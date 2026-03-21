@@ -112,7 +112,7 @@ const CreatePlaylistScreen: React.FC = () => {
 
   return (
     <>
-      <SEO title="Create Playlist - Musico" description="Create a new playlist" />
+      <SEO title="Create Playlist - Syra" description="Create a new playlist" />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={[styles.container, { backgroundColor: theme.colors.background }]}

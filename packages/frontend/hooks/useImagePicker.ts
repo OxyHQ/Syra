@@ -1,8 +1,7 @@
 import { useState, useCallback } from 'react';
 import * as ImagePicker from 'expo-image-picker';
-import { Alert, Platform } from 'react-native';
-import { useOxy } from '@oxyhq/services';
-import { api } from '@/utils/api';
+import { Alert } from 'react-native';
+import { API_URL } from '@/config';
 
 export interface ImagePickerResult {
   uri: string;
@@ -25,14 +24,11 @@ export interface UseImagePickerOptions {
  * Supports both library and camera selection
  */
 export function useImagePicker(options: UseImagePickerOptions = {}) {
-  const { oxyServices } = useOxy();
   const [isUploading, setIsUploading] = useState(false);
   const {
     allowsEditing = true,
     quality = 0.8,
     aspect = [1, 1], // Square aspect ratio for playlist covers
-    maxWidth = 2000,
-    maxHeight = 2000,
   } = options;
 
   const pickImage = useCallback(async (source: 'library' | 'camera' = 'library'): Promise<ImagePickerResult | null> => {
@@ -116,57 +112,30 @@ export function useImagePicker(options: UseImagePickerOptions = {}) {
 
   /**
    * Upload image to backend and return image ID (MongoDB ObjectId string)
-   * Always uploads images - no URL passthrough
+   * Uses authenticated client from oxyServices with current user's token
    */
   const uploadImage = useCallback(async (imageResult: ImagePickerResult): Promise<string | undefined> => {
     try {
       setIsUploading(true);
       
+      // Create OxyServices instance configured for Syra API
+      // It uses the same token storage, so authentication is automatic
+      const { OxyServices } = await import('@oxyhq/services');
+      const api = new OxyServices({ baseURL: API_URL }).getClient();
+      
       const formData = new FormData();
-      const uri = imageResult.uri;
+      const fileName = imageResult.uri.split('/').pop() || `image-${Date.now()}.jpg`;
+      
+      // Expo 54 handles platform differences automatically
+      formData.append('image', {
+        uri: imageResult.uri,
+        name: fileName,
+        type: imageResult.type || 'image/jpeg',
+      } as any);
 
-      if (Platform.OS === 'web') {
-        // Web: Check if it's a blob URL
-        if (uri.startsWith('blob:')) {
-          // Fetch the blob and create a File object
-          const response = await fetch(uri);
-          const blob = await response.blob();
-          const fileName = `image-${Date.now()}.${blob.type.split('/')[1] || 'jpg'}`;
-          formData.append('image', blob, fileName);
-        } else {
-          // Regular file path - fetch and upload
-          const response = await fetch(uri);
-          const blob = await response.blob();
-          const fileName = `image-${Date.now()}.${blob.type.split('/')[1] || 'jpg'}`;
-          formData.append('image', blob, fileName);
-        }
-      } else {
-        // React Native: Use the URI directly
-        const fileName = uri.split('/').pop() || `image-${Date.now()}.jpg`;
-        const fileType = imageResult.type || 'image/jpeg';
-        formData.append('image', {
-          uri: uri,
-          name: fileName,
-          type: fileType,
-        } as any);
-      }
+      // Upload to backend - authenticated client automatically includes auth token
+      const response = await api.post<{ id: string }>('/images/upload', formData);
 
-      // Upload to backend
-      // Use relative path to ensure axios interceptors properly add authentication headers
-      // The api helper's baseURL already includes /api, so don't include it in the endpoint
-      // Explicitly set Content-Type header to match the working pattern in artistService.uploadTrack()
-      const response = await api.post<{ id: string }>(
-        '/images/upload',
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        }
-      );
-
-      // Return the image ID (MongoDB ObjectId string)
-      // api.post() returns { data: T }, so access response.data.id
       return response.data.id;
     } catch (error: any) {
       console.error('Image upload error:', error);

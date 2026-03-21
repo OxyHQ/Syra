@@ -86,7 +86,7 @@ const AlbumScreen: React.FC = () => {
   return (
     <>
       <SEO
-        title={`${album.title} by ${album.artistName} - Musico`}
+        title={`${album.title} by ${album.artistName} - Syra`}
         description={`Listen to ${album.title} by ${album.artistName}`}
       />
       <ScrollView

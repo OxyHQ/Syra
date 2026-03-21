@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { api, isUnauthorizedError } from '@/utils/api';
 import { Storage } from '@/utils/storage';
 
-const MUSIC_PREFERENCES_CACHE_KEY = 'musico_music_preferences';
+const MUSIC_PREFERENCES_CACHE_KEY = 'syra_music_preferences';
 
 function unwrapApiData<T>(value: T | { data: T } | null | undefined): T | null {
   if (value === null || value === undefined) {
@@ -135,6 +135,9 @@ export const useMusicPreferencesStore = create<MusicPreferencesStore>((set, get)
     }
   },
 }));
+
+
+
 
 
 

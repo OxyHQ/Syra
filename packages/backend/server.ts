@@ -417,7 +417,7 @@ app.use(performanceMiddleware);
 
 // --- Root API Welcome Route ---
 app.get("", async (req, res) => {
-  res.json({ message: "Welcome to Musico API", version: "1.0.0" });
+  res.json({ message: "Welcome to Syra API", version: "1.0.0" });
 });
 
 // --- Health Check Endpoint ---

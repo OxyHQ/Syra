@@ -26,7 +26,7 @@ interface LibraryScreenProps {
 }
 
 /**
- * Musico Library Screen
+ * Syra Library Screen
  * User's music library (Liked Songs, Playlists, Artists, Albums)
  * Can be used as standalone screen or as sidebar component
  */
@@ -136,7 +136,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
     <>
       {!showSidebarControls && (
         <SEO
-          title="Your Library - Musico"
+          title="Your Library - Syra"
           description="Your music library"
         />
       )}

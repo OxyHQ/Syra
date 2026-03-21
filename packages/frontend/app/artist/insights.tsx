@@ -84,7 +84,7 @@ const ArtistInsightsScreen: React.FC = () => {
 
   return (
     <>
-      <SEO title="Artist Insights - Musico" description="View your music analytics and statistics" />
+      <SEO title="Artist Insights - Syra" description="View your music analytics and statistics" />
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
         {/* Header */}
         <View

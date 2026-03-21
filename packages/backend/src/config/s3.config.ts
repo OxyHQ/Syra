@@ -79,7 +79,7 @@ export const s3Client = new S3Client(s3ClientConfig);
 
 // Read bucket name from environment variable
 // Support both AWS_S3_BUCKET_NAME (documented) and AWS_S3_BUCKET (backwards compatibility)
-export const S3_BUCKET_NAME = process.env.AWS_S3_BUCKET_NAME || process.env.AWS_S3_BUCKET || 'musico-audio';
+export const S3_BUCKET_NAME = process.env.AWS_S3_BUCKET_NAME || process.env.AWS_S3_BUCKET || 'syra-audio';
 export const S3_AUDIO_PREFIX = process.env.S3_AUDIO_PREFIX || 'audio';
 
 // Export region and endpoint for error messages

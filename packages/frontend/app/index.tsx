@@ -20,7 +20,7 @@ type QuickAccessItem =
   | { type: 'playlist'; data: Playlist; shape: 'square' };
 
 /**
- * Musico Home Screen
+ * Syra Home Screen
  * Spotify-like home screen with recently played, made for you, etc.
  */
 const HomeScreen: React.FC = () => {
@@ -326,7 +326,7 @@ const HomeScreen: React.FC = () => {
   return (
     <>
       <SEO
-        title="Musico - Music Streaming"
+        title="Syra - Music Streaming"
         description="Discover and play your favorite music"
       />
       <LinearGradient

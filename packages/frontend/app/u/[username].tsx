@@ -22,7 +22,7 @@ const UserProfileScreen: React.FC = () => {
   if (loading) {
     return (
       <>
-        <SEO title={`${username || 'User'} - Musico`} description="User profile" />
+        <SEO title={`${username || 'User'} - Syra`} description="User profile" />
         <View style={[styles.container, styles.centered, { backgroundColor: theme.colors.background }]}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
@@ -33,7 +33,7 @@ const UserProfileScreen: React.FC = () => {
   if (!profileData) {
     return (
       <>
-        <SEO title="User Not Found - Musico" description="User profile not found" />
+        <SEO title="User Not Found - Syra" description="User profile not found" />
         <View style={[styles.container, styles.centered, { backgroundColor: theme.colors.background }]}>
           <MaterialCommunityIcons name="account-off" size={64} color={theme.colors.textSecondary} />
           <Text style={[styles.errorText, { color: theme.colors.textSecondary }]}>
@@ -65,7 +65,7 @@ const UserProfileScreen: React.FC = () => {
   return (
     <>
       <SEO 
-        title={`${displayName} (@${profileData.username}) - Musico`} 
+        title={`${displayName} (@${profileData.username}) - Syra`} 
         description={profileData.bio || `Profile page for ${displayName}`} 
       />
       <ScrollView
@@ -248,6 +248,9 @@ const styles = StyleSheet.create({
 });
 
 export default UserProfileScreen;
+
+
+
 
 
 

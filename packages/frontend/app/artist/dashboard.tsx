@@ -83,7 +83,7 @@ const ArtistDashboardScreen: React.FC = () => {
 
   return (
     <>
-      <SEO title="Artist Dashboard - Musico" description="Manage your music and view your stats" />
+      <SEO title="Artist Dashboard - Syra" description="Manage your music and view your stats" />
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
         {/* Header */}
         <View

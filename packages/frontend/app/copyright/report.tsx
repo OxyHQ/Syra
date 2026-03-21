@@ -115,7 +115,7 @@ const CopyrightReportScreen: React.FC = () => {
 
   return (
     <>
-      <SEO title="Report Copyright Violation - Musico" description="Report a copyright violation" />
+      <SEO title="Report Copyright Violation - Syra" description="Report a copyright violation" />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -160,7 +160,7 @@ const CopyrightReportScreen: React.FC = () => {
           {/* Instructions */}
           <View style={styles.section}>
             <Text style={[styles.instructions, { color: theme.colors.textSecondary }]}>
-              If you believe a track on Musico violates copyright, please search for the track below and provide details about the violation.
+              If you believe a track on Syra violates copyright, please search for the track below and provide details about the violation.
             </Text>
           </View>
 

@@ -25,7 +25,7 @@ import { STORAGE_KEYS } from '@/lib/constants';
 import { Storage } from '@/utils/storage';
 
 /**
- * Musico Settings Screen
+ * Syra Settings Screen
  * Comprehensive settings screen with all sections like Spotify
  */
 const SettingsScreen: React.FC = () => {
@@ -102,8 +102,10 @@ const SettingsScreen: React.FC = () => {
       const keysToClear = keys.filter(key => 
         key.includes('cache') || 
         key.includes('_cache') ||
+        key.startsWith('@syra') ||
         key.startsWith('@musico') ||
         key.startsWith('oxy_appearance_settings') ||
+        key.startsWith('syra_music_preferences') ||
         key.startsWith('musico_music_preferences')
       );
       await Promise.all(keysToClear.map(key => AsyncStorage.removeItem(key)));
@@ -130,7 +132,7 @@ const SettingsScreen: React.FC = () => {
   if (!isAuthenticated) {
     return (
       <>
-        <SEO title="Settings - Musico" description="App settings and preferences" />
+        <SEO title="Settings - Syra" description="App settings and preferences" />
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
           <Text style={[styles.notAuthenticated, { color: theme.colors.text }]}>
             Please log in to access settings
@@ -142,7 +144,7 @@ const SettingsScreen: React.FC = () => {
 
   return (
     <>
-      <SEO title="Settings - Musico" description="App settings and preferences" />
+      <SEO title="Settings - Syra" description="App settings and preferences" />
       <ScrollView
         style={[styles.container, { backgroundColor: theme.colors.background }]}
         contentContainerStyle={styles.contentContainer}
@@ -361,7 +363,7 @@ const SettingsScreen: React.FC = () => {
         <SettingsSection title="About">
           <SettingsItem
             label="Version"
-            description={`Musico ${appVersion}`}
+            description={`Syra ${appVersion}`}
             disabled
           />
           <SettingsItem
@@ -384,7 +386,7 @@ const SettingsScreen: React.FC = () => {
           />
           <SettingsItem
             label="Help & Support"
-            description="Get help with Musico"
+            description="Get help with Syra"
             onPress={() => {
               Alert.alert('Help & Support', 'Help center coming soon.');
             }}

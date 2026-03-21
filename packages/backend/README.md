@@ -1,12 +1,12 @@
 # @syra/backend
 
-> The backend package of the Musico monorepo - A robust API service built with Express.js and TypeScript.
+> The backend package of the Syra monorepo - A robust API service built with Express.js and TypeScript.
 
 ---
 
 ## Overview
 
-This is the **backend package** of the **Musico** monorepo. The Musico API is a robust backend service built with Express.js and TypeScript, providing functionality for music streaming including song management, playlists, artists, albums, user library, search, audio file storage, and real-time communications.
+This is the **backend package** of the **Syra** monorepo. The Syra API is a robust backend service built with Express.js and TypeScript, providing functionality for music streaming including song management, playlists, artists, albums, user library, search, audio file storage, and real-time communications.
 
 ## Tech Stack
 
@@ -29,8 +29,8 @@ This is the **backend package** of the **Musico** monorepo. The Musico API is a 
 #### Option 1: From the Monorepo Root (Recommended)
 ```bash
 # Clone the repository
-git clone https://github.com/OxyHQ/Musico.git
-cd Musico
+git clone https://github.com/OxyHQ/Syra.git
+cd Syra
 
 # Install all dependencies
 npm run install:all
@@ -74,7 +74,7 @@ TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 # Supports AWS S3, DigitalOcean Spaces, LocalStack, MinIO, and other S3-compatible services
 
 AWS_REGION=us-east-1  # For DigitalOcean Spaces, use the region (e.g., ams3, nyc3)
-AWS_S3_BUCKET_NAME=musico-bucket
+AWS_S3_BUCKET_NAME=syra-bucket
 
 # Credential Options (supports both formats):
 # Option 1: DigitalOcean Spaces (recommended when using Spaces)
@@ -255,7 +255,7 @@ erDiagram
 
 ## Monorepo Integration
 
-This package is part of the Musico monorepo and integrates with:
+This package is part of the Syra monorepo and integrates with:
 
 - **@syra/frontend**: React Native application
 - **@syra/shared-types**: Shared TypeScript type definitions
@@ -314,10 +314,10 @@ Response: {
 ### Docker Deployment
 ```bash
 # Build the Docker image
-docker build -t musico-api .
+docker build -t syra-api .
 
 # Run the container
-docker run -p 3000:3000 -e MONGODB_URI=your_mongodb_uri musico-api
+docker run -p 3000:3000 -e MONGODB_URI=your_mongodb_uri syra-api
 ```
 
 ### Cloud Deployment (Vercel)
@@ -379,20 +379,20 @@ Example configurations:
 ```env
 # DigitalOcean Spaces
 AWS_REGION=ams3
-AWS_S3_BUCKET_NAME=musico-bucket
+AWS_S3_BUCKET_NAME=syra-bucket
 SPACES_KEY=your_spaces_key
 SPACES_SECRET=your_spaces_secret
 AWS_ENDPOINT_URL=https://ams3.digitaloceanspaces.com
 
 # AWS S3
 AWS_REGION=us-east-1
-AWS_S3_BUCKET_NAME=musico-audio
+AWS_S3_BUCKET_NAME=syra-audio
 AWS_ACCESS_KEY_ID=your_aws_key
 AWS_SECRET_ACCESS_KEY=your_aws_secret
 
 # LocalStack (for local development)
 AWS_REGION=us-east-1
-AWS_S3_BUCKET_NAME=musico-bucket
+AWS_S3_BUCKET_NAME=syra-bucket
 AWS_ACCESS_KEY_ID=test
 AWS_SECRET_ACCESS_KEY=test
 AWS_ENDPOINT_URL=http://localhost:4566

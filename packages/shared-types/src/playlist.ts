@@ -1,5 +1,5 @@
 /**
- * Playlist-related types for Musico music streaming app
+ * Playlist-related types for Syra music streaming app
  */
 
 import { Timestamps } from './common';

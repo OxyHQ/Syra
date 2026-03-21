@@ -1,5 +1,5 @@
 /**
- * Search-related types for Musico music streaming app
+ * Search-related types for Syra music streaming app
  */
 
 import { Track } from './track';
@@ -70,6 +70,9 @@ export interface SearchRequest {
   query: string;
   filters?: SearchFilters;
 }
+
+
+
 
 
 

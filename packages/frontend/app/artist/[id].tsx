@@ -182,7 +182,7 @@ const ArtistScreen: React.FC = () => {
   return (
     <>
       <SEO
-        title={`${artist.name} - Musico`}
+        title={`${artist.name} - Syra`}
         description={artist.bio || `Listen to ${artist.name}`}
       />
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>

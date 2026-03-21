@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import { logger } from "./logger";
 
-const APP_NAME = "musico";
+const APP_NAME = "syra";
 
 let connectPromise: Promise<typeof mongoose> | null = null;
 let retryCount = 0;

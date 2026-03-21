@@ -104,7 +104,7 @@ const ArtistRegisterScreen: React.FC = () => {
 
     return (
         <>
-            <SEO title="Register as Artist - Musico" description="Create your artist profile" />
+            <SEO title="Register as Artist - Syra" description="Create your artist profile" />
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={[styles.container, { backgroundColor: theme.colors.background }]}

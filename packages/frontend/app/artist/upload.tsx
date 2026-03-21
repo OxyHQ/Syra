@@ -360,7 +360,7 @@ const ArtistUploadScreen: React.FC = () => {
 
   return (
     <>
-      <SEO title="Upload Music - Musico" description="Upload songs and create albums" />
+      <SEO title="Upload Music - Syra" description="Upload songs and create albums" />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={[styles.container, { backgroundColor: theme.colors.background }]}

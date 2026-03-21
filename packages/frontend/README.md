@@ -1,6 +1,6 @@
 # @syra/frontend
 
-> The frontend package of the Musico monorepo - A modern, cross-platform music streaming app built with Expo, React Native, and TypeScript.
+> The frontend package of the Syra monorepo - A modern, cross-platform music streaming app built with Expo, React Native, and TypeScript.
 
 ---
 
@@ -18,7 +18,7 @@
 
 ## About
 
-This is the **frontend package** of the **Musico** monorepo. **Musico** is a modern music streaming platform inspired by Spotify, designed for mobile and web. It features music library management, playlists, artist pages, album browsing, search, audio playback, and more. Built with Expo and React Native, it supports file-based routing, multi-language support, and a beautiful Spotify-like UI.
+This is the **frontend package** of the **Syra** monorepo. **Syra** is a modern music streaming platform inspired by Spotify, designed for mobile and web. It features music library management, playlists, artist pages, album browsing, search, audio playback, and more. Built with Expo and React Native, it supports file-based routing, multi-language support, and a beautiful Spotify-like UI.
 
 This package contains the complete React Native application that runs on Android, iOS, and Web platforms.
 
@@ -82,8 +82,8 @@ This package contains the complete React Native application that runs on Android
 #### Option 1: From the Monorepo Root (Recommended)
 ```bash
 # Clone the repository
-git clone https://github.com/OxyHQ/Musico.git
-cd Musico
+git clone https://github.com/OxyHQ/Syra.git
+cd Syra
 
 # Install all dependencies
 npm run install:all
@@ -144,7 +144,7 @@ EXPO_PUBLIC_BITDRIFT_KEY=your_bitdrift_key
 
 ## Monorepo Integration
 
-This package is part of the Musico monorepo and integrates with:
+This package is part of the Syra monorepo and integrates with:
 
 - **@syra/backend**: API server for music data and authentication
 - **@syra/shared-types**: Shared TypeScript type definitions

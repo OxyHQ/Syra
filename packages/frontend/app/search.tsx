@@ -16,7 +16,7 @@ import { usePlayerStore } from '@/stores/playerStore';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 
 /**
- * Musico Search Screen
+ * Syra Search Screen
  * Spotify-like search interface for tracks, albums, artists, and playlists
  */
 const SearchScreen: React.FC = () => {
@@ -136,7 +136,7 @@ const SearchScreen: React.FC = () => {
   return (
     <>
       <SEO
-        title="Search - Musico"
+        title="Search - Syra"
         description="Search for music"
       />
       <ScrollView

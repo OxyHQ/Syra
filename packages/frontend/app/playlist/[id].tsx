@@ -175,7 +175,7 @@ const PlaylistScreen: React.FC = () => {
   return (
     <>
       <SEO
-        title={`${playlist.name} - Musico`}
+        title={`${playlist.name} - Syra`}
         description={playlist.description || `Listen to ${playlist.name}`}
       />
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>

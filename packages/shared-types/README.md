@@ -1,10 +1,10 @@
 # @syra/shared-types
 
-Shared TypeScript types for the Musico music streaming platform. This package contains all the interfaces, enums, and types that are shared between the frontend and backend applications to ensure type consistency.
+Shared TypeScript types for the Syra music streaming platform. This package contains all the interfaces, enums, and types that are shared between the frontend and backend applications to ensure type consistency.
 
 ## Overview
 
-Musico is a modern music streaming platform inspired by Spotify, where users can discover, stream, and organize music. This package provides comprehensive type definitions for all core music streaming functionality including songs, playlists, artists, albums, and user libraries.
+Syra is a modern music streaming platform inspired by Spotify, where users can discover, stream, and organize music. This package provides comprehensive type definitions for all core music streaming functionality including songs, playlists, artists, albums, and user libraries.
 
 ## Architecture
 
@@ -198,4 +198,4 @@ When adding new types:
 
 ## License
 
-UNLICENSED - Private package for Musico platform 
+UNLICENSED - Private package for Syra platform 

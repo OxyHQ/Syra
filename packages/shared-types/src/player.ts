@@ -1,5 +1,5 @@
 /**
- * Player-related types for Musico music streaming app
+ * Player-related types for Syra music streaming app
  * Playback state, queue, now playing
  */
 
@@ -129,6 +129,9 @@ export interface AddToQueueRequest {
 export interface RemoveFromQueueRequest {
   trackIds: string[];
 }
+
+
+
 
 
 

@@ -1,6 +1,6 @@
-# Musico Documentation
+# Syra Documentation
 
-Welcome to the Musico project documentation. This directory contains comprehensive documentation about various aspects of the Musico music streaming platform.
+Welcome to the Syra project documentation. This directory contains comprehensive documentation about various aspects of the Syra music streaming platform.
 
 ## 📚 Documentation Index
 
@@ -60,7 +60,7 @@ Welcome to the Musico project documentation. This directory contains comprehensi
 
 ## 📝 Note on Legacy Documentation
 
-Some documentation files in this directory may reference features from previous iterations of the project. The core documentation for Musico includes:
+Some documentation files in this directory may reference features from previous iterations of the project. The core documentation for Syra includes:
 
 - **Theming System**: Complete theming documentation for the music streaming UI
 - **Performance**: Optimization guides for music streaming performance
