@@ -1,4 +1,4 @@
-import { OxyServices } from '@oxyhq/services';
+import { OxyServices } from '@oxyhq/core';
 import { Platform } from 'react-native';
 import axios from 'axios';
 import { API_URL } from '@/config';
@@ -27,8 +27,8 @@ export const api = {
     return { data: response.data };
   },
 
-  async post<T = any>(endpoint: string, body?: any, config?: any): Promise<{ data: T }> {
-    const response = await authenticatedClient.post(endpoint, body, config);
+  async post<T = any>(endpoint: string, body?: any): Promise<{ data: T }> {
+    const response = await authenticatedClient.post(endpoint, body);
     return { data: response.data };
   },
 
@@ -96,7 +96,7 @@ export function webAlert(
 
 export const healthApi = {
   async checkHealth() {
-    const response = await api.get('/health');
+    const response = await api.get('/api/health');
     return response.data;
   },
 };
