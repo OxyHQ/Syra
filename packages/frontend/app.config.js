@@ -21,21 +21,20 @@ module.exports = function(_config) {
 
 return {
     expo: {
-        name: "Musico",
-        slug: "musico",
+        name: "Syra",
+        slug: "syra",
         version: VERSION,
       orientation: 'portrait',
       icon: './assets/images/app-icon.png',
-      scheme: 'musico',
+      scheme: 'syra',
       userInterfaceStyle: 'automatic',
-      newArchEnabled: true,
       experiments: {
         typedRoutes: true,
         reactCompiler: true
       },
       ios: {
         supportsTablet: true,
-        bundleIdentifier: 'com.musico.ios',
+        bundleIdentifier: 'com.syra.ios',
       },
         android: {
             adaptiveIcon: {
@@ -48,7 +47,7 @@ return {
                 "android.permission.RECORD_AUDIO"
             ],
             // Must match google-services.json package_name
-            package: "com.musico.app",
+            package: "com.syra.app",
             // Point to your google-services.json for FCM
             googleServicesFile: "../../google-services.json",
             intentFilters: [
@@ -58,7 +57,7 @@ return {
                         data: [
                             {
                                 scheme: 'https',
-                                host: 'musico.app',
+                                host: 'syra.oxy.so',
                             },
                             IS_DEV && {
                                 scheme: 'http',
@@ -85,7 +84,6 @@ return {
                     },
             ],
             softwareKeyboardLayoutMode: "pan",
-            edgeToEdgeEnabled: true,
         },
         web: {
             bundler: "metro",
@@ -97,8 +95,8 @@ return {
                 themeColor: "#72184D",
                 appleMobileWebAppCapable: "yes",
                 appleMobileWebAppStatusBarStyle: "default",
-                appleMobileWebAppTitle: "Musico",
-                applicationName: "Musico",
+                appleMobileWebAppTitle: "Syra",
+                applicationName: "Syra",
                 msapplicationTileColor: "#72184D",
                 msapplicationConfig: "/browserconfig.xml"
             },
@@ -166,9 +164,9 @@ return {
                         deploymentTarget: '15.1',
                       },
                       android: {
-                        compileSdkVersion: 35,
-                        targetSdkVersion: 35,
-                        buildToolsVersion: '35.0.0',
+                        compileSdkVersion: 36,
+                        targetSdkVersion: 36,
+                        buildToolsVersion: '36.0.0',
                         enableProguardInReleaseBuilds: true,
                         enableShrinkResourcesInReleaseBuilds: true,
                         useLegacyPackaging: false
