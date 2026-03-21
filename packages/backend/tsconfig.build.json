@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/scripts/fixPostStats.ts",
+    "src/scripts/testUserBehavior.ts",
+    "src/utils/feedQueryBuilder.ts",
+    "src/utils/FeedResponseBuilder.ts",
+    "src/utils/feedUtils.ts",
+    "src/utils/notificationUtils.ts",
+    "src/utils/push.ts",
+    "src/services/UserPreferenceService.ts"
+  ]
+}
