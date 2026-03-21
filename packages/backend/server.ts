@@ -16,12 +16,13 @@ import { logger } from "./src/utils/logger";
 // Routers
 import searchRoutes from "./src/routes/search";
 import browseRoutes from "./src/routes/browse";
-import { OxyServices } from '@oxyhq/services/core';
+import { OxyServices } from '@oxyhq/core';
 import testRoutes from "./src/routes/test";
 import profileSettingsRoutes from './src/routes/profileSettings';
 import tracksRoutes from './src/routes/tracks.routes';
 import albumsRoutes from './src/routes/albums.routes';
 import artistsRoutes from './src/routes/artists.routes';
+import artistsAuthRoutes from './src/routes/artists.auth.routes';
 import playlistsRoutes from './src/routes/playlists.routes';
 import libraryRoutes from './src/routes/library.routes';
 import audioRoutes from './src/routes/audio.routes';
@@ -94,7 +95,8 @@ app.use(async (req, res, next) => {
 
 // CORS and security headers
 const ALLOWED_ORIGINS = [
-  process.env.FRONTEND_URL || "https://musico.app",
+  process.env.FRONTEND_URL || "https://syra.oxy.so",
+  "https://syra.oxy.so",
   "http://localhost:8081",
   "http://localhost:8082",
   "http://192.168.86.44:8081",
@@ -152,7 +154,7 @@ const io = new SocketIOServer(server, {
   maxHttpBufferSize: SOCKET_CONFIG.MAX_BUFFER_SIZE,
   connectTimeout: SOCKET_CONFIG.CONNECT_TIMEOUT,
   cors: {
-    origin: [process.env.FRONTEND_URL || "https://musico.app", "http://localhost:8081", "http://localhost:8082"],
+    origin: [process.env.FRONTEND_URL || "https://syra.oxy.so", "https://syra.oxy.so", "http://localhost:8081", "http://localhost:8082"],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     credentials: true,
     allowedHeaders: ["Content-Type", "Authorization", "X-CSRF-Token", "X-Requested-With", "Accept", "Accept-Version", "Content-Length", "Content-MD5", "Date", "X-Api-Version"]
@@ -396,7 +398,7 @@ publicApiRouter.use("/copyright", optionalAuth, copyrightRoutes); // Public copy
 const authenticatedApiRouter = express.Router();
 authenticatedApiRouter.use("/test", testRoutes);
 authenticatedApiRouter.use("/profile", profileSettingsRoutes);
-authenticatedApiRouter.use("/artists", artistsRoutes); // POST routes (follow/unfollow)
+authenticatedApiRouter.use("/artists", artistsAuthRoutes); // Authenticated routes (GET /me, POST /register, POST /:id/follow, etc.)
 authenticatedApiRouter.use("/playlists", playlistsRoutes); // POST routes (create)
 authenticatedApiRouter.use("/images", imagesRoutes); // POST /images/upload requires authentication
 authenticatedApiRouter.use("/library", libraryRoutes);
@@ -525,7 +527,7 @@ const bootServer = async () => {
   }
   
   // Start server regardless of database connection status
-  server.listen(PORT, () => {
+  server.listen(PORT, '0.0.0.0', () => {
     logger.info(`Server running on port ${PORT}`);
     if (!isDatabaseConnected()) {
       logger.warn("⚠️  Server started without database connection - some features may be unavailable");

@@ -108,4 +108,7 @@ temp/
 .vercel
 
 # Local development
-.local/ 
+.local/
+
+# Prevent multiple lock files (DO buildpack conflict)
+bun.lock

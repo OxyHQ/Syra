@@ -1,0 +1,60 @@
+name: syra-production
+region: ams
+services:
+  - name: syra
+    github:
+      repo: OxyHQ/Syra
+      branch: main
+      deploy_on_push: true
+    source_dir: /
+    environment_slug: node-js
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-1gb-fixed
+    http_port: 3000
+    build_command: npm ci --include=dev && npm run build -w @syra/shared-types && npm run build -w @syra/backend && npm prune --omit=dev
+    run_command: node packages/backend/dist/server.js
+    health_check:
+      http_path: /health
+    envs:
+      - key: NODE_ENV
+        value: production
+        scope: RUN_AND_BUILD_TIME
+      - key: FRONTEND_URL
+        value: https://syra.oxy.so
+        scope: RUN_AND_BUILD_TIME
+      - key: OXY_API_URL
+        value: https://api.oxy.so
+        scope: RUN_AND_BUILD_TIME
+      - key: MONGODB_URI
+        type: SECRET
+        scope: RUN_TIME
+      - key: REDIS_URL
+        type: SECRET
+        scope: RUN_TIME
+      - key: JWT_SECRET
+        type: SECRET
+        scope: RUN_TIME
+      - key: SPACES_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: SPACES_SECRET
+        type: SECRET
+        scope: RUN_TIME
+      - key: AWS_REGION
+        value: fra1
+        scope: RUN_TIME
+      - key: AWS_ENDPOINT_URL
+        value: https://fra1.digitaloceanspaces.com
+        scope: RUN_TIME
+      - key: AWS_S3_BUCKET
+        value: musico-bucket
+        scope: RUN_TIME
+      - key: S3_AUDIO_PREFIX
+        value: audio
+        scope: RUN_TIME
+      - key: FIREBASE_PROJECT_ID
+        value: musico-a7a53
+        scope: RUN_TIME
+      - key: FIREBASE_SERVICE_ACCOUNT_BASE64
+        type: SECRET
+        scope: RUN_TIME
