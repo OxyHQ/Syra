@@ -14,13 +14,13 @@
       "extends": "production",
       "distribution": "internal",
       "env": {
-        "API_URL": "https://api.oxy.so"
+        "API_URL": "https://api.syra.oxy.so"
       }
     },
     "production": {
       "node": "20.0.0",
       "env": {
-        "API_URL": "https://api.oxy.so"
+        "API_URL": "https://api.syra.oxy.so"
       },
       "android": {
         "buildType": "apk" //apk or app-bundle
