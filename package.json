@@ -32,7 +32,7 @@
     "npm": ">=8.0.0"
   },
   "dependencies": {
-    "@oxyhq/services": "6.9.10",
+    "@oxyhq/services": "6.9.12",
     "@oxyhq/core": "1.11.4",
     "@react-native/js-polyfills": "^0.81.1",
     "react-native-css-interop": "^0.2.0",
