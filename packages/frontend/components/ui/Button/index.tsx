@@ -27,7 +27,6 @@ import { Link, useRouter } from 'expo-router';
 import Animated, { useAnimatedStyle, SharedValue } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Pressable as WebPressable } from 'react-native-web-hover';
 import { useMediaQuery } from 'react-responsive';
 
 import { useTheme } from '@/hooks/useTheme';
@@ -344,7 +343,7 @@ const ButtonComponent: React.FC<ButtonProps> = ({
   
   // Responsive button (SideBar pattern)
   if (isResponsive) {
-    const PressableComponent = Platform.OS === 'web' ? WebPressable : Pressable;
+    const PressableComponent = Pressable;
     return (
       <PressableComponent 
         style={responsiveContainerStyle || finalStyle}
