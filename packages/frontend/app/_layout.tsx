@@ -6,7 +6,7 @@ import { QueryClient, focusManager, onlineManager } from '@tanstack/react-query'
 import { useFonts } from "expo-font";
 import { Slot } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState, memo } from "react";
-import { AppState, Platform, StyleSheet, View, type AppStateStatus } from "react-native";
+import { AppState, Platform, StyleSheet, Text, TextInput, View, type AppStateStatus } from "react-native";
 
 // Components
 import AppSplashScreen from '@/components/AppSplashScreen';
@@ -228,7 +228,7 @@ export default function RootLayout() {
   // Font Loading
   // Optimized: Using variable fonts - single file per family contains all weights
   // This reduces loading overhead significantly compared to registering each weight separately
-  const [fontsLoaded] = useFonts(
+  const [fontsLoaded, fontError] = useFonts(
     useMemo(() => {
       const fontMap: Record<string, any> = {};
       const InterVariable = require('@/assets/fonts/inter/InterVariable.ttf');
@@ -248,15 +248,52 @@ export default function RootLayout() {
     }, [])
   );
 
+  // If font loading fails (e.g. corrupt file, 404, wrong format), log the error
+  // and treat fonts as "ready" so the app doesn't stay stuck on splash.
+  const [fontTimedOut, setFontTimedOut] = useState(false);
+  const fontsReady = fontsLoaded || !!fontError || fontTimedOut;
+
+  useEffect(() => {
+    if (fontError) {
+      console.error('Font loading failed, proceeding without custom fonts', fontError);
+    }
+  }, [fontError]);
+
+  // Safety timeout: if fonts haven't loaded after 5 seconds, proceed anyway
+  useEffect(() => {
+    if (fontsReady) return;
+    const timer = setTimeout(() => {
+      console.warn('Font loading timed out after 5s, proceeding without custom fonts');
+      setFontTimedOut(true);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [fontsReady]);
+
+  // Set Inter as the default font for all Text and TextInput components
+  useEffect(() => {
+    if (!fontsLoaded) return;
+    const defaultTextStyle = { fontFamily: 'Inter-Regular' };
+    const textProps = (Text as any).defaultProps || {};
+    (Text as any).defaultProps = {
+      ...textProps,
+      style: [textProps.style, defaultTextStyle],
+    };
+    const textInputProps = (TextInput as any).defaultProps || {};
+    (TextInput as any).defaultProps = {
+      ...textInputProps,
+      style: [textInputProps.style, defaultTextStyle],
+    };
+  }, [fontsLoaded]);
+
   // Callbacks
   const handleSplashFadeComplete = useCallback(() => {
     setSplashState((prev) => ({ ...prev, fadeComplete: true }));
   }, []);
 
   const initializeApp = useCallback(async () => {
-    if (!fontsLoaded) return;
+    if (!fontsReady) return;
 
-    const result = await AppInitializer.initializeApp(fontsLoaded, oxyServices);
+    const result = await AppInitializer.initializeApp(fontsReady, oxyServices);
 
     if (result.success) {
       setSplashState((prev) => ({ ...prev, initializationComplete: true }));
@@ -265,7 +302,7 @@ export default function RootLayout() {
       // Still mark as complete to prevent blocking the app
       setSplashState((prev) => ({ ...prev, initializationComplete: true }));
     }
-  }, [fontsLoaded]);
+  }, [fontsReady]);
 
 
   // Initialize i18n once when the app mounts
@@ -304,10 +341,10 @@ export default function RootLayout() {
   }, [initializeApp]);
 
   useEffect(() => {
-    if (fontsLoaded && splashState.initializationComplete && !splashState.startFade) {
+    if (fontsReady && splashState.initializationComplete && !splashState.startFade) {
       setSplashState((prev) => ({ ...prev, startFade: true }));
     }
-  }, [fontsLoaded, splashState.initializationComplete, splashState.startFade]);
+  }, [fontsReady, splashState.initializationComplete, splashState.startFade]);
 
   // Set appIsReady only after both initialization (including auth) and splash fade complete
   useEffect(() => {

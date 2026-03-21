@@ -144,17 +144,16 @@ export class AppInitializer {
     }
 
     try {
-      // Setup notifications for native platforms
-      await setupNotificationsIfNeeded();
+      // Run all init tasks in parallel to minimize startup time
+      const authPromise = waitForAuth(services, INITIALIZATION_TIMEOUT.AUTH);
 
-      // Wait for auth to be ready
-      const authReady = await waitForAuth(services, INITIALIZATION_TIMEOUT.AUTH);
-
-      // Fetch current user if auth is ready
-      await fetchCurrentUser(services, authReady);
-
-      // Load appearance settings (uses cache for instant theme)
-      await loadAppearanceSettings(services, authReady);
+      await Promise.allSettled([
+        setupNotificationsIfNeeded(),
+        loadAppearanceSettings(services),
+        loadVideoMuteState(),
+        // Fetch current user once auth resolves
+        authPromise.then((authReady) => fetchCurrentUser(services, authReady)),
+      ]);
 
       // Hide splash screen
       try {
