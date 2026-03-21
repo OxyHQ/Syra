@@ -7,7 +7,7 @@ import { useRouter } from 'expo-router';
 import SEO from '@/components/SEO';
 import { MediaCard } from '@/components/MediaCard';
 import { musicService } from '@/services/musicService';
-import { Track, Album, Artist, Playlist } from '@musico/shared-types';
+import { Track, Album, Artist, Playlist } from '@syra/shared-types';
 import { usePlayerStore } from '@/stores/playerStore';
 import { Ionicons } from '@expo/vector-icons';
 

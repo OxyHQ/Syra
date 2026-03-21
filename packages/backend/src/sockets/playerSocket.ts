@@ -1,6 +1,6 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { logger } from '../utils/logger';
-import { PlaybackStateUpdate, Queue } from '@musico/shared-types';
+import { PlaybackStateUpdate, Queue } from '@syra/shared-types';
 import { getQueue, setCurrentIndex } from '../services/queueService';
 
 interface AuthenticatedSocket extends Socket {
@@ -169,6 +169,9 @@ export const setupPlayerSocket = (io: SocketIOServer) => {
 
   return playerNamespace;
 };
+
+
+
 
 
 

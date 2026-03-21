@@ -79,5 +79,5 @@ export interface UnsaveAlbumRequest {
 }
 
 // Follow/Unfollow artist requests are exported from './artist'
-// Import them if needed: import { FollowArtistRequest, UnfollowArtistRequest } from '@musico/shared-types';
+// Import them if needed: import { FollowArtistRequest, UnfollowArtistRequest } from '@syra/shared-types';
 

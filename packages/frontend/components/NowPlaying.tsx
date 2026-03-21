@@ -9,7 +9,7 @@ import { useUIStore } from '@/stores/uiStore';
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { musicService } from '@/services/musicService';
-import { Album, Artist, Track } from '@musico/shared-types';
+import { Album, Artist, Track } from '@syra/shared-types';
 import Avatar from '@/components/Avatar';
 
 /**

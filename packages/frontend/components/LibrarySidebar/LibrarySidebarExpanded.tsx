@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Playlist, Album, Artist } from '@musico/shared-types';
+import { Playlist, Album, Artist } from '@syra/shared-types';
 import LibraryScreen from '@/app/library';
 
 interface LibrarySidebarExpandedProps {

@@ -1,4 +1,4 @@
-# @musico/shared-types
+# @syra/shared-types
 
 Shared TypeScript types for the Musico music streaming platform. This package contains all the interfaces, enums, and types that are shared between the frontend and backend applications to ensure type consistency.
 
@@ -113,7 +113,7 @@ All user-related data is linked to Oxy users via `oxyUserId` fields:
 ### Installation
 
 ```bash
-npm install @musico/shared-types
+npm install @syra/shared-types
 ```
 
 ### Import Types
@@ -126,7 +126,7 @@ import {
   Album,
   PlaybackState,
   SearchResult 
-} from '@musico/shared-types';
+} from '@syra/shared-types';
 ```
 
 ### Example Usage

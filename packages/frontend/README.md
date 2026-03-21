@@ -1,4 +1,4 @@
-# @musico/frontend
+# @syra/frontend
 
 > The frontend package of the Musico monorepo - A modern, cross-platform music streaming app built with Expo, React Native, and TypeScript.
 
@@ -146,11 +146,11 @@ EXPO_PUBLIC_BITDRIFT_KEY=your_bitdrift_key
 
 This package is part of the Musico monorepo and integrates with:
 
-- **@musico/backend**: API server for music data and authentication
-- **@musico/shared-types**: Shared TypeScript type definitions
+- **@syra/backend**: API server for music data and authentication
+- **@syra/shared-types**: Shared TypeScript type definitions
 
 ### Shared Dependencies
-- Uses `@musico/shared-types` for type safety across packages
+- Uses `@syra/shared-types` for type safety across packages
 - Integrates with `@oxyhq/services` for common functionality
 
 ## Audio Playback

@@ -12,7 +12,7 @@
 
 import { create } from 'zustand';
 import { createAudioPlayer, AudioPlayer } from 'expo-audio';
-import { Track, PlaybackContext, RepeatMode } from '@musico/shared-types';
+import { Track, PlaybackContext, RepeatMode } from '@syra/shared-types';
 import { createScopedLogger } from '@/utils/logger';
 import { useQueueStore } from './queueStore';
 import {

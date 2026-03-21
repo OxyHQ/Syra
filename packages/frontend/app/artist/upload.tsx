@@ -21,7 +21,7 @@ import { musicService } from '@/services/musicService';
 import { toast } from 'sonner';
 import SEO from '@/components/SEO';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Artist, Album } from '@musico/shared-types';
+import { Artist, Album } from '@syra/shared-types';
 import { useFileBlobUrl } from '@/hooks/useBlobUrl';
 
 interface FormErrors {

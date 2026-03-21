@@ -1,5 +1,5 @@
 import { api } from '@/utils/api';
-import { Track, Album, Artist, Playlist } from '@musico/shared-types';
+import { Track, Album, Artist, Playlist } from '@syra/shared-types';
 
 /**
  * Music API service

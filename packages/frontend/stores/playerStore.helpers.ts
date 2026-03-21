@@ -3,7 +3,7 @@
  * Utility functions for the audio player store
  */
 
-import { Track } from '@musico/shared-types';
+import { Track } from '@syra/shared-types';
 import { getApiOrigin, api } from '@/utils/api';
 import { AUDIO_URL_PATTERN } from './playerStore.config';
 
@@ -86,5 +86,8 @@ export function calculateTrackDuration(
 export function clampVolume(volume: number, min: number = 0, max: number = 1): number {
   return Math.max(min, Math.min(max, volume));
 }
+
+
+
 
 

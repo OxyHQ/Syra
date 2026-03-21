@@ -3,7 +3,7 @@ import { StyleSheet, View, ScrollView, Text, Pressable, Image, ActivityIndicator
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@/hooks/useTheme';
 import { musicService } from '@/services/musicService';
-import { Album, Track } from '@musico/shared-types';
+import { Album, Track } from '@syra/shared-types';
 import { Ionicons } from '@expo/vector-icons';
 import { usePlayerStore } from '@/stores/playerStore';
 import SEO from '@/components/SEO';

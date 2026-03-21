@@ -8,7 +8,7 @@ import Avatar from './Avatar';
 import { Logo } from './Logo';
 import { useMediaQuery } from 'react-responsive';
 import { artistService } from '@/services/artistService';
-import { Artist } from '@musico/shared-types';
+import { Artist } from '@syra/shared-types';
 /**
  * Top Navigation Bar Component
  * Spotify-like top bar with logo, navigation, search, and user controls
@@ -28,12 +28,11 @@ export const TopBar: React.FC = () => {
     if (isAuthenticated && user) {
       artistService.getMyArtistProfile()
         .then((artist) => {
-          console.log('[TopBar] Artist profile loaded:', artist);
           setArtistProfile(artist);
         })
         .catch((error) => {
-          console.log('[TopBar] No artist profile or error:', error?.response?.status || error?.message);
-          // User doesn't have an artist profile, which is fine
+          // Silently handle - getMyArtistProfile returns null for 404, so this shouldn't happen
+          // But if it does, just set to null
           setArtistProfile(null);
         });
     } else {
@@ -54,7 +53,12 @@ export const TopBar: React.FC = () => {
   };
 
   const handleDashboard = () => {
-    router.push('/artist/dashboard');
+    if (artistProfile) {
+      router.push('/artist/dashboard');
+    } else {
+      // User doesn't have an artist profile, redirect to register
+      router.push('/artist/register');
+    }
   };
 
   return (
@@ -113,10 +117,11 @@ export const TopBar: React.FC = () => {
 
       {/* Right Section: Actions & Profile */}
       <View style={styles.rightSection}>
-        {artistProfile && (
+        {isAuthenticated && (
           <Pressable 
             style={[styles.iconButton, pathname.startsWith('/artist') && styles.activeButton]}
             onPress={handleDashboard}
+            title={artistProfile ? 'Artist Dashboard' : 'Register as Artist'}
           >
             <MaterialCommunityIcons 
               name={pathname.startsWith('/artist') ? 'account-music' : 'account-music-outline'} 

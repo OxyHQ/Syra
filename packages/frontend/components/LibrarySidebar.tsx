@@ -3,7 +3,7 @@ import { StyleSheet, View, Platform } from 'react-native';
 import { useMediaQuery } from 'react-responsive';
 import { useUIStore } from '@/stores/uiStore';
 import { useOxy } from '@oxyhq/services';
-import { Playlist, Album, Artist } from '@musico/shared-types';
+import { Playlist, Album, Artist } from '@syra/shared-types';
 import { musicService } from '@/services/musicService';
 import { libraryService } from '@/services/libraryService';
 import { LibrarySidebarCollapsed } from './LibrarySidebar/LibrarySidebarCollapsed';

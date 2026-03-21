@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, View, Text, Pressable, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/useTheme';
-import { Track } from '@musico/shared-types';
+import { Track } from '@syra/shared-types';
 import { formatDuration } from '@/utils/musicUtils';
 
 interface TrackRowProps {

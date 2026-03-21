@@ -49,7 +49,7 @@ config.resolver = {
     /\.map$/,
   ],
   extraNodeModules: {
-    '@musico/shared-types': path.join(monorepoRoot, 'packages/shared-types'),
+    '@syra/shared-types': path.join(monorepoRoot, 'packages/shared-types'),
   },
   // Resolve from frontend node_modules first, then root (for workspaces)
   nodeModulesPaths: [

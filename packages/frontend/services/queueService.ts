@@ -1,5 +1,5 @@
 import { api, authenticatedClient } from '@/utils/api';
-import { Queue, QueueWithMetadata, AddToQueueRequest } from '@musico/shared-types';
+import { Queue, QueueWithMetadata, AddToQueueRequest } from '@syra/shared-types';
 
 /**
  * Queue API service

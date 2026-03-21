@@ -1,4 +1,4 @@
-# Musico
+# Syra
 
 > A modern, cross-platform music streaming app built with Expo, React Native, TypeScript, and a Node.js/Express backend in a monorepo structure.
 
@@ -17,7 +17,7 @@
 
 ## About
 
-**Musico** is a modern music streaming platform inspired by Spotify, designed for mobile and web. It features music library management, playlists, artist pages, album browsing, search, and more. Built with Expo, React Native, and a Node.js backend in a modern monorepo structure, it supports file-based routing and a beautiful Spotify-like UI.
+**Syra** is a modern music streaming platform inspired by Spotify, designed for mobile and web. It features music library management, playlists, artist pages, album browsing, search, and more. Built with Expo, React Native, and a Node.js backend in a modern monorepo structure, it supports file-based routing and a beautiful Spotify-like UI.
 
 ## Project Structure
 
@@ -74,8 +74,8 @@ This is a **monorepo** using npm workspaces with the following structure:
 ### Initial Setup
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/OxyHQ/Musico.git
-   cd Musico
+   git clone https://github.com/OxyHQ/Syra.git
+   cd Syra
    ```
 
 2. **Install all dependencies**
@@ -126,7 +126,7 @@ npm run dev:backend
 - `npm run clean` — Clean all build artifacts
 - `npm run install:all` — Install dependencies for all packages
 
-### Frontend (`@musico/frontend`)
+### Frontend (`@syra/frontend`)
 - `npm start` — Start Expo development server
 - `npm run android` — Run on Android device/emulator
 - `npm run ios` — Run on iOS simulator
@@ -135,7 +135,7 @@ npm run dev:backend
 - `npm run lint` — Lint codebase
 - `npm run clean` — Clean build artifacts
 
-### Backend (`@musico/backend`)
+### Backend (`@syra/backend`)
 - `npm run dev` — Start development server with hot reload
 - `npm run build` — Build the project
 - `npm run start` — Start production server
@@ -144,7 +144,7 @@ npm run dev:backend
 - `npm run migrate` — Run database migrations
 - `npm run migrate:dev` — Run database migrations in development
 
-### Shared Types (`@musico/shared-types`)
+### Shared Types (`@syra/shared-types`)
 - `npm run build` — Build TypeScript types
 - `npm run dev` — Watch and rebuild types
 - `npm run clean` — Clean build artifacts
@@ -165,7 +165,7 @@ All project documentation is available in the [`docs/`](./docs/) folder:
 
 ### API Documentation
 
-The Musico API is a robust backend service built with Express.js and TypeScript, providing functionality for music streaming including song management, playlists, artists, albums, user library, search, and audio playback.
+The Syra API is a robust backend service built with Express.js and TypeScript, providing functionality for music streaming including song management, playlists, artists, albums, user library, search, and audio playback.
 
 For detailed API information, see the [Backend README](packages/backend/README.md).
 

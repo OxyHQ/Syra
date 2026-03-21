@@ -1,26 +1,26 @@
 {
-  "name": "musico",
+  "name": "syra",
   "version": "2.0.0",
-  "description": "Musico Monorepo - Music Streaming App Frontend and Backend",
+  "description": "Syra Monorepo - Music Streaming App Frontend and Backend",
   "private": true,
   "workspaces": [
     "packages/*"
   ],
   "scripts": {
     "dev": "npm run dev --workspaces",
-    "dev:frontend": "npm run dev --workspace=@musico/frontend",
-    "dev:backend": "npm run dev --workspace=@musico/backend",
+    "dev:frontend": "npm run dev --workspace=@syra/frontend",
+    "dev:backend": "npm run dev --workspace=@syra/backend",
     "build": "npm run build --workspaces",
-    "build:shared-types": "npm run build --workspace=@musico/shared-types",
-    "build:frontend": "npm run build --workspace=@musico/frontend",
-    "build:backend": "npm run build --workspace=@musico/backend",
+    "build:shared-types": "npm run build --workspace=@syra/shared-types",
+    "build:frontend": "npm run build --workspace=@syra/frontend",
+    "build:backend": "npm run build --workspace=@syra/backend",
     "test": "npm run test --workspaces",
     "lint": "npm run lint --workspaces",
     "clean": "npm run clean --workspaces && rm -rf node_modules",
     "install:all": "npm install && npm install --workspaces",
-    "start:frontend": "npm run start --workspace=@musico/frontend",
-    "start:backend": "npm run start --workspace=@musico/backend",
-    "postinstall": "npm run build:shared-types"
+    "start:frontend": "npm run start --workspace=@syra/frontend",
+    "start:backend": "npm run start --workspace=@syra/backend",
+    "postinstall": "npm run build --workspace=@syra/shared-types"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

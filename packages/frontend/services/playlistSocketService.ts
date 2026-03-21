@@ -1,6 +1,6 @@
 import { API_URL_SOCKET } from '@/config';
 import { io, Socket } from 'socket.io-client';
-import { Track, PlaylistTrack } from '@musico/shared-types';
+import { Track, PlaylistTrack } from '@syra/shared-types';
 
 type PlaylistUpdateCallback = (data: { playlistId: string; tracks: Track[]; playlistTracks: PlaylistTrack[] }) => void;
 type PlaylistTrackRemovedCallback = (data: { playlistId: string; trackIds: string[] }) => void;
@@ -219,6 +219,9 @@ class PlaylistSocketService {
 
 // Export singleton instance
 export const playlistSocketService = new PlaylistSocketService();
+
+
+
 
 
 

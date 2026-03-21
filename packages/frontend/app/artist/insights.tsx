@@ -16,7 +16,7 @@ import { artistService } from '@/services/artistService';
 import { toast } from 'sonner';
 import SEO from '@/components/SEO';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArtistInsights } from '@musico/shared-types';
+import { ArtistInsights } from '@syra/shared-types';
 
 /**
  * Artist Insights Screen
@@ -390,6 +390,9 @@ const styles = StyleSheet.create({
 });
 
 export default ArtistInsightsScreen;
+
+
+
 
 
 

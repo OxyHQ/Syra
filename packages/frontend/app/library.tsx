@@ -5,7 +5,7 @@ import SEO from '@/components/SEO';
 import { Ionicons, Octicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useOxy } from '@oxyhq/services';
-import { Playlist, Album, Artist } from '@musico/shared-types';
+import { Playlist, Album, Artist } from '@syra/shared-types';
 import { musicService } from '@/services/musicService';
 import { libraryService } from '@/services/libraryService';
 import { Image } from 'expo-image';

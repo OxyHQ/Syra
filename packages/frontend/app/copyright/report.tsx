@@ -15,7 +15,7 @@ import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { copyrightService } from '@/services/copyrightService';
 import { musicService } from '@/services/musicService';
-import { Track } from '@musico/shared-types';
+import { Track } from '@syra/shared-types';
 import { toast } from 'sonner';
 import SEO from '@/components/SEO';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -472,6 +472,9 @@ const styles = StyleSheet.create({
 });
 
 export default CopyrightReportScreen;
+
+
+
 
 
 

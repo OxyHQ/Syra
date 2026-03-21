@@ -1,5 +1,5 @@
 import mongoose, { Schema, Document } from 'mongoose';
-import { Album } from '@musico/shared-types';
+import { Album } from '@syra/shared-types';
 
 export interface IAlbum extends Omit<Album, 'id'>, Document {
   _id: mongoose.Types.ObjectId;

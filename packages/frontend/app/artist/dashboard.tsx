@@ -16,7 +16,7 @@ import { artistService } from '@/services/artistService';
 import { toast } from 'sonner';
 import SEO from '@/components/SEO';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArtistDashboard } from '@musico/shared-types';
+import { ArtistDashboard } from '@syra/shared-types';
 
 /**
  * Artist Dashboard Screen

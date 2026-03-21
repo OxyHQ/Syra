@@ -15,7 +15,7 @@ import { useOxy } from '@oxyhq/services';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { CoverArtPicker } from '@/components/playlists/CoverArtPicker';
-import { PlaylistVisibility } from '@musico/shared-types';
+import { PlaylistVisibility } from '@syra/shared-types';
 import { musicService } from '@/services/musicService';
 import { toast } from 'sonner';
 import SEO from '@/components/SEO';

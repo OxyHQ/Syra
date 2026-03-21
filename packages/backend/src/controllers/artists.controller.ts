@@ -7,7 +7,7 @@ import { toApiFormat, toApiFormatArray, formatTracksWithCoverArt, formatArtistWi
 import { isDatabaseConnected } from '../utils/database';
 import { AuthRequest } from '../middleware/auth';
 import { getAuthenticatedUserId } from '../utils/auth';
-import { CreateArtistRequest, ArtistInsights, ArtistDashboard } from '@musico/shared-types';
+import { CreateArtistRequest, ArtistInsights, ArtistDashboard } from '@syra/shared-types';
 import { extractColorsFromImage } from '../utils/colorHelper';
 
 /**
@@ -321,7 +321,7 @@ export const getMyArtistProfile = async (req: AuthRequest, res: Response, next: 
 
     if (!artist) {
       return res.status(404).json({ 
-        error: 'Not found',
+        error: 'Artist not found',
         message: 'You do not have an artist profile',
       });
     }

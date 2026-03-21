@@ -5,7 +5,7 @@ import { useTheme } from '@/hooks/useTheme';
 import SEO from '@/components/SEO';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { SearchCategory, SearchResult, Track, Album, Artist, Playlist } from '@musico/shared-types';
+import { SearchCategory, SearchResult, Track, Album, Artist, Playlist } from '@syra/shared-types';
 import { searchService } from '@/services/searchService';
 import { browseService, Genre } from '@/services/browseService';
 import { MediaCard } from '@/components/MediaCard';

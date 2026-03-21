@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { SearchCategory, SearchResult } from '@musico/shared-types';
+import { SearchCategory, SearchResult } from '@syra/shared-types';
 import { TrackModel } from '../models/Track';
 import { AlbumModel } from '../models/Album';
 import { ArtistModel } from '../models/Artist';

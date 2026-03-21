@@ -1,0 +1,38 @@
+name: Deploy Frontends
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/deploy-frontends.yml'
+      - 'packages/frontend/**'
+      - 'packages/shared-types/**'
+      - 'package.json'
+      - 'package-lock.json'
+
+jobs:
+  deploy-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm install
+      - name: Build shared types
+        run: npm run build --workspace=@syra/shared-types
+      - name: Build frontend
+        run: npm run build --workspace=@syra/frontend
+        timeout-minutes: 60
+        env:
+          NODE_OPTIONS: '--max-old-space-size=4096'
+          NODE_ENV: production
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: '3.114.0'
+          command: pages deploy packages/frontend/dist --project-name=syra --branch=main

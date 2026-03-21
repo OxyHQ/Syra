@@ -1,6 +1,6 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { logger } from '../utils/logger';
-import { Track, PlaylistTrack } from '@musico/shared-types';
+import { Track, PlaylistTrack } from '@syra/shared-types';
 
 interface AuthenticatedSocket extends Socket {
   user?: {
@@ -178,6 +178,9 @@ export const setupPlaylistSocket = (io: SocketIOServer) => {
 
   return playlistNamespace;
 };
+
+
+
 
 
 

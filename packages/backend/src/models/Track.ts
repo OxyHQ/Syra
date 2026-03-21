@@ -1,5 +1,5 @@
 import mongoose, { Schema, Document } from 'mongoose';
-import { Track, TrackMetadata, AudioSource } from '@musico/shared-types';
+import { Track, TrackMetadata, AudioSource } from '@syra/shared-types';
 
 export interface ITrack extends Omit<Track, 'id'>, Document {
   _id: mongoose.Types.ObjectId;

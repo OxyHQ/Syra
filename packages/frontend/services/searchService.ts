@@ -1,5 +1,5 @@
 import { api } from '@/utils/api';
-import { SearchResult, SearchCategory } from '@musico/shared-types';
+import { SearchResult, SearchCategory } from '@syra/shared-types';
 
 /**
  * Search API service

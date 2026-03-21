@@ -8,7 +8,7 @@ import mongoose from 'mongoose';
 import { TrackModel } from '../models/Track';
 import { toApiFormat, formatTrackWithCoverArt } from '../utils/musicHelpers';
 import { getTrackAudioMetadata } from '../services/audioStorageService';
-import { Track } from '@musico/shared-types';
+import { Track } from '@syra/shared-types';
 
 /**
  * Validation result for track operations

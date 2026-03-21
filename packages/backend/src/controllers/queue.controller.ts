@@ -1,6 +1,6 @@
 import { Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
-import { Queue, QueueWithMetadata, AddToQueueRequest } from '@musico/shared-types';
+import { Queue, QueueWithMetadata, AddToQueueRequest } from '@syra/shared-types';
 import { AuthRequest } from '../middleware/auth';
 import { isDatabaseConnected } from '../utils/database';
 import { TrackModel } from '../models/Track';

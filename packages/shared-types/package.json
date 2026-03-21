@@ -1,7 +1,7 @@
 {
-    "name": "@musico/shared-types",
+    "name": "@syra/shared-types",
     "version": "1.0.0",
-    "description": "Shared TypeScript types for Musico frontend and backend",
+    "description": "Shared TypeScript types for Syra frontend and backend",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
     "scripts": {
@@ -16,9 +16,9 @@
         "typescript",
         "types",
         "shared",
-        "musico"
+        "syra"
     ],
-    "author": "Musico Team",
+    "author": "Syra Team",
     "license": "UNLICENSED",
     "devDependencies": {
         "typescript": "^5.0.0",

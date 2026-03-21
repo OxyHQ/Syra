@@ -3,7 +3,7 @@ import { StyleSheet, View, Pressable, ScrollView, ActivityIndicator } from 'reac
 import { useRouter } from 'expo-router';
 import { Ionicons, Octicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/useTheme';
-import { Playlist, Album, Artist } from '@musico/shared-types';
+import { Playlist, Album, Artist } from '@syra/shared-types';
 import { Image } from 'expo-image';
 import { useOxy } from '@oxyhq/services';
 

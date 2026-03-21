@@ -7,7 +7,7 @@ import { toApiFormat, toApiFormatArray, formatTracksWithCoverArt, formatAlbumWit
 import { isDatabaseConnected } from '../utils/database';
 import { AuthRequest } from '../middleware/auth';
 import { getAuthenticatedUserId } from '../utils/auth';
-import { CreateAlbumRequest } from '@musico/shared-types';
+import { CreateAlbumRequest } from '@syra/shared-types';
 import { extractColorsFromImage } from '../utils/colorHelper';
 import { logger } from '../utils/logger';
 

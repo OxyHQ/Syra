@@ -13,10 +13,10 @@
     "composite": true,
     "baseUrl": ".",
     "paths": {
-      "@musico/shared-types": [
+      "@syra/shared-types": [
         "../shared-types/src"
       ],
-      "@musico/shared-types/*": [
+      "@syra/shared-types/*": [
         "../shared-types/src/*"
       ]
     }

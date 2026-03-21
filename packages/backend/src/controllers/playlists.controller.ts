@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
-import { Playlist, PlaylistVisibility, PlaylistWithTracks } from '@musico/shared-types';
+import { Playlist, PlaylistVisibility, PlaylistWithTracks } from '@syra/shared-types';
 import { PlaylistModel } from '../models/Playlist';
 import { PlaylistTrackModel } from '../models/PlaylistTrack';
 import { TrackModel } from '../models/Track';

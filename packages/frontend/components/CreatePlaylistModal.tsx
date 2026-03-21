@@ -17,7 +17,7 @@ import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Portal } from '@/components/Portal';
 import { CoverArtPicker } from '@/components/playlists/CoverArtPicker';
-import { PlaylistVisibility } from '@musico/shared-types';
+import { PlaylistVisibility } from '@syra/shared-types';
 import { musicService } from '@/services/musicService';
 import { toast } from 'sonner';
 import Animated, {
@@ -582,6 +582,9 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 });
+
+
+
 
 
 

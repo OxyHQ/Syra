@@ -1,4 +1,4 @@
-# @musico/backend
+# @syra/backend
 
 > The backend package of the Musico monorepo - A robust API service built with Express.js and TypeScript.
 
@@ -257,11 +257,11 @@ erDiagram
 
 This package is part of the Musico monorepo and integrates with:
 
-- **@musico/frontend**: React Native application
-- **@musico/shared-types**: Shared TypeScript type definitions
+- **@syra/frontend**: React Native application
+- **@syra/shared-types**: Shared TypeScript type definitions
 
 ### Shared Dependencies
-- Uses `@musico/shared-types` for type safety across packages
+- Uses `@syra/shared-types` for type safety across packages
 - Integrates with `@oxyhq/services` for common functionality
 
 ## Performance Optimization

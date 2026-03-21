@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Queue, QueueWithMetadata, Track, RepeatMode, ShuffleMode } from '@musico/shared-types';
+import { Queue, QueueWithMetadata, Track, RepeatMode, ShuffleMode } from '@syra/shared-types';
 import { queueService } from '../services/queueService';
 
 interface QueueState {
@@ -153,6 +153,9 @@ export const useQueueStore = create<QueueState>((set, get) => ({
     set({ queue });
   },
 }));
+
+
+
 
 
 

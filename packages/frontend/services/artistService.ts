@@ -1,5 +1,5 @@
 import { api, authenticatedClient, getApiOrigin } from '@/utils/api';
-import { Artist, CreateArtistRequest, ArtistDashboard, ArtistInsights, CreateAlbumRequest, Track, Album } from '@musico/shared-types';
+import { Artist, CreateArtistRequest, ArtistDashboard, ArtistInsights, CreateAlbumRequest, Track, Album } from '@syra/shared-types';
 import { Platform } from 'react-native';
 
 /**
@@ -17,6 +17,7 @@ export const artistService = {
 
   /**
    * Get current user's artist profile
+   * Returns null if user doesn't have an artist profile (404) - this is expected and not an error
    */
   async getMyArtistProfile(): Promise<Artist | null> {
     try {
@@ -26,6 +27,8 @@ export const artistService = {
       // Check for 404 or any error status
       const status = error?.response?.status || error?.status;
       if (status === 404) {
+        // User doesn't have an artist profile - this is expected, not an error
+        // Silently return null without logging
         return null;
       }
       // Log other errors but don't throw - return null to indicate no profile
