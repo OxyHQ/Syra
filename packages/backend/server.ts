@@ -515,7 +515,7 @@ db.once("open", () => {
 });
 
 // --- Server Listen ---
-const PORT = process.env.PORT || 3000;
+const PORT = parseInt(String(process.env.PORT || 3000), 10);
 const bootServer = async () => {
   // Try to connect to database, but don't crash if it fails
   try {
