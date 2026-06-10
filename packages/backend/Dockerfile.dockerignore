@@ -1,0 +1,42 @@
+# Build context exclusions for the backend Docker image.
+# The Docker build runs from the monorepo root (so workspace package.json files
+# and the root lockfile are available), but most of the tree is irrelevant to the
+# backend service and only slows the build / bloats layers.
+
+# Dependencies (reinstalled inside the image from the lockfile)
+**/node_modules
+
+# Build outputs (rebuilt inside the image)
+**/dist
+**/build
+**/.next
+**/out
+
+# Frontend (Expo/React Native) app — not part of the backend runtime.
+# Its package.json is force-included below so the npm workspace graph stays valid.
+packages/frontend/**
+!packages/frontend/package.json
+
+# VCS / CI / editor / OS noise
+.git
+.github
+.gitignore
+.vscode
+.idea
+**/.DS_Store
+
+# Local env files (never bake secrets into the image)
+**/.env
+**/.env.*
+!**/.env.example
+
+# Logs and caches
+**/*.log
+**/.expo
+**/.metro-health-check*
+**/coverage
+**/.eslintcache
+**/*.tsbuildinfo
+
+# Docs and misc markdown (not needed at build/runtime)
+**/*.md
