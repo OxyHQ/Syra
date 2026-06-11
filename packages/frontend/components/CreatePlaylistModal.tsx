@@ -177,12 +177,12 @@ export const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
   const modalContent = (
     <GestureHandlerRootView style={styles.container}>
       <Pressable
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
         onPress={handleBackdropPress}
       >
         <AnimatedView
           style={[
-            StyleSheet.absoluteFillObject,
+            StyleSheet.absoluteFill,
             { backgroundColor: 'rgba(0, 0, 0, 0.7)' },
             backdropStyle,
           ]}

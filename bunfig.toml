@@ -1,0 +1,6 @@
+[install]
+# Hoisted layout (npm-style). Metro/Expo autolinking expects single, hoisted
+# instances of react, react-native and expo-* packages; Bun >=1.3 defaults to
+# the isolated linker in workspaces, which creates duplicate per-peer package
+# instances that break the bundle (expo-doctor "duplicates" failure).
+linker = "hoisted"

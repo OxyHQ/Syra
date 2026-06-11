@@ -1,4 +1,4 @@
-import { useOxy } from '@oxyhq/services/full';
+import { useOxy } from '@oxyhq/services';
 import { usePathname } from "expo-router";
 import React from 'react';
 import { StyleSheet, View, Platform } from "react-native";

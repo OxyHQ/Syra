@@ -66,7 +66,7 @@ export function useImagePicker(options: UseImagePickerOptions = {}) {
         uri: asset.uri,
         width: asset.width,
         height: asset.height,
-        type: asset.type,
+        type: asset.type ?? undefined,
         base64: asset.base64 || undefined,
       };
     } catch (error) {
@@ -100,7 +100,7 @@ export function useImagePicker(options: UseImagePickerOptions = {}) {
         uri: asset.uri,
         width: asset.width,
         height: asset.height,
-        type: asset.type,
+        type: asset.type ?? undefined,
         base64: asset.base64 || undefined,
       };
     } catch (error) {
@@ -120,7 +120,7 @@ export function useImagePicker(options: UseImagePickerOptions = {}) {
       
       // Create OxyServices instance configured for Syra API
       // It uses the same token storage, so authentication is automatic
-      const { OxyServices } = await import('@oxyhq/services');
+      const { OxyServices } = await import('@oxyhq/core');
       const api = new OxyServices({ baseURL: API_URL }).getClient();
       
       const formData = new FormData();
@@ -133,10 +133,12 @@ export function useImagePicker(options: UseImagePickerOptions = {}) {
         type: imageResult.type || 'image/jpeg',
       } as any);
 
-      // Upload to backend - authenticated client automatically includes auth token
-      const response = await api.post<{ id: string }>('/images/upload', formData);
+      // Upload to backend - authenticated client automatically includes auth token.
+      // @oxyhq/core's HttpService resolves with the response body itself
+      // (no axios-style `.data` envelope); the endpoint returns `{ id }`.
+      const response: { id: string } = await api.post('/images/upload', formData);
 
-      return response.data.id;
+      return response.id;
     } catch (error: any) {
       console.error('Image upload error:', error);
       const errorMessage = error?.response?.data?.message || error?.message || 'Failed to upload image. Please try again.';

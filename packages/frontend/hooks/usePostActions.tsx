@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import { useOxy } from '@oxyhq/services';
 import { useTheme } from './useTheme';
 import { useTranslation } from 'react-i18next';
@@ -55,6 +55,7 @@ export function usePostActions({
     const theme = useTheme();
     const { t } = useTranslation();
     const router = useRouter();
+    const pathname = usePathname();
     const bottomSheet = useContext(BottomSheetContext);
     const removePostEverywhere = usePostsStore((s: any) => (s as any).removePostEverywhere);
 
@@ -62,7 +63,7 @@ export function usePostActions({
         const postId = viewPost?.id;
         const postUrl = `https://mention.earth/p/${postId}`;
         const isPinned = Boolean(viewPost?.metadata?.isPinned);
-        const isPostDetail = (router.pathname || '').startsWith('/p/');
+        const isPostDetail = pathname.startsWith('/p/');
 
         const handleDelete = async () => {
             try { bottomSheet.openBottomSheet(false); } catch { }
@@ -219,6 +220,6 @@ export function usePostActions({
             sourcesAction,
             copyLinkAction,
         };
-    }, [viewPost, isOwner, isSaved, hasArticle, hasSources, onSave, onOpenArticle, onOpenSources, theme, t, bottomSheet, router, removePostEverywhere]);
+    }, [viewPost, isOwner, isSaved, hasArticle, hasSources, onSave, onOpenArticle, onOpenSources, theme, t, bottomSheet, router, pathname, removePostEverywhere]);
 }
 

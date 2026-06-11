@@ -21,7 +21,7 @@
 
 ## Project Structure
 
-This is a **monorepo** using npm workspaces with the following structure:
+This is a **monorepo** using bun workspaces with the following structure:
 
 ```
 /
@@ -67,7 +67,7 @@ This is a **monorepo** using npm workspaces with the following structure:
 ## Getting Started
 
 ### Prerequisites
-- Node.js 18+ and npm 8+
+- Node.js 18+ and bun 1.3+
 - MongoDB instance
 - Expo CLI for mobile development
 
@@ -80,74 +80,74 @@ This is a **monorepo** using npm workspaces with the following structure:
 
 2. **Install all dependencies**
    ```bash
-   npm run install:all
+   bun run install:all
    ```
 
 ### Development
 
 #### Start All Services
 ```bash
-npm run dev
+bun run dev
 ```
 
 #### Start Individual Services
 ```bash
 # Frontend only
-npm run dev:frontend
+bun run dev:frontend
 
 # Backend only
-npm run dev:backend
+bun run dev:backend
 ```
 
 #### Frontend Development
 The frontend is an Expo React Native app that can run on:
-- **Web**: `npm run web` (or `npm run dev:frontend` then press 'w')
-- **iOS**: `npm run ios` (requires macOS and Xcode)
-- **Android**: `npm run android` (requires Android Studio)
+- **Web**: `bun run web` (or `bun run dev:frontend` then press 'w')
+- **iOS**: `bun run ios` (requires macOS and Xcode)
+- **Android**: `bun run android` (requires Android Studio)
 
 #### Backend Development
 The backend runs on the development server with hot reload:
 ```bash
-npm run dev:backend
+bun run dev:backend
 ```
 
 ## Development Scripts
 
 ### Root Level (Monorepo)
-- `npm run dev` — Start all services in development mode
-- `npm run dev:frontend` — Start frontend development server
-- `npm run dev:backend` — Start backend development server
-- `npm run build` — Build all packages
-- `npm run build:shared-types` — Build shared types package
-- `npm run build:frontend` — Build frontend for production
-- `npm run build:backend` — Build backend for production
-- `npm run test` — Run tests across all packages
-- `npm run lint` — Lint all packages
-- `npm run clean` — Clean all build artifacts
-- `npm run install:all` — Install dependencies for all packages
+- `bun run dev` — Start all services in development mode
+- `bun run dev:frontend` — Start frontend development server
+- `bun run dev:backend` — Start backend development server
+- `bun run build` — Build all packages
+- `bun run build:shared-types` — Build shared types package
+- `bun run build:frontend` — Build frontend for production
+- `bun run build:backend` — Build backend for production
+- `bun run test` — Run tests across all packages
+- `bun run lint` — Lint all packages
+- `bun run clean` — Clean all build artifacts
+- `bun run install:all` — Install dependencies for all packages
 
 ### Frontend (`@syra/frontend`)
-- `npm start` — Start Expo development server
-- `npm run android` — Run on Android device/emulator
-- `npm run ios` — Run on iOS simulator
-- `npm run web` — Run in web browser
-- `npm run build-web` — Build static web output
-- `npm run lint` — Lint codebase
-- `npm run clean` — Clean build artifacts
+- `bun run start` — Start Expo development server
+- `bun run android` — Run on Android device/emulator
+- `bun run ios` — Run on iOS simulator
+- `bun run web` — Run in web browser
+- `bun run build-web` — Build static web output
+- `bun run lint` — Lint codebase
+- `bun run clean` — Clean build artifacts
 
 ### Backend (`@syra/backend`)
-- `npm run dev` — Start development server with hot reload
-- `npm run build` — Build the project
-- `npm run start` — Start production server
-- `npm run lint` — Lint codebase
-- `npm run clean` — Clean build artifacts
-- `npm run migrate` — Run database migrations
-- `npm run migrate:dev` — Run database migrations in development
+- `bun run dev` — Start development server with hot reload
+- `bun run build` — Build the project
+- `bun run start` — Start production server
+- `bun run lint` — Lint codebase
+- `bun run clean` — Clean build artifacts
+- `bun run migrate` — Run database migrations
+- `bun run migrate:dev` — Run database migrations in development
 
 ### Shared Types (`@syra/shared-types`)
-- `npm run build` — Build TypeScript types
-- `npm run dev` — Watch and rebuild types
-- `npm run clean` — Clean build artifacts
+- `bun run build` — Build TypeScript types
+- `bun run dev` — Watch and rebuild types
+- `bun run clean` — Clean build artifacts
 
 ## Documentation
 
@@ -177,7 +177,7 @@ Contributions are welcome! Please open issues or pull requests for bug fixes, fe
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Run tests and linting: `npm run test && npm run lint`
+4. Run tests and linting: `bun run test && bun run lint`
 5. Submit a pull request
 
 ## License

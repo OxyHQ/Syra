@@ -7,36 +7,35 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run dev --workspaces",
-    "dev:frontend": "npm run dev --workspace=@syra/frontend",
-    "dev:backend": "npm run dev --workspace=@syra/backend",
-    "build": "npm run build --workspaces",
-    "build:shared-types": "npm run build --workspace=@syra/shared-types",
-    "build:frontend": "npm run build --workspace=@syra/frontend",
-    "build:backend": "npm run build --workspace=@syra/backend",
-    "test": "npm run test --workspaces",
-    "lint": "npm run lint --workspaces",
-    "clean": "npm run clean --workspaces && rm -rf node_modules",
-    "install:all": "npm install && npm install --workspaces",
-    "start:frontend": "npm run start --workspace=@syra/frontend",
-    "start:backend": "npm run start --workspace=@syra/backend",
-    "postinstall": "npm run build --workspace=@syra/shared-types"
+    "dev": "bun run --filter '*' dev",
+    "dev:frontend": "bun run --filter '@syra/frontend' dev",
+    "dev:backend": "bun run --filter '@syra/backend' dev",
+    "build": "bun run --filter '*' build",
+    "build:shared-types": "bun run --filter '@syra/shared-types' build",
+    "build:frontend": "bun run --filter '@syra/frontend' build",
+    "build:backend": "bun run --filter '@syra/backend' build",
+    "test": "bun run --filter '*' test",
+    "lint": "bun run --filter '*' lint",
+    "clean": "bun run --filter '*' clean && rm -rf node_modules",
+    "install:all": "bun install",
+    "start:frontend": "bun run --filter '@syra/frontend' start",
+    "start:backend": "bun run --filter '@syra/backend' start",
+    "postinstall": "bun run --filter '@syra/shared-types' build"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "react-native-worklets": "0.5.1",
     "typescript": "~5.9.2"
   },
   "engines": {
-    "node": ">=18.0.0",
-    "npm": ">=8.0.0"
+    "node": ">=18.0.0"
   },
   "dependencies": {
-    "@oxyhq/services": "6.9.12",
+    "@oxyhq/services": "6.10.7",
+    "@oxyhq/bloom": "0.6.11",
     "@oxyhq/core": "1.11.11",
     "@react-native/js-polyfills": "^0.81.1",
     "react-native-css-interop": "^0.2.0",
-    "react-native-worklets": "0.5.1",
+    "react-native-worklets": "0.8.3",
     "react-native-worklets-core": "^1.6.2"
   }
 }

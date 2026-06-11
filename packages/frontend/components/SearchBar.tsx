@@ -8,7 +8,7 @@ import { useTheme } from '@/hooks/useTheme'
 import { Search } from '@/assets/icons/search-icon'
 
 const debounce = (func: Function, wait: number) => {
-    let timeout: NodeJS.Timeout;
+    let timeout: ReturnType<typeof setTimeout>;
     return function executedFunction(...args: any[]) {
         const later = () => {
             clearTimeout(timeout);

@@ -13,7 +13,7 @@ export const useLinkDetection = (text: string) => {
   const [error, setError] = useState<string | null>(null);
   
   const { getCached, upsertLink } = useLinksStore();
-  const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const fetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   /**

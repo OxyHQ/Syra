@@ -130,6 +130,7 @@ return {
                         recordAudioAndroid: true
                     }
                 ],
+                "expo-image",
                 "expo-image-picker",
                 "expo-video",
                 "expo-audio",
@@ -161,7 +162,7 @@ return {
                     'expo-build-properties',
                     {
                       ios: {
-                        deploymentTarget: '15.1',
+                        deploymentTarget: '16.4',
                       },
                       android: {
                         compileSdkVersion: 36,

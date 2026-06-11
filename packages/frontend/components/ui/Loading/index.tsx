@@ -208,13 +208,13 @@ const TopLoading: React.FC<TopLoadingProps> = ({
   
   return (
     <Animated.View style={[styles.topContainer, containerAnimated]}>
-      <Animated.View 
-        style={flattenStyleArray([
+      <Animated.View
+        style={[
           styles.topLoadingView,
           { height: targetHeight },
           innerAnimated,
           style,
-        ])}
+        ]}
       >
         <LoadingIcon size={effectiveIconSize} color={spinnerColor} />
       </Animated.View>

@@ -200,7 +200,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
     gap: 6,

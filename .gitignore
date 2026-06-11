@@ -110,5 +110,5 @@ temp/
 # Local development
 .local/
 
-# Prevent multiple lock files (DO buildpack conflict)
-bun.lock
+# npm lockfile (bun.lock is the single source of truth; see bunfig.toml)
+package-lock.json

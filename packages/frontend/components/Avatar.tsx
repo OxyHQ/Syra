@@ -65,7 +65,7 @@ const Avatar: React.FC<AvatarProps> = ({
               source={imageSource}
               onError={() => setErrored(true)}
               resizeMode="cover"
-              style={[StyleSheet.absoluteFillObject, { borderRadius: size / 2 }, imageStyle]}
+              style={[StyleSheet.absoluteFill, { borderRadius: size / 2 }, imageStyle]}
               defaultSource={DEFAULT_AVATAR_SOURCE}
             />
           ) : (
@@ -73,7 +73,7 @@ const Avatar: React.FC<AvatarProps> = ({
               source={imageSource}
               onError={() => setErrored(true)}
               resizeMode="cover"
-              style={[StyleSheet.absoluteFillObject, { borderRadius: size / 2 }, imageStyle]}
+              style={[StyleSheet.absoluteFill, { borderRadius: size / 2 }, imageStyle]}
               defaultSource={DEFAULT_AVATAR_SOURCE}
             />
           )
@@ -98,7 +98,7 @@ const Avatar: React.FC<AvatarProps> = ({
             width={size * 0.36} 
             height={size * 0.36} 
             viewBox="0 0 24 24"
-            style={StyleSheet.absoluteFillObject}
+            style={StyleSheet.absoluteFill}
           >
             {/* White shield shape as border/background */}
             <Path 

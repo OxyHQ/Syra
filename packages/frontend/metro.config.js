@@ -56,11 +56,6 @@ config.resolver = {
     path.join(projectRoot, 'node_modules'),
     path.join(monorepoRoot, 'node_modules'),
   ],
-  // Disable symlink following to prevent circular dependencies
-  unstable_enableSymlinks: false,
-  // Enable tree shaking by using source extensions
-  sourceExts: [...config.resolver.sourceExts, 'ts', 'tsx'],
-  assetExts: config.resolver.assetExts.filter((ext) => ext !== 'svg'),
 };
 
 // Optimize transformer for better tree shaking

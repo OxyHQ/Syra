@@ -557,7 +557,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   titleContainer: {
     position: 'absolute',
