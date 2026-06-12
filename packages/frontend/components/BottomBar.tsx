@@ -170,12 +170,12 @@ export const BottomBar = () => {
                     if (isAuthenticated && user?.username) {
                         handlePress(`/@${user.username}`);
                     } else {
-                        showBottomSheet?.('SignIn');
+                        showBottomSheet?.('OxyAuth');
                     }
                 }}
                 onLongPress={() => {
                     Vibration.vibrate(50);
-                    showBottomSheet?.('AccountCenter');
+                    showBottomSheet?.('ManageAccount');
                 }}
             >
                 <Avatar size={35} source={{ uri: user?.avatar ? oxyServices.getFileDownloadUrl(user.avatar as string, 'thumb') : undefined }} />

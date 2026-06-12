@@ -270,7 +270,7 @@ export function SideBar() {
                                 text={t('Sign In')}
                                 isExpanded={isExpanded}
                                 onHoverExpand={handleHoverIn}
-                                onPress={() => showBottomSheet?.('SignIn')}
+                                onPress={() => showBottomSheet?.('OxyAuth')}
                             />
                         )}
                     </View>

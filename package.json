@@ -30,9 +30,12 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "@oxyhq/services": "6.10.7",
+    "@oxyhq/services": "^8.0.0",
     "@oxyhq/bloom": "0.6.11",
-    "@oxyhq/core": "1.11.11",
+    "@oxyhq/core": "2.0.0",
+    "@tanstack/react-query": "^5.100.0",
+    "@tanstack/react-query-persist-client": "^5.100.0",
+    "@tanstack/query-async-storage-persister": "^5.100.0",
     "@react-native/js-polyfills": "^0.81.1",
     "react-native-css-interop": "^0.2.0",
     "react-native-worklets": "0.8.3",

@@ -149,7 +149,7 @@ export const TopBar: React.FC = () => {
         ) : (
           <Pressable 
             style={[styles.loginButton, { backgroundColor: theme.colors.primary }]}
-            onPress={() => showBottomSheet?.('SignIn')}
+            onPress={() => showBottomSheet?.('OxyAuth')}
           >
             <Text style={[styles.loginText, { color: '#FFFFFF' }]}>Log in</Text>
           </Pressable>
