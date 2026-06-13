@@ -30,7 +30,7 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "@oxyhq/services": "^8.0.0",
+    "@oxyhq/services": "^8.1.1",
     "@oxyhq/bloom": "0.6.11",
     "@oxyhq/core": "2.0.0",
     "@tanstack/react-query": "^5.100.0",
