@@ -22,7 +22,6 @@ import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-c
 import { StatusBar } from 'expo-status-bar';
 import { OxyProvider } from '@oxyhq/services';
 import { OxyServices } from '@oxyhq/core';
-import { BloomThemeProvider } from '@oxyhq/bloom/theme';
 
 import { OXY_CLIENT_ID } from '@/config';
 import ErrorBoundary from '@/components/ErrorBoundary';
@@ -62,34 +61,32 @@ export const AppProviders = memo(function AppProviders({
     <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <ErrorBoundary>
-          <BloomThemeProvider defaultMode="dark" defaultColorPreset="purple">
-            <QueryClientProvider client={queryClient}>
-              <OxyProvider
-                oxyServices={oxyServices}
-                clientId={OXY_CLIENT_ID}
-                storageKeyPrefix="oxy_syra"
-              >
-                <I18nextProvider i18n={i18n}>
-                  <AppearanceSync />
-                  <BottomSheetModalProvider>
-                    <BottomSheetProvider>
-                      <MenuProvider>
-                        <HomeRefreshProvider>
-                          {children}
-                          <StatusBar style="auto" />
-                          <Toaster
-                            position="bottom-center"
-                            swipeToDismissDirection="left"
-                            offset={15}
-                          />
-                        </HomeRefreshProvider>
-                      </MenuProvider>
-                    </BottomSheetProvider>
-                  </BottomSheetModalProvider>
-                </I18nextProvider>
-              </OxyProvider>
-            </QueryClientProvider>
-          </BloomThemeProvider>
+          <QueryClientProvider client={queryClient}>
+            <OxyProvider
+              oxyServices={oxyServices}
+              clientId={OXY_CLIENT_ID}
+              storageKeyPrefix="oxy_syra"
+            >
+              <I18nextProvider i18n={i18n}>
+                <AppearanceSync />
+                <BottomSheetModalProvider>
+                  <BottomSheetProvider>
+                    <MenuProvider>
+                      <HomeRefreshProvider>
+                        {children}
+                        <StatusBar style="auto" />
+                        <Toaster
+                          position="bottom-center"
+                          swipeToDismissDirection="left"
+                          offset={15}
+                        />
+                      </HomeRefreshProvider>
+                    </MenuProvider>
+                  </BottomSheetProvider>
+                </BottomSheetModalProvider>
+              </I18nextProvider>
+            </OxyProvider>
+          </QueryClientProvider>
         </ErrorBoundary>
       </GestureHandlerRootView>
     </SafeAreaProvider>

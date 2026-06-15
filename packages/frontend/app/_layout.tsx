@@ -25,7 +25,7 @@ import { Provider as PortalProvider, Outlet as PortalOutlet } from '@/components
 // Hooks
 import { useKeyboardVisibility } from "@/hooks/useKeyboardVisibility";
 import { useIsScreenNotMobile, useIsDesktop } from "@/hooks/useOptimizedMediaQuery";
-import { useTheme } from '@oxyhq/bloom/theme';
+import { BloomThemeProvider, useTheme } from '@oxyhq/bloom/theme';
 import { LayoutScrollProvider, useLayoutScroll } from '@/context/LayoutScrollContext';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -395,8 +395,10 @@ export default function RootLayout() {
   ]);
 
   return (
-    <ThemedView style={{ flex: 1 }}>
-      {appContent}
-    </ThemedView>
+    <BloomThemeProvider defaultMode="dark" defaultColorPreset="purple">
+      <ThemedView style={{ flex: 1 }}>
+        {appContent}
+      </ThemedView>
+    </BloomThemeProvider>
   );
 }
