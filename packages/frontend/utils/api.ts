@@ -20,31 +20,34 @@ const publicClient = axios.create({
   },
 });
 
-// API methods using authenticatedClient (with token handling)
+// API methods using authenticatedClient (the OxyServices HttpService).
+// HttpService request methods return the parsed response body directly
+// (typed Promise<T>), NOT an axios-style { data } envelope — so the
+// resolved value IS the data.
 export const api = {
   async get<T = any>(endpoint: string, params?: Record<string, any>): Promise<{ data: T }> {
-    const response = await authenticatedClient.get(endpoint, { params });
-    return { data: response.data };
+    const data = await authenticatedClient.get<T>(endpoint, { params });
+    return { data };
   },
 
   async post<T = any>(endpoint: string, body?: any): Promise<{ data: T }> {
-    const response = await authenticatedClient.post(endpoint, body);
-    return { data: response.data };
+    const data = await authenticatedClient.post<T>(endpoint, body);
+    return { data };
   },
 
   async put<T = any>(endpoint: string, body?: any): Promise<{ data: T }> {
-    const response = await authenticatedClient.put(endpoint, body);
-    return { data: response.data };
+    const data = await authenticatedClient.put<T>(endpoint, body);
+    return { data };
   },
 
   async delete<T = any>(endpoint: string): Promise<{ data: T }> {
-    const response = await authenticatedClient.delete(endpoint);
-    return { data: response.data };
+    const data = await authenticatedClient.delete<T>(endpoint);
+    return { data };
   },
 
   async patch<T = any>(endpoint: string, body?: any): Promise<{ data: T }> {
-    const response = await authenticatedClient.patch(endpoint, body);
-    return { data: response.data };
+    const data = await authenticatedClient.patch<T>(endpoint, body);
+    return { data };
   },
 };
 
