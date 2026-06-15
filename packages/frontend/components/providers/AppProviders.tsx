@@ -23,6 +23,7 @@ import { StatusBar } from 'expo-status-bar';
 import { OxyProvider } from '@oxyhq/services';
 import { OxyServices } from '@oxyhq/core';
 
+import { OXY_CLIENT_ID } from '@/config';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { BottomSheetProvider } from '@/context/BottomSheetContext';
 import { HomeRefreshProvider } from '@/context/HomeRefreshContext';
@@ -54,6 +55,7 @@ export const AppProviders = memo(function AppProviders({
           <QueryClientProvider client={queryClient}>
             <OxyProvider
               oxyServices={oxyServices}
+              clientId={OXY_CLIENT_ID}
               storageKeyPrefix="oxy_syra"
             >
               <I18nextProvider i18n={i18n}>
