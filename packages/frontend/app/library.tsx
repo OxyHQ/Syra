@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, ScrollView, Pressable, Platform, ActivityIndicator } from 'react-native';
-import { useTheme } from '@/hooks/useTheme';
+import { useTheme } from '@oxyhq/bloom/theme';
 import SEO from '@/components/SEO';
 import { Ionicons, Octicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -309,9 +309,9 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                   style={[styles.libraryItem, { backgroundColor: theme.colors.backgroundSecondary }]}
                   onPress={() => router.push(`/artist/${artist.id}`)}
                 >
-                  {artist.profileImage ? (
+                  {artist.image ? (
                     <Image
-                      source={{ uri: artist.profileImage }}
+                      source={{ uri: artist.image }}
                       style={styles.artistImage}
                       contentFit="cover"
                     />
@@ -366,10 +366,10 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                   )}
                   <View style={styles.itemContent}>
                     <Text style={[styles.itemTitle, { color: theme.colors.text }]} numberOfLines={1}>
-                      {album.name}
+                      {album.title}
                     </Text>
                     <Text style={[styles.itemSubtitle, { color: theme.colors.textSecondary }]}>
-                      {album.artistName} • {album.releaseYear || ''}
+                      {album.artistName} • {album.releaseDate ? new Date(album.releaseDate).getFullYear() : ''}
                     </Text>
                   </View>
                 </Pressable>

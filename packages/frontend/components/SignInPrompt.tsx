@@ -8,8 +8,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useOxy } from '@oxyhq/services';
 import { Logo } from './Logo';
-import { colors } from '../styles/colors';
-import { useTheme } from '@/hooks/useTheme';
+import { useTheme } from '@oxyhq/bloom/theme';
 
 interface SignInPromptProps {
     onSignInPress?: () => void;
@@ -28,38 +27,38 @@ const SignInPrompt: React.FC<SignInPromptProps> = ({ onSignInPress }) => {
     };
 
     return (
-        <View style={[styles.signInContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
-            <View style={[styles.signInCard, { backgroundColor: theme.colors.background }]}>
+        <View className="bg-primary/10" style={styles.signInContainer}>
+            <View className="bg-background" style={styles.signInCard}>
                 <View style={styles.logoContainer}>
                     <Logo />
                 </View>
 
-                <Text style={[styles.signInTitle, { color: theme.colors.text }]}>Welcome to Mention</Text>
-                <Text style={[styles.signInSubtitle, { color: theme.colors.textSecondary }]}>
+                <Text className="text-foreground" style={styles.signInTitle}>Welcome to Mention</Text>
+                <Text className="text-muted-foreground" style={styles.signInSubtitle}>
                     Join the conversation and connect with people who share your interests
                 </Text>
 
                 <View style={styles.featuresContainer}>
                     <View style={styles.featureItem}>
                         <Ionicons name="chatbubble-outline" size={20} color={theme.colors.primary} />
-                        <Text style={[styles.featureText, { color: theme.colors.text }]}>Share your thoughts</Text>
+                        <Text className="text-foreground" style={styles.featureText}>Share your thoughts</Text>
                     </View>
                     <View style={styles.featureItem}>
                         <Ionicons name="people-outline" size={20} color={theme.colors.primary} />
-                        <Text style={[styles.featureText, { color: theme.colors.text }]}>Connect with others</Text>
+                        <Text className="text-foreground" style={styles.featureText}>Connect with others</Text>
                     </View>
                     <View style={styles.featureItem}>
                         <Ionicons name="heart-outline" size={20} color={theme.colors.primary} />
-                        <Text style={[styles.featureText, { color: theme.colors.text }]}>Discover new ideas</Text>
+                        <Text className="text-foreground" style={styles.featureText}>Discover new ideas</Text>
                     </View>
                 </View>
 
-                <TouchableOpacity style={[styles.signInButton, { backgroundColor: theme.colors.primary }]} onPress={handleSignInPress}>
-                    <Text style={[styles.signInButtonText, { color: theme.colors.card }]}>Get Started</Text>
+                <TouchableOpacity className="bg-primary" style={styles.signInButton} onPress={handleSignInPress}>
+                    <Text className="text-primary-foreground" style={styles.signInButtonText}>Get Started</Text>
                     <Ionicons name="arrow-forward" size={18} color={theme.colors.card} />
                 </TouchableOpacity>
 
-                <Text style={[styles.signInFooter, { color: theme.colors.textSecondary }]}>
+                <Text className="text-muted-foreground" style={styles.signInFooter}>
                     By signing in, you agree to our Terms of Service and Privacy Policy
                 </Text>
             </View>
@@ -73,10 +72,8 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         paddingHorizontal: 24,
-        backgroundColor: colors.primaryLight,
     },
     signInCard: {
-        backgroundColor: colors.COLOR_BLACK_LIGHT_9,
         borderRadius: 20,
         padding: 32,
         width: '100%',
@@ -91,13 +88,11 @@ const styles = StyleSheet.create({
     signInTitle: {
         fontSize: 28,
         fontWeight: 'bold',
-        color: colors.COLOR_BLACK_LIGHT_1,
         marginBottom: 12,
         textAlign: 'center',
     },
     signInSubtitle: {
         fontSize: 16,
-        color: colors.COLOR_BLACK_LIGHT_3,
         marginBottom: 32,
         textAlign: 'center',
         lineHeight: 24,
@@ -114,12 +109,10 @@ const styles = StyleSheet.create({
     },
     featureText: {
         fontSize: 16,
-        color: colors.COLOR_BLACK_LIGHT_2,
         marginLeft: 12,
         flex: 1,
     },
     signInButton: {
-        backgroundColor: colors.primaryColor,
         paddingHorizontal: 32,
         paddingVertical: 16,
         borderRadius: 12,
@@ -131,14 +124,12 @@ const styles = StyleSheet.create({
         elevation: 6,
     },
     signInButtonText: {
-        color: colors.COLOR_BLACK_LIGHT_9,
         fontSize: 16,
         fontWeight: '600',
         marginRight: 8,
     },
     signInFooter: {
         fontSize: 12,
-        color: colors.COLOR_BLACK_LIGHT_5,
         textAlign: 'center',
         marginTop: 24,
         lineHeight: 18,

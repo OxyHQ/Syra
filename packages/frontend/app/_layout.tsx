@@ -23,10 +23,9 @@ import { QUERY_CLIENT_CONFIG } from '@/components/providers/constants';
 import { Provider as PortalProvider, Outlet as PortalOutlet } from '@/components/Portal';
 
 // Hooks
-import { useColorScheme } from "@/hooks/useColorScheme";
 import { useKeyboardVisibility } from "@/hooks/useKeyboardVisibility";
 import { useIsScreenNotMobile, useIsDesktop } from "@/hooks/useOptimizedMediaQuery";
-import { useTheme } from '@/hooks/useTheme';
+import { useTheme } from '@oxyhq/bloom/theme';
 import { LayoutScrollProvider, useLayoutScroll } from '@/context/LayoutScrollContext';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -34,6 +33,7 @@ import { useUIStore } from '@/stores/uiStore';
 // Services & Utils
 import { oxyServices } from '@/lib/oxyServices';
 import { AppInitializer } from '@/lib/appInitializer';
+import { webViewStyle, webDimension } from '@/utils/webStyles';
 
 // Styles
 import '../styles/global.css';
@@ -77,28 +77,32 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
   // Player bar uses padding-based sizing (~92px: 4px progress + 16px top + 56px content + 16px bottom)
   // Padding is on panelsWrapper (bottom only, no top padding), so we subtract outerPadding
   // On mobile, player bar is absolute/fixed, so it doesn't affect height calculation
-  const panelHeight = isScreenNotMobile
-    ? `calc(100vh - 64px - 92px - ${outerPadding}px)` as any // topbar + playerBar (~92px) + padding (bottom only)
-    : `calc(100vh - 64px - 92px)` as any; // topbar + playerBar (~92px, absolute positioned)
+  // topbar + playerBar (~92px) + padding (bottom only on desktop). These are
+  // web `calc()` strings; native panels do not use this height.
+  const panelHeight = webDimension(
+    isScreenNotMobile
+      ? `calc(100vh - 64px - 92px - ${outerPadding}px)`
+      : `calc(100vh - 64px - 92px)`
+  );
 
   const styles = useMemo(() => StyleSheet.create({
     outerContainer: {
       flex: 1,
       width: '100%',
-      backgroundColor: '#000000', // Black app background
+      backgroundColor: theme.colors.background,
     },
     contentWrapper: {
       flex: 1,
     },
-    topBarContainer: {
+    topBarContainer: webViewStyle({
       ...Platform.select({
         web: {
-          position: 'sticky' as any,
+          position: 'sticky',
           top: 0,
           zIndex: 1000,
         },
       }),
-    },
+    }),
     panelsWrapper: {
       flex: 1,
       flexDirection: isScreenNotMobile ? 'row' : 'column',
@@ -120,16 +124,16 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
         },
       }),
     },
-    mainContentWrapper: {
+    mainContentWrapper: webViewStyle({
       flex: 1,
       minWidth: 0, // Allow flexbox to shrink below content size
       ...Platform.select({
         web: {
-          overflowY: 'auto' as any,
+          overflowY: 'auto',
           height: panelHeight,
         },
       }),
-    },
+    }),
     rightSidebarContainer: {
       flexShrink: 0,
       flexGrow: isNowPlayingFullscreen ? 1 : 0,
@@ -353,9 +357,6 @@ export default function RootLayout() {
     }
   }, [splashState.initializationComplete, splashState.fadeComplete, appIsReady]);
 
-  const theme = useTheme();
-  const colorScheme = useColorScheme();
-
   // Memoize app content to prevent unnecessary re-renders
   const appContent = useMemo(() => {
     if (!appIsReady) {
@@ -370,7 +371,6 @@ export default function RootLayout() {
     return (
       <AppProviders
         oxyServices={oxyServices}
-        colorScheme={colorScheme}
         queryClient={queryClient}
       >
         {/* Portal Provider for rendering components outside tree */}
@@ -387,7 +387,6 @@ export default function RootLayout() {
     splashState.startFade,
     splashState.initializationComplete,
     splashState.fadeComplete,
-    colorScheme,
     isScreenNotMobile,
     keyboardVisible,
     handleSplashFadeComplete,

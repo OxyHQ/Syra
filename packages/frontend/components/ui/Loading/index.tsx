@@ -10,7 +10,7 @@
  */
 
 import React, { useMemo, useEffect } from 'react';
-import { View, Text, StyleSheet, ViewStyle, TextStyle } from 'react-native';
+import { View, Text, StyleSheet, ViewStyle, TextStyle, DimensionValue } from 'react-native';
 import Animated, { 
   Easing, 
   useAnimatedStyle, 
@@ -18,10 +18,10 @@ import Animated, {
   withTiming 
 } from 'react-native-reanimated';
 import { Loading as LoadingIcon } from '@/assets/icons/loading-icon';
-import { useTheme } from '@/hooks/useTheme';
+import { useTheme } from '@oxyhq/bloom/theme';
 import { SPACING } from '@/styles/spacing';
 import { FONT_SIZES } from '@/styles/typography';
-import { flattenStyleArray } from '@/utils/theme';
+import { flattenStyleArray } from '@/styles/shared';
 import { memo } from 'react';
 
 export type LoadingVariant = 'spinner' | 'top' | 'skeleton' | 'inline';
@@ -74,6 +74,8 @@ interface InlineLoadingProps extends BaseLoadingProps {
   variant: 'inline';
   /** Text to show next to spinner */
   text?: string;
+  /** Custom style for the text */
+  textStyle?: TextStyle;
 }
 
 export type LoadingProps = 
@@ -238,6 +240,7 @@ const SkeletonLoading: React.FC<SkeletonLoadingProps> = ({
   const themeBackground = theme && theme.colors ? theme.colors.background : undefined;
   const backgroundColor = themeBackgroundSecondary ?? themeBackground ?? '#f5f5f5';
   
+  const skeletonWidth: DimensionValue = typeof width === 'string' ? (width as DimensionValue) : `${width}%`;
   const skeletonLines = Array.from({ length: lines }, (_, index) => (
     <View
       key={index}
@@ -245,7 +248,7 @@ const SkeletonLoading: React.FC<SkeletonLoadingProps> = ({
         styles.skeletonLine,
         {
           backgroundColor,
-          width: typeof width === 'string' ? width : `${width}%`,
+          width: skeletonWidth,
           height: lineHeight,
           marginBottom: index < lines - 1 ? SPACING.sm : 0,
         },

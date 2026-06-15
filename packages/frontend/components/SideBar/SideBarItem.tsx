@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, Platform, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useTheme } from '@/hooks/useTheme';
+import { useTheme } from '@oxyhq/bloom/theme';
 
 export function SideBarItem({
     isActive,

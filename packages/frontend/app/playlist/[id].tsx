@@ -8,7 +8,7 @@ import Animated, {
   useScrollViewOffset,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useTheme } from '@/hooks/useTheme';
+import { useTheme } from '@oxyhq/bloom/theme';
 import { musicService } from '@/services/musicService';
 import { Playlist, Track } from '@syra/shared-types';
 import { Ionicons } from '@expo/vector-icons';

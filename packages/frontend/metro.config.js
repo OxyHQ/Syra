@@ -1,4 +1,5 @@
 const { getDefaultConfig } = require('expo/metro-config');
+const { withNativeWind } = require('nativewind/metro');
 const path = require('path');
 
 const projectRoot = __dirname;
@@ -56,6 +57,16 @@ config.resolver = {
     path.join(projectRoot, 'node_modules'),
     path.join(monorepoRoot, 'node_modules'),
   ],
+  // Enable symlinks for workspace package resolution
+  unstable_enableSymlinks: true,
+  // Enable package.json "exports" field resolution (required by @oxyhq/bloom subpath exports)
+  unstable_enablePackageExports: true,
+  sourceExts: [...config.resolver.sourceExts, 'ts', 'tsx'],
+  // Bloom bundles its font system by importing `.woff2`/`.woff` files directly from JS.
+  // When Metro bundles for web (`bundler: "metro"` in app.config.js) it picks the web
+  // font-face module, which has module-level `.woff2` imports. Metro does not include
+  // `.woff2` in default `assetExts`, so register them here as static assets.
+  assetExts: [...config.resolver.assetExts, 'wasm', 'woff2', 'woff'],
 };
 
 // Optimize transformer for better tree shaking
@@ -99,5 +110,8 @@ config.transformer = {
   },
 };
 
-module.exports = config;
+module.exports = withNativeWind(config, {
+  inlineRem: 16,
+  inlineVariables: false,
+});
 

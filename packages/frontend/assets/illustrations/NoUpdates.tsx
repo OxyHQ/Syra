@@ -1,6 +1,6 @@
 import React from 'react';
 import Svg, { G, Path, Defs, ClipPath, Rect } from 'react-native-svg';
-import { colors } from '@/styles/colors';
+import { useTheme } from '@oxyhq/bloom/theme';
 
 export interface NoUpdatesIllustrationProps {
     width?: number;
@@ -8,12 +8,13 @@ export interface NoUpdatesIllustrationProps {
 }
 
 // Converted from assets/images/illustrations/no_updates.svg
-// Primary accents mapped to app colors; strokes use app neutral
+// Primary accents mapped to theme tokens; strokes use the neutral foreground
 export const NoUpdatesIllustration: React.FC<NoUpdatesIllustrationProps> = ({ width = 200, height = 200 }) => {
-    const strokeNeutral = colors.COLOR_BLACK_LIGHT_2;
-    const accentA = colors.primaryColor + "15";
-    const accentB = colors.primaryColor + "99";
-    const white = colors.primaryLight;
+    const theme = useTheme();
+    const strokeNeutral = theme.colors.text;
+    const accentA = theme.colors.primary + "15";
+    const accentB = theme.colors.primary + "99";
+    const white = theme.colors.card;
 
     return (
         <Svg width={width} height={height} viewBox="0 0 200 201" fill="none">

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, Text, Pressable, Platform, ViewStyle } from 'react-native';
+import { webViewStyle } from '@/utils/webStyles';
 import { useRouter, usePathname } from 'expo-router';
-import { useTheme } from '@/hooks/useTheme';
+import { useTheme } from '@oxyhq/bloom/theme';
 import { useOxy } from '@oxyhq/services';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Avatar from './Avatar';
@@ -118,10 +119,10 @@ export const TopBar: React.FC = () => {
       {/* Right Section: Actions & Profile */}
       <View style={styles.rightSection}>
         {isAuthenticated && (
-          <Pressable 
+          <Pressable
             style={[styles.iconButton, pathname.startsWith('/artist') && styles.activeButton]}
             onPress={handleDashboard}
-            title={artistProfile ? 'Artist Dashboard' : 'Register as Artist'}
+            accessibilityLabel={artistProfile ? 'Artist Dashboard' : 'Register as Artist'}
           >
             <MaterialCommunityIcons 
               name={pathname.startsWith('/artist') ? 'account-music' : 'account-music-outline'} 
@@ -160,7 +161,8 @@ export const TopBar: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
+  // `position: 'sticky'` is a react-native-web value; native uses static flow.
+  container: webViewStyle({
     height: 64,
     flexDirection: 'row',
     alignItems: 'center',
@@ -169,12 +171,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     ...Platform.select({
       web: {
-        position: 'sticky' as any,
+        position: 'sticky',
         top: 0,
         zIndex: 1000,
       },
     }),
-  },
+  }),
   leftSection: {
     flexDirection: 'row',
     alignItems: 'center',

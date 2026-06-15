@@ -1,7 +1,7 @@
 import React, { memo, useState, ReactNode } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ViewStyle, TextStyle } from 'react-native';
-import { useTheme } from '@/hooks/useTheme';
-import { flattenStyleArray } from '@/utils/theme';
+import { useTheme } from '@oxyhq/bloom/theme';
+import { flattenStyleArray } from '@/styles/shared';
 import { Ionicons } from '@expo/vector-icons';
 
 export interface EmptyStateProps {

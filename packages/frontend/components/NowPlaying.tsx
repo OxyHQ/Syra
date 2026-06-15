@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, ScrollView, Pressable, Platform } from 'react-native';
+import { webViewStyle, webDimension } from '@/utils/webStyles';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useTheme } from '@/hooks/useTheme';
+import { useTheme } from '@oxyhq/bloom/theme';
 import { Ionicons, Octicons } from '@expo/vector-icons';
 import { useMediaQuery } from 'react-responsive';
 import { usePlayerStore } from '@/stores/playerStore';
@@ -298,9 +299,10 @@ export const NowPlaying: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
+  // `overflowY` is a react-native-web value; the panel only scrolls on web.
+  container: webViewStyle({
     height: '100%',
-    overflowY: 'auto' as any,
+    overflowY: 'auto',
     ...Platform.select({
       default: {
         flex: 1,
@@ -309,7 +311,7 @@ const styles = StyleSheet.create({
         width: '100%',
       },
     }),
-  },
+  }),
   wrapper: {
     flex: 1,
     position: 'relative',
@@ -381,7 +383,8 @@ const styles = StyleSheet.create({
   topSpacer: {
     ...Platform.select({
       web: {
-        height: 'calc(100vh - 64px - 200px)', // Viewport minus top bar and approximate track info height
+        // Viewport minus top bar and approximate track info height.
+        height: webDimension('calc(100vh - 64px - 200px)'),
       },
       default: {
         height: 400,

@@ -1,7 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet, Platform } from "react-native";
 import { useTranslation } from "react-i18next";
-import { colors } from "@/styles/colors";
 import { ThemedView } from "@/components/ThemedView";
 import { NoUpdatesIllustration } from "@/assets/illustrations/NoUpdates";
 import { TouchableOpacity } from "react-native-gesture-handler";
@@ -19,16 +18,16 @@ export const NotificationPermissionSheet: React.FC<Props> = ({ onEnable, onLater
             <View style={styles.illustrationWrap}>
                 <NoUpdatesIllustration width={140} height={140} />
             </View>
-            <Text style={styles.title}>{t("permission.notifications.title")}</Text>
-            <Text style={styles.subtitle}>
+            <Text className="text-foreground" style={styles.title}>{t("permission.notifications.title")}</Text>
+            <Text className="text-muted-foreground" style={styles.subtitle}>
                 {t("permission.notifications.subtitle")}
             </Text>
             <View style={styles.actions}>
-                <TouchableOpacity onPress={onLater} style={[styles.button, styles.secondary]}>
-                    <Text style={[styles.buttonText, styles.secondaryText]}>{t("permission.notifications.later")}</Text>
+                <TouchableOpacity onPress={onLater} className="bg-transparent border border-border" style={styles.button}>
+                    <Text className="text-foreground" style={styles.buttonText}>{t("permission.notifications.later")}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={onEnable} style={[styles.button, styles.primary]}>
-                    <Text style={[styles.buttonText, styles.primaryText]}>{t("permission.notifications.enable")}</Text>
+                <TouchableOpacity onPress={onEnable} className="bg-primary" style={styles.button}>
+                    <Text className="text-primary-foreground" style={[styles.buttonText, styles.primaryText]}>{t("permission.notifications.enable")}</Text>
                 </TouchableOpacity>
             </View>
         </ThemedView>
@@ -51,13 +50,11 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: Platform.OS === 'web' ? 'bold' : '600',
         textAlign: 'center',
-        color: colors.COLOR_BLACK_LIGHT_1,
         marginBottom: 6,
     },
     subtitle: {
         fontSize: 14,
         textAlign: 'center',
-        color: colors.COLOR_BLACK_LIGHT_4,
         marginHorizontal: 8,
     },
     actions: {
@@ -69,23 +66,11 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
         alignItems: 'center',
     },
-    primary: {
-        backgroundColor: colors.secondaryColor,
-    },
-    secondary: {
-        backgroundColor: 'transparent',
-        borderWidth: 1,
-        borderColor: colors.chatInputBorder,
-    },
     buttonText: {
         fontSize: 15,
     },
     primaryText: {
-        color: '#fff',
         fontWeight: Platform.OS === 'web' ? 'bold' : '600',
-    },
-    secondaryText: {
-        color: colors.COLOR_BLACK_LIGHT_1,
     },
 });
 

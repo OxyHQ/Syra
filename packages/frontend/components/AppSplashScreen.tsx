@@ -1,17 +1,9 @@
 import React, { useEffect, useCallback, useMemo, useRef } from 'react';
 import { View, Animated, Platform, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { cssInterop } from 'nativewind';
 import { LogoIcon } from '@/assets/logo';
 import { LoadingSpinner } from '@/components/ui/Loading';
-import { useTheme } from '@/hooks/useTheme';
-
-// Configure LinearGradient for NativeWind
-cssInterop(LinearGradient, {
-    className: {
-        target: 'style',
-    },
-});
+import { useTheme } from '@oxyhq/bloom/theme';
 
 interface AppSplashScreenProps {
     onFadeComplete?: () => void;

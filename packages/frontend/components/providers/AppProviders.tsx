@@ -30,11 +30,21 @@ import { BottomSheetProvider } from '@/context/BottomSheetContext';
 import { HomeRefreshProvider } from '@/context/HomeRefreshContext';
 import { Toaster } from '@/lib/sonner';
 import i18n from '@/lib/i18n';
+import { useServerAppearanceSync } from '@/hooks/useServerAppearanceSync';
+
+/**
+ * Non-rendering bridge that pushes the user's saved appearance settings into the
+ * Bloom theme. Must live inside both BloomThemeProvider (for `useBloomTheme`)
+ * and OxyProvider (for `useAuth`).
+ */
+function AppearanceSync(): null {
+  useServerAppearanceSync();
+  return null;
+}
 
 interface AppProvidersProps {
   children: React.ReactNode;
   oxyServices: OxyServices;
-  colorScheme: 'light' | 'dark' | null | undefined;
   queryClient: QueryClient;
 }
 
@@ -46,7 +56,6 @@ interface AppProvidersProps {
 export const AppProviders = memo(function AppProviders({
   children,
   oxyServices,
-  colorScheme,
   queryClient,
 }: AppProvidersProps) {
   return (
@@ -61,6 +70,7 @@ export const AppProviders = memo(function AppProviders({
                 storageKeyPrefix="oxy_syra"
               >
                 <I18nextProvider i18n={i18n}>
+                  <AppearanceSync />
                   <BottomSheetModalProvider>
                     <BottomSheetProvider>
                       <MenuProvider>

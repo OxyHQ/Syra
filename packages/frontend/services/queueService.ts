@@ -33,11 +33,11 @@ export const queueService = {
    * Remove tracks from queue
    */
   async removeFromQueue(trackIds: string[]): Promise<{ queue: Queue; removed: number }> {
-    // Express delete routes can accept body via req.body
-    const response = await authenticatedClient.delete('/queue/remove', {
+    // Express delete routes can accept body via req.body.
+    // authenticatedClient (HttpService) resolves to the parsed body directly.
+    return authenticatedClient.delete<{ queue: Queue; removed: number }>('/queue/remove', {
       data: { trackIds },
     });
-    return response.data;
   },
 
   /**

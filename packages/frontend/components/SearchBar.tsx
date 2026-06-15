@@ -3,8 +3,7 @@ import { useRouter } from 'expo-router'
 import React, { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator, Platform, Text, TextInput, TouchableOpacity, View, ViewStyle } from 'react-native'
-import { colors } from '../styles/colors'
-import { useTheme } from '@/hooks/useTheme'
+import { useTheme } from '@oxyhq/bloom/theme'
 import { Search } from '@/assets/icons/search-icon'
 
 const debounce = (func: Function, wait: number) => {

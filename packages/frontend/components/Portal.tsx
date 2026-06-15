@@ -11,6 +11,7 @@ import React, {
   useState,
 } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
+import { webViewStyle } from '@/utils/webStyles';
 import { Z_INDEX } from '@/lib/constants';
 
 /**
@@ -123,7 +124,9 @@ export const Outlet = memo(DefaultPortal.Outlet);
 export const Portal = DefaultPortal.Portal;
 
 const styles = StyleSheet.create({
-  portalOutlet: {
+  // `position: 'fixed'` is a react-native-web value; the portal outlet only
+  // mounts to the DOM on web.
+  portalOutlet: webViewStyle({
     position: 'fixed',
     top: 0,
     left: 0,
@@ -131,6 +134,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     pointerEvents: 'box-none',
     zIndex: Z_INDEX.PORTAL_OUTLET,
-  },
+  }),
 });
 

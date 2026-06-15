@@ -1,9 +1,11 @@
 import React from 'react';
 import Svg, { Path, Line, Polygon, Rect } from 'react-native-svg';
 import { ViewStyle } from 'react-native';
-import { colors } from '@/styles/colors';
+import { useTheme } from '@oxyhq/bloom/theme';
 
-export const AnalyticsIcon = ({ color = colors.primaryColor, size = 26, style }: { color?: string; size?: number; style?: ViewStyle }) => {
+export const AnalyticsIcon = ({ color: colorProp, size = 26, style }: { color?: string; size?: number; style?: ViewStyle }) => {
+  const theme = useTheme();
+  const color = colorProp ?? theme.colors.icon;
   return (
     <Svg viewBox="0 0 24 24" width={size} height={size} style={{ ...style }}>
       <Rect fill="none" height="20" rx="5" stroke={color} strokeWidth="2" width="20" x="2" y="2"></Rect>
@@ -14,7 +16,9 @@ export const AnalyticsIcon = ({ color = colors.primaryColor, size = 26, style }:
   );
 };
 
-export const AnalyticsIconActive = ({ color = colors.primaryColor, size = 26, style }: { color?: string; size?: number; style?: ViewStyle }) => {
+export const AnalyticsIconActive = ({ color: colorProp, size = 26, style }: { color?: string; size?: number; style?: ViewStyle }) => {
+  const theme = useTheme();
+  const color = colorProp ?? theme.colors.icon;
   return (
     <Svg viewBox="0 0 24 24" width={size} height={size} style={{ ...style }}>
 <Rect fill="none" height="20" rx="5" stroke={color} strokeWidth="2" width="20" x="2" y="2"></Rect>

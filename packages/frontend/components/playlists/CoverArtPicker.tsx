@@ -1,6 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { StyleSheet, View, Text, Pressable, Image, Platform, Alert, ActivityIndicator } from 'react-native';
-import { useTheme } from '@/hooks/useTheme';
+import { useTheme } from '@oxyhq/bloom/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useImagePicker, ImagePickerResult } from '@/hooks/useImagePicker';
 import { getApiOrigin } from '@/utils/api';
@@ -23,6 +23,8 @@ export const CoverArtPicker: React.FC<CoverArtPickerProps> = ({
   disabled = false,
 }) => {
   const theme = useTheme();
+  // Web-only hover state to fade in the "change cover" overlay.
+  const [isHovered, setIsHovered] = useState(false);
   const { pickImage, takePhoto, uploadImage, isUploading } = useImagePicker({
     allowsEditing: true,
     aspect: [1, 1],
@@ -99,6 +101,8 @@ export const CoverArtPicker: React.FC<CoverArtPickerProps> = ({
     <Pressable
       onPress={handlePickImage}
       disabled={disabled}
+      onPointerEnter={Platform.OS === 'web' ? () => setIsHovered(true) : undefined}
+      onPointerLeave={Platform.OS === 'web' ? () => setIsHovered(false) : undefined}
       style={[
         styles.container,
         {
@@ -143,18 +147,9 @@ export const CoverArtPicker: React.FC<CoverArtPickerProps> = ({
             styles.overlay,
             {
               backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              opacity: isHovered ? 1 : 0,
             },
           ]}
-          onMouseEnter={(e) => {
-            if (e.currentTarget) {
-              (e.currentTarget as any).style.opacity = '1';
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (e.currentTarget) {
-              (e.currentTarget as any).style.opacity = '0';
-            }
-          }}
         >
           <MaterialCommunityIcons
             name="camera"

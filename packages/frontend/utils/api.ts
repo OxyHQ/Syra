@@ -10,7 +10,10 @@ const API_CONFIG = {
 
 // Initialize OxyServices - if it automatically adds /api prefix, we don't need it in baseURL
 const oxyServices = new OxyServices({ baseURL: API_CONFIG.baseURL });
-const authenticatedClient = oxyServices.getClient();
+// `@oxyhq/core` does not export the HttpService type by name, so derive an
+// explicit, nameable annotation from the public `getClient` signature. Without
+// it, TypeScript cannot name the inferred export type (TS2883).
+const authenticatedClient: ReturnType<OxyServices['getClient']> = oxyServices.getClient();
 
 // Public API client (no authentication required)
 const publicClient = axios.create({

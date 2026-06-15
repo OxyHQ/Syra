@@ -1,6 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { colors } from '@/styles/colors';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { withTranslation } from 'react-i18next';
 
 interface Props {
@@ -12,6 +11,29 @@ interface Props {
 interface State {
     hasError: boolean;
     error: Error | null;
+}
+
+// Fallback UI rendered as a function component so it can consume NativeWind theme
+// tokens via className (class components cannot use hooks directly).
+function ErrorFallbackView({ t, onRetry }: { t: (key: string) => string; onRetry: () => void }) {
+    return (
+        <View className="flex-1 items-center justify-center bg-background px-5">
+            <Text className="text-2xl font-bold mb-3 text-center text-foreground">
+                {t('error.boundary.title')}
+            </Text>
+            <Text className="text-base text-center mb-6 leading-[22px] px-4 text-muted-foreground">
+                {t('error.boundary.message')}
+            </Text>
+            <TouchableOpacity
+                className="bg-primary px-6 py-3 rounded-xl min-w-[120px] items-center"
+                onPress={onRetry}
+            >
+                <Text className="text-base font-semibold text-primary-foreground">
+                    {t('error.boundary.retry')}
+                </Text>
+            </TouchableOpacity>
+        </View>
+    );
 }
 
 class ErrorBoundaryBase extends Component<Props, State> {
@@ -40,67 +62,18 @@ class ErrorBoundaryBase extends Component<Props, State> {
                 return this.props.fallback;
             }
 
-            return (
-                <View style={styles.container}>
-                    <Text style={styles.title}>{this.props.t("error.boundary.title")}</Text>
-                    <Text style={styles.message}>
-                        {this.props.t("error.boundary.message")}
-                    </Text>
-                    <TouchableOpacity
-                        style={styles.retryButton}
-                        onPress={this.handleRetry}
-                    >
-                        <Text style={styles.retryText}>{this.props.t("error.boundary.retry")}</Text>
-                    </TouchableOpacity>
-                </View>
-            );
+            return <ErrorFallbackView t={this.props.t} onRetry={this.handleRetry} />;
         }
 
         return this.props.children;
     }
 }
 
-// Wrap the component with translation HOC
-const ErrorBoundary = withTranslation()(ErrorBoundaryBase);
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 20,
-        backgroundColor: colors.primaryDark,
-    },
-    title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        marginBottom: 12,
-        color: colors.COLOR_BLACK_LIGHT_6,
-        textAlign: 'center',
-    },
-    message: {
-        fontSize: 16,
-        textAlign: 'center',
-        marginBottom: 24,
-        color: colors.COLOR_BLACK_LIGHT_5,
-        lineHeight: 22,
-        paddingHorizontal: 16,
-    },
-    retryButton: {
-        backgroundColor: colors.primaryColor,
-        paddingHorizontal: 24,
-        paddingVertical: 12,
-        borderRadius: 12,
-        minWidth: 120,
-        alignItems: 'center',
-        boxShadow: '0px 2px 4px 0px rgba(0, 0, 0, 0.1)',
-        elevation: 3,
-    },
-    retryText: {
-        color: 'white',
-        fontSize: 16,
-        fontWeight: '600',
-    },
-});
+// Wrap the component with translation HOC. The HOC injects `t`, so the public
+// props are `Props` without it. An explicit annotation is required because the
+// HOC's inferred return type references react-i18next's internal `$Subtract`
+// helper, which TypeScript cannot name portably at the export boundary (TS2883).
+type ErrorBoundaryProps = Omit<Props, 't'>;
+const ErrorBoundary: React.ComponentType<ErrorBoundaryProps> = withTranslation()(ErrorBoundaryBase);
 
 export default ErrorBoundary;

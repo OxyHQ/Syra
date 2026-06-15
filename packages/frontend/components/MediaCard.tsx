@@ -1,6 +1,7 @@
 import React from 'react';
-import { StyleSheet, View, Text, Image, Pressable, Platform, ViewStyle } from 'react-native';
-import { useTheme } from '@/hooks/useTheme';
+import { StyleSheet, View, Text, Image, Pressable, Platform, ViewStyle, GestureResponderEvent } from 'react-native';
+import { webViewStyle } from '@/utils/webStyles';
+import { useTheme } from '@oxyhq/bloom/theme';
 import { Ionicons } from '@expo/vector-icons';
 
 interface MediaCardProps {
@@ -52,7 +53,7 @@ export const MediaCard: React.FC<MediaCardProps> = React.memo(({
     }
   };
 
-  const handlePlayPress = (e: any) => {
+  const handlePlayPress = (e: GestureResponderEvent) => {
     e?.stopPropagation?.();
     onPlayPress?.();
   };
@@ -79,7 +80,7 @@ export const MediaCard: React.FC<MediaCardProps> = React.memo(({
         styles.container,
         (isHovered || isPlayButtonHovered) && { backgroundColor: theme.colors.backgroundSecondary },
         ...Platform.select({
-          web: [{ cursor: 'pointer' as any }],
+          web: [webViewStyle({ cursor: 'pointer' })],
           default: [],
         }),
       ]}
@@ -140,7 +141,8 @@ export const MediaCard: React.FC<MediaCardProps> = React.memo(({
 });
 
 const styles = StyleSheet.create({
-  container: {
+  // `transition` is a react-native-web value; it is a no-op on native.
+  container: webViewStyle({
     padding: 6,
     borderRadius: 8,
     transition: 'background-color 0.2s',
@@ -149,7 +151,7 @@ const styles = StyleSheet.create({
         minWidth: 0,
       },
     }),
-  },
+  }),
   imageContainer: {
     width: '100%',
     aspectRatio: 1,

@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, View, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons, Octicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useTheme } from '@/hooks/useTheme';
+import { useTheme } from '@oxyhq/bloom/theme';
 import { Playlist, Album, Artist } from '@syra/shared-types';
 import { Image } from 'expo-image';
 import { useOxy } from '@oxyhq/services';
@@ -101,9 +101,9 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
             style={styles.iconButton}
             onPress={() => router.push(`/artist/${artist.id}`)}
           >
-            {artist.profileImage ? (
+            {artist.image ? (
               <Image
-                source={{ uri: artist.profileImage }}
+                source={{ uri: artist.image }}
                 style={styles.artistIcon}
                 contentFit="cover"
               />

@@ -1,9 +1,11 @@
 import React from 'react';
 import Svg, { Path } from 'react-native-svg';
 import { ViewStyle } from 'react-native';
-import { colors } from '@/styles/colors';
+import { useTheme } from '@oxyhq/bloom/theme';
 
-export const LinkIcon = ({ color = colors.primaryColor, size = 24, style }: { color?: string; size?: number; style?: ViewStyle }) => {
+export const LinkIcon = ({ color: colorProp, size = 24, style }: { color?: string; size?: number; style?: ViewStyle }) => {
+  const theme = useTheme();
+  const color = colorProp ?? theme.colors.icon;
   return (
     <Svg viewBox="0 0 24 24" width={size} height={size} style={{ ...style }}>
       <Path

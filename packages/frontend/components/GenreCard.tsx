@@ -1,7 +1,8 @@
 import React from 'react';
 import { StyleSheet, View, Text, Image, Pressable, Platform } from 'react-native';
+import { webViewStyle } from '@/utils/webStyles';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useTheme } from '@/hooks/useTheme';
+import { useTheme } from '@oxyhq/bloom/theme';
 import { Ionicons } from '@expo/vector-icons';
 
 interface GenreCardProps {
@@ -37,7 +38,8 @@ export const GenreCard: React.FC<GenreCardProps> = React.memo(({
   };
 
   const rgb = hexToRgb(color) || { r: 30, g: 50, b: 100 };
-  const gradientColors = [
+  // expo-linear-gradient requires a tuple of at least two colors.
+  const gradientColors: readonly [string, string, string] = [
     `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.8)`,
     `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.6)`,
     `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.4)`,
@@ -52,7 +54,7 @@ export const GenreCard: React.FC<GenreCardProps> = React.memo(({
         styles.container,
         isHovered && styles.containerHovered,
         ...Platform.select({
-          web: [{ cursor: 'pointer' as any }],
+          web: [webViewStyle({ cursor: 'pointer' })],
           default: [],
         }),
       ]}

@@ -5,11 +5,19 @@ import React, { useRef, useEffect, useMemo } from 'react';
 import Avatar from './Avatar';
 import { useOxy } from '@oxyhq/services';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme } from '@/hooks/useTheme';
+import { useTheme } from '@oxyhq/bloom/theme';
 import { useHomeRefresh } from '@/context/HomeRefreshContext';
 import { useLayoutScroll } from '@/context/LayoutScrollContext';
-import { colors as baseColors } from '@/styles/colors';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+
+// Forced-dark chrome for the fullscreen Videos screen, where the bar floats over
+// dark video content regardless of the app theme. Everywhere else the bar derives
+// its colors from the Bloom theme.
+const VIDEOS_DARK_PALETTE = {
+    card: '#181818',
+    border: '#3c3c3c',
+    text: '#ededed',
+} as const;
 
 export const BottomBar = () => {
     const router = useRouter();
@@ -30,9 +38,9 @@ export const BottomBar = () => {
         isDark: true,
         colors: {
             ...theme.colors,
-            card: baseColors.primaryDark_1,
-            border: baseColors.COLOR_BLACK_LIGHT_3,
-            text: baseColors.COLOR_BLACK_LIGHT_6,
+            card: VIDEOS_DARK_PALETTE.card,
+            border: VIDEOS_DARK_PALETTE.border,
+            text: VIDEOS_DARK_PALETTE.text,
             primary: theme.colors.primary,
         }
     } : theme;

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Platform } from 'react-native';
+import { webViewStyle } from '@/utils/webStyles';
 import { useMediaQuery } from 'react-responsive';
 import { useUIStore } from '@/stores/uiStore';
 import { useOxy } from '@oxyhq/services';
@@ -137,13 +138,14 @@ export const LibrarySidebar: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
+  // `overflowY` is a react-native-web value; this sidebar only scrolls on web.
+  container: webViewStyle({
     height: '100%',
-    overflowY: 'auto' as any,
+    overflowY: 'auto',
     ...Platform.select({
       default: {
         flex: 1,
       },
     }),
-  },
+  }),
 });

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, ScrollView, Text, Pressable, Image, ActivityIndicator, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useTheme } from '@/hooks/useTheme';
+import { useTheme } from '@oxyhq/bloom/theme';
 import { musicService } from '@/services/musicService';
 import { Album, Track } from '@syra/shared-types';
 import { Ionicons } from '@expo/vector-icons';

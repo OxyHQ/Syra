@@ -8,15 +8,16 @@ export const QUERY_CLIENT_CONFIG = {
   defaultOptions: {
     queries: {
       // Retry strategy - exponential backoff
-      retry: (failureCount, error: any) => {
+      retry: (failureCount: number, error: unknown) => {
         // Don't retry on 4xx errors (client errors)
-        if (error?.status >= 400 && error?.status < 500) {
+        const status = (error as { status?: number } | null)?.status;
+        if (status !== undefined && status >= 400 && status < 500) {
           return false;
         }
         // Retry up to 2 times for network/server errors
         return failureCount < 2;
       },
-      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+      retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 30000),
       
       // Cache configuration - aggressive caching for better performance
       staleTime: 1000 * 60 * 5, // 5 minutes - data stays fresh

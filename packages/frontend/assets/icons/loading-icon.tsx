@@ -1,10 +1,12 @@
 import React from 'react';
 import Svg, { Rect } from 'react-native-svg';
 import { ViewStyle } from 'react-native';
-import { colors } from '@/styles/colors';
+import { useTheme } from '@oxyhq/bloom/theme';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 
-export const Loading = ({ color = colors.primaryColor, size = 26, style: styleProp }: { color?: string; size?: number; style?: ViewStyle }) => {
+export const Loading = ({ color: colorProp, size = 26, style: styleProp }: { color?: string; size?: number; style?: ViewStyle }) => {
+    const theme = useTheme();
+    const color = colorProp ?? theme.colors.icon;
     const rotation = useSharedValue(0);
 
     React.useEffect(() => {

@@ -3,7 +3,7 @@ import { View, TouchableOpacity, StyleSheet, AccessibilityInfo, Pressable, Platf
 import { Stack, Link, useRouter } from "expo-router";
 
 import { LogoIcon } from "@/assets/logo";
-import { useTheme } from '@/hooks/useTheme';
+import { useTheme } from '@oxyhq/bloom/theme';
 
 export const Logo = () => {
   const router = useRouter();

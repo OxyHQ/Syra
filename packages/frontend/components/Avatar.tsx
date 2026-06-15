@@ -1,26 +1,9 @@
 import React from 'react';
-import {
-  View,
-  Image,
-  Animated,
-  StyleSheet,
-  ImageSourcePropType,
-  Text,
-  StyleProp,
-  ViewStyle,
-  ImageStyle,
-  TouchableOpacity,
-} from 'react-native';
-import { VerifiedIcon } from '@/assets/icons/verified-icon';
-import { colors } from '../styles/colors';
-import DefaultAvatar from '@/assets/images/default-avatar.jpg';
-import { useTheme } from '@/hooks/useTheme';
+import { StyleSheet, StyleProp, ViewStyle, ImageStyle, ImageSourcePropType } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-
-const AnimatedImage = Animated.createAnimatedComponent(Image);
-
-// Memoize the default avatar source to prevent re-creation on every render
-const DEFAULT_AVATAR_SOURCE = DefaultAvatar;
+import { Avatar as BloomAvatar } from '@oxyhq/bloom/avatar';
+import { useTheme } from '@oxyhq/bloom/theme';
+import { VerifiedIcon } from '@/assets/icons/verified-icon';
 
 interface AvatarProps {
   source?: ImageSourcePropType | string | undefined | null;
@@ -30,119 +13,37 @@ interface AvatarProps {
   imageStyle?: StyleProp<ImageStyle>;
   label?: string; // initials or single char to show when no image
   onPress?: () => void;
-  useAnimated?: boolean; // render Animated.Image so parent can pass animated styles in imageStyle
 }
 
-const Avatar: React.FC<AvatarProps> = ({
-  source,
-  size = 40,
-  verified = false,
-  style,
-  imageStyle,
-  label,
-  onPress,
-  useAnimated = false,
-}) => {
+// White shield outline behind the verified check, matching the Twitter-style
+// badge convention. The check mark itself is themed via `theme.colors.primary`.
+const VerifiedBadge: React.FC<{ size: number }> = ({ size }) => {
   const theme = useTheme();
-  const [errored, setErrored] = React.useState(false);
-
-  // Memoize imageSource to prevent unnecessary re-renders and image reloads
-  const imageSource = React.useMemo(() => {
-    if (source && !errored) {
-      return typeof source === 'string' ? { uri: source } : source;
-    }
-    return DEFAULT_AVATAR_SOURCE;
-  }, [source, errored]);
-
-  const Container: any = onPress ? TouchableOpacity : View;
-
-  const content = (
-    <Animated.View style={[styles.container, { width: size, height: size }, style]}>
-      <View style={[styles.imageContainer, { width: size, height: size, borderRadius: size / 2 }]}>
-        {source && !errored ? (
-          useAnimated ? (
-            <AnimatedImage
-              source={imageSource}
-              onError={() => setErrored(true)}
-              resizeMode="cover"
-              style={[StyleSheet.absoluteFill, { borderRadius: size / 2 }, imageStyle]}
-              defaultSource={DEFAULT_AVATAR_SOURCE}
-            />
-          ) : (
-            <Image
-              source={imageSource}
-              onError={() => setErrored(true)}
-              resizeMode="cover"
-              style={[StyleSheet.absoluteFill, { borderRadius: size / 2 }, imageStyle]}
-              defaultSource={DEFAULT_AVATAR_SOURCE}
-            />
-          )
-        ) : (
-          <View style={[styles.fallback, { width: size, height: size, borderRadius: size / 2, backgroundColor: theme.colors.backgroundSecondary }]}>
-            {label ? (
-              <Text style={[styles.fallbackText, { fontSize: Math.round(size * 0.4), color: theme.colors.text }]}>
-                {label}
-              </Text>
-            ) : null}
-          </View>
-        )}
-      </View>
-
-      {verified && (
-        <View style={[styles.verifiedBadge, { 
-          width: size * 0.36, 
-          height: size * 0.36,
-        }]}>
-          {/* White border background matching the shield shape */}
-          <Svg 
-            width={size * 0.36} 
-            height={size * 0.36} 
-            viewBox="0 0 24 24"
-            style={StyleSheet.absoluteFill}
-          >
-            {/* White shield shape as border/background */}
-            <Path 
-              fill="#FFFFFF" 
-              d="M22.25 12c0-1.43-.88-2.67-2.19-3.34.46-1.39.2-2.9-.81-3.91s-2.52-1.27-3.91-.81c-.66-1.31-1.91-2.19-3.34-2.19s-2.67.88-3.33 2.19c-1.4-.46-2.91-.2-3.92.81s-1.26 2.52-.8 3.91c-1.31.67-2.2 1.91-2.2 3.34s.89 2.67 2.2 3.34c-.46 1.39-.21 2.9.8 3.91s2.52 1.26 3.91.81c.67 1.31 1.91 2.19 3.34 2.19s2.68-.88 3.34-2.19c1.39.45 2.9.2 3.91-.81s1.27-2.52.81-3.91c1.31-.67 2.19-1.91 2.19-3.34z" 
-            />
-          </Svg>
-          {/* Verified icon on top */}
-          <VerifiedIcon size={Math.round(size * 0.36)} color={colors.primaryColor} />
-        </View>
-      )}
-    </Animated.View>
+  const badgeSize = Math.round(size * 0.36);
+  return (
+    <>
+      <Svg width={badgeSize} height={badgeSize} viewBox="0 0 24 24" style={StyleSheet.absoluteFill}>
+        <Path
+          fill="#FFFFFF"
+          d="M22.25 12c0-1.43-.88-2.67-2.19-3.34.46-1.39.2-2.9-.81-3.91s-2.52-1.27-3.91-.81c-.66-1.31-1.91-2.19-3.34-2.19s-2.67.88-3.33 2.19c-1.4-.46-2.91-.2-3.92.81s-1.26 2.52-.8 3.91c-1.31.67-2.2 1.91-2.2 3.34s.89 2.67 2.2 3.34c-.46 1.39-.21 2.9.8 3.91s2.52 1.26 3.91.81c.67 1.31 1.91 2.19 3.34 2.19s2.68-.88 3.34-2.19c1.39.45 2.9.2 3.91-.81s1.27-2.52.81-3.91c1.31-.67 2.19-1.91 2.19-3.34z"
+        />
+      </Svg>
+      <VerifiedIcon size={badgeSize} color={theme.colors.primary} />
+    </>
   );
-
-  return <Container onPress={onPress}>{content}</Container>;
 };
 
-const styles = StyleSheet.create({
-  container: {
-    position: 'relative',
-    overflow: 'visible',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  imageContainer: {
-    overflow: 'hidden',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  verifiedBadge: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1,
-  },
-  fallback: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fallbackText: {
-    fontWeight: '700',
-  },
-});
+const Avatar: React.FC<AvatarProps> = ({ source, size = 40, verified = false, style, imageStyle, label, onPress }) => (
+  <BloomAvatar
+    source={source}
+    size={size}
+    verified={verified}
+    verifiedIcon={verified ? <VerifiedBadge size={size} /> : undefined}
+    name={label}
+    style={style}
+    imageStyle={imageStyle}
+    onPress={onPress}
+  />
+);
 
 export default React.memo(Avatar);

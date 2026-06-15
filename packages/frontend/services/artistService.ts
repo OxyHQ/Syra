@@ -66,12 +66,11 @@ export const artistService = {
       const blob = await response.blob();
       formData.append('audioFile', blob, fileName);
     } else {
-      // React Native: use the URI directly
-      formData.append('audioFile', {
-        uri: fileUri,
-        name: fileName,
-        type: fileType,
-      } as any);
+      // React Native: append the file by URI. RN's FormData accepts a
+      // { uri, name, type } descriptor, which is not part of the DOM
+      // FormData.append signature, so it goes through a typed Blob view.
+      const rnFilePart = { uri: fileUri, name: fileName, type: fileType } as unknown as Blob;
+      formData.append('audioFile', rnFilePart, fileName);
     }
 
     // Add other form fields
@@ -95,22 +94,44 @@ export const artistService = {
     }
     formData.append('duration', String(data.duration));
 
-    // Use authenticatedClient directly for file uploads
-    const response = await authenticatedClient.post('/tracks/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-      onUploadProgress: onProgress
-        ? (progressEvent) => {
-            if (progressEvent.total) {
-              const progress = (progressEvent.loaded / progressEvent.total) * 100;
-              onProgress(progress);
-            }
-          }
-        : undefined,
-    });
+    // The OxyServices HTTP client is fetch-based and cannot report upload
+    // progress, so the multipart upload goes through XMLHttpRequest, which
+    // exposes `upload.onprogress`. Authentication still flows through the
+    // OxyServices session via its current access token.
+    return new Promise<Track>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      const accessToken = authenticatedClient.getAccessToken();
 
-    return response.data;
+      xhr.open('POST', `${getApiOrigin()}/tracks/upload`);
+      if (accessToken) {
+        xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
+      }
+      // Do NOT set Content-Type: the browser/RN runtime sets the multipart
+      // boundary automatically when the body is a FormData instance.
+
+      if (onProgress) {
+        xhr.upload.onprogress = (event: ProgressEvent) => {
+          if (event.lengthComputable) {
+            onProgress((event.loaded / event.total) * 100);
+          }
+        };
+      }
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            resolve(JSON.parse(xhr.responseText) as Track);
+          } catch (parseError) {
+            reject(parseError);
+          }
+        } else {
+          reject(new Error(`Track upload failed with status ${xhr.status}`));
+        }
+      };
+      xhr.onerror = () => reject(new Error('Track upload failed: network error'));
+
+      xhr.send(formData);
+    });
   },
 
   /**

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { StyleSheet, View, TextInput, Text, ScrollView, Platform, Pressable, ActivityIndicator } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
-import { useTheme } from '@/hooks/useTheme';
+import { useTheme } from '@oxyhq/bloom/theme';
 import SEO from '@/components/SEO';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
