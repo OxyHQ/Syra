@@ -4,6 +4,7 @@ import { writeFile, readFile, initGridFS } from '../utils/mongoose-gridfs';
 import { isDatabaseConnected } from '../utils/database';
 import { logger } from '../utils/logger';
 import { getErrorMessage } from '../utils/error';
+import { getParam } from '../utils/reqParams';
 import { AuthRequest } from '../middleware/auth';
 
 /**
@@ -66,7 +67,7 @@ export const getImage = async (req: Request, res: Response, next: NextFunction) 
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    const { id } = req.params;
+    const id = getParam(req, 'id');
 
     // Validate ObjectId format (24 hex characters)
     if (!mongoose.Types.ObjectId.isValid(id)) {

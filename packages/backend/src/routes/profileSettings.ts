@@ -7,6 +7,7 @@ import { AuthRequest, requireAuth } from '../middleware/auth';
 import { ensureUserSettings } from '../utils/userSettings';
 import { sendErrorResponse, sendSuccessResponse, validateRequired } from '../utils/apiHelpers';
 import { getAuthenticatedUserId } from '../utils/auth';
+import { getParam } from '../utils/reqParams';
 
 const router = Router();
 
@@ -39,7 +40,7 @@ router.get('/settings/me', async (req: AuthRequest, res: Response) => {
  */
 router.get('/settings/:userId', async (req: AuthRequest, res: Response) => {
   try {
-    const { userId } = req.params;
+    const userId = getParam(req, 'userId');
     
     const validationError = validateRequired(userId, 'userId');
     if (validationError) {

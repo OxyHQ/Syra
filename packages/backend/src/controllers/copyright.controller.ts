@@ -8,6 +8,7 @@ import { AuthRequest } from '../middleware/auth';
 import { getAuthenticatedUserId } from '../utils/auth';
 import { addStrike } from '../services/strikeService';
 import { logger } from '../utils/logger';
+import { getParam } from '../utils/reqParams';
 
 /**
  * POST /api/copyright/report
@@ -159,7 +160,7 @@ export const approveCopyrightReport = async (req: AuthRequest, res: Response, ne
     // Requires admin role — enforce once the admin system is implemented.
     const adminUserId = getAuthenticatedUserId(req);
 
-    const { id } = req.params;
+    const id = getParam(req, 'id');
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ error: 'Invalid report ID format' });
@@ -232,7 +233,7 @@ export const rejectCopyrightReport = async (req: AuthRequest, res: Response, nex
     // Requires admin role — enforce once the admin system is implemented.
     const adminUserId = getAuthenticatedUserId(req);
 
-    const { id } = req.params;
+    const id = getParam(req, 'id');
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ error: 'Invalid report ID format' });

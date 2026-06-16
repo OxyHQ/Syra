@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { getLyricsForTrack } from '../services/lyrics/lyricsService';
+import { getParam } from '../utils/reqParams';
 
 /** Cache-Control max-age for publicly-served lyrics (1 hour). */
 const LYRICS_CACHE_MAX_AGE = 3600;
@@ -17,7 +18,7 @@ const LYRICS_CACHE_MAX_AGE = 3600;
  *  404 — no lyrics found for this track.
  */
 export async function getLyrics(req: Request, res: Response): Promise<void> {
-  const { trackId } = req.params;
+  const trackId = getParam(req, 'trackId');
 
   if (!mongoose.Types.ObjectId.isValid(trackId)) {
     res.status(400).json({ error: 'Invalid trackId' });

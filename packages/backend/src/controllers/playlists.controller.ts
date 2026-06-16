@@ -8,6 +8,7 @@ import { extractColorsFromImage } from '../utils/colorHelper';
 import { toApiFormat, toApiFormatArray, formatTrackWithCoverArt, formatPlaylistWithCoverArt, formatPlaylistsWithCoverArt } from '../utils/musicHelpers';
 import { isDatabaseConnected } from '../utils/database';
 import { AuthRequest } from '../middleware/auth';
+import { getParam } from '../utils/reqParams';
 
 /**
  * Check if user has permission to edit playlist
@@ -117,7 +118,7 @@ export const getPlaylistById = async (req: AuthRequest, res: Response, next: Nex
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    const { id } = req.params;
+    const id = getParam(req, 'id');
     const userId = req.user?.id;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -152,7 +153,7 @@ export const getPlaylistTracks = async (req: AuthRequest, res: Response, next: N
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    const { id } = req.params;
+    const id = getParam(req, 'id');
     const userId = req.user?.id;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -290,7 +291,7 @@ export const updatePlaylist = async (req: AuthRequest, res: Response, next: Next
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    const { id } = req.params;
+    const id = getParam(req, 'id');
     const userId = req.user?.id;
 
     if (!userId) {
@@ -393,7 +394,7 @@ export const deletePlaylist = async (req: AuthRequest, res: Response, next: Next
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    const { id } = req.params;
+    const id = getParam(req, 'id');
     const userId = req.user?.id;
 
     if (!userId) {
@@ -436,7 +437,7 @@ export const addTracksToPlaylist = async (req: AuthRequest, res: Response, next:
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    const { id } = req.params;
+    const id = getParam(req, 'id');
     const userId = req.user?.id;
 
     if (!userId) {
@@ -534,7 +535,7 @@ export const removeTracksFromPlaylist = async (req: AuthRequest, res: Response, 
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    const { id } = req.params;
+    const id = getParam(req, 'id');
     const userId = req.user?.id;
 
     if (!userId) {
@@ -596,7 +597,7 @@ export const reorderPlaylistTracks = async (req: AuthRequest, res: Response, nex
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    const { id } = req.params;
+    const id = getParam(req, 'id');
     const userId = req.user?.id;
 
     if (!userId) {

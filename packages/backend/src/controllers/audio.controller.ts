@@ -11,6 +11,7 @@ import {
   validateAudioFileExists,
   sendErrorResponse,
 } from './audio.controller.helpers';
+import { getParam } from '../utils/reqParams';
 
 /**
  * Parse Range header (e.g., "bytes=0-1023" or "bytes=1024-")
@@ -62,7 +63,7 @@ function setupStreamErrorHandler(stream: NodeJS.ReadableStream, res: Response): 
  */
 export const streamAudio = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { trackId } = req.params;
+    const trackId = getParam(req, 'trackId');
     
     // Validate and fetch track
     const validation = await fetchAndValidateTrack(trackId);
@@ -153,7 +154,7 @@ export const streamAudio = async (req: Request, res: Response, next: NextFunctio
  */
 export const getAudioInfo = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { trackId } = req.params;
+    const trackId = getParam(req, 'trackId');
     
     // Validate and fetch track
     const validation = await fetchAndValidateTrack(trackId);
@@ -195,7 +196,7 @@ export const getAudioInfo = async (req: Request, res: Response, next: NextFuncti
  */
 export const getAudioUrl = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { trackId } = req.params;
+    const trackId = getParam(req, 'trackId');
     
     // Validate and fetch track
     const validation = await fetchAndValidateTrack(trackId);

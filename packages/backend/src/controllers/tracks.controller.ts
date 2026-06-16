@@ -13,6 +13,7 @@ import { logger } from '../utils/logger';
 import { extractColorsFromImage } from '../utils/colorHelper';
 import { enqueueIngest } from '../services/ingest/ingestTrack';
 import { getErrorMessage, getErrorStack, getHttpStatus } from '../utils/error';
+import { getParam } from '../utils/reqParams';
 
 /**
  * GET /api/tracks
@@ -58,7 +59,7 @@ export const getTrackById = async (req: Request, res: Response, next: NextFuncti
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    const { id } = req.params;
+    const id = getParam(req, 'id');
     
     // Validate ObjectId format
     if (!mongoose.Types.ObjectId.isValid(id)) {

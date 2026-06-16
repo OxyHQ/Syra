@@ -161,10 +161,10 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
       artistsResult,
       playlistsResult,
     ] = await Promise.all([
-      searchPromises.tracks || Promise.resolve([[], 0]),
-      searchPromises.albums || Promise.resolve([[], 0]),
-      searchPromises.artists || Promise.resolve([[], 0]),
-      searchPromises.playlists || Promise.resolve([[], 0]),
+      searchPromises.tracks ?? Promise.resolve<[unknown[], number]>([[], 0]),
+      searchPromises.albums ?? Promise.resolve<[unknown[], number]>([[], 0]),
+      searchPromises.artists ?? Promise.resolve<[unknown[], number]>([[], 0]),
+      searchPromises.playlists ?? Promise.resolve<[unknown[], number]>([[], 0]),
     ]);
 
     // Format results

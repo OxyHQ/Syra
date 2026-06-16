@@ -7,6 +7,7 @@ import { toApiFormat, toApiFormatArray, formatTracksWithCoverArt, formatArtistWi
 import { isDatabaseConnected } from '../utils/database';
 import { AuthRequest } from '../middleware/auth';
 import { getAuthenticatedUserId } from '../utils/auth';
+import { getParam } from '../utils/reqParams';
 import { CreateArtistRequest, ArtistInsights, ArtistDashboard } from '@syra/shared-types';
 import { extractColorsFromImage } from '../utils/colorHelper';
 
@@ -54,7 +55,7 @@ export const getArtistById = async (req: Request, res: Response, next: NextFunct
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    const { id } = req.params;
+    const id = getParam(req, 'id');
     
     // Validate ObjectId format
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -84,7 +85,7 @@ export const getArtistAlbums = async (req: Request, res: Response, next: NextFun
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    const { id } = req.params;
+    const id = getParam(req, 'id');
     
     // Validate ObjectId format
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -123,7 +124,7 @@ export const getArtistTracks = async (req: Request, res: Response, next: NextFun
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    const { id } = req.params;
+    const id = getParam(req, 'id');
     const limit = parseInt(req.query.limit as string) || 20;
     const offset = parseInt(req.query.offset as string) || 0;
     
@@ -167,7 +168,7 @@ export const getArtistTracks = async (req: Request, res: Response, next: NextFun
  */
 export const followArtist = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
+    const id = getParam(req, 'id');
     const userId = (req as any).user?.id;
 
     if (!userId) {
@@ -191,7 +192,7 @@ export const followArtist = async (req: Request, res: Response, next: NextFuncti
  */
 export const unfollowArtist = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
+    const id = getParam(req, 'id');
     const userId = (req as any).user?.id;
 
     if (!userId) {
