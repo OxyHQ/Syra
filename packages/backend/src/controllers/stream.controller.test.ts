@@ -142,8 +142,38 @@ describe('getStream', () => {
     expect(body.expiresAt).toBeDefined();
   });
 
-  it('401: no user', async () => {
-    const track = await seedTrack();
+  it('200 audius: no auth still returns stream url (public passthrough)', async () => {
+    const track = await seedTrack({
+      source: 'audius',
+      status: 'ready',
+      streamUrl: 'https://audius.co/stream/anon123',
+    });
+
+    const req = makeReq(track._id.toString(), { authed: false });
+    const res = makeRes();
+    await getStream(req, res as unknown as Response);
+
+    expect(res._status).toBe(200);
+    const body = res._body as Record<string, unknown>;
+    expect(body.type).toBe('audius');
+    expect(body.url).toBe('https://audius.co/stream/anon123');
+  });
+
+  it('404 audius: no auth + missing streamUrl returns 404', async () => {
+    const track = await seedTrack({ source: 'audius', status: 'ready', streamUrl: undefined });
+    const req = makeReq(track._id.toString(), { authed: false });
+    const res = makeRes();
+    await getStream(req, res as unknown as Response);
+    expect(res._status).toBe(404);
+  });
+
+  it('401: HLS track with no auth returns 401', async () => {
+    const track = await seedTrack({
+      source: 'upload',
+      status: 'ready',
+      hlsMasterKey: 'hls/artist/track/master.m3u8',
+      hls: [{ manifestKey: 'hls/artist/track/128k/index.m3u8', bitrateKbps: 128, encrypted: true }],
+    });
     const req = makeReq(track._id.toString(), { authed: false });
     const res = makeRes();
     await getStream(req, res as unknown as Response);

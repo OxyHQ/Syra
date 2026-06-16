@@ -106,11 +106,7 @@ function resolveManifestToken(
  *   409 — processing; 422 — failed / no playable source.
  */
 export async function getStream(req: AuthRequest, res: Response): Promise<void> {
-  if (!req.user?.id) {
-    res.status(401).json({ error: 'Unauthorized' });
-    return;
-  }
-
+  // 1. Validate the track ID before touching auth (400 is auth-agnostic).
   const trackId = Array.isArray(req.params.trackId)
     ? req.params.trackId[0]
     : req.params.trackId;
@@ -119,6 +115,7 @@ export async function getStream(req: AuthRequest, res: Response): Promise<void> 
     return;
   }
 
+  // 2. Load and validate availability (no auth needed to know a track is gone).
   const track = await TrackModel.findById(trackId).lean();
   if (!track) {
     res.status(404).json({ error: 'Track not found' });
@@ -130,7 +127,9 @@ export async function getStream(req: AuthRequest, res: Response): Promise<void> 
     return;
   }
 
-  // ── Audius branch ─────────────────────────────────────────────────────────
+  // 3. ── Audius branch — public passthrough, no auth required ────────────────
+  //    Audius tracks are free public content; the streamUrl is a direct CDN URL
+  //    that requires no Syra entitlement token. Anonymous users can play them.
   if (track.source === 'audius') {
     if (!track.streamUrl) {
       res.status(404).json({ error: 'Stream URL not available' });
@@ -140,7 +139,12 @@ export async function getStream(req: AuthRequest, res: Response): Promise<void> 
     return;
   }
 
-  // ── HLS branch ────────────────────────────────────────────────────────────
+  // 4. ── HLS branch — requires auth to mint an entitlement token ────────────
+  if (!req.user?.id) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+
   if (track.status === 'processing') {
     res.status(409).json({ error: 'Track processing' });
     return;
