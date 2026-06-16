@@ -9,6 +9,7 @@ export interface IUserLibrary extends Document {
   likedTracks: string[]; // track IDs
   savedAlbums: string[]; // album IDs
   followedArtists: string[]; // artist IDs
+  savedPlaylists: string[]; // playlist IDs
   createdAt: string;
   updatedAt: string;
 }
@@ -18,6 +19,7 @@ const UserLibrarySchema = new Schema<IUserLibrary>({
   likedTracks: [{ type: String, index: true }],
   savedAlbums: [{ type: String, index: true }],
   followedArtists: [{ type: String, index: true }],
+  savedPlaylists: [{ type: String, index: true }],
 }, {
   timestamps: true,
 });
