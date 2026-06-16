@@ -95,14 +95,13 @@ app.use(async (req, res, next) => {
 });
 
 // CORS and security headers
-// NOTE: syra.fm / www.syra.fm are the migration target web origins; they are
-// added alongside the legacy syra.oxy.so so the API accepts both during the
-// transition. The old origin is retired only at the final cutover.
+// NOTE: syra.fm is the migration target web origin; it is added alongside the
+// legacy syra.oxy.so so the API accepts both during the transition. The old
+// origin is retired only at the final cutover.
 const ALLOWED_ORIGINS = [
   process.env.FRONTEND_URL || "https://syra.oxy.so",
   "https://syra.oxy.so",
   "https://syra.fm",
-  "https://www.syra.fm",
   "http://localhost:8081",
   "http://localhost:8082",
   "http://192.168.86.44:8081",
@@ -401,6 +400,7 @@ publicApiRouter.use("/images", imagesRoutes); // GET /images/:id is public
 publicApiRouter.use("/search", optionalAuth, searchRoutes);
 publicApiRouter.use("/browse", optionalAuth, browseRoutes); // Browse/explore endpoints - public
 publicApiRouter.use("/copyright", optionalAuth, copyrightRoutes); // Public copyright reporting
+publicApiRouter.use("/stream", optionalAuth, streamRoutes); // Self-enforcing: resolver requires bearer; key accepts bearer or ?t= token
 
 // Authenticated API routes (require authentication)
 const authenticatedApiRouter = express.Router();
@@ -414,7 +414,7 @@ authenticatedApiRouter.use("/audio", audioRoutes); // Audio streaming requires a
 authenticatedApiRouter.use("/queue", queueRoutes); // Queue management requires authentication
 authenticatedApiRouter.use("/music", musicPreferencesRoutes); // Music preferences requires authentication
 authenticatedApiRouter.use("/copyright", copyrightRoutes); // Admin copyright management
-authenticatedApiRouter.use("/stream", streamRoutes);     // HLS key endpoint — requires auth
+// stream routes moved to publicApiRouter with optionalAuth — handlers self-enforce auth
 
 // Mount public and authenticated API routers
 app.use("/api", publicApiRouter);

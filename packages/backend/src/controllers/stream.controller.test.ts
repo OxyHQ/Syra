@@ -3,9 +3,13 @@ import mongoose from 'mongoose';
 import { connect, clear, disconnect } from '../test/mongo';
 import { TrackModel } from '../models/Track';
 import { TrackKeyModel } from '../models/TrackKey';
-import { getStreamKey } from './stream.controller';
+import { getStream, getStreamKey } from './stream.controller';
+import { verifyStreamToken } from '../services/stream/streamToken';
 import type { AuthRequest } from '../middleware/auth';
 import type { Response } from 'express';
+
+// Ensure STREAM_TOKEN_SECRET is set before module load
+process.env.STREAM_TOKEN_SECRET = 'test-secret-stream-controller';
 
 beforeAll(connect);
 afterEach(clear);
@@ -36,9 +40,14 @@ function makeRes(): CapturedRes {
   return res;
 }
 
-function makeReq(trackId: string, authed = true): AuthRequest {
+function makeReq(
+  trackId: string,
+  opts: { authed?: boolean; query?: Record<string, string> } = {},
+): AuthRequest {
+  const { authed = true, query = {} } = opts;
   return {
     params: { trackId },
+    query,
     user: authed ? { id: 'oxy-user-abc' } : undefined,
   } as unknown as AuthRequest;
 }
@@ -65,10 +74,124 @@ async function seedKey(trackId: string) {
   return TrackKeyModel.create({ trackId, keyHex: KEY_HEX, keyUri: 'key' });
 }
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
+// ── getStream tests ───────────────────────────────────────────────────────────
+
+describe('getStream', () => {
+  it('200 audius: returns url + type audius when streamUrl present', async () => {
+    const track = await seedTrack({
+      source: 'audius',
+      status: 'ready',
+      streamUrl: 'https://audius.co/stream/abc123',
+    });
+
+    const req = makeReq(track._id.toString());
+    const res = makeRes();
+    await getStream(req, res as unknown as Response);
+
+    expect(res._status).toBe(200);
+    const body = res._body as Record<string, unknown>;
+    expect(body.type).toBe('audius');
+    expect(body.url).toBe('https://audius.co/stream/abc123');
+  });
+
+  it('200 hls: mints stream token and returns master.m3u8 url', async () => {
+    const track = await seedTrack({
+      source: 'upload',
+      status: 'ready',
+      hlsMasterKey: 'hls/artist/track/master.m3u8',
+      hls: [{ manifestKey: 'hls/artist/track/128k/index.m3u8', bitrateKbps: 128, encrypted: true }],
+    });
+
+    const req = makeReq(track._id.toString());
+    const res = makeRes();
+    await getStream(req, res as unknown as Response);
+
+    expect(res._status).toBe(200);
+    const body = res._body as Record<string, unknown>;
+    expect(body.type).toBe('hls');
+    expect(typeof body.url).toBe('string');
+
+    const url = body.url as string;
+    expect(url).toContain(`/api/stream/${track._id.toString()}/master.m3u8?t=`);
+
+    // Extract token and verify it is valid and bound to this track + user
+    const tParam = new URL(url, 'http://localhost').searchParams.get('t');
+    expect(tParam).not.toBeNull();
+    const claims = verifyStreamToken(tParam as string);
+    expect(claims).not.toBeNull();
+    expect(claims?.trackId).toBe(track._id.toString());
+    expect(claims?.userId).toBe('oxy-user-abc');
+
+    // expiresAt must be present
+    expect(body.expiresAt).toBeDefined();
+  });
+
+  it('401: no user', async () => {
+    const track = await seedTrack();
+    const req = makeReq(track._id.toString(), { authed: false });
+    const res = makeRes();
+    await getStream(req, res as unknown as Response);
+
+    expect(res._status).toBe(401);
+  });
+
+  it('400: invalid ObjectId', async () => {
+    const req = makeReq('not-an-id');
+    const res = makeRes();
+    await getStream(req, res as unknown as Response);
+
+    expect(res._status).toBe(400);
+  });
+
+  it('404: track not found', async () => {
+    const req = makeReq(new mongoose.Types.ObjectId().toString());
+    const res = makeRes();
+    await getStream(req, res as unknown as Response);
+
+    expect(res._status).toBe(404);
+  });
+
+  it('403: track is unavailable', async () => {
+    const track = await seedTrack({ isAvailable: false });
+    const req = makeReq(track._id.toString());
+    const res = makeRes();
+    await getStream(req, res as unknown as Response);
+
+    expect(res._status).toBe(403);
+  });
+
+  it('403: track is copyright-removed', async () => {
+    const track = await seedTrack({ copyrightRemoved: true });
+    const req = makeReq(track._id.toString());
+    const res = makeRes();
+    await getStream(req, res as unknown as Response);
+
+    expect(res._status).toBe(403);
+  });
+
+  it('409: track is still processing', async () => {
+    const track = await seedTrack({ status: 'processing', source: 'upload' });
+    const req = makeReq(track._id.toString());
+    const res = makeRes();
+    await getStream(req, res as unknown as Response);
+
+    expect(res._status).toBe(409);
+  });
+
+  it('422: track is failed / not playable', async () => {
+    const track = await seedTrack({ status: 'failed', source: 'upload' });
+    const req = makeReq(track._id.toString());
+    const res = makeRes();
+    await getStream(req, res as unknown as Response);
+
+    expect(res._status).toBe(422);
+  });
+});
+
+// ── getStreamKey tests ────────────────────────────────────────────────────────
 
 describe('getStreamKey', () => {
-  it('200: returns 16-byte raw key buffer with correct headers', async () => {
+  it('200: returns 16-byte raw key buffer via bearer auth', async () => {
     const track = await seedTrack();
     await seedKey(track._id.toString());
 
@@ -84,9 +207,42 @@ describe('getStreamKey', () => {
     expect((res._body as Buffer).equals(Buffer.from(KEY_HEX, 'hex'))).toBe(true);
   });
 
-  it('401: no authenticated user', async () => {
+  it('200: returns key via valid ?t= stream token bound to this track', async () => {
     const track = await seedTrack();
-    const req = makeReq(track._id.toString(), false);
+    await seedKey(track._id.toString());
+
+    // Mint a token bound to this specific track
+    const { mintStreamToken } = await import('../services/stream/streamToken');
+    const token = mintStreamToken({ trackId: track._id.toString(), userId: 'oxy-user-abc' });
+
+    const req = makeReq(track._id.toString(), { authed: false, query: { t: token } });
+    const res = makeRes();
+    await getStreamKey(req, res as unknown as Response);
+
+    expect(res._status).toBe(200);
+    expect((res._body as Buffer).length).toBe(16);
+  });
+
+  it('401: stream token bound to a DIFFERENT trackId is rejected', async () => {
+    const track = await seedTrack();
+    await seedKey(track._id.toString());
+
+    const { mintStreamToken } = await import('../services/stream/streamToken');
+    const otherTrackId = new mongoose.Types.ObjectId().toString();
+    const token = mintStreamToken({ trackId: otherTrackId, userId: 'oxy-user-abc' });
+
+    const req = makeReq(track._id.toString(), { authed: false, query: { t: token } });
+    const res = makeRes();
+    await getStreamKey(req, res as unknown as Response);
+
+    expect(res._status).toBe(401);
+  });
+
+  it('401: no bearer and no token', async () => {
+    const track = await seedTrack();
+    await seedKey(track._id.toString());
+
+    const req = makeReq(track._id.toString(), { authed: false });
     const res = makeRes();
     await getStreamKey(req, res as unknown as Response);
 
