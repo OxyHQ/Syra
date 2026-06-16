@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router';
 import { musicService } from '@/services/musicService';
 import { Album, Artist, Track } from '@syra/shared-types';
 import Avatar from '@/components/Avatar';
+import { LyricsView } from '@/components/LyricsView';
 
 /**
  * Now Playing Sidebar Component
@@ -29,6 +30,7 @@ export const NowPlaying: React.FC = () => {
   const [artist, setArtist] = useState<Artist | null>(null);
   const [nextTracks, setNextTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(false);
+  const [lyricsExpanded, setLyricsExpanded] = useState(false);
 
   // Hide on mobile/tablet only
   if (!isDesktop) {
@@ -187,6 +189,28 @@ export const NowPlaying: React.FC = () => {
                     </Pressable>
                   </View>
                 )}
+
+                {/* Lyrics Card */}
+                <View style={[styles.card, { backgroundColor: theme.colors.backgroundTertiary }]}>
+                  <Pressable
+                    style={styles.cardHeader}
+                    onPress={() => setLyricsExpanded((v) => !v)}
+                    accessibilityRole="button"
+                    accessibilityLabel={lyricsExpanded ? 'Hide lyrics' : 'Show lyrics'}
+                  >
+                    <View style={styles.cardHeaderRow}>
+                      <Text style={[styles.cardTitle, { color: theme.colors.text }]}>Lyrics</Text>
+                      <Ionicons
+                        name={lyricsExpanded ? 'chevron-up' : 'chevron-down'}
+                        size={16}
+                        color={theme.colors.textSecondary}
+                      />
+                    </View>
+                  </Pressable>
+                  {lyricsExpanded && (
+                    <LyricsView trackId={currentTrack.id} />
+                  )}
+                </View>
 
                 {/* Credits Card */}
                 {album && (
@@ -429,6 +453,16 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     marginBottom: 12,
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+      },
+    }),
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   cardTitle: {
     fontSize: 16,
