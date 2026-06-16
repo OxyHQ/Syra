@@ -14,6 +14,13 @@ const TRACK_A = {
   is_streamable: true,
   is_stream_gated: false,
   isrc: 'USABC1234567',
+  genre: 'Electronic',
+  mood: 'Energizing',
+  tags: 'lofi,chill,beats',
+  release_date: '2021-05-01T00:00:00Z',
+  play_count: 12345,
+  favorite_count: 678,
+  repost_count: 90,
   user: { id: 'u1', name: 'DJ Test' },
   artwork: {
     '150x150': 'https://cdn.audius.co/abc/150x150.jpg',
@@ -287,5 +294,165 @@ describe('AudiusConnector.search', () => {
     const results = await connector.search('test');
     expect(results).toHaveLength(1);
     expect(results[0].externalId).toBe('abc123');
+  });
+
+  it('maps genre / mood / releaseDate from the track payload', async () => {
+    const connector = new AudiusConnector({
+      apiBase: TEST_BASE,
+      appName: TEST_APP,
+      httpGet: async () => CANNED_RESPONSE,
+    });
+
+    const [track] = await connector.search('test');
+
+    expect(track.genre).toBe('Electronic');
+    expect(track.mood).toBe('Energizing');
+    expect(track.releaseDate).toBe('2021-05-01T00:00:00Z');
+  });
+
+  it('splits the comma-separated tags string into a trimmed array', async () => {
+    const connector = new AudiusConnector({
+      apiBase: TEST_BASE,
+      appName: TEST_APP,
+      httpGet: async () => ({ data: [{ ...TRACK_A, tags: ' lofi , chill ,, beats ' }] }),
+    });
+
+    const [track] = await connector.search('test');
+    expect(track.tags).toEqual(['lofi', 'chill', 'beats']);
+  });
+
+  it('maps play/favorite/repost counts into popularity', async () => {
+    const connector = new AudiusConnector({
+      apiBase: TEST_BASE,
+      appName: TEST_APP,
+      httpGet: async () => CANNED_RESPONSE,
+    });
+
+    const [track] = await connector.search('test');
+    expect(track.popularity?.playCount).toBe(12345);
+    expect(track.popularity?.favoriteCount).toBe(678);
+    expect(track.popularity?.repostCount).toBe(90);
+  });
+
+  it('omits optional metadata fields when the payload lacks them', async () => {
+    const minimal = {
+      id: 'min1',
+      title: 'Minimal',
+      duration: 100,
+      is_delete: false,
+      is_streamable: true,
+      is_stream_gated: false,
+      user: { id: 'um', name: 'Min Artist' },
+      artwork: null,
+    };
+    const connector = new AudiusConnector({
+      apiBase: TEST_BASE,
+      appName: TEST_APP,
+      httpGet: async () => ({ data: [minimal] }),
+    });
+
+    const [track] = await connector.search('test');
+    expect(track.genre).toBeUndefined();
+    expect(track.mood).toBeUndefined();
+    expect(track.tags).toBeUndefined();
+    expect(track.releaseDate).toBeUndefined();
+    expect(track.popularity).toBeUndefined();
+  });
+});
+
+// ── Album fetching ──────────────────────────────────────────────────────────
+
+const ALBUM_A = {
+  id: 'alb1',
+  playlist_id: 53858,
+  playlist_name: 'Pretty Little Liars',
+  is_album: true,
+  release_date: '2021-06-26T14:24:05Z',
+  total_play_count: 589,
+  repost_count: 1,
+  favorite_count: 2,
+  upc: null,
+  artwork: {
+    '150x150': 'https://cdn.audius.co/alb/150x150.jpg',
+    '480x480': 'https://cdn.audius.co/alb/480x480.jpg',
+    '1000x1000': 'https://cdn.audius.co/alb/1000x1000.jpg',
+  },
+};
+
+describe('AudiusConnector.fetchArtistAlbums', () => {
+  it('fetches albums for an artist and normalises core fields', async () => {
+    const urls: string[] = [];
+    const connector = new AudiusConnector({
+      apiBase: TEST_BASE,
+      appName: TEST_APP,
+      httpGet: async (url) => {
+        urls.push(url);
+        if (url.includes('/albums')) return { data: [ALBUM_A] };
+        if (url.includes('/tracks')) return { data: [{ ...TRACK_A, genre: 'Hip-Hop/Rap' }] };
+        return { data: [] };
+      },
+    });
+
+    const albums = await connector.fetchArtistAlbums('artistX');
+
+    expect(urls[0]).toContain('/v1/users/artistX/albums');
+    expect(urls[0]).toContain('app_name=Syra');
+    expect(albums).toHaveLength(1);
+
+    const [album] = albums;
+    expect(album.externalId).toBe('alb1');
+    expect(album.name).toBe('Pretty Little Liars');
+    expect(album.releaseDate).toBe('2021-06-26T14:24:05Z');
+    expect(album.genre).toBe('Hip-Hop/Rap');
+    expect(album.popularity?.playCount).toBe(589);
+    expect(album.popularity?.favoriteCount).toBe(2);
+    expect(album.popularity?.repostCount).toBe(1);
+    // images mapped largest-first
+    expect(album.images?.[0].width).toBe(1000);
+    // member track external ids linked
+    expect(album.trackExternalIds).toEqual(['abc123']);
+  });
+
+  it('skips non-album playlists (is_album=false)', async () => {
+    const connector = new AudiusConnector({
+      apiBase: TEST_BASE,
+      appName: TEST_APP,
+      httpGet: async (url) => {
+        if (url.includes('/albums')) {
+          return { data: [{ ...ALBUM_A, is_album: false }] };
+        }
+        return { data: [] };
+      },
+    });
+
+    const albums = await connector.fetchArtistAlbums('artistX');
+    expect(albums).toHaveLength(0);
+  });
+
+  it('returns [] when the albums response is malformed', async () => {
+    const connector = new AudiusConnector({
+      apiBase: TEST_BASE,
+      appName: TEST_APP,
+      httpGet: async () => ({ data: 'nope' }),
+    });
+
+    const albums = await connector.fetchArtistAlbums('artistX');
+    expect(albums).toEqual([]);
+  });
+
+  it('still returns the album when its track listing fetch fails', async () => {
+    const connector = new AudiusConnector({
+      apiBase: TEST_BASE,
+      appName: TEST_APP,
+      httpGet: async (url) => {
+        if (url.includes('/albums')) return { data: [ALBUM_A] };
+        if (url.includes('/tracks')) throw new Error('Audius HTTP 500');
+        return { data: [] };
+      },
+    });
+
+    const albums = await connector.fetchArtistAlbums('artistX');
+    expect(albums).toHaveLength(1);
+    expect(albums[0].trackExternalIds).toEqual([]);
   });
 });

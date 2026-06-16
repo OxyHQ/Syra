@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import { connect, clear, disconnect } from '../../test/mongo';
 import { TrackModel } from '../../models/Track';
+import { ArtistModel } from '../../models/Artist';
 import { upsertTrack } from './upsertTrack';
 import type { ExternalTrack } from '@syra/shared-types';
 
@@ -98,6 +99,65 @@ describe('upsertTrack', () => {
 
       expect(created).toBe(false);
       expect(await TrackModel.countDocuments()).toBe(1);
+    });
+  });
+
+  describe('(e) provider metadata persistence', () => {
+    const richTrack: ExternalTrack = {
+      provider: 'audius',
+      externalId: 'aud-rich-001',
+      title: 'Rich Track',
+      artists: [{ name: 'Genre Artist', externalId: 'aud-genre-artist' }],
+      durationSec: 200,
+      genre: 'Electronic',
+      mood: 'Energizing',
+      tags: ['lofi', 'chill'],
+      releaseDate: '2021-05-01T00:00:00Z',
+      popularity: { playCount: 12345, favoriteCount: 678, repostCount: 90 },
+    };
+
+    it('persists genre/mood/tags/releaseDate/popularity signals onto the track', async () => {
+      const { track } = await upsertTrack(richTrack, 'audius');
+
+      expect(track.genre).toBe('Electronic');
+      expect(track.mood).toBe('Energizing');
+      expect(track.tags).toEqual(['lofi', 'chill']);
+      expect(track.releaseDate?.toISOString()).toBe('2021-05-01T00:00:00.000Z');
+      expect(track.playCount).toBe(12345);
+      expect(track.favoriteCount).toBe(678);
+      expect(track.repostCount).toBe(90);
+      // popularity (0-100) is derived from playCount and must be > 0 for a played track
+      expect(track.popularity).toBeGreaterThan(0);
+    });
+
+    it('rolls the track genre up into the artist genres (union, no duplicates)', async () => {
+      await upsertTrack(richTrack, 'audius');
+      // Second track, same artist, different genre → artist accrues both
+      await upsertTrack(
+        { ...richTrack, externalId: 'aud-rich-002', title: 'Rich Track 2', genre: 'House' },
+        'audius',
+      );
+      // Third track, same artist, repeat genre → no duplicate
+      await upsertTrack(
+        { ...richTrack, externalId: 'aud-rich-003', title: 'Rich Track 3', genre: 'Electronic' },
+        'audius',
+      );
+
+      const artist = await ArtistModel.findOne({ 'externalIds.audiusId': 'aud-genre-artist' });
+      expect(artist).not.toBeNull();
+      expect(artist?.genres?.slice().sort()).toEqual(['Electronic', 'House']);
+    });
+
+    it('does not clobber existing track popularity signals with missing ones on re-import', async () => {
+      await upsertTrack(richTrack, 'audius');
+      const { track } = await upsertTrack(
+        { ...richTrack, popularity: undefined, genre: undefined },
+        'audius',
+      );
+
+      // Existing values survive a re-import that omits them
+      expect(track.playCount).toBe(12345);
+      expect(track.genre).toBe('Electronic');
     });
   });
 

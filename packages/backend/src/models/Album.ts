@@ -1,8 +1,12 @@
 import mongoose, { Schema, Document } from 'mongoose';
 import { Album, CatalogSource, ExternalIds, SourceProvenance } from '@syra/shared-types';
 
-export interface IAlbum extends Omit<Album, 'id'>, Document {
+export interface IAlbum extends Omit<Album, 'id' | '_id' | 'createdAt' | 'updatedAt'>, Document {
   _id: mongoose.Types.ObjectId;
+  /** Stored as Date in MongoDB; serialised to ISO string in API responses */
+  createdAt: Date;
+  /** Stored as Date in MongoDB; serialised to ISO string in API responses */
+  updatedAt: Date;
 }
 
 const ExternalIdsSchema = new Schema<ExternalIds>({
@@ -31,10 +35,14 @@ const AlbumSchema = new Schema<IAlbum>({
   copyright: { type: String },
   upc: { type: String, unique: true, sparse: true },
   popularity: { type: Number, default: 0, min: 0, max: 100 },
+  playCount: { type: Number, default: 0 },
+  favoriteCount: { type: Number, default: 0 },
+  repostCount: { type: Number, default: 0 },
   isExplicit: { type: Boolean, default: false, index: true },
   primaryColor: { type: String },
   secondaryColor: { type: String },
   // Catalog provenance
+  source: { type: String, enum: ['upload', 'cc', 'audius'] as CatalogSource[], index: true },
   externalIds: { type: ExternalIdsSchema },
   sources: [{ type: SourceProvenanceSchema }],
 }, {
@@ -48,6 +56,7 @@ AlbumSchema.index({ popularity: -1 });
 AlbumSchema.index({ releaseDate: -1 });
 // External identifier lookups
 AlbumSchema.index({ 'externalIds.isrc': 1 }, { sparse: true });
+AlbumSchema.index({ 'externalIds.audiusId': 1 }, { sparse: true });
 
 export const AlbumModel: mongoose.Model<IAlbum> =
   (mongoose.models.Album as mongoose.Model<IAlbum>) ??

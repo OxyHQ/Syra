@@ -2,8 +2,10 @@ import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import { connect, clear, disconnect } from '../../test/mongo';
 import { TrackModel } from '../../models/Track';
 import { ArtistModel } from '../../models/Artist';
+import { AlbumModel } from '../../models/Album';
 import { runAudiusImport, enqueueAudiusImport } from './audiusBackgroundImport';
-import type { ExternalTrack } from '@syra/shared-types';
+import type { AlbumFetcher } from './audiusBackgroundImport';
+import type { ExternalAlbum, ExternalTrack } from '@syra/shared-types';
 import type { MusicSourceConnector } from './MusicSourceConnector';
 
 beforeAll(connect);
@@ -27,6 +29,25 @@ function makeConnector(tracks: ExternalTrack[]): MusicSourceConnector {
   return {
     provider: 'audius' as const,
     search: async () => tracks,
+  };
+}
+
+/** Album fetcher mock that returns the given albums keyed by artist external id. */
+function makeAlbumFetcher(byArtist: Record<string, ExternalAlbum[]>): AlbumFetcher {
+  return {
+    fetchArtistAlbums: async (artistExternalId: string) => byArtist[artistExternalId] ?? [],
+  };
+}
+
+function makeAlbum(externalId: string, trackExternalIds: string[]): ExternalAlbum {
+  return {
+    name: `Album ${externalId}`,
+    externalId,
+    releaseDate: '2021-01-01T00:00:00Z',
+    genre: 'Electronic',
+    images: [{ url: `https://cdn.audius.co/${externalId}/1000x1000.jpg`, width: 1000, height: 1000 }],
+    popularity: { playCount: 1000 },
+    trackExternalIds,
   };
 }
 
@@ -115,6 +136,97 @@ describe('runAudiusImport', () => {
     expect(result.imported).toBe(1);
     const track = await TrackModel.findOne({ 'externalIds.audiusId': 't7' });
     expect(track).not.toBeNull();
+  });
+});
+
+// ── album sync ──────────────────────────────────────────────────────────────
+
+describe('runAudiusImport — album sync', () => {
+  it('syncs albums for each unique imported artist and links member tracks', async () => {
+    const connector = makeConnector([
+      makeTrack('t1', 'artist-1'),
+      makeTrack('t2', 'artist-1'),
+    ]);
+    const albumFetcher = makeAlbumFetcher({
+      'artist-1': [makeAlbum('alb-1', ['t1', 't2'])],
+    });
+
+    const result = await runAudiusImport('album-sync-jazz', { connector, albumFetcher });
+
+    expect(result.imported).toBe(2);
+    expect(result.albumsSynced).toBe(1);
+
+    const album = await AlbumModel.findOne({ 'externalIds.audiusId': 'alb-1' });
+    expect(album).not.toBeNull();
+    expect(album?.totalTracks).toBe(2);
+
+    // member tracks linked to the album
+    const albumId = album?._id.toString();
+    const linked = await TrackModel.countDocuments({ albumId });
+    expect(linked).toBe(2);
+  });
+
+  it('fetches albums once per unique artist, not once per track', async () => {
+    const calls: string[] = [];
+    const albumFetcher: AlbumFetcher = {
+      fetchArtistAlbums: async (id: string) => {
+        calls.push(id);
+        return [];
+      },
+    };
+    const connector = makeConnector([
+      makeTrack('t1', 'artist-1'),
+      makeTrack('t2', 'artist-1'),
+      makeTrack('t3', 'artist-2'),
+    ]);
+
+    await runAudiusImport('album-sync-rock', { connector, albumFetcher });
+
+    expect(calls.sort()).toEqual(['artist-1', 'artist-2']);
+  });
+
+  it('caps the number of artists processed per pass', async () => {
+    const calls: string[] = [];
+    const albumFetcher: AlbumFetcher = {
+      fetchArtistAlbums: async (id: string) => {
+        calls.push(id);
+        return [];
+      },
+    };
+    const tracks = Array.from({ length: 30 }, (_, i) => makeTrack(`t${i}`, `artist-${i}`));
+    const connector = makeConnector(tracks);
+
+    await runAudiusImport('album-sync-pop', { connector, albumFetcher, maxArtistsForAlbums: 5 });
+
+    expect(calls.length).toBe(5);
+  });
+
+  it('an album-fetch failure for one artist does not abort the import', async () => {
+    const albumFetcher: AlbumFetcher = {
+      fetchArtistAlbums: async (id: string) => {
+        if (id === 'artist-1') throw new Error('boom');
+        return [makeAlbum('alb-2', ['t2'])];
+      },
+    };
+    const connector = makeConnector([
+      makeTrack('t1', 'artist-1'),
+      makeTrack('t2', 'artist-2'),
+    ]);
+
+    const result = await runAudiusImport('album-sync-metal', { connector, albumFetcher });
+
+    expect(result.imported).toBe(2);
+    expect(result.albumsSynced).toBe(1);
+    const album = await AlbumModel.findOne({ 'externalIds.audiusId': 'alb-2' });
+    expect(album).not.toBeNull();
+  });
+
+  it('does not sync albums when no album fetcher is provided', async () => {
+    const connector = makeConnector([makeTrack('t1', 'artist-1')]);
+    const result = await runAudiusImport('album-sync-folk', { connector });
+
+    expect(result.albumsSynced).toBe(0);
+    expect(await AlbumModel.countDocuments()).toBe(0);
   });
 });
 

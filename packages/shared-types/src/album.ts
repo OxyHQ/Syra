@@ -3,7 +3,7 @@
  */
 
 import { Timestamps } from './common';
-import { Track, ExternalIds, SourceProvenance } from './track';
+import { Track, CatalogSource, ExternalIds, SourceProvenance } from './track';
 
 /**
  * Album - A collection of tracks
@@ -24,9 +24,17 @@ export interface Album extends Timestamps {
   copyright?: string;
   upc?: string; // Universal Product Code
   popularity?: number; // 0-100
+  /** Lifetime play count (provider-supplied popularity signal) */
+  playCount?: number;
+  /** Number of favourites / saves (provider-supplied popularity signal) */
+  favoriteCount?: number;
+  /** Number of reposts / shares (provider-supplied popularity signal) */
+  repostCount?: number;
   isExplicit: boolean;
   primaryColor?: string; // Primary hex color extracted from cover art (e.g., "#FF5733")
   secondaryColor?: string; // Secondary hex color extracted from cover art (e.g., "#33FF57")
+  /** Which provider this album record originates from */
+  source?: CatalogSource;
   /** Cross-provider identifiers (ISRC, UPC, etc.) */
   externalIds?: ExternalIds;
   /** Provenance log — one entry per provider that contributed fields */

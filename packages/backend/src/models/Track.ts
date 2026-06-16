@@ -10,8 +10,18 @@ import {
   HlsRendition,
 } from '@syra/shared-types';
 
-export interface ITrack extends Omit<Track, 'id'>, Document {
+export interface ITrack
+  extends Omit<Track, 'id' | '_id' | 'createdAt' | 'updatedAt' | 'removedAt' | 'releaseDate'>,
+    Document {
   _id: mongoose.Types.ObjectId;
+  /** Stored as Date in MongoDB; serialised to ISO string in API responses */
+  createdAt: Date;
+  /** Stored as Date in MongoDB; serialised to ISO string in API responses */
+  updatedAt: Date;
+  /** Stored as Date in MongoDB; serialised to ISO string in API responses */
+  removedAt?: Date;
+  /** Stored as Date in MongoDB; serialised to ISO string in API responses */
+  releaseDate?: Date;
 }
 
 const AudioSourceSchema = new Schema<AudioSource>({
@@ -69,9 +79,16 @@ const TrackSchema = new Schema<ITrack>({
   audioSource: { type: AudioSourceSchema }, // optional: absent for audius/processing tracks
   coverArt: { type: String },
   metadata: { type: TrackMetadataSchema },
+  // Provider-supplied descriptive metadata (e.g. Audius genre/mood/tags)
+  genre: { type: String, index: true },
+  mood: { type: String, index: true },
+  tags: [{ type: String, index: true }],
+  releaseDate: { type: Date },
   isExplicit: { type: Boolean, default: false, index: true },
   popularity: { type: Number, default: 0, min: 0, max: 100 },
   playCount: { type: Number, default: 0 },
+  favoriteCount: { type: Number, default: 0 },
+  repostCount: { type: Number, default: 0 },
   isAvailable: { type: Boolean, default: true, index: true },
   copyrightRemoved: { type: Boolean, default: false, index: true },
   removedAt: { type: Date },
@@ -96,6 +113,7 @@ const TrackSchema = new Schema<ITrack>({
 TrackSchema.index({ artistId: 1, albumId: 1 });
 TrackSchema.index({ title: 'text', artistName: 'text' }); // Text search
 TrackSchema.index({ popularity: -1 });
+TrackSchema.index({ playCount: -1 });
 TrackSchema.index({ createdAt: -1 });
 // External identifier lookups
 TrackSchema.index({ 'externalIds.isrc': 1 }, { unique: true, sparse: true });

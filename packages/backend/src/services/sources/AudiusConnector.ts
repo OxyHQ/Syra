@@ -1,4 +1,10 @@
-import type { CatalogSource, ExternalTrack, TrackImage } from '@syra/shared-types';
+import type {
+  CatalogSource,
+  ExternalAlbum,
+  ExternalPopularity,
+  ExternalTrack,
+  TrackImage,
+} from '@syra/shared-types';
 import type { HttpGetJson, MusicSourceConnector } from './MusicSourceConnector';
 
 export const AUDIUS_DEFAULT_API_BASE = 'https://discoveryprovider.audius.co';
@@ -27,8 +33,29 @@ interface AudiusTrack {
   is_delete: boolean;
   is_streamable: boolean;
   is_stream_gated: boolean;
-  isrc?: string;
+  isrc?: string | null;
+  genre?: string | null;
+  mood?: string | null;
+  tags?: string | null;
+  release_date?: string | null;
+  play_count?: number | null;
+  favorite_count?: number | null;
+  repost_count?: number | null;
   user: { id: string; name: string; profile_picture?: AudiusArtwork | null };
+  artwork: AudiusArtwork | null;
+}
+
+/** Shape of a single Audius album from /v1/users/{id}/albums. */
+interface AudiusAlbum {
+  id: string;
+  playlist_name: string;
+  is_album?: boolean;
+  is_delete?: boolean;
+  release_date?: string | null;
+  total_play_count?: number | null;
+  favorite_count?: number | null;
+  repost_count?: number | null;
+  upc?: string | null;
   artwork: AudiusArtwork | null;
 }
 
@@ -51,6 +78,62 @@ function isAudiusTrack(value: unknown): value is AudiusTrack {
     typeof (v['user'] as Record<string, unknown>)['id'] === 'string' &&
     typeof (v['user'] as Record<string, unknown>)['name'] === 'string'
   );
+}
+
+/**
+ * Type guard — confirms `value` has the minimum required fields of AudiusAlbum.
+ */
+function isAudiusAlbum(value: unknown): value is AudiusAlbum {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return typeof v['id'] === 'string' && typeof v['playlist_name'] === 'string';
+}
+
+// ── Field normalisers ─────────────────────────────────────────────────────────
+
+/** Trim a nullable string, returning undefined for empty/blank/missing values. */
+function cleanString(value: string | null | undefined): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+/** Split a comma-separated tags string into a trimmed, de-blanked array. */
+function parseTags(tags: string | null | undefined): string[] | undefined {
+  if (typeof tags !== 'string') return undefined;
+  const parsed = tags
+    .split(',')
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0);
+  return parsed.length > 0 ? parsed : undefined;
+}
+
+/** Keep only finite non-negative numbers; everything else → undefined. */
+function cleanCount(value: number | null | undefined): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
+}
+
+/**
+ * Build an ExternalPopularity from raw play/favorite/repost counts. Returns
+ * undefined when the provider exposes none of them (so we never write zeros
+ * that would clobber a real value on merge).
+ */
+function buildPopularity(
+  playCount: number | null | undefined,
+  favoriteCount: number | null | undefined,
+  repostCount: number | null | undefined,
+): ExternalPopularity | undefined {
+  const play = cleanCount(playCount);
+  const favorite = cleanCount(favoriteCount);
+  const repost = cleanCount(repostCount);
+  if (play === undefined && favorite === undefined && repost === undefined) {
+    return undefined;
+  }
+  return {
+    ...(play !== undefined && { playCount: play }),
+    ...(favorite !== undefined && { favoriteCount: favorite }),
+    ...(repost !== undefined && { repostCount: repost }),
+  };
 }
 
 // ── Artwork → TrackImage[] ────────────────────────────────────────────────────
@@ -141,6 +224,18 @@ export class AudiusConnector implements MusicSourceConnector {
         `?app_name=${encodeURIComponent(this.appName)}`;
 
       const artistImages = mapArtwork(item.user.profile_picture ?? null);
+      const trackImages = mapArtwork(item.artwork);
+
+      const isrc = cleanString(item.isrc);
+      const genre = cleanString(item.genre);
+      const mood = cleanString(item.mood);
+      const tags = parseTags(item.tags);
+      const releaseDate = cleanString(item.release_date);
+      const popularity = buildPopularity(
+        item.play_count,
+        item.favorite_count,
+        item.repost_count,
+      );
 
       const track: ExternalTrack = {
         provider: 'audius',
@@ -155,13 +250,111 @@ export class AudiusConnector implements MusicSourceConnector {
           },
         ],
         streamUrl,
-        ...(item.isrc !== undefined && { isrc: item.isrc }),
-        ...(mapArtwork(item.artwork) !== undefined && { images: mapArtwork(item.artwork) }),
+        ...(isrc !== undefined && { isrc }),
+        ...(trackImages !== undefined && { images: trackImages }),
+        ...(genre !== undefined && { genre }),
+        ...(mood !== undefined && { mood }),
+        ...(tags !== undefined && { tags }),
+        ...(releaseDate !== undefined && { releaseDate }),
+        ...(popularity !== undefined && { popularity }),
       };
 
       results.push(track);
     }
 
     return results;
+  }
+
+  /**
+   * Fetch the albums published by an Audius artist, normalised to ExternalAlbum.
+   *
+   * For each album we additionally fetch its track listing so the importer can
+   * link member tracks by external id. A failed track-listing fetch degrades
+   * gracefully to an empty `trackExternalIds` rather than dropping the album.
+   *
+   * Non-album playlists (`is_album === false`) and deleted albums are skipped.
+   * A malformed albums response yields `[]` rather than throwing.
+   */
+  async fetchArtistAlbums(artistExternalId: string, limit: number = 20): Promise<ExternalAlbum[]> {
+    const url =
+      `${this.apiBase}/v1/users/${encodeURIComponent(artistExternalId)}/albums` +
+      `?app_name=${encodeURIComponent(this.appName)}` +
+      `&limit=${limit}`;
+
+    const raw = await this.httpGet(url);
+
+    if (typeof raw !== 'object' || raw === null) return [];
+    const body = raw as Record<string, unknown>;
+    if (!Array.isArray(body['data'])) return [];
+
+    const albums: ExternalAlbum[] = [];
+
+    for (const item of body['data']) {
+      if (!isAudiusAlbum(item)) continue;
+      if (item.is_album === false) continue;
+      if (item.is_delete === true) continue;
+      if (!item.playlist_name.trim()) continue;
+
+      const trackExternalIds = await this.fetchAlbumTrackIds(item.id);
+      // The album genre is not on the album payload itself; inherit it from the
+      // first member track that carries one (matches how Audius surfaces genre).
+      const genre = trackExternalIds.genre;
+
+      const images = mapArtwork(item.artwork);
+      const releaseDate = cleanString(item.release_date);
+      const popularity = buildPopularity(
+        item.total_play_count,
+        item.favorite_count,
+        item.repost_count,
+      );
+
+      const album: ExternalAlbum = {
+        name: item.playlist_name,
+        externalId: String(item.id),
+        trackExternalIds: trackExternalIds.ids,
+        ...(images !== undefined && { images }),
+        ...(releaseDate !== undefined && { releaseDate }),
+        ...(genre !== undefined && { genre }),
+        ...(popularity !== undefined && { popularity }),
+      };
+
+      albums.push(album);
+    }
+
+    return albums;
+  }
+
+  /**
+   * Fetch the ordered external track ids for an album, plus the genre of the
+   * first track that carries one. Network/parse failures degrade to empty.
+   */
+  private async fetchAlbumTrackIds(
+    albumExternalId: string,
+  ): Promise<{ ids: string[]; genre: string | undefined }> {
+    const url =
+      `${this.apiBase}/v1/playlists/${encodeURIComponent(albumExternalId)}/tracks` +
+      `?app_name=${encodeURIComponent(this.appName)}`;
+
+    let raw: unknown;
+    try {
+      raw = await this.httpGet(url);
+    } catch {
+      // A failed track-listing fetch must not drop the album.
+      return { ids: [], genre: undefined };
+    }
+
+    if (typeof raw !== 'object' || raw === null) return { ids: [], genre: undefined };
+    const body = raw as Record<string, unknown>;
+    if (!Array.isArray(body['data'])) return { ids: [], genre: undefined };
+
+    const ids: string[] = [];
+    let genre: string | undefined;
+    for (const item of body['data']) {
+      if (!isAudiusTrack(item)) continue;
+      ids.push(String(item.id));
+      if (genre === undefined) genre = cleanString(item.genre);
+    }
+
+    return { ids, genre };
   }
 }

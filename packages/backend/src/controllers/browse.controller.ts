@@ -37,22 +37,26 @@ export const getGenres = async (req: Request, res: Response, next: NextFunction)
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    // Aggregate unique genres from albums and artists
-    const [albumGenres, artistGenres] = await Promise.all([
+    // Aggregate unique genres from tracks, albums, and artists. Tracks carry a
+    // top-level genre from the source sync, so genres surface even before any
+    // albums have been assembled.
+    const [trackGenres, albumGenres, artistGenres] = await Promise.all([
+      TrackModel.distinct('genre', { isAvailable: true }),
       AlbumModel.distinct('genre'),
       ArtistModel.distinct('genres'),
     ]);
 
     // Flatten and get unique genres
     const allGenres = [...new Set([
+      ...trackGenres.flat(),
       ...albumGenres.flat(),
       ...artistGenres.flat(),
     ].filter(Boolean))];
 
-    // Get sample albums/artists for each genre
+    // Get sample album/artist/track for each genre to supply cover art
     const genresWithSamples = await Promise.all(
       allGenres.slice(0, 20).map(async (genre) => {
-        const [sampleAlbums, sampleArtists] = await Promise.all([
+        const [sampleAlbums, sampleArtists, sampleTracks] = await Promise.all([
           AlbumModel.find({ genre: genre })
             .sort({ popularity: -1 })
             .limit(1)
@@ -61,15 +65,24 @@ export const getGenres = async (req: Request, res: Response, next: NextFunction)
             .sort({ popularity: -1 })
             .limit(1)
             .lean(),
+          TrackModel.find({ genre: genre, isAvailable: true })
+            .sort({ popularity: -1, playCount: -1 })
+            .limit(1)
+            .lean(),
         ]);
 
         const sampleAlbum = sampleAlbums[0];
         const sampleArtist = sampleArtists[0];
+        const sampleTrack = sampleTracks[0];
 
         return {
           name: genre,
           color: GENRE_COLORS[genre] || '#1E3264',
-          coverArt: sampleAlbum?.coverArt || sampleArtist?.image || null,
+          coverArt:
+            sampleAlbum?.coverArt ||
+            sampleArtist?.image ||
+            sampleTrack?.images?.[0]?.url ||
+            null,
         };
       })
     );
@@ -184,23 +197,43 @@ export const getMadeForYou = async (req: Request, res: Response, next: NextFunct
     }
 
     const limit = parseInt(req.query.limit as string) || 20;
+    const half = Math.max(1, Math.floor(limit / 2));
 
-    // For now, return a mix of popular albums and playlists
-    // In the future, this could use user listening history for personalization
+    // Mix of popular albums and public playlists.
+    // In the future, this could use user listening history for personalization.
     const [albums, playlists] = await Promise.all([
       AlbumModel.find()
-        .sort({ popularity: -1 })
-        .limit(Math.floor(limit / 2))
+        .sort({ popularity: -1, playCount: -1 })
+        .limit(half)
         .lean(),
       PlaylistModel.find({ isPublic: true })
         .sort({ followers: -1, createdAt: -1 })
-        .limit(Math.floor(limit / 2))
+        .limit(half)
         .lean(),
     ]);
+
+    // Fallback: when albums + playlists are sparse (early catalog, source sync
+    // hasn't assembled albums yet), surface popular tracks and artists so the
+    // section is never empty while the catalog has playable content.
+    const sparse = albums.length + playlists.length < half;
+    const [tracks, artists] = sparse
+      ? await Promise.all([
+          TrackModel.find({ isAvailable: true })
+            .sort({ popularity: -1, playCount: -1, createdAt: -1 })
+            .limit(limit)
+            .lean(),
+          ArtistModel.find()
+            .sort({ popularity: -1, 'stats.followers': -1 })
+            .limit(limit)
+            .lean(),
+        ])
+      : [[], []];
 
     res.json({
       albums: formatAlbumsWithCoverArt(albums),
       playlists: formatPlaylistsWithCoverArt(playlists),
+      tracks: await formatTracksWithCoverArt(tracks),
+      artists: formatArtistsWithImage(artists),
     });
   } catch (error) {
     next(error);

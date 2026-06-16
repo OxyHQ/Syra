@@ -15,11 +15,29 @@ export interface ExternalArtist {
   images?: TrackImage[];
 }
 
+/** Popularity signals as exposed by an external provider */
+export interface ExternalPopularity {
+  /** Lifetime play count */
+  playCount?: number;
+  /** Number of favourites / saves */
+  favoriteCount?: number;
+  /** Number of reposts / shares */
+  repostCount?: number;
+}
+
 /** Minimal album data as returned by an external provider */
 export interface ExternalAlbum {
   name: string;
   externalId: string;
   images?: TrackImage[];
+  /** Release date as an ISO 8601 string, if the provider exposes one */
+  releaseDate?: string;
+  /** Single genre label as exposed by the provider */
+  genre?: string;
+  /** Popularity signals (play/favorite/repost counts) */
+  popularity?: ExternalPopularity;
+  /** External identifiers of the album's member tracks, in track order */
+  trackExternalIds?: string[];
 }
 
 /** A track as returned by an external provider, prior to catalog normalization */
@@ -33,6 +51,16 @@ export interface ExternalTrack {
   durationSec: number;
   isrc?: string;
   images?: TrackImage[];
+  /** Single genre label as exposed by the provider (e.g. Audius `genre`) */
+  genre?: string;
+  /** Mood label as exposed by the provider (e.g. Audius `mood`) */
+  mood?: string;
+  /** Free-form tags exposed by the provider */
+  tags?: string[];
+  /** Release date as an ISO 8601 string, if the provider exposes one */
+  releaseDate?: string;
+  /** Popularity signals (play/favorite/repost counts) */
+  popularity?: ExternalPopularity;
   /** Direct network stream URL (Audius only) */
   streamUrl?: string;
   /** Download URL for CC tracks with a commercial-use license */

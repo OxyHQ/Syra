@@ -1,7 +1,9 @@
 import type { ExternalTrack, CatalogSource, SourceProvenance, TrackImage } from '@syra/shared-types';
 import { TrackModel } from '../../models/Track';
 import type { ITrack } from '../../models/Track';
+import { ArtistModel } from '../../models/Artist';
 import { upsertArtist } from './upsertArtist';
+import { playCountToPopularity } from './popularity';
 
 /**
  * Normalize a string for fuzzy title/artist matching:
@@ -46,7 +48,29 @@ function contributedFields(external: ExternalTrack): string[] {
   if (external.downloadUrl) fields.push('downloadUrl');
   if (external.album?.name) fields.push('albumName');
   if (external.artists.length > 1) fields.push('artistIds');
+  if (external.genre) fields.push('genre');
+  if (external.mood) fields.push('mood');
+  if (external.tags?.length) fields.push('tags');
+  if (external.releaseDate) fields.push('releaseDate');
+  if (external.popularity) fields.push('popularity');
   return fields;
+}
+
+/** Parse a provider release-date string to a Date, or undefined if invalid. */
+function parseReleaseDate(value: string | undefined): Date | undefined {
+  if (!value) return undefined;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
+/**
+ * Union a new genre into an artist's `genres` array (case-sensitive, exact).
+ * No-op when the genre is empty or already present. Persists via $addToSet so
+ * concurrent track imports for the same artist never lose a genre.
+ */
+async function rollGenreUpToArtist(artistId: string, genre: string | undefined): Promise<void> {
+  if (!genre) return;
+  await ArtistModel.updateOne({ _id: artistId }, { $addToSet: { genres: genre } });
 }
 
 function buildProvenance(
@@ -163,6 +187,9 @@ export async function upsertTrack(
     existing = await findByFuzzy(external.title, artistName, external.durationSec);
   }
 
+  const releaseDate = parseReleaseDate(external.releaseDate);
+  const playCount = external.popularity?.playCount;
+
   // --- Create ---
   if (!existing) {
     const track = await TrackModel.create({
@@ -181,8 +208,20 @@ export async function upsertTrack(
       },
       images: external.images ?? [],
       streamUrl: external.streamUrl,
+      genre: external.genre,
+      mood: external.mood,
+      tags: external.tags ?? [],
+      releaseDate,
+      ...(playCount !== undefined ? { playCount, popularity: playCountToPopularity(playCount) } : {}),
+      ...(external.popularity?.favoriteCount !== undefined
+        ? { favoriteCount: external.popularity.favoriteCount }
+        : {}),
+      ...(external.popularity?.repostCount !== undefined
+        ? { repostCount: external.popularity.repostCount }
+        : {}),
       sources: [provenance],
     });
+    await rollGenreUpToArtist(artistId, external.genre);
     return { track, created: true };
   }
 
@@ -212,6 +251,32 @@ export async function upsertTrack(
     };
   }
 
+  // Provider metadata — only set when incoming has a value AND existing lacks one,
+  // so a later import that omits a field never clobbers a previously-synced value.
+  if (external.genre && !existing.genre) existing.genre = external.genre;
+  if (external.mood && !existing.mood) existing.mood = external.mood;
+  if (external.tags?.length && !existing.tags?.length) existing.tags = external.tags;
+  if (releaseDate && !existing.releaseDate) existing.releaseDate = releaseDate;
+  // Popularity signals reflect live counts — refresh upward when the new value
+  // is larger (counts are monotonic), never downward.
+  if (playCount !== undefined && playCount > (existing.playCount ?? 0)) {
+    existing.playCount = playCount;
+    existing.popularity = playCountToPopularity(playCount);
+  }
+  if (
+    external.popularity?.favoriteCount !== undefined &&
+    external.popularity.favoriteCount > (existing.favoriteCount ?? 0)
+  ) {
+    existing.favoriteCount = external.popularity.favoriteCount;
+  }
+  if (
+    external.popularity?.repostCount !== undefined &&
+    external.popularity.repostCount > (existing.repostCount ?? 0)
+  ) {
+    existing.repostCount = external.popularity.repostCount;
+  }
+
   const track = await existing.save();
+  await rollGenreUpToArtist(artistId, external.genre);
   return { track, created: false };
 }

@@ -83,9 +83,21 @@ export interface Track extends Timestamps {
   audioSource?: AudioSource;
   coverArt?: string; // MongoDB ObjectId string (24 hex characters) - image must be uploaded via /api/images/upload first. In API responses, converted to /api/images/:id URL
   metadata?: TrackMetadata;
+  /** Single top-level genre label (provider-supplied, e.g. Audius `genre`); enables genre faceting before albums exist */
+  genre?: string;
+  /** Mood label (provider-supplied, e.g. Audius `mood`) */
+  mood?: string;
+  /** Free-form descriptive tags (provider-supplied) */
+  tags?: string[];
+  /** Original release date as an ISO 8601 string (provider-supplied) */
+  releaseDate?: string;
   isExplicit: boolean;
   popularity?: number; // 0-100
   playCount?: number;
+  /** Number of favourites / saves (provider-supplied popularity signal) */
+  favoriteCount?: number;
+  /** Number of reposts / shares (provider-supplied popularity signal) */
+  repostCount?: number;
   isAvailable: boolean; // whether track is available for playback
   copyrightRemoved?: boolean;
   removedAt?: string;
