@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { StyleSheet, View, Text, Pressable, Platform } from 'react-native';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -6,6 +6,7 @@ import { usePlayerStore } from '@/stores/playerStore';
 import { useUIStore } from '@/stores/uiStore';
 import { Image } from 'expo-image';
 import { Slider } from './Slider';
+import { DevicePicker } from './DevicePicker';
 
 /**
  * Desktop Bottom Player Bar Component
@@ -14,6 +15,7 @@ import { Slider } from './Slider';
 export const PlayerBar: React.FC = () => {
   const theme = useTheme();
   const { toggleNowPlaying } = useUIStore();
+  const [isDevicePickerVisible, setIsDevicePickerVisible] = useState(false);
 
   const {
     currentTrack,
@@ -167,6 +169,14 @@ export const PlayerBar: React.FC = () => {
           <Pressable style={styles.controlButton}>
             <MaterialCommunityIcons name="playlist-music" size={20} color={theme.colors.textSecondary} />
           </Pressable>
+          <Pressable
+            style={styles.controlButton}
+            onPress={() => setIsDevicePickerVisible(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Connect to a device"
+          >
+            <MaterialCommunityIcons name="devices" size={20} color={theme.colors.textSecondary} />
+          </Pressable>
           <View style={[styles.volumeContainer, { gap: SPACING }]}>
             <MaterialCommunityIcons
               name={volume === 0 ? 'volume-off' : volume < 0.5 ? 'volume-low' : 'volume-high'}
@@ -190,6 +200,11 @@ export const PlayerBar: React.FC = () => {
           </Pressable>
         </View>
       </View>
+
+      <DevicePicker
+        visible={isDevicePickerVisible}
+        onClose={() => setIsDevicePickerVisible(false)}
+      />
     </View>
   );
 };

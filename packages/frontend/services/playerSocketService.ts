@@ -1,6 +1,6 @@
 import { API_URL_SOCKET } from '@/config';
 import { io, Socket } from 'socket.io-client';
-import { PlaybackStateUpdate, Queue, PlaybackState } from '@syra/shared-types';
+import { PlaybackStateUpdate, Queue, PlaybackState, Device, PlaybackCommand } from '@syra/shared-types';
 import { usePlayerStore } from '../stores/playerStore';
 import { useQueueStore } from '../stores/queueStore';
 
@@ -144,6 +144,44 @@ class PlayerSocketService {
   emitSeek(position: number) {
     if (this.socket?.connected) {
       this.socket.emit('seek', { position });
+    }
+  }
+
+  /**
+   * Register this device with the server.
+   */
+  emitDeviceRegister(device: { deviceId: string; name: string; type: string; capabilities: string[] }) {
+    if (this.socket?.connected) {
+      this.socket.emit('device:register', device);
+    }
+  }
+
+  /**
+   * Subscribe to the device list and invoke the callback whenever it updates.
+   * Returns an unsubscribe function.
+   */
+  onDeviceList(callback: (devices: Device[]) => void): () => void {
+    this.socket?.on('device:list', callback);
+    return () => {
+      this.socket?.off('device:list', callback);
+    };
+  }
+
+  /**
+   * Emit a playback command (play/pause/seek/transfer/volume/etc.).
+   */
+  emitPlaybackCommand(command: PlaybackCommand) {
+    if (this.socket?.connected) {
+      this.socket.emit('playback:command', command);
+    }
+  }
+
+  /**
+   * Emit a heartbeat to signal this device is still alive.
+   */
+  emitHeartbeat(deviceId: string) {
+    if (this.socket?.connected) {
+      this.socket.emit('heartbeat', { deviceId });
     }
   }
 
