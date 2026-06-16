@@ -30,6 +30,7 @@ import queueRoutes from './src/routes/queue.routes';
 import musicPreferencesRoutes from './src/routes/musicPreferences.routes';
 import copyrightRoutes from './src/routes/copyright.routes';
 import imagesRoutes from './src/routes/images.routes';
+import streamRoutes from './src/routes/stream.routes';
 
 // Middleware
 import { rateLimiter, bruteForceProtection } from "./src/middleware/security";
@@ -413,6 +414,7 @@ authenticatedApiRouter.use("/audio", audioRoutes); // Audio streaming requires a
 authenticatedApiRouter.use("/queue", queueRoutes); // Queue management requires authentication
 authenticatedApiRouter.use("/music", musicPreferencesRoutes); // Music preferences requires authentication
 authenticatedApiRouter.use("/copyright", copyrightRoutes); // Admin copyright management
+authenticatedApiRouter.use("/stream", streamRoutes);     // HLS key endpoint — requires auth
 
 // Mount public and authenticated API routers
 app.use("/api", publicApiRouter);
