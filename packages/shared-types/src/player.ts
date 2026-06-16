@@ -6,6 +6,12 @@
 import { Track } from './track';
 
 /**
+ * Audio quality setting — controls the HLS bitrate tier served to the client.
+ * high and very_high are premium-only; the server enforces the cap.
+ */
+export type AudioQuality = 'low' | 'normal' | 'high' | 'very_high';
+
+/**
  * Playback state
  */
 export enum PlaybackState {

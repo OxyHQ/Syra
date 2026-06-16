@@ -1,4 +1,7 @@
 import { UserMusicPreferencesModel, IUserMusicPreferences } from '../models/UserMusicPreferences';
+import type { AudioQuality } from '@syra/shared-types';
+
+const AUDIO_QUALITY_VALUES: readonly AudioQuality[] = ['low', 'normal', 'high', 'very_high'];
 
 /**
  * Ensure user music preferences exist (create with defaults if not)
@@ -70,7 +73,27 @@ export async function updateMusicPreferences(
   if (typeof updates.explicitContent === 'boolean') {
     update.explicitContent = updates.explicitContent;
   }
-  
+
+  // Validate and set audioQuality
+  if (typeof updates.audioQuality === 'string' && AUDIO_QUALITY_VALUES.includes(updates.audioQuality as AudioQuality)) {
+    update.audioQuality = updates.audioQuality;
+  }
+
+  // Validate and set downloadQuality
+  if (typeof updates.downloadQuality === 'string' && AUDIO_QUALITY_VALUES.includes(updates.downloadQuality as AudioQuality)) {
+    update.downloadQuality = updates.downloadQuality;
+  }
+
+  // Validate and set dataSaver
+  if (typeof updates.dataSaver === 'boolean') {
+    update.dataSaver = updates.dataSaver;
+  }
+
+  // Validate and set monoAudio
+  if (typeof updates.monoAudio === 'boolean') {
+    update.monoAudio = updates.monoAudio;
+  }
+
   // Update or create preferences
   const preferences = await UserMusicPreferencesModel.findOneAndUpdate(
     { oxyUserId },
