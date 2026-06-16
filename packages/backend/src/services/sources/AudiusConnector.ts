@@ -28,7 +28,7 @@ interface AudiusTrack {
   is_streamable: boolean;
   is_stream_gated: boolean;
   isrc?: string;
-  user: { id: string; name: string };
+  user: { id: string; name: string; profile_picture?: AudiusArtwork | null };
   artwork: AudiusArtwork | null;
 }
 
@@ -136,12 +136,20 @@ export class AudiusConnector implements MusicSourceConnector {
         `${this.apiBase}/v1/tracks/${item.id}/stream` +
         `?app_name=${encodeURIComponent(this.appName)}`;
 
+      const artistImages = mapArtwork(item.user.profile_picture ?? null);
+
       const track: ExternalTrack = {
         provider: 'audius',
         externalId: String(item.id),
         title: item.title,
         durationSec: item.duration,
-        artists: [{ name: item.user.name, externalId: String(item.user.id) }],
+        artists: [
+          {
+            name: item.user.name,
+            externalId: String(item.user.id),
+            ...(artistImages !== undefined && { images: artistImages }),
+          },
+        ],
         streamUrl,
         ...(item.isrc !== undefined && { isrc: item.isrc }),
         ...(mapArtwork(item.artwork) !== undefined && { images: mapArtwork(item.artwork) }),

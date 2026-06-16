@@ -189,4 +189,51 @@ describe('AudiusConnector.search', () => {
     const connector = new AudiusConnector({ apiBase: TEST_BASE, appName: TEST_APP });
     expect(connector.provider).toBe('audius');
   });
+
+  it('maps user.profile_picture to artists[0].images when present', async () => {
+    const trackWithProfilePic = {
+      ...TRACK_A,
+      user: {
+        ...TRACK_A.user,
+        profile_picture: {
+          '150x150': 'https://cdn.audius.co/u1/150x150.jpg',
+          '480x480': 'https://cdn.audius.co/u1/480x480.jpg',
+          '1000x1000': 'https://cdn.audius.co/u1/1000x1000.jpg',
+        },
+      },
+    };
+    const connector = new AudiusConnector({
+      apiBase: TEST_BASE,
+      appName: TEST_APP,
+      httpGet: async () => ({ data: [trackWithProfilePic] }),
+    });
+
+    const [track] = await connector.search('test');
+
+    expect(track.artists).toHaveLength(1);
+    const artistImages = track.artists[0].images ?? [];
+    expect(artistImages.length).toBeGreaterThanOrEqual(2);
+
+    const img480 = artistImages.find((i) => i.width === 480);
+    expect(img480).toBeDefined();
+    expect(img480?.url).toBe('https://cdn.audius.co/u1/480x480.jpg');
+    expect(img480?.source).toBe('audius');
+  });
+
+  it('artists[0].images is undefined when user has no profile_picture', async () => {
+    const trackNoProfilePic = {
+      ...TRACK_A,
+      user: { id: 'u1', name: 'DJ Test' }, // no profile_picture field
+    };
+    const connector = new AudiusConnector({
+      apiBase: TEST_BASE,
+      appName: TEST_APP,
+      httpGet: async () => ({ data: [trackNoProfilePic] }),
+    });
+
+    const [track] = await connector.search('test');
+
+    expect(track.artists).toHaveLength(1);
+    expect(track.artists[0].images).toBeUndefined();
+  });
 });
