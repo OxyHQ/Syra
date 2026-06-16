@@ -263,7 +263,7 @@ async function seedMusicData() {
     logger.info(`   Tracks: ${tracks.length}`);
 
     process.exit(0);
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('❌ Error seeding music data:', error);
     process.exit(1);
   }

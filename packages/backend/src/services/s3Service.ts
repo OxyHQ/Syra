@@ -8,7 +8,28 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { s3Client, S3_BUCKET_NAME, S3_REGION, S3_ENDPOINT } from '../config/s3.config';
 import { logger } from '../utils/logger';
+import { getErrorMessage } from '../utils/error';
 import { Readable } from 'stream';
+
+interface AwsSdkError {
+    name: string;
+    message: string;
+    Code?: string;
+    HostId?: string;
+    BucketName?: string;
+    $metadata?: {
+        httpStatusCode?: number;
+        requestId?: string;
+        extendedRequestId?: string;
+    };
+}
+
+function asAwsError(error: unknown): AwsSdkError {
+    if (error !== null && typeof error === 'object') {
+        return error as AwsSdkError;
+    }
+    return { name: 'UnknownError', message: String(error) };
+}
 
 /**
  * S3 Service
@@ -52,19 +73,19 @@ export async function uploadToS3(
 
     await s3Client.send(command);
     logger.debug(`[S3Service] Uploaded file to S3: ${key}`);
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const e = asAwsError(error);
     const errorDetails = {
       key,
       bucket: S3_BUCKET_NAME,
       region: S3_REGION,
       endpoint: S3_ENDPOINT || 'default (AWS)',
-      errorCode: error.Code || error.name,
-      errorMessage: error.message,
-      httpStatusCode: error.$metadata?.httpStatusCode,
-      requestId: error.$metadata?.requestId,
-      hostId: error.HostId || error.$metadata?.extendedRequestId,
-      // Include bucket name from error if available (helps verify case sensitivity)
-      errorBucketName: error.BucketName,
+      errorCode: e.Code ?? e.name,
+      errorMessage: e.message,
+      httpStatusCode: e.$metadata?.httpStatusCode,
+      requestId: e.$metadata?.requestId,
+      hostId: e.HostId ?? e.$metadata?.extendedRequestId,
+      errorBucketName: e.BucketName,
     };
     logger.error(`[S3Service] Error uploading to S3:`, errorDetails, error);
     throw error;
@@ -88,14 +109,15 @@ export async function getPresignedUrl(
     const url = await getSignedUrl(s3Client, command, { expiresIn });
     logger.debug(`[S3Service] Generated pre-signed URL for: ${key}`);
     return url;
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const e = asAwsError(error);
     const errorDetails = {
       key,
       bucket: S3_BUCKET_NAME,
       region: S3_REGION,
       endpoint: S3_ENDPOINT || 'default (AWS)',
-      errorCode: error.Code || error.name,
-      errorMessage: error.message,
+      errorCode: e.Code ?? e.name,
+      errorMessage: e.message,
     };
     logger.error(`[S3Service] Error generating pre-signed URL:`, errorDetails, error);
     throw error;
@@ -124,8 +146,9 @@ export async function getObjectMetadata(key: string): Promise<{
       lastModified: response.LastModified,
       etag: response.ETag,
     };
-  } catch (error: any) {
-    if (error.name === 'NotFound' || error.$metadata?.httpStatusCode === 404) {
+  } catch (error: unknown) {
+    const e = asAwsError(error);
+    if (e.name === 'NotFound' || e.$metadata?.httpStatusCode === 404) {
       return null;
     }
     const errorDetails = {
@@ -133,8 +156,8 @@ export async function getObjectMetadata(key: string): Promise<{
       bucket: S3_BUCKET_NAME,
       region: S3_REGION,
       endpoint: S3_ENDPOINT || 'default (AWS)',
-      errorCode: error.Code || error.name,
-      errorMessage: error.message,
+      errorCode: e.Code ?? e.name,
+      errorMessage: e.message,
     };
     logger.error(`[S3Service] Error getting object metadata:`, errorDetails, error);
     throw error;
@@ -179,14 +202,15 @@ export async function streamFromS3(
       contentType,
       contentRange,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const e = asAwsError(error);
     const errorDetails = {
       key,
       bucket: S3_BUCKET_NAME,
       region: S3_REGION,
       endpoint: S3_ENDPOINT || 'default (AWS)',
-      errorCode: error.Code || error.name,
-      errorMessage: error.message,
+      errorCode: e.Code ?? e.name,
+      errorMessage: e.message,
     };
     logger.error(`[S3Service] Error streaming from S3:`, errorDetails, error);
     throw error;
@@ -205,14 +229,15 @@ export async function deleteFromS3(key: string): Promise<void> {
 
     await s3Client.send(command);
     logger.debug(`[S3Service] Deleted file from S3: ${key}`);
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const e = asAwsError(error);
     const errorDetails = {
       key,
       bucket: S3_BUCKET_NAME,
       region: S3_REGION,
       endpoint: S3_ENDPOINT || 'default (AWS)',
-      errorCode: error.Code || error.name,
-      errorMessage: error.message,
+      errorCode: e.Code ?? e.name,
+      errorMessage: e.message,
     };
     logger.error(`[S3Service] Error deleting from S3:`, errorDetails, error);
     throw error;

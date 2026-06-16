@@ -43,10 +43,11 @@ router.put('/preferences', async (req: AuthRequest, res: Response) => {
     const oxyUserId = getAuthenticatedUserId(req);
     const updatedPreferences = await updateMusicPreferences(oxyUserId, req.body);
     return sendSuccessResponse(res, 200, updatedPreferences);
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('[MusicPreferences] Error updating preferences:', err);
-    if (err.message && err.message.includes('validation')) {
-      return sendErrorResponse(res, 400, 'Bad Request', err.message);
+    const msg = err instanceof Error ? err.message : '';
+    if (msg.includes('validation')) {
+      return sendErrorResponse(res, 400, 'Bad Request', msg);
     }
     return sendErrorResponse(res, 500, 'Internal Server Error', 'Failed to update music preferences');
   }

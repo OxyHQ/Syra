@@ -1,5 +1,6 @@
 import { createClient, RedisClientType, RedisClientOptions } from 'redis';
 import { logger } from './logger';
+import { getErrorMessage } from './error';
 
 /**
  * Shared Redis configuration options
@@ -392,12 +393,12 @@ export async function verifyRedisConnection(): Promise<{
       ping,
       details
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       connected: false,
       ready: false,
       ping: false,
-      details: { ...details, error: error.message }
+      details: { ...details, error: getErrorMessage(error) }
     };
   }
 }

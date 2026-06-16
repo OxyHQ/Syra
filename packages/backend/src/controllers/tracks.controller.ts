@@ -12,6 +12,7 @@ import { uploadTrackAudio } from '../services/audioStorageService';
 import { logger } from '../utils/logger';
 import { extractColorsFromImage } from '../utils/colorHelper';
 import { enqueueIngest } from '../services/ingest/ingestTrack';
+import { getErrorMessage, getErrorStack, getHttpStatus } from '../utils/error';
 
 /**
  * GET /api/tracks
@@ -360,21 +361,19 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
       } else {
         logger.warn('[TracksController] Response already sent, cannot send track data');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('[TracksController] Error uploading track:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name,
+        message: getErrorMessage(error),
+        stack: getErrorStack(error),
+        name: error instanceof Error ? error.name : 'UnknownError',
       });
-      
-      // Ensure error response is sent if not already sent
+
       if (!res.headersSent) {
-        res.status(error.statusCode || error.status || 500).json({
-          error: error.message || 'Internal Server Error',
-          ...(process.env.NODE_ENV === 'development' && { details: error.stack }),
+        res.status(getHttpStatus(error)).json({
+          error: getErrorMessage(error) || 'Internal Server Error',
+          ...(process.env.NODE_ENV === 'development' && { details: getErrorStack(error) }),
         });
       } else {
-        // If response already sent, log error but can't send response
         logger.error('[TracksController] Error occurred but response already sent');
       }
     }

@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { writeFile, readFile, initGridFS } from '../utils/mongoose-gridfs';
 import { isDatabaseConnected } from '../utils/database';
 import { logger } from '../utils/logger';
+import { getErrorMessage } from '../utils/error';
 import { AuthRequest } from '../middleware/auth';
 
 /**
@@ -48,7 +49,7 @@ export const uploadImage = async (req: AuthRequest, res: Response, next: NextFun
     logger.debug('[ImagesController] Image uploaded successfully', { imageId });
 
     res.status(201).json({ id: imageId });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('[ImagesController] Error uploading image:', error);
     next(error);
   }
@@ -80,19 +81,20 @@ export const getImage = async (req: Request, res: Response, next: NextFunction) 
       const stream = await readFile(id);
 
       // Set up error handler
-      stream.on('error', (error: any) => {
-        if (error.code === 'ENOENT' || error.message?.includes('FileNotFound')) {
+      stream.on('error', (streamError: Error) => {
+        const code = (streamError as NodeJS.ErrnoException).code;
+        if (code === 'ENOENT' || streamError.message.includes('FileNotFound')) {
           logger.debug('[ImagesController] Image not found', { id });
-          return res.status(404).json({ 
-            error: 'Image not found', 
-            message: 'The requested image does not exist' 
+          return res.status(404).json({
+            error: 'Image not found',
+            message: 'The requested image does not exist'
           });
         }
-        logger.error('[ImagesController] Error reading image stream:', error);
+        logger.error('[ImagesController] Error reading image stream:', streamError);
         if (!res.headersSent) {
-          res.status(500).json({ 
-            error: 'Internal server error', 
-            message: 'Failed to read image' 
+          res.status(500).json({
+            error: 'Internal server error',
+            message: 'Failed to read image'
           });
         }
       });
@@ -116,16 +118,18 @@ export const getImage = async (req: Request, res: Response, next: NextFunction) 
 
       // Stream the image
       stream.pipe(res);
-    } catch (error: any) {
-      if (error.message?.includes('not found') || error.code === 'ENOENT') {
-        return res.status(404).json({ 
-          error: 'Image not found', 
-          message: 'The requested image does not exist' 
+    } catch (error: unknown) {
+      const msg = getErrorMessage(error);
+      const code = error instanceof Error ? (error as NodeJS.ErrnoException).code : undefined;
+      if (msg.includes('not found') || code === 'ENOENT') {
+        return res.status(404).json({
+          error: 'Image not found',
+          message: 'The requested image does not exist'
         });
       }
       throw error;
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('[ImagesController] Error getting image:', error);
     next(error);
   }

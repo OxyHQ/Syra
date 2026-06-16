@@ -294,10 +294,13 @@ export const registerAsArtist = async (req: AuthRequest, res: Response, next: Ne
 
     const formattedArtist = formatArtistWithImage(artist);
     res.status(201).json(formattedArtist);
-  } catch (error: any) {
-    if (error.code === 11000) {
+  } catch (error: unknown) {
+    const mongoCode = error !== null && typeof error === 'object'
+      ? (error as Record<string, unknown>)['code']
+      : undefined;
+    if (mongoCode === 11000) {
       // Duplicate key error
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Name taken',
         message: 'This artist name is already taken',
       });

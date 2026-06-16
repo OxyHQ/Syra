@@ -1,5 +1,6 @@
 import { RedisClientType } from 'redis';
 import { logger } from './logger';
+import { getErrorMessage } from './error';
 
 /**
  * Check if an error is a Redis connection error
@@ -71,11 +72,12 @@ export async function ensureRedisConnected(client: RedisClientType, timeoutMs: n
     
     // If still not ready after timeout, return false
     return false;
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Handle "Socket already opened" error gracefully - this means connection is in progress
-    if (error?.message?.includes('Socket already opened') || 
-        error?.message?.includes('already open') ||
-        error?.message?.includes('already connected')) {
+    const msg = getErrorMessage(error);
+    if (msg.includes('Socket already opened') ||
+        msg.includes('already open') ||
+        msg.includes('already connected')) {
       // Socket is already open/connecting, check if it becomes ready
       const startTime = Date.now();
       const maxWait = timeoutMs;
@@ -140,12 +142,12 @@ export async function verifyRedisConnectionWithDiagnostics(client: RedisClientTy
       ping,
       error
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       connected: false,
       ready: false,
       ping: false,
-      error: error.message
+      error: getErrorMessage(error)
     };
   }
 }
@@ -166,7 +168,7 @@ export async function withRedisFallback<T>(
       return fallback;
     }
     return await operation();
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (isRedisConnectionError(error)) {
       if (operationName) {
         logger.debug(`Redis unavailable for ${operationName}, using fallback`);

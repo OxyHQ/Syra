@@ -107,7 +107,7 @@ class LinkMetadataService {
       });
 
       return result;
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('[LinkMetadataService] Error fetching metadata:', error);
       // Return basic metadata on error instead of throwing
       try {

@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { logger } from "./logger";
+import { getErrorMessage } from "./error";
 
 const APP_NAME = "syra";
 
@@ -77,12 +78,13 @@ export async function connectToDatabase(): Promise<typeof mongoose> {
       retryCount = 0; // Reset retry count on successful connection
       logger.info("Connected to MongoDB successfully");
       return mongoose;
-    } catch (error: any) {
+    } catch (error: unknown) {
       retryCount++;
-      
+
       // Provide helpful error diagnostics
-      const errorCode = error?.code || error?.syscall || '';
-      const errorMessage = error?.message || error?.toString() || 'Unknown error';
+      const errorObj = error !== null && typeof error === 'object' ? error as Record<string, unknown> : {};
+      const errorCode = String(errorObj['code'] ?? errorObj['syscall'] ?? '');
+      const errorMessage = getErrorMessage(error);
       
       if (retryCount < MAX_RETRIES) {
         const delay = getRetryDelay(retryCount - 1);

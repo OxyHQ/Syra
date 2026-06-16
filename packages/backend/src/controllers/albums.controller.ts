@@ -212,7 +212,7 @@ export const createAlbum = async (req: AuthRequest, res: Response, next: NextFun
 
     const formattedAlbum = formatAlbumWithCoverArt(album);
     res.status(201).json(formattedAlbum);
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('[AlbumsController] Error creating album:', error);
     next(error);
   }
