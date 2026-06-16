@@ -4,8 +4,10 @@ import type { AuthRequest } from '../middleware/auth';
 import { TrackModel } from '../models/Track';
 import { TrackKeyModel } from '../models/TrackKey';
 import { mintStreamToken, verifyStreamToken } from '../services/stream/streamToken';
+import { buildMasterPlaylist, buildVariantPlaylist } from '../services/stream/manifestService';
 
 const CONTENT_TYPE_OCTET_STREAM = 'application/octet-stream';
+const CONTENT_TYPE_HLS_PLAYLIST = 'application/vnd.apple.mpegurl';
 const CACHE_CONTROL_NO_STORE = 'no-store';
 
 /**
@@ -24,7 +26,7 @@ const STREAM_SESSION_TTL_SEC = 3600;
  * Callers MUST check `claims.trackId === trackId` — a token minted for track A
  * does NOT authorize access to track B.
  */
-function authorizeStreamRequest(
+export function authorizeStreamRequest(
   req: AuthRequest,
   trackId: string,
 ): { ok: boolean } {
@@ -41,7 +43,7 @@ function authorizeStreamRequest(
 
 // ── Track availability guard (shared by both handlers) ───────────────────────
 
-function isTrackPlayable(track: { isAvailable?: boolean; copyrightRemoved?: boolean }): boolean {
+export function isTrackPlayable(track: { isAvailable?: boolean; copyrightRemoved?: boolean }): boolean {
   return track.isAvailable !== false && !track.copyrightRemoved;
 }
 
@@ -180,4 +182,153 @@ export async function getStreamKey(req: AuthRequest, res: Response): Promise<voi
   res.set('Content-Type', CONTENT_TYPE_OCTET_STREAM);
   res.set('Cache-Control', CACHE_CONTROL_NO_STORE);
   res.status(200).send(Buffer.from(trackKey.keyHex, 'hex'));
+}
+
+// ── Manifest helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Extract or mint a stream token for manifest sub-requests.
+ * Reuses `?t=` when present (token-only requests from native players);
+ * otherwise mints a fresh one from the bearer session.
+ */
+function resolveToken(req: AuthRequest, trackId: string): string {
+  const rawToken = req.query?.t;
+  if (typeof rawToken === 'string' && rawToken) return rawToken;
+  // Bearer path — user is guaranteed present (authorizeStreamRequest already passed)
+  return mintStreamToken(
+    { trackId, userId: req.user?.id ?? '' },
+    STREAM_SESSION_TTL_SEC,
+  );
+}
+
+// ── Master playlist ───────────────────────────────────────────────────────────
+
+/**
+ * GET /api/stream/:trackId/master.m3u8
+ *
+ * Serves the rewritten HLS master playlist. Variant paths are replaced with
+ * tokenized API URLs; native players do not need a bearer header for sub-requests.
+ *
+ * Phase-5 seam: entitlement-based variant filtering is handled in
+ * `buildMasterPlaylist` before the rewrite step.
+ *
+ * Guards: ObjectId(1) → auth(2) → track(3) → availability(4) → readiness(5) → 200.
+ */
+export async function getMasterPlaylist(req: AuthRequest, res: Response): Promise<void> {
+  const trackId = Array.isArray(req.params.trackId)
+    ? req.params.trackId[0]
+    : req.params.trackId;
+
+  if (!trackId || !mongoose.Types.ObjectId.isValid(trackId)) {
+    res.status(400).json({ error: 'Invalid track ID' });
+    return;
+  }
+
+  if (!authorizeStreamRequest(req, trackId).ok) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+
+  const track = await TrackModel.findById(trackId);
+  if (!track) {
+    res.status(404).json({ error: 'Track not found' });
+    return;
+  }
+
+  if (!isTrackPlayable(track)) {
+    res.status(403).json({ error: 'Track unavailable' });
+    return;
+  }
+
+  if (track.status === 'processing') {
+    res.status(409).json({ error: 'Track processing' });
+    return;
+  }
+
+  if (!track.hlsMasterKey || !track.hls?.length) {
+    res.status(404).json({ error: 'Master playlist not available' });
+    return;
+  }
+
+  const token = resolveToken(req, trackId);
+  const baseUrl = process.env.STREAM_KEY_BASE_URL ?? '';
+
+  const playlist = await buildMasterPlaylist(track, token, baseUrl);
+  res.set('Content-Type', CONTENT_TYPE_HLS_PLAYLIST);
+  res.set('Cache-Control', CACHE_CONTROL_NO_STORE);
+  res.status(200).send(playlist);
+}
+
+// ── Variant playlist ──────────────────────────────────────────────────────────
+
+/**
+ * GET /api/stream/:trackId/v/:variant
+ *
+ * Serves a rewritten variant playlist. `:variant` is e.g. `96.m3u8`.
+ * Segments are presigned for 6 hours; the EXT-X-KEY URI is tokenized.
+ *
+ * Guards: ObjectId(1) → auth(2) → track(3) → availability(4) → readiness(5) →
+ *         variant parse(6) → 200.
+ */
+export async function getVariantPlaylist(req: AuthRequest, res: Response): Promise<void> {
+  const trackId = Array.isArray(req.params.trackId)
+    ? req.params.trackId[0]
+    : req.params.trackId;
+
+  if (!trackId || !mongoose.Types.ObjectId.isValid(trackId)) {
+    res.status(400).json({ error: 'Invalid track ID' });
+    return;
+  }
+
+  if (!authorizeStreamRequest(req, trackId).ok) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+
+  const track = await TrackModel.findById(trackId);
+  if (!track) {
+    res.status(404).json({ error: 'Track not found' });
+    return;
+  }
+
+  if (!isTrackPlayable(track)) {
+    res.status(403).json({ error: 'Track unavailable' });
+    return;
+  }
+
+  if (track.status === 'processing') {
+    res.status(409).json({ error: 'Track processing' });
+    return;
+  }
+
+  if (!track.hls?.length) {
+    res.status(404).json({ error: 'Variant playlist not available' });
+    return;
+  }
+
+  // Parse variant param: "96.m3u8" → 96
+  const variantParam = Array.isArray(req.params.variant)
+    ? req.params.variant[0]
+    : req.params.variant;
+  const bitrateStr = (variantParam ?? '').replace(/\.m3u8$/i, '');
+  const bitrateKbps = parseInt(bitrateStr, 10);
+
+  if (!Number.isInteger(bitrateKbps) || bitrateKbps <= 0) {
+    res.status(400).json({ error: 'Invalid variant' });
+    return;
+  }
+
+  const rendition = track.hls.find((r) => r.bitrateKbps === bitrateKbps);
+  if (!rendition) {
+    res.status(404).json({ error: `No rendition at ${bitrateKbps} kbps` });
+    return;
+  }
+
+  const token = resolveToken(req, trackId);
+  const baseUrl = process.env.STREAM_KEY_BASE_URL ?? '';
+
+  const playlist = await buildVariantPlaylist(track, bitrateKbps, token, baseUrl);
+  res.set('Content-Type', CONTENT_TYPE_HLS_PLAYLIST);
+  res.set('Cache-Control', CACHE_CONTROL_NO_STORE);
+  res.status(200).send(playlist);
 }
