@@ -87,6 +87,7 @@ const TrackSchema = new Schema<ITrack>({
   hls: [{ type: HlsRenditionSchema }],
   loudnessLufs: { type: Number },
   streamUrl: { type: String },
+  hlsMasterKey: { type: String },
 }, {
   timestamps: true,
 });

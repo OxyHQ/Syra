@@ -108,6 +108,8 @@ export interface Track extends Timestamps {
   loudnessLufs?: number;
   /** Direct network stream URL (Audius only) */
   streamUrl?: string;
+  /** S3 key of the HLS master playlist; set after transcoding completes */
+  hlsMasterKey?: string;
 }
 
 /**

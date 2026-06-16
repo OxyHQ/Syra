@@ -120,3 +120,15 @@ export function getS3AudioKey(trackId: string, artistId: string, albumId: string
   }
   return `${S3_AUDIO_PREFIX}/${artistId}/${trackId}${extension}`;
 }
+
+export const S3_HLS_PREFIX = process.env.S3_HLS_PREFIX || 'hls';
+
+/**
+ * Get S3 key for an HLS file (playlist or segment).
+ * Format: hls/{artistId}/{trackId}/{relPath}
+ * Normalises backslashes and strips leading slashes from relPath.
+ */
+export function getS3HlsKey(artistId: string, trackId: string, relPath: string): string {
+  const normalised = relPath.replace(/\\/g, '/').replace(/^\/+/, '');
+  return `${S3_HLS_PREFIX}/${artistId}/${trackId}/${normalised}`;
+}
