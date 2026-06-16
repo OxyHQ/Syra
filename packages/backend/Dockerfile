@@ -5,19 +5,40 @@
 # Multi-stage, multi-arch (amd64 + arm64). `node:22-alpine` and `oven/bun` are
 # multi-arch manifests, so this image builds natively on AWS Graviton
 # (linux/arm64) as well as x86_64 — Docker selects the right base layer per
-# target platform. All native dependencies used by the backend ship prebuilt
-# musl binaries for arm64 (sharp) or are pure JS (bcryptjs, firebase-admin),
-# so no source compilation is required.
+# target platform. Most native dependencies ship prebuilt musl binaries for
+# arm64 (sharp) or are pure JS; the exception is Bento4 (mp42hls/mp4fragment)
+# which has no arm64/musl prebuilts and is compiled from source in a dedicated
+# stage (see Stage 0).
 #
 # Build context is the monorepo ROOT (bun workspaces):
 #   docker build -f packages/backend/Dockerfile -t syra-backend:test .
 #
 # Pipeline:
-#   build: bun install --frozen-lockfile
-#          && bun run build:shared-types
-#          && bun run build:backend
-#          && reinstall production-only deps
-#   run:   node packages/backend/dist/server.js
+#   bento4: cmake build of mp42hls, mp4fragment, mp4encrypt from source
+#   build:  bun install --frozen-lockfile
+#           && bun run build:shared-types
+#           && bun run build:backend
+#           && reinstall production-only deps
+#   run:    node packages/backend/dist/server.js
+
+# ---------------------------------------------------------------------------
+# Stage 0: bento4 — compile Bento4 media tools from source.
+#
+# Bento4 ships no prebuilt musl/arm64 binaries, so we build from source for
+# the target platform. A dedicated stage keeps the C++ toolchain out of both
+# the builder and runner stages. The three binaries we need are:
+#   mp42hls      — packages AAC MP4 into AES-128 encrypted HLS
+#   mp4fragment  — fragments an MP4 file (required input for mp42hls)
+#   mp4encrypt   — low-level AES encryption helper (used in testing)
+# ---------------------------------------------------------------------------
+FROM alpine:3.20 AS bento4
+
+RUN apk add --no-cache git cmake make g++
+
+RUN git clone --depth 1 --branch v1.6.0-641 \
+      https://github.com/axiomatic-systems/Bento4.git /src \
+ && cmake -S /src -B /src/build -DCMAKE_BUILD_TYPE=Release \
+ && cmake --build /src/build --target mp42hls mp4fragment mp4encrypt -j "$(nproc)"
 
 # ---------------------------------------------------------------------------
 # Stage 1: builder — install full dependency graph and compile TypeScript.
@@ -86,7 +107,15 @@ ENV NODE_ENV=production \
 
 # libc6-compat: glibc shim some prebuilt native binaries expect on Alpine/musl.
 # dumb-init: proper PID 1 so SIGTERM/SIGINT reach Node for graceful shutdown.
-RUN apk add --no-cache libc6-compat dumb-init
+# ffmpeg: provides ffmpeg + ffprobe for EBU R128 measurement and AAC transcoding.
+# libstdc++: C++ runtime required by the Bento4 binaries (ffmpeg pulls it too,
+#            but listed explicitly so the dependency is obvious and auditable).
+RUN apk add --no-cache libc6-compat dumb-init ffmpeg libstdc++
+
+# Copy Bento4 binaries from the build stage. Placed here (as root, before
+# USER node) so the binaries land in /usr/local/bin with correct ownership and
+# execute bits — apk add and COPY both need root.
+COPY --from=bento4 /src/build/mp42hls /src/build/mp4fragment /src/build/mp4encrypt /usr/local/bin/
 
 WORKDIR /app
 
