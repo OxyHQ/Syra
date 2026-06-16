@@ -6,6 +6,13 @@ import { ArtistModel } from '../models/Artist';
 import { PlaylistModel } from '../models/Playlist';
 import { toApiFormatArray, formatTracksWithCoverArt, formatAlbumsWithCoverArt, formatArtistsWithImage, formatPlaylistsWithCoverArt } from '../utils/musicHelpers';
 import { isDatabaseConnected } from '../utils/database';
+import { enqueueAudiusImport } from '../services/sources/audiusBackgroundImport';
+
+/**
+ * Local track count below this threshold triggers a background Audius import
+ * for the same query and signals `pendingAudiusImport: true` to the client.
+ */
+const AUDIUS_IMPORT_SPARSE_THRESHOLD = 5;
 
 /**
  * GET /api/search
@@ -209,7 +216,18 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
       limit: searchLimit,
     };
 
-    res.json(results);
+    // Fire-and-forget background Audius import for track/all searches.
+    // Kicks off asynchronously — never delays the response.
+    const isTrackSearch =
+      categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.TRACKS;
+    const sparseLocalResults = tracksCount < AUDIUS_IMPORT_SPARSE_THRESHOLD;
+    const pendingAudiusImport = isTrackSearch && sparseLocalResults;
+
+    if (isTrackSearch) {
+      enqueueAudiusImport(query);
+    }
+
+    res.json({ ...results, pendingAudiusImport });
   } catch (error) {
     next(error);
   }
