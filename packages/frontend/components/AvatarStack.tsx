@@ -43,8 +43,8 @@ export function AvatarStack({
         key: `pending-${i}`,
         profile: null,
       }))
-    : profiles.map((item) => ({
-        key: item.id || `profile-${item.username || Math.random()}`,
+    : profiles.map((item, i) => ({
+        key: item.id || `profile-${item.username ?? i}`,
         profile: item,
       }));
 

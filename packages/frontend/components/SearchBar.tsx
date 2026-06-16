@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
-import React, { useCallback, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator, Platform, Text, TextInput, TouchableOpacity, View, ViewStyle } from 'react-native'
 import { useTheme } from '@oxyhq/bloom/theme'
@@ -26,17 +26,21 @@ export const SearchBar = () => {
     const { t } = useTranslation();
     const theme = useTheme();
 
-    const handleSearch = useCallback(
-        debounce(async (query: string) => {
-            if (!query.trim()) return;
-            setIsLoading(true);
-            try {
-                await router.push(`/search/${encodeURIComponent(query)}`);
-            } finally {
-                setIsLoading(false);
-            }
-        }, 300),
-        []
+    // Memoize the debounced searcher so the timer survives re-renders. useMemo (not
+    // useCallback) is correct here because we are memoizing the *result* of debounce(),
+    // not an inline callback.
+    const handleSearch = useMemo(
+        () =>
+            debounce(async (query: string) => {
+                if (!query.trim()) return;
+                setIsLoading(true);
+                try {
+                    await router.push(`/search/${encodeURIComponent(query)}`);
+                } finally {
+                    setIsLoading(false);
+                }
+            }, 300),
+        [router]
     );
 
     const handleSearchChange = (query: string) => {

@@ -14,6 +14,21 @@ import { usePlayerStore } from '@/stores/playerStore';
 import { Ionicons } from '@expo/vector-icons';
 
 /**
+ * Parse a hex color string into RGB components. Pure helper hoisted to module
+ * scope so it can be referenced from effects without a use-before-declaration.
+ */
+const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result
+    ? {
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16),
+    }
+    : null;
+};
+
+/**
  * Quick access item type - can be album, artist, or playlist
  */
 type QuickAccessItem =
@@ -262,17 +277,6 @@ const HomeScreen: React.FC = () => {
   };
 
   // Helper function to convert hex color to RGB
-  const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result
-      ? {
-        r: parseInt(result[1], 16),
-        g: parseInt(result[2], 16),
-        b: parseInt(result[3], 16),
-      }
-      : null;
-  };
-
   // Convert hex to rgba string for LinearGradient
   const hexToRgba = (hex: string, alpha: number = 0.2): string => {
     const rgb = hexToRgb(hex);

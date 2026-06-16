@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, TextProps } from 'react-native';
+import { type TextProps } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, interpolate, useAnimatedReaction, runOnJS } from 'react-native-reanimated';
 import { formatCompactNumber } from '@/utils/formatNumber';
 
@@ -39,7 +39,6 @@ const AnimatedNumber: React.FC<AnimatedNumberProps> = ({
 
     React.useEffect(() => {
         if (previousValue.current !== value) {
-            const oldValue = previousValue.current;
             previousValue.current = value;
 
             // Start animation
@@ -47,6 +46,7 @@ const AnimatedNumber: React.FC<AnimatedNumberProps> = ({
             progress.value = withTiming(1, { duration });
 
             // Animate counter value smoothly
+            // eslint-disable-next-line react-hooks/immutability -- Reanimated SharedValue write; the React Compiler rule does not model SharedValue mutation (counterValue is read by useAnimatedReaction).
             counterValue.value = withTiming(value, { duration });
         }
     }, [value, duration, progress, counterValue]);
@@ -65,19 +65,17 @@ const AnimatedNumber: React.FC<AnimatedNumberProps> = ({
         };
     });
 
-    // Use Animated.Text for smoother updates
-    const DisplayTag = Animated.createAnimatedComponent(Text);
-
     // Format number for display (e.g., 1.2K, 1.5M)
     const formatNumber = React.useCallback((n: number): string => {
         if (format) return format(n);
         return formatCompactNumber(n);
     }, [format]);
 
+    // Animated.Text gives smoother updates; it is a stable component reference.
     return (
-        <DisplayTag {...textProps} style={[style, animStyle]}>
+        <Animated.Text {...textProps} style={[style, animStyle]}>
             {formatNumber(display)}
-        </DisplayTag>
+        </Animated.Text>
     );
 };
 

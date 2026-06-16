@@ -5,10 +5,10 @@ import { useTheme } from '@oxyhq/bloom/theme';
 import SEO from '@/components/SEO';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { SearchCategory, SearchResult, Track, Album, Artist, Playlist } from '@syra/shared-types';
+import { SearchCategory, Track } from '@syra/shared-types';
 import { searchService } from '@/services/searchService';
 import { searchRefetchInterval } from '@/utils/searchUtils';
-import { browseService, Genre } from '@/services/browseService';
+import { browseService } from '@/services/browseService';
 import { MediaCard } from '@/components/MediaCard';
 import { GenreCard } from '@/components/GenreCard';
 import { TrackRow } from '@/components/TrackRow';
@@ -496,7 +496,7 @@ const SearchScreen: React.FC = () => {
             {!hasResults && (
               <View style={styles.noResultsContainer}>
                 <Text style={[styles.noResultsText, { color: theme.colors.textSecondary }]}>
-                  No results found for "{debouncedQuery}"
+                  No results found for &quot;{debouncedQuery}&quot;
                 </Text>
               </View>
             )}

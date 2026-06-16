@@ -9,7 +9,7 @@
  * - Inline loading
  */
 
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect, memo } from 'react';
 import { View, Text, StyleSheet, ViewStyle, TextStyle, DimensionValue } from 'react-native';
 import Animated, { 
   Easing, 
@@ -22,7 +22,6 @@ import { useTheme } from '@oxyhq/bloom/theme';
 import { SPACING } from '@/styles/spacing';
 import { FONT_SIZES } from '@/styles/typography';
 import { flattenStyleArray } from '@/styles/shared';
-import { memo } from 'react';
 
 export type LoadingVariant = 'spinner' | 'top' | 'skeleton' | 'inline';
 export type LoadingSize = 'small' | 'medium' | 'large';

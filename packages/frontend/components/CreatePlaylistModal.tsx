@@ -92,16 +92,20 @@ export const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
     transform: [{ scale: scale.value }],
   }));
 
-  // Reset form when modal closes
-  useEffect(() => {
-    if (!visible) {
-      setName('');
-      setDescription('');
-      setCoverArt(null);
-      setVisibility(PlaylistVisibility.PRIVATE);
-      setErrors({});
-    }
-  }, [visible]);
+  // Clear the form to its initial values. Called from every close path so the next
+  // open starts fresh — done in event handlers rather than a close-effect.
+  const resetForm = useCallback(() => {
+    setName('');
+    setDescription('');
+    setCoverArt(null);
+    setVisibility(PlaylistVisibility.PRIVATE);
+    setErrors({});
+  }, []);
+
+  const handleClose = useCallback(() => {
+    resetForm();
+    onClose();
+  }, [resetForm, onClose]);
 
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {};
@@ -145,8 +149,8 @@ export const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
 
       toast.success(`Playlist "${playlist.name}" created successfully`);
       
-      // Close modal
-      onClose();
+      // Close modal (resets the form)
+      handleClose();
 
       // Navigate to playlist or call success callback
       if (onSuccess) {
@@ -160,13 +164,13 @@ export const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
     } finally {
       setIsCreating(false);
     }
-  }, [name, description, coverArt, visibility, isAuthenticated, onClose, onSuccess, router]);
+  }, [name, description, coverArt, visibility, isAuthenticated, handleClose, onSuccess, router]);
 
   const handleBackdropPress = useCallback(() => {
     if (!isCreating) {
-      onClose();
+      handleClose();
     }
-  }, [isCreating, onClose]);
+  }, [isCreating, handleClose]);
 
   const visibilityOptions = [
     { label: 'Public', value: PlaylistVisibility.PUBLIC, description: 'Anyone can find and play' },
@@ -212,7 +216,7 @@ export const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
                 Create Playlist
               </Text>
               <Pressable
-                onPress={onClose}
+                onPress={handleClose}
                 disabled={isCreating}
                 style={styles.closeButton}
               >
@@ -375,7 +379,7 @@ export const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
               ]}
             >
               <Pressable
-                onPress={onClose}
+                onPress={handleClose}
                 disabled={isCreating}
                 style={[
                   styles.cancelButton,
@@ -423,7 +427,7 @@ export const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
           visible={visible}
           transparent
           animationType="none"
-          onRequestClose={onClose}
+          onRequestClose={handleClose}
         >
           {modalContent}
         </Modal>
@@ -438,7 +442,7 @@ export const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
         transparent
         animationType="none"
         statusBarTranslucent
-        onRequestClose={onClose}
+        onRequestClose={handleClose}
       >
         {modalContent}
       </Modal>

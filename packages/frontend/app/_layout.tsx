@@ -41,7 +41,6 @@ import '../styles/global.css';
 // Types
 interface SplashState {
   initializationComplete: boolean;
-  startFade: boolean;
   fadeComplete: boolean;
 }
 
@@ -219,13 +218,17 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
 MainLayout.displayName = 'MainLayout';
 
 export default function RootLayout() {
-  // State
-  const [appIsReady, setAppIsReady] = useState(false);
+  // State — only the two inputs are stored; `startFade` and `appIsReady` are derived.
   const [splashState, setSplashState] = useState<SplashState>({
     initializationComplete: false,
-    startFade: false,
     fadeComplete: false,
   });
+
+  // The splash begins fading the moment initialization completes, and the app is
+  // ready once init AND the fade-out have both finished. Deriving these avoids
+  // setState-in-effect cascades.
+  const startFade = splashState.initializationComplete;
+  const appIsReady = splashState.initializationComplete && splashState.fadeComplete;
 
   // Hooks
   const isScreenNotMobile = useIsScreenNotMobile();
@@ -243,18 +246,6 @@ export default function RootLayout() {
   // Callbacks
   const handleSplashFadeComplete = useCallback(() => {
     setSplashState((prev) => ({ ...prev, fadeComplete: true }));
-  }, []);
-
-  const initializeApp = useCallback(async () => {
-    const result = await AppInitializer.initializeApp(true, oxyServices);
-
-    if (result.success) {
-      setSplashState((prev) => ({ ...prev, initializationComplete: true }));
-    } else {
-      console.error('App initialization failed:', result.error);
-      // Still mark as complete to prevent blocking the app
-      setSplashState((prev) => ({ ...prev, initializationComplete: true }));
-    }
   }, []);
 
 
@@ -289,29 +280,31 @@ export default function RootLayout() {
     };
   }, []); // Empty deps - setup once
 
+  // Run app initialization once on mount. The state update happens only after the
+  // awaited bootstrap resolves, so it is not a synchronous in-effect setState.
   useEffect(() => {
-    initializeApp();
-  }, [initializeApp]);
-
-  useEffect(() => {
-    if (splashState.initializationComplete && !splashState.startFade) {
-      setSplashState((prev) => ({ ...prev, startFade: true }));
-    }
-  }, [splashState.initializationComplete, splashState.startFade]);
-
-  // Set appIsReady only after both initialization (including auth) and splash fade complete
-  useEffect(() => {
-    if (splashState.initializationComplete && splashState.fadeComplete && !appIsReady) {
-      setAppIsReady(true);
-    }
-  }, [splashState.initializationComplete, splashState.fadeComplete, appIsReady]);
+    let cancelled = false;
+    const run = async () => {
+      const result = await AppInitializer.initializeApp(true, oxyServices);
+      if (cancelled) return;
+      if (!result.success) {
+        console.error('App initialization failed:', result.error);
+      }
+      // Mark complete on success OR failure to avoid blocking the app on the splash.
+      setSplashState((prev) => ({ ...prev, initializationComplete: true }));
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Memoize app content to prevent unnecessary re-renders
   const appContent = useMemo(() => {
     if (!appIsReady) {
       return (
         <AppSplashScreen
-          startFade={splashState.startFade}
+          startFade={startFade}
           onFadeComplete={handleSplashFadeComplete}
         />
       );
@@ -333,9 +326,7 @@ export default function RootLayout() {
     );
   }, [
     appIsReady,
-    splashState.startFade,
-    splashState.initializationComplete,
-    splashState.fadeComplete,
+    startFade,
     isScreenNotMobile,
     keyboardVisible,
     handleSplashFadeComplete,

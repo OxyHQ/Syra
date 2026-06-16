@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useLayoutEffect, useState } from 'react';
+import React, { useRef, useLayoutEffect, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, useAnimatedScrollHandler } from 'react-native-reanimated';
 import { useTheme } from '@oxyhq/bloom/theme';
@@ -37,8 +37,6 @@ const AnimatedTabBar: React.FC<AnimatedTabBarProps> = ({
     const tabLayouts = useRef<{ [key: string]: { x: number; width: number; textWidth: number } }>({});
     const scrollRef = useRef<Animated.ScrollView>(null);
     const [layoutReady, setLayoutReady] = useState(false);
-
-    const activeIndex = tabs.findIndex((tab) => tab.id === activeTabId);
 
     // Track scroll offset when scrolling horizontally
     const scrollHandler = useAnimatedScrollHandler({

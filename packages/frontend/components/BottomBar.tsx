@@ -1,7 +1,7 @@
-import { StyleSheet, View, Pressable, ViewStyle, Platform, Vibration } from 'react-native';
+import { StyleSheet, Pressable, ViewStyle, Platform, Vibration } from 'react-native';
 import { Home, HomeActive, Video, VideoActive, ComposeIcon, ComposeIIconActive, BellActive, Bell } from '@/assets/icons';
 import { useRouter, usePathname } from 'expo-router';
-import React, { useRef, useEffect, useMemo } from 'react';
+import React, { useEffect } from 'react';
 import Avatar from './Avatar';
 import { useOxy } from '@oxyhq/services';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -140,10 +140,8 @@ export const BottomBar = () => {
         },
     });
 
-    const AnimatedView = Animated.createAnimatedComponent(View);
-
     return (
-        <AnimatedView style={[styles.bottomBar, bottomBarAnimatedStyle]}>
+        <Animated.View style={[styles.bottomBar, bottomBarAnimatedStyle]}>
             <Pressable onPress={handleHomePress} style={[styles.tab, pathname === '/' && styles.active]}>
                 {pathname === '/' ? (
                     <HomeActive size={28} color={effectiveTheme.colors.primary} />
@@ -188,6 +186,6 @@ export const BottomBar = () => {
             >
                 <Avatar size={35} source={{ uri: user?.avatar ? oxyServices.getFileDownloadUrl(user.avatar as string, 'thumb') : undefined }} />
             </Pressable>
-        </AnimatedView>
+        </Animated.View>
     );
 };

@@ -39,7 +39,7 @@ import { Storage } from '@/utils/storage';
 type AudioQuality = 'normal' | 'high' | 'very_high';
 type ProfileVisibility = 'public' | 'private' | 'followers_only';
 
-const LANGUAGE_OPTIONS: ReadonlyArray<{ label: string; value: string }> = [
+const LANGUAGE_OPTIONS: readonly { label: string; value: string }[] = [
   { label: 'English', value: 'en-US' },
   { label: 'Español', value: 'es-ES' },
   { label: 'Italiano', value: 'it-IT' },

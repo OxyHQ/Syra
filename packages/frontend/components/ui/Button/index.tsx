@@ -13,18 +13,16 @@
  */
 
 import React, { useMemo, useCallback, memo } from 'react';
-import { 
-  TouchableOpacity, 
-  Text, 
-  StyleSheet, 
-  ViewStyle, 
-  TextStyle, 
+import {
+  TouchableOpacity,
+  Text,
+  ViewStyle,
+  TextStyle,
   Platform,
-  StyleProp,
   Pressable,
 } from 'react-native';
 import { Link, useRouter } from 'expo-router';
-import Animated, { useAnimatedStyle, SharedValue } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMediaQuery } from 'react-responsive';
@@ -35,7 +33,7 @@ import { useKeyboardVisibility } from '@/hooks/useKeyboardVisibility';
 import { Z_INDEX } from '@/lib/constants';
 import { flattenStyleArray } from '@/styles/shared';
 
-import type { ButtonProps, ButtonVariant } from './types';
+import type { ButtonProps } from './types';
 export type { ButtonProps, ButtonVariant, ButtonSize } from './types';
 
 const SIZE_CONFIG = {

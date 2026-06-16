@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, View, Text, ScrollView } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { useOxy } from '@oxyhq/services';
 import SEO from '@/components/SEO';
@@ -15,7 +15,6 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
  */
 const UserProfileScreen: React.FC = () => {
   const theme = useTheme();
-  const router = useRouter();
   const { username } = useLocalSearchParams<{ username: string }>();
   const { oxyServices } = useOxy();
   const { data: profileData, loading } = useProfileData(username);
@@ -44,7 +43,7 @@ const UserProfileScreen: React.FC = () => {
             User not found
           </Text>
           <Text style={[styles.errorSubtext, { color: theme.colors.textSecondary }]}>
-            This user doesn't exist or the profile is private.
+            This user doesn&apos;t exist or the profile is private.
           </Text>
         </View>
       </>

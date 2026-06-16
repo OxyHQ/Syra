@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -10,13 +10,14 @@ import {
 } from 'react-native';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { useRouter } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { artistService } from '@/services/artistService';
 import { toast } from 'sonner';
 import SEO from '@/components/SEO';
 import { StatCardGridSkeleton } from '@/components/skeletons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArtistDashboard } from '@syra/shared-types';
+import { isNotFoundError } from '@/utils/api';
 
 /**
  * Artist Dashboard Screen
@@ -27,37 +28,31 @@ const ArtistDashboardScreen: React.FC = () => {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const [dashboard, setDashboard] = useState<ArtistDashboard | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const {
+    data: dashboard,
+    isLoading,
+    isRefetching,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ['artist', 'dashboard'],
+    queryFn: () => artistService.getArtistDashboard(),
+    retry: false,
+  });
 
+  // Surface fetch errors: a 404 means the user hasn't registered as an artist yet,
+  // so route them to registration; otherwise show the failure. router.push/toast are
+  // external side-effects (no setState), so this stays out of render.
   useEffect(() => {
-    loadDashboard();
-  }, []);
-
-  const loadDashboard = async () => {
-    try {
-      setLoading(true);
-      const data = await artistService.getArtistDashboard();
-      setDashboard(data);
-    } catch (error: any) {
-      console.error('Failed to load dashboard:', error);
-      if (error?.response?.status === 404) {
-        toast.error('You need to register as an artist first');
-        router.push('/artist/register');
-      } else {
-        toast.error(error?.message || 'Failed to load dashboard');
-      }
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+    if (!error) return;
+    console.error('Failed to load dashboard:', error);
+    if (isNotFoundError(error)) {
+      toast.error('You need to register as an artist first');
+      router.push('/artist/register');
+    } else {
+      toast.error(error instanceof Error ? error.message : 'Failed to load dashboard');
     }
-  };
-
-  const handleRefresh = () => {
-    setRefreshing(true);
-    loadDashboard();
-  };
+  }, [error, router]);
 
   const formatNumber = (num: number): string => {
     if (num >= 1000000) {
@@ -69,7 +64,7 @@ const ArtistDashboardScreen: React.FC = () => {
     return num.toString();
   };
 
-  if (loading && !dashboard) {
+  if (isLoading) {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <View
@@ -151,7 +146,7 @@ const ArtistDashboardScreen: React.FC = () => {
             { paddingBottom: insets.bottom + 16 },
           ]}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+            <RefreshControl refreshing={isRefetching} onRefresh={() => { void refetch(); }} />
           }
           showsVerticalScrollIndicator={false}
         >

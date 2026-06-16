@@ -6,7 +6,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import { Image, ImageProps, View, StyleSheet, ViewStyle, ImageStyle, StyleProp, Platform } from 'react-native';
 import { useTheme } from '@oxyhq/bloom/theme';
-import { SPACING } from '@/styles/spacing';
 import { flattenStyleArray } from '@/styles/shared';
 
 export type ImageSize = 'thumb' | 'small' | 'medium' | 'large' | 'original';

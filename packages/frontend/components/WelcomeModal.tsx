@@ -109,16 +109,13 @@ const WelcomeModal: React.FC<WelcomeModalProps> = ({
 }) => {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { isAuthenticated, showBottomSheet } = useOxy();
+  const { showBottomSheet } = useOxy();
   const router = useRouter();
 
   // Animation values
   const opacity = useSharedValue(0);
   const scale = useSharedValue(0.95);
   const translateY = useSharedValue(20);
-
-  // Memoize onClose to prevent unnecessary re-renders
-  const stableOnClose = useCallback(onClose, [onClose]);
 
   // Handle animation
   useEffect(() => {
@@ -135,27 +132,27 @@ const WelcomeModal: React.FC<WelcomeModalProps> = ({
 
   // Handlers
   const handleBackdropPress = useCallback(() => {
-    stableOnClose();
-  }, [stableOnClose]);
+    onClose();
+  }, [onClose]);
 
   const handleContentPress = useCallback((e: any) => {
     e.stopPropagation();
   }, []);
 
   const handleCreateAccount = useCallback(() => {
-    stableOnClose();
+    onClose();
     showBottomSheet?.('OxyAuth');
-  }, [stableOnClose, showBottomSheet]);
+  }, [onClose, showBottomSheet]);
 
   const handleExploreApp = useCallback(() => {
-    stableOnClose();
+    onClose();
     router.push('/');
-  }, [stableOnClose, router]);
+  }, [onClose, router]);
 
   const handleSignIn = useCallback(() => {
-    stableOnClose();
+    onClose();
     showBottomSheet?.('OxyAuth');
-  }, [stableOnClose, showBottomSheet]);
+  }, [onClose, showBottomSheet]);
 
   // Animated styles
   const backdropAnimatedStyle = useAnimatedStyle(() => ({
@@ -310,7 +307,7 @@ const WelcomeModal: React.FC<WelcomeModalProps> = ({
         transparent
         animationType="none"
         statusBarTranslucent={Platform.OS === 'android'}
-        onRequestClose={stableOnClose}
+        onRequestClose={onClose}
         hardwareAccelerated={Platform.OS === 'android'}
       >
         {modalContent}

@@ -3,7 +3,6 @@ import { StyleSheet, Pressable, Platform, StyleProp, ViewStyle } from 'react-nat
 import Animated, {
   useAnimatedStyle,
   useDerivedValue,
-  useSharedValue,
   withTiming,
   Easing,
   interpolate,

@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useEffect, useCallback, useMemo, useRef, useState } from 'react';
 import { View, Animated, Platform, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { LogoIcon } from '@/assets/logo';
@@ -19,7 +19,9 @@ const AppSplashScreen: React.FC<AppSplashScreenProps> = ({
     startFade = false
 }) => {
     const theme = useTheme();
-    const fadeAnim = useRef(new Animated.Value(1)).current;
+    // Lazy state initializer yields a stable Animated.Value that is safe to read
+    // during render (unlike `useRef(...).current`, which the React Compiler forbids).
+    const [fadeAnim] = useState(() => new Animated.Value(1));
     const animationRef = useRef<Animated.CompositeAnimation | null>(null);
 
     const handleFadeComplete = useCallback(

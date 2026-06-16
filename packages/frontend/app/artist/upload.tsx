@@ -14,6 +14,7 @@ import {
 import { useTheme } from '@oxyhq/bloom/theme';
 import { useOxy } from '@oxyhq/services';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { CoverArtPicker } from '@/components/playlists/CoverArtPicker';
 import { artistService } from '@/services/artistService';
@@ -21,7 +22,6 @@ import { musicService } from '@/services/musicService';
 import { toast } from 'sonner';
 import SEO from '@/components/SEO';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Artist, Album } from '@syra/shared-types';
 import { useFileBlobUrl } from '@/hooks/useBlobUrl';
 
 interface FormErrors {
@@ -47,22 +47,13 @@ const ArtistUploadScreen: React.FC = () => {
   const { isAuthenticated } = useOxy();
 
   const params = useLocalSearchParams<{ tab?: string }>();
-  const [activeTab, setActiveTab] = useState<'song' | 'album'>('song');
+  // Seed the active tab from the `tab` query param; afterwards it is user-controlled.
+  const [activeTab, setActiveTab] = useState<'song' | 'album'>(
+    params.tab === 'album' ? 'album' : 'song'
+  );
 
-  // Check for tab query parameter
-  useEffect(() => {
-    if (params.tab === 'album') {
-      setActiveTab('album');
-    } else if (params.tab === 'song') {
-      setActiveTab('song');
-    }
-  }, [params.tab]);
-
-  const [artist, setArtist] = useState<Artist | null>(null);
-  const [loading, setLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadsDisabled, setUploadsDisabled] = useState(false);
 
   // Blob URL management for audio file preview
   const { url: audioBlobUrl, setFile: setAudioBlobFile, clear: clearAudioBlob } = useFileBlobUrl();
@@ -87,55 +78,50 @@ const ArtistUploadScreen: React.FC = () => {
   const [albumCopyright, setAlbumCopyright] = useState('');
   const [albumIsExplicit, setAlbumIsExplicit] = useState(false);
   const [albumErrors, setAlbumErrors] = useState<FormErrors>({});
-  const [userAlbums, setUserAlbums] = useState<Album[]>([]);
 
-  // Define load functions before useEffect hooks that use them
-  const loadArtistProfile = useCallback(async () => {
-    try {
-      setLoading(true);
-      const profile = await artistService.getMyArtistProfile();
-      if (!profile) {
-        toast.error('You need to register as an artist first');
-        router.push('/artist/register');
-        return;
-      }
-      
-      // Check if uploads are disabled
-      if (profile.uploadsDisabled) {
-        setUploadsDisabled(true);
-        toast.error('Uploads are disabled due to copyright strikes');
-      } else {
-        setUploadsDisabled(false);
-      }
-      setArtist(profile);
-    } catch (error: any) {
-      console.error('Failed to load artist profile:', error);
-      toast.error(error?.message || 'Failed to load artist profile');
+  // Artist profile for the signed-in user. A missing profile or a fetch error
+  // routes away (handled in the effect below); uploadsDisabled is derived, not state.
+  const {
+    data: artist,
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: ['artist', 'me'],
+    queryFn: () => artistService.getMyArtistProfile(),
+    retry: false,
+  });
+
+  const uploadsDisabled = artist?.uploadsDisabled ?? false;
+
+  // The signed-in artist's albums (for the "add to album" picker). Depends on the
+  // artist query resolving first.
+  const artistId = artist?.id;
+  const { data: userAlbumsData, refetch: refetchAlbums } = useQuery({
+    queryKey: ['artist', 'me', 'albums', artistId],
+    queryFn: () => musicService.getArtistAlbums(artistId ?? ''),
+    enabled: !!artistId,
+  });
+  const userAlbums = userAlbumsData?.albums ?? [];
+
+  // Route away when there is no artist profile / the profile failed to load, and
+  // surface the uploads-disabled warning. These are external side-effects (navigation,
+  // toast) with no setState, so they stay out of render.
+  useEffect(() => {
+    if (isLoading) return;
+    if (isError) {
+      toast.error('Failed to load artist profile');
       router.back();
-    } finally {
-      setLoading(false);
+      return;
     }
-  }, [router]);
-
-  const loadAlbums = useCallback(async () => {
-    if (!artist) return;
-    try {
-      const result = await musicService.getArtistAlbums(artist.id);
-      setUserAlbums(result.albums);
-    } catch (error) {
-      console.error('Failed to load albums:', error);
+    if (artist === null) {
+      toast.error('You need to register as an artist first');
+      router.push('/artist/register');
+      return;
     }
-  }, [artist]);
-
-  useEffect(() => {
-    loadArtistProfile();
-  }, [loadArtistProfile]);
-
-  useEffect(() => {
-    if (artist) {
-      loadAlbums();
+    if (artist?.uploadsDisabled) {
+      toast.error('Uploads are disabled due to copyright strikes');
     }
-  }, [artist, loadAlbums]);
+  }, [artist, isLoading, isError, router]);
 
   const handlePickAudioFile = useCallback(() => {
     if (Platform.OS === 'web') {
@@ -172,12 +158,8 @@ const ArtistUploadScreen: React.FC = () => {
     }
   }, [setAudioBlobFile]);
 
-  // Sync blob URL with audioFile state
-  useEffect(() => {
-    if (audioBlobUrl && audioFile && audioFile.uri !== audioBlobUrl) {
-      setAudioFile((prev) => prev ? { ...prev, uri: audioBlobUrl } : null);
-    }
-  }, [audioBlobUrl]); // Only depend on audioBlobUrl to avoid infinite loop
+  // No effect needed to sync the blob URL: the audio file's effective URI is always
+  // resolved from `audioBlobUrl` (with `audioFile.uri` only as a fallback) at upload time.
 
   const validateSongForm = (): boolean => {
     const errors: FormErrors = {};
@@ -328,7 +310,7 @@ const ArtistUploadScreen: React.FC = () => {
       setAlbumIsExplicit(false);
 
       // Reload albums
-      await loadAlbums();
+      await refetchAlbums();
 
       // Navigate to album or dashboard
       router.push(`/artist/dashboard`);
@@ -338,7 +320,7 @@ const ArtistUploadScreen: React.FC = () => {
     } finally {
       setIsUploading(false);
     }
-  }, [albumTitle, albumReleaseDate, albumType, albumCoverArt, albumGenre, albumLabel, albumCopyright, albumIsExplicit, artist, isAuthenticated, router]);
+  }, [albumTitle, albumReleaseDate, albumType, albumCoverArt, albumGenre, albumLabel, albumCopyright, albumIsExplicit, artist, isAuthenticated, router, refetchAlbums]);
 
   const handleGoBack = useCallback(() => {
     if (!isUploading) {
@@ -346,7 +328,7 @@ const ArtistUploadScreen: React.FC = () => {
     }
   }, [isUploading, router]);
 
-  if (loading) {
+  if (isLoading) {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.background, justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color={theme.colors.primary} />

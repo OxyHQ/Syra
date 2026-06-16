@@ -1,7 +1,6 @@
 import React from 'react';
-import { StyleSheet, View, Text, Pressable, Platform } from 'react-native';
+import { StyleSheet, Text, Pressable, Platform } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
-import { useTheme } from '@oxyhq/bloom/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -13,7 +12,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 export const MobileBottomNav: React.FC = () => {
   const router = useRouter();
   const pathname = usePathname();
-  const theme = useTheme();
   const insets = useSafeAreaInsets();
 
   const tabs = [

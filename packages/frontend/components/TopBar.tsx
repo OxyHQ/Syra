@@ -1,16 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { StyleSheet, View, Text, Pressable, Platform, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { webViewStyle } from '@/utils/webStyles';
 import { useRouter, usePathname } from 'expo-router';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { useOxy } from '@oxyhq/services';
+import { useQuery } from '@tanstack/react-query';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Avatar from './Avatar';
 import { Logo } from './Logo';
 import { useMediaQuery } from 'react-responsive';
 import { artistService } from '@/services/artistService';
-import { Artist } from '@syra/shared-types';
 /**
  * Base visual height of the top bar (excluding the top safe-area inset, which
  * is added on top on native). Shared with the layout so panel height math stays
@@ -29,7 +29,15 @@ export const TopBar: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { user, isAuthenticated, oxyServices, showBottomSheet } = useOxy();
   const isMobile = useMediaQuery({ maxWidth: 767 });
-  const [artistProfile, setArtistProfile] = useState<Artist | null>(null);
+
+  // Whether the signed-in user has an artist profile (decides dashboard vs. register).
+  // Only runs while authenticated; when signed out the query is disabled and resolves
+  // to no profile.
+  const { data: artistProfile } = useQuery({
+    queryKey: ['artist', 'me', 'topbar'],
+    queryFn: () => artistService.getMyArtistProfile(),
+    enabled: isAuthenticated && !!user,
+  });
 
   // Clear the status bar / dynamic island on native by padding the bar's
   // content down by the top inset and growing the bar by the same amount. On
@@ -44,23 +52,6 @@ export const TopBar: React.FC = () => {
   // Subtle raised pill behind the active nav icon, derived from the theme.
   const activeButtonStyle: ViewStyle = { ...styles.activeButton, backgroundColor: theme.colors.backgroundTertiary };
 
-  // Check if user has an artist profile
-  useEffect(() => {
-    if (isAuthenticated && user) {
-      artistService.getMyArtistProfile()
-        .then((artist) => {
-          setArtistProfile(artist);
-        })
-        .catch((error) => {
-          // Silently handle - getMyArtistProfile returns null for 404, so this shouldn't happen
-          // But if it does, just set to null
-          setArtistProfile(null);
-        });
-    } else {
-      setArtistProfile(null);
-    }
-  }, [isAuthenticated, user]);
-
   const handleHome = () => {
     router.push('/');
   };
@@ -69,9 +60,6 @@ export const TopBar: React.FC = () => {
     router.push('/search');
   };
 
-  const handleLibrary = () => {
-    router.push('/library');
-  };
 
   const handleDashboard = () => {
     if (artistProfile) {

@@ -1,6 +1,6 @@
 import React from "react";
-import { View, TouchableOpacity, StyleSheet, AccessibilityInfo, Pressable, Platform } from "react-native";
-import { Stack, Link, useRouter } from "expo-router";
+import { View, StyleSheet, Pressable, Platform } from "react-native";
+import { useRouter } from "expo-router";
 
 import { LogoIcon } from "@/assets/logo";
 import { useTheme } from '@oxyhq/bloom/theme';

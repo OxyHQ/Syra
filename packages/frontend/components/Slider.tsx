@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -52,9 +52,11 @@ export const Slider: React.FC<SliderProps> = ({
       .minDistance(0)
       .onStart((e) => {
         'worklet';
+        // eslint-disable-next-line react-hooks/immutability -- Reanimated SharedValue write inside a worklet; the React Compiler rule does not model SharedValue mutation.
         isDragging.value = true;
         if (widthSV.value > 0) {
           const newPos = Math.max(0, Math.min(widthSV.value, e.x));
+          // eslint-disable-next-line react-hooks/immutability -- Reanimated SharedValue write inside a worklet; the React Compiler rule does not model SharedValue mutation.
           translateX.value = newPos;
 
           const percentage = newPos / widthSV.value;
@@ -69,6 +71,7 @@ export const Slider: React.FC<SliderProps> = ({
         'worklet';
         if (widthSV.value > 0) {
           const newPos = Math.max(0, Math.min(widthSV.value, e.x));
+          // eslint-disable-next-line react-hooks/immutability -- Reanimated SharedValue write inside a worklet; the React Compiler rule does not model SharedValue mutation.
           translateX.value = newPos;
 
           const percentage = newPos / widthSV.value;
@@ -81,6 +84,7 @@ export const Slider: React.FC<SliderProps> = ({
       })
       .onEnd(() => {
         'worklet';
+        // eslint-disable-next-line react-hooks/immutability -- Reanimated SharedValue write inside a worklet; the React Compiler rule does not model SharedValue mutation.
         isDragging.value = false;
       });
   }, [disabled, minimumValue, maximumValue, step, onValueChange, widthSV, isDragging, translateX]);
@@ -115,6 +119,7 @@ export const Slider: React.FC<SliderProps> = ({
           onLayout={(e) => {
             const newWidth = e.nativeEvent.layout.width;
             setWidth(newWidth);
+            // eslint-disable-next-line react-hooks/immutability -- Reanimated SharedValue write; the React Compiler rule does not model SharedValue mutation.
             widthSV.value = newWidth;
           }}
         >

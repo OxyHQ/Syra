@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View, Text, Image, Pressable, Platform, ViewStyle, GestureResponderEvent } from 'react-native';
+import { StyleSheet, View, Text, Image, Pressable, Platform, GestureResponderEvent } from 'react-native';
 import { webViewStyle } from '@/utils/webStyles';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,7 +24,7 @@ interface MediaCardProps {
  * Media Card Component
  * Spotify-like card for displaying playlists, albums, artists
  */
-export const MediaCard: React.FC<MediaCardProps> = React.memo(({
+const MediaCardComponent: React.FC<MediaCardProps> = ({
   title,
   subtitle,
   imageUri,
@@ -144,7 +144,9 @@ export const MediaCard: React.FC<MediaCardProps> = React.memo(({
       </View>
     </Pressable>
   );
-});
+};
+
+export const MediaCard = React.memo(MediaCardComponent);
 
 const styles = StyleSheet.create({
   // `transition` is a react-native-web value; it is a no-op on native.

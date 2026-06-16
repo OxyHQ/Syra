@@ -10,13 +10,14 @@ import {
 } from 'react-native';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { useRouter } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { artistService } from '@/services/artistService';
 import { toast } from 'sonner';
 import SEO from '@/components/SEO';
 import { StatCardGridSkeleton } from '@/components/skeletons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArtistInsights } from '@syra/shared-types';
+import { isNotFoundError } from '@/utils/api';
 
 /**
  * Artist Insights Screen
@@ -27,38 +28,33 @@ const ArtistInsightsScreen: React.FC = () => {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const [insights, setInsights] = useState<ArtistInsights | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [period, setPeriod] = useState<'7days' | '30days' | 'alltime'>('alltime');
 
+  const {
+    data: insights,
+    isLoading,
+    isRefetching,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ['artist', 'insights', period],
+    queryFn: () => artistService.getArtistInsights(period),
+    retry: false,
+  });
+
+  // Surface fetch errors: a 404 means the user hasn't registered as an artist yet,
+  // so route them to registration; otherwise show the failure. router.push/toast are
+  // external side-effects (no setState), so this stays out of render.
   useEffect(() => {
-    loadInsights();
-  }, [period]);
-
-  const loadInsights = async () => {
-    try {
-      setLoading(true);
-      const data = await artistService.getArtistInsights(period);
-      setInsights(data);
-    } catch (error: any) {
-      console.error('Failed to load insights:', error);
-      if (error?.response?.status === 404) {
-        toast.error('You need to register as an artist first');
-        router.push('/artist/register');
-      } else {
-        toast.error(error?.message || 'Failed to load insights');
-      }
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+    if (!error) return;
+    console.error('Failed to load insights:', error);
+    if (isNotFoundError(error)) {
+      toast.error('You need to register as an artist first');
+      router.push('/artist/register');
+    } else {
+      toast.error(error instanceof Error ? error.message : 'Failed to load insights');
     }
-  };
-
-  const handleRefresh = () => {
-    setRefreshing(true);
-    loadInsights();
-  };
+  }, [error, router]);
 
   const formatNumber = (num: number): string => {
     if (num >= 1000000) {
@@ -70,7 +66,7 @@ const ArtistInsightsScreen: React.FC = () => {
     return num.toString();
   };
 
-  if (loading && !insights) {
+  if (isLoading) {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <View
@@ -138,7 +134,7 @@ const ArtistInsightsScreen: React.FC = () => {
             { paddingBottom: insets.bottom + 16 },
           ]}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+            <RefreshControl refreshing={isRefetching} onRefresh={() => { void refetch(); }} />
           }
           showsVerticalScrollIndicator={false}
         >

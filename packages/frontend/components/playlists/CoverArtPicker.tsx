@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { StyleSheet, View, Text, Pressable, Image, Platform, Alert, ActivityIndicator } from 'react-native';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useImagePicker, ImagePickerResult } from '@/hooks/useImagePicker';
+import { useImagePicker } from '@/hooks/useImagePicker';
 import { getApiOrigin } from '@/utils/api';
 
 interface CoverArtPickerProps {
