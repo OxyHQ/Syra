@@ -13,6 +13,7 @@ import { musicService } from '@/services/musicService';
 import { Album, Artist, Track } from '@syra/shared-types';
 import Avatar from '@/components/Avatar';
 import { LyricsView } from '@/components/LyricsView';
+import { pickImageUrl } from '@/utils/pickImage';
 
 /**
  * Now Playing Sidebar Component
@@ -73,7 +74,10 @@ export const NowPlaying: React.FC = () => {
   }, [currentTrack?.id]);
 
   // Use album cover or artist image as background
-  const backgroundImage = currentTrack?.coverArt || album?.coverArt || artist?.image;
+  const backgroundImage =
+    pickImageUrl(currentTrack?.images, currentTrack?.coverArt, 1000) ||
+    album?.coverArt ||
+    pickImageUrl(artist?.images, artist?.image, 1000);
 
   return (
     <View style={styles.container}>
@@ -274,9 +278,9 @@ export const NowPlaying: React.FC = () => {
                           onPress={() => playTrack(track)}
                           style={styles.queueItem}
                         >
-                          {track.coverArt ? (
+                          {(track.coverArt || track.images?.length) ? (
                             <ExpoImage
-                              source={{ uri: track.coverArt }}
+                              source={{ uri: pickImageUrl(track.images, track.coverArt, 150) }}
                               style={styles.queueItemImage}
                               contentFit="cover"
                             />

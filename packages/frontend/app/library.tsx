@@ -19,6 +19,7 @@ import { Playlist, Album, Artist } from '@syra/shared-types';
 import { musicService } from '@/services/musicService';
 import { libraryService } from '@/services/libraryService';
 import { Image } from 'expo-image';
+import { pickImageUrl } from '@/utils/pickImage';
 
 /**
  * Bottom offset (in px) for the Create Playlist FAB. Clears the floating
@@ -352,9 +353,9 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                   style={[styles.libraryItem, { backgroundColor: theme.colors.backgroundTertiary }]}
                   onPress={() => router.push(`/artist/${artist.id}`)}
                 >
-                  {artist.image ? (
+                  {(artist.image || artist.images?.length) ? (
                     <Image
-                      source={{ uri: artist.image }}
+                      source={{ uri: pickImageUrl(artist.images, artist.image, 150) }}
                       style={styles.artistImage}
                       contentFit="cover"
                     />

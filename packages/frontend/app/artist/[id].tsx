@@ -18,6 +18,7 @@ import { TrackRow } from '@/components/TrackRow';
 import { MediaCard } from '@/components/MediaCard';
 import { ArtistDetailSkeleton } from '@/components/skeletons';
 import { toast } from 'sonner';
+import { pickImageUrl } from '@/utils/pickImage';
 import { useOxy } from '@oxyhq/services';
 
 const HEADER_HEIGHT = 400;
@@ -209,9 +210,9 @@ const ArtistScreen: React.FC = () => {
             {/* Center - Title and image */}
             <View style={styles.stickyHeaderCenter}>
               <View style={[styles.stickyHeaderImageContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
-                {artist.image ? (
+                {(artist.image || artist.images?.length) ? (
                   <Image
-                    source={{ uri: artist.image }}
+                    source={{ uri: pickImageUrl(artist.images, artist.image, 150) }}
                     style={styles.stickyHeaderImage}
                     resizeMode="cover"
                   />
@@ -260,9 +261,9 @@ const ArtistScreen: React.FC = () => {
         >
           {/* Parallax Header Section */}
           <Animated.View style={[styles.headerContainer, headerAnimatedStyle]}>
-            {artist.image ? (
+            {(artist.image || artist.images?.length) ? (
               <Image
-                source={{ uri: artist.image }}
+                source={{ uri: pickImageUrl(artist.images, artist.image, 1000) }}
                 style={styles.headerImage}
                 resizeMode="cover"
               />
@@ -294,9 +295,9 @@ const ArtistScreen: React.FC = () => {
             {/* Artist Info */}
             <View style={styles.infoContainer}>
               <View style={styles.infoHeader}>
-                {artist.image && (
+                {(artist.image || artist.images?.length) && (
                   <Image
-                    source={{ uri: artist.image }}
+                    source={{ uri: pickImageUrl(artist.images, artist.image, 150) }}
                     style={styles.infoImage}
                     resizeMode="cover"
                   />

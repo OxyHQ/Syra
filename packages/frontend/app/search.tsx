@@ -308,6 +308,7 @@ const SearchScreen: React.FC = () => {
                       subtitle={track.artistName}
                       type="track"
                       imageUri={track.coverArt}
+                      images={track.images}
                       onPress={() => handleTrackRowPress(track)}
                       onPlayPress={() => handleTrackPress(track)}
                     />
@@ -354,6 +355,7 @@ const SearchScreen: React.FC = () => {
                       type="artist"
                       shape="circle"
                       imageUri={artist.image}
+                      images={artist.images}
                       onPress={() => router.push(`/artist/${artist.id}` as any)}
                     />
                   </View>
@@ -456,6 +458,7 @@ const SearchScreen: React.FC = () => {
                           type="artist"
                           shape="circle"
                           imageUri={artist.image}
+                          images={artist.images}
                           onPress={() => router.push(`/artist/${artist.id}` as any)}
                         />
                       </View>

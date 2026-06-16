@@ -6,6 +6,7 @@ import { useTheme } from '@oxyhq/bloom/theme';
 import { Playlist, Album, Artist } from '@syra/shared-types';
 import { Image } from 'expo-image';
 import { useOxy } from '@oxyhq/services';
+import { pickImageUrl } from '@/utils/pickImage';
 
 interface LibrarySidebarCollapsedProps {
   onExpand: () => void;
@@ -101,9 +102,9 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
             style={styles.iconButton}
             onPress={() => router.push(`/artist/${artist.id}`)}
           >
-            {artist.image ? (
+            {(artist.image || artist.images?.length) ? (
               <Image
-                source={{ uri: artist.image }}
+                source={{ uri: pickImageUrl(artist.images, artist.image, 150) }}
                 style={styles.artistIcon}
                 contentFit="cover"
               />

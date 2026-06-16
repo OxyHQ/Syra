@@ -5,6 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePlayerStore } from '@/stores/playerStore';
 import { Image } from 'expo-image';
+import { pickImageUrl } from '@/utils/pickImage';
 
 /**
  * Mobile Bottom Player Bar Component
@@ -84,9 +85,9 @@ export const MobilePlayerBar: React.FC = () => {
         {/* Left: Track Info */}
         <View style={[styles.trackInfo, { gap: SPACING }]}>
           <Pressable style={styles.albumArtPressable}>
-            {currentTrack?.coverArt ? (
+            {(currentTrack?.coverArt || currentTrack?.images?.length) ? (
               <Image
-                source={{ uri: currentTrack.coverArt }}
+                source={{ uri: pickImageUrl(currentTrack.images, currentTrack.coverArt, 150) }}
                 style={styles.albumArt}
                 contentFit="cover"
               />

@@ -2,10 +2,14 @@ import React from 'react';
 import { StyleSheet, View, Text, Image, Pressable, Platform } from 'react-native';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { Ionicons } from '@expo/vector-icons';
+import type { TrackImage } from '@syra/shared-types';
+import { pickImageUrl } from '@/utils/pickImage';
 
 interface CompactMusicCardProps {
   title: string;
   imageUri?: string;
+  /** External image set (Audius / CC); used to pick the best size for this card (~150 px). */
+  images?: TrackImage[];
   type?: 'playlist' | 'album' | 'artist' | 'mix';
   shape?: 'square' | 'circle';
   isPlaying?: boolean;
@@ -16,14 +20,16 @@ interface CompactMusicCardProps {
  * Compact Music Card Component
  * More compact card for 8-item grid - supports both circular and square shapes
  */
-export const CompactMusicCard: React.FC<CompactMusicCardProps> = ({ 
-  title, 
-  imageUri, 
+export const CompactMusicCard: React.FC<CompactMusicCardProps> = ({
+  title,
+  imageUri,
+  images,
   type = 'playlist',
   shape = 'square',
   isPlaying = false,
-  onPress 
+  onPress
 }) => {
+  const resolvedImageUri = pickImageUrl(images, imageUri, 150);
   const theme = useTheme();
 
   const getIcon = () => {
@@ -60,9 +66,9 @@ export const CompactMusicCard: React.FC<CompactMusicCardProps> = ({
           }
         ]}
       >
-        {imageUri ? (
-          <Image 
-            source={{ uri: imageUri }} 
+        {resolvedImageUri ? (
+          <Image
+            source={{ uri: resolvedImageUri }}
             style={[styles.image, { borderRadius }]}
             resizeMode="cover"
           />

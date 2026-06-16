@@ -7,6 +7,7 @@ import { useUIStore } from '@/stores/uiStore';
 import { Image } from 'expo-image';
 import { Slider } from './Slider';
 import { DevicePicker } from './DevicePicker';
+import { pickImageUrl } from '@/utils/pickImage';
 
 /**
  * Desktop Bottom Player Bar Component
@@ -96,9 +97,9 @@ export const PlayerBar: React.FC = () => {
             }}
             style={styles.albumArtPressable}
           >
-            {currentTrack?.coverArt ? (
+            {(currentTrack?.coverArt || currentTrack?.images?.length) ? (
               <Image
-                source={{ uri: currentTrack.coverArt }}
+                source={{ uri: pickImageUrl(currentTrack.images, currentTrack.coverArt, 150) }}
                 style={styles.albumArt}
                 contentFit="cover"
               />

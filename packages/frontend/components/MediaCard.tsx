@@ -3,11 +3,15 @@ import { StyleSheet, View, Text, Image, Pressable, Platform, ViewStyle, GestureR
 import { webViewStyle } from '@/utils/webStyles';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { Ionicons } from '@expo/vector-icons';
+import type { TrackImage } from '@syra/shared-types';
+import { pickImageUrl } from '@/utils/pickImage';
 
 interface MediaCardProps {
   title: string;
   subtitle?: string;
   imageUri?: string;
+  /** External image set (Audius / CC); used to pick the best size for this card (~300 px). */
+  images?: TrackImage[];
   type?: 'playlist' | 'album' | 'artist' | 'podcast' | 'track';
   onPress?: () => void;
   onPlayPress?: () => void;
@@ -20,10 +24,11 @@ interface MediaCardProps {
  * Media Card Component
  * Spotify-like card for displaying playlists, albums, artists
  */
-export const MediaCard: React.FC<MediaCardProps> = React.memo(({ 
-  title, 
-  subtitle, 
-  imageUri, 
+export const MediaCard: React.FC<MediaCardProps> = React.memo(({
+  title,
+  subtitle,
+  imageUri,
+  images,
   type = 'playlist',
   onPress,
   onPlayPress,
@@ -32,6 +37,7 @@ export const MediaCard: React.FC<MediaCardProps> = React.memo(({
   onHoverOut,
 }) => {
   const theme = useTheme();
+  const resolvedImageUri = pickImageUrl(images, imageUri, 300);
   const [isHovered, setIsHovered] = React.useState(false);
   const [isPlayButtonHovered, setIsPlayButtonHovered] = React.useState(false);
 
@@ -93,9 +99,9 @@ export const MediaCard: React.FC<MediaCardProps> = React.memo(({
           borderRadius,
         }
       ]}>
-        {imageUri ? (
-          <Image 
-            source={{ uri: imageUri }} 
+        {resolvedImageUri ? (
+          <Image
+            source={{ uri: resolvedImageUri }}
             style={[styles.image, { borderRadius }]}
             resizeMode="cover"
           />
