@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useTheme } from '@oxyhq/bloom/theme';
 import SEO from '@/components/SEO';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SearchCategory, Track } from '@syra/shared-types';
 import { searchService } from '@/services/searchService';
 import { searchRefetchInterval } from '@/utils/searchUtils';
@@ -25,7 +25,9 @@ const SearchScreen: React.FC = () => {
   const theme = useTheme();
   const router = useRouter();
   const { playTrack, currentTrack, isPlaying } = usePlayerStore();
-  const [searchQuery, setSearchQuery] = useState('');
+  // Seed the search box from a `?q=` deep link (e.g. tapping a #hashtag / @mention).
+  const { q } = useLocalSearchParams<{ q?: string }>();
+  const [searchQuery, setSearchQuery] = useState(() => (typeof q === 'string' ? q : ''));
   const [activeCategory, setActiveCategory] = useState<SearchCategory>(SearchCategory.ALL);
 
   // Debounce search query

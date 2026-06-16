@@ -61,7 +61,7 @@ export const LinkifiedText: React.FC<LinkifiedTextProps> = ({ text, style, linkS
           <Text
             key={`m-${key++}`}
             style={[{ color: theme.colors.primary }, linkStyle]}
-            onPress={() => router.push(`/@${mentionUsername}`)}
+            onPress={() => router.push(`/u/${mentionUsername}`)}
           >
             {mentionDisplay}
           </Text>
@@ -91,24 +91,22 @@ export const LinkifiedText: React.FC<LinkifiedTextProps> = ({ text, style, linkS
 
         if (entity.startsWith('#')) {
           const tag = entity.slice(1);
-          const q = encodeURIComponent(`#${tag}`);
           elements.push(
             <Text
               key={`h-${key++}`}
               style={[{ color: theme.colors.primary }, linkStyle]}
-              onPress={() => router.push(`/search/${q}`)}
+              onPress={() => router.push({ pathname: '/search', params: { q: `#${tag}` } })}
             >
               {entity}
             </Text>
           );
         } else if (entity.startsWith('$')) {
           const symbol = entity.slice(1);
-          const q = encodeURIComponent(`$${symbol}`);
           elements.push(
             <Text
               key={`c-${key++}`}
               style={[{ color: theme.colors.primary }, linkStyle]}
-              onPress={() => router.push(`/search/${q}`)}
+              onPress={() => router.push({ pathname: '/search', params: { q: `$${symbol}` } })}
             >
               {entity}
             </Text>

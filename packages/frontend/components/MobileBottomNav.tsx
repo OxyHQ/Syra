@@ -14,7 +14,7 @@ export const MobileBottomNav: React.FC = () => {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
 
-  const tabs = [
+  const tabs: { name: string; icon: string; iconOutline: string; route: '/' | '/search' | '/library' }[] = [
     {
       name: 'Home',
       icon: 'home',

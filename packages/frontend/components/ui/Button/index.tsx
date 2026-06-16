@@ -330,11 +330,14 @@ const ButtonComponent: React.FC<ButtonProps> = ({
     ? { elevation: 0, boxShadow: 'none' as const }
     : undefined;
   
-  // Handle link vs button rendering
+  // Handle link vs button rendering. Link renders as Text, so its own `style` only
+  // accepts TextStyle; wrap a Pressable via `asChild` to carry the (View) button style.
   if (href && as === 'link' && !isResponsive) {
     return (
-      <Link href={href} style={finalStyle}>
-        {buttonContent}
+      <Link href={href} asChild>
+        <Pressable style={finalStyle}>
+          {buttonContent}
+        </Pressable>
       </Link>
     );
   }

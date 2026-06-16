@@ -46,7 +46,7 @@ export function ProfileCard({
     if (onPress) {
       onPress();
     } else {
-      router.push(`/${profile.username}`);
+      router.push(`/u/${profile.username}`);
     }
   };
 

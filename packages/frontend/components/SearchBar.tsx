@@ -35,7 +35,7 @@ export const SearchBar = () => {
                 if (!query.trim()) return;
                 setIsLoading(true);
                 try {
-                    await router.push(`/search/${encodeURIComponent(query)}`);
+                    await router.push({ pathname: '/search', params: { q: query } });
                 } finally {
                     setIsLoading(false);
                 }
@@ -125,24 +125,6 @@ export const SearchBar = () => {
                         <FilterPill label="Videos" />
                         <FilterPill label="Verified" />
                     </View>
-
-                    <TouchableOpacity
-                        style={{
-                            backgroundColor: theme.colors.primary,
-                            padding: 10,
-                            borderRadius: 20,
-                            alignItems: 'center',
-                            marginTop: 15,
-                        }}
-                        onPress={() => {
-                            setShowFilters(false);
-                            router.push('/search/advanced');
-                        }}
-                    >
-                        <Text style={{ color: 'white', fontWeight: '600' }}>
-                            {t("Advanced Search")}
-                        </Text>
-                    </TouchableOpacity>
                 </View>
             )}
         </View>

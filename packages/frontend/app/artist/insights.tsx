@@ -13,6 +13,8 @@ import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { artistService } from '@/services/artistService';
+import { musicService } from '@/services/musicService';
+import { usePlayerStore } from '@/stores/playerStore';
 import { toast } from 'sonner';
 import SEO from '@/components/SEO';
 import { StatCardGridSkeleton } from '@/components/skeletons';
@@ -27,6 +29,19 @@ const ArtistInsightsScreen: React.FC = () => {
   const theme = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { playTrack } = usePlayerStore();
+
+  // Tapping a top-track row plays it. Insights holds only a track summary, so fetch the
+  // full Track first (same UX as the album/playlist rows). Errors are non-fatal.
+  const handlePlayTrack = React.useCallback(async (trackId: string) => {
+    try {
+      const track = await musicService.getTrackById(trackId);
+      await playTrack(track);
+    } catch (err) {
+      console.error('Failed to play track:', err);
+      toast.error('Could not play this track');
+    }
+  }, [playTrack]);
 
   const [period, setPeriod] = useState<'7days' | '30days' | 'alltime'>('alltime');
 
@@ -236,7 +251,7 @@ const ArtistInsightsScreen: React.FC = () => {
                     </Text>
                   </View>
                   <Pressable
-                    onPress={() => router.push(`/track/${track.trackId}`)}
+                    onPress={() => handlePlayTrack(track.trackId)}
                     style={styles.trackButton}
                   >
                     <MaterialCommunityIcons

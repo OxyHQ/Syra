@@ -5,6 +5,7 @@
 import { ViewStyle, TextStyle, StyleProp } from 'react-native';
 import { SharedValue } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
+import type { Href } from 'expo-router';
 
 export type ButtonVariant = 
   | 'primary' 
@@ -31,7 +32,7 @@ export interface ButtonProps {
   contentStyle?: StyleProp<ViewStyle>;
   
   // Link support (replaces onPress when provided)
-  href?: string;
+  href?: Href;
   as?: 'link' | 'button';
   
   // Icon support

@@ -13,6 +13,8 @@ import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { artistService } from '@/services/artistService';
+import { musicService } from '@/services/musicService';
+import { usePlayerStore } from '@/stores/playerStore';
 import { toast } from 'sonner';
 import SEO from '@/components/SEO';
 import { StatCardGridSkeleton } from '@/components/skeletons';
@@ -27,6 +29,19 @@ const ArtistDashboardScreen: React.FC = () => {
   const theme = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { playTrack } = usePlayerStore();
+
+  // Tapping a track row plays it. The dashboard only holds a track summary, so fetch
+  // the full Track first (same UX as the album/playlist rows). Errors are non-fatal.
+  const handlePlayTrack = React.useCallback(async (trackId: string) => {
+    try {
+      const track = await musicService.getTrackById(trackId);
+      await playTrack(track);
+    } catch (err) {
+      console.error('Failed to play track:', err);
+      toast.error('Could not play this track');
+    }
+  }, [playTrack]);
 
   const {
     data: dashboard,
@@ -352,7 +367,7 @@ const ArtistDashboardScreen: React.FC = () => {
               {dashboard.recentTracks.map((track) => (
                 <Pressable
                   key={track.id}
-                  onPress={() => router.push(`/track/${track.id}`)}
+                  onPress={() => handlePlayTrack(track.id)}
                   style={[styles.trackItem, { borderBottomColor: theme.colors.border }]}
                 >
                   <View style={styles.trackInfo}>
