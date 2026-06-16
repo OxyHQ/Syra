@@ -46,6 +46,12 @@ export interface Artist extends Timestamps {
   strikes?: ArtistStrike[];
   uploadsDisabled?: boolean;
   lastStrikeAt?: string;
+  /** True once the artist has reached the repeat-infringer termination threshold */
+  terminated?: boolean;
+  /** ISO timestamp of when the termination was applied */
+  terminatedAt?: string;
+  /** Human-readable reason for termination */
+  terminationReason?: string;
   /** Which provider this artist record originates from */
   source: CatalogSource;
   /** Cross-provider identifiers (e.g. Audius artist ID) */

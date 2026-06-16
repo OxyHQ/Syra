@@ -8,8 +8,24 @@ import {
   TrackImage,
 } from '@syra/shared-types';
 
-export interface IArtist extends Omit<Artist, 'id'>, Document {
+/** Sub-document type for a single copyright strike stored in MongoDB */
+export interface IStrike {
+  _id?: mongoose.Types.ObjectId;
+  reason: string;
+  /** Stored as Date in MongoDB; serialised to ISO string in API responses */
+  createdAt: Date;
+  trackId?: string;
+}
+
+export interface IArtist
+  extends Omit<Artist, 'id' | 'lastStrikeAt' | 'terminatedAt' | 'strikes'>,
+    Document {
   _id: mongoose.Types.ObjectId;
+  /** Stored as Date in MongoDB; serialised to ISO string in API responses */
+  lastStrikeAt?: Date;
+  /** Stored as Date in MongoDB; serialised to ISO string in API responses */
+  terminatedAt?: Date;
+  strikes?: IStrike[];
 }
 
 const ArtistStatsSchema = new Schema<ArtistStats>({
@@ -67,6 +83,9 @@ const ArtistSchema = new Schema<IArtist>({
   strikes: [{ type: StrikeSchema }],
   uploadsDisabled: { type: Boolean, default: false, index: true },
   lastStrikeAt: { type: Date },
+  terminated: { type: Boolean, default: false, index: true },
+  terminatedAt: { type: Date },
+  terminationReason: { type: String },
   // Catalog provenance
   source: { type: String, enum: ['upload', 'cc', 'audius'] as CatalogSource[], required: true, index: true },
   externalIds: { type: ExternalIdsSchema },
