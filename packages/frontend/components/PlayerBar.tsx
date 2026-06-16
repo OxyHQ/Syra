@@ -8,6 +8,7 @@ import { Image } from 'expo-image';
 import { Slider } from './Slider';
 import { DevicePicker } from './DevicePicker';
 import { pickImageUrl } from '@/utils/pickImage';
+import { useLibrary, useToggleLikeTrack } from '@/hooks/useLibrary';
 
 /**
  * Desktop Bottom Player Bar Component
@@ -30,6 +31,17 @@ export const PlayerBar: React.FC = () => {
     seek,
     setVolume,
   } = usePlayerStore();
+
+  const { isTrackLiked } = useLibrary();
+  const toggleLike = useToggleLikeTrack();
+  const isLiked = currentTrack ? isTrackLiked(currentTrack.id) : false;
+
+  const handleToggleLike = () => {
+    if (!currentTrack) {
+      return;
+    }
+    toggleLike.mutate({ id: currentTrack.id, next: !isLiked });
+  };
 
   const handlePlayPause = async () => {
     if (isPlaying) {
@@ -127,8 +139,19 @@ export const PlayerBar: React.FC = () => {
                 : (isLoading ? '' : 'Choose a track to play')}
             </Text>
           </View>
-          <Pressable style={styles.likeButton}>
-            <MaterialCommunityIcons name="heart-outline" size={20} color={theme.colors.textSecondary} />
+          <Pressable
+            style={styles.likeButton}
+            onPress={handleToggleLike}
+            disabled={!currentTrack}
+            accessibilityRole="button"
+            accessibilityState={{ selected: isLiked }}
+            accessibilityLabel={isLiked ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
+          >
+            <MaterialCommunityIcons
+              name={isLiked ? 'heart' : 'heart-outline'}
+              size={20}
+              color={isLiked ? theme.colors.primary : theme.colors.textSecondary}
+            />
           </Pressable>
         </View>
 

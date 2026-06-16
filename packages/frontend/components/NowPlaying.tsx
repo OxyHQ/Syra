@@ -14,6 +14,7 @@ import { Album, Artist, Track } from '@syra/shared-types';
 import Avatar from '@/components/Avatar';
 import { LyricsView } from '@/components/LyricsView';
 import { pickImageUrl } from '@/utils/pickImage';
+import { useLibrary, useToggleLikeTrack } from '@/hooks/useLibrary';
 
 /**
  * Now Playing Sidebar Component
@@ -24,26 +25,22 @@ export const NowPlaying: React.FC = () => {
   const theme = useTheme();
   const router = useRouter();
   const isDesktop = useMediaQuery({ minWidth: 1024 });
-  const { isNowPlayingVisible, setNowPlayingVisible, fullscreenPanel, toggleFullscreen } = useUIStore();
+  const { setNowPlayingVisible, fullscreenPanel, toggleFullscreen } = useUIStore();
   const { currentTrack, playTrack } = usePlayerStore();
+  const { isTrackLiked } = useLibrary();
+  const toggleLike = useToggleLikeTrack();
+  const isLiked = currentTrack ? isTrackLiked(currentTrack.id) : false;
   const isFullscreen = fullscreenPanel === 'nowPlaying';
   const [album, setAlbum] = useState<Album | null>(null);
   const [artist, setArtist] = useState<Artist | null>(null);
   const [nextTracks, setNextTracks] = useState<Track[]>([]);
-  const [loading, setLoading] = useState(false);
   const [lyricsExpanded, setLyricsExpanded] = useState(false);
-
-  // Hide on mobile/tablet only
-  if (!isDesktop) {
-    return null;
-  }
 
   // Fetch album and artist details if track exists
   useEffect(() => {
     const fetchDetails = async () => {
       if (currentTrack) {
         try {
-          setLoading(true);
           const promises: Promise<any>[] = [];
           
           if (currentTrack.albumId) {
@@ -60,8 +57,6 @@ export const NowPlaying: React.FC = () => {
           await Promise.all(promises);
         } catch (error) {
           console.error('[NowPlaying] Error fetching details:', error);
-        } finally {
-          setLoading(false);
         }
       } else {
         setAlbum(null);
@@ -73,11 +68,23 @@ export const NowPlaying: React.FC = () => {
     fetchDetails();
   }, [currentTrack?.id]);
 
+  const handleToggleLike = () => {
+    if (!currentTrack) {
+      return;
+    }
+    toggleLike.mutate({ id: currentTrack.id, next: !isLiked });
+  };
+
   // Use album cover or artist image as background
   const backgroundImage =
     pickImageUrl(currentTrack?.images, currentTrack?.coverArt, 1000) ||
     album?.coverArt ||
     pickImageUrl(artist?.images, artist?.image, 1000);
+
+  // Hide on mobile/tablet only (after hooks, so hook order stays stable)
+  if (!isDesktop) {
+    return null;
+  }
 
   return (
     <View style={styles.container}>
@@ -144,22 +151,37 @@ export const NowPlaying: React.FC = () => {
               <View style={styles.nowPlayingContainer}>
                 {/* Track Info at Bottom */}
                 <View style={styles.trackInfoSection}>
-                  <Text 
-                    style={[styles.trackTitle, { color: '#fff' }]} 
-                    numberOfLines={2}
-                  >
-                    {currentTrack.title}
-                  </Text>
-                  <Pressable
-                    onPress={() => router.push(`/artist/${currentTrack.artistId}`)}
-                    style={styles.artistPressable}
-                  >
-                    <Text 
-                      style={[styles.trackArtist, { color: '#fff' }]} 
-                      numberOfLines={1}
+                  <View style={styles.trackInfoText}>
+                    <Text
+                      style={[styles.trackTitle, { color: '#fff' }]}
+                      numberOfLines={2}
                     >
-                      {currentTrack.artistName}
+                      {currentTrack.title}
                     </Text>
+                    <Pressable
+                      onPress={() => router.push(`/artist/${currentTrack.artistId}`)}
+                      style={styles.artistPressable}
+                    >
+                      <Text
+                        style={[styles.trackArtist, { color: '#fff' }]}
+                        numberOfLines={1}
+                      >
+                        {currentTrack.artistName}
+                      </Text>
+                    </Pressable>
+                  </View>
+                  <Pressable
+                    onPress={handleToggleLike}
+                    style={styles.likeButton}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isLiked }}
+                    accessibilityLabel={isLiked ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
+                  >
+                    <Ionicons
+                      name={isLiked ? 'heart' : 'heart-outline'}
+                      size={28}
+                      color={isLiked ? theme.colors.primary : '#fff'}
+                    />
                   </Pressable>
                 </View>
 
@@ -423,10 +445,28 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   trackInfoSection: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 12,
     padding: 20,
     paddingBottom: 24,
     marginBottom: 16,
     minWidth: 0, // Prevent a long unbroken string from expanding the panel
+  },
+  trackInfoText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  likeButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+      },
+    }),
   },
   trackTitle: {
     fontSize: 32,

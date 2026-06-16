@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { StyleSheet, View, Text, Pressable, Platform } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
@@ -8,13 +8,12 @@ import SEO from '@/components/SEO';
 import { LibraryListSkeleton } from '@/components/skeletons';
 import { Fab } from '@/components/ui/Fab';
 import { useCollapseOnScroll } from '@/hooks/useCollapseOnScroll';
+import { useLibraryCollections } from '@/hooks/useLibraryCollections';
 import { PLAYER_BAR_HEIGHT } from '@/constants/layout';
 import { Ionicons, Octicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useOxy } from '@oxyhq/services';
 import { Playlist, Album, Artist } from '@syra/shared-types';
-import { musicService } from '@/services/musicService';
-import { libraryService } from '@/services/libraryService';
 import { Image } from 'expo-image';
 import { pickImageUrl } from '@/utils/pickImage';
 
@@ -89,88 +88,19 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   // Filter state
   const [activeFilter, setActiveFilter] = useState<'Playlists' | 'Artists' | 'Albums' | 'All'>('All');
 
-  // Use props if provided (sidebar mode), otherwise use local state (standalone mode)
+  // Use props if provided (sidebar mode), otherwise fetch via the shared
+  // React Query library layer (standalone mode). The collections derive from
+  // the `['library']` membership cache, so optimistic like/save/follow toggles
+  // anywhere in the app keep these counts and lists in sync.
   const isUsingProps = propsPlaylists !== undefined;
-  
-  // State management (only used in standalone mode)
-  const [playlists, setPlaylists] = useState<Playlist[]>([]);
-  const [savedAlbums, setSavedAlbums] = useState<Album[]>([]);
-  const [followedArtists, setFollowedArtists] = useState<Artist[]>([]);
-  const [likedTracksCount, setLikedTracksCount] = useState<number>(0);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  const collections = useLibraryCollections();
 
-  // Fetch library data (only in standalone mode when props are not provided)
-  useEffect(() => {
-    if (isUsingProps) {
-      // Data is provided via props, no need to fetch
-      return;
-    }
-
-    const fetchLibraryData = async () => {
-      if (!isAuthenticated) {
-        setLoading(false);
-        setPlaylists([]);
-        setLikedTracksCount(0);
-        return;
-      }
-
-      try {
-        setLoading(true);
-        setError(null);
-
-        // Fetch all library data in parallel
-        const [playlistsResponse, likedTracksResponse, libraryResponse] = await Promise.all([
-          musicService.getUserPlaylists().catch((err) => {
-            console.error('[LibraryScreen] Error fetching playlists:', err);
-            return { playlists: [], total: 0 };
-          }),
-          libraryService.getLikedTracks().catch((err) => {
-            console.error('[LibraryScreen] Error fetching liked tracks:', err);
-            return { tracks: [], total: 0, oxyUserId: '' };
-          }),
-          libraryService.getUserLibrary().catch((err) => {
-            console.error('[LibraryScreen] Error fetching library:', err);
-            return { savedAlbums: [], followedArtists: [], likedTracks: [], oxyUserId: '' };
-          }),
-        ]);
-
-        setPlaylists(playlistsResponse.playlists);
-        setLikedTracksCount(likedTracksResponse.total);
-
-        // Fetch full album and artist objects from IDs
-        const albumPromises = (libraryResponse.savedAlbums || []).slice(0, 50).map((albumId: string) =>
-          musicService.getAlbumById(albumId).catch(() => null)
-        );
-        const artistPromises = (libraryResponse.followedArtists || []).slice(0, 50).map((artistId: string) =>
-          musicService.getArtistById(artistId).catch(() => null)
-        );
-
-        const [albums, artists] = await Promise.all([
-          Promise.all(albumPromises),
-          Promise.all(artistPromises),
-        ]);
-
-        setSavedAlbums(albums.filter((album): album is Album => album !== null));
-        setFollowedArtists(artists.filter((artist): artist is Artist => artist !== null));
-      } catch (err) {
-        console.error('[LibraryScreen] Error fetching library data:', err);
-        setError('Failed to load library data');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchLibraryData();
-  }, [isAuthenticated, isUsingProps]);
-
-  // Use props if provided, otherwise use local state
-  const finalPlaylists = isUsingProps ? (propsPlaylists || []) : playlists;
-  const finalSavedAlbums = isUsingProps ? (propsSavedAlbums || []) : savedAlbums;
-  const finalFollowedArtists = isUsingProps ? (propsFollowedArtists || []) : followedArtists;
-  const finalLikedTracksCount = isUsingProps ? (propsLikedTracksCount || 0) : likedTracksCount;
-  const finalLoading = isUsingProps ? (propsLoading ?? false) : loading;
-  const finalError = isUsingProps ? (propsError ?? null) : error;
+  const finalPlaylists = isUsingProps ? (propsPlaylists || []) : collections.playlists;
+  const finalSavedAlbums = isUsingProps ? (propsSavedAlbums || []) : collections.savedAlbums;
+  const finalFollowedArtists = isUsingProps ? (propsFollowedArtists || []) : collections.followedArtists;
+  const finalLikedTracksCount = isUsingProps ? (propsLikedTracksCount || 0) : collections.likedTracksCount;
+  const finalLoading = isUsingProps ? (propsLoading ?? false) : collections.loading;
+  const finalError = isUsingProps ? (propsError ?? null) : collections.error;
 
   return (
     <>

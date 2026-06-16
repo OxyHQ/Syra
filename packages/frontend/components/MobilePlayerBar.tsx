@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePlayerStore } from '@/stores/playerStore';
 import { Image } from 'expo-image';
 import { pickImageUrl } from '@/utils/pickImage';
+import { useLibrary, useToggleLikeTrack } from '@/hooks/useLibrary';
 
 /**
  * Mobile Bottom Player Bar Component
@@ -25,6 +26,17 @@ export const MobilePlayerBar: React.FC = () => {
     resume,
     seek,
   } = usePlayerStore();
+
+  const { isTrackLiked } = useLibrary();
+  const toggleLike = useToggleLikeTrack();
+  const isLiked = currentTrack ? isTrackLiked(currentTrack.id) : false;
+
+  const handleToggleLike = () => {
+    if (!currentTrack) {
+      return;
+    }
+    toggleLike.mutate({ id: currentTrack.id, next: !isLiked });
+  };
 
   const handlePlayPause = async () => {
     if (isPlaying) {
@@ -119,8 +131,19 @@ export const MobilePlayerBar: React.FC = () => {
 
         {/* Center: Playback Controls */}
         <View style={[styles.playbackControls, { gap: SPACING }]}>
-          <Pressable style={styles.controlButton}>
-            <MaterialCommunityIcons name="heart-outline" size={24} color={theme.colors.primaryForeground} />
+          <Pressable
+            style={styles.controlButton}
+            onPress={handleToggleLike}
+            disabled={!currentTrack}
+            accessibilityRole="button"
+            accessibilityState={{ selected: isLiked }}
+            accessibilityLabel={isLiked ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
+          >
+            <MaterialCommunityIcons
+              name={isLiked ? 'heart' : 'heart-outline'}
+              size={24}
+              color={theme.colors.primaryForeground}
+            />
           </Pressable>
           <Pressable
             style={[

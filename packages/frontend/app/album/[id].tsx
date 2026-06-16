@@ -1,15 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, View, ScrollView, Text, Pressable, Image, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { musicService } from '@/services/musicService';
-import { Album, Track } from '@syra/shared-types';
+import { Track } from '@syra/shared-types';
 import { Ionicons } from '@expo/vector-icons';
 import { usePlayerStore } from '@/stores/playerStore';
 import SEO from '@/components/SEO';
 import Avatar from '@/components/Avatar';
 import { MediaHeaderSkeleton } from '@/components/skeletons';
 import { formatDuration, formatTotalDuration } from '@/utils/musicUtils';
+import { useLibrary, useToggleSaveAlbum, useToggleLikeTrack } from '@/hooks/useLibrary';
 
 /**
  * Album Screen
@@ -20,34 +22,41 @@ const AlbumScreen: React.FC = () => {
   const router = useRouter();
   const theme = useTheme();
   const { playTrack, currentTrack, isPlaying } = usePlayerStore();
-  
-  const [album, setAlbum] = useState<Album | null>(null);
-  const [tracks, setTracks] = useState<Track[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isLiked, setIsLiked] = useState(false);
+
+  const { isAlbumSaved, isTrackLiked } = useLibrary();
+  const toggleSave = useToggleSaveAlbum();
+  const toggleLike = useToggleLikeTrack();
+  const isSaved = id ? isAlbumSaved(id) : false;
   const [isDownloaded, setIsDownloaded] = useState(false);
 
-  useEffect(() => {
-    if (id) {
-      fetchAlbumData();
+  const handleToggleSave = () => {
+    if (!id) {
+      return;
     }
-  }, [id]);
-
-  const fetchAlbumData = async () => {
-    try {
-      setLoading(true);
-      const [albumData, tracksData] = await Promise.all([
-        musicService.getAlbumById(id!),
-        musicService.getAlbumTracks(id!)
-      ]);
-      setAlbum(albumData);
-      setTracks(tracksData.tracks.sort((a, b) => (a.trackNumber || 0) - (b.trackNumber || 0)));
-    } catch (error) {
-      console.error('[AlbumScreen] Error fetching album:', error);
-    } finally {
-      setLoading(false);
-    }
+    toggleSave.mutate({ id, next: !isSaved });
   };
+
+  const handleToggleTrackLike = (trackId: string, liked: boolean) => {
+    toggleLike.mutate({ id: trackId, next: !liked });
+  };
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['album', id],
+    queryFn: async () => {
+      const [albumData, tracksData] = await Promise.all([
+        musicService.getAlbumById(id),
+        musicService.getAlbumTracks(id),
+      ]);
+      return {
+        album: albumData,
+        tracks: tracksData.tracks.sort((a, b) => (a.trackNumber || 0) - (b.trackNumber || 0)),
+      };
+    },
+    enabled: !!id,
+  });
+
+  const album = data?.album ?? null;
+  const tracks = data?.tracks ?? [];
 
 
   const formatReleaseDate = (dateString: string): string => {
@@ -65,7 +74,7 @@ const AlbumScreen: React.FC = () => {
     playTrack(track);
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <ScrollView
         style={[styles.scrollView, { backgroundColor: theme.colors.background }]}
@@ -159,12 +168,15 @@ const AlbumScreen: React.FC = () => {
 
           <Pressable
             style={styles.controlButton}
-            onPress={() => setIsLiked(!isLiked)}
+            onPress={handleToggleSave}
+            accessibilityRole="button"
+            accessibilityState={{ selected: isSaved }}
+            accessibilityLabel={isSaved ? 'Remove from your library' : 'Save to your library'}
           >
             <Ionicons
-              name={isLiked ? "checkmark-circle" : "checkmark-circle-outline"}
+              name={isSaved ? "checkmark-circle" : "checkmark-circle-outline"}
               size={24}
-              color={isLiked ? theme.colors.primary : theme.colors.text}
+              color={isSaved ? theme.colors.primary : theme.colors.text}
             />
           </Pressable>
 
@@ -206,7 +218,8 @@ const AlbumScreen: React.FC = () => {
           {tracks.map((track, index) => {
             const isCurrentTrack = currentTrack?.id === track.id;
             const isTrackPlaying = isCurrentTrack && isPlaying;
-            
+            const isLiked = isTrackLiked(track.id);
+
             return (
               <Pressable
                 key={track.id}
@@ -260,6 +273,22 @@ const AlbumScreen: React.FC = () => {
                   {isDownloaded && (
                     <Ionicons name="checkmark-circle" size={16} color={theme.colors.primary} style={styles.trackIcon} />
                   )}
+                  <Pressable
+                    onPress={(e) => {
+                      e?.stopPropagation?.();
+                      handleToggleTrackLike(track.id, isLiked);
+                    }}
+                    style={styles.trackLikeButton}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isLiked }}
+                    accessibilityLabel={isLiked ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
+                  >
+                    <Ionicons
+                      name={isLiked ? 'heart' : 'heart-outline'}
+                      size={18}
+                      color={isLiked ? theme.colors.primary : theme.colors.textSecondary}
+                    />
+                  </Pressable>
                   <Text style={[styles.trackDuration, { color: theme.colors.textSecondary }]}>
                     {formatDuration(track.duration)}
                   </Text>
@@ -485,6 +514,17 @@ const styles = StyleSheet.create({
   },
   trackIcon: {
     marginRight: 0,
+  },
+  trackLikeButton: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+      },
+    }),
   },
   trackDuration: {
     fontSize: 14,

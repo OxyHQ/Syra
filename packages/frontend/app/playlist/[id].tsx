@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, View, Text, Pressable, Image, ScrollView, Platform } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
 import Animated, {
   interpolate,
   useAnimatedRef,
@@ -10,13 +11,14 @@ import Animated, {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { musicService } from '@/services/musicService';
-import { Playlist, Track } from '@syra/shared-types';
+import { Track } from '@syra/shared-types';
 import { Ionicons } from '@expo/vector-icons';
 import { usePlayerStore } from '@/stores/playerStore';
 import SEO from '@/components/SEO';
 import { TrackRow } from '@/components/TrackRow';
 import { MediaHeaderSkeleton } from '@/components/skeletons';
-import { formatDuration, formatTotalDuration } from '@/utils/musicUtils';
+import { formatTotalDuration } from '@/utils/musicUtils';
+import { useLibrary, useToggleSavePlaylist } from '@/hooks/useLibrary';
 
 const HEADER_HEIGHT = 400;
 
@@ -26,40 +28,38 @@ const HEADER_HEIGHT = 400;
  */
 const PlaylistScreen: React.FC = () => {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const router = useRouter();
   const theme = useTheme();
   const { playTrack, currentTrack, isPlaying } = usePlayerStore();
 
-  const [playlist, setPlaylist] = useState<Playlist | null>(null);
-  const [tracks, setTracks] = useState<Track[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isLiked, setIsLiked] = useState(false);
+  const { isPlaylistSaved } = useLibrary();
+  const toggleSave = useToggleSavePlaylist();
+  const isSaved = id ? isPlaylistSaved(id) : false;
   const [isDownloaded, setIsDownloaded] = useState(false);
+
+  const handleToggleSave = () => {
+    if (!id) {
+      return;
+    }
+    toggleSave.mutate({ id, next: !isSaved });
+  };
 
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const scrollOffset = useScrollViewOffset(scrollRef);
 
-  useEffect(() => {
-    if (id) {
-      fetchPlaylistData();
-    }
-  }, [id]);
-
-  const fetchPlaylistData = async () => {
-    try {
-      setLoading(true);
+  const { data, isLoading } = useQuery({
+    queryKey: ['playlist', id],
+    queryFn: async () => {
       const [playlistData, tracksData] = await Promise.all([
-        musicService.getPlaylistById(id!),
-        musicService.getPlaylistTracks(id!)
+        musicService.getPlaylistById(id),
+        musicService.getPlaylistTracks(id),
       ]);
-      setPlaylist(playlistData);
-      setTracks(tracksData.tracks);
-    } catch (error) {
-      console.error('[PlaylistScreen] Error fetching playlist:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+      return { playlist: playlistData, tracks: tracksData.tracks };
+    },
+    enabled: !!id,
+  });
+
+  const playlist = data?.playlist ?? null;
+  const tracks = data?.tracks ?? [];
 
   // Parallax animation for header image
   const headerAnimatedStyle = useAnimatedStyle(() => {
@@ -112,25 +112,6 @@ const PlaylistScreen: React.FC = () => {
     };
   });
 
-  // Helper function to convert hex color to RGB
-  const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result
-      ? {
-        r: parseInt(result[1], 16),
-        g: parseInt(result[2], 16),
-        b: parseInt(result[3], 16),
-      }
-      : null;
-  };
-
-  // Convert hex to rgba string for LinearGradient
-  const hexToRgba = (hex: string, alpha: number = 0.2): string => {
-    const rgb = hexToRgb(hex);
-    if (!rgb) return `rgba(128, 128, 128, ${alpha})`; // Fallback gray
-    return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
-  };
-
   // Get gradient colors from playlist primaryColor or fallback to theme primary
   // 2-stop gradient: primaryColor -> theme background
   const getGradientColors = (): [string, string] => {
@@ -150,14 +131,11 @@ const PlaylistScreen: React.FC = () => {
     playTrack(track);
   };
 
-  const totalDurationFormatted = useMemo(() => {
-    if (playlist?.totalDuration) {
-      return formatTotalDuration(playlist.totalDuration);
-    }
-    return '';
-  }, [playlist?.totalDuration]);
+  const totalDurationFormatted = playlist?.totalDuration
+    ? formatTotalDuration(playlist.totalDuration)
+    : '';
 
-  if (loading) {
+  if (isLoading) {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <ScrollView
@@ -227,12 +205,15 @@ const PlaylistScreen: React.FC = () => {
               </Pressable>
               <Pressable
                 style={styles.stickyHeaderControlButton}
-                onPress={() => setIsLiked(!isLiked)}
+                onPress={handleToggleSave}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isSaved }}
+                accessibilityLabel={isSaved ? 'Remove from your library' : 'Save to your library'}
               >
                 <Ionicons
-                  name={isLiked ? "heart" : "heart-outline"}
+                  name={isSaved ? "heart" : "heart-outline"}
                   size={20}
-                  color={isLiked ? theme.colors.primary : theme.colors.text}
+                  color={isSaved ? theme.colors.primary : theme.colors.text}
                 />
               </Pressable>
               <Pressable style={styles.stickyHeaderControlButton}>
@@ -354,12 +335,15 @@ const PlaylistScreen: React.FC = () => {
 
               <Pressable
                 style={styles.controlButton}
-                onPress={() => setIsLiked(!isLiked)}
+                onPress={handleToggleSave}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isSaved }}
+                accessibilityLabel={isSaved ? 'Remove from your library' : 'Save to your library'}
               >
                 <Ionicons
-                  name={isLiked ? "heart" : "heart-outline"}
+                  name={isSaved ? "heart" : "heart-outline"}
                   size={24}
-                  color={isLiked ? theme.colors.primary : theme.colors.text}
+                  color={isSaved ? theme.colors.primary : theme.colors.text}
                 />
               </Pressable>
 

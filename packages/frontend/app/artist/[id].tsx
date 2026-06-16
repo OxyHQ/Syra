@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React from 'react';
 import { StyleSheet, View, Text, Pressable, Image, ScrollView, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
 import Animated, {
   interpolate,
   useAnimatedRef,
@@ -10,7 +11,7 @@ import Animated, {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { musicService } from '@/services/musicService';
-import { Artist, Track, Album } from '@syra/shared-types';
+import { Track } from '@syra/shared-types';
 import { Ionicons } from '@expo/vector-icons';
 import { usePlayerStore } from '@/stores/playerStore';
 import SEO from '@/components/SEO';
@@ -20,6 +21,7 @@ import { ArtistDetailSkeleton } from '@/components/skeletons';
 import { toast } from 'sonner';
 import { pickImageUrl } from '@/utils/pickImage';
 import { useOxy } from '@oxyhq/services';
+import { useLibrary, useToggleFollowArtist } from '@/hooks/useLibrary';
 
 const HEADER_HEIGHT = 400;
 
@@ -34,39 +36,33 @@ const ArtistScreen: React.FC = () => {
   const { playTrack, currentTrack, isPlaying } = usePlayerStore();
   const { isAuthenticated } = useOxy();
 
-  const [artist, setArtist] = useState<Artist | null>(null);
-  const [albums, setAlbums] = useState<Album[]>([]);
-  const [tracks, setTracks] = useState<Track[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isFollowed, setIsFollowed] = useState(false);
-  const [isFollowing, setIsFollowing] = useState(false);
+  const { isArtistFollowed } = useLibrary();
+  const toggleFollow = useToggleFollowArtist();
+  const isFollowed = id ? isArtistFollowed(id) : false;
 
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const scrollOffset = useScrollViewOffset(scrollRef);
 
-  useEffect(() => {
-    if (id) {
-      fetchArtistData();
-    }
-  }, [id]);
-
-  const fetchArtistData = async () => {
-    try {
-      setLoading(true);
+  const { data, isLoading } = useQuery({
+    queryKey: ['artist', id],
+    queryFn: async () => {
       const [artistData, albumsData, tracksData] = await Promise.all([
-        musicService.getArtistById(id!),
-        musicService.getArtistAlbums(id!),
-        musicService.getArtistTracks(id!, { limit: 20 }),
+        musicService.getArtistById(id),
+        musicService.getArtistAlbums(id),
+        musicService.getArtistTracks(id, { limit: 20 }),
       ]);
-      setArtist(artistData);
-      setAlbums(albumsData.albums);
-      setTracks(tracksData.tracks);
-    } catch (error) {
-      console.error('[ArtistScreen] Error fetching artist:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+      return {
+        artist: artistData,
+        albums: albumsData.albums,
+        tracks: tracksData.tracks,
+      };
+    },
+    enabled: !!id,
+  });
+
+  const artist = data?.artist ?? null;
+  const albums = data?.albums ?? [];
+  const tracks = data?.tracks ?? [];
 
   // Parallax animation for header image
   const headerAnimatedStyle = useAnimatedStyle(() => {
@@ -138,34 +134,31 @@ const ArtistScreen: React.FC = () => {
     playTrack(track);
   };
 
-  const handleFollow = async () => {
+  const handleFollow = () => {
     if (!isAuthenticated) {
       toast.error('You must be logged in to follow artists');
       return;
     }
 
-    if (!artist) return;
-
-    try {
-      setIsFollowing(true);
-      if (isFollowed) {
-        await musicService.unfollowArtist(artist.id);
-        setIsFollowed(false);
-        toast.success(`Unfollowed ${artist.name}`);
-      } else {
-        await musicService.followArtist(artist.id);
-        setIsFollowed(true);
-        toast.success(`Following ${artist.name}`);
-      }
-    } catch (error: any) {
-      console.error('[ArtistScreen] Error following/unfollowing artist:', error);
-      toast.error(error?.message || 'Failed to update follow status');
-    } finally {
-      setIsFollowing(false);
+    if (!artist) {
+      return;
     }
+
+    const next = !isFollowed;
+    toggleFollow.mutate(
+      { id: artist.id, next },
+      {
+        onSuccess: () => {
+          toast.success(next ? `Following ${artist.name}` : `Unfollowed ${artist.name}`);
+        },
+        onError: (error) => {
+          toast.error(error instanceof Error ? error.message : 'Failed to update follow status');
+        },
+      },
+    );
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <ScrollView
@@ -236,7 +229,10 @@ const ArtistScreen: React.FC = () => {
               <Pressable
                 style={styles.stickyHeaderControlButton}
                 onPress={handleFollow}
-                disabled={isFollowing}
+                disabled={toggleFollow.isPending}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isFollowed }}
+                accessibilityLabel={isFollowed ? 'Unfollow artist' : 'Follow artist'}
               >
                 <Ionicons
                   name={isFollowed ? "heart" : "heart-outline"}
@@ -372,7 +368,10 @@ const ArtistScreen: React.FC = () => {
               <Pressable
                 style={styles.controlButton}
                 onPress={handleFollow}
-                disabled={isFollowing}
+                disabled={toggleFollow.isPending}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isFollowed }}
+                accessibilityLabel={isFollowed ? 'Unfollow artist' : 'Follow artist'}
               >
                 <Ionicons
                   name={isFollowed ? "heart" : "heart-outline"}

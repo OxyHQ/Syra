@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { Track } from '@syra/shared-types';
 import { formatDuration } from '@/utils/musicUtils';
+import { useLibrary, useToggleLikeTrack } from '@/hooks/useLibrary';
 
 interface TrackRowProps {
   track: Track;
@@ -19,7 +20,7 @@ interface TrackRowProps {
  * Reusable Track Row Component
  * Used in search results, charts, album pages, etc.
  */
-export const TrackRow: React.FC<TrackRowProps> = React.memo(({
+const TrackRowComponent: React.FC<TrackRowProps> = ({
   track,
   index,
   isCurrentTrack,
@@ -29,6 +30,13 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
   showNumber = true,
 }) => {
   const theme = useTheme();
+  const { isTrackLiked } = useLibrary();
+  const toggleLike = useToggleLikeTrack();
+  const isLiked = isTrackLiked(track.id);
+
+  const handleToggleLike = () => {
+    toggleLike.mutate({ id: track.id, next: !isLiked });
+  };
 
   return (
     <Pressable
@@ -88,6 +96,22 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
         <Pressable
           onPress={(e) => {
             e?.stopPropagation?.();
+            handleToggleLike();
+          }}
+          style={styles.likeButton}
+          accessibilityRole="button"
+          accessibilityState={{ selected: isLiked }}
+          accessibilityLabel={isLiked ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
+        >
+          <Ionicons
+            name={isLiked ? 'heart' : 'heart-outline'}
+            size={18}
+            color={isLiked ? theme.colors.primary : theme.colors.textSecondary}
+          />
+        </Pressable>
+        <Pressable
+          onPress={(e) => {
+            e?.stopPropagation?.();
             onPlayPress();
           }}
           style={styles.playButton}
@@ -104,7 +128,9 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
       </View>
     </Pressable>
   );
-});
+};
+
+export const TrackRow = React.memo(TrackRowComponent);
 
 const styles = StyleSheet.create({
   trackRow: {
@@ -164,6 +190,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  likeButton: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+      },
+    }),
   },
   playButton: {
     width: 32,
