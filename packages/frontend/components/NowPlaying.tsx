@@ -426,6 +426,7 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 24,
     marginBottom: 16,
+    minWidth: 0, // Prevent a long unbroken string from expanding the panel
   },
   trackTitle: {
     fontSize: 32,
@@ -436,6 +437,7 @@ const styles = StyleSheet.create({
     textShadowRadius: 3,
   },
   artistPressable: {
+    minWidth: 0, // Let numberOfLines ellipsize within the panel width
     ...Platform.select({
       web: {
         cursor: 'pointer',

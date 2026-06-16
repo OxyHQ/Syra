@@ -81,6 +81,7 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
   // the top safe-area inset that grows the TopBar on native is absorbed
   // automatically). On web `insets.top` is 0, so `TOP_BAR_HEIGHT` is exact.
   const PLAYER_BAR_HEIGHT = 92;
+  const NOW_PLAYING_WIDTH = 360;
   const panelHeight = webDimension(
     isScreenNotMobile
       ? `calc(100vh - ${TOP_BAR_HEIGHT}px - ${PLAYER_BAR_HEIGHT}px - ${outerPadding}px)`
@@ -139,6 +140,8 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
     rightSidebarContainer: {
       flexShrink: 0,
       flexGrow: isNowPlayingFullscreen ? 1 : 0,
+      // Fixed width in sidebar state; undefined in fullscreen so flexGrow fills.
+      width: isNowPlayingFullscreen ? undefined : NOW_PLAYING_WIDTH,
       ...Platform.select({
         web: {
           height: panelHeight,
