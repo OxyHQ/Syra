@@ -55,10 +55,12 @@ function isAudiusTrack(value: unknown): value is AudiusTrack {
 
 // ── Artwork → TrackImage[] ────────────────────────────────────────────────────
 
+// Ordered largest-first so images[0] is the highest-resolution variant.
+// firstImageUrl() picks images[0], so this determines the default display quality.
 const ARTWORK_SIZES: Array<{ key: keyof AudiusArtwork; width: number; height: number }> = [
-  { key: '150x150', width: 150, height: 150 },
-  { key: '480x480', width: 480, height: 480 },
   { key: '1000x1000', width: 1000, height: 1000 },
+  { key: '480x480', width: 480, height: 480 },
+  { key: '150x150', width: 150, height: 150 },
 ];
 
 function mapArtwork(artwork: AudiusArtwork | null): TrackImage[] | undefined {

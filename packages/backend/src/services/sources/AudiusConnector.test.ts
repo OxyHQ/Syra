@@ -123,7 +123,7 @@ describe('AudiusConnector.search', () => {
     expect(track.streamUrl).toContain('app_name=Syra');
   });
 
-  it('normalises track A — images mapped with correct widths/heights', async () => {
+  it('normalises track A — images mapped largest-first with correct widths/heights', async () => {
     const connector = new AudiusConnector({
       apiBase: TEST_BASE,
       appName: TEST_APP,
@@ -134,6 +134,16 @@ describe('AudiusConnector.search', () => {
     const images = track.images ?? [];
 
     expect(images.length).toBeGreaterThanOrEqual(2);
+
+    // images[0] must be the largest size — firstImageUrl() picks this for display
+    expect(images[0].width).toBe(1000);
+    expect(images[0].url).toBe('https://cdn.audius.co/abc/1000x1000.jpg');
+
+    // All three sizes present and in descending width order
+    expect(images[0].width).toBeGreaterThanOrEqual(images[1].width);
+    if (images[2] !== undefined) {
+      expect(images[1].width).toBeGreaterThanOrEqual(images[2].width);
+    }
 
     const img480 = images.find((i) => i.width === 480);
     expect(img480).toBeDefined();
@@ -213,6 +223,11 @@ describe('AudiusConnector.search', () => {
     expect(track.artists).toHaveLength(1);
     const artistImages = track.artists[0].images ?? [];
     expect(artistImages.length).toBeGreaterThanOrEqual(2);
+
+    // images[0] must be the largest (1000x1000) — same largest-first ordering as track artwork
+    expect(artistImages[0].width).toBe(1000);
+    expect(artistImages[0].url).toBe('https://cdn.audius.co/u1/1000x1000.jpg');
+    expect(artistImages[0].source).toBe('audius');
 
     const img480 = artistImages.find((i) => i.width === 480);
     expect(img480).toBeDefined();
