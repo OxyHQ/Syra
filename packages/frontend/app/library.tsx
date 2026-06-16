@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, ScrollView, Pressable, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@oxyhq/bloom/theme';
 import SEO from '@/components/SEO';
 import { LibraryListSkeleton } from '@/components/skeletons';
+import { Fab } from '@/components/ui/Fab';
 import { Ionicons, Octicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useOxy } from '@oxyhq/services';
@@ -10,6 +12,16 @@ import { Playlist, Album, Artist } from '@syra/shared-types';
 import { musicService } from '@/services/musicService';
 import { libraryService } from '@/services/libraryService';
 import { Image } from 'expo-image';
+
+/**
+ * Bottom offset (in px) for the Create Playlist FAB. Clears the floating
+ * mobile player bar + bottom nav so the button never sits beneath them; on
+ * web/desktop the player bar lives below the library panel so the offset is
+ * just comfortable padding (`useSafeAreaInsets().bottom` is 0 on web).
+ */
+const FAB_BOTTOM_OFFSET = 24;
+const FAB_PLAYER_BAR_CLEARANCE = 112;
+const FAB_SIDE_OFFSET = 16;
 
 interface LibraryScreenProps {
   // Optional props for sidebar mode
@@ -45,6 +57,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
 }) => {
   const theme = useTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { isAuthenticated } = useOxy();
 
   // Filter state
@@ -141,7 +154,8 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
           description="Your music library"
         />
       )}
-      <ScrollView 
+      <View style={styles.libraryContainer}>
+      <ScrollView
         style={[styles.container, { backgroundColor: theme.colors.background }]}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
@@ -149,17 +163,6 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         <View style={styles.header}>
           <Text style={[styles.title, { color: theme.colors.text }]}>Your Library</Text>
           <View style={styles.headerActions}>
-            <Pressable
-              onPress={() => router.push('/create-playlist')}
-              style={[styles.createButton, { backgroundColor: theme.colors.primary }]}
-            >
-              <MaterialCommunityIcons
-                name="plus"
-                size={18}
-                color={theme.colors.primaryForeground}
-              />
-              <Text style={[styles.createButtonText, { color: theme.colors.primaryForeground }]}>Create Playlist</Text>
-            </Pressable>
             {showSidebarControls && onFullscreen && (
               <Pressable
                 onPress={onFullscreen}
@@ -425,13 +428,37 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
           </View>
         )}
       </ScrollView>
+
+        {isAuthenticated && (
+          <Fab
+            onPress={() => router.push('/create-playlist')}
+            iconName="plus"
+            accessibilityLabel="Create playlist"
+            size={showSidebarControls ? 48 : 56}
+            style={[
+              styles.fab,
+              {
+                right: FAB_SIDE_OFFSET,
+                bottom: FAB_BOTTOM_OFFSET + FAB_PLAYER_BAR_CLEARANCE + insets.bottom,
+              },
+            ]}
+          />
+        )}
+      </View>
     </>
   );
 };
 
 const styles = StyleSheet.create({
+  libraryContainer: {
+    flex: 1,
+    position: 'relative',
+  },
   container: {
     flex: 1,
+  },
+  fab: {
+    position: 'absolute',
   },
   contentContainer: {
     padding: 12,
@@ -451,23 +478,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     alignItems: 'center',
-  },
-  createButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    ...Platform.select({
-      web: {
-        cursor: 'pointer',
-      },
-    }),
-  },
-  createButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
   },
   headerButton: {
     width: 28,
