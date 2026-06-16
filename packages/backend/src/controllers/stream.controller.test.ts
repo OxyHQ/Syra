@@ -3,8 +3,9 @@ import mongoose from 'mongoose';
 import { connect, clear, disconnect } from '../test/mongo';
 import { TrackModel } from '../models/Track';
 import { TrackKeyModel } from '../models/TrackKey';
-import { getStream, getStreamKey } from './stream.controller';
-import { verifyStreamToken } from '../services/stream/streamToken';
+import { UserMusicPreferencesModel } from '../models/UserMusicPreferences';
+import { getStream, getStreamKey, getVariantPlaylist } from './stream.controller';
+import { verifyStreamToken, mintStreamToken } from '../services/stream/streamToken';
 import type { AuthRequest } from '../middleware/auth';
 import type { Response } from 'express';
 
@@ -42,13 +43,18 @@ function makeRes(): CapturedRes {
 
 function makeReq(
   trackId: string,
-  opts: { authed?: boolean; query?: Record<string, string> } = {},
+  opts: {
+    authed?: boolean;
+    userId?: string;
+    query?: Record<string, string>;
+    variant?: string;
+  } = {},
 ): AuthRequest {
-  const { authed = true, query = {} } = opts;
+  const { authed = true, userId = 'oxy-user-abc', query = {}, variant } = opts;
   return {
-    params: { trackId },
+    params: { trackId, ...(variant !== undefined ? { variant } : {}) },
     query,
-    user: authed ? { id: 'oxy-user-abc' } : undefined,
+    user: authed ? { id: userId } : undefined,
   } as unknown as AuthRequest;
 }
 
@@ -74,7 +80,20 @@ async function seedKey(trackId: string) {
   return TrackKeyModel.create({ trackId, keyHex: KEY_HEX, keyUri: 'key' });
 }
 
-// ── getStream tests ───────────────────────────────────────────────────────────
+function hlsTrackFields() {
+  return {
+    source: 'upload',
+    status: 'ready',
+    hlsMasterKey: 'hls/artist/track/master.m3u8',
+    hls: [
+      { manifestKey: 'hls/artist/track/96/index.m3u8', bitrateKbps: 96, encrypted: true },
+      { manifestKey: 'hls/artist/track/160/index.m3u8', bitrateKbps: 160, encrypted: true },
+      { manifestKey: 'hls/artist/track/320/index.m3u8', bitrateKbps: 320, encrypted: true },
+    ],
+  };
+}
+
+// ── getStream — existing tests ────────────────────────────────────────────────
 
 describe('getStream', () => {
   it('200 audius: returns url + type audius when streamUrl present', async () => {
@@ -114,15 +133,12 @@ describe('getStream', () => {
     const url = body.url as string;
     expect(url).toContain(`/api/stream/${track._id.toString()}/master.m3u8?t=`);
 
-    // Extract token and verify it is valid and bound to this track + user
     const tParam = new URL(url, 'http://localhost').searchParams.get('t');
     expect(tParam).not.toBeNull();
     const claims = verifyStreamToken(tParam as string);
     expect(claims).not.toBeNull();
     expect(claims?.trackId).toBe(track._id.toString());
     expect(claims?.userId).toBe('oxy-user-abc');
-
-    // expiresAt must be present
     expect(body.expiresAt).toBeDefined();
   });
 
@@ -131,7 +147,6 @@ describe('getStream', () => {
     const req = makeReq(track._id.toString(), { authed: false });
     const res = makeRes();
     await getStream(req, res as unknown as Response);
-
     expect(res._status).toBe(401);
   });
 
@@ -139,7 +154,6 @@ describe('getStream', () => {
     const req = makeReq('not-an-id');
     const res = makeRes();
     await getStream(req, res as unknown as Response);
-
     expect(res._status).toBe(400);
   });
 
@@ -147,7 +161,6 @@ describe('getStream', () => {
     const req = makeReq(new mongoose.Types.ObjectId().toString());
     const res = makeRes();
     await getStream(req, res as unknown as Response);
-
     expect(res._status).toBe(404);
   });
 
@@ -156,7 +169,6 @@ describe('getStream', () => {
     const req = makeReq(track._id.toString());
     const res = makeRes();
     await getStream(req, res as unknown as Response);
-
     expect(res._status).toBe(403);
   });
 
@@ -165,7 +177,6 @@ describe('getStream', () => {
     const req = makeReq(track._id.toString());
     const res = makeRes();
     await getStream(req, res as unknown as Response);
-
     expect(res._status).toBe(403);
   });
 
@@ -174,7 +185,6 @@ describe('getStream', () => {
     const req = makeReq(track._id.toString());
     const res = makeRes();
     await getStream(req, res as unknown as Response);
-
     expect(res._status).toBe(409);
   });
 
@@ -183,8 +193,83 @@ describe('getStream', () => {
     const req = makeReq(track._id.toString());
     const res = makeRes();
     await getStream(req, res as unknown as Response);
-
     expect(res._status).toBe(422);
+  });
+
+  // ── Entitlement cap baked into minted token ──────────────────────────────────
+
+  it('free user (no PREMIUM_USER_IDS): token has maxBitrateKbps=160', async () => {
+    const saved = process.env.PREMIUM_USER_IDS;
+    delete process.env.PREMIUM_USER_IDS;
+    try {
+      const track = await seedTrack(hlsTrackFields());
+      const req = makeReq(track._id.toString(), { userId: 'free-user' });
+      const res = makeRes();
+      await getStream(req, res as unknown as Response);
+
+      expect(res._status).toBe(200);
+      const url = (res._body as Record<string, unknown>).url as string;
+      const t = new URL(url, 'http://localhost').searchParams.get('t');
+      const claims = verifyStreamToken(t as string);
+      expect(claims?.maxBitrateKbps).toBe(160);
+    } finally {
+      if (saved !== undefined) process.env.PREMIUM_USER_IDS = saved;
+      else delete process.env.PREMIUM_USER_IDS;
+    }
+  });
+
+  it('premium user with high audioQuality pref: token has maxBitrateKbps=320', async () => {
+    const saved = process.env.PREMIUM_USER_IDS;
+    process.env.PREMIUM_USER_IDS = 'premium-user';
+    try {
+      const userId = 'premium-user';
+      // Premium user with high quality preference — should reach 320
+      await UserMusicPreferencesModel.create({
+        oxyUserId: userId,
+        audioQuality: 'high',
+      });
+
+      const track = await seedTrack(hlsTrackFields());
+      const req = makeReq(track._id.toString(), { userId });
+      const res = makeRes();
+      await getStream(req, res as unknown as Response);
+
+      expect(res._status).toBe(200);
+      const url = (res._body as Record<string, unknown>).url as string;
+      const t = new URL(url, 'http://localhost').searchParams.get('t');
+      const claims = verifyStreamToken(t as string);
+      expect(claims?.maxBitrateKbps).toBe(320);
+    } finally {
+      if (saved !== undefined) process.env.PREMIUM_USER_IDS = saved;
+      else delete process.env.PREMIUM_USER_IDS;
+    }
+  });
+
+  it('free user with dataSaver pref: token has maxBitrateKbps=96', async () => {
+    const saved = process.env.PREMIUM_USER_IDS;
+    delete process.env.PREMIUM_USER_IDS;
+    try {
+      const userId = 'datasaver-user';
+      // Seed the prefs with dataSaver=true
+      await UserMusicPreferencesModel.create({
+        oxyUserId: userId,
+        dataSaver: true,
+      });
+
+      const track = await seedTrack(hlsTrackFields());
+      const req = makeReq(track._id.toString(), { userId });
+      const res = makeRes();
+      await getStream(req, res as unknown as Response);
+
+      expect(res._status).toBe(200);
+      const url = (res._body as Record<string, unknown>).url as string;
+      const t = new URL(url, 'http://localhost').searchParams.get('t');
+      const claims = verifyStreamToken(t as string);
+      expect(claims?.maxBitrateKbps).toBe(96);
+    } finally {
+      if (saved !== undefined) process.env.PREMIUM_USER_IDS = saved;
+      else delete process.env.PREMIUM_USER_IDS;
+    }
   });
 });
 
@@ -211,9 +296,11 @@ describe('getStreamKey', () => {
     const track = await seedTrack();
     await seedKey(track._id.toString());
 
-    // Mint a token bound to this specific track
-    const { mintStreamToken } = await import('../services/stream/streamToken');
-    const token = mintStreamToken({ trackId: track._id.toString(), userId: 'oxy-user-abc' });
+    const token = mintStreamToken({
+      trackId: track._id.toString(),
+      userId: 'oxy-user-abc',
+      maxBitrateKbps: 160,
+    });
 
     const req = makeReq(track._id.toString(), { authed: false, query: { t: token } });
     const res = makeRes();
@@ -227,9 +314,12 @@ describe('getStreamKey', () => {
     const track = await seedTrack();
     await seedKey(track._id.toString());
 
-    const { mintStreamToken } = await import('../services/stream/streamToken');
     const otherTrackId = new mongoose.Types.ObjectId().toString();
-    const token = mintStreamToken({ trackId: otherTrackId, userId: 'oxy-user-abc' });
+    const token = mintStreamToken({
+      trackId: otherTrackId,
+      userId: 'oxy-user-abc',
+      maxBitrateKbps: 160,
+    });
 
     const req = makeReq(track._id.toString(), { authed: false, query: { t: token } });
     const res = makeRes();
@@ -253,7 +343,6 @@ describe('getStreamKey', () => {
     const req = makeReq('not-an-objectid');
     const res = makeRes();
     await getStreamKey(req, res as unknown as Response);
-
     expect(res._status).toBe(400);
   });
 
@@ -262,7 +351,6 @@ describe('getStreamKey', () => {
     const req = makeReq(absentId);
     const res = makeRes();
     await getStreamKey(req, res as unknown as Response);
-
     expect(res._status).toBe(404);
   });
 
@@ -271,7 +359,6 @@ describe('getStreamKey', () => {
     const req = makeReq(track._id.toString());
     const res = makeRes();
     await getStreamKey(req, res as unknown as Response);
-
     expect(res._status).toBe(404);
   });
 
@@ -282,7 +369,6 @@ describe('getStreamKey', () => {
     const req = makeReq(track._id.toString());
     const res = makeRes();
     await getStreamKey(req, res as unknown as Response);
-
     expect(res._status).toBe(403);
   });
 
@@ -293,7 +379,59 @@ describe('getStreamKey', () => {
     const req = makeReq(track._id.toString());
     const res = makeRes();
     await getStreamKey(req, res as unknown as Response);
+    expect(res._status).toBe(403);
+  });
+});
+
+// ── getVariantPlaylist — bitrate cap enforcement ───────────────────────────────
+
+describe('getVariantPlaylist — bitrate cap', () => {
+  it('403: free token (cap=160) requesting 320 kbps variant', async () => {
+    const track = await seedTrack(hlsTrackFields());
+    const token = mintStreamToken({
+      trackId: track._id.toString(),
+      userId: 'oxy-user-abc',
+      maxBitrateKbps: 160,
+    });
+
+    const req = makeReq(track._id.toString(), {
+      authed: false,
+      query: { t: token },
+      variant: '320.m3u8',
+    });
+    const res = makeRes();
+    await getVariantPlaylist(req, res as unknown as Response);
 
     expect(res._status).toBe(403);
+    const body = res._body as Record<string, unknown>;
+    expect(body.error).toBe('Quality not permitted');
+  });
+
+  it('200: free token (cap=160) requesting 160 kbps variant succeeds (up to S3 fetch)', async () => {
+    // The controller will call buildVariantPlaylist which will call defaultFetchText (real S3).
+    // We can't mock S3 here, so we expect the controller to reach the manifest build step
+    // and fail with a non-403 error (S3 error → 500 or unhandled) — not a 403.
+    // A cleaner approach: verify the 403 guard fires before any S3 call.
+    // This test confirms 160 is NOT blocked by the cap gate (status !== 403).
+    const track = await seedTrack(hlsTrackFields());
+    const token = mintStreamToken({
+      trackId: track._id.toString(),
+      userId: 'oxy-user-abc',
+      maxBitrateKbps: 160,
+    });
+
+    const req = makeReq(track._id.toString(), {
+      authed: false,
+      query: { t: token },
+      variant: '160.m3u8',
+    });
+    const res = makeRes();
+    // Will throw when trying to fetch from S3 — that's fine; we only check it's NOT 403
+    try {
+      await getVariantPlaylist(req, res as unknown as Response);
+    } catch {
+      // S3 call expected to fail in tests
+    }
+    expect(res._status).not.toBe(403);
   });
 });

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
+import { describe, it, expect } from 'bun:test';
 import jwt from 'jsonwebtoken';
 
 // Set the secret before importing the module so process.env is populated
@@ -8,16 +8,21 @@ process.env.STREAM_TOKEN_SECRET = 'test-secret-for-unit-tests';
 import { mintStreamToken, verifyStreamToken } from './streamToken';
 import type { StreamTokenClaims } from './streamToken';
 
-const CLAIMS: StreamTokenClaims = { trackId: 'track-abc', userId: 'user-xyz' };
+const CLAIMS: StreamTokenClaims = {
+  trackId: 'track-abc',
+  userId: 'user-xyz',
+  maxBitrateKbps: 160,
+};
 
 describe('streamToken', () => {
-  it('mint→verify roundtrip returns exact claims', () => {
+  it('mint→verify roundtrip returns exact claims including maxBitrateKbps', () => {
     const token = mintStreamToken(CLAIMS);
     const result = verifyStreamToken(token);
 
     expect(result).not.toBeNull();
     expect(result?.trackId).toBe('track-abc');
     expect(result?.userId).toBe('user-xyz');
+    expect(result?.maxBitrateKbps).toBe(160);
   });
 
   it('a tampered token returns null', () => {
@@ -36,9 +41,11 @@ describe('streamToken', () => {
   });
 
   it('a token signed with a different secret returns null', () => {
-    const foreign = jwt.sign({ trackId: 'track-abc', userId: 'user-xyz' }, 'other-secret', {
-      expiresIn: 300,
-    });
+    const foreign = jwt.sign(
+      { trackId: 'track-abc', userId: 'user-xyz', maxBitrateKbps: 160 },
+      'other-secret',
+      { expiresIn: 300 },
+    );
     expect(verifyStreamToken(foreign)).toBeNull();
   });
 
@@ -67,5 +74,23 @@ describe('streamToken', () => {
     } finally {
       process.env.STREAM_TOKEN_SECRET = saved;
     }
+  });
+
+  it('a payload missing maxBitrateKbps returns null', () => {
+    const secret = process.env.STREAM_TOKEN_SECRET as string;
+    const noMax = jwt.sign({ trackId: 'track-abc', userId: 'user-xyz' }, secret, {
+      expiresIn: 300,
+    });
+    expect(verifyStreamToken(noMax)).toBeNull();
+  });
+
+  it('a payload with non-number maxBitrateKbps returns null', () => {
+    const secret = process.env.STREAM_TOKEN_SECRET as string;
+    const badMax = jwt.sign(
+      { trackId: 'track-abc', userId: 'user-xyz', maxBitrateKbps: 'high' },
+      secret,
+      { expiresIn: 300 },
+    );
+    expect(verifyStreamToken(badMax)).toBeNull();
   });
 });

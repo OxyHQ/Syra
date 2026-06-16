@@ -1,18 +1,24 @@
 /**
  * HLS manifest building service.
  *
- * Fetches static playlists from S3 and rewrites them via the pure rewriter
- * functions. All I/O is injectable so the service is fully testable without
- * real S3 calls.
+ * Master playlist: built directly from `track.hls` (no S3 round-trip) and
+ * filtered to bitrates ≤ the user's entitlement cap. This makes filtering
+ * trivial and avoids a network read for a file we'd rewrite entirely anyway.
+ *
+ * Variant playlist: fetched from S3 and rewritten via the pure rewriter.
+ * All I/O is injectable for testing without real S3 calls.
  */
 
 import { Readable } from 'stream';
 import type { ITrack } from '../../models/Track';
 import { streamFromS3, getPresignedUrl } from '../s3Service';
-import { rewriteMasterPlaylist, rewriteVariantPlaylist } from './playlistRewrite';
+import { rewriteVariantPlaylist } from './playlistRewrite';
 
 /** Presigned segment URL TTL — 6 hours, covers full playback with pause/resume. */
 export const SEGMENT_URL_TTL_SEC = 21600;
+
+/** HLS audio codec for generated master playlists. */
+export const HLS_AUDIO_CODEC = 'mp4a.40.2';
 
 // ── Dependency injection ──────────────────────────────────────────────────────
 
@@ -40,26 +46,34 @@ async function defaultPresign(s3Key: string, ttlSec: number = SEGMENT_URL_TTL_SE
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
- * Build the rewritten master playlist for the given track.
+ * Build the master playlist for the given track, filtered to renditions whose
+ * bitrateKbps ≤ maxBitrateKbps.
  *
- * Phase-5 seam: entitlement-based variant filtering goes here, before calling
- * `rewriteMasterPlaylist`. Filter `track.hls` entries to only include bitrates
- * the user's subscription tier allows, then strip the corresponding lines from
- * `rawMaster` before rewriting (or pass allowed bitrates into the rewriter).
+ * The master is generated directly from `track.hls` (no S3 fetch) so filtering
+ * is trivial and avoids a network round-trip.
+ *
+ * Phase-5 seam: additional entitlement-based filtering (e.g. content tier) can
+ * be applied here before the `track.hls.filter(...)` step.
  */
 export async function buildMasterPlaylist(
   track: ITrack,
   token: string,
   baseUrl: string,
-  deps?: ManifestDeps,
+  maxBitrateKbps: number,
+  _deps?: ManifestDeps,
 ): Promise<string> {
-  const fetchText = deps?.fetchText ?? defaultFetchText;
   const trackId = track._id.toString();
+  const renditions = (track.hls ?? [])
+    .filter((r) => r.bitrateKbps <= maxBitrateKbps)
+    .sort((a, b) => a.bitrateKbps - b.bitrateKbps);
 
-  const rawMaster = await fetchText(track.hlsMasterKey as string);
+  const lines: string[] = ['#EXTM3U'];
+  for (const r of renditions) {
+    lines.push(`#EXT-X-STREAM-INF:BANDWIDTH=${r.bitrateKbps * 1000},CODECS="${HLS_AUDIO_CODEC}"`);
+    lines.push(`${baseUrl}/api/stream/${trackId}/v/${r.bitrateKbps}.m3u8?t=${token}`);
+  }
 
-  // Phase-5 seam: filter track.hls by entitlement before rewriting master.
-  return rewriteMasterPlaylist(rawMaster, { trackId, token, baseUrl });
+  return lines.join('\n');
 }
 
 /**

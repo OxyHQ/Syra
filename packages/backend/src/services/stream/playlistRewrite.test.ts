@@ -1,22 +1,9 @@
 import { describe, it, expect } from 'bun:test';
-import { rewriteMasterPlaylist, rewriteVariantPlaylist } from './playlistRewrite';
+import { rewriteVariantPlaylist } from './playlistRewrite';
 
 const TRACK_ID = 'aabbccddeeff001122334455';
 const TOKEN = 'tok123';
 const BASE_URL = 'https://api.syra.oxy.so';
-
-// ── Synthetic playlists ───────────────────────────────────────────────────────
-
-const MASTER_PLAYLIST = [
-  '#EXTM3U',
-  '#EXT-X-VERSION:3',
-  '#EXT-X-STREAM-INF:BANDWIDTH=96000,CODECS="mp4a.40.2"',
-  '96/stream.m3u8',
-  '#EXT-X-STREAM-INF:BANDWIDTH=160000,CODECS="mp4a.40.2"',
-  '160/stream.m3u8',
-  '#EXT-X-STREAM-INF:BANDWIDTH=320000,CODECS="mp4a.40.2"',
-  '320/stream.m3u8',
-].join('\n');
 
 const VARIANT_PLAYLIST = [
   '#EXTM3U',
@@ -32,54 +19,6 @@ const VARIANT_PLAYLIST = [
   'segment-2.ts',
   '#EXT-X-ENDLIST',
 ].join('\n');
-
-// ── rewriteMasterPlaylist ─────────────────────────────────────────────────────
-
-describe('rewriteMasterPlaylist', () => {
-  it('rewrites each variant path to a tokenized API URL', () => {
-    const result = rewriteMasterPlaylist(MASTER_PLAYLIST, {
-      trackId: TRACK_ID,
-      token: TOKEN,
-      baseUrl: BASE_URL,
-    });
-    const lines = result.split('\n');
-
-    expect(lines).toContain(
-      `${BASE_URL}/api/stream/${TRACK_ID}/v/96.m3u8?t=${TOKEN}`,
-    );
-    expect(lines).toContain(
-      `${BASE_URL}/api/stream/${TRACK_ID}/v/160.m3u8?t=${TOKEN}`,
-    );
-    expect(lines).toContain(
-      `${BASE_URL}/api/stream/${TRACK_ID}/v/320.m3u8?t=${TOKEN}`,
-    );
-  });
-
-  it('leaves #EXTM3U, #EXT-X-STREAM-INF, and other tag lines untouched', () => {
-    const result = rewriteMasterPlaylist(MASTER_PLAYLIST, {
-      trackId: TRACK_ID,
-      token: TOKEN,
-      baseUrl: BASE_URL,
-    });
-    const lines = result.split('\n');
-
-    expect(lines).toContain('#EXTM3U');
-    expect(lines).toContain('#EXT-X-VERSION:3');
-    expect(lines.filter((l) => l.startsWith('#EXT-X-STREAM-INF'))).toHaveLength(3);
-  });
-
-  it('does not include the original variant paths', () => {
-    const result = rewriteMasterPlaylist(MASTER_PLAYLIST, {
-      trackId: TRACK_ID,
-      token: TOKEN,
-      baseUrl: BASE_URL,
-    });
-
-    expect(result).not.toContain('96/stream.m3u8');
-    expect(result).not.toContain('160/stream.m3u8');
-    expect(result).not.toContain('320/stream.m3u8');
-  });
-});
 
 // ── rewriteVariantPlaylist ────────────────────────────────────────────────────
 

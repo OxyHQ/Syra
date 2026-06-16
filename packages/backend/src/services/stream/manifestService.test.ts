@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'bun:test';
 import { buildMasterPlaylist, buildVariantPlaylist } from './manifestService';
 import type { ITrack } from '../../models/Track';
-import type { Document } from 'mongoose';
 
 process.env.STREAM_TOKEN_SECRET = 'test-secret-manifest';
 
@@ -9,7 +8,7 @@ const TRACK_ID = 'aabbccddeeff001122334455';
 const TOKEN = 'tok-manifest';
 const BASE_URL = 'https://api.syra.oxy.so';
 
-// ── Minimal ITrack-like fixture (no real Mongoose Document needed) ─────────────
+// ── Minimal ITrack-like fixture ───────────────────────────────────────────────
 
 function makeTrack(overrides: Record<string, unknown> = {}): ITrack {
   return {
@@ -32,17 +31,7 @@ function makeTrack(overrides: Record<string, unknown> = {}): ITrack {
   } as unknown as ITrack;
 }
 
-// ── Synthetic playlist texts ──────────────────────────────────────────────────
-
-const FAKE_MASTER = [
-  '#EXTM3U',
-  '#EXT-X-STREAM-INF:BANDWIDTH=96000',
-  '96/stream.m3u8',
-  '#EXT-X-STREAM-INF:BANDWIDTH=160000',
-  '160/stream.m3u8',
-  '#EXT-X-STREAM-INF:BANDWIDTH=320000',
-  '320/stream.m3u8',
-].join('\n');
+// ── Synthetic variant text (master no longer fetched from S3) ─────────────────
 
 const FAKE_VARIANT_96 = [
   '#EXTM3U',
@@ -56,12 +45,10 @@ const FAKE_VARIANT_96 = [
 
 // ── DI helpers ────────────────────────────────────────────────────────────────
 
-function makeDeps(masterText: string, variantText: string) {
+function makeDeps(variantText: string) {
   return {
-    fetchText: async (key: string): Promise<string> => {
-      if (key.endsWith('master.m3u8')) return masterText;
-      return variantText;
-    },
+    // fetchText is only used for variant playlists now
+    fetchText: async (_key: string): Promise<string> => variantText,
     presign: async (key: string): Promise<string> =>
       `https://s3.example/${key.split('/').pop()}?sig=fake`,
   };
@@ -70,18 +57,49 @@ function makeDeps(masterText: string, variantText: string) {
 // ── buildMasterPlaylist ───────────────────────────────────────────────────────
 
 describe('buildMasterPlaylist', () => {
-  it('fetches the master key and rewrites variant lines', async () => {
+  it('cap=320: includes all three renditions', async () => {
     const track = makeTrack();
-    const deps = makeDeps(FAKE_MASTER, FAKE_VARIANT_96);
+    const deps = makeDeps(FAKE_VARIANT_96);
 
-    const result = await buildMasterPlaylist(track, TOKEN, BASE_URL, deps);
+    const result = await buildMasterPlaylist(track, TOKEN, BASE_URL, 320, deps);
 
     expect(result).toContain(`${BASE_URL}/api/stream/${TRACK_ID}/v/96.m3u8?t=${TOKEN}`);
     expect(result).toContain(`${BASE_URL}/api/stream/${TRACK_ID}/v/160.m3u8?t=${TOKEN}`);
     expect(result).toContain(`${BASE_URL}/api/stream/${TRACK_ID}/v/320.m3u8?t=${TOKEN}`);
     expect(result).toContain('#EXTM3U');
-    // Original paths must be replaced
-    expect(result).not.toContain('96/stream.m3u8');
+  });
+
+  it('cap=160: excludes 320 rendition', async () => {
+    const track = makeTrack();
+    const deps = makeDeps(FAKE_VARIANT_96);
+
+    const result = await buildMasterPlaylist(track, TOKEN, BASE_URL, 160, deps);
+
+    expect(result).toContain(`${BASE_URL}/api/stream/${TRACK_ID}/v/96.m3u8?t=${TOKEN}`);
+    expect(result).toContain(`${BASE_URL}/api/stream/${TRACK_ID}/v/160.m3u8?t=${TOKEN}`);
+    expect(result).not.toContain(`/v/320.m3u8`);
+  });
+
+  it('cap=96: only includes 96 rendition', async () => {
+    const track = makeTrack();
+    const deps = makeDeps(FAKE_VARIANT_96);
+
+    const result = await buildMasterPlaylist(track, TOKEN, BASE_URL, 96, deps);
+
+    expect(result).toContain(`${BASE_URL}/api/stream/${TRACK_ID}/v/96.m3u8?t=${TOKEN}`);
+    expect(result).not.toContain(`/v/160.m3u8`);
+    expect(result).not.toContain(`/v/320.m3u8`);
+  });
+
+  it('emits correct #EXT-X-STREAM-INF BANDWIDTH for each included rendition', async () => {
+    const track = makeTrack();
+    const deps = makeDeps(FAKE_VARIANT_96);
+
+    const result = await buildMasterPlaylist(track, TOKEN, BASE_URL, 160, deps);
+
+    expect(result).toContain('BANDWIDTH=96000');
+    expect(result).toContain('BANDWIDTH=160000');
+    expect(result).not.toContain('BANDWIDTH=320000');
   });
 });
 
@@ -90,7 +108,7 @@ describe('buildMasterPlaylist', () => {
 describe('buildVariantPlaylist', () => {
   it('fetches the correct rendition and rewrites segments + key URI', async () => {
     const track = makeTrack();
-    const deps = makeDeps(FAKE_MASTER, FAKE_VARIANT_96);
+    const deps = makeDeps(FAKE_VARIANT_96);
 
     const result = await buildVariantPlaylist(track, 96, TOKEN, BASE_URL, deps);
 
@@ -103,7 +121,7 @@ describe('buildVariantPlaylist', () => {
 
   it('throws when the requested bitrateKbps is not in track.hls', async () => {
     const track = makeTrack();
-    const deps = makeDeps(FAKE_MASTER, FAKE_VARIANT_96);
+    const deps = makeDeps(FAKE_VARIANT_96);
 
     await expect(
       buildVariantPlaylist(track, 999, TOKEN, BASE_URL, deps),

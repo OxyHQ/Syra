@@ -3,8 +3,11 @@ import type { Response } from 'express';
 import type { AuthRequest } from '../middleware/auth';
 import { TrackModel } from '../models/Track';
 import { TrackKeyModel } from '../models/TrackKey';
+import { UserMusicPreferencesModel } from '../models/UserMusicPreferences';
 import { mintStreamToken, verifyStreamToken } from '../services/stream/streamToken';
 import { buildMasterPlaylist, buildVariantPlaylist } from '../services/stream/manifestService';
+import { getUserEntitlement } from '../services/premium/entitlement';
+import { computeMaxBitrateKbps } from '../services/stream/audioQuality';
 
 const CONTENT_TYPE_OCTET_STREAM = 'application/octet-stream';
 const CONTENT_TYPE_HLS_PLAYLIST = 'application/vnd.apple.mpegurl';
@@ -16,35 +19,71 @@ const CACHE_CONTROL_NO_STORE = 'no-store';
  */
 const STREAM_SESSION_TTL_SEC = 3600;
 
-// ── Auth helper ───────────────────────────────────────────────────────────────
+// ── Access helper ─────────────────────────────────────────────────────────────
+
+export type StreamAccess =
+  | { ok: true; maxBitrateKbps: number }
+  | { ok: false };
 
 /**
- * Authorize a stream sub-resource request. A request is authorized when:
- *  - The bearer session is present (`req.user.id`), OR
- *  - A `?t=` stream token is present, valid, and bound to exactly this trackId.
+ * Resolve authorization for a stream sub-resource request and return the
+ * effective bitrate cap for this session.
  *
- * Callers MUST check `claims.trackId === trackId` — a token minted for track A
- * does NOT authorize access to track B.
+ * - Valid `?t=` token bound to this trackId → cap from token claims.
+ * - Bearer session (req.user.id) → recompute cap from live entitlement + prefs.
+ * - Neither → { ok: false }.
  */
-export function authorizeStreamRequest(
+export async function resolveStreamAccess(
   req: AuthRequest,
   trackId: string,
-): { ok: boolean } {
-  if (req.user?.id) return { ok: true };
-
+): Promise<StreamAccess> {
   const rawToken = req.query?.t;
-  if (typeof rawToken !== 'string') return { ok: false };
+  if (typeof rawToken === 'string' && rawToken) {
+    const claims = verifyStreamToken(rawToken);
+    if (claims && claims.trackId === trackId) {
+      return { ok: true, maxBitrateKbps: claims.maxBitrateKbps };
+    }
+  }
 
-  const claims = verifyStreamToken(rawToken);
-  if (!claims || claims.trackId !== trackId) return { ok: false };
+  if (req.user?.id) {
+    const [entitlement, prefs] = await Promise.all([
+      getUserEntitlement(req.user.id),
+      UserMusicPreferencesModel.findOne({ oxyUserId: req.user.id }).lean(),
+    ]);
+    const maxBitrateKbps = computeMaxBitrateKbps(
+      { audioQuality: prefs?.audioQuality, dataSaver: prefs?.dataSaver },
+      entitlement,
+    );
+    return { ok: true, maxBitrateKbps };
+  }
 
-  return { ok: true };
+  return { ok: false };
 }
 
-// ── Track availability guard (shared by both handlers) ───────────────────────
+// ── Track availability guard ──────────────────────────────────────────────────
 
 export function isTrackPlayable(track: { isAvailable?: boolean; copyrightRemoved?: boolean }): boolean {
   return track.isAvailable !== false && !track.copyrightRemoved;
+}
+
+// ── Manifest token helper ─────────────────────────────────────────────────────
+
+/**
+ * Return the stream token to embed in manifest URLs.
+ * Reuses `?t=` for token-only requests (native players); otherwise mints a
+ * fresh token with the given cap for bearer requests.
+ */
+function resolveManifestToken(
+  req: AuthRequest,
+  trackId: string,
+  maxBitrateKbps: number,
+): string {
+  const rawToken = req.query?.t;
+  if (typeof rawToken === 'string' && rawToken) return rawToken;
+  return mintStreamToken(
+    { trackId, userId: req.user?.id ?? '', maxBitrateKbps },
+    STREAM_SESSION_TTL_SEC,
+  );
 }
 
 // ── Resolver ─────────────────────────────────────────────────────────────────
@@ -52,12 +91,15 @@ export function isTrackPlayable(track: { isAvailable?: boolean; copyrightRemoved
 /**
  * GET /api/stream/:trackId
  *
- * Issues a playback session for the requested track. Requires a real user
- * session (not just a stream token) — it is the entrypoint that MINTS tokens.
+ * Issues a playback session for the requested track. Requires a real bearer
+ * session (not a stream token) — it is the entrypoint that MINTS tokens.
  *
  * Response shape:
  *   - Audius:  { url, type: 'audius', expiresAt }
- *   - HLS:     { url, type: 'hls', expiresAt }   (url includes ?t=<streamToken>)
+ *   - HLS:     { url, type: 'hls', expiresAt }  (url includes ?t=<streamToken>)
+ *
+ * The token embeds maxBitrateKbps derived from the user's entitlement + prefs.
+ * Free users receive cap=160; premium users receive cap=320; data-saver forces 96.
  *
  * Error codes:
  *   401 — no session; 400 — bad ObjectId; 404 — not found; 403 — unavailable;
@@ -94,11 +136,7 @@ export async function getStream(req: AuthRequest, res: Response): Promise<void> 
       res.status(404).json({ error: 'Stream URL not available' });
       return;
     }
-    res.status(200).json({
-      url: track.streamUrl,
-      type: 'audius',
-      expiresAt: null,
-    });
+    res.status(200).json({ url: track.streamUrl, type: 'audius', expiresAt: null });
     return;
   }
 
@@ -108,14 +146,17 @@ export async function getStream(req: AuthRequest, res: Response): Promise<void> 
     return;
   }
 
-  if (
-    track.status === 'ready' &&
-    track.hlsMasterKey &&
-    track.hls &&
-    track.hls.length > 0
-  ) {
+  if (track.status === 'ready' && track.hlsMasterKey && track.hls?.length) {
+    const [entitlement, prefs] = await Promise.all([
+      getUserEntitlement(req.user.id),
+      UserMusicPreferencesModel.findOne({ oxyUserId: req.user.id }).lean(),
+    ]);
+    const maxBitrateKbps = computeMaxBitrateKbps(
+      { audioQuality: prefs?.audioQuality, dataSaver: prefs?.dataSaver },
+      entitlement,
+    );
     const token = mintStreamToken(
-      { trackId, userId: req.user.id },
+      { trackId, userId: req.user.id, maxBitrateKbps },
       STREAM_SESSION_TTL_SEC,
     );
     const base = process.env.STREAM_KEY_BASE_URL ?? '';
@@ -126,7 +167,6 @@ export async function getStream(req: AuthRequest, res: Response): Promise<void> 
     return;
   }
 
-  // failed or no playable source
   res.status(422).json({ error: 'Track not playable' });
 }
 
@@ -135,17 +175,10 @@ export async function getStream(req: AuthRequest, res: Response): Promise<void> 
 /**
  * GET /api/stream/:trackId/key
  *
- * Serves the raw AES-128 key (16 bytes) for the requested track.
- * Authorized by bearer session OR a valid `?t=` stream token bound to this track.
+ * Serves the raw AES-128 key (16 bytes). Authorized by bearer or `?t=` token.
  * The key is NEVER cached client-side.
  *
- * Guards (in order):
- *  1. ObjectId validation — 400 for malformed trackId.
- *  2. Auth — 401 if neither bearer nor valid bound token.
- *  3. Track existence — 404 if not found.
- *  4. Track availability — 403 if unavailable or copyright-removed.
- *  5. Key existence — 404 if TrackKey not yet persisted (ingest not complete).
- *  6. 200 with raw 16-byte key body, no-store.
+ * Guards: ObjectId(1) → auth(2) → track(3) → availability(4) → key(5) → 200.
  */
 export async function getStreamKey(req: AuthRequest, res: Response): Promise<void> {
   const trackId = Array.isArray(req.params.trackId)
@@ -157,7 +190,8 @@ export async function getStreamKey(req: AuthRequest, res: Response): Promise<voi
     return;
   }
 
-  if (!authorizeStreamRequest(req, trackId).ok) {
+  const access = await resolveStreamAccess(req, trackId);
+  if (!access.ok) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }
@@ -184,33 +218,15 @@ export async function getStreamKey(req: AuthRequest, res: Response): Promise<voi
   res.status(200).send(Buffer.from(trackKey.keyHex, 'hex'));
 }
 
-// ── Manifest helpers ──────────────────────────────────────────────────────────
-
-/**
- * Extract or mint a stream token for manifest sub-requests.
- * Reuses `?t=` when present (token-only requests from native players);
- * otherwise mints a fresh one from the bearer session.
- */
-function resolveToken(req: AuthRequest, trackId: string): string {
-  const rawToken = req.query?.t;
-  if (typeof rawToken === 'string' && rawToken) return rawToken;
-  // Bearer path — user is guaranteed present (authorizeStreamRequest already passed)
-  return mintStreamToken(
-    { trackId, userId: req.user?.id ?? '' },
-    STREAM_SESSION_TTL_SEC,
-  );
-}
-
 // ── Master playlist ───────────────────────────────────────────────────────────
 
 /**
  * GET /api/stream/:trackId/master.m3u8
  *
- * Serves the rewritten HLS master playlist. Variant paths are replaced with
- * tokenized API URLs; native players do not need a bearer header for sub-requests.
+ * Serves the HLS master playlist filtered to the user's bitrate cap.
+ * Variant paths are tokenized API URLs.
  *
- * Phase-5 seam: entitlement-based variant filtering is handled in
- * `buildMasterPlaylist` before the rewrite step.
+ * Phase-5 seam: content-tier variant filtering is handled in `buildMasterPlaylist`.
  *
  * Guards: ObjectId(1) → auth(2) → track(3) → availability(4) → readiness(5) → 200.
  */
@@ -224,7 +240,8 @@ export async function getMasterPlaylist(req: AuthRequest, res: Response): Promis
     return;
   }
 
-  if (!authorizeStreamRequest(req, trackId).ok) {
+  const access = await resolveStreamAccess(req, trackId);
+  if (!access.ok) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }
@@ -250,10 +267,11 @@ export async function getMasterPlaylist(req: AuthRequest, res: Response): Promis
     return;
   }
 
-  const token = resolveToken(req, trackId);
+  const maxBitrateKbps = access.maxBitrateKbps;
   const baseUrl = process.env.STREAM_KEY_BASE_URL ?? '';
+  const token = resolveManifestToken(req, trackId, maxBitrateKbps);
 
-  const playlist = await buildMasterPlaylist(track, token, baseUrl);
+  const playlist = await buildMasterPlaylist(track, token, baseUrl, maxBitrateKbps);
   res.set('Content-Type', CONTENT_TYPE_HLS_PLAYLIST);
   res.set('Cache-Control', CACHE_CONTROL_NO_STORE);
   res.status(200).send(playlist);
@@ -265,10 +283,12 @@ export async function getMasterPlaylist(req: AuthRequest, res: Response): Promis
  * GET /api/stream/:trackId/v/:variant
  *
  * Serves a rewritten variant playlist. `:variant` is e.g. `96.m3u8`.
- * Segments are presigned for 6 hours; the EXT-X-KEY URI is tokenized.
+ * Enforces the server-side bitrate cap: a request for a bitrate above the
+ * user's entitlement cap is rejected with 403, even if the token is otherwise
+ * valid. This prevents a tampered client from accessing premium quality.
  *
  * Guards: ObjectId(1) → auth(2) → track(3) → availability(4) → readiness(5) →
- *         variant parse(6) → 200.
+ *         variant parse(6) → cap enforcement(7) → 200.
  */
 export async function getVariantPlaylist(req: AuthRequest, res: Response): Promise<void> {
   const trackId = Array.isArray(req.params.trackId)
@@ -280,7 +300,8 @@ export async function getVariantPlaylist(req: AuthRequest, res: Response): Promi
     return;
   }
 
-  if (!authorizeStreamRequest(req, trackId).ok) {
+  const access = await resolveStreamAccess(req, trackId);
+  if (!access.ok) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }
@@ -324,8 +345,15 @@ export async function getVariantPlaylist(req: AuthRequest, res: Response): Promi
     return;
   }
 
-  const token = resolveToken(req, trackId);
+  // Server-side cap enforcement: reject requests above the entitlement cap.
+  // access.maxBitrateKbps is always a number when ok is true.
+  if (bitrateKbps > access.maxBitrateKbps) {
+    res.status(403).json({ error: 'Quality not permitted' });
+    return;
+  }
+
   const baseUrl = process.env.STREAM_KEY_BASE_URL ?? '';
+  const token = resolveManifestToken(req, trackId, access.maxBitrateKbps);
 
   const playlist = await buildVariantPlaylist(track, bitrateKbps, token, baseUrl);
   res.set('Content-Type', CONTENT_TYPE_HLS_PLAYLIST);
