@@ -1,5 +1,6 @@
 import type { PlaybackCommand, CatalogSource } from '@syra/shared-types';
 import { PlaybackStateModel, IPlaybackState } from '../../models/PlaybackState';
+import { listDevices, markInactive } from './deviceService';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -133,6 +134,45 @@ export async function applyCommand(
       }
       break;
     }
+  }
+
+  return state.save();
+}
+
+/**
+ * Handle a device going offline.
+ *
+ * Marks the device inactive then, if it was the active playback device,
+ * attempts a failover:
+ *  - Another still-active device exists → promote it (keep trackId + positionMs).
+ *  - No other active devices → pause playback and clear activeDeviceId.
+ *
+ * If the disconnected device was not the active device the playback state is
+ * left untouched (only the device registry is updated).
+ */
+export async function handleDeviceDisconnect(
+  userId: string,
+  deviceId: string,
+): Promise<IPlaybackState> {
+  await markInactive(userId, deviceId);
+
+  const state = await getOrCreateState(userId);
+
+  if (state.activeDeviceId !== deviceId) {
+    // Non-active device disconnected — state unaffected
+    return state;
+  }
+
+  // Active device disconnected — try to fail over to another active device
+  const devices = await listDevices(userId);
+  const other = devices.find((d) => d.isActive && d.deviceId !== deviceId);
+
+  if (other) {
+    state.activeDeviceId = other.deviceId;
+    // isPlaying, trackId, positionMs preserved — other device picks up seamlessly
+  } else {
+    state.isPlaying = false;
+    state.activeDeviceId = undefined;
   }
 
   return state.save();

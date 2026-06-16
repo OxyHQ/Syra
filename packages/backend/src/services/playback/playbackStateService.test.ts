@@ -6,7 +6,9 @@ import {
   setNowPlaying,
   applyCommand,
   updateProgress,
+  handleDeviceDisconnect,
 } from './playbackStateService';
+import { registerDevice } from './deviceService';
 
 beforeAll(connect);
 afterEach(clear);
@@ -199,6 +201,49 @@ describe('applyCommand — next/prev queue navigation', () => {
     const state = await applyCommand(USER, { type: 'next' });
     expect(state.trackId).toBeUndefined();
     expect(state.positionMs).toBe(0);
+  });
+});
+
+describe('handleDeviceDisconnect — failover', () => {
+  const D1 = 'device-d1';
+  const D2 = 'device-d2';
+
+  async function registerBoth() {
+    await registerDevice(USER, { deviceId: D1, name: 'Web', type: 'web' });
+    await registerDevice(USER, { deviceId: D2, name: 'Mobile', type: 'mobile' });
+  }
+
+  it('failover: d1 active disconnects → d2 becomes active, isPlaying stays true', async () => {
+    await registerBoth();
+    await setNowPlaying(USER, { trackId: 'track-t', deviceId: D1 });
+    await applyCommand(USER, { type: 'seek', positionMs: 15000 });
+
+    const state = await handleDeviceDisconnect(USER, D1);
+
+    expect(state.activeDeviceId).toBe(D2);
+    expect(state.isPlaying).toBe(true);
+    expect(state.trackId).toBe('track-t');
+    expect(state.positionMs).toBe(15000);
+  });
+
+  it('no other active device: disconnect d1 → paused, activeDeviceId undefined', async () => {
+    await registerDevice(USER, { deviceId: D1, name: 'Web', type: 'web' });
+    await setNowPlaying(USER, { trackId: 'track-t', deviceId: D1 });
+
+    const state = await handleDeviceDisconnect(USER, D1);
+
+    expect(state.isPlaying).toBe(false);
+    expect(state.activeDeviceId).toBeUndefined();
+  });
+
+  it('non-active device disconnects → activeDeviceId stays d1, isPlaying unchanged', async () => {
+    await registerBoth();
+    await setNowPlaying(USER, { trackId: 'track-t', deviceId: D1 });
+
+    const state = await handleDeviceDisconnect(USER, D2);
+
+    expect(state.activeDeviceId).toBe(D1);
+    expect(state.isPlaying).toBe(true);
   });
 });
 

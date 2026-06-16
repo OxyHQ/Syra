@@ -1,7 +1,10 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { logger } from '../utils/logger';
-import { PlaybackStateUpdate, Queue } from '@syra/shared-types';
+import { PlaybackStateUpdate, Queue, PlaybackCommand } from '@syra/shared-types';
 import { getQueue, setCurrentIndex } from '../services/queueService';
+import { registerDevice, listDevices, heartbeat } from '../services/playback/deviceService';
+import { applyCommand, updateProgress, handleDeviceDisconnect } from '../services/playback/playbackStateService';
+import type { DeviceType } from '@syra/shared-types';
 
 interface AuthenticatedSocket extends Socket {
   user?: {
@@ -45,6 +48,9 @@ export const setupPlayerSocket = (io: SocketIOServer) => {
     socket.join(playerRoom);
     logger.debug(`Client ${socket.id} joined player room: ${playerRoom}`);
 
+    // Track the deviceId associated with this socket for disconnect failover
+    let socketDeviceId: string | undefined;
+
     /**
      * Handle join:player event (redundant but explicit)
      */
@@ -52,6 +58,78 @@ export const setupPlayerSocket = (io: SocketIOServer) => {
       socket.join(playerRoom);
       logger.debug(`Client ${socket.id} explicitly joined player room`);
     });
+
+    // ── Connect events ────────────────────────────────────────────────────────
+
+    /**
+     * Register or update this device in the registry.
+     * Broadcasts the fresh device list to all devices in the room.
+     */
+    socket.on('device:register', async (input: { deviceId: string; name: string; type: DeviceType; capabilities?: string[] }) => {
+      try {
+        if (!input.deviceId || !input.name || !input.type) {
+          logger.warn(`device:register missing required fields for user ${userId}`);
+          return;
+        }
+        await registerDevice(userId, input);
+        socketDeviceId = input.deviceId;
+        playerNamespace.to(playerRoom).emit('device:list', await listDevices(userId));
+      } catch (error) {
+        logger.error(`Error handling device:register for user ${userId}:`, error);
+      }
+    });
+
+    /**
+     * Respond to a device requesting the current device list.
+     */
+    socket.on('device:list', async () => {
+      try {
+        socket.emit('device:list', await listDevices(userId));
+      } catch (error) {
+        logger.error(`Error handling device:list for user ${userId}:`, error);
+      }
+    });
+
+    /**
+     * Apply a playback command and broadcast the authoritative state to ALL
+     * devices in the room (including the sender) so everyone converges.
+     */
+    socket.on('playback:command', async (command: PlaybackCommand) => {
+      try {
+        const state = await applyCommand(userId, command);
+        playerNamespace.to(playerRoom).emit('playback:state', state);
+      } catch (error) {
+        logger.error(`Error handling playback:command for user ${userId}:`, error);
+      }
+    });
+
+    /**
+     * Accept a position report from the active device and relay the updated
+     * state to OTHER devices only (exclude sender to avoid echo loops).
+     */
+    socket.on('playback:progress', async (data: { positionMs: number; isPlaying?: boolean }) => {
+      try {
+        if (!socketDeviceId) return;
+        const state = await updateProgress(userId, socketDeviceId, data.positionMs, data.isPlaying);
+        socket.to(playerRoom).emit('playback:state', state);
+      } catch (error) {
+        logger.error(`Error handling playback:progress for user ${userId}:`, error);
+      }
+    });
+
+    /**
+     * Heartbeat — keeps the device marked as active in the registry.
+     * Clients should send this on a regular interval (e.g. every 30s).
+     */
+    socket.on('heartbeat', async () => {
+      try {
+        if (socketDeviceId) await heartbeat(userId, socketDeviceId);
+      } catch (error) {
+        logger.error(`Error handling heartbeat for user ${userId}:`, error);
+      }
+    });
+
+    // ── Legacy playback state broadcast ──────────────────────────────────────
 
     /**
      * Handle playback state updates
@@ -159,11 +237,22 @@ export const setupPlayerSocket = (io: SocketIOServer) => {
     });
 
     /**
-     * Handle disconnect
+     * Handle disconnect — run Connect failover if this was the active device,
+     * then broadcast the updated state and device list to all remaining devices.
      */
-    socket.on('disconnect', (reason: string) => {
+    socket.on('disconnect', async (reason: string) => {
       logger.info(`Client disconnected from player namespace: ${socket.id} (user: ${userId}, reason: ${reason})`);
       socket.leave(playerRoom);
+
+      if (socketDeviceId) {
+        try {
+          const state = await handleDeviceDisconnect(userId, socketDeviceId);
+          playerNamespace.to(playerRoom).emit('playback:state', state);
+          playerNamespace.to(playerRoom).emit('device:list', await listDevices(userId));
+        } catch (error) {
+          logger.error(`Error handling disconnect failover for user ${userId} device ${socketDeviceId}:`, error);
+        }
+      }
     });
   });
 
