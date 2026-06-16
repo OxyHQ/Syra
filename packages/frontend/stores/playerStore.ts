@@ -30,6 +30,9 @@ import {
   calculateTrackDuration,
   clampVolume,
 } from './playerStore.helpers';
+import { resolveStream, StreamResolution } from '@/services/streamService';
+import { attachSource } from './playback/attachSource';
+import type { AttachResult } from './playback/attachSource.types';
 
 const logger = createScopedLogger('PlayerStore');
 
@@ -64,6 +67,8 @@ interface PlayerState {
 
 export const usePlayerStore = create<PlayerState>((set, get) => {
   let positionUpdateInterval: ReturnType<typeof setInterval> | null = null;
+  /** Teardown for the active attachSource (hls.js etc.) — called before attach or stop. */
+  let currentDetach: AttachResult | null = null;
 
   /**
    * Start position update interval
@@ -220,6 +225,21 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     }
   };
 
+  /**
+   * Resolve the stream for tracks that have Phase-3 HLS renditions or are
+   * Audius-sourced. Returns null for tracks that should use the legacy
+   * `getAudioUrl` path (still-processing, failed, or upload-only).
+   */
+  const getPhase3Resolution = async (track: Track): Promise<StreamResolution | null> => {
+    const hasHls = track.status === 'ready' && Array.isArray(track.hls) && track.hls.length > 0;
+    const isAudius = track.source === 'audius' && !track.audioSource;
+    if (!hasHls && !isAudius) {
+      return null;
+    }
+    logger.debug('Resolving Phase-3 stream', { trackId: track.id, hasHls, isAudius });
+    return resolveStream(track.id);
+  };
+
   return {
     currentTrack: null,
     isPlaying: false,
@@ -258,12 +278,33 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           await stop();
         }
 
-        // Get authenticated audio URL
-        const audioUrl = await getAudioUrl(track);
-        logger.debug('Audio URL resolved', { url: audioUrl });
+        // Resolve stream — Phase-3 HLS or Audius tracks use resolveStream;
+        // legacy/processing tracks fall back to the authenticated-URL path.
+        const resolution = await getPhase3Resolution(track);
+        const audioUrl = resolution
+          ? resolution.url
+          : await getAudioUrl(track);
+        logger.debug('Audio URL resolved', { url: audioUrl, type: resolution?.type });
 
         // Initialize and start player
         const player = await initializePlayer(audioUrl, track);
+
+        // Attach source via platform-aware fork (sets up hls.js on web when needed).
+        // Detach any previous attachment first.
+        if (currentDetach) {
+          currentDetach.detach();
+          currentDetach = null;
+        }
+        if (resolution) {
+          try {
+            currentDetach = attachSource(player, resolution);
+          } catch (attachError) {
+            // hlsjs mode not yet supported — log and continue; player already
+            // has the URL via initializePlayer (won't work on Chrome for HLS,
+            // but avoids a hard crash until the raw-element fork lands).
+            logger.warn('attachSource failed — falling back to basic player', attachError);
+          }
+        }
         
         set({ 
           player,
@@ -353,6 +394,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
      */
     stop: async () => {
       stopPositionUpdates();
+      // Tear down any hls.js instance before removing the player
+      if (currentDetach) {
+        currentDetach.detach();
+        currentDetach = null;
+      }
       const { player } = get();
       if (player) {
         try {
