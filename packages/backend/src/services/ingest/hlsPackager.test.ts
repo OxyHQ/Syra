@@ -1,10 +1,16 @@
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
-import { execFile as execFileCb } from 'child_process';
+import { execFile as execFileCb, execFileSync } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { packageToEncryptedHls, HLS_BITRATES_KBPS } from './hlsPackager';
+
+function hasBinary(name: string): boolean {
+  try { execFileSync('which', [name], { stdio: 'ignore' }); return true; }
+  catch { return false; }
+}
+const MEDIA_TOOLS_AVAILABLE = ['ffmpeg', 'mp42hls', 'mp4fragment'].every(hasBinary);
 
 const execFile = promisify(execFileCb);
 
@@ -34,7 +40,7 @@ afterAll(() => {
   fs.rmSync(tmpOutputDir, { recursive: true, force: true });
 });
 
-describe('packageToEncryptedHls', () => {
+describe.skipIf(!MEDIA_TOOLS_AVAILABLE)('packageToEncryptedHls (requires ffmpeg + Bento4)', () => {
   // Single shared result — packageToEncryptedHls is called once; sub-tests inspect it.
   let result: Awaited<ReturnType<typeof packageToEncryptedHls>>;
 
