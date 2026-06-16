@@ -95,12 +95,10 @@ app.use(async (req, res, next) => {
 });
 
 // CORS and security headers
-// NOTE: syra.fm is the migration target web origin; it is added alongside the
-// legacy syra.oxy.so so the API accepts both during the transition. The old
-// origin is retired only at the final cutover.
+// NOTE: syra.fm is the production web origin. The legacy syra.oxy.so origin
+// (and api.syra.oxy.so) was retired after the migration cutover.
 const ALLOWED_ORIGINS = [
-  process.env.FRONTEND_URL || "https://syra.oxy.so",
-  "https://syra.oxy.so",
+  process.env.FRONTEND_URL || "https://syra.fm",
   "https://syra.fm",
   "http://localhost:8081",
   "http://localhost:8082",
@@ -160,7 +158,7 @@ const io = new SocketIOServer(server, {
   connectTimeout: SOCKET_CONFIG.CONNECT_TIMEOUT,
   cors: {
     // Reuse the shared allow-list so the HTTP and WebSocket origins never drift
-    // (includes both legacy syra.oxy.so and migration-target syra.fm origins).
+    // (syra.fm + dev origins).
     origin: [...ALLOWED_ORIGINS],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     credentials: true,
