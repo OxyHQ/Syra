@@ -11,6 +11,7 @@ import { getAuthenticatedUserId } from '../utils/auth';
 import { uploadTrackAudio } from '../services/audioStorageService';
 import { logger } from '../utils/logger';
 import { extractColorsFromImage } from '../utils/colorHelper';
+import { enqueueIngest } from '../services/ingest/ingestTrack';
 
 /**
  * GET /api/tracks
@@ -314,7 +315,7 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
         playCount: 0,
         popularity: 0,
         source: 'upload',
-        status: 'ready',
+        status: 'processing',
       });
 
       // Upload audio file to S3 first
@@ -346,10 +347,13 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
         logger.debug('[TracksController] Album stats updated');
       }
 
+      // Kick off async HLS ingest (non-blocking); status will transition processing→ready|failed
+      enqueueIngest(savedTrack._id.toString());
+
       logger.debug('[TracksController] Formatting response...');
       const finalTrack = await formatTrackWithCoverArt(track);
       logger.debug('[TracksController] Sending response', { trackId: finalTrack?.id });
-      
+
       // Ensure response is sent
       if (!res.headersSent) {
         res.status(201).json(finalTrack);
