@@ -1,10 +1,11 @@
 import React from 'react';
-import { StyleSheet, View, Text, ScrollView, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { useOxy } from '@oxyhq/services';
 import SEO from '@/components/SEO';
 import Avatar from '@/components/Avatar';
+import { ProfileHeaderSkeleton } from '@/components/skeletons';
 import { useProfileData } from '@/hooks/useProfileData';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
@@ -23,9 +24,12 @@ const UserProfileScreen: React.FC = () => {
     return (
       <>
         <SEO title={`${username || 'User'} - Syra`} description="User profile" />
-        <View style={[styles.container, styles.centered, { backgroundColor: theme.colors.background }]}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-        </View>
+        <ScrollView
+          style={[styles.container, { backgroundColor: theme.colors.background }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <ProfileHeaderSkeleton />
+        </ScrollView>
       </>
     );
   }

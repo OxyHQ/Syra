@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { StyleSheet, View, Text, Pressable, Image, ActivityIndicator, Platform } from 'react-native';
+import { StyleSheet, View, Text, Pressable, Image, ScrollView, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Animated, {
   interpolate,
@@ -16,6 +16,7 @@ import { usePlayerStore } from '@/stores/playerStore';
 import SEO from '@/components/SEO';
 import { TrackRow } from '@/components/TrackRow';
 import { MediaCard } from '@/components/MediaCard';
+import { ArtistDetailSkeleton } from '@/components/skeletons';
 import { toast } from 'sonner';
 import { useOxy } from '@oxyhq/services';
 
@@ -165,8 +166,14 @@ const ArtistScreen: React.FC = () => {
 
   if (loading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
+      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <ArtistDetailSkeleton />
+        </ScrollView>
       </View>
     );
   }
@@ -539,11 +546,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 100,
     paddingTop: 0,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   errorContainer: {
     flex: 1,

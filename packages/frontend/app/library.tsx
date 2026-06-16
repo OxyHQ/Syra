@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, ScrollView, Pressable, Platform, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, Pressable, Platform } from 'react-native';
 import { useTheme } from '@oxyhq/bloom/theme';
 import SEO from '@/components/SEO';
+import { LibraryListSkeleton } from '@/components/skeletons';
 import { Ionicons, Octicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useOxy } from '@oxyhq/services';
@@ -235,11 +236,11 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
 
         {/* Loading state */}
         {finalLoading && isAuthenticated && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>
-              Loading your library...
-            </Text>
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Playlists</Text>
+            <View style={styles.itemsContainer}>
+              <LibraryListSkeleton count={6} />
+            </View>
           </View>
         )}
 
@@ -552,16 +553,6 @@ const styles = StyleSheet.create({
   emptyCreateButtonText: {
     fontSize: 14,
     fontWeight: '600',
-  },
-  loadingContainer: {
-    padding: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  loadingText: {
-    fontSize: 14,
-    textAlign: 'center',
   },
   section: {
     marginBottom: 24,

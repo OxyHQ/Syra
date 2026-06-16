@@ -24,7 +24,7 @@ import {
   MAX_VOLUME,
 } from './playerStore.config';
 import {
-  extractTrackIdFromUrl,
+  resolveTrackId,
   fetchAuthenticatedAudioUrl,
   resolveAudioUrlWithFallback,
   calculateTrackDuration,
@@ -181,11 +181,30 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   };
 
   /**
-   * Get authenticated audio URL with fallback
+   * Resolve a playable audio URL for a track.
+   *
+   * Uploaded tracks (those with an `audioSource`) are served via a short-lived
+   * pre-signed S3 URL fetched from the authenticated endpoint, falling back to
+   * the direct API URL if that request fails. Audius stream-only tracks have no
+   * `audioSource` and instead expose a ready-to-play `streamUrl`, which is used
+   * as-is. A track with neither source is not playable.
+   *
+   * @throws Error when the track has no resolvable playable source
    */
   const getAudioUrl = async (track: Track): Promise<string> => {
-    const trackId = extractTrackIdFromUrl(track.audioSource.url, track.id);
-    
+    // Audius stream-only tracks carry no uploaded audioSource — play their
+    // direct network stream without contacting the authenticated endpoint.
+    if (!track.audioSource) {
+      const directUrl = resolveAudioUrlWithFallback(track);
+      if (!directUrl) {
+        throw new Error(`Track ${track.id} has no playable audio source`);
+      }
+      logger.debug('Using direct stream URL for stream-only track', { trackId: track.id });
+      return directUrl;
+    }
+
+    const trackId = resolveTrackId(track);
+
     try {
       logger.debug('Fetching authenticated audio URL', { trackId });
       const url = await fetchAuthenticatedAudioUrl(trackId);
@@ -193,7 +212,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       return url;
     } catch (error) {
       logger.warn('Failed to fetch authenticated URL, using fallback', { error, trackId });
-      return resolveAudioUrlWithFallback(track);
+      const fallbackUrl = resolveAudioUrlWithFallback(track);
+      if (!fallbackUrl) {
+        throw new Error(`Track ${track.id} has no playable audio source`);
+      }
+      return fallbackUrl;
     }
   };
 
@@ -216,10 +239,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
      */
     playTrack: async (track: Track, context?: PlaybackContext, addToQueue: boolean = false) => {
       try {
-        logger.info('Playing track', { 
-          trackId: track.id, 
+        logger.info('Playing track', {
+          trackId: track.id,
           title: track.title,
-          url: track.audioSource.url 
+          url: track.audioSource?.url ?? track.streamUrl,
         });
         
         set({ 

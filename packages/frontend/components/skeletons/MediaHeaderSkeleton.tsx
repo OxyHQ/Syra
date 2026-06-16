@@ -1,0 +1,98 @@
+import React from 'react';
+import { StyleSheet, View } from 'react-native';
+import * as Skeleton from '@oxyhq/bloom/skeleton';
+import { TrackListSkeleton } from './TrackRowSkeleton';
+
+interface MediaHeaderSkeletonProps {
+  /** Number of placeholder track rows below the header. Defaults to 8. */
+  trackCount?: number;
+}
+
+/**
+ * Full-page loading placeholder for the album and playlist detail screens:
+ * a large cover, title, artist row and metadata, a control bar, and a track
+ * list. Mirrors `album/[id]` and `playlist/[id]` header layout.
+ */
+export const MediaHeaderSkeleton: React.FC<MediaHeaderSkeletonProps> =
+  React.memo(({ trackCount = 8 }) => {
+    return (
+      <View>
+        {/* Header: cover + info */}
+        <View style={styles.header}>
+          <View style={styles.coverContainer}>
+            <Skeleton.Box width={160} height={160} borderRadius={8} />
+          </View>
+          <View style={styles.infoContainer}>
+            <Skeleton.Box
+              width="80%"
+              height={42}
+              borderRadius={6}
+              style={styles.title}
+            />
+            <View style={styles.artistRow}>
+              <Skeleton.Circle size={24} />
+              <Skeleton.Box width={120} height={16} borderRadius={4} />
+            </View>
+            <Skeleton.Box width={200} height={14} borderRadius={4} />
+          </View>
+        </View>
+
+        {/* Control bar: play button + secondary actions */}
+        <View style={styles.controlsContainer}>
+          <Skeleton.Circle size={56} />
+          <Skeleton.Circle size={24} />
+          <Skeleton.Circle size={24} />
+          <Skeleton.Circle size={24} />
+        </View>
+
+        {/* Track list */}
+        <View style={styles.trackList}>
+          <TrackListSkeleton count={trackCount} />
+        </View>
+      </View>
+    );
+  });
+MediaHeaderSkeleton.displayName = 'MediaHeaderSkeleton';
+
+const styles = StyleSheet.create({
+  // Mirrors album/playlist `header`.
+  header: {
+    flexDirection: 'row',
+    padding: 24,
+    paddingBottom: 16,
+    gap: 20,
+  },
+  // Mirrors album/playlist `coverContainer`.
+  coverContainer: {
+    width: 160,
+    height: 160,
+  },
+  // Mirrors album/playlist `infoContainer`.
+  infoContainer: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    paddingBottom: 8,
+    gap: 8,
+  },
+  title: {
+    marginBottom: 0,
+  },
+  // Mirrors album/playlist `artistRow`.
+  artistRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  // Mirrors album/playlist `controlsContainer`.
+  controlsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingBottom: 12,
+    gap: 12,
+  },
+  // Mirrors album/playlist `trackList`.
+  trackList: {
+    paddingHorizontal: 24,
+  },
+});

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { StyleSheet, View, TextInput, Text, ScrollView, Platform, Pressable, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, TextInput, Text, ScrollView, Platform, Pressable } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useTheme } from '@oxyhq/bloom/theme';
 import SEO from '@/components/SEO';
@@ -12,6 +12,7 @@ import { MediaCard } from '@/components/MediaCard';
 import { GenreCard } from '@/components/GenreCard';
 import { TrackRow } from '@/components/TrackRow';
 import { ExploreSection } from '@/components/ExploreSection';
+import { GenreGridSkeleton, MediaCardRowSkeleton, TrackListSkeleton } from '@/components/skeletons';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 
@@ -210,8 +211,21 @@ const SearchScreen: React.FC = () => {
 
         {/* Loading State - Only show when searching */}
         {searchLoading && hasQuery && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={theme.colors.primary} />
+          <View style={styles.results}>
+            <View style={styles.searchSkeletonSection}>
+              <Text style={[styles.searchSkeletonTitle, { color: theme.colors.text }]}>
+                Tracks
+              </Text>
+              <View style={styles.trackList}>
+                <TrackListSkeleton count={5} />
+              </View>
+            </View>
+            <View style={styles.searchSkeletonSection}>
+              <Text style={[styles.searchSkeletonTitle, { color: theme.colors.text }]}>
+                Albums
+              </Text>
+              <MediaCardRowSkeleton count={5} />
+            </View>
           </View>
         )}
 
@@ -224,6 +238,7 @@ const SearchScreen: React.FC = () => {
               isLoading={genresLoading}
               isEmpty={genres.length === 0}
               emptyMessage="No genres available"
+              loadingSkeleton={<GenreGridSkeleton count={8} />}
             >
               <View style={styles.genreGrid}>
                 {genres.map((genre) => (
@@ -533,12 +548,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  loadingContainer: {
-    flex: 1,
-    padding: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 200,
+  // Skeleton section styling mirrors ExploreSection's section/title spacing.
+  searchSkeletonSection: {
+    marginBottom: 32,
+  },
+  searchSkeletonTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 16,
   },
   exploreView: {
     paddingHorizontal: 18,

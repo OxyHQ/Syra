@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { StyleSheet, View, ScrollView, Text, Platform, Pressable, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, ScrollView, Text, Platform, Pressable } from 'react-native';
 import { webDimension } from '@/utils/webStyles';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@oxyhq/bloom/theme';
@@ -7,6 +7,7 @@ import { useOxy } from '@oxyhq/services';
 import { useRouter } from 'expo-router';
 import SEO from '@/components/SEO';
 import { MediaCard } from '@/components/MediaCard';
+import { QuickAccessGridSkeleton, MediaCardRowSkeleton } from '@/components/skeletons';
 import { musicService } from '@/services/musicService';
 import { Track, Album, Artist, Playlist } from '@syra/shared-types';
 import { usePlayerStore } from '@/stores/playerStore';
@@ -386,9 +387,7 @@ const HomeScreen: React.FC = () => {
 
           {/* 8-Item Compact Grid (2 columns) - Just image/icon and text */}
           {quickAccessLoading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="small" color={theme.colors.primary} />
-            </View>
+            <QuickAccessGridSkeleton />
           ) : quickAccess.length > 0 && (
             <View style={styles.compactGrid}>
               {quickAccess.map((item) => {
@@ -448,8 +447,11 @@ const HomeScreen: React.FC = () => {
 
           {/* Recently Played Section */}
           {sectionsLoading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="small" color={theme.colors.primary} />
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+                Recently played
+              </Text>
+              <MediaCardRowSkeleton count={5} />
             </View>
           ) : (recentlyPlayed.length > 0 || recentlyPlayedAlbums.length > 0) && (
             <View style={styles.section}>
@@ -572,8 +574,11 @@ const HomeScreen: React.FC = () => {
 
           {/* Tracks Section */}
           {tracksLoading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={theme.colors.primary} />
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+                Tracks
+              </Text>
+              <MediaCardRowSkeleton count={10} />
             </View>
           ) : tracks.length > 0 && (
             <View style={styles.section}>
@@ -717,11 +722,6 @@ const styles = StyleSheet.create({
         width: '50%', // 2 columns on mobile
       },
     }),
-  },
-  loadingContainer: {
-    padding: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });
 

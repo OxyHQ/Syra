@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, ScrollView, Text, Pressable, Image, ActivityIndicator, Platform } from 'react-native';
+import { StyleSheet, View, ScrollView, Text, Pressable, Image, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { musicService } from '@/services/musicService';
@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { usePlayerStore } from '@/stores/playerStore';
 import SEO from '@/components/SEO';
 import Avatar from '@/components/Avatar';
+import { MediaHeaderSkeleton } from '@/components/skeletons';
 import { formatDuration, formatTotalDuration } from '@/utils/musicUtils';
 
 /**
@@ -66,9 +67,13 @@ const AlbumScreen: React.FC = () => {
 
   if (loading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-      </View>
+      <ScrollView
+        style={[styles.scrollView, { backgroundColor: theme.colors.background }]}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <MediaHeaderSkeleton />
+      </ScrollView>
     );
   }
 
@@ -288,11 +293,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 100,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   errorContainer: {
     flex: 1,

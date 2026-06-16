@@ -6,7 +6,6 @@ import {
   ScrollView,
   Pressable,
   Platform,
-  ActivityIndicator,
   RefreshControl,
 } from 'react-native';
 import { useTheme } from '@oxyhq/bloom/theme';
@@ -15,6 +14,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { artistService } from '@/services/artistService';
 import { toast } from 'sonner';
 import SEO from '@/components/SEO';
+import { StatCardGridSkeleton } from '@/components/skeletons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArtistDashboard } from '@syra/shared-types';
 
@@ -71,8 +71,29 @@ const ArtistDashboardScreen: React.FC = () => {
 
   if (loading && !dashboard) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.colors.background, justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
+      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <View
+          style={[
+            styles.header,
+            {
+              backgroundColor: theme.colors.background,
+              borderBottomColor: theme.colors.border,
+              paddingTop: 8,
+            },
+          ]}
+        >
+          <Pressable onPress={() => router.back()} style={styles.backButton}>
+            <MaterialCommunityIcons name="arrow-left" size={24} color={theme.colors.text} />
+          </Pressable>
+          <Text style={[styles.title, { color: theme.colors.text }]}>Dashboard</Text>
+          <Pressable
+            onPress={() => router.push('/artist/insights')}
+            style={styles.insightsButton}
+          >
+            <MaterialCommunityIcons name="chart-line" size={24} color={theme.colors.primary} />
+          </Pressable>
+        </View>
+        <StatCardGridSkeleton count={4} minWidth="45%" />
       </View>
     );
   }
