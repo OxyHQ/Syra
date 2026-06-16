@@ -17,7 +17,6 @@ import { logger } from "./src/utils/logger";
 import searchRoutes from "./src/routes/search";
 import browseRoutes from "./src/routes/browse";
 import { OxyServices } from '@oxyhq/core';
-import testRoutes from "./src/routes/test";
 import profileSettingsRoutes from './src/routes/profileSettings';
 import tracksRoutes from './src/routes/tracks.routes';
 import albumsRoutes from './src/routes/albums.routes';
@@ -406,7 +405,6 @@ publicApiRouter.use("/sources", optionalAuth, sourcesRoutes); // GET search publ
 
 // Authenticated API routes (require authentication)
 const authenticatedApiRouter = express.Router();
-authenticatedApiRouter.use("/test", testRoutes);
 authenticatedApiRouter.use("/profile", profileSettingsRoutes);
 authenticatedApiRouter.use("/artists", artistsAuthRoutes); // Authenticated routes (GET /me, POST /register, POST /:id/follow, etc.)
 authenticatedApiRouter.use("/playlists", playlistsRoutes); // POST routes (create)
