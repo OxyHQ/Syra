@@ -7,6 +7,7 @@
  * real browser APIs.
  */
 import type { PlaybackStatusUpdate } from './playerEngine';
+import type Hls from 'hls.js';
 
 // Dynamic import of the .web.ts file directly (jest-expo defaults to 'ios';
 // we need the web implementation explicitly).
