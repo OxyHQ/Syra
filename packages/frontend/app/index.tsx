@@ -595,8 +595,9 @@ const HomeScreen: React.FC = () => {
                       title={track.title}
                       subtitle={track.artistName}
                       type="track"
+                      imageUri={track.coverArt}
+                      images={track.images}
                       onPress={() => {
-                        // Navigate to album page if albumId exists
                         if (track.albumId) {
                           router.push(`/album/${track.albumId}`);
                         }
