@@ -32,6 +32,7 @@ import copyrightRoutes from './src/routes/copyright.routes';
 import imagesRoutes from './src/routes/images.routes';
 import streamRoutes from './src/routes/stream.routes';
 import lyricsRoutes from './src/routes/lyrics.routes';
+import sourcesRoutes from './src/routes/sources.routes';
 
 // Middleware
 import { rateLimiter, bruteForceProtection } from "./src/middleware/security";
@@ -401,6 +402,7 @@ publicApiRouter.use("/browse", optionalAuth, browseRoutes); // Browse/explore en
 publicApiRouter.use("/copyright", optionalAuth, copyrightRoutes); // Public copyright reporting
 publicApiRouter.use("/stream", optionalAuth, streamRoutes); // Self-enforcing: resolver requires bearer; key accepts bearer or ?t= token
 publicApiRouter.use("/lyrics", lyricsRoutes); // Public — no auth required for lyrics lookup
+publicApiRouter.use("/sources", optionalAuth, sourcesRoutes); // GET search public; POST add self-enforces requireAuth
 
 // Authenticated API routes (require authentication)
 const authenticatedApiRouter = express.Router();
