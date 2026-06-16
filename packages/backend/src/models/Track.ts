@@ -1,5 +1,14 @@
 import mongoose, { Schema, Document } from 'mongoose';
-import { Track, TrackMetadata, AudioSource } from '@syra/shared-types';
+import {
+  Track,
+  TrackMetadata,
+  AudioSource,
+  CatalogSource,
+  ExternalIds,
+  SourceProvenance,
+  TrackImage,
+  HlsRendition,
+} from '@syra/shared-types';
 
 export interface ITrack extends Omit<Track, 'id'>, Document {
   _id: mongoose.Types.ObjectId;
@@ -23,6 +32,31 @@ const TrackMetadataSchema = new Schema<TrackMetadata>({
   publisher: { type: String },
 }, { _id: false });
 
+const ExternalIdsSchema = new Schema<ExternalIds>({
+  isrc: { type: String },
+  audiusId: { type: String },
+}, { _id: false });
+
+const SourceProvenanceSchema = new Schema<SourceProvenance>({
+  provider: { type: String, enum: ['upload', 'cc', 'audius'] as CatalogSource[], required: true },
+  externalId: { type: String, required: true },
+  importedAt: { type: String, required: true },
+  fields: [{ type: String }],
+}, { _id: false });
+
+const TrackImageSchema = new Schema<TrackImage>({
+  url: { type: String, required: true },
+  width: { type: Number },
+  height: { type: Number },
+  source: { type: String, enum: ['upload', 'cc', 'audius'] as CatalogSource[] },
+}, { _id: false });
+
+const HlsRenditionSchema = new Schema<HlsRendition>({
+  manifestKey: { type: String, required: true },
+  bitrateKbps: { type: Number, required: true },
+  encrypted: { type: Boolean, required: true },
+}, { _id: false });
+
 const TrackSchema = new Schema<ITrack>({
   title: { type: String, required: true, index: true },
   artistId: { type: String, required: true, index: true },
@@ -32,7 +66,7 @@ const TrackSchema = new Schema<ITrack>({
   duration: { type: Number, required: true }, // in seconds
   trackNumber: { type: Number },
   discNumber: { type: Number },
-  audioSource: { type: AudioSourceSchema, required: true },
+  audioSource: { type: AudioSourceSchema }, // optional: absent for audius/processing tracks
   coverArt: { type: String },
   metadata: { type: TrackMetadataSchema },
   isExplicit: { type: Boolean, default: false, index: true },
@@ -44,6 +78,15 @@ const TrackSchema = new Schema<ITrack>({
   removedReason: { type: String },
   removedBy: { type: String }, // Oxy user ID who reported/removed
   copyrightReportId: { type: String },
+  // Catalog provenance
+  source: { type: String, enum: ['upload', 'cc', 'audius'] as CatalogSource[], required: true, index: true },
+  status: { type: String, enum: ['processing', 'ready', 'failed'], default: 'ready', index: true },
+  externalIds: { type: ExternalIdsSchema },
+  sources: [{ type: SourceProvenanceSchema }],
+  images: [{ type: TrackImageSchema }],
+  hls: [{ type: HlsRenditionSchema }],
+  loudnessLufs: { type: Number },
+  streamUrl: { type: String },
 }, {
   timestamps: true,
 });
@@ -53,6 +96,8 @@ TrackSchema.index({ artistId: 1, albumId: 1 });
 TrackSchema.index({ title: 'text', artistName: 'text' }); // Text search
 TrackSchema.index({ popularity: -1 });
 TrackSchema.index({ createdAt: -1 });
+// External identifier lookups
+TrackSchema.index({ 'externalIds.isrc': 1 }, { unique: true, sparse: true });
+TrackSchema.index({ 'externalIds.audiusId': 1 }, { sparse: true });
 
 export const TrackModel = mongoose.model<ITrack>('Track', TrackSchema);
-

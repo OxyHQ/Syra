@@ -313,6 +313,8 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
         isAvailable: true,
         playCount: 0,
         popularity: 0,
+        source: 'upload',
+        status: 'ready',
       });
 
       // Upload audio file to S3 first

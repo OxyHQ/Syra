@@ -287,6 +287,7 @@ export const registerAsArtist = async (req: AuthRequest, res: Response, next: Ne
         totalPlays: 0,
         monthlyListeners: 0,
       },
+      source: 'upload',
     });
 
     await artist.save();

@@ -127,6 +127,7 @@ async function seedMusicData() {
           totalPlays: randomInt(10000000, 5000000000),
           monthlyListeners,
         },
+        source: 'upload',
       });
 
       const savedArtist = await artist.save();
@@ -212,6 +213,8 @@ async function seedMusicData() {
           popularity: randomInt(30, 90),
           playCount: randomInt(10000, 50000000),
           isAvailable: true,
+          source: 'upload',
+          status: 'ready',
         });
 
         const savedTrack = await track.save();

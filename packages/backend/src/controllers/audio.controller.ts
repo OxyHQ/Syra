@@ -85,7 +85,7 @@ export const streamAudio = async (req: Request, res: Response, next: NextFunctio
     }
 
     const fileSize = metadata.contentLength;
-    const mimeType = metadata.contentType || `audio/${track.audioSource.format || 'mpeg'}`;
+    const mimeType = metadata.contentType || `audio/${track.audioSource?.format ?? 'mpeg'}`;
     const rangeHeader = req.headers.range;
 
     // Set common headers
@@ -172,7 +172,7 @@ export const getAudioInfo = async (req: Request, res: Response, next: NextFuncti
     res.json({
       trackId: track.id,
       size: metadata.contentLength,
-      mimeType: metadata.contentType || `audio/${track.audioSource.format || 'mpeg'}`,
+      mimeType: metadata.contentType || `audio/${track.audioSource?.format ?? 'mpeg'}`,
       lastModified: metadata.lastModified?.toISOString(),
       etag: metadata.etag,
     });

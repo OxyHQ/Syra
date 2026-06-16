@@ -1,9 +1,21 @@
 import mongoose, { Schema, Document } from 'mongoose';
-import { Album } from '@syra/shared-types';
+import { Album, CatalogSource, ExternalIds, SourceProvenance } from '@syra/shared-types';
 
 export interface IAlbum extends Omit<Album, 'id'>, Document {
   _id: mongoose.Types.ObjectId;
 }
+
+const ExternalIdsSchema = new Schema<ExternalIds>({
+  isrc: { type: String },
+  audiusId: { type: String },
+}, { _id: false });
+
+const SourceProvenanceSchema = new Schema<SourceProvenance>({
+  provider: { type: String, enum: ['upload', 'cc', 'audius'] as CatalogSource[], required: true },
+  externalId: { type: String, required: true },
+  importedAt: { type: String, required: true },
+  fields: [{ type: String }],
+}, { _id: false });
 
 const AlbumSchema = new Schema<IAlbum>({
   title: { type: String, required: true, index: true },
@@ -22,6 +34,9 @@ const AlbumSchema = new Schema<IAlbum>({
   isExplicit: { type: Boolean, default: false, index: true },
   primaryColor: { type: String },
   secondaryColor: { type: String },
+  // Catalog provenance
+  externalIds: { type: ExternalIdsSchema },
+  sources: [{ type: SourceProvenanceSchema }],
 }, {
   timestamps: true,
 });
@@ -31,6 +46,7 @@ AlbumSchema.index({ artistId: 1, releaseDate: -1 });
 AlbumSchema.index({ title: 'text', artistName: 'text' }); // Text search
 AlbumSchema.index({ popularity: -1 });
 AlbumSchema.index({ releaseDate: -1 });
+// External identifier lookups
+AlbumSchema.index({ 'externalIds.isrc': 1 }, { sparse: true });
 
 export const AlbumModel = mongoose.model<IAlbum>('Album', AlbumSchema);
-
