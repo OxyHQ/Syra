@@ -1,13 +1,17 @@
 import { api } from '@/utils/api';
-import { SearchResult, SearchCategory } from '@syra/shared-types';
+import { SearchCategory } from '@syra/shared-types';
+import type { SearchResultWithPending } from '@/utils/searchUtils';
 
 /**
  * Search API service
  * Handles music search across tracks, albums, artists, and playlists
  */
 export const searchService = {
-  async search(query: string, params?: { category?: SearchCategory; limit?: number; offset?: number }): Promise<SearchResult> {
-    const response = await api.get<SearchResult>('/search', { q: query, ...params });
+  async search(
+    query: string,
+    params?: { category?: SearchCategory; limit?: number; offset?: number },
+  ): Promise<SearchResultWithPending> {
+    const response = await api.get<SearchResultWithPending>('/search', { q: query, ...params });
     return response.data;
   },
 };

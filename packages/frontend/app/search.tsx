@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { SearchCategory, SearchResult, Track, Album, Artist, Playlist } from '@syra/shared-types';
 import { searchService } from '@/services/searchService';
+import { searchRefetchInterval } from '@/utils/searchUtils';
 import { browseService, Genre } from '@/services/browseService';
 import { MediaCard } from '@/components/MediaCard';
 import { GenreCard } from '@/components/GenreCard';
@@ -75,7 +76,10 @@ const SearchScreen: React.FC = () => {
     staleTime: 1000 * 60 * 10,
   });
 
-  // Search query - only enabled when there's a search query
+  // Search query - only enabled when there's a search query.
+  // Polls at AUDIUS_REFETCH_MS while the server signals a pending background
+  // Audius import and local track results are still sparse; stops automatically
+  // once tracks appear or pendingAudiusImport flips false.
   const { data: searchResults, isLoading: searchLoading } = useQuery({
     queryKey: ['search', debouncedQuery, activeCategory],
     queryFn: () => searchService.search(debouncedQuery, {
@@ -85,6 +89,8 @@ const SearchScreen: React.FC = () => {
     }),
     enabled: hasQuery,
     staleTime: 1000 * 60 * 5, // 5 minutes
+    refetchInterval: (query) => searchRefetchInterval(query.state.data),
+    refetchIntervalInBackground: false,
   });
 
   // Memoize explore data
