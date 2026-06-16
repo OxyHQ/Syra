@@ -9,12 +9,12 @@
  *
  * Do NOT import platform-only modules here.
  */
-import type { AudioPlayer } from 'expo-audio';
 import type { StreamResolution } from '@/services/streamService';
 import type { AttachResult } from './attachSource.types';
+import type { PlayerEngine } from './playerEngine';
 
 /** @see attachSource.native.ts / attachSource.web.ts for runtime implementations */
-export function attachSource(player: AudioPlayer, resolution: StreamResolution): AttachResult {
+export function attachSource(player: PlayerEngine, resolution: StreamResolution): AttachResult {
   player.replace({ uri: resolution.url });
   return { detach: () => {} };
 }

@@ -11,7 +11,8 @@
  */
 
 import { create } from 'zustand';
-import { createAudioPlayer, AudioPlayer } from 'expo-audio';
+import { createAudioPlayer } from 'expo-audio';
+import { Platform } from 'react-native';
 import { Track, PlaybackContext, RepeatMode } from '@syra/shared-types';
 import { createScopedLogger } from '@/utils/logger';
 import { useQueueStore } from './queueStore';
@@ -33,6 +34,9 @@ import {
 import { resolveStream, StreamResolution } from '@/services/streamService';
 import { attachSource } from './playback/attachSource';
 import type { AttachResult } from './playback/attachSource.types';
+import type { PlayerEngine } from './playback/playerEngine';
+import { pickPlaybackMode, canPlayHlsNatively } from './playback/pickPlaybackMode';
+import { createWebHlsPlayer } from './playback/webHlsPlayer';
 
 const logger = createScopedLogger('PlayerStore');
 
@@ -46,7 +50,7 @@ interface PlayerState {
   currentTime: number;
   duration: number;
   volume: number;
-  player: AudioPlayer | null;
+  player: PlayerEngine | null;
   error: string | null;
   context: PlaybackContext | null;
   
@@ -74,7 +78,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
    * Start position update interval
    * Updates player position, duration, and playing state at regular intervals
    */
-  const startPositionUpdates = (player: AudioPlayer) => {
+  const startPositionUpdates = (player: PlayerEngine) => {
     if (positionUpdateInterval) {
       clearInterval(positionUpdateInterval);
     }
@@ -108,7 +112,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
    * Setup player event listeners
    * Handles playback status updates and track completion
    */
-  const setupPlayerListeners = (player: AudioPlayer) => {
+  const setupPlayerListeners = (player: PlayerEngine) => {
     player.addListener('playbackStatusUpdate', (status) => {
       if (status.isLoaded) {
         if (status.didJustFinish) {
@@ -145,25 +149,52 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   };
 
   /**
-   * Initialize audio player with URL
+   * Initialize the playback engine for the given URL and optional resolution.
+   *
+   * For web + HLS streams that need hls.js (Chrome/Firefox), creates a
+   * WebHlsPlayer backed by a raw HTMLAudioElement. All other combinations use
+   * expo-audio's AudioPlayer, which handles native HLS via AVPlayer/ExoPlayer
+   * and progressive streams universally.
    */
-  const initializePlayer = async (audioUrl: string, track: Track): Promise<AudioPlayer> => {
-    logger.debug('Initializing audio player', { url: audioUrl, trackId: track.id });
-    
+  const initializePlayer = async (
+    audioUrl: string,
+    track: Track,
+    resolution: StreamResolution | null,
+  ): Promise<PlayerEngine> => {
+    logger.debug('Initializing playback engine', { url: audioUrl, trackId: track.id });
+
+    const mode =
+      resolution !== null
+        ? pickPlaybackMode({
+            type: resolution.type,
+            isWeb: Platform.OS === 'web',
+            canPlayHlsNatively: canPlayHlsNatively(),
+          })
+        : 'progressive';
+
+    logger.debug('Playback mode selected', { mode });
+
+    if (mode === 'hlsjs') {
+      const engine = createWebHlsPlayer(audioUrl);
+      engine.volume = get().volume;
+      setupPlayerListeners(engine);
+      return engine;
+    }
+
     const player = createAudioPlayer(audioUrl, {
       updateInterval: AUDIO_PLAYER_UPDATE_INTERVAL_MS,
     });
-    
+
     player.volume = get().volume;
     setupPlayerListeners(player);
-    
+
     return player;
   };
 
   /**
    * Start playback and wait for initialization
    */
-  const startPlayback = async (player: AudioPlayer, track: Track): Promise<void> => {
+  const startPlayback = async (player: PlayerEngine, track: Track): Promise<void> => {
     logger.debug('Starting playback', { trackId: track.id });
     
     player.play();
@@ -286,24 +317,19 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           : await getAudioUrl(track);
         logger.debug('Audio URL resolved', { url: audioUrl, type: resolution?.type });
 
-        // Initialize and start player
-        const player = await initializePlayer(audioUrl, track);
+        // Initialize the engine — for web+HLS this creates a WebHlsPlayer;
+        // all other cases use expo-audio's AudioPlayer.
+        const player = await initializePlayer(audioUrl, track, resolution);
 
-        // Attach source via platform-aware fork (sets up hls.js on web when needed).
-        // Detach any previous attachment first.
+        // Attach source via platform-aware fork. The engine was already
+        // selected above so attachSource.web.ts simply calls player.replace(),
+        // which routes to hls.loadSource() inside WebHlsPlayer for hlsjs mode.
         if (currentDetach) {
           currentDetach.detach();
           currentDetach = null;
         }
         if (resolution) {
-          try {
-            currentDetach = attachSource(player, resolution);
-          } catch (attachError) {
-            // hlsjs mode not yet supported — log and continue; player already
-            // has the URL via initializePlayer (won't work on Chrome for HLS,
-            // but avoids a hard crash until the raw-element fork lands).
-            logger.warn('attachSource failed — falling back to basic player', attachError);
-          }
+          currentDetach = attachSource(player, resolution);
         }
         
         set({ 
