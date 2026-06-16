@@ -49,4 +49,6 @@ AlbumSchema.index({ releaseDate: -1 });
 // External identifier lookups
 AlbumSchema.index({ 'externalIds.isrc': 1 }, { sparse: true });
 
-export const AlbumModel = mongoose.model<IAlbum>('Album', AlbumSchema);
+export const AlbumModel: mongoose.Model<IAlbum> =
+  (mongoose.models.Album as mongoose.Model<IAlbum>) ??
+  mongoose.model<IAlbum>('Album', AlbumSchema);

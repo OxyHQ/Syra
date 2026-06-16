@@ -96,4 +96,6 @@ ArtistSchema.index({ ownerOxyUserId: 1 }); // Index for user-artist queries
 // External identifier lookups
 ArtistSchema.index({ 'externalIds.audiusId': 1 }, { sparse: true });
 
-export const ArtistModel = mongoose.model<IArtist>('Artist', ArtistSchema);
+export const ArtistModel: mongoose.Model<IArtist> =
+  (mongoose.models.Artist as mongoose.Model<IArtist>) ??
+  mongoose.model<IArtist>('Artist', ArtistSchema);

@@ -100,4 +100,6 @@ TrackSchema.index({ createdAt: -1 });
 TrackSchema.index({ 'externalIds.isrc': 1 }, { unique: true, sparse: true });
 TrackSchema.index({ 'externalIds.audiusId': 1 }, { sparse: true });
 
-export const TrackModel = mongoose.model<ITrack>('Track', TrackSchema);
+export const TrackModel: mongoose.Model<ITrack> =
+  (mongoose.models.Track as mongoose.Model<ITrack>) ??
+  mongoose.model<ITrack>('Track', TrackSchema);
