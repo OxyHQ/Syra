@@ -19,6 +19,7 @@ let tmpOutputDir: string;
 let inputPath: string;
 
 beforeAll(async () => {
+  if (!MEDIA_TOOLS_AVAILABLE) return;
   tmpInputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hls-test-in-'));
   tmpOutputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hls-test-out-'));
   inputPath = path.join(tmpInputDir, 'input.m4a');
@@ -36,6 +37,7 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(() => {
+  if (!MEDIA_TOOLS_AVAILABLE) return;
   fs.rmSync(tmpInputDir, { recursive: true, force: true });
   fs.rmSync(tmpOutputDir, { recursive: true, force: true });
 });
