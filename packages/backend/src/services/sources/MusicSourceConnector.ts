@@ -1,5 +1,8 @@
 import type { CatalogSource, ExternalTrack } from '@syra/shared-types';
 
+/** Injectable HTTP GET abstraction — accepts a URL, returns parsed JSON as unknown. */
+export type HttpGetJson = (url: string) => Promise<unknown>;
+
 /**
  * Common interface for all external music catalog connectors.
  *

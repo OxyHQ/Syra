@@ -1,12 +1,8 @@
 import type { CatalogSource, ExternalTrack, TrackImage } from '@syra/shared-types';
-import type { MusicSourceConnector } from './MusicSourceConnector';
+import type { HttpGetJson, MusicSourceConnector } from './MusicSourceConnector';
 
 export const AUDIUS_DEFAULT_API_BASE = 'https://discoveryprovider.audius.co';
 export const AUDIUS_DEFAULT_APP_NAME = 'Syra';
-
-// ── HTTP abstraction ──────────────────────────────────────────────────────────
-
-export type HttpGetJson = (url: string) => Promise<unknown>;
 
 async function defaultHttpGet(url: string): Promise<unknown> {
   const r = await fetch(url);
