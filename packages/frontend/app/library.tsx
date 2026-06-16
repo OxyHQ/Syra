@@ -1,5 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, ScrollView, Pressable, Platform } from 'react-native';
+import { StyleSheet, View, Text, Pressable, Platform } from 'react-native';
+import Animated, {
+  useAnimatedScrollHandler,
+  useSharedValue,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
+import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@oxyhq/bloom/theme';
 import SEO from '@/components/SEO';
@@ -22,6 +29,15 @@ import { Image } from 'expo-image';
 const FAB_BOTTOM_OFFSET = 24;
 const FAB_PLAYER_BAR_CLEARANCE = 112;
 const FAB_SIDE_OFFSET = 16;
+
+/**
+ * Scroll-direction thresholds for collapsing the extended Create Playlist FAB.
+ * The label hides only after scrolling DOWN past a small delta while below the
+ * top region, and reappears on any upward scroll or when near the top.
+ */
+const FAB_COLLAPSE_SCROLL_THRESHOLD = 24;
+const FAB_COLLAPSE_DELTA = 6;
+const FAB_EXPAND_TIMING = { duration: 220, easing: Easing.out(Easing.cubic) };
 
 interface LibraryScreenProps {
   // Optional props for sidebar mode
@@ -59,6 +75,27 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isAuthenticated } = useOxy();
+  const { t } = useTranslation();
+
+  // Drives the extended FAB: 1 = expanded pill, 0 = collapsed icon-only circle.
+  // Updated entirely on the UI thread from the scroll handler (no re-renders).
+  const fabExpanded = useSharedValue(1);
+  const lastScrollY = useSharedValue(0);
+
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      const y = event.contentOffset.y;
+      const delta = y - lastScrollY.value;
+      if (y <= FAB_COLLAPSE_SCROLL_THRESHOLD || delta < -FAB_COLLAPSE_DELTA) {
+        // Near the top, or scrolling up: expand back to the full pill.
+        fabExpanded.value = withTiming(1, FAB_EXPAND_TIMING);
+      } else if (delta > FAB_COLLAPSE_DELTA) {
+        // Scrolling down past the threshold: collapse to the icon-only circle.
+        fabExpanded.value = withTiming(0, FAB_EXPAND_TIMING);
+      }
+      lastScrollY.value = y;
+    },
+  });
 
   // Filter state
   const [activeFilter, setActiveFilter] = useState<'Playlists' | 'Artists' | 'Albums' | 'All'>('All');
@@ -155,10 +192,12 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         />
       )}
       <View style={styles.libraryContainer}>
-      <ScrollView
+      <Animated.ScrollView
         style={[styles.container, { backgroundColor: theme.colors.background }]}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
+        onScroll={scrollHandler}
+        scrollEventThrottle={16}
       >
         <View style={styles.header}>
           <Text style={[styles.title, { color: theme.colors.text }]}>Your Library</Text>
@@ -427,13 +466,15 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
             </Text>
           </View>
         )}
-      </ScrollView>
+      </Animated.ScrollView>
 
         {isAuthenticated && (
           <Fab
             onPress={() => router.push('/create-playlist')}
             iconName="plus"
-            accessibilityLabel="Create playlist"
+            accessibilityLabel={t('Create Playlist')}
+            label={t('Create Playlist')}
+            expanded={fabExpanded}
             size={showSidebarControls ? 48 : 56}
             style={[
               styles.fab,
