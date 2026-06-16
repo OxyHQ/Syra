@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import UserSettings from '../models/UserSettings';
 import UserBehavior from '../models/UserBehavior';
+import { logger } from '../utils/logger';
 // Block and Restrict routes removed - frontend should use Oxy services directly
 import { AuthRequest, requireAuth } from '../middleware/auth';
 import { ensureUserSettings } from '../utils/userSettings';
@@ -27,7 +28,7 @@ router.get('/settings/me', async (req: AuthRequest, res: Response) => {
     const doc = await ensureUserSettings(oxyUserId);
     return sendSuccessResponse(res, 200, doc);
   } catch (err) {
-    console.error('[ProfileSettings] Error fetching my settings:', err);
+    logger.error('[ProfileSettings] Error fetching my settings:', err);
     return sendErrorResponse(res, 500, 'Internal Server Error', 'Failed to fetch settings');
   }
 });
@@ -48,7 +49,7 @@ router.get('/settings/:userId', async (req: AuthRequest, res: Response) => {
     const doc = await ensureUserSettings(userId);
     return sendSuccessResponse(res, 200, doc);
   } catch (err) {
-    console.error('[ProfileSettings] Error fetching user settings:', err);
+    logger.error('[ProfileSettings] Error fetching user settings:', err);
     return sendErrorResponse(res, 500, 'Internal Server Error', 'Failed to fetch settings');
   }
 });
@@ -196,7 +197,7 @@ router.put('/settings', async (req: AuthRequest, res: Response) => {
 
     return sendSuccessResponse(res, 200, doc);
   } catch (err) {
-    console.error('[ProfileSettings] Error updating settings:', err);
+    logger.error('[ProfileSettings] Error updating settings:', err);
     return sendErrorResponse(res, 500, 'Internal Server Error', 'Failed to update settings');
   }
 });
@@ -217,7 +218,7 @@ router.delete('/settings/behavior', async (req: AuthRequest, res: Response) => {
       result ? 'Personalization data reset successfully' : 'No personalization data to reset'
     );
   } catch (err) {
-    console.error('[ProfileSettings] Error resetting user behavior:', err);
+    logger.error('[ProfileSettings] Error resetting user behavior:', err);
     return sendErrorResponse(res, 500, 'Internal Server Error', 'Failed to reset personalization data');
   }
 });

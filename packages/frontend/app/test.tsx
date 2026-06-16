@@ -5,8 +5,7 @@ import { api } from '../utils/api';
 
 const handleTest = async () => {
     try {
-        const response = await api.get('/test');
-        console.log('API response:', response);
+        await api.get('/test');
     } catch (error: any) {
         if (error.response) {
             // The request was made and the server responded with a status code outside 2xx

@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import { AuthRequest, requireAuth } from '../middleware/auth';
+import { logger } from '../utils/logger';
 import { sendErrorResponse, sendSuccessResponse } from '../utils/apiHelpers';
 import { getAuthenticatedUserId } from '../utils/auth';
 import {
@@ -28,7 +29,7 @@ router.get('/preferences/me', async (req: AuthRequest, res: Response) => {
     const preferences = await ensureMusicPreferences(oxyUserId);
     return sendSuccessResponse(res, 200, preferences);
   } catch (err) {
-    console.error('[MusicPreferences] Error fetching preferences:', err);
+    logger.error('[MusicPreferences] Error fetching preferences:', err);
     return sendErrorResponse(res, 500, 'Internal Server Error', 'Failed to fetch music preferences');
   }
 });
@@ -43,7 +44,7 @@ router.put('/preferences', async (req: AuthRequest, res: Response) => {
     const updatedPreferences = await updateMusicPreferences(oxyUserId, req.body);
     return sendSuccessResponse(res, 200, updatedPreferences);
   } catch (err: any) {
-    console.error('[MusicPreferences] Error updating preferences:', err);
+    logger.error('[MusicPreferences] Error updating preferences:', err);
     if (err.message && err.message.includes('validation')) {
       return sendErrorResponse(res, 400, 'Bad Request', err.message);
     }

@@ -28,7 +28,6 @@ export const useRealtimeNotifications = () => {
       });
 
       socket.on('connect', () => {
-        console.log('Connected to notifications socket');
       });
 
       socket.on('notification', (notification: any) => {
@@ -38,7 +37,6 @@ export const useRealtimeNotifications = () => {
           console.warn('Dropped invalid socket notification', parsed.error?.issues?.[0]);
           return;
         }
-        console.log('New notification received:', parsed.data);
 
         // Invalidate notifications query to refetch
         queryClient.invalidateQueries({ queryKey: ['notifications'] });
@@ -50,22 +48,18 @@ export const useRealtimeNotifications = () => {
           console.warn('Dropped invalid socket notificationUpdated', parsed.error?.issues?.[0]);
           return;
         }
-        console.log('Notification updated:', parsed.data);
         queryClient.invalidateQueries({ queryKey: ['notifications'] });
       });
 
       socket.on('notificationDeleted', (notificationId: string) => {
-        console.log('Notification deleted:', notificationId);
         queryClient.invalidateQueries({ queryKey: ['notifications'] });
       });
 
       socket.on('allNotificationsRead', () => {
-        console.log('All notifications marked as read');
         queryClient.invalidateQueries({ queryKey: ['notifications'] });
       });
 
       socket.on('disconnect', () => {
-        console.log('Disconnected from notifications socket');
       });
 
       socket.on('connect_error', (error) => {

@@ -18,7 +18,6 @@ class PlaylistSocketService {
    */
   connect(userId?: string, token?: string) {
     if (this.socket?.connected) {
-      console.log('[PlaylistSocket] Already connected');
       return;
     }
 
@@ -48,7 +47,6 @@ class PlaylistSocketService {
     if (!this.socket) return;
 
     this.socket.on('connect', () => {
-      console.log('[PlaylistSocket] Connected');
       this.isConnected = true;
 
       // Rejoin previously joined playlists
@@ -58,7 +56,6 @@ class PlaylistSocketService {
     });
 
     this.socket.on('disconnect', () => {
-      console.log('[PlaylistSocket] Disconnected');
       this.isConnected = false;
     });
 
@@ -82,7 +79,6 @@ class PlaylistSocketService {
 
     this.socket.emit('join:playlist', playlistId);
     this.joinedPlaylists.add(playlistId);
-    console.log(`[PlaylistSocket] Joined playlist: ${playlistId}`);
   }
 
   /**
@@ -99,7 +95,6 @@ class PlaylistSocketService {
 
     this.socket.emit('leave:playlist', playlistId);
     this.joinedPlaylists.delete(playlistId);
-    console.log(`[PlaylistSocket] Left playlist: ${playlistId}`);
   }
 
   /**

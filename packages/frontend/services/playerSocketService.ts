@@ -14,7 +14,6 @@ class PlayerSocketService {
    */
   connect(userId?: string, token?: string) {
     if (this.socket?.connected) {
-      console.log('[PlayerSocket] Already connected');
       return;
     }
 
@@ -44,7 +43,6 @@ class PlayerSocketService {
     if (!this.socket) return;
 
     this.socket.on('connect', () => {
-      console.log('[PlayerSocket] Connected');
       this.isConnected = true;
 
       // Join player room
@@ -54,7 +52,6 @@ class PlayerSocketService {
     });
 
     this.socket.on('disconnect', () => {
-      console.log('[PlayerSocket] Disconnected');
       this.isConnected = false;
     });
 
@@ -64,7 +61,6 @@ class PlayerSocketService {
 
     // Listen for playback state updates from other devices
     this.socket.on('playback:state', (update: PlaybackStateUpdate) => {
-      console.log('[PlayerSocket] Received playback state update:', update);
       const playerStore = usePlayerStore.getState();
 
       if (update.state === PlaybackState.PLAYING) {
@@ -84,14 +80,12 @@ class PlayerSocketService {
 
     // Listen for queue updates from other devices
     this.socket.on('queue:update', (queue: Queue) => {
-      console.log('[PlayerSocket] Received queue update:', queue);
       const queueStore = useQueueStore.getState();
       queueStore.syncQueue(queue);
     });
 
     // Listen for track changes from other devices
     this.socket.on('track:change', async (data: { index: number; queue?: Queue }) => {
-      console.log('[PlayerSocket] Received track change:', data);
       const { index, queue } = data;
 
       if (queue) {
@@ -105,7 +99,6 @@ class PlayerSocketService {
 
     // Listen for seek requests from other devices
     this.socket.on('seek', (data: { position: number }) => {
-      console.log('[PlayerSocket] Received seek request:', data);
       const playerStore = usePlayerStore.getState();
       playerStore.seek(data.position);
     });
