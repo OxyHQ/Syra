@@ -91,7 +91,7 @@ export const getCopyrightReports = async (req: AuthRequest, res: Response, next:
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    // TODO: Add admin check when admin system is implemented
+    // Requires admin role — enforce once the admin system is implemented.
     // For now, require authentication
     const userId = getAuthenticatedUserId(req);
 
@@ -156,7 +156,7 @@ export const approveCopyrightReport = async (req: AuthRequest, res: Response, ne
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    // TODO: Add admin check when admin system is implemented
+    // Requires admin role — enforce once the admin system is implemented.
     const adminUserId = getAuthenticatedUserId(req);
 
     const { id } = req.params;
@@ -229,7 +229,7 @@ export const rejectCopyrightReport = async (req: AuthRequest, res: Response, nex
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    // TODO: Add admin check when admin system is implemented
+    // Requires admin role — enforce once the admin system is implemented.
     const adminUserId = getAuthenticatedUserId(req);
 
     const { id } = req.params;

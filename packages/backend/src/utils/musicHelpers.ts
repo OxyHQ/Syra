@@ -9,6 +9,9 @@ function firstImageUrl(doc: { images?: Array<{ url?: string }> }): string | unde
   return typeof url === 'string' && url.length > 0 ? url : undefined;
 }
 
+/** Convert a MongoDB ObjectId string to an /api/images/:id URL. */
+const toImageUrl = (id: string): string => `/api/images/${id}`;
+
 /**
  * Convert MongoDB document to API format
  * Converts _id to id and ensures proper serialization
@@ -72,7 +75,7 @@ export async function formatTrackWithCoverArt(
 
   // If track has coverArt, convert ObjectId to URL
   if (formatted.coverArt) {
-    formatted.coverArt = `/api/images/${formatted.coverArt}`;
+    formatted.coverArt = toImageUrl(formatted.coverArt);
     return formatted;
   }
 
@@ -99,7 +102,7 @@ export async function formatTrackWithCoverArt(
     if (album) {
       if (album.coverArt) {
         // Album has an ObjectId coverArt — convert to API URL (highest album priority)
-        formatted.coverArt = `/api/images/${album.coverArt}`;
+        formatted.coverArt = toImageUrl(album.coverArt);
       } else {
         // Album has no ObjectId coverArt — try its external images[] (e.g. Audius album art)
         const u = firstImageUrl(album);
@@ -139,7 +142,7 @@ export function formatAlbumWithCoverArt(album: any): any {
 
   // Convert coverArt ObjectId to URL
   if (formatted.coverArt) {
-    formatted.coverArt = `/api/images/${formatted.coverArt}`;
+    formatted.coverArt = toImageUrl(formatted.coverArt);
   }
 
   // Fallback: use first external image URL (e.g. Audius CDN) when no ObjectId art
@@ -168,7 +171,7 @@ export function formatPlaylistWithCoverArt(playlist: any): any {
 
   // Convert coverArt ObjectId to URL
   if (formatted.coverArt) {
-    formatted.coverArt = `/api/images/${formatted.coverArt}`;
+    formatted.coverArt = toImageUrl(formatted.coverArt);
   }
 
   return formatted;
@@ -191,7 +194,7 @@ export function formatArtistWithImage(artist: any): any {
 
   // Convert image ObjectId to URL
   if (formatted.image) {
-    formatted.image = `/api/images/${formatted.image}`;
+    formatted.image = toImageUrl(formatted.image);
   }
 
   // Fallback: use first external image URL (e.g. Audius CDN) when no ObjectId image

@@ -48,9 +48,8 @@ function getOptimizedImageUrl(uri: string, size: ImageSize): string {
     return uri;
   }
   
-  // TODO: Implement actual image optimization service
-  // This would typically add size parameters to the URL or use a CDN
-  // For now, return the original URI
+  // Image optimization (size params / CDN rewriting) is not yet wired;
+  // returns the original URI until an optimization service is configured.
   return uri;
 }
 
