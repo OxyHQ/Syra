@@ -37,6 +37,7 @@ import type { AttachResult } from './playback/attachSource.types';
 import type { PlayerEngine } from './playback/playerEngine';
 import { pickPlaybackMode, canPlayHlsNatively } from './playback/pickPlaybackMode';
 import { createWebHlsPlayer } from './playback/webHlsPlayer';
+import { isRealFinish } from './playback/isRealFinish';
 
 const logger = createScopedLogger('PlayerStore');
 
@@ -114,18 +115,28 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
    */
   const setupPlayerListeners = (player: PlayerEngine) => {
     player.addListener('playbackStatusUpdate', (status) => {
-      if (status.isLoaded) {
-        if (status.didJustFinish) {
+      if (!status.isLoaded) return;
+
+      if (status.didJustFinish) {
+        // Use the store's known duration as the reliable reference — stream
+        // engines report duration=0 before metadata loads and can fire a
+        // spurious didJustFinish at the very start of playback.
+        const knownDuration = get().duration || status.duration || 0;
+        const position = status.currentTime || 0;
+        if (isRealFinish(knownDuration, position)) {
           logger.debug('Track finished, handling completion');
           get().handleTrackCompletion();
         } else {
-          set({
-            isPlaying: status.playing || false,
-            currentTime: status.currentTime || 0,
-            duration: status.duration || get().duration,
-          });
+          logger.debug('Ignoring spurious didJustFinish', { position, knownDuration });
         }
+        return;
       }
+
+      set({
+        isPlaying: status.playing || false,
+        currentTime: status.currentTime || 0,
+        duration: status.duration || get().duration,
+      });
     });
   };
 

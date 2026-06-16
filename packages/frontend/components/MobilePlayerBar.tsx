@@ -110,7 +110,9 @@ export const MobilePlayerBar: React.FC = () => {
               style={[styles.trackArtist, { color: theme.colors.primaryForeground, opacity: 0.7 }]}
               numberOfLines={1}
             >
-              {currentTrack?.artistName || (isLoading ? '' : 'Choose a track to play')}
+              {currentTrack
+                ? (currentTrack.artistName || '')
+                : (isLoading ? '' : 'Choose a track to play')}
             </Text>
           </View>
         </View>

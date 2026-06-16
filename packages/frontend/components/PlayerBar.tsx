@@ -122,7 +122,9 @@ export const PlayerBar: React.FC = () => {
               style={[styles.trackArtist, { color: theme.colors.textSecondary }]}
               numberOfLines={1}
             >
-              {currentTrack?.artistName || (isLoading ? '' : 'Choose a track to play')}
+              {currentTrack
+                ? (currentTrack.artistName || '')
+                : (isLoading ? '' : 'Choose a track to play')}
             </Text>
           </View>
           <Pressable style={styles.likeButton}>
