@@ -1,6 +1,14 @@
 import mongoose from 'mongoose';
 import { AlbumModel } from '../models/Album';
 
+// ── Image helpers ─────────────────────────────────────────────────────────────
+
+/** First external image URL from an images[] array, if present. */
+function firstImageUrl(doc: { images?: Array<{ url?: string }> }): string | undefined {
+  const url = doc.images?.[0]?.url;
+  return typeof url === 'string' && url.length > 0 ? url : undefined;
+}
+
 /**
  * Convert MongoDB document to API format
  * Converts _id to id and ensures proper serialization
@@ -93,6 +101,12 @@ export async function formatTrackWithCoverArt(
     }
   }
 
+  // Fallback: use first external image URL (e.g. Audius CDN) when no ObjectId art
+  if (!formatted.coverArt) {
+    const u = firstImageUrl(formatted);
+    if (u) formatted.coverArt = u;
+  }
+
   return formatted;
 }
 
@@ -119,6 +133,12 @@ export function formatAlbumWithCoverArt(album: any): any {
   // Convert coverArt ObjectId to URL
   if (formatted.coverArt) {
     formatted.coverArt = `/api/images/${formatted.coverArt}`;
+  }
+
+  // Fallback: use first external image URL (e.g. Audius CDN) when no ObjectId art
+  if (!formatted.coverArt) {
+    const u = firstImageUrl(formatted);
+    if (u) formatted.coverArt = u;
   }
 
   return formatted;
@@ -165,6 +185,12 @@ export function formatArtistWithImage(artist: any): any {
   // Convert image ObjectId to URL
   if (formatted.image) {
     formatted.image = `/api/images/${formatted.image}`;
+  }
+
+  // Fallback: use first external image URL (e.g. Audius CDN) when no ObjectId image
+  if (!formatted.image) {
+    const u = firstImageUrl(formatted);
+    if (u) formatted.image = u;
   }
 
   return formatted;
