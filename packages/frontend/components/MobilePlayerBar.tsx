@@ -101,7 +101,9 @@ export const MobilePlayerBar: React.FC = () => {
               style={[styles.trackTitle, { color: theme.colors.primaryForeground }]}
               numberOfLines={1}
             >
-              {currentTrack?.title || (isLoading ? 'Loading...' : 'No track selected')}
+              {currentTrack
+                ? (currentTrack.title || currentTrack.artistName || 'Untitled track')
+                : (isLoading ? 'Loading...' : 'No track selected')}
             </Text>
             <Text
               style={[styles.trackArtist, { color: theme.colors.primaryForeground, opacity: 0.7 }]}
