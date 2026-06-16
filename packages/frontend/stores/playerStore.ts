@@ -32,6 +32,8 @@ import {
   clampVolume,
 } from './playerStore.helpers';
 import { resolveStream, StreamResolution } from '@/services/streamService';
+import { libraryService } from '@/services/libraryService';
+import { authenticatedClient } from '@/utils/api';
 import { attachSource } from './playback/attachSource';
 import type { AttachResult } from './playback/attachSource.types';
 import type { PlayerEngine } from './playback/playerEngine';
@@ -272,6 +274,23 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
    * Audius-sourced. Returns null for tracks that should use the legacy
    * `getAudioUrl` path (still-processing, failed, or upload-only).
    */
+  /**
+   * Record a play in the user's recently-played history.
+   *
+   * Fire-and-forget: called once a track has actually started so the home
+   * screen's real "Recently played" / "Jump back in" section is populated.
+   * Only runs for authenticated users (an access token is present) — guests
+   * have no server-side history, so we skip the request entirely rather than
+   * provoke a 401. The service itself swallows/logs any failure, so this never
+   * affects playback.
+   */
+  const recordPlay = (track: Track): void => {
+    if (!authenticatedClient.getAccessToken()) {
+      return;
+    }
+    void libraryService.recordRecentlyPlayed(track.id);
+  };
+
   const getPhase3Resolution = async (track: Track): Promise<StreamResolution | null> => {
     const hasHls = track.status === 'ready' && Array.isArray(track.hls) && track.hls.length > 0;
     const isAudius = track.source === 'audius' && !track.audioSource;
@@ -354,6 +373,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           await startPlayback(player, track);
           await updateQueueState(track, addToQueue);
           startPositionUpdates(player);
+          // Track started successfully — record it for real recently-played.
+          recordPlay(track);
         } catch (playError) {
           logger.error('Error during playback', playError);
           set({ 

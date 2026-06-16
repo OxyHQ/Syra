@@ -1,5 +1,8 @@
 import { api } from '@/utils/api';
 import { Track } from '@syra/shared-types';
+import { createScopedLogger } from '@/utils/logger';
+
+const logger = createScopedLogger('LibraryService');
 
 /**
  * Membership snapshot for the authenticated user's library.
@@ -18,6 +21,11 @@ export interface LibraryMembership {
 
 interface MutationResult {
   success: boolean;
+}
+
+/** Backend ack for a recorded play (`POST /library/recently-played`). */
+interface RecordPlayResult {
+  ok: boolean;
 }
 
 /**
@@ -100,5 +108,37 @@ export const libraryService = {
   async unsavePlaylist(playlistId: string): Promise<MutationResult> {
     const response = await api.post<MutationResult>(`/library/playlists/${playlistId}/unsave`);
     return response.data;
+  },
+
+  /**
+   * The authenticated user's most-recently-played tracks, newest first.
+   *
+   * Backed by `GET /library/recently-played`. Populated by
+   * {@link libraryService.recordRecentlyPlayed}, which the player calls when a
+   * track actually starts. Returns an empty list for users with no play
+   * history; the home screen hides the section in that case rather than faking
+   * it.
+   */
+  async getRecentlyPlayed(limit: number = 20): Promise<{ tracks: Track[] }> {
+    const response = await api.get<{ tracks: Track[] }>('/library/recently-played', { limit });
+    return { tracks: Array.isArray(response.data?.tracks) ? response.data.tracks : [] };
+  },
+
+  /**
+   * Record a play of `trackId` for the authenticated user (newest first).
+   *
+   * Fire-and-forget from the player: it must never block or surface a playback
+   * error to the user. Failures (offline, non-2xx, unauthenticated) are logged
+   * at warn level and swallowed so playback continues uninterrupted. Resolves
+   * `false` instead of throwing so callers can stay synchronous-friendly.
+   */
+  async recordRecentlyPlayed(trackId: string): Promise<boolean> {
+    try {
+      const response = await api.post<RecordPlayResult>('/library/recently-played', { trackId });
+      return response.data?.ok === true;
+    } catch (error) {
+      logger.warn('Failed to record recently-played', { trackId, error });
+      return false;
+    }
   },
 };

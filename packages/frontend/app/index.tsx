@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { StyleSheet, View, ScrollView, Text, Platform, Pressable } from 'react-native';
 import { webDimension } from '@/utils/webStyles';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@oxyhq/bloom/theme';
-import { useOxy } from '@oxyhq/services';
 import { useRouter } from 'expo-router';
 import SEO from '@/components/SEO';
 import { MediaCard } from '@/components/MediaCard';
@@ -11,7 +10,18 @@ import { QuickAccessGridSkeleton, MediaCardRowSkeleton } from '@/components/skel
 import { musicService } from '@/services/musicService';
 import { Track, Album, Artist, Playlist } from '@syra/shared-types';
 import { usePlayerStore } from '@/stores/playerStore';
+import {
+  useRecentlyPlayed,
+  useMadeForYou,
+  usePopularAlbums,
+  usePopularArtists,
+  useUserPlaylists,
+  usePopularTracks,
+} from '@/hooks/useHomeFeed';
+import { createScopedLogger } from '@/utils/logger';
 import { Ionicons } from '@expo/vector-icons';
+
+const logger = createScopedLogger('HomeScreen');
 
 /**
  * Parse a hex color string into RGB components. Pure helper hoisted to module
@@ -38,31 +48,55 @@ type QuickAccessItem =
 
 /**
  * Syra Home Screen
- * Spotify-like home screen with recently played, made for you, etc.
+ *
+ * Spotify-like home built from 100% REAL backend data via React Query — no
+ * sliced/relabeled sections. Each section reads its own query hook
+ * ({@link file://./../hooks/useHomeFeed.ts}); there is no `useEffect`/`useState`
+ * data fetching. Sections with no real data are hidden rather than faked.
  */
 const HomeScreen: React.FC = () => {
   const theme = useTheme();
   const router = useRouter();
-  const { isAuthenticated } = useOxy();
   const [activeFilter, setActiveFilter] = useState<'All' | 'Music' | 'Podcasts' | 'Audiobooks'>('All');
   const { playTrack } = usePlayerStore();
 
-  // State for tracks
-  const [tracks, setTracks] = useState<Track[]>([]);
-  const [tracksLoading, setTracksLoading] = useState(true);
+  // Real, per-section queries — each loads/caches/errors independently.
+  const recentlyPlayedQuery = useRecentlyPlayed();
+  const madeForYouQuery = useMadeForYou();
+  const popularAlbumsQuery = usePopularAlbums();
+  const popularArtistsQuery = usePopularArtists();
+  const userPlaylistsQuery = useUserPlaylists();
+  const tracksQuery = usePopularTracks();
 
-  // State for quick access (albums, artists, playlists)
-  const [albums, setAlbums] = useState<Album[]>([]);
-  const [artists, setArtists] = useState<Artist[]>([]);
-  const [userPlaylists, setUserPlaylists] = useState<Playlist[]>([]);
-  const [quickAccessLoading, setQuickAccessLoading] = useState(true);
-
-  // State for recently played and made for you
-  const [recentlyPlayed, setRecentlyPlayed] = useState<Playlist[]>([]);
-  const [madeForYou, setMadeForYou] = useState<Playlist[]>([]);
-  const [recentlyPlayedAlbums, setRecentlyPlayedAlbums] = useState<Album[]>([]);
-  const [madeForYouAlbums, setMadeForYouAlbums] = useState<Album[]>([]);
-  const [sectionsLoading, setSectionsLoading] = useState(true);
+  // Derive section data from the queries (empty arrays while pending).
+  const recentlyPlayed = useMemo<Track[]>(
+    () => recentlyPlayedQuery.data?.tracks ?? [],
+    [recentlyPlayedQuery.data],
+  );
+  const madeForYouAlbums = useMemo<Album[]>(
+    () => madeForYouQuery.data?.albums ?? [],
+    [madeForYouQuery.data],
+  );
+  const madeForYouPlaylists = useMemo<Playlist[]>(
+    () => madeForYouQuery.data?.playlists ?? [],
+    [madeForYouQuery.data],
+  );
+  const popularAlbums = useMemo<Album[]>(
+    () => popularAlbumsQuery.data?.albums ?? [],
+    [popularAlbumsQuery.data],
+  );
+  const popularArtists = useMemo<Artist[]>(
+    () => popularArtistsQuery.data?.artists ?? [],
+    [popularArtistsQuery.data],
+  );
+  const userPlaylists = useMemo<Playlist[]>(
+    () => userPlaylistsQuery.data?.playlists ?? [],
+    [userPlaylistsQuery.data],
+  );
+  const tracks = useMemo<Track[]>(
+    () => tracksQuery.data?.tracks ?? [],
+    [tracksQuery.data],
+  );
 
   // State for hover gradient color with smooth transitions
   const [hoveredItemColor, setHoveredItemColor] = useState<string | null>(null);
@@ -183,91 +217,6 @@ const HomeScreen: React.FC = () => {
     };
   }, [hoveredItemColor, theme.colors.primary]);
 
-  // Fetch tracks on mount
-  useEffect(() => {
-    const fetchTracks = async () => {
-      try {
-        setTracksLoading(true);
-        const response = await musicService.getTracks({ limit: 20 });
-        setTracks(response.tracks);
-      } catch (error) {
-        console.error('[HomeScreen] Error fetching tracks:', error);
-      } finally {
-        setTracksLoading(false);
-      }
-    };
-
-    fetchTracks();
-  }, []);
-
-  // Fetch quick access data (albums, artists, playlists)
-  useEffect(() => {
-    const fetchQuickAccess = async () => {
-      try {
-        setQuickAccessLoading(true);
-
-        const [albumsResponse, artistsResponse] = await Promise.all([
-          musicService.getAlbums({ limit: 4 }),
-          musicService.getArtists({ limit: 4 }),
-        ]);
-
-        setAlbums(albumsResponse.albums);
-        setArtists(artistsResponse.artists);
-
-        // Only fetch user playlists if authenticated
-        if (isAuthenticated) {
-          try {
-            const playlistsResponse = await musicService.getUserPlaylists();
-            setUserPlaylists(playlistsResponse.playlists);
-          } catch (error) {
-            console.error('[HomeScreen] Error fetching user playlists:', error);
-          }
-        }
-      } catch (error) {
-        console.error('[HomeScreen] Error fetching quick access data:', error);
-      } finally {
-        setQuickAccessLoading(false);
-      }
-    };
-
-    fetchQuickAccess();
-  }, [isAuthenticated]);
-
-  // Fetch recently played and made for you sections
-  useEffect(() => {
-    const fetchSections = async () => {
-      try {
-        setSectionsLoading(true);
-
-        if (isAuthenticated) {
-          // Fetch user playlists for authenticated users
-          const playlistsResponse = await musicService.getUserPlaylists();
-          const allPlaylists = playlistsResponse.playlists;
-
-          // Split playlists: first 4 for recently played, rest for made for you
-          setRecentlyPlayed(allPlaylists.slice(0, 4));
-          setMadeForYou(allPlaylists.slice(4, 8));
-          setRecentlyPlayedAlbums([]);
-          setMadeForYouAlbums([]);
-        } else {
-          // For unauthenticated users, use popular albums
-          const albumsResponse = await musicService.getAlbums({ limit: 8 });
-          // Split albums: first 4 for recently played, rest for made for you
-          setRecentlyPlayed([]);
-          setMadeForYou([]);
-          setRecentlyPlayedAlbums(albumsResponse.albums.slice(0, 4));
-          setMadeForYouAlbums(albumsResponse.albums.slice(4, 8));
-        }
-      } catch (error) {
-        console.error('[HomeScreen] Error fetching sections:', error);
-      } finally {
-        setSectionsLoading(false);
-      }
-    };
-
-    fetchSections();
-  }, [isAuthenticated]);
-
   // Get greeting based on time
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -276,7 +225,6 @@ const HomeScreen: React.FC = () => {
     return 'Good evening';
   };
 
-  // Helper function to convert hex color to RGB
   // Convert hex to rgba string for LinearGradient
   const hexToRgba = (hex: string, alpha: number = 0.2): string => {
     const rgb = hexToRgb(hex);
@@ -285,16 +233,16 @@ const HomeScreen: React.FC = () => {
   };
 
   // Handle hover in - set the color
-  const handleHoverIn = (color: string | null | undefined) => {
+  const handleHoverIn = useCallback((color: string | null | undefined) => {
     if (color) {
       setHoveredItemColor(color);
     }
-  };
+  }, []);
 
   // Handle hover out - reset to default
-  const handleHoverOut = () => {
+  const handleHoverOut = useCallback(() => {
     setHoveredItemColor(null);
-  };
+  }, []);
 
   // Get the current gradient top color with smooth transitions
   const getGradientTopColor = (): string => {
@@ -306,28 +254,47 @@ const HomeScreen: React.FC = () => {
     return hexToRgba(theme.colors.primary, 0.2);
   };
 
-  // Compute quick access items from fetched data (mix of albums, artists, playlists)
+  // Navigate to and start playing an album's first track. Used by album cards'
+  // play button so a single tap actually plays real audio.
+  const playAlbum = useCallback(async (albumId: string) => {
+    try {
+      const { tracks: albumTracks } = await musicService.getAlbumTracks(albumId);
+      if (albumTracks.length > 0) {
+        await playTrack(albumTracks[0]);
+      }
+    } catch (error) {
+      logger.error('Error playing album', { albumId, error });
+    }
+  }, [playTrack]);
+
+  // Compute quick access items from real data (mix of albums, artists, playlists)
   const quickAccess = useMemo<QuickAccessItem[]>(() => {
     const items: QuickAccessItem[] = [];
 
-    // Add albums (up to 4)
-    albums.slice(0, 4).forEach(album => {
+    // Add popular albums (up to 4)
+    popularAlbums.slice(0, 4).forEach(album => {
       items.push({ type: 'album', data: album, shape: 'square' });
     });
 
-    // Add artists (up to 2)
-    artists.slice(0, 2).forEach(artist => {
+    // Add popular artists (up to 2)
+    popularArtists.slice(0, 2).forEach(artist => {
       items.push({ type: 'artist', data: artist, shape: 'circle' });
     });
 
-    // Add playlists (up to 2, or fill remaining slots)
+    // Fill remaining slots with the user's own playlists
     const remainingSlots = 8 - items.length;
     userPlaylists.slice(0, remainingSlots).forEach(playlist => {
       items.push({ type: 'playlist', data: playlist, shape: 'square' });
     });
 
     return items.slice(0, 8);
-  }, [albums, artists, userPlaylists]);
+  }, [popularAlbums, popularArtists, userPlaylists]);
+
+  // Loading gates derived from the queries (skeleton while first load pending).
+  const quickAccessLoading =
+    popularAlbumsQuery.isPending || popularArtistsQuery.isPending;
+  const hasQuickAccess = quickAccess.length > 0;
+  const hasMadeForYou = madeForYouAlbums.length > 0 || madeForYouPlaylists.length > 0;
 
   return (
     <>
@@ -389,34 +356,27 @@ const HomeScreen: React.FC = () => {
             ))}
           </View>
 
-          {/* 8-Item Compact Grid (2 columns) - Just image/icon and text */}
+          {/* 8-Item Compact Grid (2 columns) - real albums/artists/playlists */}
           {quickAccessLoading ? (
             <QuickAccessGridSkeleton />
-          ) : quickAccess.length > 0 && (
+          ) : hasQuickAccess && (
             <View style={styles.compactGrid}>
               {quickAccess.map((item) => {
-                const title = item.type === 'album'
-                  ? item.data.title
-                  : item.type === 'artist'
-                    ? item.data.name
-                    : item.data.name;
+                const title = item.type === 'album' ? item.data.title : item.data.name;
                 const id = item.data.id;
-
-                const primaryColor = (item.data as any).primaryColor;
+                const primaryColor = item.data.primaryColor;
 
                 return (
                   <Pressable
                     key={`${item.type}-${id}`}
                     style={[styles.compactGridItem, { backgroundColor: theme.colors.backgroundSecondary }]}
                     onPress={() => {
-                      // Navigate based on type
                       if (item.type === 'album') {
-                        router.push(`/album/${id}` as any);
+                        router.push(`/album/${id}`);
                       } else if (item.type === 'playlist') {
-                        router.push(`/playlist/${id}` as any);
-                      } else if (item.type === 'artist') {
-                        // Artist navigation handled gracefully (no page yet)
-                        // Could navigate to artist page in future: router.push(`/artist/${id}`);
+                        router.push(`/playlist/${id}`);
+                      } else {
+                        router.push(`/artist/${id}`);
                       }
                     }}
                     onHoverIn={() => handleHoverIn(primaryColor)}
@@ -449,66 +409,35 @@ const HomeScreen: React.FC = () => {
             </View>
           )}
 
-          {/* Recently Played Section */}
-          {sectionsLoading ? (
+          {/* Jump back in — REAL recently-played tracks (authed). Hidden when
+              the user has no play history yet (no faking). */}
+          {recentlyPlayedQuery.isPending ? (
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                Recently played
+                Jump back in
               </Text>
               <MediaCardRowSkeleton count={5} />
             </View>
-          ) : (recentlyPlayed.length > 0 || recentlyPlayedAlbums.length > 0) && (
+          ) : recentlyPlayed.length > 0 && (
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                Recently played
+                Jump back in
               </Text>
               <View style={styles.grid}>
-                {recentlyPlayed.map((playlist) => (
-                  <View
-                    key={playlist.id}
-                    style={styles.gridItem}
-                  >
+                {recentlyPlayed.map((track) => (
+                  <View key={track.id} style={styles.gridItem}>
                     <MediaCard
-                      title={playlist.name}
-                      subtitle={playlist.description || 'Playlist'}
-                      type="playlist"
+                      title={track.title}
+                      subtitle={track.artistName}
+                      type="track"
+                      imageUri={track.coverArt}
+                      images={track.images}
                       onPress={() => {
-                        router.push(`/playlist/${playlist.id}` as any);
-                      }}
-                      onPlayPress={() => {
-                        router.push(`/playlist/${playlist.id}` as any);
-                      }}
-                      onHoverIn={() => handleHoverIn((playlist as any).primaryColor)}
-                      onHoverOut={handleHoverOut}
-                    />
-                  </View>
-                ))}
-                {recentlyPlayedAlbums.map((album) => (
-                  <View
-                    key={album.id}
-                    style={styles.gridItem}
-                  >
-                    <MediaCard
-                      title={album.title}
-                      subtitle={album.artistName}
-                      type="album"
-                      imageUri={album.coverArt}
-                      onPress={() => {
-                        router.push(`/album/${album.id}` as any);
-                      }}
-                      onPlayPress={async () => {
-                        // Fetch album tracks and play first track
-                        try {
-                          const tracksData = await musicService.getAlbumTracks(album.id);
-                          if (tracksData.tracks.length > 0) {
-                            playTrack(tracksData.tracks[0]);
-                          }
-                        } catch (error) {
-                          console.error('[HomeScreen] Error playing album:', error);
+                        if (track.albumId) {
+                          router.push(`/album/${track.albumId}`);
                         }
                       }}
-                      onHoverIn={() => handleHoverIn((album as any).primaryColor)}
-                      onHoverOut={handleHoverOut}
+                      onPlayPress={() => playTrack(track)}
                     />
                   </View>
                 ))}
@@ -516,58 +445,44 @@ const HomeScreen: React.FC = () => {
             </View>
           )}
 
-          {/* Made for You Section */}
-          {sectionsLoading ? null : (madeForYou.length > 0 || madeForYouAlbums.length > 0) && (
+          {/* Made for You — REAL recommendations (popular albums + public playlists) */}
+          {madeForYouQuery.isPending ? (
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+                Made for you
+              </Text>
+              <MediaCardRowSkeleton count={5} />
+            </View>
+          ) : hasMadeForYou && (
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
                 Made for you
               </Text>
               <View style={styles.grid}>
-                {madeForYou.map((playlist) => (
-                  <View
-                    key={playlist.id}
-                    style={styles.gridItem}
-                  >
+                {madeForYouPlaylists.map((playlist) => (
+                  <View key={playlist.id} style={styles.gridItem}>
                     <MediaCard
                       title={playlist.name}
                       subtitle={playlist.description || 'Playlist'}
                       type="playlist"
-                      onPress={() => {
-                        router.push(`/playlist/${playlist.id}` as any);
-                      }}
-                      onPlayPress={() => {
-                        router.push(`/playlist/${playlist.id}` as any);
-                      }}
-                      onHoverIn={() => handleHoverIn((playlist as any).primaryColor)}
+                      imageUri={playlist.coverArt}
+                      onPress={() => router.push(`/playlist/${playlist.id}`)}
+                      onPlayPress={() => router.push(`/playlist/${playlist.id}`)}
+                      onHoverIn={() => handleHoverIn(playlist.primaryColor)}
                       onHoverOut={handleHoverOut}
                     />
                   </View>
                 ))}
                 {madeForYouAlbums.map((album) => (
-                  <View
-                    key={album.id}
-                    style={styles.gridItem}
-                  >
+                  <View key={album.id} style={styles.gridItem}>
                     <MediaCard
                       title={album.title}
                       subtitle={album.artistName}
                       type="album"
                       imageUri={album.coverArt}
-                      onPress={() => {
-                        router.push(`/album/${album.id}` as any);
-                      }}
-                      onPlayPress={async () => {
-                        // Fetch album tracks and play first track
-                        try {
-                          const tracksData = await musicService.getAlbumTracks(album.id);
-                          if (tracksData.tracks.length > 0) {
-                            playTrack(tracksData.tracks[0]);
-                          }
-                        } catch (error) {
-                          console.error('[HomeScreen] Error playing album:', error);
-                        }
-                      }}
-                      onHoverIn={() => handleHoverIn((album as any).primaryColor)}
+                      onPress={() => router.push(`/album/${album.id}`)}
+                      onPlayPress={() => playAlbum(album.id)}
+                      onHoverIn={() => handleHoverIn(album.primaryColor)}
                       onHoverOut={handleHoverOut}
                     />
                   </View>
@@ -576,25 +491,102 @@ const HomeScreen: React.FC = () => {
             </View>
           )}
 
-          {/* Tracks Section */}
-          {tracksLoading ? (
+          {/* Popular albums — REAL, ranked by catalog popularity */}
+          {popularAlbumsQuery.isPending ? (
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                Tracks
+                Popular albums
+              </Text>
+              <MediaCardRowSkeleton count={5} />
+            </View>
+          ) : popularAlbums.length > 0 && (
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+                Popular albums
+              </Text>
+              <View style={styles.grid}>
+                {popularAlbums.map((album) => (
+                  <View key={album.id} style={styles.gridItem}>
+                    <MediaCard
+                      title={album.title}
+                      subtitle={album.artistName}
+                      type="album"
+                      imageUri={album.coverArt}
+                      onPress={() => router.push(`/album/${album.id}`)}
+                      onPlayPress={() => playAlbum(album.id)}
+                      onHoverIn={() => handleHoverIn(album.primaryColor)}
+                      onHoverOut={handleHoverOut}
+                    />
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Popular artists — REAL, ranked by catalog popularity */}
+          {popularArtistsQuery.isPending ? null : popularArtists.length > 0 && (
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+                Popular artists
+              </Text>
+              <View style={styles.grid}>
+                {popularArtists.map((artist) => (
+                  <View key={artist.id} style={styles.gridItem}>
+                    <MediaCard
+                      title={artist.name}
+                      subtitle="Artist"
+                      type="artist"
+                      onPress={() => router.push(`/artist/${artist.id}`)}
+                      onHoverIn={() => handleHoverIn(artist.primaryColor)}
+                      onHoverOut={handleHoverOut}
+                    />
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Your playlists — REAL, the signed-in user's own playlists */}
+          {userPlaylistsQuery.isPending ? null : userPlaylists.length > 0 && (
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+                Your playlists
+              </Text>
+              <View style={styles.grid}>
+                {userPlaylists.map((playlist) => (
+                  <View key={playlist.id} style={styles.gridItem}>
+                    <MediaCard
+                      title={playlist.name}
+                      subtitle={playlist.description || 'Playlist'}
+                      type="playlist"
+                      imageUri={playlist.coverArt}
+                      onPress={() => router.push(`/playlist/${playlist.id}`)}
+                      onPlayPress={() => router.push(`/playlist/${playlist.id}`)}
+                      onHoverIn={() => handleHoverIn(playlist.primaryColor)}
+                      onHoverOut={handleHoverOut}
+                    />
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Popular tracks — REAL, ranked by catalog popularity */}
+          {tracksQuery.isPending ? (
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+                Popular tracks
               </Text>
               <MediaCardRowSkeleton count={10} />
             </View>
           ) : tracks.length > 0 && (
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                Tracks
+                Popular tracks
               </Text>
               <View style={styles.grid}>
                 {tracks.map((track) => (
-                  <View
-                    key={track.id}
-                    style={styles.gridItem}
-                  >
+                  <View key={track.id} style={styles.gridItem}>
                     <MediaCard
                       title={track.title}
                       subtitle={track.artistName}
