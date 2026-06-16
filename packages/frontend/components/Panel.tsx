@@ -73,7 +73,11 @@ export const Panel: React.FC<PanelProps> = ({
 }) => {
   const theme = useTheme();
   const isScreenNotMobile = useIsScreenNotMobile();
-  const bgColor = backgroundColor || theme.colors.background;
+  // A Panel is an elevated content surface, so it defaults to the `surface`
+  // token (exposed as `backgroundSecondary`) — distinctly lighter than the
+  // app `background` it sits on, so panels read as cards on the gap rather
+  // than blending into it. Callers can still override via `backgroundColor`.
+  const bgColor = backgroundColor || theme.colors.backgroundSecondary;
 
   const getBorderRadius = (): Partial<ViewStyle> => {
     // On mobile, disable rounded corners if disableRoundedOnMobile is true

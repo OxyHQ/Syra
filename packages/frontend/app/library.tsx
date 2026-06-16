@@ -193,7 +193,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
       )}
       <View style={styles.libraryContainer}>
       <Animated.ScrollView
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
+        style={styles.container}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
         onScroll={scrollHandler}
@@ -205,7 +205,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
             {showSidebarControls && onFullscreen && (
               <Pressable
                 onPress={onFullscreen}
-                style={[styles.headerButton, { backgroundColor: theme.colors.backgroundSecondary }]}
+                style={[styles.headerButton, { backgroundColor: theme.colors.backgroundTertiary }]}
               >
                 <Ionicons
                   name={isFullscreen ? 'contract' : 'expand'}
@@ -217,7 +217,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
             {showSidebarControls && onCollapse && !isFullscreen && (
               <Pressable
                 onPress={onCollapse}
-                style={[styles.headerButton, { backgroundColor: theme.colors.backgroundSecondary }]}
+                style={[styles.headerButton, { backgroundColor: theme.colors.backgroundTertiary }]}
               >
                 <Octicons
                   name="sidebar-collapse"
@@ -239,8 +239,8 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                 onPress={() => setActiveFilter(filter as 'Playlists' | 'Artists' | 'Albums' | 'All')}
                 style={[
                   styles.filterButton,
-                  { 
-                    backgroundColor: isActive ? theme.colors.primary : theme.colors.backgroundSecondary 
+                  {
+                    backgroundColor: isActive ? theme.colors.primary : theme.colors.backgroundTertiary
                   }
                 ]}
               >
@@ -261,7 +261,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         {/* Liked Songs - show only when All or Playlists filter is active */}
         {isAuthenticated && (activeFilter === 'All' || activeFilter === 'Playlists') && (
           <Pressable 
-            style={[styles.libraryItem, { backgroundColor: theme.colors.backgroundSecondary }]}
+            style={[styles.libraryItem, { backgroundColor: theme.colors.backgroundTertiary }]}
             onPress={() => router.push('/library/liked')}
           >
             <View style={[styles.likedIcon, { backgroundColor: theme.colors.primary }]}>
@@ -309,7 +309,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
               {finalPlaylists.map((playlist) => (
                 <Pressable
                   key={playlist.id}
-                  style={[styles.libraryItem, { backgroundColor: theme.colors.backgroundSecondary }]}
+                  style={[styles.libraryItem, { backgroundColor: theme.colors.backgroundTertiary }]}
                   onPress={() => router.push(`/playlist/${playlist.id}`)}
                 >
                   {playlist.coverArt ? (
@@ -349,7 +349,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
               {finalFollowedArtists.map((artist) => (
                 <Pressable
                   key={artist.id}
-                  style={[styles.libraryItem, { backgroundColor: theme.colors.backgroundSecondary }]}
+                  style={[styles.libraryItem, { backgroundColor: theme.colors.backgroundTertiary }]}
                   onPress={() => router.push(`/artist/${artist.id}`)}
                 >
                   {artist.image ? (
@@ -389,7 +389,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
               {finalSavedAlbums.map((album) => (
                 <Pressable
                   key={album.id}
-                  style={[styles.libraryItem, { backgroundColor: theme.colors.backgroundSecondary }]}
+                  style={[styles.libraryItem, { backgroundColor: theme.colors.backgroundTertiary }]}
                   onPress={() => router.push(`/album/${album.id}`)}
                 >
                   {album.coverArt ? (

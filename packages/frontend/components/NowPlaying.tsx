@@ -119,7 +119,7 @@ export const NowPlaying: React.FC = () => {
               />
             </View>
           ) : (
-            <View style={[styles.backgroundPlaceholder, { backgroundColor: theme.colors.backgroundSecondary }]}>
+            <View style={[styles.backgroundPlaceholder, { backgroundColor: theme.colors.backgroundTertiary }]}>
               <Ionicons name="musical-notes" size={80} color={theme.colors.textSecondary} />
             </View>
           )}
@@ -159,7 +159,7 @@ export const NowPlaying: React.FC = () => {
 
                 {/* About This Artist Card */}
                 {artist && (
-                  <View style={[styles.card, { backgroundColor: theme.colors.backgroundSecondary }]}>
+                  <View style={[styles.card, { backgroundColor: theme.colors.backgroundTertiary }]}>
                     <View style={styles.cardHeader}>
                       <Text style={[styles.cardTitle, { color: theme.colors.text }]}>About this artist</Text>
                     </View>
@@ -190,7 +190,7 @@ export const NowPlaying: React.FC = () => {
 
                 {/* Credits Card */}
                 {album && (
-                  <View style={[styles.card, { backgroundColor: theme.colors.backgroundSecondary }]}>
+                  <View style={[styles.card, { backgroundColor: theme.colors.backgroundTertiary }]}>
                     <View style={styles.cardHeader}>
                       <Text style={[styles.cardTitle, { color: theme.colors.text }]}>Credits</Text>
                     </View>
@@ -238,7 +238,7 @@ export const NowPlaying: React.FC = () => {
                 )}
 
                 {/* Next in Queue Card */}
-                <View style={[styles.card, { backgroundColor: theme.colors.backgroundSecondary }]}>
+                <View style={[styles.card, { backgroundColor: theme.colors.backgroundTertiary }]}>
                   <View style={styles.cardHeader}>
                     <Text style={[styles.cardTitle, { color: theme.colors.text }]}>Next in queue</Text>
                   </View>

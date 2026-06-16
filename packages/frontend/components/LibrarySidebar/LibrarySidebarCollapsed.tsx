@@ -83,7 +83,7 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
                 contentFit="cover"
               />
             ) : (
-              <View style={[styles.playlistIconPlaceholder, { backgroundColor: theme.colors.backgroundSecondary }]}>
+              <View style={[styles.playlistIconPlaceholder, { backgroundColor: theme.colors.backgroundTertiary }]}>
                 <MaterialCommunityIcons
                   name="playlist-music"
                   size={18}
@@ -108,7 +108,7 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
                 contentFit="cover"
               />
             ) : (
-              <View style={[styles.artistIconPlaceholder, { backgroundColor: theme.colors.backgroundSecondary }]}>
+              <View style={[styles.artistIconPlaceholder, { backgroundColor: theme.colors.backgroundTertiary }]}>
                 <Ionicons
                   name="person"
                   size={18}
@@ -133,7 +133,7 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
                 contentFit="cover"
               />
             ) : (
-              <View style={[styles.playlistIconPlaceholder, { backgroundColor: theme.colors.backgroundSecondary }]}>
+              <View style={[styles.playlistIconPlaceholder, { backgroundColor: theme.colors.backgroundTertiary }]}>
                 <MaterialCommunityIcons
                   name="album"
                   size={18}
