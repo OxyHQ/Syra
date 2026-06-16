@@ -87,7 +87,7 @@ export const useAppearanceStore = create<AppearanceStore>((set, get) => ({
       }
 
       // Fetch fresh data from API
-      const res = await api.get<UserAppearance>('profile/settings/me');
+      const res = await api.get<UserAppearance>('/profile/settings/me');
       const doc = unwrapApiData<UserAppearance>(res.data);
       
       // Cache the settings
@@ -118,7 +118,7 @@ export const useAppearanceStore = create<AppearanceStore>((set, get) => ({
       const cached = get().byUserId[userId];
       if (cached && !forceRefresh) return cached;
       
-      const res = await publicApi.get<UserAppearance>(`profile/design/${userId}`);
+      const res = await publicApi.get<UserAppearance>(`/profile/design/${userId}`);
       const doc = unwrapApiData<UserAppearance>(res.data);
       
       if (doc) {
@@ -151,7 +151,7 @@ export const useAppearanceStore = create<AppearanceStore>((set, get) => ({
         }),
       };
       
-      const res = await api.put<UserAppearance>('profile/settings', payload);
+      const res = await api.put<UserAppearance>('/profile/settings', payload);
       const doc = unwrapApiData<UserAppearance>(res.data);
 
       if (doc) {
