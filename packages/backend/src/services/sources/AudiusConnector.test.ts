@@ -236,4 +236,41 @@ describe('AudiusConnector.search', () => {
     expect(track.artists).toHaveLength(1);
     expect(track.artists[0].images).toBeUndefined();
   });
+
+  it('skips tracks with blank title (empty string)', async () => {
+    const blankTitleTrack = { ...TRACK_A, title: '' };
+    const connector = new AudiusConnector({
+      apiBase: TEST_BASE,
+      appName: TEST_APP,
+      httpGet: async () => ({ data: [blankTitleTrack] }),
+    });
+
+    const results = await connector.search('test');
+    expect(results).toHaveLength(0);
+  });
+
+  it('skips tracks with whitespace-only title', async () => {
+    const whitespaceTitleTrack = { ...TRACK_A, title: '   ' };
+    const connector = new AudiusConnector({
+      apiBase: TEST_BASE,
+      appName: TEST_APP,
+      httpGet: async () => ({ data: [whitespaceTitleTrack] }),
+    });
+
+    const results = await connector.search('test');
+    expect(results).toHaveLength(0);
+  });
+
+  it('keeps valid tracks when mixed with blank-title tracks', async () => {
+    const blankTitleTrack = { ...TRACK_A, id: 'blank1', title: '' };
+    const connector = new AudiusConnector({
+      apiBase: TEST_BASE,
+      appName: TEST_APP,
+      httpGet: async () => ({ data: [blankTitleTrack, TRACK_A] }),
+    });
+
+    const results = await connector.search('test');
+    expect(results).toHaveLength(1);
+    expect(results[0].externalId).toBe('abc123');
+  });
 });

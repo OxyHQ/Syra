@@ -94,6 +94,7 @@ export interface AudiusConnectorDeps {
  *   - `is_delete === true`     — removed by the artist
  *   - `is_streamable === false` — not available for streaming
  *   - `is_stream_gated === true` — requires wallet signature (unusable for us)
+ *   - `title` is blank after trim — unusable junk; would display as "No track selected"
  */
 export class AudiusConnector implements MusicSourceConnector {
   readonly provider = 'audius' as const;
@@ -127,10 +128,11 @@ export class AudiusConnector implements MusicSourceConnector {
     for (const item of body['data']) {
       if (!isAudiusTrack(item)) continue;
 
-      // Skip inaccessible tracks
+      // Skip inaccessible or unusable tracks
       if (item.is_delete) continue;
       if (!item.is_streamable) continue;
       if (item.is_stream_gated) continue;
+      if (!item.title.trim()) continue;
 
       const streamUrl =
         `${this.apiBase}/v1/tracks/${item.id}/stream` +
