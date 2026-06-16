@@ -65,10 +65,6 @@ return {
                                 scheme: 'https',
                                 host: 'syra.fm',
                             },
-                            {
-                                scheme: 'https',
-                                host: 'www.syra.fm',
-                            },
                             IS_DEV && {
                                 scheme: 'http',
                                 host: 'localhost:3001',

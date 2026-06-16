@@ -138,8 +138,8 @@ export async function getStream(req: AuthRequest, res: Response): Promise<void> 
  * The key is NEVER cached client-side.
  *
  * Guards (in order):
- *  1. Auth — 401 if neither bearer nor valid bound token.
- *  2. ObjectId validation — 400 for malformed trackId.
+ *  1. ObjectId validation — 400 for malformed trackId.
+ *  2. Auth — 401 if neither bearer nor valid bound token.
  *  3. Track existence — 404 if not found.
  *  4. Track availability — 403 if unavailable or copyright-removed.
  *  5. Key existence — 404 if TrackKey not yet persisted (ingest not complete).
@@ -150,23 +150,7 @@ export async function getStreamKey(req: AuthRequest, res: Response): Promise<voi
     ? req.params.trackId[0]
     : req.params.trackId;
 
-  // ObjectId validation comes before auth so we can pass trackId to authorizeStreamRequest.
-  // But the auth check must be first per the spec. Validate ObjectId first to get a clean
-  // trackId string, then authorize. If ObjectId is invalid, we can still reject auth early.
   if (!trackId || !mongoose.Types.ObjectId.isValid(trackId)) {
-    // Even with invalid ObjectId, run auth check first as specified in guards order:
-    // auth → ObjectId. But we need trackId for the token check. An invalid trackId means
-    // the token can never match either, so treat as 401 when unauthenticated.
-    if (!req.user?.id) {
-      // No bearer and no valid token possible (trackId is malformed)
-      const rawToken = req.query?.t;
-      if (typeof rawToken !== 'string' || !verifyStreamToken(rawToken)) {
-        // Still return 400 — per spec guard order is: auth(1) → ObjectId(2).
-        // However, auth check itself requires a valid trackId for token binding.
-        // Since the ObjectId is invalid, no token can be bound to it → 401 would be misleading.
-        // We return 400 (ObjectId error takes precedence when bearer is absent and token is absent/invalid).
-      }
-    }
     res.status(400).json({ error: 'Invalid track ID' });
     return;
   }

@@ -16,8 +16,8 @@ The backend runs on **AWS ECS Fargate** (region `us-west-2`, cluster `oxy-cluste
 Target: web `syra.oxy.so` → **`syra.fm`**, API `api.syra.oxy.so` → **`api.syra.fm`**.
 
 Done so far (additive, deploy-safe — both old and new work simultaneously):
-- Backend CORS / Socket.IO allow-list accepts `https://syra.fm` and `https://www.syra.fm` alongside the existing `https://syra.oxy.so`.
-- App universal-link hosts (`packages/frontend/app.config.js`) include `syra.fm` / `www.syra.fm` alongside `syra.oxy.so`.
+- Backend CORS / Socket.IO allow-list accepts `https://syra.fm` alongside the existing `https://syra.oxy.so`.
+- App universal-link hosts (`packages/frontend/app.config.js`) include `syra.fm` alongside `syra.oxy.so`.
 
 **Pending — FINAL cutover step (do NOT do until `api.syra.fm` infra — DNS, ACM cert, ALB target — is live):**
 - Flip the frontend prod `API_URL` / websocket host in `packages/frontend/config.ts` (and `eas.json`) from `api.syra.oxy.so` → `api.syra.fm`.
