@@ -1,0 +1,192 @@
+import { describe, it, expect } from 'bun:test';
+import { AudiusConnector } from './AudiusConnector';
+
+const TEST_BASE = 'https://discovery.test.audius.co';
+const TEST_APP = 'Syra';
+
+// ── Canned Audius response ────────────────────────────────────────────────────
+
+const TRACK_A = {
+  id: 'abc123',
+  title: 'Good Vibes',
+  duration: 185,
+  is_delete: false,
+  is_streamable: true,
+  is_stream_gated: false,
+  isrc: 'USABC1234567',
+  user: { id: 'u1', name: 'DJ Test' },
+  artwork: {
+    '150x150': 'https://cdn.audius.co/abc/150x150.jpg',
+    '480x480': 'https://cdn.audius.co/abc/480x480.jpg',
+    '1000x1000': 'https://cdn.audius.co/abc/1000x1000.jpg',
+  },
+};
+
+const TRACK_B_GATED = {
+  id: 'gated1',
+  title: 'Gated Track',
+  duration: 120,
+  is_delete: false,
+  is_streamable: true,
+  is_stream_gated: true,
+  user: { id: 'u2', name: 'Artist B' },
+  artwork: null,
+};
+
+const TRACK_C_DELETED = {
+  id: 'del1',
+  title: 'Deleted Track',
+  duration: 90,
+  is_delete: true,
+  is_streamable: true,
+  is_stream_gated: false,
+  user: { id: 'u3', name: 'Artist C' },
+  artwork: null,
+};
+
+const TRACK_D_NOT_STREAMABLE = {
+  id: 'ns1',
+  title: 'Not Streamable',
+  duration: 60,
+  is_delete: false,
+  is_streamable: false,
+  is_stream_gated: false,
+  user: { id: 'u4', name: 'Artist D' },
+  artwork: null,
+};
+
+const CANNED_RESPONSE = {
+  data: [TRACK_A, TRACK_B_GATED, TRACK_C_DELETED, TRACK_D_NOT_STREAMABLE],
+};
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+describe('AudiusConnector.search', () => {
+  it('filters out gated / deleted / non-streamable — only track A returned', async () => {
+    let capturedUrl = '';
+    const connector = new AudiusConnector({
+      apiBase: TEST_BASE,
+      appName: TEST_APP,
+      httpGet: async (url) => { capturedUrl = url; return CANNED_RESPONSE; },
+    });
+
+    const results = await connector.search('good vibes', 20);
+
+    expect(results).toHaveLength(1);
+    expect(results[0].externalId).toBe('abc123');
+
+    // URL must hit the right endpoint with required query params
+    expect(capturedUrl).toContain('/v1/tracks/search');
+    expect(capturedUrl).toContain('query=');
+    expect(capturedUrl).toContain('app_name=Syra');
+  });
+
+  it('normalises track A — provider, externalId, title, durationSec', async () => {
+    const connector = new AudiusConnector({
+      apiBase: TEST_BASE,
+      appName: TEST_APP,
+      httpGet: async () => CANNED_RESPONSE,
+    });
+
+    const [track] = await connector.search('test');
+
+    expect(track.provider).toBe('audius');
+    expect(track.externalId).toBe('abc123');
+    expect(track.title).toBe('Good Vibes');
+    expect(track.durationSec).toBe(185);
+  });
+
+  it('normalises track A — artist name + externalId', async () => {
+    const connector = new AudiusConnector({
+      apiBase: TEST_BASE,
+      appName: TEST_APP,
+      httpGet: async () => CANNED_RESPONSE,
+    });
+
+    const [track] = await connector.search('test');
+
+    expect(track.artists).toHaveLength(1);
+    expect(track.artists[0].name).toBe('DJ Test');
+    expect(track.artists[0].externalId).toBe('u1');
+  });
+
+  it('normalises track A — streamUrl contains /v1/tracks/<id>/stream and app_name', async () => {
+    const connector = new AudiusConnector({
+      apiBase: TEST_BASE,
+      appName: TEST_APP,
+      httpGet: async () => CANNED_RESPONSE,
+    });
+
+    const [track] = await connector.search('test');
+
+    expect(track.streamUrl).toContain('/v1/tracks/abc123/stream');
+    expect(track.streamUrl).toContain('app_name=Syra');
+  });
+
+  it('normalises track A — images mapped with correct widths/heights', async () => {
+    const connector = new AudiusConnector({
+      apiBase: TEST_BASE,
+      appName: TEST_APP,
+      httpGet: async () => CANNED_RESPONSE,
+    });
+
+    const [track] = await connector.search('test');
+    const images = track.images ?? [];
+
+    expect(images.length).toBeGreaterThanOrEqual(2);
+
+    const img480 = images.find((i) => i.width === 480);
+    expect(img480).toBeDefined();
+    expect(img480?.url).toBe('https://cdn.audius.co/abc/480x480.jpg');
+    expect(img480?.height).toBe(480);
+    expect(img480?.source).toBe('audius');
+  });
+
+  it('normalises track A — isrc preserved', async () => {
+    const connector = new AudiusConnector({
+      apiBase: TEST_BASE,
+      appName: TEST_APP,
+      httpGet: async () => CANNED_RESPONSE,
+    });
+
+    const [track] = await connector.search('test');
+    expect(track.isrc).toBe('USABC1234567');
+  });
+
+  it('returns [] when data is not an array (defensive parse)', async () => {
+    const connector = new AudiusConnector({
+      apiBase: TEST_BASE,
+      appName: TEST_APP,
+      httpGet: async () => ({ data: 'not-an-array' }),
+    });
+
+    const results = await connector.search('test');
+    expect(results).toEqual([]);
+  });
+
+  it('returns [] when data key is missing entirely', async () => {
+    const connector = new AudiusConnector({
+      apiBase: TEST_BASE,
+      appName: TEST_APP,
+      httpGet: async () => ({ something: 'else' }),
+    });
+
+    const results = await connector.search('test');
+    expect(results).toEqual([]);
+  });
+
+  it('propagates HTTP errors from httpGet', async () => {
+    const connector = new AudiusConnector({
+      apiBase: TEST_BASE,
+      appName: TEST_APP,
+      httpGet: async () => { throw new Error('Audius HTTP 503'); },
+    });
+
+    await expect(connector.search('test')).rejects.toThrow('Audius HTTP 503');
+  });
+
+  it('provider is "audius"', () => {
+    const connector = new AudiusConnector({ apiBase: TEST_BASE, appName: TEST_APP });
+    expect(connector.provider).toBe('audius');
+  });
+});
