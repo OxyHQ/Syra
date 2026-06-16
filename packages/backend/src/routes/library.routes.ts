@@ -10,6 +10,8 @@ import {
   unfollowArtist,
   savePlaylist,
   unsavePlaylist,
+  getRecentlyPlayed,
+  recordRecentlyPlayed,
 } from '../controllers/library.controller';
 
 const router = Router();
@@ -17,6 +19,9 @@ const router = Router();
 // Authenticated routes (mounted behind oxy.auth() at /api/library)
 router.get('/', getUserLibrary);
 router.get('/tracks', getLikedTracks);
+
+router.get('/recently-played', getRecentlyPlayed);
+router.post('/recently-played', recordRecentlyPlayed);
 
 router.post('/tracks/:id/like', likeTrack);
 router.post('/tracks/:id/unlike', unlikeTrack);

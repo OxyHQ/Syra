@@ -2,9 +2,23 @@ import { Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
 import { AuthRequest } from '../middleware/auth';
 import { UserLibraryModel } from '../models/Library';
+import { RecentlyPlayedModel } from '../models/RecentlyPlayed';
 import { TrackModel } from '../models/Track';
 import { formatTracksWithCoverArt } from '../utils/musicHelpers';
 import { getParam } from '../utils/reqParams';
+
+/** Default number of distinct recent tracks returned by GET /recently-played. */
+const RECENTLY_PLAYED_DEFAULT_LIMIT = 20;
+/** Hard cap on the limit query param to keep responses bounded. */
+const RECENTLY_PLAYED_MAX_LIMIT = 50;
+/** Most recent play documents retained per user; older rows are pruned. */
+const RECENTLY_PLAYED_RETENTION = 100;
+/**
+ * Window within which a repeated play of the same track refreshes the existing
+ * row's timestamp instead of inserting a new one, avoiding duplicate stacking
+ * from rapid replays/seeks.
+ */
+const RECENTLY_PLAYED_DEDUP_WINDOW_MS = 30 * 1000;
 
 /**
  * Membership arrays on the user's library document. Each is an idempotent
@@ -275,6 +289,127 @@ export const unsavePlaylist = async (req: AuthRequest, res: Response, next: Next
 
     const savedPlaylists = await removeFromLibrary(userId, 'savedPlaylists', id);
     res.json({ ok: true, savedPlaylists });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/library/recently-played?limit=N
+ * Get the user's most recently played tracks as full track objects, deduped by
+ * trackId (newest play wins) and filtered to available tracks (requires auth).
+ */
+export const getRecentlyPlayed = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const requested = Number(getParam(req, 'limit') || req.query.limit);
+    const limit =
+      Number.isFinite(requested) && requested > 0
+        ? Math.min(Math.floor(requested), RECENTLY_PLAYED_MAX_LIMIT)
+        : RECENTLY_PLAYED_DEFAULT_LIMIT;
+
+    // Collapse plays to the most recent occurrence per trackId, newest first.
+    // We over-fetch (retention window) so duplicate plays don't starve the list
+    // below `limit` distinct tracks before slicing.
+    const recent = await RecentlyPlayedModel.aggregate<{ _id: string; playedAt: Date }>([
+      { $match: { oxyUserId: userId } },
+      { $sort: { playedAt: -1 } },
+      { $group: { _id: '$trackId', playedAt: { $first: '$playedAt' } } },
+      { $sort: { playedAt: -1 } },
+      { $limit: limit },
+    ]);
+
+    if (recent.length === 0) {
+      return res.json({ tracks: [] });
+    }
+
+    // Preserve recency order from the aggregation when resolving Track docs.
+    const orderedTrackIds = recent
+      .map((entry) => entry._id)
+      .filter((id) => mongoose.Types.ObjectId.isValid(id));
+
+    if (orderedTrackIds.length === 0) {
+      return res.json({ tracks: [] });
+    }
+
+    const tracks = await TrackModel.find({
+      _id: { $in: orderedTrackIds },
+      isAvailable: true,
+    }).lean();
+
+    const formattedTracks = await formatTracksWithCoverArt(tracks);
+
+    // TrackModel.find does not honour the $in order; re-sort to match recency
+    // and drop any ids that resolved to no available track.
+    const orderIndex = new Map(orderedTrackIds.map((id, index) => [id, index]));
+    const sortedTracks = formattedTracks
+      .filter((track) => orderIndex.has(track.id))
+      .sort((a, b) => (orderIndex.get(a.id) ?? 0) - (orderIndex.get(b.id) ?? 0));
+
+    res.json({ tracks: sortedTracks });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/library/recently-played
+ * Body: { trackId: string }
+ * Record a play of a track for the current user. A repeated play of the same
+ * track within a short window refreshes the existing row instead of stacking a
+ * duplicate; storage is capped to the most recent plays per user (requires auth).
+ */
+export const recordRecentlyPlayed = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const rawTrackId: unknown = req.body?.trackId;
+    const trackId = typeof rawTrackId === 'string' ? rawTrackId.trim() : '';
+
+    if (!trackId) {
+      return res.status(400).json({ error: 'trackId is required' });
+    }
+
+    const now = new Date();
+    const dedupSince = new Date(now.getTime() - RECENTLY_PLAYED_DEDUP_WINDOW_MS);
+
+    // If the same track was logged very recently, just bump its timestamp.
+    const refreshed = await RecentlyPlayedModel.findOneAndUpdate(
+      { oxyUserId: userId, trackId, playedAt: { $gte: dedupSince } },
+      { $set: { playedAt: now } },
+      { new: true }
+    ).lean();
+
+    if (!refreshed) {
+      await RecentlyPlayedModel.create({ oxyUserId: userId, trackId, playedAt: now });
+
+      // Prune anything beyond the retention window for this user.
+      const cutoff = await RecentlyPlayedModel.find({ oxyUserId: userId })
+        .sort({ playedAt: -1 })
+        .skip(RECENTLY_PLAYED_RETENTION)
+        .limit(1)
+        .select({ playedAt: 1 })
+        .lean();
+
+      const cutoffPlayedAt = cutoff[0]?.playedAt;
+      if (cutoffPlayedAt) {
+        await RecentlyPlayedModel.deleteMany({
+          oxyUserId: userId,
+          playedAt: { $lte: cutoffPlayedAt },
+        });
+      }
+    }
+
+    res.json({ ok: true });
   } catch (error) {
     next(error);
   }
