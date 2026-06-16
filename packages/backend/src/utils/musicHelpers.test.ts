@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
+import { describe, it, expect, beforeAll, afterAll, afterEach } from 'bun:test';
 import mongoose from 'mongoose';
-import { connect, disconnect } from '../test/mongo';
+import { connect, clear, disconnect } from '../test/mongo';
+import { AlbumModel } from '../models/Album';
 import {
   formatTrackWithCoverArt,
   formatAlbumWithCoverArt,
@@ -12,6 +13,7 @@ import {
 // when albumId is set. Use in-memory mongo so the optional album fetch
 // doesn't crash.
 beforeAll(connect);
+afterEach(clear);
 afterAll(disconnect);
 
 // ── Track — images[] fallback ─────────────────────────────────────────────────
@@ -176,5 +178,96 @@ describe('formatArtistWithImage — images[] fallback', () => {
 
     expect(result).not.toBeNull();
     expect(result.image).toBeUndefined();
+  });
+});
+
+// ── Track → album images[] fallback (DB-backed) ───────────────────────────────
+
+describe('formatTrackWithCoverArt — album images[] fallback', () => {
+  it('uses album images[0].url when track has albumId but album has no ObjectId coverArt', async () => {
+    // Insert an album that has only images[] (no coverArt ObjectId).
+    // Using collection.insertOne to bypass the Mongoose schema validator
+    // which marks coverArt as required — this mirrors real Audius-imported albums.
+    const albumId = new mongoose.Types.ObjectId();
+    await AlbumModel.collection.insertOne({
+      _id: albumId,
+      title: 'Audius Album',
+      artistId: 'artist-1',
+      artistName: 'Audius Artist',
+      provider: 'audius',
+      externalId: 'aud-alb-1',
+      importedAt: new Date().toISOString(),
+      releaseDate: '2024-01-01',
+      images: [{ url: 'https://x.com/album.jpg', width: 480, height: 480, source: 'audius' }],
+    });
+
+    const track = {
+      _id: new mongoose.Types.ObjectId(),
+      title: 'Audius Track',
+      artistName: 'Audius Artist',
+      albumId: albumId.toString(),
+      // no coverArt, no own images[]
+    };
+
+    const result = await formatTrackWithCoverArt(track);
+
+    expect(result).not.toBeNull();
+    expect(result.coverArt).toBe('https://x.com/album.jpg');
+  });
+
+  it('album ObjectId coverArt takes priority over album images[]', async () => {
+    const albumId = new mongoose.Types.ObjectId();
+    const coverArtId = new mongoose.Types.ObjectId();
+    await AlbumModel.collection.insertOne({
+      _id: albumId,
+      title: 'Upload Album',
+      artistId: 'artist-1',
+      artistName: 'Upload Artist',
+      provider: 'upload',
+      externalId: 'upl-alb-1',
+      importedAt: new Date().toISOString(),
+      releaseDate: '2024-01-01',
+      coverArt: coverArtId.toString(),
+      images: [{ url: 'https://x.com/album-external.jpg' }],
+    });
+
+    const track = {
+      _id: new mongoose.Types.ObjectId(),
+      title: 'Upload Track',
+      artistName: 'Upload Artist',
+      albumId: albumId.toString(),
+    };
+
+    const result = await formatTrackWithCoverArt(track);
+
+    expect(result).not.toBeNull();
+    expect(result.coverArt).toBe(`/api/images/${coverArtId.toString()}`);
+  });
+
+  it('falls back to track own images[] when album has neither coverArt nor images[]', async () => {
+    const albumId = new mongoose.Types.ObjectId();
+    await AlbumModel.collection.insertOne({
+      _id: albumId,
+      title: 'Bare Album',
+      artistId: 'artist-1',
+      artistName: 'Bare Artist',
+      provider: 'upload',
+      externalId: 'bare-alb-1',
+      importedAt: new Date().toISOString(),
+      releaseDate: '2024-01-01',
+    });
+
+    const track = {
+      _id: new mongoose.Types.ObjectId(),
+      title: 'Track with own images',
+      artistName: 'Bare Artist',
+      albumId: albumId.toString(),
+      images: [{ url: 'https://track.com/art.jpg' }],
+    };
+
+    const result = await formatTrackWithCoverArt(track);
+
+    expect(result).not.toBeNull();
+    expect(result.coverArt).toBe('https://track.com/art.jpg');
   });
 });

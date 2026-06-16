@@ -96,12 +96,19 @@ export async function formatTrackWithCoverArt(
       }
     }
 
-    if (album && album.coverArt) {
-      formatted.coverArt = `/api/images/${album.coverArt}`;
+    if (album) {
+      if (album.coverArt) {
+        // Album has an ObjectId coverArt — convert to API URL (highest album priority)
+        formatted.coverArt = `/api/images/${album.coverArt}`;
+      } else {
+        // Album has no ObjectId coverArt — try its external images[] (e.g. Audius album art)
+        const u = firstImageUrl(album);
+        if (u) formatted.coverArt = u;
+      }
     }
   }
 
-  // Fallback: use first external image URL (e.g. Audius CDN) when no ObjectId art
+  // Last resort: use track's own external images[] (e.g. Audius CDN) when still no cover
   if (!formatted.coverArt) {
     const u = firstImageUrl(formatted);
     if (u) formatted.coverArt = u;
