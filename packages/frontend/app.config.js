@@ -59,6 +59,16 @@ return {
                                 scheme: 'https',
                                 host: 'syra.oxy.so',
                             },
+                            // Migration target web host; kept alongside syra.oxy.so so
+                            // universal links keep working during the transition.
+                            {
+                                scheme: 'https',
+                                host: 'syra.fm',
+                            },
+                            {
+                                scheme: 'https',
+                                host: 'www.syra.fm',
+                            },
                             IS_DEV && {
                                 scheme: 'http',
                                 host: 'localhost:3001',

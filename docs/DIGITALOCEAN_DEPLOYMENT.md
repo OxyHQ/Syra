@@ -2,6 +2,15 @@
 
 Guide for the Syra monorepo deployment across DigitalOcean and Cloudflare.
 
+> **Domain migration (in progress — NOT yet cut over):** the web frontend is
+> moving `syra.oxy.so` → `syra.fm` and the API `api.syra.oxy.so` → `api.syra.fm`.
+> The additive groundwork (backend CORS + app universal-link hosts now accept
+> both old and new origins) is in place. The final cutover — flipping the
+> frontend `API_URL`/websocket host to `api.syra.fm`, repointing `FRONTEND_URL`,
+> and retiring the old hosts — is deferred until the `api.syra.fm` infra (DNS,
+> cert, ALB target) is live. Until then, all tables below reflect the live
+> `*.syra.oxy.so` hosts.
+
 ## Architecture
 
 | Component | Platform | Domain | Description |
