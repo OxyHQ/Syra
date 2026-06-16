@@ -86,8 +86,8 @@ export const GenreCard: React.FC<GenreCardProps> = React.memo(({
         {/* Play Button (appears on hover) */}
         {isHovered && (
           <View style={styles.playButtonContainer}>
-            <View style={styles.playButton}>
-              <Ionicons name="play" size={24} color="#FFFFFF" />
+            <View style={[styles.playButton, { backgroundColor: theme.colors.primary }]}>
+              <Ionicons name="play" size={24} color={theme.colors.primaryForeground} />
             </View>
           </View>
         )}
@@ -162,7 +162,6 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#1DB954', // Spotify green
     alignItems: 'center',
     justifyContent: 'center',
     ...Platform.select({

@@ -75,7 +75,7 @@ export const MobilePlayerBar: React.FC = () => {
         },
       }),
     };
-  }, [insets.bottom, theme.colors.background, SPACING]);
+  }, [insets.bottom, theme.colors.primary, SPACING]);
 
   return (
     <View style={containerStyle}>
@@ -98,13 +98,13 @@ export const MobilePlayerBar: React.FC = () => {
           </Pressable>
           <View style={styles.trackDetails}>
             <Text
-              style={[styles.trackTitle, { color: "#FFFFFF" }]}
+              style={[styles.trackTitle, { color: theme.colors.primaryForeground }]}
               numberOfLines={1}
             >
               {currentTrack?.title || (isLoading ? 'Loading...' : 'No track selected')}
             </Text>
             <Text
-              style={[styles.trackArtist, { color: "rgba(255, 255, 255, 0.7)" }]}
+              style={[styles.trackArtist, { color: theme.colors.primaryForeground, opacity: 0.7 }]}
               numberOfLines={1}
             >
               {currentTrack?.artistName || (isLoading ? '' : 'Choose a track to play')}
@@ -115,13 +115,13 @@ export const MobilePlayerBar: React.FC = () => {
         {/* Center: Playback Controls */}
         <View style={[styles.playbackControls, { gap: SPACING }]}>
           <Pressable style={styles.controlButton}>
-            <MaterialCommunityIcons name="heart-outline" size={24} color="#FFFFFF" />
+            <MaterialCommunityIcons name="heart-outline" size={24} color={theme.colors.primaryForeground} />
           </Pressable>
           <Pressable
             style={[
               styles.playButton,
               {
-                backgroundColor: "#FFFFFF",
+                backgroundColor: theme.colors.primaryForeground,
                 opacity: currentTrack ? 1 : 0.5,
               }
             ]}
@@ -139,7 +139,7 @@ export const MobilePlayerBar: React.FC = () => {
             )}
           </Pressable>
           <Pressable style={styles.controlButton}>
-            <MaterialCommunityIcons name="skip-next" size={24} color="#FFFFFF" />
+            <MaterialCommunityIcons name="skip-next" size={24} color={theme.colors.primaryForeground} />
           </Pressable>
         </View>
       </View>
@@ -165,7 +165,7 @@ export const MobilePlayerBar: React.FC = () => {
           style={[
             styles.progressBar,
             {
-              backgroundColor: "#FFFFFF",
+              backgroundColor: theme.colors.primaryForeground,
               width: `${progressPercent}%`,
             }
           ]}

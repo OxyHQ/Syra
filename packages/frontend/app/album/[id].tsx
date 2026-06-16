@@ -145,7 +145,7 @@ const AlbumScreen: React.FC = () => {
             style={[styles.playButton, { backgroundColor: theme.colors.primary }]}
             onPress={handlePlayAlbum}
           >
-            <Ionicons name="play" size={28} color="#000" />
+            <Ionicons name="play" size={28} color={theme.colors.primaryForeground} />
           </Pressable>
 
           <Pressable style={styles.controlButton}>
@@ -238,8 +238,8 @@ const AlbumScreen: React.FC = () => {
                     </Text>
                     <View style={styles.trackArtistRow}>
                       {track.isExplicit && (
-                        <View style={styles.explicitBadge}>
-                          <Text style={styles.explicitText}>E</Text>
+                        <View style={[styles.explicitBadge, { backgroundColor: theme.colors.backgroundTertiary }]}>
+                          <Text style={[styles.explicitText, { color: theme.colors.textSecondary }]}>E</Text>
                         </View>
                       )}
                       <Text
@@ -468,12 +468,10 @@ const styles = StyleSheet.create({
     width: 18,
     height: 18,
     borderRadius: 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   explicitText: {
-    color: '#fff',
     fontSize: 10,
     fontWeight: 'bold',
   },

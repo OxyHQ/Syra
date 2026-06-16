@@ -69,7 +69,7 @@ export const MessageBottomSheet: React.FC<MessageBottomSheetProps> = ({
                     onPress={onClose}
                     activeOpacity={0.7}
                 >
-                    <Text style={[styles.buttonText, { color: '#FFFFFF' }]}>
+                    <Text style={[styles.buttonText, { color: theme.colors.primaryForeground }]}>
                         {okText || t('common.ok')}
                     </Text>
                 </TouchableOpacity>
@@ -128,7 +128,6 @@ const styles = StyleSheet.create({
     buttonText: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#FFFFFF',
     },
 });
 

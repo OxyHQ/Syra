@@ -113,7 +113,7 @@ export const MediaCard: React.FC<MediaCardProps> = React.memo(({
             onHoverOut={() => setIsPlayButtonHovered(false)}
           >
             <View style={[styles.playButton, { backgroundColor: theme.colors.primary }]}>
-              <Ionicons name="play" size={24} color="#FFFFFF" />
+              <Ionicons name="play" size={24} color={theme.colors.primaryForeground} />
             </View>
           </Pressable>
         )}

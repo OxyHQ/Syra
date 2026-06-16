@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, Text, Pressable, Platform, ViewStyle } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { webViewStyle } from '@/utils/webStyles';
 import { useRouter, usePathname } from 'expo-router';
 import { useTheme } from '@oxyhq/bloom/theme';
@@ -11,6 +12,13 @@ import { useMediaQuery } from 'react-responsive';
 import { artistService } from '@/services/artistService';
 import { Artist } from '@syra/shared-types';
 /**
+ * Base visual height of the top bar (excluding the top safe-area inset, which
+ * is added on top on native). Shared with the layout so panel height math stays
+ * in sync. The web `calc()` in `MainLayout` uses this same value.
+ */
+export const TOP_BAR_HEIGHT = 64;
+
+/**
  * Top Navigation Bar Component
  * Spotify-like top bar with logo, navigation, search, and user controls
  */
@@ -18,11 +26,23 @@ export const TopBar: React.FC = () => {
   const router = useRouter();
   const pathname = usePathname();
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const { user, isAuthenticated, oxyServices, showBottomSheet } = useOxy();
   const isMobile = useMediaQuery({ maxWidth: 767 });
   const [artistProfile, setArtistProfile] = useState<Artist | null>(null);
-  
+
+  // Clear the status bar / dynamic island on native by padding the bar's
+  // content down by the top inset and growing the bar by the same amount. On
+  // web `insets.top` is 0, so the bar keeps its base 64px height there.
+  const safeAreaStyle: ViewStyle = {
+    paddingTop: insets.top,
+    height: TOP_BAR_HEIGHT + insets.top,
+  };
+
   const avatarUri = user?.avatar ? oxyServices.getFileDownloadUrl(user.avatar as string, 'thumb') : undefined;
+
+  // Subtle raised pill behind the active nav icon, derived from the theme.
+  const activeButtonStyle: ViewStyle = { ...styles.activeButton, backgroundColor: theme.colors.backgroundTertiary };
 
   // Check if user has an artist profile
   useEffect(() => {
@@ -63,7 +83,7 @@ export const TopBar: React.FC = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, safeAreaStyle]}>
       {/* Left Section: Logo */}
       <View style={styles.leftSection}>
         <Pressable onPress={handleHome} style={styles.logoContainer}>
@@ -78,7 +98,7 @@ export const TopBar: React.FC = () => {
         <View style={styles.centerGroup}>
           <Pressable 
             onPress={handleHome}
-            style={[styles.iconButton, pathname === '/' && styles.activeButton]}
+            style={[styles.iconButton, pathname === '/' && activeButtonStyle]}
           >
             <MaterialCommunityIcons 
               name={pathname === '/' ? 'home' : 'home-outline'} 
@@ -94,7 +114,7 @@ export const TopBar: React.FC = () => {
           {isMobile ? (
             <Pressable 
               onPress={handleSearch}
-              style={[styles.iconButton, pathname === '/search' && styles.activeButton]}
+              style={[styles.iconButton, pathname === '/search' && activeButtonStyle]}
             >
               <MaterialCommunityIcons 
                 name={pathname === '/search' ? 'magnify' : 'magnify'} 
@@ -120,7 +140,7 @@ export const TopBar: React.FC = () => {
       <View style={styles.rightSection}>
         {isAuthenticated && (
           <Pressable
-            style={[styles.iconButton, pathname.startsWith('/artist') && styles.activeButton]}
+            style={[styles.iconButton, pathname.startsWith('/artist') && activeButtonStyle]}
             onPress={handleDashboard}
             accessibilityLabel={artistProfile ? 'Artist Dashboard' : 'Register as Artist'}
           >
@@ -152,7 +172,7 @@ export const TopBar: React.FC = () => {
             style={[styles.loginButton, { backgroundColor: theme.colors.primary }]}
             onPress={() => showBottomSheet?.('OxyAuth')}
           >
-            <Text style={[styles.loginText, { color: '#FFFFFF' }]}>Log in</Text>
+            <Text style={[styles.loginText, { color: theme.colors.primaryForeground }]}>Log in</Text>
           </Pressable>
         )}
       </View>
@@ -162,8 +182,10 @@ export const TopBar: React.FC = () => {
 
 const styles = StyleSheet.create({
   // `position: 'sticky'` is a react-native-web value; native uses static flow.
+  // `height`/`paddingTop` are overridden per-render to add the top safe-area
+  // inset on native (see `safeAreaStyle`).
   container: webViewStyle({
-    height: 64,
+    height: TOP_BAR_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -207,7 +229,6 @@ const styles = StyleSheet.create({
     height: 24,
   },
   activeButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 20,
   },
   searchContainer: {

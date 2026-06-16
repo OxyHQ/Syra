@@ -372,7 +372,9 @@ const ArtistUploadScreen: React.FC = () => {
             {
               backgroundColor: theme.colors.background,
               borderBottomColor: theme.colors.border,
-              paddingTop: Math.max(insets.top, 8),
+              // Top safe-area is cleared by the shell's TopBar (single
+              // authority); this in-panel header only needs base padding.
+              paddingTop: 8,
             },
           ]}
         >
@@ -487,7 +489,7 @@ const ArtistUploadScreen: React.FC = () => {
                   </Text>
                 )}
                 {isUploading && uploadProgress > 0 && (
-                  <View style={styles.progressContainer}>
+                  <View style={[styles.progressContainer, { backgroundColor: theme.colors.border }]}>
                     <View
                       style={[
                         styles.progressBar,
@@ -606,7 +608,7 @@ const ArtistUploadScreen: React.FC = () => {
                       <Text
                         style={[
                           styles.chipText,
-                          { color: !songAlbumId ? '#FFFFFF' : theme.colors.text },
+                          { color: !songAlbumId ? theme.colors.primaryForeground : theme.colors.text },
                         ]}
                       >
                         None
@@ -627,7 +629,7 @@ const ArtistUploadScreen: React.FC = () => {
                         <Text
                           style={[
                             styles.chipText,
-                            { color: songAlbumId === album.id ? '#FFFFFF' : theme.colors.text },
+                            { color: songAlbumId === album.id ? theme.colors.primaryForeground : theme.colors.text },
                           ]}
                         >
                           {album.title}
@@ -728,9 +730,9 @@ const ArtistUploadScreen: React.FC = () => {
                 ]}
               >
                 {isUploading ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <ActivityIndicator size="small" color={theme.colors.primaryForeground} />
                 ) : (
-                  <Text style={styles.submitButtonText}>Upload Song</Text>
+                  <Text style={[styles.submitButtonText, { color: theme.colors.primaryForeground }]}>Upload Song</Text>
                 )}
               </Pressable>
             </>
@@ -822,7 +824,7 @@ const ArtistUploadScreen: React.FC = () => {
                       <Text
                         style={[
                           styles.chipText,
-                          { color: albumType === type ? '#FFFFFF' : theme.colors.text },
+                          { color: albumType === type ? theme.colors.primaryForeground : theme.colors.text },
                         ]}
                       >
                         {type.charAt(0).toUpperCase() + type.slice(1)}
@@ -976,9 +978,9 @@ const ArtistUploadScreen: React.FC = () => {
                 ]}
               >
                 {isUploading ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <ActivityIndicator size="small" color={theme.colors.primaryForeground} />
                 ) : (
-                  <Text style={styles.submitButtonText}>Create Album</Text>
+                  <Text style={[styles.submitButtonText, { color: theme.colors.primaryForeground }]}>Create Album</Text>
                 )}
               </Pressable>
             </>
@@ -1069,7 +1071,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: 'rgba(0,0,0,0.1)',
     overflow: 'hidden',
     position: 'relative',
   },
@@ -1133,7 +1134,6 @@ const styles = StyleSheet.create({
     }),
   },
   submitButtonText: {
-    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
   },

@@ -14,7 +14,10 @@
 @source "../../../node_modules/@oxyhq/bloom/lib/**/*.{js,jsx}";
 
 @theme {
-  --font-sans: Inter, sans-serif;
+  /* Bloom owns the font stack: `--bloom-font-sans` is set on :root by
+     Bloom's FontLoader (@font-face + token injection). We reference it here
+     instead of hardcoding a literal family. */
+  --font-sans: var(--bloom-font-sans), sans-serif;
 
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
@@ -64,7 +67,7 @@
 }
 
 html, body, #root {
-  font-family: 'Inter', 'Inter-Regular', sans-serif;
+  font-family: var(--bloom-font-sans), sans-serif;
 }
 
 @keyframes bloomDialogFadeIn {

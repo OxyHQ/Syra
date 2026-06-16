@@ -92,7 +92,9 @@ const ArtistDashboardScreen: React.FC = () => {
             {
               backgroundColor: theme.colors.background,
               borderBottomColor: theme.colors.border,
-              paddingTop: Math.max(insets.top, 8),
+              // Top safe-area is cleared by the shell's TopBar (single
+              // authority); this in-panel header only needs base padding.
+              paddingTop: 8,
             },
           ]}
         >
@@ -264,8 +266,8 @@ const ArtistDashboardScreen: React.FC = () => {
                   }
                 ]}
               >
-                <MaterialCommunityIcons name="upload" size={24} color="#FFFFFF" />
-                <Text style={styles.actionButtonText}>Upload Song</Text>
+                <MaterialCommunityIcons name="upload" size={24} color={theme.colors.primaryForeground} />
+                <Text style={[styles.actionButtonText, { color: theme.colors.primaryForeground }]}>Upload Song</Text>
               </Pressable>
               <Pressable
                 onPress={() => router.push('/artist/upload?tab=album')}
@@ -280,8 +282,8 @@ const ArtistDashboardScreen: React.FC = () => {
                   }
                 ]}
               >
-                <MaterialCommunityIcons name="album" size={24} color="#FFFFFF" />
-                <Text style={styles.actionButtonText}>Create Album</Text>
+                <MaterialCommunityIcons name="album" size={24} color={theme.colors.primaryForeground} />
+                <Text style={[styles.actionButtonText, { color: theme.colors.primaryForeground }]}>Create Album</Text>
               </Pressable>
             </View>
           </View>
@@ -496,7 +498,6 @@ const styles = StyleSheet.create({
     }),
   },
   actionButtonText: {
-    color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '600',
   },

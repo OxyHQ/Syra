@@ -3,17 +3,16 @@ import 'react-native-reanimated';
 
 import NetInfo from '@react-native-community/netinfo';
 import { QueryClient, focusManager, onlineManager } from '@tanstack/react-query';
-import { useFonts } from "expo-font";
 import { Slot } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState, memo } from "react";
-import { AppState, Platform, StyleSheet, Text, TextInput, View, type AppStateStatus } from "react-native";
+import { AppState, Platform, StyleSheet, View, type AppStateStatus } from "react-native";
 
 // Components
 import AppSplashScreen from '@/components/AppSplashScreen';
 import { PlayerBar } from "@/components/PlayerBar";
 import { MobilePlayerBar } from "@/components/MobilePlayerBar";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
-import { TopBar } from "@/components/TopBar";
+import { TopBar, TOP_BAR_HEIGHT } from "@/components/TopBar";
 import { LibrarySidebar } from "@/components/LibrarySidebar";
 import { NowPlaying } from "@/components/NowPlaying";
 import { ThemedView } from "@/components/ThemedView";
@@ -78,11 +77,14 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
   // Padding is on panelsWrapper (bottom only, no top padding), so we subtract outerPadding
   // On mobile, player bar is absolute/fixed, so it doesn't affect height calculation
   // topbar + playerBar (~92px) + padding (bottom only on desktop). These are
-  // web `calc()` strings; native panels do not use this height.
+  // web `calc()` strings; native panels do not use this height (they flex, so
+  // the top safe-area inset that grows the TopBar on native is absorbed
+  // automatically). On web `insets.top` is 0, so `TOP_BAR_HEIGHT` is exact.
+  const PLAYER_BAR_HEIGHT = 92;
   const panelHeight = webDimension(
     isScreenNotMobile
-      ? `calc(100vh - 64px - 92px - ${outerPadding}px)`
-      : `calc(100vh - 64px - 92px)`
+      ? `calc(100vh - ${TOP_BAR_HEIGHT}px - ${PLAYER_BAR_HEIGHT}px - ${outerPadding}px)`
+      : `calc(100vh - ${TOP_BAR_HEIGHT}px - ${PLAYER_BAR_HEIGHT}px)`
   );
 
   const styles = useMemo(() => StyleSheet.create({
@@ -229,65 +231,11 @@ export default function RootLayout() {
   // Memoized instances
   const queryClient = useMemo(() => new QueryClient(QUERY_CLIENT_CONFIG), []);
 
-  // Font Loading
-  // Optimized: Using variable fonts - single file per family contains all weights
-  // This reduces loading overhead significantly compared to registering each weight separately
-  const [fontsLoaded, fontError] = useFonts(
-    useMemo(() => {
-      const fontMap: Record<string, any> = {};
-      const InterVariable = require('@/assets/fonts/inter/InterVariable.ttf');
-      const PhuduVariable = require('@/assets/fonts/Phudu-VariableFont_wght.ttf');
-
-      // Inter: Single variable font with weight aliases
-      ['Thin', 'ExtraLight', 'Light', 'Regular', 'Medium', 'SemiBold', 'Bold', 'ExtraBold', 'Black'].forEach(weight => {
-        fontMap[`Inter-${weight}`] = InterVariable;
-      });
-
-      // Phudu: Single variable font with weight aliases
-      ['Thin', 'Regular', 'Medium', 'SemiBold', 'Bold'].forEach(weight => {
-        fontMap[`Phudu-${weight}`] = PhuduVariable;
-      });
-
-      return fontMap;
-    }, [])
-  );
-
-  // If font loading fails (e.g. corrupt file, 404, wrong format), log the error
-  // and treat fonts as "ready" so the app doesn't stay stuck on splash.
-  const [fontTimedOut, setFontTimedOut] = useState(false);
-  const fontsReady = fontsLoaded || !!fontError || fontTimedOut;
-
-  useEffect(() => {
-    if (fontError) {
-      console.error('Font loading failed, proceeding without custom fonts', fontError);
-    }
-  }, [fontError]);
-
-  // Safety timeout: if fonts haven't loaded after 5 seconds, proceed anyway
-  useEffect(() => {
-    if (fontsReady) return;
-    const timer = setTimeout(() => {
-      console.warn('Font loading timed out after 5s, proceeding without custom fonts');
-      setFontTimedOut(true);
-    }, 5000);
-    return () => clearTimeout(timer);
-  }, [fontsReady]);
-
-  // Set Inter as the default font for all Text and TextInput components
-  useEffect(() => {
-    if (!fontsLoaded) return;
-    const defaultTextStyle = { fontFamily: 'Inter-Regular' };
-    const textProps = (Text as any).defaultProps || {};
-    (Text as any).defaultProps = {
-      ...textProps,
-      style: [textProps.style, defaultTextStyle],
-    };
-    const textInputProps = (TextInput as any).defaultProps || {};
-    (TextInput as any).defaultProps = {
-      ...textInputProps,
-      style: [textInputProps.style, defaultTextStyle],
-    };
-  }, [fontsLoaded]);
+  // Font loading is owned entirely by Bloom's `BloomThemeProvider`/`FontLoader`:
+  // it loads the Bloom font families on native (and sets the default `Text`
+  // family) and injects the `@font-face` rules + `--bloom-font-*` tokens on web.
+  // The provider gates native rendering on fonts via its `onFontsLoading`
+  // fallback (wired below), so this layout no longer loads fonts itself.
 
   // Callbacks
   const handleSplashFadeComplete = useCallback(() => {
@@ -295,9 +243,7 @@ export default function RootLayout() {
   }, []);
 
   const initializeApp = useCallback(async () => {
-    if (!fontsReady) return;
-
-    const result = await AppInitializer.initializeApp(fontsReady, oxyServices);
+    const result = await AppInitializer.initializeApp(true, oxyServices);
 
     if (result.success) {
       setSplashState((prev) => ({ ...prev, initializationComplete: true }));
@@ -306,7 +252,7 @@ export default function RootLayout() {
       // Still mark as complete to prevent blocking the app
       setSplashState((prev) => ({ ...prev, initializationComplete: true }));
     }
-  }, [fontsReady]);
+  }, []);
 
 
   // Initialize i18n once when the app mounts
@@ -345,10 +291,10 @@ export default function RootLayout() {
   }, [initializeApp]);
 
   useEffect(() => {
-    if (fontsReady && splashState.initializationComplete && !splashState.startFade) {
+    if (splashState.initializationComplete && !splashState.startFade) {
       setSplashState((prev) => ({ ...prev, startFade: true }));
     }
-  }, [fontsReady, splashState.initializationComplete, splashState.startFade]);
+  }, [splashState.initializationComplete, splashState.startFade]);
 
   // Set appIsReady only after both initialization (including auth) and splash fade complete
   useEffect(() => {
@@ -395,7 +341,11 @@ export default function RootLayout() {
   ]);
 
   return (
-    <BloomThemeProvider defaultMode="dark" defaultColorPreset="purple">
+    <BloomThemeProvider
+      defaultMode="dark"
+      defaultColorPreset="purple"
+      onFontsLoading={<AppSplashScreen />}
+    >
       <ThemedView style={{ flex: 1 }}>
         {appContent}
       </ThemedView>

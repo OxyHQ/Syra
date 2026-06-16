@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, Platform, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@oxyhq/bloom/theme';
+import { webTextStyle } from '@/utils/webStyles';
 
 export function SideBarItem({
     isActive,
@@ -89,13 +90,12 @@ export function SideBarItem({
                             fontSize: 15,
                             fontWeight: isActive ? '600' : '500',
                             color: isActive || isHovered ? theme.colors.primary : theme.colors.text,
-                            ...(Platform.select({
-                                web: {
+                            ...(Platform.OS === 'web'
+                                ? webTextStyle({
                                     transition: 'color 200ms cubic-bezier(0.2, 0, 0, 1)',
-                                    fontFamily: 'Phudu',
                                     whiteSpace: 'nowrap',
-                                },
-                            }) as any),
+                                })
+                                : null),
                         }}
                     >
                         {text}

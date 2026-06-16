@@ -86,7 +86,7 @@ export const ConfirmBottomSheet: React.FC<ConfirmBottomSheetProps> = ({
                         onPress={handleConfirm}
                         activeOpacity={0.7}
                     >
-                        <Text style={[styles.confirmButtonText, { color: '#FFFFFF' }]}>
+                        <Text style={[styles.confirmButtonText, { color: theme.colors.primaryForeground }]}>
                             {confirmText || t('common.confirm')}
                         </Text>
                     </TouchableOpacity>
@@ -161,7 +161,6 @@ const styles = StyleSheet.create({
     confirmButtonText: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#FFFFFF',
     },
 });
 

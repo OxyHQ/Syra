@@ -81,7 +81,7 @@ export const useMusicPreferencesStore = create<MusicPreferencesStore>((set, get)
       }
 
       // Fetch fresh data from API
-      const res = await api.get<MusicPreferences>('music/preferences/me');
+      const res = await api.get<MusicPreferences>('/music/preferences/me');
       const doc = unwrapApiData<MusicPreferences>(res.data);
       
       // Cache the preferences
@@ -112,7 +112,7 @@ export const useMusicPreferencesStore = create<MusicPreferencesStore>((set, get)
         await Storage.set(MUSIC_PREFERENCES_CACHE_KEY, optimistic);
       }
       
-      const res = await api.put<MusicPreferences>('music/preferences', partial);
+      const res = await api.put<MusicPreferences>('/music/preferences', partial);
       const doc = unwrapApiData<MusicPreferences>(res.data);
 
       if (doc) {

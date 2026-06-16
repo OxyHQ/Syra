@@ -56,7 +56,7 @@ export const PlayerBar: React.FC = () => {
     <View style={containerStyle}>
       {/* Progress Bar */}
       <Pressable
-        style={[styles.progressBarContainer, { backgroundColor: 'rgba(255, 255, 255, 0.3)' }]}
+        style={[styles.progressBarContainer, { backgroundColor: theme.colors.border }]}
         onPress={(e) => {
           if (Platform.OS === 'web') {
             const rect = (e.target as any)?.getBoundingClientRect();
@@ -75,7 +75,7 @@ export const PlayerBar: React.FC = () => {
           style={[
             styles.progressBar,
             {
-              backgroundColor: "#FFFFFF",
+              backgroundColor: theme.colors.primary,
               width: `${progressPercent}%`,
             }
           ]}
@@ -145,12 +145,12 @@ export const PlayerBar: React.FC = () => {
             disabled={isLoading || !currentTrack}
           >
             {isLoading ? (
-              <MaterialCommunityIcons name="timer-sand" size={24} color="#FFFFFF" />
+              <MaterialCommunityIcons name="timer-sand" size={24} color={theme.colors.primaryForeground} />
             ) : (
               <MaterialCommunityIcons
                 name={isPlaying ? 'pause' : 'play'}
                 size={24}
-                color={currentTrack ? "#FFFFFF" : theme.colors.textSecondary}
+                color={currentTrack ? theme.colors.primaryForeground : theme.colors.textSecondary}
               />
             )}
           </Pressable>

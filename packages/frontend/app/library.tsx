@@ -155,14 +155,14 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
               <MaterialCommunityIcons
                 name="plus"
                 size={18}
-                color="#FFFFFF"
+                color={theme.colors.primaryForeground}
               />
-              <Text style={styles.createButtonText}>Create Playlist</Text>
+              <Text style={[styles.createButtonText, { color: theme.colors.primaryForeground }]}>Create Playlist</Text>
             </Pressable>
             {showSidebarControls && onFullscreen && (
               <Pressable
                 onPress={onFullscreen}
-                style={styles.headerButton}
+                style={[styles.headerButton, { backgroundColor: theme.colors.backgroundSecondary }]}
               >
                 <Ionicons
                   name={isFullscreen ? 'contract' : 'expand'}
@@ -174,7 +174,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
             {showSidebarControls && onCollapse && !isFullscreen && (
               <Pressable
                 onPress={onCollapse}
-                style={styles.headerButton}
+                style={[styles.headerButton, { backgroundColor: theme.colors.backgroundSecondary }]}
               >
                 <Octicons
                   name="sidebar-collapse"
@@ -204,7 +204,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                 <Text style={[
                   styles.filterText, 
                   { 
-                    color: isActive ? '#FFFFFF' : theme.colors.text,
+                    color: isActive ? theme.colors.primaryForeground : theme.colors.text,
                     fontWeight: isActive ? '700' : '600'
                   }
                 ]}>
@@ -221,8 +221,8 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
             style={[styles.libraryItem, { backgroundColor: theme.colors.backgroundSecondary }]}
             onPress={() => router.push('/library/liked')}
           >
-            <View style={[styles.likedIcon, { backgroundColor: '#450af5' }]}>
-              <Ionicons name="heart" size={24} color="#FFFFFF" />
+            <View style={[styles.likedIcon, { backgroundColor: theme.colors.primary }]}>
+              <Ionicons name="heart" size={24} color={theme.colors.primaryForeground} />
             </View>
             <View style={styles.itemContent}>
               <Text style={[styles.itemTitle, { color: theme.colors.text }]}>Liked Songs</Text>
@@ -403,7 +403,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                 onPress={() => router.push('/create-playlist')}
                 style={[styles.emptyCreateButton, { backgroundColor: theme.colors.primary }]}
               >
-                <Text style={styles.emptyCreateButtonText}>Create your first playlist</Text>
+                <Text style={[styles.emptyCreateButtonText, { color: theme.colors.primaryForeground }]}>Create your first playlist</Text>
               </Pressable>
             )}
           </View>
@@ -465,7 +465,6 @@ const styles = StyleSheet.create({
     }),
   },
   createButtonText: {
-    color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '600',
   },
@@ -475,7 +474,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 14,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
     ...Platform.select({
       web: {
         cursor: 'pointer',
@@ -552,7 +550,6 @@ const styles = StyleSheet.create({
     }),
   },
   emptyCreateButtonText: {
-    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
   },

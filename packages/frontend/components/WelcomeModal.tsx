@@ -8,6 +8,8 @@ import {
   Pressable,
   ImageBackground,
   ImageSourcePropType,
+  type StyleProp,
+  type ViewStyle,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import Animated, {
@@ -54,11 +56,10 @@ interface WelcomeModalProps {
  */
 const GradientText: React.FC<{
   lines: string[];
-  style?: any;
+  style?: StyleProp<ViewStyle>;
   fontSize: number;
   fontWeight?: string;
-  fontFamily?: string;
-}> = ({ lines, style, fontSize, fontWeight = '600', fontFamily = 'Inter-SemiBold' }) => {
+}> = ({ lines, style, fontSize, fontWeight = '600' }) => {
   const gradientId = useId();
   const lineHeight = fontSize * 1.25; // Slightly reduced gap between lines
   const totalHeight = lines.length * lineHeight;
@@ -84,7 +85,6 @@ const GradientText: React.FC<{
           y={lineHeight}
           fontSize={fontSize}
           fontWeight={fontWeight}
-          fontFamily={fontFamily}
           fill={`url(#${gradientId})`}
           textAnchor="middle"
         >
@@ -259,7 +259,6 @@ const WelcomeModal: React.FC<WelcomeModalProps> = ({
                 ]}
                 fontSize={32}
                 fontWeight="600"
-                fontFamily="Inter-SemiBold"
               />
             </View>
 
@@ -270,7 +269,7 @@ const WelcomeModal: React.FC<WelcomeModalProps> = ({
                 onPress={handleCreateAccount}
                 style={[styles.createAccountButton, { backgroundColor: theme.colors.primary }]}
               >
-                <Text style={styles.createAccountButtonText}>Create account</Text>
+                <Text style={[styles.createAccountButtonText, { color: theme.colors.primaryForeground }]}>Create account</Text>
               </Pressable>
 
               {/* Explore the app link */}
@@ -391,10 +390,8 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   createAccountButtonText: {
-    color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '600',
-    fontFamily: 'Inter-SemiBold',
   },
   exploreLink: {
     alignItems: 'center',
@@ -403,7 +400,6 @@ const styles = StyleSheet.create({
   exploreLinkText: {
     fontSize: 14,
     fontWeight: '500',
-    fontFamily: 'Inter-Medium',
   },
   signInContainer: {
     flexDirection: 'row',
@@ -413,12 +409,10 @@ const styles = StyleSheet.create({
   },
   signInPrompt: {
     fontSize: 14,
-    fontFamily: 'Inter-Regular',
   },
   signInLink: {
     fontSize: 14,
     fontWeight: '500',
-    fontFamily: 'Inter-Medium',
   },
 });
 

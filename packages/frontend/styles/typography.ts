@@ -1,19 +1,13 @@
 /**
  * Typography System
- * Consistent typography scales and font configurations
+ * Consistent typography scales (size / weight / spacing).
+ *
+ * Font families are intentionally NOT defined here: the app relies entirely on
+ * Bloom's font system. Bloom registers its families and sets the default text
+ * font (via `BloomThemeProvider`/`FontLoader`), and the `font-sans` NativeWind
+ * class resolves to Bloom's `--bloom-font-sans` token. Never hardcode a literal
+ * family name in this file.
  */
-
-import { Platform, TextStyle } from 'react-native';
-
-/**
- * Font families
- */
-export const FONT_FAMILIES = {
-  /** Primary font - Inter Variable */
-  primary: 'Inter-Regular',
-  /** Display font - Phudu Variable */
-  display: 'Phudu-Regular',
-} as const;
 
 /**
  * Font weights
@@ -88,137 +82,5 @@ export const LETTER_SPACING = {
   wider: 0.5,
 } as const;
 
-/**
- * Typography presets for common text styles
- */
-export interface TypographyPreset {
-  fontFamily: string;
-  fontSize: number;
-  fontWeight: TextStyle['fontWeight'];
-  lineHeight?: number;
-  letterSpacing?: number;
-}
-
-export const TYPOGRAPHY: Record<string, TypographyPreset> = {
-  /** Display large - for hero text */
-  displayLarge: {
-    fontFamily: FONT_FAMILIES.display,
-    fontSize: FONT_SIZES['6xl'],
-    fontWeight: Platform.OS === 'web' ? FONT_WEIGHTS.bold : '700',
-    lineHeight: FONT_SIZES['6xl'] * LINE_HEIGHTS.tight,
-    letterSpacing: LETTER_SPACING.tight,
-  },
-  /** Display medium - for large headings */
-  displayMedium: {
-    fontFamily: FONT_FAMILIES.display,
-    fontSize: FONT_SIZES['5xl'],
-    fontWeight: Platform.OS === 'web' ? FONT_WEIGHTS.bold : '700',
-    lineHeight: FONT_SIZES['5xl'] * LINE_HEIGHTS.tight,
-    letterSpacing: LETTER_SPACING.tight,
-  },
-  /** Heading 1 - main page headings */
-  h1: {
-    fontFamily: FONT_FAMILIES.primary,
-    fontSize: FONT_SIZES['3xl'],
-    fontWeight: Platform.OS === 'web' ? FONT_WEIGHTS.bold : '700',
-    lineHeight: FONT_SIZES['3xl'] * LINE_HEIGHTS.tight,
-    letterSpacing: LETTER_SPACING.normal,
-  },
-  /** Heading 2 - section headings */
-  h2: {
-    fontFamily: FONT_FAMILIES.primary,
-    fontSize: FONT_SIZES['2xl'],
-    fontWeight: Platform.OS === 'web' ? FONT_WEIGHTS.bold : '700',
-    lineHeight: FONT_SIZES['2xl'] * LINE_HEIGHTS.normal,
-    letterSpacing: LETTER_SPACING.normal,
-  },
-  /** Heading 3 - subsection headings */
-  h3: {
-    fontFamily: FONT_FAMILIES.primary,
-    fontSize: FONT_SIZES.xl,
-    fontWeight: Platform.OS === 'web' ? FONT_WEIGHTS.bold : '600',
-    lineHeight: FONT_SIZES.xl * LINE_HEIGHTS.normal,
-    letterSpacing: LETTER_SPACING.normal,
-  },
-  /** Body large - primary body text */
-  bodyLarge: {
-    fontFamily: FONT_FAMILIES.primary,
-    fontSize: FONT_SIZES.lg,
-    fontWeight: FONT_WEIGHTS.regular,
-    lineHeight: FONT_SIZES.lg * LINE_HEIGHTS.normal,
-    letterSpacing: LETTER_SPACING.normal,
-  },
-  /** Body medium - standard body text */
-  bodyMedium: {
-    fontFamily: FONT_FAMILIES.primary,
-    fontSize: FONT_SIZES.md,
-    fontWeight: FONT_WEIGHTS.regular,
-    lineHeight: FONT_SIZES.md * LINE_HEIGHTS.normal,
-    letterSpacing: LETTER_SPACING.normal,
-  },
-  /** Body small - secondary text */
-  bodySmall: {
-    fontFamily: FONT_FAMILIES.primary,
-    fontSize: FONT_SIZES.base,
-    fontWeight: FONT_WEIGHTS.regular,
-    lineHeight: FONT_SIZES.base * LINE_HEIGHTS.normal,
-    letterSpacing: LETTER_SPACING.normal,
-  },
-  /** Caption - small helper text */
-  caption: {
-    fontFamily: FONT_FAMILIES.primary,
-    fontSize: FONT_SIZES.sm,
-    fontWeight: FONT_WEIGHTS.regular,
-    lineHeight: FONT_SIZES.sm * LINE_HEIGHTS.normal,
-    letterSpacing: LETTER_SPACING.wide,
-  },
-  /** Button text */
-  button: {
-    fontFamily: FONT_FAMILIES.primary,
-    fontSize: FONT_SIZES.md,
-    fontWeight: Platform.OS === 'web' ? FONT_WEIGHTS.bold : '600',
-    lineHeight: FONT_SIZES.md * LINE_HEIGHTS.tight,
-    letterSpacing: LETTER_SPACING.normal,
-  },
-  /** Link text */
-  link: {
-    fontFamily: FONT_FAMILIES.primary,
-    fontSize: FONT_SIZES.md,
-    fontWeight: FONT_WEIGHTS.medium,
-    lineHeight: FONT_SIZES.md * LINE_HEIGHTS.normal,
-    letterSpacing: LETTER_SPACING.normal,
-  },
-} as const;
-
-/**
- * Get typography style by preset name
- */
-export function getTypographyStyle(preset: keyof typeof TYPOGRAPHY): TextStyle {
-  return TYPOGRAPHY[preset];
-}
-
-/**
- * Create custom typography style
- */
-export function createTypographyStyle(
-  fontSize: number,
-  fontWeight: TextStyle['fontWeight'] = FONT_WEIGHTS.regular,
-  options?: {
-    fontFamily?: string;
-    lineHeight?: number;
-    letterSpacing?: number;
-  }
-): TextStyle {
-  return {
-    fontFamily: options?.fontFamily ?? FONT_FAMILIES.primary,
-    fontSize,
-    fontWeight,
-    lineHeight: options?.lineHeight ?? fontSize * LINE_HEIGHTS.normal,
-    letterSpacing: options?.letterSpacing ?? LETTER_SPACING.normal,
-  };
-}
-
 export type FontSize = typeof FONT_SIZES[keyof typeof FONT_SIZES];
 export type FontWeight = typeof FONT_WEIGHTS[keyof typeof FONT_WEIGHTS];
-export type TypographyPresetName = keyof typeof TYPOGRAPHY;
-

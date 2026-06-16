@@ -55,10 +55,10 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
         {/* Liked Songs */}
         {isAuthenticated && (
           <Pressable
-            style={[styles.iconButton, { backgroundColor: '#450af5' }]}
+            style={[styles.iconButton, { backgroundColor: theme.colors.primary }]}
             onPress={() => router.push('/library/liked')}
           >
-            <Ionicons name="heart" size={18} color="#FFFFFF" />
+            <Ionicons name="heart" size={18} color={theme.colors.primaryForeground} />
           </Pressable>
         )}
 

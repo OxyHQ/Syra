@@ -183,7 +183,7 @@ export const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
         <AnimatedView
           style={[
             StyleSheet.absoluteFill,
-            { backgroundColor: 'rgba(0, 0, 0, 0.7)' },
+            { backgroundColor: theme.colors.overlay },
             backdropStyle,
           ]}
         />
@@ -343,7 +343,7 @@ export const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
                             {
                               color:
                                 visibility === option.value
-                                  ? '#FFFFFF'
+                                  ? theme.colors.primaryForeground
                                   : theme.colors.text,
                             },
                           ]}
@@ -353,12 +353,9 @@ export const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
                         <Text
                           style={[
                             styles.visibilityOptionDescription,
-                            {
-                              color:
-                                visibility === option.value
-                                  ? 'rgba(255, 255, 255, 0.8)'
-                                  : theme.colors.textSecondary,
-                            },
+                            visibility === option.value
+                              ? { color: theme.colors.primaryForeground, opacity: 0.8 }
+                              : { color: theme.colors.textSecondary },
                           ]}
                         >
                           {option.description}
@@ -407,9 +404,9 @@ export const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
                 ]}
               >
                 {isCreating ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <ActivityIndicator size="small" color={theme.colors.primaryForeground} />
                 ) : (
-                  <Text style={styles.createButtonText}>Create</Text>
+                  <Text style={[styles.createButtonText, { color: theme.colors.primaryForeground }]}>Create</Text>
                 )}
               </Pressable>
             </View>
@@ -577,7 +574,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   createButtonText: {
-    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
   },

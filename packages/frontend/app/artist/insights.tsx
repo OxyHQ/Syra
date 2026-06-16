@@ -93,7 +93,9 @@ const ArtistInsightsScreen: React.FC = () => {
             {
               backgroundColor: theme.colors.background,
               borderBottomColor: theme.colors.border,
-              paddingTop: Math.max(insets.top, 8),
+              // Top safe-area is cleared by the shell's TopBar (single
+              // authority); this in-panel header only needs base padding.
+              paddingTop: 8,
             },
           ]}
         >
@@ -141,7 +143,7 @@ const ArtistInsightsScreen: React.FC = () => {
                   style={[
                     styles.periodButtonText,
                     {
-                      color: period === p ? '#FFFFFF' : theme.colors.text,
+                      color: period === p ? theme.colors.primaryForeground : theme.colors.text,
                       fontWeight: period === p ? 'bold' : 'normal',
                     },
                   ]}

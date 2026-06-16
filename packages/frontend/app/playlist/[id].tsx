@@ -216,7 +216,7 @@ const PlaylistScreen: React.FC = () => {
                 style={[styles.stickyHeaderPlayButton, { backgroundColor: theme.colors.primary }]}
                 onPress={handlePlayPlaylist}
               >
-                <Ionicons name="play" size={16} color="#000" />
+                <Ionicons name="play" size={16} color={theme.colors.primaryForeground} />
               </Pressable>
               <Pressable
                 style={styles.stickyHeaderControlButton}
@@ -332,7 +332,7 @@ const PlaylistScreen: React.FC = () => {
                 onPress={handlePlayPlaylist}
               >
                 <View style={styles.playButtonInner}>
-                  <Ionicons name="play" size={24} color="#000" />
+                  <Ionicons name="play" size={24} color={theme.colors.primaryForeground} />
                 </View>
               </Pressable>
 
@@ -352,7 +352,7 @@ const PlaylistScreen: React.FC = () => {
                 <Ionicons
                   name={isLiked ? "heart" : "heart-outline"}
                   size={24}
-                  color={isLiked ? '#1DB954' : theme.colors.text}
+                  color={isLiked ? theme.colors.primary : theme.colors.text}
                 />
               </Pressable>
 

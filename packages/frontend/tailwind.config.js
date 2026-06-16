@@ -16,7 +16,12 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'sans-serif'],
+        // Single source of truth: Bloom's `--bloom-font-sans` token. Bloom's
+        // FontLoader injects the matching `@font-face` rules + `:root` var on
+        // web and sets the native `Text` default family, so we never hardcode a
+        // literal family name here. On native the unresolved `var()` is ignored
+        // and text falls back to Bloom's default family.
+        sans: ['var(--bloom-font-sans)', 'sans-serif'],
       },
       borderRadius: {
         lg: "var(--radius)",

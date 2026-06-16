@@ -127,7 +127,9 @@ const CopyrightReportScreen: React.FC = () => {
             {
               backgroundColor: theme.colors.background,
               borderBottomColor: theme.colors.border,
-              paddingTop: Math.max(insets.top, 8),
+              // Top safe-area is cleared by the shell's TopBar (single
+              // authority); this in-panel header only needs base padding.
+              paddingTop: 8,
             },
           ]}
         >
@@ -301,9 +303,9 @@ const CopyrightReportScreen: React.FC = () => {
             ]}
           >
             {isSubmitting ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
+              <ActivityIndicator size="small" color={theme.colors.primaryForeground} />
             ) : (
-              <Text style={styles.submitButtonText}>Submit Report</Text>
+              <Text style={[styles.submitButtonText, { color: theme.colors.primaryForeground }]}>Submit Report</Text>
             )}
           </Pressable>
         </ScrollView>
@@ -465,7 +467,6 @@ const styles = StyleSheet.create({
     }),
   },
   submitButtonText: {
-    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
   },

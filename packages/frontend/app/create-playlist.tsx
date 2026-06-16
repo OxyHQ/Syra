@@ -124,7 +124,9 @@ const CreatePlaylistScreen: React.FC = () => {
             {
               backgroundColor: theme.colors.background,
               borderBottomColor: theme.colors.border,
-              paddingTop: Math.max(insets.top, 8),
+              // Top safe-area is cleared by the shell's TopBar (single
+              // authority); this in-panel header only needs base padding.
+              paddingTop: 8,
             },
           ]}
         >
@@ -157,9 +159,9 @@ const CreatePlaylistScreen: React.FC = () => {
             ]}
           >
             {isCreating ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
+              <ActivityIndicator size="small" color={theme.colors.primaryForeground} />
             ) : (
-              <Text style={styles.createHeaderButtonText}>Create</Text>
+              <Text style={[styles.createHeaderButtonText, { color: theme.colors.primaryForeground }]}>Create</Text>
             )}
           </Pressable>
         </View>
@@ -286,7 +288,7 @@ const CreatePlaylistScreen: React.FC = () => {
                         {
                           color:
                             visibility === option.value
-                              ? '#FFFFFF'
+                              ? theme.colors.primaryForeground
                               : theme.colors.text,
                         },
                       ]}
@@ -296,12 +298,9 @@ const CreatePlaylistScreen: React.FC = () => {
                     <Text
                       style={[
                         styles.visibilityOptionDescription,
-                        {
-                          color:
-                            visibility === option.value
-                              ? 'rgba(255, 255, 255, 0.8)'
-                              : theme.colors.textSecondary,
-                        },
+                        visibility === option.value
+                          ? { color: theme.colors.primaryForeground, opacity: 0.8 }
+                          : { color: theme.colors.textSecondary },
                       ]}
                     >
                       {option.description}
@@ -359,7 +358,6 @@ const styles = StyleSheet.create({
     }),
   },
   createHeaderButtonText: {
-    color: '#FFFFFF',
     fontSize: 13,
     fontWeight: 'bold',
   },
