@@ -7,16 +7,29 @@ import { uploadTrackAudio } from '../audioStorageService';
 import { TrackModel } from '../../models/Track';
 import type { MusicSourceConnector } from './MusicSourceConnector';
 import { logger } from '../../utils/logger';
+import { assertSafeAudioUrl, isLikelyAudio, MAX_AUDIO_BYTES } from './safeAudioDownload';
 
 // ── Default CC download + store ───────────────────────────────────────────────
 
 /**
  * Production implementation for the CC download→store pipeline.
  *
- * Downloads `external.downloadUrl`, uploads the audio buffer to S3 via
- * `uploadTrackAudio`, and sets `track.audioSource` so the ingest pipeline
- * can locate the source file. The follow-on `enqueueIngest` call then
- * transcodes the audio to encrypted HLS.
+ * Security hardening applied (per OWASP SSRF + resource-exhaustion guidance):
+ *  1. SSRF guard — `assertSafeAudioUrl` rejects private IPs, localhost, file://
+ *     and over-length URLs before any network call is made.
+ *  2. Redirect rejection — fetched with `redirect: 'manual'`; any 3xx response
+ *     is rejected immediately to prevent a redirect from pointing to an internal
+ *     host that bypassed the pre-fetch URL check.
+ *  3. Content-Length cap — if the server advertises a body larger than
+ *     MAX_AUDIO_BYTES (100 MB) the download is aborted before reading a byte.
+ *  4. Streaming size cap — body is read chunk-by-chunk; the running byte count
+ *     is checked after every chunk so memory is bounded even when the server
+ *     omits or lies about content-length.
+ *  5. Audio sniff — after buffering, `isLikelyAudio` rejects responses whose
+ *     magic bytes and content-type don't look like real audio.
+ *
+ * A failure at any step throws, which the runImport per-track try/catch
+ * catches → increments job.failed → continues with the next track.
  */
 async function defaultDownloadAndStore(
   external: ExternalTrack,
@@ -27,12 +40,63 @@ async function defaultDownloadAndStore(
     throw new Error(`importService: CC track ${external.externalId} has no downloadUrl`);
   }
 
-  const response = await fetch(external.downloadUrl);
+  // 1. SSRF guard — throws for unsafe URLs
+  assertSafeAudioUrl(external.downloadUrl);
+
+  // 2. Fetch without following redirects
+  const response = await fetch(external.downloadUrl, { redirect: 'manual' });
+
+  if (response.status >= 300 && response.status < 400) {
+    throw new Error(
+      `importService: redirect not allowed for CC download (${response.status}) — possible SSRF via redirect`,
+    );
+  }
   if (!response.ok) {
-    throw new Error(`importService: download failed ${response.status} for ${external.downloadUrl}`);
+    throw new Error(
+      `importService: download failed ${response.status} for ${external.downloadUrl}`,
+    );
   }
 
-  const buffer = Buffer.from(await response.arrayBuffer());
+  // 3. Content-Length pre-check
+  const clHeader = response.headers.get('content-length');
+  if (clHeader !== null) {
+    const declared = Number(clHeader);
+    if (Number.isFinite(declared) && declared > MAX_AUDIO_BYTES) {
+      throw new Error(
+        `importService: content-length ${declared} exceeds MAX_AUDIO_BYTES ${MAX_AUDIO_BYTES}`,
+      );
+    }
+  }
+
+  // 4. Streaming read with hard byte cap
+  if (!response.body) {
+    throw new Error('importService: response has no body');
+  }
+
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+  const reader = response.body.getReader();
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    received += value.byteLength;
+    if (received > MAX_AUDIO_BYTES) {
+      await reader.cancel();
+      throw new Error(`importService: audio too large (> ${MAX_AUDIO_BYTES} bytes)`);
+    }
+    chunks.push(value);
+  }
+
+  const buffer = Buffer.concat(chunks);
+
+  // 5. Content-type / magic-byte check
+  const contentType = response.headers.get('content-type');
+  if (!isLikelyAudio(buffer, contentType)) {
+    throw new Error(
+      `importService: response does not appear to be audio (content-type: ${contentType ?? 'none'})`,
+    );
+  }
 
   // Set audioSource on the track so the ingest pipeline knows the S3 key
   const track = await TrackModel.findById(trackId);
