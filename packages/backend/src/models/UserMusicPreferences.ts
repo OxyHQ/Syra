@@ -2,9 +2,10 @@ import mongoose, { Schema, Document } from 'mongoose';
 import type { AudioQuality } from '@syra/shared-types';
 
 /**
- * UserMusicPreferences - User music settings and preferences
+ * Plain data shape of a persisted user music preferences document.
+ * Used for `.lean()` results, which strip Mongoose Document machinery.
  */
-export interface IUserMusicPreferences extends Document {
+export interface UserMusicPreferencesData {
   _id: mongoose.Types.ObjectId;
   oxyUserId: string;
   defaultVolume: number; // 0-1
@@ -17,8 +18,15 @@ export interface IUserMusicPreferences extends Document {
   downloadQuality: AudioQuality;
   dataSaver: boolean;
   monoAudio: boolean;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
+ * UserMusicPreferences - User music settings and preferences (Mongoose document)
+ */
+export interface IUserMusicPreferences extends UserMusicPreferencesData, Document {
+  _id: mongoose.Types.ObjectId;
 }
 
 const AUDIO_QUALITY_VALUES: AudioQuality[] = ['low', 'normal', 'high', 'very_high'];

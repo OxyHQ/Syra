@@ -229,6 +229,7 @@ export const createPlaylist = async (req: AuthRequest, res: Response, next: Next
     }
 
     // Validate coverArt if provided - must be a valid MongoDB ObjectId string
+    let colors: { primaryColor?: string; secondaryColor?: string } | undefined;
     if (coverArt !== undefined && coverArt !== null) {
       // Reject blob URLs, http/https URLs, or any other format
       if (coverArt.startsWith('blob:') || coverArt.startsWith('http://') || coverArt.startsWith('https://') || coverArt.startsWith('/api/')) {
@@ -247,7 +248,6 @@ export const createPlaylist = async (req: AuthRequest, res: Response, next: Next
       }
 
       // Extract colors from cover art image
-      let colors;
       try {
         const imageUrl = `/api/images/${coverArt}`;
         colors = await extractColorsFromImage(undefined, imageUrl);

@@ -14,10 +14,10 @@
     "baseUrl": ".",
     "paths": {
       "@syra/shared-types": [
-        "../shared-types/src"
+        "../shared-types/dist"
       ],
       "@syra/shared-types/*": [
-        "../shared-types/src/*"
+        "../shared-types/dist/*"
       ]
     }
   },

@@ -18,7 +18,7 @@ export interface IStrike {
 }
 
 export interface IArtist
-  extends Omit<Artist, 'id' | 'lastStrikeAt' | 'terminatedAt' | 'strikes'>,
+  extends Omit<Artist, 'id' | '_id' | 'lastStrikeAt' | 'terminatedAt' | 'strikes'>,
     Document {
   _id: mongoose.Types.ObjectId;
   /** Stored as Date in MongoDB; serialised to ISO string in API responses */

@@ -18,9 +18,23 @@ import { Readable } from 'stream';
  */
 
 /**
+ * Minimal subset of a track needed to address its audio in S3. Derived from the
+ * shared `Track` type so it stays in sync, while letting callers pass any value
+ * (e.g. a Mongoose document projection) that carries these fields without
+ * matching the full `Track` shape.
+ */
+export type TrackAudioRef = Pick<
+  Track,
+  'id' | 'artistId' | 'albumId' | 'title' | 'audioSource'
+>;
+
+/**
  * Get S3 key for a track
  */
-export function getTrackS3Key(track: Track): string {
+export function getTrackS3Key(track: TrackAudioRef): string {
+  if (!track.audioSource) {
+    throw new Error(`Track ${track.id} has no audio source`);
+  }
   const format = track.audioSource.format || 'mp3';
   return getS3AudioKey(
     track.id,
@@ -34,9 +48,12 @@ export function getTrackS3Key(track: Track): string {
  * Upload audio file to S3 for a track
  */
 export async function uploadTrackAudio(
-  track: Track,
+  track: TrackAudioRef,
   audioFile: Buffer | Readable | string
 ): Promise<string> {
+  if (!track.audioSource) {
+    throw new Error(`Track ${track.id} has no audio source`);
+  }
   const key = getTrackS3Key(track);
   const contentType = `audio/${track.audioSource.format || 'mpeg'}`;
 

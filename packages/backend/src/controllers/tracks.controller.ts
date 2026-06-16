@@ -322,6 +322,9 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
 
       // Upload audio file to S3 first
       const trackForUpload = toApiFormat(track);
+      if (!trackForUpload) {
+        throw new Error('Failed to serialize track for upload');
+      }
       logger.debug('[TracksController] Starting S3 upload...');
       await uploadTrackAudio(trackForUpload, file.buffer);
       logger.debug('[TracksController] S3 upload completed, saving track to database...');

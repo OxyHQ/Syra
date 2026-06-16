@@ -5,6 +5,7 @@ import { upsertTrack } from '../catalog/upsertTrack';
 import { enqueueIngest as defaultEnqueueIngest } from '../ingest/ingestTrack';
 import { uploadTrackAudio } from '../audioStorageService';
 import { TrackModel } from '../../models/Track';
+import { toApiFormat } from '../../utils/musicHelpers';
 import type { MusicSourceConnector } from './MusicSourceConnector';
 import { logger } from '../../utils/logger';
 import { assertSafeAudioUrl, isLikelyAudio, MAX_AUDIO_BYTES } from './safeAudioDownload';
@@ -106,7 +107,11 @@ async function defaultDownloadAndStore(
   await track.save();
 
   // Upload the raw MP3 to S3 — ingest will read it from there
-  await uploadTrackAudio(track as Parameters<typeof uploadTrackAudio>[0], buffer);
+  const trackForUpload = toApiFormat(track);
+  if (!trackForUpload) {
+    throw new Error(`importService: failed to serialize track ${trackId} for upload`);
+  }
+  await uploadTrackAudio(trackForUpload, buffer);
 }
 
 // ── Public types ──────────────────────────────────────────────────────────────

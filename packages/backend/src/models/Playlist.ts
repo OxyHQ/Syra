@@ -1,7 +1,7 @@
 import mongoose, { Schema, Document } from 'mongoose';
 import { Playlist, PlaylistCollaborator, PlaylistVisibility } from '@syra/shared-types';
 
-export interface IPlaylist extends Omit<Playlist, 'id'>, Document {
+export interface IPlaylist extends Omit<Playlist, 'id' | '_id'>, Document {
   _id: mongoose.Types.ObjectId;
 }
 

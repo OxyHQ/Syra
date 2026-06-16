@@ -4,8 +4,15 @@ import { AlbumModel } from '../models/Album';
 // ── Image helpers ─────────────────────────────────────────────────────────────
 
 /** First external image URL from an images[] array, if present. */
-function firstImageUrl(doc: { images?: Array<{ url?: string }> }): string | undefined {
-  const url = doc.images?.[0]?.url;
+function firstImageUrl(doc: unknown): string | undefined {
+  if (doc === null || typeof doc !== 'object') return undefined;
+  const images = (doc as { images?: unknown }).images;
+  if (!Array.isArray(images)) return undefined;
+  const first: unknown = images[0];
+  const url =
+    first !== null && typeof first === 'object' && 'url' in first
+      ? (first as { url?: unknown }).url
+      : undefined;
   return typeof url === 'string' && url.length > 0 ? url : undefined;
 }
 
@@ -13,18 +20,33 @@ function firstImageUrl(doc: { images?: Array<{ url?: string }> }): string | unde
 const toImageUrl = (id: string): string => `/api/images/${id}`;
 
 /**
+ * API representation of a persisted document: the `_id` ObjectId is dropped and
+ * replaced by a string `id`. Mongoose `Document` machinery is stripped at
+ * runtime via `toObject()`; structurally this still satisfies the shared
+ * domain types (e.g. `Track`, `Album`), whose `_id` is an optional string.
+ */
+export type ApiFormat<T> = Omit<T, '_id'> & { id: string };
+
+/** Narrow to a Mongoose document that exposes `toObject()`. */
+function isMongooseDoc(value: object): value is { toObject: () => Record<string, unknown> } {
+  return typeof (value as { toObject?: unknown }).toObject === 'function';
+}
+
+/**
  * Convert MongoDB document to API format
  * Converts _id to id and ensures proper serialization
  */
-export function toApiFormat<T extends { _id?: mongoose.Types.ObjectId | string; [key: string]: any }>(
+export function toApiFormat<T extends { _id?: mongoose.Types.ObjectId | string }>(
   doc: T | null | undefined
-): (T & { id: string }) | null {
+): ApiFormat<T> | null {
   if (!doc) return null;
-  
+
   // Handle both Mongoose documents and plain objects
-  const docObj = doc.toObject ? doc.toObject() : doc;
+  const docObj: Record<string, unknown> = isMongooseDoc(doc)
+    ? doc.toObject()
+    : { ...doc };
   const { _id, ...rest } = docObj;
-  
+
   // Convert _id to id string
   let id: string;
   if (_id instanceof mongoose.Types.ObjectId) {
@@ -34,13 +56,13 @@ export function toApiFormat<T extends { _id?: mongoose.Types.ObjectId | string; 
   } else {
     id = '';
   }
-  
+
   // Ensure timestamps are strings if they exist
-  const result: any = {
+  const result: Record<string, unknown> = {
     ...rest,
     id,
   };
-  
+
   // Convert Date objects to ISO strings for timestamps
   if (result.createdAt instanceof Date) {
     result.createdAt = result.createdAt.toISOString();
@@ -48,17 +70,19 @@ export function toApiFormat<T extends { _id?: mongoose.Types.ObjectId | string; 
   if (result.updatedAt instanceof Date) {
     result.updatedAt = result.updatedAt.toISOString();
   }
-  
-  return result as T & { id: string };
+
+  return result as ApiFormat<T>;
 }
 
 /**
  * Convert array of MongoDB documents to API format
  */
-export function toApiFormatArray<T extends { _id?: mongoose.Types.ObjectId | string; [key: string]: any }>(
+export function toApiFormatArray<T extends { _id?: mongoose.Types.ObjectId | string }>(
   docs: T[]
-): (T & { id: string })[] {
-  return docs.map(doc => toApiFormat(doc)!).filter(Boolean);
+): ApiFormat<T>[] {
+  return docs
+    .map(doc => toApiFormat(doc))
+    .filter((doc): doc is ApiFormat<T> => doc !== null);
 }
 
 /**

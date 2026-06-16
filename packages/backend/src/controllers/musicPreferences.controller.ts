@@ -1,4 +1,7 @@
-import { UserMusicPreferencesModel, IUserMusicPreferences } from '../models/UserMusicPreferences';
+import {
+  UserMusicPreferencesModel,
+  type UserMusicPreferencesData,
+} from '../models/UserMusicPreferences';
 import type { AudioQuality } from '@syra/shared-types';
 
 const AUDIO_QUALITY_VALUES: readonly AudioQuality[] = ['low', 'normal', 'high', 'very_high'];
@@ -6,31 +9,31 @@ const AUDIO_QUALITY_VALUES: readonly AudioQuality[] = ['low', 'normal', 'high', 
 /**
  * Ensure user music preferences exist (create with defaults if not)
  */
-export async function ensureMusicPreferences(oxyUserId: string): Promise<IUserMusicPreferences> {
-  let preferences = await UserMusicPreferencesModel.findOne({ oxyUserId }).lean();
-  
-  if (!preferences) {
-    // Create with defaults
-    const newPreferences = new UserMusicPreferencesModel({
-      oxyUserId,
-      defaultVolume: 0.7,
-      autoplay: true,
-      crossfade: 0,
-      gaplessPlayback: true,
-      normalizeVolume: true,
-      explicitContent: true,
-    });
-    preferences = (await newPreferences.save()).toObject();
+export async function ensureMusicPreferences(oxyUserId: string): Promise<UserMusicPreferencesData> {
+  const existing = await UserMusicPreferencesModel.findOne({ oxyUserId }).lean<UserMusicPreferencesData>();
+  if (existing) {
+    return existing;
   }
-  
-  return preferences as IUserMusicPreferences;
+
+  // Create with defaults
+  const newPreferences = new UserMusicPreferencesModel({
+    oxyUserId,
+    defaultVolume: 0.7,
+    autoplay: true,
+    crossfade: 0,
+    gaplessPlayback: true,
+    normalizeVolume: true,
+    explicitContent: true,
+  });
+  await newPreferences.save();
+  return newPreferences.toObject();
 }
 
 /**
  * Get music preferences for a user
  */
-export async function getMusicPreferences(oxyUserId: string): Promise<IUserMusicPreferences | null> {
-  return await UserMusicPreferencesModel.findOne({ oxyUserId }).lean() as IUserMusicPreferences | null;
+export async function getMusicPreferences(oxyUserId: string): Promise<UserMusicPreferencesData | null> {
+  return await UserMusicPreferencesModel.findOne({ oxyUserId }).lean<UserMusicPreferencesData>();
 }
 
 /**
@@ -38,9 +41,9 @@ export async function getMusicPreferences(oxyUserId: string): Promise<IUserMusic
  */
 export async function updateMusicPreferences(
   oxyUserId: string,
-  updates: Partial<IUserMusicPreferences>
-): Promise<IUserMusicPreferences> {
-  const update: Record<string, any> = {};
+  updates: Partial<UserMusicPreferencesData>
+): Promise<UserMusicPreferencesData> {
+  const update: Partial<UserMusicPreferencesData> = {};
   
   // Validate and set defaultVolume
   if (typeof updates.defaultVolume === 'number') {
@@ -99,13 +102,13 @@ export async function updateMusicPreferences(
     { oxyUserId },
     { $set: update },
     { upsert: true, new: true }
-  ).lean();
-  
+  ).lean<UserMusicPreferencesData>();
+
   if (!preferences) {
     throw new Error('Failed to update music preferences');
   }
-  
-  return preferences as IUserMusicPreferences;
+
+  return preferences;
 }
 
 

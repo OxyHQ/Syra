@@ -112,3 +112,5 @@ temp/
 
 # npm lockfile (bun.lock is the single source of truth; see bunfig.toml)
 package-lock.json
+# NativeWind generated
+nativewind-env.d.ts

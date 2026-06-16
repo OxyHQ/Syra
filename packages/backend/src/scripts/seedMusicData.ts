@@ -218,10 +218,12 @@ async function seedMusicData() {
         });
 
         const savedTrack = await track.save();
-        
+
         // Update audioSource URL to use MongoDB ID
-        savedTrack.audioSource.url = `/api/audio/${savedTrack._id}`;
-        await savedTrack.save();
+        if (savedTrack.audioSource) {
+          savedTrack.audioSource.url = `/api/audio/${savedTrack._id}`;
+          await savedTrack.save();
+        }
         
         tracks.push(savedTrack);
         trackIndex++;
