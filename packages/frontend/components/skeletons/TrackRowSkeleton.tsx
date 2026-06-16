@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import * as Skeleton from '@oxyhq/bloom/skeleton';
+import { Repeat } from './Repeat';
 
 interface TrackRowSkeletonProps {
   /** Mirrors {@link TrackRow}'s `showNumber` — reserves the index column. */
@@ -47,9 +48,7 @@ export const TrackListSkeleton: React.FC<TrackListSkeletonProps> = React.memo(
   ({ count = 6, showNumber = true }) => {
     return (
       <View>
-        {Array.from({ length: count }).map((_, index) => (
-          <TrackRowSkeleton key={index} showNumber={showNumber} />
-        ))}
+        <Repeat count={count} render={() => <TrackRowSkeleton showNumber={showNumber} />} />
       </View>
     );
   },

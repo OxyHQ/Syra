@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, View, Platform } from 'react-native';
 import { MediaCardSkeleton } from './MediaCardSkeleton';
+import { Repeat } from './Repeat';
 
 interface MediaCardRowSkeletonProps {
   /** Number of placeholder cards to render. Defaults to 5 (one desktop row). */
@@ -18,11 +19,14 @@ export const MediaCardRowSkeleton: React.FC<MediaCardRowSkeletonProps> =
   React.memo(({ count = 5, shape = 'square' }) => {
     return (
       <View style={styles.grid}>
-        {Array.from({ length: count }).map((_, index) => (
-          <View key={index} style={styles.gridItem}>
-            <MediaCardSkeleton shape={shape} />
-          </View>
-        ))}
+        <Repeat
+          count={count}
+          render={() => (
+            <View style={styles.gridItem}>
+              <MediaCardSkeleton shape={shape} />
+            </View>
+          )}
+        />
       </View>
     );
   });

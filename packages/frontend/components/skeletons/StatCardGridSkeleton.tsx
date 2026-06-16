@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import * as Skeleton from '@oxyhq/bloom/skeleton';
+import { Repeat } from './Repeat';
 
 interface StatCardGridSkeletonProps {
   /** Number of stat cards. Defaults to 4. */
@@ -22,25 +23,26 @@ export const StatCardGridSkeleton: React.FC<StatCardGridSkeletonProps> =
       <View style={styles.content}>
         {showPeriodSelector && (
           <View style={styles.periodSelector}>
-            {Array.from({ length: 3 }).map((_, index) => (
-              <Skeleton.Box
-                key={index}
-                height={40}
-                borderRadius={20}
-                style={styles.periodButton}
-              />
-            ))}
+            <Repeat
+              count={3}
+              render={() => (
+                <Skeleton.Box height={40} borderRadius={20} style={styles.periodButton} />
+              )}
+            />
           </View>
         )}
 
         <View style={styles.statsGrid}>
-          {Array.from({ length: count }).map((_, index) => (
-            <View key={index} style={[styles.statCard, { minWidth }]}>
-              <Skeleton.Circle size={32} />
-              <Skeleton.Box width={64} height={24} borderRadius={6} />
-              <Skeleton.Box width={80} height={12} borderRadius={4} />
-            </View>
-          ))}
+          <Repeat
+            count={count}
+            render={() => (
+              <View style={[styles.statCard, { minWidth }]}>
+                <Skeleton.Circle size={32} />
+                <Skeleton.Box width={64} height={24} borderRadius={6} />
+                <Skeleton.Box width={80} height={12} borderRadius={4} />
+              </View>
+            )}
+          />
         </View>
       </View>
     );

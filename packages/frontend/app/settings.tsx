@@ -45,6 +45,40 @@ const LANGUAGE_OPTIONS: ReadonlyArray<{ label: string; value: string }> = [
   { label: 'Italiano', value: 'it-IT' },
 ];
 
+interface SettingsControlSectionProps {
+  /** Optional leading icon name; when present the heading renders as a row. */
+  icon?: React.ComponentProps<typeof RowIcon>['name'];
+  title: string;
+  /** Optional sub-heading caption. */
+  caption?: string;
+  children: React.ReactNode;
+}
+
+/**
+ * Padded section wrapping a heading (plain or icon + label) and an optional
+ * caption above a control (e.g. a `SegmentedControl`). Icon sections use the
+ * slightly larger `gap-3`; plain/captioned sections use `gap-2`.
+ */
+const SettingsControlSection: React.FC<SettingsControlSectionProps> = ({
+  icon,
+  title,
+  caption,
+  children,
+}) => (
+  <View className={icon ? 'px-5 py-3 gap-3' : 'px-5 py-3 gap-2'}>
+    {icon ? (
+      <View className="flex-row items-center gap-3">
+        <RowIcon name={icon} />
+        <Text className="text-[16px] text-foreground">{title}</Text>
+      </View>
+    ) : (
+      <Text className="text-[16px] text-foreground">{title}</Text>
+    )}
+    {caption ? <Text className="text-xs text-muted-foreground">{caption}</Text> : null}
+    {children}
+  </View>
+);
+
 /**
  * Syra Settings Screen — grouped Bloom sections mirroring the Mention app.
  * Account, playback, audio quality, privacy, appearance, language, storage,
@@ -266,9 +300,7 @@ const SettingsScreen: React.FC = () => {
           </View>
 
           {/* Audio quality */}
-          <View className="px-5 py-3 gap-2">
-            <Text className="text-[16px] text-foreground">Streaming quality</Text>
-            <Text className="text-xs text-muted-foreground">Higher quality uses more data</Text>
+          <SettingsControlSection title="Streaming quality" caption="Higher quality uses more data">
             <SegmentedControl.Root<AudioQuality>
               label="Streaming quality"
               type="radio"
@@ -285,13 +317,11 @@ const SettingsScreen: React.FC = () => {
                 <SegmentedControl.ItemText>Very high</SegmentedControl.ItemText>
               </SegmentedControl.Item>
             </SegmentedControl.Root>
-          </View>
+          </SettingsControlSection>
 
           <SettingsListDivider />
 
-          <View className="px-5 py-3 gap-2">
-            <Text className="text-[16px] text-foreground">Download quality</Text>
-            <Text className="text-xs text-muted-foreground">Quality for downloaded music</Text>
+          <SettingsControlSection title="Download quality" caption="Quality for downloaded music">
             <SegmentedControl.Root<AudioQuality>
               label="Download quality"
               type="radio"
@@ -308,7 +338,7 @@ const SettingsScreen: React.FC = () => {
                 <SegmentedControl.ItemText>Very high</SegmentedControl.ItemText>
               </SegmentedControl.Item>
             </SegmentedControl.Root>
-          </View>
+          </SettingsControlSection>
 
           <SettingsListGroup>
             <SettingsListItem
@@ -328,9 +358,10 @@ const SettingsScreen: React.FC = () => {
           {/* Privacy */}
           {privacySettings && (
             <>
-              <View className="px-5 py-3 gap-2">
-                <Text className="text-[16px] text-foreground">Profile visibility</Text>
-                <Text className="text-xs text-muted-foreground">Who can see your profile</Text>
+              <SettingsControlSection
+                title="Profile visibility"
+                caption="Who can see your profile"
+              >
                 <SegmentedControl.Root<ProfileVisibility>
                   label="Profile visibility"
                   type="radio"
@@ -347,7 +378,7 @@ const SettingsScreen: React.FC = () => {
                     <SegmentedControl.ItemText>Private</SegmentedControl.ItemText>
                   </SegmentedControl.Item>
                 </SegmentedControl.Root>
-              </View>
+              </SettingsControlSection>
 
               <SettingsListGroup>
                 <SettingsListItem
@@ -379,11 +410,7 @@ const SettingsScreen: React.FC = () => {
           )}
 
           {/* Appearance */}
-          <View className="px-5 py-3 gap-3">
-            <View className="flex-row items-center gap-3">
-              <RowIcon name="phone-portrait-outline" />
-              <Text className="text-[16px] text-foreground">Color mode</Text>
-            </View>
+          <SettingsControlSection icon="phone-portrait-outline" title="Color mode">
             <SegmentedControl.Root<'system' | 'light' | 'dark'>
               label="Color mode"
               type="radio"
@@ -400,7 +427,7 @@ const SettingsScreen: React.FC = () => {
                 <SegmentedControl.ItemText>Dark</SegmentedControl.ItemText>
               </SegmentedControl.Item>
             </SegmentedControl.Root>
-          </View>
+          </SettingsControlSection>
 
           <SettingsListDivider />
 
@@ -413,11 +440,7 @@ const SettingsScreen: React.FC = () => {
           </View>
 
           {/* Language */}
-          <View className="px-5 py-3 gap-3">
-            <View className="flex-row items-center gap-3">
-              <RowIcon name="language-outline" />
-              <Text className="text-[16px] text-foreground">Language</Text>
-            </View>
+          <SettingsControlSection icon="language-outline" title="Language">
             <SegmentedControl.Root<string>
               label="Language"
               type="radio"
@@ -430,7 +453,7 @@ const SettingsScreen: React.FC = () => {
                 </SegmentedControl.Item>
               ))}
             </SegmentedControl.Root>
-          </View>
+          </SettingsControlSection>
 
           {/* Storage */}
           <SettingsListGroup title="Storage">

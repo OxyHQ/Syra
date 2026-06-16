@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, View, Platform } from 'react-native';
 import * as Skeleton from '@oxyhq/bloom/skeleton';
 import { webDimension } from '@/utils/webStyles';
+import { Repeat } from './Repeat';
 
 interface QuickAccessGridSkeletonProps {
   /** Number of placeholder tiles. Defaults to 8 (the real grid's cap). */
@@ -16,19 +17,22 @@ export const QuickAccessGridSkeleton: React.FC<QuickAccessGridSkeletonProps> =
   React.memo(({ count = 8 }) => {
     return (
       <View style={styles.compactGrid}>
-        {Array.from({ length: count }).map((_, index) => (
-          <View key={index} style={styles.compactGridItem}>
-            <Skeleton.Box
-              width={40}
-              height={40}
-              borderRadius={12}
-              style={styles.compactImage}
-            />
-            <View style={styles.compactTitle}>
-              <Skeleton.Box width="70%" height={13} borderRadius={4} />
+        <Repeat
+          count={count}
+          render={() => (
+            <View style={styles.compactGridItem}>
+              <Skeleton.Box
+                width={40}
+                height={40}
+                borderRadius={12}
+                style={styles.compactImage}
+              />
+              <View style={styles.compactTitle}>
+                <Skeleton.Box width="70%" height={13} borderRadius={4} />
+              </View>
             </View>
-          </View>
-        ))}
+          )}
+        />
       </View>
     );
   });

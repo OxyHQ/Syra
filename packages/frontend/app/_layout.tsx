@@ -20,6 +20,7 @@ import { Panel } from "@/components/Panel";
 import { AppProviders } from '@/components/providers/AppProviders';
 import { QUERY_CLIENT_CONFIG } from '@/components/providers/constants';
 import { Provider as PortalProvider, Outlet as PortalOutlet } from '@/components/Portal';
+import { PLAYER_BAR_HEIGHT } from '@/constants/layout';
 
 // Hooks
 import { useKeyboardVisibility } from "@/hooks/useKeyboardVisibility";
@@ -80,7 +81,6 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
   // web `calc()` strings; native panels do not use this height (they flex, so
   // the top safe-area inset that grows the TopBar on native is absorbed
   // automatically). On web `insets.top` is 0, so `TOP_BAR_HEIGHT` is exact.
-  const PLAYER_BAR_HEIGHT = 92;
   const NOW_PLAYING_WIDTH = 360;
   const panelHeight = webDimension(
     isScreenNotMobile

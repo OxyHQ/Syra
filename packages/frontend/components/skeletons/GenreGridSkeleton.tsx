@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, View, Platform } from 'react-native';
 import * as Skeleton from '@oxyhq/bloom/skeleton';
+import { Repeat } from './Repeat';
 
 interface GenreGridSkeletonProps {
   /** Number of placeholder cards. Defaults to 8. */
@@ -16,11 +17,14 @@ export const GenreGridSkeleton: React.FC<GenreGridSkeletonProps> = React.memo(
   ({ count = 8 }) => {
     return (
       <View style={styles.genreGrid}>
-        {Array.from({ length: count }).map((_, index) => (
-          <View key={index} style={styles.genreGridItem}>
-            <Skeleton.Box width="100%" style={styles.card} />
-          </View>
-        ))}
+        <Repeat
+          count={count}
+          render={() => (
+            <View style={styles.genreGridItem}>
+              <Skeleton.Box width="100%" style={styles.card} />
+            </View>
+          )}
+        />
       </View>
     );
   },

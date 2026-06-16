@@ -1,17 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { StyleSheet, View, Text, Pressable, Platform } from 'react-native';
-import Animated, {
-  useAnimatedScrollHandler,
-  useSharedValue,
-  withTiming,
-  Easing,
-} from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@oxyhq/bloom/theme';
 import SEO from '@/components/SEO';
 import { LibraryListSkeleton } from '@/components/skeletons';
 import { Fab } from '@/components/ui/Fab';
+import { useCollapseOnScroll } from '@/hooks/useCollapseOnScroll';
+import { PLAYER_BAR_HEIGHT } from '@/constants/layout';
 import { Ionicons, Octicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useOxy } from '@oxyhq/services';
@@ -25,20 +22,13 @@ import { pickImageUrl } from '@/utils/pickImage';
  * Bottom offset (in px) for the Create Playlist FAB. Clears the floating
  * mobile player bar + bottom nav so the button never sits beneath them; on
  * web/desktop the player bar lives below the library panel so the offset is
- * just comfortable padding (`useSafeAreaInsets().bottom` is 0 on web).
+ * just comfortable padding (`useSafeAreaInsets().bottom` is 0 on web). The
+ * player-bar clearance derives from the shared `PLAYER_BAR_HEIGHT` so it never
+ * drifts out of sync with the actual bar.
  */
 const FAB_BOTTOM_OFFSET = 24;
-const FAB_PLAYER_BAR_CLEARANCE = 112;
+const FAB_PLAYER_BAR_CLEARANCE = PLAYER_BAR_HEIGHT + 20;
 const FAB_SIDE_OFFSET = 16;
-
-/**
- * Scroll-direction thresholds for collapsing the extended Create Playlist FAB.
- * The label hides only after scrolling DOWN past a small delta while below the
- * top region, and reappears on any upward scroll or when near the top.
- */
-const FAB_COLLAPSE_SCROLL_THRESHOLD = 24;
-const FAB_COLLAPSE_DELTA = 6;
-const FAB_EXPAND_TIMING = { duration: 220, easing: Easing.out(Easing.cubic) };
 
 interface LibraryScreenProps {
   // Optional props for sidebar mode
@@ -78,25 +68,23 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   const { isAuthenticated } = useOxy();
   const { t } = useTranslation();
 
-  // Drives the extended FAB: 1 = expanded pill, 0 = collapsed icon-only circle.
-  // Updated entirely on the UI thread from the scroll handler (no re-renders).
-  const fabExpanded = useSharedValue(1);
-  const lastScrollY = useSharedValue(0);
+  // Collapses the extended FAB to an icon-only circle while scrolling down and
+  // re-expands it on upward scroll / near the top. Driven on the UI thread, so
+  // no re-renders. 1 = expanded pill, 0 = collapsed circle.
+  const { expanded: fabExpanded, scrollHandler } = useCollapseOnScroll();
 
-  const scrollHandler = useAnimatedScrollHandler({
-    onScroll: (event) => {
-      const y = event.contentOffset.y;
-      const delta = y - lastScrollY.value;
-      if (y <= FAB_COLLAPSE_SCROLL_THRESHOLD || delta < -FAB_COLLAPSE_DELTA) {
-        // Near the top, or scrolling up: expand back to the full pill.
-        fabExpanded.value = withTiming(1, FAB_EXPAND_TIMING);
-      } else if (delta > FAB_COLLAPSE_DELTA) {
-        // Scrolling down past the threshold: collapse to the icon-only circle.
-        fabExpanded.value = withTiming(0, FAB_EXPAND_TIMING);
-      }
-      lastScrollY.value = y;
-    },
-  });
+  // Absolute positioning for the FAB. `insets.bottom` is its only dynamic
+  // input, so memoize to keep the reference stable for the memoized `Fab`.
+  const fabStyle = useMemo(
+    () => [
+      styles.fab,
+      {
+        right: FAB_SIDE_OFFSET,
+        bottom: FAB_BOTTOM_OFFSET + FAB_PLAYER_BAR_CLEARANCE + insets.bottom,
+      },
+    ],
+    [insets.bottom]
+  );
 
   // Filter state
   const [activeFilter, setActiveFilter] = useState<'Playlists' | 'Artists' | 'Albums' | 'All'>('All');
@@ -477,13 +465,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
             label={t('Create Playlist')}
             expanded={fabExpanded}
             size={showSidebarControls ? 48 : 56}
-            style={[
-              styles.fab,
-              {
-                right: FAB_SIDE_OFFSET,
-                bottom: FAB_BOTTOM_OFFSET + FAB_PLAYER_BAR_CLEARANCE + insets.bottom,
-              },
-            ]}
+            style={fabStyle}
           />
         )}
       </View>

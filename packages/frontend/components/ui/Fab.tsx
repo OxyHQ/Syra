@@ -1,19 +1,12 @@
 import React, { useMemo } from 'react';
-import {
-  StyleSheet,
-  Pressable,
-  Platform,
-  StyleProp,
-  ViewStyle,
-  Text,
-  LayoutChangeEvent,
-} from 'react-native';
+import { StyleSheet, Pressable, Platform, StyleProp, ViewStyle } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useDerivedValue,
   useSharedValue,
   withTiming,
   Easing,
+  interpolate,
   type SharedValue,
 } from 'react-native-reanimated';
 import { useTheme } from '@oxyhq/bloom/theme';
@@ -52,18 +45,23 @@ interface FabProps {
 
 const TIMING = { duration: 220, easing: Easing.out(Easing.cubic) };
 
+/** Upper bound (px) for the label wrapper's animated `maxWidth`. Large enough
+ *  to never clip a realistic FAB label while keeping `overflow:'hidden'` able
+ *  to fully tuck it away as `progress` → 0. */
+const LABEL_MAX_WIDTH = 240;
+
 /**
  * Floating Action Button.
  *
  * - Without `label`: a circular, primary-colored icon button (legacy API).
- * - With `label`: a Material extended FAB — an animated pill (icon + label)
- *   that collapses to an icon-only circle when `expanded` is driven to 0 and
- *   expands back to the full pill at 1. All animation runs on the UI thread
- *   (Reanimated), so toggling `expanded` triggers no React re-renders.
+ * - With `label`: a Material extended FAB — an intrinsic-width pill (icon +
+ *   label) that collapses to an icon-only circle when `expanded` is driven to
+ *   0 and expands back to the full pill at 1. All animation runs on the UI
+ *   thread (Reanimated), so toggling `expanded` triggers no React re-renders.
  *
  * Anchor it to a scroll container via the `style` prop (absolute position).
  */
-export const Fab: React.FC<FabProps> = ({
+const FabComponent: React.FC<FabProps> = ({
   onPress,
   iconName,
   accessibilityLabel,
@@ -75,56 +73,43 @@ export const Fab: React.FC<FabProps> = ({
   const theme = useTheme();
   const iconSize = Math.round(size * 0.46);
 
-  // Measured intrinsic width of the label text, captured via onLayout so the
-  // pill can size itself precisely (no mid-animation clipping).
-  const labelWidth = useSharedValue(0);
+  // Size-derived dimensions for the icon-only circular variant.
+  const circleDims = useMemo<ViewStyle>(
+    () => ({ width: size, height: size, borderRadius: size / 2 }),
+    [size]
+  );
 
-  // Normalize the `expanded` control into a single 0..1 shared value. When a
-  // boolean is passed we animate to its target; when a shared value is passed
-  // we mirror it; with neither we stay expanded.
-  const internalProgress = useSharedValue(typeof expanded === 'boolean' && !expanded ? 0 : 1);
-  const progress = useDerivedValue(() => {
-    if (typeof expanded === 'boolean') {
-      return withTiming(expanded ? 1 : 0, TIMING);
-    }
-    if (expanded) {
-      // Shared value: parent is responsible for the timing/animation.
-      return expanded.value;
-    }
-    return internalProgress.value;
-  }, [expanded]);
-
-  // Horizontal padding between the icon and the pill edges when expanded.
+  // Horizontal padding revealed between the pill edge and its contents when
+  // expanded. Collapsed it animates to 0 so the pill shrinks to `size`.
   const horizontalPadding = Math.round(size * 0.28);
   const iconLabelGap = 8;
 
-  const onLabelLayout = (e: LayoutChangeEvent) => {
-    labelWidth.value = e.nativeEvent.layout.width;
-  };
+  // Normalize the `expanded` control into a single 0..1 shared value driving
+  // all animation. A boolean animates to its target; a shared value is mirrored
+  // (parent owns timing); with neither we stay expanded (constant 1).
+  const expandedFlag = typeof expanded === 'boolean' ? expanded : true;
+  const sharedExpanded = typeof expanded === 'object' ? expanded : undefined;
+  const progress = useDerivedValue(() => {
+    if (sharedExpanded) {
+      return sharedExpanded.value;
+    }
+    return withTiming(expandedFlag ? 1 : 0, TIMING);
+  }, [expandedFlag, sharedExpanded]);
 
-  const containerAnimatedStyle = useAnimatedStyle(() => {
-    // Collapsed: a perfect circle of `size`. Expanded: size + gap + label +
-    // trailing padding. The leading padding matches the circle's icon centering.
-    const expandedWidth = size + iconLabelGap + labelWidth.value + horizontalPadding;
-    return {
-      width: size + (expandedWidth - size) * progress.value,
-    };
-  });
+  // Pill grows intrinsically with its content; we only animate the leading
+  // icon centering padding and the trailing edge padding off `progress`.
+  const containerAnimatedStyle = useAnimatedStyle(() => ({
+    paddingLeft: (size - iconSize) / 2,
+    paddingRight: horizontalPadding * progress.value,
+  }));
 
-  const labelAnimatedStyle = useAnimatedStyle(() => {
-    return {
-      // Fade the label out faster than the container shrinks so text never
-      // shows against a too-narrow pill.
-      opacity: progress.value,
-      maxWidth: labelWidth.value * progress.value,
-      marginLeft: iconLabelGap * progress.value,
-    };
-  });
-
-  const containerColorStyle = useMemo<ViewStyle>(
-    () => ({ backgroundColor: theme.colors.primary }),
-    [theme.colors.primary]
-  );
+  const labelAnimatedStyle = useAnimatedStyle(() => ({
+    // Fade + tuck the label away as the pill collapses. `overflow:'hidden'` on
+    // the pill clips the label once `maxWidth` reaches 0.
+    opacity: progress.value,
+    maxWidth: interpolate(progress.value, [0, 1], [0, LABEL_MAX_WIDTH]),
+    marginLeft: iconLabelGap * progress.value,
+  }));
 
   // Icon-only (legacy) circular FAB.
   if (!label) {
@@ -133,16 +118,7 @@ export const Fab: React.FC<FabProps> = ({
         onPress={onPress}
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
-        style={[
-          styles.fab,
-          {
-            width: size,
-            height: size,
-            borderRadius: size / 2,
-          },
-          containerColorStyle,
-          style,
-        ]}
+        style={[styles.fab, circleDims, { backgroundColor: theme.colors.primary }, style]}
       >
         <MaterialCommunityIcons
           name={iconName}
@@ -162,13 +138,7 @@ export const Fab: React.FC<FabProps> = ({
       style={[
         styles.fab,
         styles.extended,
-        {
-          height: size,
-          borderRadius: size / 2,
-          paddingLeft: (size - iconSize) / 2,
-          paddingRight: horizontalPadding,
-        },
-        containerColorStyle,
+        { height: size, borderRadius: size / 2, backgroundColor: theme.colors.primary },
         containerAnimatedStyle,
         style,
       ]}
@@ -184,18 +154,12 @@ export const Fab: React.FC<FabProps> = ({
       >
         {label}
       </Animated.Text>
-      {/* Off-screen measurement of the label's intrinsic width. */}
-      <Text
-        aria-hidden
-        pointerEvents="none"
-        onLayout={onLabelLayout}
-        style={styles.measure}
-      >
-        {label}
-      </Text>
     </AnimatedPressable>
   );
 };
+
+export const Fab = React.memo(FabComponent);
+Fab.displayName = 'Fab';
 
 const styles = StyleSheet.create({
   fab: {
@@ -220,14 +184,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   label: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  measure: {
-    position: 'absolute',
-    opacity: 0,
-    left: -9999,
-    top: -9999,
     fontSize: 15,
     fontWeight: '700',
   },

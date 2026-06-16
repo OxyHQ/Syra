@@ -16,3 +16,4 @@ export { ProfileHeaderSkeleton } from './ProfileHeaderSkeleton';
 export { StatCardGridSkeleton } from './StatCardGridSkeleton';
 export { GenreGridSkeleton } from './GenreGridSkeleton';
 export { ArtistDetailSkeleton } from './ArtistDetailSkeleton';
+export { Repeat } from './Repeat';

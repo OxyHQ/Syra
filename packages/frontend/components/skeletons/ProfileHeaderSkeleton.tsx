@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import * as Skeleton from '@oxyhq/bloom/skeleton';
+import { Repeat } from './Repeat';
 
 /**
  * Loading placeholder for the user profile screen header: a large avatar
@@ -22,12 +23,15 @@ export const ProfileHeaderSkeleton: React.FC = React.memo(() => {
 
       {/* Stats row */}
       <View style={styles.statsSection}>
-        {Array.from({ length: 3 }).map((_, index) => (
-          <View key={index} style={styles.statItem}>
-            <Skeleton.Box width={40} height={20} borderRadius={4} />
-            <Skeleton.Box width={56} height={14} borderRadius={4} />
-          </View>
-        ))}
+        <Repeat
+          count={3}
+          render={() => (
+            <View style={styles.statItem}>
+              <Skeleton.Box width={40} height={20} borderRadius={4} />
+              <Skeleton.Box width={56} height={14} borderRadius={4} />
+            </View>
+          )}
+        />
       </View>
     </View>
   );

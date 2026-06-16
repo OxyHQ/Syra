@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import * as Skeleton from '@oxyhq/bloom/skeleton';
+import { Repeat } from './Repeat';
 
 interface LibraryItemSkeletonProps {
   /** `circle` mirrors followed-artist rows; `square` mirrors playlist rows. */
@@ -40,9 +41,7 @@ export const LibraryListSkeleton: React.FC<LibraryListSkeletonProps> =
   React.memo(({ count = 6, shape = 'square' }) => {
     return (
       <View>
-        {Array.from({ length: count }).map((_, index) => (
-          <LibraryItemSkeleton key={index} shape={shape} />
-        ))}
+        <Repeat count={count} render={() => <LibraryItemSkeleton shape={shape} />} />
       </View>
     );
   });
