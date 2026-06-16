@@ -3,6 +3,7 @@
  */
 
 import { Timestamps } from './common';
+import { CatalogSource, ExternalIds, SourceProvenance, TrackImage } from './track';
 
 /**
  * Artist statistics
@@ -33,7 +34,7 @@ export interface Artist extends Timestamps {
   _id?: string;
   name: string;
   bio?: string;
-  image?: string; // MongoDB ObjectId string (24 hex characters) - image must be uploaded via /api/images/upload first // MongoDB ObjectId string (24 hex characters) - image must be uploaded via /api/images/upload first. In API responses, converted to /api/images/:id URL
+  image?: string; // MongoDB ObjectId string (24 hex characters) - image must be uploaded via /api/images/upload first. In API responses, converted to /api/images/:id URL
   genres?: string[];
   verified?: boolean;
   popularity?: number; // 0-100
@@ -45,6 +46,22 @@ export interface Artist extends Timestamps {
   strikes?: ArtistStrike[];
   uploadsDisabled?: boolean;
   lastStrikeAt?: string;
+  /** Which provider this artist record originates from */
+  source: CatalogSource;
+  /** Cross-provider identifiers (e.g. Audius artist ID) */
+  externalIds?: ExternalIds;
+  /** Provenance log — one entry per provider that contributed fields */
+  sources?: SourceProvenance[];
+  /** External image assets (Audius / CC); uploaded artists use image */
+  images?: TrackImage[];
+  /** Known web presence links */
+  links?: { website?: string; instagram?: string; x?: string; youtube?: string };
+  /** ISO 3166-1 alpha-2 country code */
+  country?: string;
+  /** True when this imported artist record can be claimed by a real artist */
+  claimable?: boolean;
+  /** Oxy user ID of the artist who claimed this record */
+  claimedByOxyUserId?: string;
 }
 
 /**

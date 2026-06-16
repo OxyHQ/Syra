@@ -3,7 +3,7 @@
  */
 
 import { Timestamps } from './common';
-import { Track } from './track';
+import { Track, ExternalIds, SourceProvenance } from './track';
 
 /**
  * Album - A collection of tracks
@@ -27,6 +27,10 @@ export interface Album extends Timestamps {
   isExplicit: boolean;
   primaryColor?: string; // Primary hex color extracted from cover art (e.g., "#FF5733")
   secondaryColor?: string; // Secondary hex color extracted from cover art (e.g., "#33FF57")
+  /** Cross-provider identifiers (ISRC, UPC, etc.) */
+  externalIds?: ExternalIds;
+  /** Provenance log — one entry per provider that contributed fields */
+  sources?: SourceProvenance[];
 }
 
 /**
