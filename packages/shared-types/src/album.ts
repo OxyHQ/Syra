@@ -1,90 +1,77 @@
-/**
- * Album-related types for Syra music streaming app
- */
+import { z } from 'zod';
+import { timestampsSchema } from './common';
+import {
+  trackSchema,
+  catalogSourceSchema,
+  externalIdsSchema,
+  sourceProvenanceSchema,
+} from './track';
 
-import { Timestamps } from './common';
-import { Track, CatalogSource, ExternalIds, SourceProvenance } from './track';
+const albumTypeSchema = z.enum(['album', 'single', 'ep', 'compilation']);
 
-/**
- * Album - A collection of tracks
- */
-export interface Album extends Timestamps {
-  id: string;
-  _id?: string;
-  title: string;
-  artistId: string;
-  artistName: string;
-  releaseDate: string; // ISO date string
-  coverArt: string; // MongoDB ObjectId string (24 hex characters) - image must be uploaded via /api/images/upload first // URL to album cover (stored as MongoDB ObjectId in DB, converted to /api/images/:id URL in API responses)
-  genre?: string[];
-  totalTracks: number;
-  totalDuration: number; // total duration in seconds
-  type: 'album' | 'single' | 'ep' | 'compilation';
-  label?: string; // record label
-  copyright?: string;
-  upc?: string; // Universal Product Code
-  popularity?: number; // 0-100
-  /** Lifetime play count (provider-supplied popularity signal) */
-  playCount?: number;
-  /** Number of favourites / saves (provider-supplied popularity signal) */
-  favoriteCount?: number;
-  /** Number of reposts / shares (provider-supplied popularity signal) */
-  repostCount?: number;
-  isExplicit: boolean;
-  primaryColor?: string; // Primary hex color extracted from cover art (e.g., "#FF5733")
-  secondaryColor?: string; // Secondary hex color extracted from cover art (e.g., "#33FF57")
-  /** Which provider this album record originates from */
-  source?: CatalogSource;
-  /** Cross-provider identifiers (ISRC, UPC, etc.) */
-  externalIds?: ExternalIds;
-  /** Provenance log — one entry per provider that contributed fields */
-  sources?: SourceProvenance[];
-}
+export const albumSchema = timestampsSchema.extend({
+  id: z.string(),
+  _id: z.string().optional(),
+  title: z.string(),
+  artistId: z.string(),
+  artistName: z.string(),
+  releaseDate: z.string(),
+  coverArt: z.string(),
+  genre: z.array(z.string()).optional(),
+  totalTracks: z.number(),
+  totalDuration: z.number(),
+  type: albumTypeSchema,
+  label: z.string().optional(),
+  copyright: z.string().optional(),
+  upc: z.string().optional(),
+  popularity: z.number().optional(),
+  playCount: z.number().optional(),
+  favoriteCount: z.number().optional(),
+  repostCount: z.number().optional(),
+  isExplicit: z.boolean(),
+  primaryColor: z.string().optional(),
+  secondaryColor: z.string().optional(),
+  source: catalogSourceSchema.optional(),
+  externalIds: externalIdsSchema.optional(),
+  sources: z.array(sourceProvenanceSchema).optional(),
+});
+export type Album = z.infer<typeof albumSchema>;
 
-/**
- * Album with tracks
- */
-export interface AlbumWithTracks extends Album {
-  tracks: Track[];
-}
+export const albumWithTracksSchema = albumSchema.extend({
+  tracks: z.array(trackSchema),
+});
+export type AlbumWithTracks = z.infer<typeof albumWithTracksSchema>;
 
-/**
- * Album track reference (lightweight)
- */
-export interface AlbumTrack {
-  trackId: string;
-  trackNumber: number;
-  discNumber?: number;
-  title: string;
-  duration: number;
-  isExplicit: boolean;
-}
+export const albumTrackSchema = z.object({
+  trackId: z.string(),
+  trackNumber: z.number(),
+  discNumber: z.number().optional(),
+  title: z.string(),
+  duration: z.number(),
+  isExplicit: z.boolean(),
+});
+export type AlbumTrack = z.infer<typeof albumTrackSchema>;
 
-/**
- * Create album request
- */
-export interface CreateAlbumRequest {
-  title: string;
-  artistId: string;
-  releaseDate: string;
-  coverArt: string; // MongoDB ObjectId string (24 hex characters) - image must be uploaded via /api/images/upload first
-  genre?: string[];
-  type?: 'album' | 'single' | 'ep' | 'compilation';
-  label?: string;
-  copyright?: string;
-  isExplicit?: boolean;
-}
+export const createAlbumRequestSchema = z.object({
+  title: z.string(),
+  artistId: z.string(),
+  releaseDate: z.string(),
+  coverArt: z.string(),
+  genre: z.array(z.string()).optional(),
+  type: albumTypeSchema.optional(),
+  label: z.string().optional(),
+  copyright: z.string().optional(),
+  isExplicit: z.boolean().optional(),
+});
+export type CreateAlbumRequest = z.infer<typeof createAlbumRequestSchema>;
 
-/**
- * Update album request
- */
-export interface UpdateAlbumRequest {
-  title?: string;
-  releaseDate?: string;
-  coverArt?: string;
-  genre?: string[];
-  type?: 'album' | 'single' | 'ep' | 'compilation';
-  label?: string;
-  copyright?: string;
-}
-
+export const updateAlbumRequestSchema = z.object({
+  title: z.string().optional(),
+  releaseDate: z.string().optional(),
+  coverArt: z.string().optional(),
+  genre: z.array(z.string()).optional(),
+  type: albumTypeSchema.optional(),
+  label: z.string().optional(),
+  copyright: z.string().optional(),
+});
+export type UpdateAlbumRequest = z.infer<typeof updateAlbumRequestSchema>;

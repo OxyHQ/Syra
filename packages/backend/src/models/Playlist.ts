@@ -39,9 +39,8 @@ const PlaylistSchema = new Schema<IPlaylist>({
   coverArt: { type: String },
   visibility: { type: String, enum: Object.values(PlaylistVisibility), default: PlaylistVisibility.PRIVATE, index: true },
   trackCount: { type: Number, default: 0 },
-  totalDuration: { type: Number, default: 0 }, // in seconds
+  totalDuration: { type: Number, default: 0 },
   followers: { type: Number, default: 0 },
-  isPublic: { type: Boolean, default: false, index: true },
   primaryColor: { type: String },
   secondaryColor: { type: String },
   collaborators: [{ type: PlaylistCollaboratorSchema }],
@@ -52,11 +51,9 @@ const PlaylistSchema = new Schema<IPlaylist>({
   timestamps: true,
 });
 
-// Indexes for common queries
 PlaylistSchema.index({ ownerOxyUserId: 1, createdAt: -1 });
-PlaylistSchema.index({ name: 'text', description: 'text' }); // Text search
+PlaylistSchema.index({ name: 'text', description: 'text' });
 PlaylistSchema.index({ visibility: 1, followers: -1 });
-PlaylistSchema.index({ isPublic: 1, followers: -1 });
 PlaylistSchema.index({ 'externalIds.audiusId': 1 }, { sparse: true });
 
 export const PlaylistModel = mongoose.model<IPlaylist>('Playlist', PlaylistSchema);

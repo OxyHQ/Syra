@@ -102,7 +102,7 @@ export const useAppearanceStore = create<AppearanceStore>((set, get) => ({
       } else {
         set({ loading: false });
       }
-    } catch (e: any) {
+    } catch (e) {
       if (isUnauthorizedError(e)) {
         set({ loading: false, error: null });
         return;
@@ -169,7 +169,7 @@ export const useAppearanceStore = create<AppearanceStore>((set, get) => ({
 
       set({ loading: false });
       return null;
-    } catch (e: any) {
+    } catch (e) {
       set({ loading: false, error: e?.message || 'Failed to update settings' });
       return null;
     }

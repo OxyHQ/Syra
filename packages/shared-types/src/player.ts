@@ -1,143 +1,110 @@
-/**
- * Player-related types for Syra music streaming app
- * Playback state, queue, now playing
- */
+import { z } from 'zod';
+import { trackSchema } from './track';
 
-import { Track } from './track';
+export const audioQualitySchema = z.enum(['low', 'normal', 'high', 'very_high']);
+export type AudioQuality = z.infer<typeof audioQualitySchema>;
 
-/**
- * Audio quality setting — controls the HLS bitrate tier served to the client.
- * high and very_high are premium-only; the server enforces the cap.
- */
-export type AudioQuality = 'low' | 'normal' | 'high' | 'very_high';
+export const playbackStateSchema = z.enum([
+  'playing',
+  'paused',
+  'stopped',
+  'buffering',
+  'error',
+]);
+export type PlaybackState = z.infer<typeof playbackStateSchema>;
+export const PlaybackState = {
+  PLAYING: 'playing' as const,
+  PAUSED: 'paused' as const,
+  STOPPED: 'stopped' as const,
+  BUFFERING: 'buffering' as const,
+  ERROR: 'error' as const,
+};
 
-/**
- * Playback state
- */
-export enum PlaybackState {
-  PLAYING = 'playing',
-  PAUSED = 'paused',
-  STOPPED = 'stopped',
-  BUFFERING = 'buffering',
-  ERROR = 'error'
-}
+export const repeatModeSchema = z.enum(['off', 'all', 'one']);
+export type RepeatMode = z.infer<typeof repeatModeSchema>;
+export const RepeatMode = {
+  OFF: 'off' as const,
+  ALL: 'all' as const,
+  ONE: 'one' as const,
+};
 
-/**
- * Repeat mode
- */
-export enum RepeatMode {
-  OFF = 'off',
-  ALL = 'all',
-  ONE = 'one'
-}
+export const shuffleModeSchema = z.enum(['on', 'off']);
+export type ShuffleMode = z.infer<typeof shuffleModeSchema>;
 
-/**
- * Shuffle mode
- */
-export type ShuffleMode = 'on' | 'off';
+export const playbackPositionSchema = z.object({
+  currentTime: z.number(),
+  duration: z.number(),
+  progress: z.number(),
+});
+export type PlaybackPosition = z.infer<typeof playbackPositionSchema>;
 
-/**
- * Current playback position
- */
-export interface PlaybackPosition {
-  currentTime: number; // in seconds
-  duration: number; // in seconds
-  progress: number; // 0-1
-}
+export const playbackContextSchema = z.object({
+  type: z.enum(['album', 'artist', 'playlist', 'library', 'search', 'track']),
+  id: z.string().optional(),
+  name: z.string().optional(),
+  uri: z.string().optional(),
+});
+export type PlaybackContext = z.infer<typeof playbackContextSchema>;
 
-/**
- * Now playing - currently playing track with playback state
- */
-export interface NowPlaying {
-  track: Track;
-  state: PlaybackState;
-  position: PlaybackPosition;
-  volume: number; // 0-1
-  shuffle: ShuffleMode;
-  repeat: RepeatMode;
-  context?: PlaybackContext;
-}
+export const nowPlayingSchema = z.object({
+  track: trackSchema,
+  state: playbackStateSchema,
+  position: playbackPositionSchema,
+  volume: z.number(),
+  shuffle: shuffleModeSchema,
+  repeat: repeatModeSchema,
+  context: playbackContextSchema.optional(),
+});
+export type NowPlaying = z.infer<typeof nowPlayingSchema>;
 
-/**
- * Playback context - where the track is playing from
- */
-export interface PlaybackContext {
-  type: 'album' | 'artist' | 'playlist' | 'library' | 'search' | 'track';
-  id?: string; // context ID (album ID, playlist ID, etc.)
-  name?: string; // context name
-  uri?: string; // context URI
-}
+export const queueSchema = z.object({
+  current: z.number(),
+  tracks: z.array(trackSchema),
+  context: playbackContextSchema.optional(),
+});
+export type Queue = z.infer<typeof queueSchema>;
 
-/**
- * Queue - list of tracks to play
- */
-export interface Queue {
-  current: number; // index of currently playing track
-  tracks: Track[];
-  context?: PlaybackContext;
-}
+export const queueWithMetadataSchema = queueSchema.extend({
+  previous: z.array(trackSchema),
+  next: z.array(trackSchema),
+  total: z.number(),
+});
+export type QueueWithMetadata = z.infer<typeof queueWithMetadataSchema>;
 
-/**
- * Queue with additional metadata
- */
-export interface QueueWithMetadata extends Queue {
-  previous: Track[]; // previously played tracks
-  next: Track[]; // upcoming tracks
-  total: number;
-}
+export const playbackStateUpdateSchema = z.object({
+  state: playbackStateSchema.optional(),
+  position: playbackPositionSchema.optional(),
+  volume: z.number().optional(),
+  shuffle: shuffleModeSchema.optional(),
+  repeat: repeatModeSchema.optional(),
+});
+export type PlaybackStateUpdate = z.infer<typeof playbackStateUpdateSchema>;
 
-/**
- * Playback state update
- */
-export interface PlaybackStateUpdate {
-  state?: PlaybackState;
-  position?: PlaybackPosition;
-  volume?: number;
-  shuffle?: ShuffleMode;
-  repeat?: RepeatMode;
-}
+export const seekRequestSchema = z.object({
+  position: z.number(),
+});
+export type SeekRequest = z.infer<typeof seekRequestSchema>;
 
-/**
- * Seek request
- */
-export interface SeekRequest {
-  position: number; // position in seconds
-}
+export const playTrackRequestSchema = z.object({
+  trackId: z.string(),
+  context: playbackContextSchema.optional(),
+  position: z.number().optional(),
+});
+export type PlayTrackRequest = z.infer<typeof playTrackRequestSchema>;
 
-/**
- * Play track request
- */
-export interface PlayTrackRequest {
-  trackId: string;
-  context?: PlaybackContext;
-  position?: number; // start position in seconds
-}
+export const playQueueRequestSchema = z.object({
+  queue: queueSchema,
+  startIndex: z.number().optional(),
+});
+export type PlayQueueRequest = z.infer<typeof playQueueRequestSchema>;
 
-/**
- * Play queue request
- */
-export interface PlayQueueRequest {
-  queue: Queue;
-  startIndex?: number; // index to start playing from
-}
+export const addToQueueRequestSchema = z.object({
+  trackIds: z.array(z.string()),
+  position: z.union([z.enum(['next', 'last']), z.number()]).optional(),
+});
+export type AddToQueueRequest = z.infer<typeof addToQueueRequestSchema>;
 
-/**
- * Add to queue request
- */
-export interface AddToQueueRequest {
-  trackIds: string[];
-  position?: 'next' | 'last' | number; // where to add in queue
-}
-
-/**
- * Remove from queue request
- */
-export interface RemoveFromQueueRequest {
-  trackIds: string[];
-}
-
-
-
-
-
-
+export const removeFromQueueRequestSchema = z.object({
+  trackIds: z.array(z.string()),
+});
+export type RemoveFromQueueRequest = z.infer<typeof removeFromQueueRequestSchema>;

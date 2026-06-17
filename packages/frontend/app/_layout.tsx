@@ -62,8 +62,9 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
   const { forwardWheelEvent } = useLayoutScroll();
   const isDesktop = useIsDesktop();
   const keyboardVisible = useKeyboardVisibility();
-  const { currentTrack } = usePlayerStore();
-  const { fullscreenPanel, isLibrarySidebarExpanded } = useUIStore();
+  const currentTrack = usePlayerStore(s => s.currentTrack);
+  const fullscreenPanel = useUIStore(s => s.fullscreenPanel);
+  const isLibrarySidebarExpanded = useUIStore(s => s.isLibrarySidebarExpanded);
   const isLibraryFullscreen = fullscreenPanel === 'library';
   const isNowPlayingFullscreen = fullscreenPanel === 'nowPlaying';
   const showNowPlayingPanel = isDesktop && !isLibraryFullscreen && (isNowPlayingFullscreen || !!currentTrack);

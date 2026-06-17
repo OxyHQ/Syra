@@ -1,117 +1,97 @@
-/**
- * Playlist-related types for Syra music streaming app
- */
+import { z } from 'zod';
+import { timestampsSchema } from './common';
+import {
+  catalogSourceSchema,
+  externalIdsSchema,
+  sourceProvenanceSchema,
+  trackSchema,
+} from './track';
 
-import { Timestamps } from './common';
-import { CatalogSource, ExternalIds, SourceProvenance, Track } from './track';
+export const playlistVisibilitySchema = z.enum(['public', 'private', 'unlisted']);
+export type PlaylistVisibility = z.infer<typeof playlistVisibilitySchema>;
+export const PlaylistVisibility = {
+  PUBLIC: 'public' as const,
+  PRIVATE: 'private' as const,
+  UNLISTED: 'unlisted' as const,
+};
 
-/**
- * Playlist visibility
- */
-export enum PlaylistVisibility {
-  PUBLIC = 'public',
-  PRIVATE = 'private',
-  UNLISTED = 'unlisted' // accessible via link but not searchable
-}
+export const playlistCollaboratorSchema = z.object({
+  oxyUserId: z.string(),
+  username: z.string(),
+  role: z.enum(['owner', 'editor', 'viewer']),
+  addedAt: z.string(),
+});
+export type PlaylistCollaborator = z.infer<typeof playlistCollaboratorSchema>;
 
-/**
- * Playlist collaborator
- */
-export interface PlaylistCollaborator {
-  oxyUserId: string;
-  username: string;
-  role: 'owner' | 'editor' | 'viewer';
-  addedAt: string;
-}
+export const playlistSchema = timestampsSchema.extend({
+  id: z.string(),
+  _id: z.string().optional(),
+  name: z.string(),
+  description: z.string().optional(),
+  ownerOxyUserId: z.string(),
+  ownerUsername: z.string(),
+  coverArt: z.string().optional(),
+  visibility: playlistVisibilitySchema,
+  trackCount: z.number(),
+  totalDuration: z.number(),
+  followers: z.number().optional(),
+  isPublic: z.boolean(),
+  primaryColor: z.string().optional(),
+  secondaryColor: z.string().optional(),
+  collaborators: z.array(playlistCollaboratorSchema).optional(),
+  source: catalogSourceSchema.optional(),
+  externalIds: externalIdsSchema.optional(),
+  sources: z.array(sourceProvenanceSchema).optional(),
+});
+export type Playlist = z.infer<typeof playlistSchema>;
 
-/**
- * Playlist - A collection of tracks curated by a user
- */
-export interface Playlist extends Timestamps {
-  id: string;
-  _id?: string;
-  name: string;
-  description?: string;
-  ownerOxyUserId: string;
-  ownerUsername: string;
-  coverArt?: string; // MongoDB ObjectId string (24 hex characters) - image must be uploaded via /api/images/upload first // MongoDB ObjectId string (24 hex characters) - image must be uploaded via /api/images/upload first. In API responses, converted to /api/images/:id URL
-  visibility: PlaylistVisibility;
-  trackCount: number;
-  totalDuration: number; // total duration in seconds
-  followers?: number;
-  isPublic: boolean;
-  primaryColor?: string; // Primary hex color extracted from cover art (e.g., "#FF5733")
-  secondaryColor?: string; // Secondary hex color extracted from cover art (e.g., "#33FF57")
-  collaborators?: PlaylistCollaborator[];
-  /** Which provider this playlist originates from, when imported */
-  source?: CatalogSource;
-  /** Cross-provider identifiers */
-  externalIds?: ExternalIds;
-  /** Provenance log — one entry per provider that contributed fields */
-  sources?: SourceProvenance[];
-}
+export const playlistTrackSchema = z.object({
+  trackId: z.string(),
+  addedAt: z.string(),
+  addedBy: z.string().optional(),
+  order: z.number(),
+});
+export type PlaylistTrack = z.infer<typeof playlistTrackSchema>;
 
-/**
- * Playlist track reference
- */
-export interface PlaylistTrack {
-  trackId: string;
-  addedAt: string;
-  addedBy?: string; // oxyUserId who added the track
-  order: number; // position in playlist
-}
+export const playlistWithTracksSchema = playlistSchema.extend({
+  tracks: z.array(trackSchema),
+  playlistTracks: z.array(playlistTrackSchema),
+});
+export type PlaylistWithTracks = z.infer<typeof playlistWithTracksSchema>;
 
-/**
- * Playlist with tracks
- */
-export interface PlaylistWithTracks extends Playlist {
-  tracks: Track[];
-  playlistTracks: PlaylistTrack[]; // tracks with metadata about their position in playlist
-}
+export const createPlaylistRequestSchema = z.object({
+  name: z.string(),
+  description: z.string().optional(),
+  coverArt: z.string().optional(),
+  visibility: playlistVisibilitySchema.optional(),
+  isPublic: z.boolean().optional(),
+});
+export type CreatePlaylistRequest = z.infer<typeof createPlaylistRequestSchema>;
 
-/**
- * Create playlist request
- */
-export interface CreatePlaylistRequest {
-  name: string;
-  description?: string;
-  coverArt?: string; // MongoDB ObjectId string (24 hex characters) - image must be uploaded via /api/images/upload first
-  visibility?: PlaylistVisibility;
-  isPublic?: boolean;
-}
+export const updatePlaylistRequestSchema = z.object({
+  name: z.string().optional(),
+  description: z.string().optional(),
+  coverArt: z.string().optional(),
+  visibility: playlistVisibilitySchema.optional(),
+  isPublic: z.boolean().optional(),
+});
+export type UpdatePlaylistRequest = z.infer<typeof updatePlaylistRequestSchema>;
 
-/**
- * Update playlist request
- */
-export interface UpdatePlaylistRequest {
-  name?: string;
-  description?: string;
-  coverArt?: string; // MongoDB ObjectId string (24 hex characters) - image must be uploaded via /api/images/upload first
-  visibility?: PlaylistVisibility;
-  isPublic?: boolean;
-}
+export const addTracksToPlaylistRequestSchema = z.object({
+  playlistId: z.string(),
+  trackIds: z.array(z.string()),
+  position: z.number().optional(),
+});
+export type AddTracksToPlaylistRequest = z.infer<typeof addTracksToPlaylistRequestSchema>;
 
-/**
- * Add tracks to playlist request
- */
-export interface AddTracksToPlaylistRequest {
-  playlistId: string;
-  trackIds: string[];
-  position?: number; // insert at specific position, or append to end
-}
+export const removeTracksFromPlaylistRequestSchema = z.object({
+  playlistId: z.string(),
+  trackIds: z.array(z.string()),
+});
+export type RemoveTracksFromPlaylistRequest = z.infer<typeof removeTracksFromPlaylistRequestSchema>;
 
-/**
- * Remove tracks from playlist request
- */
-export interface RemoveTracksFromPlaylistRequest {
-  playlistId: string;
-  trackIds: string[];
-}
-
-/**
- * Reorder playlist tracks request
- */
-export interface ReorderPlaylistTracksRequest {
-  playlistId: string;
-  trackIds: string[]; // new order of track IDs
-}
+export const reorderPlaylistTracksRequestSchema = z.object({
+  playlistId: z.string(),
+  trackIds: z.array(z.string()),
+});
+export type ReorderPlaylistTracksRequest = z.infer<typeof reorderPlaylistTracksRequestSchema>;

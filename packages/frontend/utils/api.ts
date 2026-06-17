@@ -28,50 +28,56 @@ const publicClient = axios.create({
 // (typed Promise<T>), NOT an axios-style { data } envelope — so the
 // resolved value IS the data.
 export const api = {
-  async get<T = any>(endpoint: string, params?: Record<string, any>): Promise<{ data: T }> {
+  async get<T = unknown>(endpoint: string, params?: Record<string, unknown>): Promise<{ data: T }> {
     const data = await authenticatedClient.get<T>(endpoint, { params });
     return { data };
   },
 
-  async post<T = any>(endpoint: string, body?: any): Promise<{ data: T }> {
+  async post<T = unknown>(endpoint: string, body?: unknown): Promise<{ data: T }> {
     const data = await authenticatedClient.post<T>(endpoint, body);
     return { data };
   },
 
-  async put<T = any>(endpoint: string, body?: any): Promise<{ data: T }> {
+  async put<T = unknown>(endpoint: string, body?: unknown): Promise<{ data: T }> {
     const data = await authenticatedClient.put<T>(endpoint, body);
     return { data };
   },
 
-  async delete<T = any>(endpoint: string): Promise<{ data: T }> {
+  async delete<T = unknown>(endpoint: string): Promise<{ data: T }> {
     const data = await authenticatedClient.delete<T>(endpoint);
     return { data };
   },
 
-  async patch<T = any>(endpoint: string, body?: any): Promise<{ data: T }> {
+  async patch<T = unknown>(endpoint: string, body?: unknown): Promise<{ data: T }> {
     const data = await authenticatedClient.patch<T>(endpoint, body);
     return { data };
   },
 };
 
 export class ApiError extends Error {
-  constructor(message: string, public status?: number, public response?: any) {
+  constructor(message: string, public status?: number, public response?: unknown) {
     super(message);
     this.name = 'ApiError';
   }
 }
 
 // Error checking utilities
-export function isUnauthorizedError(error: any): boolean {
-  return error?.response?.status === 401 || error?.status === 401;
+export function isUnauthorizedError(error: unknown): boolean {
+  const err = error as Record<string, unknown> | undefined;
+  const response = err?.response as Record<string, unknown> | undefined;
+  return response?.status === 401 || err?.status === 401;
 }
 
-export function isNotFoundError(error: any): boolean {
-  return error?.response?.status === 404 || error?.status === 404;
+export function isNotFoundError(error: unknown): boolean {
+  const err = error as Record<string, unknown> | undefined;
+  const response = err?.response as Record<string, unknown> | undefined;
+  return response?.status === 404 || err?.status === 404;
 }
 
-export function isAuthError(error: any): boolean {
-  const status = error?.response?.status || error?.status;
+export function isAuthError(error: unknown): boolean {
+  const err = error as Record<string, unknown> | undefined;
+  const response = err?.response as Record<string, unknown> | undefined;
+  const status = response?.status ?? err?.status;
   return status === 401 || status === 403;
 }
 
@@ -109,7 +115,7 @@ export const healthApi = {
 
 // Public API methods (no authentication required)
 export const publicApi = {
-  async get<T = any>(endpoint: string, params?: Record<string, any>): Promise<{ data: T }> {
+  async get<T = unknown>(endpoint: string, params?: Record<string, unknown>): Promise<{ data: T }> {
     const response = await publicClient.get(endpoint, { params });
     return { data: response.data };
   },

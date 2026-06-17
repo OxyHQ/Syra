@@ -1,176 +1,140 @@
-/**
- * Track-related types for Syra music streaming app
- */
+import { z } from 'zod';
+import { timestampsSchema } from './common';
 
-import { Timestamps } from './common';
+export const catalogSourceSchema = z.enum(['upload', 'cc', 'audius']);
+export type CatalogSource = z.infer<typeof catalogSourceSchema>;
 
-/** Which provider a catalog entity originates from */
-export type CatalogSource = 'upload' | 'cc' | 'audius';
+export const trackStatusSchema = z.enum(['processing', 'ready', 'failed']);
+export type TrackStatus = z.infer<typeof trackStatusSchema>;
 
-/** Lifecycle state of a track in the catalog */
-export type TrackStatus = 'processing' | 'ready' | 'failed';
+export const externalIdsSchema = z.object({
+  isrc: z.string().optional(),
+  audiusId: z.string().optional(),
+});
+export type ExternalIds = z.infer<typeof externalIdsSchema>;
 
-/** Cross-provider identifiers for a catalog entity */
-export interface ExternalIds {
-  isrc?: string;
-  audiusId?: string;
-}
+export const sourceProvenanceSchema = z.object({
+  provider: catalogSourceSchema,
+  externalId: z.string(),
+  importedAt: z.string(),
+  fields: z.array(z.string()),
+});
+export type SourceProvenance = z.infer<typeof sourceProvenanceSchema>;
 
-/** Records which fields were imported from an external provider and when */
-export interface SourceProvenance {
-  provider: CatalogSource;
-  externalId: string;
-  importedAt: string;
-  fields: string[];
-}
+export const trackImageSchema = z.object({
+  url: z.string(),
+  width: z.number().optional(),
+  height: z.number().optional(),
+  source: catalogSourceSchema.optional(),
+});
+export type TrackImage = z.infer<typeof trackImageSchema>;
 
-/** An image asset from an external provider */
-export interface TrackImage {
-  url: string;
-  width?: number;
-  height?: number;
-  source?: CatalogSource;
-}
+export const hlsRenditionSchema = z.object({
+  manifestKey: z.string(),
+  bitrateKbps: z.number(),
+  encrypted: z.boolean(),
+});
+export type HlsRendition = z.infer<typeof hlsRenditionSchema>;
 
-/** A single HLS rendition for adaptive streaming */
-export interface HlsRendition {
-  manifestKey: string;
-  bitrateKbps: number;
-  encrypted: boolean;
-}
+export const audioSourceSchema = z.object({
+  url: z.string(),
+  format: z.enum(['mp3', 'flac', 'ogg', 'm4a', 'wav']),
+  bitrate: z.number().optional(),
+  duration: z.number().optional(),
+});
+export type AudioSource = z.infer<typeof audioSourceSchema>;
 
-/**
- * Audio source for a track
- * URL format: /api/audio/{trackId} (uses MongoDB ObjectId)
- * Files are stored in S3 with structure: audio/{artistId}/{albumId}/{trackId}.{format}
- */
-export interface AudioSource {
-  url: string; // Format: /api/audio/{trackId}
-  format: 'mp3' | 'flac' | 'ogg' | 'm4a' | 'wav';
-  bitrate?: number; // in kbps
-  duration?: number; // in seconds (can be calculated from file if not provided)
-}
+export const trackMetadataSchema = z.object({
+  genre: z.array(z.string()).optional(),
+  bpm: z.number().optional(),
+  key: z.string().optional(),
+  explicit: z.boolean().optional(),
+  language: z.string().optional(),
+  isrc: z.string().optional(),
+  copyright: z.string().optional(),
+  publisher: z.string().optional(),
+});
+export type TrackMetadata = z.infer<typeof trackMetadataSchema>;
 
-/**
- * Track metadata
- */
-export interface TrackMetadata {
-  genre?: string[];
-  bpm?: number;
-  key?: string;
-  explicit?: boolean;
-  language?: string;
-  isrc?: string; // International Standard Recording Code
-  copyright?: string;
-  publisher?: string;
-}
+export const trackSchema = timestampsSchema.extend({
+  id: z.string(),
+  _id: z.string().optional(),
+  title: z.string(),
+  artistId: z.string(),
+  artistName: z.string(),
+  albumId: z.string().optional(),
+  albumName: z.string().optional(),
+  duration: z.number(),
+  trackNumber: z.number().optional(),
+  discNumber: z.number().optional(),
+  audioSource: audioSourceSchema.optional(),
+  coverArt: z.string().optional(),
+  metadata: trackMetadataSchema.optional(),
+  genre: z.string().optional(),
+  mood: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  releaseDate: z.string().optional(),
+  isExplicit: z.boolean(),
+  popularity: z.number().optional(),
+  playCount: z.number().optional(),
+  favoriteCount: z.number().optional(),
+  repostCount: z.number().optional(),
+  primaryColor: z.string().optional(),
+  secondaryColor: z.string().optional(),
+  isAvailable: z.boolean(),
+  copyrightRemoved: z.boolean().optional(),
+  removedAt: z.string().optional(),
+  removedReason: z.string().optional(),
+  removedBy: z.string().optional(),
+  copyrightReportId: z.string().optional(),
+  source: catalogSourceSchema,
+  status: trackStatusSchema,
+  externalIds: externalIdsSchema.optional(),
+  sources: z.array(sourceProvenanceSchema).optional(),
+  images: z.array(trackImageSchema).optional(),
+  hls: z.array(hlsRenditionSchema).optional(),
+  loudnessLufs: z.number().optional(),
+  streamUrl: z.string().optional(),
+  hlsMasterKey: z.string().optional(),
+});
+export type Track = z.infer<typeof trackSchema>;
 
-/**
- * Track - A single song/audio recording
- */
-export interface Track extends Timestamps {
-  id: string;
-  _id?: string;
-  title: string;
-  artistId: string;
-  artistName: string;
-  albumId?: string;
-  albumName?: string;
-  duration: number; // in seconds
-  trackNumber?: number; // position in album
-  discNumber?: number; // disc number for multi-disc albums
-  /** Uploaded audio file; absent for audius stream-only and processing tracks */
-  audioSource?: AudioSource;
-  coverArt?: string; // MongoDB ObjectId string (24 hex characters) - image must be uploaded via /api/images/upload first. In API responses, converted to /api/images/:id URL
-  metadata?: TrackMetadata;
-  /** Single top-level genre label (provider-supplied, e.g. Audius `genre`); enables genre faceting before albums exist */
-  genre?: string;
-  /** Mood label (provider-supplied, e.g. Audius `mood`) */
-  mood?: string;
-  /** Free-form descriptive tags (provider-supplied) */
-  tags?: string[];
-  /** Original release date as an ISO 8601 string (provider-supplied) */
-  releaseDate?: string;
-  isExplicit: boolean;
-  popularity?: number; // 0-100
-  playCount?: number;
-  /** Number of favourites / saves (provider-supplied popularity signal) */
-  favoriteCount?: number;
-  /** Number of reposts / shares (provider-supplied popularity signal) */
-  repostCount?: number;
-  primaryColor?: string;
-  secondaryColor?: string;
-  isAvailable: boolean; // whether track is available for playback
-  copyrightRemoved?: boolean;
-  removedAt?: string;
-  removedReason?: string;
-  removedBy?: string; // Oxy user ID who reported/removed
-  copyrightReportId?: string;
-  /** Which provider this track originates from */
-  source: CatalogSource;
-  /** Lifecycle state; 'ready' once audio is transcoded and available */
-  status: TrackStatus;
-  /** Cross-provider identifiers (ISRC, Audius ID, etc.) */
-  externalIds?: ExternalIds;
-  /** Provenance log — one entry per provider that contributed fields */
-  sources?: SourceProvenance[];
-  /** External image assets (Audius / CC); uploaded tracks use coverArt */
-  images?: TrackImage[];
-  /** HLS adaptive renditions generated after upload transcoding */
-  hls?: HlsRendition[];
-  /** EBU R128 integrated loudness in LUFS */
-  loudnessLufs?: number;
-  /** Direct network stream URL (Audius only) */
-  streamUrl?: string;
-  /** S3 key of the HLS master playlist; set after transcoding completes */
-  hlsMasterKey?: string;
-}
+export const trackWithContextSchema = trackSchema.extend({
+  isLiked: z.boolean().optional(),
+  isInPlaylist: z.boolean().optional(),
+  playlists: z.array(z.string()).optional(),
+});
+export type TrackWithContext = z.infer<typeof trackWithContextSchema>;
 
-/**
- * Track with additional context for UI
- */
-export interface TrackWithContext extends Track {
-  isLiked?: boolean;
-  isInPlaylist?: boolean;
-  playlists?: string[]; // playlist IDs containing this track
-}
+export const createTrackRequestSchema = z.object({
+  title: z.string(),
+  artistId: z.string(),
+  albumId: z.string().optional(),
+  duration: z.number(),
+  audioSource: audioSourceSchema,
+  coverArt: z.string().optional(),
+  metadata: trackMetadataSchema.optional(),
+  isExplicit: z.boolean().optional(),
+});
+export type CreateTrackRequest = z.infer<typeof createTrackRequestSchema>;
 
-/**
- * Create track request
- */
-export interface CreateTrackRequest {
-  title: string;
-  artistId: string;
-  albumId?: string;
-  duration: number;
-  audioSource: AudioSource;
-  coverArt?: string; // MongoDB ObjectId string (24 hex characters) - image must be uploaded via /api/images/upload first
-  metadata?: TrackMetadata;
-  isExplicit?: boolean;
-}
+export const updateTrackRequestSchema = z.object({
+  title: z.string().optional(),
+  albumId: z.string().optional(),
+  trackNumber: z.number().optional(),
+  discNumber: z.number().optional(),
+  coverArt: z.string().optional(),
+  metadata: trackMetadataSchema.partial().optional(),
+  isAvailable: z.boolean().optional(),
+});
+export type UpdateTrackRequest = z.infer<typeof updateTrackRequestSchema>;
 
-/**
- * Update track request
- */
-export interface UpdateTrackRequest {
-  title?: string;
-  albumId?: string;
-  trackNumber?: number;
-  discNumber?: number;
-  coverArt?: string; // MongoDB ObjectId string (24 hex characters) - image must be uploaded via /api/images/upload first
-  metadata?: Partial<TrackMetadata>;
-  isAvailable?: boolean;
-}
-
-/**
- * Upload track request (for file uploads)
- */
-export interface UploadTrackRequest {
-  title: string;
-  artistId: string;
-  albumId?: string;
-  coverArt?: string; // MongoDB ObjectId string (24 hex characters) - image must be uploaded via /api/images/upload first
-  genre?: string[];
-  isExplicit?: boolean;
-  // Audio file will be sent as multipart/form-data
-}
+export const uploadTrackRequestSchema = z.object({
+  title: z.string(),
+  artistId: z.string(),
+  albumId: z.string().optional(),
+  coverArt: z.string().optional(),
+  genre: z.array(z.string()).optional(),
+  isExplicit: z.boolean().optional(),
+});
+export type UploadTrackRequest = z.infer<typeof uploadTrackRequestSchema>;

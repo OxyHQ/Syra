@@ -1,60 +1,56 @@
-/**
- * Syra Connect — multi-device playback types.
- *
- * Used by both the backend device registry / playback-state service and the
- * frontend Connect UI (device list, transfer, remote control).
- */
+import { z } from 'zod';
+import { repeatModeSchema } from './player';
+import { catalogSourceSchema } from './track';
 
-import { RepeatMode } from './player';
-import { CatalogSource } from './track';
+export const deviceTypeSchema = z.enum(['web', 'mobile', 'desktop', 'speaker']);
+export type DeviceType = z.infer<typeof deviceTypeSchema>;
 
-/** Physical or virtual form-factor of a connected playback device. */
-export type DeviceType = 'web' | 'mobile' | 'desktop' | 'speaker';
+export const deviceSchema = z.object({
+  id: z.string().optional(),
+  deviceId: z.string(),
+  name: z.string(),
+  type: deviceTypeSchema,
+  capabilities: z.array(z.string()),
+  lastSeen: z.string(),
+  isActive: z.boolean(),
+});
+export type Device = z.infer<typeof deviceSchema>;
 
-/** A registered playback device belonging to an Oxy user. */
-export interface Device {
-  id?: string;
-  deviceId: string;       // client-generated stable identifier
-  name: string;
-  type: DeviceType;
-  capabilities: string[]; // e.g. ['play', 'volume', 'seek']
-  lastSeen: string;       // ISO 8601
-  isActive: boolean;
-}
+export const playbackCommandTypeSchema = z.enum([
+  'play',
+  'pause',
+  'seek',
+  'next',
+  'prev',
+  'transfer',
+  'volume',
+  'shuffle',
+  'repeat',
+]);
+export type PlaybackCommandType = z.infer<typeof playbackCommandTypeSchema>;
 
-/** Commands that can be issued to the active device via the Connect socket. */
-export type PlaybackCommandType =
-  | 'play'
-  | 'pause'
-  | 'seek'
-  | 'next'
-  | 'prev'
-  | 'transfer'
-  | 'volume'
-  | 'shuffle'
-  | 'repeat';
+export const playbackCommandSchema = z.object({
+  type: playbackCommandTypeSchema,
+  positionMs: z.number().optional(),
+  volume: z.number().optional(),
+  shuffle: z.boolean().optional(),
+  repeat: repeatModeSchema.optional(),
+  deviceId: z.string().optional(),
+});
+export type PlaybackCommand = z.infer<typeof playbackCommandSchema>;
 
-export interface PlaybackCommand {
-  type: PlaybackCommandType;
-  positionMs?: number;
-  volume?: number;    // 0-1
-  shuffle?: boolean;
-  repeat?: RepeatMode;
-  deviceId?: string; // target device for 'transfer'
-}
-
-/** Server-authoritative playback state stored per user (Phase 6.2+). */
-export interface ConnectPlaybackState {
-  trackId?: string;
-  source?: CatalogSource;
-  positionMs: number;
-  isPlaying: boolean;
-  queue: string[];         // ordered trackIds (no full Track objects)
-  contextType?: string;
-  contextId?: string;
-  repeat: RepeatMode;
-  shuffle: boolean;
-  volume: number;          // 0-1
-  activeDeviceId?: string;
-  updatedAt: string;       // ISO 8601
-}
+export const connectPlaybackStateSchema = z.object({
+  trackId: z.string().optional(),
+  source: catalogSourceSchema.optional(),
+  positionMs: z.number(),
+  isPlaying: z.boolean(),
+  queue: z.array(z.string()),
+  contextType: z.string().optional(),
+  contextId: z.string().optional(),
+  repeat: repeatModeSchema,
+  shuffle: z.boolean(),
+  volume: z.number(),
+  activeDeviceId: z.string().optional(),
+  updatedAt: z.string(),
+});
+export type ConnectPlaybackState = z.infer<typeof connectPlaybackStateSchema>;

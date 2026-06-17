@@ -1,83 +1,63 @@
-/**
- * Library-related types for Syra music streaming app
- * User's personal music library - liked songs, saved albums, followed artists
- */
+import { z } from 'zod';
+import { timestampsSchema } from './common';
+import { trackSchema } from './track';
+import { albumSchema } from './album';
+import { artistSchema } from './artist';
+import { playlistSchema } from './playlist';
 
-import { Timestamps } from './common';
-import { Track } from './track';
-import { Album } from './album';
-import { Artist } from './artist';
-import { Playlist } from './playlist';
+export const userLibrarySchema = timestampsSchema.extend({
+  oxyUserId: z.string(),
+  likedTracks: z.array(z.string()),
+  savedAlbums: z.array(z.string()),
+  followedArtists: z.array(z.string()),
+  playlists: z.array(z.string()),
+});
+export type UserLibrary = z.infer<typeof userLibrarySchema>;
 
-/**
- * User's music library
- */
-export interface UserLibrary extends Timestamps {
-  oxyUserId: string;
-  likedTracks: string[]; // track IDs
-  savedAlbums: string[]; // album IDs
-  followedArtists: string[]; // artist IDs
-  playlists: string[]; // playlist IDs owned by user
-}
+export const likedTracksSchema = z.object({
+  tracks: z.array(trackSchema),
+  total: z.number(),
+  oxyUserId: z.string(),
+});
+export type LikedTracks = z.infer<typeof likedTracksSchema>;
 
-/**
- * Liked tracks response
- */
-export interface LikedTracks {
-  tracks: Track[];
-  total: number;
-  oxyUserId: string;
-}
+export const savedAlbumsSchema = z.object({
+  albums: z.array(albumSchema),
+  total: z.number(),
+  oxyUserId: z.string(),
+});
+export type SavedAlbums = z.infer<typeof savedAlbumsSchema>;
 
-/**
- * Saved albums response
- */
-export interface SavedAlbums {
-  albums: Album[];
-  total: number;
-  oxyUserId: string;
-}
+export const followedArtistsSchema = z.object({
+  artists: z.array(artistSchema),
+  total: z.number(),
+  oxyUserId: z.string(),
+});
+export type FollowedArtists = z.infer<typeof followedArtistsSchema>;
 
-/**
- * Followed artists response
- */
-export interface FollowedArtists {
-  artists: Artist[];
-  total: number;
-  oxyUserId: string;
-}
+export const userPlaylistsSchema = z.object({
+  playlists: z.array(playlistSchema),
+  total: z.number(),
+  oxyUserId: z.string(),
+});
+export type UserPlaylists = z.infer<typeof userPlaylistsSchema>;
 
-/**
- * User playlists response
- */
-export interface UserPlaylists {
-  playlists: Playlist[];
-  total: number;
-  oxyUserId: string;
-}
+export const likeTrackRequestSchema = z.object({
+  trackId: z.string(),
+});
+export type LikeTrackRequest = z.infer<typeof likeTrackRequestSchema>;
 
-/**
- * Like/Unlike track request
- */
-export interface LikeTrackRequest {
-  trackId: string;
-}
+export const unlikeTrackRequestSchema = z.object({
+  trackId: z.string(),
+});
+export type UnlikeTrackRequest = z.infer<typeof unlikeTrackRequestSchema>;
 
-export interface UnlikeTrackRequest {
-  trackId: string;
-}
+export const saveAlbumRequestSchema = z.object({
+  albumId: z.string(),
+});
+export type SaveAlbumRequest = z.infer<typeof saveAlbumRequestSchema>;
 
-/**
- * Save/Unsave album request
- */
-export interface SaveAlbumRequest {
-  albumId: string;
-}
-
-export interface UnsaveAlbumRequest {
-  albumId: string;
-}
-
-// Follow/Unfollow artist requests are exported from './artist'
-// Import them if needed: import { FollowArtistRequest, UnfollowArtistRequest } from '@syra/shared-types';
-
+export const unsaveAlbumRequestSchema = z.object({
+  albumId: z.string(),
+});
+export type UnsaveAlbumRequest = z.infer<typeof unsaveAlbumRequestSchema>;

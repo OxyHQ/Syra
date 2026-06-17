@@ -1,24 +1,29 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
 import { Animated, Platform } from 'react-native';
 
+interface ScrollEventTarget {
+    scrollTop?: number;
+    closest?: (selector: string) => Element | null;
+}
+
+interface ScrollEventNativeEvent {
+    contentOffset?: { x?: number; y?: number } | number;
+    target?: ScrollEventTarget;
+}
+
 type ScrollEvent = {
-    nativeEvent?: {
-        contentOffset?: { x?: number; y?: number } | number;
-        target?: { scrollTop?: number };
-        [key: string]: any;
-    };
-    target?: { scrollTop?: number };
-    [key: string]: any;
+    nativeEvent?: ScrollEventNativeEvent;
+    target?: ScrollEventTarget;
 };
 
 type WheelLikeEvent = {
     deltaY?: number;
     preventDefault?: () => void;
-    target?: any;
+    target?: EventTarget | null;
     nativeEvent?: {
         deltaY?: number;
         preventDefault?: () => void;
-        target?: any;
+        target?: EventTarget | null;
     };
 };
 
@@ -39,7 +44,7 @@ type LayoutScrollContextValue = {
      * Factory that returns an Animated.event handler bound to the shared scrollY.
      * Consumers can provide an optional listener to run side effects alongside the shared update.
      */
-    createAnimatedScrollHandler: (listener?: (event: ScrollEvent) => void) => (...args: any[]) => void;
+    createAnimatedScrollHandler: (listener?: (event: ScrollEvent) => void) => (...args: unknown[]) => void;
     /**
      * Direct setter for components that need to programmatically adjust the global scroll position.
      */
@@ -62,8 +67,12 @@ interface LayoutScrollProviderProps {
 }
 
 function extractOffsetY(event: ScrollEvent): number {
-    const nativeEvent = event?.nativeEvent ?? event;
-    if (!nativeEvent) return 0;
+    const nativeEvent: ScrollEventNativeEvent | undefined = event?.nativeEvent;
+    if (!nativeEvent) {
+        const target = event?.target;
+        if (target && typeof target.scrollTop === 'number') return target.scrollTop;
+        return 0;
+    }
 
     const contentOffset = nativeEvent.contentOffset;
     if (typeof contentOffset === 'number') return contentOffset;
@@ -71,7 +80,6 @@ function extractOffsetY(event: ScrollEvent): number {
     const offsetY = contentOffset?.y;
     if (typeof offsetY === 'number') return offsetY;
 
-    // React Native Web sometimes keeps scrollTop on the target node instead.
     const target = nativeEvent.target ?? event?.target;
     if (target && typeof target.scrollTop === 'number') return target.scrollTop;
 
@@ -99,7 +107,7 @@ export function LayoutScrollProvider({
         setScrollY(offset);
         // Optimize web DOM queries - only check if we don't have a registered element
         if (Platform.OS === 'web' && !scrollElementRef.current) {
-            const target = (event?.nativeEvent as any)?.target ?? (event as any)?.target;
+            const target = event?.nativeEvent?.target ?? event?.target;
             if (target && typeof target.closest === 'function') {
                 const owner = target.closest('[data-layoutscroll="true"]') as HTMLElement | null;
                 if (owner) {
@@ -119,7 +127,7 @@ export function LayoutScrollProvider({
                 [{ nativeEvent: { contentOffset: { y: scrollY } } }],
                 {
                     useNativeDriver: false, // Required for scroll position
-                    listener: (event: any) => {
+                    listener: (event: ScrollEvent) => {
                         const now = Date.now();
                         // Always update scrollY state (required for animations)
                         handleScroll(event);
@@ -165,8 +173,9 @@ export function LayoutScrollProvider({
                 ? event.nativeEvent?.deltaY
                 : 0;
         if (deltaY === 0) return;
-        const target = (event.nativeEvent?.target ?? event.target) as HTMLElement | null;
-        if (target && scrollElementRef.current && typeof target.closest === 'function') {
+        const rawTarget = event.nativeEvent?.target ?? event.target;
+        const target = rawTarget instanceof HTMLElement ? rawTarget : null;
+        if (target && scrollElementRef.current) {
             const owner = target.closest('[data-layoutscroll="true"]');
             if (owner && owner === scrollElementRef.current) {
                 // Let the scrollable itself handle native wheel events.

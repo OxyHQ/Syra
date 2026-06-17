@@ -3,40 +3,42 @@ import { subscribeWithSelector } from "zustand/middleware";
 
 export interface UserEntity {
   id: string;
+  _id?: string;
   username?: string;
   name?: { full?: string; first?: string; last?: string } | string;
-  handle?: string; // alias for username if needed
+  handle?: string;
   avatar?: string;
   verified?: boolean;
   bio?: string;
   createdAt?: string;
-  // Allow any additional fields coming from services
-  [key: string]: any;
+  privacySettings?: Record<string, unknown>;
+  links?: unknown[];
+  linksMetadata?: unknown[];
 }
 
 type CachedUser = {
   data: UserEntity;
   fetchedAt: number;
-  isFull: boolean; // true when loaded from profile endpoints, false when primed from posts
+  isFull: boolean;
 };
+
+interface PostWithUser {
+  user?: UserEntity;
+  original?: { user?: UserEntity };
+  quoted?: { user?: UserEntity };
+  repostedBy?: UserEntity;
+}
 
 interface UsersState {
   usersById: Record<string, CachedUser>;
-  idByUsername: Record<string, string>; // username -> id
-  ttlMs: number; // cache time-to-live
+  idByUsername: Record<string, string>;
+  ttlMs: number;
 
-  // Upserts
-  upsertUser: (user: Partial<UserEntity> & { id?: string }) => void;
-  upsertMany: (users: (Partial<UserEntity> & { id?: string })[]) => void;
-
-  // Ingest from posts: extract embedded user objects
-  primeFromPosts: (posts: { user?: any }[]) => void;
-
-  // Cache reads (no network)
+  upsertUser: (user: Partial<UserEntity> & { id?: string; _id?: string }) => void;
+  upsertMany: (users: (Partial<UserEntity> & { id?: string; _id?: string })[]) => void;
+  primeFromPosts: (posts: PostWithUser[]) => void;
   getCachedById: (id: string) => UserEntity | undefined;
   getCachedByUsername: (username: string) => UserEntity | undefined;
-
-  // Ensure helpers (cache-first with caller-provided loader)
   ensureById: (
     id: string,
     loader: (id: string) => Promise<UserEntity | null | undefined>,
@@ -47,8 +49,6 @@ interface UsersState {
     loader: (username: string) => Promise<UserEntity | null | undefined>,
     opts?: { force?: boolean }
   ) => Promise<UserEntity | undefined>;
-
-  // Invalidation
   invalidate: (idOrUsername: string) => void;
   clearAll: () => void;
 }
@@ -59,30 +59,28 @@ export const useUsersStore = create<UsersState>()(
   subscribeWithSelector((set, get) => ({
     usersById: {},
     idByUsername: {},
-    ttlMs: 5 * 60 * 1000, // 5 minutes default
+    ttlMs: 5 * 60 * 1000,
 
     upsertUser: (user) => {
       if (!user) return;
       const id = String(user.id ?? user._id ?? "");
       if (!id) return;
-      const username = (user as any).username ?? (user as any).handle;
+      const username = user.username ?? user.handle;
       set((state) => {
         const prev = state.usersById[id]?.data || {};
-        const merged: UserEntity = { ...prev, ...user, id } as UserEntity;
-        const isFull = Boolean(
-          (user as any)?.bio || (user as any)?.privacySettings || (user as any)?.links || (user as any)?.linksMetadata || (user as any)?.createdAt
-        );
+        const merged: UserEntity = { ...prev, ...user, id };
+        const isFull = Boolean(user.bio || user.privacySettings || user.links || user.linksMetadata || user.createdAt);
         const next: UsersState["usersById"] = {
           ...state.usersById,
           [id]: { data: merged, fetchedAt: now(), isFull: isFull || state.usersById[id]?.isFull || false },
         };
         const nextMap = { ...state.idByUsername };
         if (username) nextMap[String(username).toLowerCase()] = id;
-        return { usersById: next, idByUsername: nextMap } as Partial<UsersState> as any;
+        return { usersById: next, idByUsername: nextMap };
       });
     },
 
-  upsertMany: (users) => {
+    upsertMany: (users) => {
       if (!Array.isArray(users) || users.length === 0) return;
       set((state) => {
         const nextUsers: UsersState["usersById"] = { ...state.usersById };
@@ -90,34 +88,32 @@ export const useUsersStore = create<UsersState>()(
         const ts = now();
         for (const u of users) {
           if (!u) continue;
-          const id = String((u as any).id ?? (u as any)._id ?? "");
+          const id = String(u.id ?? u._id ?? "");
           if (!id) continue;
-          const username = (u as any).username ?? (u as any).handle;
+          const username = u.username ?? u.handle;
           const prev = nextUsers[id]?.data || {};
-      // Bulk upserts are typically from posts, assume not full
-      nextUsers[id] = { data: { ...prev, ...u, id } as UserEntity, fetchedAt: ts, isFull: nextUsers[id]?.isFull || false };
+          nextUsers[id] = { data: { ...prev, ...u, id }, fetchedAt: ts, isFull: nextUsers[id]?.isFull || false };
           if (username) nextMap[String(username).toLowerCase()] = id;
         }
-        return { usersById: nextUsers, idByUsername: nextMap } as Partial<UsersState> as any;
+        return { usersById: nextUsers, idByUsername: nextMap };
       });
     },
 
     primeFromPosts: (posts) => {
       if (!Array.isArray(posts) || posts.length === 0) return;
-      const users: any[] = [];
+      const users: UserEntity[] = [];
       for (const p of posts) {
         if (p?.user && (p.user.id || p.user._id)) users.push(p.user);
-        // Also check embedded repost/quote headers if any
-        if ((p as any)?.original?.user) users.push((p as any).original.user);
-        if ((p as any)?.quoted?.user) users.push((p as any).quoted.user);
-        if ((p as any)?.repostedBy) users.push((p as any).repostedBy);
+        if (p?.original?.user) users.push(p.original.user);
+        if (p?.quoted?.user) users.push(p.quoted.user);
+        if (p?.repostedBy) users.push(p.repostedBy);
       }
       if (users.length) get().upsertMany(users);
     },
 
     getCachedById: (id) => get().usersById[id]?.data,
     getCachedByUsername: (username) => {
-      const id = get().idByUsername[username?.toLowerCase?.() || username];
+      const id = get().idByUsername[username?.toLowerCase?.() ?? username];
       return id ? get().usersById[id]?.data : undefined;
     },
 
@@ -125,43 +121,40 @@ export const useUsersStore = create<UsersState>()(
       const { ttlMs } = get();
       const cached = get().usersById[id];
       const fresh = cached && (!opts?.force) && now() - cached.fetchedAt < ttlMs;
-      // If cached exists and is fresh but NOT full, upgrade via loader
       if (cached?.data && fresh && cached.isFull) return cached.data;
       const loaded = await loader(id).catch(() => undefined);
       if (loaded) {
-        // Mark as full on profile loads
         set((state) => {
-          const username = (loaded as any).username ?? (loaded as any).handle;
+          const username = loaded.username ?? loaded.handle;
           const nextUsers = {
             ...state.usersById,
-            [id]: { data: { ...(state.usersById[id]?.data || {}), ...loaded, id } as UserEntity, fetchedAt: now(), isFull: true },
+            [id]: { data: { ...(state.usersById[id]?.data || {}), ...loaded, id }, fetchedAt: now(), isFull: true },
           };
           const nextMap = { ...state.idByUsername };
           if (username) nextMap[String(username).toLowerCase()] = id;
-          return { usersById: nextUsers, idByUsername: nextMap } as Partial<UsersState> as any;
+          return { usersById: nextUsers, idByUsername: nextMap };
         });
       }
       return loaded || cached?.data;
     },
 
     ensureByUsername: async (username, loader, opts) => {
-      const key = username?.toLowerCase?.() || username;
+      const key = username?.toLowerCase?.() ?? username;
       const id = get().idByUsername[key];
       if (id) return get().ensureById(id, async () => loader(username), opts);
       const loaded = await loader(username).catch(() => undefined);
       if (loaded) {
-        // if we don't yet know id, derive it
-        const id = String((loaded as any).id ?? (loaded as any)._id ?? "");
-        if (id) {
+        const loadedId = String(loaded.id ?? loaded._id ?? "");
+        if (loadedId) {
           set((state) => {
             const nextUsers = {
               ...state.usersById,
-              [id]: { data: { ...(state.usersById[id]?.data || {}), ...loaded, id } as UserEntity, fetchedAt: now(), isFull: true },
+              [loadedId]: { data: { ...(state.usersById[loadedId]?.data || {}), ...loaded, id: loadedId }, fetchedAt: now(), isFull: true },
             };
             const nextMap = { ...state.idByUsername };
-            const uname = (loaded as any).username ?? (loaded as any).handle;
-            if (uname) nextMap[String(uname).toLowerCase()] = id;
-            return { usersById: nextUsers, idByUsername: nextMap } as Partial<UsersState> as any;
+            const uname = loaded.username ?? loaded.handle;
+            if (uname) nextMap[String(uname).toLowerCase()] = loadedId;
+            return { usersById: nextUsers, idByUsername: nextMap };
           });
         } else {
           get().upsertUser(loaded);
@@ -172,20 +165,16 @@ export const useUsersStore = create<UsersState>()(
 
     invalidate: (idOrUsername) => {
       set((state) => {
-        const key = idOrUsername?.toLowerCase?.() || idOrUsername;
-        // If username mapped, translate to id
-        const id = state.usersById[idOrUsername]?.data
-          ? idOrUsername
-          : state.idByUsername[key];
-        if (!id) return {} as any;
+        const key = idOrUsername?.toLowerCase?.() ?? idOrUsername;
+        const id = state.usersById[idOrUsername]?.data ? idOrUsername : state.idByUsername[key];
+        if (!id) return state;
         const next = { ...state.usersById };
         delete next[id];
-        // Also clear username mapping pointing to this id
         const nextMap = { ...state.idByUsername };
         for (const uname in nextMap) {
           if (nextMap[uname] === id) delete nextMap[uname];
         }
-        return { usersById: next, idByUsername: nextMap } as Partial<UsersState> as any;
+        return { usersById: next, idByUsername: nextMap };
       });
     },
 
@@ -193,7 +182,6 @@ export const useUsersStore = create<UsersState>()(
   }))
 );
 
-// Hooks/selectors
 export const useUserById = (id?: string) =>
   useUsersStore((s) => (id ? s.usersById[id]?.data : undefined));
 

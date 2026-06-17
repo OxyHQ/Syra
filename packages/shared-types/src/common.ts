@@ -1,43 +1,48 @@
-/**
- * Common utility types and enums shared across Mention frontend and backend
- */
+import { z } from 'zod';
 
-// Common enums
+export const coordinatesSchema = z.object({
+  lat: z.number(),
+  lng: z.number(),
+});
+export type Coordinates = z.infer<typeof coordinatesSchema>;
 
-// Common interfaces
-export interface Coordinates {
-  lat: number;
-  lng: number;
-}
+export const geoJSONPointSchema = z.object({
+  type: z.literal('Point'),
+  coordinates: z.tuple([z.number(), z.number()]),
+  address: z.string().optional(),
+});
+export type GeoJSONPoint = z.infer<typeof geoJSONPointSchema>;
 
-export interface GeoJSONPoint {
-  type: 'Point';
-  coordinates: [number, number]; // [longitude, latitude]
-  address?: string; // Optional human-readable address
-}
+export const paginationSchema = z.object({
+  page: z.number(),
+  limit: z.number(),
+  total: z.number(),
+  pages: z.number(),
+});
+export type Pagination = z.infer<typeof paginationSchema>;
 
-export interface Pagination {
-  page: number;
-  limit: number;
-  total: number;
-  pages: number;
-}
-
-export interface ApiResponse<T = any> {
+export const apiResponseSchema = <T extends z.ZodTypeAny>(dataSchema: T) =>
+  z.object({
+    success: z.boolean(),
+    message: z.string().optional(),
+    error: z.string().optional(),
+    data: dataSchema.optional(),
+  });
+export type ApiResponse<T = unknown> = {
   success: boolean;
   message?: string;
   error?: string;
   data?: T;
-}
+};
 
-export interface Timestamps {
-  createdAt: string;
-  updatedAt: string;
-}
+export const timestampsSchema = z.object({
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type Timestamps = z.infer<typeof timestampsSchema>;
 
-// Utility types
 export type Optional<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
 export type RequiredFields<T, K extends keyof T> = T & Required<Pick<T, K>>;
 export type DeepPartial<T> = {
   [P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P];
-}; 
+};

@@ -1,9 +1,37 @@
 import React, { useCallback, useContext, useEffect, useMemo, useRef } from 'react';
-import { FlatList as RNFlatList, Platform } from 'react-native';
-import { LegendList as RL } from '@legendapp/list';
+import { FlatList as RNFlatList, FlatListProps, NativeSyntheticEvent, NativeScrollEvent, Platform, RefreshControlProps } from 'react-native';
+import { LegendList as RL, LegendListProps, LegendListRef } from '@legendapp/list';
 import LayoutScrollContext from '@/context/LayoutScrollContext';
 
-const LegendList = (props: any, ref: any) => {
+type ScrollableRef = {
+    scrollToOffset?: (params: { offset: number; animated?: boolean }) => void;
+    scrollTo?: (params: { x?: number; y?: number; animated?: boolean }) => void;
+};
+
+type WheelEvent = {
+    deltaY?: number;
+    preventDefault?: () => void;
+    target?: EventTarget | null;
+    nativeEvent?: {
+        deltaY?: number;
+        preventDefault?: () => void;
+        target?: EventTarget | null;
+    };
+};
+
+type WebDataSet = Record<string, string>;
+
+type WebExtensions = {
+    dataSet?: WebDataSet;
+    onWheel?: (event: WheelEvent) => void;
+};
+
+type LegendListWrapperProps<T> = LegendListProps<T> & WebExtensions;
+
+function LegendListInner<T>(
+    props: LegendListWrapperProps<T>,
+    ref: React.ForwardedRef<LegendListRef>
+): React.ReactElement {
     const {
         refreshControl,
         scrollEnabled = true,
@@ -12,10 +40,10 @@ const LegendList = (props: any, ref: any) => {
         dataSet,
         onWheel: propOnWheel,
         ...rest
-    } = props || {};
+    } = props;
 
     const layoutScroll = useContext(LayoutScrollContext);
-    const localRef = useRef<any>(null);
+    const localRef = useRef<LegendListRef | null>(null);
     const unregisterRef = useRef<(() => void) | null>(null);
 
     const clearRegistration = useCallback(() => {
@@ -25,7 +53,7 @@ const LegendList = (props: any, ref: any) => {
         }
     }, []);
 
-    const combinedRef = useCallback((node: any) => {
+    const combinedRef = useCallback((node: LegendListRef | null) => {
         localRef.current = node;
         if (typeof ref === 'function') {
             ref(node);
@@ -40,7 +68,7 @@ const LegendList = (props: any, ref: any) => {
             return;
         }
         if (localRef.current) {
-            unregisterRef.current = layoutScroll.registerScrollable(localRef.current);
+            unregisterRef.current = layoutScroll.registerScrollable(localRef.current as unknown as ScrollableRef);
         }
         return () => {
             clearRegistration();
@@ -49,7 +77,7 @@ const LegendList = (props: any, ref: any) => {
 
     const handleScroll = layoutScroll?.handleScroll;
 
-    const mergedOnScroll = useCallback((event: any) => {
+    const mergedOnScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
         if (scrollEnabled !== false && handleScroll) {
             handleScroll(event);
         }
@@ -58,7 +86,7 @@ const LegendList = (props: any, ref: any) => {
         }
     }, [handleScroll, propOnScroll, scrollEnabled]);
 
-    const handleWheelEvent = useCallback((event: any) => {
+    const handleWheelEvent = useCallback((event: WheelEvent) => {
         if (layoutScroll?.forwardWheelEvent) {
             layoutScroll.forwardWheelEvent(event);
         }
@@ -81,7 +109,7 @@ const LegendList = (props: any, ref: any) => {
         const defaults = {
             recycleItems: true,
             maintainVisibleContentPosition: false,
-        } as any;
+        };
 
         const propsForRL = {
             ...defaults,
@@ -91,27 +119,30 @@ const LegendList = (props: any, ref: any) => {
             onScroll: layoutScroll ? mergedOnScroll : propOnScroll,
             dataSet: datasetForWeb,
             onWheel: Platform.OS === 'web' ? handleWheelEvent : propOnWheel,
-        } as any;
+            scrollEventThrottle: effectiveScrollEventThrottle ?? undefined,
+        };
 
-        if (effectiveScrollEventThrottle != null) {
-            propsForRL.scrollEventThrottle = effectiveScrollEventThrottle;
-        }
-
-        return <RL ref={combinedRef} {...propsForRL} /> as any;
+        return <RL ref={combinedRef} {...propsForRL} />;
     }
 
-    const fallbackProps: any = {
+    const fallbackProps = {
         ...rest,
-        refreshControl,
+        refreshControl: refreshControl as React.ReactElement<RefreshControlProps> | undefined,
         scrollEnabled,
         onScroll: layoutScroll ? mergedOnScroll : propOnScroll,
-        dataSet: datasetForWeb,
-        onWheel: Platform.OS === 'web' ? handleWheelEvent : propOnWheel,
-    };
-    if (effectiveScrollEventThrottle != null) {
-        fallbackProps.scrollEventThrottle = effectiveScrollEventThrottle;
-    }
-    return <RNFlatList ref={combinedRef} {...fallbackProps} /> as any;
-};
+        scrollEventThrottle: effectiveScrollEventThrottle ?? undefined,
+    } as FlatListProps<T>;
 
-export default React.forwardRef(LegendList) as any;
+    const webProps = Platform.OS === 'web' ? {
+        dataSet: datasetForWeb,
+        onWheel: handleWheelEvent,
+    } : {};
+
+    return <RNFlatList ref={combinedRef as React.Ref<RNFlatList<T>>} {...fallbackProps} {...webProps} />;
+}
+
+const LegendList = React.forwardRef(LegendListInner) as <T>(
+    props: LegendListWrapperProps<T> & React.RefAttributes<LegendListRef>
+) => React.ReactElement;
+
+export default LegendList;

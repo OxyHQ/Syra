@@ -29,17 +29,15 @@ export const MobilePlayerBar: React.FC = () => {
   const insets = useSafeAreaInsets();
   const [progressBarWidth, setProgressBarWidth] = useState(0);
 
-  const {
-    currentTrack,
-    isPlaying,
-    isLoading,
-    currentTime,
-    duration,
-    pause,
-    resume,
-    seek,
-    playNext,
-  } = usePlayerStore();
+  const currentTrack = usePlayerStore(s => s.currentTrack);
+  const isPlaying = usePlayerStore(s => s.isPlaying);
+  const isLoading = usePlayerStore(s => s.isLoading);
+  const currentTime = usePlayerStore(s => s.currentTime);
+  const duration = usePlayerStore(s => s.duration);
+  const pause = usePlayerStore(s => s.pause);
+  const resume = usePlayerStore(s => s.resume);
+  const seek = usePlayerStore(s => s.seek);
+  const playNext = usePlayerStore(s => s.playNext);
 
   const { isTrackLiked } = useLibrary();
   const toggleLike = useToggleLikeTrack();

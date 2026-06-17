@@ -26,9 +26,12 @@ export const NowPlaying: React.FC = () => {
   const theme = useTheme();
   const router = useRouter();
   const isDesktop = useMediaQuery({ minWidth: 1024 });
-  const { setNowPlayingVisible, fullscreenPanel, toggleFullscreen } = useUIStore();
-  const { currentTrack, playFromQueue } = usePlayerStore();
-  const { queue } = useQueueStore();
+  const setNowPlayingVisible = useUIStore(s => s.setNowPlayingVisible);
+  const fullscreenPanel = useUIStore(s => s.fullscreenPanel);
+  const toggleFullscreen = useUIStore(s => s.toggleFullscreen);
+  const currentTrack = usePlayerStore(s => s.currentTrack);
+  const playFromQueue = usePlayerStore(s => s.playFromQueue);
+  const queue = useQueueStore(s => s.queue);
   const { isTrackLiked } = useLibrary();
   const toggleLike = useToggleLikeTrack();
   const isLiked = currentTrack ? isTrackLiked(currentTrack.id) : false;

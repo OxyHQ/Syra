@@ -29,25 +29,28 @@ const getProgressPercent = (currentTime: number, duration: number) => {
  */
 export const PlayerBar: React.FC = () => {
   const theme = useTheme();
-  const { toggleNowPlaying } = useUIStore();
+  const toggleNowPlaying = useUIStore(s => s.toggleNowPlaying);
   const [isDevicePickerVisible, setIsDevicePickerVisible] = useState(false);
   const [progressBarWidth, setProgressBarWidth] = useState(0);
 
-  const {
-    currentTrack,
-    isPlaying,
-    isLoading,
-    currentTime,
-    duration,
-    volume,
-    pause,
-    resume,
-    seek,
-    setVolume,
-    playNext,
-    playPrevious,
-  } = usePlayerStore();
-  const { queue, shuffle, repeat, toggleShuffle, cycleRepeat } = useQueueStore();
+  const currentTrack = usePlayerStore(s => s.currentTrack);
+  const isPlaying = usePlayerStore(s => s.isPlaying);
+  const isLoading = usePlayerStore(s => s.isLoading);
+  const currentTime = usePlayerStore(s => s.currentTime);
+  const duration = usePlayerStore(s => s.duration);
+  const volume = usePlayerStore(s => s.volume);
+  const pause = usePlayerStore(s => s.pause);
+  const resume = usePlayerStore(s => s.resume);
+  const seek = usePlayerStore(s => s.seek);
+  const setVolume = usePlayerStore(s => s.setVolume);
+  const playNext = usePlayerStore(s => s.playNext);
+  const playPrevious = usePlayerStore(s => s.playPrevious);
+  
+  const queue = useQueueStore(s => s.queue);
+  const shuffle = useQueueStore(s => s.shuffle);
+  const repeat = useQueueStore(s => s.repeat);
+  const toggleShuffle = useQueueStore(s => s.toggleShuffle);
+  const cycleRepeat = useQueueStore(s => s.cycleRepeat);
 
   const { isTrackLiked } = useLibrary();
   const toggleLike = useToggleLikeTrack();

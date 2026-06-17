@@ -1,88 +1,92 @@
-/**
- * External integration types for Syra music streaming app
- *
- * These types represent data shapes returned by external providers
- * (Audius, Creative Commons) before they are normalized into the
- * canonical catalog (Track / Artist / Album).
- */
+import { z } from 'zod';
+import { catalogSourceSchema, trackImageSchema } from './track';
 
-import { CatalogSource, TrackImage } from './track';
+export const externalArtistSchema = z.object({
+  name: z.string(),
+  externalId: z.string(),
+  images: z.array(trackImageSchema).optional(),
+});
+export type ExternalArtist = z.infer<typeof externalArtistSchema>;
 
-/** Minimal artist data as returned by an external provider */
-export interface ExternalArtist {
-  name: string;
-  externalId: string;
-  images?: TrackImage[];
-}
+export const externalPopularitySchema = z.object({
+  playCount: z.number().optional(),
+  favoriteCount: z.number().optional(),
+  repostCount: z.number().optional(),
+});
+export type ExternalPopularity = z.infer<typeof externalPopularitySchema>;
 
-/** Popularity signals as exposed by an external provider */
-export interface ExternalPopularity {
-  /** Lifetime play count */
-  playCount?: number;
-  /** Number of favourites / saves */
-  favoriteCount?: number;
-  /** Number of reposts / shares */
-  repostCount?: number;
-}
+export const externalTrackSchema: z.ZodType<ExternalTrack> = z.lazy(() =>
+  z.object({
+    provider: catalogSourceSchema,
+    externalId: z.string(),
+    title: z.string(),
+    artists: z.array(externalArtistSchema),
+    album: externalAlbumSchema.optional(),
+    durationSec: z.number(),
+    isrc: z.string().optional(),
+    images: z.array(trackImageSchema).optional(),
+    genre: z.string().optional(),
+    mood: z.string().optional(),
+    tags: z.array(z.string()).optional(),
+    releaseDate: z.string().optional(),
+    popularity: externalPopularitySchema.optional(),
+    streamUrl: z.string().optional(),
+    downloadUrl: z.string().optional(),
+    license: z.string().optional(),
+  })
+);
 
-/** Minimal album data as returned by an external provider */
-export interface ExternalAlbum {
-  name: string;
-  externalId: string;
-  images?: TrackImage[];
-  /** Release date as an ISO 8601 string, if the provider exposes one */
-  releaseDate?: string;
-  /** Single genre label as exposed by the provider */
-  genre?: string;
-  /** Popularity signals (play/favorite/repost counts) */
-  popularity?: ExternalPopularity;
-  /** External identifiers of the album's member tracks, in track order */
-  trackExternalIds?: string[];
-  /** Full member tracks fetched with the album, used to fill catalog gaps */
-  tracks?: ExternalTrack[];
-}
-
-/** Minimal playlist data as returned by an external provider */
-export interface ExternalPlaylist {
-  name: string;
-  externalId: string;
-  images?: TrackImage[];
-  description?: string;
-  /** Single genre label inferred from playlist tracks, if available */
-  genre?: string;
-  /** Popularity signals (play/favorite/repost counts) */
-  popularity?: ExternalPopularity;
-  /** External identifiers of the playlist's member tracks, in track order */
-  trackExternalIds?: string[];
-  /** Full member tracks fetched with the playlist, used to fill catalog gaps */
-  tracks?: ExternalTrack[];
-}
-
-/** A track as returned by an external provider, prior to catalog normalization */
-export interface ExternalTrack {
-  /** Which provider this track originates from */
-  provider: CatalogSource;
+export type ExternalTrack = {
+  provider: z.infer<typeof catalogSourceSchema>;
   externalId: string;
   title: string;
   artists: ExternalArtist[];
   album?: ExternalAlbum;
   durationSec: number;
   isrc?: string;
-  images?: TrackImage[];
-  /** Single genre label as exposed by the provider (e.g. Audius `genre`) */
+  images?: z.infer<typeof trackImageSchema>[];
   genre?: string;
-  /** Mood label as exposed by the provider (e.g. Audius `mood`) */
   mood?: string;
-  /** Free-form tags exposed by the provider */
   tags?: string[];
-  /** Release date as an ISO 8601 string, if the provider exposes one */
   releaseDate?: string;
-  /** Popularity signals (play/favorite/repost counts) */
   popularity?: ExternalPopularity;
-  /** Direct network stream URL (Audius only) */
   streamUrl?: string;
-  /** Download URL for CC tracks with a commercial-use license */
   downloadUrl?: string;
-  /** CC license identifier; filter out NC licenses before import */
   license?: string;
-}
+};
+
+export const externalAlbumSchema: z.ZodType<ExternalAlbum> = z.lazy(() =>
+  z.object({
+    name: z.string(),
+    externalId: z.string(),
+    images: z.array(trackImageSchema).optional(),
+    releaseDate: z.string().optional(),
+    genre: z.string().optional(),
+    popularity: externalPopularitySchema.optional(),
+    trackExternalIds: z.array(z.string()).optional(),
+    tracks: z.array(externalTrackSchema).optional(),
+  })
+);
+
+export type ExternalAlbum = {
+  name: string;
+  externalId: string;
+  images?: z.infer<typeof trackImageSchema>[];
+  releaseDate?: string;
+  genre?: string;
+  popularity?: ExternalPopularity;
+  trackExternalIds?: string[];
+  tracks?: ExternalTrack[];
+};
+
+export const externalPlaylistSchema = z.object({
+  name: z.string(),
+  externalId: z.string(),
+  images: z.array(trackImageSchema).optional(),
+  description: z.string().optional(),
+  genre: z.string().optional(),
+  popularity: externalPopularitySchema.optional(),
+  trackExternalIds: z.array(z.string()).optional(),
+  tracks: z.array(externalTrackSchema).optional(),
+});
+export type ExternalPlaylist = z.infer<typeof externalPlaylistSchema>;

@@ -162,6 +162,9 @@
     "packages/shared-types": {
       "name": "@syra/shared-types",
       "version": "1.0.0",
+      "dependencies": {
+        "zod": "^3.25.76",
+      },
       "devDependencies": {
         "@types/node": "^20.0.0",
         "typescript": "~5.9.2",
@@ -3341,6 +3344,8 @@
     "@syra/backend/@syra/shared-types": ["@syra/shared-types@file:packages/shared-types", { "devDependencies": { "@types/node": "^20.0.0", "typescript": "~5.9.2" } }],
 
     "@syra/frontend/zod": ["zod@3.25.76", "", {}, "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="],
+
+    "@syra/shared-types/zod": ["zod@3.25.76", "", {}, "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="],
 
     "@tailwindcss/node/jiti": ["jiti@2.7.0", "", { "bin": { "jiti": "lib/jiti-cli.mjs" } }, "sha512-AC/7JofJvZGrrneWNaEnJeOLUx+JlGt7tNa0wZiRPT4MY1wmfKjt2+6O2p2uz2+skll8OZZmJMNqeke7kKbNgQ=="],
 
