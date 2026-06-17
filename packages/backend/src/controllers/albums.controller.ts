@@ -9,7 +9,7 @@ import { AuthRequest } from '../middleware/auth';
 import { getAuthenticatedUserId } from '../utils/auth';
 import { getParam } from '../utils/reqParams';
 import { CreateAlbumRequest } from '@syra/shared-types';
-import { extractColorsFromImage } from '../utils/colorHelper';
+import { getStoredImageColors } from '../utils/imageColors';
 import { logger } from '../utils/logger';
 import { withImageFirstSort } from '../utils/imageFirstSort';
 
@@ -181,9 +181,7 @@ export const createAlbum = async (req: AuthRequest, res: Response, next: NextFun
       });
     }
 
-    // Extract colors from cover art image
-    const imageUrl = `/api/images/${data.coverArt}`;
-    const colors = await extractColorsFromImage(undefined, imageUrl);
+    const colors = await getStoredImageColors(data.coverArt);
 
     // Create album
     const album = new AlbumModel({

@@ -9,7 +9,7 @@ import { AuthRequest } from '../middleware/auth';
 import { getAuthenticatedUserId } from '../utils/auth';
 import { getParam } from '../utils/reqParams';
 import { CreateArtistRequest, ArtistInsights, ArtistDashboard } from '@syra/shared-types';
-import { extractColorsFromImage } from '../utils/colorHelper';
+import { getStoredImageColors } from '../utils/imageColors';
 import { withImageFirstSort } from '../utils/imageFirstSort';
 
 /**
@@ -262,14 +262,7 @@ export const registerAsArtist = async (req: AuthRequest, res: Response, next: Ne
         });
       }
 
-      // Extract colors from image
-      try {
-        const imageUrl = `/api/images/${data.image}`;
-        colors = await extractColorsFromImage(undefined, imageUrl);
-      } catch (error) {
-        // Continue without colors if extraction fails
-        colors = undefined;
-      }
+      colors = await getStoredImageColors(data.image);
     }
 
     // Create artist profile

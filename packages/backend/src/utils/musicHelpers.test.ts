@@ -6,6 +6,7 @@ import {
   formatTrackWithCoverArt,
   formatAlbumWithCoverArt,
   formatArtistWithImage,
+  formatPlaylistWithCoverArt,
 } from './musicHelpers';
 
 // These tests exercise plain-object paths — no DB queries needed for
@@ -178,6 +179,38 @@ describe('formatArtistWithImage — images[] fallback', () => {
 
     expect(result).not.toBeNull();
     expect(result.image).toBeUndefined();
+  });
+});
+
+// ── Playlist — images[] fallback ──────────────────────────────────────────────
+
+describe('formatPlaylistWithCoverArt — images[] fallback', () => {
+  it('uses images[0].url as coverArt when no coverArt ObjectId', () => {
+    const playlist = {
+      _id: new mongoose.Types.ObjectId(),
+      name: 'Audius Playlist',
+      images: [{ url: 'https://audius.co/playlist.jpg' }],
+    };
+
+    const result = formatPlaylistWithCoverArt(playlist);
+
+    expect(result).not.toBeNull();
+    expect(result.coverArt).toBe('https://audius.co/playlist.jpg');
+  });
+
+  it('prefers ObjectId coverArt over images[]', () => {
+    const objectId = new mongoose.Types.ObjectId();
+    const playlist = {
+      _id: new mongoose.Types.ObjectId(),
+      name: 'Upload Playlist',
+      coverArt: objectId.toString(),
+      images: [{ url: 'https://audius.co/playlist.jpg' }],
+    };
+
+    const result = formatPlaylistWithCoverArt(playlist);
+
+    expect(result).not.toBeNull();
+    expect(result.coverArt).toBe(`/api/images/${objectId.toString()}`);
   });
 });
 

@@ -53,10 +53,9 @@ const GenreCardComponent: React.FC<GenreCardProps> = ({
   };
 
   return (
-    <Pressable
-      onPress={onPress}
-      onHoverIn={() => setIsHovered(true)}
-      onHoverOut={() => setIsHovered(false)}
+    <View
+      onPointerEnter={() => setIsHovered(true)}
+      onPointerLeave={() => setIsHovered(false)}
       style={[
         styles.container,
         isHovered && styles.containerHovered,
@@ -66,40 +65,51 @@ const GenreCardComponent: React.FC<GenreCardProps> = ({
         }),
       ]}
     >
-      <LinearGradient
-        colors={gradientColors}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.gradient}
+      <Pressable
+        accessibilityRole="button"
+        onPress={onPress}
+        style={styles.cardPressable}
       >
-        {/* Cover Art (optional) */}
-        {coverArt && (
-          <View style={styles.coverArtContainer}>
-            <Image
-              source={{ uri: coverArt }}
-              style={styles.coverArt}
-              resizeMode="cover"
-            />
-          </View>
-        )}
-
-        {/* Genre Name */}
-        <View style={styles.textContainer}>
-          <Text style={styles.genreName} numberOfLines={2}>
-            {name}
-          </Text>
-        </View>
-
-        {/* Play Button (appears on hover) */}
-        {isHovered && onPlayPress && (
-          <Pressable style={styles.playButtonContainer} onPress={handlePlayPress}>
-            <View style={[styles.playButton, { backgroundColor: theme.colors.primary }]}>
-              <Ionicons name="play" size={24} color={theme.colors.primaryForeground} />
+        <LinearGradient
+          colors={gradientColors}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.gradient}
+        >
+          {/* Cover Art (optional) */}
+          {coverArt && (
+            <View style={styles.coverArtContainer}>
+              <Image
+                source={{ uri: coverArt }}
+                style={styles.coverArt}
+                resizeMode="cover"
+              />
             </View>
-          </Pressable>
-        )}
-      </LinearGradient>
-    </Pressable>
+          )}
+
+          {/* Genre Name */}
+          <View style={styles.textContainer}>
+            <Text style={styles.genreName} numberOfLines={2}>
+              {name}
+            </Text>
+          </View>
+        </LinearGradient>
+      </Pressable>
+
+      {/* Play Button (appears on hover) */}
+      {isHovered && onPlayPress && (
+        <Pressable
+          accessibilityLabel={`Play ${name}`}
+          accessibilityRole="button"
+          style={styles.playButtonContainer}
+          onPress={handlePlayPress}
+        >
+          <View style={[styles.playButton, { backgroundColor: theme.colors.primary }]}>
+            <Ionicons name="play" size={24} color={theme.colors.primaryForeground} />
+          </View>
+        </Pressable>
+      )}
+    </View>
   );
 };
 
@@ -130,6 +140,9 @@ const styles = StyleSheet.create({
         elevation: 4,
       },
     }),
+  },
+  cardPressable: {
+    flex: 1,
   },
   gradient: {
     flex: 1,
@@ -165,6 +178,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 16,
     right: 16,
+    zIndex: 2,
+    ...Platform.select({
+      web: webViewStyle({ cursor: 'pointer' }),
+      default: {},
+    }),
   },
   playButton: {
     width: 48,

@@ -98,6 +98,8 @@ export interface Track extends Timestamps {
   favoriteCount?: number;
   /** Number of reposts / shares (provider-supplied popularity signal) */
   repostCount?: number;
+  primaryColor?: string;
+  secondaryColor?: string;
   isAvailable: boolean; // whether track is available for playback
   copyrightRemoved?: boolean;
   removedAt?: string;
@@ -172,4 +174,3 @@ export interface UploadTrackRequest {
   isExplicit?: boolean;
   // Audio file will be sent as multipart/form-data
 }
-

@@ -89,6 +89,8 @@ const TrackSchema = new Schema<ITrack>({
   playCount: { type: Number, default: 0 },
   favoriteCount: { type: Number, default: 0 },
   repostCount: { type: Number, default: 0 },
+  primaryColor: { type: String },
+  secondaryColor: { type: String },
   isAvailable: { type: Boolean, default: true, index: true },
   copyrightRemoved: { type: Boolean, default: false, index: true },
   removedAt: { type: Date },

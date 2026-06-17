@@ -1,10 +1,11 @@
-import type { ExternalAlbum, ExternalPlaylist } from '@syra/shared-types';
+import type { ExternalAlbum, ExternalPlaylist, ExternalTrack } from '@syra/shared-types';
 import type { MusicSourceConnector } from './MusicSourceConnector';
 import { AudiusConnector } from './AudiusConnector';
 import { upsertArtist } from '../catalog/upsertArtist';
 import { upsertTrack } from '../catalog/upsertTrack';
 import { upsertAlbum } from '../catalog/upsertAlbum';
 import { upsertPlaylist } from '../catalog/upsertPlaylist';
+import { syncAlbumsForTracks } from '../catalog/syncTrackAlbums';
 import { ArtistModel } from '../../models/Artist';
 import { logger } from '../../utils/logger';
 
@@ -137,6 +138,7 @@ export async function runAudiusImport(
   const tracks = await connector.search(query, AUDIUS_IMPORT_LIMIT);
 
   let imported = 0;
+  const importedTracks: ExternalTrack[] = [];
   // Unique artist external ids, preserving first-seen order, for album sync.
   const artistExternalIds: string[] = [];
   const seenArtists = new Set<string>();
@@ -144,6 +146,7 @@ export async function runAudiusImport(
     try {
       await upsertArtist(external.artists[0], 'audius');
       await upsertTrack(external, 'audius');
+      importedTracks.push(external);
       imported++;
       const artistExternalId = external.artists[0]?.externalId;
       if (artistExternalId && !seenArtists.has(artistExternalId)) {
@@ -158,9 +161,11 @@ export async function runAudiusImport(
     }
   }
 
-  const albumsSynced = albumFetcher
+  const albumsFromTracks = await syncAlbumsForTracks(importedTracks, 'audius');
+  const albumsFromArtists = albumFetcher
     ? await syncArtistAlbums(albumFetcher, artistExternalIds, maxArtistsForAlbums)
     : 0;
+  const albumsSynced = albumsFromTracks + albumsFromArtists;
   const playlistsSynced = playlistFetcher
     ? await syncArtistPlaylists(playlistFetcher, artistExternalIds, maxArtistsForAlbums)
     : 0;
@@ -206,13 +211,23 @@ async function syncArtistAlbums(
       const artistRef = { artistId: artist._id.toString(), artistName: artist.name };
 
       let skippedNoCover = 0;
+      let skippedEmpty = 0;
       for (const album of albums.slice(0, MAX_ALBUMS_PER_ARTIST)) {
         try {
+          for (const track of album.tracks ?? []) {
+            await upsertArtist(track.artists[0], 'audius');
+            await upsertTrack(track, 'audius');
+          }
+
           const { album: saved } = await upsertAlbum(album, artistRef, 'audius');
           if (saved) {
             albumsSynced++;
           } else {
-            skippedNoCover++;
+            if (!album.images?.length) {
+              skippedNoCover++;
+            } else {
+              skippedEmpty++;
+            }
           }
         } catch (err) {
           logger.warn('[audius-import] album sync: upsert failed', {
@@ -227,6 +242,12 @@ async function syncArtistAlbums(
         logger.info('[audius-import] album sync: skipped albums without cover art', {
           artistExternalId,
           skippedNoCover,
+        });
+      }
+      if (skippedEmpty > 0) {
+        logger.info('[audius-import] album sync: skipped albums without resolved tracks', {
+          artistExternalId,
+          skippedEmpty,
         });
       }
     } catch (err) {
@@ -259,8 +280,10 @@ async function syncArtistPlaylists(
             await upsertTrack(track, 'audius');
           }
 
-          await upsertPlaylist(playlist, 'audius');
-          playlistsSynced++;
+          const { playlist: saved } = await upsertPlaylist(playlist, 'audius');
+          if (saved) {
+            playlistsSynced++;
+          }
         } catch (err) {
           logger.warn('[audius-import] playlist sync: upsert failed', {
             artistExternalId,

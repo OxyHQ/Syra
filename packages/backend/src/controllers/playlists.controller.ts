@@ -4,7 +4,7 @@ import { Playlist, PlaylistVisibility, PlaylistWithTracks } from '@syra/shared-t
 import { PlaylistModel } from '../models/Playlist';
 import { PlaylistTrackModel } from '../models/PlaylistTrack';
 import { TrackModel } from '../models/Track';
-import { extractColorsFromImage } from '../utils/colorHelper';
+import { getStoredImageColors } from '../utils/imageColors';
 import { toApiFormat, toApiFormatArray, formatTrackWithCoverArt, formatPlaylistWithCoverArt, formatPlaylistsWithCoverArt } from '../utils/musicHelpers';
 import { isDatabaseConnected } from '../utils/database';
 import { AuthRequest } from '../middleware/auth';
@@ -248,14 +248,7 @@ export const createPlaylist = async (req: AuthRequest, res: Response, next: Next
         });
       }
 
-      // Extract colors from cover art image
-      try {
-        const imageUrl = `/api/images/${coverArt}`;
-        colors = await extractColorsFromImage(undefined, imageUrl);
-      } catch (error) {
-        // Continue without colors if extraction fails
-        colors = undefined;
-      }
+      colors = await getStoredImageColors(coverArt);
     }
 
     const newPlaylist = new PlaylistModel({
@@ -341,16 +334,10 @@ export const updatePlaylist = async (req: AuthRequest, res: Response, next: Next
 
         updateData.coverArt = coverArt;
         
-        // Extract colors from cover art image
-        try {
-          const imageUrl = `/api/images/${coverArt}`;
-          const colors = await extractColorsFromImage(undefined, imageUrl);
-          if (colors) {
-            updateData.primaryColor = colors.primaryColor;
-            updateData.secondaryColor = colors.secondaryColor;
-          }
-        } catch (error) {
-          // Continue without colors if extraction fails
+        const colors = await getStoredImageColors(coverArt);
+        if (colors) {
+          updateData.primaryColor = colors.primaryColor;
+          updateData.secondaryColor = colors.secondaryColor;
         }
       } else {
         updateData.coverArt = undefined;

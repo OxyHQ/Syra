@@ -38,6 +38,8 @@ export interface ExternalAlbum {
   popularity?: ExternalPopularity;
   /** External identifiers of the album's member tracks, in track order */
   trackExternalIds?: string[];
+  /** Full member tracks fetched with the album, used to fill catalog gaps */
+  tracks?: ExternalTrack[];
 }
 
 /** Minimal playlist data as returned by an external provider */

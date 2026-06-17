@@ -39,7 +39,11 @@ function makeAlbumFetcher(byArtist: Record<string, ExternalAlbum[]>): AlbumFetch
   };
 }
 
-function makeAlbum(externalId: string, trackExternalIds: string[]): ExternalAlbum {
+function makeAlbum(
+  externalId: string,
+  trackExternalIds: string[],
+  tracks?: ExternalTrack[],
+): ExternalAlbum {
   return {
     name: `Album ${externalId}`,
     externalId,
@@ -48,6 +52,7 @@ function makeAlbum(externalId: string, trackExternalIds: string[]): ExternalAlbu
     images: [{ url: `https://cdn.audius.co/${externalId}/1000x1000.jpg`, width: 1000, height: 1000 }],
     popularity: { playCount: 1000 },
     trackExternalIds,
+    ...(tracks ? { tracks } : {}),
   };
 }
 
@@ -164,6 +169,27 @@ describe('runAudiusImport — album sync', () => {
     const albumId = album?._id.toString();
     const linked = await TrackModel.countDocuments({ albumId });
     expect(linked).toBe(2);
+  });
+
+  it('imports album member tracks that were not in the original search results', async () => {
+    const connector = makeConnector([makeTrack('search-track', 'artist-1')]);
+    const albumOnlyTrack = makeTrack('album-only-track', 'artist-1');
+    const albumFetcher = makeAlbumFetcher({
+      'artist-1': [makeAlbum('alb-full', ['album-only-track'], [albumOnlyTrack])],
+    });
+
+    const result = await runAudiusImport('album-full-sync', { connector, albumFetcher });
+
+    expect(result.imported).toBe(1);
+    expect(result.albumsSynced).toBe(1);
+
+    const album = await AlbumModel.findOne({ 'externalIds.audiusId': 'alb-full' });
+    expect(album).not.toBeNull();
+    expect(album?.totalTracks).toBe(1);
+
+    const albumTrack = await TrackModel.findOne({ 'externalIds.audiusId': 'album-only-track' });
+    expect(albumTrack).not.toBeNull();
+    expect(albumTrack?.albumId).toBe(album?._id.toString());
   });
 
   it('fetches albums once per unique artist, not once per track', async () => {

@@ -3,6 +3,7 @@ import { connect, clear, disconnect } from '../../test/mongo';
 import { ImportJobModel } from '../../models/ImportJob';
 import { TrackModel } from '../../models/Track';
 import { ArtistModel } from '../../models/Artist';
+import { AlbumModel } from '../../models/Album';
 import { runImport } from './importService';
 import type { MusicSourceConnector } from './MusicSourceConnector';
 import type { ExternalTrack } from '@syra/shared-types';
@@ -20,6 +21,7 @@ const CC_TRACK_A: ExternalTrack = {
   durationSec: 210,
   artists: [{ name: 'Free Artist', externalId: 'fa-001' }],
   album: { name: 'Open Album', externalId: 'al-001' },
+  images: [{ url: 'blob:test-cover', source: 'cc' }],
   downloadUrl: 'https://storage.jamendo.com/tracks/cc-001/audio.mp3',
   license: 'https://creativecommons.org/licenses/by/4.0/',
 };
@@ -103,6 +105,25 @@ describe('runImport — CC path', () => {
 
     expect(await TrackModel.countDocuments()).toBe(2);
     expect(await ArtistModel.countDocuments()).toBe(2);
+  });
+
+  it('imports and links album metadata when imported tracks include an album', async () => {
+    await runImport(makeCcConnector([CC_TRACK_A]), 'album-track', {
+      deps: {
+        downloadAndStore: async () => {},
+        enqueueIngest: () => {},
+      },
+    });
+
+    const album = await AlbumModel.findOne({ sources: { $elemMatch: { provider: 'cc', externalId: 'al-001' } } });
+    expect(album).not.toBeNull();
+    expect(album?.title).toBe('Open Album');
+    expect(album?.totalTracks).toBe(1);
+
+    const track = await TrackModel.findOne({
+      sources: { $elemMatch: { provider: 'cc', externalId: CC_TRACK_A.externalId } },
+    });
+    expect(track?.albumId).toBe(album?._id.toString());
   });
 
   it('calls downloadAndStore and enqueueIngest once per CC track', async () => {

@@ -334,6 +334,35 @@ describe('AudiusConnector.search', () => {
     expect(track.popularity?.repostCount).toBe(90);
   });
 
+  it('normalises album metadata when a track payload includes it', async () => {
+    const connector = new AudiusConnector({
+      apiBase: TEST_BASE,
+      appName: TEST_APP,
+      httpGet: async () => ({
+        data: [
+          {
+            ...TRACK_A,
+            album: {
+              id: 'album-track-1',
+              playlist_name: 'Track Album',
+              release_date: '2021-04-01T00:00:00Z',
+              artwork: {
+                '1000x1000': 'https://cdn.audius.co/album-track-1/1000x1000.jpg',
+              },
+            },
+          },
+        ],
+      }),
+    });
+
+    const [track] = await connector.search('test');
+
+    expect(track.album?.externalId).toBe('album-track-1');
+    expect(track.album?.name).toBe('Track Album');
+    expect(track.album?.trackExternalIds).toEqual(['abc123']);
+    expect(track.album?.images?.[0].url).toBe('https://cdn.audius.co/album-track-1/1000x1000.jpg');
+  });
+
   it('omits optional metadata fields when the payload lacks them', async () => {
     const minimal = {
       id: 'min1',
@@ -411,6 +440,7 @@ describe('AudiusConnector.fetchArtistAlbums', () => {
     expect(album.images?.[0].width).toBe(1000);
     // member track external ids linked
     expect(album.trackExternalIds).toEqual(['abc123']);
+    expect(album.tracks?.map((track) => track.externalId)).toEqual(['abc123']);
   });
 
   it('skips non-album playlists (is_album=false)', async () => {

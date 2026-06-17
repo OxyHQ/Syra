@@ -14,7 +14,7 @@ const EXTERNAL_OWNER_ID = 'system:audius';
 const EXTERNAL_OWNER_NAME = 'Audius';
 
 export interface UpsertPlaylistResult {
-  playlist: IPlaylist;
+  playlist: IPlaylist | null;
   created: boolean;
 }
 
@@ -116,6 +116,9 @@ export async function upsertPlaylist(
   const provenance = buildProvenance(source, external.externalId, contributedFields(external));
   const coverArt = external.images?.[0]?.url;
   const orderedTrackIds = await resolveOrderedTrackIds(source, external.trackExternalIds);
+  if (orderedTrackIds.length === 0) {
+    return { playlist: null, created: false };
+  }
 
   const existing = await findExisting(source, external.externalId);
   const colors = (!existing || !existing.primaryColor || !existing.secondaryColor)

@@ -2,6 +2,7 @@ import type { ExternalTrack } from '@syra/shared-types';
 import { ImportJobModel, IImportJob } from '../../models/ImportJob';
 import { upsertArtist } from '../catalog/upsertArtist';
 import { upsertTrack } from '../catalog/upsertTrack';
+import { syncAlbumsForTracks } from '../catalog/syncTrackAlbums';
 import { enqueueIngest as defaultEnqueueIngest } from '../ingest/ingestTrack';
 import { uploadTrackAudio } from '../audioStorageService';
 import { TrackModel } from '../../models/Track';
@@ -171,6 +172,7 @@ export async function runImport(
   }
 
   job.total = results.length;
+  const importedTracks: ExternalTrack[] = [];
 
   for (const external of results) {
     try {
@@ -182,6 +184,7 @@ export async function runImport(
 
       const { artist } = await upsertArtist(external.artists[0], connector.provider);
       const { track } = await upsertTrack(external, connector.provider);
+      importedTracks.push(external);
 
       if (connector.provider === 'cc') {
         await downloadAndStore(external, track._id.toString(), artist._id.toString());
@@ -194,6 +197,12 @@ export async function runImport(
       logger.error(`importService: per-track failure for ${external.externalId}:`, err);
       job.failed += 1;
     }
+  }
+
+  try {
+    await syncAlbumsForTracks(importedTracks, connector.provider);
+  } catch (err) {
+    logger.warn('importService: album sync failed after track import:', err);
   }
 
   job.status = 'completed';

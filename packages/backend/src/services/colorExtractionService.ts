@@ -14,6 +14,7 @@ const TIMEOUT_MS = 10000; // 10 seconds
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
 const FALLBACK_COLOR = '#808080'; // Gray fallback color
 const MIN_COLOR_DIFFERENCE = 50; // Minimum difference in brightness or color distance for secondary color
+const MAX_REDIRECTS = 5;
 
 /**
  * Convert RGB values to hex color string
@@ -43,7 +44,7 @@ function calculateBrightness(r: number, g: number, b: number): number {
 /**
  * Download image from URL
  */
-async function downloadImage(url: string): Promise<Buffer> {
+async function downloadImage(url: string, redirectsRemaining = MAX_REDIRECTS): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     // Skip blob URLs - they're temporary local URLs and can't be downloaded
     if (url.startsWith('blob:')) {
@@ -73,6 +74,27 @@ async function downloadImage(url: string): Promise<Buffer> {
     };
 
     const req = client.request(options, (res) => {
+      const statusCode = res.statusCode ?? 0;
+      if (statusCode >= 300 && statusCode < 400) {
+        res.resume();
+        const location = res.headers.location;
+        if (!location) {
+          return reject(new Error(`Image request redirected without a location (${statusCode})`));
+        }
+        if (redirectsRemaining <= 0) {
+          return reject(new Error('Too many image redirects'));
+        }
+
+        const redirectedUrl = new URL(location, urlObj).toString();
+        downloadImage(redirectedUrl, redirectsRemaining - 1).then(resolve).catch(reject);
+        return;
+      }
+
+      if (statusCode < 200 || statusCode >= 300) {
+        res.resume();
+        return reject(new Error(`Image request failed with status ${statusCode}`));
+      }
+
       // Check content type
       const contentType = res.headers['content-type'] || '';
       if (!contentType.startsWith('image/')) {

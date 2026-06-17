@@ -6,6 +6,7 @@ import type {
 import { AlbumModel } from '../../models/Album';
 import type { IAlbum } from '../../models/Album';
 import { TrackModel } from '../../models/Track';
+import type { ITrack } from '../../models/Track';
 import { playCountToPopularity } from './popularity';
 import { assignMissingColors, colorsFromImages } from './entityColors';
 
@@ -59,27 +60,15 @@ async function findExisting(source: CatalogSource, externalId: string): Promise<
   });
 }
 
-/**
- * Link the album's member tracks (resolved by external id → our Track) to this
- * album and compute the rolled-up track count + total duration.
- *
- * Only tracks already present in the catalog are linked; unknown external ids
- * are silently ignored (the album may reference tracks not yet imported).
- *
- * @returns `{ totalTracks, totalDuration }` over the linked tracks.
- */
-async function linkMemberTracks(
-  albumId: string,
-  albumName: string,
+async function resolveMemberTracks(
   source: CatalogSource,
   trackExternalIds: string[] | undefined,
-): Promise<{ totalTracks: number; totalDuration: number }> {
+): Promise<IAlbumMemberTrack[]> {
   if (!trackExternalIds?.length) {
-    return { totalTracks: 0, totalDuration: 0 };
+    return [];
   }
 
-  let totalTracks = 0;
-  let totalDuration = 0;
+  const tracks: IAlbumMemberTrack[] = [];
 
   for (const externalId of trackExternalIds) {
     const query =
@@ -89,16 +78,32 @@ async function linkMemberTracks(
 
     const track = await TrackModel.findOne(query);
     if (!track) continue;
+    tracks.push(track);
+  }
 
+  return tracks;
+}
+
+type IAlbumMemberTrack = ITrack;
+
+/**
+ * Link the album's resolved member tracks and compute rolled-up totals.
+ */
+async function linkMemberTracks(
+  albumId: string,
+  albumName: string,
+  tracks: IAlbumMemberTrack[],
+): Promise<{ totalTracks: number; totalDuration: number }> {
+  let totalDuration = 0;
+
+  for (const track of tracks) {
     track.albumId = albumId;
     if (!track.albumName) track.albumName = albumName;
     await track.save();
-
-    totalTracks += 1;
     totalDuration += track.duration ?? 0;
   }
 
-  return { totalTracks, totalDuration };
+  return { totalTracks: tracks.length, totalDuration };
 }
 
 /**
@@ -128,6 +133,10 @@ export async function upsertAlbum(
   const provenance = buildProvenance(source, external.externalId, contributedFields(external));
   const playCount = external.popularity?.playCount;
   const genres = external.genre ? [external.genre] : [];
+  const memberTracks = await resolveMemberTracks(source, external.trackExternalIds);
+  if (memberTracks.length === 0) {
+    return { album: null, created: false };
+  }
 
   const existing = await findExisting(source, external.externalId);
   const colors = (!existing || !existing.primaryColor || !existing.secondaryColor)
@@ -162,8 +171,7 @@ export async function upsertAlbum(
     const totals = await linkMemberTracks(
       created._id.toString(),
       created.title,
-      source,
-      external.trackExternalIds,
+      memberTracks,
     );
     created.totalTracks = totals.totalTracks;
     created.totalDuration = totals.totalDuration;
@@ -206,13 +214,10 @@ export async function upsertAlbum(
   const totals = await linkMemberTracks(
     existing._id.toString(),
     existing.title,
-    source,
-    external.trackExternalIds,
+    memberTracks,
   );
-  if (totals.totalTracks > 0) {
-    existing.totalTracks = totals.totalTracks;
-    existing.totalDuration = totals.totalDuration;
-  }
+  existing.totalTracks = totals.totalTracks;
+  existing.totalDuration = totals.totalDuration;
 
   const album = await existing.save();
   return { album, created: false };

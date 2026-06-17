@@ -206,6 +206,11 @@ export function formatPlaylistWithCoverArt(playlist: any): any {
     formatted.coverArt = normalizeImageRef(formatted.coverArt);
   }
 
+  if (!formatted.coverArt) {
+    const u = firstImageUrl(formatted);
+    if (u) formatted.coverArt = u;
+  }
+
   return formatted;
 }
 

@@ -344,6 +344,7 @@ const SearchScreen: React.FC = () => {
                       type="track"
                       imageUri={track.coverArt}
                       images={track.images}
+                      primaryColor={track.primaryColor}
                       onPress={() => handleTrackRowPress(track, popularTracks, 'Popular Tracks')}
                       onPlayPress={() => playTrackFromList(track, popularTracks, { type: 'search', name: 'Popular Tracks' })}
                     />

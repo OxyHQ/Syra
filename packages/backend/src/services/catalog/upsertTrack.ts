@@ -4,6 +4,7 @@ import type { ITrack } from '../../models/Track';
 import { ArtistModel } from '../../models/Artist';
 import { upsertArtist } from './upsertArtist';
 import { playCountToPopularity } from './popularity';
+import { assignMissingColors, colorsFromImages } from './entityColors';
 
 /**
  * Normalize a string for fuzzy title/artist matching:
@@ -189,6 +190,9 @@ export async function upsertTrack(
 
   const releaseDate = parseReleaseDate(external.releaseDate);
   const playCount = external.popularity?.playCount;
+  const colors = (!existing || !existing.primaryColor || !existing.secondaryColor)
+    ? await colorsFromImages(external.images)
+    : undefined;
 
   // --- Create ---
   if (!existing) {
@@ -207,6 +211,8 @@ export async function upsertTrack(
         ...(source === 'audius' ? { audiusId: external.externalId } : {}),
       },
       images: external.images ?? [],
+      primaryColor: colors?.primaryColor,
+      secondaryColor: colors?.secondaryColor,
       streamUrl: external.streamUrl,
       genre: external.genre,
       mood: external.mood,
@@ -236,6 +242,7 @@ export async function upsertTrack(
   }
   // Merge images — never shrink an existing non-empty array to empty.
   existing.images = mergeImages(existing.images, external.images);
+  assignMissingColors(existing, colors);
   // Only set streamUrl if not already present.
   if (external.streamUrl && !existing.streamUrl) {
     existing.streamUrl = external.streamUrl;

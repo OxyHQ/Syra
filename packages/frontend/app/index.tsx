@@ -509,6 +509,7 @@ const HomeScreen: React.FC = () => {
                       type="track"
                       imageUri={track.coverArt}
                       images={track.images}
+                      primaryColor={track.primaryColor}
                       onPress={() => {
                         if (track.albumId) {
                           router.push(`/album/${track.albumId}`);
@@ -697,6 +698,7 @@ const HomeScreen: React.FC = () => {
                       type="track"
                       imageUri={track.coverArt}
                       images={track.images}
+                      primaryColor={track.primaryColor}
                       onPress={() => {
                         if (track.albumId) {
                           router.push(`/album/${track.albumId}`);

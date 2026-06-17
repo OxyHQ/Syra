@@ -20,7 +20,7 @@ const baseAlbum: ExternalAlbum = {
   genre: 'Electronic',
   images: [{ url: 'https://cdn.audius.co/alb/1000x1000.jpg', width: 1000, height: 1000 }],
   popularity: { playCount: 5000, favoriteCount: 12, repostCount: 3 },
-  trackExternalIds: [],
+  trackExternalIds: ['aud-trk-base'],
 };
 
 /** Helper: import a track and return its DB _id + audius externalId. */
@@ -38,6 +38,7 @@ async function seedTrack(externalId: string, durationSec: number): Promise<strin
 
 describe('upsertAlbum', () => {
   it('(a) inserts a new album with normalised metadata', async () => {
+    await seedTrack('aud-trk-base', 120);
     const { album, created } = await upsertAlbum(baseAlbum, ARTIST, 'audius');
 
     expect(created).toBe(true);
@@ -57,6 +58,7 @@ describe('upsertAlbum', () => {
   });
 
   it('(b) re-import with same externalId updates the SAME doc and appends provenance', async () => {
+    await seedTrack('aud-trk-base', 120);
     await upsertAlbum(baseAlbum, ARTIST, 'audius');
     const { album, created } = await upsertAlbum(
       { ...baseAlbum, name: 'Night Drive (Deluxe)' },
@@ -105,6 +107,7 @@ describe('upsertAlbum', () => {
   });
 
   it('(e) skips albums with no usable cover art (coverArt is required)', async () => {
+    await seedTrack('aud-trk-base', 120);
     const { album, created } = await upsertAlbum(
       { ...baseAlbum, images: undefined },
       ARTIST,
@@ -112,6 +115,18 @@ describe('upsertAlbum', () => {
     );
 
     // No cover art → not persisted (Album.coverArt is required); reported as not created.
+    expect(created).toBe(false);
+    expect(album).toBeNull();
+    expect(await AlbumModel.countDocuments()).toBe(0);
+  });
+
+  it('(f) skips Audius albums with no resolved tracks', async () => {
+    const { album, created } = await upsertAlbum(
+      { ...baseAlbum, trackExternalIds: ['aud-missing'] },
+      ARTIST,
+      'audius',
+    );
+
     expect(created).toBe(false);
     expect(album).toBeNull();
     expect(await AlbumModel.countDocuments()).toBe(0);

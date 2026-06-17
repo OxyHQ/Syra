@@ -10,7 +10,7 @@ import { AuthRequest } from '../middleware/auth';
 import { getAuthenticatedUserId } from '../utils/auth';
 import { uploadTrackAudio } from '../services/audioStorageService';
 import { logger } from '../utils/logger';
-import { extractColorsFromImage } from '../utils/colorHelper';
+import { getStoredImageColors } from '../utils/imageColors';
 import { enqueueIngest } from '../services/ingest/ingestTrack';
 import { getErrorMessage, getErrorStack, getHttpStatus } from '../utils/error';
 import { getParam } from '../utils/reqParams';
@@ -280,16 +280,9 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
           });
         }
 
-        // Extract colors from cover art image
-        try {
-          const imageUrl = `/api/images/${coverArt}`;
-          await extractColorsFromImage(undefined, imageUrl);
-          // Colors extracted but not stored in track model yet - can be added later if needed
-        } catch (error) {
-          // Continue without colors if extraction fails
-          logger.debug('[TracksController] Failed to extract colors from cover art:', error);
-        }
       }
+
+      const coverArtColors = coverArt ? await getStoredImageColors(coverArt) : undefined;
 
       // Generate track ID first so we can create the audio URL
       const trackId = new mongoose.Types.ObjectId();
@@ -308,6 +301,8 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
           format,
         },
         coverArt: coverArt || undefined,
+        primaryColor: coverArtColors?.primaryColor,
+        secondaryColor: coverArtColors?.secondaryColor,
         metadata: {
           genre: genre ? (Array.isArray(genre) ? genre : [genre]) : undefined,
           explicit: isExplicit === 'true' || isExplicit === true,
@@ -383,4 +378,3 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
     }
   });
 };
-

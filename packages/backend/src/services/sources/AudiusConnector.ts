@@ -44,6 +44,14 @@ interface AudiusTrack {
   repost_count?: number | null;
   user: { id: string; name: string; profile_picture?: AudiusArtwork | null };
   artwork: AudiusArtwork | null;
+  album?: {
+    id?: string | number | null;
+    playlist_id?: string | number | null;
+    playlist_name?: string | null;
+    name?: string | null;
+    release_date?: string | null;
+    artwork?: AudiusArtwork | null;
+  } | null;
 }
 
 /** Shape of a single Audius album from /v1/users/{id}/albums. */
@@ -159,6 +167,7 @@ function mapAudiusTrack(
   const mood = cleanString(item.mood);
   const tags = parseTags(item.tags);
   const releaseDate = cleanString(item.release_date);
+  const album = mapTrackAlbum(item);
   const popularity = buildPopularity(
     item.play_count,
     item.favorite_count,
@@ -180,11 +189,34 @@ function mapAudiusTrack(
     streamUrl,
     ...(isrc !== undefined && { isrc }),
     ...(trackImages !== undefined && { images: trackImages }),
+    ...(album !== undefined && { album }),
     ...(genre !== undefined && { genre }),
     ...(mood !== undefined && { mood }),
     ...(tags !== undefined && { tags }),
     ...(releaseDate !== undefined && { releaseDate }),
     ...(popularity !== undefined && { popularity }),
+  };
+}
+
+function mapTrackAlbum(item: AudiusTrack): ExternalAlbum | undefined {
+  const rawAlbum = item.album;
+  if (!rawAlbum) return undefined;
+
+  const rawId = rawAlbum.id ?? rawAlbum.playlist_id;
+  const name = cleanString(rawAlbum.playlist_name) ?? cleanString(rawAlbum.name);
+  if (rawId === null || rawId === undefined || !name) return undefined;
+
+  const images = mapArtwork(rawAlbum.artwork ?? item.artwork);
+  const releaseDate = cleanString(rawAlbum.release_date) ?? cleanString(item.release_date);
+  const genre = cleanString(item.genre);
+
+  return {
+    name,
+    externalId: String(rawId),
+    trackExternalIds: [String(item.id)],
+    ...(images !== undefined && { images }),
+    ...(releaseDate !== undefined && { releaseDate }),
+    ...(genre !== undefined && { genre }),
   };
 }
 
@@ -276,8 +308,9 @@ export class AudiusConnector implements MusicSourceConnector {
    * Fetch the albums published by an Audius artist, normalised to ExternalAlbum.
    *
    * For each album we additionally fetch its track listing so the importer can
-   * link member tracks by external id. A failed track-listing fetch degrades
-   * gracefully to an empty `trackExternalIds` rather than dropping the album.
+   * upsert and link every member track. A failed track-listing fetch degrades
+   * gracefully to an empty `trackExternalIds`; the catalog layer will skip the
+   * album rather than persist an empty container.
    *
    * Non-album playlists (`is_album === false`) and deleted albums are skipped.
    * A malformed albums response yields `[]` rather than throwing.
@@ -319,6 +352,7 @@ export class AudiusConnector implements MusicSourceConnector {
         name: item.playlist_name,
         externalId: String(item.id),
         trackExternalIds: trackListing.ids,
+        tracks: trackListing.tracks,
         ...(images !== undefined && { images }),
         ...(releaseDate !== undefined && { releaseDate }),
         ...(genre !== undefined && { genre }),
@@ -395,7 +429,8 @@ export class AudiusConnector implements MusicSourceConnector {
     try {
       raw = await this.httpGet(url);
     } catch {
-      // A failed track-listing fetch must not drop the album.
+      // The connector remains best-effort; catalog persistence decides whether
+      // an empty track listing is usable.
       return { ids: [], tracks: [], genre: undefined };
     }
 

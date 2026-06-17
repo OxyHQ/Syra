@@ -6,6 +6,7 @@ import { logger } from '../utils/logger';
 import { getErrorMessage } from '../utils/error';
 import { getParam } from '../utils/reqParams';
 import { AuthRequest } from '../middleware/auth';
+import { extractPredominantColorsFromBuffer } from '../services/colorExtractionService';
 
 /**
  * POST /api/images/upload
@@ -35,6 +36,12 @@ export const uploadImage = async (req: AuthRequest, res: Response, next: NextFun
       });
     }
 
+    const extractedColors = await extractPredominantColorsFromBuffer(file.buffer);
+    const colors = {
+      primaryColor: extractedColors.primary,
+      secondaryColor: extractedColors.secondary,
+    };
+
     // Upload to GridFS
     const result = await writeFile(file.buffer, {
       filename: file.originalname || 'image',
@@ -42,6 +49,8 @@ export const uploadImage = async (req: AuthRequest, res: Response, next: NextFun
       metadata: {
         uploadedBy: req.user?.id,
         uploadedAt: new Date(),
+        primaryColor: colors?.primaryColor,
+        secondaryColor: colors?.secondaryColor,
       }
     });
 
@@ -49,7 +58,7 @@ export const uploadImage = async (req: AuthRequest, res: Response, next: NextFun
 
     logger.debug('[ImagesController] Image uploaded successfully', { imageId });
 
-    res.status(201).json({ id: imageId });
+    res.status(201).json({ id: imageId, ...colors });
   } catch (error: unknown) {
     logger.error('[ImagesController] Error uploading image:', error);
     next(error);
@@ -135,4 +144,3 @@ export const getImage = async (req: Request, res: Response, next: NextFunction) 
     next(error);
   }
 };
-
