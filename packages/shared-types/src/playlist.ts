@@ -3,7 +3,7 @@
  */
 
 import { Timestamps } from './common';
-import { Track } from './track';
+import { CatalogSource, ExternalIds, SourceProvenance, Track } from './track';
 
 /**
  * Playlist visibility
@@ -43,6 +43,12 @@ export interface Playlist extends Timestamps {
   primaryColor?: string; // Primary hex color extracted from cover art (e.g., "#FF5733")
   secondaryColor?: string; // Secondary hex color extracted from cover art (e.g., "#33FF57")
   collaborators?: PlaylistCollaborator[];
+  /** Which provider this playlist originates from, when imported */
+  source?: CatalogSource;
+  /** Cross-provider identifiers */
+  externalIds?: ExternalIds;
+  /** Provenance log — one entry per provider that contributed fields */
+  sources?: SourceProvenance[];
 }
 
 /**
@@ -109,4 +115,3 @@ export interface ReorderPlaylistTracksRequest {
   playlistId: string;
   trackIds: string[]; // new order of track IDs
 }
-

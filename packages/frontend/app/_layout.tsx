@@ -66,6 +66,7 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
   const { fullscreenPanel } = useUIStore();
   const isLibraryFullscreen = fullscreenPanel === 'library';
   const isNowPlayingFullscreen = fullscreenPanel === 'nowPlaying';
+  const showNowPlayingPanel = isDesktop && !isLibraryFullscreen && (isNowPlayingFullscreen || !!currentTrack);
 
   // On mobile, no gaps or padding
   const gapSize = isScreenNotMobile ? 12 : 0;
@@ -81,6 +82,7 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
   // the top safe-area inset that grows the TopBar on native is absorbed
   // automatically). On web `insets.top` is 0, so `TOP_BAR_HEIGHT` is exact.
   const NOW_PLAYING_WIDTH = 360;
+  const LIBRARY_WIDTH = 320;
   const panelHeight = webDimension(
     isScreenNotMobile
       ? `calc(100vh - ${TOP_BAR_HEIGHT}px - ${PLAYER_BAR_HEIGHT}px - ${outerPadding}px)`
@@ -120,6 +122,7 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
     leftSidebarContainer: {
       flexShrink: 0,
       flexGrow: isLibraryFullscreen ? 1 : 0,
+      width: isLibraryFullscreen ? undefined : LIBRARY_WIDTH,
       ...Platform.select({
         web: {
           height: panelHeight,
@@ -150,7 +153,7 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
     playerBarContainer: {
       // Desktop only - mobile player bar handles its own positioning
     },
-  }), [isScreenNotMobile, isDesktop, theme.colors.background, gapSize, outerPadding, panelHeight, isLibraryFullscreen, isNowPlayingFullscreen]);
+  }), [isScreenNotMobile, theme.colors.background, gapSize, outerPadding, panelHeight, isLibraryFullscreen, isNowPlayingFullscreen]);
 
   const handleWheel = useCallback((event: any) => {
     forwardWheelEvent(event);
@@ -187,7 +190,7 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
           )}
 
           {/* Right Sidebar - Artist/Album Details (Desktop only) */}
-          {isDesktop && !isLibraryFullscreen && (
+          {showNowPlayingPanel && (
             <Panel rounded="all" radius={12} style={styles.rightSidebarContainer}>
               <NowPlaying />
             </Panel>

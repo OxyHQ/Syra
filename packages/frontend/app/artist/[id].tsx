@@ -34,7 +34,7 @@ const ArtistScreen: React.FC = () => {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const theme = useTheme();
-  const { playTrack, currentTrack, isPlaying } = usePlayerStore();
+  const { playTrackList, currentTrack, isPlaying } = usePlayerStore();
   const { isAuthenticated } = useOxy();
 
   const { isArtistFollowed } = useLibrary();
@@ -116,23 +116,23 @@ const ArtistScreen: React.FC = () => {
     };
   });
 
-  // Get gradient colors from artist primaryColor or fallback to theme primary
-  // 2-stop gradient: primaryColor -> theme background
-  const getGradientColors = (): [string, string] => {
-    const topColor = artist?.primaryColor
-      ? artist.primaryColor
-      : theme.colors.primary;
-    return [topColor, theme.colors.background];
+  const getGradientColors = (): readonly [string, string, string] => {
+    return [
+      artist?.primaryColor ?? theme.colors.primary,
+      artist?.secondaryColor ?? theme.colors.backgroundSecondary,
+      theme.colors.background,
+    ];
   };
 
   const handlePlayAll = () => {
     if (tracks.length > 0) {
-      playTrack(tracks[0]);
+      playTrackList(tracks, 0, { type: 'artist', id: artist?.id, name: artist?.name });
     }
   };
 
   const handleTrackPress = (track: Track) => {
-    playTrack(track);
+    const index = Math.max(0, tracks.findIndex((item) => item.id === track.id));
+    playTrackList(tracks, index, { type: 'artist', id: artist?.id, name: artist?.name });
   };
 
   const handleFollow = () => {
@@ -286,7 +286,7 @@ const ArtistScreen: React.FC = () => {
           {/* Content Section with Gradient Background */}
           <LinearGradient
             colors={getGradientColors()}
-            locations={[0, 0.2]}
+            locations={[0, 0.35, 1]}
             style={styles.contentSection}
           >
             {/* Artist Info */}
@@ -426,7 +426,6 @@ const ArtistScreen: React.FC = () => {
                 </View>
                 <ResponsiveGrid
                   minItemWidth={180}
-                  maxItemWidth={220}
                   gap={8}
                   style={styles.albumsGrid}
                 >
@@ -437,6 +436,7 @@ const ArtistScreen: React.FC = () => {
                         subtitle={album.artistName}
                         type="album"
                         imageUri={album.coverArt}
+                        primaryColor={album.primaryColor}
                         onPress={() => router.push(`/album/${album.id}`)}
                       />
                     </View>
@@ -719,4 +719,3 @@ const styles = StyleSheet.create({
 });
 
 export default ArtistScreen;
-

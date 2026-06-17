@@ -35,6 +35,12 @@ export interface ChartsResponse {
   total: number;
 }
 
+export interface GenreTracksResponse {
+  tracks: Track[];
+  total: number;
+  hasMore: boolean;
+}
+
 /**
  * Browse/Explore API service
  * Handles fetching browse and discovery content
@@ -45,6 +51,20 @@ export const browseService = {
    */
   async getGenres(): Promise<{ genres: Genre[] }> {
     const response = await api.get<{ genres: Genre[] }>('/browse/genres');
+    return response.data;
+  },
+
+  /**
+   * Get playable tracks for a genre
+   */
+  async getGenreTracks(
+    genre: string,
+    params?: { limit?: number; offset?: number },
+  ): Promise<GenreTracksResponse> {
+    const response = await api.get<GenreTracksResponse>(
+      `/browse/genres/${encodeURIComponent(genre)}/tracks`,
+      params,
+    );
     return response.data;
   },
 
@@ -88,4 +108,3 @@ export const browseService = {
     return response.data;
   },
 };
-

@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
-import { SearchCategory, SearchResult } from '@syra/shared-types';
+import { SearchCategory, SearchResult, SearchUser } from '@syra/shared-types';
+import { getAccountDisplayName } from '@oxyhq/core';
+import type { User } from '@oxyhq/core';
 import { TrackModel } from '../models/Track';
 import { AlbumModel } from '../models/Album';
 import { ArtistModel } from '../models/Artist';
@@ -7,12 +9,39 @@ import { PlaylistModel } from '../models/Playlist';
 import { toApiFormatArray, formatTracksWithCoverArt, formatAlbumsWithCoverArt, formatArtistsWithImage, formatPlaylistsWithCoverArt } from '../utils/musicHelpers';
 import { isDatabaseConnected } from '../utils/database';
 import { enqueueAudiusImport } from '../services/sources/audiusBackgroundImport';
+import { withImageFirstSort } from '../utils/imageFirstSort';
+import { logger } from '../utils/logger';
+import { oxy } from '../../server';
 
 /**
  * Local track count below this threshold triggers a background Audius import
  * for the same query and signals `pendingAudiusImport: true` to the client.
  */
 const AUDIUS_IMPORT_SPARSE_THRESHOLD = 5;
+
+function formatOxyUser(profile: User): SearchUser {
+  return {
+    id: profile.id,
+    username: profile.username,
+    displayName: getAccountDisplayName(profile),
+    avatar: profile.avatar || undefined,
+    bio: profile.bio || undefined,
+    followers: profile._count?.followers,
+    following: profile._count?.following,
+  };
+}
+
+async function searchOxyUsers(query: string, limit: number, offset: number): Promise<[SearchUser[], number]> {
+  try {
+    const response = await oxy.searchProfiles(query, { limit, offset });
+    const users = (response.data || []).map(formatOxyUser);
+
+    return [users, response.pagination?.total ?? users.length];
+  } catch (error) {
+    logger.warn('Failed searching Oxy profiles', { query, error });
+    return [[], 0];
+  }
+}
 
 /**
  * GET /api/search
@@ -39,12 +68,14 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
           albums: [],
           artists: [],
           playlists: [],
+          users: [],
         },
         counts: {
           tracks: 0,
           albums: 0,
           artists: 0,
           playlists: 0,
+          users: 0,
           total: 0,
         },
         hasMore: false,
@@ -63,6 +94,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
       albums?: Promise<[any[], number]>;
       artists?: Promise<[any[], number]>;
       playlists?: Promise<[any[], number]>;
+      users?: Promise<[SearchUser[], number]>;
     } = {};
 
     // Normalize category to enum value
@@ -78,7 +110,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
             { artistName: searchRegex },
           ],
         })
-          .sort({ popularity: -1, createdAt: -1 })
+          .sort(withImageFirstSort('track', { popularity: -1, createdAt: -1 }))
           .skip(searchOffset)
           .limit(searchLimit)
           .lean(),
@@ -101,7 +133,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
             { artistName: searchRegex },
           ],
         })
-          .sort({ popularity: -1, releaseDate: -1 })
+          .sort(withImageFirstSort('album', { popularity: -1, releaseDate: -1 }))
           .skip(searchOffset)
           .limit(searchLimit)
           .lean(),
@@ -120,7 +152,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
         ArtistModel.find({
           name: searchRegex,
         })
-          .sort({ popularity: -1, 'stats.followers': -1 })
+          .sort(withImageFirstSort('artist', { popularity: -1, 'stats.followers': -1 }))
           .skip(searchOffset)
           .limit(searchLimit)
           .lean(),
@@ -140,7 +172,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
             { description: searchRegex },
           ],
         })
-          .sort({ followers: -1, createdAt: -1 })
+          .sort(withImageFirstSort('playlist', { followers: -1, createdAt: -1 }))
           .skip(searchOffset)
           .limit(searchLimit)
           .lean(),
@@ -154,17 +186,23 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
       ]);
     }
 
+    if (categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.USERS) {
+      searchPromises.users = searchOxyUsers(query, searchLimit, searchOffset);
+    }
+
     // Execute all search queries in parallel
     const [
       tracksResult,
       albumsResult,
       artistsResult,
       playlistsResult,
+      usersResult,
     ] = await Promise.all([
       searchPromises.tracks ?? Promise.resolve<[unknown[], number]>([[], 0]),
       searchPromises.albums ?? Promise.resolve<[unknown[], number]>([[], 0]),
       searchPromises.artists ?? Promise.resolve<[unknown[], number]>([[], 0]),
       searchPromises.playlists ?? Promise.resolve<[unknown[], number]>([[], 0]),
+      searchPromises.users ?? Promise.resolve<[SearchUser[], number]>([[], 0]),
     ]);
 
     // Format results
@@ -180,13 +218,17 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
     const formattedPlaylists = categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.PLAYLISTS
       ? formatPlaylistsWithCoverArt(playlistsResult[0])
       : [];
+    const formattedUsers = categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.USERS
+      ? usersResult[0]
+      : [];
 
     // Calculate counts and totals
     const tracksCount = tracksResult[1];
     const albumsCount = albumsResult[1];
     const artistsCount = artistsResult[1];
     const playlistsCount = playlistsResult[1];
-    const totalCount = tracksCount + albumsCount + artistsCount + playlistsCount;
+    const usersCount = usersResult[1];
+    const totalCount = tracksCount + albumsCount + artistsCount + playlistsCount + usersCount;
 
     // Determine if there are more results
     const hasMore = categoryValue === SearchCategory.ALL
@@ -194,7 +236,8 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
       : (categoryValue === SearchCategory.TRACKS && tracksCount > searchOffset + searchLimit) ||
         (categoryValue === SearchCategory.ALBUMS && albumsCount > searchOffset + searchLimit) ||
         (categoryValue === SearchCategory.ARTISTS && artistsCount > searchOffset + searchLimit) ||
-        (categoryValue === SearchCategory.PLAYLISTS && playlistsCount > searchOffset + searchLimit);
+        (categoryValue === SearchCategory.PLAYLISTS && playlistsCount > searchOffset + searchLimit) ||
+        (categoryValue === SearchCategory.USERS && usersCount > searchOffset + searchLimit);
 
     const results: SearchResult = {
       query,
@@ -203,12 +246,14 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
         albums: formattedAlbums,
         artists: formattedArtists,
         playlists: formattedPlaylists,
+        users: formattedUsers,
       },
       counts: {
         tracks: tracksCount,
         albums: albumsCount,
         artists: artistsCount,
         playlists: playlistsCount,
+        users: usersCount,
         total: totalCount,
       },
       hasMore,
@@ -232,4 +277,3 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
     next(error);
   }
 };
-

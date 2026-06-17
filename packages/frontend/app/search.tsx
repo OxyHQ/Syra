@@ -2,15 +2,17 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { StyleSheet, View, TextInput, Text, ScrollView, Platform, Pressable } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useTheme } from '@oxyhq/bloom/theme';
+import { useOxy } from '@oxyhq/services';
 import SEO from '@/components/SEO';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { SearchCategory, Track } from '@syra/shared-types';
+import { SearchCategory, SearchUser, Track } from '@syra/shared-types';
 import { searchService } from '@/services/searchService';
 import { searchRefetchInterval } from '@/utils/searchUtils';
 import { browseService } from '@/services/browseService';
 import { MediaCard } from '@/components/MediaCard';
 import { GenreCard } from '@/components/GenreCard';
+import Avatar from '@/components/Avatar';
 import { ResponsiveGrid } from '@/components/ResponsiveGrid';
 import { TrackRow } from '@/components/TrackRow';
 import { ExploreSection } from '@/components/ExploreSection';
@@ -25,7 +27,8 @@ import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 const SearchScreen: React.FC = () => {
   const theme = useTheme();
   const router = useRouter();
-  const { playTrack, currentTrack, isPlaying } = usePlayerStore();
+  const { oxyServices } = useOxy();
+  const { playTrackList, currentTrack, isPlaying } = usePlayerStore();
   // Seed the search box from a `?q=` deep link (e.g. tapping a #hashtag / @mention).
   const { q } = useLocalSearchParams<{ q?: string }>();
   const [searchQuery, setSearchQuery] = useState(() => (typeof q === 'string' ? q : ''));
@@ -106,17 +109,30 @@ const SearchScreen: React.FC = () => {
   const chartsTracks = useMemo(() => chartsData?.tracks || [], [chartsData]);
 
   // Memoized event handlers
-  const handleTrackPress = useCallback((track: Track) => {
-    playTrack(track);
-  }, [playTrack]);
+  const playTrackFromList = useCallback((
+    track: Track,
+    list: Track[],
+    context: { type: 'search' | 'track'; id?: string; name?: string },
+  ) => {
+    const source = list.length > 0 ? list : [track];
+    const index = Math.max(0, source.findIndex((item) => item.id === track.id));
+    playTrackList(source, index, context);
+  }, [playTrackList]);
 
-  const handleTrackRowPress = useCallback((track: Track) => {
+  const handleGenrePlay = useCallback(async (genreName: string) => {
+    const { tracks } = await browseService.getGenreTracks(genreName, { limit: 50 });
+    if (tracks.length > 0) {
+      playTrackList(tracks, 0, { type: 'search', id: genreName, name: genreName });
+    }
+  }, [playTrackList]);
+
+  const handleTrackRowPress = useCallback((track: Track, list: Track[], contextName: string) => {
     if (track.albumId) {
       router.push(`/album/${track.albumId}`);
     } else {
-      playTrack(track);
+      playTrackFromList(track, list, { type: 'search', name: contextName });
     }
-  }, [router, playTrack]);
+  }, [router, playTrackFromList]);
 
   const handleGenreClick = useCallback((genreName: string) => {
     setSearchQuery(genreName);
@@ -130,6 +146,18 @@ const SearchScreen: React.FC = () => {
     setSearchQuery('');
   }, []);
 
+  const getUserAvatarUri = useCallback((avatar?: string) => {
+    if (!avatar) return undefined;
+    if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
+      return avatar;
+    }
+    return oxyServices.getFileDownloadUrl(avatar, 'thumb');
+  }, [oxyServices]);
+
+  const handleUserPress = useCallback((user: SearchUser) => {
+    router.push(`/u/${user.username}` as any);
+  }, [router]);
+
   // Memoized categories
   const categories: { value: SearchCategory; label: string }[] = useMemo(() => [
     { value: SearchCategory.ALL, label: 'All' },
@@ -137,6 +165,7 @@ const SearchScreen: React.FC = () => {
     { value: SearchCategory.ALBUMS, label: 'Albums' },
     { value: SearchCategory.ARTISTS, label: 'Artists' },
     { value: SearchCategory.PLAYLISTS, label: 'Playlists' },
+    { value: SearchCategory.USERS, label: 'Users' },
   ], []);
 
   // Memoized computed values
@@ -249,7 +278,7 @@ const SearchScreen: React.FC = () => {
               emptyMessage="No genres available"
               loadingSkeleton={<GenreGridSkeleton count={8} />}
             >
-              <ResponsiveGrid minItemWidth={160} maxItemWidth={240} gap={12}>
+              <ResponsiveGrid minItemWidth={160} gap={12}>
                 {genres.map((genre) => (
                   <View key={genre.name}>
                     <GenreCard
@@ -257,6 +286,7 @@ const SearchScreen: React.FC = () => {
                       color={genre.color}
                       coverArt={genre.coverArt || undefined}
                       onPress={() => handleGenreClick(genre.name)}
+                      onPlayPress={() => handleGenrePlay(genre.name)}
                     />
                   </View>
                 ))}
@@ -270,7 +300,7 @@ const SearchScreen: React.FC = () => {
               isEmpty={madeForYouAlbums.length === 0 && madeForYouPlaylists.length === 0}
               emptyMessage="No recommendations available"
             >
-              <ResponsiveGrid minItemWidth={180} maxItemWidth={220} gap={8}>
+              <ResponsiveGrid minItemWidth={180} gap={8}>
                 {madeForYouAlbums.map((album) => (
                   <View key={album.id}>
                     <MediaCard
@@ -278,6 +308,7 @@ const SearchScreen: React.FC = () => {
                       subtitle={album.artistName}
                       type="album"
                       imageUri={album.coverArt}
+                      primaryColor={album.primaryColor}
                       onPress={() => router.push(`/album/${album.id}`)}
                     />
                   </View>
@@ -289,6 +320,7 @@ const SearchScreen: React.FC = () => {
                       subtitle={`Playlist • ${playlist.trackCount || 0} songs`}
                       type="playlist"
                       imageUri={playlist.coverArt}
+                      primaryColor={playlist.primaryColor}
                       onPress={() => router.push(`/playlist/${playlist.id}` as any)}
                     />
                   </View>
@@ -303,7 +335,7 @@ const SearchScreen: React.FC = () => {
               isEmpty={popularTracks.length === 0}
               emptyMessage="No tracks available"
             >
-              <ResponsiveGrid minItemWidth={180} maxItemWidth={220} gap={8}>
+              <ResponsiveGrid minItemWidth={180} gap={8}>
                 {popularTracks.map((track) => (
                   <View key={track.id}>
                     <MediaCard
@@ -312,8 +344,8 @@ const SearchScreen: React.FC = () => {
                       type="track"
                       imageUri={track.coverArt}
                       images={track.images}
-                      onPress={() => handleTrackRowPress(track)}
-                      onPlayPress={() => handleTrackPress(track)}
+                      onPress={() => handleTrackRowPress(track, popularTracks, 'Popular Tracks')}
+                      onPlayPress={() => playTrackFromList(track, popularTracks, { type: 'search', name: 'Popular Tracks' })}
                     />
                   </View>
                 ))}
@@ -327,7 +359,7 @@ const SearchScreen: React.FC = () => {
               isEmpty={popularAlbums.length === 0}
               emptyMessage="No albums available"
             >
-              <ResponsiveGrid minItemWidth={180} maxItemWidth={220} gap={8}>
+              <ResponsiveGrid minItemWidth={180} gap={8}>
                 {popularAlbums.map((album) => (
                   <View key={album.id}>
                     <MediaCard
@@ -335,6 +367,7 @@ const SearchScreen: React.FC = () => {
                       subtitle={album.artistName}
                       type="album"
                       imageUri={album.coverArt}
+                      primaryColor={album.primaryColor}
                       onPress={() => router.push(`/album/${album.id}`)}
                     />
                   </View>
@@ -349,7 +382,7 @@ const SearchScreen: React.FC = () => {
               isEmpty={popularArtists.length === 0}
               emptyMessage="No artists available"
             >
-              <ResponsiveGrid minItemWidth={180} maxItemWidth={220} gap={8}>
+              <ResponsiveGrid minItemWidth={180} gap={8}>
                 {popularArtists.map((artist) => (
                   <View key={artist.id}>
                     <MediaCard
@@ -359,6 +392,7 @@ const SearchScreen: React.FC = () => {
                       shape="circle"
                       imageUri={artist.image}
                       images={artist.images}
+                      primaryColor={artist.primaryColor}
                       onPress={() => router.push(`/artist/${artist.id}` as any)}
                     />
                   </View>
@@ -381,8 +415,8 @@ const SearchScreen: React.FC = () => {
                     index={index}
                     isCurrentTrack={currentTrack?.id === track.id}
                     isTrackPlaying={currentTrack?.id === track.id && isPlaying}
-                    onPress={() => handleTrackRowPress(track)}
-                    onPlayPress={() => handleTrackPress(track)}
+                    onPress={() => handleTrackRowPress(track, chartsTracks, 'Charts')}
+                    onPlayPress={() => playTrackFromList(track, chartsTracks, { type: 'search', name: 'Charts' })}
                   />
                 ))}
               </View>
@@ -410,8 +444,8 @@ const SearchScreen: React.FC = () => {
                         index={index}
                         isCurrentTrack={currentTrack?.id === track.id}
                         isTrackPlaying={currentTrack?.id === track.id && isPlaying}
-                        onPress={() => handleTrackRowPress(track)}
-                        onPlayPress={() => handleTrackPress(track)}
+                        onPress={() => handleTrackRowPress(track, searchResults.results.tracks ?? [], debouncedQuery)}
+                        onPlayPress={() => playTrackFromList(track, searchResults.results.tracks ?? [], { type: 'search', name: debouncedQuery })}
                       />
                     ))}
                   </View>
@@ -427,7 +461,7 @@ const SearchScreen: React.FC = () => {
                   isLoading={false}
                   isEmpty={false}
                 >
-                  <ResponsiveGrid minItemWidth={180} maxItemWidth={220} gap={8}>
+                  <ResponsiveGrid minItemWidth={180} gap={8}>
                     {searchResults.results.albums.map((album) => (
                       <View key={album.id}>
                         <MediaCard
@@ -435,6 +469,7 @@ const SearchScreen: React.FC = () => {
                           subtitle={album.artistName}
                           type="album"
                           imageUri={album.coverArt}
+                          primaryColor={album.primaryColor}
                           onPress={() => router.push(`/album/${album.id}`)}
                         />
                       </View>
@@ -452,7 +487,7 @@ const SearchScreen: React.FC = () => {
                   isLoading={false}
                   isEmpty={false}
                 >
-                  <ResponsiveGrid minItemWidth={180} maxItemWidth={220} gap={8}>
+                  <ResponsiveGrid minItemWidth={180} gap={8}>
                     {searchResults.results.artists.map((artist) => (
                       <View key={artist.id}>
                         <MediaCard
@@ -462,6 +497,7 @@ const SearchScreen: React.FC = () => {
                           shape="circle"
                           imageUri={artist.image}
                           images={artist.images}
+                          primaryColor={artist.primaryColor}
                           onPress={() => router.push(`/artist/${artist.id}` as any)}
                         />
                       </View>
@@ -479,7 +515,7 @@ const SearchScreen: React.FC = () => {
                   isLoading={false}
                   isEmpty={false}
                 >
-                  <ResponsiveGrid minItemWidth={180} maxItemWidth={220} gap={8}>
+                  <ResponsiveGrid minItemWidth={180} gap={8}>
                     {searchResults.results.playlists.map((playlist) => (
                       <View key={playlist.id}>
                         <MediaCard
@@ -487,11 +523,77 @@ const SearchScreen: React.FC = () => {
                           subtitle={`Playlist • ${playlist.trackCount || 0} songs`}
                           type="playlist"
                           imageUri={playlist.coverArt}
+                          primaryColor={playlist.primaryColor}
                           onPress={() => router.push(`/playlist/${playlist.id}` as any)}
                         />
                       </View>
                     ))}
                   </ResponsiveGrid>
+                </ExploreSection>
+              )}
+
+            {(activeCategory === SearchCategory.ALL || activeCategory === SearchCategory.USERS) &&
+              searchResults.results.users &&
+              searchResults.results.users.length > 0 && (
+                <ExploreSection
+                  title={`Users (${searchResults.counts.users})`}
+                  isLoading={false}
+                  isEmpty={false}
+                >
+                  <View style={styles.userList}>
+                    {searchResults.results.users.map((user) => {
+                      const avatarUri = getUserAvatarUri(user.avatar);
+                      const followers = typeof user.followers === 'number'
+                        ? `${user.followers.toLocaleString()} followers`
+                        : 'Profile';
+
+                      return (
+                        <Pressable
+                          key={user.id}
+                          onPress={() => handleUserPress(user)}
+                          style={({ pressed }) => [
+                            styles.userRow,
+                            {
+                              backgroundColor: pressed
+                                ? theme.colors.backgroundTertiary
+                                : theme.colors.backgroundSecondary,
+                              borderColor: theme.colors.border,
+                            },
+                          ]}
+                        >
+                          <Avatar
+                            source={avatarUri}
+                            size={48}
+                            verified={user.verified}
+                            label={user.displayName}
+                          />
+                          <View style={styles.userInfo}>
+                            <Text
+                              style={[styles.userName, { color: theme.colors.text }]}
+                              numberOfLines={1}
+                            >
+                              {user.displayName}
+                            </Text>
+                            <Text
+                              style={[styles.userHandle, { color: theme.colors.textSecondary }]}
+                              numberOfLines={1}
+                            >
+                              @{user.username} • {followers}
+                            </Text>
+                            {user.bio && (
+                              <Text
+                                style={[styles.userBio, { color: theme.colors.textSecondary }]}
+                                numberOfLines={2}
+                              >
+                                {user.bio}
+                              </Text>
+                            )}
+                          </View>
+                          <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
+                        </Pressable>
+                      );
+                    })}
+                  </View>
                 </ExploreSection>
               )}
 
@@ -577,6 +679,35 @@ const styles = StyleSheet.create({
   },
   trackList: {
     gap: 4,
+  },
+  userList: {
+    gap: 8,
+  },
+  userRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    minHeight: 74,
+  },
+  userInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  userName: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  userHandle: {
+    fontSize: 13,
+    marginTop: 2,
+  },
+  userBio: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 4,
   },
   noResultsContainer: {
     padding: 48,

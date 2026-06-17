@@ -114,13 +114,12 @@ const PlaylistScreen: React.FC = () => {
     };
   });
 
-  // Get gradient colors from playlist primaryColor or fallback to theme primary
-  // 2-stop gradient: primaryColor -> theme background
-  const getGradientColors = (): [string, string] => {
-    const topColor = playlist?.primaryColor
-      ? playlist.primaryColor
-      : theme.colors.primary;
-    return [topColor, theme.colors.background];
+  const getGradientColors = (): readonly [string, string, string] => {
+    return [
+      playlist?.primaryColor ?? theme.colors.primary,
+      playlist?.secondaryColor ?? theme.colors.backgroundSecondary,
+      theme.colors.background,
+    ];
   };
 
   const handlePlayPlaylist = () => {
@@ -272,7 +271,7 @@ const PlaylistScreen: React.FC = () => {
           {/* Content Section with Gradient Background */}
           <LinearGradient
             colors={getGradientColors()}
-            locations={[0, 0.2]}
+            locations={[0, 0.35, 1]}
             style={styles.contentSection}
           >
             {/* Playlist Info */}

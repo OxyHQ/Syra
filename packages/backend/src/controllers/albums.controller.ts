@@ -11,6 +11,7 @@ import { getParam } from '../utils/reqParams';
 import { CreateAlbumRequest } from '@syra/shared-types';
 import { extractColorsFromImage } from '../utils/colorHelper';
 import { logger } from '../utils/logger';
+import { withImageFirstSort } from '../utils/imageFirstSort';
 
 /**
  * GET /api/albums
@@ -27,7 +28,7 @@ export const getAlbums = async (req: Request, res: Response, next: NextFunction)
 
     const [albums, total] = await Promise.all([
       AlbumModel.find()
-        .sort({ releaseDate: -1, createdAt: -1 })
+        .sort(withImageFirstSort('album', { releaseDate: -1, createdAt: -1 }))
         .skip(offset)
         .limit(limit)
         .lean(),
@@ -218,4 +219,3 @@ export const createAlbum = async (req: AuthRequest, res: Response, next: NextFun
     next(error);
   }
 };
-

@@ -11,6 +11,18 @@ import { DevicePicker } from './DevicePicker';
 import { pickImageUrl } from '@/utils/pickImage';
 import { useLibrary, useToggleLikeTrack } from '@/hooks/useLibrary';
 
+const clamp = (value: number, min: number, max: number) => (
+  Math.min(max, Math.max(min, value))
+);
+
+const getProgressPercent = (currentTime: number, duration: number) => {
+  if (!Number.isFinite(currentTime) || !Number.isFinite(duration) || duration <= 0) {
+    return 0;
+  }
+
+  return clamp((currentTime / duration) * 100, 0, 100);
+};
+
 /**
  * Desktop Bottom Player Bar Component
  * Full-featured player bar for desktop with all controls
@@ -19,6 +31,7 @@ export const PlayerBar: React.FC = () => {
   const theme = useTheme();
   const { toggleNowPlaying } = useUIStore();
   const [isDevicePickerVisible, setIsDevicePickerVisible] = useState(false);
+  const [progressBarWidth, setProgressBarWidth] = useState(0);
 
   const {
     currentTrack,
@@ -64,7 +77,8 @@ export const PlayerBar: React.FC = () => {
   const hasNext = !!queue && queue.tracks.length > 1;
 
   // Always show player bar, even when no track is playing
-  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const progressPercent = getProgressPercent(currentTime, duration);
+  const progressFillWidth = progressBarWidth > 0 ? (progressPercent / 100) * progressBarWidth : 0;
 
   // Uniform spacing constant - used for both padding and gaps
   const SPACING = 12;
@@ -80,13 +94,14 @@ export const PlayerBar: React.FC = () => {
       {/* Progress Bar */}
       <Pressable
         style={[styles.progressBarContainer, { backgroundColor: theme.colors.border }]}
+        onLayout={(event) => setProgressBarWidth(event.nativeEvent.layout.width)}
         onPress={(e) => {
           if (Platform.OS === 'web') {
-            const rect = (e.target as any)?.getBoundingClientRect();
+            const rect = (e.currentTarget as any)?.getBoundingClientRect();
             if (rect) {
               const clientX = (e.nativeEvent as any).clientX;
-              if (clientX !== undefined) {
-                const x = clientX - rect.left;
+              if (clientX !== undefined && rect.width > 0 && duration > 0) {
+                const x = clamp(clientX - rect.left, 0, rect.width);
                 const newPosition = (x / rect.width) * duration;
                 handleSeek(newPosition);
               }
@@ -99,7 +114,7 @@ export const PlayerBar: React.FC = () => {
             styles.progressBar,
             {
               backgroundColor: theme.colors.primary,
-              width: `${progressPercent}%`,
+              width: progressFillWidth,
             }
           ]}
         />
@@ -297,7 +312,7 @@ const styles = StyleSheet.create({
   },
   progressBarContainer: {
     height: 4,
-    width: '100%',
+    alignSelf: 'stretch',
     ...Platform.select({
       web: {
         cursor: 'pointer',

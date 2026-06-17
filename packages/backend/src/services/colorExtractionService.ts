@@ -279,6 +279,30 @@ export async function extractPredominantColors(imageUrl: string | null | undefin
 }
 
 /**
+ * Extract predominant colors from an image URL without substituting fallback
+ * colors. Use this for catalog metadata where persisting a fake color would be
+ * worse than leaving colors unset.
+ */
+export async function tryExtractPredominantColors(
+  imageUrl: string | null | undefined,
+): Promise<{ primary: string; secondary?: string } | undefined> {
+  if (!imageUrl || typeof imageUrl !== 'string' || imageUrl.trim().length === 0) {
+    return undefined;
+  }
+
+  try {
+    const imageBuffer = await downloadImage(imageUrl);
+    return extractPredominantColorsFromBufferInternal(imageBuffer);
+  } catch (error) {
+    logger.warn('[ColorExtractionService] Failed to extract real colors:', {
+      imageUrl,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return undefined;
+  }
+}
+
+/**
  * Extract predominant colors from image buffer (exported function)
  * 
  * @param imageBuffer - Image buffer
@@ -322,4 +346,3 @@ export async function extractDominantColorFromBuffer(imageBuffer: Buffer): Promi
   const colors = await extractPredominantColorsFromBuffer(imageBuffer);
   return colors.primary;
 }
-

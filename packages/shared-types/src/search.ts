@@ -15,7 +15,8 @@ export enum SearchCategory {
   TRACKS = 'tracks',
   ALBUMS = 'albums',
   ARTISTS = 'artists',
-  PLAYLISTS = 'playlists'
+  PLAYLISTS = 'playlists',
+  USERS = 'users'
 }
 
 /**
@@ -38,6 +39,22 @@ export interface SearchResultsByCategory {
   albums?: Album[];
   artists?: Artist[];
   playlists?: Playlist[];
+  users?: SearchUser[];
+}
+
+/**
+ * Oxy profile result returned in Syra search
+ */
+export interface SearchUser {
+  id: string;
+  username: string;
+  displayName: string;
+  avatar?: string;
+  bio?: string;
+  verified?: boolean;
+  followers?: number;
+  following?: number;
+  primaryColor?: string;
 }
 
 /**
@@ -48,6 +65,7 @@ export interface SearchResultCounts {
   albums: number;
   artists: number;
   playlists: number;
+  users: number;
   total: number;
 }
 
@@ -70,7 +88,6 @@ export interface SearchRequest {
   query: string;
   filters?: SearchFilters;
 }
-
 
 
 

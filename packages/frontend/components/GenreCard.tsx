@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View, Text, Image, Pressable, Platform } from 'react-native';
+import { GestureResponderEvent, StyleSheet, View, Text, Image, Pressable, Platform } from 'react-native';
 import { webViewStyle } from '@/utils/webStyles';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@oxyhq/bloom/theme';
@@ -10,6 +10,7 @@ interface GenreCardProps {
   color: string;
   coverArt?: string | null;
   onPress?: () => void;
+  onPlayPress?: () => void;
 }
 
 /**
@@ -21,6 +22,7 @@ const GenreCardComponent: React.FC<GenreCardProps> = ({
   color,
   coverArt,
   onPress,
+  onPlayPress,
 }) => {
   const theme = useTheme();
   const [isHovered, setIsHovered] = React.useState(false);
@@ -44,6 +46,11 @@ const GenreCardComponent: React.FC<GenreCardProps> = ({
     `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.6)`,
     `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.4)`,
   ];
+
+  const handlePlayPress = (event: GestureResponderEvent) => {
+    event.stopPropagation();
+    onPlayPress?.();
+  };
 
   return (
     <Pressable
@@ -84,12 +91,12 @@ const GenreCardComponent: React.FC<GenreCardProps> = ({
         </View>
 
         {/* Play Button (appears on hover) */}
-        {isHovered && (
-          <View style={styles.playButtonContainer}>
+        {isHovered && onPlayPress && (
+          <Pressable style={styles.playButtonContainer} onPress={handlePlayPress}>
             <View style={[styles.playButton, { backgroundColor: theme.colors.primary }]}>
               <Ionicons name="play" size={24} color={theme.colors.primaryForeground} />
             </View>
-          </View>
+          </Pressable>
         )}
       </LinearGradient>
     </Pressable>
@@ -100,7 +107,7 @@ export const GenreCard = React.memo(GenreCardComponent);
 
 const styles = StyleSheet.create({
   container: {
-    width: '100%',
+    alignSelf: 'stretch',
     aspectRatio: 4 / 3,
     borderRadius: 8,
     overflow: 'hidden',
@@ -135,12 +142,11 @@ const styles = StyleSheet.create({
     top: 0,
     right: 0,
     bottom: 0,
-    width: '50%',
+    width: 120,
     opacity: 0.3,
   },
   coverArt: {
-    width: '100%',
-    height: '100%',
+    ...StyleSheet.absoluteFill,
     transform: [{ rotate: '25deg' }, { translateX: 20 }, { translateY: 20 }],
   },
   textContainer: {
@@ -176,4 +182,3 @@ const styles = StyleSheet.create({
     }),
   },
 });
-

@@ -7,6 +7,7 @@ import { AlbumModel } from '../../models/Album';
 import type { IAlbum } from '../../models/Album';
 import { TrackModel } from '../../models/Track';
 import { playCountToPopularity } from './popularity';
+import { assignMissingColors, colorsFromImages } from './entityColors';
 
 /** Minimal artist context needed to attach an album to its primary artist. */
 export interface AlbumArtistRef {
@@ -129,6 +130,9 @@ export async function upsertAlbum(
   const genres = external.genre ? [external.genre] : [];
 
   const existing = await findExisting(source, external.externalId);
+  const colors = (!existing || !existing.primaryColor || !existing.secondaryColor)
+    ? await colorsFromImages(external.images)
+    : undefined;
 
   if (!existing) {
     const created = await AlbumModel.create({
@@ -142,6 +146,8 @@ export async function upsertAlbum(
       source,
       externalIds: source === 'audius' ? { audiusId: external.externalId } : undefined,
       sources: [provenance],
+      primaryColor: colors?.primaryColor,
+      secondaryColor: colors?.secondaryColor,
       ...(playCount !== undefined
         ? { playCount, popularity: playCountToPopularity(playCount) }
         : {}),
@@ -171,6 +177,7 @@ export async function upsertAlbum(
   if (external.name) existing.title = external.name;
   if (external.releaseDate) existing.releaseDate = external.releaseDate;
   if (coverArt && !existing.coverArt) existing.coverArt = coverArt;
+  assignMissingColors(existing, colors);
   if (external.genre && !existing.genre?.includes(external.genre)) {
     existing.genre = [...(existing.genre ?? []), external.genre];
   }

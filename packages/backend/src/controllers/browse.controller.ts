@@ -5,6 +5,7 @@ import { ArtistModel } from '../models/Artist';
 import { PlaylistModel } from '../models/Playlist';
 import { toApiFormatArray, formatTracksWithCoverArt, formatArtistsWithImage, formatPlaylistsWithCoverArt, formatAlbumsWithCoverArt } from '../utils/musicHelpers';
 import { isDatabaseConnected } from '../utils/database';
+import { withImageFirstSort } from '../utils/imageFirstSort';
 
 /**
  * Default genre colors for genre cards (Spotify-like colors)
@@ -58,15 +59,15 @@ export const getGenres = async (req: Request, res: Response, next: NextFunction)
       allGenres.slice(0, 20).map(async (genre) => {
         const [sampleAlbums, sampleArtists, sampleTracks] = await Promise.all([
           AlbumModel.find({ genre: genre })
-            .sort({ popularity: -1 })
+            .sort(withImageFirstSort('album', { popularity: -1 }))
             .limit(1)
             .lean(),
           ArtistModel.find({ genres: genre })
-            .sort({ popularity: -1 })
+            .sort(withImageFirstSort('artist', { popularity: -1 }))
             .limit(1)
             .lean(),
           TrackModel.find({ genre: genre, isAvailable: true })
-            .sort({ popularity: -1, playCount: -1 })
+            .sort(withImageFirstSort('track', { popularity: -1, playCount: -1 }))
             .limit(1)
             .lean(),
         ]);
@@ -94,6 +95,45 @@ export const getGenres = async (req: Request, res: Response, next: NextFunction)
 };
 
 /**
+ * GET /api/browse/genres/:genre/tracks
+ * Get playable tracks for a genre in popularity order.
+ */
+export const getGenreTracks = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!isDatabaseConnected()) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
+    const genre = decodeURIComponent(String(req.params.genre ?? '')).trim();
+    if (!genre) {
+      return res.status(400).json({ error: 'Genre is required' });
+    }
+
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = parseInt(req.query.offset as string) || 0;
+
+    const tracks = await TrackModel.find({
+      genre,
+      isAvailable: true,
+    })
+      .sort(withImageFirstSort('track', { popularity: -1, playCount: -1, createdAt: -1 }))
+      .skip(offset)
+      .limit(limit)
+      .lean();
+
+    const formattedTracks = await formatTracksWithCoverArt(tracks);
+
+    res.json({
+      tracks: formattedTracks,
+      total: formattedTracks.length,
+      hasMore: formattedTracks.length === limit,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * GET /api/browse/popular/tracks
  * Get popular/trending tracks
  */
@@ -107,7 +147,7 @@ export const getPopularTracks = async (req: Request, res: Response, next: NextFu
     const offset = parseInt(req.query.offset as string) || 0;
 
     const tracks = await TrackModel.find({ isAvailable: true })
-      .sort({ popularity: -1, playCount: -1, createdAt: -1 })
+      .sort(withImageFirstSort('track', { popularity: -1, playCount: -1, createdAt: -1 }))
       .skip(offset)
       .limit(limit)
       .lean();
@@ -138,7 +178,7 @@ export const getPopularAlbums = async (req: Request, res: Response, next: NextFu
     const offset = parseInt(req.query.offset as string) || 0;
 
     const albums = await AlbumModel.find()
-      .sort({ popularity: -1, releaseDate: -1 })
+      .sort(withImageFirstSort('album', { popularity: -1, releaseDate: -1 }))
       .skip(offset)
       .limit(limit)
       .lean();
@@ -169,7 +209,7 @@ export const getPopularArtists = async (req: Request, res: Response, next: NextF
     const offset = parseInt(req.query.offset as string) || 0;
 
     const artists = await ArtistModel.find()
-      .sort({ popularity: -1, 'stats.followers': -1 })
+      .sort(withImageFirstSort('artist', { popularity: -1, 'stats.followers': -1 }))
       .skip(offset)
       .limit(limit)
       .lean();
@@ -203,11 +243,11 @@ export const getMadeForYou = async (req: Request, res: Response, next: NextFunct
     // In the future, this could use user listening history for personalization.
     const [albums, playlists] = await Promise.all([
       AlbumModel.find()
-        .sort({ popularity: -1, playCount: -1 })
+        .sort(withImageFirstSort('album', { popularity: -1, playCount: -1 }))
         .limit(half)
         .lean(),
       PlaylistModel.find({ isPublic: true })
-        .sort({ followers: -1, createdAt: -1 })
+        .sort(withImageFirstSort('playlist', { followers: -1, createdAt: -1 }))
         .limit(half)
         .lean(),
     ]);
@@ -219,11 +259,11 @@ export const getMadeForYou = async (req: Request, res: Response, next: NextFunct
     const [tracks, artists] = sparse
       ? await Promise.all([
           TrackModel.find({ isAvailable: true })
-            .sort({ popularity: -1, playCount: -1, createdAt: -1 })
+            .sort(withImageFirstSort('track', { popularity: -1, playCount: -1, createdAt: -1 }))
             .limit(limit)
             .lean(),
           ArtistModel.find()
-            .sort({ popularity: -1, 'stats.followers': -1 })
+            .sort(withImageFirstSort('artist', { popularity: -1, 'stats.followers': -1 }))
             .limit(limit)
             .lean(),
         ])
@@ -253,7 +293,7 @@ export const getCharts = async (req: Request, res: Response, next: NextFunction)
     const limit = parseInt(req.query.limit as string) || 50;
 
     const tracks = await TrackModel.find({ isAvailable: true })
-      .sort({ popularity: -1, playCount: -1 })
+      .sort(withImageFirstSort('track', { popularity: -1, playCount: -1 }))
       .limit(limit)
       .lean();
 
@@ -267,5 +307,3 @@ export const getCharts = async (req: Request, res: Response, next: NextFunction)
     next(error);
   }
 };
-
-

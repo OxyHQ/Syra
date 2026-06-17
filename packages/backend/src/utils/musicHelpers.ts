@@ -19,6 +19,15 @@ function firstImageUrl(doc: unknown): string | undefined {
 /** Convert a MongoDB ObjectId string to an /api/images/:id URL. */
 const toImageUrl = (id: string): string => `/api/images/${id}`;
 
+function isMongoObjectId(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-f\d]{24}$/i.test(value);
+}
+
+function normalizeImageRef(value: unknown): string | undefined {
+  if (isMongoObjectId(value)) return toImageUrl(value);
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
 /**
  * API representation of a persisted document: the `_id` ObjectId is dropped and
  * replaced by a string `id`. Mongoose `Document` machinery is stripped at
@@ -97,9 +106,9 @@ export async function formatTrackWithCoverArt(
   const formatted = toApiFormat(track);
   if (!formatted) return null;
 
-  // If track has coverArt, convert ObjectId to URL
+  // If track has coverArt, convert uploaded ObjectIds but keep external URLs intact.
   if (formatted.coverArt) {
-    formatted.coverArt = toImageUrl(formatted.coverArt);
+    formatted.coverArt = normalizeImageRef(formatted.coverArt);
     return formatted;
   }
 
@@ -125,8 +134,7 @@ export async function formatTrackWithCoverArt(
 
     if (album) {
       if (album.coverArt) {
-        // Album has an ObjectId coverArt — convert to API URL (highest album priority)
-        formatted.coverArt = toImageUrl(album.coverArt);
+        formatted.coverArt = normalizeImageRef(album.coverArt);
       } else {
         // Album has no ObjectId coverArt — try its external images[] (e.g. Audius album art)
         const u = firstImageUrl(album);
@@ -164,9 +172,9 @@ export function formatAlbumWithCoverArt(album: any): any {
   const formatted = toApiFormat(album);
   if (!formatted) return null;
 
-  // Convert coverArt ObjectId to URL
+  // Convert uploaded ObjectIds but keep external URLs intact.
   if (formatted.coverArt) {
-    formatted.coverArt = toImageUrl(formatted.coverArt);
+    formatted.coverArt = normalizeImageRef(formatted.coverArt);
   }
 
   // Fallback: use first external image URL (e.g. Audius CDN) when no ObjectId art
@@ -193,9 +201,9 @@ export function formatPlaylistWithCoverArt(playlist: any): any {
   const formatted = toApiFormat(playlist);
   if (!formatted) return null;
 
-  // Convert coverArt ObjectId to URL
+  // Convert uploaded ObjectIds but keep external URLs intact.
   if (formatted.coverArt) {
-    formatted.coverArt = toImageUrl(formatted.coverArt);
+    formatted.coverArt = normalizeImageRef(formatted.coverArt);
   }
 
   return formatted;
@@ -216,9 +224,9 @@ export function formatArtistWithImage(artist: any): any {
   const formatted = toApiFormat(artist);
   if (!formatted) return null;
 
-  // Convert image ObjectId to URL
+  // Convert uploaded ObjectIds but keep external URLs intact.
   if (formatted.image) {
-    formatted.image = toImageUrl(formatted.image);
+    formatted.image = normalizeImageRef(formatted.image);
   }
 
   // Fallback: use first external image URL (e.g. Audius CDN) when no ObjectId image
@@ -236,4 +244,3 @@ export function formatArtistWithImage(artist: any): any {
 export function formatArtistsWithImage(artists: any[]): any[] {
   return artists.map(artist => formatArtistWithImage(artist)).filter(Boolean);
 }
-

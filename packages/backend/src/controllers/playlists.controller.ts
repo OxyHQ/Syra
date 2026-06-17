@@ -9,6 +9,7 @@ import { toApiFormat, toApiFormatArray, formatTrackWithCoverArt, formatPlaylistW
 import { isDatabaseConnected } from '../utils/database';
 import { AuthRequest } from '../middleware/auth';
 import { getParam } from '../utils/reqParams';
+import { withImageFirstSort } from '../utils/imageFirstSort';
 
 /**
  * Check if user has permission to edit playlist
@@ -94,7 +95,7 @@ export const getUserPlaylists = async (req: AuthRequest, res: Response, next: Ne
         { 'collaborators.oxyUserId': userId },
       ],
     })
-      .sort({ createdAt: -1 })
+      .sort(withImageFirstSort('playlist', { createdAt: -1 }))
       .lean();
 
     const formattedPlaylists = formatPlaylistsWithCoverArt(playlists);
@@ -652,4 +653,3 @@ export const reorderPlaylistTracks = async (req: AuthRequest, res: Response, nex
     next(error);
   }
 };
-

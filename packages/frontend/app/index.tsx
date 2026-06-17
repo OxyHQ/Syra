@@ -500,7 +500,7 @@ const HomeScreen: React.FC = () => {
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
                 Jump back in
               </Text>
-              <ResponsiveGrid minItemWidth={180} maxItemWidth={220} gap={8}>
+              <ResponsiveGrid minItemWidth={180} gap={8}>
                 {recentlyPlayed.map((track) => (
                   <View key={track.id}>
                     <MediaCard
@@ -547,7 +547,7 @@ const HomeScreen: React.FC = () => {
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
                 Made for you
               </Text>
-              <ResponsiveGrid minItemWidth={180} maxItemWidth={220} gap={8}>
+              <ResponsiveGrid minItemWidth={180} gap={8}>
                 {madeForYouPlaylists.map((playlist) => (
                   <View key={playlist.id}>
                     <MediaCard
@@ -555,6 +555,7 @@ const HomeScreen: React.FC = () => {
                       subtitle={playlist.description || 'Playlist'}
                       type="playlist"
                       imageUri={playlist.coverArt}
+                      primaryColor={playlist.primaryColor}
                       onPress={() => router.push(`/playlist/${playlist.id}`)}
                       onPlayPress={() => playPlaylist(playlist.id, playlist.name)}
                       onAddToQueue={() => addPlaylistToQueue(playlist.id)}
@@ -570,6 +571,7 @@ const HomeScreen: React.FC = () => {
                       subtitle={album.artistName}
                       type="album"
                       imageUri={album.coverArt}
+                      primaryColor={album.primaryColor}
                       onPress={() => router.push(`/album/${album.id}`)}
                       onPlayPress={() => playAlbum(album.id, album.title)}
                       onAddToQueue={() => addAlbumToQueue(album.id)}
@@ -596,7 +598,7 @@ const HomeScreen: React.FC = () => {
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
                 Popular albums
               </Text>
-              <ResponsiveGrid minItemWidth={180} maxItemWidth={220} gap={8}>
+              <ResponsiveGrid minItemWidth={180} gap={8}>
                 {popularAlbums.map((album) => (
                   <View key={album.id}>
                     <MediaCard
@@ -604,6 +606,7 @@ const HomeScreen: React.FC = () => {
                       subtitle={album.artistName}
                       type="album"
                       imageUri={album.coverArt}
+                      primaryColor={album.primaryColor}
                       onPress={() => router.push(`/album/${album.id}`)}
                       onPlayPress={() => playAlbum(album.id, album.title)}
                       onAddToQueue={() => addAlbumToQueue(album.id)}
@@ -623,7 +626,7 @@ const HomeScreen: React.FC = () => {
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
                 Popular artists
               </Text>
-              <ResponsiveGrid minItemWidth={180} maxItemWidth={220} gap={8}>
+              <ResponsiveGrid minItemWidth={180} gap={8}>
                 {popularArtists.map((artist) => (
                   <View key={artist.id}>
                     <MediaCard
@@ -632,6 +635,7 @@ const HomeScreen: React.FC = () => {
                       type="artist"
                       imageUri={artist.image}
                       images={artist.images}
+                      primaryColor={artist.primaryColor}
                       onPress={() => router.push(`/artist/${artist.id}`)}
                       onPlayPress={() => playArtist(artist.id, artist.name)}
                       onAddToQueue={() => addArtistToQueue(artist.id)}
@@ -650,7 +654,7 @@ const HomeScreen: React.FC = () => {
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
                 Your playlists
               </Text>
-              <ResponsiveGrid minItemWidth={180} maxItemWidth={220} gap={8}>
+              <ResponsiveGrid minItemWidth={180} gap={8}>
                 {userPlaylists.map((playlist) => (
                   <View key={playlist.id}>
                     <MediaCard
@@ -658,6 +662,7 @@ const HomeScreen: React.FC = () => {
                       subtitle={playlist.description || 'Playlist'}
                       type="playlist"
                       imageUri={playlist.coverArt}
+                      primaryColor={playlist.primaryColor}
                       onPress={() => router.push(`/playlist/${playlist.id}`)}
                       onPlayPress={() => playPlaylist(playlist.id, playlist.name)}
                       onAddToQueue={() => addPlaylistToQueue(playlist.id)}
@@ -683,7 +688,7 @@ const HomeScreen: React.FC = () => {
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
                 Popular tracks
               </Text>
-              <ResponsiveGrid minItemWidth={180} maxItemWidth={220} gap={8}>
+              <ResponsiveGrid minItemWidth={180} gap={8}>
                 {tracks.map((track) => (
                   <View key={track.id}>
                     <MediaCard

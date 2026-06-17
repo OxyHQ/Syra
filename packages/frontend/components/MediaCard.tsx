@@ -20,8 +20,17 @@ interface MediaCardProps {
   onGoToArtist?: () => void;
   onGoToAlbum?: () => void;
   shape?: 'square' | 'circle';
+  primaryColor?: string;
   onHoverIn?: () => void;
   onHoverOut?: () => void;
+}
+
+function colorWithAlpha(color: string | undefined, alpha: number): string | undefined {
+  if (!color) return undefined;
+  const match = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(color.trim());
+  if (!match) return undefined;
+  const [, r, g, b] = match;
+  return `rgba(${parseInt(r, 16)}, ${parseInt(g, 16)}, ${parseInt(b, 16)}, ${alpha})`;
 }
 
 /**
@@ -40,6 +49,7 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
   onGoToArtist,
   onGoToAlbum,
   shape,
+  primaryColor,
   onHoverIn,
   onHoverOut,
 }) => {
@@ -55,6 +65,7 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
   // Show play button if card is hovered OR play button itself is hovered
   const showPlayButton = (isHovered || isPlayButtonHovered) && onPlayPress;
   const hasMenu = !!(onAddToQueue || onGoToArtist || onGoToAlbum);
+  const hoverBackground = colorWithAlpha(primaryColor, 0.26) ?? theme.colors.backgroundSecondary;
 
   const getIcon = () => {
     switch (type) {
@@ -92,7 +103,7 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
       }}
       style={[
         styles.container,
-        (isHovered || isPlayButtonHovered) && { backgroundColor: theme.colors.backgroundSecondary },
+        (isHovered || isPlayButtonHovered) && { backgroundColor: hoverBackground },
         ...Platform.select({
           web: [webViewStyle({ cursor: 'pointer' })],
           default: [],
@@ -209,6 +220,7 @@ export const MediaCard = React.memo(MediaCardComponent);
 const styles = StyleSheet.create({
   // `transition` is a react-native-web value; it is a no-op on native.
   container: webViewStyle({
+    alignSelf: 'stretch',
     padding: 6,
     borderRadius: 8,
     transition: 'background-color 0.2s',
@@ -219,7 +231,7 @@ const styles = StyleSheet.create({
     }),
   }),
   imageContainer: {
-    width: '100%',
+    alignSelf: 'stretch',
     aspectRatio: 1,
     overflow: 'hidden',
     marginBottom: 6,
@@ -231,12 +243,10 @@ const styles = StyleSheet.create({
     }),
   },
   image: {
-    width: '100%',
-    height: '100%',
+    ...StyleSheet.absoluteFill,
   },
   iconContainer: {
-    width: '100%',
-    height: '100%',
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
   },

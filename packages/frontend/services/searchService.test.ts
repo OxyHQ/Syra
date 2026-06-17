@@ -6,8 +6,8 @@ describe('searchRefetchInterval', () => {
   it('returns AUDIUS_REFETCH_MS when pendingAudiusImport is true and no tracks yet', () => {
     const data: SearchResultWithPending = {
       query: 'jazz',
-      results: { tracks: [], albums: [], artists: [], playlists: [] },
-      counts: { tracks: 0, albums: 0, artists: 0, playlists: 0, total: 0 },
+      results: { tracks: [], albums: [], artists: [], playlists: [], users: [] },
+      counts: { tracks: 0, albums: 0, artists: 0, playlists: 0, users: 0, total: 0 },
       hasMore: false,
       offset: 0,
       limit: 20,
@@ -19,8 +19,8 @@ describe('searchRefetchInterval', () => {
   it('returns false when pendingAudiusImport is false', () => {
     const data: SearchResultWithPending = {
       query: 'jazz',
-      results: { tracks: [], albums: [], artists: [], playlists: [] },
-      counts: { tracks: 0, albums: 0, artists: 0, playlists: 0, total: 0 },
+      results: { tracks: [], albums: [], artists: [], playlists: [], users: [] },
+      counts: { tracks: 0, albums: 0, artists: 0, playlists: 0, users: 0, total: 0 },
       hasMore: false,
       offset: 0,
       limit: 20,
@@ -32,8 +32,8 @@ describe('searchRefetchInterval', () => {
   it('returns false when pendingAudiusImport is undefined', () => {
     const data: SearchResultWithPending = {
       query: 'jazz',
-      results: { tracks: [], albums: [], artists: [], playlists: [] },
-      counts: { tracks: 0, albums: 0, artists: 0, playlists: 0, total: 0 },
+      results: { tracks: [], albums: [], artists: [], playlists: [], users: [] },
+      counts: { tracks: 0, albums: 0, artists: 0, playlists: 0, users: 0, total: 0 },
       hasMore: false,
       offset: 0,
       limit: 20,
@@ -49,8 +49,9 @@ describe('searchRefetchInterval', () => {
         albums: [],
         artists: [],
         playlists: [],
+        users: [],
       },
-      counts: { tracks: 1, albums: 0, artists: 0, playlists: 0, total: 1 },
+      counts: { tracks: 1, albums: 0, artists: 0, playlists: 0, users: 0, total: 1 },
       hasMore: false,
       offset: 0,
       limit: 20,

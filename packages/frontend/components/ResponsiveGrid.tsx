@@ -10,16 +10,36 @@ import {
 interface ResponsiveGridProps {
   children: React.ReactNode;
   minItemWidth: number;
-  maxItemWidth?: number;
   gap?: number;
   style?: StyleProp<ViewStyle>;
   itemStyle?: StyleProp<ViewStyle>;
 }
 
+export function getResponsiveGridLayout({
+  containerWidth,
+  minItemWidth,
+  gap,
+}: {
+  containerWidth: number;
+  minItemWidth: number;
+  gap: number;
+}) {
+  if (containerWidth <= 0) {
+    return { columns: 1, itemWidth: minItemWidth };
+  }
+
+  const columns = Math.max(
+    1,
+    Math.floor((containerWidth + gap) / (minItemWidth + gap)),
+  );
+  const itemWidth = Math.floor((containerWidth - gap * (columns - 1)) / columns);
+
+  return { columns, itemWidth };
+}
+
 export function ResponsiveGrid({
   children,
   minItemWidth,
-  maxItemWidth,
   gap = 8,
   style,
   itemStyle,
@@ -28,25 +48,8 @@ export function ResponsiveGrid({
   const items = useMemo(() => React.Children.toArray(children), [children]);
 
   const layout = useMemo(() => {
-    if (containerWidth <= 0) {
-      return { columns: 1, itemWidth: minItemWidth };
-    }
-
-    const maxColumnsByMinWidth = Math.max(
-      1,
-      Math.floor((containerWidth + gap) / (minItemWidth + gap)),
-    );
-    let columns = maxColumnsByMinWidth;
-    let itemWidth = (containerWidth - gap * (columns - 1)) / columns;
-
-    if (maxItemWidth && itemWidth > maxItemWidth) {
-      const columnsByMaxWidth = Math.floor((containerWidth + gap) / (maxItemWidth + gap));
-      columns = Math.max(1, Math.min(maxColumnsByMinWidth, columnsByMaxWidth || 1));
-      itemWidth = (containerWidth - gap * (columns - 1)) / columns;
-    }
-
-    return { columns, itemWidth };
-  }, [containerWidth, gap, maxItemWidth, minItemWidth]);
+    return getResponsiveGridLayout({ containerWidth, gap, minItemWidth });
+  }, [containerWidth, gap, minItemWidth]);
 
   const handleLayout = (event: LayoutChangeEvent) => {
     const nextWidth = Math.floor(event.nativeEvent.layout.width);
@@ -65,7 +68,7 @@ export function ResponsiveGrid({
             style={[
               styles.item,
               {
-                width: layout.itemWidth,
+                flexBasis: layout.itemWidth,
                 marginRight: isLastColumn ? 0 : gap,
                 marginBottom: gap,
               },
@@ -82,11 +85,16 @@ export function ResponsiveGrid({
 
 const styles = StyleSheet.create({
   grid: {
+    alignSelf: 'stretch',
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'stretch',
+    minWidth: 0,
   },
   item: {
+    alignSelf: 'stretch',
+    flexGrow: 0,
+    flexShrink: 0,
     minWidth: 0,
   },
 });

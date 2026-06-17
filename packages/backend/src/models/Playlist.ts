@@ -1,5 +1,12 @@
 import mongoose, { Schema, Document } from 'mongoose';
-import { Playlist, PlaylistCollaborator, PlaylistVisibility } from '@syra/shared-types';
+import {
+  CatalogSource,
+  ExternalIds,
+  Playlist,
+  PlaylistCollaborator,
+  PlaylistVisibility,
+  SourceProvenance,
+} from '@syra/shared-types';
 
 export interface IPlaylist extends Omit<Playlist, 'id' | '_id'>, Document {
   _id: mongoose.Types.ObjectId;
@@ -10,6 +17,18 @@ const PlaylistCollaboratorSchema = new Schema<PlaylistCollaborator>({
   username: { type: String, required: true },
   role: { type: String, enum: ['owner', 'editor', 'viewer'], default: 'viewer' },
   addedAt: { type: String, required: true },
+}, { _id: false });
+
+const ExternalIdsSchema = new Schema<ExternalIds>({
+  isrc: { type: String },
+  audiusId: { type: String },
+}, { _id: false });
+
+const SourceProvenanceSchema = new Schema<SourceProvenance>({
+  provider: { type: String, enum: ['upload', 'cc', 'audius'] as CatalogSource[], required: true },
+  externalId: { type: String, required: true },
+  importedAt: { type: String, required: true },
+  fields: [{ type: String }],
 }, { _id: false });
 
 const PlaylistSchema = new Schema<IPlaylist>({
@@ -26,6 +45,9 @@ const PlaylistSchema = new Schema<IPlaylist>({
   primaryColor: { type: String },
   secondaryColor: { type: String },
   collaborators: [{ type: PlaylistCollaboratorSchema }],
+  source: { type: String, enum: ['upload', 'cc', 'audius'] as CatalogSource[], index: true },
+  externalIds: { type: ExternalIdsSchema },
+  sources: [{ type: SourceProvenanceSchema }],
 }, {
   timestamps: true,
 });
@@ -35,6 +57,6 @@ PlaylistSchema.index({ ownerOxyUserId: 1, createdAt: -1 });
 PlaylistSchema.index({ name: 'text', description: 'text' }); // Text search
 PlaylistSchema.index({ visibility: 1, followers: -1 });
 PlaylistSchema.index({ isPublic: 1, followers: -1 });
+PlaylistSchema.index({ 'externalIds.audiusId': 1 }, { sparse: true });
 
 export const PlaylistModel = mongoose.model<IPlaylist>('Playlist', PlaylistSchema);
-

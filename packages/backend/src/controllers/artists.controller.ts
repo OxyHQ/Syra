@@ -10,6 +10,7 @@ import { getAuthenticatedUserId } from '../utils/auth';
 import { getParam } from '../utils/reqParams';
 import { CreateArtistRequest, ArtistInsights, ArtistDashboard } from '@syra/shared-types';
 import { extractColorsFromImage } from '../utils/colorHelper';
+import { withImageFirstSort } from '../utils/imageFirstSort';
 
 /**
  * GET /api/artists
@@ -26,7 +27,7 @@ export const getArtists = async (req: Request, res: Response, next: NextFunction
 
     const [artists, total] = await Promise.all([
       ArtistModel.find()
-        .sort({ popularity: -1, 'stats.followers': -1 })
+        .sort(withImageFirstSort('artist', { popularity: -1, 'stats.followers': -1 }))
         .skip(offset)
         .limit(limit)
         .lean(),
@@ -100,7 +101,7 @@ export const getArtistAlbums = async (req: Request, res: Response, next: NextFun
 
     // Fetch albums for this artist, sorted by release date
     const albums = await AlbumModel.find({ artistId: id })
-      .sort({ releaseDate: -1 })
+      .sort(withImageFirstSort('album', { releaseDate: -1 }))
       .lean();
 
     const formattedAlbums = toApiFormatArray(albums);
@@ -142,7 +143,7 @@ export const getArtistTracks = async (req: Request, res: Response, next: NextFun
     // Fetch tracks for this artist, sorted by popularity then date
     const [tracks, total] = await Promise.all([
       TrackModel.find({ artistId: id, isAvailable: true })
-        .sort({ popularity: -1, createdAt: -1 })
+        .sort(withImageFirstSort('track', { popularity: -1, createdAt: -1 }))
         .skip(offset)
         .limit(limit)
         .lean(),
@@ -466,4 +467,3 @@ export const getArtistInsights = async (req: AuthRequest, res: Response, next: N
     next(error);
   }
 };
-

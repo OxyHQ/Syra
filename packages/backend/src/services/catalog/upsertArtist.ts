@@ -1,6 +1,7 @@
 import type { ExternalArtist, CatalogSource, SourceProvenance, TrackImage } from '@syra/shared-types';
 import { ArtistModel } from '../../models/Artist';
 import type { IArtist } from '../../models/Artist';
+import { assignMissingColors, colorsFromImages } from './entityColors';
 
 /**
  * Build a SourceProvenance entry recording this import.
@@ -66,6 +67,8 @@ export async function upsertArtist(
   source: CatalogSource,
 ): Promise<{ artist: IArtist; created: boolean }> {
   const existing = await findExisting(source, external.externalId);
+  const needsColors = !existing || (!existing.ownerOxyUserId && (!existing.primaryColor || !existing.secondaryColor));
+  const colors = needsColors ? await colorsFromImages(external.images) : undefined;
 
   const provenance = buildProvenance(
     source,
@@ -83,6 +86,8 @@ export async function upsertArtist(
       claimable: true,
       externalIds: source === 'audius' ? { audiusId: external.externalId } : undefined,
       images: external.images ?? [],
+      primaryColor: colors?.primaryColor,
+      secondaryColor: colors?.secondaryColor,
       sources: [provenance],
       stats: { followers: 0, albums: 0, tracks: 0, totalPlays: 0, monthlyListeners: 0 },
     });
@@ -97,6 +102,7 @@ export async function upsertArtist(
   if (!existing.ownerOxyUserId) {
     if (external.name) existing.name = external.name;
     existing.images = mergeImages(existing.images, external.images);
+    assignMissingColors(existing, colors);
     if (source === 'audius' && external.externalId) {
       existing.externalIds = {
         ...(existing.externalIds ?? {}),

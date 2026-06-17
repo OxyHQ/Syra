@@ -18,7 +18,7 @@ interface MediaCardRowSkeletonProps {
 export const MediaCardRowSkeleton: React.FC<MediaCardRowSkeletonProps> =
   React.memo(({ count = 5, shape = 'square' }) => {
     return (
-      <ResponsiveGrid minItemWidth={180} maxItemWidth={220} gap={8}>
+      <ResponsiveGrid minItemWidth={180} gap={8}>
         <Repeat
           count={count}
           render={() => (

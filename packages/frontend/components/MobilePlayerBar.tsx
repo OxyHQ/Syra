@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { StyleSheet, View, Text, Pressable, Platform } from 'react-native';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -8,6 +8,18 @@ import { Image } from 'expo-image';
 import { pickImageUrl } from '@/utils/pickImage';
 import { useLibrary, useToggleLikeTrack } from '@/hooks/useLibrary';
 
+const clamp = (value: number, min: number, max: number) => (
+  Math.min(max, Math.max(min, value))
+);
+
+const getProgressPercent = (currentTime: number, duration: number) => {
+  if (!Number.isFinite(currentTime) || !Number.isFinite(duration) || duration <= 0) {
+    return 0;
+  }
+
+  return clamp((currentTime / duration) * 100, 0, 100);
+};
+
 /**
  * Mobile Bottom Player Bar Component
  * Floating, fully rounded player bar for mobile devices
@@ -15,6 +27,7 @@ import { useLibrary, useToggleLikeTrack } from '@/hooks/useLibrary';
 export const MobilePlayerBar: React.FC = () => {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const [progressBarWidth, setProgressBarWidth] = useState(0);
 
   const {
     currentTrack,
@@ -51,7 +64,8 @@ export const MobilePlayerBar: React.FC = () => {
     await seek(newPosition);
   };
 
-  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const progressPercent = getProgressPercent(currentTime, duration);
+  const progressFillWidth = progressBarWidth > 0 ? (progressPercent / 100) * progressBarWidth : 0;
 
   // Uniform spacing constant - used for both padding and gaps
   const SPACING = 8;
@@ -182,13 +196,14 @@ export const MobilePlayerBar: React.FC = () => {
       {/* Progress Bar - At bottom */}
       <Pressable
         style={[styles.progressBarContainer, { backgroundColor: 'rgba(255, 255, 255, 0.3)' }]}
+        onLayout={(event) => setProgressBarWidth(event.nativeEvent.layout.width)}
         onPress={(e) => {
           if (Platform.OS === 'web') {
-            const rect = (e.target as any)?.getBoundingClientRect();
+            const rect = (e.currentTarget as any)?.getBoundingClientRect();
             if (rect) {
               const clientX = (e.nativeEvent as any).clientX;
-              if (clientX !== undefined) {
-                const x = clientX - rect.left;
+              if (clientX !== undefined && rect.width > 0 && duration > 0) {
+                const x = clamp(clientX - rect.left, 0, rect.width);
                 const newPosition = (x / rect.width) * duration;
                 handleSeek(newPosition);
               }
@@ -201,7 +216,7 @@ export const MobilePlayerBar: React.FC = () => {
             styles.progressBar,
             {
               backgroundColor: theme.colors.primaryForeground,
-              width: `${progressPercent}%`,
+              width: progressFillWidth,
             }
           ]}
         />
@@ -216,7 +231,7 @@ const styles = StyleSheet.create({
   },
   progressBarContainer: {
     height: 4,
-    width: '100%',
+    alignSelf: 'stretch',
     borderBottomLeftRadius: 16, // Match container borderRadius
     borderBottomRightRadius: 16, // Match container borderRadius
     overflow: 'hidden',

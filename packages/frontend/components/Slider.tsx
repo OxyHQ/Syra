@@ -8,6 +8,20 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useTheme } from '@oxyhq/bloom/theme';
 
+const THUMB_SIZE = 20;
+const THUMB_RADIUS = THUMB_SIZE / 2;
+const TRACK_HEIGHT = 4;
+const TRACK_TOP = 18;
+const THUMB_TOP = 10;
+
+const clamp = (value: number, min: number, max: number) => (
+  Math.min(max, Math.max(min, value))
+);
+
+const getFiniteValue = (value: number, fallback: number) => (
+  Number.isFinite(value) ? value : fallback
+);
+
 interface SliderProps {
   value: number;
   onValueChange: (value: number) => void;
@@ -40,13 +54,33 @@ export const Slider: React.FC<SliderProps> = ({
   // Update position when value changes externally
   useEffect(() => {
     if (!isDragging.value && width > 0) {
-      const range = maximumValue - minimumValue;
-      const percentage = (value - minimumValue) / range;
-      translateX.value = Math.max(0, Math.min(width, percentage * width));
+      const safeMin = getFiniteValue(minimumValue, 0);
+      const safeMax = getFiniteValue(maximumValue, 1);
+      const range = safeMax - safeMin;
+      const safeValue = clamp(getFiniteValue(value, safeMin), safeMin, safeMax);
+      const percentage = range > 0 ? (safeValue - safeMin) / range : 0;
+      translateX.value = clamp(percentage * width, 0, width);
     }
   }, [value, width, minimumValue, maximumValue]);
 
   const gesture = useMemo(() => {
+    const safeMin = getFiniteValue(minimumValue, 0);
+    const safeMax = getFiniteValue(maximumValue, 1);
+    const safeStep = getFiniteValue(step, 0.01);
+    const range = safeMax - safeMin;
+
+    const positionToValue = (position: number, trackWidth: number) => {
+      'worklet';
+      if (trackWidth <= 0 || range <= 0) {
+        return safeMin;
+      }
+
+      const percentage = position / trackWidth;
+      const rawValue = safeMin + percentage * range;
+      const steppedValue = safeStep > 0 ? Math.round(rawValue / safeStep) * safeStep : rawValue;
+      return Math.min(safeMax, Math.max(safeMin, steppedValue));
+    };
+
     return Gesture.Pan()
       .enabled(!disabled)
       .minDistance(0)
@@ -55,31 +89,21 @@ export const Slider: React.FC<SliderProps> = ({
         // eslint-disable-next-line react-hooks/immutability -- Reanimated SharedValue write inside a worklet; the React Compiler rule does not model SharedValue mutation.
         isDragging.value = true;
         if (widthSV.value > 0) {
-          const newPos = Math.max(0, Math.min(widthSV.value, e.x));
+          const newPos = Math.min(widthSV.value, Math.max(0, e.x));
           // eslint-disable-next-line react-hooks/immutability -- Reanimated SharedValue write inside a worklet; the React Compiler rule does not model SharedValue mutation.
           translateX.value = newPos;
 
-          const percentage = newPos / widthSV.value;
-          const rawValue = minimumValue + percentage * (maximumValue - minimumValue);
-          const steppedValue = Math.round(rawValue / step) * step;
-          const finalValue = Math.max(minimumValue, Math.min(maximumValue, steppedValue));
-
-          runOnJS(onValueChange)(finalValue);
+          runOnJS(onValueChange)(positionToValue(newPos, widthSV.value));
         }
       })
       .onUpdate((e) => {
         'worklet';
         if (widthSV.value > 0) {
-          const newPos = Math.max(0, Math.min(widthSV.value, e.x));
+          const newPos = Math.min(widthSV.value, Math.max(0, e.x));
           // eslint-disable-next-line react-hooks/immutability -- Reanimated SharedValue write inside a worklet; the React Compiler rule does not model SharedValue mutation.
           translateX.value = newPos;
 
-          const percentage = newPos / widthSV.value;
-          const rawValue = minimumValue + percentage * (maximumValue - minimumValue);
-          const steppedValue = Math.round(rawValue / step) * step;
-          const finalValue = Math.max(minimumValue, Math.min(maximumValue, steppedValue));
-
-          runOnJS(onValueChange)(finalValue);
+          runOnJS(onValueChange)(positionToValue(newPos, widthSV.value));
         }
       })
       .onEnd(() => {
@@ -101,7 +125,12 @@ export const Slider: React.FC<SliderProps> = ({
     };
   });
 
-  const displayValue = formatValue ? formatValue(value) : value.toFixed(step < 1 ? 2 : 0);
+  const safeValue = clamp(
+    getFiniteValue(value, getFiniteValue(minimumValue, 0)),
+    getFiniteValue(minimumValue, 0),
+    getFiniteValue(maximumValue, 1),
+  );
+  const displayValue = formatValue ? formatValue(safeValue) : safeValue.toFixed(step < 1 ? 2 : 0);
 
   return (
     <View style={styles.container}>
@@ -117,7 +146,7 @@ export const Slider: React.FC<SliderProps> = ({
         <View
           style={styles.trackContainer}
           onLayout={(e) => {
-            const newWidth = e.nativeEvent.layout.width;
+            const newWidth = Math.max(0, e.nativeEvent.layout.width - THUMB_SIZE);
             setWidth(newWidth);
             // eslint-disable-next-line react-hooks/immutability -- Reanimated SharedValue write; the React Compiler rule does not model SharedValue mutation.
             widthSV.value = newWidth;
@@ -157,7 +186,8 @@ export const Slider: React.FC<SliderProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    width: '100%',
+    alignSelf: 'stretch',
+    minWidth: 0,
   },
   labelRow: {
     flexDirection: 'row',
@@ -177,29 +207,28 @@ const styles = StyleSheet.create({
     height: 40,
     justifyContent: 'center',
     position: 'relative',
+    paddingHorizontal: THUMB_RADIUS,
   },
   track: {
-    height: 4,
-    borderRadius: 2,
-    width: '100%',
+    height: TRACK_HEIGHT,
+    borderRadius: TRACK_HEIGHT / 2,
+    alignSelf: 'stretch',
   },
   fill: {
-    height: 4,
-    borderRadius: 2,
+    height: TRACK_HEIGHT,
+    borderRadius: TRACK_HEIGHT / 2,
     position: 'absolute',
-    left: 0,
-    top: '50%',
-    marginTop: -2,
+    left: THUMB_RADIUS,
+    top: TRACK_TOP,
   },
   thumb: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: THUMB_SIZE,
+    height: THUMB_SIZE,
+    borderRadius: THUMB_RADIUS,
     borderWidth: 2,
     position: 'absolute',
-    top: '50%',
-    marginTop: -10,
-    marginLeft: -10,
+    left: 0,
+    top: THUMB_TOP,
     boxShadow: '0px 2px 3px 0px rgba(0, 0, 0, 0.2)',
     elevation: 3,
   },

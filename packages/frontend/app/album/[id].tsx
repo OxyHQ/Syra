@@ -13,6 +13,7 @@ import Avatar from '@/components/Avatar';
 import { MediaHeaderSkeleton } from '@/components/skeletons';
 import { formatDuration, formatTotalDuration } from '@/utils/musicUtils';
 import { useLibrary, useToggleSaveAlbum, useToggleLikeTrack } from '@/hooks/useLibrary';
+import { LinearGradient } from 'expo-linear-gradient';
 
 /**
  * Album Screen
@@ -107,6 +108,11 @@ const AlbumScreen: React.FC = () => {
 
   const releaseDateFormatted = formatReleaseDate(album.releaseDate);
   const totalDurationFormatted = formatTotalDuration(album.totalDuration);
+  const gradientColors: readonly [string, string, string] = [
+    album.primaryColor ?? theme.colors.backgroundSecondary,
+    album.secondaryColor ?? theme.colors.background,
+    theme.colors.background,
+  ];
 
   return (
     <>
@@ -119,108 +125,110 @@ const AlbumScreen: React.FC = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header Section */}
-        <View style={styles.header}>
-          {/* Album Cover */}
-          <View style={styles.coverContainer}>
-            {album.coverArt ? (
-              <Image
-                source={{ uri: album.coverArt }}
-                style={styles.coverImage}
-                resizeMode="cover"
-              />
-            ) : (
-              <View style={[styles.coverPlaceholder, { backgroundColor: theme.colors.backgroundSecondary }]}>
-                <Ionicons name="musical-notes" size={64} color={theme.colors.textSecondary} />
-              </View>
-            )}
+        <LinearGradient colors={gradientColors} locations={[0, 0.45, 1]} style={styles.heroSection}>
+          {/* Header Section */}
+          <View style={styles.header}>
+            {/* Album Cover */}
+            <View style={styles.coverContainer}>
+              {album.coverArt ? (
+                <Image
+                  source={{ uri: album.coverArt }}
+                  style={styles.coverImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={[styles.coverPlaceholder, { backgroundColor: theme.colors.backgroundSecondary }]}>
+                  <Ionicons name="musical-notes" size={64} color={theme.colors.textSecondary} />
+                </View>
+              )}
+            </View>
+
+            {/* Album Info */}
+            <View style={styles.infoContainer}>
+              <Text style={[styles.albumTitle, { color: theme.colors.text }]} numberOfLines={1}>
+                {album.title}
+              </Text>
+
+              {/* Artist Info */}
+              <Pressable
+                style={styles.artistRow}
+                onPress={() => router.push(`/artist/${album.artistId}`)}
+              >
+                <Avatar
+                  source={album.coverArt}
+                  size={24}
+                  style={styles.artistAvatar}
+                />
+                <Text style={[styles.artistName, { color: theme.colors.text }]}>
+                  {album.artistName}
+                </Text>
+              </Pressable>
+
+              {/* Metadata */}
+              <Text style={[styles.metadata, { color: theme.colors.textSecondary }]}>
+                {new Date(album.releaseDate).getFullYear()} • {album.totalTracks} songs, {totalDurationFormatted}
+              </Text>
+            </View>
           </View>
 
-          {/* Album Info */}
-          <View style={styles.infoContainer}>
-            <Text style={[styles.albumTitle, { color: theme.colors.text }]} numberOfLines={1}>
-              {album.title}
-            </Text>
-            
-            {/* Artist Info */}
+          {/* Playback Controls */}
+          <View style={styles.controlsContainer}>
             <Pressable
-              style={styles.artistRow}
-              onPress={() => router.push(`/artist/${album.artistId}`)}
+              style={[styles.playButton, { backgroundColor: theme.colors.primary }]}
+              onPress={handlePlayAlbum}
             >
-              <Avatar
-                source={album.coverArt}
-                size={24}
-                style={styles.artistAvatar}
-              />
-              <Text style={[styles.artistName, { color: theme.colors.text }]}>
-                {album.artistName}
-              </Text>
+              <Ionicons name="play" size={28} color={theme.colors.primaryForeground} />
             </Pressable>
 
-            {/* Metadata */}
-            <Text style={[styles.metadata, { color: theme.colors.textSecondary }]}>
-              {new Date(album.releaseDate).getFullYear()} • {album.totalTracks} songs, {totalDurationFormatted}
-            </Text>
+            <Pressable
+              style={styles.controlButton}
+              onPress={toggleShuffle}
+              accessibilityRole="button"
+              accessibilityState={{ selected: shuffle === 'on' }}
+              accessibilityLabel={shuffle === 'on' ? 'Turn shuffle off' : 'Turn shuffle on'}
+            >
+              <Ionicons
+                name="shuffle"
+                size={20}
+                color={shuffle === 'on' ? theme.colors.primary : theme.colors.text}
+              />
+            </Pressable>
+
+            <Pressable
+              style={styles.controlButton}
+              onPress={handleToggleSave}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isSaved }}
+              accessibilityLabel={isSaved ? 'Remove from your library' : 'Save to your library'}
+            >
+              <Ionicons
+                name={isSaved ? "checkmark-circle" : "checkmark-circle-outline"}
+                size={24}
+                color={isSaved ? theme.colors.primary : theme.colors.text}
+              />
+            </Pressable>
+
+            <Pressable
+              style={styles.controlButton}
+              onPress={() => setIsDownloaded(!isDownloaded)}
+            >
+              <Ionicons
+                name={isDownloaded ? "arrow-down-circle" : "arrow-down-circle-outline"}
+                size={24}
+                color={theme.colors.text}
+              />
+            </Pressable>
+
+            <Pressable style={styles.controlButton}>
+              <Ionicons name="ellipsis-horizontal" size={24} color={theme.colors.text} />
+            </Pressable>
+
+            <View style={styles.listViewContainer}>
+              <Text style={[styles.listViewText, { color: theme.colors.text }]}>List</Text>
+              <Ionicons name="list" size={20} color={theme.colors.text} />
+            </View>
           </View>
-        </View>
-
-        {/* Playback Controls */}
-        <View style={styles.controlsContainer}>
-          <Pressable
-            style={[styles.playButton, { backgroundColor: theme.colors.primary }]}
-            onPress={handlePlayAlbum}
-          >
-            <Ionicons name="play" size={28} color={theme.colors.primaryForeground} />
-          </Pressable>
-
-          <Pressable
-            style={styles.controlButton}
-            onPress={toggleShuffle}
-            accessibilityRole="button"
-            accessibilityState={{ selected: shuffle === 'on' }}
-            accessibilityLabel={shuffle === 'on' ? 'Turn shuffle off' : 'Turn shuffle on'}
-          >
-            <Ionicons
-              name="shuffle"
-              size={20}
-              color={shuffle === 'on' ? theme.colors.primary : theme.colors.text}
-            />
-          </Pressable>
-
-          <Pressable
-            style={styles.controlButton}
-            onPress={handleToggleSave}
-            accessibilityRole="button"
-            accessibilityState={{ selected: isSaved }}
-            accessibilityLabel={isSaved ? 'Remove from your library' : 'Save to your library'}
-          >
-            <Ionicons
-              name={isSaved ? "checkmark-circle" : "checkmark-circle-outline"}
-              size={24}
-              color={isSaved ? theme.colors.primary : theme.colors.text}
-            />
-          </Pressable>
-
-          <Pressable
-            style={styles.controlButton}
-            onPress={() => setIsDownloaded(!isDownloaded)}
-          >
-            <Ionicons
-              name={isDownloaded ? "arrow-down-circle" : "arrow-down-circle-outline"}
-              size={24}
-              color={theme.colors.text}
-            />
-          </Pressable>
-
-          <Pressable style={styles.controlButton}>
-            <Ionicons name="ellipsis-horizontal" size={24} color={theme.colors.text} />
-          </Pressable>
-
-          <View style={styles.listViewContainer}>
-            <Text style={[styles.listViewText, { color: theme.colors.text }]}>List</Text>
-            <Ionicons name="list" size={20} color={theme.colors.text} />
-          </View>
-        </View>
+        </LinearGradient>
 
         {/* Divider */}
         <View style={[styles.divider, { borderBottomColor: theme.colors.backgroundSecondary }]} />
@@ -352,6 +360,9 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 16,
+  },
+  heroSection: {
+    paddingTop: 0,
   },
   header: {
     flexDirection: 'row',

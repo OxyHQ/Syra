@@ -17,7 +17,7 @@ interface GenreGridSkeletonProps {
 export const GenreGridSkeleton: React.FC<GenreGridSkeletonProps> = React.memo(
   ({ count = 8 }) => {
     return (
-      <ResponsiveGrid minItemWidth={160} maxItemWidth={240} gap={12}>
+      <ResponsiveGrid minItemWidth={160} gap={12}>
         <Repeat
           count={count}
           render={() => (

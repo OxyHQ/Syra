@@ -1,9 +1,10 @@
-import type { ExternalAlbum } from '@syra/shared-types';
+import type { ExternalAlbum, ExternalPlaylist } from '@syra/shared-types';
 import type { MusicSourceConnector } from './MusicSourceConnector';
 import { AudiusConnector } from './AudiusConnector';
 import { upsertArtist } from '../catalog/upsertArtist';
 import { upsertTrack } from '../catalog/upsertTrack';
 import { upsertAlbum } from '../catalog/upsertAlbum';
+import { upsertPlaylist } from '../catalog/upsertPlaylist';
 import { ArtistModel } from '../../models/Artist';
 import { logger } from '../../utils/logger';
 
@@ -20,6 +21,9 @@ const DEFAULT_MAX_ARTISTS_FOR_ALBUMS = 10;
 
 /** Cap on the number of albums synced per artist per pass. */
 const MAX_ALBUMS_PER_ARTIST = 10;
+
+/** Cap on the number of playlists synced per artist per pass. */
+const MAX_PLAYLISTS_PER_ARTIST = 10;
 
 // ── Throttle map ──────────────────────────────────────────────────────────────
 
@@ -43,6 +47,29 @@ export interface AlbumFetcher {
   fetchArtistAlbums(artistExternalId: string, limit?: number): Promise<ExternalAlbum[]>;
 }
 
+/**
+ * Fetches an artist's non-album playlists (Audius-specific).
+ */
+export interface PlaylistFetcher {
+  fetchArtistPlaylists(artistExternalId: string, limit?: number): Promise<ExternalPlaylist[]>;
+}
+
+function isAlbumFetcher(value: unknown): value is AlbumFetcher {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { fetchArtistAlbums?: unknown }).fetchArtistAlbums === 'function'
+  );
+}
+
+function isPlaylistFetcher(value: unknown): value is PlaylistFetcher {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { fetchArtistPlaylists?: unknown }).fetchArtistPlaylists === 'function'
+  );
+}
+
 export interface AudiusImportDeps {
   /** Connector to use; defaults to `new AudiusConnector()`. */
   connector?: MusicSourceConnector;
@@ -52,6 +79,8 @@ export interface AudiusImportDeps {
    * an `AudiusConnector` so albums are synced automatically.
    */
   albumFetcher?: AlbumFetcher;
+  /** Playlist fetcher used to sync each imported artist's non-album playlists. */
+  playlistFetcher?: PlaylistFetcher;
   /** Cap on artists whose albums are synced per pass. Defaults to 10. */
   maxArtistsForAlbums?: number;
   /** Clock function; defaults to `Date.now`. Inject for testable throttling. */
@@ -65,6 +94,8 @@ export interface AudiusImportResult {
   skipped: boolean;
   /** Number of albums upserted into the catalog this pass. */
   albumsSynced: number;
+  /** Number of playlists upserted into the catalog this pass. */
+  playlistsSynced: number;
 }
 
 /**
@@ -90,6 +121,7 @@ export async function runAudiusImport(
   const {
     connector = new AudiusConnector(),
     albumFetcher,
+    playlistFetcher,
     maxArtistsForAlbums = DEFAULT_MAX_ARTISTS_FOR_ALBUMS,
     now = Date.now,
   } = deps;
@@ -98,7 +130,7 @@ export async function runAudiusImport(
   const lastRun = lastImportAt.get(key);
   const currentTime = now();
   if (lastRun !== undefined && currentTime - lastRun < AUDIUS_IMPORT_TTL_MS) {
-    return { imported: 0, skipped: true, albumsSynced: 0 };
+    return { imported: 0, skipped: true, albumsSynced: 0, playlistsSynced: 0 };
   }
   lastImportAt.set(key, currentTime);
 
@@ -129,15 +161,19 @@ export async function runAudiusImport(
   const albumsSynced = albumFetcher
     ? await syncArtistAlbums(albumFetcher, artistExternalIds, maxArtistsForAlbums)
     : 0;
+  const playlistsSynced = playlistFetcher
+    ? await syncArtistPlaylists(playlistFetcher, artistExternalIds, maxArtistsForAlbums)
+    : 0;
 
   logger.info('[audius-import] pass complete', {
     query: key,
     tracksImported: imported,
     artistsSeen: artistExternalIds.length,
     albumsSynced,
+    playlistsSynced,
   });
 
-  return { imported, skipped: false, albumsSynced };
+  return { imported, skipped: false, albumsSynced, playlistsSynced };
 }
 
 /**
@@ -201,6 +237,46 @@ async function syncArtistAlbums(
   return albumsSynced;
 }
 
+async function syncArtistPlaylists(
+  playlistFetcher: PlaylistFetcher,
+  artistExternalIds: string[],
+  maxArtists: number,
+): Promise<number> {
+  const targets = artistExternalIds.slice(0, Math.max(0, maxArtists));
+  let playlistsSynced = 0;
+
+  for (const artistExternalId of targets) {
+    try {
+      const playlists = await playlistFetcher.fetchArtistPlaylists(
+        artistExternalId,
+        MAX_PLAYLISTS_PER_ARTIST,
+      );
+
+      for (const playlist of playlists.slice(0, MAX_PLAYLISTS_PER_ARTIST)) {
+        try {
+          for (const track of playlist.tracks ?? []) {
+            await upsertArtist(track.artists[0], 'audius');
+            await upsertTrack(track, 'audius');
+          }
+
+          await upsertPlaylist(playlist, 'audius');
+          playlistsSynced++;
+        } catch (err) {
+          logger.warn('[audius-import] playlist sync: upsert failed', {
+            artistExternalId,
+            playlistExternalId: playlist.externalId,
+            err,
+          });
+        }
+      }
+    } catch (err) {
+      logger.warn('[audius-import] playlist sync: failed for artist', { artistExternalId, err });
+    }
+  }
+
+  return playlistsSynced;
+}
+
 // ── Fire-and-forget entry point ───────────────────────────────────────────────
 
 /**
@@ -219,9 +295,11 @@ export function enqueueAudiusImport(query: string, deps?: AudiusImportDeps): voi
   if (!query.trim()) return;
 
   const audius = new AudiusConnector();
+  const connector = deps?.connector ?? audius;
   const resolvedDeps: AudiusImportDeps = {
-    connector: audius,
-    albumFetcher: audius,
+    connector,
+    albumFetcher: deps?.albumFetcher ?? (isAlbumFetcher(connector) ? connector : undefined),
+    playlistFetcher: deps?.playlistFetcher ?? (isPlaylistFetcher(connector) ? connector : undefined),
     ...deps,
   };
 

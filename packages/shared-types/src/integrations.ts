@@ -40,6 +40,22 @@ export interface ExternalAlbum {
   trackExternalIds?: string[];
 }
 
+/** Minimal playlist data as returned by an external provider */
+export interface ExternalPlaylist {
+  name: string;
+  externalId: string;
+  images?: TrackImage[];
+  description?: string;
+  /** Single genre label inferred from playlist tracks, if available */
+  genre?: string;
+  /** Popularity signals (play/favorite/repost counts) */
+  popularity?: ExternalPopularity;
+  /** External identifiers of the playlist's member tracks, in track order */
+  trackExternalIds?: string[];
+  /** Full member tracks fetched with the playlist, used to fill catalog gaps */
+  tracks?: ExternalTrack[];
+}
+
 /** A track as returned by an external provider, prior to catalog normalization */
 export interface ExternalTrack {
   /** Which provider this track originates from */
