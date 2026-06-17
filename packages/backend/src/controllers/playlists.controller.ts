@@ -335,10 +335,8 @@ export const updatePlaylist = async (req: AuthRequest, res: Response, next: Next
         updateData.coverArt = coverArt;
         
         const colors = await getStoredImageColors(coverArt);
-        if (colors) {
-          updateData.primaryColor = colors.primaryColor;
-          updateData.secondaryColor = colors.secondaryColor;
-        }
+        updateData.primaryColor = colors?.primaryColor;
+        updateData.secondaryColor = colors?.secondaryColor;
       } else {
         updateData.coverArt = undefined;
         updateData.primaryColor = undefined;

@@ -4,7 +4,7 @@ import type { ITrack } from '../../models/Track';
 import { ArtistModel } from '../../models/Artist';
 import { upsertArtist } from './upsertArtist';
 import { playCountToPopularity } from './popularity';
-import { assignMissingColors, colorsFromImages } from './entityColors';
+import { assignMissingColors, colorsFromImages, firstImageUrl, replaceColors } from './entityColors';
 import { hasUsableImages, usableImages } from './externalImages';
 
 /**
@@ -26,10 +26,14 @@ function mergeImages(
   existing: TrackImage[] | undefined,
   incoming: TrackImage[] | undefined,
 ): TrackImage[] {
-  const base = existing ?? [];
-  if (!incoming?.length) return base;
-  const seen = new Set(base.map((img) => img.url));
-  return [...base, ...incoming.filter((img) => !seen.has(img.url))];
+  const merged: TrackImage[] = [];
+  const seen = new Set<string>();
+  for (const image of [...(incoming ?? []), ...(existing ?? [])]) {
+    if (seen.has(image.url)) continue;
+    seen.add(image.url);
+    merged.push(image);
+  }
+  return merged;
 }
 
 /** Derive the status for a newly-imported track based on its source. */
@@ -199,7 +203,10 @@ export async function upsertTrack(
 
   const releaseDate = parseReleaseDate(external.releaseDate);
   const playCount = external.popularity?.playCount;
-  const colors = (!existing || !existing.primaryColor || !existing.secondaryColor)
+  const incomingImageUrl = firstImageUrl(images);
+  const existingImageUrl = firstImageUrl(existing?.images);
+  const imageChanged = Boolean(existing && incomingImageUrl && incomingImageUrl !== existingImageUrl);
+  const colors = (!existing || imageChanged || !existing.primaryColor || !existing.secondaryColor)
     ? await colorsFromImages(images)
     : undefined;
 
@@ -251,7 +258,11 @@ export async function upsertTrack(
   }
   // Merge images — never shrink an existing non-empty array to empty.
   existing.images = mergeImages(existing.images, images);
-  assignMissingColors(existing, colors);
+  if (imageChanged) {
+    replaceColors(existing, colors);
+  } else {
+    assignMissingColors(existing, colors);
+  }
   // Only set streamUrl if not already present.
   if (external.streamUrl && !existing.streamUrl) {
     existing.streamUrl = external.streamUrl;

@@ -1,7 +1,7 @@
 import type { ExternalArtist, CatalogSource, SourceProvenance, TrackImage } from '@syra/shared-types';
 import { ArtistModel } from '../../models/Artist';
 import type { IArtist } from '../../models/Artist';
-import { assignMissingColors, colorsFromImages } from './entityColors';
+import { assignMissingColors, colorsFromImages, firstImageUrl, replaceColors } from './entityColors';
 import { hasUsableImages, usableImages } from './externalImages';
 
 /**
@@ -28,11 +28,14 @@ function mergeImages(
   existing: TrackImage[] | undefined,
   incoming: TrackImage[] | undefined,
 ): TrackImage[] {
-  const base = existing ?? [];
-  if (!incoming?.length) return base;
-  const seen = new Set(base.map((img) => img.url));
-  const additions = incoming.filter((img) => !seen.has(img.url));
-  return [...base, ...additions];
+  const merged: TrackImage[] = [];
+  const seen = new Set<string>();
+  for (const image of [...(incoming ?? []), ...(existing ?? [])]) {
+    if (seen.has(image.url)) continue;
+    seen.add(image.url);
+    merged.push(image);
+  }
+  return merged;
 }
 
 /**
@@ -74,7 +77,18 @@ export async function upsertArtist(
     return { artist: null, created: false };
   }
 
-  const needsColors = !existing || (!existing.ownerOxyUserId && (!existing.primaryColor || !existing.secondaryColor));
+  const incomingImageUrl = firstImageUrl(images);
+  const existingImageUrl = firstImageUrl(existing?.images);
+  const imageChanged = Boolean(
+    existing &&
+    !existing.ownerOxyUserId &&
+    incomingImageUrl &&
+    incomingImageUrl !== existingImageUrl,
+  );
+  const needsColors = !existing || (
+    !existing.ownerOxyUserId &&
+    (imageChanged || !existing.primaryColor || !existing.secondaryColor)
+  );
   const colors = needsColors ? await colorsFromImages(images) : undefined;
 
   const provenance = buildProvenance(
@@ -109,7 +123,11 @@ export async function upsertArtist(
   if (!existing.ownerOxyUserId) {
     if (external.name) existing.name = external.name;
     existing.images = mergeImages(existing.images, images);
-    assignMissingColors(existing, colors);
+    if (imageChanged) {
+      replaceColors(existing, colors);
+    } else {
+      assignMissingColors(existing, colors);
+    }
     if (source === 'audius' && external.externalId) {
       existing.externalIds = {
         ...(existing.externalIds ?? {}),

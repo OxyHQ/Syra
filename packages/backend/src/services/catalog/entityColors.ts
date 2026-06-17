@@ -40,3 +40,11 @@ export function assignMissingColors(
     target.secondaryColor = colors.secondaryColor;
   }
 }
+
+export function replaceColors(
+  target: EntityColorTarget,
+  colors: EntityColors | undefined,
+): void {
+  target.primaryColor = colors?.primaryColor;
+  target.secondaryColor = colors?.secondaryColor;
+}

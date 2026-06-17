@@ -8,7 +8,7 @@ import { PlaylistModel } from '../../models/Playlist';
 import type { IPlaylist } from '../../models/Playlist';
 import { PlaylistTrackModel } from '../../models/PlaylistTrack';
 import { TrackModel } from '../../models/Track';
-import { assignMissingColors, colorsFromImages } from './entityColors';
+import { assignMissingColors, colorsFromImages, replaceColors } from './entityColors';
 import { firstUsableImageUrl, usableImages } from './externalImages';
 
 const EXTERNAL_OWNER_ID = 'system:audius';
@@ -127,7 +127,8 @@ export async function upsertPlaylist(
   }
 
   const existing = await findExisting(source, external.externalId);
-  const colors = (!existing || !existing.primaryColor || !existing.secondaryColor)
+  const coverArtChanged = Boolean(existing && existing.coverArt !== coverArt);
+  const colors = (!existing || coverArtChanged || !existing.primaryColor || !existing.secondaryColor)
     ? await colorsFromImages(images)
     : undefined;
 
@@ -161,8 +162,12 @@ export async function upsertPlaylist(
   existing.sources = [...(existing.sources ?? []), provenance];
   if (external.name) existing.name = external.name;
   if (external.description) existing.description = external.description;
-  if (coverArt && !existing.coverArt) existing.coverArt = coverArt;
-  assignMissingColors(existing, colors);
+  existing.coverArt = coverArt;
+  if (coverArtChanged) {
+    replaceColors(existing, colors);
+  } else {
+    assignMissingColors(existing, colors);
+  }
   if (source === 'audius' && external.externalId && !existing.externalIds?.audiusId) {
     existing.externalIds = { ...(existing.externalIds ?? {}), audiusId: external.externalId };
   }

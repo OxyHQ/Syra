@@ -8,7 +8,7 @@ import type { IAlbum } from '../../models/Album';
 import { TrackModel } from '../../models/Track';
 import type { ITrack } from '../../models/Track';
 import { playCountToPopularity } from './popularity';
-import { assignMissingColors, colorsFromImages } from './entityColors';
+import { assignMissingColors, colorsFromImages, replaceColors } from './entityColors';
 import { firstUsableImageUrl, usableImages } from './externalImages';
 
 /** Minimal artist context needed to attach an album to its primary artist. */
@@ -141,7 +141,8 @@ export async function upsertAlbum(
   }
 
   const existing = await findExisting(source, external.externalId);
-  const colors = (!existing || !existing.primaryColor || !existing.secondaryColor)
+  const coverArtChanged = Boolean(existing && existing.coverArt !== coverArt);
+  const colors = (!existing || coverArtChanged || !existing.primaryColor || !existing.secondaryColor)
     ? await colorsFromImages(images)
     : undefined;
 
@@ -186,8 +187,12 @@ export async function upsertAlbum(
   existing.sources = [...(existing.sources ?? []), provenance];
   if (external.name) existing.title = external.name;
   if (external.releaseDate) existing.releaseDate = external.releaseDate;
-  if (coverArt && !existing.coverArt) existing.coverArt = coverArt;
-  assignMissingColors(existing, colors);
+  existing.coverArt = coverArt;
+  if (coverArtChanged) {
+    replaceColors(existing, colors);
+  } else {
+    assignMissingColors(existing, colors);
+  }
   if (external.genre && !existing.genre?.includes(external.genre)) {
     existing.genre = [...(existing.genre ?? []), external.genre];
   }
