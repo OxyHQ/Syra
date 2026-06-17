@@ -1,4 +1,4 @@
-import { pickImageUrl } from './pickImage';
+import { pickCatalogImageUrl, pickImageUrl } from './pickImage';
 import type { CatalogImageSizes, TrackImage } from '@syra/shared-types';
 
 const IMAGES: TrackImage[] = [
@@ -63,6 +63,12 @@ describe('pickImageUrl — size selection', () => {
     expect(pickImageUrl(undefined, FALLBACK, 64, SIZES)).toBe(`${API_IMAGES}/444444444444444444444444`);
     expect(pickImageUrl(undefined, FALLBACK, 240, SIZES)).toBe(`${API_IMAGES}/555555555555555555555555`);
     expect(pickImageUrl(undefined, FALLBACK, 500, SIZES)).toBe(`${API_IMAGES}/666666666666666666666666`);
+  });
+
+  it('supports semantic render targets backed by catalog variants', () => {
+    expect(pickCatalogImageUrl(undefined, FALLBACK, 'icon', SIZES)).toBe(`${API_IMAGES}/444444444444444444444444`);
+    expect(pickCatalogImageUrl(undefined, FALLBACK, 'card', SIZES)).toBe(`${API_IMAGES}/555555555555555555555555`);
+    expect(pickCatalogImageUrl(undefined, FALLBACK, 'hero', SIZES)).toBe(`${API_IMAGES}/666666666666666666666666`);
   });
 });
 

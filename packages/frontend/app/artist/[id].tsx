@@ -20,7 +20,7 @@ import { MediaCard } from '@/components/MediaCard';
 import { ResponsiveGrid } from '@/components/ResponsiveGrid';
 import { ArtistDetailSkeleton } from '@/components/skeletons';
 import { toast } from 'sonner';
-import { pickImageUrl } from '@/utils/pickImage';
+import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { useOxy } from '@oxyhq/services';
 import { useLibrary, useToggleFollowArtist } from '@/hooks/useLibrary';
 import { webViewStyle } from '@/utils/webStyles';
@@ -207,7 +207,7 @@ const ArtistScreen: React.FC = () => {
               <View style={[styles.stickyHeaderImageContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
                 {(artist.image || artist.images?.length) ? (
                   <Image
-                    source={{ uri: pickImageUrl(artist.images, artist.image, 64, artist.imageSizes) }}
+                    source={{ uri: pickCatalogImageUrl(artist.images, artist.image, 'icon', artist.imageSizes) }}
                     style={styles.stickyHeaderImage}
                     resizeMode="cover"
                   />
@@ -261,7 +261,7 @@ const ArtistScreen: React.FC = () => {
           <Animated.View style={[styles.headerContainer, headerAnimatedStyle]}>
             {(artist.image || artist.images?.length) ? (
               <Image
-                source={{ uri: pickImageUrl(artist.images, artist.image, 1000, artist.imageSizes) }}
+                source={{ uri: pickCatalogImageUrl(artist.images, artist.image, 'hero', artist.imageSizes) }}
                 style={styles.headerImage}
                 resizeMode="cover"
               />
@@ -295,7 +295,7 @@ const ArtistScreen: React.FC = () => {
               <View style={styles.infoHeader}>
                 {(artist.image || artist.images?.length) && (
                   <Image
-                    source={{ uri: pickImageUrl(artist.images, artist.image, 180, artist.imageSizes) }}
+                    source={{ uri: pickCatalogImageUrl(artist.images, artist.image, 'smallArtwork', artist.imageSizes) }}
                     style={styles.infoImage}
                     resizeMode="cover"
                   />
