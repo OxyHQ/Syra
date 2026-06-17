@@ -13,9 +13,6 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "composite": true,
-    "declaration": true,
-    "declarationMap": true,
     "sourceMap": true
   },
   "references": [
@@ -35,6 +32,5 @@
     "**/dist",
     "**/build",
     "**/.expo"
-  ],
-  "extends": "expo/tsconfig.base"
+  ]
 }

@@ -23,7 +23,7 @@ class PlayerSocketService {
       // Connect to player namespace
       this.socket = io(`${API_URL_SOCKET}/player`, {
         transports: ['websocket', 'polling'],
-        auth: token ? { token, userId } : (userId ? { userId } : undefined),
+        auth: token ? { token } : undefined,
         autoConnect: true,
         reconnection: true,
         reconnectionAttempts: 10,

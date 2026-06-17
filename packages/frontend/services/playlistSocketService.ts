@@ -27,7 +27,7 @@ class PlaylistSocketService {
       // Connect to playlists namespace
       this.socket = io(`${API_URL_SOCKET}/playlists`, {
         transports: ['websocket', 'polling'],
-        auth: token ? { token, userId } : (userId ? { userId } : undefined),
+        auth: token ? { token } : undefined,
         autoConnect: true,
         reconnection: true,
         reconnectionAttempts: 10,

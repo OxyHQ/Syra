@@ -320,26 +320,9 @@ docker build -t syra-api .
 docker run -p 3000:3000 -e MONGODB_URI=your_mongodb_uri syra-api
 ```
 
-### Cloud Deployment (Vercel)
-1. Configure `vercel.json`:
-```json
-{
-  "version": 2,
-  "builds": [{
-    "src": "dist/server.js",
-    "use": "@vercel/node"
-  }],
-  "routes": [{
-    "src": "/(.*)",
-    "dest": "dist/server.js"
-  }]
-}
-```
+### Cloud Deployment (AWS ECS)
 
-2. Deploy using Vercel CLI:
-```bash
-vercel --prod
-```
+See `AGENTS.md` for AWS ECS deployment with Fargate. The workflow at `.github/workflows/deploy-aws.yml` builds a `linux/arm64` Docker image, pushes to ECR, and deploys to ECS.
 
 ## Audio File Storage
 

@@ -155,13 +155,9 @@ bun run dev:backend
 
 All project documentation is available in the [`docs/`](./docs/) folder:
 
-- [Theming Guide](./docs/THEMING_REFACTOR_SUMMARY.md) - Complete theming system documentation
 - [Theme Quick Reference](./docs/THEME_QUICK_REFERENCE.md) - Quick reference for developers
 - [Theming Troubleshooting](./docs/THEMING_TROUBLESHOOTING.md) - Common theming issues and solutions
-- [Performance Optimizations](./docs/PERFORMANCE_OPTIMIZATIONS.md) - Performance best practices
 - [Performance Guide](./docs/PERFORMANCE_GUIDE.md) - Performance optimization guide
-- [Vercel Deployment](./docs/VERCEL_DEPLOYMENT.md) - Deployment guide for Vercel
-- [Code Cleanup Summary](./docs/CODE_CLEANUP_SUMMARY.md) - Code cleanup documentation
 
 ### API Documentation
 

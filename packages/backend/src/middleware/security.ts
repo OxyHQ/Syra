@@ -2,7 +2,7 @@ import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import slowDown from "express-slow-down";
 import type { RequestHandler } from "express";
 import { Request, Response } from "express";
-import { AuthRequest } from "../types/auth";
+import { AuthRequest } from "./auth";
 import { RedisStore } from "./rateLimitStore";
 
 // Create Redis store for distributed rate limiting
@@ -39,7 +39,7 @@ const rateLimiter = rateLimit({
 });
 
 // Brute force protection middleware (exclude file uploads)
-const bruteForceProtection: any = slowDown({
+const bruteForceProtection: RequestHandler = slowDown({
   windowMs: 15 * 60 * 1000, // 15 minutes
   delayAfter: (req: Request) => {
     const authReq = req as AuthRequest;
