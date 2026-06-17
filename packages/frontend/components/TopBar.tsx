@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, Pressable, Platform, ViewStyle, TextInput, Image } from 'react-native';
+import { StyleSheet, View, Text, Pressable, Platform, ViewStyle, TextInput, Image, ScrollView, GestureResponderEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { webViewStyle } from '@/utils/webStyles';
 import { useRouter, usePathname, useLocalSearchParams } from 'expo-router';
@@ -12,10 +12,24 @@ import { Logo } from './Logo';
 import { useMediaQuery } from 'react-responsive';
 import { artistService } from '@/services/artistService';
 import { searchService } from '@/services/searchService';
+import { musicService } from '@/services/musicService';
 import { searchRefetchInterval } from '@/utils/searchUtils';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { pickImageUrl } from '@/utils/pickImage';
 import { Album, Artist, Playlist, SearchCategory, SearchUser, Track } from '@syra/shared-types';
+import { usePlayerStore } from '@/stores/playerStore';
+
+type HeaderSearchItem = {
+  key: string;
+  section: 'Tracks' | 'Albums' | 'Artists' | 'Playlists' | 'Users';
+  title: string;
+  subtitle: string;
+  href: string;
+  imageUri?: string;
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  rounded?: boolean;
+  onPlay?: () => Promise<void> | void;
+};
 /**
  * Base visual height of the top bar (excluding the top safe-area inset, which
  * is added on top on native). Shared with the layout so panel height math stays
@@ -34,9 +48,11 @@ export const TopBar: React.FC = () => {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { user, isAuthenticated, oxyServices, showBottomSheet } = useOxy();
+  const { playTrackList } = usePlayerStore();
   const isMobile = useMediaQuery({ maxWidth: 767 });
   const [searchQuery, setSearchQuery] = useState(() => (pathname === '/search' && typeof q === 'string' ? q : ''));
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [activeSearchIndex, setActiveSearchIndex] = useState(-1);
 
   // Whether the signed-in user has an artist profile (decides dashboard vs. register).
   // Only runs while authenticated; when signed out the query is disabled and resolves
@@ -99,17 +115,20 @@ export const TopBar: React.FC = () => {
   const handleSearchChange = (query: string) => {
     setSearchQuery(query);
     setIsSearchOpen(true);
+    setActiveSearchIndex(-1);
   };
 
   const handleClearSearch = () => {
     setSearchQuery('');
     setIsSearchOpen(false);
+    setActiveSearchIndex(-1);
   };
 
   const handleBrowse = () => {
     setSearchQuery('');
     setIsSearchOpen(false);
-    router.push('/search');
+    setActiveSearchIndex(-1);
+    router.push('/browse');
   };
 
 
@@ -124,136 +143,244 @@ export const TopBar: React.FC = () => {
 
   const navigateFromSearch = (href: string) => {
     setIsSearchOpen(false);
+    setActiveSearchIndex(-1);
     router.push(href as any);
   };
 
-  const renderArtwork = (imageUri: string | undefined, icon: keyof typeof MaterialCommunityIcons.glyphMap, rounded = false) => (
+  const playAlbum = async (albumId: string, albumName?: string) => {
+    const { tracks } = await musicService.getAlbumTracks(albumId);
+    if (tracks.length > 0) {
+      await playTrackList(tracks, 0, { type: 'album', id: albumId, name: albumName });
+    }
+  };
+
+  const playPlaylist = async (playlistId: string, playlistName?: string) => {
+    const { tracks } = await musicService.getPlaylistTracks(playlistId);
+    if (tracks.length > 0) {
+      await playTrackList(tracks, 0, { type: 'playlist', id: playlistId, name: playlistName });
+    }
+  };
+
+  const playArtist = async (artistId: string, artistName?: string) => {
+    const { tracks } = await musicService.getArtistTracks(artistId, { limit: 50 });
+    if (tracks.length > 0) {
+      await playTrackList(tracks, 0, { type: 'artist', id: artistId, name: artistName });
+    }
+  };
+
+  const buildSearchItems = (): HeaderSearchItem[] => {
+    const results = headerSearchResults?.results;
+    const trimmedQuery = searchQuery.trim();
+    const trackItems = (results?.tracks ?? []).slice(0, 4).map((track: Track) => ({
+      key: `track-${track.id}`,
+      section: 'Tracks' as const,
+      title: track.title,
+      subtitle: track.artistName,
+      href: track.albumId ? `/album/${track.albumId}` : `/search?q=${encodeURIComponent(trimmedQuery)}`,
+      imageUri: pickImageUrl(track.images, track.coverArt, 64),
+      icon: 'music-note-outline' as const,
+      onPlay: () => {
+        const tracks = results?.tracks ?? [track];
+        const startIndex = Math.max(0, tracks.findIndex((item) => item.id === track.id));
+        return playTrackList(tracks, startIndex, { type: 'search', name: trimmedQuery });
+      },
+    }));
+    const albumItems = (results?.albums ?? []).slice(0, 3).map((album: Album) => ({
+      key: `album-${album.id}`,
+      section: 'Albums' as const,
+      title: album.title,
+      subtitle: album.artistName,
+      href: `/album/${album.id}`,
+      imageUri: album.coverArt,
+      icon: 'album' as const,
+      onPlay: () => playAlbum(album.id, album.title),
+    }));
+    const artistItems = (results?.artists ?? []).slice(0, 3).map((artist: Artist) => ({
+      key: `artist-${artist.id}`,
+      section: 'Artists' as const,
+      title: artist.name,
+      subtitle: 'Artist',
+      href: `/artist/${artist.id}`,
+      imageUri: pickImageUrl(artist.images, artist.image, 64),
+      icon: 'account-music-outline' as const,
+      rounded: true,
+      onPlay: () => playArtist(artist.id, artist.name),
+    }));
+    const playlistItems = (results?.playlists ?? []).slice(0, 2).map((playlist: Playlist) => ({
+      key: `playlist-${playlist.id}`,
+      section: 'Playlists' as const,
+      title: playlist.name,
+      subtitle: `Playlist - ${playlist.trackCount || 0} songs`,
+      href: `/playlist/${playlist.id}`,
+      imageUri: playlist.coverArt,
+      icon: 'playlist-music-outline' as const,
+      onPlay: () => playPlaylist(playlist.id, playlist.name),
+    }));
+    const userItems = (results?.users ?? []).slice(0, 2).map((searchUser: SearchUser) => ({
+      key: `user-${searchUser.id}`,
+      section: 'Users' as const,
+      title: searchUser.displayName,
+      subtitle: `@${searchUser.username}`,
+      href: `/u/${searchUser.username}`,
+      imageUri: searchUser.avatar ? oxyServices.getFileDownloadUrl(searchUser.avatar, 'thumb') : undefined,
+      icon: 'account-outline' as const,
+      rounded: true,
+    }));
+
+    return [...trackItems, ...albumItems, ...artistItems, ...playlistItems, ...userItems];
+  };
+
+  const searchItems = buildSearchItems();
+  const totalHeaderResults = headerSearchResults?.counts.total ?? 0;
+  const selectableSearchCount = totalHeaderResults > 0 ? searchItems.length + 1 : 0;
+
+  const activateSearchSelection = (index: number) => {
+    if (index < 0) {
+      handleSearchSubmit();
+      return;
+    }
+
+    if (index >= searchItems.length) {
+      handleSearchSubmit();
+      return;
+    }
+
+    navigateFromSearch(searchItems[index].href);
+  };
+
+  const handleSearchKeyPress = (event: any) => {
+    const key = event?.nativeEvent?.key;
+    const preventDefault = () => {
+      event?.preventDefault?.();
+      event?.nativeEvent?.preventDefault?.();
+    };
+
+    if (key === 'Escape') {
+      preventDefault();
+      setIsSearchOpen(false);
+      setActiveSearchIndex(-1);
+      return;
+    }
+
+    if (key === 'ArrowDown' && selectableSearchCount > 0) {
+      preventDefault();
+      setIsSearchOpen(true);
+      setActiveSearchIndex((current) => (current < 0 ? 0 : (current + 1) % selectableSearchCount));
+      return;
+    }
+
+    if (key === 'ArrowUp' && selectableSearchCount > 0) {
+      preventDefault();
+      setIsSearchOpen(true);
+      setActiveSearchIndex((current) => (current <= 0 ? selectableSearchCount - 1 : current - 1));
+      return;
+    }
+
+    if (key === 'Enter') {
+      preventDefault();
+      activateSearchSelection(activeSearchIndex);
+    }
+  };
+
+  const handleSearchItemPlay = async (item: HeaderSearchItem, event: GestureResponderEvent) => {
+    event.stopPropagation();
+    await item.onPlay?.();
+  };
+
+  const renderArtwork = (
+    item: HeaderSearchItem,
+    showPlayButton: boolean,
+  ) => (
     <View
       style={[
         styles.searchResultArtwork,
         {
           backgroundColor: theme.colors.backgroundTertiary,
-          borderRadius: rounded ? 18 : 6,
+          borderRadius: item.rounded ? 18 : 6,
         },
       ]}
     >
-      {imageUri ? (
-        <Image source={{ uri: imageUri }} style={[styles.searchResultImage, { borderRadius: rounded ? 18 : 6 }]} />
+      {item.imageUri ? (
+        <Image source={{ uri: item.imageUri }} style={[styles.searchResultImage, { borderRadius: item.rounded ? 18 : 6 }]} />
       ) : (
-        <MaterialCommunityIcons name={icon} size={18} color={theme.colors.textSecondary} />
+        <MaterialCommunityIcons name={item.icon} size={18} color={theme.colors.textSecondary} />
+      )}
+      {showPlayButton && item.onPlay && (
+        <Pressable
+          onPress={(event) => handleSearchItemPlay(item, event)}
+          style={styles.searchResultPlayOverlay}
+          accessibilityRole="button"
+          accessibilityLabel={`Play ${item.title}`}
+        >
+          <View style={[styles.searchResultPlayButton, { backgroundColor: theme.colors.primary }]}>
+            <MaterialCommunityIcons name="play" size={18} color={theme.colors.primaryForeground} />
+          </View>
+        </Pressable>
       )}
     </View>
   );
 
   const renderSearchResultRow = ({
-    key,
-    title,
-    subtitle,
-    imageUri,
-    icon,
-    rounded,
-    onPress,
+    item,
+    index,
   }: {
-    key: string;
-    title: string;
-    subtitle: string;
-    imageUri?: string;
-    icon: keyof typeof MaterialCommunityIcons.glyphMap;
-    rounded?: boolean;
-    onPress: () => void;
-  }) => (
-    <Pressable
-      key={key}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.searchResultRow,
-        pressed && { backgroundColor: theme.colors.backgroundTertiary },
-      ]}
-    >
-      {renderArtwork(imageUri, icon, rounded)}
-      <View style={styles.searchResultText}>
-        <Text style={[styles.searchResultTitle, { color: theme.colors.text }]} numberOfLines={1}>
-          {title}
-        </Text>
-        <Text style={[styles.searchResultSubtitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>
-          {subtitle}
-        </Text>
-      </View>
-    </Pressable>
-  );
+    item: HeaderSearchItem;
+    index: number;
+  }) => {
+    const isActive = activeSearchIndex === index;
+
+    return (
+      <Pressable
+        key={item.key}
+        onPress={() => navigateFromSearch(item.href)}
+        onHoverIn={() => setActiveSearchIndex(index)}
+        style={({ pressed }) => [
+          styles.searchResultRow,
+          (pressed || isActive) && { backgroundColor: theme.colors.backgroundTertiary },
+        ]}
+      >
+        {renderArtwork(item, isActive)}
+        <View style={styles.searchResultText}>
+          <Text style={[styles.searchResultTitle, { color: theme.colors.text }]} numberOfLines={1}>
+            {item.title}
+          </Text>
+          <Text style={[styles.searchResultSubtitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+            {item.subtitle}
+          </Text>
+        </View>
+      </Pressable>
+    );
+  };
 
   const renderSearchSection = (
-    title: string,
-    rows: React.ReactNode[],
+    title: HeaderSearchItem['section'],
   ) => {
-    if (rows.length === 0) return null;
+    const sectionItems = searchItems.filter((item) => item.section === title);
+    if (sectionItems.length === 0) return null;
 
     return (
       <View style={styles.searchResultSection}>
         <Text style={[styles.searchResultSectionTitle, { color: theme.colors.textSecondary }]}>{title}</Text>
-        {rows}
+        {sectionItems.map((item) => renderSearchResultRow({
+          item,
+          index: searchItems.findIndex((candidate) => candidate.key === item.key),
+        }))}
       </View>
     );
   };
 
   const renderSearchOverlay = () => {
-    const results = headerSearchResults?.results;
-    const totalResults = headerSearchResults?.counts.total ?? 0;
-    const trackRows = (results?.tracks ?? []).slice(0, 4).map((track: Track) => (
-      renderSearchResultRow({
-        key: `track-${track.id}`,
-        title: track.title,
-        subtitle: track.artistName,
-        imageUri: pickImageUrl(track.images, track.coverArt, 64),
-        icon: 'music-note-outline',
-        onPress: () => navigateFromSearch(track.albumId ? `/album/${track.albumId}` : `/search?q=${encodeURIComponent(searchQuery.trim())}`),
-      })
-    ));
-    const albumRows = (results?.albums ?? []).slice(0, 3).map((album: Album) => (
-      renderSearchResultRow({
-        key: `album-${album.id}`,
-        title: album.title,
-        subtitle: album.artistName,
-        imageUri: album.coverArt,
-        icon: 'album',
-        onPress: () => navigateFromSearch(`/album/${album.id}`),
-      })
-    ));
-    const artistRows = (results?.artists ?? []).slice(0, 3).map((artist: Artist) => (
-      renderSearchResultRow({
-        key: `artist-${artist.id}`,
-        title: artist.name,
-        subtitle: 'Artist',
-        imageUri: pickImageUrl(artist.images, artist.image, 64),
-        icon: 'account-music-outline',
-        rounded: true,
-        onPress: () => navigateFromSearch(`/artist/${artist.id}`),
-      })
-    ));
-    const playlistRows = (results?.playlists ?? []).slice(0, 2).map((playlist: Playlist) => (
-      renderSearchResultRow({
-        key: `playlist-${playlist.id}`,
-        title: playlist.name,
-        subtitle: `Playlist - ${playlist.trackCount || 0} songs`,
-        imageUri: playlist.coverArt,
-        icon: 'playlist-music-outline',
-        onPress: () => navigateFromSearch(`/playlist/${playlist.id}`),
-      })
-    ));
-    const userRows = (results?.users ?? []).slice(0, 2).map((searchUser: SearchUser) => (
-      renderSearchResultRow({
-        key: `user-${searchUser.id}`,
-        title: searchUser.displayName,
-        subtitle: `@${searchUser.username}`,
-        imageUri: searchUser.avatar ? oxyServices.getFileDownloadUrl(searchUser.avatar, 'thumb') : undefined,
-        icon: 'account-outline',
-        rounded: true,
-        onPress: () => navigateFromSearch(`/u/${searchUser.username}`),
-      })
-    ));
+    const totalResults = totalHeaderResults;
+    const viewAllIndex = searchItems.length;
+    const isViewAllActive = activeSearchIndex === viewAllIndex;
 
     return (
-      <View style={styles.searchOverlay}>
+      <ScrollView
+        style={styles.searchOverlay}
+        contentContainerStyle={styles.searchOverlayContent}
+        keyboardShouldPersistTaps="handled"
+        nestedScrollEnabled
+      >
         {isHeaderSearchLoading && (
           <Text style={[styles.searchOverlayStateText, { color: theme.colors.textSecondary }]}>
             Searching...
@@ -266,16 +393,17 @@ export const TopBar: React.FC = () => {
         )}
         {!isHeaderSearchLoading && totalResults > 0 && (
           <>
-            {renderSearchSection('Tracks', trackRows)}
-            {renderSearchSection('Albums', albumRows)}
-            {renderSearchSection('Artists', artistRows)}
-            {renderSearchSection('Playlists', playlistRows)}
-            {renderSearchSection('Users', userRows)}
+            {renderSearchSection('Tracks')}
+            {renderSearchSection('Albums')}
+            {renderSearchSection('Artists')}
+            {renderSearchSection('Playlists')}
+            {renderSearchSection('Users')}
             <Pressable
               onPress={handleSearchSubmit}
+              onHoverIn={() => setActiveSearchIndex(viewAllIndex)}
               style={({ pressed }) => [
                 styles.viewAllButton,
-                pressed && { backgroundColor: theme.colors.backgroundTertiary },
+                (pressed || isViewAllActive) && { backgroundColor: theme.colors.backgroundTertiary },
               ]}
             >
               <Text style={[styles.viewAllText, { color: theme.colors.primary }]}>View all results</Text>
@@ -283,7 +411,7 @@ export const TopBar: React.FC = () => {
             </Pressable>
           </>
         )}
-      </View>
+      </ScrollView>
     );
   };
 
@@ -316,6 +444,7 @@ export const TopBar: React.FC = () => {
             value={searchQuery}
             onFocus={handleSearch}
             onChangeText={handleSearchChange}
+            onKeyPress={handleSearchKeyPress}
             onSubmitEditing={handleSearchSubmit}
             returnKeyType="search"
           />
@@ -564,10 +693,11 @@ const styles = StyleSheet.create({
     height: 22,
   },
   searchOverlay: {
+    maxHeight: 500,
+  },
+  searchOverlayContent: {
     paddingHorizontal: 8,
     paddingBottom: 8,
-    maxHeight: 560,
-    overflow: 'hidden',
   },
   searchOverlayStateText: {
     fontSize: 14,
@@ -604,10 +734,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+    position: 'relative',
   },
   searchResultImage: {
     width: '100%',
     height: '100%',
+  },
+  searchResultPlayOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.42)',
+  },
+  searchResultPlayButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+      },
+    }),
   },
   searchResultText: {
     flex: 1,

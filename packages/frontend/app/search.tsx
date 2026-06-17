@@ -156,7 +156,7 @@ const SearchScreen: React.FC = () => {
   }, [router]);
 
   const handleBrowse = useCallback(() => {
-    router.replace('/search');
+    router.push('/browse');
   }, [router]);
 
   const getUserAvatarUri = useCallback((avatar?: string) => {

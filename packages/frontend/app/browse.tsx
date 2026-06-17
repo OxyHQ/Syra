@@ -1,0 +1,90 @@
+import React, { useCallback, useMemo } from 'react';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import { useQuery } from '@tanstack/react-query';
+import { useTheme } from '@oxyhq/bloom/theme';
+import { useRouter } from 'expo-router';
+import SEO from '@/components/SEO';
+import { ExploreSection } from '@/components/ExploreSection';
+import { GenreCard } from '@/components/GenreCard';
+import { ResponsiveGrid } from '@/components/ResponsiveGrid';
+import { GenreGridSkeleton } from '@/components/skeletons';
+import { browseService } from '@/services/browseService';
+import { usePlayerStore } from '@/stores/playerStore';
+
+const BrowseScreen: React.FC = () => {
+  const theme = useTheme();
+  const router = useRouter();
+  const { playTrackList } = usePlayerStore();
+
+  const { data: genresData, isLoading: genresLoading } = useQuery({
+    queryKey: ['browse', 'genres'],
+    queryFn: () => browseService.getGenres(),
+    staleTime: 1000 * 60 * 10,
+  });
+
+  const genres = useMemo(() => genresData?.genres || [], [genresData]);
+
+  const handleGenreClick = useCallback((genreName: string) => {
+    router.push({ pathname: '/search', params: { q: genreName } });
+  }, [router]);
+
+  const handleGenrePlay = useCallback(async (genreName: string) => {
+    const { tracks } = await browseService.getGenreTracks(genreName, { limit: 50 });
+    if (tracks.length > 0) {
+      playTrackList(tracks, 0, { type: 'search', id: genreName, name: genreName });
+    }
+  }, [playTrackList]);
+
+  return (
+    <>
+      <SEO
+        title="Browse - Syra"
+        description="Browse music by genre"
+      />
+      <ScrollView
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.content}>
+          <ExploreSection
+            title="Browse all"
+            isLoading={genresLoading}
+            isEmpty={genres.length === 0}
+            emptyMessage="No genres available"
+            loadingSkeleton={<GenreGridSkeleton count={16} />}
+          >
+            <ResponsiveGrid minItemWidth={160} gap={12}>
+              {genres.map((genre) => (
+                <View key={genre.name}>
+                  <GenreCard
+                    name={genre.name}
+                    color={genre.color}
+                    coverArt={genre.coverArt || undefined}
+                    onPress={() => handleGenreClick(genre.name)}
+                    onPlayPress={() => handleGenrePlay(genre.name)}
+                  />
+                </View>
+              ))}
+            </ResponsiveGrid>
+          </ExploreSection>
+        </View>
+      </ScrollView>
+    </>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  contentContainer: {
+    paddingTop: 18,
+    paddingBottom: 100,
+  },
+  content: {
+    paddingHorizontal: 18,
+  },
+});
+
+export default BrowseScreen;
