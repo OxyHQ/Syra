@@ -81,6 +81,7 @@ export const TopBar: React.FC = () => {
 
   // Subtle raised pill behind the active nav icon, derived from the theme.
   const activeButtonStyle: ViewStyle = { ...styles.activeButton, backgroundColor: theme.colors.backgroundTertiary };
+  const navIconColor = theme.colors.text;
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 250);
   const hasHeaderSearchQuery = debouncedSearchQuery.trim().length > 0;
 
@@ -496,7 +497,7 @@ export const TopBar: React.FC = () => {
       <View style={[styles.container, styles.mobileContainer, safeAreaStyle]}>
         <Pressable onPress={handleHome} style={styles.mobileLogoContainer}>
           <View pointerEvents="none">
-            <Logo />
+            <Logo color={navIconColor} />
           </View>
         </Pressable>
         <View style={styles.mobileRightSection}>
@@ -512,7 +513,7 @@ export const TopBar: React.FC = () => {
       <View style={styles.leftSection}>
         <Pressable onPress={handleHome} style={styles.logoContainer}>
           <View pointerEvents="none">
-            <Logo />
+            <Logo color={navIconColor} />
           </View>
         </Pressable>
       </View>
@@ -527,7 +528,7 @@ export const TopBar: React.FC = () => {
             <MaterialCommunityIcons 
               name={pathname === '/' ? 'home' : 'home-outline'} 
               size={24} 
-              color={pathname === '/' ? theme.colors.primary : theme.colors.text} 
+              color={navIconColor} 
             />
           </Pressable>
           

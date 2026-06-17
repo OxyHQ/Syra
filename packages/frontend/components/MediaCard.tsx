@@ -2,10 +2,10 @@ import React from 'react';
 import { StyleSheet, View, Text, Image, Pressable, Platform, GestureResponderEvent } from 'react-native';
 import { webViewStyle } from '@/utils/webStyles';
 import { useTheme } from '@oxyhq/bloom/theme';
+import { Menu } from '@oxyhq/bloom';
 import { Ionicons } from '@expo/vector-icons';
 import type { TrackImage } from '@syra/shared-types';
 import { pickImageUrl } from '@/utils/pickImage';
-import { Menu, MenuOptions, MenuOption, MenuTrigger } from 'react-native-popup-menu';
 
 interface MediaCardProps {
   title: string;
@@ -114,6 +114,94 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
     e?.stopPropagation?.();
     onPlayPress?.();
   };
+
+  const renderMenuIcon = (name: React.ComponentProps<typeof Ionicons>['name']) => (
+    <Ionicons name={name} size={18} color={theme.colors.textSecondary} />
+  );
+
+  const renderActionsMenu = () => {
+    if (!hasMenu) return null;
+
+    return (
+      <View style={styles.menuContainer}>
+        <Menu.Root>
+          <Menu.Trigger label={`More actions for ${title}`}>
+            {({ props, state }) => (
+              <Pressable
+                {...props}
+                onPress={(event) => {
+                  event.stopPropagation?.();
+                  props.onPress?.();
+                }}
+                style={[
+                  styles.menuTrigger,
+                  {
+                    backgroundColor: state.focused || state.pressed
+                      ? theme.colors.backgroundTertiary
+                      : theme.colors.backgroundSecondary,
+                  },
+                ]}
+              >
+                <Ionicons name="ellipsis-horizontal" size={18} color={theme.colors.textSecondary} />
+              </Pressable>
+            )}
+          </Menu.Trigger>
+          <Menu.Outer style={styles.menuOptions}>
+            <Menu.Group>
+              {onPress && (
+                <Menu.Item
+                  label="Open"
+                  onPress={(event) => {
+                    event.stopPropagation?.();
+                    onPress();
+                  }}
+                >
+                  {renderMenuIcon('open-outline')}
+                  <Menu.ItemText>Open</Menu.ItemText>
+                </Menu.Item>
+              )}
+              {onAddToQueue && (
+                <Menu.Item
+                  label="Add to queue"
+                  onPress={(event) => {
+                    event.stopPropagation?.();
+                    onAddToQueue();
+                  }}
+                >
+                  {renderMenuIcon('list-outline')}
+                  <Menu.ItemText>Add to queue</Menu.ItemText>
+                </Menu.Item>
+              )}
+              {onGoToAlbum && (
+                <Menu.Item
+                  label="Go to album"
+                  onPress={(event) => {
+                    event.stopPropagation?.();
+                    onGoToAlbum();
+                  }}
+                >
+                  {renderMenuIcon('disc-outline')}
+                  <Menu.ItemText>Go to album</Menu.ItemText>
+                </Menu.Item>
+              )}
+              {onGoToArtist && (
+                <Menu.Item
+                  label="Go to artist"
+                  onPress={(event) => {
+                    event.stopPropagation?.();
+                    onGoToArtist();
+                  }}
+                >
+                  {renderMenuIcon('person-outline')}
+                  <Menu.ItemText>Go to artist</Menu.ItemText>
+                </Menu.Item>
+              )}
+            </Menu.Group>
+          </Menu.Outer>
+        </Menu.Root>
+      </View>
+    );
+  };
   
   const handleCardHoverOut = () => {
     // Only set hover to false if play button is not hovered
@@ -180,66 +268,19 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
             </View>
           </Pressable>
         )}
-        {hasMenu && (
-          <View style={styles.menuContainer}>
-            <Menu>
-              <MenuTrigger
-                customStyles={{
-                  TriggerTouchableComponent: Pressable,
-                  triggerWrapper: [
-                    styles.menuTrigger,
-                    { backgroundColor: 'rgba(0, 0, 0, 0.55)' },
-                  ],
-                }}
-              >
-                <Ionicons name="ellipsis-horizontal" size={18} color="#FFFFFF" />
-              </MenuTrigger>
-              <MenuOptions
-                customStyles={{
-                  optionsContainer: [
-                    styles.menuOptions,
-                    { backgroundColor: theme.colors.backgroundTertiary },
-                  ],
-                }}
-              >
-                {onPress && (
-                  <MenuOption onSelect={onPress} customStyles={{ optionWrapper: styles.menuOption }}>
-                    <Ionicons name="open-outline" size={18} color={theme.colors.text} />
-                    <Text style={[styles.menuOptionText, { color: theme.colors.text }]}>Open</Text>
-                  </MenuOption>
-                )}
-                {onAddToQueue && (
-                  <MenuOption onSelect={onAddToQueue} customStyles={{ optionWrapper: styles.menuOption }}>
-                    <Ionicons name="list-outline" size={18} color={theme.colors.text} />
-                    <Text style={[styles.menuOptionText, { color: theme.colors.text }]}>Add to queue</Text>
-                  </MenuOption>
-                )}
-                {onGoToAlbum && (
-                  <MenuOption onSelect={onGoToAlbum} customStyles={{ optionWrapper: styles.menuOption }}>
-                    <Ionicons name="disc-outline" size={18} color={theme.colors.text} />
-                    <Text style={[styles.menuOptionText, { color: theme.colors.text }]}>Go to album</Text>
-                  </MenuOption>
-                )}
-                {onGoToArtist && (
-                  <MenuOption onSelect={onGoToArtist} customStyles={{ optionWrapper: styles.menuOption }}>
-                    <Ionicons name="person-outline" size={18} color={theme.colors.text} />
-                    <Text style={[styles.menuOptionText, { color: theme.colors.text }]}>Go to artist</Text>
-                  </MenuOption>
-                )}
-              </MenuOptions>
-            </Menu>
-          </View>
-        )}
       </View>
 
       {/* Text Content */}
       <View style={styles.textContainer}>
-        <Text 
-          style={[styles.title, { color: theme.colors.text }]} 
-          numberOfLines={2}
-        >
-          {title}
-        </Text>
+        <View style={styles.titleRow}>
+          <Text
+            style={[styles.title, { color: theme.colors.text }]}
+            numberOfLines={2}
+          >
+            {title}
+          </Text>
+          {renderActionsMenu()}
+        </View>
         {subtitle && (
           <Text 
             style={[styles.subtitle, { color: theme.colors.textSecondary }]} 
@@ -312,15 +353,14 @@ const styles = StyleSheet.create({
     transform: [{ translateY: 8 }], // Slight offset like Spotify
   },
   menuContainer: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    zIndex: 4,
+    position: 'relative',
+    flexShrink: 0,
+    zIndex: 10,
   },
   menuTrigger: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     ...Platform.select({
@@ -329,26 +369,26 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  menuOptions: {
-    borderRadius: 8,
-    paddingVertical: 4,
-    minWidth: 180,
-  },
-  menuOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  menuOptionText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
+  menuOptions: webViewStyle({
+    ...Platform.select({
+      web: {
+        position: 'absolute',
+        top: 32,
+        right: 0,
+        zIndex: 20,
+      },
+    }),
+  }),
   textContainer: {
     minHeight: 42,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+  },
   title: {
+    flex: 1,
     fontSize: 15,
     fontWeight: '600',
     marginBottom: 2,

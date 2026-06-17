@@ -5,20 +5,25 @@ import { useRouter } from "expo-router";
 import { LogoIcon } from "@/assets/logo";
 import { useTheme } from '@oxyhq/bloom/theme';
 
-export const Logo = () => {
+interface LogoProps {
+  color?: string;
+}
+
+export const Logo = ({ color }: LogoProps) => {
   const router = useRouter();
   const theme = useTheme();
+  const logoColor = color ?? theme.colors.primary;
 
   return (
     <Pressable
       onPress={() => router.push("/")}
       style={({ pressed }) => [
-        pressed ? { backgroundColor: `${theme.colors.primary}33` } : {},
+        pressed ? { backgroundColor: `${logoColor}33` } : {},
         styles.container,
       ]}>
       <View style={styles.logo}>
         <LogoIcon style={styles.logoSvg} size={27}
-          color={theme.colors.primary} />
+          color={logoColor} />
       </View>
     </Pressable>
   );

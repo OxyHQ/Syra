@@ -148,7 +148,7 @@ const HomeScreen: React.FC = () => {
 
     const animation = Animated.timing(gradientOpacity, {
       toValue: 1,
-      duration: 280,
+      duration: 420,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     });
