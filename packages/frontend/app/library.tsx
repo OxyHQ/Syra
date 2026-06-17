@@ -16,7 +16,6 @@ import { useOxy } from '@oxyhq/services';
 import { Playlist, Album, Artist } from '@syra/shared-types';
 import { Image } from 'expo-image';
 import { pickImageUrl } from '@/utils/pickImage';
-import { colorWithAlpha } from '@/utils/color';
 
 /**
  * Bottom offset (in px) for the Create Playlist FAB. Clears the floating
@@ -88,7 +87,6 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
 
   // Filter state
   const [activeFilter, setActiveFilter] = useState<'Playlists' | 'Artists' | 'Albums' | 'All'>('All');
-  const [hoveredLibraryItem, setHoveredLibraryItem] = useState<string | null>(null);
 
   // Use props if provided (sidebar mode), otherwise fetch via the shared
   // React Query library layer (standalone mode). The collections derive from
@@ -103,11 +101,6 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   const finalLikedTracksCount = isUsingProps ? (propsLikedTracksCount || 0) : collections.likedTracksCount;
   const finalLoading = isUsingProps ? (propsLoading ?? false) : collections.loading;
   const finalError = isUsingProps ? (propsError ?? null) : collections.error;
-  const getLibraryItemBackground = (key: string) => (
-    hoveredLibraryItem === key
-      ? colorWithAlpha(theme.colors.primary, theme.isDark ? 0.22 : 0.12) ?? theme.colors.backgroundSecondary
-      : theme.colors.backgroundTertiary
-  );
 
   return (
     <>
@@ -187,10 +180,8 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         {/* Liked Songs - show only when All or Playlists filter is active */}
         {isAuthenticated && (activeFilter === 'All' || activeFilter === 'Playlists') && (
           <Pressable 
-            style={[styles.libraryItem, { backgroundColor: getLibraryItemBackground('liked-songs') }]}
+            style={[styles.libraryItem, { backgroundColor: theme.colors.backgroundTertiary }]}
             onPress={() => router.push('/library/liked')}
-            onHoverIn={() => setHoveredLibraryItem('liked-songs')}
-            onHoverOut={() => setHoveredLibraryItem(null)}
           >
             <View style={[styles.likedIcon, { backgroundColor: theme.colors.primary }]}>
               <Ionicons name="heart" size={24} color={theme.colors.primaryForeground} />
@@ -237,10 +228,8 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
               {finalPlaylists.map((playlist) => (
                 <Pressable
                   key={playlist.id}
-                  style={[styles.libraryItem, { backgroundColor: getLibraryItemBackground(`playlist-${playlist.id}`) }]}
+                  style={[styles.libraryItem, { backgroundColor: theme.colors.backgroundTertiary }]}
                   onPress={() => router.push(`/playlist/${playlist.id}`)}
-                  onHoverIn={() => setHoveredLibraryItem(`playlist-${playlist.id}`)}
-                  onHoverOut={() => setHoveredLibraryItem(null)}
                 >
                   {playlist.coverArt ? (
                     <Image
@@ -279,10 +268,8 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
               {finalFollowedArtists.map((artist) => (
                 <Pressable
                   key={artist.id}
-                  style={[styles.libraryItem, { backgroundColor: getLibraryItemBackground(`artist-${artist.id}`) }]}
+                  style={[styles.libraryItem, { backgroundColor: theme.colors.backgroundTertiary }]}
                   onPress={() => router.push(`/artist/${artist.id}`)}
-                  onHoverIn={() => setHoveredLibraryItem(`artist-${artist.id}`)}
-                  onHoverOut={() => setHoveredLibraryItem(null)}
                 >
                   {(artist.image || artist.images?.length) ? (
                     <Image
@@ -321,10 +308,8 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
               {finalSavedAlbums.map((album) => (
                 <Pressable
                   key={album.id}
-                  style={[styles.libraryItem, { backgroundColor: getLibraryItemBackground(`album-${album.id}`) }]}
+                  style={[styles.libraryItem, { backgroundColor: theme.colors.backgroundTertiary }]}
                   onPress={() => router.push(`/album/${album.id}`)}
-                  onHoverIn={() => setHoveredLibraryItem(`album-${album.id}`)}
-                  onHoverOut={() => setHoveredLibraryItem(null)}
                 >
                   {album.coverArt ? (
                     <Image
@@ -486,12 +471,6 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 6,
     marginBottom: 8,
-    ...Platform.select({
-      web: {
-        cursor: 'pointer',
-        transition: 'background-color 0.2s',
-      },
-    }),
   },
   likedIcon: {
     width: 48,
@@ -577,3 +556,4 @@ const styles = StyleSheet.create({
 });
 
 export default LibraryScreen;
+

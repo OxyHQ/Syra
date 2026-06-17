@@ -24,7 +24,6 @@ import { createScopedLogger } from '@/utils/logger';
 import { Ionicons } from '@expo/vector-icons';
 import { pickImageUrl } from '@/utils/pickImage';
 import { toast } from '@/lib/sonner';
-import { colorWithAlpha } from '@/utils/color';
 
 const logger = createScopedLogger('HomeScreen');
 
@@ -112,7 +111,6 @@ const HomeScreen: React.FC = () => {
   // State for hover gradient color with smooth transitions
   const [hoveredItemColor, setHoveredItemColor] = useState<string | null>(null);
   const [displayGradientColor, setDisplayGradientColor] = useState<string | null>(null);
-  const [hoveredQuickAccessId, setHoveredQuickAccessId] = useState<string | null>(null);
   const currentDisplayColorRef = useRef<string | null>(null);
   const animationFrameRef = useRef<number | null>(null);
 
@@ -396,11 +394,13 @@ const HomeScreen: React.FC = () => {
         title="Syra - Music Streaming"
         description="Discover and play your favorite music"
       />
-      <LinearGradient
-        colors={[getGradientTopColor(), theme.colors.background]}
-        locations={[0, 0.2]}
-        style={styles.gradientContainer}
-      >
+      <View style={[styles.gradientContainer, { backgroundColor: theme.colors.background }]}>
+        <LinearGradient
+          colors={[getGradientTopColor(), theme.colors.background]}
+          locations={[0, 1]}
+          pointerEvents="none"
+          style={styles.fixedGradient}
+        />
         <ScrollView
           style={[styles.scrollView, { backgroundColor: 'transparent' }]}
           contentContainerStyle={[
@@ -426,7 +426,6 @@ const HomeScreen: React.FC = () => {
                 const id = item.data.id;
                 const itemKey = `${item.type}-${id}`;
                 const primaryColor = item.data.primaryColor;
-                const isHovered = hoveredQuickAccessId === itemKey;
                 const imageUri =
                   item.type === 'album'
                     ? item.data.coverArt
@@ -437,17 +436,7 @@ const HomeScreen: React.FC = () => {
                 return (
                   <Pressable
                     key={itemKey}
-                    style={[
-                      styles.compactGridItem,
-                      {
-                        backgroundColor: isHovered
-                          ? colorWithAlpha(theme.colors.primary, theme.isDark ? 0.24 : 0.14)
-                          : theme.colors.backgroundSecondary,
-                        borderColor: isHovered
-                          ? colorWithAlpha(theme.colors.primary, theme.isDark ? 0.38 : 0.28)
-                          : 'transparent',
-                      },
-                    ]}
+                    style={[styles.compactGridItem, { backgroundColor: theme.colors.backgroundSecondary }]}
                     onPress={() => {
                       if (item.type === 'album') {
                         router.push(`/album/${id}`);
@@ -457,14 +446,8 @@ const HomeScreen: React.FC = () => {
                         router.push(`/artist/${id}`);
                       }
                     }}
-                    onHoverIn={() => {
-                      setHoveredQuickAccessId(itemKey);
-                      handleHoverIn(primaryColor);
-                    }}
-                    onHoverOut={() => {
-                      setHoveredQuickAccessId(null);
-                      handleHoverOut();
-                    }}
+                    onHoverIn={() => handleHoverIn(primaryColor)}
+                    onHoverOut={handleHoverOut}
                   >
                     <View
                       style={[
@@ -546,6 +529,8 @@ const HomeScreen: React.FC = () => {
                       onAddToQueue={() => addTrackToQueue(track)}
                       onGoToAlbum={track.albumId ? () => router.push(`/album/${track.albumId}`) : undefined}
                       onGoToArtist={() => router.push(`/artist/${track.artistId}`)}
+                      onHoverIn={() => handleHoverIn(track.primaryColor)}
+                      onHoverOut={handleHoverOut}
                     />
                   </View>
                 ))}
@@ -731,6 +716,8 @@ const HomeScreen: React.FC = () => {
                       onAddToQueue={() => addTrackToQueue(track)}
                       onGoToAlbum={track.albumId ? () => router.push(`/album/${track.albumId}`) : undefined}
                       onGoToArtist={() => router.push(`/artist/${track.artistId}`)}
+                      onHoverIn={() => handleHoverIn(track.primaryColor)}
+                      onHoverOut={handleHoverOut}
                     />
                   </View>
                 ))}
@@ -738,7 +725,7 @@ const HomeScreen: React.FC = () => {
             </View>
           )}
         </ScrollView>
-      </LinearGradient>
+      </View>
     </>
   );
 };
@@ -746,6 +733,14 @@ const HomeScreen: React.FC = () => {
 const styles = StyleSheet.create({
   gradientContainer: {
     flex: 1,
+    overflow: 'hidden',
+  },
+  fixedGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 360,
     ...Platform.select({
       web: {
         transition: 'all 0.3s ease',
@@ -776,15 +771,8 @@ const styles = StyleSheet.create({
   compactGridItem: {
     flexDirection: 'row',
     padding: 4,
-    borderWidth: 1,
     borderRadius: 12,
     alignItems: 'center',
-    ...Platform.select({
-      web: {
-        cursor: 'pointer',
-        transition: 'background-color 0.2s, border-color 0.2s',
-      },
-    }),
   },
   compactImageContainer: {
     width: 40,
