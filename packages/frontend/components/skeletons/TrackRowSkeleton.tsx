@@ -27,7 +27,11 @@ export const TrackRowSkeleton: React.FC<TrackRowSkeletonProps> = React.memo(
             <Skeleton.Box width="35%" height={14} borderRadius={4} />
           </View>
         </View>
-        <Skeleton.Box width={40} height={14} borderRadius={4} />
+        <View style={styles.trackRowRight}>
+          <Skeleton.Circle size={18} />
+          <Skeleton.Circle size={20} />
+          <Skeleton.Box width={50} height={14} borderRadius={4} />
+        </View>
       </View>
     );
   },
@@ -47,7 +51,7 @@ interface TrackListSkeletonProps {
 export const TrackListSkeleton: React.FC<TrackListSkeletonProps> = React.memo(
   ({ count = 6, showNumber = true }) => {
     return (
-      <View>
+      <View style={styles.trackList}>
         <Repeat count={count} render={() => <TrackRowSkeleton showNumber={showNumber} />} />
       </View>
     );
@@ -63,6 +67,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     paddingHorizontal: 8,
+    borderRadius: 4,
     minHeight: 48,
   },
   // Mirrors TrackRow.styles.trackRowLeft.
@@ -84,5 +89,13 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     gap: 6,
+  },
+  trackRowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  trackList: {
+    gap: 4,
   },
 });

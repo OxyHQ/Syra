@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import * as Skeleton from '@oxyhq/bloom/skeleton';
+import { useTheme } from '@oxyhq/bloom/theme';
 import { Repeat } from './Repeat';
 
 interface LibraryItemSkeletonProps {
@@ -14,8 +15,10 @@ interface LibraryItemSkeletonProps {
  */
 export const LibraryItemSkeleton: React.FC<LibraryItemSkeletonProps> =
   React.memo(({ shape = 'square' }) => {
+    const theme = useTheme();
+
     return (
-      <View style={styles.libraryItem}>
+      <View style={[styles.libraryItem, { backgroundColor: theme.colors.backgroundTertiary }]}>
         {shape === 'circle' ? (
           <Skeleton.Circle size={48} />
         ) : (
@@ -54,6 +57,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     padding: 8,
+    borderRadius: 6,
     marginBottom: 8,
   },
   // Mirrors library.styles.itemContent with line spacing.

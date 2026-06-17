@@ -142,13 +142,16 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({
           {isLoading ? (
             <View style={styles.skeletonList}>
               {Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton.Box
+                <View
                   key={i}
-                  width="100%"
-                  height={56}
-                  borderRadius={8}
-                  style={styles.skeletonRow}
-                />
+                  style={[styles.skeletonRow, { backgroundColor: theme.colors.backgroundSecondary }]}
+                >
+                  <Skeleton.Circle size={36} />
+                  <View style={styles.skeletonDeviceInfo}>
+                    <Skeleton.Box width="55%" height={14} borderRadius={4} />
+                    <Skeleton.Box width="35%" height={12} borderRadius={4} />
+                  </View>
+                </View>
               ))}
             </View>
           ) : devices.length === 0 ? (
@@ -205,7 +208,17 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   skeletonRow: {
-    marginBottom: 0,
+    minHeight: 56,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  skeletonDeviceInfo: {
+    flex: 1,
+    minWidth: 0,
+    gap: 6,
   },
   emptyText: {
     textAlign: 'center',

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
 import { useTheme } from '@oxyhq/bloom/theme';
+import * as Skeleton from '@oxyhq/bloom/skeleton';
 import Avatar from './Avatar';
 
 /**
@@ -82,16 +83,7 @@ export function AvatarStack({
               style={styles.avatar}
             />
           ) : (
-            <View
-              style={[
-                styles.skeleton,
-                {
-                  width: size - 2,
-                  height: size - 2,
-                  backgroundColor: theme.colors.borderLight,
-                },
-              ]}
-            />
+            <Skeleton.Circle size={size - 2} />
           )}
         </View>
       ))}
@@ -114,8 +106,4 @@ const styles = StyleSheet.create({
   avatar: {
     borderRadius: 999,
   },
-  skeleton: {
-    borderRadius: 999,
-  },
 });
-

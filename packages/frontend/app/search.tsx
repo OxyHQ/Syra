@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { StyleSheet, View, TextInput, Text, ScrollView, Platform, Pressable } from 'react-native';
+import { StyleSheet, View, TextInput, Text, ScrollView, Pressable } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { useOxy } from '@oxyhq/services';
@@ -19,6 +19,7 @@ import { ExploreSection } from '@/components/ExploreSection';
 import { GenreGridSkeleton, MediaCardRowSkeleton, TrackListSkeleton } from '@/components/skeletons';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { useMediaQuery } from 'react-responsive';
 
 /**
  * Syra Search Screen
@@ -28,10 +29,11 @@ const SearchScreen: React.FC = () => {
   const theme = useTheme();
   const router = useRouter();
   const { oxyServices } = useOxy();
+  const isMobile = useMediaQuery({ maxWidth: 767 });
   const { playTrackList, currentTrack, isPlaying } = usePlayerStore();
   // Seed the search box from a `?q=` deep link (e.g. tapping a #hashtag / @mention).
   const { q } = useLocalSearchParams<{ q?: string }>();
-  const [searchQuery, setSearchQuery] = useState(() => (typeof q === 'string' ? q : ''));
+  const searchQuery = typeof q === 'string' ? q : '';
   const [activeCategory, setActiveCategory] = useState<SearchCategory>(SearchCategory.ALL);
 
   // Debounce search query
@@ -135,16 +137,27 @@ const SearchScreen: React.FC = () => {
   }, [router, playTrackFromList]);
 
   const handleGenreClick = useCallback((genreName: string) => {
-    setSearchQuery(genreName);
-  }, []);
+    router.replace({ pathname: '/search', params: { q: genreName } });
+  }, [router]);
 
   const handleCategoryChange = useCallback((category: SearchCategory) => {
     setActiveCategory(category);
   }, []);
 
+  const handleSearchQueryChange = useCallback((query: string) => {
+    router.replace({
+      pathname: '/search',
+      params: query.trim() ? { q: query } : {},
+    });
+  }, [router]);
+
   const handleClearSearch = useCallback(() => {
-    setSearchQuery('');
-  }, []);
+    router.replace('/search');
+  }, [router]);
+
+  const handleBrowse = useCallback(() => {
+    router.replace('/search');
+  }, [router]);
 
   const getUserAvatarUri = useCallback((avatar?: string) => {
     if (!avatar) return undefined;
@@ -180,32 +193,37 @@ const SearchScreen: React.FC = () => {
       />
       <ScrollView
         style={[styles.container, { backgroundColor: theme.colors.background }]}
-        contentContainerStyle={styles.contentContainer}
+        contentContainerStyle={[
+          styles.contentContainer,
+          !isMobile && styles.desktopContentContainer,
+        ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Search Input */}
-        <View style={styles.header}>
-          <View style={[styles.searchContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
-            <Ionicons name="search" size={24} color={theme.colors.textSecondary} />
-            <TextInput
-              style={[styles.searchInput, { color: theme.colors.text }]}
-              placeholder="What do you want to play?"
-              placeholderTextColor={theme.colors.textSecondary}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              autoFocus
-            />
-            {searchQuery.length > 0 && (
-              <Pressable onPress={handleClearSearch}>
-                <Ionicons
-                  name="close-circle"
-                  size={20}
-                  color={theme.colors.textSecondary}
-                />
+        {isMobile && (
+          <View style={styles.header}>
+            <View style={[styles.searchContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
+              <Ionicons name="search" size={20} color={theme.colors.textSecondary} />
+              <TextInput
+                style={[styles.searchInput, { color: theme.colors.text }]}
+                placeholder="What do you want to play?"
+                placeholderTextColor={theme.colors.textSecondary}
+                value={searchQuery}
+                onChangeText={handleSearchQueryChange}
+                returnKeyType="search"
+                autoFocus
+              />
+              {searchQuery.length > 0 && (
+                <Pressable onPress={handleClearSearch} accessibilityRole="button" accessibilityLabel="Clear search">
+                  <Ionicons name="close-circle" size={18} color={theme.colors.textSecondary} />
+                </Pressable>
+              )}
+              <View style={[styles.searchActionSeparator, { backgroundColor: theme.colors.border }]} />
+              <Pressable onPress={handleBrowse} accessibilityRole="button" accessibilityLabel="Browse">
+                <Ionicons name="grid-outline" size={19} color={theme.colors.textSecondary} />
               </Pressable>
-            )}
+            </View>
           </View>
-        </View>
+        )}
 
         {/* Category Tabs */}
         {searchQuery.length > 0 && (
@@ -407,6 +425,7 @@ const SearchScreen: React.FC = () => {
               isLoading={chartsLoading}
               isEmpty={chartsTracks.length === 0}
               emptyMessage="No charts available"
+              loadingSkeleton={<TrackListSkeleton count={10} />}
             >
               <View style={styles.trackList}>
                 {chartsTracks.map((track, index) => (
@@ -620,6 +639,9 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingBottom: 100, // Space for bottom player bar
   },
+  desktopContentContainer: {
+    paddingTop: 18,
+  },
   header: {
     padding: 18,
     paddingBottom: 12,
@@ -627,20 +649,20 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 4,
-    ...Platform.select({
-      web: {
-        maxWidth: 500,
-      },
-    }),
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 24,
+    minHeight: 44,
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 14,
     padding: 0,
+  },
+  searchActionSeparator: {
+    width: 1,
+    height: 22,
   },
   categoryTabs: {
     maxHeight: 50,

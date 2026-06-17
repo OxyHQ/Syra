@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import * as Skeleton from '@oxyhq/bloom/skeleton';
-import { Repeat } from './Repeat';
+import { useTheme } from '@oxyhq/bloom/theme';
 import { ResponsiveGrid } from '@/components/ResponsiveGrid';
 
 interface QuickAccessGridSkeletonProps {
@@ -15,24 +15,26 @@ interface QuickAccessGridSkeletonProps {
  */
 export const QuickAccessGridSkeleton: React.FC<QuickAccessGridSkeletonProps> =
   React.memo(({ count = 8 }) => {
+    const theme = useTheme();
+
     return (
       <ResponsiveGrid minItemWidth={300} gap={8} style={styles.compactGrid}>
-        <Repeat
-          count={count}
-          render={() => (
-            <View style={styles.compactGridItem}>
-              <Skeleton.Box
-                width={40}
-                height={40}
-                borderRadius={12}
-                style={styles.compactImage}
-              />
-              <View style={styles.compactTitle}>
-                <Skeleton.Box width="70%" height={13} borderRadius={4} />
-              </View>
+        {Array.from({ length: count }).map((_, index) => (
+          <View
+            key={index}
+            style={[styles.compactGridItem, { backgroundColor: theme.colors.backgroundSecondary }]}
+          >
+            <Skeleton.Box
+              width={40}
+              height={40}
+              borderRadius={12}
+              style={styles.compactImage}
+            />
+            <View style={styles.compactTitle}>
+              <Skeleton.Box width="70%" height={13} borderRadius={4} />
             </View>
-          )}
-        />
+          </View>
+        ))}
       </ResponsiveGrid>
     );
   });
@@ -49,6 +51,7 @@ const styles = StyleSheet.create({
     padding: 4,
     borderRadius: 12,
     alignItems: 'center',
+    minHeight: 48,
   },
   // Mirrors home.styles.compactImageContainer.
   compactImage: {

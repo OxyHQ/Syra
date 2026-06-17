@@ -17,6 +17,7 @@ import Animated, {
   useSharedValue, 
   withTiming 
 } from 'react-native-reanimated';
+import * as Skeleton from '@oxyhq/bloom/skeleton';
 import { Loading as LoadingIcon } from '@/assets/icons/loading-icon';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { SPACING } from '@/styles/spacing';
@@ -232,26 +233,14 @@ const SkeletonLoading: React.FC<SkeletonLoadingProps> = ({
   lineHeight = 16,
   style,
 }) => {
-  const theme = useTheme();
-  
-  // Extract theme values first to avoid optional chaining issues
-  const themeBackgroundSecondary = theme && theme.colors ? theme.colors.backgroundSecondary : undefined;
-  const themeBackground = theme && theme.colors ? theme.colors.background : undefined;
-  const backgroundColor = themeBackgroundSecondary ?? themeBackground ?? '#f5f5f5';
-  
   const skeletonWidth: DimensionValue = typeof width === 'string' ? (width as DimensionValue) : `${width}%`;
   const skeletonLines = Array.from({ length: lines }, (_, index) => (
-    <View
+    <Skeleton.Box
       key={index}
-      style={[
-        styles.skeletonLine,
-        {
-          backgroundColor,
-          width: skeletonWidth,
-          height: lineHeight,
-          marginBottom: index < lines - 1 ? SPACING.sm : 0,
-        },
-      ]}
+      width={skeletonWidth}
+      height={lineHeight}
+      borderRadius={4}
+      style={index < lines - 1 ? styles.skeletonLineGap : undefined}
     />
   ));
   
@@ -397,8 +386,8 @@ const styles = StyleSheet.create({
   skeletonContainer: {
     width: '100%',
   },
-  skeletonLine: {
-    borderRadius: 4,
+  skeletonLineGap: {
+    marginBottom: SPACING.sm,
   },
   inlineContainer: {
     flexDirection: 'row',
@@ -409,4 +398,3 @@ const styles = StyleSheet.create({
     // Text styles applied inline for dynamic color/size
   },
 });
-

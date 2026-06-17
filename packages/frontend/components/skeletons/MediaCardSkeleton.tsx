@@ -36,6 +36,7 @@ MediaCardSkeleton.displayName = 'MediaCardSkeleton';
 const styles = StyleSheet.create({
   // Mirrors MediaCard.styles.container padding/radius.
   container: webViewStyle({
+    alignSelf: 'stretch',
     padding: 6,
     borderRadius: 8,
     ...Platform.select({
@@ -46,6 +47,7 @@ const styles = StyleSheet.create({
   }),
   // Mirrors MediaCard.styles.imageContainer (square, bottom margin).
   image: {
+    alignSelf: 'stretch',
     aspectRatio: 1,
     marginBottom: 6,
   },

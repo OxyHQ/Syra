@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import * as Skeleton from '@oxyhq/bloom/skeleton';
+import { useTheme } from '@oxyhq/bloom/theme';
 import { Repeat } from './Repeat';
 
 /**
@@ -9,6 +10,8 @@ import { Repeat } from './Repeat';
  * Mirrors `u/[username]` profile header layout.
  */
 export const ProfileHeaderSkeleton: React.FC = React.memo(() => {
+  const theme = useTheme();
+
   return (
     <View style={styles.contentContainer}>
       {/* Profile header: avatar + name/handle/bio */}
@@ -22,7 +25,7 @@ export const ProfileHeaderSkeleton: React.FC = React.memo(() => {
       </View>
 
       {/* Stats row */}
-      <View style={styles.statsSection}>
+      <View style={[styles.statsSection, { borderBottomColor: theme.colors.border }]}>
         <Repeat
           count={3}
           render={() => (
@@ -60,6 +63,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     paddingVertical: 20,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginBottom: 24,
   },
   // Mirrors u/[username] `statItem`.
   statItem: {

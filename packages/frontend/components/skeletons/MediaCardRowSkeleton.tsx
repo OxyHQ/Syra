@@ -1,6 +1,5 @@
 import React from 'react';
 import { MediaCardSkeleton } from './MediaCardSkeleton';
-import { Repeat } from './Repeat';
 import { ResponsiveGrid } from '@/components/ResponsiveGrid';
 
 interface MediaCardRowSkeletonProps {
@@ -19,14 +18,9 @@ export const MediaCardRowSkeleton: React.FC<MediaCardRowSkeletonProps> =
   React.memo(({ count = 5, shape = 'square' }) => {
     return (
       <ResponsiveGrid minItemWidth={180} gap={8}>
-        <Repeat
-          count={count}
-          render={() => (
-            <>
-              <MediaCardSkeleton shape={shape} />
-            </>
-          )}
-        />
+        {Array.from({ length: count }).map((_, index) => (
+          <MediaCardSkeleton key={index} shape={shape} />
+        ))}
       </ResponsiveGrid>
     );
   });

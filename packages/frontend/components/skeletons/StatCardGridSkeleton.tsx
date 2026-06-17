@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import * as Skeleton from '@oxyhq/bloom/skeleton';
+import { useTheme } from '@oxyhq/bloom/theme';
 import { Repeat } from './Repeat';
 
 interface StatCardGridSkeletonProps {
@@ -19,6 +20,8 @@ interface StatCardGridSkeletonProps {
  */
 export const StatCardGridSkeleton: React.FC<StatCardGridSkeletonProps> =
   React.memo(({ count = 4, minWidth = '30%', showPeriodSelector = false }) => {
+    const theme = useTheme();
+
     return (
       <View style={styles.content}>
         {showPeriodSelector && (
@@ -36,7 +39,15 @@ export const StatCardGridSkeleton: React.FC<StatCardGridSkeletonProps> =
           <Repeat
             count={count}
             render={() => (
-              <View style={[styles.statCard, { minWidth }]}>
+              <View
+                style={[
+                  styles.statCard,
+                  {
+                    minWidth,
+                    backgroundColor: theme.colors.backgroundSecondary,
+                  },
+                ]}
+              >
                 <Skeleton.Circle size={32} />
                 <Skeleton.Box width={64} height={24} borderRadius={6} />
                 <Skeleton.Box width={80} height={12} borderRadius={4} />
@@ -77,5 +88,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     gap: 8,
+    minHeight: 132,
   },
 });
