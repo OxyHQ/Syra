@@ -27,7 +27,7 @@ const LikedSongsScreen: React.FC = () => {
   const router = useRouter();
   const { t } = useTranslation();
   const { isAuthenticated } = useOxy();
-  const { playTrack, currentTrack, isPlaying } = usePlayerStore();
+  const { playTrackList, currentTrack, isPlaying } = usePlayerStore();
 
   const { data, isLoading, isError } = useQuery({
     queryKey: LIBRARY_TRACKS_QUERY_KEY,
@@ -45,8 +45,20 @@ const LikedSongsScreen: React.FC = () => {
 
   const handlePlayAll = () => {
     if (tracks.length > 0) {
-      playTrack(tracks[0]);
+      playTrackList(tracks, 0, {
+        type: 'library',
+        id: 'liked',
+        name: 'Liked Songs',
+      });
     }
+  };
+
+  const handleTrackPress = (index: number) => {
+    playTrackList(tracks, index, {
+      type: 'library',
+      id: 'liked',
+      name: 'Liked Songs',
+    });
   };
 
   if (!isAuthenticated) {
@@ -133,8 +145,8 @@ const LikedSongsScreen: React.FC = () => {
                   index={index}
                   isCurrentTrack={isCurrentTrack}
                   isTrackPlaying={isTrackPlaying}
-                  onPress={() => playTrack(track)}
-                  onPlayPress={() => playTrack(track)}
+                  onPress={() => handleTrackPress(index)}
+                  onPlayPress={() => handleTrackPress(index)}
                   showNumber={true}
                 />
               );

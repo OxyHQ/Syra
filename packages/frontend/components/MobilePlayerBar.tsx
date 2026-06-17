@@ -25,6 +25,7 @@ export const MobilePlayerBar: React.FC = () => {
     pause,
     resume,
     seek,
+    playNext,
   } = usePlayerStore();
 
   const { isTrackLiked } = useLibrary();
@@ -166,7 +167,13 @@ export const MobilePlayerBar: React.FC = () => {
               />
             )}
           </Pressable>
-          <Pressable style={styles.controlButton}>
+          <Pressable
+            style={styles.controlButton}
+            onPress={playNext}
+            disabled={!currentTrack}
+            accessibilityRole="button"
+            accessibilityLabel="Next track"
+          >
             <MaterialCommunityIcons name="skip-next" size={24} color={theme.colors.primaryForeground} />
           </Pressable>
         </View>
@@ -290,4 +297,3 @@ const styles = StyleSheet.create({
     marginHorizontal: 0,
   },
 });
-

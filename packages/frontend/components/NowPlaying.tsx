@@ -6,11 +6,12 @@ import { useTheme } from '@oxyhq/bloom/theme';
 import { Ionicons, Octicons } from '@expo/vector-icons';
 import { useMediaQuery } from 'react-responsive';
 import { usePlayerStore } from '@/stores/playerStore';
+import { useQueueStore } from '@/stores/queueStore';
 import { useUIStore } from '@/stores/uiStore';
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { musicService } from '@/services/musicService';
-import { Album, Artist, Track } from '@syra/shared-types';
+import { Album, Artist } from '@syra/shared-types';
 import Avatar from '@/components/Avatar';
 import { LyricsView } from '@/components/LyricsView';
 import { pickImageUrl } from '@/utils/pickImage';
@@ -26,15 +27,16 @@ export const NowPlaying: React.FC = () => {
   const router = useRouter();
   const isDesktop = useMediaQuery({ minWidth: 1024 });
   const { setNowPlayingVisible, fullscreenPanel, toggleFullscreen } = useUIStore();
-  const { currentTrack, playTrack } = usePlayerStore();
+  const { currentTrack, playFromQueue } = usePlayerStore();
+  const { queue } = useQueueStore();
   const { isTrackLiked } = useLibrary();
   const toggleLike = useToggleLikeTrack();
   const isLiked = currentTrack ? isTrackLiked(currentTrack.id) : false;
   const isFullscreen = fullscreenPanel === 'nowPlaying';
   const [album, setAlbum] = useState<Album | null>(null);
   const [artist, setArtist] = useState<Artist | null>(null);
-  const [nextTracks, setNextTracks] = useState<Track[]>([]);
   const [lyricsExpanded, setLyricsExpanded] = useState(false);
+  const nextTracks = queue?.tracks.slice(Math.max((queue.current ?? -1) + 1, 0)) ?? [];
 
   // Fetch album and artist details if track exists
   useEffect(() => {
@@ -51,9 +53,6 @@ export const NowPlaying: React.FC = () => {
             promises.push(musicService.getArtistById(currentTrack.artistId).then(data => setArtist(data)));
           }
           
-          // Mock next tracks for now - will be replaced with queue API
-          setNextTracks([]);
-          
           await Promise.all(promises);
         } catch (error) {
           console.error('[NowPlaying] Error fetching details:', error);
@@ -61,7 +60,6 @@ export const NowPlaying: React.FC = () => {
       } else {
         setAlbum(null);
         setArtist(null);
-        setNextTracks([]);
       }
     };
 
@@ -297,7 +295,7 @@ export const NowPlaying: React.FC = () => {
                       {nextTracks.slice(0, 5).map((track, index) => (
                         <Pressable
                           key={track.id}
-                          onPress={() => playTrack(track)}
+                          onPress={() => playFromQueue((queue?.current ?? -1) + index + 1)}
                           style={styles.queueItem}
                         >
                           {(track.coverArt || track.images?.length) ? (

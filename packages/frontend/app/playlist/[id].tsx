@@ -14,6 +14,7 @@ import { musicService } from '@/services/musicService';
 import { Track } from '@syra/shared-types';
 import { Ionicons } from '@expo/vector-icons';
 import { usePlayerStore } from '@/stores/playerStore';
+import { useQueueStore } from '@/stores/queueStore';
 import SEO from '@/components/SEO';
 import { TrackRow } from '@/components/TrackRow';
 import { MediaHeaderSkeleton } from '@/components/skeletons';
@@ -29,7 +30,8 @@ const HEADER_HEIGHT = 400;
 const PlaylistScreen: React.FC = () => {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
-  const { playTrack, currentTrack, isPlaying } = usePlayerStore();
+  const { playTrackList, currentTrack, isPlaying } = usePlayerStore();
+  const { shuffle, toggleShuffle } = useQueueStore();
 
   const { isPlaylistSaved } = useLibrary();
   const toggleSave = useToggleSavePlaylist();
@@ -123,12 +125,21 @@ const PlaylistScreen: React.FC = () => {
 
   const handlePlayPlaylist = () => {
     if (tracks.length > 0) {
-      playTrack(tracks[0]);
+      playTrackList(tracks, 0, {
+        type: 'playlist',
+        id,
+        name: playlist?.name,
+      });
     }
   };
 
   const handleTrackPress = (track: Track) => {
-    playTrack(track);
+    const startIndex = tracks.findIndex((item) => item.id === track.id);
+    playTrackList(tracks, startIndex >= 0 ? startIndex : 0, {
+      type: 'playlist',
+      id,
+      name: playlist?.name,
+    });
   };
 
   const totalDurationFormatted = playlist?.totalDuration
@@ -326,11 +337,16 @@ const PlaylistScreen: React.FC = () => {
 
               <Pressable
                 style={styles.controlButton}
-                onPress={() => {
-                  // Shuffle functionality
-                }}
+                onPress={toggleShuffle}
+                accessibilityRole="button"
+                accessibilityState={{ selected: shuffle === 'on' }}
+                accessibilityLabel={shuffle === 'on' ? 'Turn shuffle off' : 'Turn shuffle on'}
               >
-                <Ionicons name="shuffle" size={22} color={theme.colors.text} />
+                <Ionicons
+                  name="shuffle"
+                  size={22}
+                  color={shuffle === 'on' ? theme.colors.primary : theme.colors.text}
+                />
               </Pressable>
 
               <Pressable
@@ -690,4 +706,3 @@ const styles = StyleSheet.create({
 });
 
 export default PlaylistScreen;
-

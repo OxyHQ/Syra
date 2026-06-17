@@ -33,6 +33,7 @@ import {
 } from './playerStore.helpers';
 import { resolveStream, StreamResolution } from '@/services/streamService';
 import { libraryService } from '@/services/libraryService';
+import { browseService } from '@/services/browseService';
 import { authenticatedClient } from '@/utils/api';
 import { attachSource } from './playback/attachSource';
 import type { AttachResult } from './playback/attachSource.types';
@@ -40,6 +41,7 @@ import type { PlayerEngine } from './playback/playerEngine';
 import { pickPlaybackMode, canPlayHlsNatively } from './playback/pickPlaybackMode';
 import { createWebHlsPlayer } from './playback/webHlsPlayer';
 import { isRealFinish } from './playback/isRealFinish';
+import { useMusicPreferencesStore } from './musicPreferencesStore';
 
 const logger = createScopedLogger('PlayerStore');
 
@@ -59,6 +61,7 @@ interface PlayerState {
   
   // Actions
   playTrack: (track: Track, context?: PlaybackContext, addToQueue?: boolean) => Promise<void>;
+  playTrackList: (tracks: Track[], startIndex?: number, context?: PlaybackContext) => Promise<void>;
   playFromQueue: (index: number) => Promise<void>;
   playNext: () => Promise<void>;
   playPrevious: () => Promise<void>;
@@ -150,14 +153,107 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     
     if (addToQueue) {
       await queueStore.addToQueue([track.id], 'last');
-    } else {
-      const queue = queueStore.queue;
-      if (queue) {
-        const trackIndex = queue.tracks.findIndex(t => t.id === track.id);
-        if (trackIndex >= 0) {
-          await queueStore.setCurrentIndex(trackIndex);
-        }
+      return;
+    }
+
+    const queue = queueStore.queue;
+    if (queue) {
+      const trackIndex = queue.tracks.findIndex(t => t.id === track.id);
+      if (trackIndex >= 0) {
+        await queueStore.setCurrentIndex(trackIndex);
+        return;
       }
+    }
+
+    queueStore.syncQueue({
+      current: 0,
+      tracks: [track],
+      context: get().context ?? undefined,
+    });
+  };
+
+  const seedLocalQueue = (tracks: Track[], startIndex: number, context?: PlaybackContext) => {
+    const playableTracks = tracks.filter((track) => track?.id);
+    if (playableTracks.length === 0) {
+      return null;
+    }
+
+    const clampedIndex = Math.max(0, Math.min(startIndex, playableTracks.length - 1));
+    const queue = {
+      current: clampedIndex,
+      tracks: playableTracks,
+      context,
+    };
+
+    useQueueStore.getState().syncQueue(queue);
+    return queue;
+  };
+
+  const getRandomNextIndex = (current: number, length: number): number => {
+    if (length <= 1) {
+      return current;
+    }
+
+    const candidates = Array.from({ length }, (_value, index) => index).filter((index) => index !== current);
+    return candidates[Math.floor(Math.random() * candidates.length)] ?? current;
+  };
+
+  const chooseNextIndex = (fromCompletion: boolean): number | null => {
+    const { queue, shuffle, repeat } = useQueueStore.getState();
+    if (!queue || queue.tracks.length === 0) {
+      return null;
+    }
+
+    if (repeat === RepeatMode.ONE && fromCompletion) {
+      return queue.current;
+    }
+
+    if (shuffle === 'on') {
+      return getRandomNextIndex(queue.current, queue.tracks.length);
+    }
+
+    const nextIndex = queue.current + 1;
+    if (nextIndex < queue.tracks.length) {
+      return nextIndex;
+    }
+
+    return repeat === RepeatMode.ALL ? 0 : null;
+  };
+
+  const extendQueueForAutoplay = async (): Promise<boolean> => {
+    const preferences = useMusicPreferencesStore.getState().preferences;
+    if (preferences?.autoplay === false) {
+      return false;
+    }
+
+    const queueStore = useQueueStore.getState();
+    const queue = queueStore.queue;
+    const seenIds = new Set(queue?.tracks.map((track) => track.id) ?? []);
+    const currentTrackId = get().currentTrack?.id;
+    if (currentTrackId) {
+      seenIds.add(currentTrackId);
+    }
+
+    try {
+      const response = await browseService.getPopularTracks({ limit: 30, offset: 0 });
+      const candidates = response.tracks.filter((track) => track.id && !seenIds.has(track.id));
+      if (candidates.length === 0) {
+        return false;
+      }
+
+      const additions = candidates.slice(0, 12);
+      queueStore.syncQueue({
+        current: queue?.current ?? -1,
+        tracks: [...(queue?.tracks ?? []), ...additions],
+        context: queue?.context ?? {
+          type: 'track',
+          name: 'Autoplay',
+        },
+      });
+      return true;
+    } catch (error) {
+      logger.warn('Failed to extend queue for autoplay', error);
+      return false;
     }
   };
 
@@ -326,18 +422,18 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           url: track.audioSource?.url ?? track.streamUrl,
         });
         
-        set({ 
-          isLoading: true, 
-          error: null, 
-          currentTrack: track,
-          context: context || null,
-        });
-
         // Stop current track if playing
         const { player: currentPlayer, stop } = get();
         if (currentPlayer) {
           await stop();
         }
+
+        set({
+          isLoading: true,
+          error: null,
+          currentTrack: track,
+          context: context || null,
+        });
 
         // Resolve stream — Phase-3 HLS or Audius tracks use resolveStream;
         // legacy/processing tracks fall back to the authenticated-URL path.
@@ -392,6 +488,20 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           isPlaying: false,
         });
       }
+    },
+
+    /**
+     * Play a track from a finite context and make the rest of that context the
+     * active queue. Album, playlist, liked songs, and search screens should use
+     * this instead of playing an isolated track.
+     */
+    playTrackList: async (tracks: Track[], startIndex: number = 0, context?: PlaybackContext) => {
+      const queue = seedLocalQueue(tracks, startIndex, context);
+      if (!queue) {
+        return;
+      }
+
+      await get().playTrack(queue.tracks[queue.current], context ?? queue.context, false);
     },
 
     /**
@@ -514,13 +624,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
      * Play next track in queue
      */
     playNext: async () => {
-      const queueStore = useQueueStore.getState();
-      await queueStore.playNext();
-      
-      const queue = queueStore.queue;
-      if (queue && queue.current >= 0 && queue.current < queue.tracks.length) {
-        const nextTrack = queue.tracks[queue.current];
-        await get().playTrack(nextTrack, queue.context, false);
+      let nextIndex = chooseNextIndex(false);
+
+      if (nextIndex === null && await extendQueueForAutoplay()) {
+        nextIndex = chooseNextIndex(false);
+      }
+
+      if (nextIndex !== null) {
+        await get().playFromQueue(nextIndex);
       }
     },
 
@@ -529,12 +640,25 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
      */
     playPrevious: async () => {
       const queueStore = useQueueStore.getState();
-      await queueStore.playPrevious();
-      
+      const { currentTime } = get();
+
+      if (currentTime > 3) {
+        await get().seek(0);
+        return;
+      }
+
       const queue = queueStore.queue;
-      if (queue && queue.current >= 0 && queue.current < queue.tracks.length) {
-        const prevTrack = queue.tracks[queue.current];
-        await get().playTrack(prevTrack, queue.context, false);
+      if (!queue || queue.tracks.length === 0) {
+        return;
+      }
+
+      let previousIndex = queue.current - 1;
+      if (previousIndex < 0 && queueStore.repeat === RepeatMode.ALL) {
+        previousIndex = queue.tracks.length - 1;
+      }
+
+      if (previousIndex >= 0) {
+        await get().playFromQueue(previousIndex);
       }
     },
 
@@ -543,33 +667,16 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
      * Automatically plays next track based on repeat mode
      */
     handleTrackCompletion: async () => {
-      const queueStore = useQueueStore.getState();
-      const queue = queueStore.queue;
-      const { repeat } = queueStore;
-
       await get().stop();
 
-      if (!queue || queue.tracks.length === 0) {
-        return;
+      let nextIndex = chooseNextIndex(true);
+
+      if (nextIndex === null && await extendQueueForAutoplay()) {
+        nextIndex = chooseNextIndex(true);
       }
 
-      const currentIndex = queue.current;
-      
-      // Handle repeat one mode
-      if (repeat === RepeatMode.ONE) {
-        if (currentIndex >= 0 && currentIndex < queue.tracks.length) {
-          const track = queue.tracks[currentIndex];
-          await get().playTrack(track, queue.context, false);
-        }
-        return;
-      }
-
-      // Handle next track or repeat all
-      const nextIndex = currentIndex + 1;
-      if (nextIndex < queue.tracks.length) {
+      if (nextIndex !== null) {
         await get().playFromQueue(nextIndex);
-      } else if (repeat === RepeatMode.ALL) {
-        await get().playFromQueue(0);
       }
     },
   };

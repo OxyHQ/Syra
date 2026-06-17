@@ -7,6 +7,7 @@ import { musicService } from '@/services/musicService';
 import { Track } from '@syra/shared-types';
 import { Ionicons } from '@expo/vector-icons';
 import { usePlayerStore } from '@/stores/playerStore';
+import { useQueueStore } from '@/stores/queueStore';
 import SEO from '@/components/SEO';
 import Avatar from '@/components/Avatar';
 import { MediaHeaderSkeleton } from '@/components/skeletons';
@@ -21,7 +22,8 @@ const AlbumScreen: React.FC = () => {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const theme = useTheme();
-  const { playTrack, currentTrack, isPlaying } = usePlayerStore();
+  const { playTrackList, currentTrack, isPlaying } = usePlayerStore();
+  const { shuffle, toggleShuffle } = useQueueStore();
 
   const { isAlbumSaved, isTrackLiked } = useLibrary();
   const toggleSave = useToggleSaveAlbum();
@@ -66,12 +68,21 @@ const AlbumScreen: React.FC = () => {
 
   const handlePlayAlbum = () => {
     if (tracks.length > 0) {
-      playTrack(tracks[0]);
+      playTrackList(tracks, 0, {
+        type: 'album',
+        id,
+        name: album?.title,
+      });
     }
   };
 
   const handleTrackPress = (track: Track) => {
-    playTrack(track);
+    const startIndex = tracks.findIndex((item) => item.id === track.id);
+    playTrackList(tracks, startIndex >= 0 ? startIndex : 0, {
+      type: 'album',
+      id,
+      name: album?.title,
+    });
   };
 
   if (isLoading) {
@@ -162,8 +173,18 @@ const AlbumScreen: React.FC = () => {
             <Ionicons name="play" size={28} color={theme.colors.primaryForeground} />
           </Pressable>
 
-          <Pressable style={styles.controlButton}>
-            <Ionicons name="shuffle" size={20} color={theme.colors.text} />
+          <Pressable
+            style={styles.controlButton}
+            onPress={toggleShuffle}
+            accessibilityRole="button"
+            accessibilityState={{ selected: shuffle === 'on' }}
+            accessibilityLabel={shuffle === 'on' ? 'Turn shuffle off' : 'Turn shuffle on'}
+          >
+            <Ionicons
+              name="shuffle"
+              size={20}
+              color={shuffle === 'on' ? theme.colors.primary : theme.colors.text}
+            />
           </Pressable>
 
           <Pressable

@@ -3,6 +3,7 @@ import { StyleSheet, View, Text, Pressable, Platform } from 'react-native';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { usePlayerStore } from '@/stores/playerStore';
+import { useQueueStore } from '@/stores/queueStore';
 import { useUIStore } from '@/stores/uiStore';
 import { Image } from 'expo-image';
 import { Slider } from './Slider';
@@ -30,7 +31,10 @@ export const PlayerBar: React.FC = () => {
     resume,
     seek,
     setVolume,
+    playNext,
+    playPrevious,
   } = usePlayerStore();
+  const { queue, shuffle, repeat, toggleShuffle, cycleRepeat } = useQueueStore();
 
   const { isTrackLiked } = useLibrary();
   const toggleLike = useToggleLikeTrack();
@@ -54,6 +58,10 @@ export const PlayerBar: React.FC = () => {
   const handleSeek = async (newPosition: number) => {
     await seek(newPosition);
   };
+
+  const repeatIcon = repeat === 'one' ? 'repeat-once' : 'repeat';
+  const repeatActive = repeat !== 'off';
+  const hasNext = !!queue && queue.tracks.length > 1;
 
   // Always show player bar, even when no track is playing
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
@@ -157,11 +165,31 @@ export const PlayerBar: React.FC = () => {
 
         {/* Center: Playback Controls */}
         <View style={[styles.playbackControls, { gap: SPACING }]}>
-          <Pressable style={styles.controlButton}>
-            <MaterialCommunityIcons name="shuffle" size={20} color={theme.colors.textSecondary} />
+          <Pressable
+            style={styles.controlButton}
+            onPress={toggleShuffle}
+            accessibilityRole="button"
+            accessibilityState={{ selected: shuffle === 'on' }}
+            accessibilityLabel={shuffle === 'on' ? 'Turn shuffle off' : 'Turn shuffle on'}
+          >
+            <MaterialCommunityIcons
+              name="shuffle"
+              size={20}
+              color={shuffle === 'on' ? theme.colors.primary : theme.colors.textSecondary}
+            />
           </Pressable>
-          <Pressable style={styles.controlButton}>
-            <MaterialCommunityIcons name="skip-previous" size={24} color={theme.colors.text} />
+          <Pressable
+            style={styles.controlButton}
+            onPress={playPrevious}
+            disabled={!currentTrack}
+            accessibilityRole="button"
+            accessibilityLabel="Previous track"
+          >
+            <MaterialCommunityIcons
+              name="skip-previous"
+              size={24}
+              color={currentTrack ? theme.colors.text : theme.colors.textSecondary}
+            />
           </Pressable>
           <Pressable
             style={[
@@ -184,17 +212,42 @@ export const PlayerBar: React.FC = () => {
               />
             )}
           </Pressable>
-          <Pressable style={styles.controlButton}>
-            <MaterialCommunityIcons name="skip-next" size={24} color={theme.colors.text} />
+          <Pressable
+            style={styles.controlButton}
+            onPress={playNext}
+            disabled={!currentTrack}
+            accessibilityRole="button"
+            accessibilityLabel={hasNext ? 'Next track' : 'Autoplay next track'}
+          >
+            <MaterialCommunityIcons
+              name="skip-next"
+              size={24}
+              color={currentTrack ? theme.colors.text : theme.colors.textSecondary}
+            />
           </Pressable>
-          <Pressable style={styles.controlButton}>
-            <MaterialCommunityIcons name="repeat" size={20} color={theme.colors.textSecondary} />
+          <Pressable
+            style={styles.controlButton}
+            onPress={cycleRepeat}
+            accessibilityRole="button"
+            accessibilityState={{ selected: repeatActive }}
+            accessibilityLabel={`Repeat ${repeat}`}
+          >
+            <MaterialCommunityIcons
+              name={repeatIcon}
+              size={20}
+              color={repeatActive ? theme.colors.primary : theme.colors.textSecondary}
+            />
           </Pressable>
         </View>
 
         {/* Right: Volume & Queue Controls */}
         <View style={[styles.rightControls, { gap: SPACING }]}>
-          <Pressable style={styles.controlButton}>
+          <Pressable
+            style={styles.controlButton}
+            onPress={toggleNowPlaying}
+            accessibilityRole="button"
+            accessibilityLabel="Show queue and now playing"
+          >
             <MaterialCommunityIcons name="playlist-music" size={20} color={theme.colors.textSecondary} />
           </Pressable>
           <Pressable
@@ -346,4 +399,3 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 });
-

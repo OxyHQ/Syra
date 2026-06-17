@@ -20,6 +20,8 @@ interface QueueState {
   playPrevious: () => Promise<void>;
   setShuffle: (shuffle: ShuffleMode) => void;
   setRepeat: (repeat: RepeatMode) => void;
+  toggleShuffle: () => void;
+  cycleRepeat: () => void;
   syncQueue: (queue: Queue) => void; // For socket updates
 }
 
@@ -104,12 +106,15 @@ export const useQueueStore = create<QueueState>((set, get) => ({
   },
 
   setCurrentIndex: async (index: number) => {
-    try {
-      const { queue } = get();
-      if (!queue) return;
+    const { queue } = get();
+    if (!queue || index < 0 || index >= queue.tracks.length) {
+      return;
+    }
 
+    set({ queue: { ...queue, current: index } });
+
+    try {
       await queueService.setCurrentIndex(index);
-      set({ queue: { ...queue, current: index } });
     } catch (error) {
       console.error('[QueueStore] Error setting current index:', error);
     }
@@ -149,12 +154,26 @@ export const useQueueStore = create<QueueState>((set, get) => ({
     set({ repeat });
   },
 
+  toggleShuffle: () => {
+    set((state) => ({ shuffle: state.shuffle === 'on' ? 'off' : 'on' }));
+  },
+
+  cycleRepeat: () => {
+    set((state) => {
+      const repeat =
+        state.repeat === RepeatMode.OFF
+          ? RepeatMode.ALL
+          : state.repeat === RepeatMode.ALL
+            ? RepeatMode.ONE
+            : RepeatMode.OFF;
+      return { repeat };
+    });
+  },
+
   syncQueue: (queue: Queue) => {
     set({ queue });
   },
 }));
-
-
 
 
 
