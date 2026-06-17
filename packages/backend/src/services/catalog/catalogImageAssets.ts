@@ -5,13 +5,11 @@ import { URL } from 'url';
 import sharp from 'sharp';
 import {
   type CatalogSource,
-  type TrackImage,
-} from '@syra/shared-types';
-import {
   catalogImageSizesSchema,
   type CatalogImageSizes,
   type CatalogImageVariant,
-} from '@syra/shared-types/track';
+  type TrackImage,
+} from '@syra/shared-types';
 import { extractPredominantColorsFromBuffer } from '../colorExtractionService';
 import { logger } from '../../utils/logger';
 import { validateUrlSecurity } from '../../utils/urlSecurity';
