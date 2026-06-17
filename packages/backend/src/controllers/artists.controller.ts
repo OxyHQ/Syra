@@ -11,6 +11,7 @@ import { getParam } from '../utils/reqParams';
 import { CreateArtistRequest, ArtistInsights, ArtistDashboard } from '@syra/shared-types';
 import { getStoredImageColors } from '../utils/imageColors';
 import { withImageFirstSort } from '../utils/imageFirstSort';
+import { playableTrackFilter, visibleCatalogFilter } from '../utils/catalogVisibility';
 
 /**
  * GET /api/artists
@@ -26,12 +27,12 @@ export const getArtists = async (req: Request, res: Response, next: NextFunction
     const offset = parseInt(req.query.offset as string) || 0;
 
     const [artists, total] = await Promise.all([
-      ArtistModel.find()
+      ArtistModel.find(visibleCatalogFilter())
         .sort(withImageFirstSort('artist', { popularity: -1, 'stats.followers': -1 }))
         .skip(offset)
         .limit(limit)
         .lean(),
-      ArtistModel.countDocuments(),
+      ArtistModel.countDocuments(visibleCatalogFilter()),
     ]);
 
     const formattedArtists = formatArtistsWithImage(artists);
@@ -63,7 +64,7 @@ export const getArtistById = async (req: Request, res: Response, next: NextFunct
       return res.status(404).json({ error: 'Artist not found' });
     }
     
-    const artist = await ArtistModel.findById(id).lean();
+    const artist = await ArtistModel.findOne(visibleCatalogFilter({ _id: id })).lean();
 
     if (!artist) {
       return res.status(404).json({ error: 'Artist not found' });
@@ -94,13 +95,13 @@ export const getArtistAlbums = async (req: Request, res: Response, next: NextFun
     }
     
     // Verify artist exists
-    const artist = await ArtistModel.findById(id).lean();
+    const artist = await ArtistModel.findOne(visibleCatalogFilter({ _id: id })).lean();
     if (!artist) {
       return res.status(404).json({ error: 'Artist not found' });
     }
 
     // Fetch albums for this artist, sorted by release date
-    const albums = await AlbumModel.find({ artistId: id })
+    const albums = await AlbumModel.find(visibleCatalogFilter({ artistId: id }))
       .sort(withImageFirstSort('album', { releaseDate: -1 }))
       .lean();
 
@@ -135,19 +136,19 @@ export const getArtistTracks = async (req: Request, res: Response, next: NextFun
     }
     
     // Verify artist exists
-    const artist = await ArtistModel.findById(id).lean();
+    const artist = await ArtistModel.findOne(visibleCatalogFilter({ _id: id })).lean();
     if (!artist) {
       return res.status(404).json({ error: 'Artist not found' });
     }
 
     // Fetch tracks for this artist, sorted by popularity then date
     const [tracks, total] = await Promise.all([
-      TrackModel.find({ artistId: id, isAvailable: true })
+      TrackModel.find(playableTrackFilter({ artistId: id }))
         .sort(withImageFirstSort('track', { popularity: -1, createdAt: -1 }))
         .skip(offset)
         .limit(limit)
         .lean(),
-      TrackModel.countDocuments({ artistId: id, isAvailable: true }),
+      TrackModel.countDocuments(playableTrackFilter({ artistId: id })),
     ]);
 
     const formattedTracks = await formatTracksWithCoverArt(tracks);

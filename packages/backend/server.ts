@@ -15,6 +15,7 @@ import { createAdapter } from '@socket.io/redis-adapter';
 import { logger } from './src/utils/logger';
 import { rateLimiter, bruteForceProtection } from './src/middleware/security';
 import { performanceMiddleware, getPerformanceStats } from './src/middleware/performance';
+import type { AuthRequest } from './src/middleware/auth';
 
 import { setupPlayerSocket } from './src/sockets/playerSocket';
 import { setupPlaylistSocket } from './src/sockets/playlistSocket';
@@ -45,6 +46,35 @@ app.set('trust proxy', true);
 
 export const oxy = new OxyServices({ baseURL: env.OXY_API_URL });
 
+/**
+ * Resolve the user from the bearer token without rejecting unauthenticated
+ * requests. Idempotent: if a prior pass already resolved the user, it skips the
+ * (costly) token re-verification.
+ *
+ * This runs BEFORE the rate limiter so the limiter can key/scale per user
+ * instead of per IP. Behind the AWS ALB many users share an egress IP, so
+ * IP-only limiting (the old behaviour, because auth ran after the limiter) made
+ * a single 100-req/15min bucket shared across users — the cause of frequent 429s.
+ */
+const optionalAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if ((req as AuthRequest).user?.id) {
+    return next();
+  }
+
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return next();
+  }
+
+  const authMiddleware = oxy.auth();
+  authMiddleware(req, res, (err?: unknown) => {
+    if (err) {
+      (req as express.Request & { user?: undefined }).user = undefined;
+    }
+    next();
+  });
+};
+
 const ALLOWED_ORIGINS: string[] = [
   env.FRONTEND_URL,
   'https://syra.fm',
@@ -65,6 +95,10 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-Requested-With', 'Accept', 'Accept-Version', 'Content-Length', 'Content-MD5', 'Date', 'X-Api-Version'],
 }));
+
+// Resolve the user BEFORE rate limiting so the limiter keys per authenticated
+// user (high limit) rather than per shared egress IP behind the ALB.
+app.use(optionalAuth);
 
 app.use(rateLimiter);
 
@@ -235,22 +269,6 @@ io.on('connection', (socket: Socket) => {
 app.set('io', io);
 (global as Record<string, unknown>).io = io;
 app.set('musicNamespace', musicNamespace);
-
-const optionalAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader) {
-    return next();
-  }
-
-  const authMiddleware = oxy.auth();
-  authMiddleware(req, res, (err?: unknown) => {
-    if (err) {
-      (req as express.Request & { user?: undefined }).user = undefined;
-    }
-    next();
-  });
-};
 
 const publicApiRouter = express.Router();
 publicApiRouter.use('/tracks', optionalAuth, tracksRoutes);

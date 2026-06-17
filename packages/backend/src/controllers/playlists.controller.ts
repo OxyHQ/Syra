@@ -10,6 +10,7 @@ import { isDatabaseConnected } from '../utils/database';
 import { AuthRequest } from '../middleware/auth';
 import { getParam } from '../utils/reqParams';
 import { withImageFirstSort } from '../utils/imageFirstSort';
+import { playableTrackFilter, visibleCatalogFilter } from '../utils/catalogVisibility';
 
 interface PlaylistAuthRequest extends AuthRequest {
   user?: AuthRequest['user'] & {
@@ -60,7 +61,7 @@ async function updatePlaylistStats(playlistId: mongoose.Types.ObjectId) {
   const playlistTracks = await PlaylistTrackModel.find({ playlistId }).sort({ order: 1 }).lean();
   const trackIds = playlistTracks.map(pt => pt.trackId);
   
-  const tracks = await TrackModel.find({ _id: { $in: trackIds }, isAvailable: true }).lean();
+  const tracks = await TrackModel.find(playableTrackFilter({ _id: { $in: trackIds } })).lean();
   const trackMap = new Map(tracks.map(t => [t._id.toString(), t]));
   
   let totalDuration = 0;
@@ -100,6 +101,7 @@ export const getUserPlaylists = async (req: AuthRequest, res: Response, next: Ne
         { ownerOxyUserId: userId },
         { 'collaborators.oxyUserId': userId },
       ],
+      ...visibleCatalogFilter(),
     })
       .sort(withImageFirstSort('playlist', { createdAt: -1 }))
       .lean();
@@ -137,7 +139,7 @@ export const getPlaylistById = async (req: AuthRequest, res: Response, next: Nex
       return res.status(403).json({ error: 'Forbidden' });
     }
 
-    const playlist = await PlaylistModel.findById(id).lean();
+    const playlist = await PlaylistModel.findOne(visibleCatalogFilter({ _id: id })).lean();
 
     if (!playlist) {
       return res.status(404).json({ error: 'Playlist not found' });
@@ -172,6 +174,11 @@ export const getPlaylistTracks = async (req: AuthRequest, res: Response, next: N
       return res.status(403).json({ error: 'Forbidden' });
     }
 
+    const playlist = await PlaylistModel.findOne(visibleCatalogFilter({ _id: id })).lean();
+    if (!playlist) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
     // Get playlist tracks in order
     const playlistTracks = await PlaylistTrackModel.find({ playlistId: id })
       .sort({ order: 1 })
@@ -179,7 +186,7 @@ export const getPlaylistTracks = async (req: AuthRequest, res: Response, next: N
 
     // Get track details
     const trackIds = playlistTracks.map(pt => pt.trackId);
-    const tracks = await TrackModel.find({ _id: { $in: trackIds }, isAvailable: true }).lean();
+    const tracks = await TrackModel.find(playableTrackFilter({ _id: { $in: trackIds } })).lean();
 
     // Create map for quick lookup
     const trackMap = new Map(tracks.map(t => [t._id.toString(), t]));
@@ -458,7 +465,7 @@ export const addTracksToPlaylist = async (req: AuthRequest, res: Response, next:
     }
 
     // Verify tracks exist
-    const tracks = await TrackModel.find({ _id: { $in: validTrackIds }, isAvailable: true }).lean();
+    const tracks = await TrackModel.find(playableTrackFilter({ _id: { $in: validTrackIds } })).lean();
     if (tracks.length === 0) {
       return res.status(404).json({ error: 'No valid tracks found' });
     }

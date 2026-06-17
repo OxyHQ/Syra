@@ -8,6 +8,7 @@ import { isDatabaseConnected } from '../utils/database';
 import { withImageFirstSort } from '../utils/imageFirstSort';
 import type { AuthRequest } from '../middleware/auth';
 import { getMadeForYou as getPersonalisedMadeForYou } from '../services/recommendations/recommendationService';
+import { playableTrackFilter, visibleCatalogFilter } from '../utils/catalogVisibility';
 
 /**
  * Default genre colors for genre cards (Spotify-like colors)
@@ -80,23 +81,23 @@ export const getHomeBrowse = async (req: Request, res: Response, next: NextFunct
       popularArtists,
       tracks,
     ] = await Promise.all([
-      AlbumModel.find()
+      AlbumModel.find(visibleCatalogFilter())
         .sort(withImageFirstSort('album', { popularity: -1, playCount: -1 }))
         .limit(madeForYouHalf)
         .lean(),
-      PlaylistModel.find({ visibility: 'public' })
+      PlaylistModel.find(visibleCatalogFilter({ visibility: 'public' }))
         .sort(withImageFirstSort('playlist', { followers: -1, createdAt: -1 }))
         .limit(madeForYouHalf)
         .lean(),
-      AlbumModel.find()
+      AlbumModel.find(visibleCatalogFilter())
         .sort(withImageFirstSort('album', { popularity: -1, releaseDate: -1 }))
         .limit(sectionLimit)
         .lean(),
-      ArtistModel.find()
+      ArtistModel.find(visibleCatalogFilter())
         .sort(withImageFirstSort('artist', { popularity: -1, 'stats.followers': -1 }))
         .limit(sectionLimit)
         .lean(),
-      TrackModel.find({ isAvailable: true })
+      TrackModel.find(playableTrackFilter())
         .sort(withImageFirstSort('track', { popularity: -1, playCount: -1, createdAt: -1 }))
         .limit(tracksLimit)
         .lean(),
@@ -127,11 +128,11 @@ export const getHomeBrowse = async (req: Request, res: Response, next: NextFunct
       const sparse = madeForYouAlbums.length + madeForYouPlaylists.length < madeForYouHalf;
       const [fallbackTracks, fallbackArtists] = sparse
         ? await Promise.all([
-            TrackModel.find({ isAvailable: true })
+            TrackModel.find(playableTrackFilter())
               .sort(withImageFirstSort('track', { popularity: -1, playCount: -1, createdAt: -1 }))
               .limit(sectionLimit)
               .lean(),
-            ArtistModel.find()
+            ArtistModel.find(visibleCatalogFilter())
               .sort(withImageFirstSort('artist', { popularity: -1, 'stats.followers': -1 }))
               .limit(sectionLimit)
               .lean(),
@@ -191,9 +192,9 @@ export const getGenres = async (req: Request, res: Response, next: NextFunction)
     // top-level genre from the source sync, so genres surface even before any
     // albums have been assembled.
     const [trackGenres, albumGenres, artistGenres] = await Promise.all([
-      TrackModel.distinct('genre', { isAvailable: true }),
-      AlbumModel.distinct('genre'),
-      ArtistModel.distinct('genres'),
+      TrackModel.distinct('genre', playableTrackFilter()),
+      AlbumModel.distinct('genre', visibleCatalogFilter()),
+      ArtistModel.distinct('genres', visibleCatalogFilter()),
     ]);
 
     // Flatten and get unique genres
@@ -207,15 +208,15 @@ export const getGenres = async (req: Request, res: Response, next: NextFunction)
     const genresWithSamples = await Promise.all(
       allGenres.slice(0, 20).map(async (genre) => {
         const [sampleAlbums, sampleArtists, sampleTracks] = await Promise.all([
-          AlbumModel.find({ genre: genre })
+          AlbumModel.find(visibleCatalogFilter({ genre: genre }))
             .sort(withImageFirstSort('album', { popularity: -1 }))
             .limit(1)
             .lean(),
-          ArtistModel.find({ genres: genre })
+          ArtistModel.find(visibleCatalogFilter({ genres: genre }))
             .sort(withImageFirstSort('artist', { popularity: -1 }))
             .limit(1)
             .lean(),
-          TrackModel.find({ genre: genre, isAvailable: true })
+          TrackModel.find(playableTrackFilter({ genre: genre }))
             .sort(withImageFirstSort('track', { popularity: -1, playCount: -1 }))
             .limit(1)
             .lean(),
@@ -264,7 +265,7 @@ export const getGenreTracks = async (req: Request, res: Response, next: NextFunc
 
     const tracks = await TrackModel.find({
       genre,
-      isAvailable: true,
+      ...playableTrackFilter(),
     })
       .sort(withImageFirstSort('track', { popularity: -1, playCount: -1, createdAt: -1 }))
       .skip(offset)
@@ -297,7 +298,7 @@ export const getPopularTracks = async (req: Request, res: Response, next: NextFu
     const limit = parseInt(req.query.limit as string) || 20;
     const offset = parseInt(req.query.offset as string) || 0;
 
-    const tracks = await TrackModel.find({ isAvailable: true })
+    const tracks = await TrackModel.find(playableTrackFilter())
       .sort(withImageFirstSort('track', { popularity: -1, playCount: -1, createdAt: -1 }))
       .skip(offset)
       .limit(limit)
@@ -329,7 +330,7 @@ export const getPopularAlbums = async (req: Request, res: Response, next: NextFu
     const limit = parseInt(req.query.limit as string) || 20;
     const offset = parseInt(req.query.offset as string) || 0;
 
-    const albums = await AlbumModel.find()
+    const albums = await AlbumModel.find(visibleCatalogFilter())
       .sort(withImageFirstSort('album', { popularity: -1, releaseDate: -1 }))
       .skip(offset)
       .limit(limit)
@@ -361,7 +362,7 @@ export const getPopularArtists = async (req: Request, res: Response, next: NextF
     const limit = parseInt(req.query.limit as string) || 20;
     const offset = parseInt(req.query.offset as string) || 0;
 
-    const artists = await ArtistModel.find()
+    const artists = await ArtistModel.find(visibleCatalogFilter())
       .sort(withImageFirstSort('artist', { popularity: -1, 'stats.followers': -1 }))
       .skip(offset)
       .limit(limit)
@@ -398,11 +399,11 @@ export const getMadeForYou = async (req: Request, res: Response, next: NextFunct
     const half = Math.max(1, Math.floor(limit / 2));
 
     const [albums, playlists] = await Promise.all([
-      AlbumModel.find()
+      AlbumModel.find(visibleCatalogFilter())
         .sort(withImageFirstSort('album', { popularity: -1, playCount: -1 }))
         .limit(half)
         .lean(),
-      PlaylistModel.find({ visibility: 'public' })
+      PlaylistModel.find(visibleCatalogFilter({ visibility: 'public' }))
         .sort(withImageFirstSort('playlist', { followers: -1, createdAt: -1 }))
         .limit(half)
         .lean(),
@@ -427,11 +428,11 @@ export const getMadeForYou = async (req: Request, res: Response, next: NextFunct
     const sparse = albums.length + playlists.length < half;
     const [tracks, artists] = sparse
       ? await Promise.all([
-          TrackModel.find({ isAvailable: true })
+          TrackModel.find(playableTrackFilter())
             .sort(withImageFirstSort('track', { popularity: -1, playCount: -1, createdAt: -1 }))
             .limit(limit)
             .lean(),
-          ArtistModel.find()
+          ArtistModel.find(visibleCatalogFilter())
             .sort(withImageFirstSort('artist', { popularity: -1, 'stats.followers': -1 }))
             .limit(limit)
             .lean(),
@@ -463,7 +464,7 @@ export const getCharts = async (req: Request, res: Response, next: NextFunction)
 
     const limit = parseInt(req.query.limit as string) || 50;
 
-    const tracks = await TrackModel.find({ isAvailable: true })
+    const tracks = await TrackModel.find(playableTrackFilter())
       .sort(withImageFirstSort('track', { popularity: -1, playCount: -1 }))
       .limit(limit)
       .lean();

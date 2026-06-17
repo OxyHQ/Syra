@@ -12,6 +12,7 @@ import { CreateAlbumRequest } from '@syra/shared-types';
 import { getStoredImageColors } from '../utils/imageColors';
 import { logger } from '../utils/logger';
 import { withImageFirstSort } from '../utils/imageFirstSort';
+import { playableTrackFilter, visibleCatalogFilter } from '../utils/catalogVisibility';
 
 /**
  * GET /api/albums
@@ -27,12 +28,12 @@ export const getAlbums = async (req: Request, res: Response, next: NextFunction)
     const offset = parseInt(req.query.offset as string) || 0;
 
     const [albums, total] = await Promise.all([
-      AlbumModel.find()
+      AlbumModel.find(visibleCatalogFilter())
         .sort(withImageFirstSort('album', { releaseDate: -1, createdAt: -1 }))
         .skip(offset)
         .limit(limit)
         .lean(),
-      AlbumModel.countDocuments(),
+      AlbumModel.countDocuments(visibleCatalogFilter()),
     ]);
 
     const formattedAlbums = formatAlbumsWithCoverArt(albums);
@@ -64,7 +65,7 @@ export const getAlbumById = async (req: Request, res: Response, next: NextFuncti
       return res.status(404).json({ error: 'Album not found' });
     }
     
-    const album = await AlbumModel.findById(id).lean();
+    const album = await AlbumModel.findOne(visibleCatalogFilter({ _id: id })).lean();
 
     if (!album) {
       return res.status(404).json({ error: 'Album not found' });
@@ -95,13 +96,13 @@ export const getAlbumTracks = async (req: Request, res: Response, next: NextFunc
     }
     
     // Verify album exists
-    const album = await AlbumModel.findById(id).lean();
+    const album = await AlbumModel.findOne(visibleCatalogFilter({ _id: id })).lean();
     if (!album) {
       return res.status(404).json({ error: 'Album not found' });
     }
 
     // Fetch tracks for this album, sorted by track number
-    const tracks = await TrackModel.find({ albumId: id, isAvailable: true })
+    const tracks = await TrackModel.find(playableTrackFilter({ albumId: id }))
       .sort({ discNumber: 1, trackNumber: 1 })
       .lean();
 

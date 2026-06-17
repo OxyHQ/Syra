@@ -14,6 +14,7 @@ import {
   clearQueue as clearUserQueue,
   setCurrentIndex,
 } from '../services/queueService';
+import { playableTrackFilter } from '../utils/catalogVisibility';
 
 /**
  * GET /api/queue
@@ -95,10 +96,9 @@ export const addToQueue = async (req: AuthRequest, res: Response, next: NextFunc
     }
 
     // Fetch tracks from database
-    const tracks = await TrackModel.find({
+    const tracks = await TrackModel.find(playableTrackFilter({
       _id: { $in: validTrackIds },
-      isAvailable: true,
-    }).lean();
+    })).lean();
 
     if (tracks.length === 0) {
       return res.status(404).json({ error: 'No valid tracks found' });
@@ -269,5 +269,4 @@ export const setCurrentTrack = async (req: AuthRequest, res: Response, next: Nex
     next(error);
   }
 };
-
 

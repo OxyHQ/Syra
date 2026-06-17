@@ -7,7 +7,10 @@ import { getGenres, getMadeForYou, getPopularTracks } from './browse.controller'
 import type { Request, Response, NextFunction } from 'express';
 
 beforeAll(connect);
-afterEach(clear);
+afterEach(async () => {
+  delete process.env.AUDIUS_CATALOG_ENABLED;
+  await clear();
+});
 afterAll(disconnect);
 
 // ── Fake req/res helpers ──────────────────────────────────────────────────────
@@ -44,7 +47,7 @@ async function seedTrack(overrides: Record<string, unknown> = {}): Promise<void>
     artistId: '507f1f77bcf86cd799439011',
     artistName: 'An Artist',
     duration: 180,
-    source: 'audius',
+    source: 'cc',
     status: 'ready',
     isExplicit: false,
     isAvailable: true,
@@ -72,7 +75,7 @@ describe('getGenres', () => {
     await seedTrack({ genre: 'Electronic' });
     await ArtistModel.create({
       name: 'Artist Genre',
-      source: 'audius',
+      source: 'cc',
       genres: ['Electronic', 'Jazz'],
       stats: { followers: 0, albums: 0, tracks: 0, totalPlays: 0 },
     });
@@ -83,7 +86,7 @@ describe('getGenres', () => {
       releaseDate: '2021-01-01T00:00:00Z',
       coverArt: 'https://cdn/cover.jpg',
       genre: ['Hip-Hop/Rap'],
-      source: 'audius',
+      source: 'cc',
     });
 
     const res = makeRes();
@@ -123,6 +126,17 @@ describe('getPopularTracks', () => {
     const body = res._body as { tracks: Array<{ title: string }> };
     expect(body.tracks.map((t) => t.title)).toEqual(['High', 'Mid', 'Low']);
   });
+
+  it('excludes Audius tracks by default', async () => {
+    await seedTrack({ title: 'Audius High', source: 'audius', playCount: 100000, popularity: 99 });
+    await seedTrack({ title: 'Playable Low', source: 'cc', playCount: 10, popularity: 1 });
+
+    const res = makeRes();
+    await getPopularTracks(makeReq(), res as unknown as Response, next);
+
+    const body = res._body as { tracks: Array<{ title: string }> };
+    expect(body.tracks.map((t) => t.title)).toEqual(['Playable Low']);
+  });
 });
 
 // ── getMadeForYou ─────────────────────────────────────────────────────────────
@@ -132,7 +146,7 @@ describe('getMadeForYou', () => {
     await seedTrack({ title: 'Popular', playCount: 100000, popularity: 80 });
     await ArtistModel.create({
       name: 'Popular Artist',
-      source: 'audius',
+      source: 'cc',
       popularity: 70,
       stats: { followers: 100, albums: 0, tracks: 1, totalPlays: 100000 },
     });
@@ -162,7 +176,7 @@ describe('getMadeForYou', () => {
         artistName: 'An Artist',
         releaseDate: '2021-01-01T00:00:00Z',
         coverArt: `https://cdn/cover-${i}.jpg`,
-        source: 'audius',
+        source: 'cc',
         popularity: 50,
       });
     }

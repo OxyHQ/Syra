@@ -11,16 +11,44 @@ const redisStore = new RedisStore({
   windowMs: 15 * 60 * 1000 // 15 minutes
 });
 
-// Rate limiting middleware with Redis store for distributed rate limiting
-// Realistic limits for production scale
+/**
+ * Paths exempt from the global API rate limiter.
+ *
+ * A music app fans out into MANY small GETs per screen (cover art, artist
+ * images, HLS manifest/key/segment sub-requests). Counting every image and
+ * every streaming sub-request against the same bucket exhausts it almost
+ * instantly. These are cheap, cacheable, and individually authorised, so they
+ * are excluded from the coarse global limiter (streaming has its own token
+ * guard; images are served from S3/cache).
+ */
+function isRateLimitExempt(req: Request): boolean {
+  const path = req.path;
+  return (
+    path.startsWith('/files/upload') ||
+    // Image proxy: a single screen can request dozens of covers/avatars.
+    path.startsWith('/api/images/') ||
+    path.includes('/images/') ||
+    // HLS streaming sub-requests (master/variant playlists, key, segments).
+    path.startsWith('/api/stream/') ||
+    // Liveness/readiness probes from the ALB/ECS must never be limited.
+    path === '/health'
+  );
+}
+
+// Rate limiting middleware with Redis store for distributed rate limiting.
+// Realistic limits for a media app: authenticated users fan out into many small
+// requests per screen, so the per-user budget is generous. The limiter runs
+// AFTER user resolution (see server.ts), so authenticated traffic is keyed per
+// user — not per shared egress IP behind the ALB.
 const rateLimiter = rateLimit({
   store: redisStore,
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: (req: Request) => {
     const authReq = req as AuthRequest;
-    // Authenticated users: 1000 requests per 15 minutes
-    // Unauthenticated users: 100 requests per 15 minutes
-    return authReq.user?.id ? 1000 : 100;
+    // Authenticated users: 5000 requests per 15 minutes (~5.5/sec sustained).
+    // Unauthenticated users: 600 per 15 minutes (~0.66/sec) — enough to browse
+    // public pages while still bounding anonymous abuse.
+    return authReq.user?.id ? 5000 : 600;
   },
   keyGenerator: (req: Request) => {
     const authReq = req as AuthRequest;
@@ -35,18 +63,18 @@ const rateLimiter = rateLimit({
   message: "Too many requests, please try again later.",
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req: Request) => req.path.startsWith('/files/upload')
+  skip: isRateLimitExempt,
 });
 
-// Brute force protection middleware (exclude file uploads)
+// Brute force protection middleware (exclude uploads, images, streaming, health)
 const bruteForceProtection: RequestHandler = slowDown({
   windowMs: 15 * 60 * 1000, // 15 minutes
   delayAfter: (req: Request) => {
     const authReq = req as AuthRequest;
-    return authReq.user?.id ? 1000 : 100;
+    return authReq.user?.id ? 5000 : 600;
   },
   delayMs: () => 500, // add 500ms delay per request above limit
-  skip: (req: Request) => req.path.startsWith('/files/upload')
+  skip: isRateLimitExempt,
 });
 
 /**

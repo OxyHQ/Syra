@@ -11,6 +11,7 @@ import { isDatabaseConnected } from '../utils/database';
 import { enqueueAudiusImport } from '../services/sources/audiusBackgroundImport';
 import { withImageFirstSort } from '../utils/imageFirstSort';
 import { logger } from '../utils/logger';
+import { playableTrackFilter, visibleCatalogFilter } from '../utils/catalogVisibility';
 import { oxy } from '../../server';
 
 /**
@@ -122,13 +123,13 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
 
     // Search tracks
     if (categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.TRACKS) {
-      const trackFind = TrackModel.find({
-          isAvailable: true,
+      const trackFilter = playableTrackFilter({
           $or: [
             { title: searchRegex },
             { artistName: searchRegex },
           ],
-        })
+        });
+      const trackFind = TrackModel.find(trackFilter)
           .sort(withImageFirstSort('track', { popularity: -1, createdAt: -1 }))
           .skip(searchOffset)
           .limit(searchLimit)
@@ -137,24 +138,19 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
         ? trackFind.then((docs) => [docs, docs.length])
         : Promise.all([
             trackFind,
-            TrackModel.countDocuments({
-              isAvailable: true,
-              $or: [
-                { title: searchRegex },
-                { artistName: searchRegex },
-              ],
-            }),
+            TrackModel.countDocuments(trackFilter),
           ]);
     }
 
     // Search albums
     if (categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.ALBUMS) {
-      const albumFind = AlbumModel.find({
+      const albumFilter = visibleCatalogFilter({
           $or: [
             { title: searchRegex },
             { artistName: searchRegex },
           ],
-        })
+        });
+      const albumFind = AlbumModel.find(albumFilter)
           .sort(withImageFirstSort('album', { popularity: -1, releaseDate: -1 }))
           .skip(searchOffset)
           .limit(searchLimit)
@@ -163,20 +159,16 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
         ? albumFind.then((docs) => [docs, docs.length])
         : Promise.all([
             albumFind,
-            AlbumModel.countDocuments({
-              $or: [
-                { title: searchRegex },
-                { artistName: searchRegex },
-              ],
-            }),
+            AlbumModel.countDocuments(albumFilter),
           ]);
     }
 
     // Search artists
     if (categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.ARTISTS) {
-      const artistFind = ArtistModel.find({
+      const artistFilter = visibleCatalogFilter({
           name: searchRegex,
-        })
+        });
+      const artistFind = ArtistModel.find(artistFilter)
           .sort(withImageFirstSort('artist', { popularity: -1, 'stats.followers': -1 }))
           .skip(searchOffset)
           .limit(searchLimit)
@@ -185,21 +177,20 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
         ? artistFind.then((docs) => [docs, docs.length])
         : Promise.all([
             artistFind,
-            ArtistModel.countDocuments({
-              name: searchRegex,
-            }),
+            ArtistModel.countDocuments(artistFilter),
           ]);
     }
 
     // Search playlists (only public playlists for now)
     if (categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.PLAYLISTS) {
-      const playlistFind = PlaylistModel.find({
+      const playlistFilter = visibleCatalogFilter({
           isPublic: true,
           $or: [
             { name: searchRegex },
             { description: searchRegex },
           ],
-        })
+        });
+      const playlistFind = PlaylistModel.find(playlistFilter)
           .sort(withImageFirstSort('playlist', { followers: -1, createdAt: -1 }))
           .skip(searchOffset)
           .limit(searchLimit)
@@ -208,13 +199,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
         ? playlistFind.then((docs) => [docs, docs.length])
         : Promise.all([
             playlistFind,
-            PlaylistModel.countDocuments({
-              isPublic: true,
-              $or: [
-                { name: searchRegex },
-                { description: searchRegex },
-              ],
-            }),
+            PlaylistModel.countDocuments(playlistFilter),
           ]);
     }
 

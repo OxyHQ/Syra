@@ -9,6 +9,7 @@ import { getParam } from '../utils/reqParams';
 import { recordPlay } from '../services/recommendations/recordPlay';
 import { applyLikeSignal, applyFollowSignal } from '../services/recommendations/tasteSignals';
 import { LISTENING_SOURCES, type ListeningSource } from '../models/ListeningEvent';
+import { playableTrackFilter } from '../utils/catalogVisibility';
 
 /** Validate a client-supplied listening source against the known set. */
 function parseListeningSource(value: unknown): ListeningSource {
@@ -132,10 +133,9 @@ export const getLikedTracks = async (req: AuthRequest, res: Response, next: Next
     // Only valid ObjectIds can match a Track _id; ignore any stale/invalid ids.
     const validTrackIds = likedTrackIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
 
-    const tracks = await TrackModel.find({
+    const tracks = await TrackModel.find(playableTrackFilter({
       _id: { $in: validTrackIds },
-      isAvailable: true,
-    }).lean();
+    })).lean();
 
     const formattedTracks = await formatTracksWithCoverArt(tracks);
 
@@ -354,10 +354,9 @@ export const getRecentlyPlayed = async (req: AuthRequest, res: Response, next: N
       return res.json({ tracks: [] });
     }
 
-    const tracks = await TrackModel.find({
+    const tracks = await TrackModel.find(playableTrackFilter({
       _id: { $in: orderedTrackIds },
-      isAvailable: true,
-    }).lean();
+    })).lean();
 
     const formattedTracks = await formatTracksWithCoverArt(tracks);
 

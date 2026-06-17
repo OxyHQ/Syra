@@ -14,6 +14,7 @@ import { getStoredImageColors } from '../utils/imageColors';
 import { enqueueIngest } from '../services/ingest/ingestTrack';
 import { getErrorMessage, getErrorStack, getHttpStatus } from '../utils/error';
 import { getParam } from '../utils/reqParams';
+import { playableTrackFilter } from '../utils/catalogVisibility';
 
 interface AudioUploadRequest extends AuthRequest {
   file?: Express.Multer.File;
@@ -33,12 +34,12 @@ export const getTracks = async (req: Request, res: Response, next: NextFunction)
     const offset = parseInt(req.query.offset as string) || 0;
 
     const [tracks, total] = await Promise.all([
-      TrackModel.find({ isAvailable: true })
+      TrackModel.find(playableTrackFilter())
         .sort({ createdAt: -1 })
         .skip(offset)
         .limit(limit)
         .lean(),
-      TrackModel.countDocuments({ isAvailable: true }),
+      TrackModel.countDocuments(playableTrackFilter()),
     ]);
 
     const formattedTracks = await formatTracksWithCoverArt(tracks);
@@ -70,7 +71,7 @@ export const getTrackById = async (req: Request, res: Response, next: NextFuncti
       return res.status(404).json({ error: 'Track not found' });
     }
     
-    const track = await TrackModel.findById(id).lean();
+    const track = await TrackModel.findOne(playableTrackFilter({ _id: id })).lean();
 
     if (!track) {
       return res.status(404).json({ error: 'Track not found' });
@@ -108,7 +109,7 @@ export const searchTracks = async (req: Request, res: Response, next: NextFuncti
     const searchRegex = new RegExp(query, 'i');
     const [tracks, total] = await Promise.all([
       TrackModel.find({
-        isAvailable: true,
+        ...playableTrackFilter(),
         $or: [
           { title: searchRegex },
           { artistName: searchRegex },
@@ -119,7 +120,7 @@ export const searchTracks = async (req: Request, res: Response, next: NextFuncti
         .limit(limit)
         .lean(),
       TrackModel.countDocuments({
-        isAvailable: true,
+        ...playableTrackFilter(),
         $or: [
           { title: searchRegex },
           { artistName: searchRegex },
