@@ -64,27 +64,19 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
   const theme = useTheme();
   const resolvedImageUri = pickImageUrl(images, imageUri, 300);
   const [isHovered, setIsHovered] = React.useState(false);
-  const [isPlayButtonHovered, setIsPlayButtonHovered] = React.useState(false);
   const [hideIdleActions, setHideIdleActions] = React.useState(shouldHideIdleActionsByDefault);
   const menuControl = Menu.useMenuControl();
-  const hoverOutTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isPlayButtonHoveredRef = React.useRef(false);
+  const isHoveredRef = React.useRef(false);
+  const isPointerInsideCardRef = React.useRef(false);
 
   // Auto-detect shape for artist type, or use provided shape
   const cardShape = shape || (type === 'artist' ? 'circle' : 'square');
   const borderRadius = cardShape === 'circle' ? 999 : 8;
   
-  // Show play button if card is hovered OR play button itself is hovered
-  const showPlayButton = (isHovered || isPlayButtonHovered) && onPlayPress;
+  const showPlayButton = isHovered && onPlayPress;
   const hasMenu = !!(onAddToQueue || onGoToArtist || onGoToAlbum);
   const isMenuOpen = 'isOpen' in menuControl ? Boolean(menuControl.isOpen) : false;
   const hoverBackground = colorWithAlpha(primaryColor, 0.26) ?? theme.colors.backgroundSecondary;
-
-  React.useEffect(() => () => {
-    if (hoverOutTimeoutRef.current) {
-      clearTimeout(hoverOutTimeoutRef.current);
-    }
-  }, []);
 
   React.useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.matchMedia) {
@@ -104,29 +96,38 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
     };
   }, []);
 
-  const clearHoverOutTimeout = () => {
-    if (hoverOutTimeoutRef.current) {
-      clearTimeout(hoverOutTimeoutRef.current);
-      hoverOutTimeoutRef.current = null;
+  const setCardHoverState = React.useCallback((nextHovered: boolean) => {
+    if (isHoveredRef.current === nextHovered) {
+      return;
     }
-  };
 
-  const activateHover = () => {
-    clearHoverOutTimeout();
-    setIsHovered(true);
-    onHoverIn?.();
-  };
+    isHoveredRef.current = nextHovered;
+    setIsHovered(nextHovered);
 
-  const scheduleHoverOut = () => {
-    clearHoverOutTimeout();
-    hoverOutTimeoutRef.current = setTimeout(() => {
-      if (!isPlayButtonHoveredRef.current) {
-        setIsHovered(false);
-        onHoverOut?.();
-      }
-      hoverOutTimeoutRef.current = null;
-    }, 0);
-  };
+    if (nextHovered) {
+      onHoverIn?.();
+    } else {
+      onHoverOut?.();
+    }
+  }, [onHoverIn, onHoverOut]);
+
+  const activateHover = React.useCallback(() => {
+    isPointerInsideCardRef.current = true;
+    setCardHoverState(true);
+  }, [setCardHoverState]);
+
+  const deactivateHover = React.useCallback(() => {
+    isPointerInsideCardRef.current = false;
+    if (!isMenuOpen) {
+      setCardHoverState(false);
+    }
+  }, [isMenuOpen, setCardHoverState]);
+
+  React.useEffect(() => {
+    if (!isMenuOpen && !isPointerInsideCardRef.current) {
+      setCardHoverState(false);
+    }
+  }, [isMenuOpen, setCardHoverState]);
 
   const getIcon = () => {
     switch (type) {
@@ -240,26 +241,26 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
     );
   };
   
-  const handleCardHoverOut = () => {
-    // Only set hover to false if play button is not hovered
-    if (!isPlayButtonHoveredRef.current) {
-      scheduleHoverOut();
-    }
-  };
+  const hoverHandlers = Platform.OS === 'web'
+    ? ({
+      onMouseEnter: activateHover,
+      onMouseLeave: deactivateHover,
+    } as Record<string, unknown>)
+    : {
+      onHoverIn: activateHover,
+      onHoverOut: deactivateHover,
+    };
 
   return (
     <Pressable
+      {...hoverHandlers}
       onPress={onPress}
-      onHoverIn={activateHover}
-      onHoverOut={() => {
-        handleCardHoverOut();
-      }}
       onFocus={activateHover}
-      onBlur={scheduleHoverOut}
+      onBlur={deactivateHover}
       style={[
         styles.container,
         (isHovered || isMenuOpen) && styles.containerRaised,
-        (isHovered || isPlayButtonHovered) && { backgroundColor: hoverBackground },
+        isHovered && { backgroundColor: hoverBackground },
         ...Platform.select({
           web: [webViewStyle({ cursor: 'pointer' })],
           default: [],
@@ -290,18 +291,6 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
           <Pressable 
             style={styles.playOverlay}
             onPress={handlePlayPress}
-            onHoverIn={() => {
-              clearHoverOutTimeout();
-              isPlayButtonHoveredRef.current = true;
-              setIsPlayButtonHovered(true);
-              setIsHovered(true);
-              onHoverIn?.();
-            }}
-            onHoverOut={() => {
-              isPlayButtonHoveredRef.current = false;
-              setIsPlayButtonHovered(false);
-              scheduleHoverOut();
-            }}
           >
             <View style={[styles.playButton, { backgroundColor: theme.colors.primary }]}>
               <Ionicons name="play" size={24} color={theme.colors.primaryForeground} />

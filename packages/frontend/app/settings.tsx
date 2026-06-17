@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { View, Text, ScrollView, Alert } from 'react-native';
+import { View, Text, ScrollView, Alert, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMutation } from '@tanstack/react-query';
 import { useOxy } from '@oxyhq/services';
@@ -213,11 +213,19 @@ const SettingsScreen: React.FC = () => {
       <ThemedView className="flex-1">
         <ScrollView
           className="flex-1"
-          contentContainerClassName="py-4"
+          contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
+          <View style={styles.contentColumn}>
+            <View style={styles.pageHeader}>
+              <Text className="text-3xl font-bold text-foreground">Settings</Text>
+              <Text className="text-sm text-muted-foreground">
+                Account, playback, privacy, appearance and app preferences
+              </Text>
+            </View>
+
           {/* Account header */}
-          <View className="items-center py-4 gap-1">
+          <View style={styles.accountHeader}>
             <Avatar source={avatarUri ? { uri: avatarUri } : undefined} size={80} />
             <Text className="text-2xl font-bold text-foreground mt-2" numberOfLines={1}>
               {userName}
@@ -290,71 +298,68 @@ const SettingsScreen: React.FC = () => {
                 />
               }
             />
+            <View style={styles.groupControl}>
+              <Slider
+                value={musicPreferences?.crossfade ?? 0}
+                onValueChange={(value) => updateMusicPreferences({ crossfade: value })}
+                minimumValue={0}
+                maximumValue={12}
+                step={1}
+                label="Crossfade"
+                formatValue={(value) => (value === 0 ? 'Off' : `${value}s`)}
+              />
+              <Text className="text-xs mt-1 text-muted-foreground">
+                Overlap songs when switching tracks
+              </Text>
+            </View>
           </SettingsListGroup>
 
-          <View className="px-5 py-3">
-            <Slider
-              value={musicPreferences?.crossfade ?? 0}
-              onValueChange={(value) => updateMusicPreferences({ crossfade: value })}
-              minimumValue={0}
-              maximumValue={12}
-              step={1}
-              label="Crossfade"
-              formatValue={(value) => (value === 0 ? 'Off' : `${value}s`)}
-            />
-            <Text className="text-xs mt-1 text-muted-foreground">
-              Overlap songs when switching tracks
-            </Text>
-          </View>
-
           {/* Audio quality */}
-          <SettingsControlSection title="Streaming quality" caption="Higher quality uses more data">
-            <SegmentedControl.Root<AudioQuality>
-              label="Streaming quality"
-              type="radio"
-              value={musicPreferences?.audioQuality ?? 'normal'}
-              onChange={(value) => updateMusicPreferences({ audioQuality: value })}
-            >
-              <SegmentedControl.Item value="low">
-                <SegmentedControl.ItemText>Low</SegmentedControl.ItemText>
-              </SegmentedControl.Item>
-              <SegmentedControl.Item value="normal">
-                <SegmentedControl.ItemText>Normal</SegmentedControl.ItemText>
-              </SegmentedControl.Item>
-              <SegmentedControl.Item value="high">
-                <SegmentedControl.ItemText>High</SegmentedControl.ItemText>
-              </SegmentedControl.Item>
-              <SegmentedControl.Item value="very_high">
-                <SegmentedControl.ItemText>Very high</SegmentedControl.ItemText>
-              </SegmentedControl.Item>
-            </SegmentedControl.Root>
-          </SettingsControlSection>
+          <SettingsListGroup title="Audio quality">
+            <SettingsControlSection title="Streaming quality" caption="Higher quality uses more data">
+              <SegmentedControl.Root<AudioQuality>
+                label="Streaming quality"
+                type="radio"
+                value={musicPreferences?.audioQuality ?? 'normal'}
+                onChange={(value) => updateMusicPreferences({ audioQuality: value })}
+              >
+                <SegmentedControl.Item value="low">
+                  <SegmentedControl.ItemText>Low</SegmentedControl.ItemText>
+                </SegmentedControl.Item>
+                <SegmentedControl.Item value="normal">
+                  <SegmentedControl.ItemText>Normal</SegmentedControl.ItemText>
+                </SegmentedControl.Item>
+                <SegmentedControl.Item value="high">
+                  <SegmentedControl.ItemText>High</SegmentedControl.ItemText>
+                </SegmentedControl.Item>
+                <SegmentedControl.Item value="very_high">
+                  <SegmentedControl.ItemText>Very high</SegmentedControl.ItemText>
+                </SegmentedControl.Item>
+              </SegmentedControl.Root>
+            </SettingsControlSection>
 
-          <SettingsListDivider />
+            <SettingsControlSection title="Download quality" caption="Quality for downloaded music">
+              <SegmentedControl.Root<AudioQuality>
+                label="Download quality"
+                type="radio"
+                value={musicPreferences?.downloadQuality ?? 'normal'}
+                onChange={(value) => updateMusicPreferences({ downloadQuality: value })}
+              >
+                <SegmentedControl.Item value="low">
+                  <SegmentedControl.ItemText>Low</SegmentedControl.ItemText>
+                </SegmentedControl.Item>
+                <SegmentedControl.Item value="normal">
+                  <SegmentedControl.ItemText>Normal</SegmentedControl.ItemText>
+                </SegmentedControl.Item>
+                <SegmentedControl.Item value="high">
+                  <SegmentedControl.ItemText>High</SegmentedControl.ItemText>
+                </SegmentedControl.Item>
+                <SegmentedControl.Item value="very_high">
+                  <SegmentedControl.ItemText>Very high</SegmentedControl.ItemText>
+                </SegmentedControl.Item>
+              </SegmentedControl.Root>
+            </SettingsControlSection>
 
-          <SettingsControlSection title="Download quality" caption="Quality for downloaded music">
-            <SegmentedControl.Root<AudioQuality>
-              label="Download quality"
-              type="radio"
-              value={musicPreferences?.downloadQuality ?? 'normal'}
-              onChange={(value) => updateMusicPreferences({ downloadQuality: value })}
-            >
-              <SegmentedControl.Item value="low">
-                <SegmentedControl.ItemText>Low</SegmentedControl.ItemText>
-              </SegmentedControl.Item>
-              <SegmentedControl.Item value="normal">
-                <SegmentedControl.ItemText>Normal</SegmentedControl.ItemText>
-              </SegmentedControl.Item>
-              <SegmentedControl.Item value="high">
-                <SegmentedControl.ItemText>High</SegmentedControl.ItemText>
-              </SegmentedControl.Item>
-              <SegmentedControl.Item value="very_high">
-                <SegmentedControl.ItemText>Very high</SegmentedControl.ItemText>
-              </SegmentedControl.Item>
-            </SegmentedControl.Root>
-          </SettingsControlSection>
-
-          <SettingsListGroup>
             <SettingsListItem
               icon={<RowIcon name="wifi-outline" />}
               title="Data saver"
@@ -383,7 +388,7 @@ const SettingsScreen: React.FC = () => {
 
           {/* Privacy */}
           {privacySettings && (
-            <>
+            <SettingsListGroup title="Privacy">
               <SettingsControlSection
                 title="Profile visibility"
                 caption="Who can see your profile"
@@ -406,80 +411,80 @@ const SettingsScreen: React.FC = () => {
                 </SegmentedControl.Root>
               </SettingsControlSection>
 
-              <SettingsListGroup>
-                <SettingsListItem
-                  icon={<RowIcon name="card-outline" />}
-                  title="Show contact info"
-                  description="Display your contact information on your profile"
-                  showChevron={false}
-                  rightElement={
-                    <Switch
-                      value={privacySettings.showContactInfo ?? true}
-                      onValueChange={(value) => handlePrivacyUpdate({ showContactInfo: value })}
-                    />
-                  }
-                />
-                <SettingsListItem
-                  icon={<RowIcon name="ellipse-outline" />}
-                  title="Show online status"
-                  description="Let others see when you're online"
-                  showChevron={false}
-                  rightElement={
-                    <Switch
-                      value={privacySettings.showOnlineStatus ?? true}
-                      onValueChange={(value) => handlePrivacyUpdate({ showOnlineStatus: value })}
-                    />
-                  }
-                />
-              </SettingsListGroup>
-            </>
+              <SettingsListItem
+                icon={<RowIcon name="card-outline" />}
+                title="Show contact info"
+                description="Display your contact information on your profile"
+                showChevron={false}
+                rightElement={
+                  <Switch
+                    value={privacySettings.showContactInfo ?? true}
+                    onValueChange={(value) => handlePrivacyUpdate({ showContactInfo: value })}
+                  />
+                }
+              />
+              <SettingsListItem
+                icon={<RowIcon name="ellipse-outline" />}
+                title="Show online status"
+                description="Let others see when you're online"
+                showChevron={false}
+                rightElement={
+                  <Switch
+                    value={privacySettings.showOnlineStatus ?? true}
+                    onValueChange={(value) => handlePrivacyUpdate({ showOnlineStatus: value })}
+                  />
+                }
+              />
+            </SettingsListGroup>
           )}
 
           {/* Appearance */}
-          <SettingsControlSection icon="phone-portrait-outline" title="Color mode">
-            <SegmentedControl.Root<'system' | 'light' | 'dark'>
-              label="Color mode"
-              type="radio"
-              value={themeMode}
-              onChange={handleThemeModeChange}
-            >
-              <SegmentedControl.Item value="system">
-                <SegmentedControl.ItemText>System</SegmentedControl.ItemText>
-              </SegmentedControl.Item>
-              <SegmentedControl.Item value="light">
-                <SegmentedControl.ItemText>Light</SegmentedControl.ItemText>
-              </SegmentedControl.Item>
-              <SegmentedControl.Item value="dark">
-                <SegmentedControl.ItemText>Dark</SegmentedControl.ItemText>
-              </SegmentedControl.Item>
-            </SegmentedControl.Root>
-          </SettingsControlSection>
+          <SettingsListGroup title="Appearance">
+            <SettingsControlSection icon="phone-portrait-outline" title="Color mode">
+              <SegmentedControl.Root<'system' | 'light' | 'dark'>
+                label="Color mode"
+                type="radio"
+                value={themeMode}
+                onChange={handleThemeModeChange}
+              >
+                <SegmentedControl.Item value="system">
+                  <SegmentedControl.ItemText>System</SegmentedControl.ItemText>
+                </SegmentedControl.Item>
+                <SegmentedControl.Item value="light">
+                  <SegmentedControl.ItemText>Light</SegmentedControl.ItemText>
+                </SegmentedControl.Item>
+                <SegmentedControl.Item value="dark">
+                  <SegmentedControl.ItemText>Dark</SegmentedControl.ItemText>
+                </SegmentedControl.Item>
+              </SegmentedControl.Root>
+            </SettingsControlSection>
 
-          <SettingsListDivider />
-
-          <View className="px-5 py-3 gap-3">
-            <View className="flex-row items-center gap-3">
-              <RowIcon name="color-palette-outline" />
-              <Text className="text-[16px] text-foreground">Accent color</Text>
+            <View className="px-5 py-3 gap-3">
+              <View className="flex-row items-center gap-3">
+                <RowIcon name="color-palette-outline" />
+                <Text className="text-[16px] text-foreground">Accent color</Text>
+              </View>
+              <ColorSwatchPicker value={colorPreset} onChange={handleColorChange} />
             </View>
-            <ColorSwatchPicker value={colorPreset} onChange={handleColorChange} />
-          </View>
+          </SettingsListGroup>
 
           {/* Language */}
-          <SettingsControlSection icon="language-outline" title="Language">
-            <SegmentedControl.Root<string>
-              label="Language"
-              type="radio"
-              value={i18n.language || 'en-US'}
-              onChange={handleLanguageChange}
-            >
-              {LANGUAGE_OPTIONS.map((option) => (
-                <SegmentedControl.Item key={option.value} value={option.value}>
-                  <SegmentedControl.ItemText>{option.label}</SegmentedControl.ItemText>
-                </SegmentedControl.Item>
-              ))}
-            </SegmentedControl.Root>
-          </SettingsControlSection>
+          <SettingsListGroup title="Language">
+            <SettingsControlSection icon="language-outline" title="Language">
+              <SegmentedControl.Root<string>
+                label="Language"
+                type="radio"
+                value={i18n.language || 'en-US'}
+                onChange={handleLanguageChange}
+              >
+                {LANGUAGE_OPTIONS.map((option) => (
+                  <SegmentedControl.Item key={option.value} value={option.value}>
+                    <SegmentedControl.ItemText>{option.label}</SegmentedControl.ItemText>
+                  </SegmentedControl.Item>
+                ))}
+              </SegmentedControl.Root>
+            </SettingsControlSection>
+          </SettingsListGroup>
 
           {/* Storage */}
           <SettingsListGroup title="Storage">
@@ -527,11 +532,37 @@ const SettingsScreen: React.FC = () => {
             />
           </SettingsListGroup>
 
-          <View className="h-24" />
+            <View className="h-24" />
+          </View>
         </ScrollView>
       </ThemedView>
     </>
   );
 };
+
+const styles = StyleSheet.create({
+  scrollContent: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+  },
+  contentColumn: {
+    alignSelf: 'center',
+    maxWidth: 880,
+  },
+  pageHeader: {
+    gap: 4,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+  },
+  accountHeader: {
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 16,
+  },
+  groupControl: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+});
 
 export default SettingsScreen;
