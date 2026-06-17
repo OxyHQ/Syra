@@ -19,6 +19,33 @@ export interface UseImagePickerOptions {
   maxHeight?: number;
 }
 
+interface ReactNativeFormDataFile {
+  uri: string;
+  name: string;
+  type: string;
+}
+
+interface ApiErrorResponse {
+  response?: {
+    data?: {
+      message?: unknown;
+    };
+  };
+  message?: unknown;
+}
+
+const getUploadErrorMessage = (error: unknown): string => {
+  const apiError = error as ApiErrorResponse;
+  const responseMessage = apiError.response?.data?.message;
+  if (typeof responseMessage === 'string' && responseMessage.trim()) {
+    return responseMessage;
+  }
+  if (typeof apiError.message === 'string' && apiError.message.trim()) {
+    return apiError.message;
+  }
+  return 'Failed to upload image. Please try again.';
+};
+
 /**
  * Hook for picking images from device
  * Supports both library and camera selection
@@ -127,11 +154,12 @@ export function useImagePicker(options: UseImagePickerOptions = {}) {
       const fileName = imageResult.uri.split('/').pop() || `image-${Date.now()}.jpg`;
       
       // Expo 54 handles platform differences automatically
-      formData.append('image', {
+      const uploadFile: ReactNativeFormDataFile = {
         uri: imageResult.uri,
         name: fileName,
         type: imageResult.type || 'image/jpeg',
-      } as any);
+      };
+      formData.append('image', uploadFile as unknown as Blob);
 
       // Upload to backend - authenticated client automatically includes auth token.
       // @oxyhq/core's HttpService resolves with the response body itself
@@ -139,10 +167,9 @@ export function useImagePicker(options: UseImagePickerOptions = {}) {
       const response: { id: string } = await api.post('/images/upload', formData);
 
       return response.id;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Image upload error:', error);
-      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to upload image. Please try again.';
-      Alert.alert('Error', errorMessage);
+      Alert.alert('Error', getUploadErrorMessage(error));
       return undefined;
     } finally {
       setIsUploading(false);
@@ -156,4 +183,3 @@ export function useImagePicker(options: UseImagePickerOptions = {}) {
     isUploading,
   };
 }
-

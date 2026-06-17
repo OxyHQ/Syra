@@ -35,18 +35,21 @@ import { Blob as ExpoBlob } from 'expo-blob';
  * - Proper slice() method support (unlike React Native's Blob)
  */
 export { ExpoBlob as Blob };
+export type ExpoBlobInstance = InstanceType<typeof ExpoBlob>;
+
+type IterableItem<T> = T extends Iterable<infer Item> ? Item : never;
+type ExpoBlobParts = NonNullable<ConstructorParameters<typeof ExpoBlob>[0]>;
 
 /**
- * BlobPart represents acceptable values for Blob constructor
- * Can be: string | ArrayBuffer | ArrayBufferView | Blob
+ * BlobPart represents the values accepted by expo-blob's Blob constructor.
  */
-export type BlobPart = string | ArrayBuffer | ArrayBufferView | Blob | Uint8Array | Int8Array | Uint16Array | Int16Array | Uint32Array | Int32Array | Float32Array | Float64Array;
+export type BlobPart = IterableItem<ExpoBlobParts>;
 
 /**
  * Helper function to create a Blob from text
  */
-export function createTextBlob(text: string, mimeType: string = 'text/plain'): Blob {
-  return new Blob([text], { type: mimeType });
+export function createTextBlob(text: string, mimeType: string = 'text/plain'): ExpoBlobInstance {
+  return new ExpoBlob([text], { type: mimeType });
 }
 
 /**
@@ -55,31 +58,31 @@ export function createTextBlob(text: string, mimeType: string = 'text/plain'): B
 export function createBinaryBlob(
   data: ArrayBuffer | Uint8Array | ArrayBufferView | BlobPart,
   mimeType: string = 'application/octet-stream'
-): Blob {
-  return new Blob([data as any], { type: mimeType });
+): ExpoBlobInstance {
+  return new ExpoBlob([data], { type: mimeType });
 }
 
 /**
  * Helper function to create a Blob from mixed content
  */
 export function createMixedBlob(
-  parts: (string | ArrayBuffer | ArrayBufferView | Blob)[],
+  parts: BlobPart[],
   mimeType: string = ''
-): Blob {
-  return new Blob(parts as any, { type: mimeType });
+): ExpoBlobInstance {
+  return new ExpoBlob(parts, { type: mimeType });
 }
 
 /**
  * Helper function to check if a value is a Blob
  */
-export function isBlob(value: any): value is Blob {
-  return value instanceof Blob;
+export function isBlob(value: unknown): value is ExpoBlobInstance {
+  return value instanceof ExpoBlob;
 }
 
 /**
  * Helper function to get blob info
  */
-export function getBlobInfo(blob: Blob): { size: number; type: string } {
+export function getBlobInfo(blob: ExpoBlobInstance | globalThis.Blob): { size: number; type: string } {
   return {
     size: blob.size,
     type: blob.type,
@@ -101,7 +104,7 @@ export function isBlobUrl(url: string): boolean {
  * @param originalUri - Fallback URI if blob URL creation fails or on unsupported platforms
  * @returns Blob URL when supported, otherwise original URI
  */
-export function createBlobUrl(fileOrBlob: File | Blob, originalUri?: string): string {
+export function createBlobUrl(fileOrBlob: File | globalThis.Blob, originalUri?: string): string {
   // URL.createObjectURL is available on web platforms
   if (typeof window !== 'undefined' && typeof URL !== 'undefined' && URL.createObjectURL) {
     try {
@@ -118,7 +121,7 @@ export function createBlobUrl(fileOrBlob: File | Blob, originalUri?: string): st
 
 /**
  * Revoke a blob URL to free memory
- * Safe to call on non-blob URLs or on any platform
+ * Safe to call on non-blob URLs or every supported platform
  * 
  * @param url - Blob URL to revoke
  */
@@ -135,4 +138,3 @@ export function revokeBlobUrl(url: string | null | undefined): void {
     }
   }
 }
-

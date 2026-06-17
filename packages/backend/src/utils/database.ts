@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import type { ConnectOptions } from "mongoose";
 import { logger } from "./logger";
 import { getErrorMessage } from "./error";
 
@@ -21,6 +22,22 @@ function getRetryDelay(attempt: number): number {
  */
 function wait(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+const READ_PREFERENCES = new Set<NonNullable<ConnectOptions['readPreference']>>([
+  'primary',
+  'primaryPreferred',
+  'secondary',
+  'secondaryPreferred',
+  'nearest',
+]);
+
+function getMongoReadPreference(): ConnectOptions['readPreference'] {
+  const readPreference = process.env.MONGODB_READ_PREFERENCE;
+  if (readPreference && READ_PREFERENCES.has(readPreference as NonNullable<ConnectOptions['readPreference']>)) {
+    return readPreference as ConnectOptions['readPreference'];
+  }
+  return 'primary';
 }
 
 function getDatabaseName(): string {
@@ -64,7 +81,7 @@ export async function connectToDatabase(): Promise<typeof mongoose> {
         minPoolSize: parseInt(process.env.MONGODB_MIN_POOL_SIZE || '10'), // Minimum number of connections to maintain (increased from 5)
         maxIdleTimeMS: 60000, // Close connections after 60 seconds of inactivity (increased from 30s for better connection reuse)
         // Read preference for read replicas (if configured)
-        readPreference: process.env.MONGODB_READ_PREFERENCE as any || 'primary',
+        readPreference: getMongoReadPreference(),
         // Write concern for data durability
         w: 'majority',
         wtimeoutMS: 5000, // Fixed: use wtimeoutMS instead of deprecated wtimeout
@@ -148,6 +165,7 @@ export function isDatabaseConnected(): boolean {
 export function getDatabaseStats() {
   const state = mongoose.connection.readyState;
   const states = ['disconnected', 'connected', 'connecting', 'disconnecting'];
+  const serverConfig = (mongoose.connection.db as unknown as { serverConfig?: { poolSize?: number } } | undefined)?.serverConfig;
   
   return {
     state: states[state] || 'unknown',
@@ -156,8 +174,7 @@ export function getDatabaseStats() {
     port: mongoose.connection.port,
     name: mongoose.connection.name,
     // Connection pool stats (if available)
-    poolSize: (mongoose.connection.db as any)?.serverConfig?.poolSize,
+    poolSize: serverConfig?.poolSize,
   };
 }
-
 

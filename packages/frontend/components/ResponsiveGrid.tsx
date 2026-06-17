@@ -10,6 +10,7 @@ import {
 interface ResponsiveGridProps {
   children: React.ReactNode;
   minItemWidth: number;
+  minColumns?: number;
   gap?: number;
   style?: StyleProp<ViewStyle>;
   itemStyle?: StyleProp<ViewStyle>;
@@ -18,21 +19,28 @@ interface ResponsiveGridProps {
 export function getResponsiveGridLayout({
   containerWidth,
   minItemWidth,
+  minColumns = 1,
   gap,
 }: {
   containerWidth: number;
   minItemWidth: number;
+  minColumns?: number;
   gap: number;
 }) {
+  const minimumColumns = Math.max(1, Math.floor(minColumns));
+
   if (containerWidth <= 0) {
-    return { columns: 1, itemWidth: minItemWidth };
+    return { columns: minimumColumns, itemWidth: minItemWidth };
   }
 
   const columns = Math.max(
-    1,
+    minimumColumns,
     Math.floor((containerWidth + gap) / (minItemWidth + gap)),
   );
-  const itemWidth = Math.floor((containerWidth - gap * (columns - 1)) / columns);
+  const itemWidth = Math.max(
+    1,
+    Math.floor((containerWidth - gap * (columns - 1)) / columns),
+  );
 
   return { columns, itemWidth };
 }
@@ -40,6 +48,7 @@ export function getResponsiveGridLayout({
 export function ResponsiveGrid({
   children,
   minItemWidth,
+  minColumns = 1,
   gap = 8,
   style,
   itemStyle,
@@ -48,8 +57,8 @@ export function ResponsiveGrid({
   const items = useMemo(() => React.Children.toArray(children), [children]);
 
   const layout = useMemo(() => {
-    return getResponsiveGridLayout({ containerWidth, gap, minItemWidth });
-  }, [containerWidth, gap, minItemWidth]);
+    return getResponsiveGridLayout({ containerWidth, gap, minItemWidth, minColumns });
+  }, [containerWidth, gap, minColumns, minItemWidth]);
 
   const handleLayout = (event: LayoutChangeEvent) => {
     const nextWidth = Math.floor(event.nativeEvent.layout.width);

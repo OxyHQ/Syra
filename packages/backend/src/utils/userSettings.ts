@@ -1,4 +1,4 @@
-import UserSettings from '../models/UserSettings';
+import UserSettings, { IUserSettings } from '../models/UserSettings';
 
 /**
  * Default profile customization settings
@@ -12,21 +12,26 @@ export const DEFAULT_PROFILE_CUSTOMIZATION = {
  * Ensures a UserSettings document exists for a user
  * Creates with defaults if missing, updates if missing profileCustomization
  */
+type UserSettingsLean = Pick<
+  IUserSettings,
+  'oxyUserId' | 'appearance' | 'profileHeaderImage' | 'profileCustomization'
+>;
+
 export async function ensureUserSettings(oxyUserId: string) {
-  let doc = await UserSettings.findOne({ oxyUserId }).lean();
+  let doc = await UserSettings.findOne({ oxyUserId }).lean<UserSettingsLean>();
   
   if (!doc) {
     const created = await UserSettings.create({ 
       oxyUserId,
       profileCustomization: DEFAULT_PROFILE_CUSTOMIZATION,
     });
-    doc = created.toObject() as any;
+    doc = created.toObject() as UserSettingsLean;
   } else if (!doc.profileCustomization) {
     doc = await UserSettings.findOneAndUpdate(
       { oxyUserId },
       { $set: { profileCustomization: DEFAULT_PROFILE_CUSTOMIZATION } },
       { new: true }
-    ).lean();
+    ).lean<UserSettingsLean>();
   }
   
   return doc;
@@ -35,7 +40,7 @@ export async function ensureUserSettings(oxyUserId: string) {
 /**
  * Extracts public profile design data from UserSettings document
  */
-export function extractPublicProfileData(doc: any, userId: string) {
+export function extractPublicProfileData(doc: Pick<IUserSettings, 'appearance' | 'profileHeaderImage' | 'profileCustomization'> | null | undefined, userId: string) {
   return {
     oxyUserId: userId,
     appearance: doc?.appearance?.primaryColor ? {
@@ -45,4 +50,3 @@ export function extractPublicProfileData(doc: any, userId: string) {
     profileCustomization: doc?.profileCustomization || DEFAULT_PROFILE_CUSTOMIZATION,
   };
 }
-

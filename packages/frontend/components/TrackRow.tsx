@@ -5,6 +5,7 @@ import { useTheme } from '@oxyhq/bloom/theme';
 import { Track } from '@syra/shared-types';
 import { formatDuration } from '@/utils/musicUtils';
 import { useLibrary, useToggleLikeTrack } from '@/hooks/useLibrary';
+import { webViewStyle } from '@/utils/webStyles';
 
 interface TrackRowProps {
   track: Track;
@@ -44,7 +45,7 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
         styles.trackRow,
         isCurrentTrack && { backgroundColor: theme.colors.backgroundSecondary + '40' },
         ...Platform.select({
-          web: [{ cursor: 'pointer' as any }],
+          web: [webViewStyle({ cursor: 'pointer' })],
           default: [],
         }),
       ]}
@@ -214,4 +215,3 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
 });
-

@@ -23,6 +23,7 @@ import { toast } from 'sonner';
 import { pickImageUrl } from '@/utils/pickImage';
 import { useOxy } from '@oxyhq/services';
 import { useLibrary, useToggleFollowArtist } from '@/hooks/useLibrary';
+import { webViewStyle } from '@/utils/webStyles';
 
 const HEADER_HEIGHT = 400;
 
@@ -476,9 +477,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderBottomWidth: 1,
     ...Platform.select({
-      web: {
-        position: 'sticky' as any,
-      },
+      web: webViewStyle({
+        position: 'sticky',
+      }),
     }),
   },
   stickyHeaderContent: {

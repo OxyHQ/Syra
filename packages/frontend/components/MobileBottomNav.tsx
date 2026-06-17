@@ -4,6 +4,9 @@ import { useRouter, usePathname } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { webViewStyle } from '@/utils/webStyles';
+
+type MaterialCommunityIconName = keyof typeof MaterialCommunityIcons.glyphMap;
 
 /**
  * Mobile Bottom Navigation Bar
@@ -14,7 +17,7 @@ export const MobileBottomNav: React.FC = () => {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
 
-  const tabs: { name: string; icon: string; iconOutline: string; route: '/' | '/search' | '/library' }[] = [
+  const tabs: { name: string; icon: MaterialCommunityIconName; iconOutline: MaterialCommunityIconName; route: '/' | '/search' | '/library' }[] = [
     {
       name: 'Home',
       icon: 'home',
@@ -60,7 +63,7 @@ export const MobileBottomNav: React.FC = () => {
             style={styles.tab}
           >
             <MaterialCommunityIcons
-              name={active ? tab.icon as any : tab.iconOutline as any}
+              name={active ? tab.icon : tab.iconOutline}
               size={24}
               color={active ? "#FFFFFF" : "#999999"}
             />
@@ -91,10 +94,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     alignItems: 'center',
     ...Platform.select({
-      web: {
-        position: 'fixed' as any,
+      web: webViewStyle({
+        position: 'fixed',
         height: 60,
-      },
+      }),
       default: {
         elevation: 8,
         shadowColor: '#000',
@@ -117,4 +120,3 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
-

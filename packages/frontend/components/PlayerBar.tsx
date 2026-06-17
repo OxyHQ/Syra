@@ -11,6 +11,14 @@ import { DevicePicker } from './DevicePicker';
 import { pickImageUrl } from '@/utils/pickImage';
 import { useLibrary, useToggleLikeTrack } from '@/hooks/useLibrary';
 
+interface WebPressTarget {
+  getBoundingClientRect?: () => { left: number; width: number };
+}
+
+interface WebNativePressEvent {
+  clientX?: number;
+}
+
 const clamp = (value: number, min: number, max: number) => (
   Math.min(max, Math.max(min, value))
 );
@@ -75,6 +83,18 @@ export const PlayerBar: React.FC = () => {
     await seek(newPosition);
   };
 
+  const seekFromWebPress = (event: { currentTarget: unknown; nativeEvent: unknown }) => {
+    const target = event.currentTarget as WebPressTarget;
+    const nativeEvent = event.nativeEvent as WebNativePressEvent;
+    const rect = target.getBoundingClientRect?.();
+
+    if (rect && nativeEvent.clientX !== undefined && rect.width > 0 && duration > 0) {
+      const x = clamp(nativeEvent.clientX - rect.left, 0, rect.width);
+      const newPosition = (x / rect.width) * duration;
+      handleSeek(newPosition);
+    }
+  };
+
   const repeatIcon = repeat === 'one' ? 'repeat-once' : 'repeat';
   const repeatActive = repeat !== 'off';
   const hasNext = !!queue && queue.tracks.length > 1;
@@ -100,15 +120,7 @@ export const PlayerBar: React.FC = () => {
         onLayout={(event) => setProgressBarWidth(event.nativeEvent.layout.width)}
         onPress={(e) => {
           if (Platform.OS === 'web') {
-            const rect = (e.currentTarget as any)?.getBoundingClientRect();
-            if (rect) {
-              const clientX = (e.nativeEvent as any).clientX;
-              if (clientX !== undefined && rect.width > 0 && duration > 0) {
-                const x = clamp(clientX - rect.left, 0, rect.width);
-                const newPosition = (x / rect.width) * duration;
-                handleSeek(newPosition);
-              }
-            }
+            seekFromWebPress(e);
           }
         }}
       >

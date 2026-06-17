@@ -43,7 +43,7 @@ export interface AudioSourceInput {
 /**
  * Minimal player interface satisfied by both expo-audio's `AudioPlayer` and
  * `WebHlsPlayer`. The store types its `player` field as `PlayerEngine | null`
- * so that no `as any` cast is needed when switching between engines.
+ * so that engine switching stays fully typed.
  */
 export interface PlayerEngine {
   /** Whether playback is currently active (not paused). */

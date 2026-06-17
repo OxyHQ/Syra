@@ -5,7 +5,7 @@ import { useTheme } from '@oxyhq/bloom/theme';
 import { useOxy } from '@oxyhq/services';
 import SEO from '@/components/SEO';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, type Href } from 'expo-router';
 import { SearchCategory, SearchUser, Track } from '@syra/shared-types';
 import { searchService } from '@/services/searchService';
 import { searchRefetchInterval } from '@/utils/searchUtils';
@@ -168,7 +168,7 @@ const SearchScreen: React.FC = () => {
   }, [oxyServices]);
 
   const handleUserPress = useCallback((user: SearchUser) => {
-    router.push(`/u/${user.username}` as any);
+    router.push({ pathname: '/u/[username]', params: { username: user.username } });
   }, [router]);
 
   // Memoized categories
@@ -339,7 +339,7 @@ const SearchScreen: React.FC = () => {
                       type="playlist"
                       imageUri={playlist.coverArt}
                       primaryColor={playlist.primaryColor}
-                      onPress={() => router.push(`/playlist/${playlist.id}` as any)}
+                      onPress={() => router.push({ pathname: '/playlist/[id]', params: { id: playlist.id } } satisfies Href)}
                     />
                   </View>
                 ))}
@@ -412,7 +412,7 @@ const SearchScreen: React.FC = () => {
                       imageUri={artist.image}
                       images={artist.images}
                       primaryColor={artist.primaryColor}
-                      onPress={() => router.push(`/artist/${artist.id}` as any)}
+                      onPress={() => router.push({ pathname: '/artist/[id]', params: { id: artist.id } } satisfies Href)}
                     />
                   </View>
                 ))}
@@ -518,7 +518,7 @@ const SearchScreen: React.FC = () => {
                           imageUri={artist.image}
                           images={artist.images}
                           primaryColor={artist.primaryColor}
-                          onPress={() => router.push(`/artist/${artist.id}` as any)}
+                          onPress={() => router.push({ pathname: '/artist/[id]', params: { id: artist.id } } satisfies Href)}
                         />
                       </View>
                     ))}
@@ -544,7 +544,7 @@ const SearchScreen: React.FC = () => {
                           type="playlist"
                           imageUri={playlist.coverArt}
                           primaryColor={playlist.primaryColor}
-                          onPress={() => router.push(`/playlist/${playlist.id}` as any)}
+                          onPress={() => router.push({ pathname: '/playlist/[id]', params: { id: playlist.id } } satisfies Href)}
                         />
                       </View>
                     ))}

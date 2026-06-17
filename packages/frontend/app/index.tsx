@@ -1,12 +1,15 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { StyleSheet, View, ScrollView, Text, Platform, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useMediaQuery } from 'react-responsive';
 import SEO from '@/components/SEO';
 import { MediaCard } from '@/components/MediaCard';
 import { ResponsiveGrid } from '@/components/ResponsiveGrid';
+import { TOP_BAR_HEIGHT } from '@/components/TopBar';
 import { QuickAccessGridSkeleton, MediaCardRowSkeleton } from '@/components/skeletons';
 import { musicService } from '@/services/musicService';
 import { Track, Album, Artist, Playlist } from '@syra/shared-types';
@@ -61,6 +64,8 @@ type QuickAccessItem =
 const HomeScreen: React.FC = () => {
   const theme = useTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const isMobile = useMediaQuery({ maxWidth: 767 });
   const [now, setNow] = useState(() => new Date());
   const { playTrackList } = usePlayerStore();
   const { addTracksLocally } = useQueueStore();
@@ -108,124 +113,9 @@ const HomeScreen: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // State for hover gradient color with smooth transitions
+  // State for hover gradient color. The visual transition is handled by the
+  // gradient style, avoiding per-frame React re-renders while hovering.
   const [hoveredItemColor, setHoveredItemColor] = useState<string | null>(null);
-  const [displayGradientColor, setDisplayGradientColor] = useState<string | null>(null);
-  const currentDisplayColorRef = useRef<string | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
-
-  // Smooth color transition when hoveredItemColor changes
-  useEffect(() => {
-    // Cancel any ongoing animation
-    if (animationFrameRef.current !== null) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
-
-    let isCancelled = false;
-    const transitionDuration = 300; // milliseconds
-    const startTime = performance.now();
-    const startColor = currentDisplayColorRef.current;
-    const targetColor = hoveredItemColor;
-
-    // If no change, skip animation
-    if (targetColor === startColor) {
-      return;
-    }
-
-    // Helper to interpolate between two RGB colors
-    const interpolateRgb = (
-      start: { r: number; g: number; b: number },
-      end: { r: number; g: number; b: number },
-      progress: number
-    ): { r: number; g: number; b: number } => {
-      return {
-        r: Math.round(start.r + (end.r - start.r) * progress),
-        g: Math.round(start.g + (end.g - start.g) * progress),
-        b: Math.round(start.b + (end.b - start.b) * progress),
-      };
-    };
-
-    // Convert RGB to hex string
-    const rgbToHex = (rgb: { r: number; g: number; b: number }): string => {
-      return `#${rgb.r.toString(16).padStart(2, '0')}${rgb.g.toString(16).padStart(2, '0')}${rgb.b.toString(16).padStart(2, '0')}`;
-    };
-
-    // Easing function for smooth animation (ease-in-out)
-    const easeInOut = (t: number): number => {
-      return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
-    };
-
-    // Get RGB values for start and target colors
-    const getStartRgb = (): { r: number; g: number; b: number } => {
-      if (startColor) {
-        const rgb = hexToRgb(startColor);
-        if (rgb) return rgb;
-      }
-      // Default to theme primary color
-      const defaultRgb = hexToRgb(theme.colors.primary);
-      return defaultRgb || { r: 128, g: 128, b: 128 };
-    };
-
-    const getTargetRgb = (): { r: number; g: number; b: number } | null => {
-      if (targetColor) {
-        return hexToRgb(targetColor);
-      }
-      return null;
-    };
-
-    const startRgb = getStartRgb();
-    const targetRgb = getTargetRgb();
-
-    const animate = () => {
-      if (isCancelled) return;
-
-      const elapsed = performance.now() - startTime;
-      const rawProgress = Math.min(elapsed / transitionDuration, 1);
-      const easedProgress = easeInOut(rawProgress);
-
-      if (targetRgb) {
-        // Transitioning to a specific color
-        const currentRgb = interpolateRgb(startRgb, targetRgb, easedProgress);
-        const currentHex = rgbToHex(currentRgb);
-        setDisplayGradientColor(currentHex);
-        currentDisplayColorRef.current = currentHex;
-      } else {
-        // Transitioning back to default - interpolate to default theme color
-        const defaultRgb = hexToRgb(theme.colors.primary) || { r: 128, g: 128, b: 128 };
-        const currentRgb = interpolateRgb(startRgb, defaultRgb, easedProgress);
-        const currentHex = rgbToHex(currentRgb);
-        setDisplayGradientColor(currentHex);
-        currentDisplayColorRef.current = currentHex;
-      }
-
-      if (rawProgress < 1) {
-        animationFrameRef.current = requestAnimationFrame(animate);
-      } else {
-        // Animation complete - set final state
-        if (targetColor) {
-          setDisplayGradientColor(targetColor);
-          currentDisplayColorRef.current = targetColor;
-        } else {
-          // Transitioned to null - set to null to use default gradient
-          setDisplayGradientColor(null);
-          currentDisplayColorRef.current = null;
-        }
-        animationFrameRef.current = null;
-      }
-    };
-
-    // Start animation
-    animationFrameRef.current = requestAnimationFrame(animate);
-
-    return () => {
-      isCancelled = true;
-      if (animationFrameRef.current !== null) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
-      }
-    };
-  }, [hoveredItemColor, theme.colors.primary]);
 
   // Get greeting based on time
   const greeting = useMemo(() => {
@@ -254,9 +144,9 @@ const HomeScreen: React.FC = () => {
 
   // Get the current gradient top color with smooth transitions
   const getGradientTopColor = (): string => {
-    if (displayGradientColor) {
+    if (hoveredItemColor) {
       // Use hovered color with opacity for top 20%
-      return hexToRgba(displayGradientColor, 0.2);
+      return hexToRgba(hoveredItemColor, 0.2);
     }
     // Default to theme primary with opacity
     return hexToRgba(theme.colors.primary, 0.2);
@@ -405,6 +295,7 @@ const HomeScreen: React.FC = () => {
           style={[styles.scrollView, { backgroundColor: 'transparent' }]}
           contentContainerStyle={[
             styles.contentContainer,
+            isMobile && { paddingTop: TOP_BAR_HEIGHT + insets.top + 16 },
             { paddingBottom: 100 } // Space for bottom player bar
           ]}
           showsVerticalScrollIndicator={false}
@@ -420,7 +311,7 @@ const HomeScreen: React.FC = () => {
           {quickAccessLoading ? (
             <QuickAccessGridSkeleton />
           ) : hasQuickAccess && (
-            <ResponsiveGrid minItemWidth={300} gap={8} style={styles.compactGrid}>
+            <ResponsiveGrid minItemWidth={300} minColumns={2} gap={8} style={styles.compactGrid}>
               {quickAccess.map((item) => {
                 const title = item.type === 'album' ? item.data.title : item.data.name;
                 const id = item.data.id;

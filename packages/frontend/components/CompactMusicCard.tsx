@@ -4,6 +4,7 @@ import { useTheme } from '@oxyhq/bloom/theme';
 import { Ionicons } from '@expo/vector-icons';
 import type { TrackImage } from '@syra/shared-types';
 import { pickImageUrl } from '@/utils/pickImage';
+import { webViewStyle } from '@/utils/webStyles';
 
 interface CompactMusicCardProps {
   title: string;
@@ -51,7 +52,7 @@ export const CompactMusicCard: React.FC<CompactMusicCardProps> = ({
       style={[
         styles.container,
         ...Platform.select({
-          web: [{ cursor: 'pointer' as any }],
+          web: [webViewStyle({ cursor: 'pointer' })],
           default: [],
         }),
       ]}
@@ -117,4 +118,3 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 });
-

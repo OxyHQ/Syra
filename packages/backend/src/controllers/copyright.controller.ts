@@ -14,7 +14,7 @@ import { getParam } from '../utils/reqParams';
  * POST /api/copyright/report
  * Public endpoint to report copyright violation (no authentication required)
  */
-export const reportCopyrightViolation = async (req: Request, res: Response, next: NextFunction) => {
+export const reportCopyrightViolation = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     if (!isDatabaseConnected()) {
       return res.status(503).json({ error: 'Database not available' });
@@ -53,9 +53,7 @@ export const reportCopyrightViolation = async (req: Request, res: Response, next
       });
     }
 
-    // Get reporter user ID if authenticated (optional - public reports don't require auth)
-    // This is safe because we're using optional chaining - it will be undefined if not authenticated
-    const reporterOxyUserId = (req as any).user?.id;
+    const reporterOxyUserId = req.user?.id;
 
     // Create copyright report
     const report = new CopyrightReportModel({
@@ -272,4 +270,3 @@ export const rejectCopyrightReport = async (req: AuthRequest, res: Response, nex
     next(error);
   }
 };
-

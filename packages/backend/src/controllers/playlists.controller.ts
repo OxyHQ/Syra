@@ -11,6 +11,12 @@ import { AuthRequest } from '../middleware/auth';
 import { getParam } from '../utils/reqParams';
 import { withImageFirstSort } from '../utils/imageFirstSort';
 
+interface PlaylistAuthRequest extends AuthRequest {
+  user?: AuthRequest['user'] & {
+    username?: string;
+  };
+}
+
 /**
  * Check if user has permission to edit playlist
  */
@@ -210,14 +216,14 @@ export const getPlaylistTracks = async (req: AuthRequest, res: Response, next: N
  * POST /api/playlists
  * Create playlist (requires auth)
  */
-export const createPlaylist = async (req: AuthRequest, res: Response, next: NextFunction) => {
+export const createPlaylist = async (req: PlaylistAuthRequest, res: Response, next: NextFunction) => {
   try {
     if (!isDatabaseConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
     const userId = req.user?.id;
-    const username = (req.user as any)?.username || userId;
+    const username = req.user?.username || userId;
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });

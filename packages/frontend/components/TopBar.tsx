@@ -499,18 +499,6 @@ export const TopBar: React.FC = () => {
             <Logo />
           </View>
         </Pressable>
-        <View style={styles.mobileCenterActions}>
-          <Pressable
-            onPress={handleSearch}
-            style={[styles.iconButton, pathname === '/search' && activeButtonStyle]}
-          >
-            <MaterialCommunityIcons
-              name="magnify"
-              size={24}
-              color={pathname === '/search' ? theme.colors.primary : theme.colors.text}
-            />
-          </Pressable>
-        </View>
         <View style={styles.mobileRightSection}>
           {renderProfileAction()}
         </View>
@@ -599,7 +587,7 @@ const styles = StyleSheet.create({
   }),
   mobileContainer: {
     gap: 10,
-    justifyContent: 'flex-start',
+    justifyContent: 'space-between',
   },
   leftSection: {
     flexDirection: 'row',
@@ -614,10 +602,6 @@ const styles = StyleSheet.create({
   mobileLogoContainer: {
     padding: 4,
     flexShrink: 0,
-  },
-  mobileCenterActions: {
-    flex: 1,
-    alignItems: 'center',
   },
   mobileRightSection: {
     flexShrink: 0,

@@ -7,6 +7,15 @@ import { usePlayerStore } from '@/stores/playerStore';
 import { Image } from 'expo-image';
 import { pickImageUrl } from '@/utils/pickImage';
 import { useLibrary, useToggleLikeTrack } from '@/hooks/useLibrary';
+import { webViewStyle } from '@/utils/webStyles';
+
+interface WebPressTarget {
+  getBoundingClientRect?: () => { left: number; width: number };
+}
+
+interface WebNativePressEvent {
+  clientX?: number;
+}
 
 const clamp = (value: number, min: number, max: number) => (
   Math.min(max, Math.max(min, value))
@@ -62,6 +71,18 @@ export const MobilePlayerBar: React.FC = () => {
     await seek(newPosition);
   };
 
+  const seekFromWebPress = (event: { currentTarget: unknown; nativeEvent: unknown }) => {
+    const target = event.currentTarget as WebPressTarget;
+    const nativeEvent = event.nativeEvent as WebNativePressEvent;
+    const rect = target.getBoundingClientRect?.();
+
+    if (rect && nativeEvent.clientX !== undefined && rect.width > 0 && duration > 0) {
+      const x = clamp(nativeEvent.clientX - rect.left, 0, rect.width);
+      const newPosition = (x / rect.width) * duration;
+      handleSeek(newPosition);
+    }
+  };
+
   const progressPercent = getProgressPercent(currentTime, duration);
   const progressFillWidth = progressBarWidth > 0 ? (progressPercent / 100) * progressBarWidth : 0;
 
@@ -79,14 +100,14 @@ export const MobilePlayerBar: React.FC = () => {
       borderRadius: 16,
       overflow: 'hidden' as const,
       ...Platform.select({
-        web: {
-          position: 'fixed' as any,
+        web: webViewStyle({
+          position: 'fixed',
           bottom: bottomOffset,
           left: SPACING,
           right: SPACING,
           zIndex: 999,
           boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-        },
+        }),
         default: {
           position: 'absolute' as const,
           bottom: bottomOffset,
@@ -197,15 +218,7 @@ export const MobilePlayerBar: React.FC = () => {
         onLayout={(event) => setProgressBarWidth(event.nativeEvent.layout.width)}
         onPress={(e) => {
           if (Platform.OS === 'web') {
-            const rect = (e.currentTarget as any)?.getBoundingClientRect();
-            if (rect) {
-              const clientX = (e.nativeEvent as any).clientX;
-              if (clientX !== undefined && rect.width > 0 && duration > 0) {
-                const x = clamp(clientX - rect.left, 0, rect.width);
-                const newPosition = (x / rect.width) * duration;
-                handleSeek(newPosition);
-              }
-            }
+            seekFromWebPress(e);
           }
         }}
       >

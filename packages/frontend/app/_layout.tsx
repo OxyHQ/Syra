@@ -89,7 +89,7 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
   const panelHeight = webDimension(
     isScreenNotMobile
       ? `calc(100vh - ${TOP_BAR_HEIGHT}px - ${PLAYER_BAR_HEIGHT}px - ${outerPadding}px)`
-      : `calc(100vh - ${TOP_BAR_HEIGHT}px - ${PLAYER_BAR_HEIGHT}px)`
+      : `calc(100vh - ${PLAYER_BAR_HEIGHT}px)`
   );
 
   const styles = useMemo(() => StyleSheet.create({
@@ -102,13 +102,27 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
       flex: 1,
     },
     topBarContainer: webViewStyle({
-      ...Platform.select({
-        web: {
-          position: 'sticky',
-          top: 0,
-          zIndex: 1000,
-        },
-      }),
+      zIndex: 1000,
+      ...(Platform.OS === 'web'
+        ? (isScreenNotMobile
+          ? {
+            position: 'sticky' as const,
+            top: 0,
+          }
+          : {
+            position: 'fixed' as const,
+            top: 0,
+            left: 0,
+            right: 0,
+          })
+        : (isScreenNotMobile
+          ? {}
+          : {
+            position: 'absolute' as const,
+            top: 0,
+            left: 0,
+            right: 0,
+          })),
     }),
     panelsWrapper: {
       flex: 1,
@@ -158,7 +172,7 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
     },
   }), [isScreenNotMobile, theme.colors.background, gapSize, outerPadding, panelHeight, isLibraryFullscreen, isNowPlayingFullscreen, librarySidebarWidth]);
 
-  const handleWheel = useCallback((event: any) => {
+  const handleWheel = useCallback((event: Parameters<typeof forwardWheelEvent>[0]) => {
     forwardWheelEvent(event);
   }, [forwardWheelEvent]);
 

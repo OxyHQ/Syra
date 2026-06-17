@@ -1,12 +1,16 @@
 import { Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
-import { writeFile, readFile, initGridFS } from '../utils/mongoose-gridfs';
 import { isDatabaseConnected } from '../utils/database';
 import { logger } from '../utils/logger';
 import { getErrorMessage } from '../utils/error';
 import { getParam } from '../utils/reqParams';
 import { AuthRequest } from '../middleware/auth';
 import { extractPredominantColorsFromBuffer } from '../services/colorExtractionService';
+import { getImageAssetStream, storeImageAsset } from '../services/imageAssetService';
+
+interface ImageUploadRequest extends AuthRequest {
+  file?: Express.Multer.File;
+}
 
 /**
  * POST /api/images/upload
@@ -19,7 +23,7 @@ export const uploadImage = async (req: AuthRequest, res: Response, next: NextFun
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    const file = (req as any).file;
+    const file = (req as ImageUploadRequest).file;
 
     if (!file) {
       return res.status(400).json({ 
@@ -42,19 +46,17 @@ export const uploadImage = async (req: AuthRequest, res: Response, next: NextFun
       secondaryColor: extractedColors.secondary,
     };
 
-    // Upload to GridFS
-    const result = await writeFile(file.buffer, {
+    const result = await storeImageAsset({
+      buffer: file.buffer,
       filename: file.originalname || 'image',
       contentType: file.mimetype,
-      metadata: {
-        uploadedBy: req.user?.id,
-        uploadedAt: new Date(),
-        primaryColor: colors?.primaryColor,
-        secondaryColor: colors?.secondaryColor,
-      }
+      ownerType: 'upload',
+      uploadedBy: req.user?.id,
+      primaryColor: colors.primaryColor,
+      secondaryColor: colors.secondaryColor,
     });
 
-    const imageId = (result as any)._id.toString();
+    const imageId = result.id;
 
     logger.debug('[ImagesController] Image uploaded successfully', { imageId });
 
@@ -87,11 +89,16 @@ export const getImage = async (req: Request, res: Response, next: NextFunction) 
     }
 
     try {
-      // Get image stream from GridFS
-      const stream = await readFile(id);
+      const asset = await getImageAssetStream(id);
 
-      // Set up error handler
-      stream.on('error', (streamError: Error) => {
+      if (!asset) {
+        return res.status(404).json({
+          error: 'Image not found',
+          message: 'The requested image does not exist'
+        });
+      }
+
+      asset.stream.on('error', (streamError: Error) => {
         const code = (streamError as NodeJS.ErrnoException).code;
         if (code === 'ENOENT' || streamError.message.includes('FileNotFound')) {
           logger.debug('[ImagesController] Image not found', { id });
@@ -109,25 +116,14 @@ export const getImage = async (req: Request, res: Response, next: NextFunction) 
         }
       });
 
-      // Get content type from GridFS metadata
-      const bucket = initGridFS();
-      if (bucket) {
-        const files = await bucket.find({ _id: new mongoose.Types.ObjectId(id) }).toArray();
-        if (files.length > 0 && files[0].contentType) {
-          res.setHeader('Content-Type', files[0].contentType);
-        } else {
-          res.setHeader('Content-Type', 'image/jpeg'); // Default
-        }
-      } else {
-        res.setHeader('Content-Type', 'image/jpeg'); // Default
+      res.setHeader('Content-Type', asset.contentType || 'image/jpeg');
+      if (asset.contentLength > 0) {
+        res.setHeader('Content-Length', String(asset.contentLength));
       }
-
-      // Set cache headers
       res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
       res.setHeader('Accept-Ranges', 'bytes');
 
-      // Stream the image
-      stream.pipe(res);
+      asset.stream.pipe(res);
     } catch (error: unknown) {
       const msg = getErrorMessage(error);
       const code = error instanceof Error ? (error as NodeJS.ErrnoException).code : undefined;

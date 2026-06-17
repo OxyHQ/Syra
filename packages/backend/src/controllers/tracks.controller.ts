@@ -15,6 +15,10 @@ import { enqueueIngest } from '../services/ingest/ingestTrack';
 import { getErrorMessage, getErrorStack, getHttpStatus } from '../utils/error';
 import { getParam } from '../utils/reqParams';
 
+interface AudioUploadRequest extends AuthRequest {
+  file?: Express.Multer.File;
+}
+
 /**
  * GET /api/tracks
  * Get all tracks with pagination
@@ -184,7 +188,7 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
       }
 
       const userId = getAuthenticatedUserId(req);
-      const file = (req as any).file;
+      const file = (req as AudioUploadRequest).file;
 
       if (!file) {
         return res.status(400).json({ error: 'Missing file', message: 'Audio file is required' });

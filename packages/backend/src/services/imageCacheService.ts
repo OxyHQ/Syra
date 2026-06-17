@@ -3,14 +3,15 @@ import * as http from 'http';
 import { URL } from 'url';
 import { logger } from '../utils/logger';
 import { validateUrlSecurity } from '../utils/urlSecurity';
-import mongoose from 'mongoose';
-import { GridFSBucket } from 'mongodb';
 import crypto from 'crypto';
 import sharp from 'sharp';
+import { ImageAssetModel } from '../models/ImageAsset';
+import { deleteFromS3 } from './s3Service';
+import { storeImageAsset } from './imageAssetService';
 
 /**
  * Service to cache and optimize images from external URLs
- * Downloads, resizes, compresses, and stores images
+ * Downloads, resizes, compresses, and stores images in S3.
  */
 
 // Image processing configuration
@@ -20,22 +21,6 @@ const JPEG_QUALITY = Number(process.env.LINK_PREVIEW_JPEG_QUALITY ?? 80);
 const PNG_QUALITY = Number(process.env.LINK_PREVIEW_PNG_QUALITY ?? 80);
 const WEBP_QUALITY = Number(process.env.LINK_PREVIEW_WEBP_QUALITY ?? 80);
 const MAX_FILE_SIZE = Number(process.env.LINK_PREVIEW_MAX_FILE_SIZE ?? 500 * 1024);
-
-let bucket: GridFSBucket | null = null;
-
-const initGridFS = (): GridFSBucket | null => {
-  if (!bucket && mongoose.connection.db) {
-    try {
-      bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
-        bucketName: 'link_images'
-      });
-    } catch (error) {
-      logger.error('[ImageCacheService] Failed to initialize GridFS bucket:', error);
-      return null;
-    }
-  }
-  return bucket;
-};
 
 class ImageCacheService {
   private readonly TIMEOUT_MS = 10000; // 10 seconds for image downloads
@@ -82,19 +67,14 @@ class ImageCacheService {
    */
   async getCachedImage(url: string): Promise<string | null> {
     try {
-      const bucket = initGridFS();
-      if (!bucket) {
-        logger.debug('[ImageCacheService] GridFS not initialized, cannot check cache');
-        return null;
-      }
-
       const normalizedUrl = this.normalizeImageUrl(url);
       const cacheKey = this.generateCacheKey(normalizedUrl);
       
-      // Use more efficient query - only check existence, don't fetch all data
-      const file = await bucket.find({ filename: cacheKey }, { limit: 1, projection: { _id: 1 } }).next();
-      if (file) {
-        return `/api/links/images/${cacheKey}`;
+      const image = await ImageAssetModel.findOne({ ownerType: 'link', filename: cacheKey })
+        .select('_id')
+        .lean();
+      if (image) {
+        return `/api/images/${image._id.toString()}`;
       }
       
       return null;
@@ -259,36 +239,6 @@ class ImageCacheService {
   }
 
   /**
-   * Store image in GridFS
-   */
-  private async storeImage(buffer: Buffer, cacheKey: string, contentType: string): Promise<void> {
-    const bucket = initGridFS();
-    if (!bucket) {
-      throw new Error('GridFS not initialized');
-    }
-
-    return new Promise((resolve, reject) => {
-      const uploadStream = bucket.openUploadStream(cacheKey, {
-        contentType: contentType || 'image/jpeg',
-        metadata: {
-          cachedAt: new Date(),
-        }
-      });
-
-      const { Readable } = require('stream');
-      const readableStream = Readable.from(buffer);
-      
-      readableStream
-        .pipe(uploadStream)
-        .on('error', (error: Error) => {
-          logger.error('[ImageCacheService] Failed to store image in GridFS:', { cacheKey, error: error.message });
-          reject(error);
-        })
-        .on('finish', resolve);
-    });
-  }
-
-  /**
    * Cache image from URL
    * Returns the cached image URL or null if caching failed
    */
@@ -319,12 +269,16 @@ class ImageCacheService {
       const finalBuffer = processedResult?.buffer ?? imageBuffer;
       const contentType = processedResult?.contentType ?? this.detectContentType(imageBuffer);
 
-      // Store in GridFS
       const cacheKey = this.generateCacheKey(normalizedUrl);
-      await this.storeImage(finalBuffer, cacheKey, contentType);
+      const stored = await storeImageAsset({
+        buffer: finalBuffer,
+        filename: cacheKey,
+        contentType,
+        ownerType: 'link',
+      });
 
       logger.debug('[ImageCacheService] Image cached successfully:', { url: normalizedUrl, cacheKey });
-      return `/api/links/images/${cacheKey}`;
+      return `/api/images/${stored.id}`;
     } catch (error) {
       logger.error('[ImageCacheService] Error caching image:', {
         url: imageUrl,
@@ -359,32 +313,8 @@ class ImageCacheService {
    * Get image stream from cache
    */
   async getImageStream(cacheKey: string): Promise<{ stream: NodeJS.ReadableStream; contentType: string } | null> {
-    try {
-      const bucket = initGridFS();
-      if (!bucket) {
-        logger.debug('[ImageCacheService] GridFS not initialized, cannot get image stream');
-        return null;
-      }
-
-      // Use more efficient query - only fetch what we need
-      const file = await bucket.find({ filename: cacheKey }, { limit: 1, projection: { contentType: 1 } }).next();
-      if (!file) {
-        return null;
-      }
-
-      const downloadStream = bucket.openDownloadStreamByName(cacheKey);
-
-      return {
-        stream: downloadStream,
-        contentType: file.contentType || 'image/jpeg',
-      };
-    } catch (error) {
-      logger.error('[ImageCacheService] Error getting image stream:', {
-        cacheKey,
-        error: error instanceof Error ? error.message : String(error)
-      });
-      return null;
-    }
+    logger.warn('[ImageCacheService] getImageStream is not supported; use /api/images/:id', { cacheKey });
+    return null;
   }
 
   /**
@@ -392,15 +322,12 @@ class ImageCacheService {
    */
   async deleteImage(cacheKey: string): Promise<boolean> {
     try {
-      const bucket = initGridFS();
-      if (!bucket) return false;
+      const images = await ImageAssetModel.find({ ownerType: 'link', filename: cacheKey }).lean();
+      if (images.length === 0) return false;
 
-      const files = await bucket.find({ filename: cacheKey }).toArray();
-      if (files.length === 0) return false;
-
-      // Delete all files with this cache key (should be just one)
-      for (const file of files) {
-        await bucket.delete(file._id);
+      for (const image of images) {
+        await deleteFromS3(image.s3Key);
+        await ImageAssetModel.deleteOne({ _id: image._id });
       }
 
       return true;
@@ -415,20 +342,14 @@ class ImageCacheService {
    */
   async clearAllImages(): Promise<number> {
     try {
-      const bucket = initGridFS();
-      if (!bucket) return 0;
-
-      // Get all files in the bucket
-      const files = await bucket.find({}).toArray();
-      const count = files.length;
-
-      // Delete all files
-      for (const file of files) {
-        await bucket.delete(file._id);
+      const images = await ImageAssetModel.find({ ownerType: 'link' }).lean();
+      for (const image of images) {
+        await deleteFromS3(image.s3Key);
+        await ImageAssetModel.deleteOne({ _id: image._id });
       }
 
-      logger.info('[ImageCacheService] Cleared all images:', { count });
-      return count;
+      logger.info('[ImageCacheService] Cleared all images:', { count: images.length });
+      return images.length;
     } catch (error) {
       logger.error('[ImageCacheService] Error clearing all images:', error);
       return 0;
@@ -437,4 +358,3 @@ class ImageCacheService {
 }
 
 export const imageCacheService = new ImageCacheService();
-

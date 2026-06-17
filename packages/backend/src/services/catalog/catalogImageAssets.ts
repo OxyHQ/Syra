@@ -2,7 +2,6 @@ import * as crypto from 'crypto';
 import * as http from 'http';
 import * as https from 'https';
 import { URL } from 'url';
-import mongoose from 'mongoose';
 import sharp from 'sharp';
 import {
   type CatalogSource,
@@ -16,7 +15,7 @@ import {
 import { extractPredominantColorsFromBuffer } from '../colorExtractionService';
 import { logger } from '../../utils/logger';
 import { validateUrlSecurity } from '../../utils/urlSecurity';
-import { findFiles, writeFile } from '../../utils/mongoose-gridfs';
+import { getImageAssetSourceContentHash, storeImageAsset } from '../imageAssetService';
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 10000;
@@ -67,16 +66,6 @@ function firstUsableImageUrl(images: TrackImage[] | undefined): string | undefin
 
 function normalizeSourceUrl(sourceUrl: string): string {
   return new URL(sourceUrl).toString();
-}
-
-async function getExistingSourceContentHash(imageId: string | undefined): Promise<string | undefined> {
-  if (!imageId || !mongoose.Types.ObjectId.isValid(imageId)) return undefined;
-  const files = await findFiles({ _id: new mongoose.Types.ObjectId(imageId) });
-  const metadata = files[0]?.metadata as
-    | { catalogImage?: { sourceContentHash?: unknown } }
-    | undefined;
-  const sourceContentHash = metadata?.catalogImage?.sourceContentHash;
-  return typeof sourceContentHash === 'string' ? sourceContentHash : undefined;
 }
 
 function downloadImage(sourceUrl: string, redirectsRemaining = MAX_REDIRECTS): Promise<{ buffer: Buffer; contentType: string }> {
@@ -168,24 +157,26 @@ async function writeCatalogImage(
   sourceContentHash: string,
   colors: { primary?: string; secondary?: string },
 ): Promise<CatalogImageVariant> {
-  const result = await writeFile(buffer, {
+  const result = await storeImageAsset({
+    buffer,
     filename: `${context.provider}-${context.entityType}-${context.externalId}-${size}`,
     contentType,
-    metadata: {
-      catalogImage: {
-        provider: context.provider,
-        entityType: context.entityType,
-        externalId: context.externalId,
-        size,
-        sourceUrlHash,
-        sourceContentHash,
-      },
-      primaryColor: colors.primary,
-      secondaryColor: colors.secondary,
+    ownerType: context.entityType,
+    width: dimensions.width,
+    height: dimensions.height,
+    primaryColor: colors.primary,
+    secondaryColor: colors.secondary,
+    catalog: {
+      provider: context.provider,
+      entityType: context.entityType,
+      externalId: context.externalId,
+      size,
+      sourceUrlHash,
+      sourceContentHash,
     },
-  }) as { _id: { toString(): string } };
+  });
 
-  const id = result._id.toString();
+  const id = result.id;
   return {
     id,
     url: `/api/images/${id}`,
@@ -257,7 +248,7 @@ async function mirrorCatalogImageInternal(
     const sourceContentHash = hashValue(buffer);
 
     const existingSourceContentHash = context.existingSourceContentHash
-      ?? await getExistingSourceContentHash(context.existingImageId);
+      ?? await getImageAssetSourceContentHash(context.existingImageId);
     if (
       context.existingImageId &&
       context.existingImageSizes &&

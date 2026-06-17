@@ -65,6 +65,12 @@ let redisClient: RedisClientType | null = null;
 let redisClientPromise: Promise<RedisClientType> | null = null;
 let hasLoggedRedisUnavailable = false; // Track if we've already logged Redis unavailability
 let isMainClient = true; // Track if this is the main client (for logging)
+const redisClientUrlMode = new WeakMap<object, boolean>();
+
+interface RedisSocketError extends NodeJS.ErrnoException {
+  address?: string;
+  port?: number | string;
+}
 
 /**
  * Get or create Redis client singleton
@@ -77,7 +83,7 @@ export function getRedisClient(): RedisClientType {
   if (redisClient) {
     // Check if we need to recreate the client due to config change
     // This can happen if dotenv loads after the first call
-    const wasCreatedWithUrl = (redisClient as any)._createdWithUrl;
+    const wasCreatedWithUrl = redisClientUrlMode.get(redisClient);
     const shouldUseUrl = !!config.redisUrl;
     
     // If config changed (URL now available but client was created without URL, or vice versa)
@@ -156,8 +162,7 @@ export function getRedisClient(): RedisClientType {
       },
     };
     redisClient = createClient(urlOptions) as RedisClientType;
-    // Mark that this client was created with URL
-    (redisClient as any)._createdWithUrl = true;
+    redisClientUrlMode.set(redisClient, true);
   } else {
     // No URL provided - use host/port configuration
     if (isMainClient) {
@@ -165,8 +170,7 @@ export function getRedisClient(): RedisClientType {
     }
     const options = createRedisOptions();
     redisClient = createClient(options) as RedisClientType;
-    // Mark that this client was created without URL
-    (redisClient as any)._createdWithUrl = false;
+    redisClientUrlMode.set(redisClient, false);
   }
 
   // Set up event handlers
@@ -192,13 +196,14 @@ export function getRedisClient(): RedisClientType {
         : `Host: ${config.redisHost}, Port: ${config.redisPort}`;
       
       // Log detailed error information for debugging
+      const systemError = err as RedisSocketError;
       const errorDetails = {
         message: err.message,
-        code: (err as any).code,
-        errno: (err as any).errno,
-        syscall: (err as any).syscall,
-        address: (err as any).address,
-        port: (err as any).port,
+        code: systemError.code,
+        errno: systemError.errno,
+        syscall: systemError.syscall,
+        address: systemError.address,
+        port: systemError.port,
       };
       
       if (err.message.includes('ECONNREFUSED') || err.message.includes('ENOTFOUND')) {

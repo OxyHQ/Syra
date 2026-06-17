@@ -9,6 +9,37 @@ import { ProfileHeaderSkeleton } from '@/components/skeletons';
 import { useProfileData } from '@/hooks/useProfileData';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
+interface ProfileNameParts {
+  full?: string;
+  first?: string;
+  last?: string;
+}
+
+const isProfileNameParts = (value: unknown): value is ProfileNameParts => (
+  value !== null && typeof value === 'object'
+);
+
+const getProfileName = (name: unknown): string => {
+  if (typeof name === 'string') {
+    return name;
+  }
+
+  if (!isProfileNameParts(name)) {
+    return '';
+  }
+
+  if (typeof name.full === 'string' && name.full.trim()) {
+    return name.full;
+  }
+
+  if (typeof name.first === 'string' && name.first.trim()) {
+    const last = typeof name.last === 'string' ? name.last : '';
+    return `${name.first} ${last}`.trim();
+  }
+
+  return '';
+};
+
 /**
  * User Profile Screen
  * Displays a user's profile with their music library, playlists, etc.
@@ -54,14 +85,8 @@ const UserProfileScreen: React.FC = () => {
     ? oxyServices.getFileDownloadUrl(profileData.avatar as string, 'thumb')
     : undefined;
 
-  // Handle user name display (can be object or string)
-  const displayName = profileData.design?.displayName || 
-    (typeof profileData.name === 'string' 
-      ? profileData.name
-      : (profileData.name as any)?.full || 
-        ((profileData.name as any)?.first 
-          ? `${(profileData.name as any).first} ${(profileData.name as any).last || ''}`.trim()
-          : '')) ||
+  const displayName = profileData.design?.displayName ||
+    getProfileName(profileData.name) ||
     profileData.username ||
     'User';
 
@@ -251,7 +276,6 @@ const styles = StyleSheet.create({
 });
 
 export default UserProfileScreen;
-
 
 
 

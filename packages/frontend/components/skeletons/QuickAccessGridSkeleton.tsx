@@ -18,7 +18,7 @@ export const QuickAccessGridSkeleton: React.FC<QuickAccessGridSkeletonProps> =
     const theme = useTheme();
 
     return (
-      <ResponsiveGrid minItemWidth={300} gap={8} style={styles.compactGrid}>
+      <ResponsiveGrid minItemWidth={300} minColumns={2} gap={8} style={styles.compactGrid}>
         {Array.from({ length: count }).map((_, index) => (
           <View
             key={index}

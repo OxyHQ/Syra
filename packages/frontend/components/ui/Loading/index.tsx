@@ -330,7 +330,7 @@ export const LoadingSpinner = memo((props: Omit<SpinnerLoadingProps, 'variant'>)
 interface LegacyLoadingTopSpinnerProps {
   size?: number;
   iconSize?: number;
-  style?: any;
+  style?: TopLoadingProps['style'];
   showLoading?: boolean;
 }
 
@@ -345,7 +345,7 @@ export const LoadingTopSpinner = memo((props: Omit<TopLoadingProps, 'variant'> |
     sizeProp = props.size as LoadingSize;
   }
   
-  const { size: _, ...restProps } = props as any;
+  const { size: _, ...restProps } = props;
   
   return (
     <Loading 

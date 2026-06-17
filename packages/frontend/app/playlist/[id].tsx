@@ -20,6 +20,7 @@ import { TrackRow } from '@/components/TrackRow';
 import { MediaHeaderSkeleton } from '@/components/skeletons';
 import { formatTotalDuration } from '@/utils/musicUtils';
 import { useLibrary, useToggleSavePlaylist } from '@/hooks/useLibrary';
+import { webViewStyle } from '@/utils/webStyles';
 
 const HEADER_HEIGHT = 400;
 
@@ -441,9 +442,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderBottomWidth: 1,
     ...Platform.select({
-      web: {
-        position: 'sticky' as any,
-      },
+      web: webViewStyle({
+        position: 'sticky',
+      }),
     }),
   },
   stickyHeaderContent: {

@@ -45,6 +45,7 @@ export const s3Client = new S3Client({
 export const S3_BUCKET_NAME =
   process.env.AWS_S3_BUCKET_NAME || process.env.AWS_S3_BUCKET || 'syra-audio';
 export const S3_AUDIO_PREFIX = process.env.S3_AUDIO_PREFIX || 'audio';
+export const S3_IMAGE_PREFIX = process.env.S3_IMAGE_PREFIX || 'images';
 
 // Export region and endpoint for error messages
 export const S3_REGION = AWS_REGION;
@@ -55,6 +56,7 @@ logger.info('[S3Config] S3 configuration:', {
   region: AWS_REGION,
   endpoint: AWS_ENDPOINT_URL ?? 'default (AWS)',
   audioPrefix: S3_AUDIO_PREFIX,
+  imagePrefix: S3_IMAGE_PREFIX,
   credentialsConfigured: !!credentials,
   credentialSource: credentials ? 'AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY' : 'ECS task IAM role',
 });
@@ -86,4 +88,12 @@ export const S3_HLS_PREFIX = process.env.S3_HLS_PREFIX || 'hls';
 export function getS3HlsKey(artistId: string, trackId: string, relPath: string): string {
   const normalised = relPath.replace(/\\/g, '/').replace(/^\/+/, '');
   return `${S3_HLS_PREFIX}/${artistId}/${trackId}/${normalised}`;
+}
+
+export function getS3ImageKey(imageId: string, filename: string): string {
+  const safeFilename = filename
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    || 'image';
+  return `${S3_IMAGE_PREFIX}/${imageId}/${safeFilename}`;
 }

@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { useOxy } from '@oxyhq/services';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Portal } from '@/components/Portal';
 import { CoverArtPicker } from '@/components/playlists/CoverArtPicker';
@@ -44,6 +44,19 @@ interface FormErrors {
 
 const NAME_MAX_LENGTH = 100;
 const DESCRIPTION_MAX_LENGTH = 300;
+
+const getErrorMessage = (error: unknown, fallback: string): string => {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  if (error !== null && typeof error === 'object' && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string' && message.trim()) {
+      return message;
+    }
+  }
+  return fallback;
+};
 
 /**
  * Create Playlist Modal Component
@@ -156,11 +169,11 @@ export const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
       if (onSuccess) {
         onSuccess(playlist.id);
       } else {
-        router.push(`/playlist/${playlist.id}` as any);
+        router.push({ pathname: '/playlist/[id]', params: { id: playlist.id } } satisfies Href);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to create playlist:', error);
-      toast.error(error?.message || 'Failed to create playlist. Please try again.');
+      toast.error(getErrorMessage(error, 'Failed to create playlist. Please try again.'));
     } finally {
       setIsCreating(false);
     }
@@ -582,7 +595,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 });
-
 
 
 
