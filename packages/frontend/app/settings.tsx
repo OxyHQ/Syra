@@ -8,7 +8,6 @@ import { useRouter } from 'expo-router';
 import {
   SettingsListGroup,
   SettingsListItem,
-  SettingsListDivider,
 } from '@oxyhq/bloom/settings-list';
 import { Switch } from '@oxyhq/bloom/switch';
 import * as SegmentedControl from '@oxyhq/bloom/segmented-control';
@@ -532,7 +531,7 @@ const SettingsScreen: React.FC = () => {
             />
           </SettingsListGroup>
 
-            <View className="h-24" />
+          <View className="h-24" />
           </View>
         </ScrollView>
       </ThemedView>
@@ -542,26 +541,28 @@ const SettingsScreen: React.FC = () => {
 
 const styles = StyleSheet.create({
   scrollContent: {
-    paddingVertical: 16,
-    paddingHorizontal: 20,
+    alignItems: 'center',
+    paddingTop: 20,
+    paddingBottom: 32,
   },
   contentColumn: {
-    alignSelf: 'center',
-    maxWidth: 880,
+    width: '100%',
+    maxWidth: 760,
   },
   pageHeader: {
     gap: 4,
-    paddingVertical: 12,
-    paddingHorizontal: 4,
+    paddingHorizontal: 20,
+    paddingBottom: 12,
   },
   accountHeader: {
     alignItems: 'center',
     gap: 4,
-    paddingVertical: 16,
+    paddingTop: 12,
+    paddingBottom: 18,
   },
   groupControl: {
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 14,
   },
 });
 
