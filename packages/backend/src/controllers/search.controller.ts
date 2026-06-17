@@ -90,10 +90,10 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
 
     // Build search promises based on category
     const searchPromises: {
-      tracks?: Promise<[any[], number]>;
-      albums?: Promise<[any[], number]>;
-      artists?: Promise<[any[], number]>;
-      playlists?: Promise<[any[], number]>;
+      tracks?: Promise<[unknown[], number]>;
+      albums?: Promise<[unknown[], number]>;
+      artists?: Promise<[unknown[], number]>;
+      playlists?: Promise<[unknown[], number]>;
       users?: Promise<[SearchUser[], number]>;
     } = {};
 
