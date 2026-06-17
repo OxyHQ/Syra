@@ -16,9 +16,13 @@ import { LibrarySidebarExpanded } from './LibrarySidebar/LibrarySidebarExpanded'
  */
 export const LibrarySidebar: React.FC = () => {
   const isMobile = useMediaQuery({ maxWidth: 767 });
-  const { fullscreenPanel, toggleFullscreen } = useUIStore();
+  const {
+    fullscreenPanel,
+    isLibrarySidebarExpanded,
+    setLibrarySidebarExpanded,
+    toggleFullscreen,
+  } = useUIStore();
 
-  const [isExpanded, setIsExpanded] = useState(!isMobile);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<'Playlists' | 'Artists' | 'Albums' | 'Podcasts'>('Playlists');
   const isFullscreen = fullscreenPanel === 'library';
@@ -39,9 +43,9 @@ export const LibrarySidebar: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      {!isExpanded ? (
+      {!isLibrarySidebarExpanded ? (
         <LibrarySidebarCollapsed 
-          onExpand={() => setIsExpanded(true)}
+          onExpand={() => setLibrarySidebarExpanded(true)}
           playlists={playlists}
           savedAlbums={savedAlbums}
           followedArtists={followedArtists}
@@ -55,7 +59,7 @@ export const LibrarySidebar: React.FC = () => {
           activeFilter={activeFilter}
           isFullscreen={isFullscreen}
           onFullscreen={() => toggleFullscreen('library')}
-          onCollapse={() => setIsExpanded(false)}
+          onCollapse={() => setLibrarySidebarExpanded(false)}
           onSearchChange={setSearchQuery}
           onFilterChange={setActiveFilter}
           playlists={playlists}

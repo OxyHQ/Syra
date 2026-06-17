@@ -63,7 +63,7 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
   const isDesktop = useIsDesktop();
   const keyboardVisible = useKeyboardVisibility();
   const { currentTrack } = usePlayerStore();
-  const { fullscreenPanel } = useUIStore();
+  const { fullscreenPanel, isLibrarySidebarExpanded } = useUIStore();
   const isLibraryFullscreen = fullscreenPanel === 'library';
   const isNowPlayingFullscreen = fullscreenPanel === 'nowPlaying';
   const showNowPlayingPanel = isDesktop && !isLibraryFullscreen && (isNowPlayingFullscreen || !!currentTrack);
@@ -82,7 +82,9 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
   // the top safe-area inset that grows the TopBar on native is absorbed
   // automatically). On web `insets.top` is 0, so `TOP_BAR_HEIGHT` is exact.
   const NOW_PLAYING_WIDTH = 360;
-  const LIBRARY_WIDTH = 320;
+  const LIBRARY_WIDTH_EXPANDED = 320;
+  const LIBRARY_WIDTH_COLLAPSED = 72;
+  const librarySidebarWidth = isLibrarySidebarExpanded ? LIBRARY_WIDTH_EXPANDED : LIBRARY_WIDTH_COLLAPSED;
   const panelHeight = webDimension(
     isScreenNotMobile
       ? `calc(100vh - ${TOP_BAR_HEIGHT}px - ${PLAYER_BAR_HEIGHT}px - ${outerPadding}px)`
@@ -122,7 +124,7 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
     leftSidebarContainer: {
       flexShrink: 0,
       flexGrow: isLibraryFullscreen ? 1 : 0,
-      width: isLibraryFullscreen ? undefined : LIBRARY_WIDTH,
+      width: isLibraryFullscreen ? undefined : librarySidebarWidth,
       ...Platform.select({
         web: {
           height: panelHeight,
@@ -153,7 +155,7 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
     playerBarContainer: {
       // Desktop only - mobile player bar handles its own positioning
     },
-  }), [isScreenNotMobile, theme.colors.background, gapSize, outerPadding, panelHeight, isLibraryFullscreen, isNowPlayingFullscreen]);
+  }), [isScreenNotMobile, theme.colors.background, gapSize, outerPadding, panelHeight, isLibraryFullscreen, isNowPlayingFullscreen, librarySidebarWidth]);
 
   const handleWheel = useCallback((event: any) => {
     forwardWheelEvent(event);
