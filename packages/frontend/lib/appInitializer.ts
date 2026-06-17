@@ -95,21 +95,6 @@ async function loadVideoMuteState(): Promise<void> {
 }
 
 /**
- * Fetches current user if auth is ready
- */
-async function fetchCurrentUser(services: OxyServices, authReady: boolean): Promise<void> {
-  if (!authReady) {
-    return;
-  }
-
-  try {
-    await services.getCurrentUser();
-  } catch (error) {
-    console.warn('Failed to fetch current user during init:', error);
-  }
-}
-
-/**
  * Main app initialization function
  * Coordinates all initialization steps
  */
@@ -144,15 +129,13 @@ export class AppInitializer {
     }
 
     try {
-      // Run all init tasks in parallel to minimize startup time
-      const authPromise = waitForAuth(services, INITIALIZATION_TIMEOUT.AUTH);
+      // Keep the shell bootstrap independent from auth. OxyProvider owns web
+      // SSO callback handling, so blocking here can deadlock on /__oxy/sso-callback.
+      void services;
 
       await Promise.allSettled([
         setupNotificationsIfNeeded(),
-        loadAppearanceSettings(services),
         loadVideoMuteState(),
-        // Fetch current user once auth resolves
-        authPromise.then((authReady) => fetchCurrentUser(services, authReady)),
       ]);
 
       // Hide splash screen
@@ -195,4 +178,3 @@ export class AppInitializer {
     ]);
   }
 }
-
