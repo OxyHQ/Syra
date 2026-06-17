@@ -12,6 +12,7 @@ import { musicService } from '@/services/musicService';
 import { Track, Album, Artist, Playlist } from '@syra/shared-types';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useQueueStore } from '@/stores/queueStore';
+import { useUIStore } from '@/stores/uiStore';
 import {
   useRecentlyPlayed,
   useMadeForYou,
@@ -64,6 +65,7 @@ const HomeScreen: React.FC = () => {
   const [now, setNow] = useState(() => new Date());
   const { playTrackList } = usePlayerStore();
   const { addTracksLocally } = useQueueStore();
+  const setShellGradientColor = useUIStore(s => s.setShellGradientColor);
 
   // Real, per-section queries — each loads/caches/errors independently.
   const recentlyPlayedQuery = useRecentlyPlayed();
@@ -107,6 +109,10 @@ const HomeScreen: React.FC = () => {
     const interval = setInterval(() => setNow(new Date()), 60 * 1000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => () => {
+    setShellGradientColor(null);
+  }, [setShellGradientColor]);
 
   // Cross-fade gradient layers so hover color changes do not snap.
   const [hoveredItemColor, setHoveredItemColor] = useState<string | null>(null);
@@ -169,13 +175,16 @@ const HomeScreen: React.FC = () => {
 
   // Handle hover in - set the color
   const handleHoverIn = useCallback((color: string | null | undefined) => {
-    setHoveredItemColor(color || theme.colors.primary);
-  }, [theme.colors.primary]);
+    const nextColor = color || theme.colors.primary;
+    setHoveredItemColor(nextColor);
+    setShellGradientColor(nextColor);
+  }, [setShellGradientColor, theme.colors.primary]);
 
   // Handle hover out - reset to default
   const handleHoverOut = useCallback(() => {
     setHoveredItemColor(null);
-  }, []);
+    setShellGradientColor(null);
+  }, [setShellGradientColor]);
 
   // Navigate to and start playing an album's first track. Used by album cards'
   // play button so a single tap actually plays real audio.

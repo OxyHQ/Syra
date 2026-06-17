@@ -3,6 +3,7 @@ import 'react-native-reanimated';
 
 import NetInfo from '@react-native-community/netinfo';
 import { QueryClient, focusManager, onlineManager } from '@tanstack/react-query';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Slot } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState, memo } from "react";
 import { AppState, Platform, StyleSheet, View, type AppStateStatus } from "react-native";
@@ -48,6 +49,13 @@ interface MainLayoutProps {
   isScreenNotMobile: boolean;
 }
 
+const hexToRgba = (hex: string, alpha: number): string => {
+  const match = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex.trim());
+  if (!match) return `rgba(128, 128, 128, ${alpha})`;
+  const [, r, g, b] = match;
+  return `rgba(${parseInt(r, 16)}, ${parseInt(g, 16)}, ${parseInt(b, 16)}, ${alpha})`;
+};
+
 /**
  * MainLayout Component
  * Spotify-like 5-panel layout:
@@ -65,9 +73,11 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
   const currentTrack = usePlayerStore(s => s.currentTrack);
   const fullscreenPanel = useUIStore(s => s.fullscreenPanel);
   const isLibrarySidebarExpanded = useUIStore(s => s.isLibrarySidebarExpanded);
+  const shellGradientColor = useUIStore(s => s.shellGradientColor);
   const isLibraryFullscreen = fullscreenPanel === 'library';
   const isNowPlayingFullscreen = fullscreenPanel === 'nowPlaying';
   const showNowPlayingPanel = isDesktop && !isLibraryFullscreen && (isNowPlayingFullscreen || !!currentTrack);
+  const mobileShellGradientColor = shellGradientColor ?? theme.colors.primary;
 
   // On mobile, no gaps or padding
   const gapSize = isScreenNotMobile ? 12 : 0;
@@ -156,6 +166,14 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
     playerBarContainer: {
       // Desktop only - mobile player bar handles its own positioning
     },
+    mobileNavbarGradient: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      height: TOP_BAR_HEIGHT + 220,
+      zIndex: 0,
+    },
   }), [isScreenNotMobile, theme.colors.background, gapSize, outerPadding, panelHeight, isLibraryFullscreen, isNowPlayingFullscreen, librarySidebarWidth]);
 
   const handleWheel = useCallback((event: Parameters<typeof forwardWheelEvent>[0]) => {
@@ -169,6 +187,19 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
 
   return (
     <View style={styles.outerContainer} {...containerProps}>
+      {!isScreenNotMobile && (
+        <LinearGradient
+          colors={[
+            hexToRgba(mobileShellGradientColor, 0.46),
+            hexToRgba(mobileShellGradientColor, 0.22),
+            theme.colors.background,
+          ]}
+          locations={[0, 0.52, 1]}
+          pointerEvents="none"
+          style={styles.mobileNavbarGradient}
+        />
+      )}
+
       {/* Top Navigation Bar - Outside panels wrapper */}
       <View style={styles.topBarContainer}>
         <TopBar />

@@ -68,6 +68,7 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
   const menuControl = Menu.useMenuControl();
   const isHoveredRef = React.useRef(false);
   const isPointerInsideCardRef = React.useRef(false);
+  const suppressNextPressRef = React.useRef(false);
 
   // Auto-detect shape for artist type, or use provided shape
   const cardShape = shape || (type === 'artist' ? 'circle' : 'square');
@@ -76,6 +77,7 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
   const showPlayButton = isHovered && onPlayPress;
   const hasMenu = !!(onAddToQueue || onGoToArtist || onGoToAlbum);
   const isMenuOpen = 'isOpen' in menuControl ? Boolean(menuControl.isOpen) : false;
+  const usesHoverActions = hideIdleActions;
   const hoverBackground = colorWithAlpha(primaryColor, 0.26) ?? theme.colors.backgroundSecondary;
 
   React.useEffect(() => {
@@ -145,6 +147,27 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
     onPlayPress?.();
   };
 
+  const handleCardPress = React.useCallback(() => {
+    if (suppressNextPressRef.current) {
+      suppressNextPressRef.current = false;
+      return;
+    }
+
+    onPress?.();
+  }, [onPress]);
+
+  const handleLongPress = React.useCallback((event?: GestureResponderEvent) => {
+    if (!hasMenu || usesHoverActions) {
+      return;
+    }
+
+    event?.stopPropagation?.();
+    suppressNextPressRef.current = true;
+    isPointerInsideCardRef.current = true;
+    setCardHoverState(true);
+    menuControl.open();
+  }, [hasMenu, menuControl, setCardHoverState, usesHoverActions]);
+
   const renderMenuIcon = (name: React.ComponentProps<typeof Ionicons>['name']) => (
     <Ionicons name={name} size={18} color={theme.colors.textSecondary} />
   );
@@ -156,33 +179,35 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
       <View style={styles.menuContainer}>
         <Menu.Root control={menuControl}>
           <Menu.Trigger label={`More actions for ${title}`}>
-            {({ props, state }) => (
-              <Pressable
-                {...props}
-                pointerEvents={
-                  hideIdleActions && !isHovered && !isMenuOpen && !state.focused && !state.pressed
-                    ? 'none'
-                    : 'auto'
-                }
-                onPress={(event) => {
-                  event.stopPropagation?.();
-                  props.onPress?.();
-                }}
-                style={[
-                  styles.menuTrigger,
-                  hideIdleActions && !isHovered && !isMenuOpen && !state.focused && !state.pressed
-                    ? styles.menuTriggerHidden
-                    : styles.menuTriggerVisible,
-                  {
-                    backgroundColor: state.focused || state.pressed
-                      ? theme.colors.backgroundTertiary
-                      : theme.colors.backgroundSecondary,
-                  },
-                ]}
-              >
-                <Ionicons name="ellipsis-horizontal" size={18} color={theme.colors.textSecondary} />
-              </Pressable>
-            )}
+            {({ props, state }) => {
+              const hideMenuTrigger =
+                !usesHoverActions ||
+                (!isHovered && !isMenuOpen && !state.focused && !state.pressed);
+
+              return (
+                <Pressable
+                  {...props}
+                  pointerEvents={hideMenuTrigger ? 'none' : 'auto'}
+                  onPress={(event) => {
+                    event.stopPropagation?.();
+                    props.onPress?.();
+                  }}
+                  style={[
+                    styles.menuTrigger,
+                    hideMenuTrigger
+                      ? styles.menuTriggerHidden
+                      : styles.menuTriggerVisible,
+                    {
+                      backgroundColor: state.focused || state.pressed
+                        ? theme.colors.backgroundTertiary
+                        : theme.colors.backgroundSecondary,
+                    },
+                  ]}
+                >
+                  <Ionicons name="ellipsis-horizontal" size={18} color={theme.colors.textSecondary} />
+                </Pressable>
+              );
+            }}
           </Menu.Trigger>
           <Menu.Outer style={styles.menuOptions}>
             <Menu.Group>
@@ -254,7 +279,9 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
   return (
     <Pressable
       {...hoverHandlers}
-      onPress={onPress}
+      onPress={handleCardPress}
+      onLongPress={hasMenu && !usesHoverActions ? handleLongPress : undefined}
+      delayLongPress={350}
       onFocus={activateHover}
       onBlur={deactivateHover}
       style={[
