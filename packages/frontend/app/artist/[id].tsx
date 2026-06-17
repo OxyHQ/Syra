@@ -17,6 +17,7 @@ import { usePlayerStore } from '@/stores/playerStore';
 import SEO from '@/components/SEO';
 import { TrackRow } from '@/components/TrackRow';
 import { MediaCard } from '@/components/MediaCard';
+import { ResponsiveGrid } from '@/components/ResponsiveGrid';
 import { ArtistDetailSkeleton } from '@/components/skeletons';
 import { toast } from 'sonner';
 import { pickImageUrl } from '@/utils/pickImage';
@@ -423,9 +424,14 @@ const ArtistScreen: React.FC = () => {
                     Albums
                   </Text>
                 </View>
-                <View style={styles.albumsGrid}>
+                <ResponsiveGrid
+                  minItemWidth={180}
+                  maxItemWidth={220}
+                  gap={8}
+                  style={styles.albumsGrid}
+                >
                   {albums.map((album) => (
-                    <View key={album.id} style={styles.albumGridItem}>
+                    <View key={album.id}>
                       <MediaCard
                         title={album.title}
                         subtitle={album.artistName}
@@ -435,7 +441,7 @@ const ArtistScreen: React.FC = () => {
                       />
                     </View>
                   ))}
-                </View>
+                </ResponsiveGrid>
               </>
             )}
 
@@ -699,25 +705,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   albumsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginHorizontal: -4,
     paddingHorizontal: 24,
     paddingBottom: 24,
-  },
-  albumGridItem: {
-    paddingHorizontal: 4,
-    paddingBottom: 16,
-    ...Platform.select({
-      web: {
-        width: '20%', // 5 columns on desktop
-        minWidth: 180,
-        maxWidth: 220,
-      },
-      default: {
-        width: '50%', // 2 columns on mobile
-      },
-    }),
   },
   emptyState: {
     paddingVertical: 48,
@@ -730,5 +719,4 @@ const styles = StyleSheet.create({
 });
 
 export default ArtistScreen;
-
 

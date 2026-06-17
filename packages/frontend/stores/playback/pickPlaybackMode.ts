@@ -1,5 +1,3 @@
-import { Platform } from 'react-native';
-
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type PlaybackMode = 'native' | 'hlsjs' | 'progressive';
@@ -49,11 +47,10 @@ export function pickPlaybackMode(input: PlaybackModeInput): PlaybackMode {
  * Safari on macOS/iOS supports HLS via `<audio canPlayType>`. Chrome and
  * Firefox do not; they require hls.js.
  *
- * NOT safe to call during SSR or in native contexts — guard with
- * `Platform.OS === 'web'` before calling.
+ * Safe in SSR/native contexts: without a DOM it returns false.
  */
 export function canPlayHlsNatively(): boolean {
-  if (Platform.OS !== 'web') {
+  if (typeof document === 'undefined') {
     return false;
   }
   const audio = document.createElement('audio');

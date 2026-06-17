@@ -13,7 +13,7 @@
 **/out
 
 # Frontend (Expo/React Native) app — not part of the backend runtime.
-# Its package.json is force-included below so the npm workspace graph stays valid.
+# Its package.json is force-included below so the Bun workspace graph stays valid.
 packages/frontend/**
 !packages/frontend/package.json
 

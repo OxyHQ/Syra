@@ -23,12 +23,12 @@ This error is typically caused by cached Metro bundler configuration. Try these 
 
 2. **Restart the dev server with clean cache:**
    ```bash
-   npm run dev -- --clear
+   bun run dev -- --clear
    ```
    
    Or for web specifically:
    ```bash
-   npm run web -- --clear
+   bun run web -- --clear
    ```
 
 3. **If the issue persists**, the entry point is correctly configured in package.json (`expo-router/entry`), and the app directory structure is correct. The error should resolve after clearing caches and restarting.

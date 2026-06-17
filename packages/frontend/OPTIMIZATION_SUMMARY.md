@@ -77,7 +77,7 @@
   - Identifies largest files
   - Metro config optimization checks
   - Provides optimization recommendations
-- **Usage:** `npm run analyze-bundle`
+- **Usage:** `bun run analyze-bundle`
 
 #### 3.2 Metro Config Optimization ✅
 - **Enhanced:** `packages/frontend/metro.config.js`
@@ -124,7 +124,7 @@
 
 ## 🚀 Next Steps
 
-1. **Run bundle analysis:** `npm run analyze-bundle` to see current bundle size
+1. **Run bundle analysis:** `bun run analyze-bundle` to see current bundle size
 2. **Migrate buttons incrementally:** Start with most-used components
 3. **Apply memoization:** Use utilities from `utils/memoization.ts` on frequently re-rendering components
 4. **Implement lazy loading:** Apply to heavy routes (compose, insights, settings)

@@ -3,7 +3,7 @@ import { rewriteVariantPlaylist } from './playlistRewrite';
 
 const TRACK_ID = 'aabbccddeeff001122334455';
 const TOKEN = 'tok123';
-const BASE_URL = 'https://api.syra.oxy.so';
+const BASE_URL = 'https://api.syra.fm';
 
 const VARIANT_PLAYLIST = [
   '#EXTM3U',

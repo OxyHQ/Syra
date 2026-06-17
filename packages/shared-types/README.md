@@ -113,7 +113,7 @@ All user-related data is linked to Oxy users via `oxyUserId` fields:
 ### Installation
 
 ```bash
-npm install @syra/shared-types
+bun install @syra/shared-types
 ```
 
 ### Import Types
@@ -171,19 +171,19 @@ const playbackState: PlaybackState = {
 ### Building
 
 ```bash
-npm run build
+bun run build
 ```
 
 ### Development Mode
 
 ```bash
-npm run dev
+bun run dev
 ```
 
 ### Linting
 
 ```bash
-npm run lint
+bun run lint
 ```
 
 ## Contributing

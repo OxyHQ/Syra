@@ -6,7 +6,7 @@ process.env.STREAM_TOKEN_SECRET = 'test-secret-manifest';
 
 const TRACK_ID = 'aabbccddeeff001122334455';
 const TOKEN = 'tok-manifest';
-const BASE_URL = 'https://api.syra.oxy.so';
+const BASE_URL = 'https://api.syra.fm';
 
 // ── Minimal ITrack-like fixture ───────────────────────────────────────────────
 

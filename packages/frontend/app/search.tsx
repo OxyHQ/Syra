@@ -11,6 +11,7 @@ import { searchRefetchInterval } from '@/utils/searchUtils';
 import { browseService } from '@/services/browseService';
 import { MediaCard } from '@/components/MediaCard';
 import { GenreCard } from '@/components/GenreCard';
+import { ResponsiveGrid } from '@/components/ResponsiveGrid';
 import { TrackRow } from '@/components/TrackRow';
 import { ExploreSection } from '@/components/ExploreSection';
 import { GenreGridSkeleton, MediaCardRowSkeleton, TrackListSkeleton } from '@/components/skeletons';
@@ -248,9 +249,9 @@ const SearchScreen: React.FC = () => {
               emptyMessage="No genres available"
               loadingSkeleton={<GenreGridSkeleton count={8} />}
             >
-              <View style={styles.genreGrid}>
+              <ResponsiveGrid minItemWidth={160} maxItemWidth={240} gap={12}>
                 {genres.map((genre) => (
-                  <View key={genre.name} style={styles.genreGridItem}>
+                  <View key={genre.name}>
                     <GenreCard
                       name={genre.name}
                       color={genre.color}
@@ -259,7 +260,7 @@ const SearchScreen: React.FC = () => {
                     />
                   </View>
                 ))}
-              </View>
+              </ResponsiveGrid>
             </ExploreSection>
 
             {/* Made for You */}
@@ -269,9 +270,9 @@ const SearchScreen: React.FC = () => {
               isEmpty={madeForYouAlbums.length === 0 && madeForYouPlaylists.length === 0}
               emptyMessage="No recommendations available"
             >
-              <View style={styles.grid}>
+              <ResponsiveGrid minItemWidth={180} maxItemWidth={220} gap={8}>
                 {madeForYouAlbums.map((album) => (
-                  <View key={album.id} style={styles.gridItem}>
+                  <View key={album.id}>
                     <MediaCard
                       title={album.title}
                       subtitle={album.artistName}
@@ -282,7 +283,7 @@ const SearchScreen: React.FC = () => {
                   </View>
                 ))}
                 {madeForYouPlaylists.map((playlist) => (
-                  <View key={playlist.id} style={styles.gridItem}>
+                  <View key={playlist.id}>
                     <MediaCard
                       title={playlist.name}
                       subtitle={`Playlist • ${playlist.trackCount || 0} songs`}
@@ -292,7 +293,7 @@ const SearchScreen: React.FC = () => {
                     />
                   </View>
                 ))}
-              </View>
+              </ResponsiveGrid>
             </ExploreSection>
 
             {/* Popular Tracks */}
@@ -302,9 +303,9 @@ const SearchScreen: React.FC = () => {
               isEmpty={popularTracks.length === 0}
               emptyMessage="No tracks available"
             >
-              <View style={styles.grid}>
+              <ResponsiveGrid minItemWidth={180} maxItemWidth={220} gap={8}>
                 {popularTracks.map((track) => (
-                  <View key={track.id} style={styles.gridItem}>
+                  <View key={track.id}>
                     <MediaCard
                       title={track.title}
                       subtitle={track.artistName}
@@ -316,7 +317,7 @@ const SearchScreen: React.FC = () => {
                     />
                   </View>
                 ))}
-              </View>
+              </ResponsiveGrid>
             </ExploreSection>
 
             {/* Top Albums */}
@@ -326,9 +327,9 @@ const SearchScreen: React.FC = () => {
               isEmpty={popularAlbums.length === 0}
               emptyMessage="No albums available"
             >
-              <View style={styles.grid}>
+              <ResponsiveGrid minItemWidth={180} maxItemWidth={220} gap={8}>
                 {popularAlbums.map((album) => (
-                  <View key={album.id} style={styles.gridItem}>
+                  <View key={album.id}>
                     <MediaCard
                       title={album.title}
                       subtitle={album.artistName}
@@ -338,7 +339,7 @@ const SearchScreen: React.FC = () => {
                     />
                   </View>
                 ))}
-              </View>
+              </ResponsiveGrid>
             </ExploreSection>
 
             {/* Top Artists */}
@@ -348,9 +349,9 @@ const SearchScreen: React.FC = () => {
               isEmpty={popularArtists.length === 0}
               emptyMessage="No artists available"
             >
-              <View style={styles.grid}>
+              <ResponsiveGrid minItemWidth={180} maxItemWidth={220} gap={8}>
                 {popularArtists.map((artist) => (
-                  <View key={artist.id} style={styles.gridItem}>
+                  <View key={artist.id}>
                     <MediaCard
                       title={artist.name}
                       subtitle="Artist"
@@ -362,7 +363,7 @@ const SearchScreen: React.FC = () => {
                     />
                   </View>
                 ))}
-              </View>
+              </ResponsiveGrid>
             </ExploreSection>
 
             {/* Charts */}
@@ -426,9 +427,9 @@ const SearchScreen: React.FC = () => {
                   isLoading={false}
                   isEmpty={false}
                 >
-                  <View style={styles.grid}>
+                  <ResponsiveGrid minItemWidth={180} maxItemWidth={220} gap={8}>
                     {searchResults.results.albums.map((album) => (
-                      <View key={album.id} style={styles.gridItem}>
+                      <View key={album.id}>
                         <MediaCard
                           title={album.title}
                           subtitle={album.artistName}
@@ -438,7 +439,7 @@ const SearchScreen: React.FC = () => {
                         />
                       </View>
                     ))}
-                  </View>
+                  </ResponsiveGrid>
                 </ExploreSection>
               )}
 
@@ -451,9 +452,9 @@ const SearchScreen: React.FC = () => {
                   isLoading={false}
                   isEmpty={false}
                 >
-                  <View style={styles.grid}>
+                  <ResponsiveGrid minItemWidth={180} maxItemWidth={220} gap={8}>
                     {searchResults.results.artists.map((artist) => (
-                      <View key={artist.id} style={styles.gridItem}>
+                      <View key={artist.id}>
                         <MediaCard
                           title={artist.name}
                           subtitle="Artist"
@@ -465,7 +466,7 @@ const SearchScreen: React.FC = () => {
                         />
                       </View>
                     ))}
-                  </View>
+                  </ResponsiveGrid>
                 </ExploreSection>
               )}
 
@@ -478,9 +479,9 @@ const SearchScreen: React.FC = () => {
                   isLoading={false}
                   isEmpty={false}
                 >
-                  <View style={styles.grid}>
+                  <ResponsiveGrid minItemWidth={180} maxItemWidth={220} gap={8}>
                     {searchResults.results.playlists.map((playlist) => (
-                      <View key={playlist.id} style={styles.gridItem}>
+                      <View key={playlist.id}>
                         <MediaCard
                           title={playlist.name}
                           subtitle={`Playlist • ${playlist.trackCount || 0} songs`}
@@ -490,7 +491,7 @@ const SearchScreen: React.FC = () => {
                         />
                       </View>
                     ))}
-                  </View>
+                  </ResponsiveGrid>
                 </ExploreSection>
               )}
 
@@ -571,49 +572,11 @@ const styles = StyleSheet.create({
   exploreView: {
     paddingHorizontal: 18,
   },
-  genreGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginHorizontal: -6,
-  },
-  genreGridItem: {
-    paddingHorizontal: 6,
-    paddingBottom: 12,
-    ...Platform.select({
-      web: {
-        width: '25%', // 4 columns on desktop
-        minWidth: 160,
-        maxWidth: 240,
-      },
-      default: {
-        width: '50%', // 2 columns on mobile
-      },
-    }),
-  },
   results: {
     paddingHorizontal: 18,
   },
   trackList: {
     gap: 4,
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginHorizontal: -4,
-  },
-  gridItem: {
-    paddingHorizontal: 4,
-    paddingBottom: 16,
-    ...Platform.select({
-      web: {
-        width: '20%', // 5 columns on desktop
-        minWidth: 180,
-        maxWidth: 220,
-      },
-      default: {
-        width: '50%', // 2 columns on mobile
-      },
-    }),
   },
   noResultsContainer: {
     padding: 48,

@@ -62,7 +62,7 @@ WORKDIR /app
 # unless dependencies change. The frontend workspace's package.json is included
 # (the rest of its source is excluded via Dockerfile.dockerignore) so the bun
 # workspace graph stays valid.
-COPY package.json bun.lock bunfig.toml .npmrc ./
+COPY package.json bun.lock bunfig.toml ./
 COPY packages/backend/package.json ./packages/backend/package.json
 COPY packages/shared-types/package.json ./packages/shared-types/package.json
 COPY packages/frontend/package.json ./packages/frontend/package.json

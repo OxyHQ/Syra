@@ -1,28 +1,23 @@
 # Deployment Architecture
 
-Guide for the Syra monorepo deployment across DigitalOcean and Cloudflare.
+Legacy guide for the Syra monorepo deployment across DigitalOcean and Cloudflare.
 
-> **Domain migration (in progress — NOT yet cut over):** the web frontend is
-> moving `syra.oxy.so` → `syra.fm` and the API `api.syra.oxy.so` → `api.syra.fm`.
-> The additive groundwork (backend CORS + app universal-link hosts now accept
-> both old and new origins) is in place. The final cutover — flipping the
-> frontend `API_URL`/websocket host to `api.syra.fm`, repointing `FRONTEND_URL`,
-> and retiring the old hosts — is deferred until the `api.syra.fm` infra (DNS,
-> cert, ALB target) is live. Until then, all tables below reflect the live
-> `*.syra.oxy.so` hosts.
+> **Current production domains:** web is `syra.fm`; API, WebSocket, and stream
+> keys use `api.syra.fm`. Do not use the retired oxy.so Syra hosts in runtime
+> config or deploy scripts.
 
 ## Architecture
 
 | Component | Platform | Domain | Description |
 |---|---|---|---|
-| `syra` | DigitalOcean App Platform | `api.syra.oxy.so` | Node.js backend API |
-| `syra-frontend` | Cloudflare Pages | `syra.oxy.so` | Expo web frontend |
+| `syra` | DigitalOcean App Platform | `api.syra.fm` | Node.js backend API |
+| `syra-frontend` | Cloudflare Pages | `syra.fm` | Expo web frontend |
 
 ## Routing
 
 ```
-syra.oxy.so/*           → syra-frontend (Cloudflare Pages)
-api.syra.oxy.so/*       → syra backend (DigitalOcean)
+syra.fm/*               → syra-frontend (Cloudflare Pages)
+api.syra.fm/*           → syra backend (DigitalOcean)
 ```
 
 ## Backend Deployment (DigitalOcean)
@@ -32,7 +27,7 @@ The `syra-production` DO app deploys the backend service only.
 ### Build Command
 
 ```
-npm ci --include=dev && npm run build -w @syra/shared-types && npm run build -w @syra/backend && npm prune --omit=dev
+bun install --frozen-lockfile && bun run build:shared-types && bun run build:backend
 ```
 
 - Instance: `apps-s-1vcpu-1gb-fixed`
@@ -62,7 +57,7 @@ App-level (shared):
 
 | Variable | Value | Scope |
 |---|---|---|
-| `FRONTEND_URL` | `https://syra.oxy.so` | `RUN_AND_BUILD_TIME` |
+| `FRONTEND_URL` | `https://syra.fm` | `RUN_AND_BUILD_TIME` |
 | `OXY_API_URL` | `https://api.oxy.so` | `RUN_AND_BUILD_TIME` |
 | `NODE_ENV` | `production` | `RUN_AND_BUILD_TIME` |
 
@@ -101,7 +96,7 @@ DNS is managed by Cloudflare (zone `oxy.so`):
 
 | Record | Type | Target |
 |---|---|---|
-| `api.syra.oxy.so` | CNAME | `<syra-production-hash>.ondigitalocean.app` (DNS-only, no proxy) |
+| `api.syra.fm` | CNAME | `<syra-production-hash>.ondigitalocean.app` (DNS-only, no proxy) |
 
 The CNAME target will be provided by DO App Platform after the app is created. Update the Cloudflare DNS record accordingly.
 
@@ -118,4 +113,4 @@ curl "https://api.digitalocean.com/v2/apps/{app-id}/deployments/{deploy-id}/comp
 
 ### Multiple Lock Files
 
-The DO buildpack rejects builds if multiple package manager lock files exist. The `.gitignore` should exclude `bun.lock` to prevent this.
+Use Bun only for installs and builds. Do not add other package-manager lockfiles.

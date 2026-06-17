@@ -1,7 +1,7 @@
 import React from 'react';
-import { StyleSheet, View, Platform } from 'react-native';
 import { MediaCardSkeleton } from './MediaCardSkeleton';
 import { Repeat } from './Repeat';
+import { ResponsiveGrid } from '@/components/ResponsiveGrid';
 
 interface MediaCardRowSkeletonProps {
   /** Number of placeholder cards to render. Defaults to 5 (one desktop row). */
@@ -18,40 +18,16 @@ interface MediaCardRowSkeletonProps {
 export const MediaCardRowSkeleton: React.FC<MediaCardRowSkeletonProps> =
   React.memo(({ count = 5, shape = 'square' }) => {
     return (
-      <View style={styles.grid}>
+      <ResponsiveGrid minItemWidth={180} maxItemWidth={220} gap={8}>
         <Repeat
           count={count}
           render={() => (
-            <View style={styles.gridItem}>
+            <>
               <MediaCardSkeleton shape={shape} />
-            </View>
+            </>
           )}
         />
-      </View>
+      </ResponsiveGrid>
     );
   });
 MediaCardRowSkeleton.displayName = 'MediaCardRowSkeleton';
-
-const styles = StyleSheet.create({
-  // Mirrors the screens' `grid` style.
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginHorizontal: -4,
-  },
-  // Mirrors the screens' `gridItem` style (5 columns desktop, 2 mobile).
-  gridItem: {
-    paddingHorizontal: 4,
-    paddingBottom: 6,
-    ...Platform.select({
-      web: {
-        width: '20%',
-        minWidth: 180,
-        maxWidth: 220,
-      },
-      default: {
-        width: '50%',
-      },
-    }),
-  },
-});

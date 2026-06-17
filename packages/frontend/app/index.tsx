@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { StyleSheet, View, ScrollView, Text, Platform, Pressable } from 'react-native';
-import { webDimension } from '@/utils/webStyles';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import SEO from '@/components/SEO';
 import { MediaCard } from '@/components/MediaCard';
+import { ResponsiveGrid } from '@/components/ResponsiveGrid';
 import { QuickAccessGridSkeleton, MediaCardRowSkeleton } from '@/components/skeletons';
 import { musicService } from '@/services/musicService';
 import { Track, Album, Artist, Playlist } from '@syra/shared-types';
@@ -420,7 +420,7 @@ const HomeScreen: React.FC = () => {
           {quickAccessLoading ? (
             <QuickAccessGridSkeleton />
           ) : hasQuickAccess && (
-            <View style={styles.compactGrid}>
+            <ResponsiveGrid minItemWidth={300} gap={8} style={styles.compactGrid}>
               {quickAccess.map((item) => {
                 const title = item.type === 'album' ? item.data.title : item.data.name;
                 const id = item.data.id;
@@ -483,7 +483,7 @@ const HomeScreen: React.FC = () => {
                   </Pressable>
                 );
               })}
-            </View>
+            </ResponsiveGrid>
           )}
 
           {/* Jump back in — REAL recently-played tracks (authed). Hidden when
@@ -500,9 +500,9 @@ const HomeScreen: React.FC = () => {
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
                 Jump back in
               </Text>
-              <View style={styles.grid}>
+              <ResponsiveGrid minItemWidth={180} maxItemWidth={220} gap={8}>
                 {recentlyPlayed.map((track) => (
-                  <View key={track.id} style={styles.gridItem}>
+                  <View key={track.id}>
                     <MediaCard
                       title={track.title}
                       subtitle={track.artistName}
@@ -530,7 +530,7 @@ const HomeScreen: React.FC = () => {
                     />
                   </View>
                 ))}
-              </View>
+              </ResponsiveGrid>
             </View>
           )}
 
@@ -547,9 +547,9 @@ const HomeScreen: React.FC = () => {
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
                 Made for you
               </Text>
-              <View style={styles.grid}>
+              <ResponsiveGrid minItemWidth={180} maxItemWidth={220} gap={8}>
                 {madeForYouPlaylists.map((playlist) => (
-                  <View key={playlist.id} style={styles.gridItem}>
+                  <View key={playlist.id}>
                     <MediaCard
                       title={playlist.name}
                       subtitle={playlist.description || 'Playlist'}
@@ -564,7 +564,7 @@ const HomeScreen: React.FC = () => {
                   </View>
                 ))}
                 {madeForYouAlbums.map((album) => (
-                  <View key={album.id} style={styles.gridItem}>
+                  <View key={album.id}>
                     <MediaCard
                       title={album.title}
                       subtitle={album.artistName}
@@ -579,7 +579,7 @@ const HomeScreen: React.FC = () => {
                     />
                   </View>
                 ))}
-              </View>
+              </ResponsiveGrid>
             </View>
           )}
 
@@ -596,9 +596,9 @@ const HomeScreen: React.FC = () => {
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
                 Popular albums
               </Text>
-              <View style={styles.grid}>
+              <ResponsiveGrid minItemWidth={180} maxItemWidth={220} gap={8}>
                 {popularAlbums.map((album) => (
-                  <View key={album.id} style={styles.gridItem}>
+                  <View key={album.id}>
                     <MediaCard
                       title={album.title}
                       subtitle={album.artistName}
@@ -613,7 +613,7 @@ const HomeScreen: React.FC = () => {
                     />
                   </View>
                 ))}
-              </View>
+              </ResponsiveGrid>
             </View>
           )}
 
@@ -623,9 +623,9 @@ const HomeScreen: React.FC = () => {
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
                 Popular artists
               </Text>
-              <View style={styles.grid}>
+              <ResponsiveGrid minItemWidth={180} maxItemWidth={220} gap={8}>
                 {popularArtists.map((artist) => (
-                  <View key={artist.id} style={styles.gridItem}>
+                  <View key={artist.id}>
                     <MediaCard
                       title={artist.name}
                       subtitle="Artist"
@@ -640,7 +640,7 @@ const HomeScreen: React.FC = () => {
                     />
                   </View>
                 ))}
-              </View>
+              </ResponsiveGrid>
             </View>
           )}
 
@@ -650,9 +650,9 @@ const HomeScreen: React.FC = () => {
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
                 Your playlists
               </Text>
-              <View style={styles.grid}>
+              <ResponsiveGrid minItemWidth={180} maxItemWidth={220} gap={8}>
                 {userPlaylists.map((playlist) => (
-                  <View key={playlist.id} style={styles.gridItem}>
+                  <View key={playlist.id}>
                     <MediaCard
                       title={playlist.name}
                       subtitle={playlist.description || 'Playlist'}
@@ -666,7 +666,7 @@ const HomeScreen: React.FC = () => {
                     />
                   </View>
                 ))}
-              </View>
+              </ResponsiveGrid>
             </View>
           )}
 
@@ -683,9 +683,9 @@ const HomeScreen: React.FC = () => {
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
                 Popular tracks
               </Text>
-              <View style={styles.grid}>
+              <ResponsiveGrid minItemWidth={180} maxItemWidth={220} gap={8}>
                 {tracks.map((track) => (
-                  <View key={track.id} style={styles.gridItem}>
+                  <View key={track.id}>
                     <MediaCard
                       title={track.title}
                       subtitle={track.artistName}
@@ -709,7 +709,7 @@ const HomeScreen: React.FC = () => {
                     />
                   </View>
                 ))}
-              </View>
+              </ResponsiveGrid>
             </View>
           )}
         </ScrollView>
@@ -746,25 +746,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   compactGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     marginBottom: 24,
-    gap: 8,
   },
   compactGridItem: {
     flexDirection: 'row',
     padding: 4,
     borderRadius: 12,
-    marginBottom: 4,
     alignItems: 'center',
-    ...Platform.select({
-      web: {
-        width: webDimension('calc(50% - 4px)'),
-      },
-      default: {
-        width: '48%',
-      },
-    }),
   },
   compactImageContainer: {
     width: 40,
@@ -791,25 +779,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: 'bold',
     marginBottom: 8,
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginHorizontal: -4,
-  },
-  gridItem: {
-    paddingHorizontal: 4,
-    paddingBottom: 6,
-    ...Platform.select({
-      web: {
-        width: '20%', // 5 columns on desktop
-        minWidth: 180,
-        maxWidth: 220,
-      },
-      default: {
-        width: '50%', // 2 columns on mobile
-      },
-    }),
   },
 });
 

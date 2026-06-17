@@ -39,14 +39,14 @@ RESPONSE=$(curl -s -X POST "$API/apps" \
       "instance_count": 1,
       "instance_size_slug": "apps-s-1vcpu-1gb-fixed",
       "http_port": 3000,
-      "build_command": "npm ci --include=dev && npm run build -w @syra/shared-types && npm run build -w @syra/backend && npm prune --omit=dev",
+      "build_command": "bun install --frozen-lockfile && bun run build:shared-types && bun run build:backend",
       "run_command": "node packages/backend/dist/server.js",
       "health_check": {
         "http_path": "/health"
       },
       "envs": [
         {"key": "NODE_ENV", "value": "production", "scope": "RUN_AND_BUILD_TIME"},
-        {"key": "FRONTEND_URL", "value": "https://syra.oxy.so", "scope": "RUN_AND_BUILD_TIME"},
+        {"key": "FRONTEND_URL", "value": "https://syra.fm", "scope": "RUN_AND_BUILD_TIME"},
         {"key": "OXY_API_URL", "value": "https://api.oxy.so", "scope": "RUN_AND_BUILD_TIME"},
         {"key": "AWS_REGION", "value": "fra1", "scope": "RUN_TIME"},
         {"key": "AWS_ENDPOINT_URL", "value": "https://fra1.digitaloceanspaces.com", "scope": "RUN_TIME"},
@@ -90,7 +90,7 @@ echo "   - SPACES_KEY"
 echo "   - SPACES_SECRET"
 echo "   - FIREBASE_SERVICE_ACCOUNT_BASE64"
 echo ""
-echo "2. Add custom domain 'api.syra.oxy.so' in DO dashboard"
+echo "2. Add custom domain 'api.syra.fm' in DO dashboard"
 echo ""
 echo "3. Create Cloudflare CNAME record:"
-echo "   api.syra.oxy.so -> $DEFAULT_HOSTNAME (DNS only, no proxy)"
+echo "   api.syra.fm -> $DEFAULT_HOSTNAME (DNS only, no proxy)"

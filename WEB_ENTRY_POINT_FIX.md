@@ -23,17 +23,17 @@ The configuration is correct (`"main": "expo-router/entry"` in package.json). Th
 
 2. **Restart dev server with clean cache:**
    ```bash
-   npm run web -- --clear
+   bun run web -- --clear
    ```
    
    Or:
    ```bash
-   npx expo start --web --clear
+   bunx expo start --web --clear
    ```
 
 3. **If that doesn't work, try:**
    ```bash
-   npx expo start --web --reset-cache
+   bunx expo start --web --reset-cache
    ```
 
 4. **For a complete fresh start:**
@@ -42,10 +42,10 @@ The configuration is correct (`"main": "expo-router/entry"` in package.json). Th
    rm -rf .expo node_modules/.cache .metro node_modules
    
    # Reinstall
-   npm install
+   bun install
    
    # Start fresh
-   npm run web -- --clear
+   bun run web -- --clear
    ```
 
 ## Verification

@@ -238,7 +238,7 @@ If you're still having issues:
 2. Review [THEME_QUICK_REFERENCE.md](./THEME_QUICK_REFERENCE.md) for usage examples
 3. Look at existing themed components like `app/settings/index.tsx` for patterns
 4. Ensure all dependencies are up to date
-5. Clear cache and rebuild: `npm run clean && npm run start --reset-cache`
+5. Clear cache and rebuild: `bun run clean && bun run start --reset-cache`
 
 ## Quick Checklist
 

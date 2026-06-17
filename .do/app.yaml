@@ -11,7 +11,7 @@ services:
     instance_count: 1
     instance_size_slug: apps-s-1vcpu-1gb-fixed
     http_port: 3000
-    build_command: npm ci --include=dev && npm run build -w @syra/shared-types && npm run build -w @syra/backend && npm prune --omit=dev
+    build_command: bun install --frozen-lockfile && bun run build:shared-types && bun run build:backend
     run_command: node packages/backend/dist/server.js
     health_check:
       http_path: /health
@@ -20,7 +20,7 @@ services:
         value: production
         scope: RUN_AND_BUILD_TIME
       - key: FRONTEND_URL
-        value: https://syra.oxy.so
+        value: https://syra.fm
         scope: RUN_AND_BUILD_TIME
       - key: OXY_API_URL
         value: https://api.oxy.so

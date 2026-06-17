@@ -1,6 +1,6 @@
 /**
  * Seed script to populate MongoDB with fake music data
- * Run with: npm run seed:music or ts-node --transpile-only src/scripts/seedMusicData.ts
+ * Run with: bun run seed:music or ts-node --transpile-only src/scripts/seedMusicData.ts
  */
 
 import mongoose from 'mongoose';
@@ -283,4 +283,3 @@ if (require.main === module) {
       process.exit(1);
     });
 }
-

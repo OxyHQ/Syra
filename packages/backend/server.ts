@@ -96,11 +96,9 @@ app.use(async (req, res, next) => {
 });
 
 // CORS and security headers
-// Domain migration is additive until final cutover: keep both syra.oxy.so and
-// syra.fm origins working simultaneously.
+// syra.fm is the current production web origin.
 const ALLOWED_ORIGINS = [
-  process.env.FRONTEND_URL || "https://syra.oxy.so",
-  "https://syra.oxy.so",
+  process.env.FRONTEND_URL || "https://syra.fm",
   "https://syra.fm",
   "http://localhost:8081",
   "http://localhost:8082",

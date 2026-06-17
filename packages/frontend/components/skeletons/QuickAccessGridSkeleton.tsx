@@ -1,8 +1,8 @@
 import React from 'react';
-import { StyleSheet, View, Platform } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import * as Skeleton from '@oxyhq/bloom/skeleton';
-import { webDimension } from '@/utils/webStyles';
 import { Repeat } from './Repeat';
+import { ResponsiveGrid } from '@/components/ResponsiveGrid';
 
 interface QuickAccessGridSkeletonProps {
   /** Number of placeholder tiles. Defaults to 8 (the real grid's cap). */
@@ -16,7 +16,7 @@ interface QuickAccessGridSkeletonProps {
 export const QuickAccessGridSkeleton: React.FC<QuickAccessGridSkeletonProps> =
   React.memo(({ count = 8 }) => {
     return (
-      <View style={styles.compactGrid}>
+      <ResponsiveGrid minItemWidth={300} gap={8} style={styles.compactGrid}>
         <Repeat
           count={count}
           render={() => (
@@ -33,7 +33,7 @@ export const QuickAccessGridSkeleton: React.FC<QuickAccessGridSkeletonProps> =
             </View>
           )}
         />
-      </View>
+      </ResponsiveGrid>
     );
   });
 QuickAccessGridSkeleton.displayName = 'QuickAccessGridSkeleton';
@@ -41,26 +41,14 @@ QuickAccessGridSkeleton.displayName = 'QuickAccessGridSkeleton';
 const styles = StyleSheet.create({
   // Mirrors home.styles.compactGrid.
   compactGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     marginBottom: 24,
-    gap: 8,
   },
   // Mirrors home.styles.compactGridItem.
   compactGridItem: {
     flexDirection: 'row',
     padding: 4,
     borderRadius: 12,
-    marginBottom: 4,
     alignItems: 'center',
-    ...Platform.select({
-      web: {
-        width: webDimension('calc(50% - 4px)'),
-      },
-      default: {
-        width: '48%',
-      },
-    }),
   },
   // Mirrors home.styles.compactImageContainer.
   compactImage: {

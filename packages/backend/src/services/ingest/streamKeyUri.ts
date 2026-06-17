@@ -5,8 +5,7 @@
  * IMMUTABLE per track once packaged. hls.js resolves relative key URIs against
  * the CDN manifest host, which would be wrong for a protected API endpoint.
  *
- * Set STREAM_KEY_BASE_URL (e.g. "https://api.syra.oxy.so", or "https://api.syra.fm"
- * once the migration cutover completes) in the environment.
+ * Set STREAM_KEY_BASE_URL (e.g. "https://api.syra.fm") in the environment.
  * If unset, falls back to the relative path (useful during local development).
  */
 export function buildStreamKeyUri(trackId: string): string {
