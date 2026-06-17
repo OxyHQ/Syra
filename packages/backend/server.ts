@@ -7,15 +7,17 @@ import compression from 'compression';
 import cors from 'cors';
 import { Server as SocketIOServer, Socket, Namespace } from 'socket.io';
 import { OxyServices } from '@oxyhq/core';
+import { createOxyRateLimit } from '@oxyhq/core/server';
 
 import { connectToDatabase, isDatabaseConnected, getDatabaseStats } from './src/utils/database';
 import { createRedisPubSub, isRedisConnected, getRedisStats } from './src/utils/redis';
 import { ensureRedisConnected, isRedisConnectionError } from './src/utils/redisHelpers';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { logger } from './src/utils/logger';
-import { rateLimiter, bruteForceProtection } from './src/middleware/security';
+import { bruteForceProtection } from './src/middleware/security';
 import { performanceMiddleware, getPerformanceStats } from './src/middleware/performance';
 import type { AuthRequest } from './src/middleware/auth';
+import { RedisStore } from './src/middleware/rateLimitStore';
 
 import { setupPlayerSocket } from './src/sockets/playerSocket';
 import { setupPlaylistSocket } from './src/sockets/playlistSocket';
@@ -46,35 +48,6 @@ app.set('trust proxy', true);
 
 export const oxy = new OxyServices({ baseURL: env.OXY_API_URL });
 
-/**
- * Resolve the user from the bearer token without rejecting unauthenticated
- * requests. Idempotent: if a prior pass already resolved the user, it skips the
- * (costly) token re-verification.
- *
- * This runs BEFORE the rate limiter so the limiter can key/scale per user
- * instead of per IP. Behind the AWS ALB many users share an egress IP, so
- * IP-only limiting (the old behaviour, because auth ran after the limiter) made
- * a single 100-req/15min bucket shared across users — the cause of frequent 429s.
- */
-const optionalAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  if ((req as AuthRequest).user?.id) {
-    return next();
-  }
-
-  const authHeader = req.headers.authorization;
-  if (!authHeader) {
-    return next();
-  }
-
-  const authMiddleware = oxy.auth();
-  authMiddleware(req, res, (err?: unknown) => {
-    if (err) {
-      (req as express.Request & { user?: undefined }).user = undefined;
-    }
-    next();
-  });
-};
-
 const ALLOWED_ORIGINS: string[] = [
   env.FRONTEND_URL,
   'https://syra.fm',
@@ -96,11 +69,14 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-Requested-With', 'Accept', 'Accept-Version', 'Content-Length', 'Content-MD5', 'Date', 'X-Api-Version'],
 }));
 
-// Resolve the user BEFORE rate limiting so the limiter keys per authenticated
-// user (high limit) rather than per shared egress IP behind the ALB.
-app.use(optionalAuth);
+// Create Redis store for distributed rate limiting
+const redisStore = new RedisStore({ 
+  prefix: 'rate-limit:api:',
+  windowMs: 15 * 60 * 1000
+});
 
-app.use(rateLimiter);
+// Single middleware that resolves session + applies per-user rate limiting
+app.use(createOxyRateLimit(oxy, { store: redisStore }));
 
 app.use(compression({
   filter: (req, res) => {
@@ -271,17 +247,17 @@ app.set('io', io);
 app.set('musicNamespace', musicNamespace);
 
 const publicApiRouter = express.Router();
-publicApiRouter.use('/tracks', optionalAuth, tracksRoutes);
-publicApiRouter.use('/albums', optionalAuth, albumsRoutes);
-publicApiRouter.use('/artists', optionalAuth, artistsRoutes);
-publicApiRouter.use('/playlists', optionalAuth, playlistsRoutes);
-publicApiRouter.use('/images', imagesRoutes);
-publicApiRouter.use('/search', optionalAuth, searchRoutes);
-publicApiRouter.use('/browse', optionalAuth, browseRoutes);
-publicApiRouter.use('/copyright', optionalAuth, copyrightRoutes);
-publicApiRouter.use('/stream', optionalAuth, streamRoutes);
-publicApiRouter.use('/lyrics', lyricsRoutes);
-publicApiRouter.use('/sources', optionalAuth, sourcesRoutes);
+publicApiRouter.use('/tracks', tracksRoutes);
+publicApiRouter.use('/albums', albumsRoutes);
+publicApiRouter.use('/artists', artistsRoutes);
+publicApiRouter.use('/playlists', playlistsRoutes);
+
+publicApiRouter.use('/search', searchRoutes);
+publicApiRouter.use('/browse', browseRoutes);
+publicApiRouter.use('/copyright', copyrightRoutes);
+publicApiRouter.use('/stream', streamRoutes);
+
+publicApiRouter.use('/sources', sourcesRoutes);
 
 const authenticatedApiRouter = express.Router();
 authenticatedApiRouter.use('/profile', profileSettingsRoutes);
