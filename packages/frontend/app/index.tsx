@@ -1,15 +1,12 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { StyleSheet, View, ScrollView, Text, Platform, Pressable } from 'react-native';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Animated, Easing, StyleSheet, View, ScrollView, Text, Platform, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useMediaQuery } from 'react-responsive';
 import SEO from '@/components/SEO';
 import { MediaCard } from '@/components/MediaCard';
 import { ResponsiveGrid } from '@/components/ResponsiveGrid';
-import { TOP_BAR_HEIGHT } from '@/components/TopBar';
 import { QuickAccessGridSkeleton, MediaCardRowSkeleton } from '@/components/skeletons';
 import { musicService } from '@/services/musicService';
 import { Track, Album, Artist, Playlist } from '@syra/shared-types';
@@ -64,8 +61,6 @@ type QuickAccessItem =
 const HomeScreen: React.FC = () => {
   const theme = useTheme();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const isMobile = useMediaQuery({ maxWidth: 767 });
   const [now, setNow] = useState(() => new Date());
   const { playTrackList } = usePlayerStore();
   const { addTracksLocally } = useQueueStore();
@@ -113,9 +108,12 @@ const HomeScreen: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // State for hover gradient color. The visual transition is handled by the
-  // gradient style, avoiding per-frame React re-renders while hovering.
+  // Cross-fade gradient layers so hover color changes do not snap.
   const [hoveredItemColor, setHoveredItemColor] = useState<string | null>(null);
+  const [gradientOpacity] = useState(() => new Animated.Value(1));
+  const displayedGradientColorRef = useRef(theme.colors.primary);
+  const [gradientFromColor, setGradientFromColor] = useState(theme.colors.primary);
+  const [gradientToColor, setGradientToColor] = useState(theme.colors.primary);
 
   // Get greeting based on time
   const greeting = useMemo(() => {
@@ -126,11 +124,46 @@ const HomeScreen: React.FC = () => {
   }, [now]);
 
   // Convert hex to rgba string for LinearGradient
-  const hexToRgba = (hex: string, alpha: number = 0.2): string => {
+  const hexToRgba = useCallback((hex: string, alpha: number = 0.2): string => {
     const rgb = hexToRgb(hex);
     if (!rgb) return `rgba(128, 128, 128, ${alpha})`; // Fallback gray
     return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
-  };
+  }, []);
+
+  const getGradientColors = useCallback((color: string): [string, string, string] => ([
+    hexToRgba(color, 0.46),
+    hexToRgba(color, 0.22),
+    theme.colors.background,
+  ]), [hexToRgba, theme.colors.background]);
+
+  useEffect(() => {
+    const nextColor = hoveredItemColor || theme.colors.primary;
+    if (displayedGradientColorRef.current === nextColor) {
+      return;
+    }
+
+    setGradientFromColor(displayedGradientColorRef.current);
+    setGradientToColor(nextColor);
+    gradientOpacity.setValue(0);
+
+    const animation = Animated.timing(gradientOpacity, {
+      toValue: 1,
+      duration: 280,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    });
+
+    animation.start(({ finished }) => {
+      if (finished) {
+        displayedGradientColorRef.current = nextColor;
+        setGradientFromColor(nextColor);
+      }
+    });
+
+    return () => {
+      animation.stop();
+    };
+  }, [gradientOpacity, hoveredItemColor, theme.colors.primary]);
 
   // Handle hover in - set the color
   const handleHoverIn = useCallback((color: string | null | undefined) => {
@@ -141,16 +174,6 @@ const HomeScreen: React.FC = () => {
   const handleHoverOut = useCallback(() => {
     setHoveredItemColor(null);
   }, []);
-
-  // Get the current gradient top color with smooth transitions
-  const getGradientTopColor = (): string => {
-    if (hoveredItemColor) {
-      // Use hovered color with opacity for top 20%
-      return hexToRgba(hoveredItemColor, 0.2);
-    }
-    // Default to theme primary with opacity
-    return hexToRgba(theme.colors.primary, 0.2);
-  };
 
   // Navigate to and start playing an album's first track. Used by album cards'
   // play button so a single tap actually plays real audio.
@@ -286,16 +309,26 @@ const HomeScreen: React.FC = () => {
       />
       <View style={[styles.gradientContainer, { backgroundColor: theme.colors.background }]}>
         <LinearGradient
-          colors={[getGradientTopColor(), theme.colors.background]}
-          locations={[0, 1]}
+          colors={getGradientColors(gradientFromColor)}
+          locations={[0, 0.48, 1]}
           pointerEvents="none"
           style={styles.fixedGradient}
         />
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.fixedGradient, { opacity: gradientOpacity }]}
+        >
+          <LinearGradient
+            colors={getGradientColors(gradientToColor)}
+            locations={[0, 0.48, 1]}
+            pointerEvents="none"
+            style={styles.gradientFill}
+          />
+        </Animated.View>
         <ScrollView
           style={[styles.scrollView, { backgroundColor: 'transparent' }]}
           contentContainerStyle={[
             styles.contentContainer,
-            isMobile && { paddingTop: TOP_BAR_HEIGHT + insets.top + 16 },
             { paddingBottom: 100 } // Space for bottom player bar
           ]}
           showsVerticalScrollIndicator={false}
@@ -631,12 +664,10 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 360,
-    ...Platform.select({
-      web: {
-        transition: 'all 0.3s ease',
-      },
-    }),
+    height: 520,
+  },
+  gradientFill: {
+    flex: 1,
   },
   scrollView: {
     flex: 1,
