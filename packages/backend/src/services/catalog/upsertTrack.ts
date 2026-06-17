@@ -161,13 +161,6 @@ export async function upsertTrack(
   }
 
   const primaryExternal = external.artists[0];
-  const { artist } = await upsertArtist(primaryExternal, source);
-  if (!artist) {
-    return { track: null, created: false };
-  }
-  const artistId = artist._id.toString();
-  const artistName = artist.name;
-
   const fields = contributedFields(external);
   const provenance = buildProvenance(source, external.externalId, fields);
 
@@ -184,7 +177,7 @@ export async function upsertTrack(
 
   // --- Tier 3: Fuzzy ---
   if (!existing) {
-    existing = await findByFuzzy(external.title, artistName, external.durationSec);
+    existing = await findByFuzzy(external.title, primaryExternal.name, external.durationSec);
   }
 
   const releaseDate = parseReleaseDate(external.releaseDate);
@@ -196,13 +189,24 @@ export async function upsertTrack(
     existingImageId: existing?.coverArt,
     existingImageSizes: existing?.coverArtSizes,
   });
-  if (!existing && !mirroredCover) {
+  if (!mirroredCover && !existing?.coverArt) {
     return { track: null, created: false };
   }
   const imageChanged = Boolean(mirroredCover && mirroredCover.imageId !== existing?.coverArt);
 
+  const { artist } = await upsertArtist(primaryExternal, source);
+  if (!artist) {
+    return { track: null, created: false };
+  }
+  const artistId = artist._id.toString();
+  const artistName = artist.name;
+
   // --- Create ---
   if (!existing) {
+    if (!mirroredCover) {
+      return { track: null, created: false };
+    }
+
     const track = await TrackModel.create({
       title: external.title,
       artistId,

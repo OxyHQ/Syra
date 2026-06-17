@@ -1,11 +1,15 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
-import { connect, clear, disconnect } from '../../test/mongo';
+import { connect, clear, disconnect, installCatalogImageMirrorMockForTests } from '../../test/mongo';
 import { ArtistModel } from '../../models/Artist';
 import { upsertArtist } from './upsertArtist';
+import { setCatalogImageMirrorImplementationForTests } from './catalogImageAssets';
 import type { ExternalArtist } from '@syra/shared-types';
 
 beforeAll(connect);
-afterEach(clear);
+afterEach(async () => {
+  installCatalogImageMirrorMockForTests();
+  await clear();
+});
 afterAll(disconnect);
 
 const audiusArtist: ExternalArtist = {
@@ -60,6 +64,16 @@ describe('upsertArtist', () => {
       { name: 'No Image', externalId: 'aud-no-image' },
       'audius',
     );
+
+    expect(created).toBe(false);
+    expect(artist).toBeNull();
+    expect(await ArtistModel.countDocuments()).toBe(0);
+  });
+
+  it('skips a new imported artist when image mirroring fails', async () => {
+    setCatalogImageMirrorImplementationForTests(async () => undefined);
+
+    const { artist, created } = await upsertArtist(audiusArtist, 'audius');
 
     expect(created).toBe(false);
     expect(artist).toBeNull();

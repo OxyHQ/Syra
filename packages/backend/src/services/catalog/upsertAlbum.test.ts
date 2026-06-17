@@ -1,14 +1,18 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
-import { connect, clear, disconnect } from '../../test/mongo';
+import { connect, clear, disconnect, installCatalogImageMirrorMockForTests } from '../../test/mongo';
 import { AlbumModel } from '../../models/Album';
 import { TrackModel } from '../../models/Track';
 import { upsertAlbum } from './upsertAlbum';
 import { upsertTrack } from './upsertTrack';
+import { setCatalogImageMirrorImplementationForTests } from './catalogImageAssets';
 import mongoose from 'mongoose';
 import type { ExternalAlbum, ExternalTrack } from '@syra/shared-types';
 
 beforeAll(connect);
-afterEach(clear);
+afterEach(async () => {
+  installCatalogImageMirrorMockForTests();
+  await clear();
+});
 afterAll(disconnect);
 
 const ARTIST = { artistId: new mongoose.Types.ObjectId().toString(), artistName: 'Album Artist' };
@@ -126,6 +130,17 @@ describe('upsertAlbum', () => {
     );
 
     // No cover art → not persisted (Album.coverArt is required); reported as not created.
+    expect(created).toBe(false);
+    expect(album).toBeNull();
+    expect(await AlbumModel.countDocuments()).toBe(0);
+  });
+
+  it('skips albums when cover art mirroring fails', async () => {
+    await seedTrack('aud-trk-base', 120);
+    setCatalogImageMirrorImplementationForTests(async () => undefined);
+
+    const { album, created } = await upsertAlbum(baseAlbum, ARTIST, 'audius');
+
     expect(created).toBe(false);
     expect(album).toBeNull();
     expect(await AlbumModel.countDocuments()).toBe(0);

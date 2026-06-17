@@ -52,14 +52,15 @@ function hashValue(value: string | Buffer): string {
   return crypto.createHash('sha256').update(value).digest('hex');
 }
 
-function firstUsableImageUrl(images: TrackImage[] | undefined): string | undefined {
-  if (!Array.isArray(images)) return undefined;
+function usableImageUrls(images: TrackImage[] | undefined): string[] {
+  if (!Array.isArray(images)) return [];
+  const urls: string[] = [];
   for (const image of images) {
     if (typeof image?.url === 'string' && image.url.trim().length > 0) {
-      return image.url.trim();
+      urls.push(image.url.trim());
     }
   }
-  return undefined;
+  return urls;
 }
 
 function normalizeSourceUrl(sourceUrl: string): string {
@@ -236,69 +237,78 @@ async function mirrorCatalogImageInternal(
   images: TrackImage[] | undefined,
   context: CatalogImageContext,
 ): Promise<CatalogImageAsset | undefined> {
-  const sourceUrl = firstUsableImageUrl(images);
-  if (!sourceUrl) return undefined;
+  const sourceUrls = usableImageUrls(images);
+  if (sourceUrls.length === 0) return undefined;
 
-  try {
-    const normalizedSourceUrl = normalizeSourceUrl(sourceUrl);
-    const sourceUrlHash = hashValue(normalizedSourceUrl);
-    const { buffer } = await downloadImage(normalizedSourceUrl);
-    const sourceContentHash = hashValue(buffer);
+  for (const sourceUrl of sourceUrls) {
+    try {
+      const normalizedSourceUrl = normalizeSourceUrl(sourceUrl);
+      const sourceUrlHash = hashValue(normalizedSourceUrl);
+      const { buffer } = await downloadImage(normalizedSourceUrl);
+      const sourceContentHash = hashValue(buffer);
 
-    const existingSourceContentHash = context.existingSourceContentHash
-      ?? await getImageAssetSourceContentHash(context.existingImageId);
-    if (
-      context.existingImageId &&
-      context.existingImageSizes &&
-      existingSourceContentHash === sourceContentHash
-    ) {
-      const existingSizes = catalogImageSizesSchema.parse(context.existingImageSizes);
+      const existingSourceContentHash = context.existingSourceContentHash
+        ?? await getImageAssetSourceContentHash(context.existingImageId);
+      if (
+        context.existingImageId &&
+        context.existingImageSizes &&
+        existingSourceContentHash === sourceContentHash
+      ) {
+        const existingSizes = catalogImageSizesSchema.parse(context.existingImageSizes);
+        return {
+          imageId: context.existingImageId,
+          imageSizes: existingSizes,
+          sourceUrlHash,
+          sourceContentHash,
+        };
+      }
+
+      const extractedColors = await extractPredominantColorsFromBuffer(buffer);
+      const colors = {
+        primary: extractedColors.primary,
+        secondary: extractedColors.secondary,
+      };
+      const imageSizes = await createImageSizes(
+        buffer,
+        context,
+        sourceUrlHash,
+        sourceContentHash,
+        colors,
+      );
+      const imageId = imageSizes.large?.id
+        ?? imageSizes.xlarge?.id
+        ?? imageSizes.medium?.id
+        ?? imageSizes.original?.id;
+
+      if (!imageId) {
+        throw new Error('No image variants were created');
+      }
+
       return {
-        imageId: context.existingImageId,
-        imageSizes: existingSizes,
+        imageId,
+        imageSizes,
+        primaryColor: colors.primary,
+        secondaryColor: colors.secondary,
         sourceUrlHash,
         sourceContentHash,
       };
+    } catch (error) {
+      logger.warn('[CatalogImageAssets] Failed to mirror catalog image candidate', {
+        provider: context.provider,
+        entityType: context.entityType,
+        externalId: context.externalId,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
-
-    const extractedColors = await extractPredominantColorsFromBuffer(buffer);
-    const colors = {
-      primary: extractedColors.primary,
-      secondary: extractedColors.secondary,
-    };
-    const imageSizes = await createImageSizes(
-      buffer,
-      context,
-      sourceUrlHash,
-      sourceContentHash,
-      colors,
-    );
-    const imageId = imageSizes.large?.id
-      ?? imageSizes.xlarge?.id
-      ?? imageSizes.medium?.id
-      ?? imageSizes.original?.id;
-
-    if (!imageId) {
-      throw new Error('No image variants were created');
-    }
-
-    return {
-      imageId,
-      imageSizes,
-      primaryColor: colors.primary,
-      secondaryColor: colors.secondary,
-      sourceUrlHash,
-      sourceContentHash,
-    };
-  } catch (error) {
-    logger.warn('[CatalogImageAssets] Failed to mirror catalog image', {
-      provider: context.provider,
-      entityType: context.entityType,
-      externalId: context.externalId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return undefined;
   }
+
+  logger.warn('[CatalogImageAssets] Failed to mirror catalog image', {
+    provider: context.provider,
+    entityType: context.entityType,
+    externalId: context.externalId,
+    candidates: sourceUrls.length,
+  });
+  return undefined;
 }
 
 let mirrorCatalogImageImplementation: MirrorCatalogImageImplementation = mirrorCatalogImageInternal;

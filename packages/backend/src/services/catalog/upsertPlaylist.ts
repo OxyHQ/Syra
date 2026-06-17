@@ -131,12 +131,16 @@ export async function upsertPlaylist(
     existingImageId: existing?.coverArt,
     existingImageSizes: existing?.coverArtSizes,
   });
-  if (!existing && !mirroredCover) {
+  if (!mirroredCover && !existing?.coverArt) {
     return { playlist: null, created: false };
   }
   const coverArtChanged = Boolean(mirroredCover && mirroredCover.imageId !== existing?.coverArt);
 
   if (!existing) {
+    if (!mirroredCover) {
+      return { playlist: null, created: false };
+    }
+
     const created = await PlaylistModel.create({
       name: external.name,
       description: external.description,

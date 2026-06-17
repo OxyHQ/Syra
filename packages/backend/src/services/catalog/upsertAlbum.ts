@@ -143,12 +143,16 @@ export async function upsertAlbum(
     existingImageId: existing?.coverArt,
     existingImageSizes: existing?.coverArtSizes,
   });
-  if (!existing && !mirroredCover) {
+  if (!mirroredCover && !existing?.coverArt) {
     return { album: null, created: false };
   }
   const coverArtChanged = Boolean(mirroredCover && mirroredCover.imageId !== existing?.coverArt);
 
   if (!existing) {
+    if (!mirroredCover) {
+      return { album: null, created: false };
+    }
+
     const created = await AlbumModel.create({
       title: external.name,
       artistId: artist.artistId,

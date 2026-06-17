@@ -66,7 +66,7 @@ export async function upsertArtist(
     })
     : undefined;
 
-  if (!existing && !mirroredImage) {
+  if (!mirroredImage && !existing?.image) {
     return { artist: null, created: false };
   }
 
@@ -82,6 +82,10 @@ export async function upsertArtist(
   );
 
   if (!existing) {
+    if (!mirroredImage) {
+      return { artist: null, created: false };
+    }
+
     const artist = await ArtistModel.create({
       name: external.name,
       source,

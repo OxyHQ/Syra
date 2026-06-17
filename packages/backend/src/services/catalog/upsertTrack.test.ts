@@ -1,12 +1,16 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
-import { connect, clear, disconnect } from '../../test/mongo';
+import { connect, clear, disconnect, installCatalogImageMirrorMockForTests } from '../../test/mongo';
 import { TrackModel } from '../../models/Track';
 import { ArtistModel } from '../../models/Artist';
 import { upsertTrack } from './upsertTrack';
+import { setCatalogImageMirrorImplementationForTests } from './catalogImageAssets';
 import type { ExternalTrack } from '@syra/shared-types';
 
 beforeAll(connect);
-afterEach(clear);
+afterEach(async () => {
+  installCatalogImageMirrorMockForTests();
+  await clear();
+});
 afterAll(disconnect);
 
 const baseTrack: ExternalTrack = {
@@ -211,6 +215,38 @@ describe('upsertTrack', () => {
     expect(created).toBe(false);
     expect(track).toBeNull();
     expect(await TrackModel.countDocuments()).toBe(0);
+  });
+
+  it('skips a new imported track and artist when track image mirroring fails', async () => {
+    setCatalogImageMirrorImplementationForTests(async (images, context) => {
+      if (context.entityType === 'track') return undefined;
+      const imageId = '64f000000000000000000001';
+      return {
+        imageId,
+        imageSizes: {
+          large: {
+            id: imageId,
+            url: `/api/images/${imageId}`,
+            width: 640,
+            height: 640,
+          },
+        },
+        primaryColor: '#336699',
+        secondaryColor: '#224466',
+        sourceUrlHash: `test-url-${images?.[0]?.url ?? context.externalId}`,
+        sourceContentHash: `test-content-${context.externalId}`,
+      };
+    });
+
+    const { track, created } = await upsertTrack(
+      { ...baseTrack, externalId: 'aud-mirror-fail', isrc: undefined },
+      'audius',
+    );
+
+    expect(created).toBe(false);
+    expect(track).toBeNull();
+    expect(await TrackModel.countDocuments()).toBe(0);
+    expect(await ArtistModel.countDocuments()).toBe(0);
   });
 
   it('skips a new imported track when the primary artist image is missing', async () => {

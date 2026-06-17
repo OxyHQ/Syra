@@ -19,12 +19,8 @@ import { setCatalogImageMirrorImplementationForTests } from '../services/catalog
 
 let server: MongoMemoryServer | undefined;
 let connecting: Promise<void> | undefined;
-let catalogImageMirrorInstalled = false;
 
-function installCatalogImageMirrorMock(): void {
-  if (catalogImageMirrorInstalled) return;
-  catalogImageMirrorInstalled = true;
-
+export function installCatalogImageMirrorMockForTests(): void {
   setCatalogImageMirrorImplementationForTests(async (images, context) => {
     if (!images?.length) return undefined;
     const largeId = context.existingImageId ?? new mongoose.Types.ObjectId().toString();
@@ -59,7 +55,7 @@ function installCatalogImageMirrorMock(): void {
  * (race guard) don't spawn two servers.
  */
 export async function connect(): Promise<void> {
-  installCatalogImageMirrorMock();
+  installCatalogImageMirrorMockForTests();
   if (mongoose.connection.readyState === 1) return; // already connected
   if (connecting) return connecting;                // in-flight — share the promise
 
