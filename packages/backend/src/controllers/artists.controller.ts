@@ -167,10 +167,10 @@ export const getArtistTracks = async (req: Request, res: Response, next: NextFun
  * POST /api/artists/:id/follow
  * Follow artist (requires auth)
  */
-export const followArtist = async (req: Request, res: Response, next: NextFunction) => {
+export const followArtist = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const id = getParam(req, 'id');
-    const userId = (req as any).user?.id;
+    const userId = req.user?.id;
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -191,10 +191,10 @@ export const followArtist = async (req: Request, res: Response, next: NextFuncti
  * POST /api/artists/:id/unfollow
  * Unfollow artist (requires auth)
  */
-export const unfollowArtist = async (req: Request, res: Response, next: NextFunction) => {
+export const unfollowArtist = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const id = getParam(req, 'id');
-    const userId = (req as any).user?.id;
+    const userId = req.user?.id;
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
