@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { timestampsSchema } from './common';
 import {
   catalogSourceSchema,
+  catalogImageSizesSchema,
   externalIdsSchema,
   sourceProvenanceSchema,
   trackImageSchema,
@@ -37,6 +38,7 @@ export const artistSchema = timestampsSchema.extend({
   name: z.string(),
   bio: z.string().optional(),
   image: z.string().optional(),
+  imageSizes: catalogImageSizesSchema.optional(),
   genres: z.array(z.string()).optional(),
   verified: z.boolean().optional(),
   popularity: z.number().optional(),

@@ -1,6 +1,7 @@
 import { api } from '@/utils/api';
 import { SearchCategory } from '@syra/shared-types';
 import type { SearchResultWithPending } from '@/utils/searchUtils';
+import { normalizeSearchImages } from '@/utils/catalogImages';
 
 /**
  * Search API service
@@ -12,6 +13,6 @@ export const searchService = {
     params?: { category?: SearchCategory; limit?: number; offset?: number },
   ): Promise<SearchResultWithPending> {
     const response = await api.get<SearchResultWithPending>('/search', { q: query, ...params });
-    return response.data;
+    return normalizeSearchImages(response.data);
   },
 };

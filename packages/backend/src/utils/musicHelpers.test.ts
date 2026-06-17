@@ -9,18 +9,17 @@ import {
   formatPlaylistWithCoverArt,
 } from './musicHelpers';
 
-// These tests exercise plain-object paths — no DB queries needed for
-// the images[] fallback, but formatTrackWithCoverArt may query AlbumModel
+// These tests exercise plain-object paths. formatTrackWithCoverArt may query AlbumModel
 // when albumId is set. Use in-memory mongo so the optional album fetch
 // doesn't crash.
 beforeAll(connect);
 afterEach(clear);
 afterAll(disconnect);
 
-// ── Track — images[] fallback ─────────────────────────────────────────────────
+// ── Track — internal image formatting ─────────────────────────────────────────
 
-describe('formatTrackWithCoverArt — images[] fallback', () => {
-  it('uses images[0].url as coverArt when no coverArt ObjectId', async () => {
+describe('formatTrackWithCoverArt — internal image formatting', () => {
+  it('does not expose images[0].url as coverArt when no internal coverArt exists', async () => {
     const track = {
       _id: new mongoose.Types.ObjectId(),
       title: 'Audius Track',
@@ -31,7 +30,8 @@ describe('formatTrackWithCoverArt — images[] fallback', () => {
     const result = await formatTrackWithCoverArt(track);
 
     expect(result).not.toBeNull();
-    expect(result.coverArt).toBe('https://audius.co/art.jpg');
+    expect(result.coverArt).toBeUndefined();
+    expect(result.images).toBeUndefined();
   });
 
   it('prefers ObjectId coverArt over images[] (does NOT override real art)', async () => {
@@ -78,10 +78,10 @@ describe('formatTrackWithCoverArt — images[] fallback', () => {
   });
 });
 
-// ── Album — images[] fallback ─────────────────────────────────────────────────
+// ── Album — internal image formatting ─────────────────────────────────────────
 
-describe('formatAlbumWithCoverArt — images[] fallback', () => {
-  it('uses images[0].url as coverArt when no coverArt ObjectId', () => {
+describe('formatAlbumWithCoverArt — internal image formatting', () => {
+  it('does not expose images[0].url as coverArt when no internal coverArt exists', () => {
     const album = {
       _id: new mongoose.Types.ObjectId(),
       title: 'Audius Album',
@@ -92,7 +92,8 @@ describe('formatAlbumWithCoverArt — images[] fallback', () => {
     const result = formatAlbumWithCoverArt(album);
 
     expect(result).not.toBeNull();
-    expect(result.coverArt).toBe('https://audius.co/album.jpg');
+    expect(result.coverArt).toBeUndefined();
+    expect(result.images).toBeUndefined();
   });
 
   it('prefers ObjectId coverArt over images[]', () => {
@@ -125,10 +126,10 @@ describe('formatAlbumWithCoverArt — images[] fallback', () => {
   });
 });
 
-// ── Artist — images[] fallback ────────────────────────────────────────────────
+// ── Artist — internal image formatting ────────────────────────────────────────
 
-describe('formatArtistWithImage — images[] fallback', () => {
-  it('uses images[0].url as image when no image ObjectId', () => {
+describe('formatArtistWithImage — internal image formatting', () => {
+  it('does not expose images[0].url as image when no internal image exists', () => {
     const artist = {
       _id: new mongoose.Types.ObjectId(),
       name: 'Audius Artist',
@@ -138,7 +139,8 @@ describe('formatArtistWithImage — images[] fallback', () => {
     const result = formatArtistWithImage(artist);
 
     expect(result).not.toBeNull();
-    expect(result.image).toBe('https://audius.co/artist.jpg');
+    expect(result.image).toBeUndefined();
+    expect(result.images).toBeUndefined();
   });
 
   it('prefers ObjectId image over images[]', () => {
@@ -182,10 +184,10 @@ describe('formatArtistWithImage — images[] fallback', () => {
   });
 });
 
-// ── Playlist — images[] fallback ──────────────────────────────────────────────
+// ── Playlist — internal image formatting ──────────────────────────────────────
 
-describe('formatPlaylistWithCoverArt — images[] fallback', () => {
-  it('uses images[0].url as coverArt when no coverArt ObjectId', () => {
+describe('formatPlaylistWithCoverArt — internal image formatting', () => {
+  it('does not expose images[0].url as coverArt when no internal coverArt exists', () => {
     const playlist = {
       _id: new mongoose.Types.ObjectId(),
       name: 'Audius Playlist',
@@ -195,7 +197,8 @@ describe('formatPlaylistWithCoverArt — images[] fallback', () => {
     const result = formatPlaylistWithCoverArt(playlist);
 
     expect(result).not.toBeNull();
-    expect(result.coverArt).toBe('https://audius.co/playlist.jpg');
+    expect(result.coverArt).toBeUndefined();
+    expect(result.images).toBeUndefined();
   });
 
   it('prefers ObjectId coverArt over images[]', () => {
@@ -214,13 +217,10 @@ describe('formatPlaylistWithCoverArt — images[] fallback', () => {
   });
 });
 
-// ── Track → album images[] fallback (DB-backed) ───────────────────────────────
+// ── Track → album internal cover art (DB-backed) ──────────────────────────────
 
-describe('formatTrackWithCoverArt — album images[] fallback', () => {
-  it('uses album images[0].url when track has albumId but album has no ObjectId coverArt', async () => {
-    // Insert an album that has only images[] (no coverArt ObjectId).
-    // Using collection.insertOne to bypass the Mongoose schema validator
-    // which marks coverArt as required — this mirrors real Audius-imported albums.
+describe('formatTrackWithCoverArt — album internal cover art', () => {
+  it('does not expose album images[0].url when track has albumId but album has no internal coverArt', async () => {
     const albumId = new mongoose.Types.ObjectId();
     await AlbumModel.collection.insertOne({
       _id: albumId,
@@ -245,7 +245,7 @@ describe('formatTrackWithCoverArt — album images[] fallback', () => {
     const result = await formatTrackWithCoverArt(track);
 
     expect(result).not.toBeNull();
-    expect(result.coverArt).toBe('https://x.com/album.jpg');
+    expect(result.coverArt).toBeUndefined();
   });
 
   it('album ObjectId coverArt takes priority over album images[]', async () => {
@@ -277,7 +277,7 @@ describe('formatTrackWithCoverArt — album images[] fallback', () => {
     expect(result.coverArt).toBe(`/api/images/${coverArtId.toString()}`);
   });
 
-  it('falls back to track own images[] when album has neither coverArt nor images[]', async () => {
+  it('does not fall back to track own images[] when album has no internal coverArt', async () => {
     const albumId = new mongoose.Types.ObjectId();
     await AlbumModel.collection.insertOne({
       _id: albumId,
@@ -301,6 +301,7 @@ describe('formatTrackWithCoverArt — album images[] fallback', () => {
     const result = await formatTrackWithCoverArt(track);
 
     expect(result).not.toBeNull();
-    expect(result.coverArt).toBe('https://track.com/art.jpg');
+    expect(result.coverArt).toBeUndefined();
+    expect(result.images).toBeUndefined();
   });
 });

@@ -1,5 +1,11 @@
 import mongoose, { Schema, Document } from 'mongoose';
-import { Album, CatalogSource, ExternalIds, SourceProvenance } from '@syra/shared-types';
+import {
+  Album,
+  CatalogSource,
+  ExternalIds,
+  SourceProvenance,
+} from '@syra/shared-types';
+import type { CatalogImageSizes } from '@syra/shared-types/track';
 
 export interface IAlbum extends Omit<Album, 'id' | '_id' | 'createdAt' | 'updatedAt'>, Document {
   _id: mongoose.Types.ObjectId;
@@ -21,12 +27,29 @@ const SourceProvenanceSchema = new Schema<SourceProvenance>({
   fields: [{ type: String }],
 }, { _id: false });
 
+const CatalogImageVariantSchema = new Schema({
+  id: { type: String, required: true },
+  url: { type: String, required: true },
+  width: { type: Number, required: true },
+  height: { type: Number, required: true },
+}, { _id: false });
+
+const CatalogImageSizesSchema = new Schema<CatalogImageSizes>({
+  small: { type: CatalogImageVariantSchema },
+  medium: { type: CatalogImageVariantSchema },
+  large: { type: CatalogImageVariantSchema },
+  xlarge: { type: CatalogImageVariantSchema },
+  xxlarge: { type: CatalogImageVariantSchema },
+  original: { type: CatalogImageVariantSchema },
+}, { _id: false });
+
 const AlbumSchema = new Schema<IAlbum>({
   title: { type: String, required: true, index: true },
   artistId: { type: String, required: true, index: true },
   artistName: { type: String, required: true, index: true },
   releaseDate: { type: String, required: true, index: true },
   coverArt: { type: String, required: true },
+  coverArtSizes: { type: CatalogImageSizesSchema },
   genre: [{ type: String, index: true }],
   totalTracks: { type: Number, default: 0 },
   totalDuration: { type: Number, default: 0 }, // in seconds

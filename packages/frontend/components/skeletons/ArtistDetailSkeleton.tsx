@@ -90,7 +90,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   heroOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   titleContainer: {
     position: 'absolute',

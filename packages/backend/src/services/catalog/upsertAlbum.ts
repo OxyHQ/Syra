@@ -8,8 +8,9 @@ import type { IAlbum } from '../../models/Album';
 import { TrackModel } from '../../models/Track';
 import type { ITrack } from '../../models/Track';
 import { playCountToPopularity } from './popularity';
-import { assignMissingColors, colorsFromImages, replaceColors } from './entityColors';
-import { firstUsableImageUrl, usableImages } from './externalImages';
+import { assignMissingColors, replaceColors } from './entityColors';
+import { usableImages } from './externalImages';
+import { mirrorCatalogImage } from './catalogImageAssets';
 
 /** Minimal artist context needed to attach an album to its primary artist. */
 export interface AlbumArtistRef {
@@ -126,12 +127,6 @@ export async function upsertAlbum(
   source: CatalogSource,
 ): Promise<UpsertAlbumResult> {
   const images = usableImages(external.images);
-  const coverArt = firstUsableImageUrl(images);
-  if (!coverArt) {
-    // Album.coverArt is required; without it we cannot persist a valid album.
-    return { album: null, created: false };
-  }
-
   const provenance = buildProvenance(source, external.externalId, contributedFields(external));
   const playCount = external.popularity?.playCount;
   const genres = external.genre ? [external.genre] : [];
@@ -141,10 +136,17 @@ export async function upsertAlbum(
   }
 
   const existing = await findExisting(source, external.externalId);
-  const coverArtChanged = Boolean(existing && existing.coverArt !== coverArt);
-  const colors = (!existing || coverArtChanged || !existing.primaryColor || !existing.secondaryColor)
-    ? await colorsFromImages(images)
-    : undefined;
+  const mirroredCover = await mirrorCatalogImage(images, {
+    provider: source,
+    entityType: 'album',
+    externalId: external.externalId,
+    existingImageId: existing?.coverArt,
+    existingImageSizes: existing?.coverArtSizes,
+  });
+  if (!existing && !mirroredCover) {
+    return { album: null, created: false };
+  }
+  const coverArtChanged = Boolean(mirroredCover && mirroredCover.imageId !== existing?.coverArt);
 
   if (!existing) {
     const created = await AlbumModel.create({
@@ -152,14 +154,15 @@ export async function upsertAlbum(
       artistId: artist.artistId,
       artistName: artist.artistName,
       releaseDate: external.releaseDate ?? new Date().toISOString(),
-      coverArt,
+      coverArt: mirroredCover?.imageId,
+      coverArtSizes: mirroredCover?.imageSizes,
       genre: genres,
       type: 'album',
       source,
       externalIds: source === 'audius' ? { audiusId: external.externalId } : undefined,
       sources: [provenance],
-      primaryColor: colors?.primaryColor,
-      secondaryColor: colors?.secondaryColor,
+      primaryColor: mirroredCover?.primaryColor,
+      secondaryColor: mirroredCover?.secondaryColor,
       ...(playCount !== undefined
         ? { playCount, popularity: playCountToPopularity(playCount) }
         : {}),
@@ -187,11 +190,14 @@ export async function upsertAlbum(
   existing.sources = [...(existing.sources ?? []), provenance];
   if (external.name) existing.title = external.name;
   if (external.releaseDate) existing.releaseDate = external.releaseDate;
-  existing.coverArt = coverArt;
+  if (mirroredCover) {
+    existing.coverArt = mirroredCover.imageId;
+    existing.coverArtSizes = mirroredCover.imageSizes;
+  }
   if (coverArtChanged) {
-    replaceColors(existing, colors);
+    replaceColors(existing, mirroredCover);
   } else {
-    assignMissingColors(existing, colors);
+    assignMissingColors(existing, mirroredCover);
   }
   if (external.genre && !existing.genre?.includes(external.genre)) {
     existing.genre = [...(existing.genre ?? []), external.genre];

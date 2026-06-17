@@ -3,19 +3,6 @@ import { AlbumModel } from '../models/Album';
 
 // ── Image helpers ─────────────────────────────────────────────────────────────
 
-/** First external image URL from an images[] array, if present. */
-function firstImageUrl(doc: unknown): string | undefined {
-  if (doc === null || typeof doc !== 'object') return undefined;
-  const images = (doc as { images?: unknown }).images;
-  if (!Array.isArray(images)) return undefined;
-  const first: unknown = images[0];
-  const url =
-    first !== null && typeof first === 'object' && 'url' in first
-      ? (first as { url?: unknown }).url
-      : undefined;
-  return typeof url === 'string' && url.length > 0 ? url : undefined;
-}
-
 /** Convert a MongoDB ObjectId string to an /api/images/:id URL. */
 const toImageUrl = (id: string): string => `/api/images/${id}`;
 
@@ -25,7 +12,28 @@ function isMongoObjectId(value: unknown): value is string {
 
 function normalizeImageRef(value: unknown): string | undefined {
   if (isMongoObjectId(value)) return toImageUrl(value);
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
+  if (typeof value === 'string' && value.startsWith('/api/images/')) return value;
+  return undefined;
+}
+
+function normalizeImageSizes(value: unknown): unknown {
+  if (value === null || typeof value !== 'object') return value;
+  const sizes = value as Record<string, unknown>;
+  const normalized: Record<string, unknown> = {};
+  for (const [key, variantValue] of Object.entries(sizes)) {
+    if (variantValue === null || typeof variantValue !== 'object') continue;
+    const variant = { ...(variantValue as Record<string, unknown>) };
+    const id = typeof variant.id === 'string' ? variant.id : undefined;
+    const url = normalizeImageRef(variant.url) ?? (id ? normalizeImageRef(id) : undefined);
+    if (!id || !url) continue;
+    normalized[key] = { ...variant, url };
+  }
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+function stripExternalCatalogFields(formatted: Record<string, unknown>): void {
+  delete formatted.images;
+  delete formatted.streamUrl;
 }
 
 /**
@@ -106,7 +114,9 @@ export async function formatTrackWithCoverArt(
   const formatted = toApiFormat(track);
   if (!formatted) return null;
 
-  // If track has coverArt, convert uploaded ObjectIds but keep external URLs intact.
+  stripExternalCatalogFields(formatted);
+  formatted.coverArtSizes = normalizeImageSizes(formatted.coverArtSizes);
+
   if (formatted.coverArt) {
     formatted.coverArt = normalizeImageRef(formatted.coverArt);
     return formatted;
@@ -135,18 +145,11 @@ export async function formatTrackWithCoverArt(
     if (album) {
       if (album.coverArt) {
         formatted.coverArt = normalizeImageRef(album.coverArt);
-      } else {
-        // Album has no ObjectId coverArt — try its external images[] (e.g. Audius album art)
-        const u = firstImageUrl(album);
-        if (u) formatted.coverArt = u;
+      }
+      if (!formatted.coverArtSizes && album.coverArtSizes) {
+        formatted.coverArtSizes = normalizeImageSizes(album.coverArtSizes);
       }
     }
-  }
-
-  // Last resort: use track's own external images[] (e.g. Audius CDN) when still no cover
-  if (!formatted.coverArt) {
-    const u = firstImageUrl(formatted);
-    if (u) formatted.coverArt = u;
   }
 
   return formatted;
@@ -172,15 +175,10 @@ export function formatAlbumWithCoverArt(album: any): any {
   const formatted = toApiFormat(album);
   if (!formatted) return null;
 
-  // Convert uploaded ObjectIds but keep external URLs intact.
+  stripExternalCatalogFields(formatted);
+  formatted.coverArtSizes = normalizeImageSizes(formatted.coverArtSizes);
   if (formatted.coverArt) {
     formatted.coverArt = normalizeImageRef(formatted.coverArt);
-  }
-
-  // Fallback: use first external image URL (e.g. Audius CDN) when no ObjectId art
-  if (!formatted.coverArt) {
-    const u = firstImageUrl(formatted);
-    if (u) formatted.coverArt = u;
   }
 
   return formatted;
@@ -201,14 +199,10 @@ export function formatPlaylistWithCoverArt(playlist: any): any {
   const formatted = toApiFormat(playlist);
   if (!formatted) return null;
 
-  // Convert uploaded ObjectIds but keep external URLs intact.
+  stripExternalCatalogFields(formatted);
+  formatted.coverArtSizes = normalizeImageSizes(formatted.coverArtSizes);
   if (formatted.coverArt) {
     formatted.coverArt = normalizeImageRef(formatted.coverArt);
-  }
-
-  if (!formatted.coverArt) {
-    const u = firstImageUrl(formatted);
-    if (u) formatted.coverArt = u;
   }
 
   return formatted;
@@ -229,15 +223,10 @@ export function formatArtistWithImage(artist: any): any {
   const formatted = toApiFormat(artist);
   if (!formatted) return null;
 
-  // Convert uploaded ObjectIds but keep external URLs intact.
+  stripExternalCatalogFields(formatted);
+  formatted.imageSizes = normalizeImageSizes(formatted.imageSizes);
   if (formatted.image) {
     formatted.image = normalizeImageRef(formatted.image);
-  }
-
-  // Fallback: use first external image URL (e.g. Audius CDN) when no ObjectId image
-  if (!formatted.image) {
-    const u = firstImageUrl(formatted);
-    if (u) formatted.image = u;
   }
 
   return formatted;

@@ -1,7 +1,7 @@
 import type { Response } from 'express';
 import { logger } from '../utils/logger';
 import type { AuthRequest } from '../middleware/auth';
-import type { ExternalTrack } from '@syra/shared-types';
+import { externalTrackSchema, type ExternalTrack } from '@syra/shared-types';
 import type { MusicSourceConnector } from '../services/sources/MusicSourceConnector';
 import { AudiusConnector } from '../services/sources/AudiusConnector';
 import { upsertTrack } from '../services/catalog/upsertTrack';
@@ -14,23 +14,26 @@ const SEARCH_LIMIT_DEFAULT = 20;
 
 // ── Validation ────────────────────────────────────────────────────────────────
 
-function isValidExternalTrack(value: unknown): value is ExternalTrack {
-  if (typeof value !== 'object' || value === null) return false;
-  const v = value as Record<string, unknown>;
-  return (
-    typeof v['provider'] === 'string' &&
-    typeof v['externalId'] === 'string' &&
-    typeof v['title'] === 'string' &&
-    Array.isArray(v['artists']) &&
-    typeof v['durationSec'] === 'number'
-  );
-}
-
 function clampLimit(raw: string | undefined): number {
   if (raw === undefined) return SEARCH_LIMIT_DEFAULT;
   const parsed = parseInt(raw, 10);
   if (!Number.isFinite(parsed)) return SEARCH_LIMIT_DEFAULT;
   return Math.min(SEARCH_LIMIT_MAX, Math.max(SEARCH_LIMIT_MIN, parsed));
+}
+
+function sanitizeProviderSearchTrack(track: ExternalTrack): Omit<ExternalTrack, 'images' | 'streamUrl'> {
+  const { images: _images, streamUrl: _streamUrl, artists, album, ...rest } = track;
+  return {
+    ...rest,
+    artists: artists.map(({ images: _artistImages, ...artist }) => artist),
+    album: album
+      ? {
+        ...album,
+        images: undefined,
+        tracks: undefined,
+      }
+      : undefined,
+  };
 }
 
 // ── Factory ───────────────────────────────────────────────────────────────────
@@ -73,7 +76,7 @@ export function makeSourcesController(deps: SourcesControllerDeps = {}) {
 
     try {
       const results = await connector.search(q, limit);
-      res.status(200).json({ results });
+      res.status(200).json({ results: results.map(sanitizeProviderSearchTrack) });
     } catch (err) {
       logger.error('Audius search failed', err);
       res.status(502).json({ error: 'Audius search failed' });
@@ -102,12 +105,13 @@ export function makeSourcesController(deps: SourcesControllerDeps = {}) {
 
     const body = req.body as unknown;
 
-    if (!isValidExternalTrack(body)) {
+    const parsed = externalTrackSchema.safeParse(body);
+    if (!parsed.success) {
       res.status(400).json({ error: 'Request body must be a valid ExternalTrack object' });
       return;
     }
 
-    const external = body;
+    const external = parsed.data;
 
     if (external.provider !== 'audius') {
       res.status(400).json({ error: 'provider must be "audius"' });

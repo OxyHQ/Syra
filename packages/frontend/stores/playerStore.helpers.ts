@@ -31,8 +31,8 @@ export function extractTrackIdFromUrl(audioUrl: string, fallbackTrackId: string)
  * Resolve the track ID used to fetch an authenticated (pre-signed) audio URL.
  *
  * Uploaded tracks carry an `audioSource.url` of the form `/api/audio/:trackId`,
- * from which the canonical id is parsed. Audius stream-only and still-processing
- * tracks have no `audioSource`, so the track's own id is used.
+ * from which the canonical id is parsed. Tracks without `audioSource` use their
+ * own id so the backend stream resolver can decide whether they are playable.
  *
  * @param track - The track to resolve an id for
  * @returns The track ID to request a pre-signed URL for
@@ -45,25 +45,16 @@ export function resolveTrackId(track: Track): string {
 }
 
 /**
- * Resolve a directly-playable audio URL for a track without contacting the
- * authenticated pre-signed URL endpoint.
- *
- * Precedence mirrors the backend playback model and the {@link Track} data model:
- *  1. `audioSource.url` — uploaded tracks (relative `/api/audio/...` paths are
- *     resolved against the API origin so the player can fetch them directly).
- *  2. `streamUrl` — Audius stream-only tracks expose a ready-to-play network URL.
- *
- * HLS renditions (`track.hls`) are intentionally not resolved here: the
- * `expo-audio` player consumes a single progressive/stream URL, and HLS manifest
- * keys are S3 keys, not playable URLs. They become available through the
- * authenticated endpoint once adaptive playback is wired up.
+ * Resolve a directly-playable Syra audio URL for legacy uploaded tracks without
+ * using provider URLs. Provider streams are resolved exclusively through
+ * `/api/stream/:trackId` so user preferences and backend policy are enforced.
  *
  * @param track - The track to resolve a URL for
  * @returns The resolved audio URL, or `undefined` when the track has no
  *   directly-playable source
  */
 export function resolveAudioUrlWithFallback(track: Track): string | undefined {
-  const sourceUrl = track.audioSource?.url ?? track.streamUrl;
+  const sourceUrl = track.audioSource?.url;
   if (!sourceUrl) {
     return undefined;
   }
@@ -119,7 +110,6 @@ export function calculateTrackDuration(
 export function clampVolume(volume: number, min: number = 0, max: number = 1): number {
   return Math.max(min, Math.min(max, volume));
 }
-
 
 
 

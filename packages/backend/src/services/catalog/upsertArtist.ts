@@ -1,8 +1,9 @@
-import type { ExternalArtist, CatalogSource, SourceProvenance, TrackImage } from '@syra/shared-types';
+import type { ExternalArtist, CatalogSource, SourceProvenance } from '@syra/shared-types';
 import { ArtistModel } from '../../models/Artist';
 import type { IArtist } from '../../models/Artist';
-import { assignMissingColors, colorsFromImages, firstImageUrl, replaceColors } from './entityColors';
-import { hasUsableImages, usableImages } from './externalImages';
+import { assignMissingColors, replaceColors } from './entityColors';
+import { usableImages } from './externalImages';
+import { mirrorCatalogImage } from './catalogImageAssets';
 
 /**
  * Build a SourceProvenance entry recording this import.
@@ -19,23 +20,6 @@ function buildProvenance(
     importedAt: new Date().toISOString(),
     fields,
   };
-}
-
-/**
- * Merge external images into an existing image array, deduplicating by URL.
- */
-function mergeImages(
-  existing: TrackImage[] | undefined,
-  incoming: TrackImage[] | undefined,
-): TrackImage[] {
-  const merged: TrackImage[] = [];
-  const seen = new Set<string>();
-  for (const image of [...(incoming ?? []), ...(existing ?? [])]) {
-    if (seen.has(image.url)) continue;
-    seen.add(image.url);
-    merged.push(image);
-  }
-  return merged;
 }
 
 /**
@@ -72,24 +56,21 @@ export async function upsertArtist(
 ): Promise<{ artist: IArtist | null; created: boolean }> {
   const existing = await findExisting(source, external.externalId);
   const images = usableImages(external.images);
-  const existingHasImage = hasUsableImages(existing?.images);
-  if (images.length === 0 && !existingHasImage) {
+  const mirroredImage = !existing?.ownerOxyUserId
+    ? await mirrorCatalogImage(images, {
+      provider: source,
+      entityType: 'artist',
+      externalId: external.externalId,
+      existingImageId: existing?.image,
+      existingImageSizes: existing?.imageSizes,
+    })
+    : undefined;
+
+  if (!existing && !mirroredImage) {
     return { artist: null, created: false };
   }
 
-  const incomingImageUrl = firstImageUrl(images);
-  const existingImageUrl = firstImageUrl(existing?.images);
-  const imageChanged = Boolean(
-    existing &&
-    !existing.ownerOxyUserId &&
-    incomingImageUrl &&
-    incomingImageUrl !== existingImageUrl,
-  );
-  const needsColors = !existing || (
-    !existing.ownerOxyUserId &&
-    (imageChanged || !existing.primaryColor || !existing.secondaryColor)
-  );
-  const colors = needsColors ? await colorsFromImages(images) : undefined;
+  const imageChanged = Boolean(mirroredImage && mirroredImage.imageId !== existing?.image);
 
   const provenance = buildProvenance(
     source,
@@ -106,9 +87,11 @@ export async function upsertArtist(
       source,
       claimable: true,
       externalIds: source === 'audius' ? { audiusId: external.externalId } : undefined,
-      images,
-      primaryColor: colors?.primaryColor,
-      secondaryColor: colors?.secondaryColor,
+      image: mirroredImage?.imageId,
+      imageSizes: mirroredImage?.imageSizes,
+      images: [],
+      primaryColor: mirroredImage?.primaryColor,
+      secondaryColor: mirroredImage?.secondaryColor,
       sources: [provenance],
       stats: { followers: 0, albums: 0, tracks: 0, totalPlays: 0, monthlyListeners: 0 },
     });
@@ -122,11 +105,15 @@ export async function upsertArtist(
   // If this artist is claimed by a real user, protect all owned fields.
   if (!existing.ownerOxyUserId) {
     if (external.name) existing.name = external.name;
-    existing.images = mergeImages(existing.images, images);
+    existing.images = [];
+    if (mirroredImage) {
+      existing.image = mirroredImage.imageId;
+      existing.imageSizes = mirroredImage.imageSizes;
+    }
     if (imageChanged) {
-      replaceColors(existing, colors);
+      replaceColors(existing, mirroredImage);
     } else {
-      assignMissingColors(existing, colors);
+      assignMissingColors(existing, mirroredImage);
     }
     if (source === 'audius' && external.externalId) {
       existing.externalIds = {

@@ -8,8 +8,9 @@ import { PlaylistModel } from '../../models/Playlist';
 import type { IPlaylist } from '../../models/Playlist';
 import { PlaylistTrackModel } from '../../models/PlaylistTrack';
 import { TrackModel } from '../../models/Track';
-import { assignMissingColors, colorsFromImages, replaceColors } from './entityColors';
-import { firstUsableImageUrl, usableImages } from './externalImages';
+import { assignMissingColors, replaceColors } from './entityColors';
+import { usableImages } from './externalImages';
+import { mirrorCatalogImage } from './catalogImageAssets';
 
 const EXTERNAL_OWNER_ID = 'system:audius';
 const EXTERNAL_OWNER_NAME = 'Audius';
@@ -116,10 +117,6 @@ export async function upsertPlaylist(
 ): Promise<UpsertPlaylistResult> {
   const provenance = buildProvenance(source, external.externalId, contributedFields(external));
   const images = usableImages(external.images);
-  const coverArt = firstUsableImageUrl(images);
-  if (!coverArt) {
-    return { playlist: null, created: false };
-  }
 
   const orderedTrackIds = await resolveOrderedTrackIds(source, external.trackExternalIds);
   if (orderedTrackIds.length === 0) {
@@ -127,10 +124,17 @@ export async function upsertPlaylist(
   }
 
   const existing = await findExisting(source, external.externalId);
-  const coverArtChanged = Boolean(existing && existing.coverArt !== coverArt);
-  const colors = (!existing || coverArtChanged || !existing.primaryColor || !existing.secondaryColor)
-    ? await colorsFromImages(images)
-    : undefined;
+  const mirroredCover = await mirrorCatalogImage(images, {
+    provider: source,
+    entityType: 'playlist',
+    externalId: external.externalId,
+    existingImageId: existing?.coverArt,
+    existingImageSizes: existing?.coverArtSizes,
+  });
+  if (!existing && !mirroredCover) {
+    return { playlist: null, created: false };
+  }
+  const coverArtChanged = Boolean(mirroredCover && mirroredCover.imageId !== existing?.coverArt);
 
   if (!existing) {
     const created = await PlaylistModel.create({
@@ -138,7 +142,8 @@ export async function upsertPlaylist(
       description: external.description,
       ownerOxyUserId: EXTERNAL_OWNER_ID,
       ownerUsername: EXTERNAL_OWNER_NAME,
-      coverArt,
+      coverArt: mirroredCover?.imageId,
+      coverArtSizes: mirroredCover?.imageSizes,
       visibility: PlaylistVisibility.PUBLIC,
       isPublic: true,
       trackCount: 0,
@@ -147,8 +152,8 @@ export async function upsertPlaylist(
       source,
       externalIds: source === 'audius' ? { audiusId: external.externalId } : undefined,
       sources: [provenance],
-      primaryColor: colors?.primaryColor,
-      secondaryColor: colors?.secondaryColor,
+      primaryColor: mirroredCover?.primaryColor,
+      secondaryColor: mirroredCover?.secondaryColor,
     });
 
     const totals = await replacePlaylistTracks(created._id, orderedTrackIds);
@@ -162,11 +167,14 @@ export async function upsertPlaylist(
   existing.sources = [...(existing.sources ?? []), provenance];
   if (external.name) existing.name = external.name;
   if (external.description) existing.description = external.description;
-  existing.coverArt = coverArt;
+  if (mirroredCover) {
+    existing.coverArt = mirroredCover.imageId;
+    existing.coverArtSizes = mirroredCover.imageSizes;
+  }
   if (coverArtChanged) {
-    replaceColors(existing, colors);
+    replaceColors(existing, mirroredCover);
   } else {
-    assignMissingColors(existing, colors);
+    assignMissingColors(existing, mirroredCover);
   }
   if (source === 'audius' && external.externalId && !existing.externalIds?.audiusId) {
     existing.externalIds = { ...(existing.externalIds ?? {}), audiusId: external.externalId };

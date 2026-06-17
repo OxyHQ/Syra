@@ -3,7 +3,7 @@ import { TrackModel } from '../models/Track';
 import { AlbumModel } from '../models/Album';
 import { ArtistModel } from '../models/Artist';
 import { PlaylistModel } from '../models/Playlist';
-import { toApiFormatArray, formatTracksWithCoverArt, formatArtistsWithImage, formatPlaylistsWithCoverArt, formatAlbumsWithCoverArt } from '../utils/musicHelpers';
+import { formatTracksWithCoverArt, formatArtistsWithImage, formatPlaylistsWithCoverArt, formatAlbumsWithCoverArt } from '../utils/musicHelpers';
 import { isDatabaseConnected } from '../utils/database';
 import { withImageFirstSort } from '../utils/imageFirstSort';
 
@@ -27,6 +27,13 @@ const GENRE_COLORS: Record<string, string> = {
   'Blues': '#148A08',
   'Folk': '#1E3264',
 };
+
+function toInternalImageUrl(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  if (value.startsWith('/api/images/')) return value;
+  if (/^[a-f\d]{24}$/i.test(value)) return `/api/images/${value}`;
+  return null;
+}
 
 /**
  * GET /api/browse/genres
@@ -80,9 +87,9 @@ export const getGenres = async (req: Request, res: Response, next: NextFunction)
           name: genre,
           color: GENRE_COLORS[genre] || '#1E3264',
           coverArt:
-            sampleAlbum?.coverArt ||
-            sampleArtist?.image ||
-            sampleTrack?.images?.[0]?.url ||
+            toInternalImageUrl(sampleAlbum?.coverArt) ||
+            toInternalImageUrl(sampleArtist?.image) ||
+            toInternalImageUrl(sampleTrack?.coverArt) ||
             null,
         };
       })
@@ -183,7 +190,7 @@ export const getPopularAlbums = async (req: Request, res: Response, next: NextFu
       .limit(limit)
       .lean();
 
-    const formattedAlbums = toApiFormatArray(albums);
+    const formattedAlbums = formatAlbumsWithCoverArt(albums);
 
     res.json({
       albums: formattedAlbums,

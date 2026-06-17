@@ -1,183 +1,145 @@
-import { useState, useEffect } from 'react';
-import { api, isUnauthorizedError, isNotFoundError } from '@/utils/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useOxy } from '@oxyhq/services';
+import { z } from 'zod';
+import { api, isNotFoundError, isUnauthorizedError } from '@/utils/api';
 
 const PRIVACY_SETTINGS_CACHE_KEY = '@mention_privacy_settings';
+const PRIVACY_SETTINGS_STALE_TIME_MS = 1000 * 60 * 5;
+
+const privacySettingsSchema = z.object({
+  profileVisibility: z.enum(['public', 'private', 'followers_only']).optional(),
+  showContactInfo: z.boolean().optional(),
+  allowTags: z.boolean().optional(),
+  allowMentions: z.boolean().optional(),
+  showOnlineStatus: z.boolean().optional(),
+  hideLikeCounts: z.boolean().optional(),
+  hideShareCounts: z.boolean().optional(),
+  hideReplyCounts: z.boolean().optional(),
+  hideSaveCounts: z.boolean().optional(),
+  hiddenWords: z.array(z.string()).optional(),
+  restrictedUsers: z.array(z.string()).optional(),
+});
+
+const privacyResponseSchema = z.object({
+  privacy: privacySettingsSchema.optional(),
+});
+
+export type PrivacySettings = z.infer<typeof privacySettingsSchema>;
 
 const DEFAULT_PRIVACY_SETTINGS: PrivacySettings = {
-    profileVisibility: 'public',
-    hideLikeCounts: false,
-    hideShareCounts: false,
-    hideReplyCounts: false,
-    hideSaveCounts: false,
+  profileVisibility: 'public',
+  hideLikeCounts: false,
+  hideShareCounts: false,
+  hideReplyCounts: false,
+  hideSaveCounts: false,
 };
 
-export interface PrivacySettings {
-    profileVisibility?: 'public' | 'private' | 'followers_only';
-    showContactInfo?: boolean;
-    allowTags?: boolean;
-    allowMentions?: boolean;
-    showOnlineStatus?: boolean;
-    hideLikeCounts?: boolean;
-    hideShareCounts?: boolean;
-    hideReplyCounts?: boolean;
-    hideSaveCounts?: boolean;
-    hiddenWords?: string[];
-    restrictedUsers?: string[];
-}
+const parsePrivacySettings = (value: unknown): PrivacySettings | null => {
+  const parsed = privacySettingsSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+};
+
+const readCachedPrivacySettings = async (): Promise<PrivacySettings | null> => {
+  try {
+    const cached = await AsyncStorage.getItem(PRIVACY_SETTINGS_CACHE_KEY);
+    if (!cached) return null;
+    return parsePrivacySettings(JSON.parse(cached));
+  } catch (error) {
+    console.debug('Failed to load cached privacy settings:', error);
+    return null;
+  }
+};
+
+const writeCachedPrivacySettings = async (privacySettings: PrivacySettings) => {
+  try {
+    await AsyncStorage.setItem(PRIVACY_SETTINGS_CACHE_KEY, JSON.stringify(privacySettings));
+  } catch (error) {
+    console.debug('Failed to cache privacy settings:', error);
+  }
+};
 
 /**
- * Hook to fetch privacy settings for a specific user
- * @param userId - The Oxy user ID to fetch privacy settings for
- * @returns Privacy settings or null if not available
+ * Hook to fetch privacy settings for a specific user.
  */
 export function usePrivacySettings(userId?: string | null): PrivacySettings | null {
-    const [settings, setSettings] = useState<PrivacySettings | null>(null);
-
-    useEffect(() => {
-        if (!userId) {
-            setSettings(null);
-            return;
+  const { data = null } = useQuery({
+    queryKey: ['privacySettings', userId],
+    enabled: !!userId,
+    staleTime: PRIVACY_SETTINGS_STALE_TIME_MS,
+    queryFn: async () => {
+      try {
+        const response = await api.get<{ privacy?: PrivacySettings }>(`/profile/settings/${userId}`);
+        const parsed = privacyResponseSchema.safeParse(response.data);
+        return parsed.success && parsed.data.privacy
+          ? parsed.data.privacy
+          : DEFAULT_PRIVACY_SETTINGS;
+      } catch (error) {
+        if (isNotFoundError(error)) {
+          return DEFAULT_PRIVACY_SETTINGS;
         }
+        console.debug('Could not load privacy settings:', error);
+        return null;
+      }
+    },
+  });
 
-        const loadSettings = async () => {
-            try {
-                const response = await api.get<{ privacy?: PrivacySettings }>(`/profile/settings/${userId}`);
-                if (response.data?.privacy) {
-                    setSettings(response.data.privacy);
-                } else {
-                    setSettings(DEFAULT_PRIVACY_SETTINGS);
-                }
-            } catch (error: any) {
-                if (isNotFoundError(error)) {
-                    setSettings(DEFAULT_PRIVACY_SETTINGS);
-                } else {
-                    console.debug('Could not load privacy settings:', error);
-                    setSettings(null);
-                }
-            }
-        };
-
-        loadSettings();
-    }, [userId]);
-
-    return settings;
+  return data;
 }
 
 /**
- * Hook to fetch current user's privacy settings
- * @returns Current user's privacy settings
+ * Hook to fetch current user's privacy settings.
  */
-// Cache for immediate access (loaded synchronously on first access)
-let cachedPrivacySettings: PrivacySettings | null = null;
-let cacheLoadPromise: Promise<void> | null = null;
-
 export function useCurrentUserPrivacySettings(): PrivacySettings | null {
-    const { isAuthenticated } = useOxy();
-    const [settings, setSettings] = useState<PrivacySettings | null>(() => {
-        // Try to load from cache synchronously on first render
-        if (cachedPrivacySettings) {
-            return cachedPrivacySettings;
+  const { isAuthenticated } = useOxy();
+  const { data = null } = useQuery({
+    queryKey: ['privacySettings', 'me', isAuthenticated],
+    staleTime: PRIVACY_SETTINGS_STALE_TIME_MS,
+    queryFn: async () => {
+      const cached = await readCachedPrivacySettings();
+
+      if (!isAuthenticated) {
+        return cached ?? DEFAULT_PRIVACY_SETTINGS;
+      }
+
+      try {
+        const response = await api.get<{ privacy?: PrivacySettings }>('/profile/settings/me');
+        const parsed = privacyResponseSchema.safeParse(response.data);
+        const freshSettings = parsed.success && parsed.data.privacy
+          ? parsed.data.privacy
+          : DEFAULT_PRIVACY_SETTINGS;
+
+        await writeCachedPrivacySettings(freshSettings);
+        return freshSettings;
+      } catch (error) {
+        if (isUnauthorizedError(error)) {
+          return cached ?? DEFAULT_PRIVACY_SETTINGS;
         }
-        // Start loading cache immediately
-        if (!cacheLoadPromise) {
-            cacheLoadPromise = (async () => {
-                try {
-                    const cached = await AsyncStorage.getItem(PRIVACY_SETTINGS_CACHE_KEY);
-                    if (cached) {
-                        cachedPrivacySettings = JSON.parse(cached);
-                    }
-                } catch (cacheErr) {
-                    console.debug('Failed to load cached privacy settings:', cacheErr);
-                }
-            })();
+        if (isNotFoundError(error)) {
+          await writeCachedPrivacySettings(DEFAULT_PRIVACY_SETTINGS);
+          return DEFAULT_PRIVACY_SETTINGS;
         }
-        return null;
-    });
+        console.debug('Could not load current user privacy settings:', error);
+        return cached ?? DEFAULT_PRIVACY_SETTINGS;
+      }
+    },
+  });
 
-    useEffect(() => {
-        // Only make API call if user is authenticated
-        if (!isAuthenticated) {
-            // Use cached settings or defaults if not authenticated
-            if (cacheLoadPromise) {
-                cacheLoadPromise.then(() => {
-                    setSettings(cachedPrivacySettings || DEFAULT_PRIVACY_SETTINGS);
-                });
-            } else {
-                setSettings(cachedPrivacySettings || DEFAULT_PRIVACY_SETTINGS);
-            }
-            return;
-        }
-
-        const loadSettings = async () => {
-            // Wait for initial cache load if it's still loading
-            if (cacheLoadPromise) {
-                await cacheLoadPromise;
-                cacheLoadPromise = null;
-                if (cachedPrivacySettings) {
-                    setSettings(cachedPrivacySettings);
-                }
-            }
-
-            // Then fetch fresh data from API
-            try {
-                const response = await api.get<{ privacy?: PrivacySettings }>('/profile/settings/me');
-                if (response.data?.privacy) {
-                    const freshSettings = response.data.privacy;
-                    cachedPrivacySettings = freshSettings;
-                    setSettings(freshSettings);
-                    // Cache the settings for next time
-                    try {
-                        await AsyncStorage.setItem(PRIVACY_SETTINGS_CACHE_KEY, JSON.stringify(freshSettings));
-                    } catch (cacheErr) {
-                        console.debug('Failed to cache privacy settings:', cacheErr);
-                    }
-                } else {
-                    cachedPrivacySettings = DEFAULT_PRIVACY_SETTINGS;
-                    setSettings(DEFAULT_PRIVACY_SETTINGS);
-                    try {
-                        await AsyncStorage.setItem(PRIVACY_SETTINGS_CACHE_KEY, JSON.stringify(DEFAULT_PRIVACY_SETTINGS));
-                    } catch (cacheErr) {
-                        console.debug('Failed to cache default privacy settings:', cacheErr);
-                    }
-                }
-            } catch (error: any) {
-                if (isUnauthorizedError(error)) {
-                    setSettings(cachedPrivacySettings || DEFAULT_PRIVACY_SETTINGS);
-                    return;
-                }
-                if (isNotFoundError(error)) {
-                    cachedPrivacySettings = DEFAULT_PRIVACY_SETTINGS;
-                    setSettings(DEFAULT_PRIVACY_SETTINGS);
-                    try {
-                        await AsyncStorage.setItem(PRIVACY_SETTINGS_CACHE_KEY, JSON.stringify(DEFAULT_PRIVACY_SETTINGS));
-                    } catch (cacheErr) {
-                        console.debug('Failed to cache default privacy settings:', cacheErr);
-                    }
-                } else {
-                    console.debug('Could not load current user privacy settings:', error);
-                    if (!settings) {
-                        setSettings(cachedPrivacySettings || DEFAULT_PRIVACY_SETTINGS);
-                    }
-                }
-            }
-        };
-
-        loadSettings();
-    }, [isAuthenticated]);
-
-    // Return settings (will be cached value immediately if available)
-    return settings;
+  return data;
 }
 
-// Export function to update cache when settings change
 export async function updatePrivacySettingsCache(privacySettings: PrivacySettings) {
-    try {
-        cachedPrivacySettings = privacySettings;
-        await AsyncStorage.setItem(PRIVACY_SETTINGS_CACHE_KEY, JSON.stringify(privacySettings));
-    } catch (error) {
-        console.debug('Failed to update privacy settings cache:', error);
-    }
+  const parsed = parsePrivacySettings(privacySettings);
+  if (!parsed) return;
+  await writeCachedPrivacySettings(parsed);
 }
 
+export function useUpdatePrivacySettingsCache() {
+  const queryClient = useQueryClient();
+
+  return async (privacySettings: PrivacySettings) => {
+    await updatePrivacySettingsCache(privacySettings);
+    queryClient.setQueryData(['privacySettings', 'me', true], privacySettings);
+    queryClient.setQueryData(['privacySettings', 'me', false], privacySettings);
+  };
+}

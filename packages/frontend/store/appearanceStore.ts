@@ -20,6 +20,10 @@ function unwrapApiData<T>(value: T | { data: T } | null | undefined): T | null {
   return value as T;
 }
 
+function getErrorMessage(error: unknown): string | undefined {
+  return error instanceof Error ? error.message : undefined;
+}
+
 export type ThemeMode = 'light' | 'dark' | 'system';
 
 export interface AppearanceSettings {
@@ -107,7 +111,7 @@ export const useAppearanceStore = create<AppearanceStore>((set, get) => ({
         set({ loading: false, error: null });
         return;
       }
-      set({ loading: false, error: e?.message || 'Failed to load settings' });
+      set({ loading: false, error: getErrorMessage(e) || 'Failed to load settings' });
     }
   },
 
@@ -170,7 +174,7 @@ export const useAppearanceStore = create<AppearanceStore>((set, get) => ({
       set({ loading: false });
       return null;
     } catch (e) {
-      set({ loading: false, error: e?.message || 'Failed to update settings' });
+      set({ loading: false, error: getErrorMessage(e) || 'Failed to update settings' });
       return null;
     }
   },

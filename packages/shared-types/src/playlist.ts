@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { timestampsSchema } from './common';
 import {
   catalogSourceSchema,
+  catalogImageSizesSchema,
   externalIdsSchema,
   sourceProvenanceSchema,
   trackSchema,
@@ -31,6 +32,7 @@ export const playlistSchema = timestampsSchema.extend({
   ownerOxyUserId: z.string(),
   ownerUsername: z.string(),
   coverArt: z.string().optional(),
+  coverArtSizes: catalogImageSizesSchema.optional(),
   visibility: playlistVisibilitySchema,
   trackCount: z.number(),
   totalDuration: z.number(),

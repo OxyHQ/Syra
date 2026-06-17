@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { useOxy } from '@oxyhq/services';
-import { useUsersStore, useUserByUsername } from '@/stores/usersStore';
+import { useUsersStore, useUserByUsername, type UserEntity } from '@/stores/usersStore';
 import { useAppearanceStore } from '@/store/appearanceStore';
 import { usePrivacySettings } from './usePrivacySettings';
 
@@ -98,7 +98,14 @@ export function useProfileData(username?: string): {
         // Fetch fresh data - this will update the store
         const data = await ensureByUsername(
           username,
-          (u) => oxyServices.getProfileByUsername(u)
+          async (u) => {
+            const profile = await oxyServices.getProfileByUsername(u);
+            if (!profile) return profile;
+            return {
+              ...profile,
+              privacySettings: profile.privacySettings as Record<string, unknown> | undefined,
+            } satisfies UserEntity;
+          }
         );
 
         if (!cancelled && data?.id) {

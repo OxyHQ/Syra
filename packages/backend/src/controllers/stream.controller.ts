@@ -95,8 +95,8 @@ function resolveManifestToken(
  * session (not a stream token) — it is the entrypoint that MINTS tokens.
  *
  * Response shape:
- *   - Audius:  { url, type: 'audius', expiresAt }
  *   - HLS:     { url, type: 'hls', expiresAt }  (url includes ?t=<streamToken>)
+ *   - Audius:  { url, type: 'audius', expiresAt } only when user enabled direct provider streaming
  *
  * The token embeds maxBitrateKbps derived from the user's entitlement + prefs.
  * Free users receive cap=160; premium users receive cap=320; data-saver forces 96.
@@ -127,19 +127,8 @@ export async function getStream(req: AuthRequest, res: Response): Promise<void> 
     return;
   }
 
-  // 3. ── Audius branch — public passthrough, no auth required ────────────────
-  //    Audius tracks are free public content; the streamUrl is a direct CDN URL
-  //    that requires no Syra entitlement token. Anonymous users can play them.
-  if (track.source === 'audius') {
-    if (!track.streamUrl) {
-      res.status(404).json({ error: 'Stream URL not available' });
-      return;
-    }
-    res.status(200).json({ url: track.streamUrl, type: 'audius', expiresAt: null });
-    return;
-  }
-
-  // 4. ── HLS branch — requires auth to mint an entitlement token ────────────
+  // 3. Session required: HLS needs entitlement, and direct provider streaming
+  //    is a per-user setting.
   if (!req.user?.id) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
@@ -150,15 +139,16 @@ export async function getStream(req: AuthRequest, res: Response): Promise<void> 
     return;
   }
 
+  const [entitlement, prefs] = await Promise.all([
+    getUserEntitlement(req.user.id),
+    UserMusicPreferencesModel.findOne({ oxyUserId: req.user.id }).lean(),
+  ]);
+  const maxBitrateKbps = computeMaxBitrateKbps(
+    { audioQuality: prefs?.audioQuality, dataSaver: prefs?.dataSaver },
+    entitlement,
+  );
+
   if (track.status === 'ready' && track.hlsMasterKey && track.hls?.length) {
-    const [entitlement, prefs] = await Promise.all([
-      getUserEntitlement(req.user.id),
-      UserMusicPreferencesModel.findOne({ oxyUserId: req.user.id }).lean(),
-    ]);
-    const maxBitrateKbps = computeMaxBitrateKbps(
-      { audioQuality: prefs?.audioQuality, dataSaver: prefs?.dataSaver },
-      entitlement,
-    );
     const token = mintStreamToken(
       { trackId, userId: req.user.id, maxBitrateKbps },
       STREAM_SESSION_TTL_SEC,
@@ -168,6 +158,11 @@ export async function getStream(req: AuthRequest, res: Response): Promise<void> 
     const expiresAt = new Date(Date.now() + STREAM_SESSION_TTL_SEC * 1000).toISOString();
 
     res.status(200).json({ url, type: 'hls', expiresAt });
+    return;
+  }
+
+  if (track.source === 'audius' && track.streamUrl && prefs?.directAudiusStreaming === true) {
+    res.status(200).json({ url: track.streamUrl, type: 'audius', expiresAt: null });
     return;
   }
 

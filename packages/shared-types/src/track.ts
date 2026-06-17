@@ -29,6 +29,24 @@ export const trackImageSchema = z.object({
 });
 export type TrackImage = z.infer<typeof trackImageSchema>;
 
+export const catalogImageVariantSchema = z.object({
+  id: z.string(),
+  url: z.string(),
+  width: z.number(),
+  height: z.number(),
+});
+export type CatalogImageVariant = z.infer<typeof catalogImageVariantSchema>;
+
+export const catalogImageSizesSchema = z.object({
+  small: catalogImageVariantSchema.optional(),
+  medium: catalogImageVariantSchema.optional(),
+  large: catalogImageVariantSchema.optional(),
+  xlarge: catalogImageVariantSchema.optional(),
+  xxlarge: catalogImageVariantSchema.optional(),
+  original: catalogImageVariantSchema.optional(),
+});
+export type CatalogImageSizes = z.infer<typeof catalogImageSizesSchema>;
+
 export const hlsRenditionSchema = z.object({
   manifestKey: z.string(),
   bitrateKbps: z.number(),
@@ -69,6 +87,7 @@ export const trackSchema = timestampsSchema.extend({
   discNumber: z.number().optional(),
   audioSource: audioSourceSchema.optional(),
   coverArt: z.string().optional(),
+  coverArtSizes: catalogImageSizesSchema.optional(),
   metadata: trackMetadataSchema.optional(),
   genre: z.string().optional(),
   mood: z.string().optional(),

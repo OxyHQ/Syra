@@ -337,22 +337,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
    *
    * Uploaded tracks (those with an `audioSource`) are served via a short-lived
    * pre-signed S3 URL fetched from the authenticated endpoint, falling back to
-   * the direct API URL if that request fails. Audius stream-only tracks have no
-   * `audioSource` and instead expose a ready-to-play `streamUrl`, which is used
-   * as-is. A track with neither source is not playable.
+   * the direct Syra API URL if that request fails. Provider streams are resolved
+   * through `resolveStream`, not from catalog payload fields.
    *
    * @throws Error when the track has no resolvable playable source
    */
   const getAudioUrl = async (track: Track): Promise<string> => {
-    // Audius stream-only tracks carry no uploaded audioSource — play their
-    // direct network stream without contacting the authenticated endpoint.
     if (!track.audioSource) {
-      const directUrl = resolveAudioUrlWithFallback(track);
-      if (!directUrl) {
-        throw new Error(`Track ${track.id} has no playable audio source`);
-      }
-      logger.debug('Using direct stream URL for stream-only track', { trackId: track.id });
-      return directUrl;
+      throw new Error(`Track ${track.id} has no playable audio source`);
     }
 
     const trackId = resolveTrackId(track);
@@ -426,7 +418,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         logger.info('Playing track', {
           trackId: track.id,
           title: track.title,
-          url: track.audioSource?.url ?? track.streamUrl,
+          url: track.audioSource?.url,
         });
         
         // Stop current track if playing

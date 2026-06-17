@@ -7,6 +7,7 @@ import {
   SourceProvenance,
   TrackImage,
 } from '@syra/shared-types';
+import type { CatalogImageSizes } from '@syra/shared-types/track';
 
 /** Sub-document type for a single copyright strike stored in MongoDB */
 export interface IStrike {
@@ -61,11 +62,28 @@ const ArtistImageSchema = new Schema<TrackImage>({
   source: { type: String, enum: ['upload', 'cc', 'audius'] as CatalogSource[] },
 }, { _id: false });
 
+const CatalogImageVariantSchema = new Schema({
+  id: { type: String, required: true },
+  url: { type: String, required: true },
+  width: { type: Number, required: true },
+  height: { type: Number, required: true },
+}, { _id: false });
+
+const CatalogImageSizesSchema = new Schema<CatalogImageSizes>({
+  small: { type: CatalogImageVariantSchema },
+  medium: { type: CatalogImageVariantSchema },
+  large: { type: CatalogImageVariantSchema },
+  xlarge: { type: CatalogImageVariantSchema },
+  xxlarge: { type: CatalogImageVariantSchema },
+  original: { type: CatalogImageVariantSchema },
+}, { _id: false });
+
 const ArtistSchema = new Schema<IArtist>({
   // name is no longer unique: multi-source catalog can have same name across providers
   name: { type: String, required: true, index: true },
   bio: { type: String },
   image: { type: String }, // own S3 MongoDB ObjectId; converted to /api/images/:id in API responses
+  imageSizes: { type: CatalogImageSizesSchema },
   genres: [{ type: String, index: true }],
   verified: { type: Boolean, default: false, index: true },
   popularity: { type: Number, default: 0, min: 0, max: 100 },

@@ -1,5 +1,21 @@
 import { api, authenticatedClient } from '@/utils/api';
 import { Queue, QueueWithMetadata, AddToQueueRequest } from '@syra/shared-types';
+import { normalizeTrackImages } from '@/utils/catalogImages';
+
+function normalizeQueue<T extends Queue>(queue: T): T {
+  return {
+    ...queue,
+    tracks: queue.tracks.map(normalizeTrackImages),
+  };
+}
+
+function normalizeQueueWithMetadata(queue: QueueWithMetadata): QueueWithMetadata {
+  return {
+    ...normalizeQueue(queue),
+    previous: queue.previous.map(normalizeTrackImages),
+    next: queue.next.map(normalizeTrackImages),
+  };
+}
 
 /**
  * Queue API service
@@ -11,7 +27,7 @@ export const queueService = {
    */
   async getQueue(): Promise<QueueWithMetadata> {
     const response = await api.get<QueueWithMetadata>('/queue');
-    return response.data;
+    return normalizeQueueWithMetadata(response.data);
   },
 
   /**
@@ -26,7 +42,7 @@ export const queueService = {
       position,
     };
     const response = await api.post<{ queue: Queue; added: number }>('/queue/add', body);
-    return response.data;
+    return { ...response.data, queue: normalizeQueue(response.data.queue) };
   },
 
   /**
@@ -35,9 +51,10 @@ export const queueService = {
   async removeFromQueue(trackIds: string[]): Promise<{ queue: Queue; removed: number }> {
     // Express delete routes can accept body via req.body.
     // authenticatedClient (HttpService) resolves to the parsed body directly.
-    return authenticatedClient.delete<{ queue: Queue; removed: number }>('/queue/remove', {
+    const response = await authenticatedClient.delete<{ queue: Queue; removed: number }>('/queue/remove', {
       data: { trackIds },
     });
+    return { ...response, queue: normalizeQueue(response.queue) };
   },
 
   /**
@@ -47,7 +64,7 @@ export const queueService = {
     const response = await api.put<{ queue: Queue; reordered: number }>('/queue/reorder', {
       trackIds,
     });
-    return response.data;
+    return { ...response.data, queue: normalizeQueue(response.data.queue) };
   },
 
   /**
@@ -64,7 +81,6 @@ export const queueService = {
     const response = await api.put<{ queue: Queue; currentIndex: number }>('/queue/current', {
       index,
     });
-    return response.data;
+    return { ...response.data, queue: normalizeQueue(response.data.queue) };
   },
 };
-

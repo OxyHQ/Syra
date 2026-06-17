@@ -1,4 +1,5 @@
 import type { TrackImage } from '@syra/shared-types';
+import { resolveCatalogImageUrl } from './catalogImages';
 
 /**
  * Pick the best image URL for a target render width.
@@ -16,13 +17,19 @@ export function pickImageUrl(
   fallback: string | undefined,
   preferredWidth: number,
 ): string | undefined {
-  if (!images || images.length === 0) return fallback;
+  const normalizedFallback = resolveCatalogImageUrl(fallback) ?? fallback;
+  if (!images || images.length === 0) return normalizedFallback;
 
   // Normalise: treat missing/non-positive width as 0 so comparisons are safe.
-  const normalised = images.map((img) => ({
-    url: img.url,
-    width: typeof img.width === 'number' && img.width > 0 ? img.width : 0,
-  }));
+  const normalised = images
+    .map((img) => {
+      const url = resolveCatalogImageUrl(img.url) ?? img.url;
+      return {
+        url,
+        width: typeof img.width === 'number' && img.width > 0 ? img.width : 0,
+      };
+    })
+    .filter((img) => !/^https?:\/\//i.test(img.url) || img.url.includes('/api/images/'));
 
   // Find the smallest image that is still at least as wide as the target.
   let best: { url: string; width: number } | undefined;
@@ -43,5 +50,5 @@ export function pickImageUrl(
     }
   }
 
-  return best?.url ?? fallback;
+  return best?.url ?? normalizedFallback;
 }

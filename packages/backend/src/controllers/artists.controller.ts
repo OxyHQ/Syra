@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import { ArtistModel } from '../models/Artist';
 import { AlbumModel } from '../models/Album';
 import { TrackModel } from '../models/Track';
-import { toApiFormat, toApiFormatArray, formatTracksWithCoverArt, formatArtistWithImage, formatArtistsWithImage } from '../utils/musicHelpers';
+import { toApiFormat, formatTracksWithCoverArt, formatAlbumWithCoverArt, formatArtistWithImage, formatArtistsWithImage } from '../utils/musicHelpers';
 import { isDatabaseConnected } from '../utils/database';
 import { AuthRequest } from '../middleware/auth';
 import { getAuthenticatedUserId } from '../utils/auth';
@@ -104,7 +104,7 @@ export const getArtistAlbums = async (req: Request, res: Response, next: NextFun
       .sort(withImageFirstSort('album', { releaseDate: -1 }))
       .lean();
 
-    const formattedAlbums = toApiFormatArray(albums);
+    const formattedAlbums = albums.map(album => formatAlbumWithCoverArt(album)).filter(Boolean);
 
     res.json({
       albums: formattedAlbums,

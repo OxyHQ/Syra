@@ -20,6 +20,10 @@ function unwrapApiData<T>(value: T | { data: T } | null | undefined): T | null {
   return value as T;
 }
 
+function getErrorMessage(error: unknown): string | undefined {
+  return error instanceof Error ? error.message : undefined;
+}
+
 export interface MusicPreferences {
   oxyUserId: string;
   defaultVolume: number; // 0-1
@@ -28,9 +32,11 @@ export interface MusicPreferences {
   gaplessPlayback: boolean;
   normalizeVolume: boolean;
   explicitContent: boolean;
-  streamingQuality?: 'normal' | 'high' | 'very_high';
-  downloadQuality?: 'normal' | 'high' | 'very_high';
-  wifiOnlyDownloads?: boolean;
+  audioQuality?: 'low' | 'normal' | 'high' | 'very_high';
+  downloadQuality?: 'low' | 'normal' | 'high' | 'very_high';
+  dataSaver?: boolean;
+  directAudiusStreaming?: boolean;
+  monoAudio?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -42,9 +48,11 @@ const DEFAULT_PREFERENCES: Omit<MusicPreferences, 'oxyUserId'> = {
   gaplessPlayback: true,
   normalizeVolume: true,
   explicitContent: true,
-  streamingQuality: 'normal',
+  audioQuality: 'normal',
   downloadQuality: 'normal',
-  wifiOnlyDownloads: false,
+  dataSaver: false,
+  directAudiusStreaming: false,
+  monoAudio: false,
 };
 
 interface MusicPreferencesStore {
@@ -91,12 +99,12 @@ export const useMusicPreferencesStore = create<MusicPreferencesStore>((set, get)
       } else {
         set({ loading: false });
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (isUnauthorizedError(e)) {
         set({ loading: false, error: null });
         return;
       }
-      set({ loading: false, error: e?.message || 'Failed to load music preferences' });
+      set({ loading: false, error: getErrorMessage(e) || 'Failed to load music preferences' });
     }
   },
 
@@ -124,19 +132,17 @@ export const useMusicPreferencesStore = create<MusicPreferencesStore>((set, get)
 
       set({ loading: false });
       return null;
-    } catch (e: any) {
+    } catch (e: unknown) {
       // Revert optimistic update on error
       const cached = await Storage.get<MusicPreferences>(MUSIC_PREFERENCES_CACHE_KEY);
       if (cached) {
         set({ preferences: cached });
       }
-      set({ loading: false, error: e?.message || 'Failed to update music preferences' });
+      set({ loading: false, error: getErrorMessage(e) || 'Failed to update music preferences' });
       return null;
     }
   },
 }));
-
-
 
 
 

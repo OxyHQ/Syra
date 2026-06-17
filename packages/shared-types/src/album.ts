@@ -3,6 +3,7 @@ import { timestampsSchema } from './common';
 import {
   trackSchema,
   catalogSourceSchema,
+  catalogImageSizesSchema,
   externalIdsSchema,
   sourceProvenanceSchema,
 } from './track';
@@ -17,6 +18,7 @@ export const albumSchema = timestampsSchema.extend({
   artistName: z.string(),
   releaseDate: z.string(),
   coverArt: z.string(),
+  coverArtSizes: catalogImageSizesSchema.optional(),
   genre: z.array(z.string()).optional(),
   totalTracks: z.number(),
   totalDuration: z.number(),

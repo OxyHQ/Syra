@@ -1,6 +1,7 @@
 import React, { useCallback } from 'react';
 import { View, Text, ScrollView, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useMutation } from '@tanstack/react-query';
 import { useOxy } from '@oxyhq/services';
 import { getAccountDisplayName } from '@oxyhq/core';
 import { useRouter } from 'expo-router';
@@ -26,7 +27,7 @@ import { Slider } from '@/components/Slider';
 import { useMusicPreferences } from '@/hooks/useMusicPreferences';
 import {
   useCurrentUserPrivacySettings,
-  updatePrivacySettingsCache,
+  useUpdatePrivacySettingsCache,
   type PrivacySettings,
 } from '@/hooks/usePrivacySettings';
 import { useAppearanceStore } from '@/store/appearanceStore';
@@ -36,7 +37,7 @@ import i18n from '@/lib/i18n';
 import { STORAGE_KEYS } from '@/lib/constants';
 import { Storage } from '@/utils/storage';
 
-type AudioQuality = 'normal' | 'high' | 'very_high';
+type AudioQuality = 'low' | 'normal' | 'high' | 'very_high';
 type ProfileVisibility = 'public' | 'private' | 'followers_only';
 
 const LANGUAGE_OPTIONS: readonly { label: string; value: string }[] = [
@@ -89,6 +90,7 @@ const SettingsScreen: React.FC = () => {
   const { user, isAuthenticated, logout, oxyServices } = useOxy();
   const { preferences: musicPreferences, updatePreferences: updateMusicPreferences } = useMusicPreferences();
   const privacySettings = useCurrentUserPrivacySettings();
+  const updatePrivacySettingsCache = useUpdatePrivacySettingsCache();
   const appearanceSettings = useAppearanceStore((state) => state.mySettings);
   const updateAppearanceSettings = useAppearanceStore((state) => state.updateMySettings);
   const { colorPreset, mode: bloomMode, setMode, setColorPreset } = useBloomTheme();
@@ -130,16 +132,22 @@ const SettingsScreen: React.FC = () => {
     });
   }, [setColorPreset, updateAppearanceSettings, appearanceSettings?.appearance?.themeMode]);
 
-  const handlePrivacyUpdate = useCallback(async (updates: Partial<PrivacySettings>) => {
-    try {
+  const updatePrivacySettingsMutation = useMutation({
+    mutationFn: async (updates: Partial<PrivacySettings>) => {
       const newSettings: PrivacySettings = { ...privacySettings, ...updates };
       await authenticatedClient.put('/profile/settings', { privacy: newSettings });
       await updatePrivacySettingsCache(newSettings);
-    } catch (error) {
+      return newSettings;
+    },
+    onError: (error) => {
       console.error('Failed to update privacy settings:', error);
       Alert.alert('Error', 'Failed to update privacy settings.');
-    }
-  }, [privacySettings]);
+    },
+  });
+
+  const handlePrivacyUpdate = useCallback((updates: Partial<PrivacySettings>) => {
+    updatePrivacySettingsMutation.mutate(updates);
+  }, [updatePrivacySettingsMutation]);
 
   const handleLogout = useCallback(async () => {
     const confirmed = await confirmDialog({
@@ -304,9 +312,12 @@ const SettingsScreen: React.FC = () => {
             <SegmentedControl.Root<AudioQuality>
               label="Streaming quality"
               type="radio"
-              value={musicPreferences?.streamingQuality ?? 'normal'}
-              onChange={(value) => updateMusicPreferences({ streamingQuality: value })}
+              value={musicPreferences?.audioQuality ?? 'normal'}
+              onChange={(value) => updateMusicPreferences({ audioQuality: value })}
             >
+              <SegmentedControl.Item value="low">
+                <SegmentedControl.ItemText>Low</SegmentedControl.ItemText>
+              </SegmentedControl.Item>
               <SegmentedControl.Item value="normal">
                 <SegmentedControl.ItemText>Normal</SegmentedControl.ItemText>
               </SegmentedControl.Item>
@@ -328,6 +339,9 @@ const SettingsScreen: React.FC = () => {
               value={musicPreferences?.downloadQuality ?? 'normal'}
               onChange={(value) => updateMusicPreferences({ downloadQuality: value })}
             >
+              <SegmentedControl.Item value="low">
+                <SegmentedControl.ItemText>Low</SegmentedControl.ItemText>
+              </SegmentedControl.Item>
               <SegmentedControl.Item value="normal">
                 <SegmentedControl.ItemText>Normal</SegmentedControl.ItemText>
               </SegmentedControl.Item>
@@ -343,13 +357,25 @@ const SettingsScreen: React.FC = () => {
           <SettingsListGroup>
             <SettingsListItem
               icon={<RowIcon name="wifi-outline" />}
-              title="WiFi-only downloads"
-              description="Only download music when connected to WiFi"
+              title="Data saver"
+              description="Use less data while streaming music"
               showChevron={false}
               rightElement={
                 <Switch
-                  value={musicPreferences?.wifiOnlyDownloads ?? false}
-                  onValueChange={(value) => updateMusicPreferences({ wifiOnlyDownloads: value })}
+                  value={musicPreferences?.dataSaver ?? false}
+                  onValueChange={(value) => updateMusicPreferences({ dataSaver: value })}
+                />
+              }
+            />
+            <SettingsListItem
+              icon={<RowIcon name="radio-outline" />}
+              title="Direct Audius streaming"
+              description="Play Audius streams directly when Syra-hosted audio is unavailable"
+              showChevron={false}
+              rightElement={
+                <Switch
+                  value={musicPreferences?.directAudiusStreaming ?? false}
+                  onValueChange={(value) => updateMusicPreferences({ directAudiusStreaming: value })}
                 />
               }
             />

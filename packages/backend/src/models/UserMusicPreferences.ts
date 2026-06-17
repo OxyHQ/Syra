@@ -17,6 +17,7 @@ export interface UserMusicPreferencesData {
   audioQuality: AudioQuality;
   downloadQuality: AudioQuality;
   dataSaver: boolean;
+  directAudiusStreaming: boolean;
   monoAudio: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -42,6 +43,7 @@ const UserMusicPreferencesSchema = new Schema<IUserMusicPreferences>({
   audioQuality: { type: String, enum: AUDIO_QUALITY_VALUES, default: 'normal' },
   downloadQuality: { type: String, enum: AUDIO_QUALITY_VALUES, default: 'normal' },
   dataSaver: { type: Boolean, default: false },
+  directAudiusStreaming: { type: Boolean, default: false },
   monoAudio: { type: Boolean, default: false },
 }, {
   timestamps: true,

@@ -15,6 +15,11 @@ interface WebOnlyProps {
   overflowY?: 'auto' | 'hidden' | 'scroll' | 'visible';
   overflowX?: 'auto' | 'hidden' | 'scroll' | 'visible';
   transition?: string;
+  transitionProperty?: string;
+  transitionDuration?: string;
+  transitionTimingFunction?: string;
+  boxShadow?: string;
+  outlineStyle?: 'auto' | 'none' | 'dotted' | 'dashed' | 'solid';
   cursor?: string;
   whiteSpace?: 'normal' | 'nowrap' | 'pre' | 'pre-wrap' | 'pre-line' | 'break-spaces';
   /** Allows web sizing strings such as `calc(...)` and viewport units. */

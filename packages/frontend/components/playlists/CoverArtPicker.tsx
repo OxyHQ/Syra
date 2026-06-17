@@ -3,7 +3,7 @@ import { StyleSheet, View, Text, Pressable, Image, Platform, Alert, ActivityIndi
 import { useTheme } from '@oxyhq/bloom/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useImagePicker } from '@/hooks/useImagePicker';
-import { getApiOrigin } from '@/utils/api';
+import { resolveCatalogImageUrl } from '@/utils/catalogImages';
 
 interface CoverArtPickerProps {
   value?: string; // Image ID (MongoDB ObjectId string) or URL for display
@@ -34,9 +34,7 @@ export const CoverArtPicker: React.FC<CoverArtPickerProps> = ({
   // Convert image ID to display URL
   const imageUrl = useMemo(() => {
     if (!value) return null;
-    // Treat value as image ID and convert to URL
-    const apiOrigin = getApiOrigin();
-    return `${apiOrigin}/api/images/${value}`;
+    return resolveCatalogImageUrl(value) ?? null;
   }, [value]);
 
   const handlePickImage = async () => {
@@ -223,4 +221,3 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 });
-

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
 } from 'react-native';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -20,6 +21,28 @@ import { toast } from 'sonner';
 import SEO from '@/components/SEO';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { z } from 'zod';
+
+const copyrightReportFormSchema = z.object({
+  trackId: z.string().min(1, 'Please select a track to report'),
+  reason: z.string().trim().min(1, 'Please provide a reason for the copyright violation'),
+});
+
+function getCopyrightReportErrorMessage(error: unknown): string {
+  if (error && typeof error === 'object' && 'response' in error) {
+    const response = (error as { response?: unknown }).response;
+    if (response && typeof response === 'object' && 'data' in response) {
+      const data = (response as { data?: unknown }).data;
+      if (data && typeof data === 'object' && 'message' in data) {
+        const message = (data as { message?: unknown }).message;
+        if (typeof message === 'string' && message.trim()) return message;
+      }
+    }
+  }
+  return error instanceof Error
+    ? error.message
+    : 'Failed to submit report. Please try again.';
+}
 
 /**
  * Copyright Report Screen
@@ -33,79 +56,60 @@ const CopyrightReportScreen: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
   const [reason, setReason] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [searchResults, setSearchResults] = useState<Track[]>([]);
 
   const debouncedQuery = useDebouncedValue(searchQuery, 500);
+  const trimmedDebouncedQuery = debouncedQuery.trim();
 
-  // Search tracks when query changes
-  useEffect(() => {
-    const performSearch = async () => {
-      if (!debouncedQuery.trim()) {
-        setSearchResults([]);
-        return;
-      }
+  const {
+    data: trackSearchData,
+    isLoading: isSearching,
+    isError: isSearchError,
+  } = useQuery({
+    queryKey: ['copyright', 'trackSearch', trimmedDebouncedQuery],
+    queryFn: () => musicService.searchTracks(trimmedDebouncedQuery, { limit: 10 }),
+    enabled: trimmedDebouncedQuery.length > 0 && !selectedTrack,
+    staleTime: 1000 * 60,
+  });
 
-      setIsSearching(true);
-      try {
-        const result = await musicService.searchTracks(debouncedQuery, { limit: 10 });
-        setSearchResults(result.tracks);
-      } catch (error: any) {
-        console.error('Failed to search tracks:', error);
-        toast.error('Failed to search tracks. Please try again.');
-      } finally {
-        setIsSearching(false);
-      }
-    };
+  const searchResults = trackSearchData?.tracks ?? [];
 
-    performSearch();
-  }, [debouncedQuery]);
+  const submitReportMutation = useMutation({
+    mutationFn: (input: { trackId: string; reason: string }) =>
+      copyrightService.reportCopyrightViolation(input),
+    onSuccess: () => {
+      toast.success('Copyright violation report submitted successfully');
+      setSelectedTrack(null);
+      setSearchQuery('');
+      setReason('');
+      setTimeout(() => {
+        router.back();
+      }, 1500);
+    },
+    onError: (error: unknown) => {
+      console.error('Failed to submit copyright report:', error);
+      toast.error(getCopyrightReportErrorMessage(error));
+    },
+  });
+
+  const isSubmitting = submitReportMutation.isPending;
 
   const handleTrackSelect = useCallback((track: Track) => {
     setSelectedTrack(track);
     setSearchQuery(track.title);
-    setSearchResults([]);
   }, []);
 
-  const handleSubmit = useCallback(async () => {
-    if (!selectedTrack) {
-      toast.error('Please select a track to report');
+  const handleSubmit = useCallback(() => {
+    const parsed = copyrightReportFormSchema.safeParse({
+      trackId: selectedTrack?.id,
+      reason,
+    });
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0]?.message || 'Please complete the form');
       return;
     }
 
-    if (!reason.trim()) {
-      toast.error('Please provide a reason for the copyright violation');
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      await copyrightService.reportCopyrightViolation({
-        trackId: selectedTrack.id,
-        reason: reason.trim(),
-      });
-
-      toast.success('Copyright violation report submitted successfully');
-      
-      // Reset form
-      setSelectedTrack(null);
-      setSearchQuery('');
-      setReason('');
-      setSearchResults([]);
-
-      // Navigate back after a short delay
-      setTimeout(() => {
-        router.back();
-      }, 1500);
-    } catch (error: any) {
-      console.error('Failed to submit copyright report:', error);
-      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to submit report. Please try again.';
-      toast.error(errorMessage);
-    } finally {
-      setIsSubmitting(false);
-    }
-  }, [selectedTrack, reason, router]);
+    submitReportMutation.mutate(parsed.data);
+  }, [reason, selectedTrack, submitReportMutation]);
 
   const handleGoBack = useCallback(() => {
     if (!isSubmitting) {
@@ -188,12 +192,17 @@ const CopyrightReportScreen: React.FC = () => {
                 editable={!isSubmitting}
                 autoFocus
               />
-              {isSearching && (
+            {isSearching && (
                 <ActivityIndicator
                   size="small"
                   color={theme.colors.primary}
                   style={styles.searchLoader}
                 />
+              )}
+              {isSearchError && (
+                <Text style={[styles.errorText, { color: theme.colors.error }]}>
+                  Failed to search tracks. Please try again.
+                </Text>
               )}
             </View>
 
@@ -377,6 +386,10 @@ const styles = StyleSheet.create({
     right: 12,
     top: 12,
   },
+  errorText: {
+    fontSize: 13,
+    marginTop: 6,
+  },
   resultsContainer: {
     borderRadius: 12,
     marginTop: 8,
@@ -473,9 +486,6 @@ const styles = StyleSheet.create({
 });
 
 export default CopyrightReportScreen;
-
-
-
 
 
 

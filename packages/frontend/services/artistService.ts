@@ -1,6 +1,23 @@
 import { api, authenticatedClient, getApiOrigin } from '@/utils/api';
 import { Artist, CreateArtistRequest, ArtistDashboard, ArtistInsights, CreateAlbumRequest, Track, Album } from '@syra/shared-types';
 import { Platform } from 'react-native';
+import { normalizeAlbumImages, normalizeArtistImages, normalizeTrackImages } from '@/utils/catalogImages';
+
+function getHttpStatus(error: unknown): number | undefined {
+  if (!error || typeof error !== 'object') return undefined;
+  if ('response' in error) {
+    const response = (error as { response?: unknown }).response;
+    if (response && typeof response === 'object' && 'status' in response) {
+      const status = (response as { status?: unknown }).status;
+      return typeof status === 'number' ? status : undefined;
+    }
+  }
+  if ('status' in error) {
+    const status = (error as { status?: unknown }).status;
+    return typeof status === 'number' ? status : undefined;
+  }
+  return undefined;
+}
 
 /**
  * Artist API service
@@ -12,7 +29,7 @@ export const artistService = {
    */
   async registerAsArtist(data: CreateArtistRequest): Promise<Artist> {
     const response = await api.post<Artist>('/artists/register', data);
-    return response.data;
+    return normalizeArtistImages(response.data);
   },
 
   /**
@@ -22,10 +39,10 @@ export const artistService = {
   async getMyArtistProfile(): Promise<Artist | null> {
     try {
       const response = await api.get<Artist>('/artists/me');
-      return response.data;
-    } catch (error: any) {
+      return normalizeArtistImages(response.data);
+    } catch (error: unknown) {
       // Check for 404 or any error status
-      const status = error?.response?.status || error?.status;
+      const status = getHttpStatus(error);
       if (status === 404) {
         // User doesn't have an artist profile - this is expected, not an error
         // Silently return null without logging
@@ -120,7 +137,7 @@ export const artistService = {
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) {
           try {
-            resolve(JSON.parse(xhr.responseText) as Track);
+            resolve(normalizeTrackImages(JSON.parse(xhr.responseText) as Track));
           } catch (parseError) {
             reject(parseError);
           }
@@ -139,7 +156,7 @@ export const artistService = {
    */
   async createAlbum(data: CreateAlbumRequest): Promise<Album> {
     const response = await api.post<Album>('/albums', data);
-    return response.data;
+    return normalizeAlbumImages(response.data);
   },
 
   /**
@@ -147,7 +164,10 @@ export const artistService = {
    */
   async getArtistDashboard(): Promise<ArtistDashboard> {
     const response = await api.get<ArtistDashboard>('/artists/me/dashboard');
-    return response.data;
+    return {
+      ...response.data,
+      artist: normalizeArtistImages(response.data.artist),
+    };
   },
 
   /**
@@ -158,4 +178,3 @@ export const artistService = {
     return response.data;
   },
 };
-

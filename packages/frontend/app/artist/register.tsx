@@ -10,6 +10,7 @@ import {
     ActivityIndicator,
     KeyboardAvoidingView,
 } from 'react-native';
+import { useMutation } from '@tanstack/react-query';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { useOxy } from '@oxyhq/services';
 import { useRouter } from 'expo-router';
@@ -19,12 +20,26 @@ import { artistService } from '@/services/artistService';
 import { toast } from 'sonner';
 import SEO from '@/components/SEO';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { z } from 'zod';
 
 interface FormErrors {
     name?: string;
+    bio?: string;
 }
 
 const NAME_MAX_LENGTH = 100;
+const BIO_MAX_LENGTH = 500;
+
+const artistRegistrationFormSchema = z.object({
+    name: z.string().trim().min(1, 'Artist name is required').max(NAME_MAX_LENGTH, `Name must be ${NAME_MAX_LENGTH} characters or less`),
+    bio: z.string().trim().max(BIO_MAX_LENGTH, `Bio must be ${BIO_MAX_LENGTH} characters or less`),
+    image: z.string().nullable(),
+    genre: z.string().trim(),
+});
+
+function getErrorMessage(error: unknown): string | undefined {
+    return error instanceof Error ? error.message : undefined;
+}
 
 /**
  * Artist Registration Screen
@@ -40,8 +55,25 @@ const ArtistRegisterScreen: React.FC = () => {
     const [bio, setBio] = useState('');
     const [image, setImage] = useState<string | null>(null);
     const [genre, setGenre] = useState('');
-    const [isRegistering, setIsRegistering] = useState(false);
     const [errors, setErrors] = useState<FormErrors>({});
+    const registerArtistMutation = useMutation({
+        mutationFn: (input: z.infer<typeof artistRegistrationFormSchema>) =>
+            artistService.registerAsArtist({
+                name: input.name,
+                bio: input.bio || undefined,
+                image: input.image || undefined,
+                genres: input.genre ? [input.genre] : undefined,
+            }),
+        onSuccess: (artist) => {
+            toast.success(`Artist profile "${artist.name}" created successfully`);
+            router.replace('/artist/dashboard');
+        },
+        onError: (error: unknown) => {
+            console.error('Failed to register as artist:', error);
+            toast.error(getErrorMessage(error) || 'Failed to register as artist. Please try again.');
+        },
+    });
+    const isRegistering = registerArtistMutation.isPending;
 
     // Redirect if not authenticated
     useEffect(() => {
@@ -51,19 +83,27 @@ const ArtistRegisterScreen: React.FC = () => {
         }
     }, [isAuthenticated, router]);
 
-    const validateForm = (): boolean => {
+    const validateForm = useCallback((): z.infer<typeof artistRegistrationFormSchema> | null => {
         const newErrors: FormErrors = {};
+        const parsed = artistRegistrationFormSchema.safeParse({
+            name,
+            bio,
+            image,
+            genre,
+        });
 
-        const trimmedName = name.trim();
-        if (!trimmedName) {
-            newErrors.name = 'Artist name is required';
-        } else if (trimmedName.length > NAME_MAX_LENGTH) {
-            newErrors.name = `Name must be ${NAME_MAX_LENGTH} characters or less`;
+        if (!parsed.success) {
+            for (const issue of parsed.error.issues) {
+                const key = issue.path[0];
+                if (key === 'name' || key === 'bio') {
+                    newErrors[key] = issue.message;
+                }
+            }
         }
 
         setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
-    };
+        return parsed.success ? parsed.data : null;
+    }, [bio, genre, image, name]);
 
     const handleRegister = useCallback(async () => {
         if (!isAuthenticated) {
@@ -71,30 +111,13 @@ const ArtistRegisterScreen: React.FC = () => {
             return;
         }
 
-        if (!validateForm()) {
+        const formData = validateForm();
+        if (!formData) {
             return;
         }
 
-        setIsRegistering(true);
-        try {
-            const artist = await artistService.registerAsArtist({
-                name: name.trim(),
-                bio: bio.trim() || undefined,
-                image: image || undefined,
-                genres: genre ? [genre] : undefined,
-            });
-
-            toast.success(`Artist profile "${artist.name}" created successfully`);
-
-            // Navigate to dashboard
-            router.replace('/artist/dashboard');
-        } catch (error: any) {
-            console.error('Failed to register as artist:', error);
-            toast.error(error?.message || 'Failed to register as artist. Please try again.');
-        } finally {
-            setIsRegistering(false);
-        }
-    }, [name, bio, image, genre, isAuthenticated, router]);
+        registerArtistMutation.mutate(formData);
+    }, [isAuthenticated, registerArtistMutation, validateForm]);
 
     const handleGoBack = useCallback(() => {
         if (!isRegistering) {
@@ -217,18 +240,32 @@ const ArtistRegisterScreen: React.FC = () => {
                                     {
                                         backgroundColor: theme.colors.backgroundSecondary,
                                         color: theme.colors.text,
-                                        borderColor: theme.colors.border,
+                                        borderColor: errors.bio ? theme.colors.error : theme.colors.border,
                                     },
                                 ]}
                                 placeholder="Tell us about yourself..."
                                 placeholderTextColor={theme.colors.textSecondary}
                                 value={bio}
-                                onChangeText={setBio}
+                                onChangeText={(text) => {
+                                    setBio(text);
+                                    if (errors.bio) {
+                                        setErrors((prev) => ({ ...prev, bio: undefined }));
+                                    }
+                                }}
+                                maxLength={BIO_MAX_LENGTH}
                                 multiline
                                 numberOfLines={4}
                                 textAlignVertical="top"
                                 editable={!isRegistering}
                             />
+                            {errors.bio && (
+                                <Text style={[styles.errorText, { color: theme.colors.error }]}>
+                                    {errors.bio}
+                                </Text>
+                            )}
+                            <Text style={[styles.characterCount, { color: theme.colors.textSecondary }]}>
+                                {bio.length}/{BIO_MAX_LENGTH}
+                            </Text>
                         </View>
 
                         {/* Genre Input */}
@@ -384,4 +421,3 @@ const styles = StyleSheet.create({
 });
 
 export default ArtistRegisterScreen;
-

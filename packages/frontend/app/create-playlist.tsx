@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
 } from 'react-native';
+import { useMutation } from '@tanstack/react-query';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { useOxy } from '@oxyhq/services';
 import { useRouter } from 'expo-router';
@@ -20,6 +21,7 @@ import { musicService } from '@/services/musicService';
 import { toast } from 'sonner';
 import SEO from '@/components/SEO';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { z } from 'zod';
 
 interface FormErrors {
   name?: string;
@@ -28,6 +30,17 @@ interface FormErrors {
 
 const NAME_MAX_LENGTH = 100;
 const DESCRIPTION_MAX_LENGTH = 300;
+
+const createPlaylistFormSchema = z.object({
+  name: z.string().trim().min(1, 'Playlist name is required').max(NAME_MAX_LENGTH, `Name must be ${NAME_MAX_LENGTH} characters or less`),
+  description: z.string().trim().max(DESCRIPTION_MAX_LENGTH, `Description must be ${DESCRIPTION_MAX_LENGTH} characters or less`),
+  coverArt: z.string().nullable(),
+  visibility: z.nativeEnum(PlaylistVisibility),
+});
+
+function getErrorMessage(error: unknown): string | undefined {
+  return error instanceof Error ? error.message : undefined;
+}
 
 /**
  * Create Playlist Screen
@@ -43,28 +56,48 @@ const CreatePlaylistScreen: React.FC = () => {
   const [description, setDescription] = useState('');
   const [coverArt, setCoverArt] = useState<string | null>(null);
   const [visibility, setVisibility] = useState<PlaylistVisibility>(PlaylistVisibility.PRIVATE);
-  const [isCreating, setIsCreating] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
+  const createPlaylistMutation = useMutation({
+    mutationFn: (input: z.infer<typeof createPlaylistFormSchema>) =>
+      musicService.createPlaylist({
+        name: input.name,
+        description: input.description || undefined,
+        coverArt: input.coverArt || undefined,
+        isPublic: input.visibility === PlaylistVisibility.PUBLIC,
+        visibility: input.visibility,
+    }),
+    onSuccess: (playlist) => {
+      toast.success(`Playlist "${playlist.name}" created successfully`);
+      router.replace({ pathname: '/playlist/[id]', params: { id: playlist.id } });
+    },
+    onError: (error: unknown) => {
+      console.error('Failed to create playlist:', error);
+      toast.error(getErrorMessage(error) || 'Failed to create playlist. Please try again.');
+    },
+  });
+  const isCreating = createPlaylistMutation.isPending;
 
-  const validateForm = (): boolean => {
+  const validateForm = useCallback((): z.infer<typeof createPlaylistFormSchema> | null => {
     const newErrors: FormErrors = {};
+    const parsed = createPlaylistFormSchema.safeParse({
+      name,
+      description,
+      coverArt,
+      visibility,
+    });
 
-    // Validate name
-    const trimmedName = name.trim();
-    if (!trimmedName) {
-      newErrors.name = 'Playlist name is required';
-    } else if (trimmedName.length > NAME_MAX_LENGTH) {
-      newErrors.name = `Name must be ${NAME_MAX_LENGTH} characters or less`;
-    }
-
-    // Validate description
-    if (description.trim().length > DESCRIPTION_MAX_LENGTH) {
-      newErrors.description = `Description must be ${DESCRIPTION_MAX_LENGTH} characters or less`;
+    if (!parsed.success) {
+      for (const issue of parsed.error.issues) {
+        const key = issue.path[0];
+        if (key === 'name' || key === 'description') {
+          newErrors[key] = issue.message;
+        }
+      }
     }
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
+    return parsed.success ? parsed.data : null;
+  }, [coverArt, description, name, visibility]);
 
   const handleCreate = useCallback(async () => {
     if (!isAuthenticated) {
@@ -72,31 +105,13 @@ const CreatePlaylistScreen: React.FC = () => {
       return;
     }
 
-    if (!validateForm()) {
+    const formData = validateForm();
+    if (!formData) {
       return;
     }
 
-    setIsCreating(true);
-    try {
-      const playlist = await musicService.createPlaylist({
-        name: name.trim(),
-        description: description.trim() || undefined,
-        coverArt: coverArt || undefined,
-        isPublic: visibility === PlaylistVisibility.PUBLIC,
-        visibility: visibility,
-      });
-
-      toast.success(`Playlist "${playlist.name}" created successfully`);
-      
-      // Navigate to created playlist
-      router.replace(`/playlist/${playlist.id}` as any);
-    } catch (error: any) {
-      console.error('Failed to create playlist:', error);
-      toast.error(error?.message || 'Failed to create playlist. Please try again.');
-    } finally {
-      setIsCreating(false);
-    }
-  }, [name, description, coverArt, visibility, isAuthenticated, router]);
+    createPlaylistMutation.mutate(formData);
+  }, [createPlaylistMutation, isAuthenticated, validateForm]);
 
   const handleGoBack = useCallback(() => {
     if (!isCreating) {
@@ -431,4 +446,3 @@ const styles = StyleSheet.create({
 });
 
 export default CreatePlaylistScreen;
-

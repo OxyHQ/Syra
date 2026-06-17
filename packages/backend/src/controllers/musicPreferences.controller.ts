@@ -24,6 +24,11 @@ export async function ensureMusicPreferences(oxyUserId: string): Promise<UserMus
     gaplessPlayback: true,
     normalizeVolume: true,
     explicitContent: true,
+    audioQuality: 'normal',
+    downloadQuality: 'normal',
+    dataSaver: false,
+    directAudiusStreaming: false,
+    monoAudio: false,
   });
   await newPreferences.save();
   return newPreferences.toObject();
@@ -92,6 +97,10 @@ export async function updateMusicPreferences(
     update.dataSaver = updates.dataSaver;
   }
 
+  if (typeof updates.directAudiusStreaming === 'boolean') {
+    update.directAudiusStreaming = updates.directAudiusStreaming;
+  }
+
   // Validate and set monoAudio
   if (typeof updates.monoAudio === 'boolean') {
     update.monoAudio = updates.monoAudio;
@@ -110,7 +119,6 @@ export async function updateMusicPreferences(
 
   return preferences;
 }
-
 
 
 

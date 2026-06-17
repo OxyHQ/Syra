@@ -7,6 +7,7 @@ import {
   PlaylistVisibility,
   SourceProvenance,
 } from '@syra/shared-types';
+import type { CatalogImageSizes } from '@syra/shared-types/track';
 
 export interface IPlaylist extends Omit<Playlist, 'id' | '_id'>, Document {
   _id: mongoose.Types.ObjectId;
@@ -31,12 +32,29 @@ const SourceProvenanceSchema = new Schema<SourceProvenance>({
   fields: [{ type: String }],
 }, { _id: false });
 
+const CatalogImageVariantSchema = new Schema({
+  id: { type: String, required: true },
+  url: { type: String, required: true },
+  width: { type: Number, required: true },
+  height: { type: Number, required: true },
+}, { _id: false });
+
+const CatalogImageSizesSchema = new Schema<CatalogImageSizes>({
+  small: { type: CatalogImageVariantSchema },
+  medium: { type: CatalogImageVariantSchema },
+  large: { type: CatalogImageVariantSchema },
+  xlarge: { type: CatalogImageVariantSchema },
+  xxlarge: { type: CatalogImageVariantSchema },
+  original: { type: CatalogImageVariantSchema },
+}, { _id: false });
+
 const PlaylistSchema = new Schema<IPlaylist>({
   name: { type: String, required: true, index: true },
   description: { type: String },
   ownerOxyUserId: { type: String, required: true },
   ownerUsername: { type: String, required: true },
   coverArt: { type: String },
+  coverArtSizes: { type: CatalogImageSizesSchema },
   visibility: { type: String, enum: Object.values(PlaylistVisibility), default: PlaylistVisibility.PRIVATE, index: true },
   trackCount: { type: Number, default: 0 },
   totalDuration: { type: Number, default: 0 },

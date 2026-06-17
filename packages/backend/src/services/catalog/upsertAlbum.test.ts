@@ -54,7 +54,8 @@ describe('upsertAlbum', () => {
     expect(album.artistName).toBe('Album Artist');
     expect(album.releaseDate).toBe('2021-06-26T14:24:05Z');
     expect(album.genre).toEqual(['Electronic']);
-    expect(album.coverArt).toBe('https://cdn.audius.co/alb/1000x1000.jpg');
+    expect(album.coverArt).toMatch(/^[a-f\d]{24}$/i);
+    expect(album.coverArtSizes?.large?.url).toBe(`/api/images/${album.coverArt}`);
     expect(album.source).toBe('audius');
     expect(album.externalIds?.audiusId).toBe('aud-album-001');
     expect(album.playCount).toBe(5000);

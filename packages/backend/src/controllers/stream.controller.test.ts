@@ -96,11 +96,15 @@ function hlsTrackFields() {
 // ── getStream — existing tests ────────────────────────────────────────────────
 
 describe('getStream', () => {
-  it('200 audius: returns url + type audius when streamUrl present', async () => {
+  it('200 audius: returns direct provider stream only when the user enabled it', async () => {
     const track = await seedTrack({
       source: 'audius',
       status: 'ready',
       streamUrl: 'https://audius.co/stream/abc123',
+    });
+    await UserMusicPreferencesModel.create({
+      oxyUserId: 'oxy-user-abc',
+      directAudiusStreaming: true,
     });
 
     const req = makeReq(track._id.toString());
@@ -111,6 +115,20 @@ describe('getStream', () => {
     const body = res._body as Record<string, unknown>;
     expect(body.type).toBe('audius');
     expect(body.url).toBe('https://audius.co/stream/abc123');
+  });
+
+  it('422 audius: direct provider streaming is disabled by default', async () => {
+    const track = await seedTrack({
+      source: 'audius',
+      status: 'ready',
+      streamUrl: 'https://audius.co/stream/abc123',
+    });
+
+    const req = makeReq(track._id.toString());
+    const res = makeRes();
+    await getStream(req, res as unknown as Response);
+
+    expect(res._status).toBe(422);
   });
 
   it('200 hls: mints stream token and returns master.m3u8 url', async () => {
@@ -142,7 +160,7 @@ describe('getStream', () => {
     expect(body.expiresAt).toBeDefined();
   });
 
-  it('200 audius: no auth still returns stream url (public passthrough)', async () => {
+  it('401 audius: no auth cannot use direct provider streaming', async () => {
     const track = await seedTrack({
       source: 'audius',
       status: 'ready',
@@ -153,18 +171,15 @@ describe('getStream', () => {
     const res = makeRes();
     await getStream(req, res as unknown as Response);
 
-    expect(res._status).toBe(200);
-    const body = res._body as Record<string, unknown>;
-    expect(body.type).toBe('audius');
-    expect(body.url).toBe('https://audius.co/stream/anon123');
+    expect(res._status).toBe(401);
   });
 
-  it('404 audius: no auth + missing streamUrl returns 404', async () => {
+  it('401 audius: no auth + missing streamUrl returns 401', async () => {
     const track = await seedTrack({ source: 'audius', status: 'ready', streamUrl: undefined });
     const req = makeReq(track._id.toString(), { authed: false });
     const res = makeRes();
     await getStream(req, res as unknown as Response);
-    expect(res._status).toBe(404);
+    expect(res._status).toBe(401);
   });
 
   it('401: HLS track with no auth returns 401', async () => {

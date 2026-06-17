@@ -182,15 +182,17 @@ describe('upsertTrack', () => {
   it('(d) merge never clobbers non-empty field with empty; sources[].fields recorded', async () => {
     await upsertTrack(baseTrack, 'audius');
 
-    // Re-import with no images / no streamUrl
+    // Re-import with no streamUrl.
     const { track } = await upsertTrack(
       { ...baseTrack, streamUrl: undefined },
       'audius',
     );
 
-    // Non-empty image array from first import must survive
+    // Provider image URLs are never persisted; the internal cover art survives.
     if (!track) throw new Error('expected track');
-    expect(track.images?.length).toBeGreaterThan(0);
+    expect(track.images?.length ?? 0).toBe(0);
+    expect(track.coverArt).toMatch(/^[a-f\d]{24}$/i);
+    expect(track.coverArtSizes?.large?.url).toBe(`/api/images/${track.coverArt}`);
     expect(track.streamUrl).toBe('https://audius.co/stream/aud-track-001');
 
     // sources[].fields must list the fields the FIRST import contributed

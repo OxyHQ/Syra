@@ -9,6 +9,7 @@ import {
   TrackImage,
   HlsRendition,
 } from '@syra/shared-types';
+import type { CatalogImageSizes } from '@syra/shared-types/track';
 
 export interface ITrack
   extends Omit<Track, 'id' | '_id' | 'createdAt' | 'updatedAt' | 'removedAt' | 'releaseDate'>,
@@ -61,6 +62,22 @@ const TrackImageSchema = new Schema<TrackImage>({
   source: { type: String, enum: ['upload', 'cc', 'audius'] as CatalogSource[] },
 }, { _id: false });
 
+const CatalogImageVariantSchema = new Schema({
+  id: { type: String, required: true },
+  url: { type: String, required: true },
+  width: { type: Number, required: true },
+  height: { type: Number, required: true },
+}, { _id: false });
+
+const CatalogImageSizesSchema = new Schema<CatalogImageSizes>({
+  small: { type: CatalogImageVariantSchema },
+  medium: { type: CatalogImageVariantSchema },
+  large: { type: CatalogImageVariantSchema },
+  xlarge: { type: CatalogImageVariantSchema },
+  xxlarge: { type: CatalogImageVariantSchema },
+  original: { type: CatalogImageVariantSchema },
+}, { _id: false });
+
 const HlsRenditionSchema = new Schema<HlsRendition>({
   manifestKey: { type: String, required: true },
   bitrateKbps: { type: Number, required: true },
@@ -78,6 +95,7 @@ const TrackSchema = new Schema<ITrack>({
   discNumber: { type: Number },
   audioSource: { type: AudioSourceSchema }, // optional: absent for audius/processing tracks
   coverArt: { type: String },
+  coverArtSizes: { type: CatalogImageSizesSchema },
   metadata: { type: TrackMetadataSchema },
   // Provider-supplied descriptive metadata (e.g. Audius genre/mood/tags)
   genre: { type: String, index: true },

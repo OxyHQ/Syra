@@ -1,21 +1,17 @@
 const albumImageFirstSort = {
   coverArt: -1,
-  'images.0.url': -1,
 } as const;
 
 const artistImageFirstSort = {
   image: -1,
-  'images.0.url': -1,
 } as const;
 
 const playlistImageFirstSort = {
   coverArt: -1,
-  'images.0.url': -1,
 } as const;
 
 const trackImageFirstSort = {
   coverArt: -1,
-  'images.0.url': -1,
 } as const;
 
 export type ImageFirstEntity = 'album' | 'artist' | 'playlist' | 'track';

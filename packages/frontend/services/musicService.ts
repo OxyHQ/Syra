@@ -1,5 +1,11 @@
 import { api } from '@/utils/api';
 import { Track, Album, Artist, Playlist } from '@syra/shared-types';
+import {
+  normalizeAlbumImages,
+  normalizeArtistImages,
+  normalizePlaylistImages,
+  normalizeTrackImages,
+} from '@/utils/catalogImages';
 
 /**
  * Music API service
@@ -10,54 +16,54 @@ export const musicService = {
   // Tracks
   async getTracks(params?: { limit?: number; offset?: number }): Promise<{ tracks: Track[]; total: number; hasMore: boolean }> {
     const response = await api.get<{ tracks: Track[]; total: number; hasMore: boolean }>('/tracks', params);
-    return response.data;
+    return { ...response.data, tracks: response.data.tracks.map(normalizeTrackImages) };
   },
 
   async getTrackById(id: string): Promise<Track> {
     const response = await api.get<Track>(`/tracks/${id}`);
-    return response.data;
+    return normalizeTrackImages(response.data);
   },
 
   async searchTracks(query: string, params?: { limit?: number; offset?: number }): Promise<{ tracks: Track[]; total: number; hasMore: boolean }> {
     const response = await api.get<{ tracks: Track[]; total: number; hasMore: boolean }>('/tracks/search', { q: query, ...params });
-    return response.data;
+    return { ...response.data, tracks: response.data.tracks.map(normalizeTrackImages) };
   },
 
   // Albums
   async getAlbums(params?: { limit?: number; offset?: number }): Promise<{ albums: Album[]; total: number; hasMore: boolean }> {
     const response = await api.get<{ albums: Album[]; total: number; hasMore: boolean }>('/albums', params);
-    return response.data;
+    return { ...response.data, albums: response.data.albums.map(normalizeAlbumImages) };
   },
 
   async getAlbumById(id: string): Promise<Album> {
     const response = await api.get<Album>(`/albums/${id}`);
-    return response.data;
+    return normalizeAlbumImages(response.data);
   },
 
   async getAlbumTracks(albumId: string): Promise<{ tracks: Track[] }> {
     const response = await api.get<{ tracks: Track[] }>(`/albums/${albumId}/tracks`);
-    return response.data;
+    return { ...response.data, tracks: response.data.tracks.map(normalizeTrackImages) };
   },
 
   // Artists
   async getArtists(params?: { limit?: number; offset?: number }): Promise<{ artists: Artist[]; total: number; hasMore: boolean }> {
     const response = await api.get<{ artists: Artist[]; total: number; hasMore: boolean }>('/artists', params);
-    return response.data;
+    return { ...response.data, artists: response.data.artists.map(normalizeArtistImages) };
   },
 
   async getArtistById(id: string): Promise<Artist> {
     const response = await api.get<Artist>(`/artists/${id}`);
-    return response.data;
+    return normalizeArtistImages(response.data);
   },
 
   async getArtistAlbums(artistId: string): Promise<{ albums: Album[] }> {
     const response = await api.get<{ albums: Album[] }>(`/artists/${artistId}/albums`);
-    return response.data;
+    return { ...response.data, albums: response.data.albums.map(normalizeAlbumImages) };
   },
 
   async getArtistTracks(artistId: string, params?: { limit?: number; offset?: number }): Promise<{ tracks: Track[]; total: number; hasMore: boolean }> {
     const response = await api.get<{ tracks: Track[]; total: number; hasMore: boolean }>(`/artists/${artistId}/tracks`, params);
-    return response.data;
+    return { ...response.data, tracks: response.data.tracks.map(normalizeTrackImages) };
   },
 
   async followArtist(artistId: string): Promise<{ success: boolean }> {
@@ -73,17 +79,17 @@ export const musicService = {
   // Playlists
   async getPlaylistById(id: string): Promise<Playlist> {
     const response = await api.get<Playlist>(`/playlists/${id}`);
-    return response.data;
+    return normalizePlaylistImages(response.data);
   },
 
   async getPlaylistTracks(playlistId: string): Promise<{ tracks: Track[]; total: number }> {
     const response = await api.get<{ tracks: Track[]; total: number }>(`/playlists/${playlistId}/tracks`);
-    return response.data;
+    return { ...response.data, tracks: response.data.tracks.map(normalizeTrackImages) };
   },
 
   async getUserPlaylists(): Promise<{ playlists: Playlist[]; total: number }> {
     const response = await api.get<{ playlists: Playlist[]; total: number }>('/playlists');
-    return response.data;
+    return { ...response.data, playlists: response.data.playlists.map(normalizePlaylistImages) };
   },
 
   async createPlaylist(data: { 
@@ -94,7 +100,6 @@ export const musicService = {
     visibility?: string;
   }): Promise<Playlist> {
     const response = await api.post<Playlist>('/playlists', data);
-    return response.data;
+    return normalizePlaylistImages(response.data);
   },
 };
-

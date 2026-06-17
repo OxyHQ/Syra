@@ -94,7 +94,7 @@ describe('getGenres', () => {
     expect(names).toEqual(['Electronic', 'Hip-Hop/Rap', 'Jazz']);
   });
 
-  it('uses a track image as genre cover art fallback when no album/artist art', async () => {
+  it('does not use track images[] external URLs as genre cover art', async () => {
     await seedTrack({
       genre: 'Electronic',
       images: [{ url: 'https://cdn/track-art.jpg', width: 1000, height: 1000, source: 'audius' }],
@@ -105,7 +105,7 @@ describe('getGenres', () => {
 
     const body = res._body as { genres: Array<{ name: string; coverArt: string | null }> };
     const electronic = body.genres.find((g) => g.name === 'Electronic');
-    expect(electronic?.coverArt).toBe('https://cdn/track-art.jpg');
+    expect(electronic?.coverArt).toBeNull();
   });
 });
 

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, Text, Pressable, Platform, ViewStyle, TextInput, Image, ScrollView, GestureResponderEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { webViewStyle } from '@/utils/webStyles';
-import { useRouter, usePathname, useLocalSearchParams } from 'expo-router';
+import { webTextStyle, webViewStyle } from '@/utils/webStyles';
+import { useRouter, usePathname, useLocalSearchParams, type Href } from 'expo-router';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { useOxy } from '@oxyhq/services';
 import { useQuery } from '@tanstack/react-query';
@@ -24,12 +24,18 @@ type HeaderSearchItem = {
   section: 'Tracks' | 'Albums' | 'Artists' | 'Playlists' | 'Users';
   title: string;
   subtitle: string;
-  href: string;
+  href: Href;
   imageUri?: string;
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
   rounded?: boolean;
   onPlay?: () => Promise<void> | void;
 };
+
+const albumHref = (id: string): Href => ({ pathname: '/album/[id]', params: { id } });
+const artistHref = (id: string): Href => ({ pathname: '/artist/[id]', params: { id } });
+const playlistHref = (id: string): Href => ({ pathname: '/playlist/[id]', params: { id } });
+const userHref = (username: string): Href => ({ pathname: '/u/[username]', params: { username } });
+
 /**
  * Base visual height of the top bar (excluding the top safe-area inset, which
  * is added on top on native). Shared with the layout so panel height math stays
@@ -141,10 +147,10 @@ export const TopBar: React.FC = () => {
     }
   };
 
-  const navigateFromSearch = (href: string) => {
+  const navigateFromSearch = (href: Href) => {
     setIsSearchOpen(false);
     setActiveSearchIndex(-1);
-    router.push(href as any);
+    router.push(href);
   };
 
   const playAlbum = async (albumId: string, albumName?: string) => {
@@ -176,7 +182,7 @@ export const TopBar: React.FC = () => {
       section: 'Tracks' as const,
       title: track.title,
       subtitle: track.artistName,
-      href: track.albumId ? `/album/${track.albumId}` : `/search?q=${encodeURIComponent(trimmedQuery)}`,
+      href: track.albumId ? albumHref(track.albumId) : artistHref(track.artistId),
       imageUri: pickImageUrl(track.images, track.coverArt, 64),
       icon: 'music-note-outline' as const,
       onPlay: () => {
@@ -190,7 +196,7 @@ export const TopBar: React.FC = () => {
       section: 'Albums' as const,
       title: album.title,
       subtitle: album.artistName,
-      href: `/album/${album.id}`,
+      href: albumHref(album.id),
       imageUri: album.coverArt,
       icon: 'album' as const,
       onPlay: () => playAlbum(album.id, album.title),
@@ -200,7 +206,7 @@ export const TopBar: React.FC = () => {
       section: 'Artists' as const,
       title: artist.name,
       subtitle: 'Artist',
-      href: `/artist/${artist.id}`,
+      href: artistHref(artist.id),
       imageUri: pickImageUrl(artist.images, artist.image, 64),
       icon: 'account-music-outline' as const,
       rounded: true,
@@ -211,7 +217,7 @@ export const TopBar: React.FC = () => {
       section: 'Playlists' as const,
       title: playlist.name,
       subtitle: `Playlist - ${playlist.trackCount || 0} songs`,
-      href: `/playlist/${playlist.id}`,
+      href: playlistHref(playlist.id),
       imageUri: playlist.coverArt,
       icon: 'playlist-music-outline' as const,
       onPlay: () => playPlaylist(playlist.id, playlist.name),
@@ -221,7 +227,7 @@ export const TopBar: React.FC = () => {
       section: 'Users' as const,
       title: searchUser.displayName,
       subtitle: `@${searchUser.username}`,
-      href: `/u/${searchUser.username}`,
+      href: userHref(searchUser.username),
       imageUri: searchUser.avatar ? oxyServices.getFileDownloadUrl(searchUser.avatar, 'thumb') : undefined,
       icon: 'account-outline' as const,
       rounded: true,
@@ -656,20 +662,20 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     maxHeight: 48,
     ...Platform.select({
-      web: {
+      web: webViewStyle({
         transitionProperty: 'max-height, border-radius, box-shadow, border-color',
         transitionDuration: '180ms',
         transitionTimingFunction: 'cubic-bezier(0.2, 0, 0, 1)',
-      } as any,
+      }),
     }),
   },
   searchSurfaceExpanded: {
     borderRadius: 18,
     maxHeight: 560,
     ...Platform.select({
-      web: {
+      web: webViewStyle({
         boxShadow: '0 18px 40px rgba(0, 0, 0, 0.34)',
-      } as any,
+      }),
     }),
   },
   searchContainer: {
@@ -686,7 +692,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     flex: 1,
     padding: 0,
-    outlineStyle: 'none' as any,
+    ...Platform.select({
+      web: webTextStyle({ outlineStyle: 'none' }),
+    }),
   },
   searchActionSeparator: {
     width: 1,
@@ -741,7 +749,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   searchResultPlayOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.42)',

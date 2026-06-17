@@ -1,11 +1,12 @@
-import type { ExternalTrack, CatalogSource, SourceProvenance, TrackImage } from '@syra/shared-types';
+import type { ExternalTrack, CatalogSource, SourceProvenance } from '@syra/shared-types';
 import { TrackModel } from '../../models/Track';
 import type { ITrack } from '../../models/Track';
 import { ArtistModel } from '../../models/Artist';
 import { upsertArtist } from './upsertArtist';
 import { playCountToPopularity } from './popularity';
-import { assignMissingColors, colorsFromImages, firstImageUrl, replaceColors } from './entityColors';
+import { assignMissingColors, replaceColors } from './entityColors';
 import { hasUsableImages, usableImages } from './externalImages';
+import { mirrorCatalogImage } from './catalogImageAssets';
 
 /**
  * Normalize a string for fuzzy title/artist matching:
@@ -19,21 +20,6 @@ export function normalizeForFuzzy(value: string): string {
     .replace(/[^a-z0-9\s]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
-}
-
-/** Merge external images into an existing array, deduplicating by URL. */
-function mergeImages(
-  existing: TrackImage[] | undefined,
-  incoming: TrackImage[] | undefined,
-): TrackImage[] {
-  const merged: TrackImage[] = [];
-  const seen = new Set<string>();
-  for (const image of [...(incoming ?? []), ...(existing ?? [])]) {
-    if (seen.has(image.url)) continue;
-    seen.add(image.url);
-    merged.push(image);
-  }
-  return merged;
 }
 
 /** Derive the status for a newly-imported track based on its source. */
@@ -203,12 +189,17 @@ export async function upsertTrack(
 
   const releaseDate = parseReleaseDate(external.releaseDate);
   const playCount = external.popularity?.playCount;
-  const incomingImageUrl = firstImageUrl(images);
-  const existingImageUrl = firstImageUrl(existing?.images);
-  const imageChanged = Boolean(existing && incomingImageUrl && incomingImageUrl !== existingImageUrl);
-  const colors = (!existing || imageChanged || !existing.primaryColor || !existing.secondaryColor)
-    ? await colorsFromImages(images)
-    : undefined;
+  const mirroredCover = await mirrorCatalogImage(images, {
+    provider: source,
+    entityType: 'track',
+    externalId: external.externalId,
+    existingImageId: existing?.coverArt,
+    existingImageSizes: existing?.coverArtSizes,
+  });
+  if (!existing && !mirroredCover) {
+    return { track: null, created: false };
+  }
+  const imageChanged = Boolean(mirroredCover && mirroredCover.imageId !== existing?.coverArt);
 
   // --- Create ---
   if (!existing) {
@@ -226,9 +217,11 @@ export async function upsertTrack(
         ...(external.isrc ? { isrc: external.isrc } : {}),
         ...(source === 'audius' ? { audiusId: external.externalId } : {}),
       },
-      images,
-      primaryColor: colors?.primaryColor,
-      secondaryColor: colors?.secondaryColor,
+      coverArt: mirroredCover?.imageId,
+      coverArtSizes: mirroredCover?.imageSizes,
+      images: [],
+      primaryColor: mirroredCover?.primaryColor,
+      secondaryColor: mirroredCover?.secondaryColor,
       streamUrl: external.streamUrl,
       genre: external.genre,
       mood: external.mood,
@@ -256,12 +249,15 @@ export async function upsertTrack(
   if (external.album?.name && !existing.albumName) {
     existing.albumName = external.album.name;
   }
-  // Merge images — never shrink an existing non-empty array to empty.
-  existing.images = mergeImages(existing.images, images);
+  existing.images = [];
+  if (mirroredCover) {
+    existing.coverArt = mirroredCover.imageId;
+    existing.coverArtSizes = mirroredCover.imageSizes;
+  }
   if (imageChanged) {
-    replaceColors(existing, colors);
+    replaceColors(existing, mirroredCover);
   } else {
-    assignMissingColors(existing, colors);
+    assignMissingColors(existing, mirroredCover);
   }
   // Only set streamUrl if not already present.
   if (external.streamUrl && !existing.streamUrl) {

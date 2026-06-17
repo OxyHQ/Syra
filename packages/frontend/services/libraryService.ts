@@ -1,6 +1,7 @@
 import { api } from '@/utils/api';
 import { Track } from '@syra/shared-types';
 import { createScopedLogger } from '@/utils/logger';
+import { normalizeTrackImages } from '@/utils/catalogImages';
 
 const logger = createScopedLogger('LibraryService');
 
@@ -67,7 +68,7 @@ export const libraryService = {
   /** Full liked-track objects (used by the Liked Songs screen). */
   async getLikedTracks(params?: { limit?: number; offset?: number }): Promise<{ tracks: Track[]; total: number }> {
     const response = await api.get<{ tracks: Track[]; total: number }>('/library/tracks', params);
-    return response.data;
+    return { ...response.data, tracks: response.data.tracks.map(normalizeTrackImages) };
   },
 
   async likeTrack(trackId: string): Promise<MutationResult> {
@@ -121,7 +122,8 @@ export const libraryService = {
    */
   async getRecentlyPlayed(limit: number = 20): Promise<{ tracks: Track[] }> {
     const response = await api.get<{ tracks: Track[] }>('/library/recently-played', { limit });
-    return { tracks: Array.isArray(response.data?.tracks) ? response.data.tracks : [] };
+    const tracks = Array.isArray(response.data?.tracks) ? response.data.tracks : [];
+    return { tracks: tracks.map(normalizeTrackImages) };
   },
 
   /**
