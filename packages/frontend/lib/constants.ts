@@ -21,8 +21,10 @@ export const INITIALIZATION_TIMEOUT = {
  * Ensures consistent stacking order across the application
  */
 export const Z_INDEX = {
+  CARD_ACTIVE: 20,
+  CARD_ACTIONS: 30,
+  CARD_ACTIONS_MENU: 40,
   PORTAL_OUTLET: 9999,
   MODAL: 10000,
   FLOATING_ACTION_BUTTON: 10000,
 } as const;
-

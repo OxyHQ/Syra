@@ -6,6 +6,7 @@ import { Menu } from '@oxyhq/bloom';
 import { Ionicons } from '@expo/vector-icons';
 import type { TrackImage } from '@syra/shared-types';
 import { pickImageUrl } from '@/utils/pickImage';
+import { Z_INDEX } from '@/lib/constants';
 
 interface MediaCardProps {
   title: string;
@@ -33,6 +34,13 @@ function colorWithAlpha(color: string | undefined, alpha: number): string | unde
   return `rgba(${parseInt(r, 16)}, ${parseInt(g, 16)}, ${parseInt(b, 16)}, ${alpha})`;
 }
 
+function shouldHideIdleActionsByDefault(): boolean {
+  if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.matchMedia) {
+    return false;
+  }
+  return window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+}
+
 /**
  * Media Card Component
  * Spotify-like card for displaying playlists, albums, artists
@@ -57,7 +65,7 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
   const resolvedImageUri = pickImageUrl(images, imageUri, 300);
   const [isHovered, setIsHovered] = React.useState(false);
   const [isPlayButtonHovered, setIsPlayButtonHovered] = React.useState(false);
-  const [hideIdleActions, setHideIdleActions] = React.useState(Platform.OS === 'web');
+  const [hideIdleActions, setHideIdleActions] = React.useState(shouldHideIdleActionsByDefault);
   const menuControl = Menu.useMenuControl();
   const hoverOutTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const isPlayButtonHoveredRef = React.useRef(false);
@@ -80,7 +88,6 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
 
   React.useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.matchMedia) {
-      setHideIdleActions(false);
       return undefined;
     }
 
@@ -344,7 +351,7 @@ const styles = StyleSheet.create({
     }),
   }),
   containerRaised: {
-    zIndex: 2000,
+    zIndex: Z_INDEX.CARD_ACTIVE,
   },
   imageContainer: {
     alignSelf: 'stretch',
@@ -394,7 +401,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     width: 28,
     height: 28,
-    zIndex: 2001,
+    zIndex: Z_INDEX.CARD_ACTIONS,
   },
   menuTrigger: {
     width: 28,
@@ -432,7 +439,7 @@ const styles = StyleSheet.create({
         position: 'absolute',
         top: 32,
         right: 0,
-        zIndex: 2002,
+        zIndex: Z_INDEX.CARD_ACTIONS_MENU,
       },
     }),
   }),
