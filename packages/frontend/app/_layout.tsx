@@ -296,7 +296,7 @@ export default function RootLayout() {
 
   // Load eager settings that don't block app initialization
   useEffect(() => {
-    AppInitializer.loadEagerSettings(oxyServices);
+    AppInitializer.loadEagerSettings();
     prefetchHomeBrowse(queryClient);
   }, [queryClient]);
 
@@ -324,7 +324,7 @@ export default function RootLayout() {
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
-      const result = await AppInitializer.initializeApp(true, oxyServices);
+      const result = await AppInitializer.initializeApp(true);
       if (cancelled) return;
       if (!result.success) {
         console.error('App initialization failed:', result.error);

@@ -6,8 +6,6 @@
 import { Platform } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 
-import { OxyServices } from '@oxyhq/core';
-
 import { useAppearanceStore } from '@/store/appearanceStore';
 import { useVideoMuteStore } from '@/stores/videoMuteStore';
 import {
@@ -15,7 +13,6 @@ import {
   setupNotifications,
 } from '@/utils/notifications';
 import { initializeI18n } from './i18n';
-import { INITIALIZATION_TIMEOUT } from './constants';
 
 export interface InitializationResult {
   success: boolean;
@@ -29,21 +26,6 @@ export interface AppInitializationState {
   authReady: boolean;
   appearanceLoaded: boolean;
   videoMuteLoaded: boolean;
-}
-
-/**
- * Waits for authentication to be ready
- */
-async function waitForAuth(
-  services: OxyServices,
-  timeoutMs: number = INITIALIZATION_TIMEOUT.AUTH
-): Promise<boolean> {
-  try {
-    return await services.waitForAuth(timeoutMs);
-  } catch (e) {
-    console.warn('waitForAuth failed:', e);
-    return false;
-  }
 }
 
 /**
@@ -65,19 +47,9 @@ async function setupNotificationsIfNeeded(): Promise<void> {
 /**
  * Loads user appearance settings
  */
-async function loadAppearanceSettings(services?: OxyServices, isAuthenticated?: boolean): Promise<void> {
+async function loadAppearanceSettings(): Promise<void> {
   try {
-    // Check auth state if services provided
-    let authState = isAuthenticated;
-    if (services && authState === undefined) {
-      try {
-        // Quick check if auth is ready (with short timeout)
-        authState = await services.waitForAuth(100);
-      } catch {
-        authState = false;
-      }
-    }
-    await useAppearanceStore.getState().loadMySettings(authState);
+    await useAppearanceStore.getState().loadMySettings(false);
   } catch (error) {
     console.warn('Failed to load appearance settings:', error);
   }
@@ -117,10 +89,7 @@ export class AppInitializer {
   /**
    * Initializes the entire app
    */
-  static async initializeApp(
-    fontsLoaded: boolean,
-    services: OxyServices
-  ): Promise<InitializationResult> {
+  static async initializeApp(fontsLoaded: boolean): Promise<InitializationResult> {
     if (!fontsLoaded) {
       return {
         success: false,
@@ -129,10 +98,6 @@ export class AppInitializer {
     }
 
     try {
-      // Keep the shell bootstrap independent from auth. OxyProvider owns web
-      // SSO callback handling, so blocking here can deadlock on /__oxy/sso-callback.
-      void services;
-
       await Promise.allSettled([
         setupNotificationsIfNeeded(),
         loadVideoMuteState(),
@@ -156,24 +121,10 @@ export class AppInitializer {
 
   /**
    * Loads eager settings that don't block app initialization
-   * Should be called after auth is ready to avoid 401 errors
    */
-  static async loadEagerSettings(services?: OxyServices): Promise<void> {
-    // Check auth state before loading settings
-    let isAuthenticated = false;
-    if (services) {
-      try {
-        // Quick check if auth is ready (with short timeout)
-        isAuthenticated = await services.waitForAuth(100);
-      } catch {
-        // Auth not ready, will skip authenticated API calls
-        isAuthenticated = false;
-      }
-    }
-
-    // Load these in parallel as they don't block app startup
+  static async loadEagerSettings(): Promise<void> {
     await Promise.allSettled([
-      loadAppearanceSettings(services, isAuthenticated),
+      loadAppearanceSettings(),
       loadVideoMuteState(),
     ]);
   }
