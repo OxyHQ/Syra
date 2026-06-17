@@ -158,7 +158,7 @@ const HomeScreen: React.FC = () => {
       toValue: 1,
       duration: 520,
       easing: Easing.bezier(0.16, 1, 0.3, 1),
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== 'web',
     });
 
     animation.start(({ finished }) => {

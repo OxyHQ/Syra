@@ -20,6 +20,41 @@ const STREAM_CACHE_FALLBACK_TTL_MS = 10 * 60 * 1000;
 
 const streamCache = new Map<string, StreamCacheEntry>();
 
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (typeof error === 'string' && error.trim()) {
+    return error;
+  }
+
+  if (!error || typeof error !== 'object') {
+    return 'Unknown error';
+  }
+
+  const record = error as Record<string, unknown>;
+  const response = record.response;
+  if (response && typeof response === 'object') {
+    const responseRecord = response as Record<string, unknown>;
+    const data = responseRecord.data;
+    if (data && typeof data === 'object') {
+      const dataRecord = data as Record<string, unknown>;
+      if (typeof dataRecord.message === 'string' && dataRecord.message.trim()) return dataRecord.message;
+      if (typeof dataRecord.error === 'string' && dataRecord.error.trim()) return dataRecord.error;
+    }
+    if (typeof responseRecord.status === 'number') {
+      return `HTTP ${responseRecord.status}`;
+    }
+  }
+
+  if (typeof record.message === 'string' && record.message.trim()) return record.message;
+  if (typeof record.error === 'string' && record.error.trim()) return record.error;
+  if (typeof record.status === 'number') return `HTTP ${record.status}`;
+
+  return 'Unknown error';
+}
+
 function getResolutionExpiryMs(resolution: StreamResolution): number {
   if (!resolution.expiresAt) {
     return Date.now() + STREAM_CACHE_FALLBACK_TTL_MS;
@@ -80,7 +115,7 @@ export async function resolveStream(trackId: string): Promise<StreamResolution> 
     .catch((error) => {
       streamCache.delete(trackId);
       throw new Error(
-        `Failed to resolve stream for ${trackId}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Failed to resolve stream for ${trackId}: ${getErrorMessage(error)}`,
       );
     });
 

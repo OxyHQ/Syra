@@ -198,8 +198,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
   const shouldResolveViaStreamEndpoint = (track: Track): boolean => {
     const hasHls = track.status === 'ready' && Array.isArray(track.hls) && track.hls.length > 0;
-    const isAudius = track.source === 'audius' && !track.audioSource;
-    return hasHls || isAudius;
+    const canUseDirectAudius =
+      track.source === 'audius' &&
+      !track.audioSource &&
+      useMusicPreferencesStore.getState().preferences?.directAudiusStreaming === true;
+
+    return hasHls || canUseDirectAudius;
   };
 
   const prefetchQueueStreams = (
@@ -374,6 +378,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
    */
   const getAudioUrl = async (track: Track): Promise<string> => {
     if (!track.audioSource) {
+      if (track.source === 'audius') {
+        throw new Error('This Audius track is not available through Syra streaming. Enable direct Audius streaming in Settings to try the provider stream.');
+      }
       throw new Error(`Track ${track.id} has no playable audio source`);
     }
 

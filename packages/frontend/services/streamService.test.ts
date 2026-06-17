@@ -100,11 +100,24 @@ describe('resolveStream', () => {
     );
   });
 
-  it('throws a descriptive error for non-Error rejections', async () => {
+  it('throws a descriptive error for string rejections', async () => {
     mockGet.mockRejectedValueOnce('timeout');
 
     await expect(resolveStream('t4')).rejects.toThrow(
-      'Failed to resolve stream for t4: Unknown error',
+      'Failed to resolve stream for t4: timeout',
+    );
+  });
+
+  it('throws the backend error message for HTTP-style rejections', async () => {
+    mockGet.mockRejectedValueOnce({
+      response: {
+        status: 422,
+        data: { error: 'Track not playable' },
+      },
+    });
+
+    await expect(resolveStream('t5')).rejects.toThrow(
+      'Failed to resolve stream for t5: Track not playable',
     );
   });
 });
