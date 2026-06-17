@@ -36,6 +36,8 @@ import imagesRoutes from './src/routes/images.routes';
 import streamRoutes from './src/routes/stream.routes';
 import lyricsRoutes from './src/routes/lyrics.routes';
 import sourcesRoutes from './src/routes/sources.routes';
+import recommendationsRoutes from './src/routes/recommendations.routes';
+import { startRecommendationScheduler } from './src/services/recommendations/scheduler';
 
 const app = express();
 
@@ -273,6 +275,7 @@ authenticatedApiRouter.use('/audio', audioRoutes);
 authenticatedApiRouter.use('/queue', queueRoutes);
 authenticatedApiRouter.use('/music', musicPreferencesRoutes);
 authenticatedApiRouter.use('/copyright', copyrightRoutes);
+authenticatedApiRouter.use('/recommendations', recommendationsRoutes);
 
 app.use('/api', publicApiRouter);
 app.use('/api', oxy.auth(), authenticatedApiRouter);
@@ -369,6 +372,11 @@ const bootServer = async () => {
       logger.warn('Server started without database connection - some features may be unavailable');
     }
   });
+
+  // Background recommendation maintenance (co-occurrence graph + taste decay).
+  // Runs on a timer guarded by a Redis distributed lock so it executes on a
+  // single instance per tick across the fleet.
+  startRecommendationScheduler();
 };
 
 if (require.main === module) {

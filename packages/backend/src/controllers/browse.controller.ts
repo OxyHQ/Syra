@@ -6,6 +6,8 @@ import { PlaylistModel } from '../models/Playlist';
 import { formatTracksWithCoverArt, formatArtistsWithImage, formatPlaylistsWithCoverArt, formatAlbumsWithCoverArt } from '../utils/musicHelpers';
 import { isDatabaseConnected } from '../utils/database';
 import { withImageFirstSort } from '../utils/imageFirstSort';
+import type { AuthRequest } from '../middleware/auth';
+import { getMadeForYou as getPersonalisedMadeForYou } from '../services/recommendations/recommendationService';
 
 /**
  * Default genre colors for genre cards (Spotify-like colors)
@@ -66,6 +68,7 @@ export const getHomeBrowse = async (req: Request, res: Response, next: NextFunct
       return res.status(503).json({ error: 'Database not available' });
     }
 
+    const userId = (req as AuthRequest).user?.id;
     const tracksLimit = parseBoundedLimit(req.query.tracksLimit, 20, 50);
     const sectionLimit = parseBoundedLimit(req.query.sectionLimit, 8, 20);
     const madeForYouHalf = Math.max(1, Math.floor(sectionLimit / 2));
@@ -81,7 +84,7 @@ export const getHomeBrowse = async (req: Request, res: Response, next: NextFunct
         .sort(withImageFirstSort('album', { popularity: -1, playCount: -1 }))
         .limit(madeForYouHalf)
         .lean(),
-      PlaylistModel.find({ isPublic: true })
+      PlaylistModel.find({ visibility: 'public' })
         .sort(withImageFirstSort('playlist', { followers: -1, createdAt: -1 }))
         .limit(madeForYouHalf)
         .lean(),
@@ -99,29 +102,60 @@ export const getHomeBrowse = async (req: Request, res: Response, next: NextFunct
         .lean(),
     ]);
 
-    const sparse = madeForYouAlbums.length + madeForYouPlaylists.length < madeForYouHalf;
-    const [fallbackTracks, fallbackArtists] = sparse
-      ? await Promise.all([
-          TrackModel.find({ isAvailable: true })
-            .sort(withImageFirstSort('track', { popularity: -1, playCount: -1, createdAt: -1 }))
-            .limit(sectionLimit)
-            .lean(),
-          ArtistModel.find()
-            .sort(withImageFirstSort('artist', { popularity: -1, 'stats.followers': -1 }))
-            .limit(sectionLimit)
-            .lean(),
-        ])
-      : [[], []];
+    // Personalised "Made For You": when the request is authenticated, surface a
+    // taste-driven blend of fresh tracks + artists from the recommendation
+    // engine. Falls back to popular albums/playlists for guests (and is honest
+    // about it via the `personalized` flag).
+    let madeForYou: {
+      albums: unknown[];
+      playlists: unknown[];
+      tracks: unknown[];
+      artists: unknown[];
+      personalized: boolean;
+    };
 
-    const formattedTracks = await formatTracksWithCoverArt(tracks);
-    setDiscoveryCache(res);
-    res.json({
-      madeForYou: {
+    if (userId) {
+      const personalised = await getPersonalisedMadeForYou(userId, sectionLimit);
+      madeForYou = {
+        albums: formatAlbumsWithCoverArt(madeForYouAlbums),
+        playlists: formatPlaylistsWithCoverArt(madeForYouPlaylists),
+        tracks: await formatTracksWithCoverArt(personalised.tracks),
+        artists: formatArtistsWithImage(personalised.artists),
+        personalized: personalised.personalized,
+      };
+    } else {
+      const sparse = madeForYouAlbums.length + madeForYouPlaylists.length < madeForYouHalf;
+      const [fallbackTracks, fallbackArtists] = sparse
+        ? await Promise.all([
+            TrackModel.find({ isAvailable: true })
+              .sort(withImageFirstSort('track', { popularity: -1, playCount: -1, createdAt: -1 }))
+              .limit(sectionLimit)
+              .lean(),
+            ArtistModel.find()
+              .sort(withImageFirstSort('artist', { popularity: -1, 'stats.followers': -1 }))
+              .limit(sectionLimit)
+              .lean(),
+          ])
+        : [[], []];
+      madeForYou = {
         albums: formatAlbumsWithCoverArt(madeForYouAlbums),
         playlists: formatPlaylistsWithCoverArt(madeForYouPlaylists),
         tracks: await formatTracksWithCoverArt(fallbackTracks),
         artists: formatArtistsWithImage(fallbackArtists),
-      },
+        personalized: false,
+      };
+    }
+
+    const formattedTracks = await formatTracksWithCoverArt(tracks);
+    if (userId) {
+      // The madeForYou section is personalised; never store it in a shared cache.
+      res.set('Cache-Control', 'private, max-age=60, stale-while-revalidate=300');
+      res.set('Vary', 'Authorization');
+    } else {
+      setDiscoveryCache(res);
+    }
+    res.json({
+      madeForYou,
       popularAlbums: {
         albums: formatAlbumsWithCoverArt(popularAlbums),
         total: popularAlbums.length,
@@ -348,7 +382,10 @@ export const getPopularArtists = async (req: Request, res: Response, next: NextF
 
 /**
  * GET /api/browse/made-for-you
- * Get personalized recommendations (uses popular content for now)
+ * Personalised recommendations. For a signed-in user, returns a taste-driven
+ * blend of fresh tracks + artists from the recommendation engine plus popular
+ * albums/playlists to browse. Guests receive popular content (flagged via
+ * `personalized: false`).
  */
 export const getMadeForYou = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -356,25 +393,37 @@ export const getMadeForYou = async (req: Request, res: Response, next: NextFunct
       return res.status(503).json({ error: 'Database not available' });
     }
 
+    const userId = (req as AuthRequest).user?.id;
     const limit = parseInt(req.query.limit as string) || 20;
     const half = Math.max(1, Math.floor(limit / 2));
 
-    // Mix of popular albums and public playlists.
-    // In the future, this could use user listening history for personalization.
     const [albums, playlists] = await Promise.all([
       AlbumModel.find()
         .sort(withImageFirstSort('album', { popularity: -1, playCount: -1 }))
         .limit(half)
         .lean(),
-      PlaylistModel.find({ isPublic: true })
+      PlaylistModel.find({ visibility: 'public' })
         .sort(withImageFirstSort('playlist', { followers: -1, createdAt: -1 }))
         .limit(half)
         .lean(),
     ]);
 
-    // Fallback: when albums + playlists are sparse (early catalog, source sync
-    // hasn't assembled albums yet), surface popular tracks and artists so the
-    // section is never empty while the catalog has playable content.
+    if (userId) {
+      const personalised = await getPersonalisedMadeForYou(userId, limit);
+      res.set('Cache-Control', 'private, max-age=60, stale-while-revalidate=300');
+      res.set('Vary', 'Authorization');
+      res.json({
+        albums: formatAlbumsWithCoverArt(albums),
+        playlists: formatPlaylistsWithCoverArt(playlists),
+        tracks: await formatTracksWithCoverArt(personalised.tracks),
+        artists: formatArtistsWithImage(personalised.artists),
+        personalized: personalised.personalized,
+      });
+      return;
+    }
+
+    // Guest fallback: when albums + playlists are sparse (early catalog), surface
+    // popular tracks and artists so the section is never empty.
     const sparse = albums.length + playlists.length < half;
     const [tracks, artists] = sparse
       ? await Promise.all([
@@ -395,6 +444,7 @@ export const getMadeForYou = async (req: Request, res: Response, next: NextFunct
       playlists: formatPlaylistsWithCoverArt(playlists),
       tracks: await formatTracksWithCoverArt(tracks),
       artists: formatArtistsWithImage(artists),
+      personalized: false,
     });
   } catch (error) {
     next(error);

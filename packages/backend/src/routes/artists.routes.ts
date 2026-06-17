@@ -5,6 +5,7 @@ import {
   getArtistAlbums,
   getArtistTracks,
 } from '../controllers/artists.controller';
+import { getRelatedArtistsHandler } from '../controllers/recommendations.controller';
 
 const router = Router();
 
@@ -14,5 +15,6 @@ router.get('/', getArtists);
 router.get('/:id', getArtistById);
 router.get('/:id/albums', getArtistAlbums);
 router.get('/:id/tracks', getArtistTracks);
+router.get('/:id/related', getRelatedArtistsHandler);
 
 export default router;

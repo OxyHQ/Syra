@@ -6,6 +6,21 @@ import { RecentlyPlayedModel } from '../models/RecentlyPlayed';
 import { TrackModel } from '../models/Track';
 import { formatTracksWithCoverArt } from '../utils/musicHelpers';
 import { getParam } from '../utils/reqParams';
+import { recordPlay } from '../services/recommendations/recordPlay';
+import { applyLikeSignal, applyFollowSignal } from '../services/recommendations/tasteSignals';
+import { LISTENING_SOURCES, type ListeningSource } from '../models/ListeningEvent';
+
+/** Validate a client-supplied listening source against the known set. */
+function parseListeningSource(value: unknown): ListeningSource {
+  if (typeof value !== 'string') return 'unknown';
+  const source = value.trim();
+  return LISTENING_SOURCES.includes(source as ListeningSource) ? (source as ListeningSource) : 'unknown';
+}
+
+function parseOptionalNonNegativeNumber(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  return value >= 0 ? value : undefined;
+}
 
 /** Default number of distinct recent tracks returned by GET /recently-played. */
 const RECENTLY_PLAYED_DEFAULT_LIMIT = 20;
@@ -148,6 +163,7 @@ export const likeTrack = async (req: AuthRequest, res: Response, next: NextFunct
     }
 
     const likedTracks = await addToLibrary(userId, 'likedTracks', id);
+    await applyLikeSignal(userId, id);
     res.json({ ok: true, likedTracks });
   } catch (error) {
     next(error);
@@ -228,6 +244,7 @@ export const followArtist = async (req: AuthRequest, res: Response, next: NextFu
     }
 
     const followedArtists = await addToLibrary(userId, 'followedArtists', id);
+    await applyFollowSignal(userId, id);
     res.json({ ok: true, followedArtists });
   } catch (error) {
     next(error);
@@ -378,6 +395,9 @@ export const recordRecentlyPlayed = async (req: AuthRequest, res: Response, next
     if (!trackId) {
       return res.status(400).json({ error: 'trackId is required' });
     }
+    if (!mongoose.Types.ObjectId.isValid(trackId)) {
+      return res.status(400).json({ error: 'Invalid trackId' });
+    }
 
     const now = new Date();
     const dedupSince = new Date(now.getTime() - RECENTLY_PLAYED_DEDUP_WINDOW_MS);
@@ -409,7 +429,15 @@ export const recordRecentlyPlayed = async (req: AuthRequest, res: Response, next
       }
     }
 
-    res.json({ ok: true });
+    const listening = await recordPlay({
+      oxyUserId: userId,
+      trackId,
+      listenedSec: parseOptionalNonNegativeNumber(req.body?.listenedSec),
+      completion: parseOptionalNonNegativeNumber(req.body?.completion),
+      source: parseListeningSource(req.body?.source),
+    });
+
+    res.json({ ok: true, listening });
   } catch (error) {
     next(error);
   }
