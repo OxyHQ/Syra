@@ -21,6 +21,7 @@ import { MediaHeaderSkeleton } from '@/components/skeletons';
 import { formatTotalDuration } from '@/utils/musicUtils';
 import { useLibrary, useToggleSavePlaylist } from '@/hooks/useLibrary';
 import { webViewStyle } from '@/utils/webStyles';
+import { pickImageUrl } from '@/utils/pickImage';
 
 const HEADER_HEIGHT = 400;
 
@@ -168,6 +169,10 @@ const PlaylistScreen: React.FC = () => {
     );
   }
 
+  const playlistStickyImage = pickImageUrl(undefined, playlist.coverArt, 64, playlist.coverArtSizes);
+  const playlistHeroImage = pickImageUrl(undefined, playlist.coverArt, 1000, playlist.coverArtSizes);
+  const playlistInfoImage = pickImageUrl(undefined, playlist.coverArt, 180, playlist.coverArtSizes);
+
   return (
     <>
       <SEO
@@ -191,9 +196,9 @@ const PlaylistScreen: React.FC = () => {
             {/* Center - Title and cover art */}
             <View style={styles.stickyHeaderCenter}>
               <View style={[styles.stickyHeaderImageContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
-                {playlist.coverArt ? (
+                {playlistStickyImage ? (
                   <Image
-                    source={{ uri: playlist.coverArt }}
+                    source={{ uri: playlistStickyImage }}
                     style={styles.stickyHeaderImage}
                     resizeMode="cover"
                   />
@@ -244,9 +249,9 @@ const PlaylistScreen: React.FC = () => {
         >
           {/* Parallax Header Section */}
           <Animated.View style={[styles.headerContainer, headerAnimatedStyle]}>
-            {playlist.coverArt ? (
+            {playlistHeroImage ? (
               <Image
-                source={{ uri: playlist.coverArt }}
+                source={{ uri: playlistHeroImage }}
                 style={styles.headerImage}
                 resizeMode="cover"
               />
@@ -278,9 +283,9 @@ const PlaylistScreen: React.FC = () => {
             {/* Playlist Info */}
             <View style={styles.infoContainer}>
               <View style={styles.infoHeader}>
-                {playlist.coverArt && (
+                {playlistInfoImage && (
                   <Image
-                    source={{ uri: playlist.coverArt }}
+                    source={{ uri: playlistInfoImage }}
                     style={styles.infoCoverImage}
                     resizeMode="cover"
                   />

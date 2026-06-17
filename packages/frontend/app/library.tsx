@@ -233,7 +233,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                 >
                   {playlist.coverArt ? (
                     <Image
-                      source={{ uri: playlist.coverArt }}
+                      source={{ uri: pickImageUrl(undefined, playlist.coverArt, 80, playlist.coverArtSizes) }}
                       style={styles.playlistImage}
                       contentFit="cover"
                     />
@@ -273,7 +273,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                 >
                   {(artist.image || artist.images?.length) ? (
                     <Image
-                      source={{ uri: pickImageUrl(artist.images, artist.image, 150) }}
+                      source={{ uri: pickImageUrl(artist.images, artist.image, 80, artist.imageSizes) }}
                       style={styles.artistImage}
                       contentFit="cover"
                     />
@@ -313,7 +313,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                 >
                   {album.coverArt ? (
                     <Image
-                      source={{ uri: album.coverArt }}
+                      source={{ uri: pickImageUrl(undefined, album.coverArt, 80, album.coverArtSizes) }}
                       style={styles.playlistImage}
                       contentFit="cover"
                     />
@@ -556,4 +556,3 @@ const styles = StyleSheet.create({
 });
 
 export default LibraryScreen;
-

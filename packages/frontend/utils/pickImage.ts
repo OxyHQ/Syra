@@ -1,5 +1,26 @@
-import type { TrackImage } from '@syra/shared-types';
+import type { CatalogImageSizes, CatalogImageVariant, TrackImage } from '@syra/shared-types';
 import { resolveCatalogImageUrl } from './catalogImages';
+
+type ImageCandidate = {
+  url: string;
+  width: number;
+};
+
+function normalizeCandidate(urlValue: string | undefined, widthValue: number | undefined): ImageCandidate | null {
+  if (!urlValue) return null;
+  const url = resolveCatalogImageUrl(urlValue);
+  if (!url) return null;
+
+  return {
+    url,
+    width: typeof widthValue === 'number' && widthValue > 0 ? widthValue : 0,
+  };
+}
+
+function candidateFromVariant(variant: CatalogImageVariant | undefined): ImageCandidate | null {
+  if (!variant) return null;
+  return normalizeCandidate(variant.url, variant.width) ?? normalizeCandidate(variant.id, variant.width);
+}
 
 /**
  * Pick the best image URL for a target render width.
@@ -16,23 +37,23 @@ export function pickImageUrl(
   images: TrackImage[] | undefined,
   fallback: string | undefined,
   preferredWidth: number,
+  sizes?: CatalogImageSizes,
 ): string | undefined {
-  const normalizedFallback = resolveCatalogImageUrl(fallback) ?? fallback;
-  if (!images || images.length === 0) return normalizedFallback;
+  const normalizedFallback = resolveCatalogImageUrl(fallback);
 
-  // Normalise: treat missing/non-positive width as 0 so comparisons are safe.
-  const normalised = images
-    .map((img) => {
-      const url = resolveCatalogImageUrl(img.url) ?? img.url;
-      return {
-        url,
-        width: typeof img.width === 'number' && img.width > 0 ? img.width : 0,
-      };
-    })
-    .filter((img) => !/^https?:\/\//i.test(img.url) || img.url.includes('/api/images/'));
+  const normalised = [
+    ...Object.values(sizes ?? {})
+      .map(candidateFromVariant)
+      .filter((img): img is ImageCandidate => img !== null),
+    ...(images ?? [])
+      .map((img) => normalizeCandidate(img.url, img.width))
+      .filter((img): img is ImageCandidate => img !== null),
+  ];
+
+  if (normalised.length === 0) return normalizedFallback;
 
   // Find the smallest image that is still at least as wide as the target.
-  let best: { url: string; width: number } | undefined;
+  let best: ImageCandidate | undefined;
   for (const img of normalised) {
     if (img.width >= preferredWidth) {
       if (best === undefined || img.width < best.width) {

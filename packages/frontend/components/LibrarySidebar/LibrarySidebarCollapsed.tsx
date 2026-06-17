@@ -79,7 +79,7 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
           >
             {playlist.coverArt ? (
               <Image
-                source={{ uri: playlist.coverArt }}
+                source={{ uri: pickImageUrl(undefined, playlist.coverArt, 64, playlist.coverArtSizes) }}
                 style={styles.playlistIcon}
                 contentFit="cover"
               />
@@ -104,7 +104,7 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
           >
             {(artist.image || artist.images?.length) ? (
               <Image
-                source={{ uri: pickImageUrl(artist.images, artist.image, 150) }}
+                source={{ uri: pickImageUrl(artist.images, artist.image, 64, artist.imageSizes) }}
                 style={styles.artistIcon}
                 contentFit="cover"
               />
@@ -129,7 +129,7 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
           >
             {album.coverArt ? (
               <Image
-                source={{ uri: album.coverArt }}
+                source={{ uri: pickImageUrl(undefined, album.coverArt, 64, album.coverArtSizes) }}
                 style={styles.playlistIcon}
                 contentFit="cover"
               />
@@ -215,4 +215,3 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 });
-

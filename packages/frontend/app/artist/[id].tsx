@@ -207,7 +207,7 @@ const ArtistScreen: React.FC = () => {
               <View style={[styles.stickyHeaderImageContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
                 {(artist.image || artist.images?.length) ? (
                   <Image
-                    source={{ uri: pickImageUrl(artist.images, artist.image, 150) }}
+                    source={{ uri: pickImageUrl(artist.images, artist.image, 64, artist.imageSizes) }}
                     style={styles.stickyHeaderImage}
                     resizeMode="cover"
                   />
@@ -261,7 +261,7 @@ const ArtistScreen: React.FC = () => {
           <Animated.View style={[styles.headerContainer, headerAnimatedStyle]}>
             {(artist.image || artist.images?.length) ? (
               <Image
-                source={{ uri: pickImageUrl(artist.images, artist.image, 1000) }}
+                source={{ uri: pickImageUrl(artist.images, artist.image, 1000, artist.imageSizes) }}
                 style={styles.headerImage}
                 resizeMode="cover"
               />
@@ -295,7 +295,7 @@ const ArtistScreen: React.FC = () => {
               <View style={styles.infoHeader}>
                 {(artist.image || artist.images?.length) && (
                   <Image
-                    source={{ uri: pickImageUrl(artist.images, artist.image, 150) }}
+                    source={{ uri: pickImageUrl(artist.images, artist.image, 180, artist.imageSizes) }}
                     style={styles.infoImage}
                     resizeMode="cover"
                   />
@@ -437,6 +437,7 @@ const ArtistScreen: React.FC = () => {
                         subtitle={album.artistName}
                         type="album"
                         imageUri={album.coverArt}
+                        imageSizes={album.coverArtSizes}
                         primaryColor={album.primaryColor}
                         onPress={() => router.push(`/album/${album.id}`)}
                       />

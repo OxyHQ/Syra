@@ -14,6 +14,7 @@ import { MediaHeaderSkeleton } from '@/components/skeletons';
 import { formatDuration, formatTotalDuration } from '@/utils/musicUtils';
 import { useLibrary, useToggleSaveAlbum, useToggleLikeTrack } from '@/hooks/useLibrary';
 import { LinearGradient } from 'expo-linear-gradient';
+import { pickImageUrl } from '@/utils/pickImage';
 
 /**
  * Album Screen
@@ -108,6 +109,8 @@ const AlbumScreen: React.FC = () => {
 
   const releaseDateFormatted = formatReleaseDate(album.releaseDate);
   const totalDurationFormatted = formatTotalDuration(album.totalDuration);
+  const albumCoverImage = pickImageUrl(undefined, album.coverArt, 520, album.coverArtSizes);
+  const albumThumbImage = pickImageUrl(undefined, album.coverArt, 64, album.coverArtSizes);
   const gradientColors: readonly [string, string, string] = [
     album.primaryColor ?? theme.colors.backgroundSecondary,
     album.secondaryColor ?? theme.colors.background,
@@ -130,9 +133,9 @@ const AlbumScreen: React.FC = () => {
           <View style={styles.header}>
             {/* Album Cover */}
             <View style={styles.coverContainer}>
-              {album.coverArt ? (
+              {albumCoverImage ? (
                 <Image
-                  source={{ uri: album.coverArt }}
+                  source={{ uri: albumCoverImage }}
                   style={styles.coverImage}
                   resizeMode="cover"
                 />
@@ -155,7 +158,7 @@ const AlbumScreen: React.FC = () => {
                 onPress={() => router.push(`/artist/${album.artistId}`)}
               >
                 <Avatar
-                  source={album.coverArt}
+                  source={albumThumbImage}
                   size={24}
                   style={styles.artistAvatar}
                 />

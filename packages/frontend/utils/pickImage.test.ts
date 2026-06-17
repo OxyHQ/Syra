@@ -1,5 +1,5 @@
 import { pickImageUrl } from './pickImage';
-import type { TrackImage } from '@syra/shared-types';
+import type { CatalogImageSizes, TrackImage } from '@syra/shared-types';
 
 const IMAGES: TrackImage[] = [
   { url: '/api/images/111111111111111111111111', width: 150, height: 150, source: 'audius' },
@@ -9,6 +9,26 @@ const IMAGES: TrackImage[] = [
 
 const API_IMAGES = 'http://localhost:3000/api/images';
 const FALLBACK = '/api/images/aaaaaaaaaaaaaaaaaaaaaaaa';
+const SIZES: CatalogImageSizes = {
+  small: {
+    id: '444444444444444444444444',
+    url: '/api/images/444444444444444444444444',
+    width: 160,
+    height: 160,
+  },
+  medium: {
+    id: '555555555555555555555555',
+    url: '/api/images/555555555555555555555555',
+    width: 320,
+    height: 320,
+  },
+  large: {
+    id: '666666666666666666666666',
+    url: '/api/images/666666666666666666666666',
+    width: 640,
+    height: 640,
+  },
+};
 
 describe('pickImageUrl — size selection', () => {
   it('preferredWidth 80 → picks smallest fitting (150)', () => {
@@ -37,6 +57,12 @@ describe('pickImageUrl — size selection', () => {
 
   it('preferredWidth 1000 → picks exactly 1000', () => {
     expect(pickImageUrl(IMAGES, FALLBACK, 1000)).toBe(`${API_IMAGES}/333333333333333333333333`);
+  });
+
+  it('uses catalog size variants before the single coverArt fallback', () => {
+    expect(pickImageUrl(undefined, FALLBACK, 64, SIZES)).toBe(`${API_IMAGES}/444444444444444444444444`);
+    expect(pickImageUrl(undefined, FALLBACK, 240, SIZES)).toBe(`${API_IMAGES}/555555555555555555555555`);
+    expect(pickImageUrl(undefined, FALLBACK, 500, SIZES)).toBe(`${API_IMAGES}/666666666666666666666666`);
   });
 });
 
@@ -93,5 +119,9 @@ describe('pickImageUrl — robustness', () => {
   it('does not return external catalog URLs', () => {
     const external: TrackImage[] = [{ url: 'https://cdn.example.com/cover.jpg', width: 480, height: 480, source: 'audius' }];
     expect(pickImageUrl(external, undefined, 300)).toBeUndefined();
+  });
+
+  it('does not return an external fallback URL', () => {
+    expect(pickImageUrl(undefined, 'https://cdn.example.com/cover.jpg', 300)).toBeUndefined();
   });
 });

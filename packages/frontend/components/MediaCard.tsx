@@ -4,7 +4,7 @@ import { webViewStyle } from '@/utils/webStyles';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { Menu } from '@oxyhq/bloom';
 import { Ionicons } from '@expo/vector-icons';
-import type { TrackImage } from '@syra/shared-types';
+import type { CatalogImageSizes, TrackImage } from '@syra/shared-types';
 import { pickImageUrl } from '@/utils/pickImage';
 import { Z_INDEX } from '@/lib/constants';
 
@@ -14,6 +14,8 @@ interface MediaCardProps {
   imageUri?: string;
   /** External image set (Audius / CC); used to pick the best size for this card (~300 px). */
   images?: TrackImage[];
+  /** Internal catalog image variants; used before the large coverArt fallback. */
+  imageSizes?: CatalogImageSizes;
   type?: 'playlist' | 'album' | 'artist' | 'podcast' | 'track';
   onPress?: () => void;
   onPlayPress?: () => void;
@@ -50,6 +52,7 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
   subtitle,
   imageUri,
   images,
+  imageSizes,
   type = 'playlist',
   onPress,
   onPlayPress,
@@ -62,7 +65,7 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
   onHoverOut,
 }) => {
   const theme = useTheme();
-  const resolvedImageUri = pickImageUrl(images, imageUri, 300);
+  const resolvedImageUri = pickImageUrl(images, imageUri, 300, imageSizes);
   const [isHovered, setIsHovered] = React.useState(false);
   const [hideIdleActions, setHideIdleActions] = React.useState(shouldHideIdleActionsByDefault);
   const menuControl = Menu.useMenuControl();
@@ -180,13 +183,14 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
         <Menu.Root control={menuControl}>
           <Menu.Trigger label={`More actions for ${title}`}>
             {({ props, state }) => {
-              const { ref: _triggerRef, ...triggerProps } = props;
+              const { ref: triggerRef, ...triggerProps } = props;
               const hideMenuTrigger =
                 !usesHoverActions ||
                 (!isHovered && !isMenuOpen && !state.focused && !state.pressed);
 
               return (
                 <Pressable
+                  ref={triggerRef as React.Ref<View>}
                   {...triggerProps}
                   pointerEvents={hideMenuTrigger ? 'none' : 'auto'}
                   onPress={(event) => {

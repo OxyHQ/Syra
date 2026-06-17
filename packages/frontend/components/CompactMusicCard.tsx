@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, View, Text, Image, Pressable, Platform } from 'react-native';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { Ionicons } from '@expo/vector-icons';
-import type { TrackImage } from '@syra/shared-types';
+import type { CatalogImageSizes, TrackImage } from '@syra/shared-types';
 import { pickImageUrl } from '@/utils/pickImage';
 import { webViewStyle } from '@/utils/webStyles';
 
@@ -11,6 +11,7 @@ interface CompactMusicCardProps {
   imageUri?: string;
   /** External image set (Audius / CC); used to pick the best size for this card (~150 px). */
   images?: TrackImage[];
+  imageSizes?: CatalogImageSizes;
   type?: 'playlist' | 'album' | 'artist' | 'mix';
   shape?: 'square' | 'circle';
   isPlaying?: boolean;
@@ -25,12 +26,13 @@ export const CompactMusicCard: React.FC<CompactMusicCardProps> = ({
   title,
   imageUri,
   images,
+  imageSizes,
   type = 'playlist',
   shape = 'square',
   isPlaying = false,
   onPress
 }) => {
-  const resolvedImageUri = pickImageUrl(images, imageUri, 150);
+  const resolvedImageUri = pickImageUrl(images, imageUri, 150, imageSizes);
   const theme = useTheme();
 
   const getIcon = () => {

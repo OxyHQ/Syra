@@ -326,6 +326,7 @@ const SearchScreen: React.FC = () => {
                       subtitle={album.artistName}
                       type="album"
                       imageUri={album.coverArt}
+                      imageSizes={album.coverArtSizes}
                       primaryColor={album.primaryColor}
                       onPress={() => router.push(`/album/${album.id}`)}
                     />
@@ -338,6 +339,7 @@ const SearchScreen: React.FC = () => {
                       subtitle={`Playlist • ${playlist.trackCount || 0} songs`}
                       type="playlist"
                       imageUri={playlist.coverArt}
+                      imageSizes={playlist.coverArtSizes}
                       primaryColor={playlist.primaryColor}
                       onPress={() => router.push({ pathname: '/playlist/[id]', params: { id: playlist.id } } satisfies Href)}
                     />
@@ -362,6 +364,7 @@ const SearchScreen: React.FC = () => {
                       type="track"
                       imageUri={track.coverArt}
                       images={track.images}
+                      imageSizes={track.coverArtSizes}
                       primaryColor={track.primaryColor}
                       onPress={() => handleTrackRowPress(track, popularTracks, 'Popular Tracks')}
                       onPlayPress={() => playTrackFromList(track, popularTracks, { type: 'search', name: 'Popular Tracks' })}
@@ -386,6 +389,7 @@ const SearchScreen: React.FC = () => {
                       subtitle={album.artistName}
                       type="album"
                       imageUri={album.coverArt}
+                      imageSizes={album.coverArtSizes}
                       primaryColor={album.primaryColor}
                       onPress={() => router.push(`/album/${album.id}`)}
                     />
@@ -411,6 +415,7 @@ const SearchScreen: React.FC = () => {
                       shape="circle"
                       imageUri={artist.image}
                       images={artist.images}
+                      imageSizes={artist.imageSizes}
                       primaryColor={artist.primaryColor}
                       onPress={() => router.push({ pathname: '/artist/[id]', params: { id: artist.id } } satisfies Href)}
                     />
@@ -489,6 +494,7 @@ const SearchScreen: React.FC = () => {
                           subtitle={album.artistName}
                           type="album"
                           imageUri={album.coverArt}
+                          imageSizes={album.coverArtSizes}
                           primaryColor={album.primaryColor}
                           onPress={() => router.push(`/album/${album.id}`)}
                         />
@@ -517,6 +523,7 @@ const SearchScreen: React.FC = () => {
                           shape="circle"
                           imageUri={artist.image}
                           images={artist.images}
+                          imageSizes={artist.imageSizes}
                           primaryColor={artist.primaryColor}
                           onPress={() => router.push({ pathname: '/artist/[id]', params: { id: artist.id } } satisfies Href)}
                         />
@@ -543,6 +550,7 @@ const SearchScreen: React.FC = () => {
                           subtitle={`Playlist • ${playlist.trackCount || 0} songs`}
                           type="playlist"
                           imageUri={playlist.coverArt}
+                          imageSizes={playlist.coverArtSizes}
                           primaryColor={playlist.primaryColor}
                           onPress={() => router.push({ pathname: '/playlist/[id]', params: { id: playlist.id } } satisfies Href)}
                         />

@@ -361,12 +361,9 @@ const HomeScreen: React.FC = () => {
                 const id = item.data.id;
                 const itemKey = `${item.type}-${id}`;
                 const primaryColor = item.data.primaryColor;
-                const imageUri =
-                  item.type === 'album'
-                    ? item.data.coverArt
-                    : item.type === 'artist'
-                      ? pickImageUrl(item.data.images, item.data.image, 150)
-                      : item.data.coverArt;
+                const imageUri = item.type === 'artist'
+                  ? pickImageUrl(item.data.images, item.data.image, 64, item.data.imageSizes)
+                  : pickImageUrl(undefined, item.data.coverArt, 64, item.data.coverArtSizes);
 
                 return (
                   <Pressable
@@ -445,6 +442,7 @@ const HomeScreen: React.FC = () => {
                       type="track"
                       imageUri={track.coverArt}
                       images={track.images}
+                      imageSizes={track.coverArtSizes}
                       primaryColor={track.primaryColor}
                       onPress={() => {
                         if (track.albumId) {
@@ -494,6 +492,7 @@ const HomeScreen: React.FC = () => {
                       subtitle={playlist.description || 'Playlist'}
                       type="playlist"
                       imageUri={playlist.coverArt}
+                      imageSizes={playlist.coverArtSizes}
                       primaryColor={playlist.primaryColor}
                       onPress={() => router.push(`/playlist/${playlist.id}`)}
                       onPlayPress={() => playPlaylist(playlist.id, playlist.name)}
@@ -510,6 +509,7 @@ const HomeScreen: React.FC = () => {
                       subtitle={album.artistName}
                       type="album"
                       imageUri={album.coverArt}
+                      imageSizes={album.coverArtSizes}
                       primaryColor={album.primaryColor}
                       onPress={() => router.push(`/album/${album.id}`)}
                       onPlayPress={() => playAlbum(album.id, album.title)}
@@ -545,6 +545,7 @@ const HomeScreen: React.FC = () => {
                       subtitle={album.artistName}
                       type="album"
                       imageUri={album.coverArt}
+                      imageSizes={album.coverArtSizes}
                       primaryColor={album.primaryColor}
                       onPress={() => router.push(`/album/${album.id}`)}
                       onPlayPress={() => playAlbum(album.id, album.title)}
@@ -574,6 +575,7 @@ const HomeScreen: React.FC = () => {
                       type="artist"
                       imageUri={artist.image}
                       images={artist.images}
+                      imageSizes={artist.imageSizes}
                       primaryColor={artist.primaryColor}
                       onPress={() => router.push(`/artist/${artist.id}`)}
                       onPlayPress={() => playArtist(artist.id, artist.name)}
@@ -601,6 +603,7 @@ const HomeScreen: React.FC = () => {
                       subtitle={playlist.description || 'Playlist'}
                       type="playlist"
                       imageUri={playlist.coverArt}
+                      imageSizes={playlist.coverArtSizes}
                       primaryColor={playlist.primaryColor}
                       onPress={() => router.push(`/playlist/${playlist.id}`)}
                       onPlayPress={() => playPlaylist(playlist.id, playlist.name)}
@@ -636,6 +639,7 @@ const HomeScreen: React.FC = () => {
                       type="track"
                       imageUri={track.coverArt}
                       images={track.images}
+                      imageSizes={track.coverArtSizes}
                       primaryColor={track.primaryColor}
                       onPress={() => {
                         if (track.albumId) {

@@ -149,7 +149,7 @@ export const PlayerBar: React.FC = () => {
           >
             {(currentTrack?.coverArt || currentTrack?.images?.length) ? (
               <Image
-                source={{ uri: pickImageUrl(currentTrack.images, currentTrack.coverArt, 150) }}
+                source={{ uri: pickImageUrl(currentTrack.images, currentTrack.coverArt, 80, currentTrack.coverArtSizes) }}
                 style={styles.albumArt}
                 contentFit="cover"
               />

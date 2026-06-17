@@ -184,7 +184,7 @@ export const TopBar: React.FC = () => {
       title: track.title,
       subtitle: track.artistName,
       href: track.albumId ? albumHref(track.albumId) : artistHref(track.artistId),
-      imageUri: pickImageUrl(track.images, track.coverArt, 64),
+      imageUri: pickImageUrl(track.images, track.coverArt, 64, track.coverArtSizes),
       icon: 'music-note-outline' as const,
       onPlay: () => {
         const tracks = results?.tracks ?? [track];
@@ -198,7 +198,7 @@ export const TopBar: React.FC = () => {
       title: album.title,
       subtitle: album.artistName,
       href: albumHref(album.id),
-      imageUri: album.coverArt,
+      imageUri: pickImageUrl(undefined, album.coverArt, 64, album.coverArtSizes),
       icon: 'album' as const,
       onPlay: () => playAlbum(album.id, album.title),
     }));
@@ -208,7 +208,7 @@ export const TopBar: React.FC = () => {
       title: artist.name,
       subtitle: 'Artist',
       href: artistHref(artist.id),
-      imageUri: pickImageUrl(artist.images, artist.image, 64),
+      imageUri: pickImageUrl(artist.images, artist.image, 64, artist.imageSizes),
       icon: 'account-music-outline' as const,
       rounded: true,
       onPlay: () => playArtist(artist.id, artist.name),
@@ -219,7 +219,7 @@ export const TopBar: React.FC = () => {
       title: playlist.name,
       subtitle: `Playlist - ${playlist.trackCount || 0} songs`,
       href: playlistHref(playlist.id),
-      imageUri: playlist.coverArt,
+      imageUri: pickImageUrl(undefined, playlist.coverArt, 64, playlist.coverArtSizes),
       icon: 'playlist-music-outline' as const,
       onPlay: () => playPlaylist(playlist.id, playlist.name),
     }));
