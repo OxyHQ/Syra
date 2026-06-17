@@ -1,7 +1,6 @@
 import type { ExternalAlbum, ExternalPlaylist, ExternalTrack } from '@syra/shared-types';
 import type { MusicSourceConnector } from './MusicSourceConnector';
 import { AudiusConnector } from './AudiusConnector';
-import { upsertArtist } from '../catalog/upsertArtist';
 import { upsertTrack } from '../catalog/upsertTrack';
 import { upsertAlbum } from '../catalog/upsertAlbum';
 import { upsertPlaylist } from '../catalog/upsertPlaylist';
@@ -144,8 +143,8 @@ export async function runAudiusImport(
   const seenArtists = new Set<string>();
   for (const external of tracks) {
     try {
-      await upsertArtist(external.artists[0], 'audius');
-      await upsertTrack(external, 'audius');
+      const { track } = await upsertTrack(external, 'audius');
+      if (!track) continue;
       importedTracks.push(external);
       imported++;
       const artistExternalId = external.artists[0]?.externalId;
@@ -215,7 +214,6 @@ async function syncArtistAlbums(
       for (const album of albums.slice(0, MAX_ALBUMS_PER_ARTIST)) {
         try {
           for (const track of album.tracks ?? []) {
-            await upsertArtist(track.artists[0], 'audius');
             await upsertTrack(track, 'audius');
           }
 
@@ -276,7 +274,6 @@ async function syncArtistPlaylists(
       for (const playlist of playlists.slice(0, MAX_PLAYLISTS_PER_ARTIST)) {
         try {
           for (const track of playlist.tracks ?? []) {
-            await upsertArtist(track.artists[0], 'audius');
             await upsertTrack(track, 'audius');
           }
 

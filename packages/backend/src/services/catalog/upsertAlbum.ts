@@ -9,6 +9,7 @@ import { TrackModel } from '../../models/Track';
 import type { ITrack } from '../../models/Track';
 import { playCountToPopularity } from './popularity';
 import { assignMissingColors, colorsFromImages } from './entityColors';
+import { firstUsableImageUrl, usableImages } from './externalImages';
 
 /** Minimal artist context needed to attach an album to its primary artist. */
 export interface AlbumArtistRef {
@@ -124,7 +125,8 @@ export async function upsertAlbum(
   artist: AlbumArtistRef,
   source: CatalogSource,
 ): Promise<UpsertAlbumResult> {
-  const coverArt = external.images?.[0]?.url;
+  const images = usableImages(external.images);
+  const coverArt = firstUsableImageUrl(images);
   if (!coverArt) {
     // Album.coverArt is required; without it we cannot persist a valid album.
     return { album: null, created: false };
@@ -140,7 +142,7 @@ export async function upsertAlbum(
 
   const existing = await findExisting(source, external.externalId);
   const colors = (!existing || !existing.primaryColor || !existing.secondaryColor)
-    ? await colorsFromImages(external.images)
+    ? await colorsFromImages(images)
     : undefined;
 
   if (!existing) {

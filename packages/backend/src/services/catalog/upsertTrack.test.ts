@@ -13,7 +13,11 @@ const baseTrack: ExternalTrack = {
   provider: 'audius',
   externalId: 'aud-track-001',
   title: 'Strobe',
-  artists: [{ name: 'deadmau5', externalId: 'aud-artist-001' }],
+  artists: [{
+    name: 'deadmau5',
+    externalId: 'aud-artist-001',
+    images: [{ url: 'https://audius.co/img/deadmau5.jpg', width: 600, height: 600 }],
+  }],
   durationSec: 600,
   isrc: 'USUG11400419',
   images: [{ url: 'https://audius.co/img/strobe.jpg', width: 600, height: 600 }],
@@ -25,6 +29,7 @@ describe('upsertTrack', () => {
     const { track, created } = await upsertTrack(baseTrack, 'audius');
 
     expect(created).toBe(true);
+    if (!track) throw new Error('expected track');
     expect(await TrackModel.countDocuments()).toBe(1);
     expect(track.title).toBe('Strobe');
     expect(track.source).toBe('audius');
@@ -45,6 +50,7 @@ describe('upsertTrack', () => {
     );
 
     expect(created).toBe(false);
+    if (!track) throw new Error('expected track');
     expect(await TrackModel.countDocuments()).toBe(1);
     expect(track.title).toBe('Strobe (Remaster)');
     expect(track.sources?.length).toBe(2);
@@ -63,8 +69,13 @@ describe('upsertTrack', () => {
       provider: 'cc',
       externalId: 'cc-track-999',
       title: 'Café Soleil',
-      artists: [{ name: 'Bonobo', externalId: 'cc-artist-999' }],
+      artists: [{
+        name: 'Bonobo',
+        externalId: 'cc-artist-999',
+        images: [{ url: 'https://cc.example/img/bonobo.jpg' }],
+      }],
       durationSec: 180,
+      images: [{ url: 'https://cc.example/img/cafe-soleil.jpg' }],
     };
 
     it('same title/artist, duration within ±2s → same doc', async () => {
@@ -107,8 +118,13 @@ describe('upsertTrack', () => {
       provider: 'audius',
       externalId: 'aud-rich-001',
       title: 'Rich Track',
-      artists: [{ name: 'Genre Artist', externalId: 'aud-genre-artist' }],
+      artists: [{
+        name: 'Genre Artist',
+        externalId: 'aud-genre-artist',
+        images: [{ url: 'https://audius.co/img/genre-artist.jpg' }],
+      }],
       durationSec: 200,
+      images: [{ url: 'https://audius.co/img/rich-track.jpg' }],
       genre: 'Electronic',
       mood: 'Energizing',
       tags: ['lofi', 'chill'],
@@ -119,6 +135,7 @@ describe('upsertTrack', () => {
     it('persists genre/mood/tags/releaseDate/popularity signals onto the track', async () => {
       const { track } = await upsertTrack(richTrack, 'audius');
 
+      if (!track) throw new Error('expected track');
       expect(track.genre).toBe('Electronic');
       expect(track.mood).toBe('Energizing');
       expect(track.tags).toEqual(['lofi', 'chill']);
@@ -156,6 +173,7 @@ describe('upsertTrack', () => {
       );
 
       // Existing values survive a re-import that omits them
+      if (!track) throw new Error('expected track');
       expect(track.playCount).toBe(12345);
       expect(track.genre).toBe('Electronic');
     });
@@ -166,11 +184,12 @@ describe('upsertTrack', () => {
 
     // Re-import with no images / no streamUrl
     const { track } = await upsertTrack(
-      { ...baseTrack, images: undefined, streamUrl: undefined },
+      { ...baseTrack, streamUrl: undefined },
       'audius',
     );
 
     // Non-empty image array from first import must survive
+    if (!track) throw new Error('expected track');
     expect(track.images?.length).toBeGreaterThan(0);
     expect(track.streamUrl).toBe('https://audius.co/stream/aud-track-001');
 
@@ -179,5 +198,33 @@ describe('upsertTrack', () => {
     expect(firstProv?.fields).toContain('title');
     expect(firstProv?.fields).toContain('streamUrl');
     expect(firstProv?.fields).toContain('images');
+  });
+
+  it('skips a new imported track when the track artwork is missing', async () => {
+    const { track, created } = await upsertTrack(
+      { ...baseTrack, externalId: 'aud-no-cover', isrc: undefined, images: undefined },
+      'audius',
+    );
+
+    expect(created).toBe(false);
+    expect(track).toBeNull();
+    expect(await TrackModel.countDocuments()).toBe(0);
+  });
+
+  it('skips a new imported track when the primary artist image is missing', async () => {
+    const { track, created } = await upsertTrack(
+      {
+        ...baseTrack,
+        externalId: 'aud-no-artist-image',
+        isrc: undefined,
+        artists: [{ name: 'No Image Artist', externalId: 'aud-no-image-artist' }],
+      },
+      'audius',
+    );
+
+    expect(created).toBe(false);
+    expect(track).toBeNull();
+    expect(await TrackModel.countDocuments()).toBe(0);
+    expect(await ArtistModel.countDocuments()).toBe(0);
   });
 });

@@ -1,5 +1,6 @@
 import type { TrackImage } from '@syra/shared-types';
 import { tryExtractPredominantColors } from '../colorExtractionService';
+import { firstUsableImageUrl } from './externalImages';
 
 export interface EntityColors {
   primaryColor?: string;
@@ -12,7 +13,7 @@ export interface EntityColorTarget {
 }
 
 export function firstImageUrl(images: TrackImage[] | undefined): string | undefined {
-  return images?.find((image) => typeof image.url === 'string' && image.url.length > 0)?.url;
+  return firstUsableImageUrl(images);
 }
 
 export async function colorsFromImages(

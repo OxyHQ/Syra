@@ -9,6 +9,7 @@ import type { IPlaylist } from '../../models/Playlist';
 import { PlaylistTrackModel } from '../../models/PlaylistTrack';
 import { TrackModel } from '../../models/Track';
 import { assignMissingColors, colorsFromImages } from './entityColors';
+import { firstUsableImageUrl, usableImages } from './externalImages';
 
 const EXTERNAL_OWNER_ID = 'system:audius';
 const EXTERNAL_OWNER_NAME = 'Audius';
@@ -114,7 +115,12 @@ export async function upsertPlaylist(
   source: CatalogSource,
 ): Promise<UpsertPlaylistResult> {
   const provenance = buildProvenance(source, external.externalId, contributedFields(external));
-  const coverArt = external.images?.[0]?.url;
+  const images = usableImages(external.images);
+  const coverArt = firstUsableImageUrl(images);
+  if (!coverArt) {
+    return { playlist: null, created: false };
+  }
+
   const orderedTrackIds = await resolveOrderedTrackIds(source, external.trackExternalIds);
   if (orderedTrackIds.length === 0) {
     return { playlist: null, created: false };
@@ -122,7 +128,7 @@ export async function upsertPlaylist(
 
   const existing = await findExisting(source, external.externalId);
   const colors = (!existing || !existing.primaryColor || !existing.secondaryColor)
-    ? await colorsFromImages(external.images)
+    ? await colorsFromImages(images)
     : undefined;
 
   if (!existing) {

@@ -45,6 +45,8 @@ export async function syncAlbumsForTracks(
     if (!primaryArtist) continue;
 
     const { artist } = await upsertArtist(primaryArtist, source);
+    if (!artist) continue;
+
     const trackExternalIds = [...new Set(groupTracks.map((track) => track.externalId))];
     const { album: saved } = await upsertAlbum(
       {

@@ -2,6 +2,7 @@ import type { ExternalArtist, CatalogSource, SourceProvenance, TrackImage } from
 import { ArtistModel } from '../../models/Artist';
 import type { IArtist } from '../../models/Artist';
 import { assignMissingColors, colorsFromImages } from './entityColors';
+import { hasUsableImages, usableImages } from './externalImages';
 
 /**
  * Build a SourceProvenance entry recording this import.
@@ -65,17 +66,23 @@ async function findExisting(
 export async function upsertArtist(
   external: ExternalArtist,
   source: CatalogSource,
-): Promise<{ artist: IArtist; created: boolean }> {
+): Promise<{ artist: IArtist | null; created: boolean }> {
   const existing = await findExisting(source, external.externalId);
+  const images = usableImages(external.images);
+  const existingHasImage = hasUsableImages(existing?.images);
+  if (images.length === 0 && !existingHasImage) {
+    return { artist: null, created: false };
+  }
+
   const needsColors = !existing || (!existing.ownerOxyUserId && (!existing.primaryColor || !existing.secondaryColor));
-  const colors = needsColors ? await colorsFromImages(external.images) : undefined;
+  const colors = needsColors ? await colorsFromImages(images) : undefined;
 
   const provenance = buildProvenance(
     source,
     external.externalId,
     [
       'name',
-      ...(external.images?.length ? ['images'] : []),
+      ...(images.length ? ['images'] : []),
     ],
   );
 
@@ -85,7 +92,7 @@ export async function upsertArtist(
       source,
       claimable: true,
       externalIds: source === 'audius' ? { audiusId: external.externalId } : undefined,
-      images: external.images ?? [],
+      images,
       primaryColor: colors?.primaryColor,
       secondaryColor: colors?.secondaryColor,
       sources: [provenance],
@@ -101,7 +108,7 @@ export async function upsertArtist(
   // If this artist is claimed by a real user, protect all owned fields.
   if (!existing.ownerOxyUserId) {
     if (external.name) existing.name = external.name;
-    existing.images = mergeImages(existing.images, external.images);
+    existing.images = mergeImages(existing.images, images);
     assignMissingColors(existing, colors);
     if (source === 'audius' && external.externalId) {
       existing.externalIds = {

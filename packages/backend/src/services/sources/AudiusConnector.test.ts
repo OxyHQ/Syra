@@ -21,7 +21,15 @@ const TRACK_A = {
   play_count: 12345,
   favorite_count: 678,
   repost_count: 90,
-  user: { id: 'u1', name: 'DJ Test' },
+  user: {
+    id: 'u1',
+    name: 'DJ Test',
+    profile_picture: {
+      '150x150': 'https://cdn.audius.co/u1/150x150.jpg',
+      '480x480': 'https://cdn.audius.co/u1/480x480.jpg',
+      '1000x1000': 'https://cdn.audius.co/u1/1000x1000.jpg',
+    },
+  },
   artwork: {
     '150x150': 'https://cdn.audius.co/abc/150x150.jpg',
     '480x480': 'https://cdn.audius.co/abc/480x480.jpg',
@@ -242,7 +250,7 @@ describe('AudiusConnector.search', () => {
     expect(img480?.source).toBe('audius');
   });
 
-  it('artists[0].images is undefined when user has no profile_picture', async () => {
+  it('skips tracks when user has no profile_picture', async () => {
     const trackNoProfilePic = {
       ...TRACK_A,
       user: { id: 'u1', name: 'DJ Test' }, // no profile_picture field
@@ -253,10 +261,8 @@ describe('AudiusConnector.search', () => {
       httpGet: async () => ({ data: [trackNoProfilePic] }),
     });
 
-    const [track] = await connector.search('test');
-
-    expect(track.artists).toHaveLength(1);
-    expect(track.artists[0].images).toBeUndefined();
+    const results = await connector.search('test');
+    expect(results).toHaveLength(0);
   });
 
   it('skips tracks with blank title (empty string)', async () => {
@@ -371,8 +377,16 @@ describe('AudiusConnector.search', () => {
       is_delete: false,
       is_streamable: true,
       is_stream_gated: false,
-      user: { id: 'um', name: 'Min Artist' },
-      artwork: null,
+      user: {
+        id: 'um',
+        name: 'Min Artist',
+        profile_picture: {
+          '1000x1000': 'https://cdn.audius.co/um/1000x1000.jpg',
+        },
+      },
+      artwork: {
+        '1000x1000': 'https://cdn.audius.co/min1/1000x1000.jpg',
+      },
     };
     const connector = new AudiusConnector({
       apiBase: TEST_BASE,

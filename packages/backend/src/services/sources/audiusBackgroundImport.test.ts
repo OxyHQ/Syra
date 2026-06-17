@@ -19,8 +19,13 @@ function makeTrack(id: string, artistId = 'artist-1'): ExternalTrack {
     provider: 'audius',
     externalId: id,
     title: `Track ${id}`,
-    artists: [{ name: `Artist ${artistId}`, externalId: artistId }],
+    artists: [{
+      name: `Artist ${artistId}`,
+      externalId: artistId,
+      images: [{ url: `https://cdn.audius.co/${artistId}/1000x1000.jpg`, source: 'audius' }],
+    }],
     durationSec: 180,
+    images: [{ url: `https://cdn.audius.co/${id}/1000x1000.jpg`, source: 'audius' }],
     streamUrl: `https://audius.co/v1/tracks/${id}/stream?app_name=Syra`,
   };
 }
@@ -219,7 +224,7 @@ describe('runAudiusImport — album sync', () => {
         return [];
       },
     };
-    const tracks = Array.from({ length: 30 }, (_, i) => makeTrack(`t${i}`, `artist-${i}`));
+    const tracks = Array.from({ length: 6 }, (_, i) => makeTrack(`t${i}`, `artist-${i}`));
     const connector = makeConnector(tracks);
 
     await runAudiusImport('album-sync-pop', { connector, albumFetcher, maxArtistsForAlbums: 5 });
@@ -260,7 +265,7 @@ describe('runAudiusImport — album sync', () => {
 
 describe('enqueueAudiusImport', () => {
   it('returns void synchronously and does not throw', () => {
-    const connector = makeConnector([makeTrack('t9')]);
+    const connector = makeConnector([]);
     // Must not throw synchronously
     expect(() => enqueueAudiusImport('test', { connector })).not.toThrow();
   });

@@ -1,6 +1,5 @@
 import type { ExternalTrack } from '@syra/shared-types';
 import { ImportJobModel, IImportJob } from '../../models/ImportJob';
-import { upsertArtist } from '../catalog/upsertArtist';
 import { upsertTrack } from '../catalog/upsertTrack';
 import { syncAlbumsForTracks } from '../catalog/syncTrackAlbums';
 import { enqueueIngest as defaultEnqueueIngest } from '../ingest/ingestTrack';
@@ -182,12 +181,15 @@ export async function runImport(
         continue;
       }
 
-      const { artist } = await upsertArtist(external.artists[0], connector.provider);
       const { track } = await upsertTrack(external, connector.provider);
+      if (!track) {
+        job.skipped += 1;
+        continue;
+      }
       importedTracks.push(external);
 
       if (connector.provider === 'cc') {
-        await downloadAndStore(external, track._id.toString(), artist._id.toString());
+        await downloadAndStore(external, track._id.toString(), track.artistId.toString());
         enqueueIngest(track._id.toString());
       }
       // Audius: stream-only — no download or ingest needed; streamUrl is already on the track.

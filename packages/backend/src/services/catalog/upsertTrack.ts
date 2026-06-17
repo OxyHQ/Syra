@@ -5,6 +5,7 @@ import { ArtistModel } from '../../models/Artist';
 import { upsertArtist } from './upsertArtist';
 import { playCountToPopularity } from './popularity';
 import { assignMissingColors, colorsFromImages } from './entityColors';
+import { hasUsableImages, usableImages } from './externalImages';
 
 /**
  * Normalize a string for fuzzy title/artist matching:
@@ -159,13 +160,21 @@ async function findByFuzzy(
 export async function upsertTrack(
   external: ExternalTrack,
   source: CatalogSource,
-): Promise<{ track: ITrack; created: boolean }> {
+): Promise<{ track: ITrack | null; created: boolean }> {
   if (!external.artists.length) {
     throw new Error('upsertTrack: external.artists must contain at least one entry');
   }
 
+  const images = usableImages(external.images);
+  if (images.length === 0 || !hasUsableImages(external.artists[0]?.images)) {
+    return { track: null, created: false };
+  }
+
   const primaryExternal = external.artists[0];
   const { artist } = await upsertArtist(primaryExternal, source);
+  if (!artist) {
+    return { track: null, created: false };
+  }
   const artistId = artist._id.toString();
   const artistName = artist.name;
 
@@ -191,7 +200,7 @@ export async function upsertTrack(
   const releaseDate = parseReleaseDate(external.releaseDate);
   const playCount = external.popularity?.playCount;
   const colors = (!existing || !existing.primaryColor || !existing.secondaryColor)
-    ? await colorsFromImages(external.images)
+    ? await colorsFromImages(images)
     : undefined;
 
   // --- Create ---
@@ -210,7 +219,7 @@ export async function upsertTrack(
         ...(external.isrc ? { isrc: external.isrc } : {}),
         ...(source === 'audius' ? { audiusId: external.externalId } : {}),
       },
-      images: external.images ?? [],
+      images,
       primaryColor: colors?.primaryColor,
       secondaryColor: colors?.secondaryColor,
       streamUrl: external.streamUrl,
@@ -241,7 +250,7 @@ export async function upsertTrack(
     existing.albumName = external.album.name;
   }
   // Merge images — never shrink an existing non-empty array to empty.
-  existing.images = mergeImages(existing.images, external.images);
+  existing.images = mergeImages(existing.images, images);
   assignMissingColors(existing, colors);
   // Only set streamUrl if not already present.
   if (external.streamUrl && !existing.streamUrl) {

@@ -67,8 +67,13 @@ function makeAudiusTrack(overrides: Partial<ExternalTrack> = {}): ExternalTrack 
     provider: 'audius',
     externalId: 'aud-123',
     title: 'Test Track',
-    artists: [{ name: 'Test Artist', externalId: 'aud-artist-1' }],
+    artists: [{
+      name: 'Test Artist',
+      externalId: 'aud-artist-1',
+      images: [{ url: 'https://cdn.audius.co/test-artist/1000x1000.jpg', source: 'audius' }],
+    }],
     durationSec: 180,
+    images: [{ url: 'https://cdn.audius.co/test-track/1000x1000.jpg', source: 'audius' }],
     streamUrl: 'https://discoveryprovider.audius.co/v1/tracks/aud-123/stream?app_name=Syra',
     ...overrides,
   };
@@ -274,6 +279,19 @@ describe('addAudiusTrack', () => {
     await addAudiusTrack(req, res as unknown as Response);
 
     expect(res._status).toBe(400);
+  });
+
+  it('400: missing track or primary artist image', async () => {
+    const { addAudiusTrack } = makeSourcesController({ connector: makeFakeConnector() });
+
+    const external = makeAudiusTrack({ images: undefined });
+    const req = makePostReq(external);
+    const res = makeRes();
+    await addAudiusTrack(req, res as unknown as Response);
+
+    expect(res._status).toBe(400);
+    const body = res._body as Record<string, string>;
+    expect(body.error).toBe('Track and primary artist images are required');
   });
 
   it('400: non-object body', async () => {

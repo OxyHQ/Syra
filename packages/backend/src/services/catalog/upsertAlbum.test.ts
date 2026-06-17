@@ -29,10 +29,16 @@ async function seedTrack(externalId: string, durationSec: number): Promise<strin
     provider: 'audius',
     externalId,
     title: `Track ${externalId}`,
-    artists: [{ name: 'Album Artist', externalId: 'aud-album-artist' }],
+    artists: [{
+      name: 'Album Artist',
+      externalId: 'aud-album-artist',
+      images: [{ url: 'https://cdn.audius.co/artist/1000x1000.jpg' }],
+    }],
     durationSec,
+    images: [{ url: `https://cdn.audius.co/${externalId}/1000x1000.jpg` }],
   };
   const { track } = await upsertTrack(external, 'audius');
+  if (!track) throw new Error('expected track');
   return track._id.toString();
 }
 
@@ -42,6 +48,7 @@ describe('upsertAlbum', () => {
     const { album, created } = await upsertAlbum(baseAlbum, ARTIST, 'audius');
 
     expect(created).toBe(true);
+    if (!album) throw new Error('expected album');
     expect(await AlbumModel.countDocuments()).toBe(1);
     expect(album.title).toBe('Night Drive');
     expect(album.artistName).toBe('Album Artist');
@@ -67,6 +74,7 @@ describe('upsertAlbum', () => {
     );
 
     expect(created).toBe(false);
+    if (!album) throw new Error('expected album');
     expect(await AlbumModel.countDocuments()).toBe(1);
     expect(album.title).toBe('Night Drive (Deluxe)');
     expect(album.sources?.length).toBe(2);
@@ -82,6 +90,7 @@ describe('upsertAlbum', () => {
       'audius',
     );
 
+    if (!album) throw new Error('expected album');
     const albumId = album._id.toString();
     const t1 = await TrackModel.findById(id1);
     const t2 = await TrackModel.findById(id2);
@@ -102,6 +111,7 @@ describe('upsertAlbum', () => {
     );
 
     // Only the one known track is linked; totals reflect only it.
+    if (!album) throw new Error('expected album');
     expect(album.totalTracks).toBe(1);
     expect(album.totalDuration).toBe(100);
   });

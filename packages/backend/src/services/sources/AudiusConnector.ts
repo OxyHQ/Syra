@@ -161,6 +161,7 @@ function mapAudiusTrack(
 
   const artistImages = mapArtwork(item.user.profile_picture ?? null);
   const trackImages = mapArtwork(item.artwork);
+  if (!artistImages?.length || !trackImages?.length) return null;
 
   const isrc = cleanString(item.isrc);
   const genre = cleanString(item.genre);
@@ -183,12 +184,12 @@ function mapAudiusTrack(
       {
         name: item.user.name,
         externalId: String(item.user.id),
-        ...(artistImages !== undefined && { images: artistImages }),
+        images: artistImages,
       },
     ],
     streamUrl,
     ...(isrc !== undefined && { isrc }),
-    ...(trackImages !== undefined && { images: trackImages }),
+    images: trackImages,
     ...(album !== undefined && { album }),
     ...(genre !== undefined && { genre }),
     ...(mood !== undefined && { mood }),
@@ -236,8 +237,8 @@ function mapArtwork(artwork: AudiusArtwork | null): TrackImage[] | undefined {
   const images: TrackImage[] = [];
   for (const { key, width, height } of ARTWORK_SIZES) {
     const url = artwork[key];
-    if (typeof url === 'string' && url.length > 0) {
-      images.push({ url, width, height, source: 'audius' as CatalogSource });
+    if (typeof url === 'string' && url.trim().length > 0) {
+      images.push({ url: url.trim(), width, height, source: 'audius' as CatalogSource });
     }
   }
   return images.length > 0 ? images : undefined;
@@ -341,6 +342,7 @@ export class AudiusConnector implements MusicSourceConnector {
       const genre = trackListing.genre;
 
       const images = mapArtwork(item.artwork);
+      if (!images?.length) continue;
       const releaseDate = cleanString(item.release_date);
       const popularity = buildPopularity(
         item.total_play_count,
@@ -353,7 +355,7 @@ export class AudiusConnector implements MusicSourceConnector {
         externalId: String(item.id),
         trackExternalIds: trackListing.ids,
         tracks: trackListing.tracks,
-        ...(images !== undefined && { images }),
+        images,
         ...(releaseDate !== undefined && { releaseDate }),
         ...(genre !== undefined && { genre }),
         ...(popularity !== undefined && { popularity }),
@@ -393,6 +395,7 @@ export class AudiusConnector implements MusicSourceConnector {
 
       const trackListing = await this.fetchPlaylistTrackListing(item.id);
       const images = mapArtwork(item.artwork);
+      if (!images?.length) continue;
       const popularity = buildPopularity(
         item.total_play_count,
         item.favorite_count,
@@ -404,7 +407,7 @@ export class AudiusConnector implements MusicSourceConnector {
         externalId: String(item.id),
         trackExternalIds: trackListing.ids,
         tracks: trackListing.tracks,
-        ...(images !== undefined && { images }),
+        images,
         ...(trackListing.genre !== undefined && { genre: trackListing.genre }),
         ...(popularity !== undefined && { popularity }),
       });

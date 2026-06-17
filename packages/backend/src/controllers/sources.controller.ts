@@ -4,7 +4,6 @@ import type { AuthRequest } from '../middleware/auth';
 import type { ExternalTrack } from '@syra/shared-types';
 import type { MusicSourceConnector } from '../services/sources/MusicSourceConnector';
 import { AudiusConnector } from '../services/sources/AudiusConnector';
-import { upsertArtist } from '../services/catalog/upsertArtist';
 import { upsertTrack } from '../services/catalog/upsertTrack';
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -130,8 +129,11 @@ export function makeSourcesController(deps: SourcesControllerDeps = {}) {
       return;
     }
 
-    await upsertArtist(external.artists[0], 'audius');
     const { track, created } = await upsertTrack(external, 'audius');
+    if (!track) {
+      res.status(400).json({ error: 'Track and primary artist images are required' });
+      return;
+    }
 
     res.status(200).json({ track, created });
   }

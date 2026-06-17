@@ -19,6 +19,7 @@ describe('upsertArtist', () => {
     const { artist, created } = await upsertArtist(audiusArtist, 'audius');
 
     expect(created).toBe(true);
+    if (!artist) throw new Error('expected artist');
     expect(artist.name).toBe('Deadmau5');
     expect(artist.source).toBe('audius');
     expect(artist.externalIds?.audiusId).toBe('audius-artist-123');
@@ -34,21 +35,42 @@ describe('upsertArtist', () => {
     );
 
     expect(created).toBe(false);
+    if (!artist) throw new Error('expected artist');
     expect(artist.name).toBe('deadmau5 (updated)');
     expect(await ArtistModel.countDocuments()).toBe(1);
   });
 
   it('(c) same name from different sources creates two distinct docs', async () => {
-    await upsertArtist({ name: 'Bonobo', externalId: 'aud-bonobo' }, 'audius');
-    await upsertArtist({ name: 'Bonobo', externalId: 'cc-bonobo' }, 'cc');
+    await upsertArtist({
+      name: 'Bonobo',
+      externalId: 'aud-bonobo',
+      images: [{ url: 'https://audius.co/img/bonobo.jpg' }],
+    }, 'audius');
+    await upsertArtist({
+      name: 'Bonobo',
+      externalId: 'cc-bonobo',
+      images: [{ url: 'https://cc.example/img/bonobo.jpg' }],
+    }, 'cc');
 
     expect(await ArtistModel.countDocuments()).toBe(2);
+  });
+
+  it('skips a new imported artist with no usable image', async () => {
+    const { artist, created } = await upsertArtist(
+      { name: 'No Image', externalId: 'aud-no-image' },
+      'audius',
+    );
+
+    expect(created).toBe(false);
+    expect(artist).toBeNull();
+    expect(await ArtistModel.countDocuments()).toBe(0);
   });
 
   it('(d) a SourceProvenance entry is appended on each import', async () => {
     await upsertArtist(audiusArtist, 'audius');
     const { artist } = await upsertArtist(audiusArtist, 'audius');
 
+    if (!artist) throw new Error('expected artist');
     expect(artist.sources).toBeDefined();
     expect(artist.sources?.length).toBe(2);
 
@@ -76,6 +98,7 @@ describe('upsertArtist', () => {
     const { artist, created } = await upsertArtist(audiusArtist, 'audius');
 
     expect(created).toBe(false);
+    if (!artist) throw new Error('expected artist');
     expect(artist.id).toBe(owned.id);
     // Owned fields are untouched
     expect(artist.bio).toBe('The real one.');

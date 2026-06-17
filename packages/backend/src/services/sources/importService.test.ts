@@ -19,7 +19,11 @@ const CC_TRACK_A: ExternalTrack = {
   externalId: 'cc-001',
   title: 'Open Road',
   durationSec: 210,
-  artists: [{ name: 'Free Artist', externalId: 'fa-001' }],
+  artists: [{
+    name: 'Free Artist',
+    externalId: 'fa-001',
+    images: [{ url: 'https://cc.example/artists/free-artist.jpg', source: 'cc' }],
+  }],
   album: { name: 'Open Album', externalId: 'al-001' },
   images: [{ url: 'blob:test-cover', source: 'cc' }],
   downloadUrl: 'https://storage.jamendo.com/tracks/cc-001/audio.mp3',
@@ -31,7 +35,12 @@ const CC_TRACK_B: ExternalTrack = {
   externalId: 'cc-002',
   title: 'Summer Breeze',
   durationSec: 180,
-  artists: [{ name: 'Another Artist', externalId: 'aa-001' }],
+  artists: [{
+    name: 'Another Artist',
+    externalId: 'aa-001',
+    images: [{ url: 'https://cc.example/artists/another-artist.jpg', source: 'cc' }],
+  }],
+  images: [{ url: 'blob:test-cover-b', source: 'cc' }],
   downloadUrl: 'https://storage.jamendo.com/tracks/cc-002/audio.mp3',
   license: 'https://creativecommons.org/licenses/by-sa/4.0/',
 };
@@ -41,7 +50,12 @@ const AUDIUS_TRACK_A: ExternalTrack = {
   externalId: 'aud-001',
   title: 'Electric Dream',
   durationSec: 240,
-  artists: [{ name: 'DJ Test', externalId: 'dj-001' }],
+  artists: [{
+    name: 'DJ Test',
+    externalId: 'dj-001',
+    images: [{ url: 'https://cdn.audius.co/dj-test/1000x1000.jpg', source: 'audius' }],
+  }],
+  images: [{ url: 'https://cdn.audius.co/electric-dream/1000x1000.jpg', source: 'audius' }],
   streamUrl: 'https://discoveryprovider.audius.co/v1/tracks/aud-001/stream?app_name=Syra',
 };
 
