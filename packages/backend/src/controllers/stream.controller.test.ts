@@ -115,6 +115,8 @@ describe('getStream', () => {
     const body = res._body as Record<string, unknown>;
     expect(body.type).toBe('audius');
     expect(body.url).toBe('https://audius.co/stream/abc123');
+    expect(res._headers['Cache-Control']).toBe('private, max-age=300');
+    expect(res._headers.Vary).toBe('Authorization');
   });
 
   it('422 audius: direct provider streaming is disabled by default', async () => {
@@ -158,6 +160,8 @@ describe('getStream', () => {
     expect(claims?.trackId).toBe(track._id.toString());
     expect(claims?.userId).toBe('oxy-user-abc');
     expect(body.expiresAt).toBeDefined();
+    expect(res._headers['Cache-Control']).toBe('private, max-age=300');
+    expect(res._headers.Vary).toBe('Authorization');
   });
 
   it('401 audius: no auth cannot use direct provider streaming', async () => {

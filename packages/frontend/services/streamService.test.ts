@@ -1,4 +1,4 @@
-import { resolveStream } from './streamService';
+import { clearStreamResolutionCache, prefetchStreams, resolveStream } from './streamService';
 import { api } from '@/utils/api';
 
 jest.mock('@/utils/api', () => ({
@@ -12,6 +12,7 @@ const mockGet = api.get as jest.MockedFunction<typeof api.get>;
 describe('resolveStream', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    clearStreamResolutionCache();
   });
 
   it('resolves HLS stream and returns the resolution', async () => {
@@ -27,6 +28,54 @@ describe('resolveStream', () => {
     expect(mockGet).toHaveBeenCalledTimes(1);
     expect(mockGet).toHaveBeenCalledWith('/stream/t1');
     expect(result).toEqual(resolution);
+  });
+
+  it('reuses a fresh cached stream resolution', async () => {
+    const resolution = {
+      url: 'https://x/api/stream/t1/master.m3u8?t=tok',
+      type: 'hls' as const,
+      expiresAt: '2999-12-31T00:00:00.000Z',
+    };
+    mockGet.mockResolvedValueOnce({ data: resolution });
+
+    await expect(resolveStream('t1')).resolves.toEqual(resolution);
+    await expect(resolveStream('t1')).resolves.toEqual(resolution);
+
+    expect(mockGet).toHaveBeenCalledTimes(1);
+  });
+
+  it('deduplicates concurrent stream resolution requests', async () => {
+    const resolution = {
+      url: 'https://x/api/stream/t1/master.m3u8?t=tok',
+      type: 'hls' as const,
+      expiresAt: '2999-12-31T00:00:00.000Z',
+    };
+    mockGet.mockResolvedValueOnce({ data: resolution });
+
+    const [first, second] = await Promise.all([
+      resolveStream('t1'),
+      resolveStream('t1'),
+    ]);
+
+    expect(first).toEqual(resolution);
+    expect(second).toEqual(resolution);
+    expect(mockGet).toHaveBeenCalledTimes(1);
+  });
+
+  it('prefetches unique track ids without throwing to the caller', async () => {
+    const resolution = {
+      url: 'https://x/api/stream/t1/master.m3u8?t=tok',
+      type: 'hls' as const,
+      expiresAt: '2999-12-31T00:00:00.000Z',
+    };
+    mockGet.mockResolvedValue({ data: resolution });
+
+    prefetchStreams(['t1', 't1', 't2']);
+    await Promise.resolve();
+
+    expect(mockGet).toHaveBeenCalledTimes(2);
+    expect(mockGet).toHaveBeenCalledWith('/stream/t1');
+    expect(mockGet).toHaveBeenCalledWith('/stream/t2');
   });
 
   it('resolves Audius stream and returns the resolution', async () => {

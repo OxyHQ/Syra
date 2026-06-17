@@ -29,14 +29,64 @@ export interface ManifestDeps {
   presign?: (s3Key: string, ttlSec?: number) => Promise<string>;
 }
 
-async function defaultFetchText(s3Key: string): Promise<string> {
-  const { stream } = await streamFromS3(s3Key);
-  return new Promise<string>((resolve, reject) => {
+interface ManifestTextCacheEntry {
+  value?: string;
+  promise?: Promise<string>;
+  expiresAt: number;
+}
+
+const MANIFEST_TEXT_CACHE_TTL_MS = 5 * 60 * 1000;
+const MANIFEST_TEXT_CACHE_MAX_ENTRIES = 200;
+const manifestTextCache = new Map<string, ManifestTextCacheEntry>();
+
+function rememberManifestText(s3Key: string, entry: ManifestTextCacheEntry): void {
+  manifestTextCache.set(s3Key, entry);
+  if (manifestTextCache.size <= MANIFEST_TEXT_CACHE_MAX_ENTRIES) {
+    return;
+  }
+
+  const firstKey = manifestTextCache.keys().next().value;
+  if (firstKey) {
+    manifestTextCache.delete(firstKey);
+  }
+}
+
+function readS3Text(s3Key: string): Promise<string> {
+  return streamFromS3(s3Key).then(({ stream }) => new Promise<string>((resolve, reject) => {
     const chunks: Buffer[] = [];
     (stream as Readable).on('data', (chunk: Buffer) => chunks.push(chunk));
     (stream as Readable).on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
     (stream as Readable).on('error', reject);
+  }));
+}
+
+async function defaultFetchText(s3Key: string): Promise<string> {
+  const now = Date.now();
+  const cached = manifestTextCache.get(s3Key);
+  if (cached && cached.expiresAt > now) {
+    if (cached.value !== undefined) return cached.value;
+    if (cached.promise) return cached.promise;
+  }
+
+  const promise = readS3Text(s3Key)
+    .then((value) => {
+      rememberManifestText(s3Key, {
+        value,
+        expiresAt: Date.now() + MANIFEST_TEXT_CACHE_TTL_MS,
+      });
+      return value;
+    })
+    .catch((error) => {
+      manifestTextCache.delete(s3Key);
+      throw error;
+    });
+
+  rememberManifestText(s3Key, {
+    promise,
+    expiresAt: now + MANIFEST_TEXT_CACHE_TTL_MS,
   });
+
+  return promise;
 }
 
 async function defaultPresign(s3Key: string, ttlSec: number = SEGMENT_URL_TTL_SEC): Promise<string> {

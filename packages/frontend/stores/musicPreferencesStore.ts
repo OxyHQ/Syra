@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { api, isUnauthorizedError } from '@/utils/api';
 import { Storage } from '@/utils/storage';
+import { clearStreamResolutionCache } from '@/services/streamService';
 
 const MUSIC_PREFERENCES_CACHE_KEY = 'syra_music_preferences';
 
@@ -54,6 +55,16 @@ const DEFAULT_PREFERENCES: Omit<MusicPreferences, 'oxyUserId'> = {
   directAudiusStreaming: false,
   monoAudio: false,
 };
+
+const STREAM_RELEVANT_PREFERENCES: Array<keyof MusicPreferences> = [
+  'audioQuality',
+  'dataSaver',
+  'directAudiusStreaming',
+];
+
+function touchesStreamPreferences(partial: Partial<MusicPreferences>): boolean {
+  return STREAM_RELEVANT_PREFERENCES.some((key) => Object.prototype.hasOwnProperty.call(partial, key));
+}
 
 interface MusicPreferencesStore {
   preferences: MusicPreferences | null;
@@ -111,6 +122,9 @@ export const useMusicPreferencesStore = create<MusicPreferencesStore>((set, get)
   async updatePreferences(partial: Partial<MusicPreferences>) {
     try {
       set({ loading: true, error: null });
+      if (touchesStreamPreferences(partial)) {
+        clearStreamResolutionCache();
+      }
       
       // Optimistic update
       const current = get().preferences;
@@ -143,7 +157,6 @@ export const useMusicPreferencesStore = create<MusicPreferencesStore>((set, get)
     }
   },
 }));
-
 
 
 

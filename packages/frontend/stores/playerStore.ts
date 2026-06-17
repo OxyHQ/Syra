@@ -31,7 +31,7 @@ import {
   calculateTrackDuration,
   clampVolume,
 } from './playerStore.helpers';
-import { resolveStream, StreamResolution } from '@/services/streamService';
+import { prefetchStreams, resolveStream, StreamResolution } from '@/services/streamService';
 import { libraryService } from '@/services/libraryService';
 import { browseService } from '@/services/browseService';
 import { authenticatedClient } from '@/utils/api';
@@ -194,6 +194,36 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
     useQueueStore.getState().syncQueue(queue);
     return queue;
+  };
+
+  const shouldResolveViaStreamEndpoint = (track: Track): boolean => {
+    const hasHls = track.status === 'ready' && Array.isArray(track.hls) && track.hls.length > 0;
+    const isAudius = track.source === 'audius' && !track.audioSource;
+    return hasHls || isAudius;
+  };
+
+  const prefetchQueueStreams = (
+    tracks: Track[],
+    startIndex: number,
+    options: { includeCurrent?: boolean } = {},
+  ): void => {
+    const from = options.includeCurrent ? startIndex : startIndex + 1;
+    const ids = tracks
+      .slice(Math.max(0, from), Math.max(0, from) + 4)
+      .filter(shouldResolveViaStreamEndpoint)
+      .map((track) => track.id);
+
+    if (ids.length > 0) {
+      prefetchStreams(ids);
+    }
+  };
+
+  const prefetchUpcomingQueueStreams = (): void => {
+    const queue = useQueueStore.getState().queue;
+    if (!queue) {
+      return;
+    }
+    prefetchQueueStreams(queue.tracks, queue.current);
   };
 
   const getRandomNextIndex = (current: number, length: number): number => {
@@ -387,12 +417,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   };
 
   const getPhase3Resolution = async (track: Track): Promise<StreamResolution | null> => {
-    const hasHls = track.status === 'ready' && Array.isArray(track.hls) && track.hls.length > 0;
-    const isAudius = track.source === 'audius' && !track.audioSource;
-    if (!hasHls && !isAudius) {
+    if (!shouldResolveViaStreamEndpoint(track)) {
       return null;
     }
-    logger.debug('Resolving Phase-3 stream', { trackId: track.id, hasHls, isAudius });
+    logger.debug('Resolving Phase-3 stream', { trackId: track.id });
     return resolveStream(track.id);
   };
 
@@ -468,6 +496,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           await updateQueueState(track, addToQueue);
           await startPlayback(player, track);
           startPositionUpdates(player);
+          prefetchUpcomingQueueStreams();
           // Track started successfully — record it for real recently-played.
           recordPlay(track);
         } catch (playError) {
@@ -500,6 +529,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         return;
       }
 
+      prefetchQueueStreams(queue.tracks, queue.current, { includeCurrent: true });
       await get().playTrack(queue.tracks[queue.current], context ?? queue.context, false);
     },
 

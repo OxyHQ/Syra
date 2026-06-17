@@ -31,6 +31,7 @@ import { Toaster } from '@/lib/sonner';
 import i18n from '@/lib/i18n';
 import { useServerAppearanceSync } from '@/hooks/useServerAppearanceSync';
 import { authenticatedClient } from '@/utils/api';
+import { clearStreamResolutionCache } from '@/services/streamService';
 
 /**
  * Non-rendering bridge that pushes the user's saved appearance settings into the
@@ -48,6 +49,7 @@ function SyraApiAuthSync(): null {
   React.useEffect(() => {
     const sourceClient = oxyServices.getClient();
     const syncToken = (accessToken: string | null) => {
+      clearStreamResolutionCache();
       if (accessToken) {
         authenticatedClient.setTokens(accessToken);
       } else {

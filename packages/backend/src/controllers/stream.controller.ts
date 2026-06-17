@@ -12,6 +12,8 @@ import { computeMaxBitrateKbps } from '../services/stream/audioQuality';
 const CONTENT_TYPE_OCTET_STREAM = 'application/octet-stream';
 const CONTENT_TYPE_HLS_PLAYLIST = 'application/vnd.apple.mpegurl';
 const CACHE_CONTROL_NO_STORE = 'no-store';
+const CACHE_CONTROL_STREAM_RESOLUTION = 'private, max-age=300';
+const CACHE_CONTROL_PLAYLIST = 'private, max-age=300, stale-while-revalidate=1800';
 
 /**
  * Stream token TTL covers a full listening session (play, pause, resume).
@@ -157,11 +159,15 @@ export async function getStream(req: AuthRequest, res: Response): Promise<void> 
     const url = `${base}/api/stream/${trackId}/master.m3u8?t=${token}`;
     const expiresAt = new Date(Date.now() + STREAM_SESSION_TTL_SEC * 1000).toISOString();
 
+    res.set('Cache-Control', CACHE_CONTROL_STREAM_RESOLUTION);
+    res.set('Vary', 'Authorization');
     res.status(200).json({ url, type: 'hls', expiresAt });
     return;
   }
 
   if (track.source === 'audius' && track.streamUrl && prefs?.directAudiusStreaming === true) {
+    res.set('Cache-Control', CACHE_CONTROL_STREAM_RESOLUTION);
+    res.set('Vary', 'Authorization');
     res.status(200).json({ url: track.streamUrl, type: 'audius', expiresAt: null });
     return;
   }
@@ -272,7 +278,8 @@ export async function getMasterPlaylist(req: AuthRequest, res: Response): Promis
 
   const playlist = await buildMasterPlaylist(track, token, baseUrl, maxBitrateKbps);
   res.set('Content-Type', CONTENT_TYPE_HLS_PLAYLIST);
-  res.set('Cache-Control', CACHE_CONTROL_NO_STORE);
+  res.set('Cache-Control', CACHE_CONTROL_PLAYLIST);
+  res.set('Vary', 'Authorization');
   res.status(200).send(playlist);
 }
 
@@ -356,6 +363,7 @@ export async function getVariantPlaylist(req: AuthRequest, res: Response): Promi
 
   const playlist = await buildVariantPlaylist(track, bitrateKbps, token, baseUrl);
   res.set('Content-Type', CONTENT_TYPE_HLS_PLAYLIST);
-  res.set('Cache-Control', CACHE_CONTROL_NO_STORE);
+  res.set('Cache-Control', CACHE_CONTROL_PLAYLIST);
+  res.set('Vary', 'Authorization');
   res.status(200).send(playlist);
 }
