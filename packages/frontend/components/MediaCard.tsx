@@ -57,6 +57,7 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
   const resolvedImageUri = pickImageUrl(images, imageUri, 300);
   const [isHovered, setIsHovered] = React.useState(false);
   const [isPlayButtonHovered, setIsPlayButtonHovered] = React.useState(false);
+  const menuControl = Menu.useMenuControl();
   const hoverOutTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const isPlayButtonHoveredRef = React.useRef(false);
 
@@ -67,6 +68,7 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
   // Show play button if card is hovered OR play button itself is hovered
   const showPlayButton = (isHovered || isPlayButtonHovered) && onPlayPress;
   const hasMenu = !!(onAddToQueue || onGoToArtist || onGoToAlbum);
+  const isMenuOpen = 'isOpen' in menuControl ? Boolean(menuControl.isOpen) : false;
   const hoverBackground = colorWithAlpha(primaryColor, 0.26) ?? theme.colors.backgroundSecondary;
 
   React.useEffect(() => () => {
@@ -124,7 +126,7 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
 
     return (
       <View style={styles.menuContainer}>
-        <Menu.Root>
+        <Menu.Root control={menuControl}>
           <Menu.Trigger label={`More actions for ${title}`}>
             {({ props, state }) => (
               <Pressable
@@ -219,6 +221,7 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
       }}
       style={[
         styles.container,
+        (isHovered || isMenuOpen) && styles.containerRaised,
         (isHovered || isPlayButtonHovered) && { backgroundColor: hoverBackground },
         ...Platform.select({
           web: [webViewStyle({ cursor: 'pointer' })],
@@ -302,6 +305,7 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     padding: 6,
     borderRadius: 8,
+    position: 'relative',
     transition: 'background-color 0.2s',
     ...Platform.select({
       web: {
@@ -309,6 +313,9 @@ const styles = StyleSheet.create({
       },
     }),
   }),
+  containerRaised: {
+    zIndex: 50,
+  },
   imageContainer: {
     alignSelf: 'stretch',
     aspectRatio: 1,
