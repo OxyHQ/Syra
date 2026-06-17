@@ -32,7 +32,7 @@ import {
   clampVolume,
 } from './playerStore.helpers';
 import { prefetchStreams, resolveStream, StreamResolution } from '@/services/streamService';
-import { libraryService } from '@/services/libraryService';
+import { libraryService, type ListeningSource } from '@/services/libraryService';
 import { browseService } from '@/services/browseService';
 import { authenticatedClient } from '@/utils/api';
 import { attachSource } from './playback/attachSource';
@@ -80,6 +80,55 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   /** Teardown for the active attachSource (hls.js etc.) — called before attach or stop. */
   let currentDetach: AttachResult | null = null;
   let completionInFlight = false;
+
+  /**
+   * The play currently being tracked for engagement signalling. When the next
+   * play starts (or the current one finishes), the recommendation engine is
+   * told how much of THIS track was actually heard, which is what lets the
+   * backend distinguish a real play from a skip and learn the user's taste.
+   */
+  let activePlay: { trackId: string; source: ListeningSource; durationSec: number } | null = null;
+
+  /** Map a playback context to the listening source the backend understands. */
+  const contextToSource = (context: PlaybackContext | null | undefined): ListeningSource => {
+    switch (context?.type) {
+      case 'album':
+        return 'album';
+      case 'artist':
+        return 'artist';
+      case 'playlist':
+        return 'playlist';
+      case 'library':
+        return 'library';
+      case 'search':
+        return 'search';
+      default:
+        return 'unknown';
+    }
+  };
+
+  /**
+   * Flush the engagement signal for the play currently being tracked, using the
+   * given listened position (defaults to the store's last-known position).
+   * Fire-and-forget; clears the tracked play so it is reported at most once.
+   */
+  const flushPlaySignal = (listenedSecOverride?: number): void => {
+    const play = activePlay;
+    if (!play) return;
+    activePlay = null;
+
+    if (!authenticatedClient.getAccessToken()) return;
+
+    const listenedSec = finiteSeconds(listenedSecOverride ?? get().currentTime);
+    const durationSec = play.durationSec || finiteSeconds(get().duration);
+    const completion = durationSec > 0 ? Math.min(1, listenedSec / durationSec) : undefined;
+
+    void libraryService.recordRecentlyPlayed(play.trackId, {
+      listenedSec,
+      completion,
+      source: play.source,
+    });
+  };
 
   const finiteSeconds = (value: unknown): number =>
     typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
@@ -416,11 +465,21 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
    * provoke a 401. The service itself swallows/logs any failure, so this never
    * affects playback.
    */
-  const recordPlay = (track: Track): void => {
+  const recordPlay = (track: Track, context?: PlaybackContext | null): void => {
+    // Flush the engagement signal for whatever was playing before this track so
+    // the outgoing play's completion/skip is captured exactly once.
+    flushPlaySignal();
+
     if (!authenticatedClient.getAccessToken()) {
+      activePlay = null;
       return;
     }
-    void libraryService.recordRecentlyPlayed(track.id);
+
+    const source = contextToSource(context ?? get().context);
+    // Signal-less start ping: populates "Jump back in" immediately. The
+    // engagement ping (with listenedSec/completion) is sent on flush.
+    void libraryService.recordRecentlyPlayed(track.id, { source });
+    activePlay = { trackId: track.id, source, durationSec: finiteSeconds(track.duration) };
   };
 
   const getPhase3Resolution = async (track: Track): Promise<StreamResolution | null> => {
@@ -505,7 +564,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           startPositionUpdates(player);
           prefetchUpcomingQueueStreams();
           // Track started successfully — record it for real recently-played.
-          recordPlay(track);
+          recordPlay(track, context);
         } catch (playError) {
           logger.error('Error during playback', playError);
           set({ 
@@ -597,6 +656,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
      * Stop playback and cleanup
      */
     stop: async () => {
+      // Capture engagement for the play being torn down before state resets.
+      flushPlaySignal();
       stopPositionUpdates();
       // Tear down any hls.js instance before removing the player
       if (currentDetach) {
@@ -709,6 +770,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
       completionInFlight = true;
       const finishedTrack = get().currentTrack;
+
+      // The track played to its end — report a full completion (a strong
+      // positive taste signal) before advancing.
+      flushPlaySignal(finiteSeconds(finishedTrack?.duration) || finiteSeconds(get().duration));
 
       let nextIndex = chooseNextIndex(true);
 

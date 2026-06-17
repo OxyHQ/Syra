@@ -429,13 +429,25 @@ export const recordRecentlyPlayed = async (req: AuthRequest, res: Response, next
       }
     }
 
-    const listening = await recordPlay({
-      oxyUserId: userId,
-      trackId,
-      listenedSec: parseOptionalNonNegativeNumber(req.body?.listenedSec),
-      completion: parseOptionalNonNegativeNumber(req.body?.completion),
-      source: parseListeningSource(req.body?.source),
-    });
+    // Feed the recommendation engine ONLY when the client reports engagement
+    // signals (how much of the track was actually heard). The player sends a
+    // first, signal-less ping when a track starts (to populate "Jump back in"
+    // instantly) and a second one carrying listenedSec/completion when the play
+    // ends or is skipped. Gating recordPlay on the presence of signals keeps the
+    // global play count and taste profile driven by the engagement ping alone,
+    // so a single play is never double-counted.
+    const listenedSec = parseOptionalNonNegativeNumber(req.body?.listenedSec);
+    const completion = parseOptionalNonNegativeNumber(req.body?.completion);
+    let listening: Awaited<ReturnType<typeof recordPlay>> | null = null;
+    if (listenedSec !== undefined || completion !== undefined) {
+      listening = await recordPlay({
+        oxyUserId: userId,
+        trackId,
+        listenedSec,
+        completion,
+        source: parseListeningSource(req.body?.source),
+      });
+    }
 
     res.json({ ok: true, listening });
   } catch (error) {

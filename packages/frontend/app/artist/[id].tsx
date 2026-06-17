@@ -23,6 +23,7 @@ import { toast } from 'sonner';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { useOxy } from '@oxyhq/services';
 import { useLibrary, useToggleFollowArtist } from '@/hooks/useLibrary';
+import { useRelatedArtists } from '@/hooks/useRecommendations';
 import { webViewStyle } from '@/utils/webStyles';
 
 const HEADER_HEIGHT = 400;
@@ -65,6 +66,9 @@ const ArtistScreen: React.FC = () => {
   const artist = data?.artist ?? null;
   const albums = data?.albums ?? [];
   const tracks = data?.tracks ?? [];
+
+  const relatedArtistsQuery = useRelatedArtists(id);
+  const relatedArtists = relatedArtistsQuery.data?.artists ?? [];
 
   // Parallax animation for header image
   const headerAnimatedStyle = useAnimatedStyle(() => {
@@ -447,6 +451,37 @@ const ArtistScreen: React.FC = () => {
               </>
             )}
 
+            {/* Fans also listen to */}
+            {relatedArtistsQuery.isPending ? null : relatedArtists.length > 0 && (
+              <>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+                    A los fans también les gusta
+                  </Text>
+                </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.relatedArtistsRow}
+                >
+                  {relatedArtists.map((relatedArtist) => (
+                    <View key={relatedArtist.id} style={styles.relatedArtistCard}>
+                      <MediaCard
+                        title={relatedArtist.name}
+                        subtitle="Artist"
+                        type="artist"
+                        imageUri={relatedArtist.image}
+                        images={relatedArtist.images}
+                        imageSizes={relatedArtist.imageSizes}
+                        primaryColor={relatedArtist.primaryColor}
+                        onPress={() => router.push(`/artist/${relatedArtist.id}`)}
+                      />
+                    </View>
+                  ))}
+                </ScrollView>
+              </>
+            )}
+
             {/* Empty State */}
             {albums.length === 0 && tracks.length === 0 && (
               <View style={styles.emptyState}>
@@ -709,6 +744,14 @@ const styles = StyleSheet.create({
   albumsGrid: {
     paddingHorizontal: 24,
     paddingBottom: 24,
+  },
+  relatedArtistsRow: {
+    paddingHorizontal: 24,
+    paddingBottom: 24,
+    gap: 8,
+  },
+  relatedArtistCard: {
+    width: 160,
   },
   emptyState: {
     paddingVertical: 48,

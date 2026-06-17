@@ -88,6 +88,14 @@ const HomeScreen: React.FC = () => {
     () => madeForYouQuery.data?.playlists ?? [],
     [madeForYouQuery.data],
   );
+  const madeForYouArtists = useMemo<Artist[]>(
+    () => madeForYouQuery.data?.artists ?? [],
+    [madeForYouQuery.data],
+  );
+  const isPersonalized = useMemo<boolean>(
+    () => madeForYouQuery.data?.personalized === true,
+    [madeForYouQuery.data],
+  );
   const popularAlbums = useMemo<Album[]>(
     () => popularAlbumsQuery.data?.albums ?? [],
     [popularAlbumsQuery.data],
@@ -310,7 +318,10 @@ const HomeScreen: React.FC = () => {
   const quickAccessLoading =
     popularAlbumsQuery.isPending || popularArtistsQuery.isPending;
   const hasQuickAccess = quickAccess.length > 0;
-  const hasMadeForYou = madeForYouAlbums.length > 0 || madeForYouPlaylists.length > 0;
+  const hasMadeForYou =
+    madeForYouAlbums.length > 0 ||
+    madeForYouPlaylists.length > 0 ||
+    madeForYouArtists.length > 0;
 
   return (
     <>
@@ -482,9 +493,27 @@ const HomeScreen: React.FC = () => {
           ) : hasMadeForYou && (
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                Made for you
+                {isPersonalized ? 'Hecho para ti' : 'Made for you'}
               </Text>
               <ResponsiveGrid minItemWidth={180} gap={8}>
+                {madeForYouArtists.map((artist) => (
+                  <View key={artist.id}>
+                    <MediaCard
+                      title={artist.name}
+                      subtitle="Artist"
+                      type="artist"
+                      imageUri={artist.image}
+                      images={artist.images}
+                      imageSizes={artist.imageSizes}
+                      primaryColor={artist.primaryColor}
+                      onPress={() => router.push(`/artist/${artist.id}`)}
+                      onPlayPress={() => playArtist(artist.id, artist.name)}
+                      onAddToQueue={() => addArtistToQueue(artist.id)}
+                      onHoverIn={() => handleHoverIn(artist.primaryColor)}
+                      onHoverOut={handleHoverOut}
+                    />
+                  </View>
+                ))}
                 {madeForYouPlaylists.map((playlist) => (
                   <View key={playlist.id}>
                     <MediaCard

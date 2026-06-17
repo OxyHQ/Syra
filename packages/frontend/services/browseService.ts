@@ -35,6 +35,11 @@ export interface PopularArtistsResponse {
 export interface MadeForYouResponse {
   albums: Album[];
   playlists: Playlist[];
+  /** Personalised picks (present for authenticated users). */
+  tracks?: Track[];
+  artists?: Artist[];
+  /** False when the result is a cold-start popularity fallback, not learned. */
+  personalized?: boolean;
 }
 
 export interface ChartsResponse {
@@ -69,6 +74,9 @@ export const browseService = {
       madeForYou: {
         albums: response.data.madeForYou.albums.map(normalizeAlbumImages),
         playlists: response.data.madeForYou.playlists.map(normalizePlaylistImages),
+        tracks: response.data.madeForYou.tracks?.map(normalizeTrackImages),
+        artists: response.data.madeForYou.artists?.map(normalizeArtistImages),
+        personalized: response.data.madeForYou.personalized,
       },
       popularAlbums: {
         ...response.data.popularAlbums,
@@ -144,6 +152,9 @@ export const browseService = {
     return {
       albums: response.data.albums.map(normalizeAlbumImages),
       playlists: response.data.playlists.map(normalizePlaylistImages),
+      tracks: response.data.tracks?.map(normalizeTrackImages),
+      artists: response.data.artists?.map(normalizeArtistImages),
+      personalized: response.data.personalized,
     };
   },
 

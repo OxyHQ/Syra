@@ -30,6 +30,36 @@ interface RecordPlayResult {
 }
 
 /**
+ * Where a play was initiated from. Sent with the play signal so the
+ * recommendation engine can weight taste by intent (a searched play is a
+ * stronger signal than an algorithmically-queued radio play). Must mirror the
+ * backend `ListeningSource` union.
+ */
+export type ListeningSource =
+  | 'search'
+  | 'library'
+  | 'playlist'
+  | 'album'
+  | 'artist'
+  | 'radio'
+  | 'recommendation'
+  | 'charts'
+  | 'queue'
+  | 'unknown';
+
+/**
+ * Optional engagement signals accompanying a recorded play. When the player
+ * knows how much of the track was actually heard it sends `listenedSec` (and/or
+ * an explicit `completion` ratio) so the backend can distinguish a real play
+ * from a skip — the foundation of taste learning and honest popularity.
+ */
+export interface PlaySignal {
+  listenedSec?: number;
+  completion?: number;
+  source?: ListeningSource;
+}
+
+/**
  * Normalize the `GET /library` payload to a {@link LibraryMembership}.
  *
  * The backend contract returns `{ likedTracks, savedAlbums, followedArtists,
@@ -134,9 +164,14 @@ export const libraryService = {
    * at warn level and swallowed so playback continues uninterrupted. Resolves
    * `false` instead of throwing so callers can stay synchronous-friendly.
    */
-  async recordRecentlyPlayed(trackId: string): Promise<boolean> {
+  async recordRecentlyPlayed(trackId: string, signal?: PlaySignal): Promise<boolean> {
     try {
-      const response = await api.post<RecordPlayResult>('/library/recently-played', { trackId });
+      const response = await api.post<RecordPlayResult>('/library/recently-played', {
+        trackId,
+        ...(signal?.listenedSec !== undefined ? { listenedSec: signal.listenedSec } : {}),
+        ...(signal?.completion !== undefined ? { completion: signal.completion } : {}),
+        ...(signal?.source ? { source: signal.source } : {}),
+      });
       return response.data?.ok === true;
     } catch (error) {
       logger.warn('Failed to record recently-played', { trackId, error });
