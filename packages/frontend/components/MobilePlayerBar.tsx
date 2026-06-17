@@ -5,7 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePlayerStore } from '@/stores/playerStore';
 import { Image } from 'expo-image';
-import { pickImageUrl } from '@/utils/pickImage';
+import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { useLibrary, useToggleLikeTrack } from '@/hooks/useLibrary';
 import { webViewStyle } from '@/utils/webStyles';
 
@@ -133,7 +133,7 @@ export const MobilePlayerBar: React.FC = () => {
           <Pressable style={styles.albumArtPressable}>
             {(currentTrack?.coverArt || currentTrack?.images?.length) ? (
               <Image
-                source={{ uri: pickImageUrl(currentTrack.images, currentTrack.coverArt, 80, currentTrack.coverArtSizes) }}
+                source={{ uri: pickCatalogImageUrl(currentTrack.images, currentTrack.coverArt, 'thumbnail', currentTrack.coverArtSizes) }}
                 style={styles.albumArt}
                 contentFit="cover"
               />

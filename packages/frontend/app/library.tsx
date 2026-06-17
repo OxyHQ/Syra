@@ -15,7 +15,7 @@ import { useRouter } from 'expo-router';
 import { useOxy } from '@oxyhq/services';
 import { Playlist, Album, Artist } from '@syra/shared-types';
 import { Image } from 'expo-image';
-import { pickImageUrl } from '@/utils/pickImage';
+import { pickCatalogImageUrl } from '@/utils/pickImage';
 
 /**
  * Bottom offset (in px) for the Create Playlist FAB. Clears the floating
@@ -233,7 +233,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                 >
                   {playlist.coverArt ? (
                     <Image
-                      source={{ uri: pickImageUrl(undefined, playlist.coverArt, 80, playlist.coverArtSizes) }}
+                      source={{ uri: pickCatalogImageUrl(undefined, playlist.coverArt, 'thumbnail', playlist.coverArtSizes) }}
                       style={styles.playlistImage}
                       contentFit="cover"
                     />
@@ -273,7 +273,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                 >
                   {(artist.image || artist.images?.length) ? (
                     <Image
-                      source={{ uri: pickImageUrl(artist.images, artist.image, 80, artist.imageSizes) }}
+                      source={{ uri: pickCatalogImageUrl(artist.images, artist.image, 'thumbnail', artist.imageSizes) }}
                       style={styles.artistImage}
                       contentFit="cover"
                     />
@@ -313,7 +313,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                 >
                   {album.coverArt ? (
                     <Image
-                      source={{ uri: pickImageUrl(undefined, album.coverArt, 80, album.coverArtSizes) }}
+                      source={{ uri: pickCatalogImageUrl(undefined, album.coverArt, 'thumbnail', album.coverArtSizes) }}
                       style={styles.playlistImage}
                       contentFit="cover"
                     />

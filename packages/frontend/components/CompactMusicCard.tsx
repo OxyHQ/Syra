@@ -3,7 +3,7 @@ import { StyleSheet, View, Text, Image, Pressable, Platform } from 'react-native
 import { useTheme } from '@oxyhq/bloom/theme';
 import { Ionicons } from '@expo/vector-icons';
 import type { CatalogImageSizes, TrackImage } from '@syra/shared-types';
-import { pickImageUrl } from '@/utils/pickImage';
+import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { webViewStyle } from '@/utils/webStyles';
 
 interface CompactMusicCardProps {
@@ -32,7 +32,7 @@ export const CompactMusicCard: React.FC<CompactMusicCardProps> = ({
   isPlaying = false,
   onPress
 }) => {
-  const resolvedImageUri = pickImageUrl(images, imageUri, 150, imageSizes);
+  const resolvedImageUri = pickCatalogImageUrl(images, imageUri, 'smallArtwork', imageSizes);
   const theme = useTheme();
 
   const getIcon = () => {

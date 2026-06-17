@@ -23,7 +23,7 @@ import {
 } from '@/hooks/useHomeFeed';
 import { createScopedLogger } from '@/utils/logger';
 import { Ionicons } from '@expo/vector-icons';
-import { pickImageUrl } from '@/utils/pickImage';
+import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { toast } from '@/lib/sonner';
 
 const logger = createScopedLogger('HomeScreen');
@@ -362,8 +362,8 @@ const HomeScreen: React.FC = () => {
                 const itemKey = `${item.type}-${id}`;
                 const primaryColor = item.data.primaryColor;
                 const imageUri = item.type === 'artist'
-                  ? pickImageUrl(item.data.images, item.data.image, 64, item.data.imageSizes)
-                  : pickImageUrl(undefined, item.data.coverArt, 64, item.data.coverArtSizes);
+                  ? pickCatalogImageUrl(item.data.images, item.data.image, 'icon', item.data.imageSizes)
+                  : pickCatalogImageUrl(undefined, item.data.coverArt, 'icon', item.data.coverArtSizes);
 
                 return (
                   <Pressable

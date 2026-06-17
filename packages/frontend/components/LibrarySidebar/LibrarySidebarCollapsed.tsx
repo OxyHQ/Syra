@@ -6,7 +6,7 @@ import { useTheme } from '@oxyhq/bloom/theme';
 import { Playlist, Album, Artist } from '@syra/shared-types';
 import { Image } from 'expo-image';
 import { useOxy } from '@oxyhq/services';
-import { pickImageUrl } from '@/utils/pickImage';
+import { pickCatalogImageUrl } from '@/utils/pickImage';
 
 interface LibrarySidebarCollapsedProps {
   onExpand: () => void;
@@ -79,7 +79,7 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
           >
             {playlist.coverArt ? (
               <Image
-                source={{ uri: pickImageUrl(undefined, playlist.coverArt, 64, playlist.coverArtSizes) }}
+                source={{ uri: pickCatalogImageUrl(undefined, playlist.coverArt, 'icon', playlist.coverArtSizes) }}
                 style={styles.playlistIcon}
                 contentFit="cover"
               />
@@ -104,7 +104,7 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
           >
             {(artist.image || artist.images?.length) ? (
               <Image
-                source={{ uri: pickImageUrl(artist.images, artist.image, 64, artist.imageSizes) }}
+                source={{ uri: pickCatalogImageUrl(artist.images, artist.image, 'icon', artist.imageSizes) }}
                 style={styles.artistIcon}
                 contentFit="cover"
               />
@@ -129,7 +129,7 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
           >
             {album.coverArt ? (
               <Image
-                source={{ uri: pickImageUrl(undefined, album.coverArt, 64, album.coverArtSizes) }}
+                source={{ uri: pickCatalogImageUrl(undefined, album.coverArt, 'icon', album.coverArtSizes) }}
                 style={styles.playlistIcon}
                 contentFit="cover"
               />

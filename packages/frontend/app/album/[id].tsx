@@ -14,7 +14,7 @@ import { MediaHeaderSkeleton } from '@/components/skeletons';
 import { formatDuration, formatTotalDuration } from '@/utils/musicUtils';
 import { useLibrary, useToggleSaveAlbum, useToggleLikeTrack } from '@/hooks/useLibrary';
 import { LinearGradient } from 'expo-linear-gradient';
-import { pickImageUrl } from '@/utils/pickImage';
+import { pickCatalogImageUrl } from '@/utils/pickImage';
 
 /**
  * Album Screen
@@ -109,8 +109,8 @@ const AlbumScreen: React.FC = () => {
 
   const releaseDateFormatted = formatReleaseDate(album.releaseDate);
   const totalDurationFormatted = formatTotalDuration(album.totalDuration);
-  const albumCoverImage = pickImageUrl(undefined, album.coverArt, 520, album.coverArtSizes);
-  const albumThumbImage = pickImageUrl(undefined, album.coverArt, 64, album.coverArtSizes);
+  const albumCoverImage = pickCatalogImageUrl(undefined, album.coverArt, 'detailArtwork', album.coverArtSizes);
+  const albumThumbImage = pickCatalogImageUrl(undefined, album.coverArt, 'icon', album.coverArtSizes);
   const gradientColors: readonly [string, string, string] = [
     album.primaryColor ?? theme.colors.backgroundSecondary,
     album.secondaryColor ?? theme.colors.background,

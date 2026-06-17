@@ -5,7 +5,7 @@ import { useTheme } from '@oxyhq/bloom/theme';
 import { Menu } from '@oxyhq/bloom';
 import { Ionicons } from '@expo/vector-icons';
 import type { CatalogImageSizes, TrackImage } from '@syra/shared-types';
-import { pickImageUrl } from '@/utils/pickImage';
+import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { Z_INDEX } from '@/lib/constants';
 
 interface MediaCardProps {
@@ -65,7 +65,7 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
   onHoverOut,
 }) => {
   const theme = useTheme();
-  const resolvedImageUri = pickImageUrl(images, imageUri, 300, imageSizes);
+  const resolvedImageUri = pickCatalogImageUrl(images, imageUri, 'card', imageSizes);
   const [isHovered, setIsHovered] = React.useState(false);
   const [hideIdleActions, setHideIdleActions] = React.useState(shouldHideIdleActionsByDefault);
   const menuControl = Menu.useMenuControl();

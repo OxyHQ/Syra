@@ -8,7 +8,7 @@ import { useUIStore } from '@/stores/uiStore';
 import { Image } from 'expo-image';
 import { Slider } from './Slider';
 import { DevicePicker } from './DevicePicker';
-import { pickImageUrl } from '@/utils/pickImage';
+import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { useLibrary, useToggleLikeTrack } from '@/hooks/useLibrary';
 
 interface WebPressTarget {
@@ -149,7 +149,7 @@ export const PlayerBar: React.FC = () => {
           >
             {(currentTrack?.coverArt || currentTrack?.images?.length) ? (
               <Image
-                source={{ uri: pickImageUrl(currentTrack.images, currentTrack.coverArt, 80, currentTrack.coverArtSizes) }}
+                source={{ uri: pickCatalogImageUrl(currentTrack.images, currentTrack.coverArt, 'thumbnail', currentTrack.coverArtSizes) }}
                 style={styles.albumArt}
                 contentFit="cover"
               />

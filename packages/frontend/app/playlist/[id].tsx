@@ -21,7 +21,7 @@ import { MediaHeaderSkeleton } from '@/components/skeletons';
 import { formatTotalDuration } from '@/utils/musicUtils';
 import { useLibrary, useToggleSavePlaylist } from '@/hooks/useLibrary';
 import { webViewStyle } from '@/utils/webStyles';
-import { pickImageUrl } from '@/utils/pickImage';
+import { pickCatalogImageUrl } from '@/utils/pickImage';
 
 const HEADER_HEIGHT = 400;
 
@@ -169,9 +169,9 @@ const PlaylistScreen: React.FC = () => {
     );
   }
 
-  const playlistStickyImage = pickImageUrl(undefined, playlist.coverArt, 64, playlist.coverArtSizes);
-  const playlistHeroImage = pickImageUrl(undefined, playlist.coverArt, 1000, playlist.coverArtSizes);
-  const playlistInfoImage = pickImageUrl(undefined, playlist.coverArt, 180, playlist.coverArtSizes);
+  const playlistStickyImage = pickCatalogImageUrl(undefined, playlist.coverArt, 'icon', playlist.coverArtSizes);
+  const playlistHeroImage = pickCatalogImageUrl(undefined, playlist.coverArt, 'hero', playlist.coverArtSizes);
+  const playlistInfoImage = pickCatalogImageUrl(undefined, playlist.coverArt, 'smallArtwork', playlist.coverArtSizes);
 
   return (
     <>

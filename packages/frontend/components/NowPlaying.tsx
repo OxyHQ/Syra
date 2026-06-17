@@ -14,7 +14,7 @@ import { musicService } from '@/services/musicService';
 import { Album, Artist } from '@syra/shared-types';
 import Avatar from '@/components/Avatar';
 import { LyricsView } from '@/components/LyricsView';
-import { pickImageUrl } from '@/utils/pickImage';
+import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { useLibrary, useToggleLikeTrack } from '@/hooks/useLibrary';
 
 /**
@@ -78,9 +78,9 @@ export const NowPlaying: React.FC = () => {
 
   // Use album cover or artist image as background
   const backgroundImage =
-    pickImageUrl(currentTrack?.images, currentTrack?.coverArt, 1000, currentTrack?.coverArtSizes) ||
-    pickImageUrl(undefined, album?.coverArt, 1000, album?.coverArtSizes) ||
-    pickImageUrl(artist?.images, artist?.image, 1000, artist?.imageSizes);
+    pickCatalogImageUrl(currentTrack?.images, currentTrack?.coverArt, 'hero', currentTrack?.coverArtSizes) ||
+    pickCatalogImageUrl(undefined, album?.coverArt, 'hero', album?.coverArtSizes) ||
+    pickCatalogImageUrl(artist?.images, artist?.image, 'hero', artist?.imageSizes);
 
   // Hide on mobile/tablet only (after hooks, so hook order stays stable)
   if (!isDesktop) {
@@ -197,7 +197,7 @@ export const NowPlaying: React.FC = () => {
                       style={styles.artistCard}
                     >
                       {(artist.image || artist.images?.length) ? (
-                        <Avatar source={pickImageUrl(artist.images, artist.image, 80, artist.imageSizes)} size={80} />
+                        <Avatar source={pickCatalogImageUrl(artist.images, artist.image, 'thumbnail', artist.imageSizes)} size={80} />
                       ) : (
                         <View style={[styles.artistImagePlaceholder, { backgroundColor: theme.colors.background }]}>
                           <Ionicons name="person" size={40} color={theme.colors.textSecondary} />
@@ -303,7 +303,7 @@ export const NowPlaying: React.FC = () => {
                         >
                           {(track.coverArt || track.images?.length) ? (
                             <ExpoImage
-                              source={{ uri: pickImageUrl(track.images, track.coverArt, 80, track.coverArtSizes) }}
+                              source={{ uri: pickCatalogImageUrl(track.images, track.coverArt, 'thumbnail', track.coverArtSizes) }}
                               style={styles.queueItemImage}
                               contentFit="cover"
                             />

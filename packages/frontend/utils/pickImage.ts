@@ -6,6 +6,17 @@ type ImageCandidate = {
   width: number;
 };
 
+export const CATALOG_IMAGE_TARGET_WIDTH = {
+  icon: 64,
+  thumbnail: 80,
+  smallArtwork: 180,
+  card: 300,
+  detailArtwork: 520,
+  hero: 1000,
+} as const;
+
+export type CatalogImageTarget = keyof typeof CATALOG_IMAGE_TARGET_WIDTH;
+
 function normalizeCandidate(urlValue: string | undefined, widthValue: number | undefined): ImageCandidate | null {
   if (!urlValue) return null;
   const url = resolveCatalogImageUrl(urlValue);
@@ -72,4 +83,13 @@ export function pickImageUrl(
   }
 
   return best?.url ?? normalizedFallback;
+}
+
+export function pickCatalogImageUrl(
+  images: TrackImage[] | undefined,
+  fallback: string | undefined,
+  target: CatalogImageTarget,
+  sizes?: CatalogImageSizes,
+): string | undefined {
+  return pickImageUrl(images, fallback, CATALOG_IMAGE_TARGET_WIDTH[target], sizes);
 }

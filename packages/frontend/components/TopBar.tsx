@@ -15,7 +15,7 @@ import { searchService } from '@/services/searchService';
 import { musicService } from '@/services/musicService';
 import { searchRefetchInterval } from '@/utils/searchUtils';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
-import { pickImageUrl } from '@/utils/pickImage';
+import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { Album, Artist, Playlist, SearchCategory, SearchUser, Track } from '@syra/shared-types';
 import { usePlayerStore } from '@/stores/playerStore';
 
@@ -184,7 +184,7 @@ export const TopBar: React.FC = () => {
       title: track.title,
       subtitle: track.artistName,
       href: track.albumId ? albumHref(track.albumId) : artistHref(track.artistId),
-      imageUri: pickImageUrl(track.images, track.coverArt, 64, track.coverArtSizes),
+      imageUri: pickCatalogImageUrl(track.images, track.coverArt, 'icon', track.coverArtSizes),
       icon: 'music-note-outline' as const,
       onPlay: () => {
         const tracks = results?.tracks ?? [track];
@@ -198,7 +198,7 @@ export const TopBar: React.FC = () => {
       title: album.title,
       subtitle: album.artistName,
       href: albumHref(album.id),
-      imageUri: pickImageUrl(undefined, album.coverArt, 64, album.coverArtSizes),
+      imageUri: pickCatalogImageUrl(undefined, album.coverArt, 'icon', album.coverArtSizes),
       icon: 'album' as const,
       onPlay: () => playAlbum(album.id, album.title),
     }));
@@ -208,7 +208,7 @@ export const TopBar: React.FC = () => {
       title: artist.name,
       subtitle: 'Artist',
       href: artistHref(artist.id),
-      imageUri: pickImageUrl(artist.images, artist.image, 64, artist.imageSizes),
+      imageUri: pickCatalogImageUrl(artist.images, artist.image, 'icon', artist.imageSizes),
       icon: 'account-music-outline' as const,
       rounded: true,
       onPlay: () => playArtist(artist.id, artist.name),
@@ -219,7 +219,7 @@ export const TopBar: React.FC = () => {
       title: playlist.name,
       subtitle: `Playlist - ${playlist.trackCount || 0} songs`,
       href: playlistHref(playlist.id),
-      imageUri: pickImageUrl(undefined, playlist.coverArt, 64, playlist.coverArtSizes),
+      imageUri: pickCatalogImageUrl(undefined, playlist.coverArt, 'icon', playlist.coverArtSizes),
       icon: 'playlist-music-outline' as const,
       onPlay: () => playPlaylist(playlist.id, playlist.name),
     }));
