@@ -4,12 +4,14 @@ import { webDimension } from '@/utils/webStyles';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { useRouter } from 'expo-router';
+import { Image } from 'expo-image';
 import SEO from '@/components/SEO';
 import { MediaCard } from '@/components/MediaCard';
 import { QuickAccessGridSkeleton, MediaCardRowSkeleton } from '@/components/skeletons';
 import { musicService } from '@/services/musicService';
 import { Track, Album, Artist, Playlist } from '@syra/shared-types';
 import { usePlayerStore } from '@/stores/playerStore';
+import { useQueueStore } from '@/stores/queueStore';
 import {
   useRecentlyPlayed,
   useMadeForYou,
@@ -20,6 +22,8 @@ import {
 } from '@/hooks/useHomeFeed';
 import { createScopedLogger } from '@/utils/logger';
 import { Ionicons } from '@expo/vector-icons';
+import { pickImageUrl } from '@/utils/pickImage';
+import { toast } from '@/lib/sonner';
 
 const logger = createScopedLogger('HomeScreen');
 
@@ -57,8 +61,9 @@ type QuickAccessItem =
 const HomeScreen: React.FC = () => {
   const theme = useTheme();
   const router = useRouter();
-  const [activeFilter, setActiveFilter] = useState<'All' | 'Music' | 'Podcasts' | 'Audiobooks'>('All');
-  const { playTrack } = usePlayerStore();
+  const [now, setNow] = useState(() => new Date());
+  const { playTrackList } = usePlayerStore();
+  const { addTracksLocally } = useQueueStore();
 
   // Real, per-section queries — each loads/caches/errors independently.
   const recentlyPlayedQuery = useRecentlyPlayed();
@@ -97,6 +102,11 @@ const HomeScreen: React.FC = () => {
     () => tracksQuery.data?.tracks ?? [],
     [tracksQuery.data],
   );
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // State for hover gradient color with smooth transitions
   const [hoveredItemColor, setHoveredItemColor] = useState<string | null>(null);
@@ -218,12 +228,12 @@ const HomeScreen: React.FC = () => {
   }, [hoveredItemColor, theme.colors.primary]);
 
   // Get greeting based on time
-  const getGreeting = () => {
-    const hour = new Date().getHours();
+  const greeting = useMemo(() => {
+    const hour = now.getHours();
     if (hour < 12) return 'Good morning';
     if (hour < 18) return 'Good afternoon';
     return 'Good evening';
-  };
+  }, [now]);
 
   // Convert hex to rgba string for LinearGradient
   const hexToRgba = (hex: string, alpha: number = 0.2): string => {
@@ -256,16 +266,100 @@ const HomeScreen: React.FC = () => {
 
   // Navigate to and start playing an album's first track. Used by album cards'
   // play button so a single tap actually plays real audio.
-  const playAlbum = useCallback(async (albumId: string) => {
+  const playAlbum = useCallback(async (albumId: string, albumName?: string) => {
     try {
       const { tracks: albumTracks } = await musicService.getAlbumTracks(albumId);
       if (albumTracks.length > 0) {
-        await playTrack(albumTracks[0]);
+        await playTrackList(albumTracks, 0, {
+          type: 'album',
+          id: albumId,
+          name: albumName,
+        });
       }
     } catch (error) {
       logger.error('Error playing album', { albumId, error });
     }
-  }, [playTrack]);
+  }, [playTrackList]);
+
+  const playPlaylist = useCallback(async (playlistId: string, playlistName?: string) => {
+    try {
+      const { tracks: playlistTracks } = await musicService.getPlaylistTracks(playlistId);
+      if (playlistTracks.length > 0) {
+        await playTrackList(playlistTracks, 0, {
+          type: 'playlist',
+          id: playlistId,
+          name: playlistName,
+        });
+      }
+    } catch (error) {
+      logger.error('Error playing playlist', { playlistId, error });
+    }
+  }, [playTrackList]);
+
+  const playArtist = useCallback(async (artistId: string, artistName?: string) => {
+    try {
+      const { tracks: artistTracks } = await musicService.getArtistTracks(artistId, { limit: 50 });
+      if (artistTracks.length > 0) {
+        await playTrackList(artistTracks, 0, {
+          type: 'artist',
+          id: artistId,
+          name: artistName,
+        });
+      }
+    } catch (error) {
+      logger.error('Error playing artist', { artistId, error });
+    }
+  }, [playTrackList]);
+
+  const addTrackToQueue = useCallback((track: Track) => {
+    addTracksLocally([track], 'last');
+    toast.success('Added to queue');
+  }, [addTracksLocally]);
+
+  const addAlbumToQueue = useCallback(async (albumId: string) => {
+    try {
+      const { tracks: albumTracks } = await musicService.getAlbumTracks(albumId);
+      if (albumTracks.length === 0) {
+        toast.info('No tracks to add');
+        return;
+      }
+      addTracksLocally(albumTracks, 'last');
+      toast.success('Added to queue');
+    } catch (error) {
+      logger.error('Error adding album to queue', { albumId, error });
+      toast.error('Could not add to queue');
+    }
+  }, [addTracksLocally]);
+
+  const addPlaylistToQueue = useCallback(async (playlistId: string) => {
+    try {
+      const { tracks: playlistTracks } = await musicService.getPlaylistTracks(playlistId);
+      if (playlistTracks.length === 0) {
+        toast.info('No tracks to add');
+        return;
+      }
+      addTracksLocally(playlistTracks, 'last');
+      toast.success('Added to queue');
+    } catch (error) {
+      logger.error('Error adding playlist to queue', { playlistId, error });
+      toast.error('Could not add to queue');
+    }
+  }, [addTracksLocally]);
+
+  const addArtistToQueue = useCallback(async (artistId: string) => {
+    try {
+      const { tracks: artistTracks } = await musicService.getArtistTracks(artistId, { limit: 50 });
+      if (artistTracks.length === 0) {
+        toast.info('No tracks to add');
+        return;
+      }
+      addTracksLocally(artistTracks, 'last');
+      toast.success('Added to queue');
+    } catch (error) {
+      logger.error('Error adding artist to queue', { artistId, error });
+      toast.error('Could not add to queue');
+    }
+  }, [addTracksLocally]);
 
   // Compute quick access items from real data (mix of albums, artists, playlists)
   const quickAccess = useMemo<QuickAccessItem[]>(() => {
@@ -318,42 +412,8 @@ const HomeScreen: React.FC = () => {
           {/* Header */}
           <View style={styles.header}>
             <Text style={[styles.title, { color: theme.colors.text }]}>
-              {getGreeting()}
+              {greeting}
             </Text>
-          </View>
-
-          {/* Filter Chips */}
-          <View style={styles.filtersContainer}>
-            {(['All', 'Music', 'Podcasts', 'Audiobooks'] as const).map((filter) => (
-              <Pressable
-                key={filter}
-                onPress={() => setActiveFilter(filter)}
-                style={[
-                  styles.filterButton,
-                  {
-                    backgroundColor: activeFilter === filter
-                      ? theme.colors.primary + '20'
-                      : theme.colors.backgroundSecondary,
-                    borderColor: activeFilter === filter
-                      ? theme.colors.primary
-                      : 'transparent',
-                  }
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.filterText,
-                    {
-                      color: activeFilter === filter
-                        ? theme.colors.primary
-                        : theme.colors.text
-                    }
-                  ]}
-                >
-                  {filter}
-                </Text>
-              </Pressable>
-            ))}
           </View>
 
           {/* 8-Item Compact Grid (2 columns) - real albums/artists/playlists */}
@@ -365,6 +425,12 @@ const HomeScreen: React.FC = () => {
                 const title = item.type === 'album' ? item.data.title : item.data.name;
                 const id = item.data.id;
                 const primaryColor = item.data.primaryColor;
+                const imageUri =
+                  item.type === 'album'
+                    ? item.data.coverArt
+                    : item.type === 'artist'
+                      ? pickImageUrl(item.data.images, item.data.image, 150)
+                      : item.data.coverArt;
 
                 return (
                   <Pressable
@@ -391,11 +457,22 @@ const HomeScreen: React.FC = () => {
                         }
                       ]}
                     >
-                      <Ionicons
-                        name={item.type === 'artist' ? 'person' : 'musical-notes'}
-                        size={24}
-                        color={theme.colors.textSecondary}
-                      />
+                      {imageUri ? (
+                        <Image
+                          source={{ uri: imageUri }}
+                          style={[
+                            styles.compactImage,
+                            { borderRadius: item.shape === 'circle' ? 999 : 12 },
+                          ]}
+                          contentFit="cover"
+                        />
+                      ) : (
+                        <Ionicons
+                          name={item.type === 'artist' ? 'person' : 'musical-notes'}
+                          size={24}
+                          color={theme.colors.textSecondary}
+                        />
+                      )}
                     </View>
                     <Text
                       style={[styles.compactTitle, { color: theme.colors.text }]}
@@ -435,9 +512,21 @@ const HomeScreen: React.FC = () => {
                       onPress={() => {
                         if (track.albumId) {
                           router.push(`/album/${track.albumId}`);
+                        } else {
+                          router.push(`/artist/${track.artistId}`);
                         }
                       }}
-                      onPlayPress={() => playTrack(track)}
+                      onPlayPress={() => playTrackList(
+                        recentlyPlayed,
+                        recentlyPlayed.findIndex((item) => item.id === track.id),
+                        {
+                          type: 'library',
+                          name: 'Recently played',
+                        },
+                      )}
+                      onAddToQueue={() => addTrackToQueue(track)}
+                      onGoToAlbum={track.albumId ? () => router.push(`/album/${track.albumId}`) : undefined}
+                      onGoToArtist={() => router.push(`/artist/${track.artistId}`)}
                     />
                   </View>
                 ))}
@@ -467,7 +556,8 @@ const HomeScreen: React.FC = () => {
                       type="playlist"
                       imageUri={playlist.coverArt}
                       onPress={() => router.push(`/playlist/${playlist.id}`)}
-                      onPlayPress={() => router.push(`/playlist/${playlist.id}`)}
+                      onPlayPress={() => playPlaylist(playlist.id, playlist.name)}
+                      onAddToQueue={() => addPlaylistToQueue(playlist.id)}
                       onHoverIn={() => handleHoverIn(playlist.primaryColor)}
                       onHoverOut={handleHoverOut}
                     />
@@ -481,7 +571,9 @@ const HomeScreen: React.FC = () => {
                       type="album"
                       imageUri={album.coverArt}
                       onPress={() => router.push(`/album/${album.id}`)}
-                      onPlayPress={() => playAlbum(album.id)}
+                      onPlayPress={() => playAlbum(album.id, album.title)}
+                      onAddToQueue={() => addAlbumToQueue(album.id)}
+                      onGoToArtist={() => router.push(`/artist/${album.artistId}`)}
                       onHoverIn={() => handleHoverIn(album.primaryColor)}
                       onHoverOut={handleHoverOut}
                     />
@@ -513,7 +605,9 @@ const HomeScreen: React.FC = () => {
                       type="album"
                       imageUri={album.coverArt}
                       onPress={() => router.push(`/album/${album.id}`)}
-                      onPlayPress={() => playAlbum(album.id)}
+                      onPlayPress={() => playAlbum(album.id, album.title)}
+                      onAddToQueue={() => addAlbumToQueue(album.id)}
+                      onGoToArtist={() => router.push(`/artist/${album.artistId}`)}
                       onHoverIn={() => handleHoverIn(album.primaryColor)}
                       onHoverOut={handleHoverOut}
                     />
@@ -536,7 +630,11 @@ const HomeScreen: React.FC = () => {
                       title={artist.name}
                       subtitle="Artist"
                       type="artist"
+                      imageUri={artist.image}
+                      images={artist.images}
                       onPress={() => router.push(`/artist/${artist.id}`)}
+                      onPlayPress={() => playArtist(artist.id, artist.name)}
+                      onAddToQueue={() => addArtistToQueue(artist.id)}
                       onHoverIn={() => handleHoverIn(artist.primaryColor)}
                       onHoverOut={handleHoverOut}
                     />
@@ -561,7 +659,8 @@ const HomeScreen: React.FC = () => {
                       type="playlist"
                       imageUri={playlist.coverArt}
                       onPress={() => router.push(`/playlist/${playlist.id}`)}
-                      onPlayPress={() => router.push(`/playlist/${playlist.id}`)}
+                      onPlayPress={() => playPlaylist(playlist.id, playlist.name)}
+                      onAddToQueue={() => addPlaylistToQueue(playlist.id)}
                       onHoverIn={() => handleHoverIn(playlist.primaryColor)}
                       onHoverOut={handleHoverOut}
                     />
@@ -596,9 +695,17 @@ const HomeScreen: React.FC = () => {
                       onPress={() => {
                         if (track.albumId) {
                           router.push(`/album/${track.albumId}`);
+                        } else {
+                          router.push(`/artist/${track.artistId}`);
                         }
                       }}
-                      onPlayPress={() => playTrack(track)}
+                      onPlayPress={() => playTrackList(tracks, tracks.findIndex((item) => item.id === track.id), {
+                        type: 'track',
+                        name: 'Popular tracks',
+                      })}
+                      onAddToQueue={() => addTrackToQueue(track)}
+                      onGoToAlbum={track.albumId ? () => router.push(`/album/${track.albumId}`) : undefined}
+                      onGoToArtist={() => router.push(`/artist/${track.artistId}`)}
                     />
                   </View>
                 ))}
@@ -638,26 +745,6 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: 'bold',
   },
-  filtersContainer: {
-    flexDirection: 'row',
-    gap: 6,
-    marginBottom: 20,
-    alignItems: 'center',
-  },
-  filterButton: {
-    paddingHorizontal: 13,
-    paddingVertical: 4,
-    borderRadius: 13,
-    borderWidth: 1,
-    height: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  filterText: {
-    fontSize: 12,
-    fontWeight: '600',
-    lineHeight: 14,
-  },
   compactGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -686,6 +773,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+  },
+  compactImage: {
+    width: '100%',
+    height: '100%',
   },
   compactTitle: {
     flex: 1,

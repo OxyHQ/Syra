@@ -8,6 +8,7 @@
  * the known duration.
  */
 export const FINISH_EPSILON_SEC = 1.5;
+export const UNKNOWN_DURATION_MIN_POSITION_SEC = 3;
 
 /**
  * Determine whether a `didJustFinish` playback event is a genuine track
@@ -25,5 +26,13 @@ export const FINISH_EPSILON_SEC = 1.5;
  * @param positionSec - Current playback position in seconds
  */
 export function isRealFinish(durationSec: number, positionSec: number): boolean {
-  return durationSec > 0 && positionSec >= durationSec - FINISH_EPSILON_SEC;
+  if (durationSec > 0) {
+    return positionSec >= durationSec - FINISH_EPSILON_SEC;
+  }
+
+  // Some streams, especially remote progressive/HLS sources, can emit a real
+  // ended event while duration metadata is still unknown (0/Infinity). Keep the
+  // original protection against startup false positives by requiring meaningful
+  // playback progress before accepting an unknown-duration finish.
+  return positionSec >= UNKNOWN_DURATION_MIN_POSITION_SEC;
 }

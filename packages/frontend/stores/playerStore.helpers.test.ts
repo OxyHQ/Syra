@@ -1,9 +1,17 @@
-import { isRealFinish, FINISH_EPSILON_SEC } from './playback/isRealFinish';
+import {
+  isRealFinish,
+  FINISH_EPSILON_SEC,
+  UNKNOWN_DURATION_MIN_POSITION_SEC,
+} from './playback/isRealFinish';
 
 describe('isRealFinish', () => {
   describe('spurious finish (false)', () => {
-    it('returns false when duration is 0 — no metadata yet', () => {
+    it('returns false when duration is 0 and playback has not progressed — no metadata yet', () => {
       expect(isRealFinish(0, 0)).toBe(false);
+    });
+
+    it('returns false for unknown-duration startup false positives', () => {
+      expect(isRealFinish(0, UNKNOWN_DURATION_MIN_POSITION_SEC - 0.1)).toBe(false);
     });
 
     it('returns false when position is at start of a real track', () => {
@@ -35,6 +43,10 @@ describe('isRealFinish', () => {
 
     it('returns true for a short track at its natural end', () => {
       expect(isRealFinish(30, 29)).toBe(true);
+    });
+
+    it('returns true for an unknown-duration stream after meaningful playback progress', () => {
+      expect(isRealFinish(0, UNKNOWN_DURATION_MIN_POSITION_SEC)).toBe(true);
     });
   });
 });

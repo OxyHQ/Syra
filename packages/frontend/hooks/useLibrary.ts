@@ -8,6 +8,7 @@ import {
 } from '@tanstack/react-query';
 import { useOxy } from '@oxyhq/services';
 import { libraryService, type LibraryMembership } from '@/services/libraryService';
+import { toast } from '@/lib/sonner';
 
 /**
  * Shared React Query library layer — the single source of truth for the
@@ -116,14 +117,25 @@ function useToggleMembership(
   field: MembershipField,
   on: (id: string) => Promise<{ success: boolean }>,
   off: (id: string) => Promise<{ success: boolean }>,
-  options?: { invalidateTracks?: boolean },
+  options?: { invalidateTracks?: boolean; invalidatePlaylists?: boolean },
 ): UseMutationResult<{ success: boolean }, Error, ToggleVariables, ToggleContext> {
   const queryClient = useQueryClient();
+  const { isAuthenticated, showBottomSheet } = useOxy();
   const invalidateTracks = options?.invalidateTracks ?? false;
+  const invalidatePlaylists = options?.invalidatePlaylists ?? false;
 
   return useMutation<{ success: boolean }, Error, ToggleVariables, ToggleContext>({
-    mutationFn: ({ id, next }) => (next ? on(id) : off(id)),
+    mutationFn: ({ id, next }) => {
+      if (!isAuthenticated) {
+        showBottomSheet?.('OxyAuth');
+        throw new Error('Sign in to save music to your library');
+      }
+      return next ? on(id) : off(id);
+    },
     onMutate: async ({ id, next }) => {
+      if (!isAuthenticated) {
+        return { previous: queryClient.getQueryData<LibraryMembership>(LIBRARY_QUERY_KEY) };
+      }
       await queryClient.cancelQueries({ queryKey: LIBRARY_QUERY_KEY });
       const previous = queryClient.getQueryData<LibraryMembership>(LIBRARY_QUERY_KEY);
       queryClient.setQueryData<LibraryMembership>(LIBRARY_QUERY_KEY, (current) =>
@@ -135,11 +147,15 @@ function useToggleMembership(
       if (context?.previous !== undefined) {
         queryClient.setQueryData(LIBRARY_QUERY_KEY, context.previous);
       }
+      toast.error(_error.message || 'Could not update your library');
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: LIBRARY_QUERY_KEY });
       if (invalidateTracks) {
         queryClient.invalidateQueries({ queryKey: LIBRARY_TRACKS_QUERY_KEY });
+      }
+      if (invalidatePlaylists) {
+        queryClient.invalidateQueries({ queryKey: ['library', 'playlists'] });
       }
     },
   });
@@ -160,7 +176,9 @@ export function useToggleFollowArtist() {
 }
 
 export function useToggleSavePlaylist() {
-  return useToggleMembership('savedPlaylists', libraryService.savePlaylist, libraryService.unsavePlaylist);
+  return useToggleMembership('savedPlaylists', libraryService.savePlaylist, libraryService.unsavePlaylist, {
+    invalidatePlaylists: true,
+  });
 }
 
 /**

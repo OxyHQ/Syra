@@ -20,7 +20,7 @@ import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { MenuProvider } from 'react-native-popup-menu';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { OxyProvider } from '@oxyhq/services';
+import { OxyProvider, useOxy } from '@oxyhq/services';
 import { OxyServices } from '@oxyhq/core';
 
 import { OXY_CLIENT_ID } from '@/config';
@@ -30,6 +30,7 @@ import { HomeRefreshProvider } from '@/context/HomeRefreshContext';
 import { Toaster } from '@/lib/sonner';
 import i18n from '@/lib/i18n';
 import { useServerAppearanceSync } from '@/hooks/useServerAppearanceSync';
+import { authenticatedClient } from '@/utils/api';
 
 /**
  * Non-rendering bridge that pushes the user's saved appearance settings into the
@@ -38,6 +39,26 @@ import { useServerAppearanceSync } from '@/hooks/useServerAppearanceSync';
  */
 function AppearanceSync(): null {
   useServerAppearanceSync();
+  return null;
+}
+
+function SyraApiAuthSync(): null {
+  const { oxyServices } = useOxy();
+
+  React.useEffect(() => {
+    const sourceClient = oxyServices.getClient();
+    const syncToken = (accessToken: string | null) => {
+      if (accessToken) {
+        authenticatedClient.setTokens(accessToken);
+      } else {
+        authenticatedClient.clearTokens();
+      }
+    };
+
+    syncToken(sourceClient.getAccessToken());
+    return sourceClient.addTokenChangeListener(syncToken);
+  }, [oxyServices]);
+
   return null;
 }
 
@@ -69,6 +90,7 @@ export const AppProviders = memo(function AppProviders({
             >
               <I18nextProvider i18n={i18n}>
                 <AppearanceSync />
+                <SyraApiAuthSync />
                 <BottomSheetModalProvider>
                   <BottomSheetProvider>
                     <MenuProvider>
@@ -92,4 +114,3 @@ export const AppProviders = memo(function AppProviders({
     </SafeAreaProvider>
   );
 });
-

@@ -12,6 +12,7 @@ interface QueueState {
   // Actions
   loadQueue: () => Promise<void>;
   addToQueue: (trackIds: string[], position?: 'next' | 'last' | number) => Promise<void>;
+  addTracksLocally: (tracks: Track[], position?: 'next' | 'last' | number) => void;
   removeFromQueue: (trackIds: string[]) => Promise<void>;
   reorderQueue: (trackIds: string[]) => Promise<void>;
   clearQueue: () => Promise<void>;
@@ -58,6 +59,39 @@ export const useQueueStore = create<QueueState>((set, get) => ({
         isLoading: false,
       });
     }
+  },
+
+  addTracksLocally: (tracks: Track[], position?: 'next' | 'last' | number) => {
+    if (tracks.length === 0) {
+      return;
+    }
+
+    set((state) => {
+      const queue = state.queue ?? {
+        current: -1,
+        tracks: [],
+      };
+
+      let insertIndex: number;
+      if (position === 'next') {
+        insertIndex = queue.current >= 0 ? queue.current + 1 : 0;
+      } else if (position === 'last' || position === undefined) {
+        insertIndex = queue.tracks.length;
+      } else {
+        insertIndex = Math.max(0, Math.min(position, queue.tracks.length));
+      }
+
+      const nextTracks = [...queue.tracks];
+      nextTracks.splice(insertIndex, 0, ...tracks);
+
+      return {
+        queue: {
+          ...queue,
+          current: queue.current >= insertIndex ? queue.current + tracks.length : queue.current,
+          tracks: nextTracks,
+        },
+      };
+    });
   },
 
   removeFromQueue: async (trackIds: string[]) => {
@@ -174,7 +208,6 @@ export const useQueueStore = create<QueueState>((set, get) => ({
     set({ queue });
   },
 }));
-
 
 
 

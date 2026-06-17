@@ -5,6 +5,7 @@ import { useTheme } from '@oxyhq/bloom/theme';
 import { Ionicons } from '@expo/vector-icons';
 import type { TrackImage } from '@syra/shared-types';
 import { pickImageUrl } from '@/utils/pickImage';
+import { Menu, MenuOptions, MenuOption, MenuTrigger } from 'react-native-popup-menu';
 
 interface MediaCardProps {
   title: string;
@@ -15,6 +16,9 @@ interface MediaCardProps {
   type?: 'playlist' | 'album' | 'artist' | 'podcast' | 'track';
   onPress?: () => void;
   onPlayPress?: () => void;
+  onAddToQueue?: () => void;
+  onGoToArtist?: () => void;
+  onGoToAlbum?: () => void;
   shape?: 'square' | 'circle';
   onHoverIn?: () => void;
   onHoverOut?: () => void;
@@ -32,6 +36,9 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
   type = 'playlist',
   onPress,
   onPlayPress,
+  onAddToQueue,
+  onGoToArtist,
+  onGoToAlbum,
   shape,
   onHoverIn,
   onHoverOut,
@@ -47,6 +54,7 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
   
   // Show play button if card is hovered OR play button itself is hovered
   const showPlayButton = (isHovered || isPlayButtonHovered) && onPlayPress;
+  const hasMenu = !!(onAddToQueue || onGoToArtist || onGoToAlbum);
 
   const getIcon = () => {
     switch (type) {
@@ -122,6 +130,56 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
               <Ionicons name="play" size={24} color={theme.colors.primaryForeground} />
             </View>
           </Pressable>
+        )}
+        {hasMenu && (
+          <View style={styles.menuContainer}>
+            <Menu>
+              <MenuTrigger
+                customStyles={{
+                  TriggerTouchableComponent: Pressable,
+                  triggerWrapper: [
+                    styles.menuTrigger,
+                    { backgroundColor: 'rgba(0, 0, 0, 0.55)' },
+                  ],
+                }}
+              >
+                <Ionicons name="ellipsis-horizontal" size={18} color="#FFFFFF" />
+              </MenuTrigger>
+              <MenuOptions
+                customStyles={{
+                  optionsContainer: [
+                    styles.menuOptions,
+                    { backgroundColor: theme.colors.backgroundTertiary },
+                  ],
+                }}
+              >
+                {onPress && (
+                  <MenuOption onSelect={onPress} customStyles={{ optionWrapper: styles.menuOption }}>
+                    <Ionicons name="open-outline" size={18} color={theme.colors.text} />
+                    <Text style={[styles.menuOptionText, { color: theme.colors.text }]}>Open</Text>
+                  </MenuOption>
+                )}
+                {onAddToQueue && (
+                  <MenuOption onSelect={onAddToQueue} customStyles={{ optionWrapper: styles.menuOption }}>
+                    <Ionicons name="list-outline" size={18} color={theme.colors.text} />
+                    <Text style={[styles.menuOptionText, { color: theme.colors.text }]}>Add to queue</Text>
+                  </MenuOption>
+                )}
+                {onGoToAlbum && (
+                  <MenuOption onSelect={onGoToAlbum} customStyles={{ optionWrapper: styles.menuOption }}>
+                    <Ionicons name="disc-outline" size={18} color={theme.colors.text} />
+                    <Text style={[styles.menuOptionText, { color: theme.colors.text }]}>Go to album</Text>
+                  </MenuOption>
+                )}
+                {onGoToArtist && (
+                  <MenuOption onSelect={onGoToArtist} customStyles={{ optionWrapper: styles.menuOption }}>
+                    <Ionicons name="person-outline" size={18} color={theme.colors.text} />
+                    <Text style={[styles.menuOptionText, { color: theme.colors.text }]}>Go to artist</Text>
+                  </MenuOption>
+                )}
+              </MenuOptions>
+            </Menu>
+          </View>
         )}
       </View>
 
@@ -205,6 +263,40 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     transform: [{ translateY: 8 }], // Slight offset like Spotify
   },
+  menuContainer: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    zIndex: 4,
+  },
+  menuTrigger: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+      },
+    }),
+  },
+  menuOptions: {
+    borderRadius: 8,
+    paddingVertical: 4,
+    minWidth: 180,
+  },
+  menuOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  menuOptionText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
   textContainer: {
     minHeight: 42,
   },
@@ -219,4 +311,3 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
 });
-

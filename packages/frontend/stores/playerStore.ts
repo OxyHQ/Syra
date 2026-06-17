@@ -79,6 +79,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   let positionUpdateInterval: ReturnType<typeof setInterval> | null = null;
   /** Teardown for the active attachSource (hls.js etc.) — called before attach or stop. */
   let currentDetach: AttachResult | null = null;
+  let completionInFlight = false;
+
+  const finiteSeconds = (value: unknown): number =>
+    typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
 
   /**
    * Start position update interval
@@ -126,8 +130,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         // Use the store's known duration as the reliable reference — stream
         // engines report duration=0 before metadata loads and can fire a
         // spurious didJustFinish at the very start of playback.
-        const knownDuration = get().duration || status.duration || 0;
-        const position = status.currentTime || 0;
+        const knownDuration =
+          finiteSeconds(status.duration) ||
+          finiteSeconds(get().duration) ||
+          finiteSeconds(get().currentTrack?.duration);
+        const position = finiteSeconds(status.currentTime) || finiteSeconds(get().currentTime);
         if (isRealFinish(knownDuration, position)) {
           logger.debug('Track finished, handling completion');
           get().handleTrackCompletion();
@@ -139,8 +146,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
       set({
         isPlaying: status.playing || false,
-        currentTime: status.currentTime || 0,
-        duration: status.duration || get().duration,
+        currentTime: finiteSeconds(status.currentTime),
+        duration: finiteSeconds(status.duration) || get().duration,
       });
     });
   };
@@ -220,7 +227,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     return repeat === RepeatMode.ALL ? 0 : null;
   };
 
-  const extendQueueForAutoplay = async (): Promise<boolean> => {
+  const extendQueueForAutoplay = async (finishedTrack?: Track | null): Promise<boolean> => {
     const preferences = useMusicPreferencesStore.getState().preferences;
     if (preferences?.autoplay === false) {
       return false;
@@ -229,7 +236,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     const queueStore = useQueueStore.getState();
     const queue = queueStore.queue;
     const seenIds = new Set(queue?.tracks.map((track) => track.id) ?? []);
-    const currentTrackId = get().currentTrack?.id;
+    const currentTrackId = finishedTrack?.id ?? get().currentTrack?.id;
     if (currentTrackId) {
       seenIds.add(currentTrackId);
     }
@@ -466,8 +473,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         });
 
         try {
-          await startPlayback(player, track);
           await updateQueueState(track, addToQueue);
+          await startPlayback(player, track);
           startPositionUpdates(player);
           // Track started successfully — record it for real recently-played.
           recordPlay(track);
@@ -667,17 +674,30 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
      * Automatically plays next track based on repeat mode
      */
     handleTrackCompletion: async () => {
-      await get().stop();
+      if (completionInFlight) {
+        return;
+      }
+
+      completionInFlight = true;
+      const finishedTrack = get().currentTrack;
 
       let nextIndex = chooseNextIndex(true);
 
-      if (nextIndex === null && await extendQueueForAutoplay()) {
+      if (nextIndex === null && await extendQueueForAutoplay(finishedTrack)) {
         nextIndex = chooseNextIndex(true);
       }
 
       if (nextIndex !== null) {
-        await get().playFromQueue(nextIndex);
+        try {
+          await get().playFromQueue(nextIndex);
+        } finally {
+          completionInFlight = false;
+        }
+        return;
       }
+
+      await get().stop();
+      completionInFlight = false;
     },
   };
 });
