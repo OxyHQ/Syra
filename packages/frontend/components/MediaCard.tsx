@@ -57,6 +57,7 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
   const resolvedImageUri = pickImageUrl(images, imageUri, 300);
   const [isHovered, setIsHovered] = React.useState(false);
   const [isPlayButtonHovered, setIsPlayButtonHovered] = React.useState(false);
+  const [hideIdleActions, setHideIdleActions] = React.useState(Platform.OS === 'web');
   const menuControl = Menu.useMenuControl();
   const hoverOutTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const isPlayButtonHoveredRef = React.useRef(false);
@@ -75,6 +76,25 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
     if (hoverOutTimeoutRef.current) {
       clearTimeout(hoverOutTimeoutRef.current);
     }
+  }, []);
+
+  React.useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.matchMedia) {
+      setHideIdleActions(false);
+      return undefined;
+    }
+
+    const mediaQuery = window.matchMedia('(hover: hover) and (pointer: fine)');
+    const updateHideIdleActions = () => {
+      setHideIdleActions(mediaQuery.matches);
+    };
+
+    updateHideIdleActions();
+    mediaQuery.addEventListener?.('change', updateHideIdleActions);
+
+    return () => {
+      mediaQuery.removeEventListener?.('change', updateHideIdleActions);
+    };
   }, []);
 
   const clearHoverOutTimeout = () => {
@@ -131,12 +151,20 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
             {({ props, state }) => (
               <Pressable
                 {...props}
+                pointerEvents={
+                  hideIdleActions && !isHovered && !isMenuOpen && !state.focused && !state.pressed
+                    ? 'none'
+                    : 'auto'
+                }
                 onPress={(event) => {
                   event.stopPropagation?.();
                   props.onPress?.();
                 }}
                 style={[
                   styles.menuTrigger,
+                  hideIdleActions && !isHovered && !isMenuOpen && !state.focused && !state.pressed
+                    ? styles.menuTriggerHidden
+                    : styles.menuTriggerVisible,
                   {
                     backgroundColor: state.focused || state.pressed
                       ? theme.colors.backgroundTertiary
@@ -219,6 +247,8 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
       onHoverOut={() => {
         handleCardHoverOut();
       }}
+      onFocus={activateHover}
+      onBlur={scheduleHoverOut}
       style={[
         styles.container,
         (isHovered || isMenuOpen) && styles.containerRaised,
@@ -314,7 +344,7 @@ const styles = StyleSheet.create({
     }),
   }),
   containerRaised: {
-    zIndex: 50,
+    zIndex: 2000,
   },
   imageContainer: {
     alignSelf: 'stretch',
@@ -362,7 +392,9 @@ const styles = StyleSheet.create({
   menuContainer: {
     position: 'relative',
     flexShrink: 0,
-    zIndex: 10,
+    width: 28,
+    height: 28,
+    zIndex: 2001,
   },
   menuTrigger: {
     width: 28,
@@ -376,13 +408,31 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  menuTriggerVisible: webViewStyle({
+    opacity: 1,
+    transform: [{ scale: 1 }],
+    ...Platform.select({
+      web: {
+        transition: 'opacity 0.16s ease, transform 0.16s ease, background-color 0.16s ease',
+      },
+    }),
+  }),
+  menuTriggerHidden: webViewStyle({
+    opacity: 0,
+    transform: [{ scale: 0.96 }],
+    ...Platform.select({
+      web: {
+        transition: 'opacity 0.16s ease, transform 0.16s ease, background-color 0.16s ease',
+      },
+    }),
+  }),
   menuOptions: webViewStyle({
     ...Platform.select({
       web: {
         position: 'absolute',
         top: 32,
         right: 0,
-        zIndex: 20,
+        zIndex: 2002,
       },
     }),
   }),

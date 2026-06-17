@@ -112,6 +112,7 @@ const HomeScreen: React.FC = () => {
   const [hoveredItemColor, setHoveredItemColor] = useState<string | null>(null);
   const [gradientOpacity] = useState(() => new Animated.Value(1));
   const displayedGradientColorRef = useRef(theme.colors.primary);
+  const targetGradientColorRef = useRef(theme.colors.primary);
   const [gradientFromColor, setGradientFromColor] = useState(theme.colors.primary);
   const [gradientToColor, setGradientToColor] = useState(theme.colors.primary);
 
@@ -138,18 +139,19 @@ const HomeScreen: React.FC = () => {
 
   useEffect(() => {
     const nextColor = hoveredItemColor || theme.colors.primary;
-    if (displayedGradientColorRef.current === nextColor) {
+    if (targetGradientColorRef.current === nextColor) {
       return;
     }
 
-    setGradientFromColor(displayedGradientColorRef.current);
+    setGradientFromColor(targetGradientColorRef.current);
     setGradientToColor(nextColor);
+    targetGradientColorRef.current = nextColor;
     gradientOpacity.setValue(0);
 
     const animation = Animated.timing(gradientOpacity, {
       toValue: 1,
-      duration: 420,
-      easing: Easing.out(Easing.cubic),
+      duration: 520,
+      easing: Easing.bezier(0.16, 1, 0.3, 1),
       useNativeDriver: true,
     });
 
