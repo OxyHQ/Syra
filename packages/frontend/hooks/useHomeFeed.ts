@@ -1,5 +1,5 @@
 import { useOxy } from '@oxyhq/services';
-import { useQuery } from '@tanstack/react-query';
+import { QueryClient, useQuery } from '@tanstack/react-query';
 import { browseService } from '@/services/browseService';
 import { libraryService } from '@/services/libraryService';
 import { musicService } from '@/services/musicService';
@@ -27,6 +27,7 @@ const HOME_LIMITS = {
 } as const;
 
 export const HOME_QUERY_KEYS = {
+  browse: ['home', 'browse'] as const,
   recentlyPlayed: ['home', 'recently-played'] as const,
   madeForYou: ['home', 'made-for-you'] as const,
   popularAlbums: ['home', 'popular-albums'] as const,
@@ -34,6 +35,19 @@ export const HOME_QUERY_KEYS = {
   userPlaylists: ['home', 'user-playlists'] as const,
   tracks: ['home', 'tracks'] as const,
 };
+
+const HOME_BROWSE_QUERY_OPTIONS = {
+  queryKey: HOME_QUERY_KEYS.browse,
+  queryFn: () => browseService.getHome({
+    sectionLimit: HOME_LIMITS.madeForYou,
+    tracksLimit: HOME_LIMITS.tracks,
+  }),
+  staleTime: 1000 * 60 * 10,
+} as const;
+
+export function prefetchHomeBrowse(queryClient: QueryClient): void {
+  void queryClient.prefetchQuery(HOME_BROWSE_QUERY_OPTIONS);
+}
 
 /**
  * Real recently-played tracks for the signed-in user ("Jump back in").
@@ -55,24 +69,24 @@ export function useRecentlyPlayed() {
 /** Real "Made for you" recommendations (popular albums + public playlists). */
 export function useMadeForYou() {
   return useQuery({
-    queryKey: HOME_QUERY_KEYS.madeForYou,
-    queryFn: () => browseService.getMadeForYou({ limit: HOME_LIMITS.madeForYou }),
+    ...HOME_BROWSE_QUERY_OPTIONS,
+    select: (data) => data.madeForYou,
   });
 }
 
 /** Real popular albums, ranked by catalog popularity. */
 export function usePopularAlbums() {
   return useQuery({
-    queryKey: HOME_QUERY_KEYS.popularAlbums,
-    queryFn: () => browseService.getPopularAlbums({ limit: HOME_LIMITS.popularAlbums }),
+    ...HOME_BROWSE_QUERY_OPTIONS,
+    select: (data) => data.popularAlbums,
   });
 }
 
 /** Real popular artists, ranked by catalog popularity. */
 export function usePopularArtists() {
   return useQuery({
-    queryKey: HOME_QUERY_KEYS.popularArtists,
-    queryFn: () => browseService.getPopularArtists({ limit: HOME_LIMITS.popularArtists }),
+    ...HOME_BROWSE_QUERY_OPTIONS,
+    select: (data) => data.popularArtists,
   });
 }
 
@@ -89,7 +103,7 @@ export function useUserPlaylists() {
 /** Real popular tracks for the bottom track list. */
 export function usePopularTracks() {
   return useQuery({
-    queryKey: HOME_QUERY_KEYS.tracks,
-    queryFn: () => browseService.getPopularTracks({ limit: HOME_LIMITS.tracks }),
+    ...HOME_BROWSE_QUERY_OPTIONS,
+    select: (data) => data.tracks,
   });
 }

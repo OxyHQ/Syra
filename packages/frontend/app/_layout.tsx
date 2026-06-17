@@ -30,6 +30,7 @@ import { BloomThemeProvider, useTheme } from '@oxyhq/bloom/theme';
 import { LayoutScrollProvider, useLayoutScroll } from '@/context/LayoutScrollContext';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useUIStore } from '@/stores/uiStore';
+import { prefetchHomeBrowse } from '@/hooks/useHomeFeed';
 
 // Services & Utils
 import { oxyServices } from '@/lib/oxyServices';
@@ -296,7 +297,8 @@ export default function RootLayout() {
   // Load eager settings that don't block app initialization
   useEffect(() => {
     AppInitializer.loadEagerSettings(oxyServices);
-  }, []);
+    prefetchHomeBrowse(queryClient);
+  }, [queryClient]);
 
   // React Query managers - setup once on mount
   useEffect(() => {

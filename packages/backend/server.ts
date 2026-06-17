@@ -109,6 +109,9 @@ app.use(async (_req, _res, next) => {
 });
 
 const server = http.createServer(app);
+server.keepAliveTimeout = 65_000;
+server.headersTimeout = 66_000;
+server.requestTimeout = 120_000;
 
 type DisconnectReason =
   | 'server disconnect' | 'client disconnect' | 'transport close' | 'transport error'
@@ -292,7 +295,7 @@ app.get('/health', async (_req, res) => {
     const perfStats = getPerformanceStats();
 
     const health = {
-      status: dbConnected && redisConnected ? 'healthy' : 'degraded',
+      status: dbConnected ? (redisConnected ? 'healthy' : 'degraded') : 'unhealthy',
       timestamp: new Date().toISOString(),
       services: {
         database: { ...dbStats, connected: dbConnected },
@@ -307,7 +310,7 @@ app.get('/health', async (_req, res) => {
       uptime: Math.round(process.uptime()),
     };
 
-    const statusCode = health.status === 'healthy' ? 200 : 503;
+    const statusCode = dbConnected ? 200 : 503;
     res.status(statusCode).json(health);
   } catch (error) {
     logger.error('Health check failed', { err: error });

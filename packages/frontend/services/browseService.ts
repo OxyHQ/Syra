@@ -48,11 +48,43 @@ export interface GenreTracksResponse {
   hasMore: boolean;
 }
 
+export interface HomeBrowseResponse {
+  madeForYou: MadeForYouResponse;
+  popularAlbums: PopularAlbumsResponse;
+  popularArtists: PopularArtistsResponse;
+  tracks: PopularTracksResponse;
+}
+
 /**
  * Browse/Explore API service
  * Handles fetching browse and discovery content
  */
 export const browseService = {
+  /**
+   * Get the public home discovery payload in one round-trip.
+   */
+  async getHome(params?: { sectionLimit?: number; tracksLimit?: number }): Promise<HomeBrowseResponse> {
+    const response = await api.get<HomeBrowseResponse>('/browse/home', params);
+    return {
+      madeForYou: {
+        albums: response.data.madeForYou.albums.map(normalizeAlbumImages),
+        playlists: response.data.madeForYou.playlists.map(normalizePlaylistImages),
+      },
+      popularAlbums: {
+        ...response.data.popularAlbums,
+        albums: response.data.popularAlbums.albums.map(normalizeAlbumImages),
+      },
+      popularArtists: {
+        ...response.data.popularArtists,
+        artists: response.data.popularArtists.artists.map(normalizeArtistImages),
+      },
+      tracks: {
+        ...response.data.tracks,
+        tracks: response.data.tracks.tracks.map(normalizeTrackImages),
+      },
+    };
+  },
+
   /**
    * Get available genres with sample content
    */

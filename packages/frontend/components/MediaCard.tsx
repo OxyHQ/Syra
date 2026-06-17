@@ -180,17 +180,18 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
         <Menu.Root control={menuControl}>
           <Menu.Trigger label={`More actions for ${title}`}>
             {({ props, state }) => {
+              const { ref: _triggerRef, ...triggerProps } = props;
               const hideMenuTrigger =
                 !usesHoverActions ||
                 (!isHovered && !isMenuOpen && !state.focused && !state.pressed);
 
               return (
                 <Pressable
-                  {...props}
+                  {...triggerProps}
                   pointerEvents={hideMenuTrigger ? 'none' : 'auto'}
                   onPress={(event) => {
                     event.stopPropagation?.();
-                    props.onPress?.();
+                    triggerProps.onPress?.();
                   }}
                   style={[
                     styles.menuTrigger,

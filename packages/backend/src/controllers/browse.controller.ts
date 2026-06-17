@@ -35,6 +35,114 @@ function toInternalImageUrl(value: unknown): string | null {
   return null;
 }
 
+function setDiscoveryCache(res: Response): void {
+  const value = 'public, max-age=30, stale-while-revalidate=120';
+  if (typeof res.set === 'function') {
+    res.set('Cache-Control', value);
+    return;
+  }
+  if (typeof res.setHeader === 'function') {
+    res.setHeader('Cache-Control', value);
+  }
+}
+
+function parseBoundedLimit(value: unknown, fallback: number, max: number): number {
+  const parsed = parseInt(String(value ?? ''), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+  return Math.min(parsed, max);
+}
+
+/**
+ * GET /api/browse/home
+ * Aggregated public home payload. This collapses the home screen's independent
+ * public discovery requests into one API round-trip while preserving the same
+ * section contracts on the client.
+ */
+export const getHomeBrowse = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!isDatabaseConnected()) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
+    const tracksLimit = parseBoundedLimit(req.query.tracksLimit, 20, 50);
+    const sectionLimit = parseBoundedLimit(req.query.sectionLimit, 8, 20);
+    const madeForYouHalf = Math.max(1, Math.floor(sectionLimit / 2));
+
+    const [
+      madeForYouAlbums,
+      madeForYouPlaylists,
+      popularAlbums,
+      popularArtists,
+      tracks,
+    ] = await Promise.all([
+      AlbumModel.find()
+        .sort(withImageFirstSort('album', { popularity: -1, playCount: -1 }))
+        .limit(madeForYouHalf)
+        .lean(),
+      PlaylistModel.find({ isPublic: true })
+        .sort(withImageFirstSort('playlist', { followers: -1, createdAt: -1 }))
+        .limit(madeForYouHalf)
+        .lean(),
+      AlbumModel.find()
+        .sort(withImageFirstSort('album', { popularity: -1, releaseDate: -1 }))
+        .limit(sectionLimit)
+        .lean(),
+      ArtistModel.find()
+        .sort(withImageFirstSort('artist', { popularity: -1, 'stats.followers': -1 }))
+        .limit(sectionLimit)
+        .lean(),
+      TrackModel.find({ isAvailable: true })
+        .sort(withImageFirstSort('track', { popularity: -1, playCount: -1, createdAt: -1 }))
+        .limit(tracksLimit)
+        .lean(),
+    ]);
+
+    const sparse = madeForYouAlbums.length + madeForYouPlaylists.length < madeForYouHalf;
+    const [fallbackTracks, fallbackArtists] = sparse
+      ? await Promise.all([
+          TrackModel.find({ isAvailable: true })
+            .sort(withImageFirstSort('track', { popularity: -1, playCount: -1, createdAt: -1 }))
+            .limit(sectionLimit)
+            .lean(),
+          ArtistModel.find()
+            .sort(withImageFirstSort('artist', { popularity: -1, 'stats.followers': -1 }))
+            .limit(sectionLimit)
+            .lean(),
+        ])
+      : [[], []];
+
+    const formattedTracks = await formatTracksWithCoverArt(tracks);
+    setDiscoveryCache(res);
+    res.json({
+      madeForYou: {
+        albums: formatAlbumsWithCoverArt(madeForYouAlbums),
+        playlists: formatPlaylistsWithCoverArt(madeForYouPlaylists),
+        tracks: await formatTracksWithCoverArt(fallbackTracks),
+        artists: formatArtistsWithImage(fallbackArtists),
+      },
+      popularAlbums: {
+        albums: formatAlbumsWithCoverArt(popularAlbums),
+        total: popularAlbums.length,
+        hasMore: popularAlbums.length === sectionLimit,
+      },
+      popularArtists: {
+        artists: formatArtistsWithImage(popularArtists),
+        total: popularArtists.length,
+        hasMore: popularArtists.length === sectionLimit,
+      },
+      tracks: {
+        tracks: formattedTracks,
+        total: formattedTracks.length,
+        hasMore: formattedTracks.length === tracksLimit,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 /**
  * GET /api/browse/genres
  * Get list of available genres with sample content
@@ -95,6 +203,7 @@ export const getGenres = async (req: Request, res: Response, next: NextFunction)
       })
     );
 
+    setDiscoveryCache(res);
     res.json({ genres: genresWithSamples });
   } catch (error) {
     next(error);
@@ -130,6 +239,7 @@ export const getGenreTracks = async (req: Request, res: Response, next: NextFunc
 
     const formattedTracks = await formatTracksWithCoverArt(tracks);
 
+    setDiscoveryCache(res);
     res.json({
       tracks: formattedTracks,
       total: formattedTracks.length,
@@ -161,6 +271,7 @@ export const getPopularTracks = async (req: Request, res: Response, next: NextFu
 
     const formattedTracks = await formatTracksWithCoverArt(tracks);
 
+    setDiscoveryCache(res);
     res.json({
       tracks: formattedTracks,
       total: formattedTracks.length,
@@ -192,6 +303,7 @@ export const getPopularAlbums = async (req: Request, res: Response, next: NextFu
 
     const formattedAlbums = formatAlbumsWithCoverArt(albums);
 
+    setDiscoveryCache(res);
     res.json({
       albums: formattedAlbums,
       total: formattedAlbums.length,
@@ -223,6 +335,7 @@ export const getPopularArtists = async (req: Request, res: Response, next: NextF
 
     const formattedArtists = formatArtistsWithImage(artists);
 
+    setDiscoveryCache(res);
     res.json({
       artists: formattedArtists,
       total: formattedArtists.length,
@@ -276,6 +389,7 @@ export const getMadeForYou = async (req: Request, res: Response, next: NextFunct
         ])
       : [[], []];
 
+    setDiscoveryCache(res);
     res.json({
       albums: formatAlbumsWithCoverArt(albums),
       playlists: formatPlaylistsWithCoverArt(playlists),
@@ -306,6 +420,7 @@ export const getCharts = async (req: Request, res: Response, next: NextFunction)
 
     const formattedTracks = await formatTracksWithCoverArt(tracks);
 
+    setDiscoveryCache(res);
     res.json({
       tracks: formattedTracks,
       total: formattedTracks.length,
