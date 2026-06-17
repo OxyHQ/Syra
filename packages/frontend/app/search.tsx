@@ -19,6 +19,7 @@ import { ExploreSection } from '@/components/ExploreSection';
 import { GenreGridSkeleton, MediaCardRowSkeleton, TrackListSkeleton } from '@/components/skeletons';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { colorWithAlpha } from '@/utils/color';
 
 /**
  * Syra Search Screen
@@ -33,6 +34,7 @@ const SearchScreen: React.FC = () => {
   const { q } = useLocalSearchParams<{ q?: string }>();
   const [searchQuery, setSearchQuery] = useState(() => (typeof q === 'string' ? q : ''));
   const [activeCategory, setActiveCategory] = useState<SearchCategory>(SearchCategory.ALL);
+  const [hoveredUserId, setHoveredUserId] = useState<string | null>(null);
 
   // Debounce search query
   const debouncedQuery = useDebouncedValue(searchQuery, 300);
@@ -547,18 +549,23 @@ const SearchScreen: React.FC = () => {
                       const followers = typeof user.followers === 'number'
                         ? `${user.followers.toLocaleString()} followers`
                         : 'Profile';
+                      const isHovered = hoveredUserId === user.id;
 
                       return (
                         <Pressable
                           key={user.id}
                           onPress={() => handleUserPress(user)}
+                          onHoverIn={() => setHoveredUserId(user.id)}
+                          onHoverOut={() => setHoveredUserId(null)}
                           style={({ pressed }) => [
                             styles.userRow,
                             {
-                              backgroundColor: pressed
-                                ? theme.colors.backgroundTertiary
+                              backgroundColor: pressed || isHovered
+                                ? colorWithAlpha(theme.colors.primary, theme.isDark ? 0.22 : 0.12) ?? theme.colors.backgroundTertiary
                                 : theme.colors.backgroundSecondary,
-                              borderColor: theme.colors.border,
+                              borderColor: isHovered
+                                ? colorWithAlpha(theme.colors.primary, theme.isDark ? 0.38 : 0.28) ?? theme.colors.primary
+                                : theme.colors.border,
                             },
                           ]}
                         >
@@ -692,6 +699,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     minHeight: 74,
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+        transition: 'background-color 0.2s, border-color 0.2s',
+      },
+    }),
   },
   userInfo: {
     flex: 1,

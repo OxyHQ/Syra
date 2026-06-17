@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { TrackImage } from '@syra/shared-types';
 import { pickImageUrl } from '@/utils/pickImage';
 import { Menu, MenuOptions, MenuOption, MenuTrigger } from 'react-native-popup-menu';
+import { colorWithAlpha } from '@/utils/color';
 
 interface MediaCardProps {
   title: string;
@@ -25,14 +26,6 @@ interface MediaCardProps {
   onHoverOut?: () => void;
 }
 
-function colorWithAlpha(color: string | undefined, alpha: number): string | undefined {
-  if (!color) return undefined;
-  const match = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(color.trim());
-  if (!match) return undefined;
-  const [, r, g, b] = match;
-  return `rgba(${parseInt(r, 16)}, ${parseInt(g, 16)}, ${parseInt(b, 16)}, ${alpha})`;
-}
-
 /**
  * Media Card Component
  * Spotify-like card for displaying playlists, albums, artists
@@ -49,7 +42,6 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
   onGoToArtist,
   onGoToAlbum,
   shape,
-  primaryColor,
   onHoverIn,
   onHoverOut,
 }) => {
@@ -65,7 +57,15 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
   // Show play button if card is hovered OR play button itself is hovered
   const showPlayButton = (isHovered || isPlayButtonHovered) && onPlayPress;
   const hasMenu = !!(onAddToQueue || onGoToArtist || onGoToAlbum);
-  const hoverBackground = colorWithAlpha(primaryColor, 0.26) ?? theme.colors.backgroundSecondary;
+  const hoverBackground =
+    colorWithAlpha(theme.colors.primary, theme.isDark ? 0.24 : 0.14)
+    ?? theme.colors.backgroundSecondary;
+  const hoverBorder =
+    colorWithAlpha(theme.colors.primary, theme.isDark ? 0.38 : 0.28)
+    ?? theme.colors.primary;
+  const hoverShadow =
+    colorWithAlpha(theme.colors.primary, theme.isDark ? 0.28 : 0.18)
+    ?? 'rgba(0, 0, 0, 0.18)';
 
   const getIcon = () => {
     switch (type) {
@@ -103,7 +103,13 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
       }}
       style={[
         styles.container,
-        (isHovered || isPlayButtonHovered) && { backgroundColor: hoverBackground },
+        (isHovered || isPlayButtonHovered) && {
+          backgroundColor: hoverBackground,
+          borderColor: hoverBorder,
+        },
+        (isHovered || isPlayButtonHovered) && Platform.OS === 'web' && webViewStyle({
+          boxShadow: `0 12px 30px ${hoverShadow}`,
+        }),
         ...Platform.select({
           web: [webViewStyle({ cursor: 'pointer' })],
           default: [],
@@ -222,8 +228,10 @@ const styles = StyleSheet.create({
   container: webViewStyle({
     alignSelf: 'stretch',
     padding: 6,
+    borderWidth: 1,
+    borderColor: 'transparent',
     borderRadius: 8,
-    transition: 'background-color 0.2s',
+    transition: 'background-color 0.2s, border-color 0.2s, box-shadow 0.2s',
     ...Platform.select({
       web: {
         minWidth: 0,

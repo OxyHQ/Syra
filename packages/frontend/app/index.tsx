@@ -24,6 +24,7 @@ import { createScopedLogger } from '@/utils/logger';
 import { Ionicons } from '@expo/vector-icons';
 import { pickImageUrl } from '@/utils/pickImage';
 import { toast } from '@/lib/sonner';
+import { colorWithAlpha } from '@/utils/color';
 
 const logger = createScopedLogger('HomeScreen');
 
@@ -111,6 +112,7 @@ const HomeScreen: React.FC = () => {
   // State for hover gradient color with smooth transitions
   const [hoveredItemColor, setHoveredItemColor] = useState<string | null>(null);
   const [displayGradientColor, setDisplayGradientColor] = useState<string | null>(null);
+  const [hoveredQuickAccessId, setHoveredQuickAccessId] = useState<string | null>(null);
   const currentDisplayColorRef = useRef<string | null>(null);
   const animationFrameRef = useRef<number | null>(null);
 
@@ -244,10 +246,8 @@ const HomeScreen: React.FC = () => {
 
   // Handle hover in - set the color
   const handleHoverIn = useCallback((color: string | null | undefined) => {
-    if (color) {
-      setHoveredItemColor(color);
-    }
-  }, []);
+    setHoveredItemColor(color || theme.colors.primary);
+  }, [theme.colors.primary]);
 
   // Handle hover out - reset to default
   const handleHoverOut = useCallback(() => {
@@ -424,7 +424,9 @@ const HomeScreen: React.FC = () => {
               {quickAccess.map((item) => {
                 const title = item.type === 'album' ? item.data.title : item.data.name;
                 const id = item.data.id;
+                const itemKey = `${item.type}-${id}`;
                 const primaryColor = item.data.primaryColor;
+                const isHovered = hoveredQuickAccessId === itemKey;
                 const imageUri =
                   item.type === 'album'
                     ? item.data.coverArt
@@ -434,8 +436,18 @@ const HomeScreen: React.FC = () => {
 
                 return (
                   <Pressable
-                    key={`${item.type}-${id}`}
-                    style={[styles.compactGridItem, { backgroundColor: theme.colors.backgroundSecondary }]}
+                    key={itemKey}
+                    style={[
+                      styles.compactGridItem,
+                      {
+                        backgroundColor: isHovered
+                          ? colorWithAlpha(theme.colors.primary, theme.isDark ? 0.24 : 0.14)
+                          : theme.colors.backgroundSecondary,
+                        borderColor: isHovered
+                          ? colorWithAlpha(theme.colors.primary, theme.isDark ? 0.38 : 0.28)
+                          : 'transparent',
+                      },
+                    ]}
                     onPress={() => {
                       if (item.type === 'album') {
                         router.push(`/album/${id}`);
@@ -445,8 +457,14 @@ const HomeScreen: React.FC = () => {
                         router.push(`/artist/${id}`);
                       }
                     }}
-                    onHoverIn={() => handleHoverIn(primaryColor)}
-                    onHoverOut={handleHoverOut}
+                    onHoverIn={() => {
+                      setHoveredQuickAccessId(itemKey);
+                      handleHoverIn(primaryColor);
+                    }}
+                    onHoverOut={() => {
+                      setHoveredQuickAccessId(null);
+                      handleHoverOut();
+                    }}
                   >
                     <View
                       style={[
@@ -758,8 +776,15 @@ const styles = StyleSheet.create({
   compactGridItem: {
     flexDirection: 'row',
     padding: 4,
+    borderWidth: 1,
     borderRadius: 12,
     alignItems: 'center',
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+        transition: 'background-color 0.2s, border-color 0.2s',
+      },
+    }),
   },
   compactImageContainer: {
     width: 40,

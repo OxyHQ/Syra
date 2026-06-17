@@ -5,6 +5,7 @@ import { useTheme } from '@oxyhq/bloom/theme';
 import { Track } from '@syra/shared-types';
 import { formatDuration } from '@/utils/musicUtils';
 import { useLibrary, useToggleLikeTrack } from '@/hooks/useLibrary';
+import { colorWithAlpha } from '@/utils/color';
 
 interface TrackRowProps {
   track: Track;
@@ -33,6 +34,13 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
   const { isTrackLiked } = useLibrary();
   const toggleLike = useToggleLikeTrack();
   const isLiked = isTrackLiked(track.id);
+  const [isHovered, setIsHovered] = React.useState(false);
+  const activeBackground =
+    colorWithAlpha(theme.colors.primary, theme.isDark ? 0.18 : 0.1)
+    ?? theme.colors.backgroundSecondary;
+  const hoverBackground =
+    colorWithAlpha(theme.colors.primary, theme.isDark ? 0.24 : 0.14)
+    ?? theme.colors.backgroundSecondary;
 
   const handleToggleLike = () => {
     toggleLike.mutate({ id: track.id, next: !isLiked });
@@ -42,13 +50,16 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
     <Pressable
       style={[
         styles.trackRow,
-        isCurrentTrack && { backgroundColor: theme.colors.backgroundSecondary + '40' },
+        isCurrentTrack && { backgroundColor: activeBackground },
+        isHovered && { backgroundColor: hoverBackground },
         ...Platform.select({
           web: [{ cursor: 'pointer' as any }],
           default: [],
         }),
       ]}
       onPress={onPress}
+      onHoverIn={() => setIsHovered(true)}
+      onHoverOut={() => setIsHovered(false)}
     >
       <View style={styles.trackRowLeft}>
         {showNumber && (
@@ -119,7 +130,7 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
           <Ionicons
             name={isTrackPlaying ? 'pause' : 'play'}
             size={20}
-            color={theme.colors.text}
+            color={(isHovered || isCurrentTrack) ? theme.colors.primary : theme.colors.text}
           />
         </Pressable>
         <Text style={[styles.trackDuration, { color: theme.colors.textSecondary }]}>
@@ -214,4 +225,3 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
 });
-
