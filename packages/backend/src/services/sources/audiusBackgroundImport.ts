@@ -2,8 +2,8 @@ import type { ExternalAlbum, ExternalPlaylist, ExternalTrack } from '@syra/share
 import type { MusicSourceConnector } from './MusicSourceConnector';
 import { AudiusConnector } from './AudiusConnector';
 import { upsertTrack } from '../catalog/upsertTrack';
-import { upsertAlbum } from '../catalog/upsertAlbum';
-import { upsertPlaylist } from '../catalog/upsertPlaylist';
+import { prepareAlbumCover, upsertAlbum } from '../catalog/upsertAlbum';
+import { preparePlaylistCover, upsertPlaylist } from '../catalog/upsertPlaylist';
 import { syncAlbumsForTracks } from '../catalog/syncTrackAlbums';
 import { ArtistModel } from '../../models/Artist';
 import { logger } from '../../utils/logger';
@@ -14,16 +14,16 @@ import { logger } from '../../utils/logger';
 const AUDIUS_IMPORT_TTL_MS = 10 * 60 * 1000;
 
 /** Max Audius tracks fetched per background import pass. */
-const AUDIUS_IMPORT_LIMIT = 20;
+const AUDIUS_IMPORT_LIMIT = 8;
 
 /** Default cap on the number of artists whose albums are synced per pass. */
-const DEFAULT_MAX_ARTISTS_FOR_ALBUMS = 10;
+const DEFAULT_MAX_ARTISTS_FOR_ALBUMS = 2;
 
 /** Cap on the number of albums synced per artist per pass. */
-const MAX_ALBUMS_PER_ARTIST = 10;
+const MAX_ALBUMS_PER_ARTIST = 3;
 
 /** Cap on the number of playlists synced per artist per pass. */
-const MAX_PLAYLISTS_PER_ARTIST = 10;
+const MAX_PLAYLISTS_PER_ARTIST = 3;
 
 // ── Throttle map ──────────────────────────────────────────────────────────────
 
@@ -32,6 +32,8 @@ const MAX_PLAYLISTS_PER_ARTIST = 10;
  * Used to prevent hammering Audius for repeated identical searches.
  */
 const lastImportAt = new Map<string, number>();
+const queuedImports = new Set<string>();
+let importQueue: Promise<void> = Promise.resolve();
 
 function normalizeQuery(query: string): string {
   return query.trim().toLowerCase();
@@ -213,19 +215,21 @@ async function syncArtistAlbums(
       let skippedEmpty = 0;
       for (const album of albums.slice(0, MAX_ALBUMS_PER_ARTIST)) {
         try {
+          const preparedCover = await prepareAlbumCover(album, 'audius');
+          if (!preparedCover) {
+            skippedNoCover++;
+            continue;
+          }
+
           for (const track of album.tracks ?? []) {
             await upsertTrack(track, 'audius');
           }
 
-          const { album: saved } = await upsertAlbum(album, artistRef, 'audius');
+          const { album: saved } = await upsertAlbum(album, artistRef, 'audius', preparedCover);
           if (saved) {
             albumsSynced++;
           } else {
-            if (!album.images?.length) {
-              skippedNoCover++;
-            } else {
-              skippedEmpty++;
-            }
+            skippedEmpty++;
           }
         } catch (err) {
           logger.warn('[audius-import] album sync: upsert failed', {
@@ -271,15 +275,25 @@ async function syncArtistPlaylists(
         MAX_PLAYLISTS_PER_ARTIST,
       );
 
+      let skippedNoCover = 0;
+      let skippedEmpty = 0;
       for (const playlist of playlists.slice(0, MAX_PLAYLISTS_PER_ARTIST)) {
         try {
+          const preparedCover = await preparePlaylistCover(playlist, 'audius');
+          if (!preparedCover) {
+            skippedNoCover++;
+            continue;
+          }
+
           for (const track of playlist.tracks ?? []) {
             await upsertTrack(track, 'audius');
           }
 
-          const { playlist: saved } = await upsertPlaylist(playlist, 'audius');
+          const { playlist: saved } = await upsertPlaylist(playlist, 'audius', preparedCover);
           if (saved) {
             playlistsSynced++;
+          } else {
+            skippedEmpty++;
           }
         } catch (err) {
           logger.warn('[audius-import] playlist sync: upsert failed', {
@@ -288,6 +302,18 @@ async function syncArtistPlaylists(
             err,
           });
         }
+      }
+      if (skippedNoCover > 0) {
+        logger.info('[audius-import] playlist sync: skipped playlists without cover art', {
+          artistExternalId,
+          skippedNoCover,
+        });
+      }
+      if (skippedEmpty > 0) {
+        logger.info('[audius-import] playlist sync: skipped playlists without resolved tracks', {
+          artistExternalId,
+          skippedEmpty,
+        });
       }
     } catch (err) {
       logger.warn('[audius-import] playlist sync: failed for artist', { artistExternalId, err });
@@ -312,18 +338,31 @@ async function syncArtistPlaylists(
  * explicit `connector`/`albumFetcher` keep full control.
  */
 export function enqueueAudiusImport(query: string, deps?: AudiusImportDeps): void {
-  if (!query.trim()) return;
+  const normalizedQuery = normalizeQuery(query);
+  if (!normalizedQuery) return;
+  if (queuedImports.has(normalizedQuery)) return;
+  queuedImports.add(normalizedQuery);
 
-  const audius = new AudiusConnector();
-  const connector = deps?.connector ?? audius;
-  const resolvedDeps: AudiusImportDeps = {
-    connector,
-    albumFetcher: deps?.albumFetcher ?? (isAlbumFetcher(connector) ? connector : undefined),
-    playlistFetcher: deps?.playlistFetcher ?? (isPlaylistFetcher(connector) ? connector : undefined),
-    ...deps,
-  };
+  importQueue = importQueue
+    .catch(() => {
+      // Keep the queue alive after a previous fire-and-forget failure.
+    })
+    .then(async () => {
+      const audius = new AudiusConnector();
+      const connector = deps?.connector ?? audius;
+      const resolvedDeps: AudiusImportDeps = {
+        connector,
+        albumFetcher: deps?.albumFetcher ?? (isAlbumFetcher(connector) ? connector : undefined),
+        playlistFetcher: deps?.playlistFetcher ?? (isPlaylistFetcher(connector) ? connector : undefined),
+        ...deps,
+      };
 
-  runAudiusImport(query, resolvedDeps).catch((err: unknown) => {
-    logger.error('[audius-import] failed', { query, err });
-  });
+      try {
+        await runAudiusImport(normalizedQuery, resolvedDeps);
+      } catch (err: unknown) {
+        logger.error('[audius-import] failed', { query: normalizedQuery, err });
+      } finally {
+        queuedImports.delete(normalizedQuery);
+      }
+    });
 }

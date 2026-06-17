@@ -1,15 +1,21 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
-import { connect, clear, disconnect } from '../../test/mongo';
+import mongoose from 'mongoose';
+import { connect, clear, disconnect, installCatalogImageMirrorMockForTests } from '../../test/mongo';
 import { TrackModel } from '../../models/Track';
 import { ArtistModel } from '../../models/Artist';
 import { AlbumModel } from '../../models/Album';
+import { PlaylistModel } from '../../models/Playlist';
 import { runAudiusImport, enqueueAudiusImport } from './audiusBackgroundImport';
-import type { AlbumFetcher } from './audiusBackgroundImport';
-import type { ExternalAlbum, ExternalTrack } from '@syra/shared-types';
+import type { AlbumFetcher, PlaylistFetcher } from './audiusBackgroundImport';
+import { setCatalogImageMirrorImplementationForTests } from '../catalog/catalogImageAssets';
+import type { ExternalAlbum, ExternalPlaylist, ExternalTrack } from '@syra/shared-types';
 import type { MusicSourceConnector } from './MusicSourceConnector';
 
 beforeAll(connect);
-afterEach(clear);
+afterEach(async () => {
+  installCatalogImageMirrorMockForTests();
+  await clear();
+});
 afterAll(disconnect);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -59,6 +65,60 @@ function makeAlbum(
     trackExternalIds,
     ...(tracks ? { tracks } : {}),
   };
+}
+
+function makePlaylist(
+  externalId: string,
+  trackExternalIds: string[],
+  tracks?: ExternalTrack[],
+): ExternalPlaylist {
+  return {
+    provider: 'audius',
+    name: `Playlist ${externalId}`,
+    externalId,
+    images: [{ url: `https://cdn.audius.co/${externalId}/1000x1000.jpg`, width: 1000, height: 1000 }],
+    trackExternalIds,
+    ...(tracks ? { tracks } : {}),
+  };
+}
+
+function makePlaylistFetcher(byArtist: Record<string, ExternalPlaylist[]>): PlaylistFetcher {
+  return {
+    fetchArtistPlaylists: async (artistExternalId: string) => byArtist[artistExternalId] ?? [],
+  };
+}
+
+function installMirrorMockFailingFor(entityType: string, externalId: string): void {
+  setCatalogImageMirrorImplementationForTests(async (images, context) => {
+    if (context.entityType === entityType && context.externalId === externalId) {
+      return undefined;
+    }
+    if (!images?.length) return undefined;
+
+    const largeId = context.existingImageId ?? new mongoose.Types.ObjectId().toString();
+    const variant = (id: string, width: number) => ({
+      id,
+      url: `/api/images/${id}`,
+      width,
+      height: width,
+    });
+
+    return {
+      imageId: largeId,
+      imageSizes: context.existingImageSizes ?? {
+        small: variant(new mongoose.Types.ObjectId().toString(), 160),
+        medium: variant(new mongoose.Types.ObjectId().toString(), 320),
+        large: variant(largeId, 640),
+        xlarge: variant(new mongoose.Types.ObjectId().toString(), 960),
+        xxlarge: variant(new mongoose.Types.ObjectId().toString(), 1280),
+        original: variant(new mongoose.Types.ObjectId().toString(), 1000),
+      },
+      primaryColor: '#336699',
+      secondaryColor: '#224466',
+      sourceUrlHash: `test-url-${context.provider}-${context.entityType}-${context.externalId}`,
+      sourceContentHash: `test-content-${context.provider}-${context.entityType}-${context.externalId}`,
+    };
+  });
 }
 
 // ── runAudiusImport ───────────────────────────────────────────────────────────
@@ -197,6 +257,22 @@ describe('runAudiusImport — album sync', () => {
     expect(albumTrack?.albumId).toBe(album?._id.toString());
   });
 
+  it('does not import album member tracks when the album cover cannot be mirrored', async () => {
+    installMirrorMockFailingFor('album', 'alb-no-cover');
+    const connector = makeConnector([makeTrack('search-track', 'artist-1')]);
+    const albumOnlyTrack = makeTrack('album-only-track', 'artist-1');
+    const albumFetcher = makeAlbumFetcher({
+      'artist-1': [makeAlbum('alb-no-cover', ['album-only-track'], [albumOnlyTrack])],
+    });
+
+    const result = await runAudiusImport('album-cover-failure', { connector, albumFetcher });
+
+    expect(result.imported).toBe(1);
+    expect(result.albumsSynced).toBe(0);
+    expect(await AlbumModel.countDocuments({ 'externalIds.audiusId': 'alb-no-cover' })).toBe(0);
+    expect(await TrackModel.countDocuments({ 'externalIds.audiusId': 'album-only-track' })).toBe(0);
+  });
+
   it('fetches albums once per unique artist, not once per track', async () => {
     const calls: string[] = [];
     const albumFetcher: AlbumFetcher = {
@@ -258,6 +334,24 @@ describe('runAudiusImport — album sync', () => {
 
     expect(result.albumsSynced).toBe(0);
     expect(await AlbumModel.countDocuments()).toBe(0);
+  });
+});
+
+describe('runAudiusImport — playlist sync', () => {
+  it('does not import playlist member tracks when the playlist cover cannot be mirrored', async () => {
+    installMirrorMockFailingFor('playlist', 'playlist-no-cover');
+    const connector = makeConnector([makeTrack('playlist-search-track', 'artist-1')]);
+    const playlistOnlyTrack = makeTrack('playlist-only-track', 'artist-1');
+    const playlistFetcher = makePlaylistFetcher({
+      'artist-1': [makePlaylist('playlist-no-cover', ['playlist-only-track'], [playlistOnlyTrack])],
+    });
+
+    const result = await runAudiusImport('playlist-cover-failure', { connector, playlistFetcher });
+
+    expect(result.imported).toBe(1);
+    expect(result.playlistsSynced).toBe(0);
+    expect(await PlaylistModel.countDocuments({ 'externalIds.audiusId': 'playlist-no-cover' })).toBe(0);
+    expect(await TrackModel.countDocuments({ 'externalIds.audiusId': 'playlist-only-track' })).toBe(0);
   });
 });
 

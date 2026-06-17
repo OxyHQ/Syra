@@ -10,7 +10,7 @@ import { PlaylistTrackModel } from '../../models/PlaylistTrack';
 import { TrackModel } from '../../models/Track';
 import { assignMissingColors, replaceColors } from './entityColors';
 import { usableImages } from './externalImages';
-import { mirrorCatalogImage } from './catalogImageAssets';
+import { mirrorCatalogImage, type CatalogImageAsset } from './catalogImageAssets';
 
 const EXTERNAL_OWNER_ID = 'system:audius';
 const EXTERNAL_OWNER_NAME = 'Audius';
@@ -18,6 +18,12 @@ const EXTERNAL_OWNER_NAME = 'Audius';
 export interface UpsertPlaylistResult {
   playlist: IPlaylist | null;
   created: boolean;
+}
+
+export interface PreparedPlaylistCover {
+  existing: IPlaylist | null;
+  mirroredCover: CatalogImageAsset | undefined;
+  coverArtChanged: boolean;
 }
 
 function contributedFields(external: ExternalPlaylist): string[] {
@@ -50,6 +56,30 @@ async function findExisting(source: CatalogSource, externalId: string): Promise<
   return PlaylistModel.findOne({
     sources: { $elemMatch: { provider: source, externalId } },
   });
+}
+
+export async function preparePlaylistCover(
+  external: ExternalPlaylist,
+  source: CatalogSource,
+): Promise<PreparedPlaylistCover | null> {
+  const images = usableImages(external.images);
+  const existing = await findExisting(source, external.externalId);
+  const mirroredCover = await mirrorCatalogImage(images, {
+    provider: source,
+    entityType: 'playlist',
+    externalId: external.externalId,
+    existingImageId: existing?.coverArt,
+    existingImageSizes: existing?.coverArtSizes,
+  });
+  if (!mirroredCover && !existing?.coverArt) {
+    return null;
+  }
+
+  return {
+    existing,
+    mirroredCover,
+    coverArtChanged: Boolean(mirroredCover && mirroredCover.imageId !== existing?.coverArt),
+  };
 }
 
 async function resolveOrderedTrackIds(
@@ -114,27 +144,19 @@ async function replacePlaylistTracks(
 export async function upsertPlaylist(
   external: ExternalPlaylist,
   source: CatalogSource,
+  preparedCover?: PreparedPlaylistCover,
 ): Promise<UpsertPlaylistResult> {
   const provenance = buildProvenance(source, external.externalId, contributedFields(external));
-  const images = usableImages(external.images);
-
   const orderedTrackIds = await resolveOrderedTrackIds(source, external.trackExternalIds);
   if (orderedTrackIds.length === 0) {
     return { playlist: null, created: false };
   }
 
-  const existing = await findExisting(source, external.externalId);
-  const mirroredCover = await mirrorCatalogImage(images, {
-    provider: source,
-    entityType: 'playlist',
-    externalId: external.externalId,
-    existingImageId: existing?.coverArt,
-    existingImageSizes: existing?.coverArtSizes,
-  });
-  if (!mirroredCover && !existing?.coverArt) {
+  const cover = preparedCover ?? await preparePlaylistCover(external, source);
+  if (!cover) {
     return { playlist: null, created: false };
   }
-  const coverArtChanged = Boolean(mirroredCover && mirroredCover.imageId !== existing?.coverArt);
+  const { existing, mirroredCover, coverArtChanged } = cover;
 
   if (!existing) {
     if (!mirroredCover) {

@@ -19,7 +19,7 @@ export interface SearchResultWithPending extends SearchResult {
  * The query re-fetches at this cadence until the import lands and the server
  * returns `pendingAudiusImport: false` (or tracks appear locally).
  */
-export const AUDIUS_REFETCH_MS = 2000;
+export const AUDIUS_REFETCH_MS = 8000;
 
 // ── Pure predicate ────────────────────────────────────────────────────────────
 

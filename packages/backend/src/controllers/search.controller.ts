@@ -18,6 +18,21 @@ import { oxy } from '../../server';
  * for the same query and signals `pendingAudiusImport: true` to the client.
  */
 const AUDIUS_IMPORT_SPARSE_THRESHOLD = 5;
+const AUDIUS_IMPORT_MIN_QUERY_LENGTH = 3;
+const HEADER_PREVIEW_LIMIT = 5;
+const SEARCH_LIMIT_MAX = 50;
+
+function parseSearchLimit(value: unknown): number {
+  const parsed = parseInt(String(value ?? ''), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 20;
+  }
+  return Math.min(parsed, SEARCH_LIMIT_MAX);
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 function formatOxyUser(profile: User): SearchUser {
   return {
@@ -56,7 +71,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
     const { q, category = 'all', limit = 20, offset = 0 } = req.query;
     const query = (q as string) || '';
     const searchCategory = category as SearchCategory;
-    const searchLimit = parseInt(limit as string) || 20;
+    const searchLimit = parseSearchLimit(limit);
     const searchOffset = parseInt(offset as string) || 0;
 
     // If no query, return empty results
@@ -86,7 +101,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
     }
 
     // Create regex for case-insensitive search
-    const searchRegex = new RegExp(query, 'i');
+    const searchRegex = new RegExp(escapeRegex(query.trim()), 'i');
 
     // Build search promises based on category
     const searchPromises: {
@@ -100,10 +115,14 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
     // Normalize category to enum value
     const categoryValue = searchCategory.toLowerCase() as SearchCategory;
 
+    const isPreviewSearch =
+      searchOffset === 0 &&
+      searchLimit <= HEADER_PREVIEW_LIMIT &&
+      categoryValue === SearchCategory.ALL;
+
     // Search tracks
     if (categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.TRACKS) {
-      searchPromises.tracks = Promise.all([
-        TrackModel.find({
+      const trackFind = TrackModel.find({
           isAvailable: true,
           $or: [
             { title: searchRegex },
@@ -113,21 +132,24 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
           .sort(withImageFirstSort('track', { popularity: -1, createdAt: -1 }))
           .skip(searchOffset)
           .limit(searchLimit)
-          .lean(),
-        TrackModel.countDocuments({
-          isAvailable: true,
-          $or: [
-            { title: searchRegex },
-            { artistName: searchRegex },
-          ],
-        }),
-      ]);
+          .lean();
+      searchPromises.tracks = isPreviewSearch
+        ? trackFind.then((docs) => [docs, docs.length])
+        : Promise.all([
+            trackFind,
+            TrackModel.countDocuments({
+              isAvailable: true,
+              $or: [
+                { title: searchRegex },
+                { artistName: searchRegex },
+              ],
+            }),
+          ]);
     }
 
     // Search albums
     if (categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.ALBUMS) {
-      searchPromises.albums = Promise.all([
-        AlbumModel.find({
+      const albumFind = AlbumModel.find({
           $or: [
             { title: searchRegex },
             { artistName: searchRegex },
@@ -136,36 +158,42 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
           .sort(withImageFirstSort('album', { popularity: -1, releaseDate: -1 }))
           .skip(searchOffset)
           .limit(searchLimit)
-          .lean(),
-        AlbumModel.countDocuments({
-          $or: [
-            { title: searchRegex },
-            { artistName: searchRegex },
-          ],
-        }),
-      ]);
+          .lean();
+      searchPromises.albums = isPreviewSearch
+        ? albumFind.then((docs) => [docs, docs.length])
+        : Promise.all([
+            albumFind,
+            AlbumModel.countDocuments({
+              $or: [
+                { title: searchRegex },
+                { artistName: searchRegex },
+              ],
+            }),
+          ]);
     }
 
     // Search artists
     if (categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.ARTISTS) {
-      searchPromises.artists = Promise.all([
-        ArtistModel.find({
+      const artistFind = ArtistModel.find({
           name: searchRegex,
         })
           .sort(withImageFirstSort('artist', { popularity: -1, 'stats.followers': -1 }))
           .skip(searchOffset)
           .limit(searchLimit)
-          .lean(),
-        ArtistModel.countDocuments({
-          name: searchRegex,
-        }),
-      ]);
+          .lean();
+      searchPromises.artists = isPreviewSearch
+        ? artistFind.then((docs) => [docs, docs.length])
+        : Promise.all([
+            artistFind,
+            ArtistModel.countDocuments({
+              name: searchRegex,
+            }),
+          ]);
     }
 
     // Search playlists (only public playlists for now)
     if (categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.PLAYLISTS) {
-      searchPromises.playlists = Promise.all([
-        PlaylistModel.find({
+      const playlistFind = PlaylistModel.find({
           isPublic: true,
           $or: [
             { name: searchRegex },
@@ -175,18 +203,25 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
           .sort(withImageFirstSort('playlist', { followers: -1, createdAt: -1 }))
           .skip(searchOffset)
           .limit(searchLimit)
-          .lean(),
-        PlaylistModel.countDocuments({
-          isPublic: true,
-          $or: [
-            { name: searchRegex },
-            { description: searchRegex },
-          ],
-        }),
-      ]);
+          .lean();
+      searchPromises.playlists = isPreviewSearch
+        ? playlistFind.then((docs) => [docs, docs.length])
+        : Promise.all([
+            playlistFind,
+            PlaylistModel.countDocuments({
+              isPublic: true,
+              $or: [
+                { name: searchRegex },
+                { description: searchRegex },
+              ],
+            }),
+          ]);
     }
 
-    if (categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.USERS) {
+    const includeUsers =
+      categoryValue === SearchCategory.USERS ||
+      (categoryValue === SearchCategory.ALL && searchLimit > HEADER_PREVIEW_LIMIT);
+    if (includeUsers) {
       searchPromises.users = searchOxyUsers(query, searchLimit, searchOffset);
     }
 
@@ -218,7 +253,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
     const formattedPlaylists = categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.PLAYLISTS
       ? formatPlaylistsWithCoverArt(playlistsResult[0])
       : [];
-    const formattedUsers = categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.USERS
+    const formattedUsers = includeUsers
       ? usersResult[0]
       : [];
 
@@ -266,9 +301,16 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
     const isTrackSearch =
       categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.TRACKS;
     const sparseLocalResults = tracksCount < AUDIUS_IMPORT_SPARSE_THRESHOLD;
-    const pendingAudiusImport = isTrackSearch && sparseLocalResults;
+    const querySpecificEnough = query.trim().length >= AUDIUS_IMPORT_MIN_QUERY_LENGTH;
+    const canImportAudius =
+      process.env.AUDIUS_BACKGROUND_IMPORT_ENABLED !== 'false' &&
+      isTrackSearch &&
+      sparseLocalResults &&
+      querySpecificEnough &&
+      searchOffset === 0;
+    const pendingAudiusImport = canImportAudius;
 
-    if (isTrackSearch) {
+    if (canImportAudius) {
       enqueueAudiusImport(query);
     }
 

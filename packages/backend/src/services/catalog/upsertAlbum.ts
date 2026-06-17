@@ -10,7 +10,7 @@ import type { ITrack } from '../../models/Track';
 import { playCountToPopularity } from './popularity';
 import { assignMissingColors, replaceColors } from './entityColors';
 import { usableImages } from './externalImages';
-import { mirrorCatalogImage } from './catalogImageAssets';
+import { mirrorCatalogImage, type CatalogImageAsset } from './catalogImageAssets';
 
 /** Minimal artist context needed to attach an album to its primary artist. */
 export interface AlbumArtistRef {
@@ -22,6 +22,12 @@ export interface AlbumArtistRef {
 export interface UpsertAlbumResult {
   album: IAlbum | null;
   created: boolean;
+}
+
+export interface PreparedAlbumCover {
+  existing: IAlbum | null;
+  mirroredCover: CatalogImageAsset | undefined;
+  coverArtChanged: boolean;
 }
 
 /**
@@ -60,6 +66,30 @@ async function findExisting(source: CatalogSource, externalId: string): Promise<
   return AlbumModel.findOne({
     sources: { $elemMatch: { provider: source, externalId } },
   });
+}
+
+export async function prepareAlbumCover(
+  external: ExternalAlbum,
+  source: CatalogSource,
+): Promise<PreparedAlbumCover | null> {
+  const images = usableImages(external.images);
+  const existing = await findExisting(source, external.externalId);
+  const mirroredCover = await mirrorCatalogImage(images, {
+    provider: source,
+    entityType: 'album',
+    externalId: external.externalId,
+    existingImageId: existing?.coverArt,
+    existingImageSizes: existing?.coverArtSizes,
+  });
+  if (!mirroredCover && !existing?.coverArt) {
+    return null;
+  }
+
+  return {
+    existing,
+    mirroredCover,
+    coverArtChanged: Boolean(mirroredCover && mirroredCover.imageId !== existing?.coverArt),
+  };
 }
 
 async function resolveMemberTracks(
@@ -125,8 +155,8 @@ export async function upsertAlbum(
   external: ExternalAlbum,
   artist: AlbumArtistRef,
   source: CatalogSource,
+  preparedCover?: PreparedAlbumCover,
 ): Promise<UpsertAlbumResult> {
-  const images = usableImages(external.images);
   const provenance = buildProvenance(source, external.externalId, contributedFields(external));
   const playCount = external.popularity?.playCount;
   const genres = external.genre ? [external.genre] : [];
@@ -135,18 +165,11 @@ export async function upsertAlbum(
     return { album: null, created: false };
   }
 
-  const existing = await findExisting(source, external.externalId);
-  const mirroredCover = await mirrorCatalogImage(images, {
-    provider: source,
-    entityType: 'album',
-    externalId: external.externalId,
-    existingImageId: existing?.coverArt,
-    existingImageSizes: existing?.coverArtSizes,
-  });
-  if (!mirroredCover && !existing?.coverArt) {
+  const cover = preparedCover ?? await prepareAlbumCover(external, source);
+  if (!cover) {
     return { album: null, created: false };
   }
-  const coverArtChanged = Boolean(mirroredCover && mirroredCover.imageId !== existing?.coverArt);
+  const { existing, mirroredCover, coverArtChanged } = cover;
 
   if (!existing) {
     if (!mirroredCover) {
