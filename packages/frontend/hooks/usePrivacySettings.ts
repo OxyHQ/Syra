@@ -65,9 +65,11 @@ const writeCachedPrivacySettings = async (privacySettings: PrivacySettings) => {
  * Hook to fetch privacy settings for a specific user.
  */
 export function usePrivacySettings(userId?: string | null): PrivacySettings | null {
+  const { isAuthenticated, isAuthResolved, isTokenReady } = useOxy();
+  const canUsePrivateApi = isAuthResolved && isTokenReady && isAuthenticated;
   const { data = null } = useQuery({
     queryKey: ['privacySettings', userId],
-    enabled: !!userId,
+    enabled: !!userId && canUsePrivateApi,
     staleTime: PRIVACY_SETTINGS_STALE_TIME_MS,
     queryFn: async () => {
       try {
@@ -80,13 +82,13 @@ export function usePrivacySettings(userId?: string | null): PrivacySettings | nu
         if (isNotFoundError(error)) {
           return DEFAULT_PRIVACY_SETTINGS;
         }
-        console.debug('Could not load privacy settings:', error);
+        logger.debug('Could not load privacy settings', { error });
         return null;
       }
     },
   });
 
-  return data;
+  return data ?? (isAuthResolved && !isAuthenticated ? DEFAULT_PRIVACY_SETTINGS : null);
 }
 
 /**

@@ -35,9 +35,12 @@ import { confirmDialog } from '@/utils/alerts';
 import i18n from '@/lib/i18n';
 import { STORAGE_KEYS } from '@/lib/constants';
 import { Storage } from '@/utils/storage';
+import { createScopedLogger } from '@/utils/logger';
 
 type AudioQuality = 'low' | 'normal' | 'high' | 'very_high';
 type ProfileVisibility = 'public' | 'private' | 'followers_only';
+
+const logger = createScopedLogger('SettingsScreen');
 
 const LANGUAGE_OPTIONS: readonly { label: string; value: string }[] = [
   { label: 'English', value: 'en-US' },
@@ -86,7 +89,8 @@ const SettingsControlSection: React.FC<SettingsControlSectionProps> = ({
  */
 const SettingsScreen: React.FC = () => {
   const router = useRouter();
-  const { user, isAuthenticated, logout, oxyServices } = useOxy();
+  const { user, isAuthenticated, isAuthResolved, isTokenReady, logout, oxyServices, showBottomSheet } = useOxy();
+  const canUsePrivateApi = isAuthResolved && isTokenReady && isAuthenticated;
   const { preferences: musicPreferences, updatePreferences: updateMusicPreferences } = useMusicPreferences();
   const privacySettings = useCurrentUserPrivacySettings();
   const updatePrivacySettingsCache = useUpdatePrivacySettingsCache();
@@ -106,12 +110,25 @@ const SettingsScreen: React.FC = () => {
       await i18n.changeLanguage(language);
       await Storage.set(STORAGE_KEYS.LANGUAGE_PREFERENCE, language);
     } catch (error) {
-      console.error('Failed to change language:', error);
+      logger.error('Failed to change language', { error });
       Alert.alert('Error', 'Failed to change language. Please try again.');
     }
   }, []);
 
+  const requirePrivateSession = useCallback((): boolean => {
+    if (canUsePrivateApi) return true;
+    showBottomSheet?.('OxyAuth');
+    Alert.alert('Log in required', 'Please log in before changing account settings.');
+    return false;
+  }, [canUsePrivateApi, showBottomSheet]);
+
+  const handleMusicPreferenceUpdate = useCallback((updates: Parameters<typeof updateMusicPreferences>[0]) => {
+    if (!requirePrivateSession()) return;
+    void updateMusicPreferences(updates);
+  }, [requirePrivateSession, updateMusicPreferences]);
+
   const handleThemeModeChange = useCallback((mode: 'system' | 'light' | 'dark') => {
+    if (!requirePrivateSession()) return;
     setMode(mode);
     void updateAppearanceSettings({
       appearance: {
@@ -119,9 +136,10 @@ const SettingsScreen: React.FC = () => {
         primaryColor: appearanceSettings?.appearance?.primaryColor,
       },
     });
-  }, [setMode, updateAppearanceSettings, appearanceSettings?.appearance?.primaryColor]);
+  }, [requirePrivateSession, setMode, updateAppearanceSettings, appearanceSettings?.appearance?.primaryColor]);
 
   const handleColorChange = useCallback((name: AppColorName) => {
+    if (!requirePrivateSession()) return;
     setColorPreset(name);
     void updateAppearanceSettings({
       appearance: {
@@ -129,24 +147,28 @@ const SettingsScreen: React.FC = () => {
         primaryColor: APP_COLOR_PRESETS[name].hex,
       },
     });
-  }, [setColorPreset, updateAppearanceSettings, appearanceSettings?.appearance?.themeMode]);
+  }, [requirePrivateSession, setColorPreset, updateAppearanceSettings, appearanceSettings?.appearance?.themeMode]);
 
   const updatePrivacySettingsMutation = useMutation({
     mutationFn: async (updates: Partial<PrivacySettings>) => {
+      if (!canUsePrivateApi) {
+        throw new Error('Log in required');
+      }
       const newSettings: PrivacySettings = { ...privacySettings, ...updates };
       await authenticatedClient.put('/profile/settings', { privacy: newSettings });
       await updatePrivacySettingsCache(newSettings);
       return newSettings;
     },
     onError: (error) => {
-      console.error('Failed to update privacy settings:', error);
+      logger.error('Failed to update privacy settings', { error });
       Alert.alert('Error', 'Failed to update privacy settings.');
     },
   });
 
   const handlePrivacyUpdate = useCallback((updates: Partial<PrivacySettings>) => {
+    if (!requirePrivateSession()) return;
     updatePrivacySettingsMutation.mutate(updates);
-  }, [updatePrivacySettingsMutation]);
+  }, [requirePrivateSession, updatePrivacySettingsMutation]);
 
   const handleLogout = useCallback(async () => {
     const confirmed = await confirmDialog({
@@ -161,7 +183,7 @@ const SettingsScreen: React.FC = () => {
       await logout();
       router.replace('/');
     } catch (error) {
-      console.error('Logout failed:', error);
+      logger.error('Logout failed', { error });
       Alert.alert('Error', 'Failed to log out. Please try again.');
     }
   }, [logout, router]);
@@ -188,10 +210,23 @@ const SettingsScreen: React.FC = () => {
       await Promise.all(keysToClear.map((key) => AsyncStorage.removeItem(key)));
       Alert.alert('Success', 'Cache cleared successfully.');
     } catch (error) {
-      console.error('Clear cache failed:', error);
+      logger.error('Clear cache failed', { error });
       Alert.alert('Error', 'Failed to clear cache. Please try again.');
     }
   }, []);
+
+  if (!isAuthResolved || (isAuthenticated && !isTokenReady)) {
+    return (
+      <>
+        <SEO title="Settings - Syra" description="App settings and preferences" />
+        <ThemedView className="flex-1 items-center justify-center px-12">
+          <Text className="text-base text-center text-muted-foreground">
+            Loading account settings
+          </Text>
+        </ThemedView>
+      </>
+    );
+  }
 
   if (!isAuthenticated) {
     return (
@@ -257,7 +292,7 @@ const SettingsScreen: React.FC = () => {
               rightElement={
                 <Switch
                   value={musicPreferences?.autoplay ?? true}
-                  onValueChange={(value) => updateMusicPreferences({ autoplay: value })}
+                  onValueChange={(value) => handleMusicPreferenceUpdate({ autoplay: value })}
                 />
               }
             />
@@ -269,7 +304,7 @@ const SettingsScreen: React.FC = () => {
               rightElement={
                 <Switch
                   value={musicPreferences?.gaplessPlayback ?? true}
-                  onValueChange={(value) => updateMusicPreferences({ gaplessPlayback: value })}
+                  onValueChange={(value) => handleMusicPreferenceUpdate({ gaplessPlayback: value })}
                 />
               }
             />
@@ -281,7 +316,7 @@ const SettingsScreen: React.FC = () => {
               rightElement={
                 <Switch
                   value={musicPreferences?.normalizeVolume ?? true}
-                  onValueChange={(value) => updateMusicPreferences({ normalizeVolume: value })}
+                  onValueChange={(value) => handleMusicPreferenceUpdate({ normalizeVolume: value })}
                 />
               }
             />
@@ -293,14 +328,14 @@ const SettingsScreen: React.FC = () => {
               rightElement={
                 <Switch
                   value={musicPreferences?.explicitContent ?? true}
-                  onValueChange={(value) => updateMusicPreferences({ explicitContent: value })}
+                  onValueChange={(value) => handleMusicPreferenceUpdate({ explicitContent: value })}
                 />
               }
             />
             <View style={styles.groupControl}>
               <Slider
                 value={musicPreferences?.crossfade ?? 0}
-                onValueChange={(value) => updateMusicPreferences({ crossfade: value })}
+                onValueChange={(value) => handleMusicPreferenceUpdate({ crossfade: value })}
                 minimumValue={0}
                 maximumValue={12}
                 step={1}
@@ -320,7 +355,7 @@ const SettingsScreen: React.FC = () => {
                 label="Streaming quality"
                 type="radio"
                 value={musicPreferences?.audioQuality ?? 'normal'}
-                onChange={(value) => updateMusicPreferences({ audioQuality: value })}
+                onChange={(value) => handleMusicPreferenceUpdate({ audioQuality: value })}
               >
                 <SegmentedControl.Item value="low">
                   <SegmentedControl.ItemText>Low</SegmentedControl.ItemText>
@@ -342,7 +377,7 @@ const SettingsScreen: React.FC = () => {
                 label="Download quality"
                 type="radio"
                 value={musicPreferences?.downloadQuality ?? 'normal'}
-                onChange={(value) => updateMusicPreferences({ downloadQuality: value })}
+                onChange={(value) => handleMusicPreferenceUpdate({ downloadQuality: value })}
               >
                 <SegmentedControl.Item value="low">
                   <SegmentedControl.ItemText>Low</SegmentedControl.ItemText>
@@ -367,7 +402,7 @@ const SettingsScreen: React.FC = () => {
               rightElement={
                 <Switch
                   value={musicPreferences?.dataSaver ?? false}
-                  onValueChange={(value) => updateMusicPreferences({ dataSaver: value })}
+                  onValueChange={(value) => handleMusicPreferenceUpdate({ dataSaver: value })}
                 />
               }
             />
@@ -379,7 +414,7 @@ const SettingsScreen: React.FC = () => {
               rightElement={
                 <Switch
                   value={musicPreferences?.directAudiusStreaming ?? false}
-                  onValueChange={(value) => updateMusicPreferences({ directAudiusStreaming: value })}
+                  onValueChange={(value) => handleMusicPreferenceUpdate({ directAudiusStreaming: value })}
                 />
               }
             />

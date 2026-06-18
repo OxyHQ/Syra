@@ -10,7 +10,7 @@ function unwrapApiData<T>(value: T | { data: T } | null | undefined): T | null {
   }
 
   if (typeof value === 'object' && value !== null) {
-    const recordValue = value as Record<string, any>;
+    const recordValue = value as Record<string, unknown>;
     if ('data' in recordValue) {
       const inner = recordValue.data as T | null | undefined;
       return inner ?? null;
