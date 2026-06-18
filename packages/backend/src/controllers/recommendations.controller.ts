@@ -1,5 +1,5 @@
 import type { Response, NextFunction } from 'express';
-import type { AuthRequest } from '../middleware/auth';
+import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import {
   getRelatedArtists,
   getSimilarTracks,

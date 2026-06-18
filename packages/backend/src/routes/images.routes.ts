@@ -3,7 +3,7 @@ import {
   uploadImage,
   getImage,
 } from '../controllers/images.controller';
-import { requireAuth } from '../middleware/auth';
+import { requireOxyAuth as requireAuth } from '@oxyhq/core/server';
 import { singleImageUpload } from '../utils/imageUpload';
 
 const router = Router();

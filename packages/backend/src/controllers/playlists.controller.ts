@@ -7,7 +7,7 @@ import { TrackModel } from '../models/Track';
 import { getStoredImageColors } from '../utils/imageColors';
 import { toApiFormat, toApiFormatArray, formatTrackWithCoverArt, formatPlaylistWithCoverArt, formatPlaylistsWithCoverArt } from '../utils/musicHelpers';
 import { isDatabaseConnected } from '../utils/database';
-import { AuthRequest } from '../middleware/auth';
+import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { getParam } from '../utils/reqParams';
 import { withImageFirstSort } from '../utils/imageFirstSort';
 import { playableTrackFilter, visibleCatalogFilter } from '../utils/catalogVisibility';

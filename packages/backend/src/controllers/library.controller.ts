@@ -1,6 +1,6 @@
 import { Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
-import { AuthRequest } from '../middleware/auth';
+import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { UserLibraryModel } from '../models/Library';
 import { RecentlyPlayedModel } from '../models/RecentlyPlayed';
 import { TrackModel } from '../models/Track';

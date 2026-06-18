@@ -3,10 +3,10 @@ import UserSettings from '../models/UserSettings';
 import UserBehavior from '../models/UserBehavior';
 import { logger } from '../utils/logger';
 // Block and Restrict routes removed - frontend should use Oxy services directly
-import { AuthRequest, requireAuth } from '../middleware/auth';
+import { requireOxyAuth as requireAuth, type OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { ensureUserSettings } from '../utils/userSettings';
 import { sendErrorResponse, sendSuccessResponse, validateRequired } from '../utils/apiHelpers';
-import { getAuthenticatedUserId } from '../utils/auth';
+import { getRequiredOxyUserId as getAuthenticatedUserId } from '@oxyhq/core/server';
 import { getParam } from '../utils/reqParams';
 
 const router = Router();

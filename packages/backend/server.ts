@@ -16,7 +16,7 @@ import { createAdapter } from '@socket.io/redis-adapter';
 import { logger } from './src/utils/logger';
 import { bruteForceProtection } from './src/middleware/security';
 import { performanceMiddleware, getPerformanceStats } from './src/middleware/performance';
-import type { AuthRequest } from './src/middleware/auth';
+import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { RedisStore } from './src/middleware/rateLimitStore';
 
 import { setupPlayerSocket } from './src/sockets/playerSocket';

@@ -6,7 +6,7 @@ import { TrackKeyModel } from '../models/TrackKey';
 import { UserMusicPreferencesModel } from '../models/UserMusicPreferences';
 import { getStream, getStreamKey, getVariantPlaylist } from './stream.controller';
 import { verifyStreamToken, mintStreamToken } from '../services/stream/streamToken';
-import type { AuthRequest } from '../middleware/auth';
+import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import type { Response } from 'express';
 
 // Ensure STREAM_TOKEN_SECRET is set before module load

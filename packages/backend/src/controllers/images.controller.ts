@@ -4,7 +4,7 @@ import { isDatabaseConnected } from '../utils/database';
 import { logger } from '../utils/logger';
 import { getErrorMessage } from '../utils/error';
 import { getParam } from '../utils/reqParams';
-import { AuthRequest } from '../middleware/auth';
+import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { extractPredominantColorsFromBuffer } from '../services/colorExtractionService';
 import { getImageAssetStream, storeImageAsset } from '../services/imageAssetService';
 

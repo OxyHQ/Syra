@@ -2,7 +2,7 @@ import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import slowDown from "express-slow-down";
 import type { RequestHandler } from "express";
 import { Request, Response } from "express";
-import { AuthRequest } from "./auth";
+import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { RedisStore } from "./rateLimitStore";
 
 // Create Redis store for distributed rate limiting

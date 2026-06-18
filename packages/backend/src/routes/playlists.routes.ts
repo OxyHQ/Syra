@@ -10,7 +10,7 @@ import {
   removeTracksFromPlaylist,
   reorderPlaylistTracks,
 } from '../controllers/playlists.controller';
-import { requireAuth } from '../middleware/auth';
+import { requireOxyAuth as requireAuth } from '@oxyhq/core/server';
 import { singleCoverArtUpload } from '../utils/imageUpload';
 
 const router = Router();

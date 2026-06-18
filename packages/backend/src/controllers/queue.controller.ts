@@ -1,7 +1,7 @@
 import { Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
 import { Queue, QueueWithMetadata, AddToQueueRequest } from '@syra/shared-types';
-import { AuthRequest } from '../middleware/auth';
+import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { isDatabaseConnected } from '../utils/database';
 import { TrackModel } from '../models/Track';
 import { toApiFormatArray, formatTracksWithCoverArt } from '../utils/musicHelpers';

@@ -4,7 +4,7 @@ import { TrackModel } from '../models/Track';
 import { ArtistModel } from '../models/Artist';
 import { makeSourcesController } from './sources.controller';
 import type { ExternalTrack } from '@syra/shared-types';
-import type { AuthRequest } from '../middleware/auth';
+import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import type { Response } from 'express';
 import type { MusicSourceConnector } from '../services/sources/MusicSourceConnector';
 

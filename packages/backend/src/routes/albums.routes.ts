@@ -5,7 +5,7 @@ import {
   getAlbumTracks,
   createAlbum,
 } from '../controllers/albums.controller';
-import { requireAuth } from '../middleware/auth';
+import { requireOxyAuth as requireAuth } from '@oxyhq/core/server';
 import { singleCoverArtUpload } from '../utils/imageUpload';
 
 const router = Router();

@@ -1,6 +1,6 @@
 import type { Response } from 'express';
 import { logger } from '../utils/logger';
-import type { AuthRequest } from '../middleware/auth';
+import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { externalTrackSchema, type ExternalTrack } from '@syra/shared-types';
 import type { MusicSourceConnector } from '../services/sources/MusicSourceConnector';
 import { AudiusConnector } from '../services/sources/AudiusConnector';

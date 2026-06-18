@@ -9,7 +9,7 @@ import {
   getSimilarTracksHandler,
   getTrackRadioHandler,
 } from '../controllers/recommendations.controller';
-import { requireAuth } from '../middleware/auth';
+import { requireOxyAuth as requireAuth } from '@oxyhq/core/server';
 
 const router = Router();
 

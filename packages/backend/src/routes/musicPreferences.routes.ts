@@ -1,8 +1,8 @@
 import { Router, Response } from 'express';
-import { AuthRequest, requireAuth } from '../middleware/auth';
+import { requireOxyAuth as requireAuth, type OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { logger } from '../utils/logger';
 import { sendErrorResponse, sendSuccessResponse } from '../utils/apiHelpers';
-import { getAuthenticatedUserId } from '../utils/auth';
+import { getRequiredOxyUserId as getAuthenticatedUserId } from '@oxyhq/core/server';
 import {
   getMusicPreferences,
   updateMusicPreferences,

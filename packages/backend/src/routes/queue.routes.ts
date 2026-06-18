@@ -7,7 +7,7 @@ import {
   clearQueueHandler,
   setCurrentTrack,
 } from '../controllers/queue.controller';
-import { requireAuth } from '../middleware/auth';
+import { requireOxyAuth as requireAuth } from '@oxyhq/core/server';
 
 const router = Router();
 

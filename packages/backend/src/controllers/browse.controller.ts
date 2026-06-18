@@ -6,7 +6,7 @@ import { PlaylistModel } from '../models/Playlist';
 import { formatTracksWithCoverArt, formatArtistsWithImage, formatPlaylistsWithCoverArt, formatAlbumsWithCoverArt } from '../utils/musicHelpers';
 import { isDatabaseConnected } from '../utils/database';
 import { withImageFirstSort } from '../utils/imageFirstSort';
-import type { AuthRequest } from '../middleware/auth';
+import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { getMadeForYou as getPersonalisedMadeForYou } from '../services/recommendations/recommendationService';
 import { playableTrackFilter, visibleCatalogFilter } from '../utils/catalogVisibility';
 
