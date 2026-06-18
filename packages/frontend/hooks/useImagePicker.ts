@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import { Alert } from 'react-native';
-import { API_URL } from '@/config';
+import { api } from '@/utils/api';
 
 export interface ImagePickerResult {
   uri: string;
@@ -145,11 +145,6 @@ export function useImagePicker(options: UseImagePickerOptions = {}) {
     try {
       setIsUploading(true);
       
-      // Create OxyServices instance configured for Syra API
-      // It uses the same token storage, so authentication is automatic
-      const { OxyServices } = await import('@oxyhq/core');
-      const api = new OxyServices({ baseURL: API_URL }).getClient();
-      
       const formData = new FormData();
       const fileName = imageResult.uri.split('/').pop() || `image-${Date.now()}.jpg`;
       
@@ -161,12 +156,11 @@ export function useImagePicker(options: UseImagePickerOptions = {}) {
       };
       formData.append('image', uploadFile as unknown as Blob);
 
-      // Upload to backend - authenticated client automatically includes auth token.
-      // @oxyhq/core's HttpService resolves with the response body itself
-      // (no axios-style `.data` envelope); the endpoint returns `{ id }`.
-      const response: { id: string } = await api.post('/images/upload', formData);
+      // Upload to backend - the linked Syra API client includes the active Oxy token.
+      // The app API wrapper returns an axios-style `{ data }` envelope.
+      const response = await api.post<{ id: string }>('/images/upload', formData);
 
-      return response.id;
+      return response.data.id;
     } catch (error: unknown) {
       console.error('Image upload error:', error);
       Alert.alert('Error', getUploadErrorMessage(error));

@@ -1,4 +1,4 @@
-import { api, authenticatedClient, getApiOrigin } from '@/utils/api';
+import { api } from '@/utils/api';
 import { Artist, CreateArtistRequest, ArtistDashboard, ArtistInsights, CreateAlbumRequest, Track, Album } from '@syra/shared-types';
 import { Platform } from 'react-native';
 import { normalizeAlbumImages, normalizeArtistImages, normalizeTrackImages } from '@/utils/catalogImages';
@@ -114,44 +114,10 @@ export const artistService = {
     }
     formData.append('duration', String(data.duration));
 
-    // The OxyServices HTTP client is fetch-based and cannot report upload
-    // progress, so the multipart upload goes through XMLHttpRequest, which
-    // exposes `upload.onprogress`. Authentication still flows through the
-    // OxyServices session via its current access token.
-    return new Promise<Track>((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      const accessToken = authenticatedClient.getAccessToken();
-
-      xhr.open('POST', `${getApiOrigin()}/tracks/upload`);
-      if (accessToken) {
-        xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
-      }
-      // Do NOT set Content-Type: the browser/RN runtime sets the multipart
-      // boundary automatically when the body is a FormData instance.
-
-      if (onProgress) {
-        xhr.upload.onprogress = (event: ProgressEvent) => {
-          if (event.lengthComputable) {
-            onProgress((event.loaded / event.total) * 100);
-          }
-        };
-      }
-
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            resolve(normalizeTrackImages(JSON.parse(xhr.responseText) as Track));
-          } catch (parseError) {
-            reject(parseError);
-          }
-        } else {
-          reject(new Error(`Track upload failed with status ${xhr.status}`));
-        }
-      };
-      xhr.onerror = () => reject(new Error('Track upload failed: network error'));
-
-      xhr.send(formData);
-    });
+    onProgress?.(0);
+    const response = await api.post<Track>('/tracks/upload', formData);
+    onProgress?.(100);
+    return normalizeTrackImages(response.data);
   },
 
   /**

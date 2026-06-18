@@ -30,7 +30,6 @@ import { HomeRefreshProvider } from '@/context/HomeRefreshContext';
 import { Toaster } from '@/lib/sonner';
 import i18n from '@/lib/i18n';
 import { useServerAppearanceSync } from '@/hooks/useServerAppearanceSync';
-import { authenticatedClient, setAuthenticatedAccessTokenProvider } from '@/utils/api';
 import { clearStreamResolutionCache } from '@/services/streamService';
 
 /**
@@ -43,27 +42,16 @@ function AppearanceSync(): null {
   return null;
 }
 
-function SyraApiAuthSync(): null {
+function StreamCacheAuthInvalidator(): null {
   const { oxyServices } = useOxy();
 
-  React.useLayoutEffect(() => {
-    const sourceClient = oxyServices.getClient();
-    const syncToken = (accessToken: string | null) => {
+  React.useEffect(() => {
+    const unsubscribe = oxyServices.onTokensChanged(() => {
       clearStreamResolutionCache();
-      if (accessToken) {
-        authenticatedClient.setTokens(accessToken);
-      } else {
-        authenticatedClient.clearTokens();
-      }
-    };
-
-    const unsetAccessTokenProvider = setAuthenticatedAccessTokenProvider(() => sourceClient.getAccessToken());
-    syncToken(sourceClient.getAccessToken());
-    const unsubscribe = sourceClient.addTokenChangeListener(syncToken);
+    });
 
     return () => {
       unsubscribe();
-      unsetAccessTokenProvider();
     };
   }, [oxyServices]);
 
@@ -98,7 +86,7 @@ export const AppProviders = memo(function AppProviders({
             >
               <I18nextProvider i18n={i18n}>
                 <AppearanceSync />
-                <SyraApiAuthSync />
+                <StreamCacheAuthInvalidator />
                 <BottomSheetModalProvider>
                   <BottomSheetProvider>
                     <MenuProvider>
