@@ -70,7 +70,7 @@ interface MusicPreferencesStore {
   preferences: MusicPreferences | null;
   loading: boolean;
   error: string | null;
-  loadPreferences: (isAuthenticated?: boolean) => Promise<void>;
+  loadPreferences: (isAuthenticated: boolean) => Promise<void>;
   updatePreferences: (partial: Partial<MusicPreferences>) => Promise<MusicPreferences | null>;
 }
 
@@ -82,7 +82,7 @@ export const useMusicPreferencesStore = create<MusicPreferencesStore>((set, get)
   loading: false,
   error: null,
 
-  async loadPreferences(isAuthenticated?: boolean) {
+  async loadPreferences(isAuthenticated: boolean) {
     try {
       set({ loading: true, error: null });
       
@@ -93,8 +93,8 @@ export const useMusicPreferencesStore = create<MusicPreferencesStore>((set, get)
         set({ preferences: cached });
       }
 
-      // Only fetch from API if user is authenticated
-      if (isAuthenticated === false) {
+      // Only fetch private preferences after auth is resolved and authenticated.
+      if (!isAuthenticated) {
         set({ loading: false });
         return;
       }
@@ -157,6 +157,5 @@ export const useMusicPreferencesStore = create<MusicPreferencesStore>((set, get)
     }
   },
 }));
-
 
 
