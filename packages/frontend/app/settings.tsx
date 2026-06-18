@@ -89,8 +89,7 @@ const SettingsControlSection: React.FC<SettingsControlSectionProps> = ({
  */
 const SettingsScreen: React.FC = () => {
   const router = useRouter();
-  const { user, isAuthenticated, isAuthResolved, isTokenReady, logout, oxyServices, showBottomSheet } = useOxy();
-  const canUsePrivateApi = isAuthResolved && isTokenReady && isAuthenticated;
+  const { user, isAuthenticated, isPrivateApiPending, canUsePrivateApi, logout, oxyServices, showBottomSheet } = useOxy();
   const { preferences: musicPreferences, updatePreferences: updateMusicPreferences } = useMusicPreferences();
   const privacySettings = useCurrentUserPrivacySettings();
   const updatePrivacySettingsCache = useUpdatePrivacySettingsCache();
@@ -215,7 +214,7 @@ const SettingsScreen: React.FC = () => {
     }
   }, []);
 
-  if (!isAuthResolved || (isAuthenticated && !isTokenReady)) {
+  if (isPrivateApiPending) {
     return (
       <>
         <SEO title="Settings - Syra" description="App settings and preferences" />

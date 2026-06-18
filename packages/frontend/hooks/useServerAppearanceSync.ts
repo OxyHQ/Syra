@@ -24,11 +24,10 @@ function isValidThemeMode(value: string | undefined): value is ThemeMode {
  * which is one of the few legitimate uses of `useEffect`.
  */
 export function useServerAppearanceSync(): void {
-  const { isAuthenticated, isAuthResolved, isReady } = useAuth();
+  const { canUsePrivateApi } = useAuth();
   const mySettings = useAppearanceStore((state) => state.mySettings);
   const loadMySettings = useAppearanceStore((state) => state.loadMySettings);
   const { setMode, setColorPreset } = useBloomTheme();
-  const canUsePrivateApi = isAuthResolved && isReady && isAuthenticated;
 
   useEffect(() => {
     if (!canUsePrivateApi) return;

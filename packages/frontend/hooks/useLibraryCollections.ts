@@ -31,8 +31,7 @@ export interface LibraryCollections {
 }
 
 export function useLibraryCollections(): LibraryCollections {
-  const { isAuthenticated, isAuthResolved, isTokenReady } = useOxy();
-  const canUsePrivateApi = isAuthResolved && isTokenReady && isAuthenticated;
+  const { canUsePrivateApi } = useOxy();
   const { membership, isLoading: membershipLoading, isError: membershipError } = useLibrary();
 
   const playlistsQuery = useQuery({

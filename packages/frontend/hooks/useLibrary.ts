@@ -61,8 +61,7 @@ function withMembership(
  * `useEffect`, no mirrored local state.
  */
 export function useLibrary() {
-  const { isAuthenticated, isAuthResolved, isTokenReady } = useOxy();
-  const canUsePrivateApi = isAuthResolved && isTokenReady && isAuthenticated;
+  const { canUsePrivateApi } = useOxy();
 
   const query = useQuery<LibraryMembership>({
     queryKey: LIBRARY_QUERY_KEY,
@@ -121,8 +120,7 @@ function useToggleMembership(
   options?: { invalidateTracks?: boolean; invalidatePlaylists?: boolean },
 ): UseMutationResult<{ success: boolean }, Error, ToggleVariables, ToggleContext> {
   const queryClient = useQueryClient();
-  const { isAuthenticated, isAuthResolved, isTokenReady, showBottomSheet } = useOxy();
-  const canUsePrivateApi = isAuthResolved && isTokenReady && isAuthenticated;
+  const { canUsePrivateApi, showBottomSheet } = useOxy();
   const invalidateTracks = options?.invalidateTracks ?? false;
   const invalidatePlaylists = options?.invalidatePlaylists ?? false;
 

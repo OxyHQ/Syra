@@ -64,9 +64,8 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   const theme = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { isAuthenticated, isAuthResolved, isTokenReady } = useOxy();
-  const canUsePrivateApi = isAuthResolved && isTokenReady && isAuthenticated;
-  const authLoading = !isAuthResolved || (isAuthenticated && !isTokenReady);
+  const { isAuthenticated, isAuthResolved, canUsePrivateApi, isPrivateApiPending } = useOxy();
+  const authLoading = isPrivateApiPending;
   const { t } = useTranslation();
 
   // Collapses the extended FAB to an icon-only circle while scrolling down and

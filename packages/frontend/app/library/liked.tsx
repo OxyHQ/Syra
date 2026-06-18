@@ -26,8 +26,7 @@ const LikedSongsScreen: React.FC = () => {
   const theme = useTheme();
   const router = useRouter();
   const { t } = useTranslation();
-  const { isAuthenticated, isAuthResolved, isTokenReady } = useOxy();
-  const canUsePrivateApi = isAuthResolved && isTokenReady && isAuthenticated;
+  const { canUsePrivateApi, isPrivateApiPending } = useOxy();
   const { playTrackList, currentTrack, isPlaying } = usePlayerStore();
 
   const { data, isLoading, isError } = useQuery({
@@ -62,7 +61,7 @@ const LikedSongsScreen: React.FC = () => {
     });
   };
 
-  if (!isAuthResolved || (isAuthenticated && !isTokenReady)) {
+  if (isPrivateApiPending) {
     return (
       <View style={[styles.centered, { backgroundColor: theme.colors.background }]}>
         <LibraryListSkeleton count={8} />

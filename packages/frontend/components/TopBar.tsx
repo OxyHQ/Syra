@@ -53,8 +53,7 @@ export const TopBar: React.FC = () => {
   const { q } = useLocalSearchParams<{ q?: string }>();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { user, isAuthenticated, isAuthResolved, isTokenReady, oxyServices, showBottomSheet } = useOxy();
-  const canUsePrivateApi = isAuthResolved && isTokenReady && isAuthenticated;
+  const { user, isAuthenticated, canUsePrivateApi, oxyServices, showBottomSheet } = useOxy();
   const { playTrackList } = usePlayerStore();
   const isMobile = useMediaQuery({ maxWidth: 767 });
   const [searchQuery, setSearchQuery] = useState(() => (pathname === '/search' && typeof q === 'string' ? q : ''));
