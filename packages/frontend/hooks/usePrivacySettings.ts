@@ -3,9 +3,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useOxy } from '@oxyhq/services';
 import { z } from 'zod';
 import { api, isNotFoundError, isUnauthorizedError } from '@/utils/api';
+import { createScopedLogger } from '@/utils/logger';
 
-const PRIVACY_SETTINGS_CACHE_KEY = '@mention_privacy_settings';
+const PRIVACY_SETTINGS_CACHE_KEY = '@syra_privacy_settings';
 const PRIVACY_SETTINGS_STALE_TIME_MS = 1000 * 60 * 5;
+const logger = createScopedLogger('usePrivacySettings');
 
 const privacySettingsSchema = z.object({
   profileVisibility: z.enum(['public', 'private', 'followers_only']).optional(),
@@ -46,7 +48,7 @@ const readCachedPrivacySettings = async (): Promise<PrivacySettings | null> => {
     if (!cached) return null;
     return parsePrivacySettings(JSON.parse(cached));
   } catch (error) {
-    console.debug('Failed to load cached privacy settings:', error);
+    logger.debug('Failed to load cached privacy settings', { error });
     return null;
   }
 };
@@ -55,7 +57,7 @@ const writeCachedPrivacySettings = async (privacySettings: PrivacySettings) => {
   try {
     await AsyncStorage.setItem(PRIVACY_SETTINGS_CACHE_KEY, JSON.stringify(privacySettings));
   } catch (error) {
-    console.debug('Failed to cache privacy settings:', error);
+    logger.debug('Failed to cache privacy settings', { error });
   }
 };
 
@@ -91,9 +93,11 @@ export function usePrivacySettings(userId?: string | null): PrivacySettings | nu
  * Hook to fetch current user's privacy settings.
  */
 export function useCurrentUserPrivacySettings(): PrivacySettings | null {
-  const { isAuthenticated } = useOxy();
+  const { isAuthenticated, isAuthResolved, isTokenReady } = useOxy();
+  const authStateReady = isAuthResolved && (!isAuthenticated || isTokenReady);
   const { data = null } = useQuery({
     queryKey: ['privacySettings', 'me', isAuthenticated],
+    enabled: authStateReady,
     staleTime: PRIVACY_SETTINGS_STALE_TIME_MS,
     queryFn: async () => {
       const cached = await readCachedPrivacySettings();
@@ -119,7 +123,7 @@ export function useCurrentUserPrivacySettings(): PrivacySettings | null {
           await writeCachedPrivacySettings(DEFAULT_PRIVACY_SETTINGS);
           return DEFAULT_PRIVACY_SETTINGS;
         }
-        console.debug('Could not load current user privacy settings:', error);
+        logger.debug('Could not load current user privacy settings', { error });
         return cached ?? DEFAULT_PRIVACY_SETTINGS;
       }
     },

@@ -31,19 +31,20 @@ export interface LibraryCollections {
 }
 
 export function useLibraryCollections(): LibraryCollections {
-  const { isAuthenticated } = useOxy();
+  const { isAuthenticated, isAuthResolved, isTokenReady } = useOxy();
+  const canUsePrivateApi = isAuthResolved && isTokenReady && isAuthenticated;
   const { membership, isLoading: membershipLoading, isError: membershipError } = useLibrary();
 
   const playlistsQuery = useQuery({
     queryKey: ['library', 'playlists'],
     queryFn: () => musicService.getUserPlaylists(),
-    enabled: isAuthenticated,
+    enabled: canUsePrivateApi,
   });
 
   const likedTracksQuery = useQuery({
     queryKey: ['library', 'tracks'],
     queryFn: () => libraryService.getLikedTracks(),
-    enabled: isAuthenticated,
+    enabled: canUsePrivateApi,
   });
 
   const albumIds = useMemo(
@@ -63,7 +64,7 @@ export function useLibraryCollections(): LibraryCollections {
     queries: albumIds.map((albumId) => ({
       queryKey: ['album', albumId],
       queryFn: () => musicService.getAlbumById(albumId),
-      enabled: isAuthenticated,
+      enabled: canUsePrivateApi,
     })),
   });
 
@@ -71,7 +72,7 @@ export function useLibraryCollections(): LibraryCollections {
     queries: artistIds.map((artistId) => ({
       queryKey: ['artist', artistId],
       queryFn: () => musicService.getArtistById(artistId),
-      enabled: isAuthenticated,
+      enabled: canUsePrivateApi,
     })),
   });
 
@@ -79,7 +80,7 @@ export function useLibraryCollections(): LibraryCollections {
     queries: playlistIds.map((playlistId) => ({
       queryKey: ['playlist', playlistId],
       queryFn: () => musicService.getPlaylistById(playlistId),
-      enabled: isAuthenticated,
+      enabled: canUsePrivateApi,
     })),
   });
 
@@ -124,7 +125,7 @@ export function useLibraryCollections(): LibraryCollections {
     savedAlbums,
     followedArtists,
     likedTracksCount: likedTracksQuery.data?.total ?? membership.likedTracks.length,
-    loading: isAuthenticated ? loading : false,
+    loading: canUsePrivateApi ? loading : false,
     error,
   };
 }

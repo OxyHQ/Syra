@@ -64,7 +64,9 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   const theme = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { isAuthenticated } = useOxy();
+  const { isAuthenticated, isAuthResolved, isTokenReady } = useOxy();
+  const canUsePrivateApi = isAuthResolved && isTokenReady && isAuthenticated;
+  const authLoading = !isAuthResolved || (isAuthenticated && !isTokenReady);
   const { t } = useTranslation();
 
   // Collapses the extended FAB to an icon-only circle while scrolling down and
@@ -99,7 +101,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   const finalSavedAlbums = isUsingProps ? (propsSavedAlbums || []) : collections.savedAlbums;
   const finalFollowedArtists = isUsingProps ? (propsFollowedArtists || []) : collections.followedArtists;
   const finalLikedTracksCount = isUsingProps ? (propsLikedTracksCount || 0) : collections.likedTracksCount;
-  const finalLoading = isUsingProps ? (propsLoading ?? false) : collections.loading;
+  const finalLoading = authLoading || (isUsingProps ? (propsLoading ?? false) : collections.loading);
   const finalError = isUsingProps ? (propsError ?? null) : collections.error;
 
   return (
@@ -196,7 +198,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         )}
 
         {/* Loading state */}
-        {finalLoading && isAuthenticated && (
+        {finalLoading && (isAuthenticated || authLoading) && (
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Playlists</Text>
             <View style={styles.itemsContainer}>
@@ -341,7 +343,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         )}
 
         {/* Empty state - show based on active filter */}
-        {!finalLoading && !finalError && isAuthenticated && (
+        {!finalLoading && !finalError && canUsePrivateApi && (
           (activeFilter === 'All' && finalPlaylists.length === 0 && finalFollowedArtists.length === 0 && finalSavedAlbums.length === 0) ||
           (activeFilter === 'Playlists' && finalPlaylists.length === 0) ||
           (activeFilter === 'Artists' && finalFollowedArtists.length === 0) ||
@@ -372,7 +374,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         )}
 
         {/* Not authenticated state */}
-        {!isAuthenticated && !finalLoading && (
+        {isAuthResolved && !isAuthenticated && !finalLoading && (
           <View style={styles.emptyState}>
             <MaterialCommunityIcons
               name="lock-outline"
@@ -387,7 +389,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         )}
       </Animated.ScrollView>
 
-        {isAuthenticated && (
+        {canUsePrivateApi && (
           <Fab
             onPress={() => router.push('/create-playlist')}
             iconName="plus"

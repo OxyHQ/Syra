@@ -7,27 +7,33 @@ import { useMusicPreferencesStore, MusicPreferences } from '@/stores/musicPrefer
  * Automatically loads preferences when authenticated
  */
 export function useMusicPreferences() {
-  const { isAuthenticated } = useOxy();
+  const { isAuthenticated, isAuthResolved, isTokenReady } = useOxy();
   const preferences = useMusicPreferencesStore((state) => state.preferences);
   const loading = useMusicPreferencesStore((state) => state.loading);
   const error = useMusicPreferencesStore((state) => state.error);
   const loadPreferences = useMusicPreferencesStore((state) => state.loadPreferences);
   const updatePreferences = useMusicPreferencesStore((state) => state.updatePreferences);
 
+  const canUsePrivateApi = isAuthResolved && isTokenReady && isAuthenticated;
+
   useEffect(() => {
-    if (isAuthenticated) {
+    if (!isAuthResolved || (isAuthenticated && !isTokenReady)) {
+      return;
+    }
+
+    if (canUsePrivateApi) {
       loadPreferences(true);
     } else {
       loadPreferences(false);
     }
-  }, [isAuthenticated, loadPreferences]);
+  }, [isAuthResolved, isTokenReady, isAuthenticated, canUsePrivateApi, loadPreferences]);
 
   return {
     preferences: preferences || null,
     loading,
     error,
     updatePreferences,
-    refreshPreferences: () => loadPreferences(isAuthenticated),
+    refreshPreferences: () => loadPreferences(canUsePrivateApi),
   };
 }
 
@@ -37,7 +43,6 @@ export function useMusicPreferences() {
 export function useCurrentMusicPreferences(): MusicPreferences | null {
   return useMusicPreferencesStore((state) => state.preferences);
 }
-
 
 
 

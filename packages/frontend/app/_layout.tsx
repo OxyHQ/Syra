@@ -36,6 +36,7 @@ import { prefetchHomeBrowse } from '@/hooks/useHomeFeed';
 import { oxyServices } from '@/lib/oxyServices';
 import { AppInitializer } from '@/lib/appInitializer';
 import { webViewStyle, webDimension } from '@/utils/webStyles';
+import { createScopedLogger } from '@/utils/logger';
 
 // Styles
 import '../styles/global.css';
@@ -49,6 +50,8 @@ interface SplashState {
 interface MainLayoutProps {
   isScreenNotMobile: boolean;
 }
+
+const layoutLogger = createScopedLogger('RootLayout');
 
 const hexToRgba = (hex: string, alpha: number): string => {
   const match = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex.trim());
@@ -290,7 +293,7 @@ export default function RootLayout() {
   // Initialize i18n once when the app mounts
   useEffect(() => {
     AppInitializer.initializeI18n().catch((error) => {
-      console.error('Failed to initialize i18n:', error);
+      layoutLogger.error('Failed to initialize i18n', { error });
     });
   }, []);
 
@@ -327,7 +330,7 @@ export default function RootLayout() {
       const result = await AppInitializer.initializeApp(true);
       if (cancelled) return;
       if (!result.success) {
-        console.error('App initialization failed:', result.error);
+        layoutLogger.error('App initialization failed', { error: result.error });
       }
       // Mark complete on success OR failure to avoid blocking the app on the splash.
       setSplashState((prev) => ({ ...prev, initializationComplete: true }));
@@ -340,27 +343,27 @@ export default function RootLayout() {
 
   // Memoize app content to prevent unnecessary re-renders
   const appContent = useMemo(() => {
-    if (!appIsReady) {
-      return (
-        <AppSplashScreen
-          startFade={startFade}
-          onFadeComplete={handleSplashFadeComplete}
-        />
-      );
-    }
-
     return (
       <AppProviders
         oxyServices={oxyServices}
         queryClient={queryClient}
       >
-        {/* Portal Provider for rendering components outside tree */}
-        <PortalProvider>
-          <LayoutScrollProvider>
-            <MainLayout isScreenNotMobile={isScreenNotMobile} />
-            <PortalOutlet />
-          </LayoutScrollProvider>
-        </PortalProvider>
+        {!appIsReady ? (
+          <AppSplashScreen
+            startFade={startFade}
+            onFadeComplete={handleSplashFadeComplete}
+          />
+        ) : (
+          <>
+            {/* Portal Provider for rendering components outside tree */}
+            <PortalProvider>
+              <LayoutScrollProvider>
+                <MainLayout isScreenNotMobile={isScreenNotMobile} />
+                <PortalOutlet />
+              </LayoutScrollProvider>
+            </PortalProvider>
+          </>
+        )}
       </AppProviders>
     );
   }, [

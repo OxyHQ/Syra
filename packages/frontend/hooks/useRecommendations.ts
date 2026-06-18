@@ -48,11 +48,12 @@ export function useTrackRadio(trackId: string | undefined, limit = 30) {
 
 /** Personalised "Made For You" for the signed-in user. */
 export function useMadeForYouRecommendations(limit = 20) {
-  const { isAuthenticated } = useOxy();
+  const { isAuthenticated, isAuthResolved, isTokenReady } = useOxy();
+  const canUsePrivateApi = isAuthResolved && isTokenReady && isAuthenticated;
   return useQuery({
     queryKey: RECOMMENDATION_QUERY_KEYS.madeForYou,
     queryFn: () => recommendationService.getMadeForYou({ limit }),
-    enabled: isAuthenticated,
+    enabled: canUsePrivateApi,
     staleTime: 1000 * 60 * 5,
   });
 }

@@ -30,7 +30,7 @@ import { HomeRefreshProvider } from '@/context/HomeRefreshContext';
 import { Toaster } from '@/lib/sonner';
 import i18n from '@/lib/i18n';
 import { useServerAppearanceSync } from '@/hooks/useServerAppearanceSync';
-import { authenticatedClient } from '@/utils/api';
+import { authenticatedClient, setAuthenticatedAccessTokenProvider } from '@/utils/api';
 import { clearStreamResolutionCache } from '@/services/streamService';
 
 /**
@@ -46,7 +46,7 @@ function AppearanceSync(): null {
 function SyraApiAuthSync(): null {
   const { oxyServices } = useOxy();
 
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     const sourceClient = oxyServices.getClient();
     const syncToken = (accessToken: string | null) => {
       clearStreamResolutionCache();
@@ -57,8 +57,14 @@ function SyraApiAuthSync(): null {
       }
     };
 
+    const unsetAccessTokenProvider = setAuthenticatedAccessTokenProvider(() => sourceClient.getAccessToken());
     syncToken(sourceClient.getAccessToken());
-    return sourceClient.addTokenChangeListener(syncToken);
+    const unsubscribe = sourceClient.addTokenChangeListener(syncToken);
+
+    return () => {
+      unsubscribe();
+      unsetAccessTokenProvider();
+    };
   }, [oxyServices]);
 
   return null;

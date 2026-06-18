@@ -56,11 +56,12 @@ export function prefetchHomeBrowse(queryClient: QueryClient): void {
  * section when the list is empty rather than faking it.
  */
 export function useRecentlyPlayed() {
-  const { isAuthenticated } = useOxy();
+  const { isAuthenticated, isAuthResolved, isTokenReady } = useOxy();
+  const canUsePrivateApi = isAuthResolved && isTokenReady && isAuthenticated;
   return useQuery({
     queryKey: HOME_QUERY_KEYS.recentlyPlayed,
     queryFn: () => libraryService.getRecentlyPlayed(HOME_LIMITS.recentlyPlayed),
-    enabled: isAuthenticated,
+    enabled: canUsePrivateApi,
     // Plays land here continuously, so keep it fresher than the global default.
     staleTime: 1000 * 30,
   });
@@ -92,11 +93,12 @@ export function usePopularArtists() {
 
 /** The signed-in user's own playlists (authenticated-only). */
 export function useUserPlaylists() {
-  const { isAuthenticated } = useOxy();
+  const { isAuthenticated, isAuthResolved, isTokenReady } = useOxy();
+  const canUsePrivateApi = isAuthResolved && isTokenReady && isAuthenticated;
   return useQuery({
     queryKey: HOME_QUERY_KEYS.userPlaylists,
     queryFn: () => musicService.getUserPlaylists(),
-    enabled: isAuthenticated,
+    enabled: canUsePrivateApi,
   });
 }
 

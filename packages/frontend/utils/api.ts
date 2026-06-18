@@ -14,6 +14,38 @@ const oxyServices = new OxyServices({ baseURL: API_CONFIG.baseURL });
 // explicit, nameable annotation from the public `getClient` signature. Without
 // it, TypeScript cannot name the inferred export type (TS2883).
 const authenticatedClient: ReturnType<OxyServices['getClient']> = oxyServices.getClient();
+type AccessTokenProvider = () => string | null;
+
+const emptyAccessTokenProvider: AccessTokenProvider = () => null;
+let accessTokenProvider: AccessTokenProvider = emptyAccessTokenProvider;
+
+function syncAuthenticatedClientToken(): void {
+  const accessToken = accessTokenProvider();
+  const currentAccessToken = authenticatedClient.getAccessToken();
+
+  if (accessToken) {
+    if (currentAccessToken !== accessToken) {
+      authenticatedClient.setTokens(accessToken);
+    }
+    return;
+  }
+
+  if (currentAccessToken) {
+    authenticatedClient.clearTokens();
+  }
+}
+
+export function setAuthenticatedAccessTokenProvider(provider: AccessTokenProvider): () => void {
+  accessTokenProvider = provider;
+  syncAuthenticatedClientToken();
+
+  return () => {
+    if (accessTokenProvider === provider) {
+      accessTokenProvider = emptyAccessTokenProvider;
+      authenticatedClient.clearTokens();
+    }
+  };
+}
 
 // Public API client (no authentication required)
 const publicClient = axios.create({
@@ -29,26 +61,31 @@ const publicClient = axios.create({
 // resolved value IS the data.
 export const api = {
   async get<T = unknown>(endpoint: string, params?: Record<string, unknown>): Promise<{ data: T }> {
+    syncAuthenticatedClientToken();
     const data = await authenticatedClient.get<T>(endpoint, { params });
     return { data };
   },
 
   async post<T = unknown>(endpoint: string, body?: unknown): Promise<{ data: T }> {
+    syncAuthenticatedClientToken();
     const data = await authenticatedClient.post<T>(endpoint, body);
     return { data };
   },
 
   async put<T = unknown>(endpoint: string, body?: unknown): Promise<{ data: T }> {
+    syncAuthenticatedClientToken();
     const data = await authenticatedClient.put<T>(endpoint, body);
     return { data };
   },
 
   async delete<T = unknown>(endpoint: string): Promise<{ data: T }> {
+    syncAuthenticatedClientToken();
     const data = await authenticatedClient.delete<T>(endpoint);
     return { data };
   },
 
   async patch<T = unknown>(endpoint: string, body?: unknown): Promise<{ data: T }> {
+    syncAuthenticatedClientToken();
     const data = await authenticatedClient.patch<T>(endpoint, body);
     return { data };
   },

@@ -61,12 +61,13 @@ function withMembership(
  * `useEffect`, no mirrored local state.
  */
 export function useLibrary() {
-  const { isAuthenticated } = useOxy();
+  const { isAuthenticated, isAuthResolved, isTokenReady } = useOxy();
+  const canUsePrivateApi = isAuthResolved && isTokenReady && isAuthenticated;
 
   const query = useQuery<LibraryMembership>({
     queryKey: LIBRARY_QUERY_KEY,
     queryFn: () => libraryService.getLibrary(),
-    enabled: isAuthenticated,
+    enabled: canUsePrivateApi,
     // Membership changes only via this app's own mutations, so a longer stale
     // window is safe and avoids refetch churn; mutations keep it fresh.
     staleTime: 1000 * 60 * 5,
@@ -120,20 +121,21 @@ function useToggleMembership(
   options?: { invalidateTracks?: boolean; invalidatePlaylists?: boolean },
 ): UseMutationResult<{ success: boolean }, Error, ToggleVariables, ToggleContext> {
   const queryClient = useQueryClient();
-  const { isAuthenticated, showBottomSheet } = useOxy();
+  const { isAuthenticated, isAuthResolved, isTokenReady, showBottomSheet } = useOxy();
+  const canUsePrivateApi = isAuthResolved && isTokenReady && isAuthenticated;
   const invalidateTracks = options?.invalidateTracks ?? false;
   const invalidatePlaylists = options?.invalidatePlaylists ?? false;
 
   return useMutation<{ success: boolean }, Error, ToggleVariables, ToggleContext>({
     mutationFn: ({ id, next }) => {
-      if (!isAuthenticated) {
+      if (!canUsePrivateApi) {
         showBottomSheet?.('OxyAuth');
         throw new Error('Sign in to save music to your library');
       }
       return next ? on(id) : off(id);
     },
     onMutate: async ({ id, next }) => {
-      if (!isAuthenticated) {
+      if (!canUsePrivateApi) {
         return { previous: queryClient.getQueryData<LibraryMembership>(LIBRARY_QUERY_KEY) };
       }
       await queryClient.cancelQueries({ queryKey: LIBRARY_QUERY_KEY });

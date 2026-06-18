@@ -26,13 +26,14 @@ const LikedSongsScreen: React.FC = () => {
   const theme = useTheme();
   const router = useRouter();
   const { t } = useTranslation();
-  const { isAuthenticated } = useOxy();
+  const { isAuthenticated, isAuthResolved, isTokenReady } = useOxy();
+  const canUsePrivateApi = isAuthResolved && isTokenReady && isAuthenticated;
   const { playTrackList, currentTrack, isPlaying } = usePlayerStore();
 
   const { data, isLoading, isError } = useQuery({
     queryKey: LIBRARY_TRACKS_QUERY_KEY,
     queryFn: () => libraryService.getLikedTracks(),
-    enabled: isAuthenticated,
+    enabled: canUsePrivateApi,
   });
 
   const tracks = data?.tracks ?? [];
@@ -61,7 +62,15 @@ const LikedSongsScreen: React.FC = () => {
     });
   };
 
-  if (!isAuthenticated) {
+  if (!isAuthResolved || (isAuthenticated && !isTokenReady)) {
+    return (
+      <View style={[styles.centered, { backgroundColor: theme.colors.background }]}>
+        <LibraryListSkeleton count={8} />
+      </View>
+    );
+  }
+
+  if (!canUsePrivateApi) {
     return (
       <View style={[styles.centered, { backgroundColor: theme.colors.background }]}>
         <Ionicons name="lock-closed-outline" size={48} color={theme.colors.textSecondary} style={styles.centeredIcon} />

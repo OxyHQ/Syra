@@ -2,6 +2,9 @@ import { api, authenticatedClient, getApiOrigin } from '@/utils/api';
 import { Artist, CreateArtistRequest, ArtistDashboard, ArtistInsights, CreateAlbumRequest, Track, Album } from '@syra/shared-types';
 import { Platform } from 'react-native';
 import { normalizeAlbumImages, normalizeArtistImages, normalizeTrackImages } from '@/utils/catalogImages';
+import { createScopedLogger } from '@/utils/logger';
+
+const logger = createScopedLogger('ArtistService');
 
 function getHttpStatus(error: unknown): number | undefined {
   if (!error || typeof error !== 'object') return undefined;
@@ -49,7 +52,7 @@ export const artistService = {
         return null;
       }
       // Log other errors but don't throw - return null to indicate no profile
-      console.warn('[artistService] Error fetching artist profile:', error);
+      logger.warn('Error fetching artist profile', { error });
       return null;
     }
   },

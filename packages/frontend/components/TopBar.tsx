@@ -53,7 +53,8 @@ export const TopBar: React.FC = () => {
   const { q } = useLocalSearchParams<{ q?: string }>();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { user, isAuthenticated, oxyServices, showBottomSheet } = useOxy();
+  const { user, isAuthenticated, isAuthResolved, isTokenReady, oxyServices, showBottomSheet } = useOxy();
+  const canUsePrivateApi = isAuthResolved && isTokenReady && isAuthenticated;
   const { playTrackList } = usePlayerStore();
   const isMobile = useMediaQuery({ maxWidth: 767 });
   const [searchQuery, setSearchQuery] = useState(() => (pathname === '/search' && typeof q === 'string' ? q : ''));
@@ -66,7 +67,7 @@ export const TopBar: React.FC = () => {
   const { data: artistProfile } = useQuery({
     queryKey: ['artist', 'me', 'topbar'],
     queryFn: () => artistService.getMyArtistProfile(),
-    enabled: isAuthenticated && !!user,
+    enabled: canUsePrivateApi && !!user,
   });
 
   // Clear the status bar / dynamic island on native by padding the bar's

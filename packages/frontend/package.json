@@ -15,7 +15,7 @@
     "build": "expo export --platform web --output-dir dist && bun ./scripts/remove-css-preloads.mjs",
     "build-web": "expo export --platform web --output-dir dist && bun ./scripts/remove-css-preloads.mjs",
     "build-web:prod": "expo export --platform web --output-dir dist && bun ./scripts/remove-css-preloads.mjs",
-    "test": "jest --watchAll",
+    "test": "jest --watchAll=false",
     "lint": "expo lint",
     "clean": "rm -rf dist .expo",
     "analyze-bundle": "bun ./scripts/analyze-bundle.js"
