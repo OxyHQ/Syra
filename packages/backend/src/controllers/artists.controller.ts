@@ -320,10 +320,7 @@ export const getMyArtistProfile = async (req: AuthRequest, res: Response, next: 
     const artist = await ArtistModel.findOne({ ownerOxyUserId: userId }).lean();
 
     if (!artist) {
-      return res.status(404).json({ 
-        error: 'Artist not found',
-        message: 'You do not have an artist profile',
-      });
+      return res.json(null);
     }
 
     const formattedArtist = formatArtistWithImage(artist);

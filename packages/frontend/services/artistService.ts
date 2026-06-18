@@ -37,11 +37,14 @@ export const artistService = {
 
   /**
    * Get current user's artist profile
-   * Returns null if user doesn't have an artist profile (404) - this is expected and not an error
+   * Returns null if user doesn't have an artist profile.
    */
   async getMyArtistProfile(): Promise<Artist | null> {
     try {
-      const response = await api.get<Artist>('/artists/me');
+      const response = await api.get<Artist | null>('/artists/me');
+      if (!response.data) {
+        return null;
+      }
       return normalizeArtistImages(response.data);
     } catch (error: unknown) {
       // Check for 404 or any error status
