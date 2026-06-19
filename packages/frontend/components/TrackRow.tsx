@@ -36,7 +36,7 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
   const isLiked = isTrackLiked(track.id);
 
   const handleToggleLike = () => {
-    toggleLike.mutate({ id: track.id, next: !isLiked });
+    toggleLike.mutate({ id: track.id, next: !isLiked, track });
   };
 
   return (

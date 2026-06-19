@@ -1,5 +1,5 @@
 import { api, authenticatedClient } from '@/utils/api';
-import { Queue, QueueWithMetadata, AddToQueueRequest } from '@syra/shared-types';
+import { Queue, QueueWithMetadata, AddToQueueRequest, ReplaceQueueRequest } from '@syra/shared-types';
 import { normalizeTrackImages } from '@/utils/catalogImages';
 
 function normalizeQueue<T extends Queue>(queue: T): T {
@@ -42,6 +42,19 @@ export const queueService = {
       position,
     };
     const response = await api.post<{ queue: Queue; added: number }>('/queue/add', body);
+    return { ...response.data, queue: normalizeQueue(response.data.queue) };
+  },
+
+  /**
+   * Replace user's queue with an ordered playback context.
+   */
+  async replaceQueue(queue: Queue): Promise<{ queue: Queue }> {
+    const body: ReplaceQueueRequest = {
+      trackIds: queue.tracks.map((track) => track.id),
+      current: queue.current,
+      context: queue.context,
+    };
+    const response = await api.put<{ queue: Queue }>('/queue', body);
     return { ...response.data, queue: normalizeQueue(response.data.queue) };
   },
 

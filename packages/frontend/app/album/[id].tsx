@@ -44,8 +44,8 @@ const AlbumScreen: React.FC = () => {
     toggleSave.mutate({ id, next: !isSaved });
   };
 
-  const handleToggleTrackLike = (trackId: string, liked: boolean) => {
-    toggleLike.mutate({ id: trackId, next: !liked });
+  const handleToggleTrackLike = (track: Track, liked: boolean) => {
+    toggleLike.mutate({ id: track.id, next: !liked, track });
   };
 
   const { data, isLoading } = useQuery({
@@ -329,7 +329,7 @@ const AlbumScreen: React.FC = () => {
                   <Pressable
                     onPress={(e) => {
                       e?.stopPropagation?.();
-                      handleToggleTrackLike(track.id, isLiked);
+                      handleToggleTrackLike(track, isLiked);
                     }}
                     style={styles.trackLikeButton}
                     accessibilityRole="button"

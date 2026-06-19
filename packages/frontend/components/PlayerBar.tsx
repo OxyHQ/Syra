@@ -68,7 +68,7 @@ export const PlayerBar: React.FC = () => {
     if (!currentTrack) {
       return;
     }
-    toggleLike.mutate({ id: currentTrack.id, next: !isLiked });
+    toggleLike.mutate({ id: currentTrack.id, next: !isLiked, track: currentTrack });
   };
 
   const handlePlayPause = async () => {

@@ -7,7 +7,12 @@ import {
   type UseMutationResult,
 } from '@tanstack/react-query';
 import { useOxy } from '@oxyhq/services';
-import { libraryService, type LibraryMembership } from '@/services/libraryService';
+import type { Track } from '@syra/shared-types';
+import {
+  libraryService,
+  type LibraryMembership,
+  type LibraryMutationResult,
+} from '@/services/libraryService';
 import { toast } from '@/lib/sonner';
 
 /**
@@ -98,11 +103,64 @@ export function useLibrary() {
 /** Context carried from `onMutate` to `onError` for rollback. */
 interface ToggleContext {
   previous: LibraryMembership | undefined;
+  previousLikedTracks: LikedTracksData | undefined;
 }
 
 interface ToggleVariables {
   id: string;
   next: boolean;
+  track?: Track;
+}
+
+interface LikedTracksData {
+  tracks: Track[];
+  total: number;
+}
+
+function withLikedTracksData(
+  data: LikedTracksData | undefined,
+  id: string,
+  next: boolean,
+  track?: Track,
+): LikedTracksData | undefined {
+  if (!data) {
+    return data;
+  }
+
+  const hasTrack = data.tracks.some((item) => item.id === id);
+  if (next) {
+    if (hasTrack || !track) {
+      return data;
+    }
+    return {
+      tracks: [track, ...data.tracks],
+      total: data.total + 1,
+    };
+  }
+
+  if (!hasTrack) {
+    return data;
+  }
+  return {
+    tracks: data.tracks.filter((item) => item.id !== id),
+    total: Math.max(0, data.total - 1),
+  };
+}
+
+function withServerMembership(
+  membership: LibraryMembership,
+  field: MembershipField,
+  result: LibraryMutationResult,
+): LibraryMembership {
+  const serverIds = result[field];
+  if (!Array.isArray(serverIds)) {
+    return membership;
+  }
+
+  return {
+    ...membership,
+    [field]: serverIds,
+  };
 }
 
 /**
@@ -115,16 +173,16 @@ interface ToggleVariables {
  */
 function useToggleMembership(
   field: MembershipField,
-  on: (id: string) => Promise<{ success: boolean }>,
-  off: (id: string) => Promise<{ success: boolean }>,
+  on: (id: string) => Promise<LibraryMutationResult>,
+  off: (id: string) => Promise<LibraryMutationResult>,
   options?: { invalidateTracks?: boolean; invalidatePlaylists?: boolean },
-): UseMutationResult<{ success: boolean }, Error, ToggleVariables, ToggleContext> {
+): UseMutationResult<LibraryMutationResult, Error, ToggleVariables, ToggleContext> {
   const queryClient = useQueryClient();
   const { canUsePrivateApi, showBottomSheet } = useOxy();
   const invalidateTracks = options?.invalidateTracks ?? false;
   const invalidatePlaylists = options?.invalidatePlaylists ?? false;
 
-  return useMutation<{ success: boolean }, Error, ToggleVariables, ToggleContext>({
+  return useMutation<LibraryMutationResult, Error, ToggleVariables, ToggleContext>({
     mutationFn: ({ id, next }) => {
       if (!canUsePrivateApi) {
         showBottomSheet?.('OxyAuth');
@@ -132,20 +190,42 @@ function useToggleMembership(
       }
       return next ? on(id) : off(id);
     },
-    onMutate: async ({ id, next }) => {
+    onMutate: async ({ id, next, track }) => {
       if (!canUsePrivateApi) {
-        return { previous: queryClient.getQueryData<LibraryMembership>(LIBRARY_QUERY_KEY) };
+        return {
+          previous: queryClient.getQueryData<LibraryMembership>(LIBRARY_QUERY_KEY),
+          previousLikedTracks: queryClient.getQueryData<LikedTracksData>(LIBRARY_TRACKS_QUERY_KEY),
+        };
       }
-      await queryClient.cancelQueries({ queryKey: LIBRARY_QUERY_KEY });
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: LIBRARY_QUERY_KEY }),
+        invalidateTracks
+          ? queryClient.cancelQueries({ queryKey: LIBRARY_TRACKS_QUERY_KEY })
+          : Promise.resolve(),
+      ]);
       const previous = queryClient.getQueryData<LibraryMembership>(LIBRARY_QUERY_KEY);
+      const previousLikedTracks = queryClient.getQueryData<LikedTracksData>(LIBRARY_TRACKS_QUERY_KEY);
       queryClient.setQueryData<LibraryMembership>(LIBRARY_QUERY_KEY, (current) =>
         withMembership(current ?? EMPTY_MEMBERSHIP, field, id, next),
       );
-      return { previous };
+      if (invalidateTracks) {
+        queryClient.setQueryData<LikedTracksData>(LIBRARY_TRACKS_QUERY_KEY, (current) =>
+          withLikedTracksData(current, id, next, track),
+        );
+      }
+      return { previous, previousLikedTracks };
+    },
+    onSuccess: (result) => {
+      queryClient.setQueryData<LibraryMembership>(LIBRARY_QUERY_KEY, (current) =>
+        withServerMembership(current ?? EMPTY_MEMBERSHIP, field, result),
+      );
     },
     onError: (_error, _variables, context) => {
       if (context?.previous !== undefined) {
         queryClient.setQueryData(LIBRARY_QUERY_KEY, context.previous);
+      }
+      if (context?.previousLikedTracks !== undefined) {
+        queryClient.setQueryData(LIBRARY_TRACKS_QUERY_KEY, context.previousLikedTracks);
       }
       toast.error(_error.message || 'Could not update your library');
     },

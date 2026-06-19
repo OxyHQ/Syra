@@ -46,14 +46,18 @@ export const NowPlaying: React.FC = () => {
     const fetchDetails = async () => {
       if (currentTrack) {
         try {
-          const promises: Promise<any>[] = [];
+          const promises: Promise<void>[] = [];
           
           if (currentTrack.albumId) {
-            promises.push(musicService.getAlbumById(currentTrack.albumId).then(data => setAlbum(data)));
+            promises.push(musicService.getAlbumById(currentTrack.albumId).then((data) => {
+              setAlbum(data);
+            }));
           }
           
           if (currentTrack.artistId) {
-            promises.push(musicService.getArtistById(currentTrack.artistId).then(data => setArtist(data)));
+            promises.push(musicService.getArtistById(currentTrack.artistId).then((data) => {
+              setArtist(data);
+            }));
           }
           
           await Promise.all(promises);
@@ -73,7 +77,7 @@ export const NowPlaying: React.FC = () => {
     if (!currentTrack) {
       return;
     }
-    toggleLike.mutate({ id: currentTrack.id, next: !isLiked });
+    toggleLike.mutate({ id: currentTrack.id, next: !isLiked, track: currentTrack });
   };
 
   // Use album cover or artist image as background

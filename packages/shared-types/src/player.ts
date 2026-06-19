@@ -98,6 +98,13 @@ export const playQueueRequestSchema = z.object({
 });
 export type PlayQueueRequest = z.infer<typeof playQueueRequestSchema>;
 
+export const replaceQueueRequestSchema = z.object({
+  trackIds: z.array(z.string()).min(1),
+  current: z.number().int().min(0),
+  context: playbackContextSchema.optional(),
+});
+export type ReplaceQueueRequest = z.infer<typeof replaceQueueRequestSchema>;
+
 export const addToQueueRequestSchema = z.object({
   trackIds: z.array(z.string()),
   position: z.union([z.enum(['next', 'last']), z.number()]).optional(),

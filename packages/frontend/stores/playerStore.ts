@@ -316,7 +316,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       context,
     };
 
-    useQueueStore.getState().syncQueue(queue);
+    void useQueueStore.getState().replaceQueue(queue);
     return queue;
   };
 

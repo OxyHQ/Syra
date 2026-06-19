@@ -1,6 +1,12 @@
 import { Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
-import { Queue, QueueWithMetadata, AddToQueueRequest } from '@syra/shared-types';
+import {
+  Queue,
+  QueueWithMetadata,
+  AddToQueueRequest,
+  ReplaceQueueRequest,
+  replaceQueueRequestSchema,
+} from '@syra/shared-types';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { isDatabaseConnected } from '../utils/database';
 import { TrackModel } from '../models/Track';
@@ -15,6 +21,29 @@ import {
   setCurrentIndex,
 } from '../services/queueService';
 import { playableTrackFilter, resolveCatalogPlaybackOptions } from '../utils/catalogVisibility';
+
+function uniqueValues(values: string[]): string[] {
+  return [...new Set(values)];
+}
+
+function orderedTracksFromIds(trackIds: string[], tracks: Queue['tracks']): Queue['tracks'] {
+  const trackById = new Map(tracks.map((track) => [track.id, track]));
+  const orderedTracks: Queue['tracks'] = [];
+
+  for (const trackId of trackIds) {
+    const track = trackById.get(trackId);
+    if (track) {
+      orderedTracks.push(track);
+    }
+  }
+
+  return orderedTracks;
+}
+
+function missingTrackIds(trackIds: string[], tracks: Queue['tracks']): string[] {
+  const availableTrackIds = new Set(tracks.map((track) => track.id));
+  return uniqueValues(trackIds).filter((trackId) => !availableTrackIds.has(trackId));
+}
 
 /**
  * GET /api/queue
@@ -106,10 +135,11 @@ export const addToQueue = async (req: AuthRequest, res: Response, next: NextFunc
     }
 
     // Format tracks for API
-    const formattedTracks = await formatTracksWithCoverArt(tracks);
+    const formattedTracks: Queue['tracks'] = await formatTracksWithCoverArt(tracks);
+    const orderedTracks = orderedTracksFromIds(validTrackIds, formattedTracks);
 
     // Add to queue
-    const updatedQueue = await addTracksToQueue(userId, formattedTracks, position);
+    const updatedQueue = await addTracksToQueue(userId, orderedTracks, position);
 
     if (!updatedQueue) {
       return res.status(503).json({ error: 'Failed to update queue' });
@@ -117,8 +147,77 @@ export const addToQueue = async (req: AuthRequest, res: Response, next: NextFunc
 
     res.json({
       queue: updatedQueue,
-      added: formattedTracks.length,
+      added: orderedTracks.length,
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * PUT /api/queue
+ * Replace the user's queue with an ordered playback context.
+ */
+export const replaceQueue = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!isDatabaseConnected()) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const parsed = replaceQueueRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Invalid queue payload',
+        details: parsed.error.issues,
+      });
+    }
+
+    const { trackIds, current, context }: ReplaceQueueRequest = parsed.data;
+    if (current >= trackIds.length) {
+      return res.status(400).json({ error: 'Current index out of bounds' });
+    }
+
+    const invalidTrackIds = uniqueValues(trackIds).filter((trackId) => !mongoose.Types.ObjectId.isValid(trackId));
+    if (invalidTrackIds.length > 0) {
+      return res.status(400).json({
+        error: 'Some track IDs are invalid',
+        invalidTrackIds,
+      });
+    }
+
+    const playbackOptions = await resolveCatalogPlaybackOptions(userId);
+    const uniqueTrackIds = uniqueValues(trackIds);
+    const tracks = await TrackModel.find(playableTrackFilter({
+      _id: { $in: uniqueTrackIds },
+    }, playbackOptions)).lean();
+    const formattedTracks: Queue['tracks'] = await formatTracksWithCoverArt(tracks);
+    const unavailableTrackIds = missingTrackIds(trackIds, formattedTracks);
+
+    if (unavailableTrackIds.length > 0) {
+      return res.status(404).json({
+        error: 'Some tracks are not playable',
+        unavailableTrackIds,
+      });
+    }
+
+    const queue: Queue = {
+      current,
+      tracks: orderedTracksFromIds(trackIds, formattedTracks),
+      context,
+    };
+    const success = await setQueue(userId, queue);
+
+    if (!success) {
+      return res.status(503).json({ error: 'Failed to replace queue' });
+    }
+
+    res.json({ queue });
   } catch (error) {
     next(error);
   }

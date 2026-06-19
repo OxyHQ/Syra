@@ -2,6 +2,35 @@ import { create } from 'zustand';
 import { Queue, QueueWithMetadata, Track, RepeatMode, ShuffleMode } from '@syra/shared-types';
 import { queueService } from '../services/queueService';
 
+function queueWithInsertedTracks(
+  queue: Queue | null,
+  tracks: Track[],
+  position?: 'next' | 'last' | number,
+): Queue {
+  const baseQueue = queue ?? {
+    current: -1,
+    tracks: [],
+  };
+
+  let insertIndex: number;
+  if (position === 'next') {
+    insertIndex = baseQueue.current >= 0 ? baseQueue.current + 1 : 0;
+  } else if (position === 'last' || position === undefined) {
+    insertIndex = baseQueue.tracks.length;
+  } else {
+    insertIndex = Math.max(0, Math.min(position, baseQueue.tracks.length));
+  }
+
+  const nextTracks = [...baseQueue.tracks];
+  nextTracks.splice(insertIndex, 0, ...tracks);
+
+  return {
+    ...baseQueue,
+    current: baseQueue.current >= insertIndex ? baseQueue.current + tracks.length : baseQueue.current,
+    tracks: nextTracks,
+  };
+}
+
 interface QueueState {
   queue: Queue | null;
   shuffle: ShuffleMode;
@@ -12,7 +41,8 @@ interface QueueState {
   // Actions
   loadQueue: () => Promise<void>;
   addToQueue: (trackIds: string[], position?: 'next' | 'last' | number) => Promise<void>;
-  addTracksLocally: (tracks: Track[], position?: 'next' | 'last' | number) => void;
+  replaceQueue: (queue: Queue) => Promise<void>;
+  addTracksLocally: (tracks: Track[], position?: 'next' | 'last' | number) => Promise<void>;
   removeFromQueue: (trackIds: string[]) => Promise<void>;
   reorderQueue: (trackIds: string[]) => Promise<void>;
   clearQueue: () => Promise<void>;
@@ -61,37 +91,40 @@ export const useQueueStore = create<QueueState>((set, get) => ({
     }
   },
 
-  addTracksLocally: (tracks: Track[], position?: 'next' | 'last' | number) => {
+  replaceQueue: async (queue: Queue) => {
+    const previousQueue = get().queue;
+    set({ queue, error: null });
+
+    try {
+      const result = await queueService.replaceQueue(queue);
+      set({ queue: result.queue });
+    } catch (error) {
+      console.error('[QueueStore] Error replacing queue:', error);
+      set({
+        queue: previousQueue,
+        error: error instanceof Error ? error.message : 'Failed to replace queue',
+      });
+    }
+  },
+
+  addTracksLocally: async (tracks: Track[], position?: 'next' | 'last' | number) => {
     if (tracks.length === 0) {
       return;
     }
 
-    set((state) => {
-      const queue = state.queue ?? {
-        current: -1,
-        tracks: [],
-      };
+    const previousQueue = get().queue;
+    set({ queue: queueWithInsertedTracks(previousQueue, tracks, position), error: null });
 
-      let insertIndex: number;
-      if (position === 'next') {
-        insertIndex = queue.current >= 0 ? queue.current + 1 : 0;
-      } else if (position === 'last' || position === undefined) {
-        insertIndex = queue.tracks.length;
-      } else {
-        insertIndex = Math.max(0, Math.min(position, queue.tracks.length));
-      }
-
-      const nextTracks = [...queue.tracks];
-      nextTracks.splice(insertIndex, 0, ...tracks);
-
-      return {
-        queue: {
-          ...queue,
-          current: queue.current >= insertIndex ? queue.current + tracks.length : queue.current,
-          tracks: nextTracks,
-        },
-      };
-    });
+    try {
+      const result = await queueService.addToQueue(tracks.map((track) => track.id), position);
+      set({ queue: result.queue });
+    } catch (error) {
+      console.error('[QueueStore] Error adding local tracks to queue:', error);
+      set({
+        queue: previousQueue,
+        error: error instanceof Error ? error.message : 'Failed to add to queue',
+      });
+    }
   },
 
   removeFromQueue: async (trackIds: string[]) => {
@@ -144,11 +177,15 @@ export const useQueueStore = create<QueueState>((set, get) => ({
     if (!queue || index < 0 || index >= queue.tracks.length) {
       return;
     }
+    if (queue.current === index) {
+      return;
+    }
 
     set({ queue: { ...queue, current: index } });
 
     try {
-      await queueService.setCurrentIndex(index);
+      const result = await queueService.setCurrentIndex(index);
+      set({ queue: result.queue });
     } catch (error) {
       console.error('[QueueStore] Error setting current index:', error);
     }
@@ -208,6 +245,3 @@ export const useQueueStore = create<QueueState>((set, get) => ({
     set({ queue });
   },
 }));
-
-
-

@@ -3,7 +3,6 @@ import { useQueries, useQuery } from '@tanstack/react-query';
 import { useOxy } from '@oxyhq/services';
 import { Album, Artist, Playlist } from '@syra/shared-types';
 import { musicService } from '@/services/musicService';
-import { libraryService } from '@/services/libraryService';
 import { useLibrary } from '@/hooks/useLibrary';
 
 /**
@@ -11,7 +10,8 @@ import { useLibrary } from '@/hooks/useLibrary';
  *
  * Builds on the shared `['library']` membership cache ({@link useLibrary}):
  * the saved-album / followed-artist ID lists drive per-entity object queries,
- * and owned playlists + the liked-track count come from their own queries.
+ * owned playlists come from their own query, and the liked-track count is
+ * derived directly from membership so optimistic likes update it immediately.
  * Because everything is keyed in React Query, an optimistic like/save/follow
  * from anywhere invalidates `['library']`, which re-derives these collections
  * and keeps the counts fresh — no `useEffect`, no mirrored state.
@@ -37,12 +37,6 @@ export function useLibraryCollections(): LibraryCollections {
   const playlistsQuery = useQuery({
     queryKey: ['library', 'playlists'],
     queryFn: () => musicService.getUserPlaylists(),
-    enabled: canUsePrivateApi,
-  });
-
-  const likedTracksQuery = useQuery({
-    queryKey: ['library', 'tracks'],
-    queryFn: () => libraryService.getLikedTracks(),
     enabled: canUsePrivateApi,
   });
 
@@ -104,7 +98,6 @@ export function useLibraryCollections(): LibraryCollections {
   const loading =
     membershipLoading ||
     playlistsQuery.isLoading ||
-    likedTracksQuery.isLoading ||
     albumQueries.some((q) => q.isLoading) ||
     artistQueries.some((q) => q.isLoading) ||
     savedPlaylistQueries.some((q) => q.isLoading);
@@ -112,7 +105,6 @@ export function useLibraryCollections(): LibraryCollections {
   const error =
     membershipError ||
     playlistsQuery.isError ||
-    likedTracksQuery.isError ||
     albumQueries.some((q) => q.isError) ||
     artistQueries.some((q) => q.isError) ||
     savedPlaylistQueries.some((q) => q.isError)
@@ -123,7 +115,7 @@ export function useLibraryCollections(): LibraryCollections {
     playlists,
     savedAlbums,
     followedArtists,
-    likedTracksCount: likedTracksQuery.data?.total ?? membership.likedTracks.length,
+    likedTracksCount: membership.likedTracks.length,
     loading: canUsePrivateApi ? loading : false,
     error,
   };

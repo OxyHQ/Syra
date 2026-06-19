@@ -20,8 +20,12 @@ export interface LibraryMembership {
   savedPlaylists: string[];
 }
 
-interface MutationResult {
-  success: boolean;
+export interface LibraryMutationResult {
+  ok: boolean;
+  likedTracks?: string[];
+  savedAlbums?: string[];
+  followedArtists?: string[];
+  savedPlaylists?: string[];
 }
 
 /** Backend ack for a recorded play (`POST /library/recently-played`). */
@@ -101,43 +105,43 @@ export const libraryService = {
     return { ...response.data, tracks: response.data.tracks.map(normalizeTrackImages) };
   },
 
-  async likeTrack(trackId: string): Promise<MutationResult> {
-    const response = await api.post<MutationResult>(`/library/tracks/${trackId}/like`);
+  async likeTrack(trackId: string): Promise<LibraryMutationResult> {
+    const response = await api.post<LibraryMutationResult>(`/library/tracks/${trackId}/like`);
     return response.data;
   },
 
-  async unlikeTrack(trackId: string): Promise<MutationResult> {
-    const response = await api.post<MutationResult>(`/library/tracks/${trackId}/unlike`);
+  async unlikeTrack(trackId: string): Promise<LibraryMutationResult> {
+    const response = await api.post<LibraryMutationResult>(`/library/tracks/${trackId}/unlike`);
     return response.data;
   },
 
-  async saveAlbum(albumId: string): Promise<MutationResult> {
-    const response = await api.post<MutationResult>(`/library/albums/${albumId}/save`);
+  async saveAlbum(albumId: string): Promise<LibraryMutationResult> {
+    const response = await api.post<LibraryMutationResult>(`/library/albums/${albumId}/save`);
     return response.data;
   },
 
-  async unsaveAlbum(albumId: string): Promise<MutationResult> {
-    const response = await api.post<MutationResult>(`/library/albums/${albumId}/unsave`);
+  async unsaveAlbum(albumId: string): Promise<LibraryMutationResult> {
+    const response = await api.post<LibraryMutationResult>(`/library/albums/${albumId}/unsave`);
     return response.data;
   },
 
-  async followArtist(artistId: string): Promise<MutationResult> {
-    const response = await api.post<MutationResult>(`/library/artists/${artistId}/follow`);
+  async followArtist(artistId: string): Promise<LibraryMutationResult> {
+    const response = await api.post<LibraryMutationResult>(`/library/artists/${artistId}/follow`);
     return response.data;
   },
 
-  async unfollowArtist(artistId: string): Promise<MutationResult> {
-    const response = await api.post<MutationResult>(`/library/artists/${artistId}/unfollow`);
+  async unfollowArtist(artistId: string): Promise<LibraryMutationResult> {
+    const response = await api.post<LibraryMutationResult>(`/library/artists/${artistId}/unfollow`);
     return response.data;
   },
 
-  async savePlaylist(playlistId: string): Promise<MutationResult> {
-    const response = await api.post<MutationResult>(`/library/playlists/${playlistId}/save`);
+  async savePlaylist(playlistId: string): Promise<LibraryMutationResult> {
+    const response = await api.post<LibraryMutationResult>(`/library/playlists/${playlistId}/save`);
     return response.data;
   },
 
-  async unsavePlaylist(playlistId: string): Promise<MutationResult> {
-    const response = await api.post<MutationResult>(`/library/playlists/${playlistId}/unsave`);
+  async unsavePlaylist(playlistId: string): Promise<LibraryMutationResult> {
+    const response = await api.post<LibraryMutationResult>(`/library/playlists/${playlistId}/unsave`);
     return response.data;
   },
 
