@@ -3,7 +3,9 @@ import { connect, clear, disconnect } from '../test/mongo';
 import { TrackModel } from '../models/Track';
 import { AlbumModel } from '../models/Album';
 import { ArtistModel } from '../models/Artist';
+import { UserMusicPreferencesModel } from '../models/UserMusicPreferences';
 import { getGenres, getMadeForYou, getPopularTracks } from './browse.controller';
+import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import type { Request, Response, NextFunction } from 'express';
 
 beforeAll(connect);
@@ -18,7 +20,9 @@ afterAll(disconnect);
 interface CapturedRes {
   _status: number;
   _body: unknown;
+  _headers: Record<string, string>;
   status(code: number): CapturedRes;
+  set(name: string, value: string): CapturedRes;
   json(body: unknown): CapturedRes;
 }
 
@@ -26,13 +30,18 @@ function makeRes(): CapturedRes {
   return {
     _status: 200,
     _body: undefined,
+    _headers: {},
     status(code) { this._status = code; return this; },
+    set(name, value) { this._headers[name] = value; return this; },
     json(body) { this._body = body; return this; },
   };
 }
 
-function makeReq(query: Record<string, string> = {}): Request {
-  return { query } as unknown as Request;
+function makeReq(query: Record<string, string> = {}, userId?: string): Request {
+  return {
+    query,
+    user: userId ? { id: userId } : undefined,
+  } as unknown as AuthRequest;
 }
 
 const next: NextFunction = (err?: unknown) => {
@@ -136,6 +145,57 @@ describe('getPopularTracks', () => {
 
     const body = res._body as { tracks: Array<{ title: string }> };
     expect(body.tracks.map((t) => t.title)).toEqual(['Playable Low']);
+  });
+
+  it('includes Audius tracks rehosted through Syra when the Audius catalog is enabled', async () => {
+    process.env.AUDIUS_CATALOG_ENABLED = 'true';
+    await seedTrack({
+      title: 'Audius Rehosted',
+      source: 'audius',
+      status: 'ready',
+      playCount: 100000,
+      popularity: 99,
+      hlsMasterKey: 'hls/audius/rehosted/master.m3u8',
+      hls: [{ manifestKey: 'hls/audius/rehosted/160/index.m3u8', bitrateKbps: 160, encrypted: true }],
+    });
+    await seedTrack({
+      title: 'Audius Direct Only',
+      source: 'audius',
+      status: 'ready',
+      streamUrl: 'https://discoveryprovider.audius.co/v1/tracks/direct/stream?app_name=Syra',
+      playCount: 90000,
+      popularity: 90,
+    });
+
+    const res = makeRes();
+    await getPopularTracks(makeReq(), res as unknown as Response, next);
+
+    const body = res._body as { tracks: Array<{ title: string }> };
+    expect(body.tracks.map((t) => t.title)).toEqual(['Audius Rehosted']);
+  });
+
+  it('includes direct-only Audius tracks when the signed-in user enabled direct streaming', async () => {
+    process.env.AUDIUS_CATALOG_ENABLED = 'true';
+    await seedTrack({
+      title: 'Audius Direct Only',
+      source: 'audius',
+      status: 'ready',
+      streamUrl: 'https://discoveryprovider.audius.co/v1/tracks/direct/stream?app_name=Syra',
+      playCount: 100000,
+      popularity: 99,
+    });
+    await UserMusicPreferencesModel.create({
+      oxyUserId: 'oxy-user-direct',
+      directAudiusStreaming: true,
+    });
+
+    const res = makeRes();
+    await getPopularTracks(makeReq({}, 'oxy-user-direct'), res as unknown as Response, next);
+
+    const body = res._body as { tracks: Array<{ title: string }> };
+    expect(body.tracks.map((t) => t.title)).toEqual(['Audius Direct Only']);
+    expect(res._headers['Cache-Control']).toBe('private, max-age=30, stale-while-revalidate=120');
+    expect(res._headers.Vary).toBe('Authorization');
   });
 });
 

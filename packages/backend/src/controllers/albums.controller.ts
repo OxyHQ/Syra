@@ -12,7 +12,12 @@ import { CreateAlbumRequest } from '@syra/shared-types';
 import { getStoredImageColors } from '../utils/imageColors';
 import { logger } from '../utils/logger';
 import { withImageFirstSort } from '../utils/imageFirstSort';
-import { playableTrackFilter, visibleCatalogFilter } from '../utils/catalogVisibility';
+import {
+  getRequestUserId,
+  playableTrackFilter,
+  resolveCatalogPlaybackOptions,
+  visibleCatalogFilter,
+} from '../utils/catalogVisibility';
 
 /**
  * GET /api/albums
@@ -89,6 +94,7 @@ export const getAlbumTracks = async (req: Request, res: Response, next: NextFunc
     }
 
     const id = getParam(req, 'id');
+    const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
     
     // Validate ObjectId format
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -102,7 +108,7 @@ export const getAlbumTracks = async (req: Request, res: Response, next: NextFunc
     }
 
     // Fetch tracks for this album, sorted by track number
-    const tracks = await TrackModel.find(playableTrackFilter({ albumId: id }))
+    const tracks = await TrackModel.find(playableTrackFilter({ albumId: id }, playbackOptions))
       .sort({ discNumber: 1, trackNumber: 1 })
       .lean();
 

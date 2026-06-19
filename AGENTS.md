@@ -26,3 +26,13 @@ Do not restore the retired Syra oxy.so hosts in runtime config, CORS, EAS env, u
 - Private Syra API calls must wait for Oxy cold boot: gate library, playlists, artist profile, privacy, preferences, and recommendations with `useAuth().canUsePrivateApi` / `isPrivateApiPending`, not app-local token helpers.
 - `packages/frontend/utils/api.ts` owns the linked authenticated Syra API client via `oxyServices.createLinkedClient(...)`; components/hooks should not hand-roll Authorization headers, refresh, or session invalidation.
 - Backend auth middleware comes from `@oxyhq/core/server` (`createOxyAuthMiddleware`, `createOptionalOxyAuth`, `createOxyRateLimit`, `requireOxyAuth`, `getRequiredOxyUserId`, `authSocket`). Do not define local `AuthRequest`, `requireAuth`, `getUserId`, bearer parsers, or token-decoding middleware. Bearer-authenticated writes do not fetch app-local CSRF tokens; CSRF remains for ambient cookie credentials.
+
+## Audius Catalog And Playback
+
+- `AUDIUS_CATALOG_ENABLED=true` is a global production visibility flag, not a playback permission bypass.
+- Audius provenance does not mean stream-only. Syra's target model is to copy/rehost every Audius track, artist, album, and playlist that can legally and technically be copied, then serve playback from Syra-owned storage/HLS.
+- `directAudiusStreaming` is only the user's opt-in fallback for Audius tracks that are not copyable/rehostable and therefore depend only on the provider `streamUrl`.
+- Tracks with Syra HLS (`status: ready`, `hlsMasterKey`, `hls[]`) must be visible and playable even when `directAudiusStreaming` is false.
+- Direct-only Audius tracks must not appear in track lists, queues, library views, recommendations, or search for users who have not enabled `directAudiusStreaming`.
+- Catalog filters must compose conditions with `$and`; do not spread filters in a way that overwrites `$or` clauses from playback visibility.
+- The long-term ingest path is: classify Audius legal/technical copyability in the connector, ingest copyable tracks through Syra S3/HLS, and persist stream-only policy explicitly. Do not solve this by treating all Audius as direct streaming.

@@ -11,7 +11,12 @@ import { getParam } from '../utils/reqParams';
 import { CreateArtistRequest, ArtistInsights, ArtistDashboard } from '@syra/shared-types';
 import { getStoredImageColors } from '../utils/imageColors';
 import { withImageFirstSort } from '../utils/imageFirstSort';
-import { playableTrackFilter, visibleCatalogFilter } from '../utils/catalogVisibility';
+import {
+  getRequestUserId,
+  playableTrackFilter,
+  resolveCatalogPlaybackOptions,
+  visibleCatalogFilter,
+} from '../utils/catalogVisibility';
 
 /**
  * GET /api/artists
@@ -129,6 +134,7 @@ export const getArtistTracks = async (req: Request, res: Response, next: NextFun
     const id = getParam(req, 'id');
     const limit = parseInt(req.query.limit as string) || 20;
     const offset = parseInt(req.query.offset as string) || 0;
+    const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
     
     // Validate ObjectId format
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -143,12 +149,12 @@ export const getArtistTracks = async (req: Request, res: Response, next: NextFun
 
     // Fetch tracks for this artist, sorted by popularity then date
     const [tracks, total] = await Promise.all([
-      TrackModel.find(playableTrackFilter({ artistId: id }))
+      TrackModel.find(playableTrackFilter({ artistId: id }, playbackOptions))
         .sort(withImageFirstSort('track', { popularity: -1, createdAt: -1 }))
         .skip(offset)
         .limit(limit)
         .lean(),
-      TrackModel.countDocuments(playableTrackFilter({ artistId: id })),
+      TrackModel.countDocuments(playableTrackFilter({ artistId: id }, playbackOptions)),
     ]);
 
     const formattedTracks = await formatTracksWithCoverArt(tracks);

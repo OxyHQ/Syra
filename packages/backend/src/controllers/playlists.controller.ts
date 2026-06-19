@@ -10,7 +10,11 @@ import { isDatabaseConnected } from '../utils/database';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { getParam } from '../utils/reqParams';
 import { withImageFirstSort } from '../utils/imageFirstSort';
-import { playableTrackFilter, visibleCatalogFilter } from '../utils/catalogVisibility';
+import {
+  playableTrackFilter,
+  resolveCatalogPlaybackOptions,
+  visibleCatalogFilter,
+} from '../utils/catalogVisibility';
 
 interface PlaylistAuthRequest extends AuthRequest {
   user?: AuthRequest['user'] & {
@@ -164,6 +168,7 @@ export const getPlaylistTracks = async (req: AuthRequest, res: Response, next: N
 
     const id = getParam(req, 'id');
     const userId = req.user?.id;
+    const playbackOptions = await resolveCatalogPlaybackOptions(userId);
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(404).json({ error: 'Playlist not found' });
@@ -186,7 +191,7 @@ export const getPlaylistTracks = async (req: AuthRequest, res: Response, next: N
 
     // Get track details
     const trackIds = playlistTracks.map(pt => pt.trackId);
-    const tracks = await TrackModel.find(playableTrackFilter({ _id: { $in: trackIds } })).lean();
+    const tracks = await TrackModel.find(playableTrackFilter({ _id: { $in: trackIds } }, playbackOptions)).lean();
 
     // Create map for quick lookup
     const trackMap = new Map(tracks.map(t => [t._id.toString(), t]));
@@ -442,6 +447,7 @@ export const addTracksToPlaylist = async (req: AuthRequest, res: Response, next:
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
+    const playbackOptions = await resolveCatalogPlaybackOptions(userId);
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(404).json({ error: 'Playlist not found' });
@@ -465,7 +471,7 @@ export const addTracksToPlaylist = async (req: AuthRequest, res: Response, next:
     }
 
     // Verify tracks exist
-    const tracks = await TrackModel.find(playableTrackFilter({ _id: { $in: validTrackIds } })).lean();
+    const tracks = await TrackModel.find(playableTrackFilter({ _id: { $in: validTrackIds } }, playbackOptions)).lean();
     if (tracks.length === 0) {
       return res.status(404).json({ error: 'No valid tracks found' });
     }

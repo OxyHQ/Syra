@@ -7,7 +7,7 @@ import compression from 'compression';
 import cors from 'cors';
 import { Server as SocketIOServer, Socket, Namespace } from 'socket.io';
 import { OxyServices } from '@oxyhq/core';
-import { createOxyRateLimit } from '@oxyhq/core/server';
+import { createOptionalOxyAuth, createOxyRateLimit } from '@oxyhq/core/server';
 
 import { connectToDatabase, isDatabaseConnected, getDatabaseStats } from './src/utils/database';
 import { createRedisPubSub, isRedisConnected, getRedisStats } from './src/utils/redis';
@@ -35,7 +35,8 @@ import audioRoutes from './src/routes/audio.routes';
 import queueRoutes from './src/routes/queue.routes';
 import musicPreferencesRoutes from './src/routes/musicPreferences.routes';
 import copyrightRoutes from './src/routes/copyright.routes';
-import imagesRoutes from './src/routes/images.routes';
+import imagesPublicRoutes from './src/routes/images.public.routes';
+import imagesAuthRoutes from './src/routes/images.auth.routes';
 import streamRoutes from './src/routes/stream.routes';
 import lyricsRoutes from './src/routes/lyrics.routes';
 import sourcesRoutes from './src/routes/sources.routes';
@@ -255,7 +256,8 @@ publicApiRouter.use('/playlists', playlistsRoutes);
 publicApiRouter.use('/search', searchRoutes);
 publicApiRouter.use('/browse', browseRoutes);
 publicApiRouter.use('/copyright', copyrightRoutes);
-publicApiRouter.use('/stream', streamRoutes);
+publicApiRouter.use('/stream', createOptionalOxyAuth(oxy), streamRoutes);
+publicApiRouter.use('/images', imagesPublicRoutes);
 
 publicApiRouter.use('/sources', sourcesRoutes);
 
@@ -263,7 +265,7 @@ const authenticatedApiRouter = express.Router();
 authenticatedApiRouter.use('/profile', profileSettingsRoutes);
 authenticatedApiRouter.use('/artists', artistsAuthRoutes);
 authenticatedApiRouter.use('/playlists', playlistsRoutes);
-authenticatedApiRouter.use('/images', imagesRoutes);
+authenticatedApiRouter.use('/images', imagesAuthRoutes);
 authenticatedApiRouter.use('/library', libraryRoutes);
 authenticatedApiRouter.use('/audio', audioRoutes);
 authenticatedApiRouter.use('/queue', queueRoutes);

@@ -14,7 +14,11 @@ import { getStoredImageColors } from '../utils/imageColors';
 import { enqueueIngest } from '../services/ingest/ingestTrack';
 import { getErrorMessage, getErrorStack, getHttpStatus } from '../utils/error';
 import { getParam } from '../utils/reqParams';
-import { playableTrackFilter } from '../utils/catalogVisibility';
+import {
+  getRequestUserId,
+  playableTrackFilter,
+  resolveCatalogPlaybackOptions,
+} from '../utils/catalogVisibility';
 
 interface AudioUploadRequest extends AuthRequest {
   file?: Express.Multer.File;
@@ -32,14 +36,15 @@ export const getTracks = async (req: Request, res: Response, next: NextFunction)
 
     const limit = parseInt(req.query.limit as string) || 20;
     const offset = parseInt(req.query.offset as string) || 0;
+    const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
 
     const [tracks, total] = await Promise.all([
-      TrackModel.find(playableTrackFilter())
+      TrackModel.find(playableTrackFilter({}, playbackOptions))
         .sort({ createdAt: -1 })
         .skip(offset)
         .limit(limit)
         .lean(),
-      TrackModel.countDocuments(playableTrackFilter()),
+      TrackModel.countDocuments(playableTrackFilter({}, playbackOptions)),
     ]);
 
     const formattedTracks = await formatTracksWithCoverArt(tracks);
@@ -65,13 +70,14 @@ export const getTrackById = async (req: Request, res: Response, next: NextFuncti
     }
 
     const id = getParam(req, 'id');
+    const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
     
     // Validate ObjectId format
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(404).json({ error: 'Track not found' });
     }
     
-    const track = await TrackModel.findOne(playableTrackFilter({ _id: id })).lean();
+    const track = await TrackModel.findOne(playableTrackFilter({ _id: id }, playbackOptions)).lean();
 
     if (!track) {
       return res.status(404).json({ error: 'Track not found' });
@@ -97,6 +103,7 @@ export const searchTracks = async (req: Request, res: Response, next: NextFuncti
     const query = (req.query.q as string) || '';
     const limit = parseInt(req.query.limit as string) || 20;
     const offset = parseInt(req.query.offset as string) || 0;
+    const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
 
     if (!query.trim()) {
       return res.json({
@@ -108,24 +115,24 @@ export const searchTracks = async (req: Request, res: Response, next: NextFuncti
 
     const searchRegex = new RegExp(query, 'i');
     const [tracks, total] = await Promise.all([
-      TrackModel.find({
-        ...playableTrackFilter(),
-        $or: [
-          { title: searchRegex },
-          { artistName: searchRegex },
-        ],
-      })
+      TrackModel.find(
+        playableTrackFilter({
+          $or: [
+            { title: searchRegex },
+            { artistName: searchRegex },
+          ],
+        }, playbackOptions),
+      )
         .sort({ popularity: -1, createdAt: -1 })
         .skip(offset)
         .limit(limit)
         .lean(),
-      TrackModel.countDocuments({
-        ...playableTrackFilter(),
+      TrackModel.countDocuments(playableTrackFilter({
         $or: [
           { title: searchRegex },
           { artistName: searchRegex },
         ],
-      }),
+      }, playbackOptions)),
     ]);
 
     const formattedTracks = await formatTracksWithCoverArt(tracks);

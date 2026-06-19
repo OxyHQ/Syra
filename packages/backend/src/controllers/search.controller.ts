@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { SearchCategory, SearchResult, SearchUser } from '@syra/shared-types';
 import { getAccountDisplayName } from '@oxyhq/core';
 import type { User } from '@oxyhq/core';
+import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { TrackModel } from '../models/Track';
 import { AlbumModel } from '../models/Album';
 import { ArtistModel } from '../models/Artist';
@@ -11,7 +12,12 @@ import { isDatabaseConnected } from '../utils/database';
 import { enqueueAudiusImport } from '../services/sources/audiusBackgroundImport';
 import { withImageFirstSort } from '../utils/imageFirstSort';
 import { logger } from '../utils/logger';
-import { playableTrackFilter, visibleCatalogFilter } from '../utils/catalogVisibility';
+import {
+  getRequestUserId,
+  playableTrackFilter,
+  resolveCatalogPlaybackOptions,
+  visibleCatalogFilter,
+} from '../utils/catalogVisibility';
 import { oxy } from '../../server';
 
 /**
@@ -74,6 +80,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
     const searchCategory = category as SearchCategory;
     const searchLimit = parseSearchLimit(limit);
     const searchOffset = parseInt(offset as string) || 0;
+    const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
 
     // If no query, return empty results
     if (!query.trim()) {
@@ -128,7 +135,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
             { title: searchRegex },
             { artistName: searchRegex },
           ],
-        });
+        }, playbackOptions);
       const trackFind = TrackModel.find(trackFilter)
           .sort(withImageFirstSort('track', { popularity: -1, createdAt: -1 }))
           .skip(searchOffset)

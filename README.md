@@ -19,6 +19,16 @@
 
 **Syra** is a modern music streaming platform inspired by Spotify, designed for mobile and web. It features music library management, playlists, artist pages, album browsing, search, and more. Built with Expo, React Native, and a Node.js backend in a modern monorepo structure, it supports file-based routing and a beautiful Spotify-like UI.
 
+## Audius Catalog And Playback
+
+Syra treats Audius as a catalog/source integration, not as a blanket direct-streaming dependency.
+
+- `AUDIUS_CATALOG_ENABLED=true` controls whether Audius catalog content can be shown globally.
+- Copyable Audius music should be ingested into Syra storage and served from Syra HLS/audio endpoints.
+- `directAudiusStreaming` is a user opt-in fallback only for Audius tracks that cannot be copied/rehosted and only have a provider `streamUrl`.
+- Audius tracks with ready Syra HLS must remain visible and playable when direct Audius streaming is disabled.
+- Direct-only Audius tracks are hidden from track lists/search/recommendations unless the signed-in user enabled direct Audius streaming.
+
 ## Project Structure
 
 This is a **monorepo** using bun workspaces with the following structure:

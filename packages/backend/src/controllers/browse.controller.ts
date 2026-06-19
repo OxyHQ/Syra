@@ -8,7 +8,12 @@ import { isDatabaseConnected } from '../utils/database';
 import { withImageFirstSort } from '../utils/imageFirstSort';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { getMadeForYou as getPersonalisedMadeForYou } from '../services/recommendations/recommendationService';
-import { playableTrackFilter, visibleCatalogFilter } from '../utils/catalogVisibility';
+import {
+  getRequestUserId,
+  playableTrackFilter,
+  resolveCatalogPlaybackOptions,
+  visibleCatalogFilter,
+} from '../utils/catalogVisibility';
 
 /**
  * Default genre colors for genre cards (Spotify-like colors)
@@ -49,6 +54,16 @@ function setDiscoveryCache(res: Response): void {
   }
 }
 
+function setCatalogCache(res: Response, userId?: string): void {
+  if (userId) {
+    res.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=120');
+    res.set('Vary', 'Authorization');
+    return;
+  }
+
+  setDiscoveryCache(res);
+}
+
 function parseBoundedLimit(value: unknown, fallback: number, max: number): number {
   const parsed = parseInt(String(value ?? ''), 10);
   if (!Number.isFinite(parsed) || parsed <= 0) {
@@ -69,7 +84,8 @@ export const getHomeBrowse = async (req: Request, res: Response, next: NextFunct
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    const userId = (req as AuthRequest).user?.id;
+    const userId = getRequestUserId(req as AuthRequest);
+    const playbackOptions = await resolveCatalogPlaybackOptions(userId);
     const tracksLimit = parseBoundedLimit(req.query.tracksLimit, 20, 50);
     const sectionLimit = parseBoundedLimit(req.query.sectionLimit, 8, 20);
     const madeForYouHalf = Math.max(1, Math.floor(sectionLimit / 2));
@@ -97,7 +113,7 @@ export const getHomeBrowse = async (req: Request, res: Response, next: NextFunct
         .sort(withImageFirstSort('artist', { popularity: -1, 'stats.followers': -1 }))
         .limit(sectionLimit)
         .lean(),
-      TrackModel.find(playableTrackFilter())
+      TrackModel.find(playableTrackFilter({}, playbackOptions))
         .sort(withImageFirstSort('track', { popularity: -1, playCount: -1, createdAt: -1 }))
         .limit(tracksLimit)
         .lean(),
@@ -116,7 +132,7 @@ export const getHomeBrowse = async (req: Request, res: Response, next: NextFunct
     };
 
     if (userId) {
-      const personalised = await getPersonalisedMadeForYou(userId, sectionLimit);
+      const personalised = await getPersonalisedMadeForYou(userId, sectionLimit, playbackOptions);
       madeForYou = {
         albums: formatAlbumsWithCoverArt(madeForYouAlbums),
         playlists: formatPlaylistsWithCoverArt(madeForYouPlaylists),
@@ -128,7 +144,7 @@ export const getHomeBrowse = async (req: Request, res: Response, next: NextFunct
       const sparse = madeForYouAlbums.length + madeForYouPlaylists.length < madeForYouHalf;
       const [fallbackTracks, fallbackArtists] = sparse
         ? await Promise.all([
-            TrackModel.find(playableTrackFilter())
+            TrackModel.find(playableTrackFilter({}, playbackOptions))
               .sort(withImageFirstSort('track', { popularity: -1, playCount: -1, createdAt: -1 }))
               .limit(sectionLimit)
               .lean(),
@@ -188,11 +204,14 @@ export const getGenres = async (req: Request, res: Response, next: NextFunction)
       return res.status(503).json({ error: 'Database not available' });
     }
 
+    const userId = getRequestUserId(req as AuthRequest);
+    const playbackOptions = await resolveCatalogPlaybackOptions(userId);
+
     // Aggregate unique genres from tracks, albums, and artists. Tracks carry a
     // top-level genre from the source sync, so genres surface even before any
     // albums have been assembled.
     const [trackGenres, albumGenres, artistGenres] = await Promise.all([
-      TrackModel.distinct('genre', playableTrackFilter()),
+      TrackModel.distinct('genre', playableTrackFilter({}, playbackOptions)),
       AlbumModel.distinct('genre', visibleCatalogFilter()),
       ArtistModel.distinct('genres', visibleCatalogFilter()),
     ]);
@@ -216,7 +235,7 @@ export const getGenres = async (req: Request, res: Response, next: NextFunction)
             .sort(withImageFirstSort('artist', { popularity: -1 }))
             .limit(1)
             .lean(),
-          TrackModel.find(playableTrackFilter({ genre: genre }))
+          TrackModel.find(playableTrackFilter({ genre: genre }, playbackOptions))
             .sort(withImageFirstSort('track', { popularity: -1, playCount: -1 }))
             .limit(1)
             .lean(),
@@ -238,7 +257,7 @@ export const getGenres = async (req: Request, res: Response, next: NextFunction)
       })
     );
 
-    setDiscoveryCache(res);
+    setCatalogCache(res, userId);
     res.json({ genres: genresWithSamples });
   } catch (error) {
     next(error);
@@ -260,13 +279,12 @@ export const getGenreTracks = async (req: Request, res: Response, next: NextFunc
       return res.status(400).json({ error: 'Genre is required' });
     }
 
+    const userId = getRequestUserId(req as AuthRequest);
+    const playbackOptions = await resolveCatalogPlaybackOptions(userId);
     const limit = parseInt(req.query.limit as string) || 50;
     const offset = parseInt(req.query.offset as string) || 0;
 
-    const tracks = await TrackModel.find({
-      genre,
-      ...playableTrackFilter(),
-    })
+    const tracks = await TrackModel.find(playableTrackFilter({ genre }, playbackOptions))
       .sort(withImageFirstSort('track', { popularity: -1, playCount: -1, createdAt: -1 }))
       .skip(offset)
       .limit(limit)
@@ -274,7 +292,7 @@ export const getGenreTracks = async (req: Request, res: Response, next: NextFunc
 
     const formattedTracks = await formatTracksWithCoverArt(tracks);
 
-    setDiscoveryCache(res);
+    setCatalogCache(res, userId);
     res.json({
       tracks: formattedTracks,
       total: formattedTracks.length,
@@ -295,10 +313,12 @@ export const getPopularTracks = async (req: Request, res: Response, next: NextFu
       return res.status(503).json({ error: 'Database not available' });
     }
 
+    const userId = getRequestUserId(req as AuthRequest);
+    const playbackOptions = await resolveCatalogPlaybackOptions(userId);
     const limit = parseInt(req.query.limit as string) || 20;
     const offset = parseInt(req.query.offset as string) || 0;
 
-    const tracks = await TrackModel.find(playableTrackFilter())
+    const tracks = await TrackModel.find(playableTrackFilter({}, playbackOptions))
       .sort(withImageFirstSort('track', { popularity: -1, playCount: -1, createdAt: -1 }))
       .skip(offset)
       .limit(limit)
@@ -306,7 +326,7 @@ export const getPopularTracks = async (req: Request, res: Response, next: NextFu
 
     const formattedTracks = await formatTracksWithCoverArt(tracks);
 
-    setDiscoveryCache(res);
+    setCatalogCache(res, userId);
     res.json({
       tracks: formattedTracks,
       total: formattedTracks.length,
@@ -394,7 +414,8 @@ export const getMadeForYou = async (req: Request, res: Response, next: NextFunct
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    const userId = (req as AuthRequest).user?.id;
+    const userId = getRequestUserId(req as AuthRequest);
+    const playbackOptions = await resolveCatalogPlaybackOptions(userId);
     const limit = parseInt(req.query.limit as string) || 20;
     const half = Math.max(1, Math.floor(limit / 2));
 
@@ -410,7 +431,7 @@ export const getMadeForYou = async (req: Request, res: Response, next: NextFunct
     ]);
 
     if (userId) {
-      const personalised = await getPersonalisedMadeForYou(userId, limit);
+      const personalised = await getPersonalisedMadeForYou(userId, limit, playbackOptions);
       res.set('Cache-Control', 'private, max-age=60, stale-while-revalidate=300');
       res.set('Vary', 'Authorization');
       res.json({
@@ -428,7 +449,7 @@ export const getMadeForYou = async (req: Request, res: Response, next: NextFunct
     const sparse = albums.length + playlists.length < half;
     const [tracks, artists] = sparse
       ? await Promise.all([
-          TrackModel.find(playableTrackFilter())
+          TrackModel.find(playableTrackFilter({}, playbackOptions))
             .sort(withImageFirstSort('track', { popularity: -1, playCount: -1, createdAt: -1 }))
             .limit(limit)
             .lean(),
@@ -439,7 +460,7 @@ export const getMadeForYou = async (req: Request, res: Response, next: NextFunct
         ])
       : [[], []];
 
-    setDiscoveryCache(res);
+    setCatalogCache(res, userId);
     res.json({
       albums: formatAlbumsWithCoverArt(albums),
       playlists: formatPlaylistsWithCoverArt(playlists),
@@ -462,16 +483,18 @@ export const getCharts = async (req: Request, res: Response, next: NextFunction)
       return res.status(503).json({ error: 'Database not available' });
     }
 
+    const userId = getRequestUserId(req as AuthRequest);
+    const playbackOptions = await resolveCatalogPlaybackOptions(userId);
     const limit = parseInt(req.query.limit as string) || 50;
 
-    const tracks = await TrackModel.find(playableTrackFilter())
+    const tracks = await TrackModel.find(playableTrackFilter({}, playbackOptions))
       .sort(withImageFirstSort('track', { popularity: -1, playCount: -1 }))
       .limit(limit)
       .lean();
 
     const formattedTracks = await formatTracksWithCoverArt(tracks);
 
-    setDiscoveryCache(res);
+    setCatalogCache(res, userId);
     res.json({
       tracks: formattedTracks,
       total: formattedTracks.length,

@@ -6,7 +6,11 @@ import { UserTasteProfileModel } from '../../models/UserTasteProfile';
 import { UserLibraryModel } from '../../models/Library';
 import { ListeningEventModel } from '../../models/ListeningEvent';
 import { withImageFirstSort } from '../../utils/imageFirstSort';
-import { playableTrackFilter, visibleCatalogFilter } from '../../utils/catalogVisibility';
+import {
+  type CatalogPlaybackOptions,
+  playableTrackFilter,
+  visibleCatalogFilter,
+} from '../../utils/catalogVisibility';
 
 /**
  * Read side of the recommendation engine. Every function degrades gracefully:
@@ -38,6 +42,17 @@ interface CatalogArtist {
     followers?: number;
   };
   terminated?: boolean;
+}
+
+function andMongoFilters<T>(...filters: Array<mongoose.FilterQuery<T>>): mongoose.FilterQuery<T> {
+  const nonEmptyFilters = filters.filter((filter) => Object.keys(filter).length > 0);
+  if (nonEmptyFilters.length === 0) {
+    return {};
+  }
+  if (nonEmptyFilters.length === 1) {
+    return nonEmptyFilters[0];
+  }
+  return { $and: nonEmptyFilters };
 }
 
 // ── Related artists ─────────────────────────────────────────────────────────
@@ -103,7 +118,11 @@ export async function getRelatedArtists(artistId: string, limit = DEFAULT_RELATE
  * Tracks similar to `trackId`. Co-listen graph first, then same-artist / same
  * genre by popularity. Excludes the seed track.
  */
-export async function getSimilarTracks(trackId: string, limit = DEFAULT_RELATED_LIMIT): Promise<CatalogTrack[]> {
+export async function getSimilarTracks(
+  trackId: string,
+  limit = DEFAULT_RELATED_LIMIT,
+  playbackOptions: CatalogPlaybackOptions = {},
+): Promise<CatalogTrack[]> {
   if (!mongoose.Types.ObjectId.isValid(trackId)) return [];
 
   const edges = await CatalogRelationModel.find({ kind: 'track', sourceId: trackId })
@@ -116,23 +135,23 @@ export async function getSimilarTracks(trackId: string, limit = DEFAULT_RELATED_
     .filter((id) => mongoose.Types.ObjectId.isValid(id));
 
   const collaborative = relatedIds.length
-    ? orderByIds(await TrackModel.find(playableTrackFilter({ _id: { $in: relatedIds } })).lean(), relatedIds)
+    ? orderByIds(await TrackModel.find(playableTrackFilter({ _id: { $in: relatedIds } }, playbackOptions)).lean(), relatedIds)
     : [];
 
   if (collaborative.length >= limit) return collaborative.slice(0, limit);
 
-  const seed = await TrackModel.findOne(playableTrackFilter({ _id: trackId })).select({ genre: 1, artistId: 1 }).lean();
+  const seed = await TrackModel.findOne(playableTrackFilter({ _id: trackId }, playbackOptions)).select({ genre: 1, artistId: 1 }).lean();
   if (!seed) return collaborative.slice(0, limit);
   const exclude = new Set<string>([trackId, ...collaborative.map((t) => t._id.toString())]);
 
-  const contentFilter: mongoose.FilterQuery<CatalogTrack> = {
-    ...playableTrackFilter<CatalogTrack>(),
+  const contentBaseFilter = playableTrackFilter<CatalogTrack>({
     _id: { $nin: Array.from(exclude).filter((id) => mongoose.Types.ObjectId.isValid(id)) },
-  };
+  }, playbackOptions);
+  let contentFilter: mongoose.FilterQuery<CatalogTrack> = contentBaseFilter;
   if (seed?.genre) {
-    contentFilter.$or = [{ genre: seed.genre }, { artistId: seed.artistId }];
+    contentFilter = andMongoFilters(contentBaseFilter, { $or: [{ genre: seed.genre }, { artistId: seed.artistId }] });
   } else if (seed?.artistId) {
-    contentFilter.artistId = seed.artistId;
+    contentFilter = andMongoFilters(contentBaseFilter, { artistId: seed.artistId });
   }
 
   const contentMatches = await TrackModel.find(contentFilter)
@@ -150,13 +169,17 @@ export async function getSimilarTracks(trackId: string, limit = DEFAULT_RELATED_
  * its similar tracks and same-genre popular tracks. Suitable for autoplay
  * queue population ("play similar songs" when the queue runs dry).
  */
-export async function getTrackRadio(trackId: string, limit = 30): Promise<CatalogTrack[]> {
+export async function getTrackRadio(
+  trackId: string,
+  limit = 30,
+  playbackOptions: CatalogPlaybackOptions = {},
+): Promise<CatalogTrack[]> {
   if (!mongoose.Types.ObjectId.isValid(trackId)) return [];
 
-  const seed = await TrackModel.findOne(playableTrackFilter({ _id: trackId })).lean();
+  const seed = await TrackModel.findOne(playableTrackFilter({ _id: trackId }, playbackOptions)).lean();
   if (!seed || seed.isAvailable === false) return [];
 
-  const similar = await getSimilarTracks(trackId, limit * 2);
+  const similar = await getSimilarTracks(trackId, limit * 2, playbackOptions);
 
   const seen = new Set<string>([trackId]);
   const station: CatalogTrack[] = [seed];
@@ -187,7 +210,11 @@ export interface MadeForYou {
  * meaningful taste signal yet (cold start), returns globally popular content
  * flagged `personalized: false` so the caller can label it honestly.
  */
-export async function getMadeForYou(oxyUserId: string, limit = 20): Promise<MadeForYou> {
+export async function getMadeForYou(
+  oxyUserId: string,
+  limit = 20,
+  playbackOptions: CatalogPlaybackOptions = {},
+): Promise<MadeForYou> {
   const [profile, library] = await Promise.all([
     UserTasteProfileModel.findOne({ oxyUserId }).lean(),
     UserLibraryModel.findOne({ oxyUserId }).select({ likedTracks: 1, followedArtists: 1 }).lean(),
@@ -208,7 +235,7 @@ export async function getMadeForYou(oxyUserId: string, limit = 20): Promise<Made
   // Cold start: no learned taste → popular content, honestly labelled.
   if (topGenres.length === 0 && topArtists.length === 0) {
     const [tracks, artists] = await Promise.all([
-      TrackModel.find(playableTrackFilter())
+      TrackModel.find(playableTrackFilter({}, playbackOptions))
         .sort(withImageFirstSort('track', { popularity: -1, playCount: -1, createdAt: -1 }))
         .limit(limit)
         .lean(),
@@ -236,14 +263,15 @@ export async function getMadeForYou(oxyUserId: string, limit = 20): Promise<Made
 
   // Discover NEW tracks: by the user's favourite artists (deep cuts they may not
   // have heard) and by their favourite genres, ranked by global popularity.
-  const trackFilter: mongoose.FilterQuery<CatalogTrack> = {
-    ...playableTrackFilter<CatalogTrack>(),
+  const baseTrackFilter = playableTrackFilter<CatalogTrack>({
     _id: { $nin: excludeTrackObjectIds },
-  };
+  }, playbackOptions);
   const trackOr: mongoose.FilterQuery<CatalogTrack>[] = [];
   if (validTopArtists.length) trackOr.push({ artistId: { $in: validTopArtists } });
   if (topGenres.length) trackOr.push({ genre: { $in: topGenres } });
-  if (trackOr.length) trackFilter.$or = trackOr;
+  const trackFilter = trackOr.length
+    ? andMongoFilters(baseTrackFilter, { $or: trackOr })
+    : baseTrackFilter;
 
   const candidateTracks = await TrackModel.find(trackFilter)
     .sort(withImageFirstSort('track', { popularity: -1, playCount: -1 }))
