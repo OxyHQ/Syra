@@ -23,6 +23,7 @@ import { useLibrary, useToggleSavePlaylist } from '@/hooks/useLibrary';
 import { webViewStyle } from '@/utils/webStyles';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { toast } from '@/lib/sonner';
+import { useOxy } from '@oxyhq/services';
 
 const HEADER_HEIGHT = 400;
 
@@ -35,6 +36,8 @@ const PlaylistScreen: React.FC = () => {
   const theme = useTheme();
   const { playTrackList, currentTrack, isPlaying } = usePlayerStore();
   const { shuffle, toggleShuffle } = useQueueStore();
+  const { canUsePrivateApi, isPrivateApiPending } = useOxy();
+  const catalogIdentity = canUsePrivateApi ? 'auth' : 'guest';
 
   const { isPlaylistSaved } = useLibrary();
   const toggleSave = useToggleSavePlaylist();
@@ -52,7 +55,7 @@ const PlaylistScreen: React.FC = () => {
   const scrollOffset = useScrollViewOffset(scrollRef);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['playlist', id],
+    queryKey: ['playlist', id, catalogIdentity],
     queryFn: async () => {
       const [playlistData, tracksData] = await Promise.all([
         musicService.getPlaylistById(id),
@@ -60,12 +63,13 @@ const PlaylistScreen: React.FC = () => {
       ]);
       return { playlist: playlistData, tracks: tracksData.tracks };
     },
-    enabled: !!id,
+    enabled: !!id && !isPrivateApiPending,
   });
 
   const playlist = data?.playlist ?? null;
   const tracks = data?.tracks ?? [];
   const canPlay = tracks.length > 0;
+  const isCatalogLoading = isPrivateApiPending || isLoading;
 
   // Parallax animation for header image
   const headerAnimatedStyle = useAnimatedStyle(() => {
@@ -152,7 +156,7 @@ const PlaylistScreen: React.FC = () => {
     ? formatTotalDuration(playlist.totalDuration)
     : '';
 
-  if (isLoading) {
+  if (isCatalogLoading) {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <ScrollView

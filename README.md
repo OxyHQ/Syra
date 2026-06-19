@@ -30,6 +30,8 @@ Syra treats Audius as a catalog/source integration, not as a blanket direct-stre
 - Direct-only Audius tracks are hidden from track lists/search/recommendations unless the signed-in user enabled direct Audius streaming.
 - Albums, artists, playlists, genre cards, and browse/search containers follow the same playable-track policy. Syra should not present a music container as playable when it has zero tracks for the current user's Audius playback preference.
 - Frontend catalog calls that can vary by identity or playback preference use the linked Oxy API client in `packages/frontend/utils/api.ts`, not an anonymous HTTP client.
+- Frontend catalog queries wait for Oxy cold boot to settle and keep separate `guest` and `auth` cache keys, so anonymous startup data cannot leak into a signed-in session.
+- Playback resolves HLS and direct-only Audius URLs through the backend `/stream/:trackId` resolver; frontend preference state is not the source of truth for stream permission.
 
 ## Project Structure
 

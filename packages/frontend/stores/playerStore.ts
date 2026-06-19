@@ -322,12 +322,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
   const shouldResolveViaStreamEndpoint = (track: Track): boolean => {
     const hasHls = track.status === 'ready' && Array.isArray(track.hls) && track.hls.length > 0;
-    const canUseDirectAudius =
-      track.source === 'audius' &&
-      !track.audioSource &&
-      useMusicPreferencesStore.getState().preferences?.directAudiusStreaming === true;
+    const isAudiusProviderTrack = track.source === 'audius' && !track.audioSource;
 
-    return hasHls || canUseDirectAudius;
+    return hasHls || isAudiusProviderTrack;
   };
 
   const prefetchQueueStreams = (

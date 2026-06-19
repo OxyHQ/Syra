@@ -3,6 +3,13 @@ import { QueryClient, useQuery } from '@tanstack/react-query';
 import { browseService } from '@/services/browseService';
 import { libraryService } from '@/services/libraryService';
 import { musicService } from '@/services/musicService';
+import type {
+  HomeBrowseResponse,
+  MadeForYouResponse,
+  PopularAlbumsResponse,
+  PopularArtistsResponse,
+  PopularTracksResponse,
+} from '@/services/browseService';
 
 /**
  * React Query layer for the home screen.
@@ -26,6 +33,8 @@ const HOME_LIMITS = {
   tracks: 20,
 } as const;
 
+type CatalogIdentity = 'auth' | 'guest';
+
 export const HOME_QUERY_KEYS = {
   browse: ['home', 'browse'] as const,
   recentlyPlayed: ['home', 'recently-played'] as const,
@@ -37,7 +46,7 @@ export const HOME_QUERY_KEYS = {
 };
 
 const HOME_BROWSE_QUERY_OPTIONS = {
-  queryKey: HOME_QUERY_KEYS.browse,
+  queryKey: [...HOME_QUERY_KEYS.browse, 'guest'] as const,
   queryFn: () => browseService.getHome({
     sectionLimit: HOME_LIMITS.madeForYou,
     tracksLimit: HOME_LIMITS.tracks,
@@ -47,6 +56,21 @@ const HOME_BROWSE_QUERY_OPTIONS = {
 
 export function prefetchHomeBrowse(queryClient: QueryClient): void {
   void queryClient.prefetchQuery(HOME_BROWSE_QUERY_OPTIONS);
+}
+
+function resolveCatalogIdentity(canUsePrivateApi: boolean): CatalogIdentity {
+  return canUsePrivateApi ? 'auth' : 'guest';
+}
+
+function homeBrowseQueryOptions(identity: CatalogIdentity) {
+  return {
+    queryKey: [...HOME_QUERY_KEYS.browse, identity] as const,
+    queryFn: () => browseService.getHome({
+      sectionLimit: HOME_LIMITS.madeForYou,
+      tracksLimit: HOME_LIMITS.tracks,
+    }),
+    staleTime: 1000 * 60 * 10,
+  };
 }
 
 /**
@@ -68,25 +92,31 @@ export function useRecentlyPlayed() {
 
 /** Real "Made for you" recommendations (popular albums + public playlists). */
 export function useMadeForYou() {
+  const { canUsePrivateApi, isPrivateApiPending } = useOxy();
   return useQuery({
-    ...HOME_BROWSE_QUERY_OPTIONS,
-    select: (data) => data.madeForYou,
+    ...homeBrowseQueryOptions(resolveCatalogIdentity(canUsePrivateApi)),
+    enabled: !isPrivateApiPending,
+    select: (data: HomeBrowseResponse): MadeForYouResponse => data.madeForYou,
   });
 }
 
 /** Real popular albums, ranked by catalog popularity. */
 export function usePopularAlbums() {
+  const { canUsePrivateApi, isPrivateApiPending } = useOxy();
   return useQuery({
-    ...HOME_BROWSE_QUERY_OPTIONS,
-    select: (data) => data.popularAlbums,
+    ...homeBrowseQueryOptions(resolveCatalogIdentity(canUsePrivateApi)),
+    enabled: !isPrivateApiPending,
+    select: (data: HomeBrowseResponse): PopularAlbumsResponse => data.popularAlbums,
   });
 }
 
 /** Real popular artists, ranked by catalog popularity. */
 export function usePopularArtists() {
+  const { canUsePrivateApi, isPrivateApiPending } = useOxy();
   return useQuery({
-    ...HOME_BROWSE_QUERY_OPTIONS,
-    select: (data) => data.popularArtists,
+    ...homeBrowseQueryOptions(resolveCatalogIdentity(canUsePrivateApi)),
+    enabled: !isPrivateApiPending,
+    select: (data: HomeBrowseResponse): PopularArtistsResponse => data.popularArtists,
   });
 }
 
@@ -102,8 +132,10 @@ export function useUserPlaylists() {
 
 /** Real popular tracks for the bottom track list. */
 export function usePopularTracks() {
+  const { canUsePrivateApi, isPrivateApiPending } = useOxy();
   return useQuery({
-    ...HOME_BROWSE_QUERY_OPTIONS,
-    select: (data) => data.tracks,
+    ...homeBrowseQueryOptions(resolveCatalogIdentity(canUsePrivateApi)),
+    enabled: !isPrivateApiPending,
+    select: (data: HomeBrowseResponse): PopularTracksResponse => data.tracks,
   });
 }

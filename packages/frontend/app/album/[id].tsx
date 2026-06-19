@@ -16,6 +16,7 @@ import { useLibrary, useToggleSaveAlbum, useToggleLikeTrack } from '@/hooks/useL
 import { LinearGradient } from 'expo-linear-gradient';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { toast } from '@/lib/sonner';
+import { useOxy } from '@oxyhq/services';
 
 /**
  * Album Screen
@@ -27,6 +28,8 @@ const AlbumScreen: React.FC = () => {
   const theme = useTheme();
   const { playTrackList, currentTrack, isPlaying } = usePlayerStore();
   const { shuffle, toggleShuffle } = useQueueStore();
+  const { canUsePrivateApi, isPrivateApiPending } = useOxy();
+  const catalogIdentity = canUsePrivateApi ? 'auth' : 'guest';
 
   const { isAlbumSaved, isTrackLiked } = useLibrary();
   const toggleSave = useToggleSaveAlbum();
@@ -46,7 +49,7 @@ const AlbumScreen: React.FC = () => {
   };
 
   const { data, isLoading } = useQuery({
-    queryKey: ['album', id],
+    queryKey: ['album', id, catalogIdentity],
     queryFn: async () => {
       const [albumData, tracksData] = await Promise.all([
         musicService.getAlbumById(id),
@@ -57,13 +60,13 @@ const AlbumScreen: React.FC = () => {
         tracks: tracksData.tracks.sort((a, b) => (a.trackNumber || 0) - (b.trackNumber || 0)),
       };
     },
-    enabled: !!id,
+    enabled: !!id && !isPrivateApiPending,
   });
 
   const album = data?.album ?? null;
   const tracks = data?.tracks ?? [];
   const canPlay = tracks.length > 0;
-
+  const isCatalogLoading = isPrivateApiPending || isLoading;
 
   const formatReleaseDate = (dateString: string): string => {
     const date = new Date(dateString);
@@ -92,7 +95,7 @@ const AlbumScreen: React.FC = () => {
     });
   };
 
-  if (isLoading) {
+  if (isCatalogLoading) {
     return (
       <ScrollView
         style={[styles.scrollView, { backgroundColor: theme.colors.background }]}

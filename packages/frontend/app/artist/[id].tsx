@@ -37,7 +37,8 @@ const ArtistScreen: React.FC = () => {
   const router = useRouter();
   const theme = useTheme();
   const { playTrackList, currentTrack, isPlaying } = usePlayerStore();
-  const { isAuthenticated } = useOxy();
+  const { isAuthenticated, canUsePrivateApi, isPrivateApiPending } = useOxy();
+  const catalogIdentity = canUsePrivateApi ? 'auth' : 'guest';
 
   const { isArtistFollowed } = useLibrary();
   const toggleFollow = useToggleFollowArtist();
@@ -47,7 +48,7 @@ const ArtistScreen: React.FC = () => {
   const scrollOffset = useScrollViewOffset(scrollRef);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['artist', id],
+    queryKey: ['artist', id, catalogIdentity],
     queryFn: async () => {
       const [artistData, albumsData, tracksData] = await Promise.all([
         musicService.getArtistById(id),
@@ -60,12 +61,14 @@ const ArtistScreen: React.FC = () => {
         tracks: tracksData.tracks,
       };
     },
-    enabled: !!id,
+    enabled: !!id && !isPrivateApiPending,
   });
 
   const artist = data?.artist ?? null;
   const albums = data?.albums ?? [];
   const tracks = data?.tracks ?? [];
+  const canPlay = tracks.length > 0;
+  const isCatalogLoading = isPrivateApiPending || isLoading;
 
   const relatedArtistsQuery = useRelatedArtists(id);
   const relatedArtists = relatedArtistsQuery.data?.artists ?? [];
@@ -130,9 +133,12 @@ const ArtistScreen: React.FC = () => {
   };
 
   const handlePlayAll = () => {
-    if (tracks.length > 0) {
-      playTrackList(tracks, 0, { type: 'artist', id: artist?.id, name: artist?.name });
+    if (!canPlay) {
+      toast.info('No playable tracks available');
+      return;
     }
+
+    playTrackList(tracks, 0, { type: 'artist', id: artist?.id, name: artist?.name });
   };
 
   const handleTrackPress = (track: Track) => {
@@ -164,7 +170,7 @@ const ArtistScreen: React.FC = () => {
     );
   };
 
-  if (isLoading) {
+  if (isCatalogLoading) {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <ScrollView
@@ -227,8 +233,15 @@ const ArtistScreen: React.FC = () => {
             {/* Right side - Controls */}
             <View style={styles.stickyHeaderControls}>
               <Pressable
-                style={[styles.stickyHeaderPlayButton, { backgroundColor: theme.colors.primary }]}
+                style={[
+                  styles.stickyHeaderPlayButton,
+                  { backgroundColor: theme.colors.primary },
+                  !canPlay && styles.disabledControl,
+                ]}
                 onPress={handlePlayAll}
+                disabled={!canPlay}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !canPlay }}
               >
                 <Ionicons name="play" size={16} color={theme.colors.primaryForeground} />
               </Pressable>
@@ -354,8 +367,15 @@ const ArtistScreen: React.FC = () => {
             {/* Playback Controls */}
             <View style={styles.controlsContainer}>
               <Pressable
-                style={[styles.playButton, { backgroundColor: theme.colors.primary }]}
+                style={[
+                  styles.playButton,
+                  { backgroundColor: theme.colors.primary },
+                  !canPlay && styles.disabledControl,
+                ]}
                 onPress={handlePlayAll}
+                disabled={!canPlay}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !canPlay }}
               >
                 <View style={styles.playButtonInner}>
                   <Ionicons name="play" size={24} color={theme.colors.primaryForeground} />
@@ -486,7 +506,7 @@ const ArtistScreen: React.FC = () => {
             {albums.length === 0 && tracks.length === 0 && (
               <View style={styles.emptyState}>
                 <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>
-                  No albums or tracks available
+                  No playable tracks available
                 </Text>
               </View>
             )}
@@ -713,6 +733,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 28,
+  },
+  disabledControl: {
+    opacity: 0.45,
   },
   controlButton: {
     width: 40,
