@@ -205,9 +205,12 @@ const HomeScreen: React.FC = () => {
           id: albumId,
           name: albumName,
         });
+        return;
       }
+      toast.info('No playable tracks available');
     } catch (error) {
       logger.error('Error playing album', { albumId, error });
+      toast.error('Could not start playback');
     }
   }, [playTrackList]);
 
@@ -220,9 +223,12 @@ const HomeScreen: React.FC = () => {
           id: playlistId,
           name: playlistName,
         });
+        return;
       }
+      toast.info('No playable tracks available');
     } catch (error) {
       logger.error('Error playing playlist', { playlistId, error });
+      toast.error('Could not start playback');
     }
   }, [playTrackList]);
 
@@ -235,9 +241,12 @@ const HomeScreen: React.FC = () => {
           id: artistId,
           name: artistName,
         });
+        return;
       }
+      toast.info('No playable tracks available');
     } catch (error) {
       logger.error('Error playing artist', { artistId, error });
+      toast.error('Could not start playback');
     }
   }, [playTrackList]);
 

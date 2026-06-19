@@ -22,6 +22,7 @@ import { formatTotalDuration } from '@/utils/musicUtils';
 import { useLibrary, useToggleSavePlaylist } from '@/hooks/useLibrary';
 import { webViewStyle } from '@/utils/webStyles';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
+import { toast } from '@/lib/sonner';
 
 const HEADER_HEIGHT = 400;
 
@@ -64,6 +65,7 @@ const PlaylistScreen: React.FC = () => {
 
   const playlist = data?.playlist ?? null;
   const tracks = data?.tracks ?? [];
+  const canPlay = tracks.length > 0;
 
   // Parallax animation for header image
   const headerAnimatedStyle = useAnimatedStyle(() => {
@@ -125,13 +127,16 @@ const PlaylistScreen: React.FC = () => {
   };
 
   const handlePlayPlaylist = () => {
-    if (tracks.length > 0) {
-      playTrackList(tracks, 0, {
-        type: 'playlist',
-        id,
-        name: playlist?.name,
-      });
+    if (!canPlay) {
+      toast.info('No playable tracks available');
+      return;
     }
+
+    playTrackList(tracks, 0, {
+      type: 'playlist',
+      id,
+      name: playlist?.name,
+    });
   };
 
   const handleTrackPress = (track: Track) => {
@@ -214,8 +219,15 @@ const PlaylistScreen: React.FC = () => {
             {/* Right side - Controls */}
             <View style={styles.stickyHeaderControls}>
               <Pressable
-                style={[styles.stickyHeaderPlayButton, { backgroundColor: theme.colors.primary }]}
+                style={[
+                  styles.stickyHeaderPlayButton,
+                  { backgroundColor: theme.colors.primary },
+                  !canPlay && styles.disabledControl,
+                ]}
                 onPress={handlePlayPlaylist}
+                disabled={!canPlay}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !canPlay }}
               >
                 <Ionicons name="play" size={16} color={theme.colors.primaryForeground} />
               </Pressable>
@@ -332,8 +344,15 @@ const PlaylistScreen: React.FC = () => {
             {/* Playback Controls */}
             <View style={styles.controlsContainer}>
               <Pressable
-                style={[styles.playButton, { backgroundColor: theme.colors.primary }]}
+                style={[
+                  styles.playButton,
+                  { backgroundColor: theme.colors.primary },
+                  !canPlay && styles.disabledControl,
+                ]}
                 onPress={handlePlayPlaylist}
+                disabled={!canPlay}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !canPlay }}
               >
                 <View style={styles.playButtonInner}>
                   <Ionicons name="play" size={24} color={theme.colors.primaryForeground} />
@@ -517,6 +536,9 @@ const styles = StyleSheet.create({
         },
       },
     }),
+  },
+  disabledControl: {
+    opacity: 0.5,
   },
   stickyHeaderControlButton: {
     width: 40,

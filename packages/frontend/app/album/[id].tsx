@@ -15,6 +15,7 @@ import { formatDuration, formatTotalDuration } from '@/utils/musicUtils';
 import { useLibrary, useToggleSaveAlbum, useToggleLikeTrack } from '@/hooks/useLibrary';
 import { LinearGradient } from 'expo-linear-gradient';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
+import { toast } from '@/lib/sonner';
 
 /**
  * Album Screen
@@ -61,6 +62,7 @@ const AlbumScreen: React.FC = () => {
 
   const album = data?.album ?? null;
   const tracks = data?.tracks ?? [];
+  const canPlay = tracks.length > 0;
 
 
   const formatReleaseDate = (dateString: string): string => {
@@ -69,13 +71,16 @@ const AlbumScreen: React.FC = () => {
   };
 
   const handlePlayAlbum = () => {
-    if (tracks.length > 0) {
-      playTrackList(tracks, 0, {
-        type: 'album',
-        id,
-        name: album?.title,
-      });
+    if (!canPlay) {
+      toast.info('No playable tracks available');
+      return;
     }
+
+    playTrackList(tracks, 0, {
+      type: 'album',
+      id,
+      name: album?.title,
+    });
   };
 
   const handleTrackPress = (track: Track) => {
@@ -177,8 +182,15 @@ const AlbumScreen: React.FC = () => {
           {/* Playback Controls */}
           <View style={styles.controlsContainer}>
             <Pressable
-              style={[styles.playButton, { backgroundColor: theme.colors.primary }]}
+              style={[
+                styles.playButton,
+                { backgroundColor: theme.colors.primary },
+                !canPlay && styles.disabledControl,
+              ]}
               onPress={handlePlayAlbum}
+              disabled={!canPlay}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !canPlay }}
             >
               <Ionicons name="play" size={28} color={theme.colors.primaryForeground} />
             </Pressable>
@@ -247,7 +259,13 @@ const AlbumScreen: React.FC = () => {
 
         {/* Track List */}
         <View style={styles.trackList}>
-          {tracks.map((track, index) => {
+          {tracks.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>
+                No playable tracks available
+              </Text>
+            </View>
+          ) : tracks.map((track, index) => {
             const isCurrentTrack = currentTrack?.id === track.id;
             const isTrackPlaying = isCurrentTrack && isPlaying;
             const isLiked = isTrackLiked(track.id);
@@ -437,6 +455,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 8,
   },
+  disabledControl: {
+    opacity: 0.5,
+  },
   controlButton: {
     padding: 8,
     borderRadius: 20,
@@ -483,6 +504,13 @@ const styles = StyleSheet.create({
   },
   trackList: {
     paddingHorizontal: 24,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 48,
+  },
+  emptyStateText: {
+    fontSize: 15,
   },
   trackRow: {
     flexDirection: 'row',

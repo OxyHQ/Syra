@@ -18,6 +18,7 @@ import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { Album, Artist, Playlist, SearchCategory, SearchUser, Track } from '@syra/shared-types';
 import { usePlayerStore } from '@/stores/playerStore';
+import { toast } from '@/lib/sonner';
 
 type HeaderSearchItem = {
   key: string;
@@ -158,21 +159,27 @@ export const TopBar: React.FC = () => {
     const { tracks } = await musicService.getAlbumTracks(albumId);
     if (tracks.length > 0) {
       await playTrackList(tracks, 0, { type: 'album', id: albumId, name: albumName });
+      return;
     }
+    toast.info('No playable tracks available');
   };
 
   const playPlaylist = async (playlistId: string, playlistName?: string) => {
     const { tracks } = await musicService.getPlaylistTracks(playlistId);
     if (tracks.length > 0) {
       await playTrackList(tracks, 0, { type: 'playlist', id: playlistId, name: playlistName });
+      return;
     }
+    toast.info('No playable tracks available');
   };
 
   const playArtist = async (artistId: string, artistName?: string) => {
     const { tracks } = await musicService.getArtistTracks(artistId, { limit: 50 });
     if (tracks.length > 0) {
       await playTrackList(tracks, 0, { type: 'artist', id: artistId, name: artistName });
+      return;
     }
+    toast.info('No playable tracks available');
   };
 
   const buildSearchItems = (): HeaderSearchItem[] => {
