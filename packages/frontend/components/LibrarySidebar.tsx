@@ -24,7 +24,7 @@ export const LibrarySidebar: React.FC = () => {
   } = useUIStore();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState<'Playlists' | 'Artists' | 'Albums' | 'Podcasts'>('Playlists');
+  const [activeFilter, setActiveFilter] = useState<'All' | 'Playlists' | 'Artists' | 'Albums' | 'Podcasts'>('All');
   const isFullscreen = fullscreenPanel === 'library';
 
   // Library data from the shared React Query layer. Derived from the
