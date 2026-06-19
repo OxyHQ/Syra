@@ -24,6 +24,7 @@ class FakeAudio {
   currentTime = 0;
   duration = NaN;
   readyState = 0;
+  playError: unknown = null;
 
   ontimeupdate: (() => void) | null = null;
   onplay: (() => void) | null = null;
@@ -36,6 +37,9 @@ class FakeAudio {
   play(): Promise<void> {
     this.paused = false;
     this.onplay?.();
+    if (this.playError) {
+      return Promise.reject(this.playError);
+    }
     return Promise.resolve();
   }
 
@@ -171,6 +175,17 @@ describe('createWebHlsPlayer', () => {
       player.remove();
       player.remove();
     }).not.toThrow();
+  });
+
+  it('handles play promise aborts after remove()', async () => {
+    const { player, audio } = makePlayer();
+    audio.playError = { name: 'AbortError' };
+
+    player.play();
+    player.remove();
+    await Promise.resolve();
+
+    expect(audio.paused).toBe(true);
   });
 
   describe('addListener / status events', () => {

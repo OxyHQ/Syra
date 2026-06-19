@@ -13,6 +13,7 @@
 
 import Hls from 'hls.js';
 import type { PlayerEngine, PlaybackStatusUpdate } from './playerEngine';
+import { createScopedLogger } from '@/utils/logger';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -23,6 +24,17 @@ export interface WebHlsPlayerDeps {
 }
 
 // ── Implementation ────────────────────────────────────────────────────────────
+
+const logger = createScopedLogger('WebHlsPlayer');
+
+function getErrorName(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null || !('name' in error)) {
+    return undefined;
+  }
+
+  const namedError = error as { name?: unknown };
+  return typeof namedError.name === 'string' ? namedError.name : undefined;
+}
 
 class WebHlsPlayerImpl implements PlayerEngine {
   private readonly audio: HTMLAudioElement;
@@ -69,7 +81,14 @@ class WebHlsPlayerImpl implements PlayerEngine {
   // ── PlayerEngine methods ───────────────────────────────────────────────────
 
   play(): void {
-    void this.audio.play();
+    void this.audio.play().catch((error: unknown) => {
+      if (this.destroyed || getErrorName(error) === 'AbortError') {
+        return;
+      }
+
+      logger.warn('HTML audio play request failed', { error });
+      this.emit({ isLoaded: false, playing: false });
+    });
   }
 
   pause(): void {
