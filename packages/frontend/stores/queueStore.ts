@@ -2,6 +2,82 @@ import { create } from 'zustand';
 import { Queue, QueueWithMetadata, Track, RepeatMode, ShuffleMode } from '@syra/shared-types';
 import { queueService } from '../services/queueService';
 
+const RECOVERABLE_CURRENT_INDEX_ERRORS = new Set(['Queue not found', 'Index out of bounds']);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function getStatus(error: unknown): number | null {
+  if (!isRecord(error)) {
+    return null;
+  }
+
+  if (typeof error.status === 'number') {
+    return error.status;
+  }
+
+  if (isRecord(error.response) && typeof error.response.status === 'number') {
+    return error.response.status;
+  }
+
+  return null;
+}
+
+function getPayloadMessage(payload: unknown): string | null {
+  if (!isRecord(payload)) {
+    return null;
+  }
+
+  if (typeof payload.error === 'string') {
+    return payload.error;
+  }
+
+  if (typeof payload.message === 'string') {
+    return payload.message;
+  }
+
+  return null;
+}
+
+function getErrorMessage(error: unknown): string | null {
+  const directMessage = getPayloadMessage(error);
+  if (directMessage) {
+    return directMessage;
+  }
+
+  if (isRecord(error)) {
+    const dataMessage = getPayloadMessage(error.data);
+    if (dataMessage) {
+      return dataMessage;
+    }
+
+    if (isRecord(error.response)) {
+      const responseMessage = getPayloadMessage(error.response);
+      if (responseMessage) {
+        return responseMessage;
+      }
+
+      const responseDataMessage = getPayloadMessage(error.response.data);
+      if (responseDataMessage) {
+        return responseDataMessage;
+      }
+    }
+  }
+
+  return error instanceof Error ? error.message : null;
+}
+
+function isRecoverableCurrentIndexError(error: unknown): boolean {
+  const status = getStatus(error);
+  const message = getErrorMessage(error);
+  return status === 400 && typeof message === 'string' && RECOVERABLE_CURRENT_INDEX_ERRORS.has(message);
+}
+
+function userFacingError(error: unknown, fallback: string): string {
+  return getErrorMessage(error) ?? fallback;
+}
+
 function queueWithInsertedTracks(
   queue: Queue | null,
   tracks: Track[],
@@ -187,7 +263,25 @@ export const useQueueStore = create<QueueState>((set, get) => ({
       const result = await queueService.setCurrentIndex(index);
       set({ queue: result.queue });
     } catch (error) {
+      if (isRecoverableCurrentIndexError(error)) {
+        const currentQueue = get().queue;
+        if (!currentQueue || index < 0 || index >= currentQueue.tracks.length) {
+          return;
+        }
+
+        const repairedQueue = { ...currentQueue, current: index };
+        try {
+          const result = await queueService.replaceQueue(repairedQueue);
+          set({ queue: result.queue, error: null });
+        } catch (repairError) {
+          console.error('[QueueStore] Error repairing queue current index:', repairError);
+          set({ error: userFacingError(repairError, 'Failed to repair queue') });
+        }
+        return;
+      }
+
       console.error('[QueueStore] Error setting current index:', error);
+      set({ error: userFacingError(error, 'Failed to update current track') });
     }
   },
 

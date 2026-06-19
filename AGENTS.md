@@ -21,11 +21,19 @@ Do not restore the retired Syra oxy.so hosts in runtime config, CORS, EAS env, u
 
 ## Oxy Integration
 
-- Current Oxy packages: `@oxyhq/core ^3.4.13`, `@oxyhq/services ^10.2.10`, `@oxyhq/bloom ^0.8.5`.
+- Current Oxy packages: `@oxyhq/core ^3.4.18`, `@oxyhq/services ^10.2.11`, `@oxyhq/bloom ^0.8.5`.
 - Expo web root HTML (`packages/frontend/app/+html.tsx`) injects `getSsoCallbackBootstrapScript()` from `@oxyhq/core`; do not add a per-app `/__oxy/sso-callback` route or copy SSO helper logic locally.
 - Private Syra API calls must wait for Oxy cold boot: gate library, playlists, artist profile, privacy, preferences, and recommendations with `useAuth().canUsePrivateApi` / `isPrivateApiPending`, not app-local token helpers.
-- `packages/frontend/utils/api.ts` owns the linked authenticated Syra API client via `oxyServices.createLinkedClient(...)`; components/hooks should not hand-roll Authorization headers, refresh, or session invalidation.
+- `packages/frontend/utils/api.ts` owns the linked authenticated Syra API client via `oxyServices.createLinkedClient(...)`; components/hooks should not hand-roll Authorization headers, refresh, CSRF probing, or session invalidation. `@oxyhq/core >=3.4.18` keeps a still-valid near-expiry bearer token when preflight refresh cannot refresh yet, so linked Syra writes must not fall back to a local `/csrf-token` route while the bearer is usable.
 - Backend auth middleware comes from `@oxyhq/core/server` (`createOxyAuthMiddleware`, `createOptionalOxyAuth`, `createOxyRateLimit`, `requireOxyAuth`, `getRequiredOxyUserId`, `authSocket`). Do not define local `AuthRequest`, `requireAuth`, `getUserId`, bearer parsers, or token-decoding middleware. Bearer-authenticated writes do not fetch app-local CSRF tokens; CSRF remains for ambient cookie credentials.
+
+## Frontend Data And State
+
+- Use TanStack Query for server state: catalog reads, library, playlists, artist profile, preferences, recommendations, privacy, and any data that must refetch or invalidate across screens.
+- Use Zod at API boundaries where runtime backend data can drift from TypeScript types. Parse once in the service layer, return typed data to hooks/components, and fail loudly through the existing error path.
+- Use Zustand only for local app state that is not the backend source of truth: player state, queue UI state, session-independent UI preferences, and transient interaction state. Do not mirror liked tracks, playlists, or profile data in Zustand when TanStack Query already owns that remote state.
+- Mutations must invalidate or update the relevant TanStack Query keys immediately. A like/unlike must update the visible button, library lists, album/track screens, and player state without requiring reload.
+- Queue/playback Zustand state may optimistically update, but it must persist through `queueService` and repair backend drift by replacing the queue instead of hiding 400 errors with local-only state.
 
 ## Audius Catalog And Playback
 

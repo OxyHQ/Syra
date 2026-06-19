@@ -37,12 +37,21 @@ This package contains the complete React Native application that runs on Android
 - [Expo](https://expo.dev/) & React Native
 - TypeScript
 - NativeWind (Tailwind CSS for React Native)
-- Zustand (state management)
+- TanStack Query (server state and cross-screen invalidation)
+- Zod (runtime validation at API/service boundaries)
+- Zustand (local playback, queue, and UI state)
 - i18next (internationalization)
 - Expo Router (file-based routing)
 - Expo Audio (audio playback)
 - Custom SVG icons
 - Expo Notifications, Secure Store
+
+## Data And State Contract
+
+- Server state belongs in TanStack Query. Library, playlists, catalog, profile, recommendations, preferences, and privacy data should be fetched through hooks backed by query keys and invalidated after mutations.
+- Runtime backend responses that can drift from TypeScript expectations should be parsed in the service layer with Zod before reaching UI code.
+- Zustand is for local interaction state only: player, queue, temporary UI state, and session-independent preferences. Do not duplicate liked tracks, saved albums, playlists, or profile records in Zustand.
+- Authenticated Syra API calls go through the linked Oxy client in `utils/api.ts`; do not add per-component token refresh, Authorization headers, or CSRF token fetches.
 
 ## Project Structure
 ```

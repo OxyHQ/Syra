@@ -87,6 +87,68 @@ describe('queueStore', () => {
     expect(mockedQueueService.setCurrentIndex).not.toHaveBeenCalled();
   });
 
+  it.each(['Queue not found', 'Index out of bounds'] as const)(
+    'repairs recoverable backend current-index drift: %s',
+    async (message) => {
+      const firstTrack = track('6a34c2c5d1646e517424358f');
+      const secondTrack = track('6a34c2c5d1646e5174243592');
+      const initialQueue: Queue = {
+        current: 0,
+        tracks: [firstTrack, secondTrack],
+      };
+      const repairedQueue: Queue = {
+        ...initialQueue,
+        current: 1,
+      };
+      resetQueueStore(initialQueue);
+      mockedQueueService.setCurrentIndex.mockRejectedValueOnce({
+        response: {
+          status: 400,
+          data: { error: message },
+        },
+      });
+      mockedQueueService.replaceQueue.mockResolvedValueOnce({ queue: repairedQueue });
+      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+      try {
+        await useQueueStore.getState().setCurrentIndex(1);
+
+        expect(mockedQueueService.setCurrentIndex).toHaveBeenCalledWith(1);
+        expect(mockedQueueService.replaceQueue).toHaveBeenCalledWith(repairedQueue);
+        expect(useQueueStore.getState().queue).toEqual(repairedQueue);
+        expect(useQueueStore.getState().error).toBeNull();
+        expect(consoleError).not.toHaveBeenCalled();
+      } finally {
+        consoleError.mockRestore();
+      }
+    },
+  );
+
+  it('keeps real current-index failures visible', async () => {
+    const firstTrack = track('6a34c2c5d1646e517424358f');
+    const secondTrack = track('6a34c2c5d1646e5174243592');
+    const initialQueue: Queue = {
+      current: 0,
+      tracks: [firstTrack, secondTrack],
+    };
+    const error = new Error('Network unavailable');
+    resetQueueStore(initialQueue);
+    mockedQueueService.setCurrentIndex.mockRejectedValueOnce(error);
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    try {
+      await useQueueStore.getState().setCurrentIndex(1);
+
+      expect(mockedQueueService.setCurrentIndex).toHaveBeenCalledWith(1);
+      expect(mockedQueueService.replaceQueue).not.toHaveBeenCalled();
+      expect(useQueueStore.getState().queue).toEqual({ ...initialQueue, current: 1 });
+      expect(useQueueStore.getState().error).toBe('Network unavailable');
+      expect(consoleError).toHaveBeenCalledWith('[QueueStore] Error setting current index:', error);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
   it('optimistically inserts tracks and persists the queue append', async () => {
     const firstTrack = track('6a34c2c5d1646e517424358f');
     const secondTrack = track('6a34c2c5d1646e5174243592');

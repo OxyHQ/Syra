@@ -13,7 +13,7 @@
 import { create } from 'zustand';
 import { createAudioPlayer } from 'expo-audio';
 import { Platform } from 'react-native';
-import { Track, PlaybackContext, RepeatMode } from '@syra/shared-types';
+import { Queue, Track, PlaybackContext, RepeatMode } from '@syra/shared-types';
 import { createScopedLogger } from '@/utils/logger';
 import { useQueueStore } from './queueStore';
 import {
@@ -296,14 +296,18 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       }
     }
 
-    queueStore.syncQueue({
+    await queueStore.replaceQueue({
       current: 0,
       tracks: [track],
       context: get().context ?? undefined,
     });
   };
 
-  const seedLocalQueue = (tracks: Track[], startIndex: number, context?: PlaybackContext) => {
+  const seedLocalQueue = async (
+    tracks: Track[],
+    startIndex: number,
+    context?: PlaybackContext,
+  ): Promise<Queue | null> => {
     const playableTracks = tracks.filter((track) => track?.id);
     if (playableTracks.length === 0) {
       return null;
@@ -316,7 +320,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       context,
     };
 
-    void useQueueStore.getState().replaceQueue(queue);
+    await useQueueStore.getState().replaceQueue(queue);
     return queue;
   };
 
@@ -656,7 +660,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
      * this instead of playing an isolated track.
      */
     playTrackList: async (tracks: Track[], startIndex: number = 0, context?: PlaybackContext) => {
-      const queue = seedLocalQueue(tracks, startIndex, context);
+      const queue = await seedLocalQueue(tracks, startIndex, context);
       if (!queue) {
         return;
       }

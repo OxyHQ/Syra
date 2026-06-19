@@ -33,6 +33,14 @@ Syra treats Audius as a catalog/source integration, not as a blanket direct-stre
 - Frontend catalog queries wait for Oxy cold boot to settle and keep separate `guest` and `auth` cache keys, so anonymous startup data cannot leak into a signed-in session.
 - Playback resolves HLS and direct-only Audius URLs through the backend `/stream/:trackId` resolver; frontend preference state is not the source of truth for stream permission.
 
+## Frontend Data And State
+
+- Oxy session and authenticated HTTP are centralized through `@oxyhq/services` and `@oxyhq/core`; Syra code uses the linked client in `packages/frontend/utils/api.ts` instead of per-screen auth headers, refresh logic, or CSRF workarounds.
+- TanStack Query owns server state such as catalog data, library, playlists, recommendations, privacy, and profile data.
+- Zod validates backend responses at service boundaries where runtime data shape matters.
+- Zustand is reserved for local interactive state such as playback, queue, and UI preferences. Remote state must not be duplicated in app-local stores.
+- Mutations update or invalidate the matching TanStack Query data so likes, saved tracks, playlists, and library panels react immediately across the app.
+
 ## Project Structure
 
 This is a **monorepo** using bun workspaces with the following structure:

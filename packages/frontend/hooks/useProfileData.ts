@@ -1,8 +1,11 @@
 import { useEffect, useMemo } from 'react';
 import { useOxy } from '@oxyhq/services';
 import { useUsersStore, useUserByUsername, type UserEntity } from '@/stores/usersStore';
-import { useAppearanceStore } from '@/store/appearanceStore';
+import { useAppearanceStore, type UserAppearance } from '@/store/appearanceStore';
 import { usePrivacySettings } from './usePrivacySettings';
+import { createScopedLogger } from '@/utils/logger';
+
+const logger = createScopedLogger('useProfileData');
 
 export interface ProfileDesign {
   displayName: string;
@@ -13,35 +16,28 @@ export interface ProfileDesign {
   primaryColor?: string;
 }
 
-export interface ProfileData {
+export interface ProfileData extends Omit<UserEntity, 'avatar'> {
   id: string;
   username: string;
-  bio?: string;
-  verified?: boolean;
   avatar?: string;
   postsCount?: number;
+  stats?: {
+    followers?: number;
+    following?: number;
+  };
   design: ProfileDesign;
   privacy?: {
     profileVisibility?: 'public' | 'private' | 'followers_only';
   };
-  [key: string]: any;
 }
 
 /**
  * Computes profile design values from Oxy profile + backend customization settings
  */
 function computeDesign(
-  oxyProfile: any,
-  appearance: any
+  oxyProfile: UserEntity,
+  appearance?: UserAppearance
 ): ProfileDesign {
-  if (!oxyProfile) {
-    return {
-      displayName: '',
-      coverPhotoEnabled: true,
-      minimalistMode: false,
-    };
-  }
-
   const customization = appearance?.profileCustomization;
   const nameValue = typeof oxyProfile?.name === 'string' 
     ? oxyProfile.name 
@@ -103,6 +99,7 @@ export function useProfileData(username?: string): {
             if (!profile) return profile;
             return {
               ...profile,
+              avatar: profile.avatar ?? undefined,
               privacySettings: profile.privacySettings as Record<string, unknown> | undefined,
             } satisfies UserEntity;
           }
@@ -112,8 +109,8 @@ export function useProfileData(username?: string): {
           // Load appearance settings for this user
           await loadForUser(data.id, true);
         }
-      } catch (err) {
-        console.debug('Profile fetch error:', err);
+      } catch (error) {
+        logger.debug('Profile fetch error', { error });
       }
     };
 

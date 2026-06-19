@@ -9,7 +9,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { useOxy } from '@oxyhq/services';
@@ -25,7 +25,7 @@ interface LibraryEntry {
   kind: LibraryEntryKind;
   title: string;
   subtitle: string;
-  href: string;
+  href: Href;
   imageUrl?: string;
   imageShape: 'square' | 'circle';
 }
@@ -116,7 +116,7 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
       kind: 'playlist',
       title: playlist.name,
       subtitle: `${playlist.visibility === 'public' ? 'Public playlist' : 'Private playlist'} • ${playlist.trackCount || 0} ${playlist.trackCount === 1 ? 'song' : 'songs'}`,
-      href: `/playlist/${playlist.id}`,
+      href: { pathname: '/playlist/[id]', params: { id: playlist.id } },
       imageUrl: pickCatalogImageUrl(undefined, playlist.coverArt, 'thumbnail', playlist.coverArtSizes),
       imageShape: 'square',
     }));
@@ -126,7 +126,7 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
       kind: 'artist',
       title: artist.name,
       subtitle: 'Artist',
-      href: `/artist/${artist.id}`,
+      href: { pathname: '/artist/[id]', params: { id: artist.id } },
       imageUrl: pickCatalogImageUrl(artist.images, artist.image, 'thumbnail', artist.imageSizes),
       imageShape: 'circle',
     }));
@@ -136,7 +136,7 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
       kind: 'album',
       title: album.title,
       subtitle: `${album.artistName}${album.releaseDate ? ` • ${new Date(album.releaseDate).getFullYear()}` : ''}`,
-      href: `/album/${album.id}`,
+      href: { pathname: '/album/[id]', params: { id: album.id } },
       imageUrl: pickCatalogImageUrl(undefined, album.coverArt, 'thumbnail', album.coverArtSizes),
       imageShape: 'square',
     }));
