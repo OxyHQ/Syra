@@ -1,10 +1,9 @@
 import React, { useCallback } from 'react';
-import { View, Text, ScrollView, Alert, StyleSheet } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMutation } from '@tanstack/react-query';
-import { useOxy } from '@oxyhq/services';
 import { getAccountDisplayName } from '@oxyhq/core';
-import { useRouter } from 'expo-router';
+import { useOxy } from '@oxyhq/services';
 import {
   SettingsListGroup,
   SettingsListItem,
@@ -17,12 +16,13 @@ import {
   type AppColorName,
 } from '@oxyhq/bloom/theme';
 import Constants from 'expo-constants';
+import { useRouter } from 'expo-router';
 import SEO from '@/components/SEO';
 import Avatar from '@/components/Avatar';
 import { ThemedView } from '@/components/ThemedView';
-import { RowIcon } from '@/components/settings/RowIcon';
-import { ColorSwatchPicker } from '@/components/settings/ColorSwatchPicker';
 import { Slider } from '@/components/Slider';
+import { ColorSwatchPicker } from '@/components/settings/ColorSwatchPicker';
+import { RowIcon } from '@/components/settings/RowIcon';
 import { useMusicPreferences } from '@/hooks/useMusicPreferences';
 import {
   useCurrentUserPrivacySettings,
@@ -30,15 +30,17 @@ import {
   type PrivacySettings,
 } from '@/hooks/usePrivacySettings';
 import { useAppearanceStore } from '@/store/appearanceStore';
+import { STORAGE_KEYS } from '@/lib/constants';
+import i18n from '@/lib/i18n';
 import { authenticatedClient } from '@/utils/api';
 import { confirmDialog } from '@/utils/alerts';
-import i18n from '@/lib/i18n';
-import { STORAGE_KEYS } from '@/lib/constants';
-import { Storage } from '@/utils/storage';
 import { createScopedLogger } from '@/utils/logger';
+import { Storage } from '@/utils/storage';
 
 type AudioQuality = 'low' | 'normal' | 'high' | 'very_high';
 type ProfileVisibility = 'public' | 'private' | 'followers_only';
+
+type RowIconName = React.ComponentProps<typeof RowIcon>['name'];
 
 const logger = createScopedLogger('SettingsScreen');
 
@@ -48,49 +50,52 @@ const LANGUAGE_OPTIONS: readonly { label: string; value: string }[] = [
   { label: 'Italiano', value: 'it-IT' },
 ];
 
-interface SettingsControlSectionProps {
-  /** Optional leading icon name; when present the heading renders as a row. */
-  icon?: React.ComponentProps<typeof RowIcon>['name'];
+interface SettingsControlBlockProps {
+  icon: RowIconName;
   title: string;
-  /** Optional sub-heading caption. */
-  caption?: string;
+  description?: string;
   children: React.ReactNode;
 }
 
-/**
- * Padded section wrapping a heading (plain or icon + label) and an optional
- * caption above a control (e.g. a `SegmentedControl`). Icon sections use the
- * slightly larger `gap-3`; plain/captioned sections use `gap-2`.
- */
-const SettingsControlSection: React.FC<SettingsControlSectionProps> = ({
+const SettingsControlBlock: React.FC<SettingsControlBlockProps> = ({
   icon,
   title,
-  caption,
+  description,
   children,
 }) => (
-  <View className={icon ? 'px-5 py-3 gap-3' : 'px-5 py-3 gap-2'}>
-    {icon ? (
-      <View className="flex-row items-center gap-3">
-        <RowIcon name={icon} />
-        <Text className="text-[16px] text-foreground">{title}</Text>
+  <View style={styles.controlBlock}>
+    <View style={styles.controlHeader}>
+      <RowIcon name={icon} />
+      <View style={styles.controlText}>
+        <Text className="text-[15px] font-medium text-foreground" numberOfLines={1}>
+          {title}
+        </Text>
+        {description ? (
+          <Text className="text-[13px] leading-[17px] text-muted-foreground" numberOfLines={2}>
+            {description}
+          </Text>
+        ) : null}
       </View>
-    ) : (
-      <Text className="text-[16px] text-foreground">{title}</Text>
-    )}
-    {caption ? <Text className="text-xs text-muted-foreground">{caption}</Text> : null}
-    {children}
+    </View>
+    <View style={styles.controlContent}>{children}</View>
   </View>
 );
 
-/**
- * Syra Settings Screen — grouped Bloom sections mirroring the Mention app.
- * Account, playback, audio quality, privacy, appearance, language, storage,
- * about and sign-out, rendered with Bloom's settings-list primitives.
- */
 const SettingsScreen: React.FC = () => {
   const router = useRouter();
-  const { user, isAuthenticated, isPrivateApiPending, canUsePrivateApi, logout, oxyServices, showBottomSheet } = useOxy();
-  const { preferences: musicPreferences, updatePreferences: updateMusicPreferences } = useMusicPreferences();
+  const {
+    user,
+    isAuthenticated,
+    isPrivateApiPending,
+    canUsePrivateApi,
+    logout,
+    oxyServices,
+    showBottomSheet,
+  } = useOxy();
+  const {
+    preferences: musicPreferences,
+    updatePreferences: updateMusicPreferences,
+  } = useMusicPreferences();
   const privacySettings = useCurrentUserPrivacySettings();
   const updatePrivacySettingsCache = useUpdatePrivacySettingsCache();
   const appearanceSettings = useAppearanceStore((state) => state.mySettings);
@@ -100,6 +105,7 @@ const SettingsScreen: React.FC = () => {
   const avatarUri = user?.avatar ? oxyServices.getFileDownloadUrl(user.avatar, 'thumb') : undefined;
   const appVersion = Constants.expoConfig?.version ?? '2.0.0';
   const userName = getAccountDisplayName(user);
+  const usernameLabel = user?.username ? `@${user.username}` : 'Signed in to Syra';
 
   const themeMode: 'system' | 'light' | 'dark' =
     bloomMode === 'light' || bloomMode === 'dark' ? bloomMode : 'system';
@@ -121,6 +127,15 @@ const SettingsScreen: React.FC = () => {
     return false;
   }, [canUsePrivateApi, showBottomSheet]);
 
+  const handleViewProfile = useCallback(() => {
+    if (!user?.username) return;
+    router.push(`/u/${user.username}`);
+  }, [router, user?.username]);
+
+  const handleManageAccount = useCallback(() => {
+    showBottomSheet?.('ManageAccount');
+  }, [showBottomSheet]);
+
   const handleMusicPreferenceUpdate = useCallback((updates: Parameters<typeof updateMusicPreferences>[0]) => {
     if (!requirePrivateSession()) return;
     void updateMusicPreferences(updates);
@@ -135,7 +150,7 @@ const SettingsScreen: React.FC = () => {
         primaryColor: appearanceSettings?.appearance?.primaryColor,
       },
     });
-  }, [requirePrivateSession, setMode, updateAppearanceSettings, appearanceSettings?.appearance?.primaryColor]);
+  }, [appearanceSettings?.appearance?.primaryColor, requirePrivateSession, setMode, updateAppearanceSettings]);
 
   const handleColorChange = useCallback((name: AppColorName) => {
     if (!requirePrivateSession()) return;
@@ -146,7 +161,7 @@ const SettingsScreen: React.FC = () => {
         primaryColor: APP_COLOR_PRESETS[name].hex,
       },
     });
-  }, [requirePrivateSession, setColorPreset, updateAppearanceSettings, appearanceSettings?.appearance?.themeMode]);
+  }, [appearanceSettings?.appearance?.themeMode, requirePrivateSession, setColorPreset, updateAppearanceSettings]);
 
   const updatePrivacySettingsMutation = useMutation({
     mutationFn: async (updates: Partial<PrivacySettings>) => {
@@ -247,325 +262,341 @@ const SettingsScreen: React.FC = () => {
         <ScrollView
           className="flex-1"
           contentContainerStyle={styles.scrollContent}
+          contentInsetAdjustmentBehavior="automatic"
+          keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.contentColumn}>
             <View style={styles.pageHeader}>
-              <Text className="text-3xl font-bold text-foreground">Settings</Text>
-              <Text className="text-sm text-muted-foreground">
-                Account, playback, privacy, appearance and app preferences
+              <Text className="text-3xl font-bold text-foreground" numberOfLines={1}>
+                Settings
               </Text>
             </View>
 
-          {/* Account header */}
-          <View style={styles.accountHeader}>
-            <Avatar source={avatarUri ? { uri: avatarUri } : undefined} size={80} />
-            <Text className="text-2xl font-bold text-foreground mt-2" numberOfLines={1}>
-              {userName}
-            </Text>
-            <Text className="text-base text-muted-foreground" numberOfLines={1}>
-              @{user?.username ?? 'username'}
-            </Text>
-          </View>
+            <View style={styles.accountHeader}>
+              <Avatar source={avatarUri ? { uri: avatarUri } : undefined} size={80} />
+              <Text className="text-2xl font-bold text-foreground mt-2 text-center" numberOfLines={1}>
+                {userName}
+              </Text>
+              <Text className="text-base text-muted-foreground text-center" numberOfLines={1}>
+                {usernameLabel}
+              </Text>
+            </View>
 
-          <SettingsListGroup>
-            <SettingsListItem
-              icon={<RowIcon name="person-outline" />}
-              title="View profile"
-              description="See your public profile"
-              onPress={() => {
-                if (user?.username) {
-                  router.push(`/u/${user.username}`);
-                }
-              }}
-            />
-          </SettingsListGroup>
-
-          {/* Playback */}
-          <SettingsListGroup title="Playback">
-            <SettingsListItem
-              icon={<RowIcon name="play-circle-outline" />}
-              title="Autoplay"
-              description="Automatically play similar songs when your music ends"
-              showChevron={false}
-              rightElement={
-                <Switch
-                  value={musicPreferences?.autoplay ?? true}
-                  onValueChange={(value) => handleMusicPreferenceUpdate({ autoplay: value })}
-                />
-              }
-            />
-            <SettingsListItem
-              icon={<RowIcon name="albums-outline" />}
-              title="Gapless playback"
-              description="Play songs without gaps between tracks"
-              showChevron={false}
-              rightElement={
-                <Switch
-                  value={musicPreferences?.gaplessPlayback ?? true}
-                  onValueChange={(value) => handleMusicPreferenceUpdate({ gaplessPlayback: value })}
-                />
-              }
-            />
-            <SettingsListItem
-              icon={<RowIcon name="volume-medium-outline" />}
-              title="Normalize volume"
-              description="Set the same volume level for all tracks"
-              showChevron={false}
-              rightElement={
-                <Switch
-                  value={musicPreferences?.normalizeVolume ?? true}
-                  onValueChange={(value) => handleMusicPreferenceUpdate({ normalizeVolume: value })}
-                />
-              }
-            />
-            <SettingsListItem
-              icon={<RowIcon name="alert-circle-outline" />}
-              title="Explicit content"
-              description="Allow playback of explicit content"
-              showChevron={false}
-              rightElement={
-                <Switch
-                  value={musicPreferences?.explicitContent ?? true}
-                  onValueChange={(value) => handleMusicPreferenceUpdate({ explicitContent: value })}
-                />
-              }
-            />
-            <View style={styles.groupControl}>
-              <Slider
-                value={musicPreferences?.crossfade ?? 0}
-                onValueChange={(value) => handleMusicPreferenceUpdate({ crossfade: value })}
-                minimumValue={0}
-                maximumValue={12}
-                step={1}
-                label="Crossfade"
-                formatValue={(value) => (value === 0 ? 'Off' : `${value}s`)}
+            <SettingsListGroup title="Account & profile">
+              <SettingsListItem
+                icon={<RowIcon name="person-outline" />}
+                title="View profile"
+                description="Open your public Syra profile"
+                onPress={handleViewProfile}
+                disabled={!user?.username}
               />
-              <Text className="text-xs mt-1 text-muted-foreground">
-                Overlap songs when switching tracks
-              </Text>
-            </View>
-          </SettingsListGroup>
+              <SettingsListItem
+                icon={<RowIcon name="person-circle-outline" />}
+                title="Manage account"
+                description="Oxy account, identity and security"
+                onPress={handleManageAccount}
+              />
+            </SettingsListGroup>
 
-          {/* Audio quality */}
-          <SettingsListGroup title="Audio quality">
-            <SettingsControlSection title="Streaming quality" caption="Higher quality uses more data">
-              <SegmentedControl.Root<AudioQuality>
-                label="Streaming quality"
-                type="radio"
-                value={musicPreferences?.audioQuality ?? 'normal'}
-                onChange={(value) => handleMusicPreferenceUpdate({ audioQuality: value })}
+            <SettingsListGroup title="Preferences">
+              <SettingsControlBlock
+                icon="phone-portrait-outline"
+                title="Color mode"
+                description="Choose how Syra follows your device theme"
               >
-                <SegmentedControl.Item value="low">
-                  <SegmentedControl.ItemText>Low</SegmentedControl.ItemText>
-                </SegmentedControl.Item>
-                <SegmentedControl.Item value="normal">
-                  <SegmentedControl.ItemText>Normal</SegmentedControl.ItemText>
-                </SegmentedControl.Item>
-                <SegmentedControl.Item value="high">
-                  <SegmentedControl.ItemText>High</SegmentedControl.ItemText>
-                </SegmentedControl.Item>
-                <SegmentedControl.Item value="very_high">
-                  <SegmentedControl.ItemText>Very high</SegmentedControl.ItemText>
-                </SegmentedControl.Item>
-              </SegmentedControl.Root>
-            </SettingsControlSection>
-
-            <SettingsControlSection title="Download quality" caption="Quality for downloaded music">
-              <SegmentedControl.Root<AudioQuality>
-                label="Download quality"
-                type="radio"
-                value={musicPreferences?.downloadQuality ?? 'normal'}
-                onChange={(value) => handleMusicPreferenceUpdate({ downloadQuality: value })}
-              >
-                <SegmentedControl.Item value="low">
-                  <SegmentedControl.ItemText>Low</SegmentedControl.ItemText>
-                </SegmentedControl.Item>
-                <SegmentedControl.Item value="normal">
-                  <SegmentedControl.ItemText>Normal</SegmentedControl.ItemText>
-                </SegmentedControl.Item>
-                <SegmentedControl.Item value="high">
-                  <SegmentedControl.ItemText>High</SegmentedControl.ItemText>
-                </SegmentedControl.Item>
-                <SegmentedControl.Item value="very_high">
-                  <SegmentedControl.ItemText>Very high</SegmentedControl.ItemText>
-                </SegmentedControl.Item>
-              </SegmentedControl.Root>
-            </SettingsControlSection>
-
-            <SettingsListItem
-              icon={<RowIcon name="wifi-outline" />}
-              title="Data saver"
-              description="Use less data while streaming music"
-              showChevron={false}
-              rightElement={
-                <Switch
-                  value={musicPreferences?.dataSaver ?? false}
-                  onValueChange={(value) => handleMusicPreferenceUpdate({ dataSaver: value })}
-                />
-              }
-            />
-            <SettingsListItem
-              icon={<RowIcon name="radio-outline" />}
-              title="Direct Audius streaming"
-              description="Play Audius streams directly when Syra-hosted audio is unavailable"
-              showChevron={false}
-              rightElement={
-                <Switch
-                  value={musicPreferences?.directAudiusStreaming ?? false}
-                  onValueChange={(value) => handleMusicPreferenceUpdate({ directAudiusStreaming: value })}
-                />
-              }
-            />
-          </SettingsListGroup>
-
-          {/* Privacy */}
-          {privacySettings && (
-            <SettingsListGroup title="Privacy">
-              <SettingsControlSection
-                title="Profile visibility"
-                caption="Who can see your profile"
-              >
-                <SegmentedControl.Root<ProfileVisibility>
-                  label="Profile visibility"
+                <SegmentedControl.Root<'system' | 'light' | 'dark'>
+                  label="Color mode"
                   type="radio"
-                  value={privacySettings.profileVisibility ?? 'public'}
-                  onChange={(value) => handlePrivacyUpdate({ profileVisibility: value })}
+                  size="small"
+                  value={themeMode}
+                  onChange={handleThemeModeChange}
                 >
-                  <SegmentedControl.Item value="public">
-                    <SegmentedControl.ItemText>Public</SegmentedControl.ItemText>
+                  <SegmentedControl.Item value="system">
+                    <SegmentedControl.ItemText numberOfLines={1}>System</SegmentedControl.ItemText>
                   </SegmentedControl.Item>
-                  <SegmentedControl.Item value="followers_only">
-                    <SegmentedControl.ItemText>Followers</SegmentedControl.ItemText>
+                  <SegmentedControl.Item value="light">
+                    <SegmentedControl.ItemText numberOfLines={1}>Light</SegmentedControl.ItemText>
                   </SegmentedControl.Item>
-                  <SegmentedControl.Item value="private">
-                    <SegmentedControl.ItemText>Private</SegmentedControl.ItemText>
+                  <SegmentedControl.Item value="dark">
+                    <SegmentedControl.ItemText numberOfLines={1}>Dark</SegmentedControl.ItemText>
                   </SegmentedControl.Item>
                 </SegmentedControl.Root>
-              </SettingsControlSection>
+              </SettingsControlBlock>
 
+              <SettingsControlBlock
+                icon="color-palette-outline"
+                title="Accent color"
+                description="Applies to controls and highlighted surfaces"
+              >
+                <ColorSwatchPicker value={colorPreset} onChange={handleColorChange} />
+              </SettingsControlBlock>
+
+              <SettingsControlBlock
+                icon="language-outline"
+                title="Language"
+                description="App display language"
+              >
+                <SegmentedControl.Root<string>
+                  label="Language"
+                  type="radio"
+                  size="small"
+                  value={i18n.language || 'en-US'}
+                  onChange={handleLanguageChange}
+                >
+                  {LANGUAGE_OPTIONS.map((option) => (
+                    <SegmentedControl.Item key={option.value} value={option.value}>
+                      <SegmentedControl.ItemText numberOfLines={1}>
+                        {option.label}
+                      </SegmentedControl.ItemText>
+                    </SegmentedControl.Item>
+                  ))}
+                </SegmentedControl.Root>
+              </SettingsControlBlock>
+            </SettingsListGroup>
+
+            <SettingsListGroup title="Playback">
               <SettingsListItem
-                icon={<RowIcon name="card-outline" />}
-                title="Show contact info"
-                description="Display your contact information on your profile"
+                icon={<RowIcon name="play-circle-outline" />}
+                title="Autoplay"
+                description="Automatically play similar songs when your music ends"
                 showChevron={false}
                 rightElement={
                   <Switch
-                    value={privacySettings.showContactInfo ?? true}
-                    onValueChange={(value) => handlePrivacyUpdate({ showContactInfo: value })}
+                    value={musicPreferences?.autoplay ?? true}
+                    onValueChange={(value) => handleMusicPreferenceUpdate({ autoplay: value })}
                   />
                 }
               />
               <SettingsListItem
-                icon={<RowIcon name="ellipse-outline" />}
-                title="Show online status"
-                description="Let others see when you're online"
+                icon={<RowIcon name="albums-outline" />}
+                title="Gapless playback"
+                description="Play songs without gaps between tracks"
                 showChevron={false}
                 rightElement={
                   <Switch
-                    value={privacySettings.showOnlineStatus ?? true}
-                    onValueChange={(value) => handlePrivacyUpdate({ showOnlineStatus: value })}
+                    value={musicPreferences?.gaplessPlayback ?? true}
+                    onValueChange={(value) => handleMusicPreferenceUpdate({ gaplessPlayback: value })}
+                  />
+                }
+              />
+              <SettingsListItem
+                icon={<RowIcon name="volume-medium-outline" />}
+                title="Normalize volume"
+                description="Set the same volume level for all tracks"
+                showChevron={false}
+                rightElement={
+                  <Switch
+                    value={musicPreferences?.normalizeVolume ?? true}
+                    onValueChange={(value) => handleMusicPreferenceUpdate({ normalizeVolume: value })}
+                  />
+                }
+              />
+              <SettingsListItem
+                icon={<RowIcon name="alert-circle-outline" />}
+                title="Explicit content"
+                description="Allow playback of explicit content"
+                showChevron={false}
+                rightElement={
+                  <Switch
+                    value={musicPreferences?.explicitContent ?? true}
+                    onValueChange={(value) => handleMusicPreferenceUpdate({ explicitContent: value })}
+                  />
+                }
+              />
+              <SettingsControlBlock
+                icon="options-outline"
+                title="Crossfade"
+                description="Overlap songs when switching tracks"
+              >
+                <Slider
+                  value={musicPreferences?.crossfade ?? 0}
+                  onValueChange={(value) => handleMusicPreferenceUpdate({ crossfade: value })}
+                  minimumValue={0}
+                  maximumValue={12}
+                  step={1}
+                  formatValue={(value) => (value === 0 ? 'Off' : `${value}s`)}
+                />
+              </SettingsControlBlock>
+            </SettingsListGroup>
+
+            <SettingsListGroup title="Audio quality & data">
+              <SettingsControlBlock
+                icon="wifi-outline"
+                title="Streaming quality"
+                description="Higher quality uses more data"
+              >
+                <SegmentedControl.Root<AudioQuality>
+                  label="Streaming quality"
+                  type="radio"
+                  size="small"
+                  value={musicPreferences?.audioQuality ?? 'normal'}
+                  onChange={(value) => handleMusicPreferenceUpdate({ audioQuality: value })}
+                >
+                  <SegmentedControl.Item value="low">
+                    <SegmentedControl.ItemText numberOfLines={1}>Low</SegmentedControl.ItemText>
+                  </SegmentedControl.Item>
+                  <SegmentedControl.Item value="normal">
+                    <SegmentedControl.ItemText numberOfLines={1}>Normal</SegmentedControl.ItemText>
+                  </SegmentedControl.Item>
+                  <SegmentedControl.Item value="high">
+                    <SegmentedControl.ItemText numberOfLines={1}>High</SegmentedControl.ItemText>
+                  </SegmentedControl.Item>
+                  <SegmentedControl.Item value="very_high">
+                    <SegmentedControl.ItemText numberOfLines={1}>Very high</SegmentedControl.ItemText>
+                  </SegmentedControl.Item>
+                </SegmentedControl.Root>
+              </SettingsControlBlock>
+
+              <SettingsControlBlock
+                icon="cloud-download-outline"
+                title="Download quality"
+                description="Quality for downloaded music"
+              >
+                <SegmentedControl.Root<AudioQuality>
+                  label="Download quality"
+                  type="radio"
+                  size="small"
+                  value={musicPreferences?.downloadQuality ?? 'normal'}
+                  onChange={(value) => handleMusicPreferenceUpdate({ downloadQuality: value })}
+                >
+                  <SegmentedControl.Item value="low">
+                    <SegmentedControl.ItemText numberOfLines={1}>Low</SegmentedControl.ItemText>
+                  </SegmentedControl.Item>
+                  <SegmentedControl.Item value="normal">
+                    <SegmentedControl.ItemText numberOfLines={1}>Normal</SegmentedControl.ItemText>
+                  </SegmentedControl.Item>
+                  <SegmentedControl.Item value="high">
+                    <SegmentedControl.ItemText numberOfLines={1}>High</SegmentedControl.ItemText>
+                  </SegmentedControl.Item>
+                  <SegmentedControl.Item value="very_high">
+                    <SegmentedControl.ItemText numberOfLines={1}>Very high</SegmentedControl.ItemText>
+                  </SegmentedControl.Item>
+                </SegmentedControl.Root>
+              </SettingsControlBlock>
+
+              <SettingsListItem
+                icon={<RowIcon name="radio-outline" />}
+                title="Data saver"
+                description="Use less data while streaming music"
+                showChevron={false}
+                rightElement={
+                  <Switch
+                    value={musicPreferences?.dataSaver ?? false}
+                    onValueChange={(value) => handleMusicPreferenceUpdate({ dataSaver: value })}
+                  />
+                }
+              />
+              <SettingsListItem
+                icon={<RowIcon name="musical-notes-outline" />}
+                title="Direct Audius streaming"
+                description="Play provider streams only when Syra-hosted audio is unavailable"
+                showChevron={false}
+                rightElement={
+                  <Switch
+                    value={musicPreferences?.directAudiusStreaming ?? false}
+                    onValueChange={(value) => handleMusicPreferenceUpdate({ directAudiusStreaming: value })}
                   />
                 }
               />
             </SettingsListGroup>
-          )}
 
-          {/* Appearance */}
-          <SettingsListGroup title="Appearance">
-            <SettingsControlSection icon="phone-portrait-outline" title="Color mode">
-              <SegmentedControl.Root<'system' | 'light' | 'dark'>
-                label="Color mode"
-                type="radio"
-                value={themeMode}
-                onChange={handleThemeModeChange}
-              >
-                <SegmentedControl.Item value="system">
-                  <SegmentedControl.ItemText>System</SegmentedControl.ItemText>
-                </SegmentedControl.Item>
-                <SegmentedControl.Item value="light">
-                  <SegmentedControl.ItemText>Light</SegmentedControl.ItemText>
-                </SegmentedControl.Item>
-                <SegmentedControl.Item value="dark">
-                  <SegmentedControl.ItemText>Dark</SegmentedControl.ItemText>
-                </SegmentedControl.Item>
-              </SegmentedControl.Root>
-            </SettingsControlSection>
+            <SettingsListGroup title="Privacy & data">
+              {privacySettings ? (
+                <SettingsControlBlock
+                  icon="lock-closed-outline"
+                  title="Profile visibility"
+                  description="Choose who can see your profile"
+                >
+                  <SegmentedControl.Root<ProfileVisibility>
+                    label="Profile visibility"
+                    type="radio"
+                    size="small"
+                    value={privacySettings.profileVisibility ?? 'public'}
+                    onChange={(value) => handlePrivacyUpdate({ profileVisibility: value })}
+                  >
+                    <SegmentedControl.Item value="public">
+                      <SegmentedControl.ItemText numberOfLines={1}>Public</SegmentedControl.ItemText>
+                    </SegmentedControl.Item>
+                    <SegmentedControl.Item value="followers_only">
+                      <SegmentedControl.ItemText numberOfLines={1}>Followers</SegmentedControl.ItemText>
+                    </SegmentedControl.Item>
+                    <SegmentedControl.Item value="private">
+                      <SegmentedControl.ItemText numberOfLines={1}>Private</SegmentedControl.ItemText>
+                    </SegmentedControl.Item>
+                  </SegmentedControl.Root>
+                </SettingsControlBlock>
+              ) : null}
+              {privacySettings ? (
+                <SettingsListItem
+                  icon={<RowIcon name="card-outline" />}
+                  title="Show contact info"
+                  description="Display your contact information on your profile"
+                  showChevron={false}
+                  rightElement={
+                    <Switch
+                      value={privacySettings.showContactInfo ?? true}
+                      onValueChange={(value) => handlePrivacyUpdate({ showContactInfo: value })}
+                    />
+                  }
+                />
+              ) : null}
+              {privacySettings ? (
+                <SettingsListItem
+                  icon={<RowIcon name="ellipse-outline" />}
+                  title="Show online status"
+                  description="Let others see when you're online"
+                  showChevron={false}
+                  rightElement={
+                    <Switch
+                      value={privacySettings.showOnlineStatus ?? true}
+                      onValueChange={(value) => handlePrivacyUpdate({ showOnlineStatus: value })}
+                    />
+                  }
+                />
+              ) : null}
+              <SettingsListItem
+                icon={<RowIcon name="trash-outline" />}
+                title="Clear cache"
+                description="Free up space by clearing cached data"
+                onPress={handleClearCache}
+                showChevron={false}
+              />
+            </SettingsListGroup>
 
-            <View className="px-5 py-3 gap-3">
-              <View className="flex-row items-center gap-3">
-                <RowIcon name="color-palette-outline" />
-                <Text className="text-[16px] text-foreground">Accent color</Text>
-              </View>
-              <ColorSwatchPicker value={colorPreset} onChange={handleColorChange} />
-            </View>
-          </SettingsListGroup>
+            <SettingsListGroup title="About & support">
+              <SettingsListItem
+                icon={<RowIcon name="information-circle-outline" />}
+                title="Version"
+                value={`Syra ${appVersion}`}
+                showChevron={false}
+              />
+              <SettingsListItem
+                icon={<RowIcon name="document-text-outline" />}
+                title="Terms of Service"
+                onPress={() => Alert.alert('Terms of Service', 'Terms of service page coming soon.')}
+              />
+              <SettingsListItem
+                icon={<RowIcon name="shield-checkmark-outline" />}
+                title="Privacy Policy"
+                onPress={() => Alert.alert('Privacy Policy', 'Privacy policy page coming soon.')}
+              />
+              <SettingsListItem
+                icon={<RowIcon name="help-circle-outline" />}
+                title="Help & Support"
+                onPress={() => Alert.alert('Help & Support', 'Help center coming soon.')}
+              />
+            </SettingsListGroup>
 
-          {/* Language */}
-          <SettingsListGroup title="Language">
-            <SettingsControlSection icon="language-outline" title="Language">
-              <SegmentedControl.Root<string>
-                label="Language"
-                type="radio"
-                value={i18n.language || 'en-US'}
-                onChange={handleLanguageChange}
-              >
-                {LANGUAGE_OPTIONS.map((option) => (
-                  <SegmentedControl.Item key={option.value} value={option.value}>
-                    <SegmentedControl.ItemText>{option.label}</SegmentedControl.ItemText>
-                  </SegmentedControl.Item>
-                ))}
-              </SegmentedControl.Root>
-            </SettingsControlSection>
-          </SettingsListGroup>
-
-          {/* Storage */}
-          <SettingsListGroup title="Storage">
-            <SettingsListItem
-              icon={<RowIcon name="trash-outline" />}
-              title="Clear cache"
-              description="Free up space by clearing cached data"
-              onPress={handleClearCache}
-            />
-          </SettingsListGroup>
-
-          {/* About */}
-          <SettingsListGroup title="About">
-            <SettingsListItem
-              icon={<RowIcon name="information-circle-outline" />}
-              title="Version"
-              value={`Syra ${appVersion}`}
-              showChevron={false}
-            />
-            <SettingsListItem
-              icon={<RowIcon name="document-text-outline" />}
-              title="Terms of Service"
-              onPress={() => Alert.alert('Terms of Service', 'Terms of service page coming soon.')}
-            />
-            <SettingsListItem
-              icon={<RowIcon name="shield-checkmark-outline" />}
-              title="Privacy Policy"
-              onPress={() => Alert.alert('Privacy Policy', 'Privacy policy page coming soon.')}
-            />
-            <SettingsListItem
-              icon={<RowIcon name="help-circle-outline" />}
-              title="Help & Support"
-              onPress={() => Alert.alert('Help & Support', 'Help center coming soon.')}
-            />
-          </SettingsListGroup>
-
-          {/* Sign out */}
-          <SettingsListGroup>
-            <SettingsListItem
-              icon={<RowIcon name="log-out-outline" destructive />}
-              title="Log out"
-              onPress={handleLogout}
-              destructive
-              showChevron={false}
-            />
-          </SettingsListGroup>
-
-          <View className="h-24" />
+            <SettingsListGroup>
+              <SettingsListItem
+                icon={<RowIcon name="log-out-outline" destructive />}
+                title="Log out"
+                onPress={handleLogout}
+                destructive
+                showChevron={false}
+              />
+            </SettingsListGroup>
           </View>
         </ScrollView>
       </ThemedView>
@@ -576,27 +607,41 @@ const SettingsScreen: React.FC = () => {
 const styles = StyleSheet.create({
   scrollContent: {
     alignItems: 'center',
-    paddingTop: 20,
-    paddingBottom: 32,
+    paddingTop: 16,
+    paddingBottom: 40,
   },
   contentColumn: {
     width: '100%',
-    maxWidth: 760,
+    maxWidth: 680,
   },
   pageHeader: {
-    gap: 4,
     paddingHorizontal: 20,
-    paddingBottom: 12,
+    paddingBottom: 10,
   },
   accountHeader: {
     alignItems: 'center',
     gap: 4,
-    paddingTop: 12,
-    paddingBottom: 18,
-  },
-  groupControl: {
     paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingTop: 4,
+    paddingBottom: 20,
+  },
+  controlBlock: {
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  controlHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 12,
+    minWidth: 0,
+  },
+  controlText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  controlContent: {
+    alignSelf: 'stretch',
   },
 });
 

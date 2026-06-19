@@ -12,6 +12,17 @@ const API_CONFIG = {
 const syraApiClient = oxyServices.createLinkedClient({ baseURL: API_CONFIG.baseURL });
 const authenticatedClient: ReturnType<OxyServices['getClient']> = syraApiClient.client;
 
+export interface ApiRequestOptions {
+  cache?: boolean;
+  cacheTTL?: number;
+  deduplicate?: boolean;
+  retry?: boolean;
+  maxRetries?: number;
+  timeout?: number;
+  signal?: AbortSignal;
+  headers?: Record<string, string>;
+}
+
 // Public API client (no authentication required)
 const publicClient = axios.create({
   baseURL: API_CONFIG.baseURL,
@@ -25,29 +36,41 @@ const publicClient = axios.create({
 // (typed Promise<T>), NOT an axios-style { data } envelope — so the
 // resolved value IS the data.
 export const api = {
-  async get<T = unknown>(endpoint: string, params?: Record<string, unknown>): Promise<{ data: T }> {
-    const data = await authenticatedClient.get<T>(endpoint, { params });
+  async get<T = unknown>(
+    endpoint: string,
+    params?: Record<string, unknown>,
+    options?: ApiRequestOptions,
+  ): Promise<{ data: T }> {
+    const data = await authenticatedClient.get<T>(endpoint, { params, ...options });
     return { data };
   },
 
-  async post<T = unknown>(endpoint: string, body?: unknown): Promise<{ data: T }> {
-    const data = await authenticatedClient.post<T>(endpoint, body);
+  async post<T = unknown>(endpoint: string, body?: unknown, options?: ApiRequestOptions): Promise<{ data: T }> {
+    const data = await authenticatedClient.post<T>(endpoint, body, options);
     return { data };
   },
 
-  async put<T = unknown>(endpoint: string, body?: unknown): Promise<{ data: T }> {
-    const data = await authenticatedClient.put<T>(endpoint, body);
+  async put<T = unknown>(endpoint: string, body?: unknown, options?: ApiRequestOptions): Promise<{ data: T }> {
+    const data = await authenticatedClient.put<T>(endpoint, body, options);
     return { data };
   },
 
-  async delete<T = unknown>(endpoint: string): Promise<{ data: T }> {
-    const data = await authenticatedClient.delete<T>(endpoint);
+  async delete<T = unknown>(endpoint: string, options?: ApiRequestOptions): Promise<{ data: T }> {
+    const data = await authenticatedClient.delete<T>(endpoint, options);
     return { data };
   },
 
-  async patch<T = unknown>(endpoint: string, body?: unknown): Promise<{ data: T }> {
-    const data = await authenticatedClient.patch<T>(endpoint, body);
+  async patch<T = unknown>(endpoint: string, body?: unknown, options?: ApiRequestOptions): Promise<{ data: T }> {
+    const data = await authenticatedClient.patch<T>(endpoint, body, options);
     return { data };
+  },
+
+  clearCacheEntry(key: string): void {
+    authenticatedClient.clearCacheEntry(key);
+  },
+
+  clearCacheByPrefix(prefix: string): number {
+    return authenticatedClient.clearCacheByPrefix(prefix);
   },
 };
 

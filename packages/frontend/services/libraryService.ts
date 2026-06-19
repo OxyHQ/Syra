@@ -1,9 +1,29 @@
 import { api } from '@/utils/api';
 import { Track } from '@syra/shared-types';
+import { z } from 'zod';
 import { createScopedLogger } from '@/utils/logger';
 import { normalizeTrackImages } from '@/utils/catalogImages';
 
 const logger = createScopedLogger('LibraryService');
+const FRESH_LIBRARY_READ = { cache: false } as const;
+const LIBRARY_HTTP_CACHE_PREFIX = 'GET:/library';
+const idArraySchema = z.array(z.unknown()).transform((ids) =>
+  ids.filter((id): id is string => typeof id === 'string'),
+);
+const libraryMembershipResponseSchema = z.object({
+  likedTracks: idArraySchema.optional(),
+  savedAlbums: idArraySchema.optional(),
+  followedArtists: idArraySchema.optional(),
+  savedPlaylists: idArraySchema.optional(),
+  playlists: idArraySchema.optional(),
+}).passthrough();
+const libraryMutationResultSchema = z.object({
+  ok: z.boolean(),
+  likedTracks: idArraySchema.optional(),
+  savedAlbums: idArraySchema.optional(),
+  followedArtists: idArraySchema.optional(),
+  savedPlaylists: idArraySchema.optional(),
+}).passthrough();
 
 /**
  * Membership snapshot for the authenticated user's library.
@@ -72,16 +92,44 @@ export interface PlaySignal {
  * `playlists` instead of `savedPlaylists`) never produces `undefined` Sets
  * downstream.
  */
-function normalizeMembership(raw: Partial<LibraryMembership> & { playlists?: string[] }): LibraryMembership {
-  const toIds = (value: unknown): string[] =>
-    Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
+function normalizeMembership(raw: unknown): LibraryMembership {
+  const parsed = libraryMembershipResponseSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      likedTracks: [],
+      savedAlbums: [],
+      followedArtists: [],
+      savedPlaylists: [],
+    };
+  }
+
+  const data = parsed.data;
 
   return {
-    likedTracks: toIds(raw.likedTracks),
-    savedAlbums: toIds(raw.savedAlbums),
-    followedArtists: toIds(raw.followedArtists),
-    savedPlaylists: toIds(raw.savedPlaylists ?? raw.playlists),
+    likedTracks: data.likedTracks ?? [],
+    savedAlbums: data.savedAlbums ?? [],
+    followedArtists: data.followedArtists ?? [],
+    savedPlaylists: data.savedPlaylists ?? data.playlists ?? [],
   };
+}
+
+function clearLibraryHttpCache(): void {
+  api.clearCacheByPrefix(LIBRARY_HTTP_CACHE_PREFIX);
+}
+
+function parseLibraryMutationResult(raw: unknown): LibraryMutationResult {
+  const parsed = libraryMutationResultSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new Error('Invalid library mutation response');
+  }
+  return parsed.data;
+}
+
+async function postLibraryMutation(endpoint: string): Promise<LibraryMutationResult> {
+  const response = await api.post<LibraryMutationResult>(endpoint);
+  const result = parseLibraryMutationResult(response.data);
+  clearLibraryHttpCache();
+  return result;
 }
 
 /**
@@ -95,54 +143,54 @@ function normalizeMembership(raw: Partial<LibraryMembership> & { playlists?: str
 export const libraryService = {
   /** Membership source for ALL like/save/follow buttons. */
   async getLibrary(): Promise<LibraryMembership> {
-    const response = await api.get<Partial<LibraryMembership> & { playlists?: string[] }>('/library');
+    const response = await api.get<unknown>(
+      '/library',
+      undefined,
+      FRESH_LIBRARY_READ,
+    );
     return normalizeMembership(response.data);
   },
 
   /** Full liked-track objects (used by the Liked Songs screen). */
   async getLikedTracks(params?: { limit?: number; offset?: number }): Promise<{ tracks: Track[]; total: number }> {
-    const response = await api.get<{ tracks: Track[]; total: number }>('/library/tracks', params);
+    const response = await api.get<{ tracks: Track[]; total: number }>(
+      '/library/tracks',
+      params,
+      FRESH_LIBRARY_READ,
+    );
     return { ...response.data, tracks: response.data.tracks.map(normalizeTrackImages) };
   },
 
   async likeTrack(trackId: string): Promise<LibraryMutationResult> {
-    const response = await api.post<LibraryMutationResult>(`/library/tracks/${trackId}/like`);
-    return response.data;
+    return postLibraryMutation(`/library/tracks/${trackId}/like`);
   },
 
   async unlikeTrack(trackId: string): Promise<LibraryMutationResult> {
-    const response = await api.post<LibraryMutationResult>(`/library/tracks/${trackId}/unlike`);
-    return response.data;
+    return postLibraryMutation(`/library/tracks/${trackId}/unlike`);
   },
 
   async saveAlbum(albumId: string): Promise<LibraryMutationResult> {
-    const response = await api.post<LibraryMutationResult>(`/library/albums/${albumId}/save`);
-    return response.data;
+    return postLibraryMutation(`/library/albums/${albumId}/save`);
   },
 
   async unsaveAlbum(albumId: string): Promise<LibraryMutationResult> {
-    const response = await api.post<LibraryMutationResult>(`/library/albums/${albumId}/unsave`);
-    return response.data;
+    return postLibraryMutation(`/library/albums/${albumId}/unsave`);
   },
 
   async followArtist(artistId: string): Promise<LibraryMutationResult> {
-    const response = await api.post<LibraryMutationResult>(`/library/artists/${artistId}/follow`);
-    return response.data;
+    return postLibraryMutation(`/library/artists/${artistId}/follow`);
   },
 
   async unfollowArtist(artistId: string): Promise<LibraryMutationResult> {
-    const response = await api.post<LibraryMutationResult>(`/library/artists/${artistId}/unfollow`);
-    return response.data;
+    return postLibraryMutation(`/library/artists/${artistId}/unfollow`);
   },
 
   async savePlaylist(playlistId: string): Promise<LibraryMutationResult> {
-    const response = await api.post<LibraryMutationResult>(`/library/playlists/${playlistId}/save`);
-    return response.data;
+    return postLibraryMutation(`/library/playlists/${playlistId}/save`);
   },
 
   async unsavePlaylist(playlistId: string): Promise<LibraryMutationResult> {
-    const response = await api.post<LibraryMutationResult>(`/library/playlists/${playlistId}/unsave`);
-    return response.data;
+    return postLibraryMutation(`/library/playlists/${playlistId}/unsave`);
   },
 
   /**
@@ -155,7 +203,11 @@ export const libraryService = {
    * it.
    */
   async getRecentlyPlayed(limit: number = 20): Promise<{ tracks: Track[] }> {
-    const response = await api.get<{ tracks: Track[] }>('/library/recently-played', { limit });
+    const response = await api.get<{ tracks: Track[] }>(
+      '/library/recently-played',
+      { limit },
+      FRESH_LIBRARY_READ,
+    );
     const tracks = Array.isArray(response.data?.tracks) ? response.data.tracks : [];
     return { tracks: tracks.map(normalizeTrackImages) };
   },
