@@ -209,9 +209,8 @@ export const getGenres = async (req: Request, res: Response, next: NextFunction)
     const userId = getRequestUserId(req as AuthRequest);
     const playbackOptions = await resolveCatalogPlaybackOptions(userId);
 
-    // Aggregate unique genres from tracks, albums, and artists. Tracks carry a
-    // top-level genre from the source sync, so genres surface even before any
-    // albums have been assembled.
+    // Aggregate unique genres from playable tracks, so genres only surface when
+    // the current user can actually play music in that genre.
     const trackGenres = await TrackModel.distinct('genre', playableTrackFilter({}, playbackOptions));
 
     const allGenres = [...new Set(trackGenres.flat().filter(Boolean))];
