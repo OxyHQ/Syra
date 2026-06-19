@@ -1,6 +1,8 @@
 import mongoose, { type FilterQuery, type PipelineStage } from 'mongoose';
 import { AlbumModel, type IAlbum } from '../models/Album';
 import { ArtistModel, type IArtist } from '../models/Artist';
+import { PlaylistModel, type IPlaylist } from '../models/Playlist';
+import { PlaylistTrackModel } from '../models/PlaylistTrack';
 import { TrackModel } from '../models/Track';
 import {
   type CatalogPlaybackOptions,
@@ -9,6 +11,7 @@ import {
 } from './catalogVisibility';
 
 const PLAYABLE_TRACK_LOOKUP_FIELD = '_playableTracks';
+const PLAYABLE_PLAYLIST_TRACK_LOOKUP_FIELD = '_playablePlaylistTracks';
 
 export type CatalogSort = Record<string, 1 | -1>;
 
@@ -71,6 +74,55 @@ function withPlayableTracksPipeline<T>(
     playableTrackLookup(relationField, playbackOptions),
     { $match: { [`${PLAYABLE_TRACK_LOOKUP_FIELD}.0`]: { $exists: true } } },
     { $project: { [PLAYABLE_TRACK_LOOKUP_FIELD]: 0 } },
+  ];
+}
+
+function playlistTrackLookup(
+  playbackOptions: CatalogPlaybackOptions,
+): PipelineStage.Lookup {
+  return {
+    $lookup: {
+      from: PlaylistTrackModel.collection.name,
+      let: { playlistId: '$_id' },
+      pipeline: [
+        { $match: { $expr: { $eq: ['$playlistId', '$$playlistId'] } } },
+        {
+          $lookup: {
+            from: TrackModel.collection.name,
+            let: { trackId: '$trackId' },
+            pipeline: [
+              {
+                $match: {
+                  $and: [
+                    playableTrackFilter<Record<string, unknown>>({}, playbackOptions),
+                    { $expr: { $eq: [{ $toString: '$_id' }, '$$trackId'] } },
+                  ],
+                },
+              },
+              { $limit: 1 },
+              { $project: { _id: 1 } },
+            ],
+            as: PLAYABLE_TRACK_LOOKUP_FIELD,
+          },
+        },
+        { $match: { [`${PLAYABLE_TRACK_LOOKUP_FIELD}.0`]: { $exists: true } } },
+        { $limit: 1 },
+        { $project: { _id: 1 } },
+      ],
+      as: PLAYABLE_PLAYLIST_TRACK_LOOKUP_FIELD,
+    },
+  };
+}
+
+function withPlayablePlaylistTracksPipeline(
+  filter: FilterQuery<IPlaylist>,
+  playbackOptions: CatalogPlaybackOptions,
+): PipelineStage[] {
+  return [
+    { $match: visibleCatalogFilter(filter) },
+    playlistTrackLookup(playbackOptions),
+    { $match: { [`${PLAYABLE_PLAYLIST_TRACK_LOOKUP_FIELD}.0`]: { $exists: true } } },
+    { $project: { [PLAYABLE_PLAYLIST_TRACK_LOOKUP_FIELD]: 0 } },
   ];
 }
 
@@ -154,4 +206,27 @@ export async function findOneArtistWithPlayableTracks(
   ]).exec();
 
   return artists[0] ?? null;
+}
+
+export async function findPlaylistsWithPlayableTracks(
+  filter: FilterQuery<IPlaylist>,
+  playbackOptions: CatalogPlaybackOptions,
+  page: CatalogPage,
+): Promise<unknown[]> {
+  return PlaylistModel.aggregate<unknown>([
+    ...withPlayablePlaylistTracksPipeline(filter, playbackOptions),
+    ...paginatedStages(page),
+  ]).exec();
+}
+
+export async function countPlaylistsWithPlayableTracks(
+  filter: FilterQuery<IPlaylist>,
+  playbackOptions: CatalogPlaybackOptions,
+): Promise<number> {
+  const result = await PlaylistModel.aggregate<{ total: number }>([
+    ...withPlayablePlaylistTracksPipeline(filter, playbackOptions),
+    { $count: 'total' },
+  ]).exec();
+
+  return result[0]?.total ?? 0;
 }

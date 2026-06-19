@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
+import { PlaylistVisibility } from '@syra/shared-types';
 import { TrackModel } from '../models/Track';
-import { PlaylistModel } from '../models/Playlist';
 import { formatTracksWithCoverArt, formatArtistsWithImage, formatPlaylistsWithCoverArt, formatAlbumsWithCoverArt } from '../utils/musicHelpers';
 import { isDatabaseConnected } from '../utils/database';
 import { withImageFirstSort } from '../utils/imageFirstSort';
@@ -10,11 +10,11 @@ import {
   getRequestUserId,
   playableTrackFilter,
   resolveCatalogPlaybackOptions,
-  visibleCatalogFilter,
 } from '../utils/catalogVisibility';
 import {
   findAlbumsWithPlayableTracks,
   findArtistsWithPlayableTracks,
+  findPlaylistsWithPlayableTracks,
 } from '../utils/playableContainers';
 
 /**
@@ -103,10 +103,10 @@ export const getHomeBrowse = async (req: Request, res: Response, next: NextFunct
         sort: withImageFirstSort('album', { popularity: -1, playCount: -1 }),
         limit: madeForYouHalf,
       }),
-      PlaylistModel.find(visibleCatalogFilter({ visibility: 'public' }))
-        .sort(withImageFirstSort('playlist', { followers: -1, createdAt: -1 }))
-        .limit(madeForYouHalf)
-        .lean(),
+      findPlaylistsWithPlayableTracks({ visibility: PlaylistVisibility.PUBLIC }, playbackOptions, {
+        sort: withImageFirstSort('playlist', { followers: -1, createdAt: -1 }),
+        limit: madeForYouHalf,
+      }),
       findAlbumsWithPlayableTracks({}, playbackOptions, {
         sort: withImageFirstSort('album', { popularity: -1, releaseDate: -1 }),
         limit: sectionLimit,
@@ -403,10 +403,10 @@ export const getMadeForYou = async (req: Request, res: Response, next: NextFunct
         sort: withImageFirstSort('album', { popularity: -1, playCount: -1 }),
         limit: half,
       }),
-      PlaylistModel.find(visibleCatalogFilter({ visibility: 'public' }))
-        .sort(withImageFirstSort('playlist', { followers: -1, createdAt: -1 }))
-        .limit(half)
-        .lean(),
+      findPlaylistsWithPlayableTracks({ visibility: PlaylistVisibility.PUBLIC }, playbackOptions, {
+        sort: withImageFirstSort('playlist', { followers: -1, createdAt: -1 }),
+        limit: half,
+      }),
     ]);
 
     if (userId) {

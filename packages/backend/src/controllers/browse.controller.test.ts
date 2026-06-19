@@ -3,8 +3,11 @@ import { connect, clear, disconnect } from '../test/mongo';
 import { TrackModel } from '../models/Track';
 import { AlbumModel } from '../models/Album';
 import { ArtistModel } from '../models/Artist';
+import { PlaylistModel } from '../models/Playlist';
+import { PlaylistTrackModel } from '../models/PlaylistTrack';
 import { UserMusicPreferencesModel } from '../models/UserMusicPreferences';
-import { getGenres, getMadeForYou, getPopularAlbums, getPopularTracks } from './browse.controller';
+import { PlaylistVisibility } from '@syra/shared-types';
+import { getGenres, getHomeBrowse, getMadeForYou, getPopularAlbums, getPopularTracks } from './browse.controller';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import type { Request, Response, NextFunction } from 'express';
 
@@ -50,8 +53,8 @@ const next: NextFunction = (err?: unknown) => {
 
 // ── Seed helpers ───────────────────────────────────────────────────────────────
 
-async function seedTrack(overrides: Record<string, unknown> = {}): Promise<void> {
-  await TrackModel.create({
+async function seedTrack(overrides: Record<string, unknown> = {}): Promise<string> {
+  const track = await TrackModel.create({
     title: 'A Track',
     artistId: '507f1f77bcf86cd799439011',
     artistName: 'An Artist',
@@ -61,6 +64,37 @@ async function seedTrack(overrides: Record<string, unknown> = {}): Promise<void>
     isExplicit: false,
     isAvailable: true,
     ...overrides,
+  });
+
+  return track._id.toString();
+}
+
+async function seedPlaylistWithTrack(
+  playlistName: string,
+  trackOverrides: Record<string, unknown> = {},
+  playlistOverrides: Record<string, unknown> = {},
+): Promise<void> {
+  const playlist = await PlaylistModel.create({
+    name: playlistName,
+    ownerOxyUserId: 'system:test',
+    ownerUsername: 'Test',
+    visibility: PlaylistVisibility.PUBLIC,
+    trackCount: 1,
+    totalDuration: 180,
+    followers: 0,
+    source: trackOverrides.source,
+    ...playlistOverrides,
+  });
+  const trackId = await seedTrack({
+    title: `${playlistName} Track`,
+    ...trackOverrides,
+  });
+
+  await PlaylistTrackModel.create({
+    playlistId: playlist._id,
+    trackId,
+    addedAt: '2026-01-01T00:00:00.000Z',
+    order: 0,
   });
 }
 
@@ -281,9 +315,82 @@ describe('getPopularAlbums', () => {
   });
 });
 
+// ── getHomeBrowse ───────────────────────────────────────────────────────────
+
+describe('getHomeBrowse', () => {
+  it('does not surface playlists whose tracks are not playable for the current playback policy', async () => {
+    process.env.AUDIUS_CATALOG_ENABLED = 'true';
+    await seedPlaylistWithTrack(
+      'Direct Only Playlist',
+      {
+        source: 'audius',
+        status: 'ready',
+        streamUrl: 'https://discoveryprovider.audius.co/v1/tracks/direct/stream?app_name=Syra',
+      },
+      { followers: 100 },
+    );
+    await seedPlaylistWithTrack(
+      'Syra Hosted Playlist',
+      {
+        source: 'audius',
+        status: 'ready',
+        hlsMasterKey: 'hls/audius/rehosted/master.m3u8',
+        hls: [{ manifestKey: 'hls/audius/rehosted/160/index.m3u8', bitrateKbps: 160, encrypted: true }],
+      },
+      { followers: 1 },
+    );
+
+    const res = makeRes();
+    await getHomeBrowse(makeReq({ sectionLimit: '4', tracksLimit: '4' }), res as unknown as Response, next);
+
+    const body = res._body as { madeForYou: { playlists: Array<{ name: string }> } };
+    expect(body.madeForYou.playlists.map((playlist) => playlist.name)).toEqual(['Syra Hosted Playlist']);
+  });
+
+  it('surfaces direct-only playlists when the signed-in user enabled direct streaming', async () => {
+    process.env.AUDIUS_CATALOG_ENABLED = 'true';
+    await seedPlaylistWithTrack(
+      'Direct Only Playlist',
+      {
+        source: 'audius',
+        status: 'ready',
+        streamUrl: 'https://discoveryprovider.audius.co/v1/tracks/direct/stream?app_name=Syra',
+      },
+      { followers: 100 },
+    );
+    await UserMusicPreferencesModel.create({
+      oxyUserId: 'oxy-user-direct',
+      directAudiusStreaming: true,
+    });
+
+    const res = makeRes();
+    await getHomeBrowse(makeReq({ sectionLimit: '4', tracksLimit: '4' }, 'oxy-user-direct'), res as unknown as Response, next);
+
+    const body = res._body as { madeForYou: { playlists: Array<{ name: string }> } };
+    expect(body.madeForYou.playlists.map((playlist) => playlist.name)).toEqual(['Direct Only Playlist']);
+    expect(res._headers['Cache-Control']).toBe('private, max-age=60, stale-while-revalidate=300');
+    expect(res._headers.Vary).toBe('Authorization');
+  });
+});
+
 // ── getMadeForYou ─────────────────────────────────────────────────────────────
 
 describe('getMadeForYou', () => {
+  it('excludes playlists with no playable tracks from public discovery', async () => {
+    process.env.AUDIUS_CATALOG_ENABLED = 'true';
+    await seedPlaylistWithTrack('Direct Only Playlist', {
+      source: 'audius',
+      status: 'ready',
+      streamUrl: 'https://discoveryprovider.audius.co/v1/tracks/direct/stream?app_name=Syra',
+    });
+
+    const res = makeRes();
+    await getMadeForYou(makeReq(), res as unknown as Response, next);
+
+    const body = res._body as { playlists: Array<{ name: string }> };
+    expect(body.playlists).toHaveLength(0);
+  });
+
   it('falls back to popular tracks + artists when albums/playlists are sparse', async () => {
     const artistId = '507f1f77bcf86cd799439011';
     await seedTrack({ title: 'Popular', artistId, playCount: 100000, popularity: 80 });

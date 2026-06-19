@@ -1,10 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
-import { SearchCategory, SearchResult, SearchUser } from '@syra/shared-types';
+import { PlaylistVisibility, SearchCategory, SearchResult, SearchUser } from '@syra/shared-types';
 import { getAccountDisplayName } from '@oxyhq/core';
 import type { User } from '@oxyhq/core';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { TrackModel } from '../models/Track';
-import { PlaylistModel } from '../models/Playlist';
 import { formatTracksWithCoverArt, formatAlbumsWithCoverArt, formatArtistsWithImage, formatPlaylistsWithCoverArt } from '../utils/musicHelpers';
 import { isDatabaseConnected } from '../utils/database';
 import { enqueueAudiusImport } from '../services/sources/audiusBackgroundImport';
@@ -14,13 +13,14 @@ import {
   getRequestUserId,
   playableTrackFilter,
   resolveCatalogPlaybackOptions,
-  visibleCatalogFilter,
 } from '../utils/catalogVisibility';
 import {
   countAlbumsWithPlayableTracks,
   countArtistsWithPlayableTracks,
+  countPlaylistsWithPlayableTracks,
   findAlbumsWithPlayableTracks,
   findArtistsWithPlayableTracks,
+  findPlaylistsWithPlayableTracks,
 } from '../utils/playableContainers';
 import { oxy } from '../../server';
 
@@ -194,23 +194,23 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
 
     // Search playlists (only public playlists for now)
     if (categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.PLAYLISTS) {
-      const playlistFilter = visibleCatalogFilter({
-          isPublic: true,
-          $or: [
-            { name: searchRegex },
-            { description: searchRegex },
-          ],
-        });
-      const playlistFind = PlaylistModel.find(playlistFilter)
-          .sort(withImageFirstSort('playlist', { followers: -1, createdAt: -1 }))
-          .skip(searchOffset)
-          .limit(searchLimit)
-          .lean();
+      const playlistFilter = {
+        visibility: PlaylistVisibility.PUBLIC,
+        $or: [
+          { name: searchRegex },
+          { description: searchRegex },
+        ],
+      };
+      const playlistFind = findPlaylistsWithPlayableTracks(playlistFilter, playbackOptions, {
+        sort: withImageFirstSort('playlist', { followers: -1, createdAt: -1 }),
+        offset: searchOffset,
+        limit: searchLimit,
+      });
       searchPromises.playlists = isPreviewSearch
         ? playlistFind.then((docs) => [docs, docs.length])
         : Promise.all([
             playlistFind,
-            PlaylistModel.countDocuments(playlistFilter),
+            countPlaylistsWithPlayableTracks(playlistFilter, playbackOptions),
           ]);
     }
 
