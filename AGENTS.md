@@ -34,5 +34,7 @@ Do not restore the retired Syra oxy.so hosts in runtime config, CORS, EAS env, u
 - `directAudiusStreaming` is only the user's opt-in fallback for Audius tracks that are not copyable/rehostable and therefore depend only on the provider `streamUrl`.
 - Tracks with Syra HLS (`status: ready`, `hlsMasterKey`, `hls[]`) must be visible and playable even when `directAudiusStreaming` is false.
 - Direct-only Audius tracks must not appear in track lists, queues, library views, recommendations, or search for users who have not enabled `directAudiusStreaming`.
+- Track-bearing containers (albums, artists, genre cards, search/browse containers) must be filtered by the same playable-track policy for the current user. Do not show an album/artist as playable if opening it returns zero tracks under that user's policy.
+- Syra frontend catalog reads must use `packages/frontend/utils/api.ts`'s linked Oxy client when the backend response can vary by identity or playback preferences. Do not use `publicApi` for album/artist/track browse flows that need `directAudiusStreaming`.
 - Catalog filters must compose conditions with `$and`; do not spread filters in a way that overwrites `$or` clauses from playback visibility.
 - The long-term ingest path is: classify Audius legal/technical copyability in the connector, ingest copyable tracks through Syra S3/HLS, and persist stream-only policy explicitly. Do not solve this by treating all Audius as direct streaming.

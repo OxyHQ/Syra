@@ -16,7 +16,8 @@ music is what Audius legally allows.
 |--------|-------------|----------|-------|
 | **Artist uploads** (core) | **Syra S3** | playable | Artist uploads directly, grants Syra a license via ToS. Syra already has `Artist`, `artist/register|upload|dashboard|insights`, S3, copyright reporting. |
 | **CC imports (commercial-use only)** | **Syra S3** | playable | Import + self-host ONLY tracks under a Creative Commons license that permits commercial use (filter out CC-NC). Sources: Jamendo, Free Music Archive, ccMixter. |
-| **Audius (All-Rights-Reserved)** | Audius network | playable via stream | **Stream only** via Audius `GET /v1/tracks/{id}/stream` (+ `app_name`). The Audius Open Music License **forbids redistribution/rehosting** — never copy these to S3. Gated tracks need a user wallet signature → skip. |
+| **Audius copyable** | **Syra S3** | playable | Copy/rehost only when Audius metadata and license/access fields show the track can legally and technically be copied. These tracks are ingested to Syra HLS and stay visible even when direct Audius streaming is disabled. |
+| **Audius direct-only** | Audius network | opt-in stream | Tracks that cannot be copied/rehosted keep only a provider stream URL. They are hidden unless the signed-in user enabled `directAudiusStreaming`; gated tracks that require wallet access remain skipped. |
 
 To the user, **everything plays uniformly via streaming** (Spotify-like). The source only
 changes the URL behind a unified resolver.
@@ -30,8 +31,9 @@ changes the URL behind a unified resolver.
 - **US DMCA safe harbor:** clear ToS, working takedown (`CopyrightReport` +
   `copyright/report.tsx`), **repeat-infringer termination** (formalize on `strikeService`),
   registered DMCA agent, no inducement.
-- **Audius:** stream only; never rehost ARR. CC imports only when the CC license permits
-  commercial use.
+- **Audius:** copy/rehost only tracks whose Audius metadata and license/access state permit
+  it. Non-copyable Audius remains direct-only and is visible only behind the user's
+  `directAudiusStreaming` opt-in. CC imports only when the CC license permits commercial use.
 - Optional later: ACRCloud fingerprinting to flag commercial uploads pre-publish.
 
 ## Streaming (decided: HLS adaptive, AES-128 encrypted, Spotify-like)
@@ -47,8 +49,9 @@ changes the URL behind a unified resolver.
 
 ### Unified stream resolver (3 sources, 1 player)
 `GET /api/stream/:trackId` → `{ url, type: 'hls' | 'audius', expiresAt }` based on
-`track.source`: owned/CC → signed **encrypted HLS** manifest (CDN); Audius → Audius stream
-URL (or light backend proxy for unified auth/analytics).
+`track.source` and playback policy: uploads/CC/copyable Audius → signed **encrypted HLS**
+manifest (CDN); direct-only Audius → Audius stream URL only when the user enabled
+`directAudiusStreaming`.
 `GET /api/stream/:trackId/key` → AES-128 key, **authenticated, short-TTL**, bound to session.
 
 ### Players
@@ -84,8 +87,9 @@ Single catalog any source upserts into, deduped by ISRC, provenance preserved.
 
 - Extend `Track`/`Artist`/`Album`: `externalIds { isrc?, audiusId? }`, `sources[]`
   (provenance), `source` (`upload` | `cc` | `audius`), `status` (`processing` | `ready` |
-  `failed`), `images[]`, `hls[]` renditions, `loudnessLufs`, `streamUrl?` (audius).
-  `audioSource` becomes optional (audius/processing tracks have none).
+  `failed`), `images[]`, `hls[]` renditions, `loudnessLufs`, `streamUrl?` (direct-only
+  Audius fallback). `audioSource` becomes optional while imported tracks are processing or
+  when an Audius track is direct-only.
 - New collections: `Lyrics` (LRCLIB via abstracted `LyricsProvider`), `ImportJob`
   (Audius/CC ingestion progress), `Device`, `PlaybackState`.
 - Dedup/upsert by ISRC → fuzzy (normalized title + primary artist + duration ±2s) in
@@ -132,8 +136,9 @@ rows show a lock + upgrade CTA.
 
 ## Sources connectors
 `MusicSourceConnector` interface. Implementations:
-- `AudiusConnector` — search/browse + import metadata; resolver returns Audius stream;
-  **never rehost ARR**.
+- `AudiusConnector` — search/browse + import metadata; classify copyability from Audius
+  license/access/download metadata; ingest copyable tracks to Syra HLS; keep non-copyable
+  tracks direct-only behind `directAudiusStreaming`.
 - `CcConnector` — Jamendo / FMA / ccMixter; **filter CC licenses that permit commercial
   use** (reject CC-NC); enqueue transcode-to-S3 via `ImportJob`.
 
@@ -147,11 +152,11 @@ rows show a lock + upgrade CTA.
 - HLS transcode cost/latency — async job per upload/import.
 - CloudFront signed-URL key management (key pair in SSM).
 - AES-128 key endpoint must be authenticated + short-TTL (light DRM, not studio-grade).
-- Audius gated tracks unplayable without wallet — skip.
+- Audius gated or non-copyable tracks must not be copied; direct-only playback is opt-in.
 - Lyrics licensing — abstracted.
 
 ## Out of scope (now)
 - **Spotify / YouTube Music sync — dropped** (no commercial music).
 - Commercial-label catalog (7digital/Feed.fm) — revisit with traction.
 - Chromecast/AirPlay casting; offline downloads; real DRM (Widevine/FairPlay).
-- Rehosting Audius All-Rights-Reserved content (illegal — never).
+- Rehosting Audius content that is not explicitly copyable under Audius metadata/license.

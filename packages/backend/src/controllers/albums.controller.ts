@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import { AlbumModel } from '../models/Album';
 import { TrackModel } from '../models/Track';
 import { ArtistModel } from '../models/Artist';
-import { toApiFormat, toApiFormatArray, formatTracksWithCoverArt, formatAlbumWithCoverArt, formatAlbumsWithCoverArt } from '../utils/musicHelpers';
+import { formatTracksWithCoverArt, formatAlbumWithCoverArt, formatAlbumsWithCoverArt } from '../utils/musicHelpers';
 import { isDatabaseConnected } from '../utils/database';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { getRequiredOxyUserId as getAuthenticatedUserId } from '@oxyhq/core/server';
@@ -16,8 +16,12 @@ import {
   getRequestUserId,
   playableTrackFilter,
   resolveCatalogPlaybackOptions,
-  visibleCatalogFilter,
 } from '../utils/catalogVisibility';
+import {
+  countAlbumsWithPlayableTracks,
+  findAlbumsWithPlayableTracks,
+  findOneAlbumWithPlayableTracks,
+} from '../utils/playableContainers';
 
 /**
  * GET /api/albums
@@ -31,14 +35,15 @@ export const getAlbums = async (req: Request, res: Response, next: NextFunction)
 
     const limit = parseInt(req.query.limit as string) || 20;
     const offset = parseInt(req.query.offset as string) || 0;
+    const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
 
     const [albums, total] = await Promise.all([
-      AlbumModel.find(visibleCatalogFilter())
-        .sort(withImageFirstSort('album', { releaseDate: -1, createdAt: -1 }))
-        .skip(offset)
-        .limit(limit)
-        .lean(),
-      AlbumModel.countDocuments(visibleCatalogFilter()),
+      findAlbumsWithPlayableTracks({}, playbackOptions, {
+        sort: withImageFirstSort('album', { releaseDate: -1, createdAt: -1 }),
+        offset,
+        limit,
+      }),
+      countAlbumsWithPlayableTracks({}, playbackOptions),
     ]);
 
     const formattedAlbums = formatAlbumsWithCoverArt(albums);
@@ -69,8 +74,9 @@ export const getAlbumById = async (req: Request, res: Response, next: NextFuncti
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(404).json({ error: 'Album not found' });
     }
-    
-    const album = await AlbumModel.findOne(visibleCatalogFilter({ _id: id })).lean();
+
+    const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
+    const album = await findOneAlbumWithPlayableTracks(id, playbackOptions);
 
     if (!album) {
       return res.status(404).json({ error: 'Album not found' });
@@ -102,7 +108,7 @@ export const getAlbumTracks = async (req: Request, res: Response, next: NextFunc
     }
     
     // Verify album exists
-    const album = await AlbumModel.findOne(visibleCatalogFilter({ _id: id })).lean();
+    const album = await findOneAlbumWithPlayableTracks(id, playbackOptions);
     if (!album) {
       return res.status(404).json({ error: 'Album not found' });
     }

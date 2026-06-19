@@ -1,4 +1,4 @@
-import { api, publicApi } from '@/utils/api';
+import { api } from '@/utils/api';
 import { Track, Album, Artist, Playlist } from '@syra/shared-types';
 import {
   normalizeAlbumImages,
@@ -10,60 +10,60 @@ import {
 /**
  * Music API service
  * Handles all music-related API calls
- * Public catalog reads use the unauthenticated client; account mutations use
- * the linked authenticated client owned by utils/api.
+ * Catalog reads use the linked Oxy client so the backend can apply
+ * session-scoped playback preferences while guests still receive public data.
  */
 export const musicService = {
   // Tracks
   async getTracks(params?: { limit?: number; offset?: number }): Promise<{ tracks: Track[]; total: number; hasMore: boolean }> {
-    const response = await publicApi.get<{ tracks: Track[]; total: number; hasMore: boolean }>('/tracks', params);
+    const response = await api.get<{ tracks: Track[]; total: number; hasMore: boolean }>('/tracks', params);
     return { ...response.data, tracks: response.data.tracks.map(normalizeTrackImages) };
   },
 
   async getTrackById(id: string): Promise<Track> {
-    const response = await publicApi.get<Track>(`/tracks/${id}`);
+    const response = await api.get<Track>(`/tracks/${id}`);
     return normalizeTrackImages(response.data);
   },
 
   async searchTracks(query: string, params?: { limit?: number; offset?: number }): Promise<{ tracks: Track[]; total: number; hasMore: boolean }> {
-    const response = await publicApi.get<{ tracks: Track[]; total: number; hasMore: boolean }>('/tracks/search', { q: query, ...params });
+    const response = await api.get<{ tracks: Track[]; total: number; hasMore: boolean }>('/tracks/search', { q: query, ...params });
     return { ...response.data, tracks: response.data.tracks.map(normalizeTrackImages) };
   },
 
   // Albums
   async getAlbums(params?: { limit?: number; offset?: number }): Promise<{ albums: Album[]; total: number; hasMore: boolean }> {
-    const response = await publicApi.get<{ albums: Album[]; total: number; hasMore: boolean }>('/albums', params);
+    const response = await api.get<{ albums: Album[]; total: number; hasMore: boolean }>('/albums', params);
     return { ...response.data, albums: response.data.albums.map(normalizeAlbumImages) };
   },
 
   async getAlbumById(id: string): Promise<Album> {
-    const response = await publicApi.get<Album>(`/albums/${id}`);
+    const response = await api.get<Album>(`/albums/${id}`);
     return normalizeAlbumImages(response.data);
   },
 
   async getAlbumTracks(albumId: string): Promise<{ tracks: Track[] }> {
-    const response = await publicApi.get<{ tracks: Track[] }>(`/albums/${albumId}/tracks`);
+    const response = await api.get<{ tracks: Track[] }>(`/albums/${albumId}/tracks`);
     return { ...response.data, tracks: response.data.tracks.map(normalizeTrackImages) };
   },
 
   // Artists
   async getArtists(params?: { limit?: number; offset?: number }): Promise<{ artists: Artist[]; total: number; hasMore: boolean }> {
-    const response = await publicApi.get<{ artists: Artist[]; total: number; hasMore: boolean }>('/artists', params);
+    const response = await api.get<{ artists: Artist[]; total: number; hasMore: boolean }>('/artists', params);
     return { ...response.data, artists: response.data.artists.map(normalizeArtistImages) };
   },
 
   async getArtistById(id: string): Promise<Artist> {
-    const response = await publicApi.get<Artist>(`/artists/${id}`);
+    const response = await api.get<Artist>(`/artists/${id}`);
     return normalizeArtistImages(response.data);
   },
 
   async getArtistAlbums(artistId: string): Promise<{ albums: Album[] }> {
-    const response = await publicApi.get<{ albums: Album[] }>(`/artists/${artistId}/albums`);
+    const response = await api.get<{ albums: Album[] }>(`/artists/${artistId}/albums`);
     return { ...response.data, albums: response.data.albums.map(normalizeAlbumImages) };
   },
 
   async getArtistTracks(artistId: string, params?: { limit?: number; offset?: number }): Promise<{ tracks: Track[]; total: number; hasMore: boolean }> {
-    const response = await publicApi.get<{ tracks: Track[]; total: number; hasMore: boolean }>(`/artists/${artistId}/tracks`, params);
+    const response = await api.get<{ tracks: Track[]; total: number; hasMore: boolean }>(`/artists/${artistId}/tracks`, params);
     return { ...response.data, tracks: response.data.tracks.map(normalizeTrackImages) };
   },
 
@@ -79,12 +79,12 @@ export const musicService = {
 
   // Playlists
   async getPlaylistById(id: string): Promise<Playlist> {
-    const response = await publicApi.get<Playlist>(`/playlists/${id}`);
+    const response = await api.get<Playlist>(`/playlists/${id}`);
     return normalizePlaylistImages(response.data);
   },
 
   async getPlaylistTracks(playlistId: string): Promise<{ tracks: Track[]; total: number }> {
-    const response = await publicApi.get<{ tracks: Track[]; total: number }>(`/playlists/${playlistId}/tracks`);
+    const response = await api.get<{ tracks: Track[]; total: number }>(`/playlists/${playlistId}/tracks`);
     return { ...response.data, tracks: response.data.tracks.map(normalizeTrackImages) };
   },
 

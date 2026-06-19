@@ -4,10 +4,8 @@ import { getAccountDisplayName } from '@oxyhq/core';
 import type { User } from '@oxyhq/core';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { TrackModel } from '../models/Track';
-import { AlbumModel } from '../models/Album';
-import { ArtistModel } from '../models/Artist';
 import { PlaylistModel } from '../models/Playlist';
-import { toApiFormatArray, formatTracksWithCoverArt, formatAlbumsWithCoverArt, formatArtistsWithImage, formatPlaylistsWithCoverArt } from '../utils/musicHelpers';
+import { formatTracksWithCoverArt, formatAlbumsWithCoverArt, formatArtistsWithImage, formatPlaylistsWithCoverArt } from '../utils/musicHelpers';
 import { isDatabaseConnected } from '../utils/database';
 import { enqueueAudiusImport } from '../services/sources/audiusBackgroundImport';
 import { withImageFirstSort } from '../utils/imageFirstSort';
@@ -18,6 +16,12 @@ import {
   resolveCatalogPlaybackOptions,
   visibleCatalogFilter,
 } from '../utils/catalogVisibility';
+import {
+  countAlbumsWithPlayableTracks,
+  countArtistsWithPlayableTracks,
+  findAlbumsWithPlayableTracks,
+  findArtistsWithPlayableTracks,
+} from '../utils/playableContainers';
 import { oxy } from '../../server';
 
 /**
@@ -151,40 +155,40 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
 
     // Search albums
     if (categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.ALBUMS) {
-      const albumFilter = visibleCatalogFilter({
+      const albumFilter = {
           $or: [
             { title: searchRegex },
             { artistName: searchRegex },
           ],
-        });
-      const albumFind = AlbumModel.find(albumFilter)
-          .sort(withImageFirstSort('album', { popularity: -1, releaseDate: -1 }))
-          .skip(searchOffset)
-          .limit(searchLimit)
-          .lean();
+        };
+      const albumFind = findAlbumsWithPlayableTracks(albumFilter, playbackOptions, {
+        sort: withImageFirstSort('album', { popularity: -1, releaseDate: -1 }),
+        offset: searchOffset,
+        limit: searchLimit,
+      });
       searchPromises.albums = isPreviewSearch
         ? albumFind.then((docs) => [docs, docs.length])
         : Promise.all([
             albumFind,
-            AlbumModel.countDocuments(albumFilter),
+            countAlbumsWithPlayableTracks(albumFilter, playbackOptions),
           ]);
     }
 
     // Search artists
     if (categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.ARTISTS) {
-      const artistFilter = visibleCatalogFilter({
+      const artistFilter = {
           name: searchRegex,
-        });
-      const artistFind = ArtistModel.find(artistFilter)
-          .sort(withImageFirstSort('artist', { popularity: -1, 'stats.followers': -1 }))
-          .skip(searchOffset)
-          .limit(searchLimit)
-          .lean();
+        };
+      const artistFind = findArtistsWithPlayableTracks(artistFilter, playbackOptions, {
+        sort: withImageFirstSort('artist', { popularity: -1, 'stats.followers': -1 }),
+        offset: searchOffset,
+        limit: searchLimit,
+      });
       searchPromises.artists = isPreviewSearch
         ? artistFind.then((docs) => [docs, docs.length])
         : Promise.all([
             artistFind,
-            ArtistModel.countDocuments(artistFilter),
+            countArtistsWithPlayableTracks(artistFilter, playbackOptions),
           ]);
     }
 

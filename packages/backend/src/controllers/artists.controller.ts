@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import { ArtistModel } from '../models/Artist';
 import { AlbumModel } from '../models/Album';
 import { TrackModel } from '../models/Track';
-import { toApiFormat, formatTracksWithCoverArt, formatAlbumWithCoverArt, formatArtistWithImage, formatArtistsWithImage } from '../utils/musicHelpers';
+import { formatTracksWithCoverArt, formatAlbumWithCoverArt, formatArtistWithImage, formatArtistsWithImage } from '../utils/musicHelpers';
 import { isDatabaseConnected } from '../utils/database';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { getRequiredOxyUserId as getAuthenticatedUserId } from '@oxyhq/core/server';
@@ -15,8 +15,15 @@ import {
   getRequestUserId,
   playableTrackFilter,
   resolveCatalogPlaybackOptions,
-  visibleCatalogFilter,
 } from '../utils/catalogVisibility';
+import {
+  countArtistsWithPlayableTracks,
+  findAlbumsWithPlayableTracks,
+  findArtistsWithPlayableTracks,
+  findOneArtistWithPlayableTracks,
+} from '../utils/playableContainers';
+
+const ARTIST_ALBUMS_LIMIT = 100;
 
 /**
  * GET /api/artists
@@ -30,14 +37,15 @@ export const getArtists = async (req: Request, res: Response, next: NextFunction
 
     const limit = parseInt(req.query.limit as string) || 20;
     const offset = parseInt(req.query.offset as string) || 0;
+    const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
 
     const [artists, total] = await Promise.all([
-      ArtistModel.find(visibleCatalogFilter())
-        .sort(withImageFirstSort('artist', { popularity: -1, 'stats.followers': -1 }))
-        .skip(offset)
-        .limit(limit)
-        .lean(),
-      ArtistModel.countDocuments(visibleCatalogFilter()),
+      findArtistsWithPlayableTracks({}, playbackOptions, {
+        sort: withImageFirstSort('artist', { popularity: -1, 'stats.followers': -1 }),
+        offset,
+        limit,
+      }),
+      countArtistsWithPlayableTracks({}, playbackOptions),
     ]);
 
     const formattedArtists = formatArtistsWithImage(artists);
@@ -68,8 +76,9 @@ export const getArtistById = async (req: Request, res: Response, next: NextFunct
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(404).json({ error: 'Artist not found' });
     }
-    
-    const artist = await ArtistModel.findOne(visibleCatalogFilter({ _id: id })).lean();
+
+    const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
+    const artist = await findOneArtistWithPlayableTracks(id, playbackOptions);
 
     if (!artist) {
       return res.status(404).json({ error: 'Artist not found' });
@@ -100,15 +109,17 @@ export const getArtistAlbums = async (req: Request, res: Response, next: NextFun
     }
     
     // Verify artist exists
-    const artist = await ArtistModel.findOne(visibleCatalogFilter({ _id: id })).lean();
+    const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
+    const artist = await findOneArtistWithPlayableTracks(id, playbackOptions);
     if (!artist) {
       return res.status(404).json({ error: 'Artist not found' });
     }
 
     // Fetch albums for this artist, sorted by release date
-    const albums = await AlbumModel.find(visibleCatalogFilter({ artistId: id }))
-      .sort(withImageFirstSort('album', { releaseDate: -1 }))
-      .lean();
+    const albums = await findAlbumsWithPlayableTracks({ artistId: id }, playbackOptions, {
+      sort: withImageFirstSort('album', { releaseDate: -1 }),
+      limit: ARTIST_ALBUMS_LIMIT,
+    });
 
     const formattedAlbums = albums.map(album => formatAlbumWithCoverArt(album)).filter(Boolean);
 
@@ -142,7 +153,7 @@ export const getArtistTracks = async (req: Request, res: Response, next: NextFun
     }
     
     // Verify artist exists
-    const artist = await ArtistModel.findOne(visibleCatalogFilter({ _id: id })).lean();
+    const artist = await findOneArtistWithPlayableTracks(id, playbackOptions);
     if (!artist) {
       return res.status(404).json({ error: 'Artist not found' });
     }

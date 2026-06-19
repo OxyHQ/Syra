@@ -4,7 +4,7 @@ import { TrackModel } from '../models/Track';
 import { AlbumModel } from '../models/Album';
 import { ArtistModel } from '../models/Artist';
 import { UserMusicPreferencesModel } from '../models/UserMusicPreferences';
-import { getGenres, getMadeForYou, getPopularTracks } from './browse.controller';
+import { getGenres, getMadeForYou, getPopularAlbums, getPopularTracks } from './browse.controller';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import type { Request, Response, NextFunction } from 'express';
 
@@ -80,7 +80,7 @@ describe('getGenres', () => {
     expect(names).toEqual(['Electronic', 'House']);
   });
 
-  it('unions track, album, and artist genres without duplicates', async () => {
+  it('only surfaces genres backed by playable tracks', async () => {
     await seedTrack({ genre: 'Electronic' });
     await ArtistModel.create({
       name: 'Artist Genre',
@@ -103,7 +103,7 @@ describe('getGenres', () => {
 
     const body = res._body as { genres: Array<{ name: string }> };
     const names = body.genres.map((g) => g.name).sort();
-    expect(names).toEqual(['Electronic', 'Hip-Hop/Rap', 'Jazz']);
+    expect(names).toEqual(['Electronic']);
   });
 
   it('does not use track images[] external URLs as genre cover art', async () => {
@@ -199,12 +199,96 @@ describe('getPopularTracks', () => {
   });
 });
 
+// ── getPopularAlbums ─────────────────────────────────────────────────────────
+
+describe('getPopularAlbums', () => {
+  it('excludes albums with no playable tracks for the current playback policy', async () => {
+    process.env.AUDIUS_CATALOG_ENABLED = 'true';
+    const playableAlbum = await AlbumModel.create({
+      title: 'Playable Album',
+      artistId: '507f1f77bcf86cd799439011',
+      artistName: 'An Artist',
+      releaseDate: '2026-01-01T00:00:00Z',
+      coverArt: '507f1f77bcf86cd799439012',
+      source: 'audius',
+      popularity: 80,
+    });
+    const directOnlyAlbum = await AlbumModel.create({
+      title: 'Direct Only Album',
+      artistId: '507f1f77bcf86cd799439011',
+      artistName: 'An Artist',
+      releaseDate: '2026-01-01T00:00:00Z',
+      coverArt: '507f1f77bcf86cd799439013',
+      source: 'audius',
+      popularity: 99,
+    });
+    await seedTrack({
+      title: 'Syra Hosted Audius',
+      source: 'audius',
+      albumId: playableAlbum._id.toString(),
+      status: 'ready',
+      popularity: 80,
+      hlsMasterKey: 'hls/audius/rehosted/master.m3u8',
+      hls: [{ manifestKey: 'hls/audius/rehosted/160/index.m3u8', bitrateKbps: 160, encrypted: true }],
+    });
+    await seedTrack({
+      title: 'Direct Audius',
+      source: 'audius',
+      albumId: directOnlyAlbum._id.toString(),
+      status: 'ready',
+      popularity: 99,
+      streamUrl: 'https://discoveryprovider.audius.co/v1/tracks/direct/stream?app_name=Syra',
+    });
+
+    const res = makeRes();
+    await getPopularAlbums(makeReq(), res as unknown as Response, next);
+
+    const body = res._body as { albums: Array<{ title: string }> };
+    expect(body.albums.map((album) => album.title)).toEqual(['Playable Album']);
+  });
+
+  it('includes direct-only Audius albums when the signed-in user enabled direct streaming', async () => {
+    process.env.AUDIUS_CATALOG_ENABLED = 'true';
+    const album = await AlbumModel.create({
+      title: 'Direct Only Album',
+      artistId: '507f1f77bcf86cd799439011',
+      artistName: 'An Artist',
+      releaseDate: '2026-01-01T00:00:00Z',
+      coverArt: '507f1f77bcf86cd799439013',
+      source: 'audius',
+      popularity: 99,
+    });
+    await seedTrack({
+      title: 'Direct Audius',
+      source: 'audius',
+      albumId: album._id.toString(),
+      status: 'ready',
+      popularity: 99,
+      streamUrl: 'https://discoveryprovider.audius.co/v1/tracks/direct/stream?app_name=Syra',
+    });
+    await UserMusicPreferencesModel.create({
+      oxyUserId: 'oxy-user-direct',
+      directAudiusStreaming: true,
+    });
+
+    const res = makeRes();
+    await getPopularAlbums(makeReq({}, 'oxy-user-direct'), res as unknown as Response, next);
+
+    const body = res._body as { albums: Array<{ title: string }> };
+    expect(body.albums.map((listedAlbum) => listedAlbum.title)).toEqual(['Direct Only Album']);
+    expect(res._headers['Cache-Control']).toBe('private, max-age=30, stale-while-revalidate=120');
+    expect(res._headers.Vary).toBe('Authorization');
+  });
+});
+
 // ── getMadeForYou ─────────────────────────────────────────────────────────────
 
 describe('getMadeForYou', () => {
   it('falls back to popular tracks + artists when albums/playlists are sparse', async () => {
-    await seedTrack({ title: 'Popular', playCount: 100000, popularity: 80 });
+    const artistId = '507f1f77bcf86cd799439011';
+    await seedTrack({ title: 'Popular', artistId, playCount: 100000, popularity: 80 });
     await ArtistModel.create({
+      _id: artistId,
       name: 'Popular Artist',
       source: 'cc',
       popularity: 70,
@@ -230,7 +314,7 @@ describe('getMadeForYou', () => {
   it('does not include track/artist fallback when albums fill the section', async () => {
     // Seed enough albums to satisfy half the default limit (20 → half=10)
     for (let i = 0; i < 10; i++) {
-      await AlbumModel.create({
+      const album = await AlbumModel.create({
         title: `Album ${i}`,
         artistId: '507f1f77bcf86cd799439011',
         artistName: 'An Artist',
@@ -238,6 +322,11 @@ describe('getMadeForYou', () => {
         coverArt: `https://cdn/cover-${i}.jpg`,
         source: 'cc',
         popularity: 50,
+      });
+      await seedTrack({
+        title: `Album Track ${i}`,
+        albumId: album._id.toString(),
+        playCount: i,
       });
     }
     await seedTrack({ title: 'Should Not Appear', playCount: 100000 });

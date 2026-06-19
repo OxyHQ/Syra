@@ -4,7 +4,7 @@
 
 **Goal:** Build Syra's music core — one canonical catalog fed by artist uploads + commercial-use CC imports + Audius, with real adaptive (HLS, AES-128 encrypted) streaming and Spotify Connect-style multi-device control. **No Spotify/YouTube Music, no commercial-label catalog.**
 
-**Architecture:** Canonical Track/Artist/Album gain `externalIds`/`sources`/`source`/`status`/`images`/`hls`. Owned audio (uploads + commercial-use CC) is transcoded to AES-128-encrypted HLS in S3, served via CloudFront signed URLs; Audius tracks stream from the Audius network (never rehosted). A unified resolver hands the player one URL per source. Playback is server-authoritative (`PlaybackState` + `Device`) over the existing `playerSocket` for cross-device control + transfer.
+**Architecture:** Canonical Track/Artist/Album gain `externalIds`/`sources`/`source`/`status`/`images`/`hls`. Owned audio (uploads + commercial-use CC) and copyable Audius audio are transcoded to AES-128-encrypted HLS in S3, served via CloudFront signed URLs. Audius direct streaming is only the user opt-in fallback for tracks that cannot be copied/rehosted and only have a provider stream URL. A unified resolver hands the player one URL per source. Playback is server-authoritative (`PlaybackState` + `Device`) over the existing `playerSocket` for cross-device control + transfer.
 
 **Tech Stack:** Bun, Express + Mongoose, Expo/expo-router, `expo-audio` (+ `hls.js` web shim), `@tanstack/react-query`, Bloom, `@syra/shared-types`, ffmpeg + Shaka Packager/Bento4 (transcode/encrypt), CloudFront (CDN), Audius API, LRCLIB.
 
@@ -26,9 +26,10 @@ TDD steps right before it is executed**, following the Phase 1 shape and the spe
    store renditions in `oxy-syra-media-usw2`; set `Track.status`. Async job. Tests: pipeline
    on a sample file → asserts manifests + encrypted segments + key artifact + status flip.
 3. **Delivery + unified resolver** — CloudFront signed URLs/cookies (key pair in SSM);
-   `GET /api/stream/:trackId` → `{ url, type, expiresAt }` (owned→signed HLS, audius→Audius
-   stream/proxy); `GET /api/stream/:trackId/key` (authenticated, short-TTL AES key). Tests:
-   resolver per source; key endpoint authz + TTL.
+   `GET /api/stream/:trackId` → `{ url, type, expiresAt }` (Syra-hosted HLS for uploads,
+   CC imports, and copyable Audius; provider stream only for direct-only Audius when the
+   signed-in user enabled `directAudiusStreaming`); `GET /api/stream/:trackId/key`
+   (authenticated, short-TTL AES key). Tests: resolver per source; key endpoint authz + TTL.
 4. **Player layer** — shared `playerStore`/`queueStore` (exist) + `attachSource`
    `.native.ts` (expo-audio) / `.web.ts` (Safari→expo-audio, else hls.js + AES key cb); wire
    `AudioQuality`. Tests: source resolution + quality selection (mock player).
@@ -43,7 +44,8 @@ TDD steps right before it is executed**, following the Phase 1 shape and the spe
    heartbeat; transfer. Device-picker UI on `PlayerBar`. Tests: command→state→broadcast;
    transfer moves activeDevice+position; offline failover.
 7. **Sources connectors** — `MusicSourceConnector` interface; `AudiusConnector` (search/import
-   metadata, resolver returns Audius stream, **never rehost ARR**); `CcConnector`
+   metadata, classify legal/technical copyability, ingest copyable audio to Syra HLS, keep
+   non-copyable tracks direct-only behind `directAudiusStreaming`); `CcConnector`
    (Jamendo/FMA/ccMixter — **filter CC licenses that permit commercial use**, reject CC-NC →
    enqueue transcode-to-S3); `ImportJob` model + progress. Tests: license filter; Audius
    normalization (mock HTTP); import job counts.
