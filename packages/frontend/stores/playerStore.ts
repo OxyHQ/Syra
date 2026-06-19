@@ -32,9 +32,9 @@ import {
   clampVolume,
 } from './playerStore.helpers';
 import { prefetchStreams, resolveStream, StreamResolution } from '@/services/streamService';
-import { libraryService, type ListeningSource } from '@/services/libraryService';
+import { libraryService, type ListeningSource, type PlaySignal } from '@/services/libraryService';
 import { browseService } from '@/services/browseService';
-import { authenticatedClient } from '@/utils/api';
+import { oxyServices } from '@/lib/oxyServices';
 import { attachSource } from './playback/attachSource';
 import type { AttachResult } from './playback/attachSource.types';
 import type { PlayerEngine } from './playback/playerEngine';
@@ -44,6 +44,13 @@ import { isRealFinish } from './playback/isRealFinish';
 import { useMusicPreferencesStore } from './musicPreferencesStore';
 
 const logger = createScopedLogger('PlayerStore');
+const PLAY_SIGNAL_AUTH_WAIT_MS = 20_000;
+const MAX_PENDING_PLAY_SIGNALS = 16;
+
+interface PendingPlaySignal {
+  trackId: string;
+  signal?: PlaySignal;
+}
 
 /**
  * Player state interface
@@ -80,6 +87,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   /** Teardown for the active attachSource (hls.js etc.) — called before attach or stop. */
   let currentDetach: AttachResult | null = null;
   let completionInFlight = false;
+  let tokenDrainUnsubscribe: (() => void) | null = null;
+  let pendingSignalDrainInFlight = false;
+  const pendingPlaySignals: PendingPlaySignal[] = [];
 
   /**
    * The play currently being tracked for engagement signalling. When the next
@@ -88,6 +98,73 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
    * backend distinguish a real play from a skip and learn the user's taste.
    */
   let activePlay: { trackId: string; source: ListeningSource; durationSec: number } | null = null;
+
+  const removePendingPlaySignal = (pending: PendingPlaySignal): void => {
+    const index = pendingPlaySignals.indexOf(pending);
+    if (index >= 0) {
+      pendingPlaySignals.splice(index, 1);
+    }
+  };
+
+  const drainPendingPlaySignals = (): void => {
+    if (pendingSignalDrainInFlight || !oxyServices.hasValidToken() || pendingPlaySignals.length === 0) {
+      return;
+    }
+
+    pendingSignalDrainInFlight = true;
+    const signals = pendingPlaySignals.splice(0, pendingPlaySignals.length);
+    void Promise.all(
+      signals.map((pending) => libraryService.recordRecentlyPlayed(pending.trackId, pending.signal)),
+    ).finally(() => {
+      pendingSignalDrainInFlight = false;
+      if (pendingPlaySignals.length > 0 && oxyServices.hasValidToken()) {
+        drainPendingPlaySignals();
+      }
+    });
+  };
+
+  const ensureTokenDrainSubscription = (): void => {
+    if (tokenDrainUnsubscribe) {
+      return;
+    }
+
+    tokenDrainUnsubscribe = oxyServices.onTokensChanged((accessToken) => {
+      if (accessToken) {
+        drainPendingPlaySignals();
+      }
+    });
+  };
+
+  const queuePlaySignalUntilAuthReady = (trackId: string, signal?: PlaySignal): void => {
+    const pending: PendingPlaySignal = { trackId, signal };
+    pendingPlaySignals.push(pending);
+    if (pendingPlaySignals.length > MAX_PENDING_PLAY_SIGNALS) {
+      pendingPlaySignals.shift();
+    }
+
+    ensureTokenDrainSubscription();
+    void oxyServices.waitForAuth(PLAY_SIGNAL_AUTH_WAIT_MS)
+      .then((authReady) => {
+        if (authReady) {
+          drainPendingPlaySignals();
+          return;
+        }
+        removePendingPlaySignal(pending);
+      })
+      .catch((error) => {
+        removePendingPlaySignal(pending);
+        logger.warn('Failed while waiting for auth before recording playback', { trackId, error });
+      });
+  };
+
+  const submitPlaySignal = (trackId: string, signal?: PlaySignal): void => {
+    if (oxyServices.hasValidToken()) {
+      void libraryService.recordRecentlyPlayed(trackId, signal);
+      return;
+    }
+
+    queuePlaySignalUntilAuthReady(trackId, signal);
+  };
 
   /** Map a playback context to the listening source the backend understands. */
   const contextToSource = (context: PlaybackContext | null | undefined): ListeningSource => {
@@ -117,13 +194,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     if (!play) return;
     activePlay = null;
 
-    if (!authenticatedClient.getAccessToken()) return;
-
     const listenedSec = finiteSeconds(listenedSecOverride ?? get().currentTime);
     const durationSec = play.durationSec || finiteSeconds(get().duration);
     const completion = durationSec > 0 ? Math.min(1, listenedSec / durationSec) : undefined;
 
-    void libraryService.recordRecentlyPlayed(play.trackId, {
+    submitPlaySignal(play.trackId, {
       listenedSec,
       completion,
       source: play.source,
@@ -460,25 +535,19 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
    *
    * Fire-and-forget: called once a track has actually started so the home
    * screen's real "Recently played" / "Jump back in" section is populated.
-   * Only runs for authenticated users (an access token is present) — guests
-   * have no server-side history, so we skip the request entirely rather than
-   * provoke a 401. The service itself swallows/logs any failure, so this never
-   * affects playback.
+   * Uses SDK session readiness instead of a one-time token read. During cold
+   * boot, signals wait briefly for OxyProvider to publish the restored token;
+   * true guests expire without affecting playback.
    */
   const recordPlay = (track: Track, context?: PlaybackContext | null): void => {
     // Flush the engagement signal for whatever was playing before this track so
     // the outgoing play's completion/skip is captured exactly once.
     flushPlaySignal();
 
-    if (!authenticatedClient.getAccessToken()) {
-      activePlay = null;
-      return;
-    }
-
     const source = contextToSource(context ?? get().context);
     // Signal-less start ping: populates "Jump back in" immediately. The
     // engagement ping (with listenedSec/completion) is sent on flush.
-    void libraryService.recordRecentlyPlayed(track.id, { source });
+    submitPlaySignal(track.id, { source });
     activePlay = { trackId: track.id, source, durationSec: finiteSeconds(track.duration) };
   };
 

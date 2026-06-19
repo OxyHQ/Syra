@@ -1,4 +1,4 @@
-import { api } from '@/utils/api';
+import { api, publicApi } from '@/utils/api';
 import { Track, Artist } from '@syra/shared-types';
 import { normalizeTrackImages, normalizeArtistImages } from '@/utils/catalogImages';
 
@@ -34,19 +34,19 @@ export interface MadeForYouResponse {
 export const recommendationService = {
   /** Artists fans of `artistId` also listen to. Public. */
   async getRelatedArtists(artistId: string, params?: { limit?: number }): Promise<RelatedArtistsResponse> {
-    const response = await api.get<RelatedArtistsResponse>(`/artists/${artistId}/related`, params);
+    const response = await publicApi.get<RelatedArtistsResponse>(`/artists/${artistId}/related`, params);
     return { ...response.data, artists: response.data.artists.map(normalizeArtistImages) };
   },
 
   /** Tracks similar to `trackId`. Public. */
   async getSimilarTracks(trackId: string, params?: { limit?: number }): Promise<SimilarTracksResponse> {
-    const response = await api.get<SimilarTracksResponse>(`/tracks/${trackId}/similar`, params);
+    const response = await publicApi.get<SimilarTracksResponse>(`/tracks/${trackId}/similar`, params);
     return { ...response.data, tracks: response.data.tracks.map(normalizeTrackImages) };
   },
 
   /** A radio station seeded from `trackId` for autoplay queue population. Public. */
   async getTrackRadio(trackId: string, params?: { limit?: number }): Promise<RadioResponse> {
-    const response = await api.get<RadioResponse>(`/tracks/${trackId}/radio`, params);
+    const response = await publicApi.get<RadioResponse>(`/tracks/${trackId}/radio`, params);
     return { ...response.data, tracks: response.data.tracks.map(normalizeTrackImages) };
   },
 

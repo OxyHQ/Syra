@@ -1,4 +1,4 @@
-import { api } from '@/utils/api';
+import { publicApi } from '@/utils/api';
 import { Track, Album, Artist, Playlist } from '@syra/shared-types';
 import {
   normalizeAlbumImages,
@@ -69,7 +69,7 @@ export const browseService = {
    * Get the public home discovery payload in one round-trip.
    */
   async getHome(params?: { sectionLimit?: number; tracksLimit?: number }): Promise<HomeBrowseResponse> {
-    const response = await api.get<HomeBrowseResponse>('/browse/home', params);
+    const response = await publicApi.get<HomeBrowseResponse>('/browse/home', params);
     return {
       madeForYou: {
         albums: response.data.madeForYou.albums.map(normalizeAlbumImages),
@@ -97,7 +97,7 @@ export const browseService = {
    * Get available genres with sample content
    */
   async getGenres(): Promise<{ genres: Genre[] }> {
-    const response = await api.get<{ genres: Genre[] }>('/browse/genres');
+    const response = await publicApi.get<{ genres: Genre[] }>('/browse/genres');
     return {
       genres: response.data.genres.map((genre) => ({
         ...genre,
@@ -113,7 +113,7 @@ export const browseService = {
     genre: string,
     params?: { limit?: number; offset?: number },
   ): Promise<GenreTracksResponse> {
-    const response = await api.get<GenreTracksResponse>(
+    const response = await publicApi.get<GenreTracksResponse>(
       `/browse/genres/${encodeURIComponent(genre)}/tracks`,
       params,
     );
@@ -124,7 +124,7 @@ export const browseService = {
    * Get popular/trending tracks
    */
   async getPopularTracks(params?: { limit?: number; offset?: number }): Promise<PopularTracksResponse> {
-    const response = await api.get<PopularTracksResponse>('/browse/popular/tracks', params);
+    const response = await publicApi.get<PopularTracksResponse>('/browse/popular/tracks', params);
     return { ...response.data, tracks: response.data.tracks.map(normalizeTrackImages) };
   },
 
@@ -132,7 +132,7 @@ export const browseService = {
    * Get popular/trending albums
    */
   async getPopularAlbums(params?: { limit?: number; offset?: number }): Promise<PopularAlbumsResponse> {
-    const response = await api.get<PopularAlbumsResponse>('/browse/popular/albums', params);
+    const response = await publicApi.get<PopularAlbumsResponse>('/browse/popular/albums', params);
     return { ...response.data, albums: response.data.albums.map(normalizeAlbumImages) };
   },
 
@@ -140,7 +140,7 @@ export const browseService = {
    * Get popular/trending artists
    */
   async getPopularArtists(params?: { limit?: number; offset?: number }): Promise<PopularArtistsResponse> {
-    const response = await api.get<PopularArtistsResponse>('/browse/popular/artists', params);
+    const response = await publicApi.get<PopularArtistsResponse>('/browse/popular/artists', params);
     return { ...response.data, artists: response.data.artists.map(normalizeArtistImages) };
   },
 
@@ -148,7 +148,7 @@ export const browseService = {
    * Get made for you recommendations
    */
   async getMadeForYou(params?: { limit?: number }): Promise<MadeForYouResponse> {
-    const response = await api.get<MadeForYouResponse>('/browse/made-for-you', params);
+    const response = await publicApi.get<MadeForYouResponse>('/browse/made-for-you', params);
     return {
       albums: response.data.albums.map(normalizeAlbumImages),
       playlists: response.data.playlists.map(normalizePlaylistImages),
@@ -162,7 +162,7 @@ export const browseService = {
    * Get top charts
    */
   async getCharts(params?: { limit?: number }): Promise<ChartsResponse> {
-    const response = await api.get<ChartsResponse>('/browse/charts', params);
+    const response = await publicApi.get<ChartsResponse>('/browse/charts', params);
     return { ...response.data, tracks: response.data.tracks.map(normalizeTrackImages) };
   },
 };
