@@ -29,7 +29,10 @@ import {
   useUpdatePrivacySettingsCache,
   type PrivacySettings,
 } from '@/hooks/usePrivacySettings';
-import { useAppearanceStore } from '@/store/appearanceStore';
+import {
+  useMyAppearanceSettings,
+  useUpdateMyAppearanceSettings,
+} from '@/store/appearanceStore';
 import { STORAGE_KEYS } from '@/lib/constants';
 import i18n from '@/lib/i18n';
 import { authenticatedClient } from '@/utils/api';
@@ -98,8 +101,8 @@ const SettingsScreen: React.FC = () => {
   } = useMusicPreferences();
   const privacySettings = useCurrentUserPrivacySettings();
   const updatePrivacySettingsCache = useUpdatePrivacySettingsCache();
-  const appearanceSettings = useAppearanceStore((state) => state.mySettings);
-  const updateAppearanceSettings = useAppearanceStore((state) => state.updateMySettings);
+  const { data: appearanceSettings } = useMyAppearanceSettings(!isPrivateApiPending && canUsePrivateApi);
+  const { mutateAsync: updateAppearanceSettings } = useUpdateMyAppearanceSettings();
   const { colorPreset, mode: bloomMode, setMode, setColorPreset } = useBloomTheme();
 
   const avatarUri = user?.avatar ? oxyServices.getFileDownloadUrl(user.avatar, 'thumb') : undefined;

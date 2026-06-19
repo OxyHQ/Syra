@@ -1,11 +1,9 @@
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useOxy } from '@oxyhq/services';
-import { useUsersStore, useUserByUsername, type UserEntity } from '@/stores/usersStore';
-import { useAppearanceStore, type UserAppearance } from '@/store/appearanceStore';
+import { type UserEntity } from '@/stores/usersStore';
+import { useUserAppearance, type UserAppearance } from '@/store/appearanceStore';
 import { usePrivacySettings } from './usePrivacySettings';
-import { createScopedLogger } from '@/utils/logger';
-
-const logger = createScopedLogger('useProfileData');
 
 export interface ProfileDesign {
   displayName: string;
@@ -31,6 +29,11 @@ export interface ProfileData extends Omit<UserEntity, 'avatar'> {
   };
 }
 
+type RemoteUserProfile = Omit<UserEntity, 'avatar' | 'privacySettings'> & {
+  avatar?: string | null;
+  privacySettings?: unknown;
+};
+
 /**
  * Computes profile design values from Oxy profile + backend customization settings
  */
@@ -53,6 +56,19 @@ function computeDesign(
   };
 }
 
+function normalizeProfile(profile: RemoteUserProfile): UserEntity {
+  const privacySettings =
+    typeof profile.privacySettings === 'object' && profile.privacySettings !== null
+      ? profile.privacySettings as Record<string, unknown>
+      : undefined;
+
+  return {
+    ...profile,
+    avatar: profile.avatar ?? undefined,
+    privacySettings,
+  };
+}
+
 /**
  * Unified hook for profile data that combines:
  * - Oxy profile data (from usersStore)
@@ -66,60 +82,24 @@ export function useProfileData(username?: string): {
   loading: boolean;
 } {
   const { oxyServices } = useOxy();
-  
-  // Use existing hooks for store access
-  const ensureByUsername = useUsersStore((state) => state.ensureByUsername);
-  const loadForUser = useAppearanceStore((state) => state.loadForUser);
-  
-  // Get user from store using existing hook
-  const oxyProfile = useUserByUsername(username);
-  
-  // Subscribe to appearance settings for this user
-  const appearance = useAppearanceStore((state) => {
-    const id = oxyProfile?.id;
-    return id ? state.byUserId[id] : undefined;
-  });
-  
-  // Load privacy settings
-  const privacySettings = usePrivacySettings(oxyProfile?.id);
 
-  // Fetch profile data when username changes
-  useEffect(() => {
-    if (!username) return;
-
-    let cancelled = false;
-
-    const fetchProfile = async () => {
-      try {
-        // Fetch fresh data - this will update the store
-        const data = await ensureByUsername(
-          username,
-          async (u) => {
-            const profile = await oxyServices.getProfileByUsername(u);
-            if (!profile) return profile;
-            return {
-              ...profile,
-              avatar: profile.avatar ?? undefined,
-              privacySettings: profile.privacySettings as Record<string, unknown> | undefined,
-            } satisfies UserEntity;
-          }
-        );
-
-        if (!cancelled && data?.id) {
-          // Load appearance settings for this user
-          await loadForUser(data.id, true);
-        }
-      } catch (error) {
-        logger.debug('Profile fetch error', { error });
+  const normalizedUsername = username?.trim().toLowerCase();
+  const profileQuery = useQuery<UserEntity | null, Error>({
+    queryKey: ['profile', 'username', normalizedUsername ?? 'missing'],
+    enabled: Boolean(normalizedUsername),
+    queryFn: async () => {
+      if (!username) {
+        return null;
       }
-    };
+      const profile = await oxyServices.getProfileByUsername(username);
+      return profile ? normalizeProfile(profile) : null;
+    },
+  });
 
-    fetchProfile();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [username, ensureByUsername, loadForUser, oxyServices]);
+  const oxyProfile = profileQuery.data;
+  const appearanceQuery = useUserAppearance(oxyProfile?.id);
+  const appearance = appearanceQuery.data ?? undefined;
+  const privacySettings = usePrivacySettings(oxyProfile?.id);
 
   // Compute unified profile data
   const profileData = useMemo((): ProfileData | null => {
@@ -143,7 +123,7 @@ export function useProfileData(username?: string): {
   }, [oxyProfile, appearance, privacySettings]);
 
   // Loading state: true if username provided but no profile data yet
-  const loading = Boolean(username && !oxyProfile);
+  const loading = Boolean(username && profileQuery.isLoading);
 
   return { data: profileData, loading };
 }

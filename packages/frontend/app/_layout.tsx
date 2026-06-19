@@ -2,7 +2,7 @@
 import 'react-native-reanimated';
 
 import NetInfo from '@react-native-community/netinfo';
-import { QueryClient, focusManager, onlineManager } from '@tanstack/react-query';
+import { focusManager, onlineManager } from '@tanstack/react-query';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Slot } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState, memo } from "react";
@@ -19,7 +19,6 @@ import { NowPlaying } from "@/components/NowPlaying";
 import { ThemedView } from "@/components/ThemedView";
 import { Panel } from "@/components/Panel";
 import { AppProviders } from '@/components/providers/AppProviders';
-import { QUERY_CLIENT_CONFIG } from '@/components/providers/constants';
 import { Provider as PortalProvider, Outlet as PortalOutlet } from '@/components/Portal';
 import { PLAYER_BAR_HEIGHT } from '@/constants/layout';
 
@@ -34,6 +33,7 @@ import { prefetchHomeBrowse } from '@/hooks/useHomeFeed';
 
 // Services & Utils
 import { oxyServices } from '@/lib/oxyServices';
+import { queryClient } from '@/lib/queryClient';
 import { AppInitializer } from '@/lib/appInitializer';
 import { webViewStyle, webDimension } from '@/utils/webStyles';
 import { createScopedLogger } from '@/utils/logger';
@@ -275,9 +275,6 @@ export default function RootLayout() {
   const isScreenNotMobile = useIsScreenNotMobile();
   const keyboardVisible = useKeyboardVisibility();
 
-  // Memoized instances
-  const queryClient = useMemo(() => new QueryClient(QUERY_CLIENT_CONFIG), []);
-
   // Font loading is owned entirely by Bloom's `BloomThemeProvider`/`FontLoader`:
   // it loads the Bloom font families on native (and sets the default `Text`
   // family) and injects the `@font-face` rules + `--bloom-font-*` tokens on web.
@@ -372,7 +369,6 @@ export default function RootLayout() {
     isScreenNotMobile,
     keyboardVisible,
     handleSplashFadeComplete,
-    queryClient,
     // oxyServices is stable (imported singleton), but included for completeness
   ]);
 

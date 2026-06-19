@@ -41,7 +41,7 @@ import type { PlayerEngine } from './playback/playerEngine';
 import { pickPlaybackMode, canPlayHlsNatively } from './playback/pickPlaybackMode';
 import { createWebHlsPlayer } from './playback/webHlsPlayer';
 import { isRealFinish } from './playback/isRealFinish';
-import { useMusicPreferencesStore } from './musicPreferencesStore';
+import { getCurrentMusicPreferences } from './musicPreferencesStore';
 
 const logger = createScopedLogger('PlayerStore');
 const PLAY_SIGNAL_AUTH_WAIT_MS = 20_000;
@@ -387,7 +387,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   };
 
   const extendQueueForAutoplay = async (finishedTrack?: Track | null): Promise<boolean> => {
-    const preferences = useMusicPreferencesStore.getState().preferences;
+    const preferences = getCurrentMusicPreferences();
     if (preferences?.autoplay === false) {
       return false;
     }

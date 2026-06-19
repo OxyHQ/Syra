@@ -1,8 +1,5 @@
-import { create } from 'zustand';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, publicApi, isUnauthorizedError } from '@/utils/api';
-import { Storage } from '@/utils/storage';
-
-const APPEARANCE_CACHE_KEY = 'oxy_appearance_settings';
 
 function unwrapApiData<T>(value: T | { data: T } | null | undefined): T | null {
   if (value === null || value === undefined) {
@@ -52,129 +49,113 @@ export interface UserAppearance {
   updatedAt?: string;
 }
 
-interface AppearanceStore {
-  mySettings: UserAppearance | null;
-  byUserId: Record<string, UserAppearance>;
-  loading: boolean;
-  error: string | null;
-  loadMySettings: (isAuthenticated: boolean) => Promise<void>;
-  loadForUser: (userId: string, forceRefresh?: boolean) => Promise<UserAppearance | null>;
-  updateMySettings: (partial: Partial<UserAppearance>) => Promise<UserAppearance | null>;
+export const appearanceQueryKeys = {
+  all: ['appearance'] as const,
+  me: ['appearance', 'me'] as const,
+  user: (userId: string) => ['appearance', 'user', userId] as const,
+};
+
+function buildAppearancePayload(partial: Partial<UserAppearance>): Partial<UserAppearance> {
+  return {
+    ...(partial.appearance && { appearance: partial.appearance }),
+    ...(Object.prototype.hasOwnProperty.call(partial, 'profileHeaderImage') && {
+      profileHeaderImage: partial.profileHeaderImage,
+    }),
+    ...(partial.profileCustomization && {
+      profileCustomization: partial.profileCustomization,
+    }),
+    ...(partial.interests && {
+      interests: partial.interests,
+    }),
+  };
 }
 
-/**
- * Appearance store with optimized selectors to prevent unnecessary re-renders.
- * Always use selectors when subscribing: useAppearanceStore(state => state.mySettings)
- */
-export const useAppearanceStore = create<AppearanceStore>((set, get) => ({
-  mySettings: null,
-  byUserId: {},
-  loading: false,
-  error: null,
-
-  async loadMySettings(isAuthenticated: boolean) {
-    try {
-      set({ loading: true, error: null });
-      
-      // Load from cache first for instant theme application
-      const cachedRaw = await Storage.get<UserAppearance | { data: UserAppearance }>(APPEARANCE_CACHE_KEY);
-      const cached = unwrapApiData<UserAppearance>(cachedRaw);
-      if (cached) {
-        set({ mySettings: cached });
-      }
-
-      // Only fetch private settings after auth is resolved and authenticated.
-      if (!isAuthenticated) {
-        set({ loading: false });
-        return;
-      }
-
-      // Fetch fresh data from API
-      const res = await api.get<UserAppearance>('/profile/settings/me');
-      const doc = unwrapApiData<UserAppearance>(res.data);
-      
-      // Cache the settings
-      if (doc) {
-        await Storage.set(APPEARANCE_CACHE_KEY, doc);
-
-        set((state) => ({
-          mySettings: doc,
-          byUserId: doc.oxyUserId ? { ...state.byUserId, [doc.oxyUserId]: doc } : state.byUserId,
-          loading: false,
-        }));
-      } else {
-        set({ loading: false });
-      }
-    } catch (e) {
-      if (isUnauthorizedError(e)) {
-        set({ loading: false, error: null });
-        return;
-      }
-      set({ loading: false, error: getErrorMessage(e) || 'Failed to load settings' });
-    }
-  },
-
-  async loadForUser(userId: string, forceRefresh: boolean = false) {
-    if (!userId) return null;
-    
-    try {
-      const cached = get().byUserId[userId];
-      if (cached && !forceRefresh) return cached;
-      
-      const res = await publicApi.get<UserAppearance>(`/profile/design/${userId}`);
-      const doc = unwrapApiData<UserAppearance>(res.data);
-      
-      if (doc) {
-        set((state) => ({
-          byUserId: { ...state.byUserId, [userId]: doc },
-        }));
-      }
-      
-      return doc ?? null;
-    } catch (e) {
+export async function fetchMyAppearanceSettings(): Promise<UserAppearance | null> {
+  try {
+    const res = await api.get<UserAppearance>('/profile/settings/me');
+    return unwrapApiData<UserAppearance>(res.data);
+  } catch (error) {
+    if (isUnauthorizedError(error)) {
       return null;
     }
-  },
+    throw error;
+  }
+}
 
-  async updateMySettings(partial: Partial<UserAppearance>) {
-    try {
-      set({ loading: true, error: null });
-      
-      // Build payload with only allowed fields
-      const payload: Partial<UserAppearance> = {
-        ...(partial.appearance && { appearance: partial.appearance }),
-        ...(Object.prototype.hasOwnProperty.call(partial, 'profileHeaderImage') && {
-          profileHeaderImage: partial.profileHeaderImage,
-        }),
-        ...(partial.profileCustomization && {
-          profileCustomization: partial.profileCustomization,
-        }),
-        ...(partial.interests && {
-          interests: partial.interests,
-        }),
-      };
-      
-      const res = await api.put<UserAppearance>('/profile/settings', payload);
-      const doc = unwrapApiData<UserAppearance>(res.data);
+export async function fetchUserAppearance(userId: string): Promise<UserAppearance | null> {
+  const res = await publicApi.get<UserAppearance>(`/profile/design/${userId}`);
+  return unwrapApiData<UserAppearance>(res.data);
+}
 
-      if (doc) {
-        // Update cache
-        await Storage.set(APPEARANCE_CACHE_KEY, doc);
+export async function updateMyAppearanceSettings(
+  partial: Partial<UserAppearance>,
+): Promise<UserAppearance | null> {
+  const res = await api.put<UserAppearance>('/profile/settings', buildAppearancePayload(partial));
+  return unwrapApiData<UserAppearance>(res.data);
+}
 
-        set((state) => ({
-          mySettings: doc,
-          byUserId: doc.oxyUserId ? { ...state.byUserId, [doc.oxyUserId]: doc } : state.byUserId,
-          loading: false,
-        }));
+export function useMyAppearanceSettings(enabled: boolean) {
+  return useQuery<UserAppearance | null, Error>({
+    queryKey: appearanceQueryKeys.me,
+    enabled,
+    queryFn: fetchMyAppearanceSettings,
+  });
+}
 
-        return doc;
+export function useUserAppearance(userId?: string | null) {
+  return useQuery<UserAppearance | null, Error>({
+    queryKey: userId ? appearanceQueryKeys.user(userId) : [...appearanceQueryKeys.all, 'user', 'missing'],
+    enabled: Boolean(userId),
+    queryFn: () => (userId ? fetchUserAppearance(userId) : Promise.resolve(null)),
+  });
+}
+
+export function useUpdateMyAppearanceSettings() {
+  const queryClient = useQueryClient();
+
+  return useMutation<UserAppearance | null, Error, Partial<UserAppearance>, { previous?: UserAppearance | null }>({
+    mutationFn: updateMyAppearanceSettings,
+    onMutate: async (partial) => {
+      await queryClient.cancelQueries({ queryKey: appearanceQueryKeys.me });
+      const previous = queryClient.getQueryData<UserAppearance | null>(appearanceQueryKeys.me);
+      if (previous) {
+        const optimistic: UserAppearance = {
+          ...previous,
+          ...partial,
+          appearance: partial.appearance
+            ? { ...previous.appearance, ...partial.appearance }
+            : previous.appearance,
+          profileCustomization: partial.profileCustomization
+            ? { ...previous.profileCustomization, ...partial.profileCustomization }
+            : previous.profileCustomization,
+          interests: partial.interests
+            ? { ...previous.interests, ...partial.interests }
+            : previous.interests,
+        };
+        queryClient.setQueryData(appearanceQueryKeys.me, optimistic);
+        if (optimistic.oxyUserId) {
+          queryClient.setQueryData(appearanceQueryKeys.user(optimistic.oxyUserId), optimistic);
+        }
       }
+      return { previous };
+    },
+    onError: (_error, _partial, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(appearanceQueryKeys.me, context.previous);
+      }
+    },
+    onSuccess: (doc) => {
+      queryClient.setQueryData(appearanceQueryKeys.me, doc);
+      if (doc?.oxyUserId) {
+        queryClient.setQueryData(appearanceQueryKeys.user(doc.oxyUserId), doc);
+      }
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: appearanceQueryKeys.me });
+    },
+  });
+}
 
-      set({ loading: false });
-      return null;
-    } catch (e) {
-      set({ loading: false, error: getErrorMessage(e) || 'Failed to update settings' });
-      return null;
-    }
-  },
-}));
+export function getAppearanceErrorMessage(error: unknown): string | undefined {
+  return getErrorMessage(error);
+}

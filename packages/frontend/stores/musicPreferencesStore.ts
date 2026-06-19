@@ -1,9 +1,7 @@
-import { create } from 'zustand';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, isUnauthorizedError } from '@/utils/api';
-import { Storage } from '@/utils/storage';
+import { queryClient } from '@/lib/queryClient';
 import { clearStreamResolutionCache } from '@/services/streamService';
-
-const MUSIC_PREFERENCES_CACHE_KEY = 'syra_music_preferences';
 
 function unwrapApiData<T>(value: T | { data: T } | null | undefined): T | null {
   if (value === null || value === undefined) {
@@ -42,7 +40,7 @@ export interface MusicPreferences {
   updatedAt?: string;
 }
 
-const DEFAULT_PREFERENCES: Omit<MusicPreferences, 'oxyUserId'> = {
+export const DEFAULT_MUSIC_PREFERENCES: Omit<MusicPreferences, 'oxyUserId'> = {
   defaultVolume: 0.7,
   autoplay: true,
   crossfade: 0,
@@ -66,95 +64,75 @@ function touchesStreamPreferences(partial: Partial<MusicPreferences>): boolean {
   return STREAM_RELEVANT_PREFERENCES.some((key) => Object.prototype.hasOwnProperty.call(partial, key));
 }
 
-interface MusicPreferencesStore {
-  preferences: MusicPreferences | null;
-  loading: boolean;
-  error: string | null;
-  loadPreferences: (isAuthenticated: boolean) => Promise<void>;
-  updatePreferences: (partial: Partial<MusicPreferences>) => Promise<MusicPreferences | null>;
+export const musicPreferencesQueryKeys = {
+  all: ['musicPreferences'] as const,
+  me: ['musicPreferences', 'me'] as const,
+};
+
+export async function fetchMusicPreferences(): Promise<MusicPreferences | null> {
+  try {
+    const res = await api.get<MusicPreferences>('/music/preferences/me');
+    return unwrapApiData<MusicPreferences>(res.data);
+  } catch (error) {
+    if (isUnauthorizedError(error)) {
+      return null;
+    }
+    throw error;
+  }
 }
 
-/**
- * Music preferences store with caching
- */
-export const useMusicPreferencesStore = create<MusicPreferencesStore>((set, get) => ({
-  preferences: null,
-  loading: false,
-  error: null,
+export async function updateMusicPreferences(
+  partial: Partial<MusicPreferences>,
+): Promise<MusicPreferences | null> {
+  const res = await api.put<MusicPreferences>('/music/preferences', partial);
+  return unwrapApiData<MusicPreferences>(res.data);
+}
 
-  async loadPreferences(isAuthenticated: boolean) {
-    try {
-      set({ loading: true, error: null });
-      
-      // Load from cache first for instant access
-      const cachedRaw = await Storage.get<MusicPreferences | { data: MusicPreferences }>(MUSIC_PREFERENCES_CACHE_KEY);
-      const cached = unwrapApiData<MusicPreferences>(cachedRaw);
-      if (cached) {
-        set({ preferences: cached });
-      }
+export function getCurrentMusicPreferences(): MusicPreferences | null {
+  return queryClient.getQueryData<MusicPreferences | null>(musicPreferencesQueryKeys.me) ?? null;
+}
 
-      // Only fetch private preferences after auth is resolved and authenticated.
-      if (!isAuthenticated) {
-        set({ loading: false });
-        return;
-      }
+export function useMusicPreferencesQuery(enabled: boolean) {
+  return useQuery<MusicPreferences | null, Error>({
+    queryKey: musicPreferencesQueryKeys.me,
+    enabled,
+    queryFn: fetchMusicPreferences,
+  });
+}
 
-      // Fetch fresh data from API
-      const res = await api.get<MusicPreferences>('/music/preferences/me');
-      const doc = unwrapApiData<MusicPreferences>(res.data);
-      
-      // Cache the preferences
-      if (doc) {
-        await Storage.set(MUSIC_PREFERENCES_CACHE_KEY, doc);
-        set({ preferences: doc, loading: false });
-      } else {
-        set({ loading: false });
-      }
-    } catch (e: unknown) {
-      if (isUnauthorizedError(e)) {
-        set({ loading: false, error: null });
-        return;
-      }
-      set({ loading: false, error: getErrorMessage(e) || 'Failed to load music preferences' });
-    }
-  },
+export function useUpdateMusicPreferences() {
+  const activeQueryClient = useQueryClient();
 
-  async updatePreferences(partial: Partial<MusicPreferences>) {
-    try {
-      set({ loading: true, error: null });
+  return useMutation<MusicPreferences | null, Error, Partial<MusicPreferences>, { previous?: MusicPreferences | null }>({
+    mutationFn: updateMusicPreferences,
+    onMutate: async (partial) => {
+      await activeQueryClient.cancelQueries({ queryKey: musicPreferencesQueryKeys.me });
       if (touchesStreamPreferences(partial)) {
         clearStreamResolutionCache();
       }
-      
-      // Optimistic update
-      const current = get().preferences;
-      if (current) {
-        const optimistic = { ...current, ...partial };
-        set({ preferences: optimistic });
-        await Storage.set(MUSIC_PREFERENCES_CACHE_KEY, optimistic);
+      const previous = activeQueryClient.getQueryData<MusicPreferences | null>(musicPreferencesQueryKeys.me);
+      if (previous) {
+        activeQueryClient.setQueryData<MusicPreferences>(musicPreferencesQueryKeys.me, {
+          ...previous,
+          ...partial,
+        });
       }
-      
-      const res = await api.put<MusicPreferences>('/music/preferences', partial);
-      const doc = unwrapApiData<MusicPreferences>(res.data);
-
-      if (doc) {
-        // Update cache with server response
-        await Storage.set(MUSIC_PREFERENCES_CACHE_KEY, doc);
-        set({ preferences: doc, loading: false });
-        return doc;
+      return { previous };
+    },
+    onError: (_error, _partial, context) => {
+      if (context?.previous !== undefined) {
+        activeQueryClient.setQueryData(musicPreferencesQueryKeys.me, context.previous);
       }
+    },
+    onSuccess: (doc) => {
+      activeQueryClient.setQueryData(musicPreferencesQueryKeys.me, doc);
+    },
+    onSettled: () => {
+      void activeQueryClient.invalidateQueries({ queryKey: musicPreferencesQueryKeys.me });
+    },
+  });
+}
 
-      set({ loading: false });
-      return null;
-    } catch (e: unknown) {
-      // Revert optimistic update on error
-      const cached = await Storage.get<MusicPreferences>(MUSIC_PREFERENCES_CACHE_KEY);
-      if (cached) {
-        set({ preferences: cached });
-      }
-      set({ loading: false, error: getErrorMessage(e) || 'Failed to update music preferences' });
-      return null;
-    }
-  },
-}));
-
+export function getMusicPreferencesErrorMessage(error: unknown): string | undefined {
+  return getErrorMessage(error);
+}

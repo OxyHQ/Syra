@@ -1,10 +1,40 @@
 import { api } from '@/utils/api';
-import { Artist, CreateArtistRequest, ArtistDashboard, ArtistInsights, CreateAlbumRequest, Track, Album } from '@syra/shared-types';
+import {
+  albumSchema,
+  artistDashboardSchema,
+  artistInsightsSchema,
+  artistSchema,
+  trackSchema,
+  type Album,
+  type Artist,
+  type ArtistDashboard,
+  type ArtistInsights,
+  type CreateAlbumRequest,
+  type CreateArtistRequest,
+  type Track,
+} from '@syra/shared-types';
 import { Platform } from 'react-native';
 import { normalizeAlbumImages, normalizeArtistImages, normalizeTrackImages } from '@/utils/catalogImages';
 import { createScopedLogger } from '@/utils/logger';
+import { z } from 'zod';
 
 const logger = createScopedLogger('ArtistService');
+const artistResponseSchema = artistSchema.passthrough();
+const albumResponseSchema = albumSchema.passthrough();
+const trackResponseSchema = trackSchema.passthrough();
+const nullableArtistResponseSchema = artistResponseSchema.nullable();
+const artistDashboardResponseSchema = artistDashboardSchema.extend({
+  artist: artistResponseSchema,
+}).passthrough();
+const artistInsightsResponseSchema = artistInsightsSchema.passthrough();
+
+function parseArtistResponse<T>(schema: z.ZodType<T>, data: unknown, label: string): T {
+  const parsed = schema.safeParse(data);
+  if (!parsed.success) {
+    throw new Error(`Invalid ${label} response: ${parsed.error.message}`);
+  }
+  return parsed.data;
+}
 
 function getHttpStatus(error: unknown): number | undefined {
   if (!error || typeof error !== 'object') return undefined;
@@ -31,8 +61,8 @@ export const artistService = {
    * Register as an artist (create artist profile)
    */
   async registerAsArtist(data: CreateArtistRequest): Promise<Artist> {
-    const response = await api.post<Artist>('/artists/register', data);
-    return normalizeArtistImages(response.data);
+    const response = await api.post<unknown>('/artists/register', data);
+    return normalizeArtistImages(parseArtistResponse(artistResponseSchema, response.data, 'artist registration'));
   },
 
   /**
@@ -41,11 +71,12 @@ export const artistService = {
    */
   async getMyArtistProfile(): Promise<Artist | null> {
     try {
-      const response = await api.get<Artist | null>('/artists/me');
-      if (!response.data) {
+      const response = await api.get<unknown>('/artists/me');
+      const artist = parseArtistResponse(nullableArtistResponseSchema, response.data, 'artist profile');
+      if (!artist) {
         return null;
       }
-      return normalizeArtistImages(response.data);
+      return normalizeArtistImages(artist);
     } catch (error: unknown) {
       // Check for 404 or any error status
       const status = getHttpStatus(error);
@@ -118,27 +149,28 @@ export const artistService = {
     formData.append('duration', String(data.duration));
 
     onProgress?.(0);
-    const response = await api.post<Track>('/tracks/upload', formData);
+    const response = await api.post<unknown>('/tracks/upload', formData);
     onProgress?.(100);
-    return normalizeTrackImages(response.data);
+    return normalizeTrackImages(parseArtistResponse(trackResponseSchema, response.data, 'track upload'));
   },
 
   /**
    * Create an album
    */
   async createAlbum(data: CreateAlbumRequest): Promise<Album> {
-    const response = await api.post<Album>('/albums', data);
-    return normalizeAlbumImages(response.data);
+    const response = await api.post<unknown>('/albums', data);
+    return normalizeAlbumImages(parseArtistResponse(albumResponseSchema, response.data, 'album creation'));
   },
 
   /**
    * Get artist dashboard data
    */
   async getArtistDashboard(): Promise<ArtistDashboard> {
-    const response = await api.get<ArtistDashboard>('/artists/me/dashboard');
+    const response = await api.get<unknown>('/artists/me/dashboard');
+    const data = parseArtistResponse(artistDashboardResponseSchema, response.data, 'artist dashboard');
     return {
-      ...response.data,
-      artist: normalizeArtistImages(response.data.artist),
+      ...data,
+      artist: normalizeArtistImages(data.artist),
     };
   },
 
@@ -146,7 +178,7 @@ export const artistService = {
    * Get artist insights/analytics
    */
   async getArtistInsights(period?: '7days' | '30days' | 'alltime'): Promise<ArtistInsights> {
-    const response = await api.get<ArtistInsights>('/artists/me/insights', { period });
-    return response.data;
+    const response = await api.get<unknown>('/artists/me/insights', { period });
+    return parseArtistResponse(artistInsightsResponseSchema, response.data, 'artist insights');
   },
 };

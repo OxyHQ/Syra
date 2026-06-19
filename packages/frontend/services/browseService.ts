@@ -1,5 +1,15 @@
 import { api } from '@/utils/api';
-import { Track, Album, Artist, Playlist } from '@syra/shared-types';
+import {
+  albumSchema,
+  artistSchema,
+  playlistSchema,
+  trackSchema,
+  type Album,
+  type Artist,
+  type Playlist,
+  type Track,
+} from '@syra/shared-types';
+import { z } from 'zod';
 import {
   normalizeAlbumImages,
   normalizeArtistImages,
@@ -7,6 +17,60 @@ import {
   normalizeTrackImages,
   resolveCatalogImageUrl,
 } from '@/utils/catalogImages';
+
+const trackResponseSchema = trackSchema.passthrough();
+const albumResponseSchema = albumSchema.passthrough();
+const artistResponseSchema = artistSchema.passthrough();
+const playlistResponseSchema = playlistSchema.passthrough();
+
+const popularTracksResponseSchema = z.object({
+  tracks: z.array(trackResponseSchema),
+  total: z.number(),
+  hasMore: z.boolean(),
+}).passthrough();
+const popularAlbumsResponseSchema = z.object({
+  albums: z.array(albumResponseSchema),
+  total: z.number(),
+  hasMore: z.boolean(),
+}).passthrough();
+const popularArtistsResponseSchema = z.object({
+  artists: z.array(artistResponseSchema),
+  total: z.number(),
+  hasMore: z.boolean(),
+}).passthrough();
+const madeForYouResponseSchema = z.object({
+  albums: z.array(albumResponseSchema),
+  playlists: z.array(playlistResponseSchema),
+  tracks: z.array(trackResponseSchema).optional(),
+  artists: z.array(artistResponseSchema).optional(),
+  personalized: z.boolean().optional(),
+}).passthrough();
+const homeBrowseResponseSchema = z.object({
+  madeForYou: madeForYouResponseSchema,
+  popularAlbums: popularAlbumsResponseSchema,
+  popularArtists: popularArtistsResponseSchema,
+  tracks: popularTracksResponseSchema,
+}).passthrough();
+const genreResponseSchema = z.object({
+  name: z.string(),
+  color: z.string(),
+  coverArt: z.string().nullable(),
+}).passthrough();
+const genresResponseSchema = z.object({
+  genres: z.array(genreResponseSchema),
+}).passthrough();
+const chartsResponseSchema = z.object({
+  tracks: z.array(trackResponseSchema),
+  total: z.number(),
+}).passthrough();
+
+function parseBrowseResponse<T>(schema: z.ZodType<T>, data: unknown, label: string): T {
+  const parsed = schema.safeParse(data);
+  if (!parsed.success) {
+    throw new Error(`Invalid ${label} response: ${parsed.error.message}`);
+  }
+  return parsed.data;
+}
 
 export interface Genre {
   name: string;
@@ -71,26 +135,27 @@ export const browseService = {
    * Get the home discovery payload in one round-trip.
    */
   async getHome(params?: { sectionLimit?: number; tracksLimit?: number }): Promise<HomeBrowseResponse> {
-    const response = await api.get<HomeBrowseResponse>('/browse/home', params);
+    const response = await api.get<unknown>('/browse/home', params);
+    const data = parseBrowseResponse(homeBrowseResponseSchema, response.data, 'browse home');
     return {
       madeForYou: {
-        albums: response.data.madeForYou.albums.map(normalizeAlbumImages),
-        playlists: response.data.madeForYou.playlists.map(normalizePlaylistImages),
-        tracks: response.data.madeForYou.tracks?.map(normalizeTrackImages),
-        artists: response.data.madeForYou.artists?.map(normalizeArtistImages),
-        personalized: response.data.madeForYou.personalized,
+        albums: data.madeForYou.albums.map(normalizeAlbumImages),
+        playlists: data.madeForYou.playlists.map(normalizePlaylistImages),
+        tracks: data.madeForYou.tracks?.map(normalizeTrackImages),
+        artists: data.madeForYou.artists?.map(normalizeArtistImages),
+        personalized: data.madeForYou.personalized,
       },
       popularAlbums: {
-        ...response.data.popularAlbums,
-        albums: response.data.popularAlbums.albums.map(normalizeAlbumImages),
+        ...data.popularAlbums,
+        albums: data.popularAlbums.albums.map(normalizeAlbumImages),
       },
       popularArtists: {
-        ...response.data.popularArtists,
-        artists: response.data.popularArtists.artists.map(normalizeArtistImages),
+        ...data.popularArtists,
+        artists: data.popularArtists.artists.map(normalizeArtistImages),
       },
       tracks: {
-        ...response.data.tracks,
-        tracks: response.data.tracks.tracks.map(normalizeTrackImages),
+        ...data.tracks,
+        tracks: data.tracks.tracks.map(normalizeTrackImages),
       },
     };
   },
@@ -99,9 +164,10 @@ export const browseService = {
    * Get available genres with sample content
    */
   async getGenres(): Promise<{ genres: Genre[] }> {
-    const response = await api.get<{ genres: Genre[] }>('/browse/genres');
+    const response = await api.get<unknown>('/browse/genres');
+    const data = parseBrowseResponse(genresResponseSchema, response.data, 'genres');
     return {
-      genres: response.data.genres.map((genre) => ({
+      genres: data.genres.map((genre) => ({
         ...genre,
         coverArt: resolveCatalogImageUrl(genre.coverArt) ?? null,
       })),
@@ -115,48 +181,53 @@ export const browseService = {
     genre: string,
     params?: { limit?: number; offset?: number },
   ): Promise<GenreTracksResponse> {
-    const response = await api.get<GenreTracksResponse>(
+    const response = await api.get<unknown>(
       `/browse/genres/${encodeURIComponent(genre)}/tracks`,
       params,
     );
-    return { ...response.data, tracks: response.data.tracks.map(normalizeTrackImages) };
+    const data = parseBrowseResponse(popularTracksResponseSchema, response.data, 'genre tracks');
+    return { ...data, tracks: data.tracks.map(normalizeTrackImages) };
   },
 
   /**
    * Get popular/trending tracks
    */
   async getPopularTracks(params?: { limit?: number; offset?: number }): Promise<PopularTracksResponse> {
-    const response = await api.get<PopularTracksResponse>('/browse/popular/tracks', params);
-    return { ...response.data, tracks: response.data.tracks.map(normalizeTrackImages) };
+    const response = await api.get<unknown>('/browse/popular/tracks', params);
+    const data = parseBrowseResponse(popularTracksResponseSchema, response.data, 'popular tracks');
+    return { ...data, tracks: data.tracks.map(normalizeTrackImages) };
   },
 
   /**
    * Get popular/trending albums
    */
   async getPopularAlbums(params?: { limit?: number; offset?: number }): Promise<PopularAlbumsResponse> {
-    const response = await api.get<PopularAlbumsResponse>('/browse/popular/albums', params);
-    return { ...response.data, albums: response.data.albums.map(normalizeAlbumImages) };
+    const response = await api.get<unknown>('/browse/popular/albums', params);
+    const data = parseBrowseResponse(popularAlbumsResponseSchema, response.data, 'popular albums');
+    return { ...data, albums: data.albums.map(normalizeAlbumImages) };
   },
 
   /**
    * Get popular/trending artists
    */
   async getPopularArtists(params?: { limit?: number; offset?: number }): Promise<PopularArtistsResponse> {
-    const response = await api.get<PopularArtistsResponse>('/browse/popular/artists', params);
-    return { ...response.data, artists: response.data.artists.map(normalizeArtistImages) };
+    const response = await api.get<unknown>('/browse/popular/artists', params);
+    const data = parseBrowseResponse(popularArtistsResponseSchema, response.data, 'popular artists');
+    return { ...data, artists: data.artists.map(normalizeArtistImages) };
   },
 
   /**
    * Get made for you recommendations
    */
   async getMadeForYou(params?: { limit?: number }): Promise<MadeForYouResponse> {
-    const response = await api.get<MadeForYouResponse>('/browse/made-for-you', params);
+    const response = await api.get<unknown>('/browse/made-for-you', params);
+    const data = parseBrowseResponse(madeForYouResponseSchema, response.data, 'made for you');
     return {
-      albums: response.data.albums.map(normalizeAlbumImages),
-      playlists: response.data.playlists.map(normalizePlaylistImages),
-      tracks: response.data.tracks?.map(normalizeTrackImages),
-      artists: response.data.artists?.map(normalizeArtistImages),
-      personalized: response.data.personalized,
+      albums: data.albums.map(normalizeAlbumImages),
+      playlists: data.playlists.map(normalizePlaylistImages),
+      tracks: data.tracks?.map(normalizeTrackImages),
+      artists: data.artists?.map(normalizeArtistImages),
+      personalized: data.personalized,
     };
   },
 
@@ -164,7 +235,8 @@ export const browseService = {
    * Get top charts
    */
   async getCharts(params?: { limit?: number }): Promise<ChartsResponse> {
-    const response = await api.get<ChartsResponse>('/browse/charts', params);
-    return { ...response.data, tracks: response.data.tracks.map(normalizeTrackImages) };
+    const response = await api.get<unknown>('/browse/charts', params);
+    const data = parseBrowseResponse(chartsResponseSchema, response.data, 'charts');
+    return { ...data, tracks: data.tracks.map(normalizeTrackImages) };
   },
 };

@@ -121,4 +121,10 @@ describe('browseService client selection', () => {
     expect(mockApiGet).toHaveBeenCalledWith('/browse/made-for-you', { limit: 8 });
     expect(mockApiGet).toHaveBeenCalledWith('/browse/charts', { limit: 20 });
   });
+
+  it('rejects malformed browse responses at the API boundary', async () => {
+    mockApiGet.mockResolvedValueOnce({ data: { tracks: [track], total: 1 } });
+
+    await expect(browseService.getPopularTracks()).rejects.toThrow('Invalid popular tracks response');
+  });
 });

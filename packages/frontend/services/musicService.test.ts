@@ -119,4 +119,10 @@ describe('musicService client selection', () => {
     expect(mockApiGet).toHaveBeenCalledWith('/playlists/playlist-1');
     expect(mockApiGet).toHaveBeenCalledWith('/playlists/playlist-1/tracks');
   });
+
+  it('rejects malformed catalog responses at the API boundary', async () => {
+    mockApiGet.mockResolvedValueOnce({ data: { tracks: [track], total: 1 } });
+
+    await expect(musicService.getTracks()).rejects.toThrow('Invalid tracks response');
+  });
 });

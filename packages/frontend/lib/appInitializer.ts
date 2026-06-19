@@ -6,7 +6,6 @@
 import { Platform } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 
-import { useAppearanceStore } from '@/store/appearanceStore';
 import { useVideoMuteStore } from '@/stores/videoMuteStore';
 import {
   hasNotificationPermission,
@@ -41,17 +40,6 @@ async function setupNotificationsIfNeeded(): Promise<void> {
     await hasNotificationPermission();
   } catch (error) {
     console.warn('Failed to setup notifications:', error);
-  }
-}
-
-/**
- * Loads user appearance settings
- */
-async function loadAppearanceSettings(): Promise<void> {
-  try {
-    await useAppearanceStore.getState().loadMySettings(false);
-  } catch (error) {
-    console.warn('Failed to load appearance settings:', error);
   }
 }
 
@@ -124,7 +112,6 @@ export class AppInitializer {
    */
   static async loadEagerSettings(): Promise<void> {
     await Promise.allSettled([
-      loadAppearanceSettings(),
       loadVideoMuteState(),
     ]);
   }

@@ -21,10 +21,10 @@ Do not restore the retired Syra oxy.so hosts in runtime config, CORS, EAS env, u
 
 ## Oxy Integration
 
-- Current Oxy packages: `@oxyhq/core ^3.4.18`, `@oxyhq/services ^10.2.11`, `@oxyhq/bloom ^0.8.5`.
+- Current Oxy packages: `@oxyhq/core ^3.4.19`, `@oxyhq/services ^10.2.11`, `@oxyhq/bloom ^0.8.5`.
 - Expo web root HTML (`packages/frontend/app/+html.tsx`) injects `getSsoCallbackBootstrapScript()` from `@oxyhq/core`; do not add a per-app `/__oxy/sso-callback` route or copy SSO helper logic locally.
 - Private Syra API calls must wait for Oxy cold boot: gate library, playlists, artist profile, privacy, preferences, and recommendations with `useAuth().canUsePrivateApi` / `isPrivateApiPending`, not app-local token helpers.
-- `packages/frontend/utils/api.ts` owns the linked authenticated Syra API client via `oxyServices.createLinkedClient(...)`; components/hooks should not hand-roll Authorization headers, refresh, CSRF probing, or session invalidation. `@oxyhq/core >=3.4.18` keeps a still-valid near-expiry bearer token when preflight refresh cannot refresh yet, so linked Syra writes must not fall back to a local `/csrf-token` route while the bearer is usable.
+- `packages/frontend/utils/api.ts` owns the linked authenticated Syra API client via `oxyServices.createLinkedClient(...)`; components/hooks should not hand-roll Authorization headers, refresh, CSRF probing, or session invalidation. `@oxyhq/core >=3.4.19` keeps a still-valid near-expiry bearer token when preflight refresh cannot refresh yet and re-syncs linked app clients from the owning OxyServices token before requests, so linked Syra writes must not fall back to a local `/csrf-token` route while the Oxy session is still valid.
 - Backend auth middleware comes from `@oxyhq/core/server` (`createOxyAuthMiddleware`, `createOptionalOxyAuth`, `createOxyRateLimit`, `requireOxyAuth`, `getRequiredOxyUserId`, `authSocket`). Do not define local `AuthRequest`, `requireAuth`, `getUserId`, bearer parsers, or token-decoding middleware. Bearer-authenticated writes do not fetch app-local CSRF tokens; CSRF remains for ambient cookie credentials.
 
 ## Frontend Data And State

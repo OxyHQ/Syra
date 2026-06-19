@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useAuth } from '@oxyhq/services';
 import { useBloomTheme, hexToAppColorName, type ThemeMode } from '@oxyhq/bloom/theme';
-import { useAppearanceStore } from '@/store/appearanceStore';
+import { useMyAppearanceSettings } from '@/store/appearanceStore';
 
 const VALID_THEME_MODES: ReadonlySet<ThemeMode> = new Set<ThemeMode>([
   'light',
@@ -25,14 +25,8 @@ function isValidThemeMode(value: string | undefined): value is ThemeMode {
  */
 export function useServerAppearanceSync(): void {
   const { canUsePrivateApi } = useAuth();
-  const mySettings = useAppearanceStore((state) => state.mySettings);
-  const loadMySettings = useAppearanceStore((state) => state.loadMySettings);
+  const { data: mySettings } = useMyAppearanceSettings(canUsePrivateApi);
   const { setMode, setColorPreset } = useBloomTheme();
-
-  useEffect(() => {
-    if (!canUsePrivateApi) return;
-    void loadMySettings(true);
-  }, [canUsePrivateApi, loadMySettings]);
 
   useEffect(() => {
     const appearance = mySettings?.appearance;
