@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, View, Text, Image, Pressable, Platform, GestureResponderEvent } from 'react-native';
 import { webViewStyle } from '@/utils/webStyles';
 import { useTheme } from '@oxyhq/bloom/theme';
-import { Menu } from '@oxyhq/bloom';
+import { Menu, MenuTrigger, MenuContent, MenuItem, MenuItemText, MenuGroup, useMenuControl } from '@oxyhq/bloom';
 import { Ionicons } from '@expo/vector-icons';
 import type { CatalogImageSizes, TrackImage } from '@syra/shared-types';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
@@ -68,7 +68,7 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
   const resolvedImageUri = pickCatalogImageUrl(images, imageUri, 'card', imageSizes);
   const [isHovered, setIsHovered] = React.useState(false);
   const [hideIdleActions, setHideIdleActions] = React.useState(shouldHideIdleActionsByDefault);
-  const menuControl = Menu.useMenuControl();
+  const menuControl = useMenuControl();
   const isHoveredRef = React.useRef(false);
   const isPointerInsideCardRef = React.useRef(false);
   const suppressNextPressRef = React.useRef(false);
@@ -180,8 +180,8 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
 
     return (
       <View style={styles.menuContainer}>
-        <Menu.Root control={menuControl}>
-          <Menu.Trigger label={`More actions for ${title}`}>
+        <Menu control={menuControl}>
+          <MenuTrigger label={`More actions for ${title}`}>
             {({ props, state }) => {
               const { ref: triggerRef, ...triggerProps } = props;
               const hideMenuTrigger =
@@ -213,11 +213,11 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
                 </Pressable>
               );
             }}
-          </Menu.Trigger>
-          <Menu.Outer style={styles.menuOptions}>
-            <Menu.Group>
+          </MenuTrigger>
+          <MenuContent style={styles.menuOptions}>
+            <MenuGroup>
               {onPress && (
-                <Menu.Item
+                <MenuItem
                   label="Open"
                   onPress={(event) => {
                     event.stopPropagation?.();
@@ -225,11 +225,11 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
                   }}
                 >
                   {renderMenuIcon('open-outline')}
-                  <Menu.ItemText>Open</Menu.ItemText>
-                </Menu.Item>
+                  <MenuItemText>Open</MenuItemText>
+                </MenuItem>
               )}
               {onAddToQueue && (
-                <Menu.Item
+                <MenuItem
                   label="Add to queue"
                   onPress={(event) => {
                     event.stopPropagation?.();
@@ -237,11 +237,11 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
                   }}
                 >
                   {renderMenuIcon('list-outline')}
-                  <Menu.ItemText>Add to queue</Menu.ItemText>
-                </Menu.Item>
+                  <MenuItemText>Add to queue</MenuItemText>
+                </MenuItem>
               )}
               {onGoToAlbum && (
-                <Menu.Item
+                <MenuItem
                   label="Go to album"
                   onPress={(event) => {
                     event.stopPropagation?.();
@@ -249,11 +249,11 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
                   }}
                 >
                   {renderMenuIcon('disc-outline')}
-                  <Menu.ItemText>Go to album</Menu.ItemText>
-                </Menu.Item>
+                  <MenuItemText>Go to album</MenuItemText>
+                </MenuItem>
               )}
               {onGoToArtist && (
-                <Menu.Item
+                <MenuItem
                   label="Go to artist"
                   onPress={(event) => {
                     event.stopPropagation?.();
@@ -261,12 +261,12 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
                   }}
                 >
                   {renderMenuIcon('person-outline')}
-                  <Menu.ItemText>Go to artist</Menu.ItemText>
-                </Menu.Item>
+                  <MenuItemText>Go to artist</MenuItemText>
+                </MenuItem>
               )}
-            </Menu.Group>
-          </Menu.Outer>
-        </Menu.Root>
+            </MenuGroup>
+          </MenuContent>
+        </Menu>
       </View>
     );
   };

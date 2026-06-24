@@ -9,7 +9,7 @@ import {
   SettingsListItem,
 } from '@oxyhq/bloom/settings-list';
 import { Switch } from '@oxyhq/bloom/switch';
-import * as SegmentedControl from '@oxyhq/bloom/segmented-control';
+import { SegmentedControl, SegmentedControlItem, SegmentedControlItemText } from '@oxyhq/bloom/segmented-control';
 import {
   APP_COLOR_PRESETS,
   useBloomTheme,
@@ -308,23 +308,23 @@ const SettingsScreen: React.FC = () => {
                 title="Color mode"
                 description="Choose how Syra follows your device theme"
               >
-                <SegmentedControl.Root<'system' | 'light' | 'dark'>
+                <SegmentedControl<'system' | 'light' | 'dark'>
                   label="Color mode"
                   type="radio"
                   size="small"
                   value={themeMode}
                   onChange={handleThemeModeChange}
                 >
-                  <SegmentedControl.Item value="system">
-                    <SegmentedControl.ItemText numberOfLines={1}>System</SegmentedControl.ItemText>
-                  </SegmentedControl.Item>
-                  <SegmentedControl.Item value="light">
-                    <SegmentedControl.ItemText numberOfLines={1}>Light</SegmentedControl.ItemText>
-                  </SegmentedControl.Item>
-                  <SegmentedControl.Item value="dark">
-                    <SegmentedControl.ItemText numberOfLines={1}>Dark</SegmentedControl.ItemText>
-                  </SegmentedControl.Item>
-                </SegmentedControl.Root>
+                  <SegmentedControlItem value="system">
+                    <SegmentedControlItemText numberOfLines={1}>System</SegmentedControlItemText>
+                  </SegmentedControlItem>
+                  <SegmentedControlItem value="light">
+                    <SegmentedControlItemText numberOfLines={1}>Light</SegmentedControlItemText>
+                  </SegmentedControlItem>
+                  <SegmentedControlItem value="dark">
+                    <SegmentedControlItemText numberOfLines={1}>Dark</SegmentedControlItemText>
+                  </SegmentedControlItem>
+                </SegmentedControl>
               </SettingsControlBlock>
 
               <SettingsControlBlock
@@ -340,7 +340,7 @@ const SettingsScreen: React.FC = () => {
                 title="Language"
                 description="App display language"
               >
-                <SegmentedControl.Root<string>
+                <SegmentedControl<string>
                   label="Language"
                   type="radio"
                   size="small"
@@ -348,13 +348,13 @@ const SettingsScreen: React.FC = () => {
                   onChange={handleLanguageChange}
                 >
                   {LANGUAGE_OPTIONS.map((option) => (
-                    <SegmentedControl.Item key={option.value} value={option.value}>
-                      <SegmentedControl.ItemText numberOfLines={1}>
+                    <SegmentedControlItem key={option.value} value={option.value}>
+                      <SegmentedControlItemText numberOfLines={1}>
                         {option.label}
-                      </SegmentedControl.ItemText>
-                    </SegmentedControl.Item>
+                      </SegmentedControlItemText>
+                    </SegmentedControlItem>
                   ))}
-                </SegmentedControl.Root>
+                </SegmentedControl>
               </SettingsControlBlock>
             </SettingsListGroup>
 
@@ -429,26 +429,26 @@ const SettingsScreen: React.FC = () => {
                 title="Streaming quality"
                 description="Higher quality uses more data"
               >
-                <SegmentedControl.Root<AudioQuality>
+                <SegmentedControl<AudioQuality>
                   label="Streaming quality"
                   type="radio"
                   size="small"
                   value={musicPreferences?.audioQuality ?? 'normal'}
                   onChange={(value) => handleMusicPreferenceUpdate({ audioQuality: value })}
                 >
-                  <SegmentedControl.Item value="low">
-                    <SegmentedControl.ItemText numberOfLines={1}>Low</SegmentedControl.ItemText>
-                  </SegmentedControl.Item>
-                  <SegmentedControl.Item value="normal">
-                    <SegmentedControl.ItemText numberOfLines={1}>Normal</SegmentedControl.ItemText>
-                  </SegmentedControl.Item>
-                  <SegmentedControl.Item value="high">
-                    <SegmentedControl.ItemText numberOfLines={1}>High</SegmentedControl.ItemText>
-                  </SegmentedControl.Item>
-                  <SegmentedControl.Item value="very_high">
-                    <SegmentedControl.ItemText numberOfLines={1}>Very high</SegmentedControl.ItemText>
-                  </SegmentedControl.Item>
-                </SegmentedControl.Root>
+                  <SegmentedControlItem value="low">
+                    <SegmentedControlItemText numberOfLines={1}>Low</SegmentedControlItemText>
+                  </SegmentedControlItem>
+                  <SegmentedControlItem value="normal">
+                    <SegmentedControlItemText numberOfLines={1}>Normal</SegmentedControlItemText>
+                  </SegmentedControlItem>
+                  <SegmentedControlItem value="high">
+                    <SegmentedControlItemText numberOfLines={1}>High</SegmentedControlItemText>
+                  </SegmentedControlItem>
+                  <SegmentedControlItem value="very_high">
+                    <SegmentedControlItemText numberOfLines={1}>Very high</SegmentedControlItemText>
+                  </SegmentedControlItem>
+                </SegmentedControl>
               </SettingsControlBlock>
 
               <SettingsControlBlock
@@ -456,26 +456,26 @@ const SettingsScreen: React.FC = () => {
                 title="Download quality"
                 description="Quality for downloaded music"
               >
-                <SegmentedControl.Root<AudioQuality>
+                <SegmentedControl<AudioQuality>
                   label="Download quality"
                   type="radio"
                   size="small"
                   value={musicPreferences?.downloadQuality ?? 'normal'}
                   onChange={(value) => handleMusicPreferenceUpdate({ downloadQuality: value })}
                 >
-                  <SegmentedControl.Item value="low">
-                    <SegmentedControl.ItemText numberOfLines={1}>Low</SegmentedControl.ItemText>
-                  </SegmentedControl.Item>
-                  <SegmentedControl.Item value="normal">
-                    <SegmentedControl.ItemText numberOfLines={1}>Normal</SegmentedControl.ItemText>
-                  </SegmentedControl.Item>
-                  <SegmentedControl.Item value="high">
-                    <SegmentedControl.ItemText numberOfLines={1}>High</SegmentedControl.ItemText>
-                  </SegmentedControl.Item>
-                  <SegmentedControl.Item value="very_high">
-                    <SegmentedControl.ItemText numberOfLines={1}>Very high</SegmentedControl.ItemText>
-                  </SegmentedControl.Item>
-                </SegmentedControl.Root>
+                  <SegmentedControlItem value="low">
+                    <SegmentedControlItemText numberOfLines={1}>Low</SegmentedControlItemText>
+                  </SegmentedControlItem>
+                  <SegmentedControlItem value="normal">
+                    <SegmentedControlItemText numberOfLines={1}>Normal</SegmentedControlItemText>
+                  </SegmentedControlItem>
+                  <SegmentedControlItem value="high">
+                    <SegmentedControlItemText numberOfLines={1}>High</SegmentedControlItemText>
+                  </SegmentedControlItem>
+                  <SegmentedControlItem value="very_high">
+                    <SegmentedControlItemText numberOfLines={1}>Very high</SegmentedControlItemText>
+                  </SegmentedControlItem>
+                </SegmentedControl>
               </SettingsControlBlock>
 
               <SettingsListItem
@@ -511,23 +511,23 @@ const SettingsScreen: React.FC = () => {
                   title="Profile visibility"
                   description="Choose who can see your profile"
                 >
-                  <SegmentedControl.Root<ProfileVisibility>
+                  <SegmentedControl<ProfileVisibility>
                     label="Profile visibility"
                     type="radio"
                     size="small"
                     value={privacySettings.profileVisibility ?? 'public'}
                     onChange={(value) => handlePrivacyUpdate({ profileVisibility: value })}
                   >
-                    <SegmentedControl.Item value="public">
-                      <SegmentedControl.ItemText numberOfLines={1}>Public</SegmentedControl.ItemText>
-                    </SegmentedControl.Item>
-                    <SegmentedControl.Item value="followers_only">
-                      <SegmentedControl.ItemText numberOfLines={1}>Followers</SegmentedControl.ItemText>
-                    </SegmentedControl.Item>
-                    <SegmentedControl.Item value="private">
-                      <SegmentedControl.ItemText numberOfLines={1}>Private</SegmentedControl.ItemText>
-                    </SegmentedControl.Item>
-                  </SegmentedControl.Root>
+                    <SegmentedControlItem value="public">
+                      <SegmentedControlItemText numberOfLines={1}>Public</SegmentedControlItemText>
+                    </SegmentedControlItem>
+                    <SegmentedControlItem value="followers_only">
+                      <SegmentedControlItemText numberOfLines={1}>Followers</SegmentedControlItemText>
+                    </SegmentedControlItem>
+                    <SegmentedControlItem value="private">
+                      <SegmentedControlItemText numberOfLines={1}>Private</SegmentedControlItemText>
+                    </SegmentedControlItem>
+                  </SegmentedControl>
                 </SettingsControlBlock>
               ) : null}
               {privacySettings ? (
