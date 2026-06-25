@@ -21,7 +21,9 @@ Do not restore the retired Syra oxy.so hosts in runtime config, CORS, EAS env, u
 
 ## Oxy Integration
 
-- Current Oxy packages: `@oxyhq/core ^3.7.1`, `@oxyhq/services ^10.3.3`, `@oxyhq/bloom ^0.9.1`.
+- Current Oxy packages: `@oxyhq/core ^3.10.0`, `@oxyhq/services ^11.0.0`, `@oxyhq/bloom ^0.19.1`, `@oxyhq/contracts ^0.2.1` (transitive via core). `@oxyhq/services ^11.0.0` is a packaging-only major — deps moved to peerDependencies; app must declare TanStack Query peers.
+- **Media**: avatars/images resolve ONLY through `oxyServices.getFileDownloadUrl(id, variant)` + bloom's variant-aware `<Avatar source={fileId} variant="thumb">`. Never hardcode `cloud.oxy.so` or `/media/` URLs.
+- **Display names**: render `name.displayName` directly (core 3.10 fixes the type under node resolution). No local name fallbacks.
 - Expo web root HTML (`packages/frontend/app/+html.tsx`) injects `getSsoCallbackBootstrapScript()` from `@oxyhq/core`; do not add a per-app `/__oxy/sso-callback` route or copy SSO helper logic locally.
 - Private Syra API calls must wait for Oxy cold boot: gate library, playlists, artist profile, privacy, preferences, and recommendations with `useAuth().canUsePrivateApi` / `isPrivateApiPending`, not app-local token helpers.
 - `packages/frontend/utils/api.ts` owns the linked authenticated Syra API client via `oxyServices.createLinkedClient(...)`; components/hooks should not hand-roll Authorization headers, refresh, CSRF probing, or session invalidation. `@oxyhq/core >=3.4.19` keeps a still-valid near-expiry bearer token when preflight refresh cannot refresh yet and re-syncs linked app clients from the owning OxyServices token before requests, so linked Syra writes must not fall back to a local `/csrf-token` route while the Oxy session is still valid.
