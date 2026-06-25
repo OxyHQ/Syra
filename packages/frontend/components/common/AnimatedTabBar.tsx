@@ -1,5 +1,5 @@
 import React, { useRef, useLayoutEffect, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, useAnimatedScrollHandler } from 'react-native-reanimated';
 import { useTheme } from '@oxyhq/bloom/theme';
 
@@ -13,7 +13,7 @@ interface AnimatedTabBarProps {
     activeTabId: string;
     onTabPress: (tabId: string) => void;
     scrollEnabled?: boolean;
-    style?: any;
+    style?: StyleProp<ViewStyle>;
     instanceId?: string; // Unique identifier to persist state across remounts
 }
 

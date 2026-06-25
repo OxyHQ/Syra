@@ -60,8 +60,16 @@ export function memoize<Args extends any[], Return>(
 
   return (...args: Args): Return => {
     const key = keyFn ? keyFn(...args) : JSON.stringify(args);
+    const cached = cache.get(key);
+    if (cached !== undefined) {
+      // Narrowed to `Return` by the `!== undefined` check — no cast needed.
+      return cached;
+    }
     if (cache.has(key)) {
-      return cache.get(key)!;
+      // A stored value that is genuinely `undefined` is a valid cache hit; the
+      // cast restores the declared `Return` that `Map.get` widens to include
+      // `undefined`. Returning it (not recomputing) preserves memoization.
+      return cache.get(key) as Return;
     }
     const result = fn(...args);
     cache.set(key, result);

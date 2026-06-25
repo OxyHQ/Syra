@@ -12,7 +12,7 @@
  * mount, which was causing the white-screen-after-splash bug.
  */
 
-import React, { memo } from 'react';
+import React, { memo, useMemo } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { I18nextProvider } from 'react-i18next';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -22,6 +22,7 @@ import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-c
 import { StatusBar } from 'expo-status-bar';
 import { OxyProvider, useOxy } from '@oxyhq/services';
 import { OxyServices } from '@oxyhq/core';
+import { ImageResolverProvider, type ImageResolver } from '@oxyhq/bloom/image-resolver';
 
 import { OXY_CLIENT_ID } from '@/config';
 import ErrorBoundary from '@/components/ErrorBoundary';
@@ -74,6 +75,14 @@ export const AppProviders = memo(function AppProviders({
   oxyServices,
   queryClient,
 }: AppProvidersProps) {
+  // Single chokepoint that resolves Oxy file IDs to loadable URLs for every
+  // Bloom Avatar/Image in the tree. Bloom's Avatar runs bare-string `source`
+  // values through this resolver; passing raw file IDs to `source` requires it.
+  const resolveImage: ImageResolver = useMemo(
+    () => (id: string, variant?: string) => oxyServices.getFileDownloadUrl(id, variant),
+    [oxyServices],
+  );
+
   return (
     <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <GestureHandlerRootView style={{ flex: 1 }}>
@@ -84,25 +93,27 @@ export const AppProviders = memo(function AppProviders({
               clientId={OXY_CLIENT_ID}
               storageKeyPrefix="oxy_syra"
             >
-              <I18nextProvider i18n={i18n}>
-                <AppearanceSync />
-                <StreamCacheAuthInvalidator />
-                <BottomSheetModalProvider>
-                  <BottomSheetProvider>
-                    <MenuProvider>
-                      <HomeRefreshProvider>
-                        {children}
-                        <StatusBar style="auto" />
-                        <Toaster
-                          position="bottom-center"
-                          swipeToDismissDirection="left"
-                          offset={15}
-                        />
-                      </HomeRefreshProvider>
-                    </MenuProvider>
-                  </BottomSheetProvider>
-                </BottomSheetModalProvider>
-              </I18nextProvider>
+              <ImageResolverProvider value={resolveImage}>
+                <I18nextProvider i18n={i18n}>
+                  <AppearanceSync />
+                  <StreamCacheAuthInvalidator />
+                  <BottomSheetModalProvider>
+                    <BottomSheetProvider>
+                      <MenuProvider>
+                        <HomeRefreshProvider>
+                          {children}
+                          <StatusBar style="auto" />
+                          <Toaster
+                            position="bottom-center"
+                            swipeToDismissDirection="left"
+                            offset={15}
+                          />
+                        </HomeRefreshProvider>
+                      </MenuProvider>
+                    </BottomSheetProvider>
+                  </BottomSheetModalProvider>
+                </I18nextProvider>
+              </ImageResolverProvider>
             </OxyProvider>
           </QueryClientProvider>
         </ErrorBoundary>

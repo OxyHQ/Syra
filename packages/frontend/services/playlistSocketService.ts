@@ -1,11 +1,19 @@
 import { API_URL_SOCKET } from '@/config';
 import { io, Socket } from 'socket.io-client';
-import { Track, PlaylistTrack } from '@syra/shared-types';
+import { Track, PlaylistTrack, Playlist } from '@syra/shared-types';
+
+/**
+ * Editable playlist-metadata fields broadcast on `playlist:updated`. Mirrors the
+ * subset of {@link Playlist} that the playlist-edit flow can mutate.
+ */
+export type PlaylistUpdatePayload = Partial<
+  Pick<Playlist, 'name' | 'description' | 'coverArt' | 'visibility' | 'isPublic' | 'primaryColor' | 'secondaryColor'>
+>;
 
 type PlaylistUpdateCallback = (data: { playlistId: string; tracks: Track[]; playlistTracks: PlaylistTrack[] }) => void;
 type PlaylistTrackRemovedCallback = (data: { playlistId: string; trackIds: string[] }) => void;
 type PlaylistTrackReorderedCallback = (data: { playlistId: string; trackIds: string[] }) => void;
-type PlaylistUpdatedCallback = (data: { playlistId: string; updates: any }) => void;
+type PlaylistUpdatedCallback = (data: { playlistId: string; updates: PlaylistUpdatePayload }) => void;
 
 class PlaylistSocketService {
   private socket: Socket | null = null;
@@ -186,7 +194,7 @@ class PlaylistSocketService {
   /**
    * Emit playlist updated event (for broadcasting to other clients)
    */
-  emitPlaylistUpdated(data: { playlistId: string; updates: any }) {
+  emitPlaylistUpdated(data: { playlistId: string; updates: PlaylistUpdatePayload }) {
     if (this.socket?.connected) {
       this.socket.emit('playlist:updated', data);
     }

@@ -2,7 +2,6 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { StyleSheet, View, TextInput, Text, ScrollView, Pressable } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useTheme } from '@oxyhq/bloom/theme';
-import { useOxy } from '@oxyhq/services';
 import SEO from '@/components/SEO';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams, type Href } from 'expo-router';
@@ -28,7 +27,6 @@ import { useMediaQuery } from 'react-responsive';
 const SearchScreen: React.FC = () => {
   const theme = useTheme();
   const router = useRouter();
-  const { oxyServices } = useOxy();
   const isMobile = useMediaQuery({ maxWidth: 767 });
   const { playTrackList, currentTrack, isPlaying } = usePlayerStore();
   // Seed the search box from a `?q=` deep link (e.g. tapping a #hashtag / @mention).
@@ -158,14 +156,6 @@ const SearchScreen: React.FC = () => {
   const handleBrowse = useCallback(() => {
     router.push('/browse');
   }, [router]);
-
-  const getUserAvatarUri = useCallback((avatar?: string) => {
-    if (!avatar) return undefined;
-    if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
-      return avatar;
-    }
-    return oxyServices.getFileDownloadUrl(avatar, 'thumb');
-  }, [oxyServices]);
 
   const handleUserPress = useCallback((user: SearchUser) => {
     router.push({ pathname: '/u/[username]', params: { username: user.username } });
@@ -570,7 +560,6 @@ const SearchScreen: React.FC = () => {
                 >
                   <View style={styles.userList}>
                     {searchResults.results.users.map((user) => {
-                      const avatarUri = getUserAvatarUri(user.avatar);
                       const followers = typeof user.followers === 'number'
                         ? `${user.followers.toLocaleString()} followers`
                         : 'Profile';
@@ -590,7 +579,8 @@ const SearchScreen: React.FC = () => {
                           ]}
                         >
                           <Avatar
-                            source={avatarUri}
+                            source={user.avatar ?? undefined}
+                            variant="thumb"
                             size={48}
                             verified={user.verified}
                             label={user.displayName}

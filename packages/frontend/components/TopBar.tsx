@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, Pressable, Platform, ViewStyle, TextInput, Image, ScrollView, GestureResponderEvent } from 'react-native';
+import { StyleSheet, View, Text, Pressable, Platform, ViewStyle, TextInput, Image, ScrollView, GestureResponderEvent, type NativeSyntheticEvent, type TextInputKeyPressEventData } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { webTextStyle, webViewStyle } from '@/utils/webStyles';
 import { useRouter, usePathname, useLocalSearchParams, type Href } from 'expo-router';
@@ -27,6 +27,12 @@ type HeaderSearchItem = {
   subtitle: string;
   href: Href;
   imageUri?: string;
+  /**
+   * Bare Oxy file ID for user-avatar rows. Rendered through the local Avatar
+   * component (and the registered ImageResolver) so the URL is built at the
+   * render boundary, not at the call site. Catalog rows use `imageUri` instead.
+   */
+  avatarId?: string;
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
   rounded?: boolean;
   onPlay?: () => Promise<void> | void;
@@ -54,7 +60,7 @@ export const TopBar: React.FC = () => {
   const { q } = useLocalSearchParams<{ q?: string }>();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { user, isAuthenticated, canUsePrivateApi, oxyServices, showBottomSheet } = useOxy();
+  const { user, isAuthenticated, canUsePrivateApi, showBottomSheet } = useOxy();
   const { playTrackList } = usePlayerStore();
   const isMobile = useMediaQuery({ maxWidth: 767 });
   const [searchQuery, setSearchQuery] = useState(() => (pathname === '/search' && typeof q === 'string' ? q : ''));
@@ -77,8 +83,6 @@ export const TopBar: React.FC = () => {
     paddingTop: insets.top,
     height: TOP_BAR_HEIGHT + insets.top,
   };
-
-  const avatarUri = user?.avatar ? oxyServices.getFileDownloadUrl(user.avatar as string, 'thumb') : undefined;
 
   // Subtle raised pill behind the active nav icon, derived from the theme.
   const activeButtonStyle: ViewStyle = { ...styles.activeButton, backgroundColor: theme.colors.backgroundTertiary };
@@ -236,7 +240,7 @@ export const TopBar: React.FC = () => {
       title: searchUser.displayName,
       subtitle: `@${searchUser.username}`,
       href: userHref(searchUser.username),
-      imageUri: searchUser.avatar ? oxyServices.getFileDownloadUrl(searchUser.avatar, 'thumb') : undefined,
+      avatarId: searchUser.avatar ?? undefined,
       icon: 'account-outline' as const,
       rounded: true,
     }));
@@ -262,11 +266,16 @@ export const TopBar: React.FC = () => {
     navigateFromSearch(searchItems[index].href);
   };
 
-  const handleSearchKeyPress = (event: any) => {
-    const key = event?.nativeEvent?.key;
+  const handleSearchKeyPress = (event: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
+    const key = event.nativeEvent.key;
     const preventDefault = () => {
-      event?.preventDefault?.();
-      event?.nativeEvent?.preventDefault?.();
+      event.preventDefault?.();
+      // On react-native-web the underlying `nativeEvent` is a DOM KeyboardEvent
+      // that also exposes `preventDefault`; native platforms have no such method.
+      const domNativeEvent = event.nativeEvent as TextInputKeyPressEventData & {
+        preventDefault?: () => void;
+      };
+      domNativeEvent.preventDefault?.();
     };
 
     if (key === 'Escape') {
@@ -314,7 +323,9 @@ export const TopBar: React.FC = () => {
         },
       ]}
     >
-      {item.imageUri ? (
+      {item.avatarId ? (
+        <Avatar source={item.avatarId} variant="thumb" size={36} label={item.title} />
+      ) : item.imageUri ? (
         <Image source={{ uri: item.imageUri }} style={[styles.searchResultImage, { borderRadius: item.rounded ? 18 : 6 }]} />
       ) : (
         <MaterialCommunityIcons name={item.icon} size={18} color={theme.colors.textSecondary} />
@@ -486,7 +497,8 @@ export const TopBar: React.FC = () => {
       >
         <Avatar
           size={32}
-          source={{ uri: avatarUri }}
+          source={user?.avatar ?? undefined}
+          variant="thumb"
         />
       </Pressable>
     ) : (

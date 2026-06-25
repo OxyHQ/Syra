@@ -7,6 +7,12 @@ import { VerifiedIcon } from '@/assets/icons/verified-icon';
 
 interface AvatarProps {
   source?: ImageSourcePropType | string | undefined | null;
+  /**
+   * Rendition variant forwarded to Bloom's Avatar (and the registered
+   * ImageResolver) when `source` is a bare Oxy file ID. Use `"thumb"` in lists
+   * and small renditions; omit for full-size.
+   */
+  variant?: string;
   size?: number;
   verified?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -33,9 +39,10 @@ const VerifiedBadge: React.FC<{ size: number }> = ({ size }) => {
   );
 };
 
-const Avatar: React.FC<AvatarProps> = ({ source, size = 40, verified = false, style, imageStyle, label, onPress }) => (
+const Avatar: React.FC<AvatarProps> = ({ source, variant, size = 40, verified = false, style, imageStyle, label, onPress }) => (
   <BloomAvatar
     source={source}
+    variant={variant}
     size={size}
     verified={verified}
     verifiedIcon={verified ? <VerifiedBadge size={size} /> : undefined}

@@ -10,6 +10,7 @@ import {
   ImageSourcePropType,
   type StyleProp,
   type ViewStyle,
+  type GestureResponderEvent,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import Animated, {
@@ -135,7 +136,7 @@ const WelcomeModal: React.FC<WelcomeModalProps> = ({
     onClose();
   }, [onClose]);
 
-  const handleContentPress = useCallback((e: any) => {
+  const handleContentPress = useCallback((e: GestureResponderEvent) => {
     e.stopPropagation();
   }, []);
 

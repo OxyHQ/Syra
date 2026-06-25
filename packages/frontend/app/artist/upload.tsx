@@ -129,8 +129,9 @@ const ArtistUploadScreen: React.FC = () => {
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = 'audio/*,.mp3,.flac,.ogg,.m4a,.wav';
-      input.onchange = (e: any) => {
-        const file = e.target.files?.[0];
+      input.onchange = (e: Event) => {
+        const target = e.target as HTMLInputElement;
+        const file = target.files?.[0];
         if (file) {
           // Use blob URL hook for proper lifecycle management
           setAudioBlobFile(file);
@@ -259,9 +260,9 @@ const ArtistUploadScreen: React.FC = () => {
 
       // Navigate to track or dashboard
       router.push(`/artist/dashboard`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to upload track:', error);
-      toast.error(error?.message || 'Failed to upload track. Please try again.');
+      toast.error(error instanceof Error ? error.message : 'Failed to upload track. Please try again.');
     } finally {
       setIsUploading(false);
     }
@@ -282,6 +283,11 @@ const ArtistUploadScreen: React.FC = () => {
       return;
     }
 
+    if (!albumCoverArt) {
+      toast.error('Cover art is required');
+      return;
+    }
+
     setIsUploading(true);
 
     try {
@@ -289,7 +295,7 @@ const ArtistUploadScreen: React.FC = () => {
         title: albumTitle.trim(),
         artistId: artist.id,
         releaseDate: albumReleaseDate,
-        coverArt: albumCoverArt!,
+        coverArt: albumCoverArt,
         genre: albumGenre ? [albumGenre] : undefined,
         type: albumType,
         label: albumLabel || undefined,
@@ -314,9 +320,9 @@ const ArtistUploadScreen: React.FC = () => {
 
       // Navigate to album or dashboard
       router.push(`/artist/dashboard`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to create album:', error);
-      toast.error(error?.message || 'Failed to create album. Please try again.');
+      toast.error(error instanceof Error ? error.message : 'Failed to create album. Please try again.');
     } finally {
       setIsUploading(false);
     }

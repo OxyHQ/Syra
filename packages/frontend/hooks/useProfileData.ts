@@ -42,12 +42,15 @@ function computeDesign(
   appearance?: UserAppearance
 ): ProfileDesign {
   const customization = appearance?.profileCustomization;
-  const nameValue = typeof oxyProfile?.name === 'string' 
-    ? oxyProfile.name 
-    : oxyProfile?.name?.full;
+  // Canonical display name comes from the Oxy API user contract (`name.displayName`).
+  // We do NOT recompose it from `name.full`/`first`/`last`. `customization.displayName`
+  // is Syra's own user-set profile override and intentionally takes precedence.
+  const canonicalName = typeof oxyProfile?.name === 'string'
+    ? oxyProfile.name
+    : oxyProfile?.name?.displayName;
 
   return {
-    displayName: customization?.displayName || nameValue || oxyProfile?.username || '',
+    displayName: customization?.displayName || canonicalName || oxyProfile?.username || '',
     coverImage: customization?.coverImage || appearance?.profileHeaderImage,
     avatar: oxyProfile?.avatar,
     coverPhotoEnabled: customization?.coverPhotoEnabled ?? true,

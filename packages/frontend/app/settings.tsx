@@ -92,7 +92,6 @@ const SettingsScreen: React.FC = () => {
     isPrivateApiPending,
     canUsePrivateApi,
     logout,
-    oxyServices,
     showBottomSheet,
   } = useOxy();
   const {
@@ -105,7 +104,6 @@ const SettingsScreen: React.FC = () => {
   const { mutateAsync: updateAppearanceSettings } = useUpdateMyAppearanceSettings();
   const { colorPreset, mode: bloomMode, setMode, setColorPreset } = useBloomTheme();
 
-  const avatarUri = user?.avatar ? oxyServices.getFileDownloadUrl(user.avatar, 'thumb') : undefined;
   const appVersion = Constants.expoConfig?.version ?? '2.0.0';
   const userName = getAccountDisplayName(user);
   const usernameLabel = user?.username ? `@${user.username}` : 'Signed in to Syra';
@@ -277,7 +275,7 @@ const SettingsScreen: React.FC = () => {
             </View>
 
             <View style={styles.accountHeader}>
-              <Avatar source={avatarUri ? { uri: avatarUri } : undefined} size={80} />
+              <Avatar source={user?.avatar ?? undefined} variant="thumb" size={80} />
               <Text className="text-2xl font-bold text-foreground mt-2 text-center" numberOfLines={1}>
                 {userName}
               </Text>

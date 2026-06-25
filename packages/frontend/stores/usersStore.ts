@@ -5,7 +5,10 @@ export interface UserEntity {
   id: string;
   _id?: string;
   username?: string;
-  name?: { full?: string; first?: string; last?: string } | string;
+  // `displayName` is the canonical, server-composed display string from the Oxy
+  // API user contract — render it directly. `full`/`first`/`last` are raw,
+  // edit-time fields and must NOT be recomposed into a display name on the client.
+  name?: { displayName?: string; full?: string; first?: string; last?: string } | string;
   handle?: string;
   avatar?: string;
   verified?: boolean;

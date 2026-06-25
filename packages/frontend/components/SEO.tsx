@@ -3,13 +3,18 @@ import { Platform } from 'react-native';
 import { usePathname } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
+type HeadComponent = React.ComponentType<{ children?: React.ReactNode }>;
+
 // Only import Head on web to avoid native errors
-let Head: any = null;
+let Head: HeadComponent | null = null;
 if (Platform.OS === 'web') {
   try {
     // Try multiple import methods for compatibility
-    const expoRouterHead = require('expo-router/head');
-    Head = expoRouterHead.Head || expoRouterHead.default || expoRouterHead;
+    const expoRouterHead = require('expo-router/head') as {
+      Head?: HeadComponent;
+      default?: HeadComponent;
+    };
+    Head = expoRouterHead.Head ?? expoRouterHead.default ?? null;
   } catch (e) {
     // Head not available - will return null component
     console.warn('SEO: expo-router/head not available', e);
