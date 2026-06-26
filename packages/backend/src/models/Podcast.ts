@@ -64,6 +64,11 @@ const PodcastSchema = new Schema<IPodcast>({
   author: { type: String, index: true },
   image: { type: String },
   imageSizes: { type: CatalogImageSizesSchema },
+  // Extracted from the re-hosted cover (gradient source), mirrors Artist/Album.
+  primaryColor: { type: String },
+  secondaryColor: { type: String },
+  // Original external artwork URL, kept as a fallback when re-hosting fails.
+  imageSourceUrl: { type: String },
   language: { type: String },
   categories: [{ type: String, index: true }],
   explicit: { type: Boolean, default: false },

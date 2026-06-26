@@ -27,7 +27,7 @@ export function useNowPlayingMedia(): NowPlayingMedia | null {
         id: currentEpisode.id,
         title: currentEpisode.title,
         subtitle: currentEpisode.podcastTitle,
-        imageUri: resolvePodcastImageUri(currentEpisode.image, 'thumb'),
+        imageUri: resolvePodcastImageUri(currentEpisode, 'thumbnail'),
       };
     }
     if (currentTrack) {

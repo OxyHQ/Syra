@@ -8,7 +8,7 @@ import SEO from '@/components/SEO';
 import { ArtistDetailSkeleton } from '@/components/skeletons';
 import { useEpisode, useEpisodeChapters } from '@/hooks/usePodcasts';
 import { usePlayerStore } from '@/stores/playerStore';
-import { resolvePodcastImageUri } from '@/utils/podcastImages';
+import { resolvePodcastImageUri, resolveExternalImageUri } from '@/utils/podcastImages';
 import { stripHtml, formatPubDate, formatEpisodeDuration } from '@/utils/podcastFormat';
 import { formatDuration } from '@/utils/musicUtils';
 import type { ResolvedPerson } from '@/services/episodeService';
@@ -37,7 +37,7 @@ const EpisodeScreen: React.FC = () => {
   const seek = usePlayerStore((s) => s.seek);
 
   const isCurrent = currentEpisode?.id === id;
-  const artwork = resolvePodcastImageUri(episode?.image, 'full');
+  const artwork = resolvePodcastImageUri(episode, 'detailArtwork');
   const description = useMemo(() => stripHtml(episode?.description ?? episode?.summary), [episode]);
 
   const handlePlay = () => {
@@ -136,7 +136,7 @@ const EpisodeScreen: React.FC = () => {
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Hosts & guests</Text>
             {detail.persons.map((person: ResolvedPerson, index: number) => {
-              const personImage = resolvePodcastImageUri(person.img, 'thumb');
+              const personImage = resolveExternalImageUri(person.img);
               const isLinked = Boolean(person.linkedArtistId);
               return (
                 <Pressable

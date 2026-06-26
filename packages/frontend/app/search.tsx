@@ -8,6 +8,7 @@ import { useRouter, useLocalSearchParams, type Href } from 'expo-router';
 import { SearchCategory, SearchUser, Track } from '@syra/shared-types';
 import { searchService } from '@/services/searchService';
 import { searchRefetchInterval } from '@/utils/searchUtils';
+import { resolvePodcastImageUri } from '@/utils/podcastImages';
 import { browseService } from '@/services/browseService';
 import { MediaCard } from '@/components/MediaCard';
 import { GenreCard } from '@/components/GenreCard';
@@ -29,10 +30,15 @@ const SearchScreen: React.FC = () => {
   const router = useRouter();
   const isMobile = useMediaQuery({ maxWidth: 767 });
   const { playTrackList, currentTrack, isPlaying } = usePlayerStore();
-  // Seed the search box from a `?q=` deep link (e.g. tapping a #hashtag / @mention).
-  const { q } = useLocalSearchParams<{ q?: string }>();
+  // Seed the search box from a `?q=` deep link (e.g. tapping a #hashtag / @mention),
+  // and optionally preselect a `?category=` tab (e.g. the podcasts home search entry).
+  const { q, category } = useLocalSearchParams<{ q?: string; category?: string }>();
   const searchQuery = typeof q === 'string' ? q : '';
-  const [activeCategory, setActiveCategory] = useState<SearchCategory>(SearchCategory.ALL);
+  const initialCategory = typeof category === 'string'
+    && (Object.values(SearchCategory) as string[]).includes(category)
+    ? (category as SearchCategory)
+    : SearchCategory.ALL;
+  const [activeCategory, setActiveCategory] = useState<SearchCategory>(initialCategory);
 
   // Debounce search query
   const debouncedQuery = useDebouncedValue(searchQuery, 300);
@@ -168,6 +174,7 @@ const SearchScreen: React.FC = () => {
     { value: SearchCategory.ALBUMS, label: 'Albums' },
     { value: SearchCategory.ARTISTS, label: 'Artists' },
     { value: SearchCategory.PLAYLISTS, label: 'Playlists' },
+    { value: SearchCategory.PODCASTS, label: 'Podcasts' },
     { value: SearchCategory.USERS, label: 'Users' },
   ], []);
 
@@ -550,6 +557,40 @@ const SearchScreen: React.FC = () => {
                 </ExploreSection>
               )}
 
+            {/* Podcasts Section */}
+            {(activeCategory === SearchCategory.ALL || activeCategory === SearchCategory.PODCASTS) &&
+              searchResults.results.podcasts &&
+              searchResults.results.podcasts.length > 0 && (
+                <ExploreSection
+                  title={`Podcasts (${searchResults.counts.podcasts})`}
+                  isLoading={false}
+                  isEmpty={false}
+                >
+                  <ResponsiveGrid minItemWidth={180} gap={8}>
+                    {searchResults.results.podcasts.map((podcast) => (
+                      <View key={podcast.id}>
+                        <MediaCard
+                          title={podcast.title}
+                          subtitle={podcast.author ?? 'Podcast'}
+                          type="podcast"
+                          resolvedImageUri={resolvePodcastImageUri(podcast, 'card')}
+                          primaryColor={podcast.primaryColor}
+                          onPress={() => router.push({ pathname: '/podcasts/[id]', params: { id: podcast.id } } satisfies Href)}
+                        />
+                      </View>
+                    ))}
+                  </ResponsiveGrid>
+                </ExploreSection>
+              )}
+
+            {/* Background directory import runs server-side on every podcast search. */}
+            {(activeCategory === SearchCategory.ALL || activeCategory === SearchCategory.PODCASTS) &&
+              searchResults.pendingPodcastImport && (
+                <Text style={[styles.podcastImportHint, { color: theme.colors.textSecondary }]}>
+                  Finding more podcasts…
+                </Text>
+              )}
+
             {(activeCategory === SearchCategory.ALL || activeCategory === SearchCategory.USERS) &&
               searchResults.results.users &&
               searchResults.results.users.length > 0 && (
@@ -738,6 +779,12 @@ const styles = StyleSheet.create({
   noResultsText: {
     fontSize: 16,
     textAlign: 'center',
+  },
+  podcastImportHint: {
+    fontSize: 13,
+    fontStyle: 'italic',
+    marginTop: 8,
+    marginBottom: 8,
   },
 });
 

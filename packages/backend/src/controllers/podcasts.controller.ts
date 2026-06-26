@@ -27,18 +27,19 @@ import { getParam } from '../utils/reqParams';
 import { logger } from '../utils/logger';
 import { searchPodcasts as directorySearch } from '../services/podcasts/PodcastDirectory';
 import { importFeed } from '../services/podcasts/podcastImportService';
+import { enqueuePodcastSearchImport } from '../services/podcasts/podcastBackgroundImport';
 import { serializePodcast, serializeEpisode } from '../services/podcasts/podcastSerializers';
 import { enqueueEpisodeIngest } from '../services/podcasts/ingestEpisode';
 import { generatePodcastRss } from '../services/podcasts/podcastRssGenerator';
 import { getS3PodcastEpisodeAudioKey } from '../config/s3.config';
 import { uploadToS3 } from '../services/s3Service';
+import { getImageAssetColors } from '../services/imageAssetService';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const LIST_LIMIT_DEFAULT = 20;
 const LIST_LIMIT_MAX = 50;
 const RECENT_EPISODES_ON_SHOW = 20;
-const DISCOVER_AUTO_IMPORT = 1;
 
 const AUDIO_FORMAT_BY_MIME: Record<string, AudioSource['format']> = {
   'audio/mpeg': 'mp3',
@@ -97,9 +98,10 @@ function episodeVisibilityFilter(
 // ── Reads ──────────────────────────────────────────────────────────────────────
 
 /**
- * GET /api/podcasts/search?q=&limit= — DB-first text search. When the local
- * catalog has nothing, fall back to the directory and import the top match
- * on-the-fly so a first-time query still returns a real show.
+ * GET /api/podcasts/search?q=&limit= — DB-first text search. Enriches the
+ * catalog in the BACKGROUND from the whole directory result set (capped +
+ * throttled + deduped) without blocking the response; newly imported shows
+ * surface on subsequent searches. This replaces the old import-on-tap flow.
  */
 export async function searchPodcasts(req: AuthRequest, res: Response): Promise<void> {
   const q = (queryString(req, 'q') ?? '').trim();
@@ -109,7 +111,7 @@ export async function searchPodcasts(req: AuthRequest, res: Response): Promise<v
   }
   const limit = clampLimit(req.query.limit);
 
-  let podcasts = await PodcastModel.find(
+  const podcasts = await PodcastModel.find(
     { status: 'active', $text: { $search: q } },
     { score: { $meta: 'textScore' } },
   )
@@ -117,23 +119,8 @@ export async function searchPodcasts(req: AuthRequest, res: Response): Promise<v
     .limit(limit)
     .lean();
 
-  if (podcasts.length === 0) {
-    const candidates = await directorySearch(q, DISCOVER_AUTO_IMPORT);
-    for (const candidate of candidates.slice(0, DISCOVER_AUTO_IMPORT)) {
-      try {
-        await importFeed(candidate.feedUrl, { directory: candidate });
-      } catch (err) {
-        logger.warn('[podcasts] on-the-fly import failed', { feedUrl: candidate.feedUrl, err });
-      }
-    }
-    podcasts = await PodcastModel.find(
-      { status: 'active', $text: { $search: q } },
-      { score: { $meta: 'textScore' } },
-    )
-      .sort({ score: { $meta: 'textScore' } })
-      .limit(limit)
-      .lean();
-  }
+  // Fire-and-forget bulk enrichment — never delays this response.
+  enqueuePodcastSearchImport(q);
 
   res.json({ data: podcasts.map(serializePodcast) });
 }
@@ -405,6 +392,16 @@ export async function createPodcast(req: AuthRequest, res: Response): Promise<vo
     claimable: false,
     status: 'active',
   });
+
+  // Pull the gradient colors from the creator's uploaded cover (Syra image id),
+  // matching how Album/Artist carry primaryColor. Best-effort.
+  if (input.image && mongoose.Types.ObjectId.isValid(input.image)) {
+    const colors = await getImageAssetColors(input.image);
+    if (colors) {
+      podcast.primaryColor = colors.primaryColor;
+      podcast.secondaryColor = colors.secondaryColor;
+    }
+  }
 
   // The public RSS URL is derivable from the id; persist it so it's queryable.
   const base = process.env.STREAM_KEY_BASE_URL ?? '';

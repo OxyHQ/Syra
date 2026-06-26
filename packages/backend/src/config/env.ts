@@ -68,6 +68,7 @@ const schema = z.object({
 
   PODCAST_INDEX_KEY: z.string().optional(),
   PODCAST_INDEX_SECRET: z.string().optional(),
+  PODCAST_BULK_IMPORT_ENABLED: z.string().optional(),
 
   LRCLIB_API_URL: z.string().optional(),
 

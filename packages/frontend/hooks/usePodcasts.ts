@@ -18,7 +18,6 @@ import {
   type EpisodeDetail,
   type ContinueListeningEntry,
 } from '@/services/episodeService';
-import { podcastDiscoveryService } from '@/services/podcastDiscoveryService';
 import { toast } from '@/lib/sonner';
 
 /**
@@ -39,7 +38,6 @@ export const PODCAST_QUERY_KEYS = {
   episode: (id: string, identity: string) => ['episodes', 'detail', id, identity] as const,
   subscriptions: ['podcasts', 'subscriptions'] as const,
   continue: ['episodes', 'continue'] as const,
-  discover: (query: string) => ['podcasts', 'discover', query] as const,
 };
 
 // ── Catalog reads (public) ───────────────────────────────────────────────────
@@ -216,18 +214,6 @@ export function useEpisodeProgress(episodeId: string | undefined): EpisodeProgre
   return episodeId ? map.get(episodeId) : undefined;
 }
 
-// ── Directory discovery + import ─────────────────────────────────────────────
-
-export function usePodcastDiscovery(query: string) {
-  const trimmed = query.trim();
-  return useQuery({
-    queryKey: PODCAST_QUERY_KEYS.discover(trimmed),
-    queryFn: () => podcastDiscoveryService.discover(trimmed),
-    enabled: trimmed.length > 1,
-    staleTime: 1000 * 60 * 5,
-  });
-}
-
 // ── Chapters (Podcasting 2.0) ────────────────────────────────────────────────
 
 export interface EpisodeChapter {
@@ -266,27 +252,5 @@ export function useEpisodeChapters(url: string | undefined) {
     },
     enabled: Boolean(url),
     staleTime: 1000 * 60 * 60,
-  });
-}
-
-/** Import an external feed into the catalog and return the resulting show. */
-export function useImportFeed(): UseMutationResult<Podcast, Error, string> {
-  const queryClient = useQueryClient();
-  const { canUsePrivateApi, showBottomSheet } = useOxy();
-  return useMutation<Podcast, Error, string>({
-    mutationFn: (feedUrl: string) => {
-      if (!canUsePrivateApi) {
-        showBottomSheet?.('OxyAuth');
-        throw new Error('Sign in to add a podcast');
-      }
-      return podcastService.importFeed(feedUrl);
-    },
-    onSuccess: (podcast) => {
-      queryClient.setQueryData(PODCAST_QUERY_KEYS.show(podcast.id), { podcast, episodes: [] });
-      queryClient.invalidateQueries({ queryKey: ['podcasts', 'browse'] });
-    },
-    onError: (error) => {
-      toast.error(error.message || 'Could not add this podcast');
-    },
   });
 }

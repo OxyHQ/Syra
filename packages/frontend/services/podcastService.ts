@@ -50,11 +50,6 @@ const subscriptionsResponseSchema = z.object({
   data: podcastSubscriptionsSchema,
 }).passthrough();
 
-const importResponseSchema = z.object({
-  data: podcastResponseSchema,
-  importedEpisodes: z.number().optional(),
-}).passthrough();
-
 const okResponseSchema = z.object({
   ok: z.boolean(),
 }).passthrough();
@@ -129,11 +124,5 @@ export const podcastService = {
   async unsubscribe(podcastId: string): Promise<void> {
     const response = await api.post<unknown>(`/podcasts/${podcastId}/unsubscribe`);
     parsePodcastResponse(okResponseSchema, response.data, 'unsubscribe');
-  },
-
-  /** Mirror an external feed into the catalog (auth). Returns the show. */
-  async importFeed(feedUrl: string): Promise<Podcast> {
-    const response = await api.post<unknown>('/podcasts/import', { feedUrl });
-    return parsePodcastResponse(importResponseSchema, response.data, 'import feed').data;
   },
 };

@@ -360,7 +360,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Podcasts</Text>
             <View style={styles.itemsContainer}>
               {subscribedPodcasts.map(({ podcast }) => {
-                const imageUri = resolvePodcastImageUri(podcast.image, 'thumb');
+                const imageUri = resolvePodcastImageUri(podcast, 'thumbnail');
                 return (
                   <Pressable
                     key={podcast.id}

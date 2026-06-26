@@ -37,7 +37,7 @@ const EpisodeRowComponent: React.FC<EpisodeRowProps> = ({
   hideArtwork = false,
 }) => {
   const theme = useTheme();
-  const imageUri = useMemo(() => resolvePodcastImageUri(episode.image, 'thumb'), [episode.image]);
+  const imageUri = useMemo(() => resolvePodcastImageUri(episode, 'thumbnail'), [episode]);
 
   const completed = progress?.completed ?? false;
   const hasProgress = !completed && (progress?.progressSec ?? 0) > 0 && (progress?.durationSec ?? 0) > 0;

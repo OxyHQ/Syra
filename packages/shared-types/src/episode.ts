@@ -71,8 +71,15 @@ export const episodeSchema = timestampsSchema.extend({
   season: z.number().optional(),
   episodeNumber: z.number().optional(),
   episodeType: episodeTypeSchema,
+  // Episode-specific cover art (only when the episode carries its own artwork;
+  // otherwise it inherits the show's). `image` is the re-hosted Syra image id;
+  // `primaryColor`/`secondaryColor` come from that art; `imageSourceUrl` is the
+  // original external URL kept as a fallback only.
   image: z.string().optional(),
   imageSizes: catalogImageSizesSchema.optional(),
+  primaryColor: z.string().optional(),
+  secondaryColor: z.string().optional(),
+  imageSourceUrl: z.string().optional(),
   explicit: z.boolean(),
   // Podcasting 2.0
   chapters: episodeChaptersSchema.optional(),

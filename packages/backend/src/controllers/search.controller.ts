@@ -4,9 +4,12 @@ import { getAccountDisplayName } from '@oxyhq/core';
 import type { User } from '@oxyhq/core';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { TrackModel } from '../models/Track';
+import { PodcastModel } from '../models/Podcast';
 import { formatTracksWithCoverArt, formatAlbumsWithCoverArt, formatArtistsWithImage, formatPlaylistsWithCoverArt } from '../utils/musicHelpers';
+import { serializePodcast, type PodcastDocument } from '../services/podcasts/podcastSerializers';
 import { isDatabaseConnected } from '../utils/database';
 import { enqueueAudiusImport } from '../services/sources/audiusBackgroundImport';
+import { enqueuePodcastSearchImport } from '../services/podcasts/podcastBackgroundImport';
 import { withImageFirstSort } from '../utils/imageFirstSort';
 import { logger } from '../utils/logger';
 import {
@@ -95,6 +98,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
           albums: [],
           artists: [],
           playlists: [],
+          podcasts: [],
           users: [],
         },
         counts: {
@@ -102,6 +106,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
           albums: 0,
           artists: 0,
           playlists: 0,
+          podcasts: 0,
           users: 0,
           total: 0,
         },
@@ -121,6 +126,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
       albums?: Promise<[unknown[], number]>;
       artists?: Promise<[unknown[], number]>;
       playlists?: Promise<[unknown[], number]>;
+      podcasts?: Promise<[unknown[], number]>;
       users?: Promise<[SearchUser[], number]>;
     } = {};
 
@@ -214,6 +220,28 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
           ]);
     }
 
+    // Search podcasts (our mirrored catalog; podcasts are free → no playback filter).
+    if (categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.PODCASTS) {
+      const podcastFilter = {
+        status: 'active',
+        $or: [
+          { title: searchRegex },
+          { author: searchRegex },
+        ],
+      };
+      const podcastFind = PodcastModel.find(podcastFilter)
+        .sort({ popularity: -1, subscriberCount: -1, lastEpisodeAt: -1 })
+        .skip(searchOffset)
+        .limit(searchLimit)
+        .lean();
+      searchPromises.podcasts = isPreviewSearch
+        ? podcastFind.then((docs) => [docs, docs.length])
+        : Promise.all([
+            podcastFind,
+            PodcastModel.countDocuments(podcastFilter),
+          ]);
+    }
+
     const includeUsers =
       categoryValue === SearchCategory.USERS ||
       (categoryValue === SearchCategory.ALL && searchLimit > HEADER_PREVIEW_LIMIT);
@@ -227,12 +255,14 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
       albumsResult,
       artistsResult,
       playlistsResult,
+      podcastsResult,
       usersResult,
     ] = await Promise.all([
       searchPromises.tracks ?? Promise.resolve<[unknown[], number]>([[], 0]),
       searchPromises.albums ?? Promise.resolve<[unknown[], number]>([[], 0]),
       searchPromises.artists ?? Promise.resolve<[unknown[], number]>([[], 0]),
       searchPromises.playlists ?? Promise.resolve<[unknown[], number]>([[], 0]),
+      searchPromises.podcasts ?? Promise.resolve<[unknown[], number]>([[], 0]),
       searchPromises.users ?? Promise.resolve<[SearchUser[], number]>([[], 0]),
     ]);
 
@@ -249,6 +279,9 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
     const formattedPlaylists = categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.PLAYLISTS
       ? formatPlaylistsWithCoverArt(playlistsResult[0])
       : [];
+    const formattedPodcasts = categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.PODCASTS
+      ? (podcastsResult[0] as PodcastDocument[]).map(serializePodcast)
+      : [];
     const formattedUsers = includeUsers
       ? usersResult[0]
       : [];
@@ -258,8 +291,9 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
     const albumsCount = albumsResult[1];
     const artistsCount = artistsResult[1];
     const playlistsCount = playlistsResult[1];
+    const podcastsCount = podcastsResult[1];
     const usersCount = usersResult[1];
-    const totalCount = tracksCount + albumsCount + artistsCount + playlistsCount + usersCount;
+    const totalCount = tracksCount + albumsCount + artistsCount + playlistsCount + podcastsCount + usersCount;
 
     // Determine if there are more results
     const hasMore = categoryValue === SearchCategory.ALL
@@ -268,6 +302,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
         (categoryValue === SearchCategory.ALBUMS && albumsCount > searchOffset + searchLimit) ||
         (categoryValue === SearchCategory.ARTISTS && artistsCount > searchOffset + searchLimit) ||
         (categoryValue === SearchCategory.PLAYLISTS && playlistsCount > searchOffset + searchLimit) ||
+        (categoryValue === SearchCategory.PODCASTS && podcastsCount > searchOffset + searchLimit) ||
         (categoryValue === SearchCategory.USERS && usersCount > searchOffset + searchLimit);
 
     const results: SearchResult = {
@@ -277,6 +312,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
         albums: formattedAlbums,
         artists: formattedArtists,
         playlists: formattedPlaylists,
+        podcasts: formattedPodcasts,
         users: formattedUsers,
       },
       counts: {
@@ -284,6 +320,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
         albums: albumsCount,
         artists: artistsCount,
         playlists: playlistsCount,
+        podcasts: podcastsCount,
         users: usersCount,
         total: totalCount,
       },
@@ -310,7 +347,24 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
       enqueueAudiusImport(query);
     }
 
-    res.json({ ...results, pendingAudiusImport });
+    // Fire-and-forget BULK podcast import: every podcast/all search enriches the
+    // catalog with the WHOLE directory result set (not just a tapped show).
+    // Throttled + capped + deduped inside the service; never delays the response.
+    // Skipped for the tiny header preview to avoid keystroke spam.
+    const isPodcastSearch =
+      categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.PODCASTS;
+    const pendingPodcastImport =
+      process.env.PODCAST_BULK_IMPORT_ENABLED !== 'false' &&
+      isPodcastSearch &&
+      querySpecificEnough &&
+      searchOffset === 0 &&
+      !isPreviewSearch;
+
+    if (pendingPodcastImport) {
+      enqueuePodcastSearchImport(query);
+    }
+
+    res.json({ ...results, pendingAudiusImport, pendingPodcastImport });
   } catch (error) {
     next(error);
   }

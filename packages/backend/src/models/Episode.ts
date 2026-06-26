@@ -105,6 +105,11 @@ const EpisodeSchema = new Schema<IEpisode>({
   episodeType: { type: String, enum: ['full', 'trailer', 'bonus'], default: 'full' },
   image: { type: String },
   imageSizes: { type: CatalogImageSizesSchema },
+  // Colors from the episode's own art (only when it carries distinct artwork).
+  primaryColor: { type: String },
+  secondaryColor: { type: String },
+  // Original external episode-art URL, kept as a fallback when re-hosting fails.
+  imageSourceUrl: { type: String },
   explicit: { type: Boolean, default: false },
   // Podcasting 2.0
   chapters: { type: EpisodeChaptersSchema },

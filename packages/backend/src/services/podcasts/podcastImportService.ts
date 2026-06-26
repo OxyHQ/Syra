@@ -13,11 +13,27 @@
  * state on an existing row.
  */
 
+import type { CatalogImageSizes } from '@syra/shared-types';
 import { PodcastModel, IPodcast } from '../../models/Podcast';
 import { EpisodeModel } from '../../models/Episode';
 import { logger } from '../../utils/logger';
+import { assignMissingColors, replaceColors } from '../catalog/entityColors';
 import { fetchAndParse, type ParsedEpisode, type ParsedShow } from './RssConnector';
+import { rehostPodcastImage } from './podcastMedia';
 import type { PodcastDirectoryCandidate } from './PodcastDirectory';
+
+/** Max NEW episodes whose own artwork is re-hosted inline per import (bounds the
+ * import path; the long tail is covered by the backfill script). */
+const MAX_EPISODE_IMAGE_REHOST = 30;
+
+/** Cover-art fields applied to an episode upsert when it carries its own art. */
+interface EpisodeMedia {
+  image?: string;
+  imageSizes?: CatalogImageSizes;
+  primaryColor?: string;
+  secondaryColor?: string;
+  imageSourceUrl?: string;
+}
 
 export interface ImportFeedOptions {
   /** Bypass conditional GET (always re-parse the body). */
@@ -44,11 +60,12 @@ function definedOnly(fields: Record<string, unknown>): Record<string, unknown> {
 
 function buildPodcastSet(show: ParsedShow, directory: PodcastDirectoryCandidate | undefined): Record<string, unknown> {
   const categories = show.categories.length > 0 ? show.categories : (directory?.categories ?? []);
+  // `image`/`imageSizes`/colors are handled by the re-host step (post-upsert),
+  // NOT here — we never store an external URL in `image`.
   return definedOnly({
     title: show.title,
     description: show.description,
     author: show.author ?? directory?.author,
-    image: show.image ?? directory?.image,
     language: show.language,
     categories,
     explicit: show.explicit,
@@ -61,7 +78,11 @@ function buildPodcastSet(show: ParsedShow, directory: PodcastDirectoryCandidate 
   });
 }
 
-function buildEpisodeSet(podcastTitle: string, episode: ParsedEpisode): Record<string, unknown> {
+function buildEpisodeSet(
+  podcastTitle: string,
+  episode: ParsedEpisode,
+  media: EpisodeMedia | undefined,
+): Record<string, unknown> {
   return definedOnly({
     podcastTitle,
     title: episode.title,
@@ -74,14 +95,53 @@ function buildEpisodeSet(podcastTitle: string, episode: ParsedEpisode): Record<s
     season: episode.season,
     episodeNumber: episode.episodeNumber,
     episodeType: episode.episodeType,
-    image: episode.image,
     explicit: episode.explicit,
     chapters: episode.chapters,
     transcripts: episode.transcripts,
     persons: episode.persons,
+    // Cover art (only when the episode carries its own; image is a Syra id).
+    image: media?.image,
+    imageSizes: media?.imageSizes,
+    primaryColor: media?.primaryColor,
+    secondaryColor: media?.secondaryColor,
+    imageSourceUrl: media?.imageSourceUrl,
     // pubDate is set here only when parsed; the insert fallback handles the rest.
     ...(episode.pubDate ? { pubDate: episode.pubDate } : {}),
   });
+}
+
+/**
+ * Re-host the show cover into Syra S3 and apply image/sizes/colors to the doc,
+ * keeping the external URL only as a fallback. Mutates `podcast` (saved by the
+ * caller). Colors follow the catalog convention: replace on change, fill-missing
+ * when unchanged.
+ */
+async function applyShowCover(podcast: IPodcast, feedUrl: string, sourceImageUrl: string | undefined): Promise<void> {
+  if (!sourceImageUrl) return;
+
+  const previousImageId = podcast.image;
+  const rehosted = await rehostPodcastImage(sourceImageUrl, {
+    source: 'rss',
+    entityType: 'podcast',
+    externalId: podcast.podcastGuid ?? feedUrl,
+    existingImageId: previousImageId,
+    existingImageSizes: podcast.imageSizes,
+  });
+
+  // Keep the external artwork URL as a fallback regardless of re-host outcome.
+  podcast.imageSourceUrl = sourceImageUrl;
+
+  if (!rehosted) return;
+
+  const changed = rehosted.image !== previousImageId;
+  podcast.image = rehosted.image;
+  podcast.imageSizes = rehosted.imageSizes;
+  const colors = { primaryColor: rehosted.primaryColor, secondaryColor: rehosted.secondaryColor };
+  if (changed) {
+    replaceColors(podcast, colors);
+  } else {
+    assignMissingColors(podcast, colors);
+  }
 }
 
 /**
@@ -129,15 +189,57 @@ export async function importFeed(feedUrl: string, options: ImportFeedOptions = {
     throw new Error(`podcastImportService: failed to upsert podcast for ${feedUrl}`);
   }
 
+  // Re-host the show cover (mirrors Artist) before the final save.
+  const showImageUrl = fetched.show.image ?? options.directory?.image;
+  try {
+    await applyShowCover(podcast, feedUrl, showImageUrl);
+  } catch (err) {
+    logger.warn('[podcasts] show cover re-host failed', { feedUrl, err });
+    if (showImageUrl) podcast.imageSourceUrl = showImageUrl;
+  }
+
   let importedEpisodes = 0;
   let failedEpisodes = 0;
+  let rehostedEpisodeImages = 0;
 
   for (const episode of fetched.episodes) {
     try {
+      // Re-host a NEW episode's OWN artwork (distinct from the show), bounded.
+      let media: EpisodeMedia | undefined;
+      const ownArtUrl = episode.image;
+      if (ownArtUrl && ownArtUrl !== showImageUrl) {
+        const alreadyExists = await EpisodeModel.exists({ podcastId: podcast._id, guid: episode.guid });
+        if (!alreadyExists) {
+          if (rehostedEpisodeImages < MAX_EPISODE_IMAGE_REHOST) {
+            const rehosted = await rehostPodcastImage(ownArtUrl, {
+              source: 'rss',
+              entityType: 'episode',
+              externalId: episode.guid,
+            });
+            if (rehosted) {
+              media = {
+                image: rehosted.image,
+                imageSizes: rehosted.imageSizes,
+                primaryColor: rehosted.primaryColor,
+                secondaryColor: rehosted.secondaryColor,
+                imageSourceUrl: ownArtUrl,
+              };
+              rehostedEpisodeImages += 1;
+            } else {
+              media = { imageSourceUrl: ownArtUrl };
+            }
+          } else {
+            // Beyond the per-import cap → keep the external URL as a fallback only.
+            media = { imageSourceUrl: ownArtUrl };
+          }
+        }
+        // Existing episode → leave its cover as-is (idempotent).
+      }
+
       await EpisodeModel.findOneAndUpdate(
         { podcastId: podcast._id, guid: episode.guid },
         {
-          $set: buildEpisodeSet(podcast.title, episode),
+          $set: buildEpisodeSet(podcast.title, episode, media),
           $setOnInsert: {
             source: 'rss',
             status: 'ready',

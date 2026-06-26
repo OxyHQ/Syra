@@ -1,36 +1,52 @@
-import { oxyServices } from '@/lib/oxyServices';
+import type { CatalogImageSizes } from '@syra/shared-types';
+import { pickCatalogImageUrl, type CatalogImageTarget } from '@/utils/pickImage';
 
 /**
  * Podcast / episode artwork resolution.
  *
- * Podcast and episode `image` values come from two very different origins:
- *   - **External (rss) shows/episodes** carry a PLAIN external URL (the
- *     publisher's CDN). These must be rendered directly — they are NOT Oxy
- *     file ids and must never go through `getFileDownloadUrl` / the catalog
- *     image resolver (which would discard them).
- *   - **Syra-hosted (`source: 'syra'`) media** stores an Oxy file id, which is
- *     resolved through `oxyServices.getFileDownloadUrl(id, variant)` like the
- *     rest of the Oxy media chokepoint.
- *
- * This helper detects which case applies from the string itself: anything that
- * looks like an absolute URL is used as-is; everything else is treated as an
- * Oxy file id.
+ * Cover art is now re-hosted on Syra (mirrors Artist/Album): `image` is the Syra
+ * image id and `imageSizes` is the multi-resolution variant set, both resolved
+ * through the shared catalog image picker (`/api/images/:id`). `imageSourceUrl`
+ * keeps the original external artwork URL and is used ONLY as a fallback for
+ * rows that have not been backfilled to Syra-hosted media yet.
  */
 const ABSOLUTE_URL_RE = /^(https?:)?\/\//i;
 
+/** The subset of a podcast/episode needed to resolve its artwork. */
+export interface PodcastArtworkSource {
+  image?: string;
+  imageSizes?: CatalogImageSizes;
+  imageSourceUrl?: string;
+}
+
+/**
+ * Resolve podcast/episode artwork at a catalog target size — Syra-hosted media
+ * first (exactly like Artist/Album), falling back to the original external URL
+ * only when no Syra image exists yet.
+ */
 export function resolvePodcastImageUri(
-  image: string | undefined,
-  variant?: 'thumb' | 'medium' | 'full',
+  source: PodcastArtworkSource | undefined,
+  target: CatalogImageTarget,
 ): string | undefined {
-  if (!image) {
+  if (!source) {
     return undefined;
   }
-  const trimmed = image.trim();
-  if (!trimmed) {
+  const syraImage = pickCatalogImageUrl(undefined, source.image, target, source.imageSizes);
+  if (syraImage) {
+    return syraImage;
+  }
+  return resolveExternalImageUri(source.imageSourceUrl);
+}
+
+/**
+ * Resolve a plain external image URL (directory-discovery candidates and
+ * Podcasting 2.0 host/guest avatars, which are never re-hosted). Returns the
+ * value only when it looks like an absolute URL.
+ */
+export function resolveExternalImageUri(value: string | undefined): string | undefined {
+  if (!value) {
     return undefined;
   }
-  if (ABSOLUTE_URL_RE.test(trimmed)) {
-    return trimmed;
-  }
-  return oxyServices.getFileDownloadUrl(trimmed, variant);
+  const trimmed = value.trim();
+  return trimmed && ABSOLUTE_URL_RE.test(trimmed) ? trimmed : undefined;
 }

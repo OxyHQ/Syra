@@ -1,11 +1,17 @@
 import mongoose, { Schema, Document } from 'mongoose';
 import type { CatalogSource } from '@syra/shared-types';
 
-export type ImageAssetOwnerType = 'upload' | 'artist' | 'track' | 'album' | 'playlist' | 'link';
+export type ImageAssetOwnerType =
+  | 'upload' | 'artist' | 'track' | 'album' | 'playlist' | 'link' | 'podcast' | 'episode';
+
+/** Catalog image provider — music catalog sources plus podcast origins. */
+export type CatalogImageProvider = CatalogSource | 'rss' | 'syra';
+
+export type CatalogImageEntity = 'artist' | 'track' | 'album' | 'playlist' | 'podcast' | 'episode';
 
 export interface ImageAssetCatalogMetadata {
-  provider?: CatalogSource;
-  entityType?: 'artist' | 'track' | 'album' | 'playlist';
+  provider?: CatalogImageProvider;
+  entityType?: CatalogImageEntity;
   externalId?: string;
   size?: string;
   sourceUrlHash?: string;
@@ -30,8 +36,8 @@ export interface IImageAsset extends Document {
 }
 
 const CatalogMetadataSchema = new Schema<ImageAssetCatalogMetadata>({
-  provider: { type: String, enum: ['upload', 'cc', 'audius'] as CatalogSource[] },
-  entityType: { type: String, enum: ['artist', 'track', 'album', 'playlist'] },
+  provider: { type: String, enum: ['upload', 'cc', 'audius', 'rss', 'syra'] as CatalogImageProvider[] },
+  entityType: { type: String, enum: ['artist', 'track', 'album', 'playlist', 'podcast', 'episode'] },
   externalId: { type: String },
   size: { type: String },
   sourceUrlHash: { type: String },
@@ -45,7 +51,7 @@ const ImageAssetSchema = new Schema<IImageAsset>({
   byteSize: { type: Number, required: true },
   width: { type: Number },
   height: { type: Number },
-  ownerType: { type: String, enum: ['upload', 'artist', 'track', 'album', 'playlist', 'link'], required: true, index: true },
+  ownerType: { type: String, enum: ['upload', 'artist', 'track', 'album', 'playlist', 'link', 'podcast', 'episode'], required: true, index: true },
   uploadedBy: { type: String, index: true },
   primaryColor: { type: String },
   secondaryColor: { type: String },

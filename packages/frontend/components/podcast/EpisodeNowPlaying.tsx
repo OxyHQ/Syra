@@ -33,7 +33,7 @@ export const EpisodeNowPlaying: React.FC = () => {
     return null;
   }
 
-  const artwork = resolvePodcastImageUri(episode.image, 'full');
+  const artwork = resolvePodcastImageUri(episode, 'hero');
   const chapters = chaptersQuery.data ?? [];
   const activeChapterIndex = chapters.reduce(
     (active, chapter, index) => (currentTime >= chapter.startTime ? index : active),

@@ -164,7 +164,10 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
   const isGrid = displayMode === 'grid';
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    // Match the collapsed view, whose transparent container shows the wrapping
+    // Panel's `surface` color (`backgroundSecondary`); use that same token here
+    // instead of the darker app `background` so both views read identically.
+    <View style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}>
       <View style={styles.header}>
         <View style={styles.titleRow}>
           <Pressable

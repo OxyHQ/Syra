@@ -4,7 +4,6 @@ import * as https from 'https';
 import { URL } from 'url';
 import sharp from 'sharp';
 import {
-  type CatalogSource,
   catalogImageSizesSchema,
   type CatalogImageSizes,
   type CatalogImageVariant,
@@ -14,6 +13,7 @@ import { extractPredominantColorsFromBuffer } from '../colorExtractionService';
 import { logger } from '../../utils/logger';
 import { validateUrlSecurity } from '../../utils/urlSecurity';
 import { getImageAssetSourceContentHash, storeImageAsset } from '../imageAssetService';
+import type { CatalogImageProvider } from '../../models/ImageAsset';
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 10000;
@@ -28,10 +28,10 @@ const IMAGE_SIZES = [
   ['xxlarge', 1280],
 ] as const;
 
-export type CatalogImageEntityType = 'artist' | 'track' | 'album' | 'playlist';
+export type CatalogImageEntityType = 'artist' | 'track' | 'album' | 'playlist' | 'podcast' | 'episode';
 
 export interface CatalogImageContext {
-  provider: CatalogSource;
+  provider: CatalogImageProvider;
   entityType: CatalogImageEntityType;
   externalId: string;
   existingImageId?: string;

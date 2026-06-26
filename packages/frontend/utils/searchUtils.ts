@@ -10,6 +10,8 @@ import type { SearchResult } from '@syra/shared-types';
 export interface SearchResultWithPending extends SearchResult {
   /** True when the server fired a background Audius import for this query. */
   pendingAudiusImport?: boolean;
+  /** True when the server fired a background podcast directory import for this query. */
+  pendingPodcastImport?: boolean;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────

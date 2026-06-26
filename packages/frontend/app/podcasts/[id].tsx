@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import SEO from '@/components/SEO';
 import { EpisodeRow } from '@/components/EpisodeRow';
 import { LibraryListSkeleton } from '@/components/skeletons';
@@ -49,8 +50,15 @@ const PodcastShowScreen: React.FC = () => {
   );
 
   const subscribed = podcast ? isSubscribed(podcast.id) : false;
-  const artwork = resolvePodcastImageUri(podcast?.image, 'full');
+  const artwork = resolvePodcastImageUri(podcast, 'detailArtwork');
   const description = stripHtml(podcast?.description);
+
+  // Cover-derived hero gradient, same shape as the album/artist screens.
+  const gradientColors: readonly [string, string, string] = [
+    podcast?.primaryColor ?? theme.colors.backgroundSecondary,
+    podcast?.secondaryColor ?? theme.colors.background,
+    theme.colors.background,
+  ];
 
   const handlePlayEpisode = (index: number) => {
     const episode = episodes[index];
@@ -96,7 +104,8 @@ const PodcastShowScreen: React.FC = () => {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
+        {/* Header — cover-derived gradient hero (bleeds past the content padding). */}
+        <LinearGradient colors={gradientColors} locations={[0, 0.45, 1]} style={styles.hero}>
         <View style={styles.header}>
           {artwork ? (
             <Image source={{ uri: artwork }} style={styles.headerArtwork} contentFit="cover" />
@@ -141,6 +150,7 @@ const PodcastShowScreen: React.FC = () => {
             </Pressable>
           </View>
         </View>
+        </LinearGradient>
 
         {/* Description */}
         {description ? (
@@ -198,10 +208,18 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 120,
   },
+  hero: {
+    // Bleed the gradient past the ScrollView content padding to the panel edges,
+    // mirroring the album/artist hero.
+    marginHorizontal: -16,
+    marginTop: -16,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    marginBottom: 16,
+  },
   header: {
     flexDirection: 'row',
     gap: 16,
-    marginBottom: 16,
   },
   headerArtwork: {
     width: 140,

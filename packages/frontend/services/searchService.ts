@@ -3,6 +3,7 @@ import {
   albumSchema,
   artistSchema,
   playlistSchema,
+  podcastSchema,
   searchUserSchema,
   trackSchema,
   type SearchCategory,
@@ -18,6 +19,7 @@ const searchResultWithPendingResponseSchema = z.object({
     albums: z.array(albumSchema.passthrough()).optional(),
     artists: z.array(artistSchema.passthrough()).optional(),
     playlists: z.array(playlistSchema.passthrough()).optional(),
+    podcasts: z.array(podcastSchema.passthrough()).optional(),
     users: z.array(searchUserSchema.passthrough()).optional(),
   }).passthrough(),
   counts: z.object({
@@ -25,6 +27,7 @@ const searchResultWithPendingResponseSchema = z.object({
     albums: z.number(),
     artists: z.number(),
     playlists: z.number(),
+    podcasts: z.number(),
     users: z.number(),
     total: z.number(),
   }).passthrough(),
@@ -32,6 +35,7 @@ const searchResultWithPendingResponseSchema = z.object({
   offset: z.number(),
   limit: z.number(),
   pendingAudiusImport: z.boolean().optional(),
+  pendingPodcastImport: z.boolean().optional(),
 }).passthrough();
 
 function parseSearchResponse(data: unknown): SearchResultWithPending {

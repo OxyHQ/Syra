@@ -38,8 +38,15 @@ export const podcastSchema = timestampsSchema.extend({
   title: z.string(),
   description: z.string().optional(),
   author: z.string().optional(),
+  // Cover art: `image` is the Syra image id (re-hosted, resolved via /api/images/:id,
+  // mirrors Artist); `imageSizes` is the multi-resolution variant set; `primaryColor`/
+  // `secondaryColor` are extracted from the cover (gradient source). `imageSourceUrl`
+  // keeps the original external artwork URL as a fallback only.
   image: z.string().optional(),
   imageSizes: catalogImageSizesSchema.optional(),
+  primaryColor: z.string().optional(),
+  secondaryColor: z.string().optional(),
+  imageSourceUrl: z.string().optional(),
   language: z.string().optional(),
   categories: z.array(z.string()).optional(),
   explicit: z.boolean(),
