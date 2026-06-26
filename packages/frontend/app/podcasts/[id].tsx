@@ -7,7 +7,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import SEO from '@/components/SEO';
 import { EpisodeRow } from '@/components/EpisodeRow';
-import { LibraryListSkeleton } from '@/components/skeletons';
+import { LibraryListSkeleton, PodcastDetailSkeleton } from '@/components/skeletons';
 import {
   usePodcast,
   useEpisodes,
@@ -80,11 +80,7 @@ const PodcastShowScreen: React.FC = () => {
   };
 
   if (showQuery.isPending) {
-    return (
-      <View style={[styles.container, styles.center, { backgroundColor: theme.colors.background }]}>
-        <LibraryListSkeleton count={6} />
-      </View>
-    );
+    return <PodcastDetailSkeleton />;
   }
 
   if (!podcast) {
