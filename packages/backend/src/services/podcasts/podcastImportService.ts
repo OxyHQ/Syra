@@ -18,7 +18,7 @@ import { PodcastModel, IPodcast } from '../../models/Podcast';
 import { EpisodeModel } from '../../models/Episode';
 import { logger } from '../../utils/logger';
 import { assignMissingColors, replaceColors } from '../catalog/entityColors';
-import { fetchAndParse, type ParsedEpisode, type ParsedShow } from './RssConnector';
+import { fetchAndParse, type ParsedEpisode, type ParsedShow, type SafeFetchFn } from './RssConnector';
 import { rehostPodcastImage } from './podcastMedia';
 import type { PodcastDirectoryCandidate } from './PodcastDirectory';
 
@@ -40,6 +40,8 @@ export interface ImportFeedOptions {
   force?: boolean;
   /** Directory metadata to enrich the show (podcastIndexId, appleCollectionId, …). */
   directory?: PodcastDirectoryCandidate;
+  /** Injectable SSRF-safe fetch (defaults to the real `safeFetch`). For tests. */
+  fetch?: SafeFetchFn;
 }
 
 export interface ImportFeedResult {
@@ -155,10 +157,14 @@ export async function importFeed(feedUrl: string, options: ImportFeedOptions = {
       ? await PodcastModel.findOne({ podcastGuid: options.directory.podcastGuid })
       : null);
 
-  const fetched = await fetchAndParse(feedUrl, {
-    etag: options.force ? undefined : existing?.etag,
-    lastModified: options.force ? undefined : existing?.lastModified,
-  });
+  const fetched = await fetchAndParse(
+    feedUrl,
+    {
+      etag: options.force ? undefined : existing?.etag,
+      lastModified: options.force ? undefined : existing?.lastModified,
+    },
+    { fetch: options.fetch },
+  );
 
   if (fetched.notModified && existing) {
     existing.lastRefreshedAt = new Date();
@@ -190,13 +196,22 @@ export async function importFeed(feedUrl: string, options: ImportFeedOptions = {
     throw new Error(`podcastImportService: failed to upsert podcast for ${feedUrl}`);
   }
 
-  // Re-host the show cover (mirrors Artist) before the final save.
+  // Re-host the show cover (mirrors Artist) and PERSIST it IMMEDIATELY — before
+  // the (potentially slow, 2000-episode) loop — so the Syra-hosted `image` id +
+  // `imageSizes` + `primaryColor` replace the external URL fast. The external URL
+  // is kept only in `imageSourceUrl` as a fallback.
   const showImageUrl = fetched.show.image ?? options.directory?.image;
   try {
     await applyShowCover(podcast, feedUrl, showImageUrl);
+    await podcast.save();
   } catch (err) {
     logger.warn('[podcasts] show cover re-host failed', { feedUrl, err });
-    if (showImageUrl) podcast.imageSourceUrl = showImageUrl;
+    if (showImageUrl) {
+      podcast.imageSourceUrl = showImageUrl;
+      await podcast.save().catch((saveErr) =>
+        logger.warn('[podcasts] persisting fallback image url failed', { feedUrl, err: saveErr }),
+      );
+    }
   }
 
   let importedEpisodes = 0;
