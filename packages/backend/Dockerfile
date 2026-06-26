@@ -59,13 +59,15 @@ WORKDIR /app
 
 # Install dependencies first for better layer caching. Copy only the manifests,
 # the lockfile and the bun config (hoisted linker) so this layer is reused
-# unless dependencies change. The frontend workspace's package.json is included
-# (the rest of its source is excluded via Dockerfile.dockerignore) so the bun
-# workspace graph stays valid.
+# unless dependencies change. The frontend and creators workspace package.json
+# files are included (the rest of their source is excluded via
+# Dockerfile.dockerignore) so the bun workspace graph matches the lockfile and
+# `bun install --frozen-lockfile` does not try to rewrite it.
 COPY package.json bun.lock bunfig.toml ./
 COPY packages/backend/package.json ./packages/backend/package.json
 COPY packages/shared-types/package.json ./packages/shared-types/package.json
 COPY packages/frontend/package.json ./packages/frontend/package.json
+COPY packages/creators/package.json ./packages/creators/package.json
 
 # Deterministic install from the lockfile, including devDependencies (TypeScript,
 # ts build tooling) which are required to compile the project.

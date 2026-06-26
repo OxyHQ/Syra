@@ -36,7 +36,7 @@ module.exports = function (_config) {
             data: [
               {
                 scheme: 'https',
-                host: 'creators.syra.fm',
+                host: 'creators.oxy.so',
               },
               {
                 scheme: 'https',

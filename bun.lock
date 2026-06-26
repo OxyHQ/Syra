@@ -79,7 +79,6 @@
         "@oxyhq/services": "^11.0.0",
         "@react-native-async-storage/async-storage": "2.2.0",
         "@shopify/flash-list": "2.0.2",
-        "@syra/shared-types": "file:../shared-types",
         "@tanstack/query-async-storage-persister": "^5.100.0",
         "@tanstack/query-sync-storage-persister": "^5.100.0",
         "@tanstack/react-query": "^5.100.0",
@@ -3320,8 +3319,6 @@
     "@socket.io/redis-adapter/debug": ["debug@4.3.7", "", { "dependencies": { "ms": "^2.1.3" }, "peerDependencies": { "supports-color": "*" }, "optionalPeers": ["supports-color"] }, "sha512-Er2nc/H7RrMXZBFCEim6TCmMk02Z8vLC2Rbi1KEBggpo0fS6l0S1nnapwmIi3yW/+GOJap1Krg4w0Hg80oCqgQ=="],
 
     "@syra/backend/@syra/shared-types": ["@syra/shared-types@file:packages/shared-types", { "dependencies": { "zod": "^3.25.76" }, "devDependencies": { "@types/node": "^20.0.0", "typescript": "~5.9.2" } }],
-
-    "@syra/creators/@syra/shared-types": ["@syra/shared-types@file:packages/shared-types", { "dependencies": { "zod": "^3.25.76" }, "devDependencies": { "@types/node": "^20.0.0", "typescript": "~5.9.2" } }],
 
     "@syra/creators/zod": ["zod@3.25.76", "", {}, "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="],
 

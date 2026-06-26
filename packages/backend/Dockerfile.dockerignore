@@ -17,6 +17,11 @@
 packages/frontend/**
 !packages/frontend/package.json
 
+# Creators (Expo/React Native) app — not part of the backend runtime.
+# Its package.json is force-included below so the Bun workspace graph stays valid.
+packages/creators/**
+!packages/creators/package.json
+
 # VCS / CI / editor / OS noise
 .git
 .github
