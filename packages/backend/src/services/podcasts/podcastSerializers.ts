@@ -78,6 +78,7 @@ export function serializePodcast(doc: PodcastDocument): Podcast {
     lastModified: doc.lastModified,
     episodeCount: doc.episodeCount ?? 0,
     lastEpisodeAt: isoOrUndefined(doc.lastEpisodeAt),
+    needsDeepImport: doc.needsDeepImport,
     popularity: doc.popularity,
     subscriberCount: doc.subscriberCount,
     status: doc.status ?? 'active',

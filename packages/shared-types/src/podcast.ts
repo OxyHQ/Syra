@@ -71,6 +71,8 @@ export const podcastSchema = timestampsSchema.extend({
   lastModified: z.string().optional(),
   episodeCount: z.number(),
   lastEpisodeAt: z.string().optional(),
+  /** Shallow (directory-only) doc awaiting a background deep feed import. */
+  needsDeepImport: z.boolean().optional(),
   // Signals
   popularity: z.number().optional(),
   subscriberCount: z.number().optional(),

@@ -27,7 +27,7 @@ import { getParam } from '../utils/reqParams';
 import { logger } from '../utils/logger';
 import { searchPodcasts as directorySearch } from '../services/podcasts/PodcastDirectory';
 import { importFeed } from '../services/podcasts/podcastImportService';
-import { enqueuePodcastSearchImport } from '../services/podcasts/podcastBackgroundImport';
+import { syncPodcastSearch } from '../services/podcasts/podcastBackgroundImport';
 import { serializePodcast, serializeEpisode } from '../services/podcasts/podcastSerializers';
 import { enqueueEpisodeIngest } from '../services/podcasts/ingestEpisode';
 import { generatePodcastRss } from '../services/podcasts/podcastRssGenerator';
@@ -83,6 +83,10 @@ function queryString(req: AuthRequest, name: string): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
  * Episode visibility filter. The show owner sees every episode (including
  * `processing`/`failed`); everyone else sees only `ready` episodes.
@@ -98,10 +102,14 @@ function episodeVisibilityFilter(
 // ── Reads ──────────────────────────────────────────────────────────────────────
 
 /**
- * GET /api/podcasts/search?q=&limit= — DB-first text search. Enriches the
- * catalog in the BACKGROUND from the whole directory result set (capped +
- * throttled + deduped) without blocking the response; newly imported shows
- * surface on subsequent searches. This replaces the old import-on-tap flow.
+ * GET /api/podcasts/search?q=&limit= — instant directory-backed search.
+ *
+ * `syncPodcastSearch` shallow-upserts the directory candidates first (bounded +
+ * throttled, never hangs) so they appear in THIS response like the old discover
+ * screen; the heavy feed import runs in the background. Uses a case-insensitive
+ * regex (NOT `$text`) to avoid depending on a text index that is not built in
+ * production (`autoIndex` is off) — that was the 502/504 cause. Wrapped so the
+ * handler ALWAYS responds.
  */
 export async function searchPodcasts(req: AuthRequest, res: Response): Promise<void> {
   const q = (queryString(req, 'q') ?? '').trim();
@@ -111,18 +119,24 @@ export async function searchPodcasts(req: AuthRequest, res: Response): Promise<v
   }
   const limit = clampLimit(req.query.limit);
 
-  const podcasts = await PodcastModel.find(
-    { status: 'active', $text: { $search: q } },
-    { score: { $meta: 'textScore' } },
-  )
-    .sort({ score: { $meta: 'textScore' } })
-    .limit(limit)
-    .lean();
+  try {
+    // Instant enrichment (shallow upsert) before we read — bounded + throttled.
+    await syncPodcastSearch(q);
 
-  // Fire-and-forget bulk enrichment — never delays this response.
-  enqueuePodcastSearchImport(q);
+    const regex = new RegExp(escapeRegex(q), 'i');
+    const podcasts = await PodcastModel.find({
+      status: 'active',
+      $or: [{ title: regex }, { author: regex }],
+    })
+      .sort({ popularity: -1, subscriberCount: -1, lastEpisodeAt: -1 })
+      .limit(limit)
+      .lean();
 
-  res.json({ data: podcasts.map(serializePodcast) });
+    res.json({ data: podcasts.map(serializePodcast) });
+  } catch (err) {
+    logger.error('[podcasts] search failed', { q, err });
+    if (!res.headersSent) res.status(500).json({ error: 'Search failed' });
+  }
 }
 
 /**

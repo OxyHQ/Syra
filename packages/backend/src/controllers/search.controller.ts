@@ -9,7 +9,7 @@ import { formatTracksWithCoverArt, formatAlbumsWithCoverArt, formatArtistsWithIm
 import { serializePodcast, type PodcastDocument } from '../services/podcasts/podcastSerializers';
 import { isDatabaseConnected } from '../utils/database';
 import { enqueueAudiusImport } from '../services/sources/audiusBackgroundImport';
-import { enqueuePodcastSearchImport } from '../services/podcasts/podcastBackgroundImport';
+import { syncPodcastSearch } from '../services/podcasts/podcastBackgroundImport';
 import { withImageFirstSort } from '../utils/imageFirstSort';
 import { logger } from '../utils/logger';
 import {
@@ -220,6 +220,26 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
           ]);
     }
 
+    // Podcast enrichment. For an explicit podcasts search we AWAIT the shallow
+    // upsert of directory candidates so they appear in THIS response (instant,
+    // like the old discover); the heavy feed import runs in the background. For
+    // 'all' we enrich in the background so the aggregate search stays fast.
+    // `syncPodcastSearch` is bounded + throttled and never hangs/throws.
+    let podcastSyncTriggered = false;
+    if (
+      process.env.PODCAST_BULK_IMPORT_ENABLED !== 'false' &&
+      query.trim().length >= AUDIUS_IMPORT_MIN_QUERY_LENGTH &&
+      searchOffset === 0
+    ) {
+      if (categoryValue === SearchCategory.PODCASTS) {
+        await syncPodcastSearch(query);
+        podcastSyncTriggered = true;
+      } else if (categoryValue === SearchCategory.ALL && !isPreviewSearch) {
+        void syncPodcastSearch(query);
+        podcastSyncTriggered = true;
+      }
+    }
+
     // Search podcasts (our mirrored catalog; podcasts are free → no playback filter).
     if (categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.PODCASTS) {
       const podcastFilter = {
@@ -347,22 +367,9 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
       enqueueAudiusImport(query);
     }
 
-    // Fire-and-forget BULK podcast import: every podcast/all search enriches the
-    // catalog with the WHOLE directory result set (not just a tapped show).
-    // Throttled + capped + deduped inside the service; never delays the response.
-    // Skipped for the tiny header preview to avoid keystroke spam.
-    const isPodcastSearch =
-      categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.PODCASTS;
-    const pendingPodcastImport =
-      process.env.PODCAST_BULK_IMPORT_ENABLED !== 'false' &&
-      isPodcastSearch &&
-      querySpecificEnough &&
-      searchOffset === 0 &&
-      !isPreviewSearch;
-
-    if (pendingPodcastImport) {
-      enqueuePodcastSearchImport(query);
-    }
+    // True when a background deep import may still be enriching podcasts (the
+    // shallow upsert already ran synchronously above for explicit searches).
+    const pendingPodcastImport = podcastSyncTriggered;
 
     res.json({ ...results, pendingAudiusImport, pendingPodcastImport });
   } catch (error) {

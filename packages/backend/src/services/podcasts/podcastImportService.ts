@@ -162,6 +162,7 @@ export async function importFeed(feedUrl: string, options: ImportFeedOptions = {
 
   if (fetched.notModified && existing) {
     existing.lastRefreshedAt = new Date();
+    existing.needsDeepImport = false;
     await existing.save();
     return { podcast: existing, notModified: true, importedEpisodes: 0, failedEpisodes: 0 };
   }
@@ -266,6 +267,7 @@ export async function importFeed(feedUrl: string, options: ImportFeedOptions = {
   podcast.episodeCount = episodeCount;
   podcast.lastEpisodeAt = latest?.pubDate ?? podcast.lastEpisodeAt;
   podcast.lastRefreshedAt = new Date();
+  podcast.needsDeepImport = false;
   if (fetched.etag) podcast.etag = fetched.etag;
   if (fetched.lastModified) podcast.lastModified = fetched.lastModified;
   await podcast.save();

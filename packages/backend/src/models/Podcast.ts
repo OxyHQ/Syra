@@ -93,6 +93,10 @@ const PodcastSchema = new Schema<IPodcast>({
   lastModified: { type: String },
   episodeCount: { type: Number, default: 0 },
   lastEpisodeAt: { type: Date },
+  // True for shallow docs created from a directory candidate that have not yet
+  // had their feed deep-imported (episodes + re-hosted cover). The deep importer
+  // clears it after enriching.
+  needsDeepImport: { type: Boolean, default: false, index: true },
   // Signals
   popularity: { type: Number, default: 0, min: 0, max: 100 },
   subscriberCount: { type: Number, default: 0 },

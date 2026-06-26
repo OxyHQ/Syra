@@ -3,7 +3,7 @@ import { connect, clear, disconnect } from '../../test/mongo';
 import { PodcastModel } from '../../models/Podcast';
 import type { PodcastDirectoryCandidate } from './PodcastDirectory';
 import {
-  runPodcastSearchImport,
+  syncPodcastSearch,
   resetPodcastImportStateForTests,
   MAX_FEEDS_PER_SEARCH,
 } from './podcastBackgroundImport';
@@ -13,72 +13,114 @@ afterEach(clear);
 afterAll(disconnect);
 beforeEach(() => resetPodcastImportStateForTests());
 
+const NOW = 1_000_000_000_000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 function candidate(n: number, extra: Partial<PodcastDirectoryCandidate> = {}): PodcastDirectoryCandidate {
   return {
     feedUrl: `https://feeds.example/${n}.xml`,
     title: `Show ${n}`,
+    author: `Author ${n}`,
+    image: `https://img.example/${n}.jpg`,
     categories: [],
     ...extra,
   };
 }
 
-describe('runPodcastSearchImport — cap + dedup', () => {
-  it('caps the number of feeds enqueued per search at MAX_FEEDS_PER_SEARCH', async () => {
+describe('syncPodcastSearch — shallow upsert + deep scheduling', () => {
+  it('shallow-upserts candidates instantly (no feed fetch) and caps at MAX_FEEDS_PER_SEARCH', async () => {
     const enqueued: string[] = [];
     const many = Array.from({ length: 30 }, (_, i) => candidate(i));
 
-    const result = await runPodcastSearchImport('news', {
+    const result = await syncPodcastSearch('news', {
       search: async () => many,
       enqueue: (feedUrl) => enqueued.push(feedUrl),
+      now: () => NOW,
     });
 
     expect(result.skipped).toBe(false);
     expect(result.candidates).toBe(MAX_FEEDS_PER_SEARCH); // 30 sliced to 25
-    expect(result.enqueued).toBe(MAX_FEEDS_PER_SEARCH);
+    expect(result.shallowUpserted).toBe(MAX_FEEDS_PER_SEARCH);
+    expect(await PodcastModel.countDocuments({})).toBe(MAX_FEEDS_PER_SEARCH);
+
+    const doc = await PodcastModel.findOne({ feedUrl: 'https://feeds.example/0.xml' }).lean();
+    expect(doc?.title).toBe('Show 0');
+    expect(doc?.author).toBe('Author 0');
+    expect(doc?.imageSourceUrl).toBe('https://img.example/0.jpg');
+    expect(doc?.image).toBeUndefined(); // no Syra id yet (deep import re-hosts)
+    expect(doc?.source).toBe('rss');
+    expect(doc?.needsDeepImport).toBe(true);
+
+    // Every new (needsDeepImport) show is enqueued for the background deep import.
+    expect(result.deepEnqueued).toBe(MAX_FEEDS_PER_SEARCH);
     expect(enqueued).toHaveLength(MAX_FEEDS_PER_SEARCH);
   });
 
-  it('dedupes candidates already in the catalog (by feedUrl and podcastGuid)', async () => {
-    await PodcastModel.create({ title: 'Existing A', source: 'rss', feedUrl: 'https://feeds.example/0.xml', claimable: true });
-    await PodcastModel.create({ title: 'Existing B', source: 'rss', feedUrl: 'https://feeds.example/other.xml', podcastGuid: 'guid-1', claimable: true });
-
-    const enqueued: string[] = [];
-    const candidates = [
-      candidate(0), // existing by feedUrl → skipped
-      candidate(1, { podcastGuid: 'guid-1' }), // existing by podcastGuid → skipped
-      candidate(2), // new → enqueued
-    ];
-
-    const result = await runPodcastSearchImport('tech', {
-      search: async () => candidates,
-      enqueue: (feedUrl) => enqueued.push(feedUrl),
+  it('REFRESHES an existing show and does NOT re-enqueue it when fresh', async () => {
+    await PodcastModel.create({
+      title: 'Old Title',
+      author: 'Old Author',
+      source: 'rss',
+      feedUrl: 'https://feeds.example/0.xml',
+      needsDeepImport: false,
+      lastRefreshedAt: new Date(NOW), // fresh
     });
 
-    expect(result.candidates).toBe(3);
-    expect(result.enqueued).toBe(1);
-    expect(enqueued).toEqual(['https://feeds.example/2.xml']);
+    const enqueued: string[] = [];
+    const result = await syncPodcastSearch('tech', {
+      search: async () => [candidate(0)],
+      enqueue: (feedUrl) => enqueued.push(feedUrl),
+      now: () => NOW,
+    });
+
+    const doc = await PodcastModel.findOne({ feedUrl: 'https://feeds.example/0.xml' }).lean();
+    expect(doc?.title).toBe('Show 0'); // metadata refreshed from the directory
+    expect(doc?.author).toBe('Author 0');
+    expect(doc?.imageSourceUrl).toBe('https://img.example/0.jpg');
+    expect(doc?.needsDeepImport).toBe(false); // not re-flagged
+    expect(result.deepEnqueued).toBe(0); // fresh → no heavy re-fetch
+    expect(enqueued).toHaveLength(0);
   });
 
-  it('throttles repeat imports of the same query within the TTL window', async () => {
+  it('re-enqueues a STALE existing show for a deep refresh', async () => {
+    await PodcastModel.create({
+      title: 'Old',
+      source: 'rss',
+      feedUrl: 'https://feeds.example/0.xml',
+      needsDeepImport: false,
+      lastRefreshedAt: new Date(NOW - 2 * DAY_MS), // stale (> 24h)
+    });
+
+    const enqueued: string[] = [];
+    const result = await syncPodcastSearch('stale', {
+      search: async () => [candidate(0)],
+      enqueue: (feedUrl) => enqueued.push(feedUrl),
+      now: () => NOW,
+    });
+
+    expect(result.deepEnqueued).toBe(1);
+    expect(enqueued).toEqual(['https://feeds.example/0.xml']);
+  });
+
+  it('throttles repeat syncs of the same query within the TTL window', async () => {
     const enqueued: string[] = [];
     const deps = {
       search: async () => [candidate(1)],
       enqueue: (feedUrl: string) => enqueued.push(feedUrl),
-      now: () => 1_000, // frozen clock → second call is within TTL
+      now: () => NOW,
     };
 
-    const first = await runPodcastSearchImport('same', deps);
-    const second = await runPodcastSearchImport('same', deps);
+    const first = await syncPodcastSearch('same', deps);
+    const second = await syncPodcastSearch('same', deps);
 
     expect(first.skipped).toBe(false);
-    expect(first.enqueued).toBe(1);
     expect(second.skipped).toBe(true);
-    expect(second.enqueued).toBe(0);
-    expect(enqueued).toHaveLength(1); // not enqueued twice
+    expect(await PodcastModel.countDocuments({})).toBe(1); // not upserted twice
   });
 
   it('is a no-op for a blank query', async () => {
-    const result = await runPodcastSearchImport('   ', { search: async () => [candidate(1)], enqueue: () => {} });
-    expect(result).toEqual({ skipped: true, candidates: 0, enqueued: 0 });
+    const result = await syncPodcastSearch('   ', { search: async () => [candidate(1)], enqueue: () => {} });
+    expect(result).toEqual({ skipped: true, candidates: 0, shallowUpserted: 0, deepEnqueued: 0 });
+    expect(await PodcastModel.countDocuments({})).toBe(0);
   });
 });

@@ -1,20 +1,22 @@
 /**
- * Background bulk import-on-search — mirrors `enqueueAudiusImport`.
+ * Podcast search enrichment — fast SHALLOW upsert (instant results) + background
+ * DEEP import (feed → episodes + re-hosted cover + primaryColor).
  *
- * When a user searches podcasts we enrich the catalog with the WHOLE directory
- * result set, not just the show they tap: `searchPodcasts` (Podcast Index +
- * Apple) → enqueue `importFeed` for EVERY new candidate. This replaces
- * import-on-tap entirely.
+ * On a podcast search we:
+ *  1. Hit the directories (`searchPodcasts`: Podcast Index + Apple) once per
+ *     query (TTL-throttled), bounded by a hard timeout so it can NEVER hang the
+ *     request — replacing the old multi-minute import-on-tap.
+ *  2. Immediately `bulkWrite` a SHALLOW Podcast doc per candidate from the data
+ *     the directory already returns (title/author/feedUrl/podcastGuid/external
+ *     image) — NO feed fetch. These get real ids and appear in the SAME search
+ *     response. Existing shows are REFRESHED (title/author/image) so a changed
+ *     photo/title propagates; they are never permanently skipped.
+ *  3. Enqueue the heavy DEEP import in the BACKGROUND (serialized, one feed at a
+ *     time = natural rate limit) ONLY for shows that are new (`needsDeepImport`)
+ *     or stale (feed not re-fetched within {@link DEEP_REFRESH_STALE_MS}).
  *
- * Safety rails:
- *  - Fire-and-forget; never throws into the request path.
- *  - Imports run ONE AT A TIME on a serialized queue (natural rate limit so a
- *    search can't hammer the import path or the directories).
- *  - Per-query TTL throttle (repeat searches within the window are skipped).
- *  - Capped at {@link MAX_FEEDS_PER_SEARCH} candidates per search.
- *  - Deduped against the existing catalog by `feedUrl`/`podcastGuid`, and by
- *    in-flight `feedUrl` so the same feed isn't queued twice.
- *  - Env kill-switch `PODCAST_BULK_IMPORT_ENABLED=false`.
+ * Caps: ≤{@link MAX_FEEDS_PER_SEARCH} candidates/search; dedup vs in-flight feed;
+ * per-query TTL throttle; env kill-switch `PODCAST_BULK_IMPORT_ENABLED=false`.
  */
 
 import { PodcastModel } from '../../models/Podcast';
@@ -22,13 +24,19 @@ import { logger } from '../../utils/logger';
 import { searchPodcasts as directorySearch, type PodcastDirectoryCandidate } from './PodcastDirectory';
 import { importFeed } from './podcastImportService';
 
-/** Minimum gap between bulk imports for the same normalized query (10 min). */
+/** Minimum gap between directory syncs for the same normalized query (10 min). */
 const SEARCH_IMPORT_TTL_MS = 10 * 60 * 1000;
 
-/** Max directory candidates imported per search (cost + rate cap). */
+/** Max directory candidates handled per search (cost + rate cap). */
 export const MAX_FEEDS_PER_SEARCH = 25;
 
-const lastSearchImportAt = new Map<string, number>();
+/** Hard timeout on the in-request directory call so a search can never hang. */
+const DIRECTORY_TIMEOUT_MS = 3000;
+
+/** Re-pull a show's full feed at most this often from search (24h). */
+const DEEP_REFRESH_STALE_MS = 24 * 60 * 60 * 1000;
+
+const lastSyncAt = new Map<string, number>();
 const queuedFeeds = new Set<string>();
 let importQueue: Promise<void> = Promise.resolve();
 
@@ -40,17 +48,78 @@ function bulkImportEnabled(): boolean {
   return process.env.PODCAST_BULK_IMPORT_ENABLED !== 'false';
 }
 
-/** Already mirrored? Dedup by feedUrl/podcastGuid so we never re-import a show. */
-async function alreadyInCatalog(candidate: PodcastDirectoryCandidate): Promise<boolean> {
-  const or: Record<string, unknown>[] = [{ feedUrl: candidate.feedUrl }];
-  if (candidate.podcastGuid) or.push({ podcastGuid: candidate.podcastGuid });
-  const exists = await PodcastModel.exists({ $or: or });
-  return exists !== null;
+function definedOnly(fields: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(fields)) {
+    if (value !== undefined) result[key] = value;
+  }
+  return result;
 }
 
+/** Resolve a promise to a fallback if it doesn't settle within `ms`. */
+async function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<T>((resolve) => {
+    timer = setTimeout(() => resolve(fallback), ms);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+// ── Shallow upsert (instant results) ────────────────────────────────────────────
+
 /**
- * Enqueue a SINGLE feed import onto the serialized background queue. Deduped by
- * feedUrl while in-flight. Fire-and-forget; never throws.
+ * Upsert a SHALLOW Podcast doc per directory candidate (metadata only, no feed
+ * fetch). Refreshes existing shows' directory metadata; flags new docs for deep
+ * import. Best-effort; a bulk error (e.g. a rare duplicate podcastGuid) never
+ * throws into the caller.
+ */
+export async function shallowUpsertCandidates(candidates: PodcastDirectoryCandidate[]): Promise<void> {
+  if (candidates.length === 0) return;
+
+  const ops = candidates.map((candidate) => ({
+    updateOne: {
+      filter: { feedUrl: candidate.feedUrl },
+      update: {
+        // Refresh directory-owned metadata on every sync. `image` (the Syra id)
+        // is owned by the deep re-host step and is never touched here; the
+        // external artwork URL lives in `imageSourceUrl` for instant display.
+        $set: definedOnly({
+          title: candidate.title,
+          author: candidate.author,
+          imageSourceUrl: candidate.image,
+          ...(candidate.categories.length > 0 ? { categories: candidate.categories } : {}),
+        }),
+        // Stable identity + flags set once, on insert.
+        $setOnInsert: definedOnly({
+          source: 'rss',
+          status: 'active',
+          claimable: true,
+          needsDeepImport: true,
+          podcastGuid: candidate.podcastGuid,
+          podcastIndexId: candidate.podcastIndexId,
+          appleCollectionId: candidate.appleCollectionId,
+        }),
+      },
+      upsert: true,
+    },
+  }));
+
+  try {
+    await PodcastModel.bulkWrite(ops, { ordered: false });
+  } catch (err) {
+    logger.warn('[podcast-import] shallow upsert bulkWrite partial failure', { err });
+  }
+}
+
+// ── Deep import (background) ─────────────────────────────────────────────────────
+
+/**
+ * Enqueue a SINGLE feed's deep import onto the serialized background queue.
+ * Deduped by in-flight feedUrl. Fire-and-forget; never throws.
  */
 export function enqueuePodcastImport(feedUrl: string, directory?: PodcastDirectoryCandidate): void {
   const key = feedUrl.trim().toLowerCase();
@@ -66,81 +135,115 @@ export function enqueuePodcastImport(feedUrl: string, directory?: PodcastDirecto
       try {
         await importFeed(feedUrl, directory ? { directory } : {});
       } catch (err) {
-        logger.warn('[podcast-import] feed import failed', { feedUrl, err });
+        logger.warn('[podcast-import] deep feed import failed', { feedUrl, err });
       } finally {
         queuedFeeds.delete(key);
       }
     });
 }
 
-export interface PodcastSearchImportDeps {
-  /** Directory search; defaults to the real Podcast Index + Apple search. */
+/**
+ * Among the just-upserted candidate feeds, enqueue a deep import only for those
+ * that are new (`needsDeepImport`) or stale (feed not re-fetched recently).
+ * Already-fresh shows are NOT re-pulled, so search never re-fetches a 15MB feed
+ * on every keystroke.
+ */
+async function enqueueDeepImports(
+  candidates: PodcastDirectoryCandidate[],
+  enqueue: (feedUrl: string, directory?: PodcastDirectoryCandidate) => void,
+  now: number,
+): Promise<number> {
+  const feedUrls = candidates.map((c) => c.feedUrl);
+  const staleBefore = new Date(now - DEEP_REFRESH_STALE_MS);
+
+  const targets = await PodcastModel.find({
+    feedUrl: { $in: feedUrls },
+    $or: [
+      { needsDeepImport: true },
+      { lastRefreshedAt: { $exists: false } },
+      { lastRefreshedAt: { $lt: staleBefore } },
+    ],
+  })
+    .select('feedUrl')
+    .lean();
+
+  const byFeedUrl = new Map(candidates.map((c) => [c.feedUrl, c]));
+  let enqueued = 0;
+  for (const target of targets) {
+    if (!target.feedUrl) continue;
+    enqueue(target.feedUrl, byFeedUrl.get(target.feedUrl));
+    enqueued += 1;
+  }
+  return enqueued;
+}
+
+// ── Orchestrator ─────────────────────────────────────────────────────────────────
+
+export interface PodcastSearchSyncDeps {
   search?: (query: string, limit?: number) => Promise<PodcastDirectoryCandidate[]>;
-  /** Per-feed enqueue; defaults to {@link enqueuePodcastImport}. Injectable for tests. */
   enqueue?: (feedUrl: string, directory?: PodcastDirectoryCandidate) => void;
-  /** Clock; defaults to `Date.now`. Inject for testable throttling. */
   now?: () => number;
 }
 
-export interface PodcastSearchImportResult {
+export interface PodcastSearchSyncResult {
   skipped: boolean;
   candidates: number;
-  enqueued: number;
+  shallowUpserted: number;
+  deepEnqueued: number;
 }
 
 /**
- * Search the directories and enqueue importFeed for every NEW candidate (capped
- * + deduped). Throttled per normalized query. Returns counts for observability.
+ * Fast, bounded, idempotent search enrichment. Hits the directory (capped +
+ * timed out), shallow-upserts every candidate so they show immediately, and
+ * enqueues background deep imports for new/stale shows. Throttled per query.
+ * NEVER throws — safe to `await` in the request path or fire-and-forget.
  */
-export async function runPodcastSearchImport(
+export async function syncPodcastSearch(
   query: string,
-  deps: PodcastSearchImportDeps = {},
-): Promise<PodcastSearchImportResult> {
+  deps: PodcastSearchSyncDeps = {},
+): Promise<PodcastSearchSyncResult> {
+  const empty: PodcastSearchSyncResult = { skipped: true, candidates: 0, shallowUpserted: 0, deepEnqueued: 0 };
+  if (!bulkImportEnabled()) return empty;
+
   const search = deps.search ?? directorySearch;
   const enqueue = deps.enqueue ?? enqueuePodcastImport;
-  const now = deps.now ?? Date.now;
+  const now = (deps.now ?? Date.now)();
 
   const key = normalizeQuery(query);
-  if (!key) return { skipped: true, candidates: 0, enqueued: 0 };
+  if (!key) return empty;
 
-  const last = lastSearchImportAt.get(key);
-  if (last !== undefined && now() - last < SEARCH_IMPORT_TTL_MS) {
-    return { skipped: true, candidates: 0, enqueued: 0 };
-  }
-  lastSearchImportAt.set(key, now());
+  const last = lastSyncAt.get(key);
+  if (last !== undefined && now - last < SEARCH_IMPORT_TTL_MS) return empty;
+  lastSyncAt.set(key, now);
 
-  const candidates = (await search(key, MAX_FEEDS_PER_SEARCH)).slice(0, MAX_FEEDS_PER_SEARCH);
-  let enqueued = 0;
-  for (const candidate of candidates) {
-    try {
-      if (await alreadyInCatalog(candidate)) continue;
-      enqueue(candidate.feedUrl, candidate);
-      enqueued += 1;
-    } catch (err) {
-      logger.debug('[podcast-import] candidate dedup check failed', { feedUrl: candidate.feedUrl, err });
-    }
+  let candidates: PodcastDirectoryCandidate[];
+  try {
+    candidates = (await withTimeout(search(key, MAX_FEEDS_PER_SEARCH), DIRECTORY_TIMEOUT_MS, [])).slice(
+      0,
+      MAX_FEEDS_PER_SEARCH,
+    );
+  } catch (err) {
+    logger.warn('[podcast-import] directory search failed', { query: key, err });
+    return { ...empty, skipped: false };
   }
 
-  logger.info('[podcast-import] search import pass', { query: key, candidates: candidates.length, enqueued });
-  return { skipped: false, candidates: candidates.length, enqueued };
+  if (candidates.length === 0) return { ...empty, skipped: false };
+
+  await shallowUpsertCandidates(candidates);
+  let deepEnqueued = 0;
+  try {
+    deepEnqueued = await enqueueDeepImports(candidates, enqueue, now);
+  } catch (err) {
+    logger.warn('[podcast-import] deep-import scheduling failed', { query: key, err });
+  }
+
+  logger.info('[podcast-import] search sync', { query: key, candidates: candidates.length, deepEnqueued });
+  return { skipped: false, candidates: candidates.length, shallowUpserted: candidates.length, deepEnqueued };
 }
 
-/**
- * Fire-and-forget wrapper for the request path. No-op when disabled or blank.
- * Never throws.
- */
-export function enqueuePodcastSearchImport(query: string, deps?: PodcastSearchImportDeps): void {
-  if (!bulkImportEnabled()) return;
-  const key = normalizeQuery(query);
-  if (!key) return;
-  void runPodcastSearchImport(key, deps).catch((err) =>
-    logger.error('[podcast-import] search import failed', { query: key, err }),
-  );
-}
-
-/** Test-only: reset the module throttle/dedup state between cases. */
+/** Test-only: reset module throttle/dedup state between cases. */
 export function resetPodcastImportStateForTests(): void {
-  lastSearchImportAt.clear();
+  lastSyncAt.clear();
   queuedFeeds.clear();
   importQueue = Promise.resolve();
 }
