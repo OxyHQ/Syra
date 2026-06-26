@@ -540,21 +540,34 @@ export const TopBar: React.FC = () => {
       {/* Center Section: Home & Search Grouped (Centered) */}
       <View style={styles.centerSection}>
         <View style={styles.centerGroup}>
-          <Pressable 
+          <Pressable
             onPress={handleHome}
             style={[styles.iconButton, pathname === '/' && activeButtonStyle]}
           >
-            <MaterialCommunityIcons 
-              name={pathname === '/' ? 'home' : 'home-outline'} 
-              size={24} 
-              color={navIconColor} 
+            <MaterialCommunityIcons
+              name={pathname === '/' ? 'home' : 'home-outline'}
+              size={24}
+              color={navIconColor}
             />
           </Pressable>
-          
+
+          <Pressable
+            onPress={() => router.push('/podcasts')}
+            style={[styles.iconButton, pathname.startsWith('/podcasts') && activeButtonStyle]}
+            accessibilityRole="button"
+            accessibilityLabel="Podcasts"
+          >
+            <MaterialCommunityIcons
+              name="podcast"
+              size={24}
+              color={pathname.startsWith('/podcasts') ? theme.colors.primary : navIconColor}
+            />
+          </Pressable>
+
           {!isMobile && (
             <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />
           )}
-          
+
           {renderSearchField(undefined, true)}
         </View>
       </View>

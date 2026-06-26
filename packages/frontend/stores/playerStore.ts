@@ -13,7 +13,7 @@
 import { create } from 'zustand';
 import { createAudioPlayer } from 'expo-audio';
 import { Platform } from 'react-native';
-import { Queue, Track, PlaybackContext, RepeatMode } from '@syra/shared-types';
+import { Queue, Track, Episode, PlaybackContext, RepeatMode } from '@syra/shared-types';
 import { createScopedLogger } from '@/utils/logger';
 import { useQueueStore } from './queueStore';
 import {
@@ -31,7 +31,9 @@ import {
   calculateTrackDuration,
   clampVolume,
 } from './playerStore.helpers';
-import { prefetchStreams, resolveStream, StreamResolution } from '@/services/streamService';
+import { prefetchStreams, resolveStream, resolveEpisodeStream, StreamResolution } from '@/services/streamService';
+import { episodeService } from '@/services/episodeService';
+import { getApiOrigin } from '@/utils/api';
 import { libraryService, type ListeningSource, type PlaySignal } from '@/services/libraryService';
 import { browseService } from '@/services/browseService';
 import { oxyServices } from '@/lib/oxyServices';
@@ -47,9 +49,39 @@ const logger = createScopedLogger('PlayerStore');
 const PLAY_SIGNAL_AUTH_WAIT_MS = 20_000;
 const MAX_PENDING_PLAY_SIGNALS = 16;
 
+/** How often the player persists episode progress while playing. */
+const PROGRESS_SAVE_INTERVAL_MS = 12_000;
+/** Within this many seconds of the end an episode is marked completed. */
+const EPISODE_COMPLETE_THRESHOLD_SEC = 30;
+/** Minimum saved position worth resuming to (avoids a 0–1s jitter). */
+const RESUME_MIN_SEC = 5;
+/** Default podcast playback speed (1×). */
+const DEFAULT_PLAYBACK_RATE = 1;
+
 interface PendingPlaySignal {
   trackId: string;
   signal?: PlaySignal;
+}
+
+/**
+ * Minimal metadata both `Track` and `Episode` satisfy — all the engine setup
+ * helpers need is an id (for logging) and an optional known duration.
+ */
+interface PlayableMeta {
+  id: string;
+  duration?: number;
+}
+
+/** Options for starting episode playback. */
+export interface PlayEpisodeOptions {
+  /** Resume from this saved position (seconds). */
+  resumeFromSec?: number;
+  /** The sequential episode queue this episode belongs to. */
+  queue?: Episode[];
+  /** Index of this episode within `queue`. */
+  index?: number;
+  /** Playback context for analytics / now-playing labelling. */
+  context?: PlaybackContext;
 }
 
 /**
@@ -57,6 +89,14 @@ interface PendingPlaySignal {
  */
 interface PlayerState {
   currentTrack: Track | null;
+  /** The episode currently playing (mutually exclusive with `currentTrack`). */
+  currentEpisode: Episode | null;
+  /** Sequential episode queue for the active podcast playback session. */
+  episodeQueue: Episode[];
+  /** Index of `currentEpisode` within `episodeQueue`. */
+  episodeIndex: number;
+  /** Podcast playback speed (1 = normal). Only applied to episode playback. */
+  playbackRate: number;
   isPlaying: boolean;
   isLoading: boolean;
   currentTime: number;
@@ -65,17 +105,21 @@ interface PlayerState {
   player: PlayerEngine | null;
   error: string | null;
   context: PlaybackContext | null;
-  
+
   // Actions
   playTrack: (track: Track, context?: PlaybackContext, addToQueue?: boolean) => Promise<void>;
   playTrackList: (tracks: Track[], startIndex?: number, context?: PlaybackContext) => Promise<void>;
+  playEpisode: (episode: Episode, options?: PlayEpisodeOptions) => Promise<void>;
+  playEpisodeList: (episodes: Episode[], startIndex?: number, context?: PlaybackContext, resumeFromSec?: number) => Promise<void>;
   playFromQueue: (index: number) => Promise<void>;
   playNext: () => Promise<void>;
   playPrevious: () => Promise<void>;
   pause: () => Promise<void>;
   resume: () => Promise<void>;
   seek: (position: number) => Promise<void>;
+  skipBy: (seconds: number) => Promise<void>;
   setVolume: (volume: number) => void;
+  setPlaybackRate: (rate: number) => void;
   stop: () => Promise<void>;
   updateCurrentTime: (time: number) => void;
   setDuration: (duration: number) => void;
@@ -84,6 +128,8 @@ interface PlayerState {
 
 export const usePlayerStore = create<PlayerState>((set, get) => {
   let positionUpdateInterval: ReturnType<typeof setInterval> | null = null;
+  /** Periodic episode-progress persistence timer (podcast playback only). */
+  let progressSaveInterval: ReturnType<typeof setInterval> | null = null;
   /** Teardown for the active attachSource (hls.js etc.) — called before attach or stop. */
   let currentDetach: AttachResult | null = null;
   let completionInFlight = false;
@@ -260,8 +306,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           finiteSeconds(get().currentTrack?.duration);
         const position = finiteSeconds(status.currentTime) || finiteSeconds(get().currentTime);
         if (isRealFinish(knownDuration, position)) {
-          logger.debug('Track finished, handling completion');
-          get().handleTrackCompletion();
+          logger.debug('Media finished, handling completion');
+          if (get().currentEpisode) {
+            void handleEpisodeCompletion();
+          } else {
+            get().handleTrackCompletion();
+          }
         } else {
           logger.debug('Ignoring spurious didJustFinish', { position, knownDuration });
         }
@@ -433,10 +483,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
    */
   const initializePlayer = async (
     audioUrl: string,
-    track: Track,
+    media: PlayableMeta,
     resolution: StreamResolution | null,
   ): Promise<PlayerEngine> => {
-    logger.debug('Initializing playback engine', { url: audioUrl, trackId: track.id });
+    logger.debug('Initializing playback engine', { url: audioUrl, trackId: media.id });
 
     const mode =
       resolution !== null
@@ -469,16 +519,16 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   /**
    * Start playback and wait for initialization
    */
-  const startPlayback = async (player: PlayerEngine, track: Track): Promise<void> => {
-    logger.debug('Starting playback', { trackId: track.id });
-    
+  const startPlayback = async (player: PlayerEngine, media: PlayableMeta): Promise<void> => {
+    logger.debug('Starting playback', { trackId: media.id });
+
     player.play();
-    
+
     // Wait for player to initialize
     await new Promise(resolve => setTimeout(resolve, PLAYBACK_INIT_DELAY_MS));
-    
+
     const duration = calculateTrackDuration(
-      track.duration,
+      media.duration ?? 0,
       player.duration,
       player.isLoaded
     );
@@ -560,8 +610,130 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     return resolveStream(track.id);
   };
 
+  // ── Episode playback helpers ───────────────────────────────────────────────
+
+  /** Apply the store's playback rate to an engine that supports it. */
+  const applyPlaybackRate = (player: PlayerEngine): void => {
+    player.setPlaybackRate?.(get().playbackRate);
+  };
+
+  /**
+   * Whether a Syra-hosted episode can be played via the encrypted HLS ladder.
+   * External (rss) episodes and processing/guest cases use the progressive proxy.
+   */
+  const episodeSupportsHls = (episode: Episode): boolean =>
+    episode.source === 'syra' &&
+    episode.status === 'ready' &&
+    Boolean(episode.hlsMasterKey) &&
+    Array.isArray(episode.hls) &&
+    episode.hls.length > 0 &&
+    oxyServices.hasValidToken();
+
+  /** Public progressive (range-proxy) audio URL for an episode. */
+  const episodeProgressiveUrl = (episodeId: string): string =>
+    `${getApiOrigin()}/api/podcasts/episodes/${episodeId}/audio`;
+
+  /**
+   * Resolve a playable URL for an episode. Syra-hosted ready episodes use the
+   * tokenized HLS stream (falling back to the progressive proxy if that fails);
+   * everything else streams from the public `/audio` proxy.
+   */
+  const resolveEpisodeAudio = async (
+    episode: Episode,
+  ): Promise<{ url: string; resolution: StreamResolution | null }> => {
+    if (episodeSupportsHls(episode)) {
+      try {
+        const resolution = await resolveEpisodeStream(episode.id);
+        return { url: resolution.url, resolution };
+      } catch (error) {
+        logger.warn('Episode HLS resolve failed, using progressive proxy', { episodeId: episode.id, error });
+      }
+    }
+    return { url: episodeProgressiveUrl(episode.id), resolution: null };
+  };
+
+  /**
+   * Persist the current episode's playback position. Best-effort: requires a
+   * valid session and never throws into the caller.
+   */
+  const saveEpisodeProgress = (options?: { completed?: boolean }): void => {
+    const episode = get().currentEpisode;
+    if (!episode || !oxyServices.hasValidToken()) {
+      return;
+    }
+
+    const positionSec = finiteSeconds(get().currentTime);
+    const durationSec = finiteSeconds(get().duration) || finiteSeconds(episode.duration);
+    const completed =
+      options?.completed ??
+      (durationSec > 0 && positionSec >= durationSec - EPISODE_COMPLETE_THRESHOLD_SEC);
+
+    void episodeService
+      .saveProgress({
+        episodeId: episode.id,
+        positionSec,
+        durationSec: durationSec > 0 ? durationSec : undefined,
+        completed,
+      })
+      .catch((error) => {
+        logger.warn('Failed to save episode progress', { episodeId: episode.id, error });
+      });
+  };
+
+  const stopProgressSaves = (): void => {
+    if (progressSaveInterval) {
+      clearInterval(progressSaveInterval);
+      progressSaveInterval = null;
+    }
+  };
+
+  const startProgressSaves = (): void => {
+    stopProgressSaves();
+    progressSaveInterval = setInterval(() => {
+      if (get().currentEpisode && get().isPlaying) {
+        saveEpisodeProgress();
+      }
+    }, PROGRESS_SAVE_INTERVAL_MS);
+  };
+
+  /**
+   * Advance to the next episode in the sequential queue when one finishes, or
+   * stop when the queue is exhausted. Marks the finished episode completed.
+   */
+  const handleEpisodeCompletion = async (): Promise<void> => {
+    if (completionInFlight) {
+      return;
+    }
+    completionInFlight = true;
+
+    saveEpisodeProgress({ completed: true });
+
+    const { episodeQueue, episodeIndex, context } = get();
+    const nextIndex = episodeIndex + 1;
+
+    if (nextIndex >= 0 && nextIndex < episodeQueue.length) {
+      try {
+        await get().playEpisode(episodeQueue[nextIndex], {
+          queue: episodeQueue,
+          index: nextIndex,
+          context: context ?? undefined,
+        });
+      } finally {
+        completionInFlight = false;
+      }
+      return;
+    }
+
+    await get().stop();
+    completionInFlight = false;
+  };
+
   return {
     currentTrack: null,
+    currentEpisode: null,
+    episodeQueue: [],
+    episodeIndex: 0,
+    playbackRate: DEFAULT_PLAYBACK_RATE,
     isPlaying: false,
     isLoading: false,
     currentTime: 0,
@@ -595,6 +767,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           isLoading: true,
           error: null,
           currentTrack: track,
+          currentEpisode: null,
+          episodeQueue: [],
+          episodeIndex: 0,
+          playbackRate: DEFAULT_PLAYBACK_RATE,
           context: context || null,
         });
 
@@ -670,6 +846,112 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     },
 
     /**
+     * Play a podcast episode.
+     *
+     * Reuses the shared engine/position machinery but runs its own sequential
+     * episode queue (no shuffle), resumes from a saved position, applies the
+     * current playback rate, and persists progress while playing.
+     */
+    playEpisode: async (episode: Episode, options?: PlayEpisodeOptions) => {
+      try {
+        logger.info('Playing episode', { episodeId: episode.id, title: episode.title });
+
+        const { player: currentPlayer, stop } = get();
+        if (currentPlayer) {
+          await stop();
+        }
+
+        const nextQueue = options?.queue && options.queue.length > 0 ? options.queue : [episode];
+        const requestedIndex = options?.index;
+        const resolvedIndex =
+          requestedIndex !== undefined && requestedIndex >= 0
+            ? requestedIndex
+            : nextQueue.findIndex((item) => item.id === episode.id);
+
+        set({
+          isLoading: true,
+          error: null,
+          currentTrack: null,
+          currentEpisode: episode,
+          episodeQueue: nextQueue,
+          episodeIndex: resolvedIndex >= 0 ? resolvedIndex : 0,
+          context: options?.context ?? { type: 'episode', id: episode.id, name: episode.podcastTitle },
+          currentTime: 0,
+          duration: episode.duration || 0,
+        });
+
+        const { url, resolution } = await resolveEpisodeAudio(episode);
+        logger.debug('Episode audio resolved', { url, type: resolution?.type });
+
+        const player = await initializePlayer(url, episode, resolution);
+
+        if (currentDetach) {
+          currentDetach.detach();
+          currentDetach = null;
+        }
+        if (resolution) {
+          currentDetach = attachSource(player, resolution);
+        }
+
+        applyPlaybackRate(player);
+        set({ player, isLoading: true });
+
+        try {
+          await startPlayback(player, episode);
+          // Some engines reset rate on (re)load — re-apply once playing.
+          applyPlaybackRate(player);
+
+          const resumeFromSec = finiteSeconds(options?.resumeFromSec);
+          if (resumeFromSec >= RESUME_MIN_SEC) {
+            await player.seekTo(resumeFromSec);
+            set({ currentTime: resumeFromSec });
+          }
+
+          startPositionUpdates(player);
+          startProgressSaves();
+        } catch (playError) {
+          logger.error('Error during episode playback', playError);
+          set({
+            isPlaying: false,
+            isLoading: false,
+            error: playError instanceof Error ? playError.message : 'Failed to play episode',
+          });
+          throw playError;
+        }
+      } catch (error) {
+        logger.error('Error playing episode', error);
+        set({
+          error: error instanceof Error ? error.message : 'Failed to play episode',
+          isLoading: false,
+          isPlaying: false,
+        });
+      }
+    },
+
+    /**
+     * Play a sequential list of episodes starting at `startIndex`, optionally
+     * resuming the first one from a saved position.
+     */
+    playEpisodeList: async (
+      episodes: Episode[],
+      startIndex: number = 0,
+      context?: PlaybackContext,
+      resumeFromSec?: number,
+    ) => {
+      const playable = episodes.filter((episode) => episode?.id);
+      if (playable.length === 0) {
+        return;
+      }
+      const clampedIndex = Math.max(0, Math.min(startIndex, playable.length - 1));
+      await get().playEpisode(playable[clampedIndex], {
+        queue: playable,
+        index: clampedIndex,
+        context,
+        resumeFromSec,
+      });
+    },
+
+    /**
      * Pause playback
      */
     pause: async () => {
@@ -677,6 +959,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       if (player) {
         player.pause();
         set({ isPlaying: false });
+        if (get().currentEpisode) {
+          saveEpisodeProgress();
+        }
         logger.debug('Playback paused');
       }
     },
@@ -702,7 +987,28 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       if (player) {
         await player.seekTo(position);
         set({ currentTime: position });
+        if (get().currentEpisode) {
+          saveEpisodeProgress();
+        }
         logger.debug('Seeked to position', { position });
+      }
+    },
+
+    /**
+     * Seek relative to the current position (podcast skip ±15s / ±30s).
+     * Clamped to the playable range and persists progress for episodes.
+     */
+    skipBy: async (seconds: number) => {
+      const { player, currentTime, duration } = get();
+      if (!player) {
+        return;
+      }
+      const upperBound = duration > 0 ? duration : currentTime + Math.max(seconds, 0);
+      const target = Math.max(0, Math.min(currentTime + seconds, upperBound));
+      await player.seekTo(target);
+      set({ currentTime: target });
+      if (get().currentEpisode) {
+        saveEpisodeProgress();
       }
     },
 
@@ -718,8 +1024,19 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       if (player) {
         player.volume = clampedVolume;
       }
-      
+
       logger.debug('Volume set', { volume: clampedVolume });
+    },
+
+    /**
+     * Set the podcast playback speed (0.5×–3×). Applied to the live engine and
+     * remembered so it sticks across episodes in the session.
+     */
+    setPlaybackRate: (rate: number) => {
+      const clampedRate = Math.min(3, Math.max(0.5, rate));
+      set({ playbackRate: clampedRate });
+      get().player?.setPlaybackRate?.(clampedRate);
+      logger.debug('Playback rate set', { rate: clampedRate });
     },
 
     /**
@@ -729,6 +1046,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       // Capture engagement for the play being torn down before state resets.
       flushPlaySignal();
       stopPositionUpdates();
+      stopProgressSaves();
+      // Persist the final episode position before the state is cleared.
+      if (get().currentEpisode) {
+        saveEpisodeProgress();
+      }
       // Tear down any hls.js instance before removing the player
       if (currentDetach) {
         currentDetach.detach();
@@ -742,9 +1064,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           logger.warn('Error removing player', error);
         }
       }
-      set({ 
+      set({
         player: null,
         currentTrack: null,
+        currentEpisode: null,
+        episodeQueue: [],
+        episodeIndex: 0,
         isPlaying: false,
         currentTime: 0,
         duration: 0,
@@ -791,6 +1116,20 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
      * Play next track in queue
      */
     playNext: async () => {
+      // Episode playback advances through its own sequential queue.
+      if (get().currentEpisode) {
+        const { episodeQueue, episodeIndex, context } = get();
+        const next = episodeIndex + 1;
+        if (next < episodeQueue.length) {
+          await get().playEpisode(episodeQueue[next], {
+            queue: episodeQueue,
+            index: next,
+            context: context ?? undefined,
+          });
+        }
+        return;
+      }
+
       let nextIndex = chooseNextIndex(false);
 
       if (nextIndex === null && await extendQueueForAutoplay()) {
@@ -806,8 +1145,27 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
      * Play previous track in queue
      */
     playPrevious: async () => {
-      const queueStore = useQueueStore.getState();
       const { currentTime } = get();
+
+      // Episode playback steps back through its own sequential queue.
+      if (get().currentEpisode) {
+        if (currentTime > 3) {
+          await get().seek(0);
+          return;
+        }
+        const { episodeQueue, episodeIndex, context } = get();
+        const previous = episodeIndex - 1;
+        if (previous >= 0) {
+          await get().playEpisode(episodeQueue[previous], {
+            queue: episodeQueue,
+            index: previous,
+            context: context ?? undefined,
+          });
+        }
+        return;
+      }
+
+      const queueStore = useQueueStore.getState();
 
       if (currentTime > 3) {
         await get().seek(0);

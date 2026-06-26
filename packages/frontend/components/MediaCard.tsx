@@ -12,6 +12,12 @@ interface MediaCardProps {
   title: string;
   subtitle?: string;
   imageUri?: string;
+  /**
+   * A fully-resolved image URL to render directly, bypassing the catalog image
+   * pipeline. Required for podcast/episode artwork, whose external (rss) URLs
+   * are dropped by `pickCatalogImageUrl` (it only resolves Oxy/catalog ids).
+   */
+  resolvedImageUri?: string;
   /** External image set (Audius / CC); used to pick the best size for this card (~300 px). */
   images?: TrackImage[];
   /** Internal catalog image variants; used before the large coverArt fallback. */
@@ -51,6 +57,7 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
   title,
   subtitle,
   imageUri,
+  resolvedImageUri: resolvedImageUriProp,
   images,
   imageSizes,
   type = 'playlist',
@@ -65,7 +72,7 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
   onHoverOut,
 }) => {
   const theme = useTheme();
-  const resolvedImageUri = pickCatalogImageUrl(images, imageUri, 'card', imageSizes);
+  const resolvedImageUri = resolvedImageUriProp ?? pickCatalogImageUrl(images, imageUri, 'card', imageSizes);
   const [isHovered, setIsHovered] = React.useState(false);
   const [hideIdleActions, setHideIdleActions] = React.useState(shouldHideIdleActionsByDefault);
   const menuControl = useMenuControl();

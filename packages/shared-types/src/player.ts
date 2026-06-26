@@ -39,7 +39,7 @@ export const playbackPositionSchema = z.object({
 export type PlaybackPosition = z.infer<typeof playbackPositionSchema>;
 
 export const playbackContextSchema = z.object({
-  type: z.enum(['album', 'artist', 'playlist', 'library', 'search', 'track']),
+  type: z.enum(['album', 'artist', 'playlist', 'library', 'search', 'track', 'podcast', 'episode']),
   id: z.string().optional(),
   name: z.string().optional(),
   uri: z.string().optional(),

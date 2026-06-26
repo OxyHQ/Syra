@@ -95,6 +95,10 @@ class WebHlsPlayerImpl implements PlayerEngine {
     this.audio.pause();
   }
 
+  setPlaybackRate(rate: number): void {
+    this.audio.playbackRate = rate;
+  }
+
   async seekTo(seconds: number): Promise<void> {
     this.audio.currentTime = seconds;
   }

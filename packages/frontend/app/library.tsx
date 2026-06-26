@@ -16,6 +16,10 @@ import { useOxy } from '@oxyhq/services';
 import { Playlist, Album, Artist } from '@syra/shared-types';
 import { Image } from 'expo-image';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
+import { EpisodeRow } from '@/components/EpisodeRow';
+import { useSubscriptions, useContinueListening } from '@/hooks/usePodcasts';
+import { usePlayerStore } from '@/stores/playerStore';
+import { resolvePodcastImageUri } from '@/utils/podcastImages';
 
 /**
  * Bottom offset (in px) for the Create Playlist FAB. Clears the floating
@@ -87,7 +91,16 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   );
 
   // Filter state
-  const [activeFilter, setActiveFilter] = useState<'Playlists' | 'Artists' | 'Albums' | 'All'>('All');
+  const [activeFilter, setActiveFilter] = useState<'Playlists' | 'Artists' | 'Albums' | 'Podcasts' | 'Episodes' | 'All'>('All');
+
+  // Podcasts vertical: subscribed shows + in-progress episodes.
+  const subscriptionsQuery = useSubscriptions();
+  const continueQuery = useContinueListening();
+  const subscribedPodcasts = subscriptionsQuery.data?.subscriptions ?? [];
+  const inProgressEpisodes = (continueQuery.data ?? []).filter((entry) => !entry.completed);
+  const currentEpisode = usePlayerStore((s) => s.currentEpisode);
+  const isEpisodePlaying = usePlayerStore((s) => s.isPlaying);
+  const playEpisode = usePlayerStore((s) => s.playEpisode);
 
   // Use props if provided (sidebar mode), otherwise fetch via the shared
   // React Query library layer (standalone mode). The collections derive from
@@ -151,12 +164,12 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
 
         {/* Filters */}
         <View style={styles.filters}>
-          {['All', 'Playlists', 'Artists', 'Albums'].map((filter) => {
+          {['All', 'Playlists', 'Artists', 'Albums', 'Podcasts', 'Episodes'].map((filter) => {
             const isActive = activeFilter === filter;
             return (
-              <Pressable 
+              <Pressable
                 key={filter}
-                onPress={() => setActiveFilter(filter as 'Playlists' | 'Artists' | 'Albums' | 'All')}
+                onPress={() => setActiveFilter(filter as 'Playlists' | 'Artists' | 'Albums' | 'Podcasts' | 'Episodes' | 'All')}
                 style={[
                   styles.filterButton,
                   {
@@ -341,12 +354,69 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
           </View>
         )}
 
+        {/* Subscribed podcasts */}
+        {isAuthenticated && (activeFilter === 'All' || activeFilter === 'Podcasts') && subscribedPodcasts.length > 0 && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Podcasts</Text>
+            <View style={styles.itemsContainer}>
+              {subscribedPodcasts.map(({ podcast }) => {
+                const imageUri = resolvePodcastImageUri(podcast.image, 'thumb');
+                return (
+                  <Pressable
+                    key={podcast.id}
+                    style={[styles.libraryItem, { backgroundColor: theme.colors.backgroundTertiary }]}
+                    onPress={() => router.push({ pathname: '/podcasts/[id]', params: { id: podcast.id } })}
+                  >
+                    {imageUri ? (
+                      <Image source={{ uri: imageUri }} style={styles.playlistImage} contentFit="cover" />
+                    ) : (
+                      <View style={[styles.playlistImagePlaceholder, { backgroundColor: theme.colors.background }]}>
+                        <MaterialCommunityIcons name="podcast" size={24} color={theme.colors.textSecondary} />
+                      </View>
+                    )}
+                    <View style={styles.itemContent}>
+                      <Text style={[styles.itemTitle, { color: theme.colors.text }]} numberOfLines={1}>
+                        {podcast.title}
+                      </Text>
+                      <Text style={[styles.itemSubtitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+                        {podcast.author ?? 'Podcast'}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+        {/* In-progress episodes */}
+        {isAuthenticated && (activeFilter === 'All' || activeFilter === 'Episodes') && inProgressEpisodes.length > 0 && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Continue listening</Text>
+            <View style={styles.itemsContainer}>
+              {inProgressEpisodes.map((entry) => (
+                <EpisodeRow
+                  key={entry.episode.id}
+                  episode={entry.episode}
+                  progress={{ progressSec: entry.progressSec, durationSec: entry.durationSec, completed: entry.completed }}
+                  isCurrent={currentEpisode?.id === entry.episode.id}
+                  isPlaying={currentEpisode?.id === entry.episode.id && isEpisodePlaying}
+                  onPress={() => router.push({ pathname: '/episode/[id]', params: { id: entry.episode.id } })}
+                  onPlayPress={() => playEpisode(entry.episode, { resumeFromSec: entry.progressSec })}
+                />
+              ))}
+            </View>
+          </View>
+        )}
+
         {/* Empty state - show based on active filter */}
         {!finalLoading && !finalError && canUsePrivateApi && (
-          (activeFilter === 'All' && finalPlaylists.length === 0 && finalFollowedArtists.length === 0 && finalSavedAlbums.length === 0) ||
+          (activeFilter === 'All' && finalPlaylists.length === 0 && finalFollowedArtists.length === 0 && finalSavedAlbums.length === 0 && subscribedPodcasts.length === 0 && inProgressEpisodes.length === 0) ||
           (activeFilter === 'Playlists' && finalPlaylists.length === 0) ||
           (activeFilter === 'Artists' && finalFollowedArtists.length === 0) ||
-          (activeFilter === 'Albums' && finalSavedAlbums.length === 0)
+          (activeFilter === 'Albums' && finalSavedAlbums.length === 0) ||
+          (activeFilter === 'Podcasts' && subscribedPodcasts.length === 0) ||
+          (activeFilter === 'Episodes' && inProgressEpisodes.length === 0)
         ) && (
           <View style={styles.emptyState}>
             <MaterialCommunityIcons
@@ -360,6 +430,8 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
               {activeFilter === 'Playlists' && 'No playlists yet'}
               {activeFilter === 'Artists' && 'No followed artists yet'}
               {activeFilter === 'Albums' && 'No saved albums yet'}
+              {activeFilter === 'Podcasts' && 'No podcast subscriptions yet'}
+              {activeFilter === 'Episodes' && 'No episodes in progress'}
             </Text>
             {activeFilter === 'Playlists' && (
               <Pressable

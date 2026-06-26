@@ -1,0 +1,35 @@
+{
+  "cli": {
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "android": {
+        "buildType": "apk"
+      },
+      "extends": "production",
+      "distribution": "internal",
+      "env": {
+        "API_URL": "https://api.syra.fm"
+      }
+    },
+    "production": {
+      "node": "20.0.0",
+      "env": {
+        "API_URL": "https://api.syra.fm"
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "autoIncrement": true
+    },
+    "staging": {
+      "extends": "production",
+      "distribution": "internal"
+    }
+  }
+}

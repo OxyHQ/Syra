@@ -90,6 +90,34 @@ export function getS3HlsKey(artistId: string, trackId: string, relPath: string):
   return `${S3_HLS_PREFIX}/${artistId}/${trackId}/${normalised}`;
 }
 
+export const S3_PODCAST_PREFIX = process.env.S3_PODCAST_PREFIX || 'podcasts';
+
+/**
+ * Get the S3 key for a Syra-hosted podcast episode's SOURCE audio (creator
+ * upload). Format: podcasts/audio/{podcastId}/{episodeId}.{format}
+ */
+export function getS3PodcastEpisodeAudioKey(
+  episodeId: string,
+  podcastId: string,
+  format: string,
+): string {
+  const extension = format.startsWith('.') ? format : `.${format}`;
+  return `${S3_PODCAST_PREFIX}/audio/${podcastId}/${episodeId}${extension}`;
+}
+
+/**
+ * Get the S3 key for a CACHED external (RSS) episode enclosure copied into Syra
+ * storage. Format: podcasts/cache/{podcastId}/{episodeId}.{ext}
+ */
+export function getS3PodcastEpisodeCacheKey(
+  episodeId: string,
+  podcastId: string,
+  ext: string,
+): string {
+  const extension = ext.startsWith('.') ? ext : `.${ext}`;
+  return `${S3_PODCAST_PREFIX}/cache/${podcastId}/${episodeId}${extension}`;
+}
+
 export function getS3ImageKey(imageId: string, filename: string): string {
   const safeFilename = filename
     .replace(/[^a-zA-Z0-9._-]+/g, '-')

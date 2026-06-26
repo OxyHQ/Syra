@@ -11,6 +11,7 @@ export const userLibrarySchema = timestampsSchema.extend({
   savedAlbums: z.array(z.string()),
   followedArtists: z.array(z.string()),
   playlists: z.array(z.string()),
+  subscribedPodcasts: z.array(z.string()),
 });
 export type UserLibrary = z.infer<typeof userLibrarySchema>;
 

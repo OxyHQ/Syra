@@ -75,12 +75,14 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
   const isDesktop = useIsDesktop();
   const keyboardVisible = useKeyboardVisibility();
   const currentTrack = usePlayerStore(s => s.currentTrack);
+  const currentEpisode = usePlayerStore(s => s.currentEpisode);
+  const hasNowPlaying = !!currentTrack || !!currentEpisode;
   const fullscreenPanel = useUIStore(s => s.fullscreenPanel);
   const isLibrarySidebarExpanded = useUIStore(s => s.isLibrarySidebarExpanded);
   const shellGradientColor = useUIStore(s => s.shellGradientColor);
   const isLibraryFullscreen = fullscreenPanel === 'library';
   const isNowPlayingFullscreen = fullscreenPanel === 'nowPlaying';
-  const showNowPlayingPanel = isDesktop && !isLibraryFullscreen && (isNowPlayingFullscreen || !!currentTrack);
+  const showNowPlayingPanel = isDesktop && !isLibraryFullscreen && (isNowPlayingFullscreen || hasNowPlaying);
   const mobileShellGradientColor = shellGradientColor ?? theme.colors.primary;
 
   // On mobile, no gaps or padding
@@ -244,8 +246,8 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
               <PlayerBar />
             </View>
           ) : (
-            // Mobile: Only show player bar when there's a track playing
-            currentTrack && <MobilePlayerBar />
+            // Mobile: Only show player bar when there's a track or episode playing
+            hasNowPlaying && <MobilePlayerBar />
           )}
         </>
       )}

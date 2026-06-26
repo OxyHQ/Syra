@@ -66,6 +66,9 @@ const schema = z.object({
   JAMENDO_CLIENT_ID: z.string().optional(),
   JAMENDO_API_URL: z.string().optional(),
 
+  PODCAST_INDEX_KEY: z.string().optional(),
+  PODCAST_INDEX_SECRET: z.string().optional(),
+
   LRCLIB_API_URL: z.string().optional(),
 
   KLIPY_APP_KEY: z.string().optional(),

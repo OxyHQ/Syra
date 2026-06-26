@@ -16,6 +16,7 @@ import Avatar from '@/components/Avatar';
 import { LyricsView } from '@/components/LyricsView';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { useLibrary, useToggleLikeTrack } from '@/hooks/useLibrary';
+import { EpisodeNowPlaying } from '@/components/podcast/EpisodeNowPlaying';
 
 /**
  * Now Playing Sidebar Component
@@ -30,6 +31,7 @@ export const NowPlaying: React.FC = () => {
   const fullscreenPanel = useUIStore(s => s.fullscreenPanel);
   const toggleFullscreen = useUIStore(s => s.toggleFullscreen);
   const currentTrack = usePlayerStore(s => s.currentTrack);
+  const currentEpisode = usePlayerStore(s => s.currentEpisode);
   const playFromQueue = usePlayerStore(s => s.playFromQueue);
   const queue = useQueueStore(s => s.queue);
   const { isTrackLiked } = useLibrary();
@@ -89,6 +91,15 @@ export const NowPlaying: React.FC = () => {
   // Hide on mobile/tablet only (after hooks, so hook order stays stable)
   if (!isDesktop) {
     return null;
+  }
+
+  // Podcast episodes get a dedicated now-playing view (transport + chapters).
+  if (currentEpisode) {
+    return (
+      <View style={styles.container}>
+        <EpisodeNowPlaying />
+      </View>
+    );
   }
 
   return (

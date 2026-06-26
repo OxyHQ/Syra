@@ -83,6 +83,49 @@ function remember(trackId: string, entry: StreamCacheEntry): void {
 // ── Service ───────────────────────────────────────────────────────────────────
 
 /**
+ * Resolve a tokenized HLS/provider stream from a backend resolver endpoint,
+ * memoizing the result (and the in-flight promise) until shortly before expiry.
+ *
+ * `cacheKey` namespaces the entry so track ids and episode ids never collide in
+ * the shared cache.
+ */
+async function resolveFromEndpoint(
+  cacheKey: string,
+  endpoint: string,
+  label: string,
+): Promise<StreamResolution> {
+  const cached = streamCache.get(cacheKey);
+  if (cached?.resolution && isFresh(cached)) {
+    return cached.resolution;
+  }
+  if (cached?.promise && isFresh(cached)) {
+    return cached.promise;
+  }
+
+  const promise = api.get<StreamResolution>(endpoint)
+    .then((res) => {
+      const resolution = res.data;
+      remember(cacheKey, {
+        resolution,
+        expiresAtMs: getResolutionExpiryMs(resolution),
+      });
+      return resolution;
+    })
+    .catch((error) => {
+      streamCache.delete(cacheKey);
+      throw new Error(
+        `Failed to resolve stream for ${label}: ${getErrorMessage(error)}`,
+      );
+    });
+
+  remember(cacheKey, {
+    promise,
+    expiresAtMs: Date.now() + STREAM_CACHE_FALLBACK_TTL_MS,
+  });
+  return promise;
+}
+
+/**
  * Resolve the stream URL for a track from the backend.
  *
  * Calls `GET /api/stream/:trackId` (bearer-authenticated) which returns the
@@ -94,40 +137,24 @@ function remember(trackId: string, entry: StreamCacheEntry): void {
  * @throws Error on any network or API error, with a descriptive message
  *   including the trackId and the original error message.
  */
-export async function resolveStream(trackId: string): Promise<StreamResolution> {
-  const cached = streamCache.get(trackId);
-  if (cached?.resolution && isFresh(cached)) {
-    return cached.resolution;
-  }
-  if (cached?.promise && isFresh(cached)) {
-    return cached.promise;
-  }
+export function resolveStream(trackId: string): Promise<StreamResolution> {
+  return resolveFromEndpoint(trackId, `/stream/${trackId}`, trackId);
+}
 
-  const promise = api.get<StreamResolution>(`/stream/${trackId}`)
-    .then((res) => {
-      const resolution = res.data;
-      remember(trackId, {
-        resolution,
-        expiresAtMs: getResolutionExpiryMs(resolution),
-      });
-      return resolution;
-    })
-    .catch((error) => {
-      streamCache.delete(trackId);
-      throw new Error(
-        `Failed to resolve stream for ${trackId}: ${getErrorMessage(error)}`,
-      );
-    });
-
-  try {
-    remember(trackId, {
-      promise,
-      expiresAtMs: Date.now() + STREAM_CACHE_FALLBACK_TTL_MS,
-    });
-    return await promise;
-  } catch (error) {
-    throw error;
-  }
+/**
+ * Resolve the tokenized HLS stream for a Syra-hosted episode.
+ *
+ * Calls `GET /api/podcasts/episodes/:id/stream` (bearer-authenticated) which
+ * mints a session token and returns the master playlist URL (`type: 'hls'`).
+ * External (rss) episodes are NOT resolved here — they play from the public
+ * progressive `/audio` proxy URL built directly in the player.
+ */
+export function resolveEpisodeStream(episodeId: string): Promise<StreamResolution> {
+  return resolveFromEndpoint(
+    `episode:${episodeId}`,
+    `/podcasts/episodes/${episodeId}/stream`,
+    `episode ${episodeId}`,
+  );
 }
 
 export function prefetchStreams(trackIds: string[]): void {

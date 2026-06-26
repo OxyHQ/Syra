@@ -61,6 +61,12 @@ export interface PlayerEngine {
   play(): void;
   /** Pause playback. */
   pause(): void;
+  /**
+   * Set the playback rate (1 = normal). Used for podcast speed control.
+   * Optional because only some engines expose it; callers guard with `?.`.
+   * expo-audio's `AudioPlayer.setPlaybackRate` satisfies this directly.
+   */
+  setPlaybackRate?(rate: number): void;
   /** Seek to an absolute position in seconds. */
   seekTo(seconds: number): Promise<void>;
   /** Replace the current source. Playback state is preserved where possible. */

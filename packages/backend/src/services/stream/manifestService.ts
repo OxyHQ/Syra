@@ -10,9 +10,20 @@
  */
 
 import { Readable } from 'stream';
+import type { HlsRendition } from '@syra/shared-types';
 import type { ITrack } from '../../models/Track';
 import { streamFromS3, getPresignedUrl } from '../s3Service';
 import { rewriteVariantPlaylist } from './playlistRewrite';
+
+/**
+ * Minimal HLS-bearing entity shared by tracks and podcast episodes. Both carry
+ * an id and an `hls` rendition ladder, so the manifest builders operate on this
+ * structural shape and the URL prefix is supplied via `basePath`.
+ */
+export interface StreamableHlsEntity {
+  id: string;
+  hls?: HlsRendition[];
+}
 
 /** Presigned segment URL TTL — 6 hours, covers full playback with pause/resume. */
 export const SEGMENT_URL_TTL_SEC = 21600;
@@ -113,14 +124,28 @@ export async function buildMasterPlaylist(
   _deps?: ManifestDeps,
 ): Promise<string> {
   const trackId = track._id.toString();
-  const renditions = (track.hls ?? [])
-    .filter((r) => r.bitrateKbps <= maxBitrateKbps)
+  return buildMasterPlaylistFor(
+    { id: trackId, hls: track.hls },
+    { token, baseUrl, maxBitrateKbps, basePath: `/api/stream/${trackId}` },
+  );
+}
+
+/**
+ * Generic master-playlist builder shared by tracks and episodes. Variant URLs
+ * are built as `${baseUrl}${basePath}/v/<kbps>.m3u8?t=<token>`.
+ */
+export async function buildMasterPlaylistFor(
+  entity: StreamableHlsEntity,
+  opts: { token: string; baseUrl: string; maxBitrateKbps: number; basePath: string },
+): Promise<string> {
+  const renditions = (entity.hls ?? [])
+    .filter((r) => r.bitrateKbps <= opts.maxBitrateKbps)
     .sort((a, b) => a.bitrateKbps - b.bitrateKbps);
 
   const lines: string[] = ['#EXTM3U'];
   for (const r of renditions) {
     lines.push(`#EXT-X-STREAM-INF:BANDWIDTH=${r.bitrateKbps * 1000},CODECS="${HLS_AUDIO_CODEC}"`);
-    lines.push(`${baseUrl}/api/stream/${trackId}/v/${r.bitrateKbps}.m3u8?t=${token}`);
+    lines.push(`${opts.baseUrl}${opts.basePath}/v/${r.bitrateKbps}.m3u8?t=${opts.token}`);
   }
 
   return lines.join('\n');
@@ -138,15 +163,28 @@ export async function buildVariantPlaylist(
   baseUrl: string,
   deps?: ManifestDeps,
 ): Promise<string> {
-  const fetchText = deps?.fetchText ?? defaultFetchText;
-  const doPresign = deps?.presign ?? defaultPresign;
   const trackId = track._id.toString();
+  return buildVariantPlaylistFor(
+    { id: trackId, hls: track.hls },
+    { bitrateKbps, token, baseUrl, basePath: `/api/stream/${trackId}`, deps },
+  );
+}
 
-  const rendition = track.hls?.find((r) => r.bitrateKbps === bitrateKbps);
+/**
+ * Generic variant-playlist builder shared by tracks and episodes. Segments are
+ * rewritten to presigned S3 URLs; the `EXT-X-KEY` URI is rewritten to
+ * `${baseUrl}${basePath}/key?t=<token>`.
+ */
+export async function buildVariantPlaylistFor(
+  entity: StreamableHlsEntity,
+  opts: { bitrateKbps: number; token: string; baseUrl: string; basePath: string; deps?: ManifestDeps },
+): Promise<string> {
+  const fetchText = opts.deps?.fetchText ?? defaultFetchText;
+  const doPresign = opts.deps?.presign ?? defaultPresign;
+
+  const rendition = entity.hls?.find((r) => r.bitrateKbps === opts.bitrateKbps);
   if (!rendition) {
-    throw new Error(
-      `No HLS rendition at ${bitrateKbps} kbps for track ${trackId}`,
-    );
+    throw new Error(`No HLS rendition at ${opts.bitrateKbps} kbps for ${entity.id}`);
   }
 
   const rawVariant = await fetchText(rendition.manifestKey);
@@ -155,10 +193,10 @@ export async function buildVariantPlaylist(
   const manifestDir = rendition.manifestKey.replace(/\/[^/]+$/, '');
 
   return rewriteVariantPlaylist(rawVariant, {
-    trackId,
-    token,
-    baseUrl,
-    presign: (segmentName) =>
-      doPresign(`${manifestDir}/${segmentName}`, SEGMENT_URL_TTL_SEC),
+    trackId: entity.id,
+    token: opts.token,
+    baseUrl: opts.baseUrl,
+    keyBasePath: opts.basePath,
+    presign: (segmentName) => doPresign(`${manifestDir}/${segmentName}`, SEGMENT_URL_TTL_SEC),
   });
 }

@@ -8,8 +8,9 @@ import { useUIStore } from '@/stores/uiStore';
 import { Image } from 'expo-image';
 import { Slider } from './Slider';
 import { DevicePicker } from './DevicePicker';
-import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { useLibrary, useToggleLikeTrack } from '@/hooks/useLibrary';
+import { useNowPlayingMedia } from '@/hooks/useNowPlayingMedia';
+import { SpeedPill, SkipButton } from './podcast/PodcastTransportControls';
 
 interface WebPressTarget {
   getBoundingClientRect?: () => { left: number; width: number };
@@ -53,7 +54,12 @@ export const PlayerBar: React.FC = () => {
   const setVolume = usePlayerStore(s => s.setVolume);
   const playNext = usePlayerStore(s => s.playNext);
   const playPrevious = usePlayerStore(s => s.playPrevious);
-  
+
+  // Unified now-playing view (track or podcast episode).
+  const media = useNowPlayingMedia();
+  const hasMedia = media !== null;
+  const isEpisode = media?.kind === 'episode';
+
   const queue = useQueueStore(s => s.queue);
   const shuffle = useQueueStore(s => s.shuffle);
   const repeat = useQueueStore(s => s.repeat);
@@ -141,21 +147,21 @@ export const PlayerBar: React.FC = () => {
         <View style={[styles.trackInfo, { gap: SPACING }]}>
           <Pressable
             onPress={() => {
-              if (currentTrack) {
+              if (hasMedia) {
                 toggleNowPlaying();
               }
             }}
             style={styles.albumArtPressable}
           >
-            {(currentTrack?.coverArt || currentTrack?.images?.length) ? (
+            {media?.imageUri ? (
               <Image
-                source={{ uri: pickCatalogImageUrl(currentTrack.images, currentTrack.coverArt, 'thumbnail', currentTrack.coverArtSizes) }}
+                source={{ uri: media.imageUri }}
                 style={styles.albumArt}
                 contentFit="cover"
               />
             ) : (
               <View style={[styles.albumArtPlaceholder, { backgroundColor: theme.colors.backgroundSecondary }]}>
-                <MaterialCommunityIcons name="music" size={24} color={theme.colors.textSecondary} />
+                <MaterialCommunityIcons name={isEpisode ? 'microphone' : 'music'} size={24} color={theme.colors.textSecondary} />
               </View>
             )}
           </Pressable>
@@ -164,73 +170,81 @@ export const PlayerBar: React.FC = () => {
               style={[styles.trackTitle, { color: theme.colors.text }]}
               numberOfLines={1}
             >
-              {currentTrack
-                ? (currentTrack.title || currentTrack.artistName || 'Untitled track')
+              {media
+                ? media.title
                 : (isLoading ? 'Loading...' : 'No track selected')}
             </Text>
             <Text
               style={[styles.trackArtist, { color: theme.colors.textSecondary }]}
               numberOfLines={1}
             >
-              {currentTrack
-                ? (currentTrack.artistName || '')
+              {media
+                ? media.subtitle
                 : (isLoading ? '' : 'Choose a track to play')}
             </Text>
           </View>
-          <Pressable
-            style={styles.likeButton}
-            onPress={handleToggleLike}
-            disabled={!currentTrack}
-            accessibilityRole="button"
-            accessibilityState={{ selected: isLiked }}
-            accessibilityLabel={isLiked ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
-          >
-            <MaterialCommunityIcons
-              name={isLiked ? 'heart' : 'heart-outline'}
-              size={20}
-              color={isLiked ? theme.colors.primary : theme.colors.textSecondary}
-            />
-          </Pressable>
+          {/* Like is track-only; episodes use the show subscribe action instead. */}
+          {!isEpisode && (
+            <Pressable
+              style={styles.likeButton}
+              onPress={handleToggleLike}
+              disabled={!currentTrack}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isLiked }}
+              accessibilityLabel={isLiked ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
+            >
+              <MaterialCommunityIcons
+                name={isLiked ? 'heart' : 'heart-outline'}
+                size={20}
+                color={isLiked ? theme.colors.primary : theme.colors.textSecondary}
+              />
+            </Pressable>
+          )}
         </View>
 
-        {/* Center: Playback Controls */}
+        {/* Center: Playback Controls. Episodes swap shuffle/repeat for skip
+            ±15s/±30s and a speed pill; tracks keep shuffle + repeat. */}
         <View style={[styles.playbackControls, { gap: SPACING }]}>
-          <Pressable
-            style={styles.controlButton}
-            onPress={toggleShuffle}
-            accessibilityRole="button"
-            accessibilityState={{ selected: shuffle === 'on' }}
-            accessibilityLabel={shuffle === 'on' ? 'Turn shuffle off' : 'Turn shuffle on'}
-          >
-            <MaterialCommunityIcons
-              name="shuffle"
-              size={20}
-              color={shuffle === 'on' ? theme.colors.primary : theme.colors.textSecondary}
-            />
-          </Pressable>
+          {isEpisode ? (
+            <SkipButton direction="back" seconds={15} size={22} tint={theme.colors.textSecondary} />
+          ) : (
+            <Pressable
+              style={styles.controlButton}
+              onPress={toggleShuffle}
+              accessibilityRole="button"
+              accessibilityState={{ selected: shuffle === 'on' }}
+              accessibilityLabel={shuffle === 'on' ? 'Turn shuffle off' : 'Turn shuffle on'}
+            >
+              <MaterialCommunityIcons
+                name="shuffle"
+                size={20}
+                color={shuffle === 'on' ? theme.colors.primary : theme.colors.textSecondary}
+              />
+            </Pressable>
+          )}
           <Pressable
             style={styles.controlButton}
             onPress={playPrevious}
-            disabled={!currentTrack}
+            disabled={!hasMedia}
             accessibilityRole="button"
-            accessibilityLabel="Previous track"
+            accessibilityLabel="Previous"
           >
             <MaterialCommunityIcons
               name="skip-previous"
               size={24}
-              color={currentTrack ? theme.colors.text : theme.colors.textSecondary}
+              color={hasMedia ? theme.colors.text : theme.colors.textSecondary}
             />
           </Pressable>
           <Pressable
             style={[
               styles.playButton,
               {
-                backgroundColor: currentTrack ? theme.colors.primary : theme.colors.backgroundSecondary,
-                opacity: currentTrack ? 1 : 0.5,
+                backgroundColor: hasMedia ? theme.colors.primary : theme.colors.backgroundSecondary,
+                opacity: hasMedia ? 1 : 0.5,
               }
             ]}
             onPress={handlePlayPause}
-            disabled={isLoading || !currentTrack}
+            disabled={isLoading || !hasMedia}
           >
             {isLoading ? (
               <MaterialCommunityIcons name="timer-sand" size={24} color={theme.colors.primaryForeground} />
@@ -238,40 +252,45 @@ export const PlayerBar: React.FC = () => {
               <MaterialCommunityIcons
                 name={isPlaying ? 'pause' : 'play'}
                 size={24}
-                color={currentTrack ? theme.colors.primaryForeground : theme.colors.textSecondary}
+                color={hasMedia ? theme.colors.primaryForeground : theme.colors.textSecondary}
               />
             )}
           </Pressable>
           <Pressable
             style={styles.controlButton}
             onPress={playNext}
-            disabled={!currentTrack}
+            disabled={!hasMedia}
             accessibilityRole="button"
-            accessibilityLabel={hasNext ? 'Next track' : 'Autoplay next track'}
+            accessibilityLabel={hasNext ? 'Next' : 'Autoplay next'}
           >
             <MaterialCommunityIcons
               name="skip-next"
               size={24}
-              color={currentTrack ? theme.colors.text : theme.colors.textSecondary}
+              color={hasMedia ? theme.colors.text : theme.colors.textSecondary}
             />
           </Pressable>
-          <Pressable
-            style={styles.controlButton}
-            onPress={cycleRepeat}
-            accessibilityRole="button"
-            accessibilityState={{ selected: repeatActive }}
-            accessibilityLabel={`Repeat ${repeat}`}
-          >
-            <MaterialCommunityIcons
-              name={repeatIcon}
-              size={20}
-              color={repeatActive ? theme.colors.primary : theme.colors.textSecondary}
-            />
-          </Pressable>
+          {isEpisode ? (
+            <SkipButton direction="forward" seconds={30} size={22} tint={theme.colors.textSecondary} />
+          ) : (
+            <Pressable
+              style={styles.controlButton}
+              onPress={cycleRepeat}
+              accessibilityRole="button"
+              accessibilityState={{ selected: repeatActive }}
+              accessibilityLabel={`Repeat ${repeat}`}
+            >
+              <MaterialCommunityIcons
+                name={repeatIcon}
+                size={20}
+                color={repeatActive ? theme.colors.primary : theme.colors.textSecondary}
+              />
+            </Pressable>
+          )}
         </View>
 
         {/* Right: Volume & Queue Controls */}
         <View style={[styles.rightControls, { gap: SPACING }]}>
+          {isEpisode && <SpeedPill size="sm" />}
           <Pressable
             style={styles.controlButton}
             onPress={toggleNowPlaying}

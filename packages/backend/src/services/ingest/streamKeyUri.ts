@@ -9,6 +9,16 @@
  * If unset, falls back to the relative path (useful during local development).
  */
 export function buildStreamKeyUri(trackId: string): string {
+  return buildStreamKeyUriFor(`/api/stream/${trackId}`);
+}
+
+/**
+ * Build the key URI for any streamable entity given its API base path
+ * (e.g. `/api/stream/<trackId>` or `/api/podcasts/episodes/<episodeId>`). The
+ * `/key` endpoint is appended. Shared by track and episode HLS packaging so the
+ * key-endpoint logic is never duplicated.
+ */
+export function buildStreamKeyUriFor(entityBasePath: string): string {
   const base = process.env.STREAM_KEY_BASE_URL ?? '';
-  return `${base}/api/stream/${trackId}/key`;
+  return `${base}${entityBasePath}/key`;
 }

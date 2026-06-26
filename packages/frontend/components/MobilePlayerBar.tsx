@@ -5,8 +5,9 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePlayerStore } from '@/stores/playerStore';
 import { Image } from 'expo-image';
-import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { useLibrary, useToggleLikeTrack } from '@/hooks/useLibrary';
+import { useNowPlayingMedia } from '@/hooks/useNowPlayingMedia';
+import { SpeedPill, SkipButton } from './podcast/PodcastTransportControls';
 import { webViewStyle } from '@/utils/webStyles';
 
 interface WebPressTarget {
@@ -47,6 +48,10 @@ export const MobilePlayerBar: React.FC = () => {
   const resume = usePlayerStore(s => s.resume);
   const seek = usePlayerStore(s => s.seek);
   const playNext = usePlayerStore(s => s.playNext);
+
+  const media = useNowPlayingMedia();
+  const hasMedia = media !== null;
+  const isEpisode = media?.kind === 'episode';
 
   const { isTrackLiked } = useLibrary();
   const toggleLike = useToggleLikeTrack();
@@ -131,15 +136,15 @@ export const MobilePlayerBar: React.FC = () => {
         {/* Left: Track Info */}
         <View style={[styles.trackInfo, { gap: SPACING }]}>
           <Pressable style={styles.albumArtPressable}>
-            {(currentTrack?.coverArt || currentTrack?.images?.length) ? (
+            {media?.imageUri ? (
               <Image
-                source={{ uri: pickCatalogImageUrl(currentTrack.images, currentTrack.coverArt, 'thumbnail', currentTrack.coverArtSizes) }}
+                source={{ uri: media.imageUri }}
                 style={styles.albumArt}
                 contentFit="cover"
               />
             ) : (
               <View style={[styles.albumArtPlaceholder, { backgroundColor: theme.colors.backgroundSecondary }]}>
-                <MaterialCommunityIcons name="music" size={24} color={theme.colors.textSecondary} />
+                <MaterialCommunityIcons name={isEpisode ? 'microphone' : 'music'} size={24} color={theme.colors.textSecondary} />
               </View>
             )}
           </Pressable>
@@ -148,47 +153,52 @@ export const MobilePlayerBar: React.FC = () => {
               style={[styles.trackTitle, { color: theme.colors.primaryForeground }]}
               numberOfLines={1}
             >
-              {currentTrack
-                ? (currentTrack.title || currentTrack.artistName || 'Untitled track')
+              {media
+                ? media.title
                 : (isLoading ? 'Loading...' : 'No track selected')}
             </Text>
             <Text
               style={[styles.trackArtist, { color: theme.colors.primaryForeground, opacity: 0.7 }]}
               numberOfLines={1}
             >
-              {currentTrack
-                ? (currentTrack.artistName || '')
+              {media
+                ? media.subtitle
                 : (isLoading ? '' : 'Choose a track to play')}
             </Text>
           </View>
         </View>
 
-        {/* Center: Playback Controls */}
+        {/* Center: Playback Controls. Episodes show a speed pill + skip-30;
+            tracks show like + next. */}
         <View style={[styles.playbackControls, { gap: SPACING }]}>
-          <Pressable
-            style={styles.controlButton}
-            onPress={handleToggleLike}
-            disabled={!currentTrack}
-            accessibilityRole="button"
-            accessibilityState={{ selected: isLiked }}
-            accessibilityLabel={isLiked ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
-          >
-            <MaterialCommunityIcons
-              name={isLiked ? 'heart' : 'heart-outline'}
-              size={24}
-              color={theme.colors.primaryForeground}
-            />
-          </Pressable>
+          {isEpisode ? (
+            <SpeedPill size="sm" tint={theme.colors.primaryForeground} />
+          ) : (
+            <Pressable
+              style={styles.controlButton}
+              onPress={handleToggleLike}
+              disabled={!currentTrack}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isLiked }}
+              accessibilityLabel={isLiked ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
+            >
+              <MaterialCommunityIcons
+                name={isLiked ? 'heart' : 'heart-outline'}
+                size={24}
+                color={theme.colors.primaryForeground}
+              />
+            </Pressable>
+          )}
           <Pressable
             style={[
               styles.playButton,
               {
                 backgroundColor: theme.colors.primaryForeground,
-                opacity: currentTrack ? 1 : 0.5,
+                opacity: hasMedia ? 1 : 0.5,
               }
             ]}
             onPress={handlePlayPause}
-            disabled={isLoading || !currentTrack}
+            disabled={isLoading || !hasMedia}
           >
             {isLoading ? (
               <MaterialCommunityIcons name="timer-sand" size={24} color={theme.colors.primary} />
@@ -196,19 +206,23 @@ export const MobilePlayerBar: React.FC = () => {
               <MaterialCommunityIcons
                 name={isPlaying ? 'pause' : 'play'}
                 size={24}
-                color={currentTrack ? theme.colors.primary : theme.colors.textSecondary}
+                color={hasMedia ? theme.colors.primary : theme.colors.textSecondary}
               />
             )}
           </Pressable>
-          <Pressable
-            style={styles.controlButton}
-            onPress={playNext}
-            disabled={!currentTrack}
-            accessibilityRole="button"
-            accessibilityLabel="Next track"
-          >
-            <MaterialCommunityIcons name="skip-next" size={24} color={theme.colors.primaryForeground} />
-          </Pressable>
+          {isEpisode ? (
+            <SkipButton direction="forward" seconds={30} size={24} tint={theme.colors.primaryForeground} />
+          ) : (
+            <Pressable
+              style={styles.controlButton}
+              onPress={playNext}
+              disabled={!currentTrack}
+              accessibilityRole="button"
+              accessibilityLabel="Next track"
+            >
+              <MaterialCommunityIcons name="skip-next" size={24} color={theme.colors.primaryForeground} />
+            </Pressable>
+          )}
         </View>
       </View>
 

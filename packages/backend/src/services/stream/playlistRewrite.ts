@@ -14,6 +14,12 @@ export interface RewriteVariantOpts {
   trackId: string;
   token: string;
   baseUrl: string;
+  /**
+   * API base path of the streamable entity, used to build the `EXT-X-KEY` URI as
+   * `${baseUrl}${keyBasePath}/key?t=${token}`. Defaults to `/api/stream/${trackId}`
+   * so track playlists are unchanged; episodes pass `/api/podcasts/episodes/<id>`.
+   */
+  keyBasePath?: string;
   /** Called with the bare segment filename (e.g. `segment-0.ts`); returns a presigned URL. */
   presign: (segmentName: string) => Promise<string>;
 }
@@ -30,7 +36,8 @@ export async function rewriteVariantPlaylist(
   opts: RewriteVariantOpts,
 ): Promise<string> {
   const { trackId, token, baseUrl, presign } = opts;
-  const keyUrl = `${baseUrl}/api/stream/${trackId}/key?t=${token}`;
+  const keyBasePath = opts.keyBasePath ?? `/api/stream/${trackId}`;
+  const keyUrl = `${baseUrl}${keyBasePath}/key?t=${token}`;
 
   const rewrittenLines = await Promise.all(
     text.split('\n').map(async (line) => {

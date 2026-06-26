@@ -17,7 +17,7 @@ export const MobileBottomNav: React.FC = () => {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
 
-  const tabs: { name: string; icon: MaterialCommunityIconName; iconOutline: MaterialCommunityIconName; route: '/' | '/search' | '/library' }[] = [
+  const tabs: { name: string; icon: MaterialCommunityIconName; iconOutline: MaterialCommunityIconName; route: '/' | '/search' | '/podcasts' | '/library' }[] = [
     {
       name: 'Home',
       icon: 'home',
@@ -29,6 +29,12 @@ export const MobileBottomNav: React.FC = () => {
       icon: 'magnify',
       iconOutline: 'magnify',
       route: '/search',
+    },
+    {
+      name: 'Podcasts',
+      icon: 'podcast',
+      iconOutline: 'podcast',
+      route: '/podcasts',
     },
     {
       name: 'Your Library',

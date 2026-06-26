@@ -1,0 +1,83 @@
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  important: true,
+  darkMode: 'class',
+  content: [
+    "./app/**/*.{js,jsx,ts,tsx}",
+    "./components/**/*.{js,jsx,ts,tsx}",
+    "./lib/**/*.{js,jsx,ts,tsx}",
+    "./hooks/**/*.{js,jsx,ts,tsx}",
+    "../../node_modules/@oxyhq/services/lib/**/*.{js,jsx}",
+    "../../node_modules/@oxyhq/bloom/lib/**/*.{js,jsx}",
+  ],
+  theme: {
+    extend: {
+      fontFamily: {
+        // Single source of truth: Bloom's `--bloom-font-sans` token. Bloom's
+        // FontLoader injects the matching `@font-face` rules + `:root` var on
+        // web and sets the native `Text` default family, so we never hardcode a
+        // literal family name here. On native the unresolved `var()` is ignored
+        // and text falls back to Bloom's default family.
+        sans: ['var(--bloom-font-sans)', 'sans-serif'],
+      },
+      borderRadius: {
+        lg: "var(--radius)",
+        md: "calc(var(--radius) - 2px)",
+        sm: "calc(var(--radius) - 4px)",
+      },
+      colors: {
+        border: "var(--border)",
+        input: "var(--input)",
+        ring: "var(--ring)",
+        background: "var(--background)",
+        foreground: "var(--foreground)",
+        primary: {
+          DEFAULT: "var(--primary)",
+          foreground: "var(--primary-foreground)",
+        },
+        secondary: {
+          DEFAULT: "var(--secondary)",
+          foreground: "var(--secondary-foreground)",
+        },
+        destructive: {
+          DEFAULT: "var(--destructive)",
+          foreground: "hsl(0 0% 100%)",
+        },
+        muted: {
+          DEFAULT: "var(--muted)",
+          foreground: "var(--muted-foreground)",
+        },
+        accent: {
+          DEFAULT: "var(--accent)",
+          foreground: "var(--accent-foreground)",
+        },
+        popover: {
+          DEFAULT: "var(--popover)",
+          foreground: "var(--popover-foreground)",
+        },
+        card: {
+          DEFAULT: "var(--surface)",
+          foreground: "var(--surface-foreground)",
+        },
+        surface: {
+          DEFAULT: "var(--surface)",
+          foreground: "var(--surface-foreground)",
+        },
+        "content-area": {
+          DEFAULT: "var(--content-area)",
+        },
+        sidebar: {
+          DEFAULT: "var(--sidebar)",
+          foreground: "var(--sidebar-foreground)",
+          primary: "var(--sidebar-primary)",
+          "primary-foreground": "var(--sidebar-primary-foreground)",
+          accent: "var(--sidebar-accent)",
+          "accent-foreground": "var(--sidebar-accent-foreground)",
+          border: "var(--sidebar-border)",
+          ring: "var(--sidebar-ring)",
+        },
+      },
+    },
+  },
+  plugins: [require("tailwindcss-animate")],
+}

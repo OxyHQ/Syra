@@ -41,7 +41,10 @@ import streamRoutes from './src/routes/stream.routes';
 import lyricsRoutes from './src/routes/lyrics.routes';
 import sourcesRoutes from './src/routes/sources.routes';
 import recommendationsRoutes from './src/routes/recommendations.routes';
+import podcastsRoutes from './src/routes/podcasts.routes';
+import episodesRoutes from './src/routes/episodes.routes';
 import { startRecommendationScheduler } from './src/services/recommendations/scheduler';
+import { startPodcastRefreshScheduler } from './src/services/podcasts/podcastRefreshScheduler';
 
 const app = express();
 
@@ -261,6 +264,11 @@ publicApiRouter.use('/images', imagesPublicRoutes);
 
 publicApiRouter.use('/sources', sourcesRoutes);
 
+// Podcasts: public reads + audio/HLS stream; private/creator routes self-enforce
+// with requireAuth. Optional auth resolves the session for entitlement + progress.
+publicApiRouter.use('/podcasts', createOptionalOxyAuth(oxy), podcastsRoutes);
+publicApiRouter.use('/episodes', createOptionalOxyAuth(oxy), episodesRoutes);
+
 const authenticatedApiRouter = express.Router();
 authenticatedApiRouter.use('/profile', profileSettingsRoutes);
 authenticatedApiRouter.use('/artists', artistsAuthRoutes);
@@ -373,6 +381,10 @@ const bootServer = async () => {
   // Runs on a timer guarded by a Redis distributed lock so it executes on a
   // single instance per tick across the fleet.
   startRecommendationScheduler();
+
+  // Periodic re-crawl of subscribed/popular RSS feeds (same lock-guarded timer
+  // pattern; skipped when Redis is unavailable).
+  startPodcastRefreshScheduler();
 };
 
 if (require.main === module) {
