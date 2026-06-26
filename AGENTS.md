@@ -21,7 +21,7 @@ Do not restore the retired Syra oxy.so hosts in runtime config, CORS, EAS env, u
 
 ## Oxy Integration
 
-- Current Oxy packages: `@oxyhq/core ^3.10.0`, `@oxyhq/services ^11.0.0`, `@oxyhq/bloom ^0.19.1`, `@oxyhq/contracts ^0.2.1` (transitive via core). `@oxyhq/services ^11.0.0` is a packaging-only major — deps moved to peerDependencies; app must declare TanStack Query peers.
+- Current Oxy packages: `@oxyhq/core ^3.11.0`, `@oxyhq/services ^11.1.0`, `@oxyhq/bloom ^0.19.1`, `@oxyhq/contracts ^0.3.0` (transitive via core). **3.11.0 / services 11.1.0:** self-sovereign identity layer (did:web, signed records, export, domain verify) + "Sign in with Oxy" (shared-keychain SSO + cross-device QR/deep-link handoff via `Commons by Oxy`). **Accounts is now keyless "Accounts by Oxy"** (management-only; identity creation moved to Commons). `@oxyhq/services ^11.0.0` was a packaging-only major — deps moved to peerDependencies; app must declare TanStack Query peers.
 - **Media**: avatars/images resolve ONLY through `oxyServices.getFileDownloadUrl(id, variant)` + bloom's variant-aware `<Avatar source={fileId} variant="thumb">`. Never hardcode `cloud.oxy.so` or `/media/` URLs.
 - **Display names**: render `name.displayName` directly (core 3.10 fixes the type under node resolution). No local name fallbacks.
 - Expo web root HTML (`packages/frontend/app/+html.tsx`) injects `getSsoCallbackBootstrapScript()` from `@oxyhq/core`; do not add a per-app `/__oxy/sso-callback` route or copy SSO helper logic locally.
