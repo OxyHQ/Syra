@@ -24,6 +24,8 @@ const FEED = `<?xml version="1.0" encoding="UTF-8"?>
     </itunes:category>
     <itunes:category text="Society &amp; Culture"/>
     <podcast:funding url="https://donate.example">Support us</podcast:funding>
+    <podcast:person role="host" img="https://img.example/host.jpg" href="https://example.com/host">Show Host</podcast:person>
+    <podcast:person role="guest">Recurring Guest</podcast:person>
     <item>
       <title>Episode One</title>
       <guid isPermaLink="false">ep-001</guid>
@@ -91,6 +93,20 @@ describe('parseFeedXml — show', () => {
   it('maps podcast:funding with url + message text', () => {
     const { show } = parseFeedXml(FEED);
     expect(show.funding).toEqual([{ url: 'https://donate.example', message: 'Support us' }]);
+  });
+
+  it('maps channel-level podcast:person (show Hosts & Guests)', () => {
+    const { show } = parseFeedXml(FEED);
+    expect(show.persons).toHaveLength(2);
+    expect(show.persons[0]).toEqual({
+      name: 'Show Host',
+      role: 'host',
+      group: undefined,
+      img: 'https://img.example/host.jpg',
+      href: 'https://example.com/host',
+    });
+    expect(show.persons[1].name).toBe('Recurring Guest');
+    expect(show.persons[1].role).toBe('guest');
   });
 });
 

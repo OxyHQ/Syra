@@ -67,6 +67,8 @@ export interface ParsedShow {
   type: 'episodic' | 'serial';
   podcastGuid?: string;
   funding: ParsedFunding[];
+  /** Channel-level `<podcast:person>` credits (show Hosts & Guests). */
+  persons: ParsedPerson[];
 }
 
 export interface ParsedTranscript {
@@ -203,6 +205,24 @@ function collectCategories(raw: unknown): string[] {
   return Array.from(new Set(categories));
 }
 
+/** Parse `<podcast:person>` nodes (channel- or item-level) into ParsedPerson[]. */
+function collectPersons(raw: unknown): ParsedPerson[] {
+  const persons: ParsedPerson[] = [];
+  for (const node of asArray(raw)) {
+    const name = text(node);
+    if (name) {
+      persons.push({
+        name,
+        role: attr(node, 'role'),
+        group: attr(node, 'group'),
+        img: attr(node, 'img'),
+        href: attr(node, 'href'),
+      });
+    }
+  }
+  return persons;
+}
+
 function normaliseShow(channel: Record<string, unknown>): ParsedShow {
   const funding: ParsedFunding[] = [];
   for (const node of asArray(channel['podcast:funding'])) {
@@ -224,6 +244,7 @@ function normaliseShow(channel: Record<string, unknown>): ParsedShow {
     type: typeValue === 'serial' ? 'serial' : 'episodic',
     podcastGuid: text(channel['podcast:guid']),
     funding,
+    persons: collectPersons(channel['podcast:person']),
   };
 }
 
@@ -246,19 +267,7 @@ function normaliseEpisode(item: Record<string, unknown>): ParsedEpisode | null {
     if (url && type) transcripts.push({ url, type, language: attr(node, 'language') });
   }
 
-  const persons: ParsedPerson[] = [];
-  for (const node of asArray(item['podcast:person'])) {
-    const name = text(node);
-    if (name) {
-      persons.push({
-        name,
-        role: attr(node, 'role'),
-        group: attr(node, 'group'),
-        img: attr(node, 'img'),
-        href: attr(node, 'href'),
-      });
-    }
-  }
+  const persons = collectPersons(item['podcast:person']);
 
   const chaptersUrl = attr(item['podcast:chapters'], 'url');
   const chaptersType = attr(item['podcast:chapters'], 'type');

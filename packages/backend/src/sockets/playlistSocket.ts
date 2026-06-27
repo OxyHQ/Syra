@@ -1,7 +1,7 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { logger } from '../utils/logger';
 import { Track, PlaylistTrack } from '@syra/shared-types';
-import { oxy } from '../../server';
+import { oxy } from '../oxyClient';
 
 export const setupPlaylistSocket = (io: SocketIOServer) => {
   const playlistNamespace = io.of('/playlists');

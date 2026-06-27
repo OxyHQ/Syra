@@ -1,9 +1,10 @@
 import { z } from 'zod';
 import {
   episodeSchema,
-  episodePersonSchema,
+  resolvedPersonSchema,
   updateEpisodeProgressRequestSchema,
   type Episode,
+  type ResolvedPerson,
   type UpdateEpisodeProgressRequest,
 } from '@syra/shared-types';
 import { api } from '@/utils/api';
@@ -23,18 +24,10 @@ import { api } from '@/utils/api';
 
 const episodeResponseSchema = episodeSchema.passthrough();
 
-/** Podcasting 2.0 person resolved against the Person/Artist link tables. */
-export const resolvedPersonSchema = episodePersonSchema.extend({
-  personId: z.string(),
-  linkedOxyUserId: z.string().optional(),
-  linkedArtistId: z.string().optional(),
-}).passthrough();
-export type ResolvedPerson = z.infer<typeof resolvedPersonSchema>;
-
 const episodeDetailResponseSchema = z.object({
   data: z.object({
     episode: episodeResponseSchema,
-    persons: z.array(resolvedPersonSchema),
+    persons: z.array(resolvedPersonSchema.passthrough()),
     progressSec: z.number().optional(),
     completed: z.boolean().optional(),
   }).passthrough(),

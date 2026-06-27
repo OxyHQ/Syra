@@ -7,6 +7,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import SEO from '@/components/SEO';
 import { EpisodeRow } from '@/components/EpisodeRow';
+import { HostsAndGuests } from '@/components/podcast/HostsAndGuests';
 import { LibraryListSkeleton, PodcastDetailSkeleton } from '@/components/skeletons';
 import {
   usePodcast,
@@ -162,6 +163,9 @@ const PodcastShowScreen: React.FC = () => {
             </Text>
           </Pressable>
         ) : null}
+
+        {/* Hosts & Guests */}
+        <HostsAndGuests persons={showQuery.data?.persons ?? []} />
 
         {/* Episodes */}
         <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Episodes</Text>

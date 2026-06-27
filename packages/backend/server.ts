@@ -6,8 +6,8 @@ import mongoose from 'mongoose';
 import compression from 'compression';
 import cors from 'cors';
 import { Server as SocketIOServer, Socket, Namespace } from 'socket.io';
-import { OxyServices } from '@oxyhq/core';
 import { createOptionalOxyAuth, createOxyRateLimit } from '@oxyhq/core/server';
+import { oxy } from './src/oxyClient';
 
 import { connectToDatabase, isDatabaseConnected, getDatabaseStats } from './src/utils/database';
 import { createRedisPubSub, isRedisConnected, getRedisStats } from './src/utils/redis';
@@ -49,8 +49,6 @@ import { startPodcastRefreshScheduler } from './src/services/podcasts/podcastRef
 const app = express();
 
 app.set('trust proxy', true);
-
-export const oxy = new OxyServices({ baseURL: env.OXY_API_URL });
 
 const ALLOWED_ORIGINS: string[] = [
   env.FRONTEND_URL,

@@ -24,6 +24,9 @@ export interface UploadEpisodeMetadata {
   explicit?: boolean;
   /** Duration in seconds, when the client could measure it. */
   duration?: number;
+  /** Hosts & Guests as Oxy user ids (validated server-side). */
+  hosts?: string[];
+  guests?: string[];
 }
 
 /**
@@ -63,6 +66,10 @@ export const episodeService = {
     if (metadata.episodeType) formData.append('episodeType', metadata.episodeType);
     if (metadata.explicit !== undefined) formData.append('explicit', String(metadata.explicit));
     if (metadata.duration !== undefined) formData.append('duration', String(metadata.duration));
+    // Multipart can't carry arrays cleanly; the backend parses these as a JSON
+    // string (or comma-separated) into the validated id list.
+    if (metadata.hosts?.length) formData.append('hosts', JSON.stringify(metadata.hosts));
+    if (metadata.guests?.length) formData.append('guests', JSON.stringify(metadata.guests));
 
     const response = await api.post<unknown>(`/podcasts/${podcastId}/episodes`, formData);
     const parsed = uploadEpisodeResponseSchema.safeParse(response.data);

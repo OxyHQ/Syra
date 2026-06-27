@@ -1,14 +1,25 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 /**
- * Person - a host/guest credited on episodes (Podcasting 2.0 `<podcast:person>`).
- * Stored lightly and resolved to a Syra identity when the name/feed matches a
- * claimed Artist or Oxy user. Episodes still keep their own inline `persons[]`;
- * this collection backs cross-linking to profiles.
+ * Person — the canonical, GLOBAL credit identity for a host/guest, shared across
+ * every show/episode they appear on (Podcasting 2.0 `<podcast:person>` + creator
+ * additions).
+ *
+ * Dedup is by STRONG keys only:
+ *  - `linkedOxyUserId` (unique, sparse) — canonical for creator-added / Oxy users.
+ *  - `href` (unique, sparse) — the `<podcast:person>` URL, a stable RSS identity.
+ * Name is NEVER a global merge key (avoids false "Joe Rogan" merges). RSS persons
+ * that carry only a name are low-confidence: deduped by exact `nameKey` ONLY
+ * among other name-only persons, never merged into/over a strong-key person.
+ *
+ * `linkedArtistId`/`linkedOxyUserId` are optional links, set only on a strong
+ * signal (Oxy id / href), not a loose name.
  */
 export interface IPerson extends Document {
   _id: mongoose.Types.ObjectId;
   name: string;
+  /** Lowercased/trimmed name for low-confidence (name-only) dedup. */
+  nameKey?: string;
   linkedOxyUserId?: string;
   linkedArtistId?: mongoose.Types.ObjectId;
   img?: string;
@@ -21,6 +32,7 @@ export interface IPerson extends Document {
 
 const PersonSchema = new Schema<IPerson>({
   name: { type: String, required: true, index: true },
+  nameKey: { type: String, index: true },
   linkedOxyUserId: { type: String },
   linkedArtistId: { type: Schema.Types.ObjectId, ref: 'Artist' },
   img: { type: String },
@@ -30,7 +42,9 @@ const PersonSchema = new Schema<IPerson>({
 });
 
 PersonSchema.index({ name: 'text' });
-PersonSchema.index({ linkedOxyUserId: 1 }, { sparse: true });
+// Strong dedup keys: one Person per Oxy user, one per podcast:person href.
+PersonSchema.index({ linkedOxyUserId: 1 }, { unique: true, sparse: true });
+PersonSchema.index({ href: 1 }, { unique: true, sparse: true });
 PersonSchema.index({ linkedArtistId: 1 }, { sparse: true });
 
 export const PersonModel: mongoose.Model<IPerson> =

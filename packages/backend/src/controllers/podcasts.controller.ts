@@ -18,6 +18,7 @@ import {
   createPodcastRequestSchema,
   importFeedRequestSchema,
   type AudioSource,
+  type EpisodePerson,
 } from '@syra/shared-types';
 import { PodcastModel } from '../models/Podcast';
 import { EpisodeModel } from '../models/Episode';
@@ -29,11 +30,13 @@ import { searchPodcasts as directorySearch } from '../services/podcasts/PodcastD
 import { importFeed } from '../services/podcasts/podcastImportService';
 import { syncPodcastSearch } from '../services/podcasts/podcastBackgroundImport';
 import { serializePodcast, serializeEpisode } from '../services/podcasts/podcastSerializers';
+import { resolvePersons, buildCreatorPersons, makeOxyUsersFetcher } from '../services/podcasts/resolvePersons';
 import { enqueueEpisodeIngest } from '../services/podcasts/ingestEpisode';
 import { generatePodcastRss } from '../services/podcasts/podcastRssGenerator';
 import { getS3PodcastEpisodeAudioKey } from '../config/s3.config';
 import { uploadToS3 } from '../services/s3Service';
 import { getImageAssetColors } from '../services/imageAssetService';
+import { oxy } from '../oxyClient';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -85,6 +88,26 @@ function queryString(req: AuthRequest, name: string): string | undefined {
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Parse an id array from a multipart form field — accepts a real array, a JSON
+ * array string (`["a","b"]`), or a comma-separated string.
+ */
+function parseIdArray(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw.filter((v): v is string => typeof v === 'string');
+  if (typeof raw !== 'string') return [];
+  const trimmed = raw.trim();
+  if (!trimmed) return [];
+  if (trimmed.startsWith('[')) {
+    try {
+      const parsed: unknown = JSON.parse(trimmed);
+      return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
+    } catch {
+      return [];
+    }
+  }
+  return trimmed.split(',').map((v) => v.trim()).filter((v) => v.length > 0);
 }
 
 /**
@@ -212,15 +235,22 @@ export async function getPodcast(req: AuthRequest, res: Response): Promise<void>
     return;
   }
 
-  const episodes = await EpisodeModel.find({
-    podcastId: podcast._id,
-    ...episodeVisibilityFilter(podcast.ownerOxyUserId, req.user?.id),
-  })
-    .sort({ pubDate: -1 })
-    .limit(RECENT_EPISODES_ON_SHOW)
-    .lean();
+  const [episodes, persons] = await Promise.all([
+    EpisodeModel.find({
+      podcastId: podcast._id,
+      ...episodeVisibilityFilter(podcast.ownerOxyUserId, req.user?.id),
+    })
+      .sort({ pubDate: -1 })
+      .limit(RECENT_EPISODES_ON_SHOW)
+      .lean(),
+    // Show-level Hosts & Guests: resolve channel persons to Person/Artist links
+    // + enrich Oxy-linked credits with their live avatar + displayName.
+    resolvePersons(podcast.persons, makeOxyUsersFetcher(oxy)),
+  ]);
 
-  res.json({ data: { podcast: serializePodcast(podcast), episodes: episodes.map(serializeEpisode) } });
+  res.json({
+    data: { podcast: serializePodcast(podcast), episodes: episodes.map(serializeEpisode), persons },
+  });
 }
 
 /**
@@ -407,6 +437,19 @@ export async function createPodcast(req: AuthRequest, res: Response): Promise<vo
     status: 'active',
   });
 
+  // Hosts & Guests — Oxy user ids ONLY (validated; no free text).
+  if (input.hosts?.length || input.guests?.length) {
+    const { persons, invalidIds } = await buildCreatorPersons(
+      { hosts: input.hosts, guests: input.guests },
+      makeOxyUsersFetcher(oxy),
+    );
+    if (invalidIds.length > 0) {
+      res.status(400).json({ error: 'hosts/guests must be valid Oxy user ids', invalidIds });
+      return;
+    }
+    podcast.persons = persons;
+  }
+
   // Pull the gradient colors from the creator's uploaded cover (Syra image id),
   // matching how Album/Artist carry primaryColor. Best-effort.
   if (input.image && mongoose.Types.ObjectId.isValid(input.image)) {
@@ -466,6 +509,22 @@ export async function uploadEpisode(req: AuthRequest, res: Response): Promise<vo
         return;
       }
 
+      // Hosts & Guests — Oxy user ids ONLY, validated BEFORE any S3 upload.
+      const hostIds = parseIdArray(req.body?.hosts);
+      const guestIds = parseIdArray(req.body?.guests);
+      let episodePersons: EpisodePerson[] = [];
+      if (hostIds.length > 0 || guestIds.length > 0) {
+        const { persons, invalidIds } = await buildCreatorPersons(
+          { hosts: hostIds, guests: guestIds },
+          makeOxyUsersFetcher(oxy),
+        );
+        if (invalidIds.length > 0) {
+          res.status(400).json({ error: 'hosts/guests must be valid Oxy user ids', invalidIds });
+          return;
+        }
+        episodePersons = persons;
+      }
+
       const format = AUDIO_FORMAT_BY_MIME[file.mimetype] ?? 'mp3';
       const durationRaw = Number(req.body?.duration);
       const duration = Number.isFinite(durationRaw) && durationRaw > 0 ? durationRaw : 0;
@@ -486,6 +545,7 @@ export async function uploadEpisode(req: AuthRequest, res: Response): Promise<vo
         source: 'syra',
         audioSource: { url: `/api/podcasts/episodes/${episodeId.toString()}/audio`, format },
         status: 'processing',
+        persons: episodePersons,
       });
 
       const audioKey = getS3PodcastEpisodeAudioKey(episodeId.toString(), podcast._id.toString(), format);

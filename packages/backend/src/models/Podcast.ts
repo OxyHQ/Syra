@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 import {
   Podcast,
   PodcastFunding,
+  PodcastPerson,
   PodcastProvenanceProvider,
   PodcastSourceProvenance,
 } from '@syra/shared-types';
@@ -44,6 +45,17 @@ const CatalogImageSizesSchema = new Schema<CatalogImageSizes>({
 const PodcastFundingSchema = new Schema<PodcastFunding>({
   url: { type: String, required: true },
   message: { type: String },
+}, { _id: false });
+
+// Channel-level <podcast:person> (show Hosts & Guests). Mirrors Episode's
+// EpisodePersonSchema; person `img` stays an external URL (not re-hosted).
+const PodcastPersonSchema = new Schema<PodcastPerson>({
+  name: { type: String, required: true },
+  role: { type: String },
+  group: { type: String },
+  img: { type: String },
+  href: { type: String },
+  linkedOxyUserId: { type: String },
 }, { _id: false });
 
 const PodcastSourceProvenanceSchema = new Schema<PodcastSourceProvenance>({
@@ -103,6 +115,7 @@ const PodcastSchema = new Schema<IPodcast>({
   status: { type: String, enum: ['active', 'unavailable', 'removed'], default: 'active', index: true },
   // Optional Podcasting 2.0
   funding: [{ type: PodcastFundingSchema }],
+  persons: [{ type: PodcastPersonSchema }],
   value: { type: Schema.Types.Mixed },
   // Provenance
   sources: [{ type: PodcastSourceProvenanceSchema }],

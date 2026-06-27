@@ -25,7 +25,7 @@ import {
   findArtistsWithPlayableTracks,
   findPlaylistsWithPlayableTracks,
 } from '../utils/playableContainers';
-import { oxy } from '../../server';
+import { oxy } from '../oxyClient';
 
 /**
  * Local track count below this threshold triggers a background Audius import

@@ -92,6 +92,30 @@ export function getHttpStatus(error: unknown): number | undefined {
   return undefined;
 }
 
+/**
+ * Pulls the backend's `invalidIds` array out of a 400 error body (returned when
+ * a hosts/guests submission contains an id that isn't a real Oxy user). Reads
+ * both the linked-client (`error.data`) and axios-style (`error.response.data`)
+ * shapes.
+ */
+export function extractInvalidIds(error: unknown): string[] | undefined {
+  if (!error || typeof error !== 'object') return undefined;
+  const candidates: unknown[] = [
+    (error as { response?: { data?: unknown } }).response?.data,
+    (error as { data?: unknown }).data,
+    error,
+  ];
+  for (const body of candidates) {
+    if (body && typeof body === 'object' && 'invalidIds' in body) {
+      const ids = (body as { invalidIds?: unknown }).invalidIds;
+      if (Array.isArray(ids)) {
+        return ids.filter((id): id is string => typeof id === 'string');
+      }
+    }
+  }
+  return undefined;
+}
+
 export function isUnauthorizedError(error: unknown): boolean {
   return getHttpStatus(error) === 401;
 }

@@ -31,6 +31,46 @@ export const podcastFundingSchema = z.object({
 });
 export type PodcastFunding = z.infer<typeof podcastFundingSchema>;
 
+/**
+ * A person CREDIT stored inline on a show/episode (Hosts & Guests). Mirrors
+ * `episodePersonSchema` in episode.ts — defined here (not imported) to avoid a
+ * circular module dependency between podcast.ts and episode.ts. `linkedOxyUserId`
+ * is set for creator-added credits (Oxy users); RSS credits carry `img`/`href`.
+ */
+export const podcastPersonSchema = z.object({
+  name: z.string(),
+  role: z.string().optional(),
+  group: z.string().optional(),
+  img: z.string().optional(),
+  href: z.string().optional(),
+  linkedOxyUserId: z.string().optional(),
+});
+export type PodcastPerson = z.infer<typeof podcastPersonSchema>;
+
+/**
+ * A RESOLVED person returned on show/episode detail: the global `Person` row +
+ * the linked Oxy identity (avatar file id + displayName) when `linkedOxyUserId`
+ * is set, otherwise the external `img`/`href` from the RSS credit.
+ */
+export const resolvedPersonSchema = z.object({
+  personId: z.string(),
+  name: z.string(),
+  role: z.string().optional(),
+  group: z.string().optional(),
+  href: z.string().optional(),
+  /** External avatar URL (RSS persons only; absent for Oxy-linked). */
+  img: z.string().optional(),
+  linkedOxyUserId: z.string().optional(),
+  linkedArtistId: z.string().optional(),
+  /** Oxy avatar file id (resolve via the media resolver) when Oxy-linked. */
+  oxyAvatar: z.string().optional(),
+  /** Oxy `name.displayName` when Oxy-linked. */
+  displayName: z.string().optional(),
+  /** Oxy handle — the frontend routes to `/u/[username]` when Oxy-linked. */
+  username: z.string().optional(),
+});
+export type ResolvedPerson = z.infer<typeof resolvedPersonSchema>;
+
 export const podcastSchema = timestampsSchema.extend({
   id: z.string(),
   _id: z.string().optional(),
@@ -79,6 +119,7 @@ export const podcastSchema = timestampsSchema.extend({
   status: podcastStatusSchema,
   // Optional Podcasting 2.0
   funding: z.array(podcastFundingSchema).optional(),
+  persons: z.array(podcastPersonSchema).optional(),
   value: z.record(z.string(), z.unknown()).optional(),
   // Provenance
   sources: z.array(podcastSourceProvenanceSchema).optional(),
@@ -100,6 +141,9 @@ export const createPodcastRequestSchema = z.object({
   explicit: z.boolean().optional(),
   link: z.string().optional(),
   type: podcastTypeSchema.optional(),
+  /** Hosts & Guests as Oxy user ids (validated server-side; no free text). */
+  hosts: z.array(z.string()).optional(),
+  guests: z.array(z.string()).optional(),
 });
 export type CreatePodcastRequest = z.infer<typeof createPodcastRequestSchema>;
 

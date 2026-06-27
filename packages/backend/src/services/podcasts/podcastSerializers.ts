@@ -83,6 +83,7 @@ export function serializePodcast(doc: PodcastDocument): Podcast {
     subscriberCount: doc.subscriberCount,
     status: doc.status ?? 'active',
     funding: doc.funding,
+    persons: doc.persons,
     value: doc.value,
     sources: doc.sources,
     createdAt: doc.createdAt.toISOString(),

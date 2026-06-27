@@ -85,6 +85,7 @@ const EpisodePersonSchema = new Schema<EpisodePerson>({
   group: { type: String },
   img: { type: String },
   href: { type: String },
+  linkedOxyUserId: { type: String },
 }, { _id: false });
 
 const EpisodeSchema = new Schema<IEpisode>({

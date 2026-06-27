@@ -2,9 +2,11 @@ import { z } from 'zod';
 import {
   podcastSchema,
   episodeSchema,
+  resolvedPersonSchema,
   podcastSubscriptionsSchema,
   type Podcast,
   type Episode,
+  type ResolvedPerson,
   type PodcastSubscriptions,
 } from '@syra/shared-types';
 import { api, publicApi } from '@/utils/api';
@@ -36,6 +38,9 @@ const podcastShowResponseSchema = z.object({
   data: z.object({
     podcast: podcastResponseSchema,
     episodes: z.array(episodeResponseSchema),
+    // Show-level Hosts & Guests (resolved Person/Artist + Oxy links). Optional
+    // so the client stays resilient across the backend rollout.
+    persons: z.array(resolvedPersonSchema.passthrough()).optional(),
   }).passthrough(),
 }).passthrough();
 
@@ -89,10 +94,11 @@ export const podcastService = {
     return parsePodcastResponse(podcastListResponseSchema, response.data, 'podcast browse').data;
   },
 
-  /** A single show plus its most recent episodes. */
-  async getPodcast(id: string): Promise<{ podcast: Podcast; episodes: Episode[] }> {
+  /** A single show plus its most recent episodes and resolved hosts/guests. */
+  async getPodcast(id: string): Promise<{ podcast: Podcast; episodes: Episode[]; persons: ResolvedPerson[] }> {
     const response = await publicApi.get<unknown>(`/podcasts/${id}`);
-    return parsePodcastResponse(podcastShowResponseSchema, response.data, 'podcast').data;
+    const data = parsePodcastResponse(podcastShowResponseSchema, response.data, 'podcast').data;
+    return { podcast: data.podcast, episodes: data.episodes, persons: data.persons ?? [] };
   },
 
   /** Paginated, reverse-chronological episodes for a show. */

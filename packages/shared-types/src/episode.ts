@@ -43,13 +43,17 @@ export const episodeTranscriptSchema = z.object({
 });
 export type EpisodeTranscript = z.infer<typeof episodeTranscriptSchema>;
 
-/** Podcasting 2.0 `<podcast:person>` (host/guest credit, inline on the episode). */
+/**
+ * Podcasting 2.0 `<podcast:person>` (host/guest credit, inline on the episode).
+ * `linkedOxyUserId` is set for creator-added credits (Oxy users).
+ */
 export const episodePersonSchema = z.object({
   name: z.string(),
   role: z.string().optional(),
   group: z.string().optional(),
   img: z.string().optional(),
   href: z.string().optional(),
+  linkedOxyUserId: z.string().optional(),
 });
 export type EpisodePerson = z.infer<typeof episodePersonSchema>;
 
@@ -115,6 +119,9 @@ export const createEpisodeRequestSchema = z.object({
   episodeType: episodeTypeSchema.optional(),
   image: z.string().optional(),
   explicit: z.boolean().optional(),
+  /** Hosts & Guests as Oxy user ids (validated server-side; no free text). */
+  hosts: z.array(z.string()).optional(),
+  guests: z.array(z.string()).optional(),
 });
 export type CreateEpisodeRequest = z.infer<typeof createEpisodeRequestSchema>;
 

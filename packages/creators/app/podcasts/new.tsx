@@ -7,7 +7,9 @@ import type { CreatePodcastRequest, PodcastType } from '@syra/shared-types';
 import { SignInGate } from '@/components/SignInGate';
 import { ScreenContainer } from '@/components/AppShell';
 import { FormField } from '@/components/FormField';
+import { HostsGuestsPicker, type HostsGuests } from '@/components/HostsGuestsPicker';
 import { useCreatePodcast } from '@/hooks/usePodcasts';
+import { extractInvalidIds } from '@/utils/api';
 import { toast } from '@/lib/sonner';
 import { cn } from '@/lib/utils';
 
@@ -56,6 +58,7 @@ function CreateShowForm() {
   const [categories, setCategories] = useState('');
   const [type, setType] = useState<PodcastType>('episodic');
   const [explicit, setExplicit] = useState(false);
+  const [hostsGuests, setHostsGuests] = useState<HostsGuests>({ hosts: [], guests: [] });
   const [titleError, setTitleError] = useState<string | undefined>(undefined);
 
   const onSubmit = useCallback(async () => {
@@ -71,6 +74,9 @@ function CreateShowForm() {
       .map((c) => c.trim())
       .filter(Boolean);
 
+    const hostIds = hostsGuests.hosts.map((u) => u.id);
+    const guestIds = hostsGuests.guests.map((u) => u.id);
+
     const payload: CreatePodcastRequest = {
       title: trimmedTitle,
       description: description.trim() || undefined,
@@ -80,16 +86,23 @@ function CreateShowForm() {
       categories: categoryList.length > 0 ? categoryList : undefined,
       explicit,
       type,
+      hosts: hostIds.length > 0 ? hostIds : undefined,
+      guests: guestIds.length > 0 ? guestIds : undefined,
     };
 
     try {
       const created = await createPodcast.mutateAsync(payload);
       toast.success('Show created');
       router.replace({ pathname: '/podcasts/[id]', params: { id: created.id } });
-    } catch {
-      toast.error('Could not create the show. Please try again.');
+    } catch (error) {
+      const invalidIds = extractInvalidIds(error);
+      if (invalidIds) {
+        toast.error('Some hosts/guests are not valid Oxy users. Remove them and try again.');
+      } else {
+        toast.error('Could not create the show. Please try again.');
+      }
     }
-  }, [title, description, author, image, language, categories, explicit, type, createPodcast, router]);
+  }, [title, description, author, image, language, categories, explicit, type, hostsGuests, createPodcast, router]);
 
   return (
     <ScreenContainer title="New show" subtitle="Create a Syra-hosted podcast" onBack={() => router.back()}>
@@ -145,6 +158,7 @@ function CreateShowForm() {
         </View>
       </View>
       <TypeSelector value={type} onChange={setType} />
+      <HostsGuestsPicker value={hostsGuests} onChange={setHostsGuests} />
       <View className="flex-row items-center justify-between rounded-xl border border-border bg-surface px-4 py-3 mb-6">
         <View className="flex-1 pr-3">
           <Text className="text-sm font-medium text-foreground">Explicit content</Text>

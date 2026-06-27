@@ -10,8 +10,10 @@ import type { EpisodeType } from '@syra/shared-types';
 import { SignInGate } from '@/components/SignInGate';
 import { ScreenContainer } from '@/components/AppShell';
 import { FormField } from '@/components/FormField';
+import { HostsGuestsPicker, type HostsGuests } from '@/components/HostsGuestsPicker';
 import { useUploadEpisode } from '@/hooks/usePodcasts';
 import type { EpisodeAudioFile } from '@/services/episodeService';
+import { extractInvalidIds } from '@/utils/api';
 import { toast } from '@/lib/sonner';
 import { cn } from '@/lib/utils';
 
@@ -91,6 +93,7 @@ function UploadEpisodeForm({ id }: { id: string }) {
   const [episodeNumber, setEpisodeNumber] = useState('');
   const [episodeType, setEpisodeType] = useState<EpisodeType>('full');
   const [explicit, setExplicit] = useState(false);
+  const [hostsGuests, setHostsGuests] = useState<HostsGuests>({ hosts: [], guests: [] });
   const [titleError, setTitleError] = useState<string | undefined>(undefined);
   const [audioError, setAudioError] = useState<string | undefined>(undefined);
 
@@ -127,6 +130,9 @@ function UploadEpisodeForm({ id }: { id: string }) {
     }
     if (!valid || !audioFile) return;
 
+    const hostIds = hostsGuests.hosts.map((u) => u.id);
+    const guestIds = hostsGuests.guests.map((u) => u.id);
+
     try {
       await uploadEpisode.mutateAsync({
         podcastId: id,
@@ -138,14 +144,21 @@ function UploadEpisodeForm({ id }: { id: string }) {
           episodeNumber: parsePositiveInt(episodeNumber),
           episodeType,
           explicit,
+          hosts: hostIds.length > 0 ? hostIds : undefined,
+          guests: guestIds.length > 0 ? guestIds : undefined,
         },
       });
       toast.success('Episode uploaded — processing now');
       router.back();
-    } catch {
-      toast.error('Upload failed. Please try again.');
+    } catch (error) {
+      const invalidIds = extractInvalidIds(error);
+      if (invalidIds) {
+        toast.error('Some hosts/guests are not valid Oxy users. Remove them and try again.');
+      } else {
+        toast.error('Upload failed. Please try again.');
+      }
     }
-  }, [title, audioFile, description, season, episodeNumber, episodeType, explicit, id, uploadEpisode, router]);
+  }, [title, audioFile, description, season, episodeNumber, episodeType, explicit, hostsGuests, id, uploadEpisode, router]);
 
   return (
     <ScreenContainer title="Upload episode" onBack={() => router.back()}>
@@ -188,6 +201,7 @@ function UploadEpisodeForm({ id }: { id: string }) {
         </View>
       </View>
       <TypeSelector value={episodeType} onChange={setEpisodeType} />
+      <HostsGuestsPicker value={hostsGuests} onChange={setHostsGuests} />
       <View className="flex-row items-center justify-between rounded-xl border border-border bg-surface px-4 py-3 mb-6">
         <View className="flex-1 pr-3">
           <Text className="text-sm font-medium text-foreground">Explicit content</Text>

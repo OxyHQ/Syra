@@ -6,12 +6,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import SEO from '@/components/SEO';
 import { ArtistDetailSkeleton } from '@/components/skeletons';
+import { HostsAndGuests } from '@/components/podcast/HostsAndGuests';
 import { useEpisode, useEpisodeChapters } from '@/hooks/usePodcasts';
 import { usePlayerStore } from '@/stores/playerStore';
-import { resolvePodcastImageUri, resolveExternalImageUri } from '@/utils/podcastImages';
+import { resolvePodcastImageUri } from '@/utils/podcastImages';
 import { stripHtml, formatPubDate, formatEpisodeDuration } from '@/utils/podcastFormat';
 import { formatDuration } from '@/utils/musicUtils';
-import type { ResolvedPerson } from '@/services/episodeService';
 
 /**
  * Episode detail — artwork, show/title, play/resume control, description,
@@ -131,46 +131,8 @@ const EpisodeScreen: React.FC = () => {
           </Pressable>
         </View>
 
-        {/* Hosts & guests */}
-        {detail && detail.persons.length > 0 && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Hosts & guests</Text>
-            {detail.persons.map((person: ResolvedPerson, index: number) => {
-              const personImage = resolveExternalImageUri(person.img);
-              const isLinked = Boolean(person.linkedArtistId);
-              return (
-                <Pressable
-                  key={`${person.name}-${index}`}
-                  disabled={!isLinked}
-                  onPress={() =>
-                    person.linkedArtistId &&
-                    router.push({ pathname: '/artist/[id]', params: { id: person.linkedArtistId } })
-                  }
-                  style={styles.personRow}
-                >
-                  {personImage ? (
-                    <Image source={{ uri: personImage }} style={styles.personAvatar} contentFit="cover" />
-                  ) : (
-                    <View style={[styles.personAvatarPlaceholder, { backgroundColor: theme.colors.backgroundTertiary }]}>
-                      <Ionicons name="person" size={18} color={theme.colors.textSecondary} />
-                    </View>
-                  )}
-                  <View style={styles.personInfo}>
-                    <Text style={[styles.personName, { color: theme.colors.text }]} numberOfLines={1}>
-                      {person.name}
-                    </Text>
-                    {person.role ? (
-                      <Text style={[styles.personRole, { color: theme.colors.textSecondary }]} numberOfLines={1}>
-                        {person.role}
-                      </Text>
-                    ) : null}
-                  </View>
-                  {isLinked && <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />}
-                </Pressable>
-              );
-            })}
-          </View>
-        )}
+        {/* Hosts & Guests */}
+        {detail && <HostsAndGuests persons={detail.persons} />}
 
         {/* Chapters */}
         {chaptersQuery.data && chaptersQuery.data.length > 0 && (
@@ -290,36 +252,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 12,
-  },
-  personRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 8,
-    ...Platform.select({ web: { cursor: 'pointer' } }),
-  },
-  personAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-  },
-  personAvatarPlaceholder: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  personInfo: {
-    flex: 1,
-    minWidth: 0,
-  },
-  personName: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  personRole: {
-    fontSize: 13,
   },
   chapterRow: {
     flexDirection: 'row',

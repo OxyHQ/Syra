@@ -77,6 +77,7 @@ function buildPodcastSet(show: ParsedShow, directory: PodcastDirectoryCandidate 
     podcastIndexId: directory?.podcastIndexId,
     appleCollectionId: directory?.appleCollectionId,
     funding: show.funding,
+    persons: show.persons,
   });
 }
 

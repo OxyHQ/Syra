@@ -5,7 +5,7 @@ import { getQueue, setCurrentIndex } from '../services/queueService';
 import { registerDevice, listDevices, heartbeat } from '../services/playback/deviceService';
 import { applyCommand, updateProgress, handleDeviceDisconnect } from '../services/playback/playbackStateService';
 import type { DeviceType } from '@syra/shared-types';
-import { oxy } from '../../server';
+import { oxy } from '../oxyClient';
 
 export const setupPlayerSocket = (io: SocketIOServer) => {
   const playerNamespace = io.of('/player');

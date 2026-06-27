@@ -13,7 +13,8 @@ import { EpisodeModel } from '../models/Episode';
 import { EpisodeProgressModel } from '../models/EpisodeProgress';
 import { getParam } from '../utils/reqParams';
 import { serializeEpisode } from '../services/podcasts/podcastSerializers';
-import { resolveEpisodePersons } from '../services/podcasts/resolvePersons';
+import { resolvePersons, makeOxyUsersFetcher } from '../services/podcasts/resolvePersons';
+import { oxy } from '../oxyClient';
 
 const CONTINUE_LIMIT_DEFAULT = 20;
 const CONTINUE_LIMIT_MAX = 50;
@@ -41,7 +42,7 @@ export async function getEpisode(req: AuthRequest, res: Response): Promise<void>
     return;
   }
 
-  const persons = await resolveEpisodePersons(episode.persons);
+  const persons = await resolvePersons(episode.persons, makeOxyUsersFetcher(oxy));
 
   let progressSec: number | undefined;
   let completed: boolean | undefined;
