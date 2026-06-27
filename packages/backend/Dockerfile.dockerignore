@@ -22,6 +22,11 @@ packages/frontend/**
 packages/creators/**
 !packages/creators/package.json
 
+# SDK (@syra.fm/sdk public client) — not part of the backend runtime.
+# Its package.json is force-included below so the Bun workspace graph stays valid.
+packages/sdk/**
+!packages/sdk/package.json
+
 # VCS / CI / editor / OS noise
 .git
 .github
