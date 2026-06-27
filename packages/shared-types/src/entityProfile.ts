@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { artistLinksSchema } from './artist';
-import { trackSchema } from './track';
+import { artistLinksSchema, artistStatsSchema } from './artist';
+import { trackSchema, catalogImageSizesSchema } from './track';
 import { albumSchema } from './album';
 import { podcastSchema } from './podcast';
 import { episodeSchema } from './episode';
@@ -36,6 +36,10 @@ export type EntityAppearsIn = z.infer<typeof entityAppearsInSchema>;
  *  - `image` is the artist cover (file id / `/api/images/:id`); `avatar` is the
  *    Oxy avatar file id for an Oxy-linked person. `linkedArtistId`/`linkedOxyUserId`
  *    expose the cross-links for the frontend.
+ *  - Artist display fields (`genres`/`secondaryColor`/`verified`/`stats`/`imageSizes`)
+ *    are present on the artist branch (and the person→linkedArtist case) so `/p/[id]`
+ *    matches what the old artist screen rendered (primary+secondary gradient, hero
+ *    size variants, follower/listener stats).
  */
 export const entityProfileSchema = z.object({
   id: z.string(),
@@ -44,9 +48,14 @@ export const entityProfileSchema = z.object({
   displayName: z.string().optional(),
   username: z.string().optional(),
   image: z.string().optional(),
+  imageSizes: catalogImageSizesSchema.optional(),
   avatar: z.string().optional(),
   primaryColor: z.string().optional(),
+  secondaryColor: z.string().optional(),
   bio: z.string().optional(),
+  genres: z.array(z.string()).optional(),
+  verified: z.boolean().optional(),
+  stats: artistStatsSchema.optional(),
   links: artistLinksSchema.optional(),
   linkedArtistId: z.string().optional(),
   linkedOxyUserId: z.string().optional(),

@@ -54,7 +54,11 @@ function bodyData(res: CapturedRes): EntityProfile {
 
 describe('GET /api/p/:id — unified entity profile', () => {
   it('artist id → kind:artist with music + linked-person appearsIn', async () => {
-    const artist = await ArtistModel.create({ name: 'Jane Music', source: 'cc' });
+    const artist = await ArtistModel.create({
+      name: 'Jane Music', source: 'cc',
+      genres: ['rock', 'indie'], primaryColor: '#111', secondaryColor: '#222', verified: true,
+      stats: { followers: 123, monthlyListeners: 456 },
+    });
     const artistId = artist._id.toString();
     await seedPlayableTrack(artistId, 'Jane Track');
     // A Person linked to this artist drives the podcast appearances.
@@ -76,6 +80,12 @@ describe('GET /api/p/:id — unified entity profile', () => {
     const data = bodyData(res);
     expect(data.kind).toBe('artist');
     expect(data.name).toBe('Jane Music');
+    expect(data.genres).toEqual(['rock', 'indie']);
+    expect(data.primaryColor).toBe('#111');
+    expect(data.secondaryColor).toBe('#222');
+    expect(data.verified).toBe(true);
+    expect(data.stats?.followers).toBe(123);
+    expect(data.stats?.monthlyListeners).toBe(456);
     expect(data.music?.tracks).toHaveLength(1);
     expect(data.appearsIn?.podcasts).toHaveLength(1);
     expect(data.appearsIn?.episodes).toHaveLength(1);

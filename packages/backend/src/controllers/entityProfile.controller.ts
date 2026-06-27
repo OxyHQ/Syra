@@ -44,10 +44,35 @@ type FormattedArtistProfile = {
   id: string;
   name: string;
   image?: string;
+  imageSizes?: EntityProfile['imageSizes'];
   primaryColor?: string;
+  secondaryColor?: string;
   bio?: string;
+  genres?: string[];
+  verified?: boolean;
+  stats?: EntityProfile['stats'];
   links?: EntityProfile['links'];
 };
+
+/** The display fields shared by the old artist screen — pulled from the (formatted) Artist doc. */
+type ArtistDisplayFields = Pick<
+  EntityProfile,
+  'image' | 'imageSizes' | 'primaryColor' | 'secondaryColor' | 'bio' | 'genres' | 'verified' | 'stats' | 'links'
+>;
+
+function artistDisplayFields(formatted: FormattedArtistProfile | null): ArtistDisplayFields {
+  return {
+    image: formatted?.image,
+    imageSizes: formatted?.imageSizes,
+    primaryColor: formatted?.primaryColor,
+    secondaryColor: formatted?.secondaryColor,
+    bio: formatted?.bio,
+    genres: formatted?.genres,
+    verified: formatted?.verified,
+    stats: formatted?.stats,
+    links: formatted?.links,
+  };
+}
 
 /**
  * Artist music — tracks + albums, both filtered by the viewer's playback policy
@@ -152,10 +177,7 @@ export const getEntityProfile = async (req: Request, res: Response, next: NextFu
         id,
         kind: 'artist',
         name: formatted?.name ?? artist.name,
-        image: formatted?.image,
-        primaryColor: formatted?.primaryColor,
-        bio: formatted?.bio,
-        links: formatted?.links,
+        ...artistDisplayFields(formatted),
         linkedOxyUserId: linkedPerson?.linkedOxyUserId,
         music,
         appearsIn: linkedPerson ? await loadAppearsIn(toPersonLike(linkedPerson)) : undefined,
@@ -175,17 +197,11 @@ export const getEntityProfile = async (req: Request, res: Response, next: NextFu
       const identity = enriched[0];
 
       let music: EntityMusic | undefined;
-      let artistImage: string | undefined;
-      let artistColor: string | undefined;
-      let artistBio: string | undefined;
-      let artistLinks: EntityProfile['links'];
+      let linkedArtistFields: ArtistDisplayFields = artistDisplayFields(null);
       if (linkedArtist) {
         const formattedLinked = formatArtistWithImage(linkedArtist) as FormattedArtistProfile | null;
         music = await loadArtistMusic(linkedArtist._id.toString(), playbackOptions);
-        artistImage = formattedLinked?.image;
-        artistColor = formattedLinked?.primaryColor;
-        artistBio = formattedLinked?.bio;
-        artistLinks = formattedLinked?.links;
+        linkedArtistFields = artistDisplayFields(formattedLinked);
       }
 
       const profile: EntityProfile = {
@@ -195,10 +211,7 @@ export const getEntityProfile = async (req: Request, res: Response, next: NextFu
         displayName: identity?.displayName,
         username: identity?.username,
         avatar: identity?.oxyAvatar,
-        image: artistImage,
-        primaryColor: artistColor,
-        bio: artistBio,
-        links: artistLinks,
+        ...linkedArtistFields,
         linkedArtistId: person.linkedArtistId ? person.linkedArtistId.toString() : undefined,
         linkedOxyUserId: person.linkedOxyUserId,
         music,
