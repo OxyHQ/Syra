@@ -1,4 +1,13 @@
 const pkg = require('./package.json')
+const fs = require('fs')
+const path = require('path')
+
+// FCM config lives at the monorepo root and is only present in CI / release
+// setups (or via the GOOGLE_SERVICES_JSON env, as in Mention). Local dev-client
+// builds don't have it — include it only when it actually exists so
+// `expo prebuild` doesn't fail on a missing file.
+const googleServicesJson = process.env.GOOGLE_SERVICES_JSON || path.resolve(__dirname, '../../google-services.json')
+const hasGoogleServices = fs.existsSync(googleServicesJson)
 
 module.exports = function(_config) {
     
@@ -48,8 +57,9 @@ return {
             ],
             // Must match google-services.json package_name
             package: "com.syra.app",
-            // Point to your google-services.json for FCM
-            googleServicesFile: "../../google-services.json",
+            // Point to your google-services.json for FCM (only when present —
+            // absent in local dev-client builds).
+            ...(hasGoogleServices ? { googleServicesFile: googleServicesJson } : {}),
             intentFilters: [
                     {
                         action: 'VIEW',
