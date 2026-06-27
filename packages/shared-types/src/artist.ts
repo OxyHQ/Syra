@@ -25,7 +25,7 @@ export const artistStrikeSchema = z.object({
 });
 export type ArtistStrike = z.infer<typeof artistStrikeSchema>;
 
-const artistLinksSchema = z.object({
+export const artistLinksSchema = z.object({
   website: z.string().optional(),
   instagram: z.string().optional(),
   x: z.string().optional(),

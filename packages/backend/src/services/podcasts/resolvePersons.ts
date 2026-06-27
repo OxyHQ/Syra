@@ -13,7 +13,8 @@
  * the call site) so this module stays decoupled from the server + unit-testable.
  */
 
-import type { EpisodePerson, ResolvedPerson } from '@syra/shared-types';
+import mongoose from 'mongoose';
+import type { EpisodePerson, ResolvedPerson, SearchPerson } from '@syra/shared-types';
 import { getAccountDisplayName } from '@oxyhq/core';
 import type { OxyServices, User } from '@oxyhq/core';
 import { PersonModel, IPerson } from '../../models/Person';
@@ -207,4 +208,63 @@ export async function buildCreatorPersons(
   });
 
   return { persons, invalidIds: [] };
+}
+
+/** Data-only `Person` shape (hydrated doc or `.lean()` result both satisfy it). */
+export interface PersonLike {
+  _id: mongoose.Types.ObjectId;
+  name: string;
+  img?: string;
+  href?: string;
+  linkedOxyUserId?: string;
+  linkedArtistId?: mongoose.Types.ObjectId;
+}
+
+/**
+ * Enrich global `Person` rows into `SearchPerson` DTOs — adds the live Oxy
+ * identity (avatar id + displayName + username) for Oxy-linked persons; RSS
+ * persons keep their external `img`. Used by People search + person detail.
+ */
+export async function enrichPersons(persons: PersonLike[], getOxyUsers: GetOxyUsers): Promise<SearchPerson[]> {
+  const oxyIds = Array.from(
+    new Set(persons.map((p) => p.linkedOxyUserId).filter((id): id is string => !!id)),
+  );
+  const oxyById = new Map<string, OxyUserLite>();
+  if (oxyIds.length > 0) {
+    try {
+      for (const user of await getOxyUsers(oxyIds)) oxyById.set(user.id, user);
+    } catch (err) {
+      logger.debug('[podcasts] people enrichment failed', { err });
+    }
+  }
+
+  return persons.map((person) => {
+    const oxy = person.linkedOxyUserId ? oxyById.get(person.linkedOxyUserId) : undefined;
+    return {
+      personId: person._id.toString(),
+      name: oxy?.displayName ?? person.name,
+      displayName: oxy?.displayName,
+      username: oxy?.username,
+      oxyAvatar: oxy?.avatar,
+      img: person.linkedOxyUserId ? undefined : person.img,
+      linkedOxyUserId: person.linkedOxyUserId,
+      linkedArtistId: person.linkedArtistId ? person.linkedArtistId.toString() : undefined,
+    };
+  });
+}
+
+/**
+ * STRONG-key `$elemMatch` filter selecting shows/episodes whose `persons[]`
+ * credit this person — `linkedOxyUserId`, else `href`, else exact name (the same
+ * keys the resolver dedups by). Powers the "appears in" query.
+ */
+export function strongKeyCreditMatch(person: PersonLike): Record<string, unknown> {
+  if (person.linkedOxyUserId) {
+    return { persons: { $elemMatch: { linkedOxyUserId: person.linkedOxyUserId } } };
+  }
+  if (person.href) {
+    return { persons: { $elemMatch: { href: person.href } } };
+  }
+  const exactName = new RegExp(`^${person.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+  return { persons: { $elemMatch: { name: exactName } } };
 }

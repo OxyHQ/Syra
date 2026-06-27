@@ -9,6 +9,8 @@ export * from './podcast';
 export * from './episode';
 export * from './episodeProgress';
 export * from './subscription';
+export * from './person';
+export * from './entityProfile';
 export * from './library';
 export * from './player';
 export * from './search';

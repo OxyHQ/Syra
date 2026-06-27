@@ -5,8 +5,11 @@ import type { User } from '@oxyhq/core';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { TrackModel } from '../models/Track';
 import { PodcastModel } from '../models/Podcast';
+import { EpisodeModel } from '../models/Episode';
+import { PersonModel } from '../models/Person';
 import { formatTracksWithCoverArt, formatAlbumsWithCoverArt, formatArtistsWithImage, formatPlaylistsWithCoverArt } from '../utils/musicHelpers';
-import { serializePodcast, type PodcastDocument } from '../services/podcasts/podcastSerializers';
+import { serializePodcast, serializeEpisode, type PodcastDocument, type EpisodeDocument } from '../services/podcasts/podcastSerializers';
+import { enrichPersons, makeOxyUsersFetcher, type PersonLike } from '../services/podcasts/resolvePersons';
 import { isDatabaseConnected } from '../utils/database';
 import { enqueueAudiusImport } from '../services/sources/audiusBackgroundImport';
 import { syncPodcastSearch } from '../services/podcasts/podcastBackgroundImport';
@@ -99,6 +102,8 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
           artists: [],
           playlists: [],
           podcasts: [],
+          episodes: [],
+          people: [],
           users: [],
         },
         counts: {
@@ -107,6 +112,8 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
           artists: 0,
           playlists: 0,
           podcasts: 0,
+          episodes: 0,
+          people: 0,
           users: 0,
           total: 0,
         },
@@ -127,6 +134,8 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
       artists?: Promise<[unknown[], number]>;
       playlists?: Promise<[unknown[], number]>;
       podcasts?: Promise<[unknown[], number]>;
+      episodes?: Promise<[unknown[], number]>;
+      people?: Promise<[unknown[], number]>;
       users?: Promise<[SearchUser[], number]>;
     } = {};
 
@@ -262,6 +271,50 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
           ]);
     }
 
+    // Search episodes (existing catalog, populated by the podcast feed imports —
+    // no separate directory import). A public viewer sees only playable episodes:
+    // `status: 'ready'` AND (a Syra-hosted episode OR an RSS episode with an
+    // enclosure). Composed with `$and` so the title regex never overwrites the
+    // playability `$or`.
+    if (categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.EPISODES) {
+      const episodeFilter = {
+        status: 'ready',
+        title: searchRegex,
+        $and: [
+          { $or: [{ source: 'syra' }, { enclosureUrl: { $exists: true, $nin: [null, ''] } }] },
+        ],
+      };
+      const episodeFind = EpisodeModel.find(episodeFilter)
+        .sort({ popularity: -1, pubDate: -1 })
+        .skip(searchOffset)
+        .limit(searchLimit)
+        .lean();
+      searchPromises.episodes = isPreviewSearch
+        ? episodeFind.then((docs) => [docs, docs.length])
+        : Promise.all([
+            episodeFind,
+            EpisodeModel.countDocuments(episodeFilter),
+          ]);
+    }
+
+    // Search PEOPLE (global host/guest identities). Match the stored credit name
+    // (Oxy-linked persons store the denormalised displayName) — enriched with the
+    // live Oxy identity below.
+    if (categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.PEOPLE) {
+      const personFilter = { name: searchRegex };
+      const personFind = PersonModel.find(personFilter)
+        .sort({ name: 1 })
+        .skip(searchOffset)
+        .limit(searchLimit)
+        .lean();
+      searchPromises.people = isPreviewSearch
+        ? personFind.then((docs) => [docs, docs.length])
+        : Promise.all([
+            personFind,
+            PersonModel.countDocuments(personFilter),
+          ]);
+    }
+
     const includeUsers =
       categoryValue === SearchCategory.USERS ||
       (categoryValue === SearchCategory.ALL && searchLimit > HEADER_PREVIEW_LIMIT);
@@ -276,6 +329,8 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
       artistsResult,
       playlistsResult,
       podcastsResult,
+      episodesResult,
+      peopleResult,
       usersResult,
     ] = await Promise.all([
       searchPromises.tracks ?? Promise.resolve<[unknown[], number]>([[], 0]),
@@ -283,6 +338,8 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
       searchPromises.artists ?? Promise.resolve<[unknown[], number]>([[], 0]),
       searchPromises.playlists ?? Promise.resolve<[unknown[], number]>([[], 0]),
       searchPromises.podcasts ?? Promise.resolve<[unknown[], number]>([[], 0]),
+      searchPromises.episodes ?? Promise.resolve<[unknown[], number]>([[], 0]),
+      searchPromises.people ?? Promise.resolve<[unknown[], number]>([[], 0]),
       searchPromises.users ?? Promise.resolve<[SearchUser[], number]>([[], 0]),
     ]);
 
@@ -302,6 +359,12 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
     const formattedPodcasts = categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.PODCASTS
       ? (podcastsResult[0] as PodcastDocument[]).map(serializePodcast)
       : [];
+    const formattedEpisodes = categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.EPISODES
+      ? (episodesResult[0] as EpisodeDocument[]).map(serializeEpisode)
+      : [];
+    const formattedPeople = categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.PEOPLE
+      ? await enrichPersons(peopleResult[0] as PersonLike[], makeOxyUsersFetcher(oxy))
+      : [];
     const formattedUsers = includeUsers
       ? usersResult[0]
       : [];
@@ -312,8 +375,10 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
     const artistsCount = artistsResult[1];
     const playlistsCount = playlistsResult[1];
     const podcastsCount = podcastsResult[1];
+    const episodesCount = episodesResult[1];
+    const peopleCount = peopleResult[1];
     const usersCount = usersResult[1];
-    const totalCount = tracksCount + albumsCount + artistsCount + playlistsCount + podcastsCount + usersCount;
+    const totalCount = tracksCount + albumsCount + artistsCount + playlistsCount + podcastsCount + episodesCount + peopleCount + usersCount;
 
     // Determine if there are more results
     const hasMore = categoryValue === SearchCategory.ALL
@@ -323,6 +388,8 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
         (categoryValue === SearchCategory.ARTISTS && artistsCount > searchOffset + searchLimit) ||
         (categoryValue === SearchCategory.PLAYLISTS && playlistsCount > searchOffset + searchLimit) ||
         (categoryValue === SearchCategory.PODCASTS && podcastsCount > searchOffset + searchLimit) ||
+        (categoryValue === SearchCategory.EPISODES && episodesCount > searchOffset + searchLimit) ||
+        (categoryValue === SearchCategory.PEOPLE && peopleCount > searchOffset + searchLimit) ||
         (categoryValue === SearchCategory.USERS && usersCount > searchOffset + searchLimit);
 
     const results: SearchResult = {
@@ -333,6 +400,8 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
         artists: formattedArtists,
         playlists: formattedPlaylists,
         podcasts: formattedPodcasts,
+        episodes: formattedEpisodes,
+        people: formattedPeople,
         users: formattedUsers,
       },
       counts: {
@@ -341,6 +410,8 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
         artists: artistsCount,
         playlists: playlistsCount,
         podcasts: podcastsCount,
+        episodes: episodesCount,
+        people: peopleCount,
         users: usersCount,
         total: totalCount,
       },

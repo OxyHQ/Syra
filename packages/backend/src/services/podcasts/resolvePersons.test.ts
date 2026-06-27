@@ -1,8 +1,15 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
+import mongoose from 'mongoose';
 import { connect, clear, disconnect } from '../../test/mongo';
 import { PersonModel } from '../../models/Person';
 import { ArtistModel } from '../../models/Artist';
-import { resolvePersons, buildCreatorPersons, type GetOxyUsers } from './resolvePersons';
+import {
+  resolvePersons,
+  buildCreatorPersons,
+  enrichPersons,
+  strongKeyCreditMatch,
+  type GetOxyUsers,
+} from './resolvePersons';
 
 beforeAll(connect);
 afterEach(clear);
@@ -93,5 +100,49 @@ describe('buildCreatorPersons — Oxy-only validation', () => {
     const { persons } = await buildCreatorPersons({ hosts: ['u1'], guests: ['u1'] }, echoOxy);
     expect(persons).toHaveLength(1);
     expect(persons[0].role).toBe('host');
+  });
+});
+
+describe('enrichPersons', () => {
+  it('enriches Oxy-linked persons (avatar/displayName/username); keeps img for RSS', async () => {
+    const oxyId = new mongoose.Types.ObjectId();
+    const rssId = new mongoose.Types.ObjectId();
+
+    const result = await enrichPersons(
+      [
+        { _id: oxyId, name: 'stored name', linkedOxyUserId: 'oxy1' },
+        { _id: rssId, name: 'RSS Host', img: 'https://x/a.jpg' },
+      ],
+      echoOxy,
+    );
+
+    const oxy = result.find((p) => p.linkedOxyUserId === 'oxy1');
+    expect(oxy?.name).toBe('User oxy1');
+    expect(oxy?.displayName).toBe('User oxy1');
+    expect(oxy?.username).toBe('user_oxy1');
+    expect(oxy?.oxyAvatar).toBe('avatar-oxy1');
+    expect(oxy?.img).toBeUndefined();
+
+    const rss = result.find((p) => p.personId === rssId.toString());
+    expect(rss?.name).toBe('RSS Host');
+    expect(rss?.img).toBe('https://x/a.jpg');
+    expect(rss?.oxyAvatar).toBeUndefined();
+  });
+});
+
+describe('strongKeyCreditMatch', () => {
+  it('keys on linkedOxyUserId, then href, then exact name', () => {
+    const base = { _id: new mongoose.Types.ObjectId(), name: 'Jane Host' };
+    expect(strongKeyCreditMatch({ ...base, linkedOxyUserId: 'oxy1' })).toEqual({
+      persons: { $elemMatch: { linkedOxyUserId: 'oxy1' } },
+    });
+    expect(strongKeyCreditMatch({ ...base, href: 'https://x/jane' })).toEqual({
+      persons: { $elemMatch: { href: 'https://x/jane' } },
+    });
+    const nameMatch = strongKeyCreditMatch(base);
+    const elem = (nameMatch.persons as { $elemMatch: { name: RegExp } }).$elemMatch;
+    expect(elem.name).toBeInstanceOf(RegExp);
+    expect('jane host').toMatch(elem.name); // exact, case-insensitive
+    expect('jane host extra').not.toMatch(elem.name);
   });
 });

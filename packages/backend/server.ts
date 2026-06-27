@@ -43,6 +43,7 @@ import sourcesRoutes from './src/routes/sources.routes';
 import recommendationsRoutes from './src/routes/recommendations.routes';
 import podcastsRoutes from './src/routes/podcasts.routes';
 import episodesRoutes from './src/routes/episodes.routes';
+import entityProfileRoutes from './src/routes/entityProfile.routes';
 import { startRecommendationScheduler } from './src/services/recommendations/scheduler';
 import { startPodcastRefreshScheduler } from './src/services/podcasts/podcastRefreshScheduler';
 
@@ -266,6 +267,7 @@ publicApiRouter.use('/sources', sourcesRoutes);
 // with requireAuth. Optional auth resolves the session for entitlement + progress.
 publicApiRouter.use('/podcasts', createOptionalOxyAuth(oxy), podcastsRoutes);
 publicApiRouter.use('/episodes', createOptionalOxyAuth(oxy), episodesRoutes);
+publicApiRouter.use('/p', createOptionalOxyAuth(oxy), entityProfileRoutes);
 
 const authenticatedApiRouter = express.Router();
 authenticatedApiRouter.use('/profile', profileSettingsRoutes);

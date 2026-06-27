@@ -4,6 +4,8 @@ import { albumSchema } from './album';
 import { artistSchema } from './artist';
 import { playlistSchema } from './playlist';
 import { podcastSchema } from './podcast';
+import { episodeSchema } from './episode';
+import { searchPersonSchema } from './person';
 
 export const searchCategorySchema = z.enum([
   'all',
@@ -12,6 +14,8 @@ export const searchCategorySchema = z.enum([
   'artists',
   'playlists',
   'podcasts',
+  'episodes',
+  'people',
   'users',
 ]);
 export type SearchCategory = z.infer<typeof searchCategorySchema>;
@@ -22,6 +26,8 @@ export const SearchCategory = {
   ARTISTS: 'artists' as const,
   PLAYLISTS: 'playlists' as const,
   PODCASTS: 'podcasts' as const,
+  EPISODES: 'episodes' as const,
+  PEOPLE: 'people' as const,
   USERS: 'users' as const,
 };
 
@@ -54,6 +60,8 @@ export const searchResultsByCategorySchema = z.object({
   artists: z.array(artistSchema).optional(),
   playlists: z.array(playlistSchema).optional(),
   podcasts: z.array(podcastSchema).optional(),
+  episodes: z.array(episodeSchema).optional(),
+  people: z.array(searchPersonSchema).optional(),
   users: z.array(searchUserSchema).optional(),
 });
 export type SearchResultsByCategory = z.infer<typeof searchResultsByCategorySchema>;
@@ -64,6 +72,8 @@ export const searchResultCountsSchema = z.object({
   artists: z.number(),
   playlists: z.number(),
   podcasts: z.number(),
+  episodes: z.number(),
+  people: z.number(),
   users: z.number(),
   total: z.number(),
 });
