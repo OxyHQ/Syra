@@ -1,0 +1,61 @@
+{
+  "name": "@syra.fm/sdk",
+  "version": "0.1.0",
+  "description": "Headless, isomorphic client for the Syra public API — catalog reads and 30s preview clips. No React/RN/DOM dependencies; public reads only.",
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/types/index.d.ts",
+  "source": "src/index.ts",
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/types/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/types/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      },
+      "default": "./dist/esm/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "keywords": [
+    "syra",
+    "sdk",
+    "music",
+    "api-client",
+    "preview"
+  ],
+  "author": "Syra Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "bun run clean && bun run build:cjs && bun run build:esm && bun run build:types && bun run build:markers",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:esm": "tsc -p tsconfig.esm.json && node scripts/fix-esm-imports.mjs",
+    "build:types": "tsc -p tsconfig.types.json",
+    "build:markers": "node scripts/write-dist-markers.mjs",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "bun test src",
+    "prepublishOnly": "bun run build"
+  },
+  "dependencies": {
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "~5.9.2"
+  }
+}

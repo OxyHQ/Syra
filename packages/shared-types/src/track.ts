@@ -115,6 +115,13 @@ export const trackSchema = timestampsSchema.extend({
   loudnessLufs: z.number().optional(),
   streamUrl: z.string().optional(),
   hlsMasterKey: z.string().optional(),
+  /**
+   * Whether a public 30s preview clip can be served for this track. Derived by
+   * the backend serializer (guest-playable + has a regenerable source); the
+   * `@syra/sdk` reads this to decide whether to offer a preview. Optional for
+   * backward compatibility with older API responses.
+   */
+  previewAvailable: z.boolean().optional(),
 });
 export type Track = z.infer<typeof trackSchema>;
 

@@ -26,7 +26,12 @@ import type { PackageOptions, PackageResult } from './hlsPackager';
 import { storePackagedHls } from './hlsStorage';
 import type { StoredHls } from './hlsStorage';
 import { buildStreamKeyUri } from './streamKeyUri';
+import { storePreviewFromSourceFile } from '../preview/previewService';
+import type { StorePreviewFromSourceParams } from '../preview/previewService';
 import type { ITrack } from '../../models/Track';
+
+/** Offset of the default preview clip generated at ingest time. */
+const DEFAULT_PREVIEW_START_SEC = 0;
 
 // ── Dep types ────────────────────────────────────────────────────────────────
 
@@ -42,6 +47,7 @@ export interface IngestDeps {
     result: PackageResult,
     ids: { trackId: string; artistId: string },
   ) => Promise<StoredHls>;
+  generatePreview?: (params: StorePreviewFromSourceParams) => Promise<string>;
   keyUri?: string;
 }
 
@@ -103,6 +109,7 @@ export async function ingestTrack(trackId: string, deps?: IngestDeps): Promise<v
   const fetchSource = deps?.fetchSource ?? defaultFetchSource;
   const packageHls = deps?.packageHls ?? packageToEncryptedHls;
   const doStoreHls = deps?.storeHls ?? storePackagedHls;
+  const generatePreview = deps?.generatePreview ?? storePreviewFromSourceFile;
   const keyUri = deps?.keyUri ?? buildStreamKeyUri(trackId);
 
   let cleanup: (() => void) | undefined;
@@ -122,6 +129,21 @@ export async function ingestTrack(trackId: string, deps?: IngestDeps): Promise<v
     track.loudnessLufs = result.loudnessLufs;
     track.status = 'ready';
     await track.save();
+
+    // Best-effort default preview clip from the already-local source. A preview
+    // failure must NOT fail an otherwise-successful ingest — log and continue.
+    try {
+      await generatePreview({
+        trackId,
+        inputPath: fetched.localPath,
+        startSec: DEFAULT_PREVIEW_START_SEC,
+      });
+    } catch (previewErr) {
+      logger.error('[ingest] preview generation failed (non-fatal)', {
+        trackId,
+        err: previewErr,
+      });
+    }
   } catch (err) {
     track.status = 'failed';
     await track.save().catch((saveErr) =>

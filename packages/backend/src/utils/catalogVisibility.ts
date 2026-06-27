@@ -68,6 +68,78 @@ export function playableTrackFilter<T>(
   return andFilter(visible, playback);
 }
 
+/** Minimal shape needed to evaluate guest playability of an in-memory track. */
+export interface PlayableTrackShape {
+  isAvailable?: boolean;
+  source?: string;
+  status?: string;
+  hlsMasterKey?: string;
+  hls?: unknown[];
+  audioSource?: unknown;
+}
+
+/**
+ * In-memory equivalent of `playableTrackFilter({}, {})` — true iff the track is
+ * playable for a guest viewer (no direct Audius streaming). Kept next to the
+ * Mongo filter so the two stay in lockstep: a track this returns `true` for is
+ * exactly a track the guest catalog query would surface.
+ */
+export function isGuestPlayableTrack(track: PlayableTrackShape): boolean {
+  if (track.isAvailable === false) {
+    return false;
+  }
+
+  const isAudius = track.source === 'audius';
+
+  if (!isAudiusCatalogEnabled()) {
+    return !isAudius;
+  }
+
+  if (!isAudius) {
+    return true;
+  }
+
+  return (
+    track.status === 'ready' &&
+    typeof track.hlsMasterKey === 'string' &&
+    track.hlsMasterKey.length > 0 &&
+    Array.isArray(track.hls) &&
+    track.hls.length > 0
+  );
+}
+
+/** True iff the track has Syra-hosted, ready, encrypted HLS we can clip from. */
+export function hasReadyHls(track: PlayableTrackShape): boolean {
+  return (
+    track.status === 'ready' &&
+    typeof track.hlsMasterKey === 'string' &&
+    track.hlsMasterKey.length > 0 &&
+    Array.isArray(track.hls) &&
+    track.hls.length > 0
+  );
+}
+
+/**
+ * True iff a 30s preview can actually be generated for this track — it has a
+ * regenerable Syra-native source: either a retained `audioSource` (uploads / CC)
+ * or its own ready HLS ladder (e.g. Audius rehosted to Syra HLS). Never depends
+ * on a direct-Audius provider stream.
+ */
+export function hasRegenerablePreviewSource(track: PlayableTrackShape): boolean {
+  return Boolean(track.audioSource) || hasReadyHls(track);
+}
+
+/**
+ * Truthful `previewAvailable`: the track is guest-playable AND a preview clip is
+ * actually regenerable from a Syra-native source. For Audius tracks this equals
+ * guest-playability (guest-playable Audius already requires ready HLS); for the
+ * pathological "guest-playable but no regenerable source" case it returns false
+ * so the SDK never surfaces a track whose preview would 404.
+ */
+export function isPreviewEligibleTrack(track: PlayableTrackShape): boolean {
+  return isGuestPlayableTrack(track) && hasRegenerablePreviewSource(track);
+}
+
 export async function resolveCatalogPlaybackOptions(
   userId?: string,
 ): Promise<CatalogPlaybackOptions> {

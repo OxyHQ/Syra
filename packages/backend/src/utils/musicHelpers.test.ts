@@ -78,6 +78,111 @@ describe('formatTrackWithCoverArt — internal image formatting', () => {
   });
 });
 
+// ── Track — previewAvailable flag ─────────────────────────────────────────────
+
+describe('formatTrackWithCoverArt — previewAvailable', () => {
+  it('is true for an available upload track with a retained audio source', async () => {
+    const result = await formatTrackWithCoverArt({
+      _id: new mongoose.Types.ObjectId(),
+      title: 'Upload Track',
+      artistName: 'Artist',
+      source: 'upload',
+      status: 'ready',
+      isAvailable: true,
+      audioSource: { url: '/api/audio/x', format: 'mp3' },
+    });
+
+    expect(result).not.toBeNull();
+    expect(result.previewAvailable).toBe(true);
+  });
+
+  it('is false when there is no regenerable audio source', async () => {
+    const result = await formatTrackWithCoverArt({
+      _id: new mongoose.Types.ObjectId(),
+      title: 'Sourceless Track',
+      artistName: 'Artist',
+      source: 'upload',
+      status: 'ready',
+      isAvailable: true,
+    });
+
+    expect(result).not.toBeNull();
+    expect(result.previewAvailable).toBe(false);
+  });
+
+  it('is false when the track is unavailable', async () => {
+    const result = await formatTrackWithCoverArt({
+      _id: new mongoose.Types.ObjectId(),
+      title: 'Unavailable Track',
+      artistName: 'Artist',
+      source: 'upload',
+      status: 'ready',
+      isAvailable: false,
+      audioSource: { url: '/api/audio/x', format: 'mp3' },
+    });
+
+    expect(result).not.toBeNull();
+    expect(result.previewAvailable).toBe(false);
+  });
+});
+
+// ── previewAvailable — Audius rehosted to Syra HLS (no audioSource) ────────────
+
+describe('formatTrackWithCoverArt — previewAvailable for Audius-HLS', () => {
+  const prev = process.env.AUDIUS_CATALOG_ENABLED;
+  beforeAll(() => { process.env.AUDIUS_CATALOG_ENABLED = 'true'; });
+  afterAll(() => {
+    if (prev === undefined) delete process.env.AUDIUS_CATALOG_ENABLED;
+    else process.env.AUDIUS_CATALOG_ENABLED = prev;
+  });
+
+  it('is true for an Audius track rehosted to ready Syra HLS (no audioSource)', async () => {
+    const result = await formatTrackWithCoverArt({
+      _id: new mongoose.Types.ObjectId(),
+      title: 'Audius HLS Track',
+      artistName: 'Artist',
+      source: 'audius',
+      status: 'ready',
+      isAvailable: true,
+      hlsMasterKey: 'hls/a/t/master.m3u8',
+      hls: [{ manifestKey: 'hls/a/t/96/stream.m3u8', bitrateKbps: 96, encrypted: true }],
+    });
+
+    expect(result).not.toBeNull();
+    expect(result.previewAvailable).toBe(true);
+  });
+
+  it('is false for an Audius track with only a direct provider stream (no Syra HLS)', async () => {
+    const result = await formatTrackWithCoverArt({
+      _id: new mongoose.Types.ObjectId(),
+      title: 'Audius Direct Track',
+      artistName: 'Artist',
+      source: 'audius',
+      status: 'ready',
+      isAvailable: true,
+      streamUrl: 'https://audius.example/stream',
+    });
+
+    expect(result).not.toBeNull();
+    expect(result.previewAvailable).toBe(false);
+  });
+
+  it('is false for an Audius track whose HLS is not yet ready (processing)', async () => {
+    const result = await formatTrackWithCoverArt({
+      _id: new mongoose.Types.ObjectId(),
+      title: 'Audius Processing Track',
+      artistName: 'Artist',
+      source: 'audius',
+      status: 'processing',
+      isAvailable: true,
+      hls: [{ manifestKey: 'hls/a/t/96/stream.m3u8', bitrateKbps: 96, encrypted: true }],
+    });
+
+    expect(result).not.toBeNull();
+    expect(result.previewAvailable).toBe(false);
+  });
+});
+
 // ── Album — internal image formatting ─────────────────────────────────────────
 
 describe('formatAlbumWithCoverArt — internal image formatting', () => {

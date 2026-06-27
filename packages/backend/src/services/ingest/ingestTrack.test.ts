@@ -40,6 +40,7 @@ const happyDeps = {
   fetchSource: async () => ({ localPath: '/tmp/fake.mp3', cleanup: () => {} }),
   packageHls: async () => CANNED_PACKAGE_RESULT,
   storeHls: async () => CANNED_STORED,
+  generatePreview: async () => 'previews/fake-track-id/0.mp3',
 };
 
 async function createTrack(overrides: Record<string, unknown> = {}) {
@@ -73,6 +74,23 @@ describe('ingestTrack', () => {
     expect(reloaded?.hls).toHaveLength(3);
     expect(reloaded?.hls?.[0].manifestKey).toBe('hls/a/t/96/stream.m3u8');
     expect(reloaded?.hls?.[0].encrypted).toBe(true);
+  });
+
+  it('best-effort preview: generatePreview throwing does not fail ingest', async () => {
+    const track = await createTrack();
+    const trackId = track._id.toString();
+
+    const previewFailDeps = {
+      ...happyDeps,
+      generatePreview: async (): Promise<string> => {
+        throw new Error('ffmpeg preview clip failed');
+      },
+    };
+
+    await ingestTrack(trackId, previewFailDeps);
+
+    const reloaded = await TrackModel.findById(trackId);
+    expect(reloaded?.status).toBe('ready');
   });
 
   it('failure path: packageHls throws → status set to failed, error rethrown', async () => {

@@ -125,3 +125,18 @@ export function getS3ImageKey(imageId: string, filename: string): string {
     || 'image';
   return `${S3_IMAGE_PREFIX}/${imageId}/${safeFilename}`;
 }
+
+export const S3_PREVIEW_PREFIX = process.env.S3_PREVIEW_PREFIX || 'previews';
+
+/**
+ * Get the S3 key for a public 30s preview clip.
+ * Format: previews/{trackId}/{startSec}.mp3
+ *
+ * These objects are served by the public, unauthenticated preview endpoint and
+ * are safe to cache at the edge — the key is fully derived from the track id and
+ * the (clamped, integer) start offset.
+ */
+export function getS3PreviewKey(trackId: string, startSec: number): string {
+  const safeStart = Math.max(0, Math.trunc(startSec));
+  return `${S3_PREVIEW_PREFIX}/${trackId}/${safeStart}.mp3`;
+}

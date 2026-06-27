@@ -37,6 +37,7 @@ import musicPreferencesRoutes from './src/routes/musicPreferences.routes';
 import copyrightRoutes from './src/routes/copyright.routes';
 import imagesPublicRoutes from './src/routes/images.public.routes';
 import imagesAuthRoutes from './src/routes/images.auth.routes';
+import previewRoutes from './src/routes/preview.routes';
 import streamRoutes from './src/routes/stream.routes';
 import lyricsRoutes from './src/routes/lyrics.routes';
 import sourcesRoutes from './src/routes/sources.routes';
@@ -260,6 +261,7 @@ publicApiRouter.use('/browse', browseRoutes);
 publicApiRouter.use('/copyright', copyrightRoutes);
 publicApiRouter.use('/stream', createOptionalOxyAuth(oxy), streamRoutes);
 publicApiRouter.use('/images', imagesPublicRoutes);
+publicApiRouter.use('/preview', createOptionalOxyAuth(oxy), previewRoutes);
 
 publicApiRouter.use('/sources', sourcesRoutes);
 

@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { AlbumModel } from '../models/Album';
+import { isPreviewEligibleTrack } from './catalogVisibility';
 
 // ── Image helpers ─────────────────────────────────────────────────────────────
 
@@ -116,6 +117,19 @@ export async function formatTrackWithCoverArt(
 
   stripExternalCatalogFields(formatted);
   formatted.coverArtSizes = normalizeImageSizes(formatted.coverArtSizes);
+
+  // A public 30s preview can be served iff the track is guest-playable AND a
+  // clip is regenerable from a Syra-native source (retained `audioSource` OR the
+  // track's own ready HLS — e.g. Audius rehosted to Syra HLS). The SDK derives
+  // the preview URL from this flag — we never persist or expose a raw preview URL.
+  formatted.previewAvailable = isPreviewEligibleTrack({
+    isAvailable: formatted.isAvailable,
+    source: formatted.source,
+    status: formatted.status,
+    hlsMasterKey: formatted.hlsMasterKey,
+    hls: formatted.hls,
+    audioSource: formatted.audioSource,
+  });
 
   if (formatted.coverArt) {
     formatted.coverArt = normalizeImageRef(formatted.coverArt);
