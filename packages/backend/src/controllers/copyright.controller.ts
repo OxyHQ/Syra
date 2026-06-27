@@ -98,7 +98,7 @@ export const getCopyrightReports = async (req: AuthRequest, res: Response, next:
     const limit = parseInt(req.query.limit as string) || 50;
     const offset = parseInt(req.query.offset as string) || 0;
 
-    const query: any = {};
+    const query: { status?: string } = {};
     if (status && ['pending', 'approved', 'rejected'].includes(status)) {
       query.status = status;
     }
