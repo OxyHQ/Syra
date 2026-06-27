@@ -395,7 +395,7 @@ const HomeScreen: React.FC = () => {
                       } else if (item.type === 'playlist') {
                         router.push(`/playlist/${id}`);
                       } else {
-                        router.push(`/artist/${id}`);
+                        router.push(`/p/${id}`);
                       }
                     }}
                     onHoverIn={() => handleHoverIn(primaryColor)}
@@ -468,7 +468,7 @@ const HomeScreen: React.FC = () => {
                         if (track.albumId) {
                           router.push(`/album/${track.albumId}`);
                         } else {
-                          router.push(`/artist/${track.artistId}`);
+                          router.push(`/p/${track.artistId}`);
                         }
                       }}
                       onPlayPress={() => playTrackList(
@@ -481,7 +481,7 @@ const HomeScreen: React.FC = () => {
                       )}
                       onAddToQueue={() => addTrackToQueue(track)}
                       onGoToAlbum={track.albumId ? () => router.push(`/album/${track.albumId}`) : undefined}
-                      onGoToArtist={() => router.push(`/artist/${track.artistId}`)}
+                      onGoToArtist={() => router.push(`/p/${track.artistId}`)}
                       onHoverIn={() => handleHoverIn(track.primaryColor)}
                       onHoverOut={handleHoverOut}
                     />
@@ -515,7 +515,7 @@ const HomeScreen: React.FC = () => {
                       images={artist.images}
                       imageSizes={artist.imageSizes}
                       primaryColor={artist.primaryColor}
-                      onPress={() => router.push(`/artist/${artist.id}`)}
+                      onPress={() => router.push(`/p/${artist.id}`)}
                       onPlayPress={() => playArtist(artist.id, artist.name)}
                       onAddToQueue={() => addArtistToQueue(artist.id)}
                       onHoverIn={() => handleHoverIn(artist.primaryColor)}
@@ -552,7 +552,7 @@ const HomeScreen: React.FC = () => {
                       onPress={() => router.push(`/album/${album.id}`)}
                       onPlayPress={() => playAlbum(album.id, album.title)}
                       onAddToQueue={() => addAlbumToQueue(album.id)}
-                      onGoToArtist={() => router.push(`/artist/${album.artistId}`)}
+                      onGoToArtist={() => router.push(`/p/${album.artistId}`)}
                       onHoverIn={() => handleHoverIn(album.primaryColor)}
                       onHoverOut={handleHoverOut}
                     />
@@ -588,7 +588,7 @@ const HomeScreen: React.FC = () => {
                       onPress={() => router.push(`/album/${album.id}`)}
                       onPlayPress={() => playAlbum(album.id, album.title)}
                       onAddToQueue={() => addAlbumToQueue(album.id)}
-                      onGoToArtist={() => router.push(`/artist/${album.artistId}`)}
+                      onGoToArtist={() => router.push(`/p/${album.artistId}`)}
                       onHoverIn={() => handleHoverIn(album.primaryColor)}
                       onHoverOut={handleHoverOut}
                     />
@@ -615,7 +615,7 @@ const HomeScreen: React.FC = () => {
                       images={artist.images}
                       imageSizes={artist.imageSizes}
                       primaryColor={artist.primaryColor}
-                      onPress={() => router.push(`/artist/${artist.id}`)}
+                      onPress={() => router.push(`/p/${artist.id}`)}
                       onPlayPress={() => playArtist(artist.id, artist.name)}
                       onAddToQueue={() => addArtistToQueue(artist.id)}
                       onHoverIn={() => handleHoverIn(artist.primaryColor)}
@@ -683,7 +683,7 @@ const HomeScreen: React.FC = () => {
                         if (track.albumId) {
                           router.push(`/album/${track.albumId}`);
                         } else {
-                          router.push(`/artist/${track.artistId}`);
+                          router.push(`/p/${track.artistId}`);
                         }
                       }}
                       onPlayPress={() => playTrackList(tracks, tracks.findIndex((item) => item.id === track.id), {
@@ -692,7 +692,7 @@ const HomeScreen: React.FC = () => {
                       })}
                       onAddToQueue={() => addTrackToQueue(track)}
                       onGoToAlbum={track.albumId ? () => router.push(`/album/${track.albumId}`) : undefined}
-                      onGoToArtist={() => router.push(`/artist/${track.artistId}`)}
+                      onGoToArtist={() => router.push(`/p/${track.artistId}`)}
                       onHoverIn={() => handleHoverIn(track.primaryColor)}
                       onHoverOut={handleHoverOut}
                     />

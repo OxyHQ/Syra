@@ -126,7 +126,7 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
       kind: 'artist',
       title: artist.name,
       subtitle: 'Artist',
-      href: { pathname: '/artist/[id]', params: { id: artist.id } },
+      href: { pathname: '/p/[id]', params: { id: artist.id } },
       imageUrl: pickCatalogImageUrl(artist.images, artist.image, 'thumbnail', artist.imageSizes),
       imageShape: 'circle',
     }));

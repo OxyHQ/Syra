@@ -100,7 +100,7 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
           <Pressable
             key={artist.id}
             style={styles.iconButton}
-            onPress={() => router.push(`/artist/${artist.id}`)}
+            onPress={() => router.push(`/p/${artist.id}`)}
           >
             {(artist.image || artist.images?.length) ? (
               <Image

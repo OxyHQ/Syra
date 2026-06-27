@@ -39,7 +39,7 @@ type HeaderSearchItem = {
 };
 
 const albumHref = (id: string): Href => ({ pathname: '/album/[id]', params: { id } });
-const artistHref = (id: string): Href => ({ pathname: '/artist/[id]', params: { id } });
+const artistHref = (id: string): Href => ({ pathname: '/p/[id]', params: { id } });
 const playlistHref = (id: string): Href => ({ pathname: '/playlist/[id]', params: { id } });
 const userHref = (username: string): Href => ({ pathname: '/u/[username]', params: { username } });
 

@@ -21,9 +21,10 @@ interface HostsAndGuestsProps {
  *    avatar (resolved as an Oxy file id via Bloom `Avatar`) + display name.
  *  - RSS person (`img` + `name`): the external avatar (rendered directly) + name.
  *
- * Tappable when linked to a Syra artist (`linkedArtistId` → `/artist/[id]`).
- * Oxy-user profile navigation is gated on a `username` being present in the
- * payload (the `/u/[username]` route resolves by username, not by Oxy id).
+ * Tap destination policy: Oxy-linked (`username`) → `/u/[username]`; else
+ * artist-linked (`linkedArtistId`) → `/p/[id]`; else the person's own unified
+ * profile → `/p/[personId]`. The Oxy-user link is gated on `username` being in
+ * the payload (the `/u/[username]` route resolves by username, not by Oxy id).
  */
 export const HostsAndGuests: React.FC<HostsAndGuestsProps> = ({ persons, title = 'Hosts & Guests' }) => {
   const theme = useTheme();
@@ -43,12 +44,14 @@ export const HostsAndGuests: React.FC<HostsAndGuestsProps> = ({ persons, title =
         const profileUsername = person.username;
         const externalImg = resolveExternalImageUri(person.img);
 
-        // Prefer the Oxy user profile (gated on a username being present);
-        // otherwise fall back to the linked Syra artist page.
+        // Oxy user profile first (gated on a username), then the linked Syra
+        // artist, then the person's own unified `/p/[personId]` profile.
         const onPress = profileUsername
           ? () => router.push({ pathname: '/u/[username]', params: { username: profileUsername } })
           : linkedArtistId
-          ? () => router.push({ pathname: '/artist/[id]', params: { id: linkedArtistId } })
+          ? () => router.push({ pathname: '/p/[id]', params: { id: linkedArtistId } })
+          : person.personId
+          ? () => router.push({ pathname: '/p/[id]', params: { id: person.personId } })
           : undefined;
 
         return (

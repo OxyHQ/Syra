@@ -175,7 +175,7 @@ export const NowPlaying: React.FC = () => {
                       {currentTrack.title}
                     </Text>
                     <Pressable
-                      onPress={() => router.push(`/artist/${currentTrack.artistId}`)}
+                      onPress={() => router.push(`/p/${currentTrack.artistId}`)}
                       style={styles.artistPressable}
                     >
                       <Text
@@ -208,7 +208,7 @@ export const NowPlaying: React.FC = () => {
                       <Text style={[styles.cardTitle, { color: theme.colors.text }]}>About this artist</Text>
                     </View>
                     <Pressable
-                      onPress={() => router.push(`/artist/${artist.id}`)}
+                      onPress={() => router.push(`/p/${artist.id}`)}
                       style={styles.artistCard}
                     >
                       {(artist.image || artist.images?.length) ? (
@@ -275,7 +275,7 @@ export const NowPlaying: React.FC = () => {
                       <View style={styles.creditRow}>
                         <Text style={[styles.creditLabel, { color: theme.colors.textSecondary }]}>Artist</Text>
                         <Pressable
-                          onPress={() => router.push(`/artist/${album.artistId}`)}
+                          onPress={() => router.push(`/p/${album.artistId}`)}
                           style={styles.creditValuePressable}
                         >
                           <Text style={[styles.creditValue, { color: theme.colors.text }]} numberOfLines={1}>

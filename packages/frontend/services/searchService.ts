@@ -2,8 +2,10 @@ import { api } from '@/utils/api';
 import {
   albumSchema,
   artistSchema,
+  episodeSchema,
   playlistSchema,
   podcastSchema,
+  searchPersonSchema,
   searchUserSchema,
   trackSchema,
   type SearchCategory,
@@ -20,6 +22,8 @@ const searchResultWithPendingResponseSchema = z.object({
     artists: z.array(artistSchema.passthrough()).optional(),
     playlists: z.array(playlistSchema.passthrough()).optional(),
     podcasts: z.array(podcastSchema.passthrough()).optional(),
+    episodes: z.array(episodeSchema.passthrough()).optional(),
+    people: z.array(searchPersonSchema.passthrough()).optional(),
     users: z.array(searchUserSchema.passthrough()).optional(),
   }).passthrough(),
   counts: z.object({
@@ -28,6 +32,8 @@ const searchResultWithPendingResponseSchema = z.object({
     artists: z.number(),
     playlists: z.number(),
     podcasts: z.number(),
+    episodes: z.number(),
+    people: z.number(),
     users: z.number(),
     total: z.number(),
   }).passthrough(),

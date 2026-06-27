@@ -5,16 +5,18 @@ import { useTheme } from '@oxyhq/bloom/theme';
 import SEO from '@/components/SEO';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams, type Href } from 'expo-router';
+import { Image } from 'expo-image';
 import { SearchCategory, SearchUser, Track } from '@syra/shared-types';
 import { searchService } from '@/services/searchService';
 import { searchRefetchInterval } from '@/utils/searchUtils';
-import { resolvePodcastImageUri } from '@/utils/podcastImages';
+import { resolvePodcastImageUri, resolveExternalImageUri } from '@/utils/podcastImages';
 import { browseService } from '@/services/browseService';
 import { MediaCard } from '@/components/MediaCard';
 import { GenreCard } from '@/components/GenreCard';
 import Avatar from '@/components/Avatar';
 import { ResponsiveGrid } from '@/components/ResponsiveGrid';
 import { TrackRow } from '@/components/TrackRow';
+import { EpisodeRow } from '@/components/EpisodeRow';
 import { ExploreSection } from '@/components/ExploreSection';
 import { GenreGridSkeleton, MediaCardRowSkeleton, TrackListSkeleton } from '@/components/skeletons';
 import { usePlayerStore } from '@/stores/playerStore';
@@ -29,7 +31,7 @@ const SearchScreen: React.FC = () => {
   const theme = useTheme();
   const router = useRouter();
   const isMobile = useMediaQuery({ maxWidth: 767 });
-  const { playTrackList, currentTrack, isPlaying } = usePlayerStore();
+  const { playTrackList, playEpisode, currentTrack, currentEpisode, isPlaying } = usePlayerStore();
   // Seed the search box from a `?q=` deep link (e.g. tapping a #hashtag / @mention),
   // and optionally preselect a `?category=` tab (e.g. the podcasts home search entry).
   const { q, category } = useLocalSearchParams<{ q?: string; category?: string }>();
@@ -175,6 +177,8 @@ const SearchScreen: React.FC = () => {
     { value: SearchCategory.ARTISTS, label: 'Artists' },
     { value: SearchCategory.PLAYLISTS, label: 'Playlists' },
     { value: SearchCategory.PODCASTS, label: 'Podcasts' },
+    { value: SearchCategory.EPISODES, label: 'Episodes' },
+    { value: SearchCategory.PEOPLE, label: 'People' },
     { value: SearchCategory.USERS, label: 'Users' },
   ], []);
 
@@ -414,7 +418,7 @@ const SearchScreen: React.FC = () => {
                       images={artist.images}
                       imageSizes={artist.imageSizes}
                       primaryColor={artist.primaryColor}
-                      onPress={() => router.push({ pathname: '/artist/[id]', params: { id: artist.id } } satisfies Href)}
+                      onPress={() => router.push({ pathname: '/p/[id]', params: { id: artist.id } } satisfies Href)}
                     />
                   </View>
                 ))}
@@ -522,7 +526,7 @@ const SearchScreen: React.FC = () => {
                           images={artist.images}
                           imageSizes={artist.imageSizes}
                           primaryColor={artist.primaryColor}
-                          onPress={() => router.push({ pathname: '/artist/[id]', params: { id: artist.id } } satisfies Href)}
+                          onPress={() => router.push({ pathname: '/p/[id]', params: { id: artist.id } } satisfies Href)}
                         />
                       </View>
                     ))}
@@ -589,6 +593,91 @@ const SearchScreen: React.FC = () => {
                 <Text style={[styles.podcastImportHint, { color: theme.colors.textSecondary }]}>
                   Finding more podcasts…
                 </Text>
+              )}
+
+            {/* Episodes Section */}
+            {(activeCategory === SearchCategory.ALL || activeCategory === SearchCategory.EPISODES) &&
+              searchResults.results.episodes &&
+              searchResults.results.episodes.length > 0 && (
+                <ExploreSection
+                  title={`Episodes (${searchResults.counts.episodes})`}
+                  isLoading={false}
+                  isEmpty={false}
+                >
+                  <View style={styles.trackList}>
+                    {searchResults.results.episodes.map((episode) => (
+                      <EpisodeRow
+                        key={episode.id}
+                        episode={episode}
+                        isCurrent={currentEpisode?.id === episode.id}
+                        isPlaying={currentEpisode?.id === episode.id && isPlaying}
+                        onPress={() => router.push({ pathname: '/episode/[id]', params: { id: episode.id } } satisfies Href)}
+                        onPlayPress={() => playEpisode(episode)}
+                      />
+                    ))}
+                  </View>
+                </ExploreSection>
+              )}
+
+            {/* People Section */}
+            {(activeCategory === SearchCategory.ALL || activeCategory === SearchCategory.PEOPLE) &&
+              searchResults.results.people &&
+              searchResults.results.people.length > 0 && (
+                <ExploreSection
+                  title={`People (${searchResults.counts.people})`}
+                  isLoading={false}
+                  isEmpty={false}
+                >
+                  <View style={styles.userList}>
+                    {searchResults.results.people.map((person) => {
+                      const externalImg = resolveExternalImageUri(person.img);
+                      const label = person.displayName || person.name;
+                      const onPress = () => {
+                        if (person.username) {
+                          router.push({ pathname: '/u/[username]', params: { username: person.username } } satisfies Href);
+                        } else if (person.linkedArtistId) {
+                          router.push({ pathname: '/p/[id]', params: { id: person.linkedArtistId } } satisfies Href);
+                        } else {
+                          router.push({ pathname: '/p/[id]', params: { id: person.personId } } satisfies Href);
+                        }
+                      };
+                      return (
+                        <Pressable
+                          key={person.personId}
+                          onPress={onPress}
+                          style={({ pressed }) => [
+                            styles.userRow,
+                            {
+                              backgroundColor: pressed ? theme.colors.backgroundTertiary : theme.colors.backgroundSecondary,
+                              borderColor: theme.colors.border,
+                            },
+                          ]}
+                        >
+                          {person.oxyAvatar ? (
+                            <Avatar source={person.oxyAvatar} variant="thumb" size={48} label={label} />
+                          ) : externalImg ? (
+                            <Image source={{ uri: externalImg }} style={styles.personAvatar} contentFit="cover" />
+                          ) : (
+                            <View style={[styles.personAvatarPlaceholder, { backgroundColor: theme.colors.backgroundTertiary }]}>
+                              <Ionicons name="person" size={22} color={theme.colors.textSecondary} />
+                            </View>
+                          )}
+                          <View style={styles.userInfo}>
+                            <Text style={[styles.userName, { color: theme.colors.text }]} numberOfLines={1}>
+                              {label}
+                            </Text>
+                            {typeof person.appearsInCount === 'number' && person.appearsInCount > 0 && (
+                              <Text style={[styles.userHandle, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+                                {person.appearsInCount} {person.appearsInCount === 1 ? 'appearance' : 'appearances'}
+                              </Text>
+                            )}
+                          </View>
+                          <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </ExploreSection>
               )}
 
             {(activeCategory === SearchCategory.ALL || activeCategory === SearchCategory.USERS) &&
@@ -753,6 +842,18 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     minHeight: 74,
+  },
+  personAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  personAvatarPlaceholder: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   userInfo: {
     flex: 1,

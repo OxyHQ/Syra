@@ -17,7 +17,7 @@ describe('searchRefetchInterval', () => {
     const data: SearchResultWithPending = {
       query: 'jazz',
       results: { tracks: [], albums: [], artists: [], playlists: [], users: [] },
-      counts: { tracks: 0, albums: 0, artists: 0, playlists: 0, podcasts: 0, users: 0, total: 0 },
+      counts: { tracks: 0, albums: 0, artists: 0, playlists: 0, podcasts: 0, episodes: 0, people: 0, users: 0, total: 0 },
       hasMore: false,
       offset: 0,
       limit: 20,
@@ -30,7 +30,7 @@ describe('searchRefetchInterval', () => {
     const data: SearchResultWithPending = {
       query: 'jazz',
       results: { tracks: [], albums: [], artists: [], playlists: [], users: [] },
-      counts: { tracks: 0, albums: 0, artists: 0, playlists: 0, podcasts: 0, users: 0, total: 0 },
+      counts: { tracks: 0, albums: 0, artists: 0, playlists: 0, podcasts: 0, episodes: 0, people: 0, users: 0, total: 0 },
       hasMore: false,
       offset: 0,
       limit: 20,
@@ -43,7 +43,7 @@ describe('searchRefetchInterval', () => {
     const data: SearchResultWithPending = {
       query: 'jazz',
       results: { tracks: [], albums: [], artists: [], playlists: [], users: [] },
-      counts: { tracks: 0, albums: 0, artists: 0, playlists: 0, podcasts: 0, users: 0, total: 0 },
+      counts: { tracks: 0, albums: 0, artists: 0, playlists: 0, podcasts: 0, episodes: 0, people: 0, users: 0, total: 0 },
       hasMore: false,
       offset: 0,
       limit: 20,
@@ -61,7 +61,7 @@ describe('searchRefetchInterval', () => {
         playlists: [],
         users: [],
       },
-      counts: { tracks: 1, albums: 0, artists: 0, playlists: 0, podcasts: 0, users: 0, total: 1 },
+      counts: { tracks: 1, albums: 0, artists: 0, playlists: 0, podcasts: 0, episodes: 0, people: 0, users: 0, total: 1 },
       hasMore: false,
       offset: 0,
       limit: 20,

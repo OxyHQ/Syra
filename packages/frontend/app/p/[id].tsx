@@ -10,18 +10,21 @@ import Animated, {
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@oxyhq/bloom/theme';
-import { musicService } from '@/services/musicService';
-import { Track } from '@syra/shared-types';
 import { Ionicons } from '@expo/vector-icons';
+import { toast } from 'sonner';
+import { useOxy } from '@oxyhq/services';
+import { Track } from '@syra/shared-types';
+import { entityService } from '@/services/entityService';
 import { usePlayerStore } from '@/stores/playerStore';
 import SEO from '@/components/SEO';
 import { TrackRow } from '@/components/TrackRow';
+import { EpisodeRow } from '@/components/EpisodeRow';
 import { MediaCard } from '@/components/MediaCard';
 import { ResponsiveGrid } from '@/components/ResponsiveGrid';
 import { ArtistDetailSkeleton } from '@/components/skeletons';
-import { toast } from 'sonner';
-import { pickCatalogImageUrl } from '@/utils/pickImage';
-import { useOxy } from '@oxyhq/services';
+import { pickCatalogImageUrl, type CatalogImageTarget } from '@/utils/pickImage';
+import { resolvePodcastImageUri } from '@/utils/podcastImages';
+import { oxyServices } from '@/lib/oxyServices';
 import { useLibrary, useToggleFollowArtist } from '@/hooks/useLibrary';
 import { useRelatedArtists } from '@/hooks/useRecommendations';
 import { webViewStyle } from '@/utils/webStyles';
@@ -29,121 +32,143 @@ import { webViewStyle } from '@/utils/webStyles';
 const HEADER_HEIGHT = 400;
 
 /**
- * Artist Screen
- * Displays artist details with parallax header, gradient overlay, albums grid, and tracks list
+ * Unified entity profile screen (`/p/[id]`) — a merged music **artist** +
+ * podcast **person** page driven by `GET /api/p/:id` (`EntityProfile`). Ports
+ * the artist screen (parallax hero, play-all, popular tracks, albums, related
+ * artists, follow) for the `music` half, and adds an "Appears in" section for
+ * the `appearsIn` (podcasts/episodes) half. A linked entity shows both.
  */
-const ArtistScreen: React.FC = () => {
+const EntityProfileScreen: React.FC = () => {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const theme = useTheme();
-  const { playTrackList, currentTrack, isPlaying } = usePlayerStore();
+  const { playTrackList, playEpisode, currentTrack, currentEpisode, isPlaying } = usePlayerStore();
   const { isAuthenticated, canUsePrivateApi, isPrivateApiPending } = useOxy();
   const catalogIdentity = canUsePrivateApi ? 'auth' : 'guest';
-
-  const { isArtistFollowed } = useLibrary();
-  const toggleFollow = useToggleFollowArtist();
-  const isFollowed = id ? isArtistFollowed(id) : false;
 
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const scrollOffset = useScrollViewOffset(scrollRef);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['artist', id, catalogIdentity],
-    queryFn: async () => {
-      const [artistData, albumsData, tracksData] = await Promise.all([
-        musicService.getArtistById(id),
-        musicService.getArtistAlbums(id),
-        musicService.getArtistTracks(id, { limit: 20 }),
-      ]);
-      return {
-        artist: artistData,
-        albums: albumsData.albums,
-        tracks: tracksData.tracks,
-      };
-    },
+    queryKey: ['entity', id, catalogIdentity],
+    queryFn: () => entityService.getEntityProfile(id),
     enabled: !!id && !isPrivateApiPending,
   });
 
-  const artist = data?.artist ?? null;
-  const albums = data?.albums ?? [];
-  const tracks = data?.tracks ?? [];
+  const entity = data ?? null;
+  const tracks = entity?.music?.tracks ?? [];
+  const albums = entity?.music?.albums ?? [];
+  const podcasts = entity?.appearsIn?.podcasts ?? [];
+  const episodes = entity?.appearsIn?.episodes ?? [];
   const canPlay = tracks.length > 0;
   const isCatalogLoading = isPrivateApiPending || isLoading;
 
-  const relatedArtistsQuery = useRelatedArtists(id);
+  // The follow + related-artist features key off the music artist id: the entity
+  // id when this is an artist, else its linked artist.
+  const artistId = entity
+    ? (entity.kind === 'artist' ? entity.id : entity.linkedArtistId)
+    : undefined;
+
+  const { isArtistFollowed } = useLibrary();
+  const toggleFollow = useToggleFollowArtist();
+  const isFollowed = artistId ? isArtistFollowed(artistId) : false;
+
+  const relatedArtistsQuery = useRelatedArtists(artistId);
   const relatedArtists = relatedArtistsQuery.data?.artists ?? [];
 
   // Parallax animation for header image
-  const headerAnimatedStyle = useAnimatedStyle(() => {
-    return {
-      transform: [
-        {
-          translateY: interpolate(
-            scrollOffset.value,
-            [-HEADER_HEIGHT, 0, HEADER_HEIGHT],
-            [-HEADER_HEIGHT / 2, 0, HEADER_HEIGHT * 0.75]
-          ),
-        },
-        {
-          scale: interpolate(scrollOffset.value, [-HEADER_HEIGHT, 0, HEADER_HEIGHT], [2, 1, 1]),
-        },
-      ],
-    };
-  });
+  const headerAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        translateY: interpolate(
+          scrollOffset.value,
+          [-HEADER_HEIGHT, 0, HEADER_HEIGHT],
+          [-HEADER_HEIGHT / 2, 0, HEADER_HEIGHT * 0.75],
+        ),
+      },
+      {
+        scale: interpolate(scrollOffset.value, [-HEADER_HEIGHT, 0, HEADER_HEIGHT], [2, 1, 1]),
+      },
+    ],
+  }));
 
-  // Animated style for title in header - fades out as you scroll
-  const headerTitleAnimatedStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(
+  const headerTitleAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(
       scrollOffset.value,
       [0, HEADER_HEIGHT - 100, HEADER_HEIGHT - 50],
       [1, 0.3, 0],
-      'clamp'
-    );
-    return {
-      opacity,
-    };
-  });
+      'clamp',
+    ),
+  }));
 
-  // Animated style for sticky header - fades in as you scroll
   const stickyHeaderAnimatedStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(
-      scrollOffset.value,
-      [HEADER_HEIGHT - 100, HEADER_HEIGHT - 50],
-      [0, 1],
-      'clamp'
-    );
-    const translateY = interpolate(
-      scrollOffset.value,
-      [HEADER_HEIGHT - 100, HEADER_HEIGHT - 50],
-      [-20, 0],
-      'clamp'
-    );
-    return {
-      opacity,
-      transform: [{ translateY }],
-    };
+    const opacity = interpolate(scrollOffset.value, [HEADER_HEIGHT - 100, HEADER_HEIGHT - 50], [0, 1], 'clamp');
+    const translateY = interpolate(scrollOffset.value, [HEADER_HEIGHT - 100, HEADER_HEIGHT - 50], [-20, 0], 'clamp');
+    return { opacity, transform: [{ translateY }] };
   });
 
-  const getGradientColors = (): readonly [string, string, string] => {
-    return [
-      artist?.primaryColor ?? theme.colors.primary,
-      artist?.secondaryColor ?? theme.colors.backgroundSecondary,
-      theme.colors.background,
-    ];
+  /**
+   * Resolve the entity image at a catalog target size: an artist cover (`image`,
+   * a catalog id) via the catalog picker, else an Oxy avatar (`avatar`, a file
+   * id) via the Oxy media resolver.
+   */
+  const entityImage = (target: CatalogImageTarget): string | undefined => {
+    if (!entity) return undefined;
+    // Prefer the artist cover (catalog id + size variants); fall back to the
+    // Oxy avatar (a file id) resolved through the Oxy media resolver.
+    if (entity.image || entity.imageSizes) {
+      const fromCatalog = pickCatalogImageUrl(undefined, entity.image, target, entity.imageSizes);
+      if (fromCatalog) return fromCatalog;
+    }
+    if (entity.avatar) {
+      const variant = target === 'hero' || target === 'detailArtwork' ? 'full' : 'thumb';
+      return oxyServices.getFileDownloadUrl(entity.avatar, variant);
+    }
+    return undefined;
   };
+
+  const displayName = entity ? (entity.displayName || entity.name) : '';
+
+  // Two-color cover gradient (artist primary + secondary), like the artist page.
+  const gradientColors: readonly [string, string, string] = [
+    entity?.primaryColor ?? theme.colors.primary,
+    entity?.secondaryColor ?? theme.colors.backgroundSecondary,
+    theme.colors.background,
+  ];
+
+  // Real artist metadata: genres + follower/monthly-listener + album/track counts
+  // (mirrors the artist screen), preferring `stats` and falling back to the
+  // loaded music arrays.
+  const metadata = ((): string => {
+    const parts: string[] = [];
+    const stats = entity?.stats;
+    if (entity?.genres && entity.genres.length > 0) {
+      parts.push(entity.genres.join(', '));
+    }
+    if (stats?.monthlyListeners && stats.monthlyListeners > 0) {
+      parts.push(`${stats.monthlyListeners.toLocaleString()} monthly listeners`);
+    } else if (stats && stats.followers > 0) {
+      parts.push(`${stats.followers.toLocaleString()} ${stats.followers === 1 ? 'follower' : 'followers'}`);
+    }
+    const albumCount = stats?.albums ?? albums.length;
+    const trackCount = stats?.tracks ?? tracks.length;
+    if (albumCount > 0) parts.push(`${albumCount} ${albumCount === 1 ? 'album' : 'albums'}`);
+    if (trackCount > 0) parts.push(`${trackCount} ${trackCount === 1 ? 'track' : 'tracks'}`);
+    if (podcasts.length > 0) parts.push(`${podcasts.length} ${podcasts.length === 1 ? 'show' : 'shows'}`);
+    return parts.join('  •  ');
+  })();
 
   const handlePlayAll = () => {
     if (!canPlay) {
       toast.info('No playable tracks available');
       return;
     }
-
-    playTrackList(tracks, 0, { type: 'artist', id: artist?.id, name: artist?.name });
+    playTrackList(tracks, 0, { type: 'artist', id: artistId, name: displayName });
   };
 
   const handleTrackPress = (track: Track) => {
     const index = Math.max(0, tracks.findIndex((item) => item.id === track.id));
-    playTrackList(tracks, index, { type: 'artist', id: artist?.id, name: artist?.name });
+    playTrackList(tracks, index, { type: 'artist', id: artistId, name: displayName });
   };
 
   const handleFollow = () => {
@@ -151,17 +176,15 @@ const ArtistScreen: React.FC = () => {
       toast.error('You must be logged in to follow artists');
       return;
     }
-
-    if (!artist) {
+    if (!artistId) {
       return;
     }
-
     const next = !isFollowed;
     toggleFollow.mutate(
-      { id: artist.id, next },
+      { id: artistId, next },
       {
         onSuccess: () => {
-          toast.success(next ? `Following ${artist.name}` : `Unfollowed ${artist.name}`);
+          toast.success(next ? `Following ${displayName}` : `Unfollowed ${displayName}`);
         },
         onError: (error) => {
           toast.error(error instanceof Error ? error.message : 'Failed to update follow status');
@@ -184,84 +207,74 @@ const ArtistScreen: React.FC = () => {
     );
   }
 
-  if (!artist) {
+  if (!entity) {
     return (
       <View style={[styles.errorContainer, { backgroundColor: theme.colors.background }]}>
-        <Text style={[styles.errorText, { color: theme.colors.text }]}>Artist not found</Text>
+        <Text style={[styles.errorText, { color: theme.colors.text }]}>Profile not found</Text>
       </View>
     );
   }
 
+  const heroImage = entityImage('hero');
+  const smallImage = entityImage('smallArtwork');
+  const iconImage = entityImage('icon');
+
   return (
     <>
-      <SEO
-        title={`${artist.name} - Syra`}
-        description={artist.bio || `Listen to ${artist.name}`}
-      />
+      <SEO title={`${displayName} - Syra`} description={entity.bio || `Listen to ${displayName}`} />
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
         {/* Sticky Header */}
         <Animated.View
           style={[
             styles.stickyHeader,
-            {
-              backgroundColor: theme.colors.background,
-              borderBottomColor: theme.colors.backgroundSecondary,
-            },
-            stickyHeaderAnimatedStyle
+            { backgroundColor: theme.colors.background, borderBottomColor: theme.colors.backgroundSecondary },
+            stickyHeaderAnimatedStyle,
           ]}
           pointerEvents="box-none"
         >
           <View style={styles.stickyHeaderContent}>
-            {/* Center - Title and image */}
             <View style={styles.stickyHeaderCenter}>
               <View style={[styles.stickyHeaderImageContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
-                {(artist.image || artist.images?.length) ? (
-                  <Image
-                    source={{ uri: pickCatalogImageUrl(artist.images, artist.image, 'icon', artist.imageSizes) }}
-                    style={styles.stickyHeaderImage}
-                    resizeMode="cover"
-                  />
+                {iconImage ? (
+                  <Image source={{ uri: iconImage }} style={styles.stickyHeaderImage} resizeMode="cover" />
                 ) : (
                   <Ionicons name="person" size={20} color={theme.colors.textSecondary} />
                 )}
               </View>
               <Text style={[styles.stickyHeaderTitle, { color: theme.colors.text }]} numberOfLines={1}>
-                {artist.name}
+                {displayName}
               </Text>
+              {entity.verified ? (
+                <Ionicons name="checkmark-circle" size={16} color={theme.colors.primary} />
+              ) : null}
             </View>
 
-            {/* Right side - Controls */}
             <View style={styles.stickyHeaderControls}>
-              <Pressable
-                style={[
-                  styles.stickyHeaderPlayButton,
-                  { backgroundColor: theme.colors.primary },
-                  !canPlay && styles.disabledControl,
-                ]}
-                onPress={handlePlayAll}
-                disabled={!canPlay}
-                accessibilityRole="button"
-                accessibilityState={{ disabled: !canPlay }}
-              >
-                <Ionicons name="play" size={16} color={theme.colors.primaryForeground} />
-              </Pressable>
-              <Pressable
-                style={styles.stickyHeaderControlButton}
-                onPress={handleFollow}
-                disabled={toggleFollow.isPending}
-                accessibilityRole="button"
-                accessibilityState={{ selected: isFollowed }}
-                accessibilityLabel={isFollowed ? 'Unfollow artist' : 'Follow artist'}
-              >
-                <Ionicons
-                  name={isFollowed ? "heart" : "heart-outline"}
-                  size={20}
-                  color={isFollowed ? theme.colors.primary : theme.colors.text}
-                />
-              </Pressable>
-              <Pressable style={styles.stickyHeaderControlButton}>
-                <Ionicons name="ellipsis-horizontal" size={20} color={theme.colors.text} />
-              </Pressable>
+              {canPlay && (
+                <Pressable
+                  style={[styles.stickyHeaderPlayButton, { backgroundColor: theme.colors.primary }]}
+                  onPress={handlePlayAll}
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="play" size={16} color={theme.colors.primaryForeground} />
+                </Pressable>
+              )}
+              {artistId && (
+                <Pressable
+                  style={styles.stickyHeaderControlButton}
+                  onPress={handleFollow}
+                  disabled={toggleFollow.isPending}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isFollowed }}
+                  accessibilityLabel={isFollowed ? 'Unfollow artist' : 'Follow artist'}
+                >
+                  <Ionicons
+                    name={isFollowed ? 'heart' : 'heart-outline'}
+                    size={20}
+                    color={isFollowed ? theme.colors.primary : theme.colors.text}
+                  />
+                </Pressable>
+              )}
             </View>
           </View>
         </Animated.View>
@@ -276,164 +289,106 @@ const ArtistScreen: React.FC = () => {
         >
           {/* Parallax Header Section */}
           <Animated.View style={[styles.headerContainer, headerAnimatedStyle]}>
-            {(artist.image || artist.images?.length) ? (
-              <Image
-                source={{ uri: pickCatalogImageUrl(artist.images, artist.image, 'hero', artist.imageSizes) }}
-                style={styles.headerImage}
-                resizeMode="cover"
-              />
+            {heroImage ? (
+              <Image source={{ uri: heroImage }} style={styles.headerImage} resizeMode="cover" />
             ) : (
               <View style={[styles.headerPlaceholder, { backgroundColor: theme.colors.backgroundSecondary }]}>
                 <Ionicons name="person" size={80} color={theme.colors.textSecondary} />
               </View>
             )}
-            {/* Gradient overlay for text readability */}
             <LinearGradient
               colors={['transparent', 'rgba(0, 0, 0, 0.3)', 'rgba(0, 0, 0, 0.7)'] as readonly [string, string, string]}
               locations={[0, 0.6, 1] as readonly [number, number, number]}
               style={styles.headerOverlay}
             />
-            {/* Artist Title */}
             <Animated.View style={[styles.titleContainer, headerTitleAnimatedStyle]}>
               <Text style={[styles.artistTitle, { color: '#FFFFFF' }]} numberOfLines={2}>
-                {artist.name}
+                {displayName}
               </Text>
             </Animated.View>
           </Animated.View>
 
           {/* Content Section with Gradient Background */}
-          <LinearGradient
-            colors={getGradientColors()}
-            locations={[0, 0.35, 1]}
-            style={styles.contentSection}
-          >
-            {/* Artist Info */}
+          <LinearGradient colors={gradientColors} locations={[0, 0.35, 1]} style={styles.contentSection}>
+            {/* Entity Info */}
             <View style={styles.infoContainer}>
               <View style={styles.infoHeader}>
-                {(artist.image || artist.images?.length) && (
-                  <Image
-                    source={{ uri: pickCatalogImageUrl(artist.images, artist.image, 'smallArtwork', artist.imageSizes) }}
-                    style={styles.infoImage}
-                    resizeMode="cover"
-                  />
+                {smallImage && (
+                  <Image source={{ uri: smallImage }} style={styles.infoImage} resizeMode="cover" />
                 )}
                 <View style={styles.infoTextContainer}>
-                  {artist.bio && (
+                  {entity.verified ? (
+                    <View style={styles.verifiedRow}>
+                      <Ionicons name="checkmark-circle" size={18} color={theme.colors.primary} />
+                      <Text style={[styles.verifiedText, { color: theme.colors.text }]}>Verified Artist</Text>
+                    </View>
+                  ) : null}
+                  {entity.bio ? (
                     <Text style={[styles.bio, { color: theme.colors.textSecondary }]} numberOfLines={3}>
-                      {artist.bio}
+                      {entity.bio}
                     </Text>
-                  )}
-                  <View style={styles.metadataRow}>
-                    {artist.genres && artist.genres.length > 0 && (
-                      <>
-                        <Text style={[styles.metadata, { color: theme.colors.textSecondary }]}>
-                          {artist.genres.join(', ')}
-                        </Text>
-                        {(artist.stats.followers > 0 || artist.stats.albums > 0 || artist.stats.tracks > 0) && (
-                          <Text style={[styles.metadataSeparator, { color: theme.colors.textSecondary }]}>•</Text>
-                        )}
-                      </>
-                    )}
-                    {artist.stats.followers > 0 && (
-                      <>
-                        <Text style={[styles.metadata, { color: theme.colors.textSecondary }]}>
-                          {artist.stats.followers.toLocaleString()} {artist.stats.followers === 1 ? 'follower' : 'followers'}
-                        </Text>
-                        {(artist.stats.albums > 0 || artist.stats.tracks > 0) && (
-                          <Text style={[styles.metadataSeparator, { color: theme.colors.textSecondary }]}>•</Text>
-                        )}
-                      </>
-                    )}
-                    {artist.stats.albums > 0 && (
-                      <>
-                        <Text style={[styles.metadata, { color: theme.colors.textSecondary }]}>
-                          {artist.stats.albums} {artist.stats.albums === 1 ? 'album' : 'albums'}
-                        </Text>
-                        {artist.stats.tracks > 0 && (
-                          <Text style={[styles.metadataSeparator, { color: theme.colors.textSecondary }]}>•</Text>
-                        )}
-                      </>
-                    )}
-                    {artist.stats.tracks > 0 && (
-                      <Text style={[styles.metadata, { color: theme.colors.textSecondary }]}>
-                        {artist.stats.tracks} {artist.stats.tracks === 1 ? 'track' : 'tracks'}
-                      </Text>
-                    )}
-                  </View>
+                  ) : null}
+                  {metadata ? (
+                    <View style={styles.metadataRow}>
+                      <Text style={[styles.metadata, { color: theme.colors.textSecondary }]}>{metadata}</Text>
+                    </View>
+                  ) : null}
                 </View>
               </View>
             </View>
 
-            {/* Playback Controls */}
-            <View style={styles.controlsContainer}>
-              <Pressable
-                style={[
-                  styles.playButton,
-                  { backgroundColor: theme.colors.primary },
-                  !canPlay && styles.disabledControl,
-                ]}
-                onPress={handlePlayAll}
-                disabled={!canPlay}
-                accessibilityRole="button"
-                accessibilityState={{ disabled: !canPlay }}
-              >
-                <View style={styles.playButtonInner}>
-                  <Ionicons name="play" size={24} color={theme.colors.primaryForeground} />
-                </View>
-              </Pressable>
-
-              <Pressable
-                style={styles.controlButton}
-                onPress={() => {
-                  // Shuffle functionality
-                }}
-              >
-                <Ionicons name="shuffle" size={22} color={theme.colors.text} />
-              </Pressable>
-
-              <Pressable
-                style={styles.controlButton}
-                onPress={handleFollow}
-                disabled={toggleFollow.isPending}
-                accessibilityRole="button"
-                accessibilityState={{ selected: isFollowed }}
-                accessibilityLabel={isFollowed ? 'Unfollow artist' : 'Follow artist'}
-              >
-                <Ionicons
-                  name={isFollowed ? "heart" : "heart-outline"}
-                  size={24}
-                  color={isFollowed ? theme.colors.primary : theme.colors.text}
-                />
-              </Pressable>
-
-              <Pressable style={styles.controlButton}>
-                <Ionicons name="ellipsis-horizontal" size={24} color={theme.colors.text} />
-              </Pressable>
-            </View>
+            {/* Playback Controls (music) */}
+            {(canPlay || artistId) && (
+              <View style={styles.controlsContainer}>
+                {canPlay && (
+                  <Pressable
+                    style={[styles.playButton, { backgroundColor: theme.colors.primary }]}
+                    onPress={handlePlayAll}
+                    accessibilityRole="button"
+                  >
+                    <View style={styles.playButtonInner}>
+                      <Ionicons name="play" size={24} color={theme.colors.primaryForeground} />
+                    </View>
+                  </Pressable>
+                )}
+                {artistId && (
+                  <Pressable
+                    style={styles.controlButton}
+                    onPress={handleFollow}
+                    disabled={toggleFollow.isPending}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isFollowed }}
+                    accessibilityLabel={isFollowed ? 'Unfollow artist' : 'Follow artist'}
+                  >
+                    <Ionicons
+                      name={isFollowed ? 'heart' : 'heart-outline'}
+                      size={24}
+                      color={isFollowed ? theme.colors.primary : theme.colors.text}
+                    />
+                  </Pressable>
+                )}
+              </View>
+            )}
 
             {/* Popular Tracks Section */}
             {tracks.length > 0 && (
               <>
                 <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                    Popular
-                  </Text>
+                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Popular</Text>
                 </View>
                 <View style={styles.trackList}>
                   {tracks.slice(0, 10).map((track, index) => {
                     const isCurrentTrack = currentTrack?.id === track.id;
-                    const isTrackPlaying = isCurrentTrack && isPlaying;
-
                     return (
                       <TrackRow
                         key={track.id}
                         track={track}
                         index={index}
                         isCurrentTrack={isCurrentTrack}
-                        isTrackPlaying={isTrackPlaying}
+                        isTrackPlaying={isCurrentTrack && isPlaying}
                         onPress={() => handleTrackPress(track)}
                         onPlayPress={() => handleTrackPress(track)}
-                        showNumber={true}
+                        showNumber
                       />
                     );
                   })}
@@ -445,15 +400,9 @@ const ArtistScreen: React.FC = () => {
             {albums.length > 0 && (
               <>
                 <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                    Albums
-                  </Text>
+                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Albums</Text>
                 </View>
-                <ResponsiveGrid
-                  minItemWidth={180}
-                  gap={8}
-                  style={styles.albumsGrid}
-                >
+                <ResponsiveGrid minItemWidth={180} gap={8} style={styles.albumsGrid}>
                   {albums.map((album) => (
                     <View key={album.id}>
                       <MediaCard
@@ -471,6 +420,50 @@ const ArtistScreen: React.FC = () => {
               </>
             )}
 
+            {/* Appears in — podcasts the entity hosts/guests in */}
+            {podcasts.length > 0 && (
+              <>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Appears in</Text>
+                </View>
+                <ResponsiveGrid minItemWidth={160} gap={8} style={styles.albumsGrid}>
+                  {podcasts.map((podcast) => (
+                    <View key={podcast.id}>
+                      <MediaCard
+                        title={podcast.title}
+                        subtitle={podcast.author ?? 'Podcast'}
+                        type="podcast"
+                        resolvedImageUri={resolvePodcastImageUri(podcast, 'card')}
+                        primaryColor={podcast.primaryColor}
+                        onPress={() => router.push({ pathname: '/podcasts/[id]', params: { id: podcast.id } })}
+                      />
+                    </View>
+                  ))}
+                </ResponsiveGrid>
+              </>
+            )}
+
+            {/* Appears in — crediting episodes */}
+            {episodes.length > 0 && (
+              <>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Episodes</Text>
+                </View>
+                <View style={styles.trackList}>
+                  {episodes.map((episode) => (
+                    <EpisodeRow
+                      key={episode.id}
+                      episode={episode}
+                      isCurrent={currentEpisode?.id === episode.id}
+                      isPlaying={currentEpisode?.id === episode.id && isPlaying}
+                      onPress={() => router.push({ pathname: '/episode/[id]', params: { id: episode.id } })}
+                      onPlayPress={() => playEpisode(episode)}
+                    />
+                  ))}
+                </View>
+              </>
+            )}
+
             {/* Fans also listen to */}
             {relatedArtistsQuery.isPending ? null : relatedArtists.length > 0 && (
               <>
@@ -479,11 +472,7 @@ const ArtistScreen: React.FC = () => {
                     A los fans también les gusta
                   </Text>
                 </View>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.relatedArtistsRow}
-                >
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.relatedArtistsRow}>
                   {relatedArtists.map((relatedArtist) => (
                     <View key={relatedArtist.id} style={styles.relatedArtistCard}>
                       <MediaCard
@@ -494,7 +483,7 @@ const ArtistScreen: React.FC = () => {
                         images={relatedArtist.images}
                         imageSizes={relatedArtist.imageSizes}
                         primaryColor={relatedArtist.primaryColor}
-                        onPress={() => router.push(`/artist/${relatedArtist.id}`)}
+                        onPress={() => router.push({ pathname: '/p/[id]', params: { id: relatedArtist.id } })}
                       />
                     </View>
                   ))}
@@ -503,10 +492,10 @@ const ArtistScreen: React.FC = () => {
             )}
 
             {/* Empty State */}
-            {albums.length === 0 && tracks.length === 0 && (
+            {tracks.length === 0 && albums.length === 0 && podcasts.length === 0 && episodes.length === 0 && (
               <View style={styles.emptyState}>
                 <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>
-                  No playable tracks available
+                  Nothing to show yet
                 </Text>
               </View>
             )}
@@ -533,9 +522,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderBottomWidth: 1,
     ...Platform.select({
-      web: webViewStyle({
-        position: 'sticky',
-      }),
+      web: webViewStyle({ position: 'sticky' }),
     }),
   },
   stickyHeaderContent: {
@@ -550,7 +537,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     minWidth: 0,
-    marginHorizontal: 0,
   },
   stickyHeaderImageContainer: {
     width: 40,
@@ -583,13 +569,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     ...Platform.select({
-      web: {
-        cursor: 'pointer',
-        transition: 'transform 0.2s',
-        ':hover': {
-          transform: 'scale(1.1)',
-        },
-      },
+      web: { cursor: 'pointer' },
     }),
   },
   stickyHeaderControlButton: {
@@ -598,9 +578,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     ...Platform.select({
-      web: {
-        cursor: 'pointer',
-      },
+      web: { cursor: 'pointer' },
     }),
   },
   scrollView: {
@@ -624,8 +602,6 @@ const styles = StyleSheet.create({
     width: '100%',
     overflow: 'hidden',
     position: 'relative',
-    marginTop: 0,
-    marginBottom: 0,
   },
   headerImage: {
     width: '100%',
@@ -680,6 +656,16 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
+  verifiedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  verifiedText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
   bio: {
     fontSize: 14,
     marginBottom: 12,
@@ -692,10 +678,6 @@ const styles = StyleSheet.create({
   },
   metadata: {
     fontSize: 14,
-  },
-  metadataSeparator: {
-    fontSize: 14,
-    marginHorizontal: 8,
   },
   controlsContainer: {
     flexDirection: 'row',
@@ -718,13 +700,7 @@ const styles = StyleSheet.create({
     elevation: 5,
     overflow: 'hidden',
     ...Platform.select({
-      web: {
-        cursor: 'pointer',
-        transition: 'transform 0.2s',
-        ':hover': {
-          transform: 'scale(1.05)',
-        },
-      },
+      web: { cursor: 'pointer' },
     }),
   },
   playButtonInner: {
@@ -734,9 +710,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 28,
   },
-  disabledControl: {
-    opacity: 0.45,
-  },
   controlButton: {
     width: 40,
     height: 40,
@@ -744,10 +717,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 20,
     ...Platform.select({
-      web: {
-        cursor: 'pointer',
-        transition: 'transform 0.2s, background-color 0.2s',
-      },
+      web: { cursor: 'pointer' },
     }),
   },
   sectionHeader: {
@@ -786,4 +756,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ArtistScreen;
+export default EntityProfileScreen;

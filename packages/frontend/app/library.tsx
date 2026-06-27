@@ -283,7 +283,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                 <Pressable
                   key={artist.id}
                   style={[styles.libraryItem, { backgroundColor: theme.colors.backgroundTertiary }]}
-                  onPress={() => router.push(`/artist/${artist.id}`)}
+                  onPress={() => router.push(`/p/${artist.id}`)}
                 >
                   {(artist.image || artist.images?.length) ? (
                     <Image

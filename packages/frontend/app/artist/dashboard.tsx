@@ -358,7 +358,7 @@ const ArtistDashboardScreen: React.FC = () => {
                 <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
                   Recent Tracks
                 </Text>
-                <Pressable onPress={() => router.push(`/artist/${dashboard.artist.id}`)}>
+                <Pressable onPress={() => router.push(`/p/${dashboard.artist.id}`)}>
                   <Text style={[styles.seeAll, { color: theme.colors.primary }]}>
                     See All
                   </Text>
@@ -395,7 +395,7 @@ const ArtistDashboardScreen: React.FC = () => {
                 <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
                   Recent Albums
                 </Text>
-                <Pressable onPress={() => router.push(`/artist/${dashboard.artist.id}`)}>
+                <Pressable onPress={() => router.push(`/p/${dashboard.artist.id}`)}>
                   <Text style={[styles.seeAll, { color: theme.colors.primary }]}>
                     See All
                   </Text>

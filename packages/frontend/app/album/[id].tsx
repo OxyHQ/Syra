@@ -163,7 +163,7 @@ const AlbumScreen: React.FC = () => {
               {/* Artist Info */}
               <Pressable
                 style={styles.artistRow}
-                onPress={() => router.push(`/artist/${album.artistId}`)}
+                onPress={() => router.push(`/p/${album.artistId}`)}
               >
                 <Avatar
                   source={albumThumbImage}
