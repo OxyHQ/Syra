@@ -7,7 +7,7 @@ import { Image } from 'expo-image';
 import SEO from '@/components/SEO';
 import { ArtistDetailSkeleton } from '@/components/skeletons';
 import { HostsAndGuests } from '@/components/podcast/HostsAndGuests';
-import { useEpisode, useEpisodeChapters } from '@/hooks/usePodcasts';
+import { useEpisode, useEpisodeChapters, useEpisodeProgress } from '@/hooks/usePodcasts';
 import { usePlayerStore } from '@/stores/playerStore';
 import { resolvePodcastImageUri } from '@/utils/podcastImages';
 import { stripHtml, formatPubDate, formatEpisodeDuration } from '@/utils/podcastFormat';
@@ -26,6 +26,8 @@ const EpisodeScreen: React.FC = () => {
   const episodeQuery = useEpisode(id);
   const detail = episodeQuery.data;
   const episode = detail?.episode;
+  // Per-user saved position (authed-only; undefined for guests / unplayed episodes).
+  const progress = useEpisodeProgress(id);
 
   const chaptersQuery = useEpisodeChapters(episode?.chapters?.url);
 
@@ -52,7 +54,7 @@ const EpisodeScreen: React.FC = () => {
       }
       return;
     }
-    playEpisode(episode, { resumeFromSec: detail?.progressSec });
+    playEpisode(episode, { resumeFromSec: progress?.progressSec });
   };
 
   const handleChapterPress = (startTime: number) => {
@@ -82,7 +84,7 @@ const EpisodeScreen: React.FC = () => {
   const metaParts = [formatPubDate(episode.pubDate), formatEpisodeDuration(episode.duration)].filter(Boolean);
   const playLabel = isCurrent && isPlaying
     ? 'Pause'
-    : (detail?.progressSec ?? 0) > 5 && !detail?.completed
+    : (progress?.progressSec ?? 0) > 5 && !progress?.completed
       ? 'Resume'
       : 'Play';
 

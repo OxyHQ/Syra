@@ -72,16 +72,17 @@ function parseEpisodeResponse<T>(schema: z.ZodType<T>, data: unknown, label: str
 
 export const episodeService = {
   /**
-   * Episode detail + resolved persons + the caller's saved progress.
+   * Episode detail + resolved persons.
    *
-   * The endpoint is public (optional auth): guests MUST read it through the
-   * unauthenticated `publicApi` client (the linked `api` client has no session
-   * and would fail). Authenticated callers use the linked `api` client so the
-   * response also carries their saved `progressSec`/`completed`.
+   * The episode content is public and identity-independent, so it is ALWAYS
+   * read through the plain `publicApi` client. The linked `api` client can stall
+   * while it waits on an Oxy session/refresh — which would block the episode
+   * from ever loading for the caller. Per-user saved position is fetched
+   * separately via `useEpisodeProgress` (the continue-listening cache), so it
+   * is intentionally not requested here.
    */
-  async getEpisode(id: string, authenticated = false): Promise<EpisodeDetail> {
-    const client = authenticated ? api : publicApi;
-    const response = await client.get<unknown>(`/episodes/${id}`);
+  async getEpisode(id: string): Promise<EpisodeDetail> {
+    const response = await publicApi.get<unknown>(`/episodes/${id}`);
     return parseEpisodeResponse(episodeDetailResponseSchema, response.data, 'episode').data;
   },
 

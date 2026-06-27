@@ -81,12 +81,13 @@ export function useEpisodes(podcastId: string | undefined, limit = 50) {
 // ── Episode detail (identity-scoped) ─────────────────────────────────────────
 
 export function useEpisode(id: string | undefined) {
-  const { canUsePrivateApi, isPrivateApiPending } = useOxy();
-  const identity = canUsePrivateApi ? 'auth' : 'guest';
+  // Episode content is public + identity-independent (read via publicApi), so it
+  // does NOT wait on the Oxy cold boot — it loads as soon as we have an id, even
+  // for guests or while a session is still settling.
   return useQuery<EpisodeDetail>({
-    queryKey: PODCAST_QUERY_KEYS.episode(id ?? '', identity),
-    queryFn: () => episodeService.getEpisode(id as string, canUsePrivateApi),
-    enabled: Boolean(id) && !isPrivateApiPending,
+    queryKey: PODCAST_QUERY_KEYS.episode(id ?? '', 'public'),
+    queryFn: () => episodeService.getEpisode(id as string),
+    enabled: Boolean(id),
     staleTime: 1000 * 60,
   });
 }
