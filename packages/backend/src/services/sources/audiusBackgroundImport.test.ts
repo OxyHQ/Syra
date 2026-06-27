@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import mongoose from 'mongoose';
 import { connect, clear, disconnect, installCatalogImageMirrorMockForTests } from '../../test/mongo';
 import { TrackModel } from '../../models/Track';
-import { ArtistModel } from '../../models/Artist';
+import { ArtistModel } from '../../models/CatalogEntity';
 import { AlbumModel } from '../../models/Album';
 import { PlaylistModel } from '../../models/Playlist';
 import { runAudiusImport, enqueueAudiusImport } from './audiusBackgroundImport';

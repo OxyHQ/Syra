@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { TrackModel } from '../../models/Track';
-import { ArtistModel } from '../../models/Artist';
+import { ArtistModel } from '../../models/CatalogEntity';
 import { CatalogRelationModel } from '../../models/CatalogRelation';
 import { UserTasteProfileModel } from '../../models/UserTasteProfile';
 import { UserLibraryModel } from '../../models/Library';

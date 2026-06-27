@@ -6,7 +6,7 @@ import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { TrackModel } from '../models/Track';
 import { PodcastModel } from '../models/Podcast';
 import { EpisodeModel } from '../models/Episode';
-import { PersonModel } from '../models/Person';
+import { PersonModel } from '../models/CatalogEntity';
 import { formatTracksWithCoverArt, formatAlbumsWithCoverArt, formatArtistsWithImage, formatPlaylistsWithCoverArt } from '../utils/musicHelpers';
 import { serializePodcast, serializeEpisode, type PodcastDocument, type EpisodeDocument } from '../services/podcasts/podcastSerializers';
 import { enrichPersons, makeOxyUsersFetcher, type PersonLike } from '../services/podcasts/resolvePersons';

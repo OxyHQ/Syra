@@ -1,6 +1,6 @@
 import mongoose, { type FilterQuery, type PipelineStage } from 'mongoose';
 import { AlbumModel, type IAlbum } from '../models/Album';
-import { ArtistModel, type IArtist } from '../models/Artist';
+import { ArtistModel, type IArtist } from '../models/CatalogEntity';
 import { PlaylistModel, type IPlaylist } from '../models/Playlist';
 import { PlaylistTrackModel } from '../models/PlaylistTrack';
 import { TrackModel } from '../models/Track';
@@ -174,8 +174,9 @@ export async function findArtistsWithPlayableTracks(
   playbackOptions: CatalogPlaybackOptions,
   page: CatalogPage,
 ): Promise<unknown[]> {
+  // aggregate() bypasses the discriminator's `type` scoping — match it explicitly.
   return ArtistModel.aggregate<unknown>([
-    ...withPlayableTracksPipeline(visibleCatalogFilter(filter), 'artistId', playbackOptions),
+    ...withPlayableTracksPipeline(visibleCatalogFilter({ ...filter, type: 'artist' }), 'artistId', playbackOptions),
     ...paginatedStages(page),
   ]).exec();
 }
@@ -184,8 +185,9 @@ export async function countArtistsWithPlayableTracks(
   filter: FilterQuery<IArtist>,
   playbackOptions: CatalogPlaybackOptions,
 ): Promise<number> {
+  // aggregate() bypasses the discriminator's `type` scoping — match it explicitly.
   const result = await ArtistModel.aggregate<{ total: number }>([
-    ...withPlayableTracksPipeline(visibleCatalogFilter(filter), 'artistId', playbackOptions),
+    ...withPlayableTracksPipeline(visibleCatalogFilter({ ...filter, type: 'artist' }), 'artistId', playbackOptions),
     { $count: 'total' },
   ]).exec();
 
@@ -196,9 +198,10 @@ export async function findOneArtistWithPlayableTracks(
   id: string,
   playbackOptions: CatalogPlaybackOptions,
 ): Promise<unknown | null> {
+  // aggregate() bypasses the discriminator's `type` scoping — match it explicitly.
   const artists = await ArtistModel.aggregate<unknown>([
     ...withPlayableTracksPipeline(
-      visibleCatalogFilter({ _id: toObjectId(id) }),
+      visibleCatalogFilter({ _id: toObjectId(id), type: 'artist' }),
       'artistId',
       playbackOptions,
     ),

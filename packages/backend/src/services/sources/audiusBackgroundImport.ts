@@ -5,7 +5,7 @@ import { upsertTrack } from '../catalog/upsertTrack';
 import { prepareAlbumCover, upsertAlbum } from '../catalog/upsertAlbum';
 import { preparePlaylistCover, upsertPlaylist } from '../catalog/upsertPlaylist';
 import { syncAlbumsForTracks } from '../catalog/syncTrackAlbums';
-import { ArtistModel } from '../../models/Artist';
+import { ArtistModel } from '../../models/CatalogEntity';
 import { logger } from '../../utils/logger';
 
 // ── Constants ─────────────────────────────────────────────────────────────────

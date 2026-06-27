@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import type { Request, Response, NextFunction } from 'express';
 import { connect, clear, disconnect } from '../test/mongo';
-import { PersonModel } from '../models/Person';
+import { PersonModel } from '../models/CatalogEntity';
 import { search } from './search.controller';
 
 beforeAll(connect);

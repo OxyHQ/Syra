@@ -3,7 +3,7 @@ import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import type { Response } from 'express';
 import { connect, clear, disconnect } from '../test/mongo';
 import { PodcastModel } from '../models/Podcast';
-import { ArtistModel } from '../models/Artist';
+import { ArtistModel } from '../models/CatalogEntity';
 import { claimPodcast } from './podcasts.controller';
 
 beforeAll(connect);

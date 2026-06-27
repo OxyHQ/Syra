@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
 import multer from 'multer';
 import { TrackModel } from '../models/Track';
-import { ArtistModel } from '../models/Artist';
+import { ArtistModel } from '../models/CatalogEntity';
 import { AlbumModel } from '../models/Album';
 import { toApiFormat, toApiFormatArray, formatTracksWithCoverArt, formatTrackWithCoverArt } from '../utils/musicHelpers';
 import { isDatabaseConnected } from '../utils/database';

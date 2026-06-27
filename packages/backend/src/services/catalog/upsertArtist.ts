@@ -1,6 +1,6 @@
 import type { ExternalArtist, CatalogSource, SourceProvenance } from '@syra/shared-types';
-import { ArtistModel } from '../../models/Artist';
-import type { IArtist } from '../../models/Artist';
+import { ArtistModel } from '../../models/CatalogEntity';
+import type { IArtist } from '../../models/CatalogEntity';
 import { assignMissingColors, replaceColors } from './entityColors';
 import { usableImages } from './externalImages';
 import { mirrorCatalogImage } from './catalogImageAssets';

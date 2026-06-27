@@ -6,7 +6,7 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import { connectToDatabase } from '../utils/database';
-import { ArtistModel } from '../models/Artist';
+import { ArtistModel } from '../models/CatalogEntity';
 import { AlbumModel } from '../models/Album';
 import { TrackModel } from '../models/Track';
 import { logger } from '../utils/logger';

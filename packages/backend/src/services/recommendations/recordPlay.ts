@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import { ListeningEventModel, type ListeningSource } from '../../models/ListeningEvent';
 import { TrackModel } from '../../models/Track';
-import { ArtistModel } from '../../models/Artist';
+import { ArtistModel } from '../../models/CatalogEntity';
 import { AlbumModel } from '../../models/Album';
 import { UserTasteProfileModel } from '../../models/UserTasteProfile';
 import { playCountToPopularity } from '../catalog/popularity';

@@ -1,7 +1,7 @@
-import { ArtistModel } from '../models/Artist';
+import { ArtistModel } from '../models/CatalogEntity';
 import { TrackModel } from '../models/Track';
 import { logger } from '../utils/logger';
-import type { IArtist, IStrike } from '../models/Artist';
+import type { IArtist, IStrike } from '../models/CatalogEntity';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 

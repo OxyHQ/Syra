@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import { connect, clear, disconnect } from '../test/mongo';
 import { TrackModel } from '../models/Track';
 import { AlbumModel } from '../models/Album';
-import { ArtistModel } from '../models/Artist';
+import { ArtistModel } from '../models/CatalogEntity';
 import { PlaylistModel } from '../models/Playlist';
 import { PlaylistTrackModel } from '../models/PlaylistTrack';
 import { UserMusicPreferencesModel } from '../models/UserMusicPreferences';

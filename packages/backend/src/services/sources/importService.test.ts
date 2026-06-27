@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import { connect, clear, disconnect } from '../../test/mongo';
 import { ImportJobModel } from '../../models/ImportJob';
 import { TrackModel } from '../../models/Track';
-import { ArtistModel } from '../../models/Artist';
+import { ArtistModel } from '../../models/CatalogEntity';
 import { AlbumModel } from '../../models/Album';
 import { runImport } from './importService';
 import type { MusicSourceConnector } from './MusicSourceConnector';

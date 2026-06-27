@@ -17,8 +17,7 @@ import mongoose from 'mongoose';
 import type { EpisodePerson, ResolvedPerson, SearchPerson } from '@syra/shared-types';
 import { getAccountDisplayName } from '@oxyhq/core';
 import type { OxyServices, User } from '@oxyhq/core';
-import { PersonModel, IPerson } from '../../models/Person';
-import { ArtistModel } from '../../models/Artist';
+import { PersonModel, ArtistModel, type IPerson } from '../../models/CatalogEntity';
 import { logger } from '../../utils/logger';
 
 /** Minimal Oxy identity used to enrich a linked person. */

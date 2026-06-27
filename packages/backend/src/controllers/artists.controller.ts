@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
-import { ArtistModel } from '../models/Artist';
+import { ArtistModel } from '../models/CatalogEntity';
 import { AlbumModel } from '../models/Album';
 import { TrackModel } from '../models/Track';
 import { formatTracksWithCoverArt, formatAlbumWithCoverArt, formatArtistWithImage, formatArtistsWithImage } from '../utils/musicHelpers';

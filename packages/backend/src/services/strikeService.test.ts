@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import mongoose from 'mongoose';
 import { connect, clear, disconnect } from '../test/mongo';
-import { ArtistModel } from '../models/Artist';
+import { ArtistModel } from '../models/CatalogEntity';
 import { TrackModel } from '../models/Track';
 import {
   addStrike,

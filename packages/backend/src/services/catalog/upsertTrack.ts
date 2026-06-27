@@ -1,7 +1,7 @@
 import type { ExternalTrack, CatalogSource, SourceProvenance } from '@syra/shared-types';
 import { TrackModel } from '../../models/Track';
 import type { ITrack } from '../../models/Track';
-import { ArtistModel } from '../../models/Artist';
+import { ArtistModel } from '../../models/CatalogEntity';
 import { upsertArtist } from './upsertArtist';
 import { playCountToPopularity } from './popularity';
 import { assignMissingColors, replaceColors } from './entityColors';

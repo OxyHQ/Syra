@@ -2,8 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import type { EntityProfile, EntityMusic, EntityAppearsIn } from '@syra/shared-types';
-import { ArtistModel } from '../models/Artist';
-import { PersonModel } from '../models/Person';
+import { CatalogEntityModel, PersonModel, type CatalogEntityType } from '../models/CatalogEntity';
 import { PodcastModel } from '../models/Podcast';
 import { EpisodeModel } from '../models/Episode';
 import { TrackModel } from '../models/Track';
@@ -148,8 +147,25 @@ function toPersonLike(person: {
 }
 
 /**
- * GET /api/p/:id — unified entity profile. Resolves the id against BOTH Artist
- * and Person and returns the merged music (artist) + podcast appearances (person).
+ * The lean shape of a base CatalogEntity read — the fields the unified resolver
+ * needs across both discriminator types. Artist-only fields (genres/stats/…) are
+ * read at runtime by `formatArtistWithImage`, which is untyped, so they are not
+ * listed here.
+ */
+type CatalogEntityLean = {
+  _id: mongoose.Types.ObjectId;
+  type: CatalogEntityType;
+  name: string;
+  img?: string;
+  href?: string;
+  linkedOxyUserId?: string;
+  linkedArtistId?: mongoose.Types.ObjectId;
+};
+
+/**
+ * GET /api/p/:id — unified entity profile. ONE `catalogentities` lookup resolves
+ * the id to an artist OR person (`kind = entity.type`): artists carry music + a
+ * linked person's appearances; persons carry appearances + a linked artist's music.
  */
 export const getEntityProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -164,19 +180,23 @@ export const getEntityProfile = async (req: Request, res: Response, next: NextFu
 
     const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
 
-    // 1) Artist by id first.
-    const artist = await ArtistModel.findById(id).lean();
-    if (artist) {
-      const formatted = formatArtistWithImage(artist) as FormattedArtistProfile | null;
+    const entity = await CatalogEntityModel.findById(id).lean<CatalogEntityLean>();
+    if (!entity) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    // Artist entity → profile + music; attach a linked person's appearances.
+    if (entity.type === 'artist') {
+      const formatted = formatArtistWithImage(entity) as FormattedArtistProfile | null;
       const [music, linkedPerson] = await Promise.all([
         loadArtistMusic(id, playbackOptions),
-        PersonModel.findOne({ linkedArtistId: artist._id }).lean(),
+        PersonModel.findOne({ linkedArtistId: entity._id }).lean<CatalogEntityLean>(),
       ]);
 
       const profile: EntityProfile = {
         id,
         kind: 'artist',
-        name: formatted?.name ?? artist.name,
+        name: formatted?.name ?? entity.name,
         ...artistDisplayFields(formatted),
         linkedOxyUserId: linkedPerson?.linkedOxyUserId,
         music,
@@ -185,43 +205,39 @@ export const getEntityProfile = async (req: Request, res: Response, next: NextFu
       return res.json({ data: profile });
     }
 
-    // 2) Person by id.
-    const person = await PersonModel.findById(id).lean();
-    if (person) {
-      const personLike = toPersonLike(person);
-      const [appearsIn, enriched, linkedArtist] = await Promise.all([
-        loadAppearsIn(personLike),
-        enrichPersons([personLike], makeOxyUsersFetcher(oxy)),
-        person.linkedArtistId ? ArtistModel.findById(person.linkedArtistId).lean() : Promise.resolve(null),
-      ]);
-      const identity = enriched[0];
+    // Person entity → enriched identity + appearances; attach a linked artist's music.
+    const personLike = toPersonLike(entity);
+    const [appearsIn, enriched, linkedArtist] = await Promise.all([
+      loadAppearsIn(personLike),
+      enrichPersons([personLike], makeOxyUsersFetcher(oxy)),
+      entity.linkedArtistId
+        ? CatalogEntityModel.findById(entity.linkedArtistId).lean<CatalogEntityLean>()
+        : Promise.resolve(null),
+    ]);
+    const identity = enriched[0];
 
-      let music: EntityMusic | undefined;
-      let linkedArtistFields: ArtistDisplayFields = artistDisplayFields(null);
-      if (linkedArtist) {
-        const formattedLinked = formatArtistWithImage(linkedArtist) as FormattedArtistProfile | null;
-        music = await loadArtistMusic(linkedArtist._id.toString(), playbackOptions);
-        linkedArtistFields = artistDisplayFields(formattedLinked);
-      }
-
-      const profile: EntityProfile = {
-        id,
-        kind: 'person',
-        name: identity?.displayName ?? identity?.name ?? person.name,
-        displayName: identity?.displayName,
-        username: identity?.username,
-        avatar: identity?.oxyAvatar,
-        ...linkedArtistFields,
-        linkedArtistId: person.linkedArtistId ? person.linkedArtistId.toString() : undefined,
-        linkedOxyUserId: person.linkedOxyUserId,
-        music,
-        appearsIn,
-      };
-      return res.json({ data: profile });
+    let music: EntityMusic | undefined;
+    let linkedArtistFields: ArtistDisplayFields = artistDisplayFields(null);
+    if (linkedArtist) {
+      const formattedLinked = formatArtistWithImage(linkedArtist) as FormattedArtistProfile | null;
+      music = await loadArtistMusic(linkedArtist._id.toString(), playbackOptions);
+      linkedArtistFields = artistDisplayFields(formattedLinked);
     }
 
-    // 3) Neither.
-    return res.status(404).json({ error: 'Not found' });
+    const profile: EntityProfile = {
+      id,
+      kind: 'person',
+      name: identity?.displayName ?? identity?.name ?? entity.name,
+      displayName: identity?.displayName,
+      username: identity?.username,
+      avatar: identity?.oxyAvatar,
+      ...linkedArtistFields,
+      linkedArtistId: entity.linkedArtistId ? entity.linkedArtistId.toString() : undefined,
+      linkedOxyUserId: entity.linkedOxyUserId,
+      music,
+      appearsIn,
+    };
+    return res.json({ data: profile });
   } catch (error) {
     next(error);
   }

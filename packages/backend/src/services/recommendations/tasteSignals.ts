@@ -1,6 +1,6 @@
 import { UserTasteProfileModel } from '../../models/UserTasteProfile';
 import { TrackModel } from '../../models/Track';
-import { ArtistModel } from '../../models/Artist';
+import { ArtistModel } from '../../models/CatalogEntity';
 import { logger } from '../../utils/logger';
 
 /**

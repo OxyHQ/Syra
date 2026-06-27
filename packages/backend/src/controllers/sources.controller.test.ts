@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import { connect, clear, disconnect } from '../test/mongo';
 import { TrackModel } from '../models/Track';
-import { ArtistModel } from '../models/Artist';
+import { ArtistModel } from '../models/CatalogEntity';
 import { makeSourcesController } from './sources.controller';
 import type { ExternalTrack } from '@syra/shared-types';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';

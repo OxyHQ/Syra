@@ -97,7 +97,7 @@ const PodcastSchema = new Schema<IPodcast>({
   ownerOxyUserId: { type: String },
   claimable: { type: Boolean, index: true },
   claimedByOxyUserId: { type: String },
-  linkedArtistId: { type: Schema.Types.ObjectId, ref: 'Artist' },
+  linkedArtistId: { type: Schema.Types.ObjectId, ref: 'CatalogEntity' },
   // Refresh / HTTP conditional-GET cache
   lastRefreshedAt: { type: Date },
   refreshIntervalMin: { type: Number, default: 60 },

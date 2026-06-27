@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import mongoose from 'mongoose';
 import { connect, clear, disconnect } from '../../test/mongo';
-import { PersonModel } from '../../models/Person';
-import { ArtistModel } from '../../models/Artist';
+import { PersonModel, ArtistModel } from '../../models/CatalogEntity';
 import {
   resolvePersons,
   buildCreatorPersons,

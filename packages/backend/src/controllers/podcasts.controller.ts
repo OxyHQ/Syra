@@ -23,7 +23,7 @@ import {
 import { PodcastModel } from '../models/Podcast';
 import { EpisodeModel } from '../models/Episode';
 import { UserLibraryModel } from '../models/Library';
-import { ArtistModel } from '../models/Artist';
+import { ArtistModel } from '../models/CatalogEntity';
 import { getParam } from '../utils/reqParams';
 import { logger } from '../utils/logger';
 import { searchPodcasts as directorySearch } from '../services/podcasts/PodcastDirectory';

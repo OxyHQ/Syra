@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import { connect, clear, disconnect, installCatalogImageMirrorMockForTests } from '../../test/mongo';
-import { ArtistModel } from '../../models/Artist';
+import { ArtistModel } from '../../models/CatalogEntity';
 import { upsertArtist } from './upsertArtist';
 import { setCatalogImageMirrorImplementationForTests } from './catalogImageAssets';
 import type { ExternalArtist } from '@syra/shared-types';
