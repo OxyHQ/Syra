@@ -85,7 +85,7 @@ export function useEpisode(id: string | undefined) {
   const identity = canUsePrivateApi ? 'auth' : 'guest';
   return useQuery<EpisodeDetail>({
     queryKey: PODCAST_QUERY_KEYS.episode(id ?? '', identity),
-    queryFn: () => episodeService.getEpisode(id as string),
+    queryFn: () => episodeService.getEpisode(id as string, canUsePrivateApi),
     enabled: Boolean(id) && !isPrivateApiPending,
     staleTime: 1000 * 60,
   });

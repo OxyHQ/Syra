@@ -7,7 +7,7 @@ import {
   type ResolvedPerson,
   type UpdateEpisodeProgressRequest,
 } from '@syra/shared-types';
-import { api } from '@/utils/api';
+import { api, publicApi } from '@/utils/api';
 
 /**
  * Episode service — episode detail (with resolved hosts/guests and the caller's
@@ -71,9 +71,17 @@ function parseEpisodeResponse<T>(schema: z.ZodType<T>, data: unknown, label: str
 }
 
 export const episodeService = {
-  /** Episode detail + resolved persons + the caller's saved progress. */
-  async getEpisode(id: string): Promise<EpisodeDetail> {
-    const response = await api.get<unknown>(`/episodes/${id}`);
+  /**
+   * Episode detail + resolved persons + the caller's saved progress.
+   *
+   * The endpoint is public (optional auth): guests MUST read it through the
+   * unauthenticated `publicApi` client (the linked `api` client has no session
+   * and would fail). Authenticated callers use the linked `api` client so the
+   * response also carries their saved `progressSec`/`completed`.
+   */
+  async getEpisode(id: string, authenticated = false): Promise<EpisodeDetail> {
+    const client = authenticated ? api : publicApi;
+    const response = await client.get<unknown>(`/episodes/${id}`);
     return parseEpisodeResponse(episodeDetailResponseSchema, response.data, 'episode').data;
   },
 
