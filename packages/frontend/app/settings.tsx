@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMutation } from '@tanstack/react-query';
 import { getAccountDisplayName } from '@oxyhq/core';
@@ -46,6 +46,8 @@ type ProfileVisibility = 'public' | 'private' | 'followers_only';
 type RowIconName = React.ComponentProps<typeof RowIcon>['name'];
 
 const logger = createScopedLogger('SettingsScreen');
+
+const CREATORS_URL = 'https://creators.syra.fm';
 
 const LANGUAGE_OPTIONS: readonly { label: string; value: string }[] = [
   { label: 'English', value: 'en-US' },
@@ -136,6 +138,12 @@ const SettingsScreen: React.FC = () => {
   const handleManageAccount = useCallback(() => {
     showBottomSheet?.('ManageAccount');
   }, [showBottomSheet]);
+
+  const handleOpenCreators = useCallback(() => {
+    Linking.openURL(CREATORS_URL).catch((error) => {
+      logger.warn('Failed to open Syra for Creators', error);
+    });
+  }, []);
 
   const handleMusicPreferenceUpdate = useCallback((updates: Parameters<typeof updateMusicPreferences>[0]) => {
     if (!requirePrivateSession()) return;
@@ -297,6 +305,15 @@ const SettingsScreen: React.FC = () => {
                 title="Manage account"
                 description="Oxy account, identity and security"
                 onPress={handleManageAccount}
+              />
+            </SettingsListGroup>
+
+            <SettingsListGroup title="Create">
+              <SettingsListItem
+                icon={<RowIcon name="mic-outline" />}
+                title="Syra for Creators"
+                description="Upload music, manage podcasts and your artist profile"
+                onPress={handleOpenCreators}
               />
             </SettingsListGroup>
 
