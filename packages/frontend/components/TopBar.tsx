@@ -10,7 +10,6 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Avatar from './Avatar';
 import { Logo } from './Logo';
 import { useMediaQuery } from 'react-responsive';
-import { artistService } from '@/services/artistService';
 import { searchService } from '@/services/searchService';
 import { musicService } from '@/services/musicService';
 import { searchRefetchInterval } from '@/utils/searchUtils';
@@ -60,21 +59,12 @@ export const TopBar: React.FC = () => {
   const { q } = useLocalSearchParams<{ q?: string }>();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { user, isAuthenticated, canUsePrivateApi, showBottomSheet } = useOxy();
+  const { user, isAuthenticated, showBottomSheet } = useOxy();
   const { playTrackList } = usePlayerStore();
   const isMobile = useMediaQuery({ maxWidth: 767 });
   const [searchQuery, setSearchQuery] = useState(() => (pathname === '/search' && typeof q === 'string' ? q : ''));
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [activeSearchIndex, setActiveSearchIndex] = useState(-1);
-
-  // Whether the signed-in user has an artist profile (decides dashboard vs. register).
-  // Only runs while authenticated; when signed out the query is disabled and resolves
-  // to no profile.
-  const { data: artistProfile } = useQuery({
-    queryKey: ['artist', 'me', 'topbar'],
-    queryFn: () => artistService.getMyArtistProfile(),
-    enabled: canUsePrivateApi && !!user,
-  });
 
   // Clear the status bar / dynamic island on native by padding the bar's
   // content down by the top inset and growing the bar by the same amount. On
@@ -143,15 +133,6 @@ export const TopBar: React.FC = () => {
     router.push('/browse');
   };
 
-
-  const handleDashboard = () => {
-    if (artistProfile) {
-      router.push('/artist/dashboard');
-    } else {
-      // User doesn't have an artist profile, redirect to register
-      router.push('/artist/register');
-    }
-  };
 
   const navigateFromSearch = (href: Href) => {
     setIsSearchOpen(false);
@@ -574,19 +555,6 @@ export const TopBar: React.FC = () => {
 
       {/* Right Section: Actions & Profile */}
       <View style={styles.rightSection}>
-        {isAuthenticated && (
-          <Pressable
-            style={[styles.iconButton, pathname.startsWith('/artist') && activeButtonStyle]}
-            onPress={handleDashboard}
-            accessibilityLabel={artistProfile ? 'Artist Dashboard' : 'Register as Artist'}
-          >
-            <MaterialCommunityIcons 
-              name={pathname.startsWith('/artist') ? 'account-music' : 'account-music-outline'} 
-              size={24} 
-              color={pathname.startsWith('/artist') ? theme.colors.primary : theme.colors.text} 
-            />
-          </Pressable>
-        )}
         <Pressable style={styles.iconButton}>
           <MaterialCommunityIcons name="download-outline" size={24} color={theme.colors.text} />
         </Pressable>
