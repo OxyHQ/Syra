@@ -22,13 +22,13 @@ export const PodcastDetailSkeleton: React.FC<PodcastDetailSkeletonProps> =
     const theme = useTheme();
     const gradientColors: readonly [string, string, string] = [
       theme.colors.backgroundSecondary,
-      theme.colors.background,
-      theme.colors.background,
+      theme.colors.backgroundSecondary,
+      theme.colors.backgroundSecondary,
     ];
 
     return (
       <ScrollView
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
+        style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >

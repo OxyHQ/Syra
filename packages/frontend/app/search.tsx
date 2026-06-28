@@ -193,7 +193,7 @@ const SearchScreen: React.FC = () => {
         description="Search for music"
       />
       <ScrollView
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
+        style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}
         contentContainerStyle={[
           styles.contentContainer,
           !isMobile && styles.desktopContentContainer,

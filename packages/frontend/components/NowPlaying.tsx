@@ -148,7 +148,7 @@ export const NowPlaying: React.FC = () => {
               />
             </View>
           ) : (
-            <View style={[styles.backgroundPlaceholder, { backgroundColor: theme.colors.backgroundTertiary }]}>
+            <View style={[styles.backgroundPlaceholder, { backgroundColor: theme.colors.backgroundSecondary }]}>
               <Ionicons name="musical-notes" size={80} color={theme.colors.textSecondary} />
             </View>
           )}

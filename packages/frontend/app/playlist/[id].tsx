@@ -126,7 +126,7 @@ const PlaylistScreen: React.FC = () => {
     return [
       playlist?.primaryColor ?? theme.colors.primary,
       playlist?.secondaryColor ?? theme.colors.backgroundSecondary,
-      theme.colors.background,
+      theme.colors.backgroundSecondary,
     ];
   };
 
@@ -158,7 +158,7 @@ const PlaylistScreen: React.FC = () => {
 
   if (isCatalogLoading) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}>
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
@@ -172,7 +172,7 @@ const PlaylistScreen: React.FC = () => {
 
   if (!playlist) {
     return (
-      <View style={[styles.errorContainer, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.errorContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
         <Text style={[styles.errorText, { color: theme.colors.text }]}>Playlist not found</Text>
       </View>
     );
@@ -188,7 +188,7 @@ const PlaylistScreen: React.FC = () => {
         title={`${playlist.name} - Syra`}
         description={playlist.description || `Listen to ${playlist.name}`}
       />
-      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}>
         {/* Sticky Header */}
         <Animated.View
           style={[

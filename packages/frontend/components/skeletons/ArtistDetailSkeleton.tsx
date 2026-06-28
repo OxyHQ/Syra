@@ -25,8 +25,8 @@ export const ArtistDetailSkeleton: React.FC<ArtistDetailSkeletonProps> =
     const theme = useTheme();
     const contentGradient: readonly [string, string, string] = [
       theme.colors.backgroundSecondary,
-      theme.colors.background,
-      theme.colors.background,
+      theme.colors.backgroundSecondary,
+      theme.colors.backgroundSecondary,
     ];
 
     return (

@@ -74,7 +74,7 @@ const EpisodeScreen: React.FC = () => {
 
   if (!episode) {
     return (
-      <View style={[styles.container, styles.center, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.container, styles.center, { backgroundColor: theme.colors.backgroundSecondary }]}>
         <Ionicons name="alert-circle-outline" size={48} color={theme.colors.textSecondary} />
         <Text style={[styles.errorText, { color: theme.colors.textSecondary }]}>Episode not found</Text>
       </View>
@@ -92,7 +92,7 @@ const EpisodeScreen: React.FC = () => {
     <>
       <SEO title={`${episode.title} - Syra`} description={description.slice(0, 160)} />
       <ScrollView
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
+        style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >

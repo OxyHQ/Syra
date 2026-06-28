@@ -22,7 +22,7 @@ const UserProfileScreen: React.FC = () => {
       <>
         <SEO title={`${username || 'User'} - Syra`} description="User profile" />
         <ScrollView
-          style={[styles.container, { backgroundColor: theme.colors.background }]}
+          style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}
           showsVerticalScrollIndicator={false}
         >
           <ProfileHeaderSkeleton />
@@ -35,7 +35,7 @@ const UserProfileScreen: React.FC = () => {
     return (
       <>
         <SEO title="User Not Found - Syra" description="User profile not found" />
-        <View style={[styles.container, styles.centered, { backgroundColor: theme.colors.background }]}>
+        <View style={[styles.container, styles.centered, { backgroundColor: theme.colors.backgroundSecondary }]}>
           <MaterialCommunityIcons name="account-off" size={64} color={theme.colors.textSecondary} />
           <Text style={[styles.errorText, { color: theme.colors.textSecondary }]}>
             User not found
@@ -59,7 +59,7 @@ const UserProfileScreen: React.FC = () => {
         description={profileData.bio || `Profile page for ${displayName}`} 
       />
       <ScrollView
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
+        style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >

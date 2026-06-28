@@ -80,13 +80,13 @@ const PodcastsScreen: React.FC = () => {
   const gradientColors: readonly [string, string, string] = [
     hexToRgba(hoveredColor ?? theme.colors.primary, 0.46),
     hexToRgba(hoveredColor ?? theme.colors.primary, 0.22),
-    theme.colors.background,
+    theme.colors.backgroundSecondary,
   ];
 
   return (
     <>
       <SEO title="Podcasts - Syra" description="Discover and listen to podcasts on Syra" />
-      <View style={[styles.gradientContainer, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.gradientContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
         <LinearGradient
           colors={gradientColors}
           locations={[0, 0.48, 1]}

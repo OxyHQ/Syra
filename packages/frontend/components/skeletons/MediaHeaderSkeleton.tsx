@@ -20,8 +20,8 @@ export const MediaHeaderSkeleton: React.FC<MediaHeaderSkeletonProps> =
     const theme = useTheme();
     const gradientColors: readonly [string, string, string] = [
       theme.colors.backgroundSecondary,
-      theme.colors.background,
-      theme.colors.background,
+      theme.colors.backgroundSecondary,
+      theme.colors.backgroundSecondary,
     ];
 
     return (

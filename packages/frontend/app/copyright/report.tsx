@@ -122,14 +122,14 @@ const CopyrightReportScreen: React.FC = () => {
       <SEO title="Report Copyright Violation - Syra" description="Report a copyright violation" />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
+        style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}
       >
         {/* Header */}
         <View
           style={[
             styles.header,
             {
-              backgroundColor: theme.colors.background,
+              backgroundColor: theme.colors.backgroundSecondary,
               borderBottomColor: theme.colors.border,
               // Top safe-area is cleared by the shell's TopBar (single
               // authority); this in-panel header only needs base padding.

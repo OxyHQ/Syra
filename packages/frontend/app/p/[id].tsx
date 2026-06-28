@@ -133,7 +133,7 @@ const EntityProfileScreen: React.FC = () => {
   const gradientColors: readonly [string, string, string] = [
     entity?.primaryColor ?? theme.colors.primary,
     entity?.secondaryColor ?? theme.colors.backgroundSecondary,
-    theme.colors.background,
+    theme.colors.backgroundSecondary,
   ];
 
   // Real artist metadata: genres + follower/monthly-listener + album/track counts
@@ -195,7 +195,7 @@ const EntityProfileScreen: React.FC = () => {
 
   if (isCatalogLoading) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}>
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
@@ -209,7 +209,7 @@ const EntityProfileScreen: React.FC = () => {
 
   if (!entity) {
     return (
-      <View style={[styles.errorContainer, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.errorContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
         <Text style={[styles.errorText, { color: theme.colors.text }]}>Profile not found</Text>
       </View>
     );
@@ -222,7 +222,7 @@ const EntityProfileScreen: React.FC = () => {
   return (
     <>
       <SEO title={`${displayName} - Syra`} description={entity.bio || `Listen to ${displayName}`} />
-      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}>
         {/* Sticky Header */}
         <Animated.View
           style={[

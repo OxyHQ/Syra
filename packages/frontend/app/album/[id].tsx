@@ -98,7 +98,7 @@ const AlbumScreen: React.FC = () => {
   if (isCatalogLoading) {
     return (
       <ScrollView
-        style={[styles.scrollView, { backgroundColor: theme.colors.background }]}
+        style={[styles.scrollView, { backgroundColor: theme.colors.backgroundSecondary }]}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
@@ -109,7 +109,7 @@ const AlbumScreen: React.FC = () => {
 
   if (!album) {
     return (
-      <View style={[styles.errorContainer, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.errorContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
         <Text style={[styles.errorText, { color: theme.colors.text }]}>Album not found</Text>
       </View>
     );
@@ -121,8 +121,8 @@ const AlbumScreen: React.FC = () => {
   const albumThumbImage = pickCatalogImageUrl(undefined, album.coverArt, 'icon', album.coverArtSizes);
   const gradientColors: readonly [string, string, string] = [
     album.primaryColor ?? theme.colors.backgroundSecondary,
-    album.secondaryColor ?? theme.colors.background,
-    theme.colors.background,
+    album.secondaryColor ?? theme.colors.backgroundSecondary,
+    theme.colors.backgroundSecondary,
   ];
 
   return (
@@ -132,7 +132,7 @@ const AlbumScreen: React.FC = () => {
         description={`Listen to ${album.title} by ${album.artistName}`}
       />
       <ScrollView
-        style={[styles.scrollView, { backgroundColor: theme.colors.background }]}
+        style={[styles.scrollView, { backgroundColor: theme.colors.backgroundSecondary }]}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >

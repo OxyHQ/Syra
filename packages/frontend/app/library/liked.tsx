@@ -63,7 +63,7 @@ const LikedSongsScreen: React.FC = () => {
 
   if (isPrivateApiPending) {
     return (
-      <View style={[styles.centered, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.centered, { backgroundColor: theme.colors.backgroundSecondary }]}>
         <LibraryListSkeleton count={8} />
       </View>
     );
@@ -71,7 +71,7 @@ const LikedSongsScreen: React.FC = () => {
 
   if (!canUsePrivateApi) {
     return (
-      <View style={[styles.centered, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.centered, { backgroundColor: theme.colors.backgroundSecondary }]}>
         <Ionicons name="lock-closed-outline" size={48} color={theme.colors.textSecondary} style={styles.centeredIcon} />
         <Text style={[styles.centeredText, { color: theme.colors.textSecondary }]}>
           Sign in to view your liked songs
@@ -84,7 +84,7 @@ const LikedSongsScreen: React.FC = () => {
     <>
       <SEO title="Liked Songs - Syra" description="Your liked songs" />
       <ScrollView
-        style={[styles.scrollView, { backgroundColor: theme.colors.background }]}
+        style={[styles.scrollView, { backgroundColor: theme.colors.backgroundSecondary }]}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >

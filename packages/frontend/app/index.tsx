@@ -148,8 +148,8 @@ const HomeScreen: React.FC = () => {
   const getGradientColors = useCallback((color: string): [string, string, string] => ([
     hexToRgba(color, 0.46),
     hexToRgba(color, 0.22),
-    theme.colors.background,
-  ]), [hexToRgba, theme.colors.background]);
+    theme.colors.backgroundSecondary,
+  ]), [hexToRgba, theme.colors.backgroundSecondary]);
 
   useEffect(() => {
     const nextColor = hoveredItemColor || theme.colors.primary;
@@ -338,7 +338,7 @@ const HomeScreen: React.FC = () => {
         title="Syra - Music Streaming"
         description="Discover and play your favorite music"
       />
-      <View style={[styles.gradientContainer, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.gradientContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
         <LinearGradient
           colors={getGradientColors(gradientFromColor)}
           locations={[0, 0.48, 1]}
