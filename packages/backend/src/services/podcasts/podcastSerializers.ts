@@ -11,7 +11,22 @@
  */
 
 import mongoose from 'mongoose';
-import type { Podcast, Episode } from '@syra/shared-types';
+import type { Podcast, Episode, CatalogImageSizes } from '@syra/shared-types';
+
+/**
+ * The parent show's artwork bundle, used as the inheritance fallback for an
+ * episode that carries no cover art of its own. Mirrors the shared artwork
+ * fields present on both Podcast and Episode (`image` is the re-hosted Syra
+ * image id, `imageSourceUrl` the original external URL, and the two colors are
+ * the gradient extracted from the cover).
+ */
+export interface PodcastArtwork {
+  image?: string;
+  imageSizes?: CatalogImageSizes;
+  imageSourceUrl?: string;
+  primaryColor?: string;
+  secondaryColor?: string;
+}
 
 /**
  * Data-only persisted shapes — the model interface without the Mongoose
@@ -91,7 +106,19 @@ export function serializePodcast(doc: PodcastDocument): Podcast {
   };
 }
 
-export function serializeEpisode(doc: EpisodeDocument): Episode {
+export function serializeEpisode(doc: EpisodeDocument, podcastArtwork?: PodcastArtwork): Episode {
+  // Artwork inheritance: `doc.image` (the re-hosted Syra cover id) is the
+  // canonical "episode has its own art" signal. When it is absent the episode
+  // inherits the WHOLE artwork bundle from its parent show, so clients render
+  // `episode.image`/`imageSizes`/`imageSourceUrl` + colors with no special
+  // casing. When the episode carries its own cover, its fields are kept intact.
+  const hasOwnArt = Boolean(doc.image);
+  const image = hasOwnArt ? doc.image : podcastArtwork?.image;
+  const imageSizes = hasOwnArt ? doc.imageSizes : podcastArtwork?.imageSizes;
+  const imageSourceUrl = hasOwnArt ? doc.imageSourceUrl : podcastArtwork?.imageSourceUrl;
+  const primaryColor = hasOwnArt ? doc.primaryColor : podcastArtwork?.primaryColor;
+  const secondaryColor = hasOwnArt ? doc.secondaryColor : podcastArtwork?.secondaryColor;
+
   return {
     id: doc._id.toString(),
     podcastId: doc.podcastId.toString(),
@@ -108,11 +135,11 @@ export function serializeEpisode(doc: EpisodeDocument): Episode {
     season: doc.season,
     episodeNumber: doc.episodeNumber,
     episodeType: doc.episodeType ?? 'full',
-    image: doc.image,
-    imageSizes: doc.imageSizes,
-    primaryColor: doc.primaryColor,
-    secondaryColor: doc.secondaryColor,
-    imageSourceUrl: doc.imageSourceUrl,
+    image,
+    imageSizes,
+    primaryColor,
+    secondaryColor,
+    imageSourceUrl,
     explicit: doc.explicit ?? false,
     chapters: doc.chapters,
     transcripts: doc.transcripts,

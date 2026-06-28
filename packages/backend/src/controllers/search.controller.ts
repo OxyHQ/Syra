@@ -9,6 +9,7 @@ import { EpisodeModel } from '../models/Episode';
 import { PersonModel } from '../models/CatalogEntity';
 import { formatTracksWithCoverArt, formatAlbumsWithCoverArt, formatArtistsWithImage, formatPlaylistsWithCoverArt } from '../utils/musicHelpers';
 import { serializePodcast, serializeEpisode, type PodcastDocument, type EpisodeDocument } from '../services/podcasts/podcastSerializers';
+import { loadShowArtworkByPodcastId } from '../services/podcasts/episodeShowArtwork';
 import { enrichPersons, makeOxyUsersFetcher, type PersonLike } from '../services/podcasts/resolvePersons';
 import { isDatabaseConnected } from '../utils/database';
 import { enqueueAudiusImport } from '../services/sources/audiusBackgroundImport';
@@ -359,9 +360,15 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
     const formattedPodcasts = categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.PODCASTS
       ? (podcastsResult[0] as PodcastDocument[]).map(serializePodcast)
       : [];
-    const formattedEpisodes = categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.EPISODES
-      ? (episodesResult[0] as EpisodeDocument[]).map(serializeEpisode)
+    // Search episodes span many shows: resolve their parent-show artwork in ONE
+    // `$in` query so cover-less episodes inherit it (no N+1).
+    const episodeDocs = categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.EPISODES
+      ? (episodesResult[0] as EpisodeDocument[])
       : [];
+    const episodeShowArtwork = await loadShowArtworkByPodcastId(episodeDocs);
+    const formattedEpisodes = episodeDocs.map((episode) =>
+      serializeEpisode(episode, episodeShowArtwork.get(episode.podcastId.toString())),
+    );
     const formattedPeople = categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.PEOPLE
       ? await enrichPersons(peopleResult[0] as PersonLike[], makeOxyUsersFetcher(oxy))
       : [];

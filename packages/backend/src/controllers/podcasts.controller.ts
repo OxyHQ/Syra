@@ -30,6 +30,7 @@ import { searchPodcasts as directorySearch } from '../services/podcasts/PodcastD
 import { importFeed } from '../services/podcasts/podcastImportService';
 import { syncPodcastSearch } from '../services/podcasts/podcastBackgroundImport';
 import { serializePodcast, serializeEpisode } from '../services/podcasts/podcastSerializers';
+import { PODCAST_ARTWORK_PROJECTION } from '../services/podcasts/episodeShowArtwork';
 import { resolvePersons, buildCreatorPersons, makeOxyUsersFetcher } from '../services/podcasts/resolvePersons';
 import { enqueueEpisodeIngest } from '../services/podcasts/ingestEpisode';
 import { generatePodcastRss } from '../services/podcasts/podcastRssGenerator';
@@ -249,7 +250,12 @@ export async function getPodcast(req: AuthRequest, res: Response): Promise<void>
   ]);
 
   res.json({
-    data: { podcast: serializePodcast(podcast), episodes: episodes.map(serializeEpisode), persons },
+    data: {
+      podcast: serializePodcast(podcast),
+      // Show already loaded: cover-less episodes inherit its artwork directly.
+      episodes: episodes.map((episode) => serializeEpisode(episode, podcast)),
+      persons,
+    },
   });
 }
 
@@ -263,7 +269,10 @@ export async function getPodcastEpisodes(req: AuthRequest, res: Response): Promi
     return;
   }
 
-  const podcast = await PodcastModel.findById(id).select('ownerOxyUserId status').lean();
+  // Also project the show's artwork so cover-less episodes inherit it (no N+1).
+  const podcast = await PodcastModel.findById(id)
+    .select(`ownerOxyUserId status ${PODCAST_ARTWORK_PROJECTION}`)
+    .lean();
   if (!podcast || podcast.status === 'removed') {
     res.status(404).json({ error: 'Podcast not found' });
     return;
@@ -284,7 +293,7 @@ export async function getPodcastEpisodes(req: AuthRequest, res: Response): Promi
     EpisodeModel.countDocuments(filter),
   ]);
 
-  res.json({ data: episodes.map(serializeEpisode), total, page, limit });
+  res.json({ data: episodes.map((episode) => serializeEpisode(episode, podcast)), total, page, limit });
 }
 
 /**
@@ -559,7 +568,8 @@ export async function uploadEpisode(req: AuthRequest, res: Response): Promise<vo
 
       enqueueEpisodeIngest(episodeId.toString());
 
-      res.status(201).json({ data: serializeEpisode(episode) });
+      // New episode has no cover of its own yet: inherit the loaded show's art.
+      res.status(201).json({ data: serializeEpisode(episode, podcast) });
     } catch (err) {
       logger.error('[podcasts] episode upload failed', { err });
       if (!res.headersSent) res.status(500).json({ error: 'Failed to upload episode' });

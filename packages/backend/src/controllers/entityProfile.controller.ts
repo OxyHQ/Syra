@@ -22,6 +22,7 @@ import {
 } from '../utils/catalogVisibility';
 import { findAlbumsWithPlayableTracks } from '../utils/playableContainers';
 import { serializePodcast, serializeEpisode } from '../services/podcasts/podcastSerializers';
+import { loadShowArtworkByPodcastId } from '../services/podcasts/episodeShowArtwork';
 import {
   enrichPersons,
   strongKeyCreditMatch,
@@ -121,9 +122,15 @@ async function loadAppearsIn(person: PersonLike): Promise<EntityAppearsIn> {
       .lean(),
   ]);
 
+  // Episodes here span many shows: resolve their parent-show artwork in ONE
+  // `$in` query so cover-less episodes inherit it without an N+1.
+  const showArtwork = await loadShowArtworkByPodcastId(episodes);
+
   return {
     podcasts: podcasts.map(serializePodcast),
-    episodes: episodes.map(serializeEpisode),
+    episodes: episodes.map((episode) =>
+      serializeEpisode(episode, showArtwork.get(episode.podcastId.toString())),
+    ),
   };
 }
 
