@@ -106,18 +106,17 @@ export function serializePodcast(doc: PodcastDocument): Podcast {
   };
 }
 
-export function serializeEpisode(doc: EpisodeDocument, podcastArtwork?: PodcastArtwork): Episode {
+// `podcastArtwork` is required (not optional) so a new call site cannot silently
+// forget it and ship cover-less episodes; pass `undefined` explicitly when the
+// parent show's artwork genuinely isn't available.
+export function serializeEpisode(doc: EpisodeDocument, podcastArtwork: PodcastArtwork | undefined): Episode {
   // Artwork inheritance: `doc.image` (the re-hosted Syra cover id) is the
   // canonical "episode has its own art" signal. When it is absent the episode
   // inherits the WHOLE artwork bundle from its parent show, so clients render
   // `episode.image`/`imageSizes`/`imageSourceUrl` + colors with no special
   // casing. When the episode carries its own cover, its fields are kept intact.
-  const hasOwnArt = Boolean(doc.image);
-  const image = hasOwnArt ? doc.image : podcastArtwork?.image;
-  const imageSizes = hasOwnArt ? doc.imageSizes : podcastArtwork?.imageSizes;
-  const imageSourceUrl = hasOwnArt ? doc.imageSourceUrl : podcastArtwork?.imageSourceUrl;
-  const primaryColor = hasOwnArt ? doc.primaryColor : podcastArtwork?.primaryColor;
-  const secondaryColor = hasOwnArt ? doc.secondaryColor : podcastArtwork?.secondaryColor;
+  const art: PodcastArtwork = doc.image ? doc : (podcastArtwork ?? {});
+  const { image, imageSizes, imageSourceUrl, primaryColor, secondaryColor } = art;
 
   return {
     id: doc._id.toString(),
