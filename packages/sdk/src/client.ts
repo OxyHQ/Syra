@@ -1,6 +1,8 @@
 import {
   trackSummarySchema,
+  podcastSummarySchema,
   type TrackSummary,
+  type PodcastSummary,
   type CoverArtSizes,
   type ArtworkSize,
 } from './schema';
@@ -9,9 +11,18 @@ import { SyraApiError } from './errors';
 /** Default base URL of the public Syra API. */
 export const DEFAULT_SYRA_BASE_URL = 'https://api.syra.fm';
 
+/** Default base URL of the Syra web app, used for deep links. */
+export const DEFAULT_SYRA_WEB_BASE_URL = 'https://syra.fm';
+
 export interface SyraClientOptions {
   /** Base URL of the Syra API. Defaults to {@link DEFAULT_SYRA_BASE_URL}. */
   baseURL?: string;
+  /**
+   * Base URL of the Syra WEB app (not the API host), used to build deep links
+   * such as {@link SyraClient.podcastUrl}. Defaults to
+   * {@link DEFAULT_SYRA_WEB_BASE_URL}.
+   */
+  webBaseURL?: string;
   /**
    * `fetch` implementation. Defaults to the global `fetch` (Node 18+, browsers,
    * React Native). Inject one (e.g. `node-fetch`) when no global is available.
@@ -25,10 +36,22 @@ export interface SearchTracksOptions {
   limit?: number;
 }
 
-/** Minimal shape from which artwork URLs can be derived. */
+export interface SearchPodcastsOptions {
+  /** Maximum number of podcast shows to request from the API. */
+  limit?: number;
+}
+
+/** Minimal shape from which track artwork URLs can be derived. */
 export interface ArtworkSource {
   coverArt?: string | null;
   coverArtSizes?: CoverArtSizes | null;
+}
+
+/** Minimal shape from which podcast-show artwork URLs can be derived. */
+export interface PodcastArtworkSource {
+  image?: string | null;
+  imageSizes?: CoverArtSizes | null;
+  imageSourceUrl?: string | null;
 }
 
 export interface SyraClient {
@@ -46,6 +69,25 @@ export interface SyraClient {
    * `undefined` when no artwork can be derived.
    */
   artworkUrl(source: string | ArtworkSource, size?: ArtworkSize): string | undefined;
+  /**
+   * Search the public catalog for podcast SHOWS (not episodes). Results are
+   * validated against the podcast-summary schema; malformed rows are dropped.
+   */
+  searchPodcasts(query: string, options?: SearchPodcastsOptions): Promise<PodcastSummary[]>;
+  /**
+   * Fetch a single podcast show by id, validated against the podcast-summary
+   * schema. The by-id endpoint also returns episodes and resolved persons; this
+   * returns just the show summary needed to render a card.
+   */
+  getPodcast(id: string): Promise<PodcastSummary>;
+  /** Build the Syra web app deep link for a podcast show (`/podcasts/:id`). */
+  podcastUrl(id: string): string;
+  /**
+   * Resolve an absolute artwork URL from a podcast show reference. Prefers the
+   * re-hosted Syra image, then the requested/fallback variant, then the original
+   * external artwork URL. Returns `undefined` when no artwork can be derived.
+   */
+  podcastArtworkUrl(source: PodcastArtworkSource, size?: ArtworkSize): string | undefined;
 }
 
 /** Order used to pick the best available artwork variant when none is named. */
@@ -64,12 +106,21 @@ interface SearchResponseShape {
   results?: { tracks?: unknown[] };
 }
 
+interface PodcastSearchResponseShape {
+  data?: unknown[];
+}
+
+interface PodcastDetailResponseShape {
+  data?: { podcast?: unknown };
+}
+
 /**
  * Create a headless client for the public Syra API. Public reads only — there
  * is no authentication in this version.
  */
 export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
   const baseURL = (options.baseURL ?? DEFAULT_SYRA_BASE_URL).replace(/\/+$/, '');
+  const webBaseURL = (options.webBaseURL ?? DEFAULT_SYRA_WEB_BASE_URL).replace(/\/+$/, '');
 
   function resolveFetch(): typeof fetch {
     if (options.fetch) {
@@ -173,6 +224,64 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
       }
 
       return undefined;
+    },
+
+    async searchPodcasts(query, searchOptions = {}) {
+      const params = new URLSearchParams({ q: query });
+      if (typeof searchOptions.limit === 'number') {
+        params.set('limit', String(searchOptions.limit));
+      }
+
+      const json = (await getJson(
+        `/api/podcasts/search?${params.toString()}`,
+      )) as PodcastSearchResponseShape;
+      const rawPodcasts = Array.isArray(json?.data) ? json.data : [];
+
+      const podcasts: PodcastSummary[] = [];
+      for (const raw of rawPodcasts) {
+        // A single malformed catalog row must not fail the whole search.
+        const parsed = podcastSummarySchema.safeParse(raw);
+        if (parsed.success) {
+          podcasts.push(parsed.data);
+        }
+      }
+      return podcasts;
+    },
+
+    async getPodcast(id) {
+      const json = (await getJson(
+        `/api/podcasts/${encodeURIComponent(id)}`,
+      )) as PodcastDetailResponseShape;
+      return podcastSummarySchema.parse(json?.data?.podcast);
+    },
+
+    podcastUrl(id) {
+      return `${webBaseURL}/podcasts/${encodeURIComponent(id)}`;
+    },
+
+    podcastArtworkUrl(source, size) {
+      if (size && source.imageSizes) {
+        const resolved = resolveImageRef(source.imageSizes[size]?.url);
+        if (resolved) {
+          return resolved;
+        }
+      }
+
+      const fromImage = resolveImageRef(source.image);
+      if (fromImage) {
+        return fromImage;
+      }
+
+      if (source.imageSizes) {
+        for (const key of ARTWORK_FALLBACK_ORDER) {
+          const resolved = resolveImageRef(source.imageSizes[key]?.url);
+          if (resolved) {
+            return resolved;
+          }
+        }
+      }
+
+      return resolveImageRef(source.imageSourceUrl);
     },
   };
 }

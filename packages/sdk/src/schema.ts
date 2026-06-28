@@ -48,3 +48,24 @@ export const trackSummarySchema = z.object({
   previewAvailable: z.boolean().optional(),
 });
 export type TrackSummary = z.infer<typeof trackSummarySchema>;
+
+/**
+ * The summary view of a podcast SHOW returned by the public podcast endpoints
+ * (`GET /api/podcasts/search`, `GET /api/podcasts/:id`) — just enough to render
+ * a show card and deep-link into the Syra app.
+ *
+ * Artwork mirrors tracks: `image` is the re-hosted Syra image id (resolved via
+ * `/api/images/:id`); `imageSizes` is the multi-resolution variant set (each
+ * variant `url` is `/api/images/:id`); `imageSourceUrl` keeps the original
+ * external artwork URL as an absolute fallback when re-hosting has not run yet.
+ */
+export const podcastSummarySchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  author: z.string().optional(),
+  description: z.string().optional(),
+  image: z.string().optional(),
+  imageSizes: coverArtSizesSchema.optional(),
+  imageSourceUrl: z.string().optional(),
+});
+export type PodcastSummary = z.infer<typeof podcastSummarySchema>;
