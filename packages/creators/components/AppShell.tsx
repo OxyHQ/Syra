@@ -20,9 +20,9 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: 'Dashboard', href: '/', icon: 'view-dashboard-outline', matchPrefix: '/podcasts' },
-  { label: 'New show', href: '/podcasts/new', icon: 'plus-circle-outline' },
   { label: 'Music', href: '/music', icon: 'music', matchPrefix: '/music' },
+  { label: 'Podcasts', href: '/', icon: 'podcast', matchPrefix: '/podcasts' },
+  { label: 'New podcast', href: '/podcasts/new', icon: 'plus-circle-outline' },
 ];
 
 function isActive(pathname: string, item: NavItem): boolean {
@@ -66,7 +66,7 @@ function AccountButton() {
           {isAuthenticated ? (user?.name?.displayName ?? user?.username ?? 'Your account') : 'Sign in'}
         </Text>
         <Text numberOfLines={1} className="text-muted-foreground text-xs">
-          {isAuthenticated ? `@${user?.username ?? ''}` : 'Manage your shows'}
+          {isAuthenticated ? `@${user?.username ?? ''}` : 'Manage your podcasts'}
         </Text>
       </View>
     </Pressable>

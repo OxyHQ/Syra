@@ -36,7 +36,7 @@ function ShowDetail({ id }: { id: string }) {
     return (
       <ScreenContainer title="Show" onBack={() => router.back()}>
         <View className="py-16 items-center px-6">
-          <Text className="text-base text-foreground mb-3">Couldn&apos;t load this show.</Text>
+          <Text className="text-base text-foreground mb-3">Couldn&apos;t load this podcast.</Text>
           <Button variant="secondary" onPress={() => refetch()}>Retry</Button>
         </View>
       </ScreenContainer>

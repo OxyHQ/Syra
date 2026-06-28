@@ -21,7 +21,7 @@ const TYPES: { value: PodcastType; label: string; hint: string }[] = [
 function TypeSelector({ value, onChange }: { value: PodcastType; onChange: (value: PodcastType) => void }) {
   return (
     <View className="mb-4">
-      <Text className="text-sm font-medium text-foreground mb-1.5">Show type</Text>
+      <Text className="text-sm font-medium text-foreground mb-1.5">Podcast type</Text>
       <View className="flex-row gap-2">
         {TYPES.map((option) => {
           const active = option.value === value;
@@ -64,7 +64,7 @@ function CreateShowForm() {
   const onSubmit = useCallback(async () => {
     const trimmedTitle = title.trim();
     if (!trimmedTitle) {
-      setTitleError('A show title is required');
+      setTitleError('A podcast title is required');
       return;
     }
     setTitleError(undefined);
@@ -92,20 +92,20 @@ function CreateShowForm() {
 
     try {
       const created = await createPodcast.mutateAsync(payload);
-      toast.success('Show created');
+      toast.success('Podcast created');
       router.replace({ pathname: '/podcasts/[id]', params: { id: created.id } });
     } catch (error) {
       const invalidIds = extractInvalidIds(error);
       if (invalidIds) {
         toast.error('Some hosts/guests are not valid Oxy users. Remove them and try again.');
       } else {
-        toast.error('Could not create the show. Please try again.');
+        toast.error('Could not create the podcast. Please try again.');
       }
     }
   }, [title, description, author, image, language, categories, explicit, type, hostsGuests, createPodcast, router]);
 
   return (
-    <ScreenContainer title="New show" subtitle="Create a Syra-hosted podcast" onBack={() => router.back()}>
+    <ScreenContainer title="New podcast" subtitle="Create a Syra-hosted podcast" onBack={() => router.back()}>
       <FormField
         label="Title"
         placeholder="My amazing podcast"
@@ -116,7 +116,7 @@ function CreateShowForm() {
       />
       <FormField
         label="Description"
-        placeholder="What is your show about?"
+        placeholder="What is your podcast about?"
         value={description}
         onChangeText={setDescription}
         multiline

@@ -17,11 +17,11 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
       <View className="w-16 h-16 rounded-2xl bg-primary/10 items-center justify-center mb-4">
         <MaterialCommunityIcons name="microphone-plus" size={30} color={theme.colors.primary} />
       </View>
-      <Text className="text-lg font-semibold text-foreground mb-1">No shows yet</Text>
+      <Text className="text-lg font-semibold text-foreground mb-1">No podcasts yet</Text>
       <Text className="text-sm text-muted-foreground text-center mb-5 max-w-[360px]">
-        Create your first podcast show to start uploading episodes and get a public RSS feed.
+        Create your first podcast to start uploading episodes and get a public RSS feed.
       </Text>
-      <Button variant="primary" onPress={onCreate}>Create your first show</Button>
+      <Button variant="primary" onPress={onCreate}>Create your first podcast</Button>
     </View>
   );
 }
@@ -38,11 +38,11 @@ function Dashboard() {
 
   return (
     <ScreenContainer
-      title="Your shows"
+      title="Your podcasts"
       subtitle="Manage your podcasts and episodes"
       actions={
         <Button variant="primary" size="sm" onPress={goToNew} icon={<MaterialCommunityIcons name="plus" size={18} color="#fff" />}>
-          New show
+          New podcast
         </Button>
       }
     >
@@ -52,7 +52,7 @@ function Dashboard() {
         </View>
       ) : isError ? (
         <View className="py-16 items-center px-6">
-          <Text className="text-base text-foreground mb-3">Couldn&apos;t load your shows.</Text>
+          <Text className="text-base text-foreground mb-3">Couldn&apos;t load your podcasts.</Text>
           <Button variant="secondary" onPress={() => refetch()}>Retry</Button>
         </View>
       ) : !podcasts || podcasts.length === 0 ? (
