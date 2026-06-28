@@ -8,6 +8,7 @@ export type {
   SyraClientOptions,
   SearchTracksOptions,
   SearchPodcastsOptions,
+  SearchPage,
   ArtworkSource,
   PodcastArtworkSource,
 } from './client';

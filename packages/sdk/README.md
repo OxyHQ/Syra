@@ -18,11 +18,15 @@ import { createSyraClient } from '@syra.fm/sdk';
 
 const syra = createSyraClient(); // defaults to https://api.syra.fm
 
-// Search the catalog (only tracks with a public preview are returned)
-const tracks = await syra.searchTracks('lofi beats', { limit: 10 });
+// Search the catalog — returns one page; only tracks with a public preview are
+// in `items`. Paginate for infinite scroll by advancing `offset` by `limit`.
+const page = await syra.searchTracks('lofi beats', { limit: 10, offset: 0 });
+if (page.hasMore) {
+  const next = await syra.searchTracks('lofi beats', { limit: 10, offset: 10 });
+}
 
 // Fetch a single track
-const track = await syra.getTrack(tracks[0].id);
+const track = await syra.getTrack(page.items[0].id);
 
 // Build a public 30s preview URL (directly playable MP3)
 const url = syra.previewUrl(track.id);          // .../api/preview/<id>.mp3?start=0
@@ -48,10 +52,18 @@ authenticated transport can be layered in a future version.
 
 | Method | Description |
 | --- | --- |
-| `searchTracks(query, { limit })` | Preview-available `TrackSummary[]` matching `query`. |
+| `searchTracks(query, { limit, offset })` | A `SearchPage<TrackSummary>` of preview-available tracks (`{ items, hasMore, limit, offset }`). |
 | `getTrack(id)` | A single `TrackSummary`, schema-validated. |
 | `previewUrl(id, startSec = 0)` | Public 30s preview URL. |
 | `artworkUrl(trackOrCoverArt, size?)` | Absolute artwork URL, or `undefined`. |
+| `searchPodcasts(query, { limit, offset })` | A `SearchPage<PodcastSummary>` of podcast shows. |
+| `getPodcast(id)` | A single `PodcastSummary`, schema-validated. |
+| `podcastUrl(id)` | Syra web deep link (`/podcasts/:id`). |
+| `podcastArtworkUrl(show, size?)` | Absolute show-artwork URL, or `undefined`. |
+
+`hasMore` reflects the backend's pagination over the full result set, so it is
+not affected by the client-side preview filter on `searchTracks` — paginate by
+advancing `offset` by `limit`, never by `items.length`.
 
 Responses are validated at runtime with the package's own self-contained Zod
 schemas (`trackSummarySchema`), so there are no shared internal dependencies.

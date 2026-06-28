@@ -81,6 +81,12 @@ function parsePage(raw: unknown): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
 }
 
+/** Parse a zero-based pagination offset, clamped to `>= 0`. */
+function parseOffset(raw: unknown): number {
+  const parsed = typeof raw === 'string' ? parseInt(raw, 10) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
 /** Read a string query param (Express types query values loosely). */
 function queryString(req: AuthRequest, name: string): string | undefined {
   const value = req.query[name];
@@ -126,7 +132,7 @@ function episodeVisibilityFilter(
 // ── Reads ──────────────────────────────────────────────────────────────────────
 
 /**
- * GET /api/podcasts/search?q=&limit= — instant directory-backed search.
+ * GET /api/podcasts/search?q=&limit=&offset= — instant directory-backed search.
  *
  * `syncPodcastSearch` shallow-upserts the directory candidates first (bounded +
  * throttled, never hangs) so they appear in THIS response like the old discover
@@ -134,6 +140,10 @@ function episodeVisibilityFilter(
  * regex (NOT `$text`) to avoid depending on a text index that is not built in
  * production (`autoIndex` is off) — that was the 502/504 cause. Wrapped so the
  * handler ALWAYS responds.
+ *
+ * Paginated for infinite scroll: `offset` (zero-based, clamped `>= 0`) + `limit`
+ * page the result set. `hasMore` is derived by over-fetching ONE row beyond the
+ * page (no second count query over the whole collection).
  */
 export async function searchPodcasts(req: AuthRequest, res: Response): Promise<void> {
   const q = (queryString(req, 'q') ?? '').trim();
@@ -142,21 +152,28 @@ export async function searchPodcasts(req: AuthRequest, res: Response): Promise<v
     return;
   }
   const limit = clampLimit(req.query.limit);
+  const offset = parseOffset(req.query.offset);
 
   try {
     // Instant enrichment (shallow upsert) before we read — bounded + throttled.
     await syncPodcastSearch(q);
 
     const regex = new RegExp(escapeRegex(q), 'i');
-    const podcasts = await PodcastModel.find({
+    // Over-fetch one row past the page so `hasMore` is known without a separate
+    // count query against the full collection.
+    const rows = await PodcastModel.find({
       status: 'active',
       $or: [{ title: regex }, { author: regex }],
     })
       .sort({ popularity: -1, subscriberCount: -1, lastEpisodeAt: -1 })
-      .limit(limit)
+      .skip(offset)
+      .limit(limit + 1)
       .lean();
 
-    res.json({ data: podcasts.map(serializePodcast) });
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+
+    res.json({ data: page.map(serializePodcast), hasMore, limit, offset });
   } catch (err) {
     logger.error('[podcasts] search failed', { q, err });
     if (!res.headersSent) res.status(500).json({ error: 'Search failed' });

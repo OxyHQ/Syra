@@ -32,13 +32,37 @@ export interface SyraClientOptions {
 }
 
 export interface SearchTracksOptions {
-  /** Maximum number of tracks to request from the API. */
+  /** Maximum number of tracks to request from the API (the page size). */
   limit?: number;
+  /** Zero-based offset of the first track to return (for infinite scroll). */
+  offset?: number;
 }
 
 export interface SearchPodcastsOptions {
-  /** Maximum number of podcast shows to request from the API. */
+  /** Maximum number of podcast shows to request from the API (the page size). */
   limit?: number;
+  /** Zero-based offset of the first show to return (for infinite scroll). */
+  offset?: number;
+}
+
+/**
+ * One page of paginated catalog search results.
+ *
+ * `hasMore` reflects the BACKEND's pagination over the full matching set — NOT
+ * `items.length`. {@link SyraClient.searchTracks} additionally filters its page
+ * client-side to preview-available tracks, so `items.length` can be smaller than
+ * `limit` while `hasMore` is still `true`; callers must paginate by advancing
+ * `offset` by `limit` (the page size), never by `items.length`.
+ */
+export interface SearchPage<T> {
+  /** The validated rows for this page. */
+  items: T[];
+  /** Whether the backend has results beyond this page. */
+  hasMore: boolean;
+  /** The page size the backend applied. */
+  limit: number;
+  /** The zero-based offset of this page. */
+  offset: number;
 }
 
 /** Minimal shape from which track artwork URLs can be derived. */
@@ -56,10 +80,12 @@ export interface PodcastArtworkSource {
 
 export interface SyraClient {
   /**
-   * Search the public catalog for tracks. Results are validated against the
-   * track-summary schema and filtered to those that expose a public preview.
+   * Search the public catalog for tracks. Returns one paginated page: rows are
+   * validated against the track-summary schema and filtered to those that expose
+   * a public preview. `hasMore` comes from the backend's pagination, so it is
+   * unaffected by the client-side preview filter (see {@link SearchPage}).
    */
-  searchTracks(query: string, options?: SearchTracksOptions): Promise<TrackSummary[]>;
+  searchTracks(query: string, options?: SearchTracksOptions): Promise<SearchPage<TrackSummary>>;
   /** Fetch a single track by id, validated against the track-summary schema. */
   getTrack(id: string): Promise<TrackSummary>;
   /** Build the public 30s preview URL for a track at the given start offset. */
@@ -70,10 +96,11 @@ export interface SyraClient {
    */
   artworkUrl(source: string | ArtworkSource, size?: ArtworkSize): string | undefined;
   /**
-   * Search the public catalog for podcast SHOWS (not episodes). Results are
-   * validated against the podcast-summary schema; malformed rows are dropped.
+   * Search the public catalog for podcast SHOWS (not episodes). Returns one
+   * paginated page: rows are validated against the podcast-summary schema and
+   * malformed rows are dropped. `hasMore` comes from the backend's pagination.
    */
-  searchPodcasts(query: string, options?: SearchPodcastsOptions): Promise<PodcastSummary[]>;
+  searchPodcasts(query: string, options?: SearchPodcastsOptions): Promise<SearchPage<PodcastSummary>>;
   /**
    * Fetch a single podcast show by id, validated against the podcast-summary
    * schema. The by-id endpoint also returns episodes and resolved persons; this
@@ -102,12 +129,23 @@ const ARTWORK_FALLBACK_ORDER: ArtworkSize[] = [
 
 const OBJECT_ID_PATTERN = /^[a-f\d]{24}$/i;
 
+/** Read a finite number from an unknown response field, else a fallback. */
+function numberOr(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
 interface SearchResponseShape {
   results?: { tracks?: unknown[] };
+  hasMore?: unknown;
+  limit?: unknown;
+  offset?: unknown;
 }
 
 interface PodcastSearchResponseShape {
   data?: unknown[];
+  hasMore?: unknown;
+  limit?: unknown;
+  offset?: unknown;
 }
 
 interface PodcastDetailResponseShape {
@@ -172,19 +210,32 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
       if (typeof searchOptions.limit === 'number') {
         params.set('limit', String(searchOptions.limit));
       }
+      if (typeof searchOptions.offset === 'number') {
+        params.set('offset', String(searchOptions.offset));
+      }
 
       const json = (await getJson(`/api/search?${params.toString()}`)) as SearchResponseShape;
       const rawTracks = Array.isArray(json?.results?.tracks) ? json.results.tracks : [];
 
-      const tracks: TrackSummary[] = [];
+      const items: TrackSummary[] = [];
       for (const raw of rawTracks) {
         // A single malformed catalog row must not fail the whole search.
         const parsed = trackSummarySchema.safeParse(raw);
         if (parsed.success && parsed.data.previewAvailable === true) {
-          tracks.push(parsed.data);
+          items.push(parsed.data);
         }
       }
-      return tracks;
+
+      return {
+        items,
+        // `hasMore` is sourced from the backend's pagination over the FULL result
+        // set; the client-side preview filter above may shrink `items` below
+        // `limit`, but must NOT corrupt `hasMore` (else a page whose tail was
+        // filtered out would falsely report the end of the catalog).
+        hasMore: json?.hasMore === true,
+        limit: numberOr(json?.limit, searchOptions.limit ?? rawTracks.length),
+        offset: numberOr(json?.offset, searchOptions.offset ?? 0),
+      };
     },
 
     async getTrack(id) {
@@ -231,21 +282,31 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
       if (typeof searchOptions.limit === 'number') {
         params.set('limit', String(searchOptions.limit));
       }
+      if (typeof searchOptions.offset === 'number') {
+        params.set('offset', String(searchOptions.offset));
+      }
 
       const json = (await getJson(
         `/api/podcasts/search?${params.toString()}`,
       )) as PodcastSearchResponseShape;
       const rawPodcasts = Array.isArray(json?.data) ? json.data : [];
 
-      const podcasts: PodcastSummary[] = [];
+      const items: PodcastSummary[] = [];
       for (const raw of rawPodcasts) {
         // A single malformed catalog row must not fail the whole search.
         const parsed = podcastSummarySchema.safeParse(raw);
         if (parsed.success) {
-          podcasts.push(parsed.data);
+          items.push(parsed.data);
         }
       }
-      return podcasts;
+
+      return {
+        items,
+        // `hasMore` reflects the backend's pagination over the full result set.
+        hasMore: json?.hasMore === true,
+        limit: numberOr(json?.limit, searchOptions.limit ?? rawPodcasts.length),
+        offset: numberOr(json?.offset, searchOptions.offset ?? 0),
+      };
     },
 
     async getPodcast(id) {

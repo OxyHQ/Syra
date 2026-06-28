@@ -1,6 +1,6 @@
 {
   "name": "@syra.fm/sdk",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Headless, isomorphic client for the Syra public API — catalog reads and 30s preview clips. No React/RN/DOM dependencies; public reads only.",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",

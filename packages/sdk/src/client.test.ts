@@ -70,7 +70,7 @@ function fakeFetch(
 // ── searchTracks ──────────────────────────────────────────────────────────────
 
 describe('createSyraClient.searchTracks', () => {
-  it('calls /api/search with category=tracks and the limit, returns preview-available tracks', async () => {
+  it('calls /api/search with category=tracks and the limit, returns a page of preview-available tracks', async () => {
     const { fetch, calls } = fakeFetch(() => ({
       body: {
         results: {
@@ -79,14 +79,20 @@ describe('createSyraClient.searchTracks', () => {
             makeTrack({ id: '507f1f77bcf86cd799439012', previewAvailable: false }),
           ],
         },
+        hasMore: false,
+        limit: 10,
+        offset: 0,
       },
     }));
 
     const client = createSyraClient({ baseURL: 'https://api.example.test', fetch });
-    const tracks = await client.searchTracks('hello', { limit: 10 });
+    const page = await client.searchTracks('hello', { limit: 10 });
 
-    expect(tracks).toHaveLength(1);
-    expect(tracks[0].id).toBe('507f1f77bcf86cd799439011');
+    expect(page.items).toHaveLength(1);
+    expect(page.items[0].id).toBe('507f1f77bcf86cd799439011');
+    expect(page.hasMore).toBe(false);
+    expect(page.limit).toBe(10);
+    expect(page.offset).toBe(0);
 
     expect(calls).toHaveLength(1);
     const url = new URL(calls[0].url);
@@ -94,6 +100,53 @@ describe('createSyraClient.searchTracks', () => {
     expect(url.searchParams.get('q')).toBe('hello');
     expect(url.searchParams.get('category')).toBe('tracks');
     expect(url.searchParams.get('limit')).toBe('10');
+    expect(url.searchParams.has('offset')).toBe(false);
+  });
+
+  it('sends the offset param and reports hasMore/offset/limit from the backend', async () => {
+    const { fetch, calls } = fakeFetch(() => ({
+      body: {
+        results: { tracks: [makeTrack()] },
+        hasMore: true,
+        limit: 20,
+        offset: 40,
+      },
+    }));
+
+    const client = createSyraClient({ baseURL: 'https://api.example.test', fetch });
+    const page = await client.searchTracks('hello', { limit: 20, offset: 40 });
+
+    expect(page.items).toHaveLength(1);
+    expect(page.hasMore).toBe(true);
+    expect(page.limit).toBe(20);
+    expect(page.offset).toBe(40);
+
+    const url = new URL(calls[0].url);
+    expect(url.searchParams.get('offset')).toBe('40');
+    expect(url.searchParams.get('limit')).toBe('20');
+  });
+
+  it('reports backend hasMore even when client-side preview filtering empties the page', async () => {
+    const { fetch } = fakeFetch(() => ({
+      body: {
+        results: {
+          tracks: [
+            makeTrack({ previewAvailable: false }),
+            makeTrack({ previewAvailable: false }),
+          ],
+        },
+        hasMore: true,
+        limit: 2,
+        offset: 0,
+      },
+    }));
+
+    const client = createSyraClient({ fetch });
+    const page = await client.searchTracks('x', { limit: 2 });
+
+    // All rows were filtered out, but the page is NOT the last one.
+    expect(page.items).toHaveLength(0);
+    expect(page.hasMore).toBe(true);
   });
 
   it('drops malformed rows without throwing', async () => {
@@ -109,14 +162,17 @@ describe('createSyraClient.searchTracks', () => {
     }));
 
     const client = createSyraClient({ fetch });
-    const tracks = await client.searchTracks('x');
-    expect(tracks).toHaveLength(1);
+    const page = await client.searchTracks('x');
+    expect(page.items).toHaveLength(1);
   });
 
-  it('returns an empty array when results.tracks is absent', async () => {
+  it('returns an empty page with hasMore=false when results.tracks is absent', async () => {
     const { fetch } = fakeFetch(() => ({ body: {} }));
     const client = createSyraClient({ fetch });
-    expect(await client.searchTracks('x')).toEqual([]);
+    const page = await client.searchTracks('x');
+    expect(page.items).toEqual([]);
+    expect(page.hasMore).toBe(false);
+    expect(page.offset).toBe(0);
   });
 });
 
@@ -222,36 +278,60 @@ describe('createSyraClient.artworkUrl', () => {
 // ── searchPodcasts ──────────────────────────────────────────────────────────────
 
 describe('createSyraClient.searchPodcasts', () => {
-  it('calls /api/podcasts/search with q and limit, returns parsed shows', async () => {
+  it('calls /api/podcasts/search with q and limit, returns a page of parsed shows', async () => {
     const { fetch, calls } = fakeFetch(() => ({
       body: {
         data: [
           makePodcast({ id: '507f1f77bcf86cd799439021' }),
           makePodcast({ id: '507f1f77bcf86cd799439023', title: 'Second Show' }),
         ],
+        hasMore: false,
+        limit: 5,
+        offset: 0,
       },
     }));
 
     const client = createSyraClient({ baseURL: 'https://api.example.test', fetch });
-    const podcasts = await client.searchPodcasts('news', { limit: 5 });
+    const page = await client.searchPodcasts('news', { limit: 5 });
 
-    expect(podcasts).toHaveLength(2);
-    expect(podcasts[0].id).toBe('507f1f77bcf86cd799439021');
-    expect(podcasts[0].author).toBe('Test Publisher');
+    expect(page.items).toHaveLength(2);
+    expect(page.items[0].id).toBe('507f1f77bcf86cd799439021');
+    expect(page.items[0].author).toBe('Test Publisher');
+    expect(page.hasMore).toBe(false);
+    expect(page.limit).toBe(5);
+    expect(page.offset).toBe(0);
 
     expect(calls).toHaveLength(1);
     const url = new URL(calls[0].url);
     expect(url.pathname).toBe('/api/podcasts/search');
     expect(url.searchParams.get('q')).toBe('news');
     expect(url.searchParams.get('limit')).toBe('5');
+    expect(url.searchParams.has('offset')).toBe(false);
   });
 
-  it('omits the limit param when not provided', async () => {
+  it('sends the offset param and reports hasMore/offset from the backend', async () => {
+    const { fetch, calls } = fakeFetch(() => ({
+      body: { data: [makePodcast()], hasMore: true, limit: 10, offset: 20 },
+    }));
+
+    const client = createSyraClient({ baseURL: 'https://api.example.test', fetch });
+    const page = await client.searchPodcasts('news', { limit: 10, offset: 20 });
+
+    expect(page.hasMore).toBe(true);
+    expect(page.limit).toBe(10);
+    expect(page.offset).toBe(20);
+
+    const url = new URL(calls[0].url);
+    expect(url.searchParams.get('offset')).toBe('20');
+  });
+
+  it('omits the limit and offset params when not provided', async () => {
     const { fetch, calls } = fakeFetch(() => ({ body: { data: [makePodcast()] } }));
     const client = createSyraClient({ fetch });
     await client.searchPodcasts('news');
     const url = new URL(calls[0].url);
     expect(url.searchParams.has('limit')).toBe(false);
+    expect(url.searchParams.has('offset')).toBe(false);
   });
 
   it('drops malformed rows without throwing', async () => {
@@ -259,14 +339,17 @@ describe('createSyraClient.searchPodcasts', () => {
       body: { data: [{ id: 'broken' }, makePodcast()] },
     }));
     const client = createSyraClient({ fetch });
-    const podcasts = await client.searchPodcasts('x');
-    expect(podcasts).toHaveLength(1);
+    const page = await client.searchPodcasts('x');
+    expect(page.items).toHaveLength(1);
   });
 
-  it('returns an empty array when data is absent', async () => {
+  it('returns an empty page with hasMore=false when data is absent', async () => {
     const { fetch } = fakeFetch(() => ({ body: {} }));
     const client = createSyraClient({ fetch });
-    expect(await client.searchPodcasts('x')).toEqual([]);
+    const page = await client.searchPodcasts('x');
+    expect(page.items).toEqual([]);
+    expect(page.hasMore).toBe(false);
+    expect(page.offset).toBe(0);
   });
 });
 
