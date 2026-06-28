@@ -116,6 +116,29 @@ export function extractInvalidIds(error: unknown): string[] | undefined {
   return undefined;
 }
 
+/**
+ * Pulls a human-readable message out of an API error, reading both the
+ * linked-client (`error.data`) and axios-style (`error.response.data`) shapes,
+ * then the error's own `message`. Falls back to the provided default.
+ */
+export function getApiErrorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === 'object') {
+    const bodies: unknown[] = [
+      (error as { response?: { data?: unknown } }).response?.data,
+      (error as { data?: unknown }).data,
+    ];
+    for (const body of bodies) {
+      if (body && typeof body === 'object' && 'message' in body) {
+        const message = (body as { message?: unknown }).message;
+        if (typeof message === 'string' && message.trim()) return message;
+      }
+    }
+    const directMessage = (error as { message?: unknown }).message;
+    if (typeof directMessage === 'string' && directMessage.trim()) return directMessage;
+  }
+  return fallback;
+}
+
 export function isUnauthorizedError(error: unknown): boolean {
   return getHttpStatus(error) === 401;
 }

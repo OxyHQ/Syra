@@ -22,12 +22,15 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', href: '/', icon: 'view-dashboard-outline', matchPrefix: '/podcasts' },
   { label: 'New show', href: '/podcasts/new', icon: 'plus-circle-outline' },
-  { label: 'Music', href: '/music', icon: 'music', comingSoon: true },
+  { label: 'Music', href: '/music', icon: 'music', matchPrefix: '/music' },
 ];
 
 function isActive(pathname: string, item: NavItem): boolean {
   if (item.href === '/') {
     return pathname === '/' || (item.matchPrefix ? pathname.startsWith(item.matchPrefix) : false);
+  }
+  if (item.matchPrefix) {
+    return pathname === item.href || pathname.startsWith(item.matchPrefix);
   }
   return pathname === item.href;
 }
