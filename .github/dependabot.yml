@@ -1,0 +1,15 @@
+# Dependabot configuration for Syra.
+#
+# This repo uses bun (bun.lock) and does NOT track any package-lock.json.
+# Dependabot's npm/npm_and_yarn updater only understands package-lock.json /
+# yarn.lock, so enabling it produces invalid PRs that add stray, unused,
+# out-of-sync npm lockfiles. It is intentionally NOT enabled here.
+# JavaScript dependency updates are applied natively via `bun update`.
+#
+# Only the github-actions ecosystem is managed by Dependabot.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
