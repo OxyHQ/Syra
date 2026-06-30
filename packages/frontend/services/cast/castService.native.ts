@@ -203,11 +203,16 @@ class NativeCastEngine implements PlayerEngine {
   }
 
   private emit(didJustFinish: boolean): void {
+    // On a real finish the player is IDLE, so `isLoaded` is false. Report a
+    // status consistent with how the local engines signal completion (loaded,
+    // position at the end) so the store's `setupPlayerListeners` accepts it and
+    // advances the queue. The finish is authoritative (idleReason FINISHED).
+    const duration = this.duration;
     const update: PlaybackStatusUpdate = {
-      isLoaded: this.isLoaded,
-      playing: this.playing,
-      currentTime: this.currentTime,
-      duration: this.duration,
+      isLoaded: didJustFinish ? true : this.isLoaded,
+      playing: didJustFinish ? false : this.playing,
+      currentTime: didJustFinish ? duration || this.currentTime : this.currentTime,
+      duration,
       didJustFinish,
     };
     for (const cb of this.listeners) {

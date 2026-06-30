@@ -48,6 +48,8 @@ class WebCastEngine implements PlayerEngine {
   private readonly onChange: (event: CafRemotePlayerChangedEvent) => void;
   private previousPlayerState: string | null;
   private destroyed = false;
+  /** Last positive duration seen — the receiver resets duration to 0 at IDLE. */
+  private lastKnownDuration = 0;
 
   constructor(
     private readonly framework: CafFrameworkNamespace,
@@ -165,6 +167,9 @@ class WebCastEngine implements PlayerEngine {
   private handleChange(): void {
     if (this.destroyed) return;
 
+    const liveDuration = this.duration;
+    if (liveDuration > 0) this.lastKnownDuration = liveDuration;
+
     const state = this.remotePlayer.playerState;
     const idle = this.chromeCast.media.PlayerState.IDLE;
     const wasNotIdle = this.previousPlayerState !== idle;
@@ -180,11 +185,17 @@ class WebCastEngine implements PlayerEngine {
   }
 
   private emit(didJustFinish: boolean): void {
+    // On a real finish the receiver has gone IDLE — `isLoaded` is false and the
+    // live position/duration reset to 0. Report a status consistent with how the
+    // local engines signal completion (loaded, position at the end) so the store's
+    // `setupPlayerListeners` accepts it and advances the queue. The finish itself
+    // is already authoritative (gated on idleReason FINISHED), not spurious.
+    const duration = this.duration || this.lastKnownDuration;
     const status: PlaybackStatusUpdate = {
-      isLoaded: this.isLoaded,
-      playing: this.playing,
-      currentTime: this.currentTime,
-      duration: this.duration,
+      isLoaded: didJustFinish ? true : this.isLoaded,
+      playing: didJustFinish ? false : this.playing,
+      currentTime: didJustFinish ? duration : this.currentTime,
+      duration,
       didJustFinish,
     };
     for (const cb of this.listeners) {
