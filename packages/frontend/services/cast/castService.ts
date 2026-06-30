@@ -47,6 +47,10 @@ class NoopCastController implements CastController {
   setMediaMetadata(_meta: CastMediaMetadata): void {
     // Nothing is loaded onto a receiver in the default build.
   }
+
+  setContentType(_contentType: string): void {
+    // Nothing is loaded onto a receiver in the default build.
+  }
 }
 
 export const castController: CastController = new NoopCastController();

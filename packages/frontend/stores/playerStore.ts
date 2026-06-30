@@ -45,6 +45,7 @@ import { createWebHlsPlayer } from './playback/webHlsPlayer';
 import { isRealFinish } from './playback/isRealFinish';
 import { getCurrentMusicPreferences } from './musicPreferencesStore';
 import { castController } from '@/services/cast/castService';
+import { CAST_HLS_CONTENT_TYPE, CAST_PROGRESSIVE_CONTENT_TYPE } from '@/services/cast/types';
 import type { CastMediaMetadata, CastSessionState } from '@/services/cast/types';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { resolvePodcastImageUri } from '@/utils/podcastImages';
@@ -531,8 +532,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       const castEngine = castController.getEngine();
       if (castEngine) {
         logger.debug('Routing playback to cast receiver', { trackId: media.id });
-        // Metadata must be set before replace() so it is applied to the load.
+        // Metadata and content type must be set before replace() so they are
+        // applied to the load. HLS streams use the m3u8 MIME type; everything
+        // else (Audius / progressive MP3, or the legacy no-resolution path) is a
+        // progressive stream the receiver must not be told is HLS.
         castController.setMediaMetadata(buildCastMetadata());
+        castController.setContentType(
+          resolution?.type === 'hls' ? CAST_HLS_CONTENT_TYPE : CAST_PROGRESSIVE_CONTENT_TYPE,
+        );
         castEngine.replace({ uri: audioUrl });
         castEngine.volume = get().volume;
         setupPlayerListeners(castEngine);

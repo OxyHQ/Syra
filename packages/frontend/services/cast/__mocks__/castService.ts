@@ -6,6 +6,7 @@
  * the session state and inspect the cast engine without `as any` casts.
  */
 import type { PlayerEngine } from '@/stores/playback/playerEngine';
+import { CAST_HLS_CONTENT_TYPE } from '../types';
 import type { CastController, CastSessionState } from '../types';
 
 /** A {@link PlayerEngine} whose methods are jest spies for assertions. */
@@ -40,6 +41,9 @@ export const castTestEngine: MockCastEngine = {
 };
 
 let sessionState: CastSessionState = 'available';
+// The content type most recently applied to a cast load, mirroring how the real
+// controllers hold it and pass it to the engine on replace().
+let contentType: string = CAST_HLS_CONTENT_TYPE;
 // The store registers its handler once at creation; kept across resets so specs
 // can fire session transitions exactly like the real controller would.
 let registered: ((state: CastSessionState) => void) | null = null;
@@ -58,7 +62,15 @@ export const castController: CastController = {
   getDeviceName: jest.fn(() => (sessionState === 'connected' ? 'Living Room TV' : null)),
   getEngine: jest.fn((): PlayerEngine | null => (sessionState === 'connected' ? castTestEngine : null)),
   setMediaMetadata: jest.fn(),
+  setContentType: jest.fn((nextContentType: string) => {
+    contentType = nextContentType;
+  }),
 };
+
+/** The content type most recently applied to a cast load (set via setContentType). */
+export function getCastContentType(): string {
+  return contentType;
+}
 
 /** Set the reported session state without notifying subscribers. */
 export function setCastSessionState(state: CastSessionState): void {
@@ -79,4 +91,5 @@ export function fireCastSessionState(state: CastSessionState): void {
  */
 export function resetCastMock(): void {
   sessionState = 'available';
+  contentType = CAST_HLS_CONTENT_TYPE;
 }

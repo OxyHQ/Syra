@@ -4,9 +4,11 @@ import { resolveStream } from '@/services/streamService';
 import { attachSource } from './playback/attachSource';
 import { usePlayerStore } from './playerStore';
 import { castController } from '@/services/cast/castService';
+import { CAST_HLS_CONTENT_TYPE, CAST_PROGRESSIVE_CONTENT_TYPE } from '@/services/cast/types';
 import {
   castTestEngine,
   fireCastSessionState,
+  getCastContentType,
   resetCastMock,
   setCastSessionState,
 } from '@/services/cast/__mocks__/castService';
@@ -186,8 +188,30 @@ describe('playerStore — Google Cast routing', () => {
 
     expect(castTestEngine.replace).toHaveBeenCalledWith({ uri: 'https://cdn/hls/a.m3u8' });
     expect(castController.setMediaMetadata).toHaveBeenCalled();
+    // An HLS stream is loaded onto the receiver as an m3u8 playlist.
+    expect(castController.setContentType).toHaveBeenCalledWith(CAST_HLS_CONTENT_TYPE);
+    expect(getCastContentType()).toBe(CAST_HLS_CONTENT_TYPE);
     expect(createAudioPlayerMock).not.toHaveBeenCalled();
     expect(attachSourceMock).not.toHaveBeenCalled();
+    expect(usePlayerStore.getState().player).toBe(castTestEngine);
+  });
+
+  it('loads an Audius progressive stream onto the cast receiver as audio/mpeg, not HLS', async () => {
+    resolveStreamMock.mockResolvedValue({
+      url: 'https://audius-cdn/track.mp3',
+      type: 'audius',
+      expiresAt: null,
+    });
+
+    fireCastSessionState('connected');
+    expect(usePlayerStore.getState().isCasting).toBe(true);
+
+    await usePlayerStore.getState().playTrack(audiusTrack);
+
+    expect(castTestEngine.replace).toHaveBeenCalledWith({ uri: 'https://audius-cdn/track.mp3' });
+    // A progressive MP3 must NOT be announced as HLS or the receiver plays silence.
+    expect(castController.setContentType).toHaveBeenCalledWith(CAST_PROGRESSIVE_CONTENT_TYPE);
+    expect(getCastContentType()).toBe(CAST_PROGRESSIVE_CONTENT_TYPE);
     expect(usePlayerStore.getState().player).toBe(castTestEngine);
   });
 

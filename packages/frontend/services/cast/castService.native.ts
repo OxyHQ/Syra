@@ -67,6 +67,7 @@ class NativeCastEngine implements PlayerEngine {
   constructor(
     private readonly client: RemoteMediaClient,
     private readonly getMeta: () => CastMediaMetadata,
+    private readonly getContentType: () => string,
     private readonly onRemoved: () => void,
   ) {
     this.subscriptions.push(
@@ -172,7 +173,7 @@ class NativeCastEngine implements PlayerEngine {
     const meta = this.getMeta();
     return {
       contentUrl: uri,
-      contentType: CAST_HLS_CONTENT_TYPE,
+      contentType: this.getContentType(),
       streamType: MediaStreamType.BUFFERED,
       metadata: {
         type: 'musicTrack',
@@ -224,6 +225,7 @@ class NativeCastController implements CastController {
   private engine: NativeCastEngine | null = null;
   private deviceName: string | null = null;
   private meta: CastMediaMetadata = {};
+  private contentType: string = CAST_HLS_CONTENT_TYPE;
 
   constructor() {
     CastContext.onCastStateChanged((state) => {
@@ -282,6 +284,10 @@ class NativeCastController implements CastController {
     this.meta = meta;
   }
 
+  setContentType(contentType: string): void {
+    this.contentType = contentType;
+  }
+
   // ── Internal ───────────────────────────────────────────────────────────────
 
   private adoptSession(session: CastSession): void {
@@ -302,7 +308,7 @@ class NativeCastController implements CastController {
   }
 
   private createEngine(client: RemoteMediaClient): NativeCastEngine {
-    return new NativeCastEngine(client, () => this.meta, () => {
+    return new NativeCastEngine(client, () => this.meta, () => this.contentType, () => {
       this.engine = null;
     });
   }

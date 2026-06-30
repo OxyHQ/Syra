@@ -62,9 +62,19 @@ export interface CastController {
   getEngine(): PlayerEngine | null;
   /** Set metadata applied to the next media loaded onto the receiver. */
   setMediaMetadata(meta: CastMediaMetadata): void;
+  /**
+   * Set the MIME content type applied to the next media loaded onto the
+   * receiver. HLS master playlists and progressive (MP3) streams need different
+   * types — telling the receiver a progressive stream is HLS makes it parse-fail
+   * and play silence.
+   */
+  setContentType(contentType: string): void;
 }
 
 // ── Shared constants ──────────────────────────────────────────────────────────
 
 /** MIME type used when loading Syra HLS master playlists onto a receiver. */
 export const CAST_HLS_CONTENT_TYPE = 'application/x-mpegURL';
+
+/** MIME type used when loading progressive (Audius / MP3) streams onto a receiver. */
+export const CAST_PROGRESSIVE_CONTENT_TYPE = 'audio/mpeg';

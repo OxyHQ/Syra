@@ -55,6 +55,7 @@ class WebCastEngine implements PlayerEngine {
     private readonly remotePlayer: CafRemotePlayer,
     private readonly controller: CafRemotePlayerController,
     private readonly getMeta: () => CastMediaMetadata,
+    private readonly getContentType: () => string,
     private readonly onRemoved: () => void,
   ) {
     this.previousPlayerState = remotePlayer.playerState;
@@ -121,7 +122,7 @@ class WebCastEngine implements PlayerEngine {
       return;
     }
 
-    const mediaInfo = new this.chromeCast.media.MediaInfo(uri, CAST_HLS_CONTENT_TYPE);
+    const mediaInfo = new this.chromeCast.media.MediaInfo(uri, this.getContentType());
     mediaInfo.metadata = this.buildMetadata();
     const request = new this.chromeCast.media.LoadRequest(mediaInfo);
     request.autoplay = true;
@@ -199,6 +200,7 @@ class WebCastController implements CastController {
   private context: CafCastContext | null = null;
   private engine: WebCastEngine | null = null;
   private meta: CastMediaMetadata = {};
+  private contentType: string = CAST_HLS_CONTENT_TYPE;
   private initialized = false;
   private readonly onCastStateChanged: (event: CafCastStateEvent) => void;
 
@@ -257,6 +259,10 @@ class WebCastController implements CastController {
 
   setMediaMetadata(meta: CastMediaMetadata): void {
     this.meta = meta;
+  }
+
+  setContentType(contentType: string): void {
+    this.contentType = contentType;
   }
 
   // ── Internal ───────────────────────────────────────────────────────────────
@@ -348,6 +354,7 @@ class WebCastController implements CastController {
       remotePlayer,
       controller,
       () => this.meta,
+      () => this.contentType,
       () => {
         this.engine = null;
       },
