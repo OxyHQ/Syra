@@ -6,7 +6,10 @@ const schema = z.object({
   PORT: z.coerce.number().default(3000),
   LOG_LEVEL: z.string().optional(),
 
-  MONGODB_URI: z.string(),
+  // Optional at parse time so `env` stays importable in any context (tests,
+  // tooling) without a live DB config. The connection is the real authority:
+  // `utils/database.ts` throws at connect time when MONGODB_URI is missing.
+  MONGODB_URI: z.string().optional(),
   MONGODB_MAX_POOL_SIZE: z.coerce.number().default(100),
   MONGODB_MIN_POOL_SIZE: z.coerce.number().default(10),
   MONGODB_READ_PREFERENCE: z.string().default('primary'),
@@ -62,6 +65,7 @@ const schema = z.object({
 
   AUDIUS_API_URL: z.string().optional(),
   AUDIUS_APP_NAME: z.string().optional(),
+  AUDIUS_BACKGROUND_IMPORT_ENABLED: z.string().optional(),
 
   JAMENDO_CLIENT_ID: z.string().optional(),
   JAMENDO_API_URL: z.string().optional(),

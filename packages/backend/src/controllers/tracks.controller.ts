@@ -6,6 +6,7 @@ import { ArtistModel } from '../models/CatalogEntity';
 import { AlbumModel } from '../models/Album';
 import { toApiFormat, toApiFormatArray, formatTracksWithCoverArt, formatTrackWithCoverArt } from '../utils/musicHelpers';
 import { isDatabaseConnected } from '../utils/database';
+import { env } from '../config/env';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { getRequiredOxyUserId as getAuthenticatedUserId } from '@oxyhq/core/server';
 import { uploadTrackAudio } from '../services/audioStorageService';
@@ -382,7 +383,7 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
       if (!res.headersSent) {
         res.status(getHttpStatus(error)).json({
           error: getErrorMessage(error) || 'Internal Server Error',
-          ...(process.env.NODE_ENV === 'development' && { details: getErrorStack(error) }),
+          ...(env.NODE_ENV === 'development' && { details: getErrorStack(error) }),
         });
       } else {
         logger.error('[TracksController] Error occurred but response already sent');

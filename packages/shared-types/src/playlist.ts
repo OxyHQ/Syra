@@ -37,7 +37,6 @@ export const playlistSchema = timestampsSchema.extend({
   trackCount: z.number(),
   totalDuration: z.number(),
   followers: z.number().optional(),
-  isPublic: z.boolean(),
   primaryColor: z.string().optional(),
   secondaryColor: z.string().optional(),
   collaborators: z.array(playlistCollaboratorSchema).optional(),
@@ -66,7 +65,6 @@ export const createPlaylistRequestSchema = z.object({
   description: z.string().optional(),
   coverArt: z.string().optional(),
   visibility: playlistVisibilitySchema.optional(),
-  isPublic: z.boolean().optional(),
 });
 export type CreatePlaylistRequest = z.infer<typeof createPlaylistRequestSchema>;
 
@@ -75,7 +73,6 @@ export const updatePlaylistRequestSchema = z.object({
   description: z.string().optional(),
   coverArt: z.string().optional(),
   visibility: playlistVisibilitySchema.optional(),
-  isPublic: z.boolean().optional(),
 });
 export type UpdatePlaylistRequest = z.infer<typeof updatePlaylistRequestSchema>;
 
@@ -97,3 +94,23 @@ export const reorderPlaylistTracksRequestSchema = z.object({
   trackIds: z.array(z.string()),
 });
 export type ReorderPlaylistTracksRequest = z.infer<typeof reorderPlaylistTracksRequestSchema>;
+
+/**
+ * Request-body schemas for the `/:id/tracks` routes, where the playlist id is a
+ * path param rather than a body field. Used by the backend `validate()`
+ * middleware so controllers can trust `req.body`.
+ */
+export const addTracksToPlaylistBodySchema = addTracksToPlaylistRequestSchema.omit({ playlistId: true }).extend({
+  trackIds: z.array(z.string()).min(1),
+});
+export type AddTracksToPlaylistBody = z.infer<typeof addTracksToPlaylistBodySchema>;
+
+export const removeTracksFromPlaylistBodySchema = z.object({
+  trackIds: z.array(z.string()).min(1),
+});
+export type RemoveTracksFromPlaylistBody = z.infer<typeof removeTracksFromPlaylistBodySchema>;
+
+export const reorderPlaylistTracksBodySchema = z.object({
+  trackIds: z.array(z.string()).min(1),
+});
+export type ReorderPlaylistTracksBody = z.infer<typeof reorderPlaylistTracksBodySchema>;

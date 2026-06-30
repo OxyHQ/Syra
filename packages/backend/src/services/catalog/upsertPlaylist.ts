@@ -171,7 +171,6 @@ export async function upsertPlaylist(
       coverArt: mirroredCover?.imageId,
       coverArtSizes: mirroredCover?.imageSizes,
       visibility: PlaylistVisibility.PUBLIC,
-      isPublic: true,
       trackCount: 0,
       totalDuration: 0,
       followers: 0,
@@ -207,7 +206,6 @@ export async function upsertPlaylist(
   }
   if (!existing.source) existing.source = source;
   existing.visibility = PlaylistVisibility.PUBLIC;
-  existing.isPublic = true;
 
   const totals = await replacePlaylistTracks(existing._id, orderedTrackIds);
   existing.trackCount = totals.totalTracks;

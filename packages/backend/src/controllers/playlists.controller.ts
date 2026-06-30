@@ -6,7 +6,6 @@ import { PlaylistTrackModel } from '../models/PlaylistTrack';
 import { TrackModel } from '../models/Track';
 import { getStoredImageColors } from '../utils/imageColors';
 import { toApiFormat, toApiFormatArray, formatTrackWithCoverArt, formatPlaylistWithCoverArt, formatPlaylistsWithCoverArt } from '../utils/musicHelpers';
-import { isDatabaseConnected } from '../utils/database';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { getParam } from '../utils/reqParams';
 import { withImageFirstSort } from '../utils/imageFirstSort';
@@ -45,7 +44,7 @@ async function canViewPlaylist(playlistId: string, userId?: string): Promise<boo
   if (!playlist) return false;
   
   // Public playlists are viewable by anyone
-  if (playlist.isPublic || playlist.visibility === PlaylistVisibility.PUBLIC) return true;
+  if (playlist.visibility === PlaylistVisibility.PUBLIC) return true;
   
   // Private playlists require authentication
   if (!userId) return false;
@@ -90,10 +89,6 @@ async function updatePlaylistStats(playlistId: mongoose.Types.ObjectId) {
  */
 export const getUserPlaylists = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
-      return res.status(503).json({ error: 'Database not available' });
-    }
-
     const userId = req.user?.id;
 
     if (!userId) {
@@ -127,10 +122,6 @@ export const getUserPlaylists = async (req: AuthRequest, res: Response, next: Ne
  */
 export const getPlaylistById = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
-      return res.status(503).json({ error: 'Database not available' });
-    }
-
     const id = getParam(req, 'id');
     const userId = req.user?.id;
 
@@ -162,10 +153,6 @@ export const getPlaylistById = async (req: AuthRequest, res: Response, next: Nex
  */
 export const getPlaylistTracks = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
-      return res.status(503).json({ error: 'Database not available' });
-    }
-
     const id = getParam(req, 'id');
     const userId = req.user?.id;
     const playbackOptions = await resolveCatalogPlaybackOptions(userId);
@@ -230,10 +217,6 @@ export const getPlaylistTracks = async (req: AuthRequest, res: Response, next: N
  */
 export const createPlaylist = async (req: PlaylistAuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
-      return res.status(503).json({ error: 'Database not available' });
-    }
-
     const userId = req.user?.id;
     const username = req.user?.username || userId;
 
@@ -241,7 +224,7 @@ export const createPlaylist = async (req: PlaylistAuthRequest, res: Response, ne
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const { name, description, coverArt, visibility, isPublic } = req.body;
+    const { name, description, coverArt, visibility } = req.body;
 
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       return res.status(400).json({ error: 'Playlist name is required' });
@@ -276,7 +259,6 @@ export const createPlaylist = async (req: PlaylistAuthRequest, res: Response, ne
       ownerUsername: username,
       coverArt: coverArt || undefined,
       visibility: visibility || PlaylistVisibility.PRIVATE,
-      isPublic: isPublic || false,
       trackCount: 0,
       totalDuration: 0,
       followers: 0,
@@ -299,10 +281,6 @@ export const createPlaylist = async (req: PlaylistAuthRequest, res: Response, ne
  */
 export const updatePlaylist = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
-      return res.status(503).json({ error: 'Database not available' });
-    }
-
     const id = getParam(req, 'id');
     const userId = req.user?.id;
 
@@ -319,7 +297,7 @@ export const updatePlaylist = async (req: AuthRequest, res: Response, next: Next
       return res.status(403).json({ error: 'Forbidden' });
     }
 
-    const { name, description, coverArt, visibility, isPublic } = req.body;
+    const { name, description, coverArt, visibility } = req.body;
 
     const updateData: any = {};
     if (name !== undefined) {
@@ -367,9 +345,6 @@ export const updatePlaylist = async (req: AuthRequest, res: Response, next: Next
       }
       updateData.visibility = visibility;
     }
-    if (isPublic !== undefined) {
-      updateData.isPublic = Boolean(isPublic);
-    }
 
     const playlist = await PlaylistModel.findByIdAndUpdate(
       id,
@@ -394,10 +369,6 @@ export const updatePlaylist = async (req: AuthRequest, res: Response, next: Next
  */
 export const deletePlaylist = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
-      return res.status(503).json({ error: 'Database not available' });
-    }
-
     const id = getParam(req, 'id');
     const userId = req.user?.id;
 
@@ -437,10 +408,6 @@ export const deletePlaylist = async (req: AuthRequest, res: Response, next: Next
  */
 export const addTracksToPlaylist = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
-      return res.status(503).json({ error: 'Database not available' });
-    }
-
     const id = getParam(req, 'id');
     const userId = req.user?.id;
 
@@ -536,10 +503,6 @@ export const addTracksToPlaylist = async (req: AuthRequest, res: Response, next:
  */
 export const removeTracksFromPlaylist = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
-      return res.status(503).json({ error: 'Database not available' });
-    }
-
     const id = getParam(req, 'id');
     const userId = req.user?.id;
 
@@ -598,10 +561,6 @@ export const removeTracksFromPlaylist = async (req: AuthRequest, res: Response, 
  */
 export const reorderPlaylistTracks = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
-      return res.status(503).json({ error: 'Database not available' });
-    }
-
     const id = getParam(req, 'id');
     const userId = req.user?.id;
 

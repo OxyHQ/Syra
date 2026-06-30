@@ -7,7 +7,7 @@ import { Track, PlaylistTrack, Playlist } from '@syra/shared-types';
  * subset of {@link Playlist} that the playlist-edit flow can mutate.
  */
 export type PlaylistUpdatePayload = Partial<
-  Pick<Playlist, 'name' | 'description' | 'coverArt' | 'visibility' | 'isPublic' | 'primaryColor' | 'secondaryColor'>
+  Pick<Playlist, 'name' | 'description' | 'coverArt' | 'visibility' | 'primaryColor' | 'secondaryColor'>
 >;
 
 type PlaylistUpdateCallback = (data: { playlistId: string; tracks: Track[]; playlistTracks: PlaylistTrack[] }) => void;

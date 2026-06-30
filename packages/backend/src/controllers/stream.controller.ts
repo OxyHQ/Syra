@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import type { Response } from 'express';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
+import { env } from '../config/env';
 import { TrackModel } from '../models/Track';
 import { TrackKeyModel } from '../models/TrackKey';
 import { UserMusicPreferencesModel } from '../models/UserMusicPreferences';
@@ -155,7 +156,7 @@ export async function getStream(req: AuthRequest, res: Response): Promise<void> 
       { trackId, userId: req.user.id, maxBitrateKbps },
       STREAM_SESSION_TTL_SEC,
     );
-    const base = process.env.STREAM_KEY_BASE_URL ?? '';
+    const base = env.STREAM_KEY_BASE_URL;
     const url = `${base}/api/stream/${trackId}/master.m3u8?t=${token}`;
     const expiresAt = new Date(Date.now() + STREAM_SESSION_TTL_SEC * 1000).toISOString();
 
@@ -273,7 +274,7 @@ export async function getMasterPlaylist(req: AuthRequest, res: Response): Promis
   }
 
   const maxBitrateKbps = access.maxBitrateKbps;
-  const baseUrl = process.env.STREAM_KEY_BASE_URL ?? '';
+  const baseUrl = env.STREAM_KEY_BASE_URL;
   const token = resolveManifestToken(req, trackId, maxBitrateKbps);
 
   const playlist = await buildMasterPlaylist(track, token, baseUrl, maxBitrateKbps);
@@ -358,7 +359,7 @@ export async function getVariantPlaylist(req: AuthRequest, res: Response): Promi
     return;
   }
 
-  const baseUrl = process.env.STREAM_KEY_BASE_URL ?? '';
+  const baseUrl = env.STREAM_KEY_BASE_URL;
   const token = resolveManifestToken(req, trackId, access.maxBitrateKbps);
 
   const playlist = await buildVariantPlaylist(track, bitrateKbps, token, baseUrl);

@@ -136,7 +136,7 @@ import {
 const newPlaylist: CreatePlaylistRequest = {
   name: "My Favorite Songs",
   description: "A collection of my favorite tracks",
-  isPublic: true
+  visibility: "public"
 };
 
 // Song with metadata

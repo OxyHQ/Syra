@@ -13,7 +13,8 @@
  */
 
 import React, { memo, useMemo } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { I18nextProvider } from 'react-i18next';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
@@ -32,6 +33,7 @@ import { Toaster } from '@/lib/sonner';
 import i18n from '@/lib/i18n';
 import { useServerAppearanceSync } from '@/hooks/useServerAppearanceSync';
 import { clearStreamResolutionCache } from '@/services/streamService';
+import { persistOptions } from '@/lib/queryPersister';
 
 /**
  * Non-rendering bridge that pushes the user's saved appearance settings into the
@@ -87,7 +89,7 @@ export const AppProviders = memo(function AppProviders({
     <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <ErrorBoundary>
-          <QueryClientProvider client={queryClient}>
+          <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
             <OxyProvider
               oxyServices={oxyServices}
               clientId={OXY_CLIENT_ID}
@@ -115,7 +117,7 @@ export const AppProviders = memo(function AppProviders({
                 </I18nextProvider>
               </ImageResolverProvider>
             </OxyProvider>
-          </QueryClientProvider>
+          </PersistQueryClientProvider>
         </ErrorBoundary>
       </GestureHandlerRootView>
     </SafeAreaProvider>

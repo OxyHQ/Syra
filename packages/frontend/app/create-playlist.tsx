@@ -63,7 +63,6 @@ const CreatePlaylistScreen: React.FC = () => {
         name: input.name,
         description: input.description || undefined,
         coverArt: input.coverArt || undefined,
-        isPublic: input.visibility === PlaylistVisibility.PUBLIC,
         visibility: input.visibility,
     }),
     onSuccess: (playlist) => {
