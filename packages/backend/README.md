@@ -148,7 +148,7 @@ The API uses **Oxy** for user authentication and user data management. All user-
 #### POST /api/playlists
 - Creates a new playlist
 - Authentication: Bearer token required
-- Body: `{ name: string, description?: string, isPublic?: boolean }`
+- Body: `{ name: string, description?: string, coverArt?: string, visibility?: 'public' | 'private' | 'unlisted' }`
 
 #### GET /api/playlists/:id
 - Retrieves playlist details including songs
@@ -237,7 +237,7 @@ erDiagram
         string userId FK
         string name
         string description
-        boolean isPublic
+        string visibility
         datetime createdAt
     }
 ```
