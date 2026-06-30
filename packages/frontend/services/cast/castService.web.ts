@@ -204,6 +204,9 @@ class WebCastController implements CastController {
 
   constructor() {
     this.onCastStateChanged = () => this.notifySubscribers();
+    // `+html.tsx` is ignored by Expo Router under `web.output: 'single'`, so the
+    // CAF sender SDK must be injected at runtime rather than via a static <script>.
+    this.ensureSdkScript();
     this.tryInitialize();
     this.scheduleReadinessCheck();
   }
@@ -257,6 +260,33 @@ class WebCastController implements CastController {
   }
 
   // ── Internal ───────────────────────────────────────────────────────────────
+
+  /**
+   * Inject the CAF Web Sender SDK script if it is not already present. Loading
+   * it here (rather than from `+html.tsx`, which Expo Router does not apply to
+   * the `output: 'single'` SPA shell) is what makes `window.cast` exist, so
+   * `isSupported()` can ever become true. The readiness callback is registered
+   * first so the SDK's `__onGCastApiAvailable` signal is never missed, and the
+   * script is added at most once (covering a future `output: 'static'` build
+   * where `+html.tsx` would already include it).
+   */
+  private ensureSdkScript(): void {
+    if (typeof document === 'undefined' || typeof window === 'undefined') return;
+    if (window.cast?.framework) return;
+
+    this.registerReadinessCallback();
+
+    const src = 'https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1';
+    if (document.querySelector(`script[src="${src}"]`)) return;
+
+    const script = document.createElement('script');
+    script.src = src;
+    script.async = true;
+    script.addEventListener('error', () => {
+      logger.warn('Failed to load the Google Cast sender SDK');
+    });
+    document.head.appendChild(script);
+  }
 
   /** Idempotently wire the CAF context once the SDK is present. */
   private tryInitialize(): void {
