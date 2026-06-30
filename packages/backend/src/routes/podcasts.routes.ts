@@ -23,6 +23,7 @@ import {
   getEpisodeMasterPlaylist,
   getEpisodeVariantPlaylist,
 } from '../controllers/podcastAudio.controller';
+import { streamMediaCors } from '../middleware/streamMediaCors';
 
 /**
  * Mounted on the PUBLIC router with optional Oxy auth (server.ts). Reads are
@@ -39,12 +40,18 @@ router.post('/import', requireAuth, importPodcast);
 router.get('/subscriptions', requireAuth, getSubscriptions);
 router.get('/mine', requireAuth, getMyPodcasts);
 
-// Episode audio + tokenized HLS stream (3-segment, before /:id and /:id/episodes)
+// Episode audio + tokenized HLS stream (3-segment, before /:id and /:id/episodes).
+// The tokenized media endpoints carry `streamMediaCors` so Google Cast (a foreign
+// Origin) can fetch the manifest, variant playlists, and key cross-origin. The
+// `/stream` resolver stays bearer-authed with the global credentialed CORS.
 router.get('/episodes/:id/audio', getEpisodeAudio);
 router.get('/episodes/:id/stream', getEpisodeStream);
-router.get('/episodes/:id/master.m3u8', getEpisodeMasterPlaylist);
-router.get('/episodes/:id/v/:variant', getEpisodeVariantPlaylist);
-router.get('/episodes/:id/key', getEpisodeStreamKey);
+router.options('/episodes/:id/master.m3u8', streamMediaCors);
+router.get('/episodes/:id/master.m3u8', streamMediaCors, getEpisodeMasterPlaylist);
+router.options('/episodes/:id/v/:variant', streamMediaCors);
+router.get('/episodes/:id/v/:variant', streamMediaCors, getEpisodeVariantPlaylist);
+router.options('/episodes/:id/key', streamMediaCors);
+router.get('/episodes/:id/key', streamMediaCors, getEpisodeStreamKey);
 
 // Browse + create
 router.get('/', browsePodcasts);

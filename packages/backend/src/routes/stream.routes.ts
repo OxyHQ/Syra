@@ -5,6 +5,7 @@ import {
   getMasterPlaylist,
   getVariantPlaylist,
 } from '../controllers/stream.controller';
+import { streamMediaCors } from '../middleware/streamMediaCors';
 
 const router = Router();
 
@@ -18,14 +19,22 @@ const router = Router();
  *
  * Route ordering: specific fixed-suffix paths are registered before /:trackId so
  * Express does not misroute /key, /master.m3u8, or /v/:variant to the resolver.
+ *
+ * The tokenized media endpoints carry `streamMediaCors` so Google Cast (a foreign
+ * Origin) can fetch the manifest, variant playlists, and key cross-origin. The
+ * `/:trackId` resolver is bearer-authed and deliberately keeps the global,
+ * credentialed CORS — never give it the permissive `*`.
  */
 
-// Sub-resource routes (specific paths first)
-router.get('/:trackId/key', getStreamKey);
-router.get('/:trackId/master.m3u8', getMasterPlaylist);
-router.get('/:trackId/v/:variant', getVariantPlaylist);
+// Sub-resource routes (specific paths first) — tokenized media, Cast-reachable.
+router.options('/:trackId/key', streamMediaCors);
+router.get('/:trackId/key', streamMediaCors, getStreamKey);
+router.options('/:trackId/master.m3u8', streamMediaCors);
+router.get('/:trackId/master.m3u8', streamMediaCors, getMasterPlaylist);
+router.options('/:trackId/v/:variant', streamMediaCors);
+router.get('/:trackId/v/:variant', streamMediaCors, getVariantPlaylist);
 
-// Resolver (catch-last)
+// Resolver (catch-last) — bearer-authed, keeps credentialed CORS.
 router.get('/:trackId', getStream);
 
 export default router;
