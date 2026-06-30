@@ -6,7 +6,6 @@ import { PlaylistTrackModel } from '../models/PlaylistTrack';
 import { TrackModel } from '../models/Track';
 import { getStoredImageColors } from '../utils/imageColors';
 import { toApiFormat, toApiFormatArray, formatTrackWithCoverArt, formatPlaylistWithCoverArt, formatPlaylistsWithCoverArt } from '../utils/musicHelpers';
-import { isDatabaseConnected } from '../utils/database';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { getParam } from '../utils/reqParams';
 import { withImageFirstSort } from '../utils/imageFirstSort';
@@ -90,10 +89,6 @@ async function updatePlaylistStats(playlistId: mongoose.Types.ObjectId) {
  */
 export const getUserPlaylists = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
-      return res.status(503).json({ error: 'Database not available' });
-    }
-
     const userId = req.user?.id;
 
     if (!userId) {
@@ -127,10 +122,6 @@ export const getUserPlaylists = async (req: AuthRequest, res: Response, next: Ne
  */
 export const getPlaylistById = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
-      return res.status(503).json({ error: 'Database not available' });
-    }
-
     const id = getParam(req, 'id');
     const userId = req.user?.id;
 
@@ -162,10 +153,6 @@ export const getPlaylistById = async (req: AuthRequest, res: Response, next: Nex
  */
 export const getPlaylistTracks = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
-      return res.status(503).json({ error: 'Database not available' });
-    }
-
     const id = getParam(req, 'id');
     const userId = req.user?.id;
     const playbackOptions = await resolveCatalogPlaybackOptions(userId);
@@ -230,10 +217,6 @@ export const getPlaylistTracks = async (req: AuthRequest, res: Response, next: N
  */
 export const createPlaylist = async (req: PlaylistAuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
-      return res.status(503).json({ error: 'Database not available' });
-    }
-
     const userId = req.user?.id;
     const username = req.user?.username || userId;
 
@@ -298,10 +281,6 @@ export const createPlaylist = async (req: PlaylistAuthRequest, res: Response, ne
  */
 export const updatePlaylist = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
-      return res.status(503).json({ error: 'Database not available' });
-    }
-
     const id = getParam(req, 'id');
     const userId = req.user?.id;
 
@@ -390,10 +369,6 @@ export const updatePlaylist = async (req: AuthRequest, res: Response, next: Next
  */
 export const deletePlaylist = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
-      return res.status(503).json({ error: 'Database not available' });
-    }
-
     const id = getParam(req, 'id');
     const userId = req.user?.id;
 
@@ -433,10 +408,6 @@ export const deletePlaylist = async (req: AuthRequest, res: Response, next: Next
  */
 export const addTracksToPlaylist = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
-      return res.status(503).json({ error: 'Database not available' });
-    }
-
     const id = getParam(req, 'id');
     const userId = req.user?.id;
 
@@ -532,10 +503,6 @@ export const addTracksToPlaylist = async (req: AuthRequest, res: Response, next:
  */
 export const removeTracksFromPlaylist = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
-      return res.status(503).json({ error: 'Database not available' });
-    }
-
     const id = getParam(req, 'id');
     const userId = req.user?.id;
 
@@ -594,10 +561,6 @@ export const removeTracksFromPlaylist = async (req: AuthRequest, res: Response, 
  */
 export const reorderPlaylistTracks = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
-      return res.status(503).json({ error: 'Database not available' });
-    }
-
     const id = getParam(req, 'id');
     const userId = req.user?.id;
 
