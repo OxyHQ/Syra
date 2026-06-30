@@ -1,9 +1,26 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useOxy } from '@oxyhq/services';
-import { type UserEntity } from '@/stores/usersStore';
 import { useUserAppearance, type UserAppearance } from '@/store/appearanceStore';
 import { usePrivacySettings } from './usePrivacySettings';
+
+export interface UserEntity {
+  id: string;
+  _id?: string;
+  username?: string;
+  // `displayName` is the canonical, server-composed display string from the Oxy
+  // API user contract — render it directly. `full`/`first`/`last` are raw,
+  // edit-time fields and must NOT be recomposed into a display name on the client.
+  name?: { displayName?: string; full?: string; first?: string; last?: string } | string;
+  handle?: string;
+  avatar?: string;
+  verified?: boolean;
+  bio?: string;
+  createdAt?: string;
+  privacySettings?: Record<string, unknown>;
+  links?: unknown[];
+  linksMetadata?: unknown[];
+}
 
 export interface ProfileDesign {
   displayName: string;
@@ -74,7 +91,7 @@ function normalizeProfile(profile: RemoteUserProfile): UserEntity {
 
 /**
  * Unified hook for profile data that combines:
- * - Oxy profile data (from usersStore)
+ * - Oxy profile data (fetched via React Query)
  * - Appearance/customization settings (from appearanceStore)
  * - Privacy settings
  * 
