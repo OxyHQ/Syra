@@ -1,18 +1,44 @@
 import { API_URL_SOCKET } from '@/config';
 import { io, Socket } from 'socket.io-client';
-import { PlaybackStateUpdate, Queue, PlaybackState, Device, PlaybackCommand } from '@syra/shared-types';
+import { PlaybackStateUpdate, Queue, PlaybackState, Device, DeviceType, PlaybackCommand } from '@syra/shared-types';
 import { usePlayerStore } from '../stores/playerStore';
 import { useQueueStore } from '../stores/queueStore';
+
+/** Descriptor sent to the server to (re)register this device. */
+interface DeviceRegistration {
+  deviceId: string;
+  name: string;
+  type: DeviceType;
+  capabilities: string[];
+}
 
 class PlayerSocketService {
   private socket: Socket | null = null;
   private isConnected = false;
   private currentUserId?: string;
+  /** Last device descriptor registered, re-sent automatically after reconnects. */
+  private lastDeviceRegistration?: DeviceRegistration;
+  /**
+   * Device-list subscribers, kept independent of the socket instance so a
+   * subscription survives socket (re)creation and works even if registered
+   * before the socket connects. A single fan-out handler (attached in
+   * setupEventListeners) forwards each `device:list` event to all of them.
+   */
+  private deviceListCallbacks = new Set<(devices: Device[]) => void>();
 
   /**
-   * Connect to player socket namespace
+   * Connect to the player socket namespace.
+   *
+   * `getToken` is resolved lazily via a socket.io auth callback so a fresh
+   * access token is sent on every (re)connection — reconnects after a token
+   * refresh authenticate with the current token rather than a stale one.
    */
-  connect(userId?: string, token?: string) {
+  connect(userId?: string, getToken?: () => string | null | undefined) {
+    // Switching users → fully tear down the previous session first.
+    if (userId && this.currentUserId && userId !== this.currentUserId) {
+      this.disconnect();
+    }
+
     if (this.socket?.connected) {
       return;
     }
@@ -20,10 +46,16 @@ class PlayerSocketService {
     try {
       if (userId) this.currentUserId = userId;
 
+      // Clean up a stale, non-connected socket before creating a new one.
+      if (this.socket) {
+        this.socket.disconnect();
+        this.socket = null;
+      }
+
       // Connect to player namespace
       this.socket = io(`${API_URL_SOCKET}/player`, {
         transports: ['websocket', 'polling'],
-        auth: token ? { token } : undefined,
+        auth: (cb) => cb({ token: getToken?.() ?? undefined }),
         autoConnect: true,
         reconnection: true,
         reconnectionAttempts: 10,
@@ -45,14 +77,25 @@ class PlayerSocketService {
     this.socket.on('connect', () => {
       this.isConnected = true;
 
-      // Join player room
-      if (this.currentUserId) {
-        this.socket?.emit('join:player');
+      // Join the per-user player room.
+      this.socket?.emit('join:player');
+
+      // Re-register this device on every (re)connect so the server-side
+      // socket↔device binding is restored after a reconnect, not just on the
+      // first connect.
+      if (this.lastDeviceRegistration) {
+        this.socket?.emit('device:register', this.lastDeviceRegistration);
       }
     });
 
     this.socket.on('disconnect', () => {
       this.isConnected = false;
+    });
+
+    // Single fan-out for the device list → forward to every subscriber. Bound
+    // once per socket; subscribers live on the service, not the socket.
+    this.socket.on('device:list', (list: Device[]) => {
+      this.deviceListCallbacks.forEach((cb) => cb(list));
     });
 
     this.socket.on('connect_error', (error) => {
@@ -141,22 +184,34 @@ class PlayerSocketService {
   }
 
   /**
-   * Register this device with the server.
+   * Register this device with the server. The descriptor is cached so it can be
+   * re-sent automatically after a reconnect (see the `connect` handler).
    */
-  emitDeviceRegister(device: { deviceId: string; name: string; type: string; capabilities: string[] }) {
+  emitDeviceRegister(device: DeviceRegistration) {
+    this.lastDeviceRegistration = device;
     if (this.socket?.connected) {
       this.socket.emit('device:register', device);
     }
   }
 
   /**
+   * Ask the server to send the current device list to this socket. The backend
+   * responds to the requesting socket with a `device:list` event.
+   */
+  requestDeviceList() {
+    this.socket?.emit('device:list');
+  }
+
+  /**
    * Subscribe to the device list and invoke the callback whenever it updates.
-   * Returns an unsubscribe function.
+   * Decoupled from the socket: the subscription is valid regardless of socket
+   * state and survives reconnects/socket recreation. Returns an unsubscribe
+   * function.
    */
   onDeviceList(callback: (devices: Device[]) => void): () => void {
-    this.socket?.on('device:list', callback);
+    this.deviceListCallbacks.add(callback);
     return () => {
-      this.socket?.off('device:list', callback);
+      this.deviceListCallbacks.delete(callback);
     };
   }
 

@@ -32,6 +32,7 @@ import { HomeRefreshProvider } from '@/context/HomeRefreshContext';
 import { Toaster } from '@/lib/sonner';
 import i18n from '@/lib/i18n';
 import { useServerAppearanceSync } from '@/hooks/useServerAppearanceSync';
+import { usePlayerPresence } from '@/hooks/usePlayerPresence';
 import { clearStreamResolutionCache } from '@/services/streamService';
 import { persistOptions } from '@/lib/queryPersister';
 
@@ -42,6 +43,16 @@ import { persistOptions } from '@/lib/queryPersister';
  */
 function AppearanceSync(): null {
   useServerAppearanceSync();
+  return null;
+}
+
+/**
+ * Non-rendering bridge that opens the Syra Connect `/player` socket, registers
+ * this device, and emits heartbeats once authenticated. Must live inside
+ * OxyProvider (for `useOxy`).
+ */
+function PlayerPresence(): null {
+  usePlayerPresence();
   return null;
 }
 
@@ -99,6 +110,7 @@ export const AppProviders = memo(function AppProviders({
                 <I18nextProvider i18n={i18n}>
                   <AppearanceSync />
                   <StreamCacheAuthInvalidator />
+                  <PlayerPresence />
                   <BottomSheetModalProvider>
                     <BottomSheetProvider>
                       <MenuProvider>
