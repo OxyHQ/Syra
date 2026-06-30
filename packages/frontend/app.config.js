@@ -201,6 +201,15 @@ return {
                         contactsPermission: "Allow $(PRODUCT_NAME) to access your contacts."
                     }
                 ]);
+                // Google Cast is native-only (web cast loads the CAF sender SDK
+                // via app/+html.tsx); the config plugin enables `expo prebuild`.
+                base.push([
+                    'react-native-google-cast',
+                    {
+                        receiverAppId: 'CC1AD845', // Google default media receiver (HLS-capable)
+                        iosLocalNetworkUsageDescription: 'Syra usa la red local para encontrar dispositivos Cast y altavoces cercanos.',
+                    },
+                ]);
             }
 
             return base;

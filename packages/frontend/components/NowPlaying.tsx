@@ -17,6 +17,7 @@ import { LyricsView } from '@/components/LyricsView';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { useLibrary, useToggleLikeTrack } from '@/hooks/useLibrary';
 import { EpisodeNowPlaying } from '@/components/podcast/EpisodeNowPlaying';
+import { CastButton } from '@/components/CastButton';
 
 /**
  * Now Playing Sidebar Component
@@ -108,6 +109,11 @@ export const NowPlaying: React.FC = () => {
           {/* Header with buttons */}
           <View style={styles.header}>
             <View style={styles.headerButtons}>
+              {/* Wrapped so the cast glyph gets the same translucent circle as
+                  its sibling header buttons (readability over the artwork). */}
+              <View style={styles.headerButton}>
+                <CastButton size={20} color="#fff" />
+              </View>
               <Pressable
                 onPress={() => toggleFullscreen('nowPlaying')}
                 style={styles.headerButton}

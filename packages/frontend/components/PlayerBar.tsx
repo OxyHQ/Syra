@@ -8,6 +8,7 @@ import { useUIStore } from '@/stores/uiStore';
 import { Image } from 'expo-image';
 import { Slider } from './Slider';
 import { DevicePicker } from './DevicePicker';
+import { CastButton } from './CastButton';
 import { useLibrary, useToggleLikeTrack } from '@/hooks/useLibrary';
 import { useNowPlayingMedia } from '@/hooks/useNowPlayingMedia';
 import { SpeedPill, SkipButton } from './podcast/PodcastTransportControls';
@@ -307,6 +308,7 @@ export const PlayerBar: React.FC = () => {
           >
             <MaterialCommunityIcons name="devices" size={20} color={theme.colors.textSecondary} />
           </Pressable>
+          <CastButton size={20} />
           <View style={[styles.volumeContainer, { gap: SPACING }]}>
             <MaterialCommunityIcons
               name={volume === 0 ? 'volume-off' : volume < 0.5 ? 'volume-low' : 'volume-high'}

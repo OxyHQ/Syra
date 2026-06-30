@@ -8,6 +8,7 @@ import { Image } from 'expo-image';
 import { useLibrary, useToggleLikeTrack } from '@/hooks/useLibrary';
 import { useNowPlayingMedia } from '@/hooks/useNowPlayingMedia';
 import { SpeedPill, SkipButton } from './podcast/PodcastTransportControls';
+import { CastButton } from './CastButton';
 import { webViewStyle } from '@/utils/webStyles';
 
 interface WebPressTarget {
@@ -171,6 +172,7 @@ export const MobilePlayerBar: React.FC = () => {
         {/* Center: Playback Controls. Episodes show a speed pill + skip-30;
             tracks show like + next. */}
         <View style={[styles.playbackControls, { gap: SPACING }]}>
+          <CastButton size={24} color={theme.colors.primaryForeground} />
           {isEpisode ? (
             <SpeedPill size="sm" tint={theme.colors.primaryForeground} />
           ) : (

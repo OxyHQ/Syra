@@ -83,6 +83,7 @@
     "react-native-compressor": "^1.13.0",
     "react-native-css": "^3.0.6",
     "react-native-gesture-handler": "~2.31.1",
+    "react-native-google-cast": "^4.9.1",
     "react-native-keyboard-controller": "1.21.6",
     "react-native-markdown-display": "^7.0.2",
     "react-native-popup-menu": "^0.18.0",

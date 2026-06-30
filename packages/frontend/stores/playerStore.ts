@@ -44,6 +44,10 @@ import { pickPlaybackMode, canPlayHlsNatively } from './playback/pickPlaybackMod
 import { createWebHlsPlayer } from './playback/webHlsPlayer';
 import { isRealFinish } from './playback/isRealFinish';
 import { getCurrentMusicPreferences } from './musicPreferencesStore';
+import { castController } from '@/services/cast/castService';
+import type { CastMediaMetadata, CastSessionState } from '@/services/cast/types';
+import { pickCatalogImageUrl } from '@/utils/pickImage';
+import { resolvePodcastImageUri } from '@/utils/podcastImages';
 
 const logger = createScopedLogger('PlayerStore');
 const PLAY_SIGNAL_AUTH_WAIT_MS = 20_000;
@@ -105,6 +109,10 @@ interface PlayerState {
   player: PlayerEngine | null;
   error: string | null;
   context: PlaybackContext | null;
+  /** Whether playback is currently routed to a Google Cast receiver. */
+  isCasting: boolean;
+  /** Friendly name of the connected cast receiver, or null when not casting. */
+  castDeviceName: string | null;
 
   // Actions
   playTrack: (track: Track, context?: PlaybackContext, addToQueue?: boolean) => Promise<void>;
@@ -474,12 +482,43 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   };
 
   /**
+   * Build the now-playing metadata shown on the cast receiver. Resolves artwork
+   * through the same catalog/podcast image pickers the now-playing UI uses, so
+   * the receiver gets a fully-qualified (off-device-reachable) artwork URL.
+   */
+  const buildCastMetadata = (): CastMediaMetadata => {
+    const { currentEpisode, currentTrack } = get();
+    if (currentEpisode) {
+      return {
+        title: currentEpisode.title,
+        subtitle: currentEpisode.podcastTitle,
+        artworkUrl: resolvePodcastImageUri(currentEpisode, 'detailArtwork'),
+      };
+    }
+    if (currentTrack) {
+      return {
+        title: currentTrack.title,
+        subtitle: currentTrack.artistName,
+        artworkUrl: pickCatalogImageUrl(
+          currentTrack.images,
+          currentTrack.coverArt,
+          'detailArtwork',
+          currentTrack.coverArtSizes,
+        ),
+      };
+    }
+    return {};
+  };
+
+  /**
    * Initialize the playback engine for the given URL and optional resolution.
    *
-   * For web + HLS streams that need hls.js (Chrome/Firefox), creates a
-   * WebHlsPlayer backed by a raw HTMLAudioElement. All other combinations use
-   * expo-audio's AudioPlayer, which handles native HLS via AVPlayer/ExoPlayer
-   * and progressive streams universally.
+   * When a cast session is connected, the active engine becomes the cast engine
+   * (the receiver loads the URL directly) — every existing control flows through
+   * the shared {@link PlayerEngine} interface unchanged. Otherwise, for web + HLS
+   * streams that need hls.js (Chrome/Firefox), creates a WebHlsPlayer backed by a
+   * raw HTMLAudioElement; all other combinations use expo-audio's AudioPlayer,
+   * which handles native HLS via AVPlayer/ExoPlayer and progressive streams.
    */
   const initializePlayer = async (
     audioUrl: string,
@@ -487,6 +526,19 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     resolution: StreamResolution | null,
   ): Promise<PlayerEngine> => {
     logger.debug('Initializing playback engine', { url: audioUrl, trackId: media.id });
+
+    if (castController.getSessionState() === 'connected') {
+      const castEngine = castController.getEngine();
+      if (castEngine) {
+        logger.debug('Routing playback to cast receiver', { trackId: media.id });
+        // Metadata must be set before replace() so it is applied to the load.
+        castController.setMediaMetadata(buildCastMetadata());
+        castEngine.replace({ uri: audioUrl });
+        castEngine.volume = get().volume;
+        setupPlayerListeners(castEngine);
+        return castEngine;
+      }
+    }
 
     const mode =
       resolution !== null
@@ -728,6 +780,112 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     completionInFlight = false;
   };
 
+  // ── Cast output handoff ─────────────────────────────────────────────────────
+
+  /**
+   * Re-route the currently playing media to the now-active output (local ⇄ cast)
+   * at the preserved position, keeping the queue and engagement tracking intact.
+   * Invoked when a cast session connects or disconnects while something plays.
+   *
+   * The source URL is re-resolved through the same path `playTrack`/`playEpisode`
+   * use (cheap — `streamService` memoizes), and `initializePlayer` picks the cast
+   * or local engine based on the current `isCasting` flag.
+   */
+  const routePlaybackToActiveOutput = async (): Promise<void> => {
+    const { currentTrack, currentEpisode, currentTime, isPlaying } = get();
+    if (!currentTrack && !currentEpisode) {
+      return;
+    }
+
+    const resumeFrom = finiteSeconds(currentTime);
+    try {
+      // Tear down the engine bound to the previous output. For a cast engine this
+      // only detaches its listeners — the session stays open (see castService).
+      stopPositionUpdates();
+      stopProgressSaves();
+      if (currentDetach) {
+        currentDetach.detach();
+        currentDetach = null;
+      }
+      const previousPlayer = get().player;
+      if (previousPlayer) {
+        previousPlayer.remove();
+      }
+
+      // Re-resolve the source and let initializePlayer pick the cast or local
+      // engine based on the (already-updated) isCasting flag.
+      let audioUrl: string;
+      let resolution: StreamResolution | null;
+      let media: PlayableMeta;
+      if (currentEpisode) {
+        const resolved = await resolveEpisodeAudio(currentEpisode);
+        audioUrl = resolved.url;
+        resolution = resolved.resolution;
+        media = currentEpisode;
+      } else if (currentTrack) {
+        resolution = await getPhase3Resolution(currentTrack);
+        audioUrl = resolution ? resolution.url : await getAudioUrl(currentTrack);
+        media = currentTrack;
+      } else {
+        return;
+      }
+
+      const player = await initializePlayer(audioUrl, media, resolution);
+
+      // hls.js attach only applies to the local web engine, never to cast.
+      if (resolution && !get().isCasting) {
+        currentDetach = attachSource(player, resolution);
+      }
+      if (currentEpisode) {
+        applyPlaybackRate(player);
+      }
+      set({ player });
+
+      if (resumeFrom > 0) {
+        await player.seekTo(resumeFrom);
+        set({ currentTime: resumeFrom });
+      }
+      if (isPlaying) {
+        player.play();
+      } else {
+        player.pause();
+      }
+      if (currentEpisode) {
+        applyPlaybackRate(player);
+      }
+
+      startPositionUpdates(player);
+      if (currentEpisode) {
+        startProgressSaves();
+      }
+    } catch (error) {
+      logger.error('Failed to re-route playback to the active output', error);
+    }
+  };
+
+  /**
+   * React to cast session-state changes: mirror the casting flag/device name into
+   * the store and, on an actual output switch (connect/disconnect), hand the
+   * current media over to the now-active output. Native device-name resolution
+   * re-fires `'connected'`, so the handoff only runs on a real casting transition.
+   */
+  const handleCastStateChange = (state: CastSessionState): void => {
+    const isCasting = state === 'connected';
+    const wasCasting = get().isCasting;
+    set({
+      isCasting,
+      castDeviceName: isCasting ? castController.getDeviceName() : null,
+    });
+    if (isCasting === wasCasting) {
+      return;
+    }
+    void routePlaybackToActiveOutput();
+  };
+
+  // Subscribe once at store creation. The controllers guard for SDK-not-ready /
+  // native-module-absent, so this is a safe no-op until a receiver is available.
+  castController.onSessionStateChange(handleCastStateChange);
+
   return {
     currentTrack: null,
     currentEpisode: null,
@@ -742,6 +900,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     player: null,
     error: null,
     context: null,
+    isCasting: castController.getSessionState() === 'connected',
+    castDeviceName:
+      castController.getSessionState() === 'connected' ? castController.getDeviceName() : null,
 
     /**
      * Play a track
@@ -793,11 +954,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           currentDetach.detach();
           currentDetach = null;
         }
-        if (resolution) {
+        // The cast receiver loads the URL directly; attachSource is hls.js-only.
+        if (resolution && !get().isCasting) {
           currentDetach = attachSource(player, resolution);
         }
-        
-        set({ 
+
+        set({
           player,
           isLoading: true,
           currentTime: 0,
@@ -889,7 +1051,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           currentDetach.detach();
           currentDetach = null;
         }
-        if (resolution) {
+        // The cast receiver loads the URL directly; attachSource is hls.js-only.
+        if (resolution && !get().isCasting) {
           currentDetach = attachSource(player, resolution);
         }
 

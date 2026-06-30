@@ -11,6 +11,10 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Skeleton from '@oxyhq/bloom/skeleton';
 import type { Device, DeviceType } from '@syra/shared-types';
 import { useConnect } from '@/hooks/useConnect';
+import { useCast } from '@/hooks/useCast';
+import { createScopedLogger } from '@/utils/logger';
+
+const logger = createScopedLogger('DevicePicker');
 
 // ── Icon mapping ──────────────────────────────────────────────────────────────
 
@@ -100,6 +104,13 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({
 }) => {
   const theme = useTheme();
   const { devices, isLoading, transferTo } = useConnect();
+  const {
+    isSupported: castSupported,
+    isCasting,
+    deviceName: castDeviceName,
+    requestSession: requestCast,
+    endSession: endCast,
+  } = useCast();
 
   const backdropStyle = useMemo(
     () => [styles.backdrop],
@@ -114,6 +125,18 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({
   const handleTransfer = (deviceId: string) => {
     transferTo(deviceId);
     onClose();
+  };
+
+  const handleCastPress = async () => {
+    try {
+      if (isCasting) {
+        await endCast();
+      } else {
+        await requestCast();
+      }
+    } catch (error) {
+      logger.error(isCasting ? 'Failed to end cast session' : 'Failed to start cast session', error);
+    }
   };
 
   return (
@@ -167,6 +190,52 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({
                 onPress={() => handleTransfer(device.deviceId)}
               />
             ))
+          )}
+
+          {/* Cast & speakers — Google Cast receivers. Omitted entirely when the
+              platform/build can't cast, so no dead row is shown. */}
+          {castSupported && (
+            <View style={[styles.castSection, { borderTopColor: theme.colors.border }]}>
+              <Text style={[styles.sectionLabel, { color: theme.colors.textSecondary }]}>
+                Cast & speakers
+              </Text>
+              <Pressable
+                style={styles.deviceRow}
+                onPress={handleCastPress}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isCasting }}
+                accessibilityLabel={
+                  isCasting
+                    ? `Disconnect from ${castDeviceName ?? 'Cast'}`
+                    : 'Connect to Cast'
+                }
+              >
+                <MaterialCommunityIcons
+                  name={isCasting ? 'cast-connected' : 'cast'}
+                  size={24}
+                  color={isCasting ? theme.colors.primary : theme.colors.textSecondary}
+                  style={styles.deviceIcon}
+                />
+                <View style={styles.deviceInfo}>
+                  <Text
+                    style={[styles.deviceName, { color: theme.colors.text }]}
+                    numberOfLines={1}
+                  >
+                    {isCasting ? (castDeviceName ?? 'Cast device') : 'Connect to Cast'}
+                  </Text>
+                  {isCasting && (
+                    <Text style={[styles.deviceStatus, { color: theme.colors.primary }]}>
+                      Connected
+                    </Text>
+                  )}
+                </View>
+                {isCasting && (
+                  <Text style={[styles.disconnectText, { color: theme.colors.primary }]}>
+                    Disconnect
+                  </Text>
+                )}
+              </Pressable>
+            </View>
           )}
         </Pressable>
       </Pressable>
@@ -246,5 +315,22 @@ const styles = StyleSheet.create({
   deviceStatus: {
     fontSize: 12,
     marginTop: 2,
+  },
+  castSection: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+  },
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    paddingHorizontal: 8,
+    marginBottom: 4,
+  },
+  disconnectText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
 });
