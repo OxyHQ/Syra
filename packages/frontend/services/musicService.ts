@@ -158,11 +158,10 @@ export const musicService = {
     return { ...data, playlists: data.playlists.map(normalizePlaylistImages) };
   },
 
-  async createPlaylist(data: { 
-    name: string; 
-    description?: string; 
-    coverArt?: string; 
-    isPublic?: boolean;
+  async createPlaylist(data: {
+    name: string;
+    description?: string;
+    coverArt?: string;
     visibility?: string;
   }): Promise<Playlist> {
     const response = await api.post<unknown>('/playlists', data);

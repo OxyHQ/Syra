@@ -62,6 +62,7 @@ const schema = z.object({
 
   AUDIUS_API_URL: z.string().optional(),
   AUDIUS_APP_NAME: z.string().optional(),
+  AUDIUS_BACKGROUND_IMPORT_ENABLED: z.string().optional(),
 
   JAMENDO_CLIENT_ID: z.string().optional(),
   JAMENDO_API_URL: z.string().optional(),

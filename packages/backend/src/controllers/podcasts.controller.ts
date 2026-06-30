@@ -20,6 +20,7 @@ import {
   type AudioSource,
   type EpisodePerson,
 } from '@syra/shared-types';
+import { env } from '../config/env';
 import { PodcastModel } from '../models/Podcast';
 import { EpisodeModel } from '../models/Episode';
 import { UserLibraryModel } from '../models/Library';
@@ -333,7 +334,7 @@ export async function getPodcastRss(req: AuthRequest, res: Response): Promise<vo
     .sort({ pubDate: -1 })
     .limit(300);
 
-  const baseUrl = process.env.STREAM_KEY_BASE_URL ?? '';
+  const baseUrl = env.STREAM_KEY_BASE_URL;
   const xml = generatePodcastRss(podcast, episodes, baseUrl);
 
   res.set('Content-Type', 'application/rss+xml; charset=utf-8');
@@ -487,7 +488,7 @@ export async function createPodcast(req: AuthRequest, res: Response): Promise<vo
   }
 
   // The public RSS URL is derivable from the id; persist it so it's queryable.
-  const base = process.env.STREAM_KEY_BASE_URL ?? '';
+  const base = env.STREAM_KEY_BASE_URL;
   podcast.feedUrl = `${base}/api/podcasts/${podcast._id.toString()}/rss`;
   await podcast.save();
 

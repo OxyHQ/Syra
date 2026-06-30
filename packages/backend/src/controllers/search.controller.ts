@@ -3,6 +3,7 @@ import { PlaylistVisibility, SearchCategory, SearchResult, SearchUser } from '@s
 import { getAccountDisplayName } from '@oxyhq/core';
 import type { User } from '@oxyhq/core';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
+import { env } from '../config/env';
 import { TrackModel } from '../models/Track';
 import { PodcastModel } from '../models/Podcast';
 import { EpisodeModel } from '../models/Episode';
@@ -237,7 +238,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
     // `syncPodcastSearch` is bounded + throttled and never hangs/throws.
     let podcastSyncTriggered = false;
     if (
-      process.env.PODCAST_BULK_IMPORT_ENABLED !== 'false' &&
+      env.PODCAST_BULK_IMPORT_ENABLED !== 'false' &&
       query.trim().length >= AUDIUS_IMPORT_MIN_QUERY_LENGTH &&
       searchOffset === 0
     ) {
@@ -434,7 +435,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
     const sparseLocalResults = tracksCount < AUDIUS_IMPORT_SPARSE_THRESHOLD;
     const querySpecificEnough = query.trim().length >= AUDIUS_IMPORT_MIN_QUERY_LENGTH;
     const canImportAudius =
-      process.env.AUDIUS_BACKGROUND_IMPORT_ENABLED !== 'false' &&
+      env.AUDIUS_BACKGROUND_IMPORT_ENABLED !== 'false' &&
       isTrackSearch &&
       sparseLocalResults &&
       querySpecificEnough &&

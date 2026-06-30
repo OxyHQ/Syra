@@ -22,6 +22,7 @@ import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { safeFetch, SsrfRejection } from '@oxyhq/core/server';
 import { EpisodeModel, IEpisode } from '../models/Episode';
 import { TrackKeyModel } from '../models/TrackKey';
+import { env } from '../config/env';
 import { getS3PodcastEpisodeAudioKey } from '../config/s3.config';
 import { streamFromS3, getObjectMetadata } from '../services/s3Service';
 import { resolveStreamAccess } from './stream.controller';
@@ -244,7 +245,7 @@ export async function getEpisodeStream(req: AuthRequest, res: Response): Promise
     { trackId: episodeId, userId: req.user.id, maxBitrateKbps: access.maxBitrateKbps },
     STREAM_SESSION_TTL_SEC,
   );
-  const base = process.env.STREAM_KEY_BASE_URL ?? '';
+  const base = env.STREAM_KEY_BASE_URL;
   const url = `${base}/api/podcasts/episodes/${episodeId}/master.m3u8?t=${token}`;
   const expiresAt = new Date(Date.now() + STREAM_SESSION_TTL_SEC * 1000).toISOString();
 
@@ -310,7 +311,7 @@ export async function getEpisodeMasterPlaylist(req: AuthRequest, res: Response):
     ? rawToken
     : mintStreamToken({ trackId: episodeId, userId: req.user?.id ?? '', maxBitrateKbps: access.maxBitrateKbps }, STREAM_SESSION_TTL_SEC);
 
-  const baseUrl = process.env.STREAM_KEY_BASE_URL ?? '';
+  const baseUrl = env.STREAM_KEY_BASE_URL;
   const playlist = await buildMasterPlaylistFor(
     { id: episodeId, hls: episode.hls },
     { token, baseUrl, maxBitrateKbps: access.maxBitrateKbps, basePath: `/api/podcasts/episodes/${episodeId}` },
@@ -369,7 +370,7 @@ export async function getEpisodeVariantPlaylist(req: AuthRequest, res: Response)
     ? rawToken
     : mintStreamToken({ trackId: episodeId, userId: req.user?.id ?? '', maxBitrateKbps: access.maxBitrateKbps }, STREAM_SESSION_TTL_SEC);
 
-  const baseUrl = process.env.STREAM_KEY_BASE_URL ?? '';
+  const baseUrl = env.STREAM_KEY_BASE_URL;
   const playlist = await buildVariantPlaylistFor(
     { id: episodeId, hls: episode.hls },
     { bitrateKbps, token, baseUrl, basePath: `/api/podcasts/episodes/${episodeId}` },

@@ -62,7 +62,6 @@ const playlist: Playlist = {
   visibility: PlaylistVisibility.PRIVATE,
   trackCount: 1,
   totalDuration: 180,
-  isPublic: false,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
