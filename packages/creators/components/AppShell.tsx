@@ -3,8 +3,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter, usePathname, type Href } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@oxyhq/bloom/theme';
-import { Avatar } from '@oxyhq/bloom/avatar';
-import { useOxy } from '@oxyhq/services';
+import { useOxy, ProfileButton } from '@oxyhq/services';
 import { useResponsive } from '@/hooks/useResponsive';
 import { cn } from '@/lib/utils';
 
@@ -49,27 +48,28 @@ function Brand() {
   );
 }
 
-function AccountButton() {
-  const { user, isAuthenticated, showBottomSheet } = useOxy();
-  const onPress = useCallback(() => {
-    showBottomSheet?.(isAuthenticated ? 'ManageAccount' : 'OxyAuth');
-  }, [isAuthenticated, showBottomSheet]);
+// Account trigger. ProfileButton owns all three auth states (undetermined
+// skeleton, signed-in row + account switcher, signed-out "Sign in") and the
+// device-account switcher menu. `expanded` renders the full row (avatar + name +
+// handle) in the sidebar; the collapsed avatar-only variant fits the mobile
+// top-bar slot. Manage goes to the ManageAccount sheet (this studio has no
+// standalone settings route); add-account opens the OxyAuth sheet.
+function AccountButton({ expanded = true }: { expanded?: boolean }) {
+  const { showBottomSheet } = useOxy();
+  const onNavigateManage = useCallback(() => {
+    showBottomSheet?.('ManageAccount');
+  }, [showBottomSheet]);
+  const onAddAccount = useCallback(() => {
+    showBottomSheet?.('OxyAuth');
+  }, [showBottomSheet]);
 
   return (
-    <Pressable
-      onPress={onPress}
-      className="flex-row items-center gap-3 rounded-xl px-2 py-2 active:opacity-70"
-    >
-      <Avatar source={user?.avatar ?? undefined} name={user?.name?.displayName ?? user?.username} size={34} />
-      <View className="flex-1">
-        <Text numberOfLines={1} className="text-foreground text-sm font-medium">
-          {isAuthenticated ? (user?.name?.displayName ?? user?.username ?? 'Your account') : 'Sign in'}
-        </Text>
-        <Text numberOfLines={1} className="text-muted-foreground text-xs">
-          {isAuthenticated ? `@${user?.username ?? ''}` : 'Manage your podcasts'}
-        </Text>
-      </View>
-    </Pressable>
+    <ProfileButton
+      expanded={expanded}
+      avatarSize={34}
+      onNavigateManage={onNavigateManage}
+      onAddAccount={onAddAccount}
+    />
   );
 }
 
@@ -134,8 +134,8 @@ function MobileTopBar() {
       <Pressable onPress={() => router.push('/')} className="active:opacity-70">
         <Brand />
       </Pressable>
-      <View className="w-[44px] items-end">
-        <AccountButton />
+      <View className="items-end">
+        <AccountButton expanded={false} />
       </View>
     </View>
   );
