@@ -1,6 +1,7 @@
 const pkg = require('./package.json')
 const fs = require('fs')
 const path = require('path')
+const { oxySplashScreenPlugin } = require('@oxyhq/expo-splash/config')
 
 // FCM config lives at the monorepo root and is only present in CI / release
 // setups (or via the GOOGLE_SERVICES_JSON env, as in Mention). Local dev-client
@@ -123,15 +124,19 @@ return {
         plugins: (() => {
             const base = [
                 "expo-router",
-                [
-                    "expo-splash-screen",
-                    {
-                        image: "./assets/images/splash-icon.png",
-                        imageWidth: 200,
-                        resizeMode: "contain",
-                        backgroundColor: "#ffffff"
-                    }
-                ],
+                // Native OS splash (Oxy family "Instagram, from Meta" pattern): Syra's
+                // OWN equalizer logo (white on transparent) centered on the shared dark
+                // brand background, with the Oxy symbol pinned to the bottom.
+                // `oxySplashScreenPlugin` builds the `expo-splash-screen` tuple with the
+                // Oxy-standard defaults; the bare `@oxyhq/expo-splash` entry (bundled Oxy
+                // asset) MUST follow it immediately to add the bottom branding — the
+                // ordering is load-bearing.
+                oxySplashScreenPlugin({
+                    image: "./assets/images/splash-logo.png",
+                    imageWidth: 176,
+                    backgroundColor: "#0B0B0F"
+                }),
+                "@oxyhq/expo-splash",
                 [
                     "expo-camera",
                     {
@@ -186,9 +191,12 @@ return {
                 "expo-web-browser",
             ];
 
-            // Only include expo-notifications for native builds (android/ios)
+            // Only include expo-notifications for native builds (android/ios).
+            // Insert at index 3 — AFTER the two splash entries (the
+            // `oxySplashScreenPlugin` tuple at index 1 and the `@oxyhq/expo-splash`
+            // branding plugin at index 2) so their load-bearing adjacency is preserved.
             if (PLATFORM !== 'web') {
-                base.splice(2, 0, [
+                base.splice(3, 0, [
                     "expo-notifications",
                     {
                         color: "#ffffff"
