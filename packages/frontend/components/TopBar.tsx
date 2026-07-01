@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { webTextStyle, webViewStyle } from '@/utils/webStyles';
 import { useRouter, usePathname, useLocalSearchParams, type Href } from 'expo-router';
 import { useTheme } from '@oxyhq/bloom/theme';
-import { useOxy } from '@oxyhq/services';
+import { useOxy, ProfileButton } from '@oxyhq/services';
 import { useQuery } from '@tanstack/react-query';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Avatar from './Avatar';
@@ -59,7 +59,7 @@ export const TopBar: React.FC = () => {
   const { q } = useLocalSearchParams<{ q?: string }>();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { user, isAuthenticated, showBottomSheet } = useOxy();
+  const { user, showBottomSheet } = useOxy();
   const { playTrackList } = usePlayerStore();
   const isMobile = useMediaQuery({ maxWidth: 767 });
   const [searchQuery, setSearchQuery] = useState(() => (pathname === '/search' && typeof q === 'string' ? q : ''));
@@ -470,26 +470,18 @@ export const TopBar: React.FC = () => {
     );
   };
 
+  // Account trigger. ProfileButton owns all three auth states (undetermined
+  // skeleton, signed-in avatar + account switcher, signed-out "Sign in") and the
+  // device-account switcher menu. Collapsed (`expanded={false}`) so it renders as
+  // the bare 32px avatar that fits the top bar's right section.
   const renderProfileAction = () => (
-    isAuthenticated && user ? (
-      <Pressable
-        style={styles.avatarButton}
-        onPress={() => router.push('/settings')}
-      >
-        <Avatar
-          size={32}
-          source={user?.avatar ?? undefined}
-          variant="thumb"
-        />
-      </Pressable>
-    ) : (
-      <Pressable
-        style={[styles.loginButton, { backgroundColor: theme.colors.primary }]}
-        onPress={() => showBottomSheet?.('OxyAuth')}
-      >
-        <Text style={[styles.loginText, { color: theme.colors.primaryForeground }]}>Log in</Text>
-      </Pressable>
-    )
+    <ProfileButton
+      expanded={false}
+      avatarSize={32}
+      onNavigateManage={() => router.push('/settings')}
+      onNavigateProfile={user?.username ? () => router.push(userHref(user.username)) : undefined}
+      onAddAccount={() => showBottomSheet?.('OxyAuth')}
+    />
   );
 
   if (isMobile) {
@@ -794,20 +786,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 20,
-  },
-  avatarButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  loginButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  loginText: {
-    fontSize: 14,
-    fontWeight: '700',
   },
 });
