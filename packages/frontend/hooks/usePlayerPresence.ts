@@ -42,6 +42,7 @@ export function usePlayerPresence(): void {
       const deviceId = await getDeviceId();
       if (cancelled) return;
 
+      playerSocketService.setLocalDeviceId(deviceId);
       playerSocketService.emitDeviceRegister({
         deviceId,
         name: deviceDisplayName(Platform.OS),

@@ -12,13 +12,6 @@ export const playbackStateSchema = z.enum([
   'error',
 ]);
 export type PlaybackState = z.infer<typeof playbackStateSchema>;
-export const PlaybackState = {
-  PLAYING: 'playing' as const,
-  PAUSED: 'paused' as const,
-  STOPPED: 'stopped' as const,
-  BUFFERING: 'buffering' as const,
-  ERROR: 'error' as const,
-};
 
 export const repeatModeSchema = z.enum(['off', 'all', 'one']);
 export type RepeatMode = z.infer<typeof repeatModeSchema>;
@@ -70,15 +63,6 @@ export const queueWithMetadataSchema = queueSchema.extend({
   total: z.number(),
 });
 export type QueueWithMetadata = z.infer<typeof queueWithMetadataSchema>;
-
-export const playbackStateUpdateSchema = z.object({
-  state: playbackStateSchema.optional(),
-  position: playbackPositionSchema.optional(),
-  volume: z.number().optional(),
-  shuffle: shuffleModeSchema.optional(),
-  repeat: repeatModeSchema.optional(),
-});
-export type PlaybackStateUpdate = z.infer<typeof playbackStateUpdateSchema>;
 
 export const seekRequestSchema = z.object({
   position: z.number(),

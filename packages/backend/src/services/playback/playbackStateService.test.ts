@@ -7,6 +7,7 @@ import {
   applyCommand,
   updateProgress,
   handleDeviceDisconnect,
+  toConnectPlaybackState,
 } from './playbackStateService';
 import { registerDevice } from './deviceService';
 
@@ -269,5 +270,60 @@ describe('updateProgress', () => {
     await setNowPlaying(USER, { trackId: 'track-abc', deviceId: 'device-d1' });
     const state = await updateProgress(USER, 'device-d1', -100);
     expect(state.positionMs).toBe(0);
+  });
+});
+
+describe('toConnectPlaybackState', () => {
+  it('maps every field, with updatedAt serialized as an ISO string', async () => {
+    await setNowPlaying(USER, {
+      trackId: 'track-abc',
+      source: 'audius',
+      queue: ['track-abc', 'track-def'],
+      contextType: 'album',
+      contextId: 'album-1',
+      deviceId: 'device-web',
+    });
+    await applyCommand(USER, { type: 'seek', positionMs: 42000 });
+    await applyCommand(USER, { type: 'shuffle', shuffle: true });
+    await applyCommand(USER, { type: 'repeat', repeat: 'all' });
+    const state = await applyCommand(USER, { type: 'volume', volume: 0.4 });
+
+    const connect = toConnectPlaybackState(state);
+
+    expect(connect).toEqual({
+      trackId: 'track-abc',
+      source: 'audius',
+      positionMs: 42000,
+      isPlaying: true,
+      queue: ['track-abc', 'track-def'],
+      contextType: 'album',
+      contextId: 'album-1',
+      repeat: 'all',
+      shuffle: true,
+      volume: 0.4,
+      activeDeviceId: 'device-web',
+      updatedAt: state.updatedAt.toISOString(),
+    });
+    expect(typeof connect.updatedAt).toBe('string');
+    expect(new Date(connect.updatedAt).toISOString()).toBe(connect.updatedAt);
+  });
+
+  it('carries through defaults for a freshly created state (no track, no active device)', async () => {
+    const state = await getOrCreateState(USER);
+
+    const connect = toConnectPlaybackState(state);
+
+    expect(connect.trackId).toBeUndefined();
+    expect(connect.source).toBeUndefined();
+    expect(connect.contextType).toBeUndefined();
+    expect(connect.contextId).toBeUndefined();
+    expect(connect.activeDeviceId).toBeUndefined();
+    expect(connect.positionMs).toBe(0);
+    expect(connect.isPlaying).toBe(false);
+    expect(connect.queue).toEqual([]);
+    expect(connect.repeat).toBe('off');
+    expect(connect.shuffle).toBe(false);
+    expect(connect.volume).toBe(1);
+    expect(typeof connect.updatedAt).toBe('string');
   });
 });

@@ -13,9 +13,11 @@
 import { create } from 'zustand';
 import { createAudioPlayer } from 'expo-audio';
 import { Platform } from 'react-native';
-import { Queue, Track, Episode, PlaybackContext, RepeatMode } from '@syra/shared-types';
+import { Queue, Track, Episode, PlaybackContext, RepeatMode, ConnectPlaybackState } from '@syra/shared-types';
 import { createScopedLogger } from '@/utils/logger';
 import { useQueueStore } from './queueStore';
+import { musicService } from '@/services/musicService';
+import { queueService } from '@/services/queueService';
 import {
   POSITION_UPDATE_INTERVAL_MS,
   AUDIO_PLAYER_UPDATE_INTERVAL_MS,
@@ -114,6 +116,12 @@ interface PlayerState {
   isCasting: boolean;
   /** Friendly name of the connected cast receiver, or null when not casting. */
   castDeviceName: string | null;
+  /**
+   * The `activeDeviceId` from the last Syra Connect state applied on this device.
+   * Transient (never persisted) bookkeeping so a subsequent state can tell that
+   * playback moved AWAY from this device and release the local audio engine.
+   */
+  connectActiveDeviceId: string | null;
 
   // Actions
   playTrack: (track: Track, context?: PlaybackContext, addToQueue?: boolean) => Promise<void>;
@@ -133,6 +141,13 @@ interface PlayerState {
   updateCurrentTime: (time: number) => void;
   setDuration: (duration: number) => void;
   handleTrackCompletion: () => Promise<void>;
+  /**
+   * Apply server-authoritative Syra Connect playback state pushed over the
+   * socket. When this device is the active playback target it loads/seeks/plays
+   * to match; when playback has just moved to another device it releases the
+   * local audio engine.
+   */
+  applyRemotePlaybackState: (state: ConnectPlaybackState, localDeviceId: string | null) => Promise<void>;
 }
 
 export const usePlayerStore = create<PlayerState>((set, get) => {
@@ -910,6 +925,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     isCasting: castController.getSessionState() === 'connected',
     castDeviceName:
       castController.getSessionState() === 'connected' ? castController.getDeviceName() : null,
+    connectActiveDeviceId: null,
 
     /**
      * Play a track
@@ -1390,6 +1406,51 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
       await get().stop();
       completionInFlight = false;
+    },
+
+    applyRemotePlaybackState: async (state, localDeviceId) => {
+      const wasActiveHere =
+        get().connectActiveDeviceId !== null && get().connectActiveDeviceId === localDeviceId;
+      const isNowActiveHere = localDeviceId !== null && state.activeDeviceId === localDeviceId;
+      set({ connectActiveDeviceId: state.activeDeviceId ?? null });
+
+      if (isNowActiveHere) {
+        try {
+          if (!state.trackId) {
+            if (get().player) await get().stop();
+            return;
+          }
+
+          const needsFreshLoad =
+            get().currentTrack?.id !== state.trackId || !get().player;
+          if (needsFreshLoad) {
+            const track = await musicService.getTrackById(state.trackId);
+            await get().playTrack(track, undefined, false);
+          }
+
+          await get().seek(state.positionMs / 1000);
+          if (state.isPlaying) {
+            await get().resume();
+          } else {
+            await get().pause();
+          }
+
+          // Mirror the server-authoritative queue so this device's up-next matches
+          // the session it just took over. getQueue() returns the queue itself
+          // (QueueWithMetadata extends Queue), not a wrapper.
+          const remoteQueue = await queueService.getQueue().catch(() => null);
+          if (remoteQueue) {
+            useQueueStore.getState().syncQueue(remoteQueue);
+          }
+        } catch (error) {
+          logger.error('Failed to apply remote Connect playback state', error);
+        }
+      } else if (wasActiveHere) {
+        // Playback moved to another device — release the local audio engine.
+        if (get().player) {
+          await get().stop();
+        }
+      }
     },
   };
 });

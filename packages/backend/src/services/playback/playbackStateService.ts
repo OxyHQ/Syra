@@ -1,4 +1,4 @@
-import type { PlaybackCommand, CatalogSource } from '@syra/shared-types';
+import type { PlaybackCommand, CatalogSource, ConnectPlaybackState } from '@syra/shared-types';
 import { PlaybackStateModel, IPlaybackState } from '../../models/PlaybackState';
 import { listDevices, markInactive } from './deviceService';
 
@@ -6,6 +6,30 @@ import { listDevices, markInactive } from './deviceService';
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+/**
+ * Serialize the persisted Mongoose playback document into the wire-safe
+ * {@link ConnectPlaybackState} broadcast over the `/player` socket. Keeping this
+ * the single mapping point ensures every `playback:state` emit sends the exact
+ * shape Syra Connect clients parse (field names, and `updatedAt` as an ISO
+ * string rather than a `Date`).
+ */
+export function toConnectPlaybackState(state: IPlaybackState): ConnectPlaybackState {
+  return {
+    trackId: state.trackId,
+    source: state.source,
+    positionMs: state.positionMs,
+    isPlaying: state.isPlaying,
+    queue: state.queue,
+    contextType: state.contextType,
+    contextId: state.contextId,
+    repeat: state.repeat,
+    shuffle: state.shuffle,
+    volume: state.volume,
+    activeDeviceId: state.activeDeviceId,
+    updatedAt: state.updatedAt.toISOString(),
+  };
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────

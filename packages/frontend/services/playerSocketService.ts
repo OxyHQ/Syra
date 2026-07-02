@@ -1,6 +1,6 @@
 import { API_URL_SOCKET } from '@/config';
 import { io, Socket } from 'socket.io-client';
-import { PlaybackStateUpdate, Queue, PlaybackState, Device, DeviceType, PlaybackCommand } from '@syra/shared-types';
+import { ConnectPlaybackState, Queue, Device, DeviceType, PlaybackCommand } from '@syra/shared-types';
 import { usePlayerStore } from '../stores/playerStore';
 import { useQueueStore } from '../stores/queueStore';
 
@@ -25,6 +25,17 @@ class PlayerSocketService {
    * setupEventListeners) forwards each `device:list` event to all of them.
    */
   private deviceListCallbacks = new Set<(devices: Device[]) => void>();
+  /**
+   * This device's stable id (set once presence is registered). Lets the store
+   * decide whether an incoming `activeDeviceId` refers to THIS device — i.e.
+   * whether a Syra Connect transfer targeted us and we must start playing.
+   */
+  private localDeviceId: string | null = null;
+
+  /** Remember this device's id so remote playback state can be routed correctly. */
+  setLocalDeviceId(deviceId: string): void {
+    this.localDeviceId = deviceId;
+  }
 
   /**
    * Connect to the player socket namespace.
@@ -102,23 +113,11 @@ class PlayerSocketService {
       console.error('[PlayerSocket] Connection error:', error);
     });
 
-    // Listen for playback state updates from other devices
-    this.socket.on('playback:state', (update: PlaybackStateUpdate) => {
-      const playerStore = usePlayerStore.getState();
-
-      if (update.state === PlaybackState.PLAYING) {
-        playerStore.resume();
-      } else if (update.state === PlaybackState.PAUSED) {
-        playerStore.pause();
-      }
-
-      if (update.position) {
-        playerStore.seek(update.position.currentTime);
-      }
-
-      if (update.volume !== undefined) {
-        playerStore.setVolume(update.volume);
-      }
+    // Server-authoritative playback state (device transfers, remote play/pause,
+    // progress from the active device). The store decides what to do based on
+    // whether THIS device is the active playback target.
+    this.socket.on('playback:state', (update: ConnectPlaybackState) => {
+      void usePlayerStore.getState().applyRemotePlaybackState(update, this.localDeviceId);
     });
 
     // Listen for queue updates from other devices
@@ -150,7 +149,7 @@ class PlayerSocketService {
   /**
    * Emit playback state update
    */
-  emitPlaybackState(update: PlaybackStateUpdate) {
+  emitPlaybackState(update: ConnectPlaybackState) {
     if (this.socket?.connected) {
       this.socket.emit('playback:state', update);
     }

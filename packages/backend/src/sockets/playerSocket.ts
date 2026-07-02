@@ -1,9 +1,9 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { logger } from '../utils/logger';
-import { PlaybackStateUpdate, Queue, PlaybackCommand } from '@syra/shared-types';
+import { ConnectPlaybackState, Queue, PlaybackCommand } from '@syra/shared-types';
 import { getQueue, setCurrentIndex } from '../services/queueService';
 import { registerDevice, listDevices, heartbeat } from '../services/playback/deviceService';
-import { applyCommand, updateProgress, handleDeviceDisconnect } from '../services/playback/playbackStateService';
+import { applyCommand, updateProgress, handleDeviceDisconnect, toConnectPlaybackState } from '../services/playback/playbackStateService';
 import type { DeviceType } from '@syra/shared-types';
 import { oxy } from '../oxyClient';
 
@@ -53,7 +53,7 @@ export const setupPlayerSocket = (io: SocketIOServer) => {
     socket.on('playback:command', async (command: PlaybackCommand) => {
       try {
         const state = await applyCommand(userId, command);
-        playerNamespace.to(playerRoom).emit('playback:state', state);
+        playerNamespace.to(playerRoom).emit('playback:state', toConnectPlaybackState(state));
       } catch (error) {
         logger.error('Error handling playback:command', { err: error, userId });
       }
@@ -63,7 +63,7 @@ export const setupPlayerSocket = (io: SocketIOServer) => {
       try {
         if (!socketDeviceId) return;
         const state = await updateProgress(userId, socketDeviceId, data.positionMs, data.isPlaying);
-        socket.to(playerRoom).emit('playback:state', state);
+        socket.to(playerRoom).emit('playback:state', toConnectPlaybackState(state));
       } catch (error) {
         logger.error('Error handling playback:progress', { err: error, userId });
       }
@@ -77,7 +77,7 @@ export const setupPlayerSocket = (io: SocketIOServer) => {
       }
     });
 
-    socket.on('playback:state', async (update: PlaybackStateUpdate) => {
+    socket.on('playback:state', async (update: ConnectPlaybackState) => {
       try {
         socket.to(playerRoom).emit('playback:state', update);
       } catch (error) {
@@ -156,7 +156,7 @@ export const setupPlayerSocket = (io: SocketIOServer) => {
       if (socketDeviceId) {
         try {
           const state = await handleDeviceDisconnect(userId, socketDeviceId);
-          playerNamespace.to(playerRoom).emit('playback:state', state);
+          playerNamespace.to(playerRoom).emit('playback:state', toConnectPlaybackState(state));
           playerNamespace.to(playerRoom).emit('device:list', await listDevices(userId));
         } catch (error) {
           logger.error('Error handling disconnect failover', { err: error, userId, deviceId: socketDeviceId });
