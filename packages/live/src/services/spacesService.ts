@@ -91,28 +91,31 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function readPaginationMeta(data: Record<string, unknown>, requestedOffset: number): { hasMore: boolean; offset: number } {
-  const pagination = isRecord(data.pagination) ? data.pagination : {};
-  return {
-    hasMore: pagination.hasMore === true,
-    offset: typeof pagination.offset === 'number' ? pagination.offset : requestedOffset,
-  };
-}
+/** Page size for the Syra podcast catalog reads (search + episode list). */
+const PODCAST_PAGE_SIZE = 20;
 
+// Podcast catalog reads hit Syra's native endpoints (`/podcasts/search`,
+// `/podcasts/:id/episodes`) — the raw show/episode shape, NOT Mention's
+// pre-mapped `/profile/media/*` proxy. Map `id`→`syraPodcastId`, the absolute
+// `imageSourceUrl`→`artworkUrl`, `duration`/`pubDate`→`durationSec`/`publishedAt`.
 function parsePodcastSearchResponse(data: Record<string, unknown>, requestedOffset: number): PaginatedResult<PodcastResult> {
   const raw = Array.isArray(data.data) ? data.data : [];
   const items: PodcastResult[] = [];
   for (const entry of raw) {
     if (!isRecord(entry)) continue;
-    if (typeof entry.syraPodcastId !== 'string' || typeof entry.title !== 'string') continue;
+    if (typeof entry.id !== 'string' || typeof entry.title !== 'string') continue;
     items.push({
-      syraPodcastId: entry.syraPodcastId,
+      syraPodcastId: entry.id,
       title: entry.title,
       author: typeof entry.author === 'string' ? entry.author : undefined,
-      artworkUrl: typeof entry.artworkUrl === 'string' ? entry.artworkUrl : undefined,
+      artworkUrl: typeof entry.imageSourceUrl === 'string' ? entry.imageSourceUrl : undefined,
     });
   }
-  return { items, ...readPaginationMeta(data, requestedOffset) };
+  return {
+    items,
+    hasMore: data.hasMore === true,
+    offset: typeof data.offset === 'number' ? data.offset : requestedOffset,
+  };
 }
 
 function parseEpisodeListResponse(data: Record<string, unknown>, requestedOffset: number): PaginatedResult<EpisodeListItem> {
@@ -120,16 +123,20 @@ function parseEpisodeListResponse(data: Record<string, unknown>, requestedOffset
   const items: EpisodeListItem[] = [];
   for (const entry of raw) {
     if (!isRecord(entry)) continue;
-    if (typeof entry.episodeId !== 'string' || typeof entry.title !== 'string') continue;
+    if (typeof entry.id !== 'string' || typeof entry.title !== 'string') continue;
     items.push({
-      episodeId: entry.episodeId,
+      episodeId: entry.id,
       title: entry.title,
-      durationSec: typeof entry.durationSec === 'number' ? entry.durationSec : undefined,
-      publishedAt: typeof entry.publishedAt === 'string' ? entry.publishedAt : undefined,
-      artworkUrl: typeof entry.artworkUrl === 'string' ? entry.artworkUrl : undefined,
+      durationSec: typeof entry.duration === 'number' ? entry.duration : undefined,
+      publishedAt: typeof entry.pubDate === 'string' ? entry.pubDate : undefined,
+      artworkUrl: typeof entry.imageSourceUrl === 'string' ? entry.imageSourceUrl : undefined,
     });
   }
-  return { items, ...readPaginationMeta(data, requestedOffset) };
+  // Syra episodes are page-based (`{ data, total, page, limit }`); derive hasMore.
+  const limit = typeof data.limit === 'number' && data.limit > 0 ? data.limit : PODCAST_PAGE_SIZE;
+  const page = typeof data.page === 'number' && data.page > 0 ? data.page : 1;
+  const total = typeof data.total === 'number' ? data.total : requestedOffset + items.length;
+  return { items, hasMore: page * limit < total, offset: requestedOffset };
 }
 
 /**
@@ -324,8 +331,8 @@ export function createAgoraService(httpClient: HttpClient) {
 
     async searchPodcasts(query: string, offset = 0): Promise<PodcastFetchResult<PodcastResult>> {
       try {
-        const res = await httpClient.get('/profile/media/search', {
-          params: { type: 'podcast', q: query, offset: String(offset) },
+        const res = await httpClient.get('/podcasts/search', {
+          params: { q: query, offset: String(offset), limit: String(PODCAST_PAGE_SIZE) },
         });
         return { ok: true, ...parsePodcastSearchResponse(res.data, offset) };
       } catch (error) {
@@ -338,8 +345,8 @@ export function createAgoraService(httpClient: HttpClient) {
       // An empty id is not a failure — it is simply an empty (successful) result.
       if (!syraPodcastId) return { ok: true, items: [], hasMore: false, offset };
       try {
-        const res = await httpClient.get(`/profile/media/podcasts/${syraPodcastId}/episodes`, {
-          params: { offset: String(offset) },
+        const res = await httpClient.get(`/podcasts/${syraPodcastId}/episodes`, {
+          params: { page: String(Math.floor(offset / PODCAST_PAGE_SIZE) + 1), limit: String(PODCAST_PAGE_SIZE) },
         });
         return { ok: true, ...parseEpisodeListResponse(res.data, offset) };
       } catch (error) {
