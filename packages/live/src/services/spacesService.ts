@@ -187,7 +187,7 @@ export function createRoomsService(httpClient: HttpClient) {
         if (status) params.status = status;
         if (type) params.type = type;
         const res = await httpClient.get("/rooms", { params });
-        const raw = res.data.rooms || res.data.data || res.data || [];
+        const raw = res.rooms || res.data || res || [];
         return validateRooms(Array.isArray(raw) ? raw : []);
       } catch (error) {
         console.warn("Failed to fetch rooms", error);
@@ -199,7 +199,7 @@ export function createRoomsService(httpClient: HttpClient) {
       if (!id) return null;
       try {
         const res = await httpClient.get(`/rooms/${id}`);
-        const raw = res.data.room || res.data.data || res.data || null;
+        const raw = res.room || res.data || res || null;
         return raw ? validateRoom(raw) : null;
       } catch (error) {
         console.warn("Failed to fetch room", error);
@@ -210,7 +210,7 @@ export function createRoomsService(httpClient: HttpClient) {
     async createRoom(data: CreateRoomData): Promise<Room | null> {
       try {
         const res = await httpClient.post("/rooms", data);
-        const raw = res.data.room || res.data.data || res.data || null;
+        const raw = res.room || res.data || res || null;
         return raw ? validateRoom(raw) : null;
       } catch (error) {
         console.warn("Failed to create room", error);
@@ -277,7 +277,7 @@ export function createRoomsService(httpClient: HttpClient) {
       if (!id) return null;
       try {
         const res = await httpClient.post(`/rooms/${id}/stream`, data);
-        const parsed = ZStartStreamResponse.safeParse(res.data);
+        const parsed = ZStartStreamResponse.safeParse(res);
         if (!parsed.success) {
           console.warn('[live] Invalid startStream response:', parsed.error.issues[0]);
           return null;
@@ -293,7 +293,7 @@ export function createRoomsService(httpClient: HttpClient) {
       if (!id) return null;
       try {
         const res = await httpClient.post(`/rooms/${id}/stream/rtmp`, data || {});
-        const parsed = ZGenerateStreamKeyResponse.safeParse(res.data);
+        const parsed = ZGenerateStreamKeyResponse.safeParse(res);
         if (!parsed.success) {
           console.warn('[live] Invalid generateStreamKey response:', parsed.error.issues[0]);
           return null;
@@ -334,7 +334,7 @@ export function createRoomsService(httpClient: HttpClient) {
         const res = await httpClient.get('/podcasts/search', {
           params: { q: query, offset: String(offset), limit: String(PODCAST_PAGE_SIZE) },
         });
-        return { ok: true, ...parsePodcastSearchResponse(res.data, offset) };
+        return { ok: true, ...parsePodcastSearchResponse(res, offset) };
       } catch (error) {
         console.warn("Failed to search podcasts", error);
         return { ok: false };
@@ -348,7 +348,7 @@ export function createRoomsService(httpClient: HttpClient) {
         const res = await httpClient.get(`/podcasts/${syraPodcastId}/episodes`, {
           params: { page: String(Math.floor(offset / PODCAST_PAGE_SIZE) + 1), limit: String(PODCAST_PAGE_SIZE) },
         });
-        return { ok: true, ...parseEpisodeListResponse(res.data, offset) };
+        return { ok: true, ...parseEpisodeListResponse(res, offset) };
       } catch (error) {
         console.warn("Failed to fetch podcast episodes", error);
         return { ok: false };
@@ -362,7 +362,7 @@ export function createRoomsService(httpClient: HttpClient) {
       if (!roomId) return null;
       try {
         const res = await httpClient.post(`/rooms/${roomId}/stream/podcast`, body);
-        const parsed = ZStartStreamResponse.safeParse(res.data);
+        const parsed = ZStartStreamResponse.safeParse(res);
         if (!parsed.success) {
           console.warn('[live] Invalid startPodcastStream response:', parsed.error.issues[0]);
           return null;
@@ -384,8 +384,8 @@ export function createRoomsService(httpClient: HttpClient) {
       if (!roomId) return null;
       try {
         const res = await httpClient.post(`/rooms/${roomId}/stream/podcast/next`);
-        if (res.data.ended === true) return { ended: true };
-        const parsed = ZStartStreamResponse.safeParse(res.data);
+        if (res.ended === true) return { ended: true };
+        const parsed = ZStartStreamResponse.safeParse(res);
         if (parsed.success) return { ended: false };
         console.warn('[live] Invalid skipPodcastNext response:', parsed.error.issues[0]);
         return null;
@@ -408,7 +408,7 @@ export function createRoomsService(httpClient: HttpClient) {
         const res = await httpClient.get('/tracks/search', {
           params: { q: query, offset: String(offset) },
         });
-        return { ok: true, ...parseMusicSearchResponse(res.data, offset) };
+        return { ok: true, ...parseMusicSearchResponse(res, offset) };
       } catch (error) {
         console.warn("Failed to search music", error);
         return { ok: false };
@@ -428,7 +428,7 @@ export function createRoomsService(httpClient: HttpClient) {
       if (!roomId) return null;
       try {
         const res = await httpClient.post(`/rooms/${roomId}/stream/track`, body);
-        const parsed = ZStartStreamResponse.safeParse(res.data);
+        const parsed = ZStartStreamResponse.safeParse(res);
         if (!parsed.success) {
           console.warn('[live] Invalid startTrackStream response:', parsed.error.issues[0]);
           return null;
@@ -456,8 +456,8 @@ export function createRoomsService(httpClient: HttpClient) {
       try {
         const res = await httpClient.patch(`/rooms/${id}/archive`);
         return {
-          success: res.data.success !== undefined ? Boolean(res.data.success) : true,
-          archived: res.data.archived !== undefined ? Boolean(res.data.archived) : true,
+          success: res.success !== undefined ? Boolean(res.success) : true,
+          archived: res.archived !== undefined ? Boolean(res.archived) : true,
         };
       } catch (error) {
         console.warn("Failed to archive room", error);
@@ -470,7 +470,7 @@ export function createRoomsService(httpClient: HttpClient) {
         const params: Record<string, string> = {};
         if (search) params.search = search;
         const res = await httpClient.get("/houses", { params });
-        const raw = res.data.houses || res.data.data || res.data || [];
+        const raw = res.houses || res.data || res || [];
         const items = Array.isArray(raw) ? raw : [];
         return items
           .map((h: unknown) => validateHouse(h))
@@ -485,7 +485,7 @@ export function createRoomsService(httpClient: HttpClient) {
       if (!id) return null;
       try {
         const res = await httpClient.get(`/houses/${id}`);
-        const raw = res.data.house || res.data.data || res.data || null;
+        const raw = res.house || res.data || res || null;
         return raw ? validateHouse(raw) : null;
       } catch (error) {
         console.warn("Failed to fetch house", error);
@@ -526,7 +526,7 @@ export function createRoomsService(httpClient: HttpClient) {
         const params: Record<string, string> = {};
         if (status) params.status = status;
         const res = await httpClient.get(`/houses/${houseId}/rooms`, { params });
-        const raw = res.data.rooms || res.data.data || res.data || [];
+        const raw = res.rooms || res.data || res || [];
         return validateRooms(Array.isArray(raw) ? raw : []);
       } catch (error) {
         console.warn("Failed to fetch house rooms", error);
@@ -562,7 +562,7 @@ export function createRoomsService(httpClient: HttpClient) {
       if (!roomId) return [];
       try {
         const res = await httpClient.get(`/rooms/${roomId}/recordings`);
-        const raw = res.data.recordings || [];
+        const raw = res.recordings || [];
         return validateRecordings(Array.isArray(raw) ? raw : []);
       } catch (error) {
         console.warn("Failed to fetch recordings", error);
@@ -574,7 +574,7 @@ export function createRoomsService(httpClient: HttpClient) {
       if (!recordingId) return null;
       try {
         const res = await httpClient.get(`/recordings/${recordingId}`);
-        return parseRecordingResponse(res.data);
+        return parseRecordingResponse(res);
       } catch (error) {
         console.warn("Failed to fetch recording", error);
         return null;
@@ -609,7 +609,7 @@ export function createRoomsService(httpClient: HttpClient) {
         if (sortBy) params.sortBy = sortBy;
         if (limit) params.limit = String(limit);
         const res = await httpClient.get("/recordings", { params });
-        const raw = res.data.recordings || res.data.data || res.data || [];
+        const raw = res.recordings || res.data || res || [];
         return validateRecordings(Array.isArray(raw) ? raw : []);
       } catch (error) {
         console.warn("Failed to fetch recordings", error);
@@ -620,7 +620,7 @@ export function createRoomsService(httpClient: HttpClient) {
     async getTopHosts(): Promise<{ userId: string; roomCount: number; totalListeners: number }[]> {
       try {
         const res = await httpClient.get("/rooms/top-hosts");
-        const raw = res.data.hosts || res.data.data || res.data || [];
+        const raw = res.hosts || res.data || res || [];
         return Array.isArray(raw) ? raw : [];
       } catch (error) {
         console.warn("Failed to fetch top hosts", error);
@@ -633,7 +633,7 @@ export function createRoomsService(httpClient: HttpClient) {
     async createHouse(data: { name: string; description?: string; tags?: string[]; isPublic?: boolean }): Promise<House | null> {
       try {
         const res = await httpClient.post("/houses", data);
-        const raw = res.data.house || res.data.data || res.data || null;
+        const raw = res.house || res.data || res || null;
         return raw ? validateHouse(raw) : null;
       } catch (error) {
         console.warn("Failed to create house", error);
@@ -647,7 +647,7 @@ export function createRoomsService(httpClient: HttpClient) {
       if (!houseId) return null;
       try {
         const res = await httpClient.post(`/houses/${houseId}/avatar`, formData);
-        return (res.data.avatar as string) || null;
+        return (res.avatar as string) || null;
       } catch (error) {
         console.warn("Failed to upload house avatar", error);
         return null;
@@ -658,7 +658,7 @@ export function createRoomsService(httpClient: HttpClient) {
       if (!houseId) return null;
       try {
         const res = await httpClient.post(`/houses/${houseId}/cover`, formData);
-        return (res.data.coverImage as string) || null;
+        return (res.coverImage as string) || null;
       } catch (error) {
         console.warn("Failed to upload house cover", error);
         return null;
@@ -669,7 +669,7 @@ export function createRoomsService(httpClient: HttpClient) {
       if (!roomId) return null;
       try {
         const res = await httpClient.post(`/rooms/${roomId}/image`, formData);
-        return (res.data.streamImage as string) || null;
+        return (res.streamImage as string) || null;
       } catch (error) {
         console.warn("Failed to upload room image", error);
         return null;
@@ -680,7 +680,7 @@ export function createRoomsService(httpClient: HttpClient) {
       if (!seriesId) return null;
       try {
         const res = await httpClient.post(`/series/${seriesId}/cover`, formData);
-        return (res.data.coverImage as string) || null;
+        return (res.coverImage as string) || null;
       } catch (error) {
         console.warn("Failed to upload series cover", error);
         return null;
