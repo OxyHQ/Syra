@@ -45,6 +45,13 @@ import recommendationsRoutes from './src/routes/recommendations.routes';
 import podcastsRoutes from './src/routes/podcasts.routes';
 import episodesRoutes from './src/routes/episodes.routes';
 import entityProfileRoutes from './src/routes/entityProfile.routes';
+import roomsRoutes from './src/routes/rooms.routes';
+import housesRoutes from './src/routes/houses.routes';
+import seriesRoutes from './src/routes/series.routes';
+import recordingsRoutes from './src/routes/recordings.routes';
+import livekitWebhookRoutes from './src/routes/livekitWebhook.routes';
+import { initializeRoomSocket } from './src/sockets/roomSocket';
+import { initializeIO } from './src/utils/socket';
 import { startRecommendationScheduler } from './src/services/recommendations/scheduler';
 import { startPodcastRefreshScheduler } from './src/services/podcasts/podcastRefreshScheduler';
 
@@ -72,6 +79,13 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-Requested-With', 'Accept', 'Accept-Version', 'Content-Length', 'Content-MD5', 'Date', 'X-Api-Version'],
 }));
+
+// LiveKit webhook — mounted BEFORE the global JSON parser (and the rate limiter)
+// because its own raw body parser must own the request bytes for signature
+// verification; a JSON re-serialization would invalidate the LiveKit signature.
+// The route is machine-to-machine and gated entirely by cryptographic signature
+// verification, so it needs no per-request rate limit.
+app.use('/livekit', livekitWebhookRoutes);
 
 // Create Redis store for distributed rate limiting
 const redisStore = new RedisStore({ 
@@ -168,6 +182,10 @@ const io = new SocketIOServer(server, {
   },
 });
 
+// Register the shared io singleton so main-namespace signal broadcasters
+// (e.g. `emitLiveRoomsUpdated`) can reach connected clients.
+initializeIO(io);
+
 (async () => {
   try {
     const { publisher, subscriber } = createRedisPubSub();
@@ -208,8 +226,9 @@ const musicNamespace = io.of('/music');
 
 const playerNamespace = setupPlayerSocket(io);
 const playlistNamespace = setupPlaylistSocket(io);
+const roomsNamespace = initializeRoomSocket(io);
 
-[musicNamespace, io].forEach((ns) => {
+[musicNamespace, roomsNamespace, io].forEach((ns) => {
   if (ns && typeof ns.use === 'function') {
     ns.use(oxy.authSocket());
   }
@@ -227,7 +246,7 @@ musicNamespace.on('connection', (socket: Socket) => {
   });
 });
 
-[musicNamespace, playerNamespace, playlistNamespace].forEach((namespace) => {
+[musicNamespace, playerNamespace, playlistNamespace, roomsNamespace].forEach((namespace) => {
   configureNamespaceErrorHandling(namespace);
 });
 
@@ -265,6 +284,10 @@ publicApiRouter.use('/preview', createOptionalOxyAuth(oxy), previewRoutes);
 
 publicApiRouter.use('/sources', sourcesRoutes);
 
+// Live rooms: public discovery (optional auth resolves the viewer for
+// visibility gating); write routes self-enforce auth internally.
+publicApiRouter.use('/rooms', createOptionalOxyAuth(oxy), roomsRoutes);
+
 // Podcasts: public reads + audio/HLS stream; private/creator routes self-enforce
 // with requireAuth. Optional auth resolves the session for entitlement + progress.
 publicApiRouter.use('/podcasts', createOptionalOxyAuth(oxy), podcastsRoutes);
@@ -282,6 +305,9 @@ authenticatedApiRouter.use('/queue', queueRoutes);
 authenticatedApiRouter.use('/music', musicPreferencesRoutes);
 authenticatedApiRouter.use('/copyright', copyrightRoutes);
 authenticatedApiRouter.use('/recommendations', recommendationsRoutes);
+authenticatedApiRouter.use('/recordings', recordingsRoutes);
+authenticatedApiRouter.use('/houses', housesRoutes);
+authenticatedApiRouter.use('/series', seriesRoutes);
 
 app.use('/api', publicApiRouter);
 app.use('/api', oxy.auth(), authenticatedApiRouter);

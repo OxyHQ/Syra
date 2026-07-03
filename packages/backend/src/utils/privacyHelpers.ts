@@ -1,3 +1,6 @@
+import { oxy } from '../oxyClient';
+import { logger } from './logger';
+
 /**
  * Privacy visibility constants
  */
@@ -92,6 +95,30 @@ export function extractFollowersIds(followersRes: unknown): string[] {
  * Check if a profile requires access check (private or followers_only)
  */
 export function requiresAccessCheck(profileVisibility: string | undefined): boolean {
-  return profileVisibility === ProfileVisibility.PRIVATE || 
+  return profileVisibility === ProfileVisibility.PRIVATE ||
          profileVisibility === ProfileVisibility.FOLLOWERS_ONLY;
+}
+
+/**
+ * Fetch the viewer's following list once and expose it as a Set for batched
+ * access checks within a single request path. On any error the set is empty —
+ * access is denied for privacy.
+ */
+export async function getFollowingIdSet(viewerId: string): Promise<Set<string>> {
+  try {
+    const followingRes = await oxy.getUserFollowing(viewerId);
+    return new Set(extractFollowingIds(followingRes));
+  } catch (error) {
+    logger.error('Error fetching following list for access check:', { err: error });
+    return new Set();
+  }
+}
+
+/**
+ * Check whether `viewerId` follows `targetUserId` (used to gate followers-only
+ * live rooms). Denies access on any lookup failure.
+ */
+export async function checkFollowAccess(viewerId: string, targetUserId: string): Promise<boolean> {
+  const followingIds = await getFollowingIdSet(viewerId);
+  return followingIds.has(targetUserId);
 }
