@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import axios from 'axios';
 import type { OxyServices } from '@oxyhq/core';
+import type { HttpClient } from '@syra.fm/live';
 import { API_URL } from '@/config';
 import { oxyServices } from '@/lib/oxyServices';
 
@@ -11,6 +12,28 @@ const API_CONFIG = {
 
 const syraApiClient = oxyServices.createLinkedClient({ baseURL: API_CONFIG.baseURL });
 const authenticatedClient: ReturnType<OxyServices['getClient']> = syraApiClient.client;
+
+// The @syra.fm/live engine's HttpClient contract resolves each request to a
+// `{ data }` envelope (its services read `res.data`) with request config passed
+// as the second arg (`{ params }`). The OxyServices linked client resolves the
+// parsed body directly, so adapt it once here and pass THIS as `httpClient` in
+// both frontend and studio liveConfig — passing the raw `authenticatedClient`
+// makes the engine read `res.data` off the body and silently get nothing
+// (empty rooms / "no podcasts found").
+export const liveHttpClient: HttpClient = {
+  async get<T = unknown>(endpoint: string, config?: Parameters<typeof authenticatedClient.get>[1]): Promise<{ data: T }> {
+    return { data: await authenticatedClient.get<T>(endpoint, config) };
+  },
+  async post<T = unknown>(endpoint: string, body?: unknown, config?: Parameters<typeof authenticatedClient.post>[2]): Promise<{ data: T }> {
+    return { data: await authenticatedClient.post<T>(endpoint, body, config) };
+  },
+  async delete<T = unknown>(endpoint: string, config?: Parameters<typeof authenticatedClient.delete>[1]): Promise<{ data: T }> {
+    return { data: await authenticatedClient.delete<T>(endpoint, config) };
+  },
+  async patch<T = unknown>(endpoint: string, body?: unknown, config?: Parameters<typeof authenticatedClient.patch>[2]): Promise<{ data: T }> {
+    return { data: await authenticatedClient.patch<T>(endpoint, body, config) };
+  },
+};
 
 export interface ApiRequestOptions {
   cache?: boolean;
