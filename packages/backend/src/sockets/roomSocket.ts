@@ -379,11 +379,17 @@ export function initializeRoomSocket(io: Server): Namespace {
     socket.on('speaker:request', async (data: { roomId: string }, callback?: RoomAck) => {
       try {
         const { roomId } = data || {};
-        if (!roomId) return;
+        if (!roomId) {
+          callback?.({ success: false, error: 'roomId is required' });
+          return;
+        }
 
         // Look up room type to enforce broadcast restriction
         const room = await Room.findById(roomId).lean();
-        if (!room) return;
+        if (!room) {
+          callback?.({ success: false, error: 'Room not found' });
+          return;
+        }
 
         if (room.type === RoomType.BROADCAST) {
           callback?.({ success: false, error: 'Speaker requests are not allowed in broadcast rooms' });
@@ -391,7 +397,10 @@ export function initializeRoomSocket(io: Server): Namespace {
         }
 
         const participant = await redisGetParticipant(roomId, userId);
-        if (!participant || participant.role !== 'listener') return;
+        if (!participant || participant.role !== 'listener') {
+          callback?.({ success: false, error: 'Only a listener can request to speak' });
+          return;
+        }
 
         // For TALK rooms: if speakerPermission is 'everyone', auto-promote
         if (room.type === RoomType.TALK && room.speakerPermission === SpeakerPermission.EVERYONE) {
@@ -437,7 +446,10 @@ export function initializeRoomSocket(io: Server): Namespace {
     socket.on('speaker:approve', async (data: { roomId: string; targetUserId: string }, callback?: RoomAck) => {
       try {
         const { roomId, targetUserId } = data || {};
-        if (!roomId || !targetUserId) return;
+        if (!roomId || !targetUserId) {
+          callback?.({ success: false, error: 'roomId and targetUserId are required' });
+          return;
+        }
 
         // Enforce broadcast restriction
         const room = await Room.findById(roomId).lean();
@@ -447,10 +459,16 @@ export function initializeRoomSocket(io: Server): Namespace {
         }
 
         const redisRoom = await redisGetRoom(roomId);
-        if (!redisRoom || redisRoom.hostId !== userId) return;
+        if (!redisRoom || redisRoom.hostId !== userId) {
+          callback?.({ success: false, error: 'Only the host can approve speakers' });
+          return;
+        }
 
         const target = await redisGetParticipant(roomId, targetUserId);
-        if (!target) return;
+        if (!target) {
+          callback?.({ success: false, error: 'Target user is not in the room' });
+          return;
+        }
 
         // Promote to speaker
         await redisUpdateParticipant(roomId, targetUserId, { role: 'speaker' });
@@ -510,7 +528,10 @@ export function initializeRoomSocket(io: Server): Namespace {
     socket.on('speaker:remove', async (data: { roomId: string; targetUserId: string }, callback?: RoomAck) => {
       try {
         const { roomId, targetUserId } = data || {};
-        if (!roomId || !targetUserId) return;
+        if (!roomId || !targetUserId) {
+          callback?.({ success: false, error: 'roomId and targetUserId are required' });
+          return;
+        }
 
         // Enforce broadcast restriction
         const room = await Room.findById(roomId).lean();
@@ -520,10 +541,20 @@ export function initializeRoomSocket(io: Server): Namespace {
         }
 
         const redisRoom = await redisGetRoom(roomId);
-        if (!redisRoom || redisRoom.hostId !== userId) return;
+        if (!redisRoom || redisRoom.hostId !== userId) {
+          callback?.({ success: false, error: 'Only the host can remove speakers' });
+          return;
+        }
 
         const target = await redisGetParticipant(roomId, targetUserId);
-        if (!target || target.role === 'host') return;
+        if (!target) {
+          callback?.({ success: false, error: 'Target user is not in the room' });
+          return;
+        }
+        if (target.role === 'host') {
+          callback?.({ success: false, error: 'Cannot remove the host' });
+          return;
+        }
 
         await redisUpdateParticipant(roomId, targetUserId, { role: 'listener', isMuted: true });
 
