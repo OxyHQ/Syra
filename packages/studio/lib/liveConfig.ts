@@ -4,7 +4,7 @@ import { Avatar } from '@oxyhq/bloom/avatar';
 import { useQuery } from '@tanstack/react-query';
 import type { LiveConfig, LiveTheme, UserEntity } from '@syra.fm/live';
 
-import { authenticatedClient } from '@/utils/api';
+import { liveHttpClient } from '@/utils/api';
 import { API_URL_SOCKET } from '@/config';
 import { useResponsive } from '@/hooks/useResponsive';
 import { oxyServices } from '@/lib/oxyServices';
@@ -79,7 +79,7 @@ const liveToast = Object.assign((message: string) => { toast(message); }, {
  * and sonner toasts. `onRoomChanged` is injected in `AppProviders`.
  */
 export const liveConfig: LiveConfig = {
-  httpClient: authenticatedClient,
+  httpClient: liveHttpClient,
   socketUrl: API_URL_SOCKET,
   useTheme: useLiveTheme,
   useIsDesktop,

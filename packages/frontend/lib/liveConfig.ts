@@ -3,7 +3,7 @@ import { useTheme } from '@oxyhq/bloom/theme';
 import { useQuery } from '@tanstack/react-query';
 import type { LiveConfig, LiveTheme, UserEntity } from '@syra.fm/live';
 
-import { authenticatedClient } from '@/utils/api';
+import { liveHttpClient } from '@/utils/api';
 import { API_URL_SOCKET } from '@/config';
 import { useIsDesktop } from '@/hooks/useOptimizedMediaQuery';
 import { oxyServices } from '@/lib/oxyServices';
@@ -76,7 +76,7 @@ const liveToast = Object.assign((message: string) => { toast(message); }, {
  * `QueryClient` is in scope.
  */
 export const liveConfig: LiveConfig = {
-  httpClient: authenticatedClient,
+  httpClient: liveHttpClient,
   socketUrl: API_URL_SOCKET,
   useTheme: useLiveTheme,
   useIsDesktop,
