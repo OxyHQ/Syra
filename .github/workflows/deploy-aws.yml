@@ -35,6 +35,9 @@ jobs:
 
       - run: bun run build:shared-types
 
+      # The backend imports @syra.fm/sdk (workspace); build its dist so tsc/tests resolve it.
+      - run: bun run build:sdk
+
       - run: cd packages/backend && bun run test
 
       - run: cd packages/frontend && bunx jest --ci
