@@ -1,13 +1,13 @@
 import React, { createContext, useContext, useMemo } from 'react';
 import type { ViewStyle } from 'react-native';
-import type { AgoraTheme, UserEntity, HttpClient } from '../types';
-import { createAgoraService, type AgoraServiceInstance } from '../services/spacesService';
+import type { LiveTheme, UserEntity, HttpClient } from '../types';
+import { createRoomsService, type RoomsServiceInstance } from '../services/spacesService';
 import { RoomSocketService } from '../services/spaceSocketService';
 import { createGetRoomToken, type GetRoomTokenFn } from '../services/livekitService';
 
 /**
  * The viewer's pinned Syra podcast (resolved from their profile media), surfaced
- * by {@link AgoraConfig.getPinnedPodcast}. `title`/`artworkUrl` are optional —
+ * by {@link LiveConfig.getPinnedPodcast}. `title`/`artworkUrl` are optional —
  * the id is all the picker needs to drill into the episode list.
  */
 export interface PinnedPodcast {
@@ -16,14 +16,14 @@ export interface PinnedPodcast {
   artworkUrl?: string;
 }
 
-export interface AgoraConfig {
+export interface LiveConfig {
   httpClient: HttpClient;
   socketUrl: string;
-  useTheme: () => AgoraTheme;
+  useTheme: () => LiveTheme;
   /**
    * Translate a UI string key to the active locale. Optional: hosts WITH an i18n
    * layer (the Mention frontend) inject their real translator so the shared
-   * live-room UI localizes; hosts WITHOUT one (the standalone Agora app) omit it
+   * live-room UI localizes; hosts WITHOUT one (the standalone live-rooms app) omit it
    * and the shared components fall back to their bundled English source copy.
    * Keys are looked up flat (e.g. `agora.podcastStream.disclaimer`).
    */
@@ -66,31 +66,31 @@ export interface AgoraConfig {
   dockClassName?: string;
 }
 
-export interface AgoraConfigInternal extends AgoraConfig {
-  agoraService: AgoraServiceInstance;
+export interface LiveConfigInternal extends LiveConfig {
+  roomsService: RoomsServiceInstance;
   roomSocketService: RoomSocketService;
   getRoomToken: GetRoomTokenFn;
 }
 
-const AgoraConfigContext = createContext<AgoraConfigInternal | null>(null);
+const LiveConfigContext = createContext<LiveConfigInternal | null>(null);
 
-export function useAgoraConfig(): AgoraConfigInternal {
-  const config = useContext(AgoraConfigContext);
-  if (!config) throw new Error('useAgoraConfig must be used within an AgoraProvider');
+export function useLiveConfig(): LiveConfigInternal {
+  const config = useContext(LiveConfigContext);
+  if (!config) throw new Error('useLiveConfig must be used within a LiveConfigProvider');
   return config;
 }
 
-export function AgoraProvider({ config, children }: { config: AgoraConfig; children: React.ReactNode }) {
-  const fullConfig = useMemo<AgoraConfigInternal>(() => {
-    const agoraService = createAgoraService(config.httpClient);
+export function LiveConfigProvider({ config, children }: { config: LiveConfig; children: React.ReactNode }) {
+  const fullConfig = useMemo<LiveConfigInternal>(() => {
+    const roomsService = createRoomsService(config.httpClient);
     const roomSocketService = new RoomSocketService(config.socketUrl);
     const getRoomToken = createGetRoomToken(config.httpClient);
-    return { ...config, agoraService, roomSocketService, getRoomToken };
+    return { ...config, roomsService, roomSocketService, getRoomToken };
   }, [config]);
 
   return (
-    <AgoraConfigContext.Provider value={fullConfig}>
+    <LiveConfigContext.Provider value={fullConfig}>
       {children}
-    </AgoraConfigContext.Provider>
+    </LiveConfigContext.Provider>
   );
 }

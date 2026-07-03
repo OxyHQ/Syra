@@ -16,7 +16,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useAuth } from '@oxyhq/services';
 import * as ImagePicker from 'expo-image-picker';
 
-import { useAgoraConfig } from '../context/AgoraConfigContext';
+import { useLiveConfig } from '../context/LiveConfigContext';
 
 interface StreamConfigModalProps {
   visible: boolean;
@@ -29,7 +29,7 @@ interface StreamConfigModalProps {
 type StreamMode = 'url' | 'rtmp';
 
 export function StreamConfigModal({ visible, onClose, roomId, initialStreamUrl, onStreamStarted }: StreamConfigModalProps) {
-  const { useTheme, agoraService, toast } = useAgoraConfig();
+  const { useTheme, roomsService, toast } = useLiveConfig();
   const theme = useTheme();
   const { oxyServices } = useAuth();
 
@@ -126,7 +126,7 @@ export function StreamConfigModal({ visible, onClose, roomId, initialStreamUrl, 
     if (!streamUrl.trim() || loading) return;
     setLoading(true);
     try {
-      const result = await agoraService.startStream(roomId, {
+      const result = await roomsService.startStream(roomId, {
         url: streamUrl.trim(),
         title: title.trim() || undefined,
         image: imageFileId || undefined,
@@ -151,7 +151,7 @@ export function StreamConfigModal({ visible, onClose, roomId, initialStreamUrl, 
     if (generatingKey) return;
     setGeneratingKey(true);
     try {
-      const result = await agoraService.generateStreamKey(roomId, {
+      const result = await roomsService.generateStreamKey(roomId, {
         title: title.trim() || undefined,
         image: imageFileId || undefined,
         description: description.trim() || undefined,
@@ -183,7 +183,7 @@ export function StreamConfigModal({ visible, onClose, roomId, initialStreamUrl, 
     }
     setLoading(true);
     try {
-      const success = await agoraService.updateStreamMetadata(roomId, {
+      const success = await roomsService.updateStreamMetadata(roomId, {
         ...(mode === 'url' ? { url: trimmedUrl } : {}),
         title: title.trim() || undefined,
         image: imageFileId || undefined,

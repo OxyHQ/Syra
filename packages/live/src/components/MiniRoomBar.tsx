@@ -11,7 +11,7 @@ import Animated, {
   cancelAnimation,
 } from 'react-native-reanimated';
 
-import { useAgoraConfig } from '../context/AgoraConfigContext';
+import { useLiveConfig } from '../context/LiveConfigContext';
 
 interface MiniRoomBarProps {
   title: string;
@@ -36,7 +36,7 @@ export function MiniRoomBar({
   onToggleMute,
   onLeave,
 }: MiniRoomBarProps) {
-  const { useTheme } = useAgoraConfig();
+  const { useTheme } = useLiveConfig();
   const theme = useTheme();
 
   const pulseScale = useSharedValue(1);

@@ -3,13 +3,13 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
 import { PanelHeader } from './PanelHeader';
-import { useAgoraConfig } from '../context/AgoraConfigContext';
-import type { Recording, AgoraTheme } from '../types';
+import { useLiveConfig } from '../context/LiveConfigContext';
+import type { Recording, LiveTheme } from '../types';
 
 interface RecordingsPanelProps {
   roomId: string;
   isHost: boolean;
-  theme: AgoraTheme;
+  theme: LiveTheme;
   onClose: () => void;
   onPlay?: (playbackUrl: string, recording: Recording) => void;
 }
@@ -31,7 +31,7 @@ function formatDate(dateStr: string): string {
 }
 
 export function RecordingsPanel({ roomId, isHost, theme, onClose, onPlay }: RecordingsPanelProps) {
-  const { agoraService, toast } = useAgoraConfig();
+  const { roomsService, toast } = useLiveConfig();
   const [recordings, setRecordings] = useState<Recording[]>([]);
   const [loading, setLoading] = useState(true);
   const [playingId, setPlayingId] = useState<string | null>(null);
@@ -42,7 +42,7 @@ export function RecordingsPanel({ roomId, isHost, theme, onClose, onPlay }: Reco
 
   const loadRecordings = async () => {
     setLoading(true);
-    const data = await agoraService.getRoomRecordings(roomId);
+    const data = await roomsService.getRoomRecordings(roomId);
     setRecordings(data);
     setLoading(false);
   };
@@ -50,7 +50,7 @@ export function RecordingsPanel({ roomId, isHost, theme, onClose, onPlay }: Reco
   const handlePlay = async (recording: Recording) => {
     setPlayingId(recording._id);
     try {
-      const result = await agoraService.getRecording(recording._id);
+      const result = await roomsService.getRecording(recording._id);
       if (result?.playbackUrl) {
         onPlay?.(result.playbackUrl, recording);
       } else {
@@ -65,7 +65,7 @@ export function RecordingsPanel({ roomId, isHost, theme, onClose, onPlay }: Reco
 
   const handleToggleAccess = async (recording: Recording) => {
     const newAccess = recording.access === 'public' ? 'participants' as const : 'public' as const;
-    const success = await agoraService.updateRecordingAccess(recording._id, newAccess);
+    const success = await roomsService.updateRecordingAccess(recording._id, newAccess);
     if (success) {
       setRecordings((prev) =>
         prev.map((r) => r._id === recording._id ? { ...r, access: newAccess } : r)
@@ -77,7 +77,7 @@ export function RecordingsPanel({ roomId, isHost, theme, onClose, onPlay }: Reco
   };
 
   const handleDelete = async (recording: Recording) => {
-    const success = await agoraService.deleteRecording(recording._id);
+    const success = await roomsService.deleteRecording(recording._id);
     if (success) {
       setRecordings((prev) => prev.filter((r) => r._id !== recording._id));
       toast.success('Recording deleted');

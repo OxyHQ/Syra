@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import { Room, RoomEvent, Track, ConnectionState } from 'livekit-client';
 import { setAudioModeAsync } from 'expo-audio';
-import { useAgoraConfig } from '../context/AgoraConfigContext';
+import { useLiveConfig } from '../context/LiveConfigContext';
 
 let AudioSession: { startAudioSession: () => void; stopAudioSession: () => void } | null = null;
 if (Platform.OS !== 'web') {
@@ -24,7 +24,7 @@ interface UseRoomAudioReturn {
 }
 
 export function useRoomAudio({ roomId, isSpeaker, isMuted, isConnected }: UseRoomAudioOptions): UseRoomAudioReturn {
-  const { getRoomToken } = useAgoraConfig();
+  const { getRoomToken } = useLiveConfig();
   const [isLiveKitConnected, setIsLiveKitConnected] = useState(false);
   const [localAudioEnabled, setLocalAudioEnabled] = useState(false);
   const [micPermissionDenied, setMicPermissionDenied] = useState(false);

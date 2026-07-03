@@ -3,12 +3,12 @@ import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
 import { PanelHeader } from './PanelHeader';
-import type { Room, RoomParticipant, AgoraTheme } from '../types';
+import type { Room, RoomParticipant, LiveTheme } from '../types';
 
 interface InsightsPanelProps {
   room: Room | null;
   participants: RoomParticipant[];
-  theme: AgoraTheme;
+  theme: LiveTheme;
   onClose: () => void;
 }
 

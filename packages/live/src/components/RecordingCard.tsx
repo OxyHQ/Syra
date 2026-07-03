@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, StyleProp, ViewStyle } from '
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useAuth } from '@oxyhq/services';
 
-import { useAgoraConfig } from '../context/AgoraConfigContext';
+import { useLiveConfig } from '../context/LiveConfigContext';
 import { getAvatarUrl, getDisplayName } from '../hooks/useRoomUsers';
 import type { Recording } from '../validation';
 
@@ -35,7 +35,7 @@ interface RecordingCardProps {
 // --- Component ---
 
 export const RecordingCard: React.FC<RecordingCardProps> = ({ recording, onPress, style }) => {
-  const { useTheme, useUserById, AvatarComponent, getCachedFileDownloadUrlSync } = useAgoraConfig();
+  const { useTheme, useUserById, AvatarComponent, getCachedFileDownloadUrlSync } = useLiveConfig();
   const theme = useTheme();
   const { oxyServices } = useAuth();
   const hostProfile = useUserById(recording.host);

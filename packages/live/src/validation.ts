@@ -228,7 +228,7 @@ export type RoomAttachment = z.infer<typeof ZRoomAttachment>;
 export function validateRoom(data: unknown): Room | null {
   const result = ZRoom.safeParse(data);
   if (result.success) return result.data;
-  console.warn('[agora-shared] Invalid Room:', result.error.issues[0]);
+  console.warn('[live] Invalid Room:', result.error.issues[0]);
   return null;
 }
 
@@ -240,7 +240,7 @@ export function validateRooms(items: unknown[]): Room[] {
     if (parsed.success) {
       valid.push(parsed.data);
     } else {
-      console.warn('[agora-shared] Dropping invalid room:', parsed.error.issues[0]);
+      console.warn('[live] Dropping invalid room:', parsed.error.issues[0]);
     }
   }
   return valid;
@@ -249,14 +249,14 @@ export function validateRooms(items: unknown[]): Room[] {
 export function validateHouse(data: unknown): House | null {
   const result = ZHouse.safeParse(data);
   if (result.success) return result.data;
-  console.warn('[agora-shared] Invalid House:', result.error.issues[0]);
+  console.warn('[live] Invalid House:', result.error.issues[0]);
   return null;
 }
 
 export function validateRecording(data: unknown): Recording | null {
   const result = ZRecording.safeParse(data);
   if (result.success) return result.data;
-  console.warn('[agora-shared] Invalid Recording:', result.error.issues[0]);
+  console.warn('[live] Invalid Recording:', result.error.issues[0]);
   return null;
 }
 
@@ -273,7 +273,7 @@ export function validateRecordings(items: unknown[]): Recording[] {
 export function validateSeries(data: unknown): Series | null {
   const result = ZSeries.safeParse(data);
   if (result.success) return result.data;
-  console.warn('[agora-shared] Invalid Series:', result.error.issues[0]);
+  console.warn('[live] Invalid Series:', result.error.issues[0]);
   return null;
 }
 

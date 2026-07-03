@@ -81,7 +81,7 @@ export interface UserEntity {
   [key: string]: unknown;
 }
 
-export interface AgoraTheme {
+export interface LiveTheme {
   isDark?: boolean;
   colors: {
     text: string;
