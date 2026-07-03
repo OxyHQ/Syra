@@ -95,20 +95,22 @@ export interface LiveTheme {
   };
 }
 
-export interface HttpResponse {
-  data: Record<string, unknown>;
-}
-
 export interface HttpRequestConfig {
   params?: Record<string, string | number | boolean | undefined>;
   [key: string]: unknown;
 }
 
+/**
+ * The HTTP client the engine consumes. Deliberately shaped to match an Oxy
+ * `oxyServices.createLinkedClient(...).client` as-is: every method resolves to
+ * the PARSED RESPONSE BODY directly (not a `{ data }` envelope). Consumers pass
+ * that Oxy client straight through — no per-app adapter.
+ */
 export interface HttpClient {
-  get: (url: string, config?: HttpRequestConfig) => Promise<HttpResponse>;
-  post: (url: string, data?: Record<string, unknown> | FormData, config?: HttpRequestConfig) => Promise<HttpResponse>;
-  patch: (url: string, data?: Record<string, unknown>, config?: HttpRequestConfig) => Promise<HttpResponse>;
-  delete: (url: string, config?: HttpRequestConfig) => Promise<HttpResponse>;
+  get: (url: string, config?: HttpRequestConfig) => Promise<Record<string, unknown>>;
+  post: (url: string, data?: Record<string, unknown> | FormData, config?: HttpRequestConfig) => Promise<Record<string, unknown>>;
+  patch: (url: string, data?: Record<string, unknown>, config?: HttpRequestConfig) => Promise<Record<string, unknown>>;
+  delete: (url: string, config?: HttpRequestConfig) => Promise<Record<string, unknown>>;
 }
 
 export interface FileDownloadService {

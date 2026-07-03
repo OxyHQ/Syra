@@ -18,7 +18,6 @@ export type {
   StreamInfo,
   UserEntity,
   LiveTheme,
-  HttpResponse,
   HttpRequestConfig,
   HttpClient,
   FileDownloadService,

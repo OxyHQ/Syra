@@ -1,6 +1,6 @@
 {
   "name": "@syra.fm/live",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Syra live rooms engine (DI-based; audio rooms over LiveKit)",
   "source": "src/index.ts",
   "main": "lib/commonjs/index.js",
