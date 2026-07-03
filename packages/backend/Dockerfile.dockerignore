@@ -22,10 +22,17 @@ packages/frontend/**
 packages/studio/**
 !packages/studio/package.json
 
-# SDK (@syra.fm/sdk public client) — not part of the backend runtime.
-# Its package.json is force-included below so the Bun workspace graph stays valid.
-packages/sdk/**
-!packages/sdk/package.json
+# Live (@syra/live shared live-rooms UI) — a frontend/studio dependency, not part
+# of the backend runtime. Its package.json is force-included so the Bun workspace
+# graph stays valid for `bun install --frozen-lockfile`.
+packages/live/**
+!packages/live/package.json
+
+# SDK (@syra.fm/sdk public client) — the backend imports and require()s it, so
+# its SOURCE must reach the builder to be compiled before the backend. Only the
+# build outputs (dist) are excluded via the global **/dist rule above; they are
+# rebuilt inside the image. Its package.json is copied early for the dependency
+# install layer, the rest of the source for the sdk build step.
 
 # VCS / CI / editor / OS noise
 .git
