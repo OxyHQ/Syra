@@ -21,6 +21,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { label: 'Music', href: '/music', icon: 'music', matchPrefix: '/music' },
   { label: 'Podcasts', href: '/', icon: 'podcast', matchPrefix: '/podcasts' },
+  { label: 'Go Live', href: '/live', icon: 'access-point', matchPrefix: '/live' },
   { label: 'New podcast', href: '/podcasts/new', icon: 'plus-circle-outline' },
 ];
 

@@ -12,8 +12,8 @@
  * mount, which was causing the white-screen-after-splash bug.
  */
 
-import React, { memo, useMemo } from 'react';
-import { QueryClient } from '@tanstack/react-query';
+import React, { memo, useCallback, useMemo } from 'react';
+import { QueryClient, useQueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { I18nextProvider } from 'react-i18next';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -24,6 +24,7 @@ import { StatusBar } from 'expo-status-bar';
 import { OxyProvider, useOxy } from '@oxyhq/services';
 import { OxyServices } from '@oxyhq/core';
 import { ImageResolverProvider, type ImageResolver } from '@oxyhq/bloom/image-resolver';
+import { AgoraProvider, LiveRoomProvider } from '@syra/live';
 
 import { OXY_CLIENT_ID } from '@/config';
 import ErrorBoundary from '@/components/ErrorBoundary';
@@ -31,10 +32,29 @@ import { BottomSheetProvider } from '@/context/BottomSheetContext';
 import { HomeRefreshProvider } from '@/context/HomeRefreshContext';
 import { Toaster } from '@/lib/sonner';
 import i18n from '@/lib/i18n';
+import { liveConfig, liveRoomsQueryKey } from '@/lib/liveConfig';
 import { useServerAppearanceSync } from '@/hooks/useServerAppearanceSync';
 import { usePlayerPresence } from '@/hooks/usePlayerPresence';
 import { clearStreamResolutionCache } from '@/services/streamService';
 import { persistOptions } from '@/lib/queryPersister';
+
+/**
+ * Feeds the live-rooms engine and mounts its floating dock. `onRoomChanged` is
+ * wired here (not in `liveConfig`) because it needs the in-tree `QueryClient` to
+ * invalidate the shared rooms list after a create/join/leave.
+ */
+function LiveRoomsProvider({ children }: { children: React.ReactNode }) {
+  const queryClient = useQueryClient();
+  const onRoomChanged = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: liveRoomsQueryKey });
+  }, [queryClient]);
+  const config = useMemo(() => ({ ...liveConfig, onRoomChanged }), [onRoomChanged]);
+  return (
+    <AgoraProvider config={config}>
+      <LiveRoomProvider>{children}</LiveRoomProvider>
+    </AgoraProvider>
+  );
+}
 
 /**
  * Non-rendering bridge that pushes the user's saved appearance settings into the
@@ -115,7 +135,9 @@ export const AppProviders = memo(function AppProviders({
                     <BottomSheetProvider>
                       <MenuProvider>
                         <HomeRefreshProvider>
-                          {children}
+                          <LiveRoomsProvider>
+                            {children}
+                          </LiveRoomsProvider>
                           <StatusBar style="auto" />
                           <Toaster
                             position="bottom-center"

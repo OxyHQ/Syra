@@ -13,6 +13,7 @@
     "dev:backend": "bun run --filter '@syra/backend' dev",
     "build": "bun run --filter '*' build",
     "build:shared-types": "bun run --filter '@syra/shared-types' build",
+    "build:sdk": "bun run --filter '@syra.fm/sdk' build",
     "build:frontend": "bun run --filter '@syra/frontend' build",
     "build:studio": "bun run --filter '@syra/studio' build",
     "build:backend": "bun run --filter '@syra/backend' build",
