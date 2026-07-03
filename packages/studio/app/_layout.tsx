@@ -2,8 +2,23 @@
 import 'react-native-reanimated';
 
 import { Slot } from 'expo-router';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { BloomThemeProvider } from '@oxyhq/bloom/theme';
+
+import { createScopedLogger } from '@/utils/logger';
+
+// NATIVE ONLY: register the LiveKit WebRTC globals the `@syra/live` rooms engine
+// needs before any room connects. Guarded to native (the browser already has
+// WebRTC) and to a soft failure so a missing/unlinked native module never blocks
+// app boot for creators who never go live.
+if (Platform.OS !== 'web') {
+  try {
+    const { registerGlobals } = require('@livekit/react-native');
+    registerGlobals();
+  } catch (error) {
+    createScopedLogger('RootLayout').warn('Failed to register LiveKit globals', { error });
+  }
+}
 
 import { AppProviders } from '@/components/providers/AppProviders';
 import { AppShell } from '@/components/AppShell';

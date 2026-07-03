@@ -8,8 +8,8 @@
  * @gorhom/bottom-sheet v5 (the Oxy auth/account sheets mount through it).
  */
 
-import { memo, useMemo, type ReactNode } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { memo, useCallback, useMemo, type ReactNode } from 'react';
+import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
@@ -17,15 +17,35 @@ import { StatusBar } from 'expo-status-bar';
 import { OxyProvider } from '@oxyhq/services';
 import type { OxyServices } from '@oxyhq/core';
 import { ImageResolverProvider, type ImageResolver } from '@oxyhq/bloom/image-resolver';
+import { AgoraProvider, LiveRoomProvider } from '@syra/live';
 
 import { OXY_CLIENT_ID } from '@/config';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { Toaster } from '@/lib/sonner';
+import { liveConfig, liveRoomsQueryKey } from '@/lib/liveConfig';
 
 interface AppProvidersProps {
   children: ReactNode;
   oxyServices: OxyServices;
   queryClient: QueryClient;
+}
+
+/**
+ * Feeds the live-rooms engine and mounts its floating dock. `onRoomChanged` is
+ * wired here (not in `liveConfig`) because it needs the in-tree `QueryClient` to
+ * invalidate the shared rooms list after a create/join/leave.
+ */
+function LiveRoomsProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
+  const onRoomChanged = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: liveRoomsQueryKey });
+  }, [queryClient]);
+  const config = useMemo(() => ({ ...liveConfig, onRoomChanged }), [onRoomChanged]);
+  return (
+    <AgoraProvider config={config}>
+      <LiveRoomProvider>{children}</LiveRoomProvider>
+    </AgoraProvider>
+  );
 }
 
 export const AppProviders = memo(function AppProviders({
@@ -56,7 +76,9 @@ export const AppProviders = memo(function AppProviders({
             >
               <ImageResolverProvider value={resolveImage}>
                 <BottomSheetModalProvider>
-                  {children}
+                  <LiveRoomsProvider>
+                    {children}
+                  </LiveRoomsProvider>
                   <StatusBar style="auto" />
                   <Toaster position="bottom-center" swipeToDismissDirection="left" offset={15} />
                 </BottomSheetModalProvider>

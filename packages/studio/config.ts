@@ -6,6 +6,14 @@ export const API_URL =
     ? 'https://api.syra.fm/api'
     : (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000/api');
 
+// Socket origin for the `@syra/live` rooms engine. Same backend host as the API
+// (api.syra.fm) but the bare origin (no `/api` suffix) — Socket.io mounts at the
+// host root.
+export const API_URL_SOCKET =
+  process.env.NODE_ENV === 'production'
+    ? 'wss://api.syra.fm'
+    : (process.env.API_URL_SOCKET ?? 'ws://localhost:3000');
+
 export const OXY_BASE_URL =
   process.env.EXPO_PUBLIC_OXY_BASE_URL ||
   (process.env.NODE_ENV === 'production' ? 'https://api.oxy.so' : 'http://localhost:3001');

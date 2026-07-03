@@ -525,6 +525,19 @@ export const TopBar: React.FC = () => {
           </Pressable>
 
           <Pressable
+            onPress={() => router.push('/live')}
+            style={[styles.iconButton, pathname.startsWith('/live') && activeButtonStyle]}
+            accessibilityRole="button"
+            accessibilityLabel="Live"
+          >
+            <MaterialCommunityIcons
+              name="access-point"
+              size={24}
+              color={pathname.startsWith('/live') ? theme.colors.primary : navIconColor}
+            />
+          </Pressable>
+
+          <Pressable
             onPress={() => router.push('/podcasts')}
             style={[styles.iconButton, pathname.startsWith('/podcasts') && activeButtonStyle]}
             accessibilityRole="button"
