@@ -469,6 +469,10 @@
     "agora.musicStream.removeFromQueue": "Remove from queue",
     "agora.musicStream.playQueue": "Play tracks",
     "agora.musicStream.clearQueue": "Clear",
+    "Live now": "Live now",
+    "Podcasts": "Podcasts",
+    "See all": "See all",
+    "Podcast": "Podcast",
     "notifications": {
         "tabs": {
             "all": "All",

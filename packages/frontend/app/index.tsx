@@ -3,7 +3,10 @@ import { Animated, Easing, StyleSheet, View, ScrollView, Text, Platform, Pressab
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
+import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
+import { RoomCard, useLiveRoom, createAgoraService, type Room } from '@syra/live';
 import SEO from '@/components/SEO';
 import { MediaCard } from '@/components/MediaCard';
 import { ResponsiveGrid } from '@/components/ResponsiveGrid';
@@ -21,9 +24,13 @@ import {
   useUserPlaylists,
   usePopularTracks,
 } from '@/hooks/useHomeFeed';
+import { usePodcasts } from '@/hooks/usePodcasts';
 import { createScopedLogger } from '@/utils/logger';
 import { Ionicons } from '@expo/vector-icons';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
+import { resolvePodcastImageUri } from '@/utils/podcastImages';
+import { authenticatedClient } from '@/utils/api';
+import { liveRoomsQueryKey } from '@/lib/liveConfig';
 import { toast } from '@/lib/sonner';
 
 const logger = createScopedLogger('HomeScreen');
@@ -62,6 +69,8 @@ type QuickAccessItem =
 const HomeScreen: React.FC = () => {
   const theme = useTheme();
   const router = useRouter();
+  const { t } = useTranslation();
+  const { joinLiveRoom } = useLiveRoom();
   const [now, setNow] = useState(() => new Date());
   const { playTrackList } = usePlayerStore();
   const { addTracksLocally } = useQueueStore();
@@ -74,6 +83,20 @@ const HomeScreen: React.FC = () => {
   const popularArtistsQuery = usePopularArtists();
   const userPlaylistsQuery = useUserPlaylists();
   const tracksQuery = usePopularTracks();
+
+  // Live rooms — the same fetch the Live surface uses (public, error-swallowing:
+  // `getRooms` returns `[]` on failure/no-auth). Keyed off the shared
+  // `liveRoomsQueryKey` so it shares one cache authority with `app/live.tsx`.
+  const agoraService = useMemo(() => createAgoraService(authenticatedClient), []);
+  const liveRoomsQuery = useQuery({
+    queryKey: liveRoomsQueryKey,
+    queryFn: () => agoraService.getRooms('live'),
+    staleTime: 30_000,
+  });
+
+  // Podcasts — popular shows from the public catalog (same hook the podcasts
+  // browse screen uses); runs for guests too.
+  const podcastsQuery = usePodcasts({ sort: 'popular', limit: 12 });
 
   // Derive section data from the queries (empty arrays while pending).
   const recentlyPlayed = useMemo<Track[]>(
@@ -111,6 +134,14 @@ const HomeScreen: React.FC = () => {
   const tracks = useMemo<Track[]>(
     () => tracksQuery.data?.tracks ?? [],
     [tracksQuery.data],
+  );
+  const liveRooms = useMemo<Room[]>(
+    () => liveRoomsQuery.data ?? [],
+    [liveRoomsQuery.data],
+  );
+  const podcasts = useMemo(
+    () => podcastsQuery.data ?? [],
+    [podcastsQuery.data],
   );
 
   useEffect(() => {
@@ -371,6 +402,42 @@ const HomeScreen: React.FC = () => {
             </Text>
           </View>
 
+          {/* Live now — currently-live audio rooms, surfaced at the top because
+              live content is time-sensitive. Reuses the Live surface's exact
+              fetch + RoomCard; hidden entirely when nothing is live (the home
+              hides empty sections rather than faking them). */}
+          {liveRooms.length > 0 && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeaderRow}>
+                <View style={styles.liveHeading}>
+                  <View style={[styles.liveDot, { backgroundColor: theme.colors.error }]} />
+                  <Text style={[styles.sectionHeaderTitle, { color: theme.colors.text }]}>
+                    {t('Live now')}
+                  </Text>
+                </View>
+                <Pressable style={styles.seeAllButton} onPress={() => router.push('/live')} hitSlop={8}>
+                  <Text style={[styles.seeAll, { color: theme.colors.textSecondary }]}>
+                    {t('See all')}
+                  </Text>
+                </Pressable>
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.rail}
+              >
+                {liveRooms.map((room) => (
+                  <RoomCard
+                    key={room._id}
+                    room={room}
+                    variant="compact"
+                    onPress={() => joinLiveRoom(room._id)}
+                  />
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
           {/* 8-Item Compact Grid (2 columns) - real albums/artists/playlists */}
           {quickAccessLoading ? (
             <QuickAccessGridSkeleton />
@@ -554,6 +621,50 @@ const HomeScreen: React.FC = () => {
                       onAddToQueue={() => addAlbumToQueue(album.id)}
                       onGoToArtist={() => router.push(`/p/${album.artistId}`)}
                       onHoverIn={() => handleHoverIn(album.primaryColor)}
+                      onHoverOut={handleHoverOut}
+                    />
+                  </View>
+                ))}
+              </ResponsiveGrid>
+            </View>
+          )}
+
+          {/* Podcasts — popular shows from the public catalog. Mirrors the music
+              rails (same MediaCard + ResponsiveGrid); "See all" opens the
+              podcasts browse screen. Hidden when the catalog has no shows. */}
+          {podcastsQuery.isPending ? (
+            <View style={styles.section}>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={[styles.sectionHeaderTitle, { color: theme.colors.text }]}>
+                  {t('Podcasts')}
+                </Text>
+              </View>
+              <MediaCardRowSkeleton count={5} />
+            </View>
+          ) : podcasts.length > 0 && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={[styles.sectionHeaderTitle, { color: theme.colors.text }]}>
+                  {t('Podcasts')}
+                </Text>
+                <Pressable style={styles.seeAllButton} onPress={() => router.push('/podcasts')} hitSlop={8}>
+                  <Text style={[styles.seeAll, { color: theme.colors.textSecondary }]}>
+                    {t('See all')}
+                  </Text>
+                </Pressable>
+              </View>
+              <ResponsiveGrid minItemWidth={180} gap={8}>
+                {podcasts.map((podcast) => (
+                  <View key={podcast.id}>
+                    <MediaCard
+                      title={podcast.title}
+                      subtitle={podcast.author ?? t('Podcast')}
+                      type="podcast"
+                      resolvedImageUri={resolvePodcastImageUri(podcast, 'card')}
+                      primaryColor={podcast.primaryColor}
+                      onPress={() => router.push({ pathname: '/podcasts/[id]', params: { id: podcast.id } })}
+                      onPlayPress={() => router.push({ pathname: '/podcasts/[id]', params: { id: podcast.id } })}
+                      onHoverIn={() => handleHoverIn(podcast.primaryColor)}
                       onHoverOut={handleHoverOut}
                     />
                   </View>
@@ -774,6 +885,37 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: 'bold',
     marginBottom: 8,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  sectionHeaderTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+  },
+  liveHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  liveDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+  },
+  seeAllButton: {
+    ...Platform.select({ web: { cursor: 'pointer' } }),
+  },
+  seeAll: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  rail: {
+    gap: 12,
+    paddingVertical: 2,
   },
 });
 
