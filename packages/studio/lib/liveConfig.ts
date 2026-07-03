@@ -2,7 +2,7 @@ import { useOxy } from '@oxyhq/services';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { Avatar } from '@oxyhq/bloom/avatar';
 import { useQuery } from '@tanstack/react-query';
-import type { AgoraConfig, AgoraTheme, UserEntity } from '@syra.fm/live';
+import type { LiveConfig, LiveTheme, UserEntity } from '@syra.fm/live';
 
 import { authenticatedClient } from '@/utils/api';
 import { API_URL_SOCKET } from '@/config';
@@ -22,12 +22,12 @@ const liveUserQueryKey = (id: string) => ['live', 'user', id] as const;
 const LIVE_USER_STALE_TIME = 5 * 60 * 1000;
 
 /**
- * Bloom's `useTheme` returns a superset of the engine's `AgoraTheme`. Spreading
+ * Bloom's `useTheme` returns a superset of the engine's `LiveTheme`. Spreading
  * `colors` into a fresh object literal forwards every Bloom color key the
- * live-room UI reads and supplies the string index signature `AgoraTheme.colors`
+ * live-room UI reads and supplies the string index signature `LiveTheme.colors`
  * requires.
  */
-function useLiveTheme(): AgoraTheme {
+function useLiveTheme(): LiveTheme {
   const theme = useTheme();
   return { isDark: theme.isDark, colors: { ...theme.colors } };
 }
@@ -78,7 +78,7 @@ const liveToast = Object.assign((message: string) => { toast(message); }, {
  * React Query-backed user resolution, the canonical Oxy file-download resolver,
  * and sonner toasts. `onRoomChanged` is injected in `AppProviders`.
  */
-export const liveConfig: AgoraConfig = {
+export const liveConfig: LiveConfig = {
   httpClient: authenticatedClient,
   socketUrl: API_URL_SOCKET,
   useTheme: useLiveTheme,
@@ -87,7 +87,7 @@ export const liveConfig: AgoraConfig = {
   ensureUserById: ensureLiveUserById,
   getCachedFileDownloadUrl: async (_oxy, fileId, variant) => oxyServices.getFileDownloadUrl(fileId, variant),
   getCachedFileDownloadUrlSync: (_oxy, fileId, variant) => oxyServices.getFileDownloadUrl(fileId, variant),
-  AvatarComponent: Avatar as AgoraConfig['AvatarComponent'],
+  AvatarComponent: Avatar as LiveConfig['AvatarComponent'],
   toast: liveToast,
   introSound: require('@syra.fm/live/src/assets/sounds/intro.mp3'),
 };

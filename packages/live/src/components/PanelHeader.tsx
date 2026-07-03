@@ -2,11 +2,11 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
-import type { AgoraTheme } from '../types';
+import type { LiveTheme } from '../types';
 
 interface PanelHeaderProps {
   title: string;
-  theme: AgoraTheme;
+  theme: LiveTheme;
   onBack: () => void;
 }
 

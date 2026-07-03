@@ -179,7 +179,7 @@ function parseRecordingResponse(value: unknown): RecordingResponse | null {
   };
 }
 
-export function createAgoraService(httpClient: HttpClient) {
+export function createRoomsService(httpClient: HttpClient) {
   return {
     async getRooms(status?: string, type?: string): Promise<Room[]> {
       try {
@@ -279,7 +279,7 @@ export function createAgoraService(httpClient: HttpClient) {
         const res = await httpClient.post(`/rooms/${id}/stream`, data);
         const parsed = ZStartStreamResponse.safeParse(res.data);
         if (!parsed.success) {
-          console.warn('[agora] Invalid startStream response:', parsed.error.issues[0]);
+          console.warn('[live] Invalid startStream response:', parsed.error.issues[0]);
           return null;
         }
         return parsed.data;
@@ -295,7 +295,7 @@ export function createAgoraService(httpClient: HttpClient) {
         const res = await httpClient.post(`/rooms/${id}/stream/rtmp`, data || {});
         const parsed = ZGenerateStreamKeyResponse.safeParse(res.data);
         if (!parsed.success) {
-          console.warn('[agora] Invalid generateStreamKey response:', parsed.error.issues[0]);
+          console.warn('[live] Invalid generateStreamKey response:', parsed.error.issues[0]);
           return null;
         }
         return parsed.data;
@@ -364,7 +364,7 @@ export function createAgoraService(httpClient: HttpClient) {
         const res = await httpClient.post(`/rooms/${roomId}/stream/podcast`, body);
         const parsed = ZStartStreamResponse.safeParse(res.data);
         if (!parsed.success) {
-          console.warn('[agora] Invalid startPodcastStream response:', parsed.error.issues[0]);
+          console.warn('[live] Invalid startPodcastStream response:', parsed.error.issues[0]);
           return null;
         }
         return parsed.data;
@@ -387,7 +387,7 @@ export function createAgoraService(httpClient: HttpClient) {
         if (res.data.ended === true) return { ended: true };
         const parsed = ZStartStreamResponse.safeParse(res.data);
         if (parsed.success) return { ended: false };
-        console.warn('[agora] Invalid skipPodcastNext response:', parsed.error.issues[0]);
+        console.warn('[live] Invalid skipPodcastNext response:', parsed.error.issues[0]);
         return null;
       } catch (error) {
         console.warn("Failed to skip to next podcast episode", error);
@@ -430,7 +430,7 @@ export function createAgoraService(httpClient: HttpClient) {
         const res = await httpClient.post(`/rooms/${roomId}/stream/track`, body);
         const parsed = ZStartStreamResponse.safeParse(res.data);
         if (!parsed.success) {
-          console.warn('[agora] Invalid startTrackStream response:', parsed.error.issues[0]);
+          console.warn('[live] Invalid startTrackStream response:', parsed.error.issues[0]);
           return null;
         }
         return parsed.data;
@@ -689,4 +689,4 @@ export function createAgoraService(httpClient: HttpClient) {
   };
 }
 
-export type AgoraServiceInstance = ReturnType<typeof createAgoraService>;
+export type RoomsServiceInstance = ReturnType<typeof createRoomsService>;

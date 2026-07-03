@@ -17,7 +17,7 @@ export type {
   RecordingStateData,
   StreamInfo,
   UserEntity,
-  AgoraTheme,
+  LiveTheme,
   HttpResponse,
   HttpRequestConfig,
   HttpClient,
@@ -49,17 +49,17 @@ export {
 
 // Context
 export {
-  AgoraProvider,
-  useAgoraConfig,
-  type AgoraConfig,
-  type AgoraConfigInternal,
-} from './context/AgoraConfigContext';
+  LiveConfigProvider,
+  useLiveConfig,
+  type LiveConfig,
+  type LiveConfigInternal,
+} from './context/LiveConfigContext';
 export { LiveRoomProvider, useLiveRoom } from './context/LiveRoomContext';
 
 // Services
 export {
-  createAgoraService,
-  type AgoraServiceInstance,
+  createRoomsService,
+  type RoomsServiceInstance,
   type CreateRoomData,
   type PodcastResult,
   type EpisodeListItem,
@@ -89,4 +89,4 @@ export { RecordingsPanel } from './components/RecordingsPanel';
 export { RecordingCard } from './components/RecordingCard';
 
 // Assets
-export { Agora, AgoraActive } from './assets/icons/spaces-icon';
+export { LiveRoomsIcon, LiveRoomsIconActive } from './assets/icons/spaces-icon';

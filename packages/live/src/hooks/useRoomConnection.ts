@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@oxyhq/services';
 import { createAudioPlayer } from 'expo-audio';
-import { useAgoraConfig } from '../context/AgoraConfigContext';
+import { useLiveConfig } from '../context/LiveConfigContext';
 import type { RoomParticipant, StreamInfo } from '../types';
 
 interface UseRoomConnectionOptions {
@@ -33,7 +33,7 @@ export function useRoomConnection({
   enabled = true,
 }: UseRoomConnectionOptions): UseRoomConnectionReturn {
   const { user, isAuthenticated, isReady, oxyServices } = useAuth();
-  const { roomSocketService, introSound } = useAgoraConfig();
+  const { roomSocketService, introSound } = useLiveConfig();
   const userId = user?.id;
 
   const [isConnected, setIsConnected] = useState(false);

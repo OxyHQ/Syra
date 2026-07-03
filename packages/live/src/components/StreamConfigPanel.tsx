@@ -13,7 +13,7 @@ import {
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import * as ImagePicker from 'expo-image-picker';
 
-import { useAgoraConfig } from '../context/AgoraConfigContext';
+import { useLiveConfig } from '../context/LiveConfigContext';
 import { PanelHeader } from './PanelHeader';
 import { PodcastStreamPicker, MusicPicker } from './PodcastStreamPicker';
 
@@ -45,7 +45,7 @@ function appendNativeFile(formData: FormData, file: NativeFormDataFile): void {
 }
 
 export function StreamConfigPanel({ roomId, roomStatus, initialStreamUrl, initialRtmpUrl, initialStreamKey, onClose, onStreamStarted }: StreamConfigPanelProps) {
-  const { useTheme, agoraService, toast, onRoomChanged } = useAgoraConfig();
+  const { useTheme, roomsService, toast, onRoomChanged } = useLiveConfig();
   const theme = useTheme();
 
   const initialUrl = initialStreamUrl?.trim() ?? '';
@@ -107,7 +107,7 @@ export function StreamConfigPanel({ roomId, roomStatus, initialStreamUrl, initia
           appendNativeFile(formData, nativeFile);
         }
 
-        const cdnUrl = await agoraService.uploadRoomImage(roomId, formData);
+        const cdnUrl = await roomsService.uploadRoomImage(roomId, formData);
         if (cdnUrl) {
           setImageCdnUrl(cdnUrl);
         } else {
@@ -130,7 +130,7 @@ export function StreamConfigPanel({ roomId, roomStatus, initialStreamUrl, initia
   const ensureRoomLive = async (): Promise<boolean> => {
     if (roomStatus === 'live') return true;
     if (roomStatus === 'scheduled') {
-      const started = await agoraService.startRoom(roomId);
+      const started = await roomsService.startRoom(roomId);
       if (!started) {
         toast.error('Failed to start room');
         return false;
@@ -147,7 +147,7 @@ export function StreamConfigPanel({ roomId, roomStatus, initialStreamUrl, initia
     setLoading(true);
     try {
       if (!(await ensureRoomLive())) return;
-      const result = await agoraService.startStream(roomId, {
+      const result = await roomsService.startStream(roomId, {
         url: streamUrl.trim(),
         title: title.trim() || undefined,
         image: imageCdnUrl || undefined,
@@ -173,7 +173,7 @@ export function StreamConfigPanel({ roomId, roomStatus, initialStreamUrl, initia
     setLoading(true);
     try {
       if (!(await ensureRoomLive())) return;
-      const result = await agoraService.startPodcastStream(roomId, { syraPodcastId, episodeId });
+      const result = await roomsService.startPodcastStream(roomId, { syraPodcastId, episodeId });
       if (result) {
         toast.success('Stream started');
         resetState();
@@ -197,7 +197,7 @@ export function StreamConfigPanel({ roomId, roomStatus, initialStreamUrl, initia
     setLoading(true);
     try {
       if (!(await ensureRoomLive())) return;
-      const result = await agoraService.startPodcastStream(roomId, {
+      const result = await roomsService.startPodcastStream(roomId, {
         syraPodcastId: first.syraPodcastId,
         episodeId: first.episodeId,
         queue: rest,
@@ -223,7 +223,7 @@ export function StreamConfigPanel({ roomId, roomStatus, initialStreamUrl, initia
     setLoading(true);
     try {
       if (!(await ensureRoomLive())) return;
-      const result = await agoraService.startTrackStream(roomId, { trackId });
+      const result = await roomsService.startTrackStream(roomId, { trackId });
       if (result) {
         toast.success('Stream started');
         resetState();
@@ -247,7 +247,7 @@ export function StreamConfigPanel({ roomId, roomStatus, initialStreamUrl, initia
     setLoading(true);
     try {
       if (!(await ensureRoomLive())) return;
-      const result = await agoraService.startTrackStream(roomId, {
+      const result = await roomsService.startTrackStream(roomId, {
         trackId: first,
         queue: rest.map((trackId) => ({ trackId })),
       });
@@ -274,7 +274,7 @@ export function StreamConfigPanel({ roomId, roomStatus, initialStreamUrl, initia
     setGeneratingKey(true);
     try {
       if (!(await ensureRoomLive())) return;
-      const result = await agoraService.generateStreamKey(roomId, {
+      const result = await roomsService.generateStreamKey(roomId, {
         title: title.trim() || undefined,
         image: imageCdnUrl || undefined,
         description: description.trim() || undefined,
@@ -313,7 +313,7 @@ export function StreamConfigPanel({ roomId, roomStatus, initialStreamUrl, initia
     }
     setLoading(true);
     try {
-      const success = await agoraService.updateStreamMetadata(roomId, {
+      const success = await roomsService.updateStreamMetadata(roomId, {
         ...(mode === 'url' ? { url: trimmedUrl } : {}),
         title: title.trim() || undefined,
         image: imageCdnUrl || undefined,

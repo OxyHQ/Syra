@@ -12,7 +12,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 
-import { useAgoraConfig } from './AgoraConfigContext';
+import { useLiveConfig } from './LiveConfigContext';
 import { LiveRoomSheet } from '../components/LiveRoomSheet';
 import { MINI_BAR_HEIGHT } from '../components/MiniRoomBar';
 
@@ -38,7 +38,7 @@ const BOTTOM_BAR_OFFSET = 76;
 const defaultUseIsDesktop = () => false;
 
 export function LiveRoomProvider({ children }: { children: React.ReactNode }) {
-  const config = useAgoraConfig();
+  const config = useLiveConfig();
   const theme = config.useTheme();
   // NativeWind class the host supplies to pin the dock to the viewport on web
   // (e.g. `"web:fixed"` for the document-scroll shell). Undefined on hosts with
@@ -52,7 +52,7 @@ export function LiveRoomProvider({ children }: { children: React.ReactNode }) {
   //     OMIT the inline position so the supplied `web:fixed` class owns it
   //     (NativeWind lets an inline `position` win over a className, which would
   //     re-sink the dock to the document bottom).
-  //   - WEB + no host className (e.g. the Agora app, fixed-viewport model with
+  //   - WEB + no host className (e.g. the live-rooms app, fixed-viewport model with
   //     no NativeWind): `absolute` — pins to the viewport there, preserving the
   //     prior behavior.
   const dockPosition = useMemo<ViewStyle>(

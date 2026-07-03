@@ -17,7 +17,7 @@ import { StatusBar } from 'expo-status-bar';
 import { OxyProvider } from '@oxyhq/services';
 import type { OxyServices } from '@oxyhq/core';
 import { ImageResolverProvider, type ImageResolver } from '@oxyhq/bloom/image-resolver';
-import { AgoraProvider, LiveRoomProvider } from '@syra.fm/live';
+import { LiveConfigProvider, LiveRoomProvider } from '@syra.fm/live';
 
 import { OXY_CLIENT_ID } from '@/config';
 import ErrorBoundary from '@/components/ErrorBoundary';
@@ -42,9 +42,9 @@ function LiveRoomsProvider({ children }: { children: ReactNode }) {
   }, [queryClient]);
   const config = useMemo(() => ({ ...liveConfig, onRoomChanged }), [onRoomChanged]);
   return (
-    <AgoraProvider config={config}>
+    <LiveConfigProvider config={config}>
       <LiveRoomProvider>{children}</LiveRoomProvider>
-    </AgoraProvider>
+    </LiveConfigProvider>
   );
 }
 

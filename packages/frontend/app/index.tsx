@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
-import { RoomCard, useLiveRoom, createAgoraService, type Room } from '@syra.fm/live';
+import { RoomCard, useLiveRoom, createRoomsService, type Room } from '@syra.fm/live';
 import SEO from '@/components/SEO';
 import { MediaCard } from '@/components/MediaCard';
 import { ResponsiveGrid } from '@/components/ResponsiveGrid';
@@ -87,10 +87,10 @@ const HomeScreen: React.FC = () => {
   // Live rooms — the same fetch the Live surface uses (public, error-swallowing:
   // `getRooms` returns `[]` on failure/no-auth). Keyed off the shared
   // `liveRoomsQueryKey` so it shares one cache authority with `app/live.tsx`.
-  const agoraService = useMemo(() => createAgoraService(authenticatedClient), []);
+  const roomsService = useMemo(() => createRoomsService(authenticatedClient), []);
   const liveRoomsQuery = useQuery({
     queryKey: liveRoomsQueryKey,
-    queryFn: () => agoraService.getRooms('live'),
+    queryFn: () => roomsService.getRooms('live'),
     staleTime: 30_000,
   });
 

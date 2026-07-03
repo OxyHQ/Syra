@@ -1,11 +1,11 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@oxyhq/services';
-import { useAgoraConfig } from '../context/AgoraConfigContext';
+import { useLiveConfig } from '../context/LiveConfigContext';
 import type { UserEntity } from '../types';
 
 export function useRoomUsers(userIds: string[]) {
   const { oxyServices } = useAuth();
-  const { ensureUserById } = useAgoraConfig();
+  const { ensureUserById } = useLiveConfig();
   const resolvedRef = useRef<Set<string>>(new Set());
 
   const loader = useCallback(

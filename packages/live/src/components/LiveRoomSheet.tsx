@@ -11,7 +11,7 @@ import {
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useAuth } from '@oxyhq/services';
 
-import { useAgoraConfig } from '../context/AgoraConfigContext';
+import { useLiveConfig } from '../context/LiveConfigContext';
 import { MiniRoomBar } from './MiniRoomBar';
 import { StreamConfigPanel } from './StreamConfigPanel';
 import { InsightsPanel } from './InsightsPanel';
@@ -22,7 +22,7 @@ import { useRoomConnection } from '../hooks/useRoomConnection';
 import { useRoomAudio } from '../hooks/useRoomAudio';
 import { useActiveSpeakers } from '../hooks/useActiveSpeakers';
 import { useRoomUsers, getDisplayName, getAvatarUrl } from '../hooks/useRoomUsers';
-import type { RoomParticipant, Room, StreamInfo, UserEntity, AgoraTheme } from '../types';
+import type { RoomParticipant, Room, StreamInfo, UserEntity, LiveTheme } from '../types';
 
 type ActivePanel = null | 'stream' | 'insights' | 'settings';
 
@@ -51,7 +51,7 @@ function formatClock(totalSeconds: number, withHours: boolean): string {
 type AvatarComponentType = React.ComponentType<{ size: number; source?: string; shape?: string; style?: ViewStyle }>;
 type CachedFileDownloadUrlSyncFn = (oxyServices: unknown, fileId: string, variant?: string) => string;
 
-const RoleBadge = ({ role, theme }: { role: string; theme: AgoraTheme }) => {
+const RoleBadge = ({ role, theme }: { role: string; theme: LiveTheme }) => {
   if (role === 'host') {
     return (
       <View style={[styles.roleBadge, { backgroundColor: theme.colors.primary }]}>
@@ -82,7 +82,7 @@ const SpeakerTile = ({
   participant: RoomParticipant;
   isCurrentUser: boolean;
   isSpeaking: boolean;
-  theme: AgoraTheme;
+  theme: LiveTheme;
   userProfile: UserEntity | undefined;
   oxyServices: unknown;
   AvatarComponent: AvatarComponentType;
@@ -134,7 +134,7 @@ const ListenerAvatar = ({
 };
 
 const ConnectedSpeakerTile = ({ participant, isCurrentUser, isSpeaking, theme, oxyServices, AvatarComponent, getCachedFileDownloadUrlSync, useUserById }: {
-  participant: RoomParticipant; isCurrentUser: boolean; isSpeaking: boolean; theme: AgoraTheme; oxyServices: unknown;
+  participant: RoomParticipant; isCurrentUser: boolean; isSpeaking: boolean; theme: LiveTheme; oxyServices: unknown;
   AvatarComponent: AvatarComponentType; getCachedFileDownloadUrlSync: CachedFileDownloadUrlSyncFn; useUserById: (id: string | undefined) => UserEntity | undefined;
 }) => {
   const userProfile = useUserById(participant.userId);
@@ -150,7 +150,7 @@ const ConnectedListenerAvatar = ({ participant, oxyServices, AvatarComponent, ge
 };
 
 const ConnectedRequestRow = ({ request, theme, oxyServices, onApprove, onDeny, AvatarComponent, getCachedFileDownloadUrlSync, useUserById }: {
-  request: { userId: string; requestedAt: string }; theme: AgoraTheme; oxyServices: unknown;
+  request: { userId: string; requestedAt: string }; theme: LiveTheme; oxyServices: unknown;
   onApprove: (userId: string) => void; onDeny: (userId: string) => void;
   AvatarComponent: AvatarComponentType; getCachedFileDownloadUrlSync: CachedFileDownloadUrlSyncFn; useUserById: (id: string | undefined) => UserEntity | undefined;
 }) => {
@@ -183,7 +183,7 @@ interface LiveRoomSheetProps {
 }
 
 export function LiveRoomSheet({ roomId, isExpanded, onCollapse, onExpand, onLeave }: LiveRoomSheetProps) {
-  const { useTheme, useUserById, AvatarComponent, agoraService, toast, getCachedFileDownloadUrl, getCachedFileDownloadUrlSync, onRoomChanged, t } = useAgoraConfig();
+  const { useTheme, useUserById, AvatarComponent, roomsService, toast, getCachedFileDownloadUrl, getCachedFileDownloadUrlSync, onRoomChanged, t } = useLiveConfig();
   const theme = useTheme();
   const { user, oxyServices } = useAuth();
   const [room, setRoom] = useState<Room | null>(null);
@@ -195,7 +195,7 @@ export function LiveRoomSheet({ roomId, isExpanded, onCollapse, onExpand, onLeav
 
   useEffect(() => {
     if (roomId) {
-      agoraService.getRoom(roomId).then(setRoom);
+      roomsService.getRoom(roomId).then(setRoom);
     }
   }, [roomId]);
 
@@ -247,7 +247,7 @@ export function LiveRoomSheet({ roomId, isExpanded, onCollapse, onExpand, onLeav
 
   const handleStopRoom = async () => {
     if (!roomId) return;
-    const success = await agoraService.stopRoom(roomId);
+    const success = await roomsService.stopRoom(roomId);
     if (success) {
       onRoomChanged?.(roomId);
       leave();
@@ -259,7 +259,7 @@ export function LiveRoomSheet({ roomId, isExpanded, onCollapse, onExpand, onLeav
 
   const handleDeleteRoom = async () => {
     if (!roomId) return;
-    const success = await agoraService.deleteRoom(roomId);
+    const success = await roomsService.deleteRoom(roomId);
     if (success) {
       onRoomChanged?.(roomId);
       leave();
@@ -275,9 +275,9 @@ export function LiveRoomSheet({ roomId, isExpanded, onCollapse, onExpand, onLeav
     if (!roomId || startingRoom) return;
     setStartingRoom(true);
     try {
-      const success = await agoraService.startRoom(roomId);
+      const success = await roomsService.startRoom(roomId);
       if (success) {
-        const updated = await agoraService.getRoom(roomId);
+        const updated = await roomsService.getRoom(roomId);
         if (updated) setRoom(updated);
         onRoomChanged?.(roomId);
         toast.success('Room is now live!');
@@ -293,7 +293,7 @@ export function LiveRoomSheet({ roomId, isExpanded, onCollapse, onExpand, onLeav
 
   const handleStartRecording = async () => {
     if (!roomId) return;
-    const success = await agoraService.startRecording(roomId);
+    const success = await roomsService.startRecording(roomId);
     if (success) {
       toast.success('Recording started');
     } else {
@@ -303,7 +303,7 @@ export function LiveRoomSheet({ roomId, isExpanded, onCollapse, onExpand, onLeav
 
   const handleStopRecording = async () => {
     if (!roomId) return;
-    const success = await agoraService.stopRecording(roomId);
+    const success = await roomsService.stopRecording(roomId);
     if (success) {
       toast.success('Recording saved');
     } else {
@@ -365,7 +365,7 @@ export function LiveRoomSheet({ roomId, isExpanded, onCollapse, onExpand, onLeav
     if (!roomId || streamLoading) return;
     setStreamLoading(true);
     try {
-      const success = await agoraService.stopStream(roomId);
+      const success = await roomsService.stopStream(roomId);
       if (success) {
         toast.success('Stream stopped');
       } else {
@@ -383,12 +383,12 @@ export function LiveRoomSheet({ roomId, isExpanded, onCollapse, onExpand, onLeav
     if (!roomId || skipLoading) return;
     setSkipLoading(true);
     try {
-      const result = await agoraService.skipPodcastNext(roomId);
+      const result = await roomsService.skipPodcastNext(roomId);
       if (!result) {
         toast.error(tr('agora.podcastStream.skipFailed'));
       } else {
         toast.success(tr(result.ended ? 'agora.podcastStream.queueEnded' : 'agora.podcastStream.skipped'));
-        const updated = await agoraService.getRoom(roomId);
+        const updated = await roomsService.getRoom(roomId);
         if (updated) setRoom(updated);
       }
     } catch {
@@ -435,7 +435,7 @@ export function LiveRoomSheet({ roomId, isExpanded, onCollapse, onExpand, onLeav
         initialStreamKey={room?.rtmpStreamKey ?? undefined}
         onClose={() => setActivePanel(null)}
         onStreamStarted={() => {
-          agoraService.getRoom(roomId).then(setRoom);
+          roomsService.getRoom(roomId).then(setRoom);
           onRoomChanged?.(roomId);
           setActivePanel(null);
         }}

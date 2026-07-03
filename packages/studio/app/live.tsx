@@ -9,7 +9,7 @@ import {
   RoomCard,
   CreateRoomSheet,
   useLiveRoom,
-  createAgoraService,
+  createRoomsService,
   type Room,
   type CreateRoomSheetRef,
   type CreateRoomFormState,
@@ -31,10 +31,10 @@ function GoLive() {
   const theme = useTheme();
   const { joinLiveRoom } = useLiveRoom();
 
-  const agoraService = useMemo(() => createAgoraService(authenticatedClient), []);
+  const roomsService = useMemo(() => createRoomsService(authenticatedClient), []);
   const { data: liveRooms = [], isLoading, refetch } = useQuery({
     queryKey: liveRoomsQueryKey,
-    queryFn: () => agoraService.getRooms('live'),
+    queryFn: () => roomsService.getRooms('live'),
     staleTime: 30_000,
   });
 

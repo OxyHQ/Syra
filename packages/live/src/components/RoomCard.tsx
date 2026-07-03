@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, StyleProp, ViewStyle } from '
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useAuth } from '@oxyhq/services';
 
-import { useAgoraConfig } from '../context/AgoraConfigContext';
+import { useLiveConfig } from '../context/LiveConfigContext';
 import { AnimatedPulse } from './AnimatedPulse';
 import { useRoomUsers, getAvatarUrl } from '../hooks/useRoomUsers';
 
@@ -101,7 +101,7 @@ export const RoomCard: React.FC<RoomCardProps> = ({
   isSaved,
   style,
 }) => {
-  const { useTheme, useUserById, AvatarComponent, getCachedFileDownloadUrlSync } = useAgoraConfig();
+  const { useTheme, useUserById, AvatarComponent, getCachedFileDownloadUrlSync } = useLiveConfig();
   const theme = useTheme();
   const { oxyServices } = useAuth();
   const hostProfile = useUserById(room.host);
@@ -292,7 +292,7 @@ function SpeakerRow({
 }: {
   speakerIds: string[];
   listenerCount: number;
-  theme: ReturnType<ReturnType<typeof useAgoraConfig>['useTheme']>;
+  theme: ReturnType<ReturnType<typeof useLiveConfig>['useTheme']>;
 }) {
   return (
     <View style={styles.avatarRow}>
@@ -311,7 +311,7 @@ function SpeakerRow({
 }
 
 function SpeakerAvatar({ userId }: { userId: string }) {
-  const { useUserById, AvatarComponent, getCachedFileDownloadUrlSync, useTheme } = useAgoraConfig();
+  const { useUserById, AvatarComponent, getCachedFileDownloadUrlSync, useTheme } = useLiveConfig();
   const theme = useTheme();
   const { oxyServices } = useAuth();
   const profile = useUserById(userId);

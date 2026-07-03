@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
-import { useAgoraConfig } from '../context/AgoraConfigContext';
+import { useLiveConfig } from '../context/LiveConfigContext';
 import { useLiveRoom } from '../context/LiveRoomContext';
 import type { Room, House } from '../types';
 
@@ -70,7 +70,7 @@ export const CreateRoomSheet = forwardRef<CreateRoomSheetRef, CreateRoomSheetPro
   houses,
 }, ref) => {
   const Scroll = ScrollViewComponent || ScrollView;
-  const { useTheme, agoraService, toast } = useAgoraConfig();
+  const { useTheme, roomsService, toast } = useLiveConfig();
   const theme = useTheme();
   const { joinLiveRoom } = useLiveRoom();
   const [title, setTitle] = useState('');
@@ -106,10 +106,10 @@ export const CreateRoomSheet = forwardRef<CreateRoomSheetRef, CreateRoomSheetPro
 
     setLoading(true);
     try {
-      const room = await agoraService.createRoom(buildCreatePayload());
+      const room = await roomsService.createRoom(buildCreatePayload());
 
       if (room) {
-        const started = await agoraService.startRoom(room._id);
+        const started = await roomsService.startRoom(room._id);
         onClose();
         if (started) {
           joinLiveRoom(room._id);
@@ -138,7 +138,7 @@ export const CreateRoomSheet = forwardRef<CreateRoomSheetRef, CreateRoomSheetPro
 
     setLoading(true);
     try {
-      const room = await agoraService.createRoom({
+      const room = await roomsService.createRoom({
         ...buildCreatePayload(),
         scheduledStart: scheduledStart.trim(),
       });
@@ -162,7 +162,7 @@ export const CreateRoomSheet = forwardRef<CreateRoomSheetRef, CreateRoomSheetPro
 
     setLoading(true);
     try {
-      const room = await agoraService.createRoom(buildCreatePayload());
+      const room = await roomsService.createRoom(buildCreatePayload());
 
       if (room) {
         onClose();

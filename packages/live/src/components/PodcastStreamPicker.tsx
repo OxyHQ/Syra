@@ -12,8 +12,8 @@ import {
 import type { ViewStyle } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
-import { useAgoraConfig, type PinnedPodcast } from '../context/AgoraConfigContext';
-import type { AgoraTheme } from '../types';
+import { useLiveConfig, type PinnedPodcast } from '../context/LiveConfigContext';
+import type { LiveTheme } from '../types';
 import type { PodcastResult, EpisodeListItem, MusicTrackResult } from '../services/spacesService';
 
 const SEARCH_DEBOUNCE_MS = 350;
@@ -23,8 +23,8 @@ const SYRA_WEB_BASE_URL = 'https://syra.fm';
 
 /**
  * English source copy for every user-facing string in the picker. Hosts with an
- * i18n layer (the Mention frontend) inject `t` via `useAgoraConfig()` and these
- * are never read; hosts without one (the standalone Agora app) fall back to
+ * i18n layer (the Mention frontend) inject `t` via `useLiveConfig()` and these
+ * are never read; hosts without one (the standalone live-rooms app) fall back to
  * these. Keys mirror the `agora.podcastStream.*` entries in the app locale files.
  */
 const DEFAULT_STRINGS: Record<string, string> = {
@@ -112,7 +112,7 @@ const ShowRow = memo(function ShowRow({
   onSelect,
 }: {
   show: PodcastResult;
-  theme: AgoraTheme;
+  theme: LiveTheme;
   AvatarComponent: AvatarComponentType;
   onSelect: (show: PodcastResult) => void;
 }) {
@@ -145,7 +145,7 @@ const EpisodeRow = memo(function EpisodeRow({
   queueActionLabel,
 }: {
   episode: EpisodeListItem;
-  theme: AgoraTheme;
+  theme: LiveTheme;
   AvatarComponent: AvatarComponentType;
   onSelect: (episode: EpisodeListItem) => void;
   queueEnabled: boolean;
@@ -200,7 +200,7 @@ const ErrorState = memo(function ErrorState({
   retryLabel,
   onRetry,
 }: {
-  theme: AgoraTheme;
+  theme: LiveTheme;
   message: string;
   retryLabel: string;
   onRetry: () => void;
@@ -225,8 +225,8 @@ const ErrorState = memo(function ErrorState({
  * Self-contained two-level podcast picker for the live-room stream setup. Level 1
  * is a debounced Syra show search; tapping a show drills into Level 2, its episode
  * list. Tapping an episode reports `(syraPodcastId, episodeId)` to the parent — the
- * picker owns NO room/stream logic. Ships inside agora-shared, so it depends only
- * on `useAgoraConfig()` injection and never imports from a host app (`@/`).
+ * picker owns NO room/stream logic. Ships inside @syra.fm/live, so it depends only
+ * on `useLiveConfig()` injection and never imports from a host app (`@/`).
  *
  * UX affordances (all backend-field-free): a host copyright disclaimer, an honest
  * error+Retry state distinct from empty results, a one-tap "stream my pinned
@@ -234,7 +234,7 @@ const ErrorState = memo(function ErrorState({
  * "Open in Syra" deep link on the episode-list header.
  */
 export function PodcastStreamPicker({ onSelectEpisode, onStartQueue }: PodcastStreamPickerProps) {
-  const { useTheme, agoraService, AvatarComponent, toast, t, getPinnedPodcast } = useAgoraConfig();
+  const { useTheme, roomsService, AvatarComponent, toast, t, getPinnedPodcast } = useLiveConfig();
   const theme = useTheme();
 
   const tr = useCallback<TranslateFn>(
@@ -292,7 +292,7 @@ export function PodcastStreamPicker({ onSelectEpisode, onStartQueue }: PodcastSt
         setShowsLoadingMore(true);
       }
 
-      const result = await agoraService.searchPodcasts(trimmed, offset);
+      const result = await roomsService.searchPodcasts(trimmed, offset);
       if (seq !== showsSeqRef.current) return; // superseded by a newer query
 
       if (!result.ok) {
@@ -314,7 +314,7 @@ export function PodcastStreamPicker({ onSelectEpisode, onStartQueue }: PodcastSt
       setShowsLoading(false);
       setShowsLoadingMore(false);
     },
-    [agoraService],
+    [roomsService],
   );
 
   const handleQueryChange = useCallback(
@@ -355,7 +355,7 @@ export function PodcastStreamPicker({ onSelectEpisode, onStartQueue }: PodcastSt
         setEpisodesLoadingMore(true);
       }
 
-      const result = await agoraService.getPodcastEpisodes(syraPodcastId, offset);
+      const result = await roomsService.getPodcastEpisodes(syraPodcastId, offset);
       if (seq !== episodesSeqRef.current) return; // superseded by a newer show
 
       if (!result.ok) {
@@ -375,7 +375,7 @@ export function PodcastStreamPicker({ onSelectEpisode, onStartQueue }: PodcastSt
       setEpisodesLoading(false);
       setEpisodesLoadingMore(false);
     },
-    [agoraService],
+    [roomsService],
   );
 
   const handleSelectShow = useCallback(
@@ -712,7 +712,7 @@ const MusicTrackRow = memo(function MusicTrackRow({
   queueActionLabel,
 }: {
   track: MusicTrackResult;
-  theme: AgoraTheme;
+  theme: LiveTheme;
   AvatarComponent: AvatarComponentType;
   onSelect: (track: MusicTrackResult) => void;
   isQueued: boolean;
@@ -771,7 +771,7 @@ interface MusicPickerProps {
  * A debounced Syra catalog search; tapping a track reports its `trackId` to the
  * parent (the picker owns NO room/stream logic and never sees an audio URL — the
  * backend resolves the playable source server-side). Ships inside the shared
- * package, so it depends only on `useAgoraConfig()` injection and never imports
+ * package, so it depends only on `useLiveConfig()` injection and never imports
  * from a host app (`@/`).
  *
  * Mirrors {@link PodcastStreamPicker}: a host copyright/broadcast disclaimer, an
@@ -779,7 +779,7 @@ interface MusicPickerProps {
  * queue (per-row "+" plus a floating "Play (N)" footer).
  */
 export function MusicPicker({ onSelectTrack, onStartQueue }: MusicPickerProps) {
-  const { useTheme, agoraService, AvatarComponent, t } = useAgoraConfig();
+  const { useTheme, roomsService, AvatarComponent, t } = useLiveConfig();
   const theme = useTheme();
 
   const tr = useCallback<TranslateFn>((key) => (t ? t(key) : DEFAULT_STRINGS[key] ?? key), [t]);
@@ -819,7 +819,7 @@ export function MusicPicker({ onSelectTrack, onStartQueue }: MusicPickerProps) {
         setLoadingMore(true);
       }
 
-      const result = await agoraService.searchMusic(trimmed, offset);
+      const result = await roomsService.searchMusic(trimmed, offset);
       if (seq !== seqRef.current) return; // superseded by a newer query
 
       if (!result.ok) {
@@ -839,7 +839,7 @@ export function MusicPicker({ onSelectTrack, onStartQueue }: MusicPickerProps) {
       setLoading(false);
       setLoadingMore(false);
     },
-    [agoraService],
+    [roomsService],
   );
 
   const handleQueryChange = useCallback(
