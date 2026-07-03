@@ -294,8 +294,12 @@ async function applyUrlIngressToRoom(
 
 /**
  * HTTP wrapper over {@link applyUrlIngressToRoom} for the host-supplied-URL
- * route: starts the ingress and writes the standard `{ message, ingressId, url }`
- * response, or maps a LiveKit failure via {@link sendLiveKitIngressError}.
+ * route: runs the shared SSRF-guarded {@link validatePlayableAudioUrl} probe on
+ * the caller-supplied URL FIRST, then starts the ingress and writes the standard
+ * `{ message, ingressId, url }` response, or maps a validation / LiveKit failure
+ * via {@link sendLiveKitIngressError}. This is the single validation gate for the
+ * manual-URL path, mirroring the probe {@link startResolvedMediaStream} runs for
+ * the resolved podcast/track paths — so no path reaches the ingress unvalidated.
  */
 async function startUrlIngressForRoom(
   room: IRoom,
@@ -304,6 +308,12 @@ async function startUrlIngressForRoom(
   res: Response,
   userId: string,
 ): Promise<void> {
+  const validation = await validatePlayableAudioUrl(meta.url);
+  if (!validation.ok) {
+    res.status(validation.status).json({ message: validation.message });
+    return;
+  }
+
   const outcome = await applyUrlIngressToRoom(room, id, meta);
   if (!outcome.ok) {
     sendLiveKitIngressError(res, outcome.error, 'create-url-ingress', { roomId: id, userId });
@@ -2088,6 +2098,13 @@ router.patch('/:id/stream', async (req: AuthRequest, res: Response) => {
     if (nextStreamUrl !== undefined && nextStreamUrl !== (room.activeStreamUrl ?? undefined)) {
       if (room.status !== RoomStatus.LIVE) {
         return res.status(400).json({ message: 'Room must be live to update stream URL' });
+      }
+
+      // SSRF-guarded probe of the new URL before replacing the ingress -- the same
+      // gate the stream-start paths run, so a URL swap can never bypass validation.
+      const validation = await validatePlayableAudioUrl(nextStreamUrl);
+      if (!validation.ok) {
+        return res.status(validation.status).json({ message: validation.message });
       }
 
       let ingressResult: IngressReplacementResult;
