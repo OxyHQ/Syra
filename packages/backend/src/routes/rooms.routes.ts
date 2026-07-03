@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import multer from 'multer';
-import Room, { IRoom, PodcastQueueItem, RoomStatus, RoomType, OwnerType, BroadcastKind, SpeakerPermission } from '../models/Room';
+import Room, { IRoom, MediaQueueItem, RoomStatus, RoomType, OwnerType, BroadcastKind, SpeakerPermission } from '../models/Room';
 import House, { HouseMemberRole } from '../models/House';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { isAdmin } from '../middleware/admin';
@@ -26,6 +26,7 @@ import { getRecordingObjectKey, uploadObject, deleteObject, getAgoraRoomImageKey
 import { processImage } from '../utils/imageProcessor';
 import { emitLiveRoomsUpdated } from '../utils/socket';
 import { resolvePodcastEpisode } from '../utils/syraPodcast';
+import { resolveTrack, resolveAlbumTracks, resolvePlaylistTracks } from '../utils/syraMedia';
 import {
   fetchUpstreamFollowingRedirects,
   contentTypeFamily,
@@ -404,53 +405,37 @@ async function validatePlayableAudioUrl(url: string): Promise<AudioUrlValidation
   }
 }
 
-/** Res-free outcome shape shared by every podcast stream-start path. */
-type PodcastStreamOutcome =
+/** Res-free outcome shape shared by every media (podcast/track) stream-start path. */
+type MediaStreamOutcome =
   | { ok: true; ingressId: string; url: string }
   | { ok: false; status: number; body: { message: string; code?: string } };
 
 /**
- * The full server-side podcast-episode → live-stream pipeline (res-free):
- * tri-state resolve → SSRF-guarded audio probe → URL ingress. Shared by the
- * `POST /:id/stream/podcast` route, the `/next` manual-advance route, and the
- * LiveKit auto-advance webhook so all three enforce the identical policy.
+ * Feed an already-resolved, server-owned audio URL + card metadata through the
+ * shared SSRF-guarded probe → LiveKit URL ingress. The res-free tail shared by
+ * both the podcast-episode and music-track pipelines so they enforce the
+ * identical safety policy.
  *
- * Failure mapping: `not_found` → 404, `unavailable` → 503, non-audio/blocked
- * URL → 400, unreachable upstream → 502, LiveKit ingress failure → the mapped
- * LiveKit status. The caller MUST have already set `room.podcastQueue` to the
- * post-start remainder (persisted atomically by the ingress save on success).
+ * Failure mapping: non-audio/blocked URL → 400, unreachable upstream → 502,
+ * LiveKit ingress failure → the mapped LiveKit status.
  */
-async function startPodcastEpisodeStream(
+async function startResolvedMediaStream(
   room: IRoom,
   id: string,
-  episodeId: string,
-  expectedPodcastId: string | undefined,
+  meta: UrlIngressMeta,
   userId: string,
-): Promise<PodcastStreamOutcome> {
-  const resolved = await resolvePodcastEpisode(episodeId, expectedPodcastId);
-  if (resolved.status === 'not_found') {
-    return { ok: false, status: 404, body: { message: 'Podcast episode not found' } };
-  }
-  if (resolved.status === 'unavailable') {
-    return { ok: false, status: 503, body: { message: 'Podcast service is temporarily unavailable' } };
-  }
-
-  const validation = await validatePlayableAudioUrl(resolved.episode.audioUrl);
+  operation: string,
+): Promise<MediaStreamOutcome> {
+  const validation = await validatePlayableAudioUrl(meta.url);
   if (!validation.ok) {
     return { ok: false, status: validation.status, body: { message: validation.message } };
   }
 
-  const outcome = await applyUrlIngressToRoom(room, id, {
-    url: resolved.episode.audioUrl,
-    title: resolved.episode.title,
-    image: resolved.episode.artworkUrl,
-    description: undefined,
-    durationSec: resolved.episode.durationSec,
-  });
+  const outcome = await applyUrlIngressToRoom(room, id, meta);
   if (!outcome.ok) {
     const mapped = mapLiveKitIngressError(outcome.error);
     logger.warn('LiveKit stream ingress operation failed', {
-      operation: 'create-podcast-ingress',
+      operation,
       roomId: id,
       userId,
       status: mapped.liveKit.status,
@@ -463,31 +448,134 @@ async function startPodcastEpisodeStream(
   return { ok: true, ingressId: outcome.ingressId, url: outcome.url };
 }
 
-/** Upper bound on episodes queued behind the current one (DoS / abuse guard). */
-const MAX_PODCAST_QUEUE_LENGTH = 100;
+/**
+ * The full server-side podcast-episode → live-stream pipeline (res-free):
+ * tri-state resolve → SSRF-guarded audio probe → URL ingress. Shared by the
+ * `POST /:id/stream/podcast` route, the `/next` manual-advance route, and the
+ * LiveKit auto-advance webhook so all enforce the identical policy.
+ *
+ * Failure mapping: `not_found` → 404, `unavailable` → 503, then the shared
+ * probe/ingress mapping. The caller MUST have already set `room.podcastQueue` to
+ * the post-start remainder (persisted atomically by the ingress save on success).
+ */
+async function startPodcastEpisodeStream(
+  room: IRoom,
+  id: string,
+  episodeId: string,
+  expectedPodcastId: string | undefined,
+  userId: string,
+): Promise<MediaStreamOutcome> {
+  const resolved = await resolvePodcastEpisode(episodeId, expectedPodcastId);
+  if (resolved.status === 'not_found') {
+    return { ok: false, status: 404, body: { message: 'Podcast episode not found' } };
+  }
+  if (resolved.status === 'unavailable') {
+    return { ok: false, status: 503, body: { message: 'Podcast service is temporarily unavailable' } };
+  }
 
-type ParsedPodcastQueue =
-  | { ok: true; queue: PodcastQueueItem[] }
+  return startResolvedMediaStream(
+    room,
+    id,
+    {
+      url: resolved.episode.audioUrl,
+      title: resolved.episode.title,
+      image: resolved.episode.artworkUrl,
+      description: undefined,
+      durationSec: resolved.episode.durationSec,
+    },
+    userId,
+    'create-podcast-ingress',
+  );
+}
+
+/**
+ * The full server-side track → live-stream pipeline (res-free): tri-state resolve
+ * → SSRF-guarded audio probe → URL ingress. The music-shaped sibling of
+ * {@link startPodcastEpisodeStream}, shared by `POST /:id/stream/track` and the
+ * mixed-queue advance paths. The audio URL is resolved server-side from Syra's
+ * catalog ({@link resolveTrack}) — the client only ever supplies the track id.
+ *
+ * Failure mapping: `not_found` → 404, `unavailable` → 503, then the shared
+ * probe/ingress mapping.
+ */
+async function startTrackStream(
+  room: IRoom,
+  id: string,
+  trackId: string,
+  userId: string,
+): Promise<MediaStreamOutcome> {
+  const resolved = await resolveTrack(trackId);
+  if (resolved.status === 'not_found') {
+    return { ok: false, status: 404, body: { message: 'Track not found' } };
+  }
+  if (resolved.status === 'unavailable') {
+    return { ok: false, status: 503, body: { message: 'Track audio is temporarily unavailable' } };
+  }
+
+  return startResolvedMediaStream(
+    room,
+    id,
+    {
+      url: resolved.track.audioUrl,
+      title: resolved.track.title,
+      image: resolved.track.artworkUrl,
+      description: resolved.track.artist,
+      durationSec: resolved.track.durationSec,
+    },
+    userId,
+    'create-track-ingress',
+  );
+}
+
+/**
+ * Resolve + start a single mixed-queue item (podcast episode OR music track) by
+ * its `kind`. The one dispatch point shared by the manual `/next` advance and
+ * the LiveKit auto-advance webhook, so both handle a queue of either kind.
+ */
+async function startMediaQueueItem(
+  room: IRoom,
+  id: string,
+  item: MediaQueueItem,
+  userId: string,
+): Promise<MediaStreamOutcome> {
+  if (item.kind === 'track') {
+    if (!item.trackId) {
+      return { ok: false, status: 404, body: { message: 'Queued track is missing its id' } };
+    }
+    return startTrackStream(room, id, item.trackId, userId);
+  }
+  if (!item.episodeId) {
+    return { ok: false, status: 404, body: { message: 'Queued episode is missing its id' } };
+  }
+  return startPodcastEpisodeStream(room, id, item.episodeId, item.syraPodcastId, userId);
+}
+
+/** Upper bound on media items queued behind the current one (DoS / abuse guard). */
+const MAX_MEDIA_QUEUE_LENGTH = 100;
+
+type ParsedMediaQueue =
+  | { ok: true; queue: MediaQueueItem[] }
   | { ok: false; message: string };
 
 /**
- * Validate + normalize an optional client-supplied podcast queue. Each item
- * must carry a non-empty `episodeId`; `syraPodcastId` is optional (used for the
- * show cross-check at play-time). Absent/null ⇒ an empty queue. The playable
- * audio URL is never accepted from the client — only opaque ids.
+ * Validate + normalize an optional client-supplied podcast queue into
+ * {@link MediaQueueItem} rows (`kind: 'podcast'`). Each item must carry a
+ * non-empty `episodeId`; `syraPodcastId` is optional (used for the show
+ * cross-check at play-time). Absent/null ⇒ an empty queue. The playable audio
+ * URL is never accepted from the client — only opaque ids.
  */
-function parsePodcastQueue(input: unknown): ParsedPodcastQueue {
+function parsePodcastQueue(input: unknown): ParsedMediaQueue {
   if (input === undefined || input === null) {
     return { ok: true, queue: [] };
   }
   if (!Array.isArray(input)) {
     return { ok: false, message: 'queue must be an array' };
   }
-  if (input.length > MAX_PODCAST_QUEUE_LENGTH) {
-    return { ok: false, message: `queue cannot exceed ${MAX_PODCAST_QUEUE_LENGTH} episodes` };
+  if (input.length > MAX_MEDIA_QUEUE_LENGTH) {
+    return { ok: false, message: `queue cannot exceed ${MAX_MEDIA_QUEUE_LENGTH} episodes` };
   }
 
-  const queue: PodcastQueueItem[] = [];
+  const queue: MediaQueueItem[] = [];
   for (const item of input) {
     if (!item || typeof item !== 'object') {
       return { ok: false, message: 'each queue item must be an object' };
@@ -499,7 +587,40 @@ function parsePodcastQueue(input: unknown): ParsedPodcastQueue {
     }
     const syraPodcastId =
       typeof obj.syraPodcastId === 'string' && obj.syraPodcastId.trim() ? obj.syraPodcastId.trim() : undefined;
-    queue.push(syraPodcastId ? { syraPodcastId, episodeId } : { episodeId });
+    queue.push({ kind: 'podcast', episodeId, ...(syraPodcastId ? { syraPodcastId } : {}) });
+  }
+  return { ok: true, queue };
+}
+
+/**
+ * Validate + normalize an optional client-supplied track queue into
+ * {@link MediaQueueItem} rows (`kind: 'track'`). Each item must carry a non-empty
+ * `trackId`; absent/null ⇒ an empty queue. Only opaque ids are accepted — the
+ * playable audio URL is always resolved server-side at play-time.
+ */
+function parseTrackQueue(input: unknown): ParsedMediaQueue {
+  if (input === undefined || input === null) {
+    return { ok: true, queue: [] };
+  }
+  if (!Array.isArray(input)) {
+    return { ok: false, message: 'queue must be an array' };
+  }
+  if (input.length > MAX_MEDIA_QUEUE_LENGTH) {
+    return { ok: false, message: `queue cannot exceed ${MAX_MEDIA_QUEUE_LENGTH} tracks` };
+  }
+
+  const queue: MediaQueueItem[] = [];
+  for (const item of input) {
+    if (!item || typeof item !== 'object') {
+      return { ok: false, message: 'each queue item must be an object' };
+    }
+    const trackId = typeof (item as Record<string, unknown>).trackId === 'string'
+      ? String((item as Record<string, unknown>).trackId).trim()
+      : '';
+    if (!trackId) {
+      return { ok: false, message: 'each queue item requires a trackId' };
+    }
+    queue.push({ kind: 'track', trackId });
   }
   return { ok: true, queue };
 }
@@ -527,23 +648,30 @@ export type AdvancePodcastResult =
   | { kind: 'error'; status: number; body: { message: string; code?: string } };
 
 /**
- * Advance a room to the next queued podcast episode, or stop the stream when the
+ * Advance a room to the next queued media item, or stop the stream when the
  * queue is empty. Shared by `POST /:id/stream/podcast/next` (manual) and the
- * LiveKit `ingress_ended` webhook (auto-advance).
+ * LiveKit `ingress_ended` webhook (auto-advance). The queue is a generic media
+ * queue (`room.podcastQueue`): each item is resolved by its `kind` — a podcast
+ * episode OR a music track — so a mixed queue advances correctly.
  *
- * Pops the head of `room.podcastQueue`, sets the room's queue to the remainder
- * in memory (persisted atomically by the ingress save only on a SUCCESSFUL
- * start — so a failed start leaves the persisted queue untouched, keeping the
- * head for a retry), then runs it through {@link startPodcastEpisodeStream}.
- * When the queue is empty it stops the stream via {@link stopRoomStream}.
+ * Pops the head of the queue, sets the room's queue to the remainder in memory
+ * (persisted atomically by the ingress save only on a SUCCESSFUL start — so a
+ * failed start leaves the persisted queue untouched, keeping the head for a
+ * retry), then runs it through {@link startMediaQueueItem}. When the queue is
+ * empty it stops the stream via {@link stopRoomStream}.
  */
 export async function advancePodcastQueueForRoom(
   room: IRoom,
   id: string,
   userId: string,
 ): Promise<AdvancePodcastResult> {
-  const queue: PodcastQueueItem[] = Array.isArray(room.podcastQueue)
-    ? room.podcastQueue.map((item) => ({ syraPodcastId: item.syraPodcastId, episodeId: item.episodeId }))
+  const queue: MediaQueueItem[] = Array.isArray(room.podcastQueue)
+    ? room.podcastQueue.map((item) => ({
+        kind: item.kind,
+        syraPodcastId: item.syraPodcastId,
+        episodeId: item.episodeId,
+        trackId: item.trackId,
+      }))
     : [];
 
   const head = queue.shift();
@@ -554,7 +682,7 @@ export async function advancePodcastQueueForRoom(
 
   room.podcastQueue = queue.length > 0 ? queue : undefined;
 
-  const outcome = await startPodcastEpisodeStream(room, id, head.episodeId, head.syraPodcastId, userId);
+  const outcome = await startMediaQueueItem(room, id, head, userId);
   if (!outcome.ok) {
     return { kind: 'error', status: outcome.status, body: outcome.body };
   }
@@ -1625,6 +1753,139 @@ router.post('/:id/stream/podcast', async (req: AuthRequest, res: Response) => {
     });
   } catch (error) {
     logger.error('Error starting podcast stream:', { userId: req.user?.id, roomId: req.params.id, error });
+    res.status(500).json({
+      message: 'Error starting stream',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+/** How the caller seeded a track stream — flags which id branch to resolve. */
+type ParsedTrackStreamBody =
+  | { ok: true; kind: 'track'; trackId: string; queue: MediaQueueItem[] }
+  | { ok: true; kind: 'album'; albumId: string }
+  | { ok: true; kind: 'playlist'; playlistId: string }
+  | { ok: false; message: string };
+
+/**
+ * Parse + validate the `POST /:id/stream/track` body. Exactly one of `trackId`,
+ * `albumId`, `playlistId` must be supplied. `trackId` may carry an optional
+ * `queue` of `{ trackId }[]` (the tracks AFTER this one); `albumId` / `playlistId`
+ * seed the queue server-side from the container's ordered, playable tracks.
+ */
+function parseTrackStreamBody(body: unknown): ParsedTrackStreamBody {
+  const obj = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
+  const trackId = typeof obj.trackId === 'string' ? obj.trackId.trim() : '';
+  const albumId = typeof obj.albumId === 'string' ? obj.albumId.trim() : '';
+  const playlistId = typeof obj.playlistId === 'string' ? obj.playlistId.trim() : '';
+
+  const supplied = [trackId, albumId, playlistId].filter(Boolean).length;
+  if (supplied === 0) {
+    return { ok: false, message: 'One of trackId, albumId or playlistId is required' };
+  }
+  if (supplied > 1) {
+    return { ok: false, message: 'Provide only one of trackId, albumId or playlistId' };
+  }
+
+  if (trackId) {
+    const parsedQueue = parseTrackQueue(obj.queue);
+    if (!parsedQueue.ok) {
+      return { ok: false, message: parsedQueue.message };
+    }
+    return { ok: true, kind: 'track', trackId, queue: parsedQueue.queue };
+  }
+  if (albumId) {
+    return { ok: true, kind: 'album', albumId };
+  }
+  return { ok: true, kind: 'playlist', playlistId };
+}
+
+/**
+ * Start streaming a Syra music track into the room — a "listening party" (room
+ * manager only). The music-shaped sibling of `POST /:id/stream/podcast`.
+ * POST /api/rooms/:id/stream/track
+ * Body: { trackId, queue?: { trackId }[] } | { albumId } | { playlistId }
+ *
+ * Rate limiting is handled by the global Oxy limiter (`app.use(rateLimiter)` in
+ * server.ts) that fronts every route — like the sibling `/:id/stream*` routes,
+ * this handler carries no per-route limiter of its own.
+ *
+ * COPYRIGHT / LICENSING: streaming a full track into a room is a broadcast, not a
+ * private listen — this is scoped to Syra's OWN catalog + rights model (see
+ * `utils/syraMedia.ts`) and the host is shown a rights disclaimer in the picker.
+ *
+ * The client sends only ids — never a media URL. The backend resolves the
+ * playable audio (presigned original → tokenized HLS → Audius passthrough) +
+ * metadata server-side, SSRF-validates it, then feeds it into the SAME LiveKit
+ * URL ingress as the other stream routes. `albumId` / `playlistId` additionally
+ * seed `room.podcastQueue` (the generic up-next queue) from the container's
+ * ordered, playable tracks; the queue auto-advances via `/stream/podcast/next`
+ * or the LiveKit `ingress_ended` webhook, and may mix with podcast items.
+ */
+router.post('/:id/stream/track', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    const { id } = req.params;
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const parsed = parseTrackStreamBody(req.body);
+    if (!parsed.ok) {
+      return res.status(400).json({ message: parsed.message });
+    }
+
+    const room = await Room.findById(id);
+    if (!room) {
+      return res.status(404).json({ message: 'Room not found' });
+    }
+
+    if (!(await sendForbiddenUnlessRoomManager(room, userId, res, 'Only a room manager can add a live stream'))) {
+      return;
+    }
+
+    if (room.status !== RoomStatus.LIVE) {
+      return res.status(400).json({ message: 'Room must be live to add a stream' });
+    }
+
+    // Resolve the head track to play now + the remaining queue to stage. For a
+    // container (album/playlist) the ordered, playable tracks are resolved
+    // server-side; the head plays now and the rest (capped) become the up-next
+    // queue. Only ids are stored — audio is resolved per item at play-time.
+    let firstTrackId: string;
+    let queue: MediaQueueItem[];
+    if (parsed.kind === 'track') {
+      firstTrackId = parsed.trackId;
+      queue = parsed.queue;
+    } else {
+      const items = parsed.kind === 'album'
+        ? await resolveAlbumTracks(parsed.albumId)
+        : await resolvePlaylistTracks(parsed.playlistId);
+      const [head, ...rest] = items;
+      if (!head?.trackId) {
+        return res.status(404).json({ message: 'No playable tracks found' });
+      }
+      firstTrackId = head.trackId;
+      queue = rest.slice(0, MAX_MEDIA_QUEUE_LENGTH);
+    }
+
+    // Stage the remaining queue in memory; it is persisted atomically by the
+    // ingress save only when the first track actually starts.
+    room.podcastQueue = queue.length > 0 ? queue : undefined;
+
+    const outcome = await startTrackStream(room, String(id), firstTrackId, userId);
+    if (!outcome.ok) {
+      return res.status(outcome.status).json(outcome.body);
+    }
+
+    res.json({
+      message: 'Stream started successfully',
+      ingressId: outcome.ingressId,
+      url: outcome.url,
+    });
+  } catch (error) {
+    logger.error('Error starting track stream:', { userId: req.user?.id, roomId: req.params.id, error });
     res.status(500).json({
       message: 'Error starting stream',
       error: error instanceof Error ? error.message : 'Unknown error',

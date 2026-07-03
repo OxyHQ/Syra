@@ -14,7 +14,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
 import { useAgoraConfig, type PinnedPodcast } from '../context/AgoraConfigContext';
 import type { AgoraTheme } from '../types';
-import type { PodcastResult, EpisodeListItem } from '../services/spacesService';
+import type { PodcastResult, EpisodeListItem, MusicTrackResult } from '../services/spacesService';
 
 const SEARCH_DEBOUNCE_MS = 350;
 
@@ -44,6 +44,19 @@ const DEFAULT_STRINGS: Record<string, string> = {
   'agora.podcastStream.removeFromQueue': 'Remove from queue',
   'agora.podcastStream.playQueue': 'Play episodes',
   'agora.podcastStream.clearQueue': 'Clear',
+  // Music (listening party). Streaming a full track into a room is a broadcast —
+  // the disclaimer makes the host's rights responsibility explicit.
+  'agora.musicStream.disclaimer':
+    "You're responsible for having the rights to broadcast this music into your room.",
+  'agora.musicStream.searchPlaceholder': 'Search music',
+  'agora.musicStream.searchHint': 'Search for a track to play',
+  'agora.musicStream.empty': 'No tracks found',
+  'agora.musicStream.error': "Couldn't load music. Check your connection and try again.",
+  'agora.musicStream.retry': 'Retry',
+  'agora.musicStream.addToQueue': 'Add to queue',
+  'agora.musicStream.removeFromQueue': 'Remove from queue',
+  'agora.musicStream.playQueue': 'Play tracks',
+  'agora.musicStream.clearQueue': 'Clear',
 };
 
 type TranslateFn = (key: string) => string;
@@ -677,6 +690,326 @@ export function PodcastStreamPicker({ onSelectEpisode, onStartQueue }: PodcastSt
           contentContainerStyle={listContentStyle}
           ListFooterComponent={
             showsLoadingMore ? (
+              <View style={styles.footerLoader}>
+                <ActivityIndicator size="small" color={theme.colors.primary} />
+              </View>
+            ) : null
+          }
+        />
+      )}
+      {queueFooter}
+    </View>
+  );
+}
+
+const MusicTrackRow = memo(function MusicTrackRow({
+  track,
+  theme,
+  AvatarComponent,
+  onSelect,
+  isQueued,
+  onToggleQueue,
+  queueActionLabel,
+}: {
+  track: MusicTrackResult;
+  theme: AgoraTheme;
+  AvatarComponent: AvatarComponentType;
+  onSelect: (track: MusicTrackResult) => void;
+  isQueued: boolean;
+  onToggleQueue: (track: MusicTrackResult) => void;
+  queueActionLabel: string;
+}) {
+  const meta = [track.artist, formatDuration(track.durationSec)].filter(Boolean).join('  ·  ');
+
+  return (
+    <View style={styles.row}>
+      <TouchableOpacity style={styles.rowMain} activeOpacity={0.7} onPress={() => onSelect(track)}>
+        <AvatarComponent size={44} source={track.artworkUrl} shape="squircle" />
+        <View style={styles.rowText}>
+          <Text style={[styles.rowTitle, { color: theme.colors.text }]} numberOfLines={2}>
+            {track.title}
+          </Text>
+          {!!meta && (
+            <Text style={[styles.rowSubtitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+              {meta}
+            </Text>
+          )}
+        </View>
+        <MaterialCommunityIcons name="play-circle" size={26} color={theme.colors.primary} />
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.queueBtn}
+        activeOpacity={0.7}
+        hitSlop={8}
+        onPress={() => onToggleQueue(track)}
+        accessibilityRole="button"
+        accessibilityLabel={queueActionLabel}
+      >
+        <MaterialCommunityIcons
+          name={isQueued ? 'check-circle' : 'plus-circle-outline'}
+          size={24}
+          color={isQueued ? theme.colors.primary : theme.colors.textSecondary}
+        />
+      </TouchableOpacity>
+    </View>
+  );
+});
+
+interface MusicPickerProps {
+  /** Stream a single track immediately. */
+  onSelectTrack: (trackId: string) => void;
+  /**
+   * Start a multi-track session: the first track plays immediately, the rest
+   * become the room's up-next queue. Optional — hosts that omit it get the
+   * single-tap "play this now" flow only, and the queue affordances are hidden.
+   */
+  onStartQueue?: (trackIds: string[]) => void;
+}
+
+/**
+ * Self-contained single-level music picker for the live-room "listening party".
+ * A debounced Syra catalog search; tapping a track reports its `trackId` to the
+ * parent (the picker owns NO room/stream logic and never sees an audio URL — the
+ * backend resolves the playable source server-side). Ships inside the shared
+ * package, so it depends only on `useAgoraConfig()` injection and never imports
+ * from a host app (`@/`).
+ *
+ * Mirrors {@link PodcastStreamPicker}: a host copyright/broadcast disclaimer, an
+ * honest error+Retry state distinct from empty results, and an optional up-next
+ * queue (per-row "+" plus a floating "Play (N)" footer).
+ */
+export function MusicPicker({ onSelectTrack, onStartQueue }: MusicPickerProps) {
+  const { useTheme, agoraService, AvatarComponent, t } = useAgoraConfig();
+  const theme = useTheme();
+
+  const tr = useCallback<TranslateFn>((key) => (t ? t(key) : DEFAULT_STRINGS[key] ?? key), [t]);
+
+  const queueEnabled = !!onStartQueue;
+  const [queued, setQueued] = useState<string[]>([]);
+  const queuedIds = useMemo(() => new Set(queued), [queued]);
+
+  const [query, setQuery] = useState('');
+  const [tracks, setTracks] = useState<MusicTrackResult[]>([]);
+  const [nextOffset, setNextOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState(false);
+  const seqRef = useRef(0);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const runSearch = useCallback(
+    async (rawQuery: string, offset: number) => {
+      const trimmed = rawQuery.trim();
+      if (!trimmed) {
+        seqRef.current += 1;
+        setTracks([]);
+        setHasMore(false);
+        setNextOffset(0);
+        setLoading(false);
+        setLoadingMore(false);
+        setError(false);
+        return;
+      }
+      const seq = offset === 0 ? (seqRef.current += 1) : seqRef.current;
+      if (offset === 0) {
+        setLoading(true);
+        setError(false);
+      } else {
+        setLoadingMore(true);
+      }
+
+      const result = await agoraService.searchMusic(trimmed, offset);
+      if (seq !== seqRef.current) return; // superseded by a newer query
+
+      if (!result.ok) {
+        if (offset === 0) {
+          setTracks([]);
+          setError(true);
+        }
+        setHasMore(false);
+        setLoading(false);
+        setLoadingMore(false);
+        return;
+      }
+
+      setTracks((prev) => (offset === 0 ? result.items : [...prev, ...result.items]));
+      setHasMore(result.hasMore);
+      setNextOffset(result.offset + result.items.length);
+      setLoading(false);
+      setLoadingMore(false);
+    },
+    [agoraService],
+  );
+
+  const handleQueryChange = useCallback(
+    (text: string) => {
+      setQuery(text);
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (text.trim()) {
+        setLoading(true);
+        setError(false);
+      }
+      debounceRef.current = setTimeout(() => {
+        runSearch(text, 0);
+      }, SEARCH_DEBOUNCE_MS);
+    },
+    [runSearch],
+  );
+
+  const handleClearQuery = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setQuery('');
+    runSearch('', 0);
+  }, [runSearch]);
+
+  const handleEndReached = useCallback(() => {
+    if (loading || loadingMore || !hasMore) return;
+    runSearch(query, nextOffset);
+  }, [loading, loadingMore, hasMore, runSearch, query, nextOffset]);
+
+  const handleSelectTrack = useCallback(
+    (track: MusicTrackResult) => onSelectTrack(track.trackId),
+    [onSelectTrack],
+  );
+
+  const handleToggleQueue = useCallback((track: MusicTrackResult) => {
+    setQueued((prev) =>
+      prev.includes(track.trackId)
+        ? prev.filter((id) => id !== track.trackId)
+        : [...prev, track.trackId],
+    );
+  }, []);
+
+  const handleClearQueue = useCallback(() => setQueued([]), []);
+
+  const handleStartQueue = useCallback(() => {
+    if (queued.length === 0) return;
+    onStartQueue?.(queued);
+    setQueued([]);
+  }, [queued, onStartQueue]);
+
+  // Cancel any pending debounced search when the picker unmounts.
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  const hasQuery = query.trim().length > 0;
+  const showQueueFooter = queueEnabled && queued.length > 0;
+  const listContentStyle = showQueueFooter
+    ? [styles.listContent, styles.listContentWithFooter]
+    : styles.listContent;
+
+  const queueFooter = showQueueFooter ? (
+    <View style={[styles.queueFooter, { backgroundColor: theme.colors.background, borderTopColor: theme.colors.border }]}>
+      <TouchableOpacity
+        style={styles.queueClearBtn}
+        activeOpacity={0.7}
+        hitSlop={8}
+        onPress={handleClearQueue}
+        accessibilityRole="button"
+      >
+        <Text style={[styles.queueClearText, { color: theme.colors.textSecondary }]}>
+          {tr('agora.musicStream.clearQueue')}
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.queuePlayBtn, { backgroundColor: theme.colors.primary }]}
+        activeOpacity={0.85}
+        onPress={handleStartQueue}
+        accessibilityRole="button"
+      >
+        <MaterialCommunityIcons name="play" size={18} color="#FFFFFF" />
+        <Text style={styles.queuePlayText}>
+          {tr('agora.musicStream.playQueue')} ({queued.length})
+        </Text>
+      </TouchableOpacity>
+    </View>
+  ) : null;
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.disclaimer}>
+        <MaterialCommunityIcons name="shield-alert-outline" size={15} color={theme.colors.textSecondary} />
+        <Text style={[styles.disclaimerText, { color: theme.colors.textSecondary }]}>
+          {tr('agora.musicStream.disclaimer')}
+        </Text>
+      </View>
+
+      <View style={styles.searchWrap}>
+        <View style={[styles.searchRow, { backgroundColor: `${theme.colors.card}80`, borderColor: theme.colors.border }]}>
+          <MaterialCommunityIcons name="magnify" size={18} color={theme.colors.textSecondary} />
+          <TextInput
+            style={[styles.searchInput, { color: theme.colors.text }]}
+            placeholder={tr('agora.musicStream.searchPlaceholder')}
+            placeholderTextColor={theme.colors.textSecondary}
+            value={query}
+            onChangeText={handleQueryChange}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
+          />
+          {query.length > 0 && (
+            <TouchableOpacity onPress={handleClearQuery} hitSlop={8}>
+              <MaterialCommunityIcons name="close-circle" size={18} color={theme.colors.textSecondary} />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      {!hasQuery ? (
+        <View style={styles.stateBox}>
+          <MaterialCommunityIcons name="music-note" size={32} color={theme.colors.textSecondary} />
+          <Text style={[styles.stateText, { color: theme.colors.textSecondary }]}>
+            {tr('agora.musicStream.searchHint')}
+          </Text>
+        </View>
+      ) : error ? (
+        <ErrorState
+          theme={theme}
+          message={tr('agora.musicStream.error')}
+          retryLabel={tr('agora.musicStream.retry')}
+          onRetry={() => runSearch(query, 0)}
+        />
+      ) : loading ? (
+        <View style={styles.stateBox}>
+          <ActivityIndicator size="small" color={theme.colors.primary} />
+        </View>
+      ) : tracks.length === 0 ? (
+        <View style={styles.stateBox}>
+          <MaterialCommunityIcons name="magnify-close" size={32} color={theme.colors.textSecondary} />
+          <Text style={[styles.stateText, { color: theme.colors.textSecondary }]}>
+            {tr('agora.musicStream.empty')}
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={tracks}
+          keyExtractor={(item) => item.trackId}
+          renderItem={({ item }) => (
+            <MusicTrackRow
+              track={item}
+              theme={theme}
+              AvatarComponent={AvatarComponent}
+              onSelect={handleSelectTrack}
+              isQueued={queuedIds.has(item.trackId)}
+              onToggleQueue={handleToggleQueue}
+              queueActionLabel={tr(
+                queuedIds.has(item.trackId)
+                  ? 'agora.musicStream.removeFromQueue'
+                  : 'agora.musicStream.addToQueue',
+              )}
+            />
+          )}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          onEndReached={handleEndReached}
+          onEndReachedThreshold={0.4}
+          contentContainerStyle={listContentStyle}
+          ListFooterComponent={
+            loadingMore ? (
               <View style={styles.footerLoader}>
                 <ActivityIndicator size="small" color={theme.colors.primary} />
               </View>

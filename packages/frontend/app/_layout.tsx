@@ -64,6 +64,19 @@ interface MainLayoutProps {
 
 const layoutLogger = createScopedLogger('RootLayout');
 
+// NATIVE ONLY: register the LiveKit WebRTC globals the `@syra/live` rooms engine
+// needs before any room connects. Guarded to native (the browser already has
+// WebRTC) and to a soft failure so a missing/unlinked native module never blocks
+// app boot for users who don't open a live room.
+if (Platform.OS !== 'web') {
+  try {
+    const { registerGlobals } = require('@livekit/react-native');
+    registerGlobals();
+  } catch (error) {
+    layoutLogger.warn('Failed to register LiveKit globals', { error });
+  }
+}
+
 const hexToRgba = (hex: string, alpha: number): string => {
   const match = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex.trim());
   if (!match) return `rgba(128, 128, 128, ${alpha})`;

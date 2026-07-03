@@ -78,7 +78,7 @@ export async function uploadTrackAudio(
 const presignedUrlCache = new Map<string, { url: string; expiresAt: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-export async function getTrackStreamUrl(track: Track): Promise<string> {
+export async function getTrackStreamUrl(track: TrackAudioRef): Promise<string> {
   const key = getTrackS3Key(track);
   
   // Check cache

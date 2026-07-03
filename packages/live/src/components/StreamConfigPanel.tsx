@@ -15,7 +15,7 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { useAgoraConfig } from '../context/AgoraConfigContext';
 import { PanelHeader } from './PanelHeader';
-import { PodcastStreamPicker } from './PodcastStreamPicker';
+import { PodcastStreamPicker, MusicPicker } from './PodcastStreamPicker';
 
 interface StreamConfigPanelProps {
   roomId: string;
@@ -27,7 +27,7 @@ interface StreamConfigPanelProps {
   onStreamStarted: () => void;
 }
 
-type StreamMode = 'url' | 'rtmp' | 'podcast';
+type StreamMode = 'url' | 'rtmp' | 'podcast' | 'music';
 
 type NativeFormDataFile = {
   uri: string;
@@ -217,6 +217,55 @@ export function StreamConfigPanel({ roomId, roomStatus, initialStreamUrl, initia
     }
   };
 
+  // Stream a single Syra track into the room (a "listening party").
+  const handleStartTrack = async (trackId: string) => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      if (!(await ensureRoomLive())) return;
+      const result = await agoraService.startTrackStream(roomId, { trackId });
+      if (result) {
+        toast.success('Stream started');
+        resetState();
+        onStreamStarted();
+        onClose();
+      } else {
+        toast.error('Failed to start stream');
+      }
+    } catch {
+      toast.error('Failed to start stream');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Start a multi-track session: the first track plays now, the rest are
+  // persisted as the room's up-next queue.
+  const handleStartTrackQueue = async (trackIds: string[]) => {
+    if (loading || trackIds.length === 0) return;
+    const [first, ...rest] = trackIds;
+    setLoading(true);
+    try {
+      if (!(await ensureRoomLive())) return;
+      const result = await agoraService.startTrackStream(roomId, {
+        trackId: first,
+        queue: rest.map((trackId) => ({ trackId })),
+      });
+      if (result) {
+        toast.success('Stream started');
+        resetState();
+        onStreamStarted();
+        onClose();
+      } else {
+        toast.error('Failed to start stream');
+      }
+    } catch {
+      toast.error('Failed to start stream');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const generatingRef = useRef(false);
 
   const generateKey = async () => {
@@ -341,10 +390,25 @@ export function StreamConfigPanel({ roomId, roomStatus, initialStreamUrl, initia
             Podcast
           </Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.modeTab,
+            { borderColor: theme.colors.border },
+            mode === 'music' && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+          ]}
+          onPress={() => setMode('music')}
+        >
+          <MaterialCommunityIcons name="music" size={16} color={mode === 'music' ? '#FFFFFF' : theme.colors.text} />
+          <Text style={[styles.modeTabText, { color: mode === 'music' ? '#FFFFFF' : theme.colors.text }]}>
+            Music
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {mode === 'podcast' ? (
         <PodcastStreamPicker onSelectEpisode={handleStartPodcast} onStartQueue={handleStartPodcastQueue} />
+      ) : mode === 'music' ? (
+        <MusicPicker onSelectTrack={handleStartTrack} onStartQueue={handleStartTrackQueue} />
       ) : (
       <ScrollView
         style={{ flex: 1 }}
