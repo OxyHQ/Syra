@@ -33,15 +33,29 @@ export enum SpeakerPermission {
 
 // --- Interface ---
 
+/** Discriminant for a queued in-room media item. */
+export type MediaQueueKind = 'podcast' | 'track';
+
 /**
- * One queued podcast episode awaiting playback after the current one. The
- * `syraPodcastId` (when present) is cross-checked against the resolved episode's
- * show at play-time to reject a mismatched pairing; only the opaque `episodeId`
- * is required — the playable audio URL is always resolved server-side.
+ * One queued in-room media item awaiting playback after the current one — either
+ * a Syra podcast episode (`kind: 'podcast'`) or a Syra music track
+ * (`kind: 'track'`, the listening-party source). Only opaque ids are stored; the
+ * playable audio URL is ALWAYS resolved server-side at play-time (never trusted
+ * from the client). This is a single flat shape (rather than a strict union) so
+ * the Mongoose subdocument types cleanly; the `kind` field discriminates which
+ * id fields are meaningful, and the parse/seed paths guarantee the right fields
+ * are populated for each kind.
+ *
+ * For a podcast item, `syraPodcastId` (when present) is cross-checked against the
+ * resolved episode's show at play-time to reject a mismatched pairing.
  */
-export interface PodcastQueueItem {
+export interface MediaQueueItem {
+  kind: MediaQueueKind;
+  // Podcast-episode reference (kind === 'podcast')
   syraPodcastId?: string;
-  episodeId: string;
+  episodeId?: string;
+  // Music-track reference (kind === 'track')
+  trackId?: string;
 }
 
 export interface IRoom extends Document {
@@ -101,10 +115,12 @@ export interface IRoom extends Document {
   // Total length of the current stream in seconds, when known (e.g. a podcast
   // episode's duration). Absent for open-ended streams (RTMP, arbitrary URLs).
   streamDurationSec?: number;
-  // Remaining podcast episodes queued behind the current one. Advanced manually
-  // (`POST /:id/stream/podcast/next`) or automatically when the current ingress
-  // ends (LiveKit `ingress_ended` webhook).
-  podcastQueue?: PodcastQueueItem[];
+  // Remaining media items (podcast episodes and/or music tracks) queued behind
+  // the current one. Advanced manually (`POST /:id/stream/podcast/next`) or
+  // automatically when the current ingress ends (LiveKit `ingress_ended`
+  // webhook). Named `podcastQueue` for historical reasons — it is the generic
+  // up-next queue and may hold mixed media kinds.
+  podcastQueue?: MediaQueueItem[];
 
   // Timestamps
   createdAt: Date;
@@ -286,10 +302,12 @@ const RoomSchema = new Schema({
   },
   podcastQueue: {
     type: [
-      new Schema<PodcastQueueItem>(
+      new Schema<MediaQueueItem>(
         {
+          kind: { type: String, enum: ['podcast', 'track'], required: true },
           syraPodcastId: { type: String },
-          episodeId: { type: String, required: true },
+          episodeId: { type: String },
+          trackId: { type: String },
         },
         { _id: false },
       ),

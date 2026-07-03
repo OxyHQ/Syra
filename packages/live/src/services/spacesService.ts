@@ -42,6 +42,29 @@ export interface EpisodeListItem {
   artworkUrl?: string;
 }
 
+/**
+ * A single Syra music track row for the listening-party picker. Like the podcast
+ * rows it carries NO audio URL — the playable source (presigned original /
+ * tokenized HLS / Audius passthrough) stays server-owned and is resolved at
+ * stream-start by the backend from the opaque `trackId` alone.
+ */
+export interface MusicTrackResult {
+  trackId: string;
+  title: string;
+  artist?: string;
+  durationSec?: number;
+  artworkUrl?: string;
+}
+
+/** Optional seed to start a track stream: a single track, an album, or a playlist. */
+export interface StartTrackStreamBody extends Record<string, unknown> {
+  trackId?: string;
+  albumId?: string;
+  playlistId?: string;
+  /** Tracks to queue AFTER `trackId` (up-next). Only used with `trackId`. */
+  queue?: { trackId: string }[];
+}
+
 interface PaginatedResult<T> {
   items: T[];
   hasMore: boolean;
@@ -107,6 +130,30 @@ function parseEpisodeListResponse(data: Record<string, unknown>, requestedOffset
     });
   }
   return { items, ...readPaginationMeta(data, requestedOffset) };
+}
+
+/**
+ * Parse the Syra track-search response (`{ tracks, total, hasMore }`) into
+ * {@link MusicTrackResult} rows. Unlike the offset-paginated podcast search this
+ * endpoint returns a flat `hasMore` boolean, so the next offset is derived by the
+ * caller (`offset + items.length`). Each track's `coverArt` is the server's image
+ * ref — the host's `AvatarComponent` resolves it, mirroring the podcast rows.
+ */
+function parseMusicSearchResponse(data: Record<string, unknown>, requestedOffset: number): PaginatedResult<MusicTrackResult> {
+  const raw = Array.isArray(data.tracks) ? data.tracks : [];
+  const items: MusicTrackResult[] = [];
+  for (const entry of raw) {
+    if (!isRecord(entry)) continue;
+    if (typeof entry.id !== 'string' || typeof entry.title !== 'string') continue;
+    items.push({
+      trackId: entry.id,
+      title: entry.title,
+      artist: typeof entry.artistName === 'string' ? entry.artistName : undefined,
+      durationSec: typeof entry.duration === 'number' ? entry.duration : undefined,
+      artworkUrl: typeof entry.coverArt === 'string' ? entry.coverArt : undefined,
+    });
+  }
+  return { items, hasMore: data.hasMore === true, offset: requestedOffset };
 }
 
 function parseRecordingResponse(value: unknown): RecordingResponse | null {
@@ -337,6 +384,51 @@ export function createAgoraService(httpClient: HttpClient) {
         return null;
       } catch (error) {
         console.warn("Failed to skip to next podcast episode", error);
+        return null;
+      }
+    },
+
+    // --- Music streaming (Syra catalog → LiveKit URL ingress) ---
+
+    /**
+     * Search the Syra music catalog for the listening-party picker. Reuses the
+     * existing tracks search endpoint (`GET /tracks/search`); like the podcast
+     * search it never throws — a failure resolves to `{ ok:false }` so the picker
+     * can tell a genuine error from a successful-but-empty result.
+     */
+    async searchMusic(query: string, offset = 0): Promise<PodcastFetchResult<MusicTrackResult>> {
+      try {
+        const res = await httpClient.get('/tracks/search', {
+          params: { q: query, offset: String(offset) },
+        });
+        return { ok: true, ...parseMusicSearchResponse(res.data, offset) };
+      } catch (error) {
+        console.warn("Failed to search music", error);
+        return { ok: false };
+      }
+    },
+
+    /**
+     * Start streaming Syra music into the room (a "listening party"): a single
+     * track (optionally with an up-next `queue`), or an album / playlist whose
+     * ordered tracks the backend resolves into the queue. The client sends only
+     * ids — the playable audio URL is resolved server-side at stream-start.
+     */
+    async startTrackStream(
+      roomId: string,
+      body: StartTrackStreamBody,
+    ): Promise<{ ingressId: string; url: string } | null> {
+      if (!roomId) return null;
+      try {
+        const res = await httpClient.post(`/rooms/${roomId}/stream/track`, body);
+        const parsed = ZStartStreamResponse.safeParse(res.data);
+        if (!parsed.success) {
+          console.warn('[agora] Invalid startTrackStream response:', parsed.error.issues[0]);
+          return null;
+        }
+        return parsed.data;
+      } catch (error) {
+        console.warn("Failed to start track stream", error);
         return null;
       }
     },
