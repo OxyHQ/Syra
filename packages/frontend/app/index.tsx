@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
-import { RoomCard, useLiveRoom, createAgoraService, type Room } from '@syra/live';
+import { RoomCard, useLiveRoom, createAgoraService, type Room } from '@syra.fm/live';
 import SEO from '@/components/SEO';
 import { MediaCard } from '@/components/MediaCard';
 import { ResponsiveGrid } from '@/components/ResponsiveGrid';

@@ -62,6 +62,8 @@ app.set('trust proxy', true);
 const ALLOWED_ORIGINS: string[] = [
   env.FRONTEND_URL,
   'https://syra.fm',
+  'https://mention.earth',
+  'https://www.mention.earth',
   'http://localhost:8081',
   'http://localhost:8082',
   ...env.ALLOWED_ORIGINS,

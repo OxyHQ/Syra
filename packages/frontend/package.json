@@ -40,7 +40,7 @@
     "@react-native-community/netinfo": "12.0.1",
     "@react-native/js-polyfills": "^0.81.1",
     "@shopify/flash-list": "2.0.2",
-    "@syra/live": "workspace:*",
+    "@syra.fm/live": "workspace:*",
     "@tanstack/query-sync-storage-persister": "^5.100.0",
     "@tanstack/react-query": "^5.100.0",
     "axios": "^1.13.6",
