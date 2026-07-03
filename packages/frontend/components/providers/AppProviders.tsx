@@ -24,7 +24,7 @@ import { StatusBar } from 'expo-status-bar';
 import { OxyProvider, useOxy } from '@oxyhq/services';
 import { OxyServices } from '@oxyhq/core';
 import { ImageResolverProvider, type ImageResolver } from '@oxyhq/bloom/image-resolver';
-import { AgoraProvider, LiveRoomProvider } from '@syra/live';
+import { AgoraProvider, LiveRoomProvider } from '@syra.fm/live';
 
 import { OXY_CLIENT_ID } from '@/config';
 import ErrorBoundary from '@/components/ErrorBoundary';

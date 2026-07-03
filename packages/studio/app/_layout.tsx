@@ -7,7 +7,7 @@ import { BloomThemeProvider } from '@oxyhq/bloom/theme';
 
 import { createScopedLogger } from '@/utils/logger';
 
-// NATIVE ONLY: register the LiveKit WebRTC globals the `@syra/live` rooms engine
+// NATIVE ONLY: register the LiveKit WebRTC globals the `@syra.fm/live` rooms engine
 // needs before any room connects. Guarded to native (the browser already has
 // WebRTC) and to a soft failure so a missing/unlinked native module never blocks
 // app boot for creators who never go live.
