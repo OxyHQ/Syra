@@ -8,19 +8,23 @@ export type {
   SyraClientOptions,
   SearchTracksOptions,
   SearchPodcastsOptions,
+  PodcastEpisodesOptions,
   SearchPage,
   ArtworkSource,
   PodcastArtworkSource,
+  EpisodeArtworkSource,
 } from './client';
 export {
   trackSummarySchema,
   podcastSummarySchema,
+  episodeSummarySchema,
   coverArtSizesSchema,
   coverArtVariantSchema,
 } from './schema';
 export type {
   TrackSummary,
   PodcastSummary,
+  EpisodeSummary,
   CoverArtSizes,
   CoverArtVariant,
   ArtworkSize,

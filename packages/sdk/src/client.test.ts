@@ -45,6 +45,29 @@ function makePodcast(overrides: Record<string, unknown> = {}): Record<string, un
   };
 }
 
+function makeEpisode(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: '507f1f77bcf86cd799439031',
+    podcastId: '507f1f77bcf86cd799439021',
+    podcastTitle: 'Test Show',
+    title: 'Test Episode',
+    description: 'An episode about testing.',
+    guid: 'guid-1',
+    enclosureUrl: 'https://api.fastcast.ai/audio/guid-1.mp3',
+    enclosureType: 'audio/mpeg',
+    enclosureLength: 12_345_678,
+    duration: 1800,
+    pubDate: '2026-01-01T00:00:00.000Z',
+    episodeType: 'full',
+    image: '507f1f77bcf86cd799439032',
+    imageSourceUrl: 'https://cdn.example.com/episode.jpg',
+    status: 'ready',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
 interface FetchCall {
   url: string;
 }
@@ -443,5 +466,167 @@ describe('createSyraClient.podcastArtworkUrl', () => {
   it('returns undefined when nothing resolvable is present', () => {
     expect(client.podcastArtworkUrl({})).toBeUndefined();
     expect(client.podcastArtworkUrl({ image: 'not-an-id' })).toBeUndefined();
+  });
+});
+
+// ── getPodcastEpisodes ──────────────────────────────────────────────────────────
+
+describe('createSyraClient.getPodcastEpisodes', () => {
+  it('calls /api/podcasts/:id/episodes with page and limit and returns parsed episodes', async () => {
+    const { fetch, calls } = fakeFetch(() => ({
+      body: {
+        data: [
+          makeEpisode({ id: '507f1f77bcf86cd799439031' }),
+          makeEpisode({ id: '507f1f77bcf86cd799439033', title: 'Second Episode' }),
+        ],
+        total: 2,
+        page: 1,
+        limit: 20,
+      },
+    }));
+
+    const client = createSyraClient({ baseURL: 'https://api.example.test', fetch });
+    const page = await client.getPodcastEpisodes('507f1f77bcf86cd799439021', { limit: 20 });
+
+    expect(page.items).toHaveLength(2);
+    expect(page.items[0].id).toBe('507f1f77bcf86cd799439031');
+    expect(page.items[0].enclosureUrl).toBe('https://api.fastcast.ai/audio/guid-1.mp3');
+    expect(page.hasMore).toBe(false);
+    expect(page.limit).toBe(20);
+    expect(page.offset).toBe(0);
+
+    expect(calls).toHaveLength(1);
+    const url = new URL(calls[0].url);
+    expect(url.pathname).toBe('/api/podcasts/507f1f77bcf86cd799439021/episodes');
+    expect(url.searchParams.get('page')).toBe('1');
+    expect(url.searchParams.get('limit')).toBe('20');
+  });
+
+  it('translates a zero-based offset into a 1-based page and derives hasMore from total', async () => {
+    const { fetch, calls } = fakeFetch(() => ({
+      body: { data: [makeEpisode()], total: 45, page: 3, limit: 10 },
+    }));
+
+    const client = createSyraClient({ baseURL: 'https://api.example.test', fetch });
+    const page = await client.getPodcastEpisodes('507f1f77bcf86cd799439021', {
+      limit: 10,
+      offset: 20,
+    });
+
+    // offset 20 / limit 10 → page 3; 3 * 10 = 30 < 45 → more remain.
+    const url = new URL(calls[0].url);
+    expect(url.searchParams.get('page')).toBe('3');
+    expect(url.searchParams.get('limit')).toBe('10');
+    expect(page.offset).toBe(20);
+    expect(page.limit).toBe(10);
+    expect(page.hasMore).toBe(true);
+  });
+
+  it('reports hasMore=false when the page reaches the end of the total', async () => {
+    const { fetch } = fakeFetch(() => ({
+      body: { data: [makeEpisode()], total: 20, page: 2, limit: 10 },
+    }));
+    const client = createSyraClient({ fetch });
+    const page = await client.getPodcastEpisodes('507f1f77bcf86cd799439021', {
+      limit: 10,
+      offset: 10,
+    });
+    // page 2 * limit 10 = 20, not < total 20 → this is the last page.
+    expect(page.hasMore).toBe(false);
+  });
+
+  it('drops a row missing the required enclosureUrl without throwing', async () => {
+    const { fetch } = fakeFetch(() => ({
+      body: {
+        data: [makeEpisode({ enclosureUrl: undefined }), makeEpisode()],
+        total: 2,
+      },
+    }));
+    const client = createSyraClient({ fetch });
+    const page = await client.getPodcastEpisodes('507f1f77bcf86cd799439021', { limit: 10 });
+    expect(page.items).toHaveLength(1);
+    expect(page.items[0].enclosureUrl).toBe('https://api.fastcast.ai/audio/guid-1.mp3');
+  });
+
+  it('defaults the limit and returns an empty page when data is absent', async () => {
+    const { fetch, calls } = fakeFetch(() => ({ body: {} }));
+    const client = createSyraClient({ fetch });
+    const page = await client.getPodcastEpisodes('507f1f77bcf86cd799439021');
+    expect(page.items).toEqual([]);
+    expect(page.hasMore).toBe(false);
+    expect(page.offset).toBe(0);
+    expect(page.limit).toBe(20);
+    const url = new URL(calls[0].url);
+    expect(url.searchParams.get('page')).toBe('1');
+    expect(url.searchParams.get('limit')).toBe('20');
+  });
+});
+
+// ── getEpisode ──────────────────────────────────────────────────────────────────
+
+describe('createSyraClient.getEpisode', () => {
+  it('fetches /api/episodes/:id and validates data.episode', async () => {
+    const { fetch, calls } = fakeFetch(() => ({
+      body: { data: { episode: makeEpisode(), persons: [] } },
+    }));
+    const client = createSyraClient({ baseURL: 'https://api.example.test', fetch });
+
+    const episode = await client.getEpisode('507f1f77bcf86cd799439031');
+    expect(episode.title).toBe('Test Episode');
+    expect(episode.enclosureUrl).toBe('https://api.fastcast.ai/audio/guid-1.mp3');
+    expect(calls[0].url).toBe('https://api.example.test/api/episodes/507f1f77bcf86cd799439031');
+  });
+
+  it('throws SyraApiError on a non-2xx response', async () => {
+    const { fetch } = fakeFetch(() => ({ status: 404, body: { error: 'not found' } }));
+    const client = createSyraClient({ fetch });
+    await expect(client.getEpisode('507f1f77bcf86cd799439031')).rejects.toBeInstanceOf(SyraApiError);
+  });
+
+  it('throws when data.episode fails schema validation', async () => {
+    const { fetch } = fakeFetch(() => ({ body: { data: { episode: { id: 'x' } } } }));
+    const client = createSyraClient({ fetch });
+    await expect(client.getEpisode('x')).rejects.toThrow();
+  });
+});
+
+// ── episodeImageUrl ──────────────────────────────────────────────────────────────
+
+describe('createSyraClient.episodeImageUrl', () => {
+  const client = createSyraClient({ baseURL: 'https://api.example.test' });
+
+  it('resolves the re-hosted image id to an absolute images URL', () => {
+    expect(client.episodeImageUrl({ image: '507f1f77bcf86cd799439032' })).toBe(
+      'https://api.example.test/api/images/507f1f77bcf86cd799439032',
+    );
+  });
+
+  it('prefers a named size from imageSizes', () => {
+    const url = client.episodeImageUrl(
+      {
+        image: '507f1f77bcf86cd799439032',
+        imageSizes: {
+          large: {
+            id: '507f1f77bcf86cd799439033',
+            url: '/api/images/507f1f77bcf86cd799439033',
+            width: 640,
+            height: 640,
+          },
+        },
+      },
+      'large',
+    );
+    expect(url).toBe('https://api.example.test/api/images/507f1f77bcf86cd799439033');
+  });
+
+  it('falls back to imageSourceUrl when no Syra image is present', () => {
+    expect(client.episodeImageUrl({ imageSourceUrl: 'https://cdn.example.com/episode.jpg' })).toBe(
+      'https://cdn.example.com/episode.jpg',
+    );
+  });
+
+  it('returns undefined when nothing resolvable is present', () => {
+    expect(client.episodeImageUrl({})).toBeUndefined();
+    expect(client.episodeImageUrl({ image: 'not-an-id' })).toBeUndefined();
   });
 });

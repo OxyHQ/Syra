@@ -69,3 +69,37 @@ export const podcastSummarySchema = z.object({
   imageSourceUrl: z.string().optional(),
 });
 export type PodcastSummary = z.infer<typeof podcastSummarySchema>;
+
+/**
+ * The summary view of a podcast EPISODE returned by the public podcast endpoints
+ * (`GET /api/podcasts/:id/episodes`, `GET /api/episodes/:id`) — just enough to
+ * list an episode and stream its audio.
+ *
+ * `enclosureUrl` is the direct audio file URL (e.g.
+ * `https://api.fastcast.ai/audio/<guid>.mp3`) and is REQUIRED: an episode with
+ * no enclosure is unplayable, so a row missing it is treated as malformed and
+ * dropped rather than surfaced as a dead entry. `enclosureType` /
+ * `enclosureLength` describe that file (MIME type and byte length); `duration`
+ * is the runtime in seconds and `pubDate` the ISO publish timestamp.
+ *
+ * Artwork mirrors the podcast SHOW: `image` is the re-hosted Syra image id
+ * (resolved via `/api/images/:id`); `imageSizes` is the multi-resolution variant
+ * set (each variant `url` is `/api/images/:id`); `imageSourceUrl` keeps the
+ * original external artwork URL as an absolute fallback when re-hosting has not
+ * run yet.
+ */
+export const episodeSummarySchema = z.object({
+  id: z.string(),
+  podcastId: z.string(),
+  title: z.string(),
+  description: z.string().optional(),
+  enclosureUrl: z.string(),
+  enclosureType: z.string().optional(),
+  enclosureLength: z.number().optional(),
+  duration: z.number().optional(),
+  pubDate: z.string().optional(),
+  image: z.string().optional(),
+  imageSizes: coverArtSizesSchema.optional(),
+  imageSourceUrl: z.string().optional(),
+});
+export type EpisodeSummary = z.infer<typeof episodeSummarySchema>;

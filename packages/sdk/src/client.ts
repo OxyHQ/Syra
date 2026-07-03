@@ -1,8 +1,10 @@
 import {
   trackSummarySchema,
   podcastSummarySchema,
+  episodeSummarySchema,
   type TrackSummary,
   type PodcastSummary,
+  type EpisodeSummary,
   type CoverArtSizes,
   type ArtworkSize,
 } from './schema';
@@ -45,6 +47,13 @@ export interface SearchPodcastsOptions {
   offset?: number;
 }
 
+export interface PodcastEpisodesOptions {
+  /** Maximum number of episodes to request from the API (the page size). */
+  limit?: number;
+  /** Zero-based offset of the first episode to return (for infinite scroll). */
+  offset?: number;
+}
+
 /**
  * One page of paginated catalog search results.
  *
@@ -73,6 +82,13 @@ export interface ArtworkSource {
 
 /** Minimal shape from which podcast-show artwork URLs can be derived. */
 export interface PodcastArtworkSource {
+  image?: string | null;
+  imageSizes?: CoverArtSizes | null;
+  imageSourceUrl?: string | null;
+}
+
+/** Minimal shape from which podcast-episode artwork URLs can be derived. */
+export interface EpisodeArtworkSource {
   image?: string | null;
   imageSizes?: CoverArtSizes | null;
   imageSourceUrl?: string | null;
@@ -115,6 +131,31 @@ export interface SyraClient {
    * external artwork URL. Returns `undefined` when no artwork can be derived.
    */
   podcastArtworkUrl(source: PodcastArtworkSource, size?: ArtworkSize): string | undefined;
+  /**
+   * List a podcast show's EPISODES (newest first, as the backend orders them).
+   * Returns one paginated page: rows are validated against the episode-summary
+   * schema and malformed rows are dropped — including any without a playable
+   * `enclosureUrl`, which the schema requires. The backend paginates by 1-based
+   * `page`, but this keeps the uniform offset-based {@link SearchPage} for parity
+   * with {@link SyraClient.searchPodcasts}; paginate by advancing `offset` by
+   * `limit` (the page size), never by `items.length`.
+   */
+  getPodcastEpisodes(
+    podcastId: string,
+    options?: PodcastEpisodesOptions,
+  ): Promise<SearchPage<EpisodeSummary>>;
+  /**
+   * Fetch a single episode by id, validated against the episode-summary schema.
+   * The by-id endpoint nests the episode under `data.episode` alongside resolved
+   * persons; this returns just the episode summary needed to stream its audio.
+   */
+  getEpisode(episodeId: string): Promise<EpisodeSummary>;
+  /**
+   * Resolve an absolute artwork URL from a podcast episode reference. Prefers the
+   * re-hosted Syra image, then the requested/fallback variant, then the original
+   * external artwork URL. Returns `undefined` when no artwork can be derived.
+   */
+  episodeImageUrl(source: EpisodeArtworkSource, size?: ArtworkSize): string | undefined;
 }
 
 /** Order used to pick the best available artwork variant when none is named. */
@@ -128,6 +169,12 @@ const ARTWORK_FALLBACK_ORDER: ArtworkSize[] = [
 ];
 
 const OBJECT_ID_PATTERN = /^[a-f\d]{24}$/i;
+
+/**
+ * Default episode page size, matching the backend's own default so the SDK's
+ * offset→page translation lines up with the server's pagination window.
+ */
+const DEFAULT_EPISODES_PAGE_SIZE = 20;
 
 /** Read a finite number from an unknown response field, else a fallback. */
 function numberOr(value: unknown, fallback: number): number {
@@ -150,6 +197,17 @@ interface PodcastSearchResponseShape {
 
 interface PodcastDetailResponseShape {
   data?: { podcast?: unknown };
+}
+
+interface PodcastEpisodesResponseShape {
+  data?: unknown[];
+  total?: unknown;
+  page?: unknown;
+  limit?: unknown;
+}
+
+interface EpisodeDetailResponseShape {
+  data?: { episode?: unknown };
 }
 
 /**
@@ -321,6 +379,73 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
     },
 
     podcastArtworkUrl(source, size) {
+      if (size && source.imageSizes) {
+        const resolved = resolveImageRef(source.imageSizes[size]?.url);
+        if (resolved) {
+          return resolved;
+        }
+      }
+
+      const fromImage = resolveImageRef(source.image);
+      if (fromImage) {
+        return fromImage;
+      }
+
+      if (source.imageSizes) {
+        for (const key of ARTWORK_FALLBACK_ORDER) {
+          const resolved = resolveImageRef(source.imageSizes[key]?.url);
+          if (resolved) {
+            return resolved;
+          }
+        }
+      }
+
+      return resolveImageRef(source.imageSourceUrl);
+    },
+
+    async getPodcastEpisodes(podcastId, listOptions = {}) {
+      // The endpoint paginates by 1-based `page`; translate the SDK's uniform
+      // offset-based paging into it. `limit` must be concrete (unlike search,
+      // which can omit it) because the page number is derived from it.
+      const limit = listOptions.limit ?? DEFAULT_EPISODES_PAGE_SIZE;
+      const offset = listOptions.offset ?? 0;
+      const page = Math.floor(offset / limit) + 1;
+
+      const json = (await getJson(
+        `/api/podcasts/${encodeURIComponent(podcastId)}/episodes?page=${page}&limit=${limit}`,
+      )) as PodcastEpisodesResponseShape;
+      const rawEpisodes = Array.isArray(json?.data) ? json.data : [];
+
+      const items: EpisodeSummary[] = [];
+      for (const raw of rawEpisodes) {
+        // A single malformed episode row must not fail the whole listing.
+        const parsed = episodeSummarySchema.safeParse(raw);
+        if (parsed.success) {
+          items.push(parsed.data);
+        }
+      }
+
+      // `total` is the backend's full count over the show; derive `hasMore` from
+      // it rather than `items.length`, which the schema/enclosure filter above may
+      // shrink below `limit` on a page that is NOT the last one. Absent a count,
+      // fall back to what we have (this page ends the listing).
+      const total = numberOr(json?.total, offset + items.length);
+      return {
+        items,
+        hasMore: page * limit < total,
+        limit,
+        offset,
+      };
+    },
+
+    async getEpisode(episodeId) {
+      const json = (await getJson(
+        `/api/episodes/${encodeURIComponent(episodeId)}`,
+      )) as EpisodeDetailResponseShape;
+      return episodeSummarySchema.parse(json?.data?.episode);
+    },
+
+    episodeImageUrl(source, size) {
       if (size && source.imageSizes) {
         const resolved = resolveImageRef(source.imageSizes[size]?.url);
         if (resolved) {
