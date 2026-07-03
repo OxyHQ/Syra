@@ -172,7 +172,7 @@
     },
     "packages/live": {
       "name": "@syra.fm/live",
-      "version": "0.1.1",
+      "version": "0.2.0",
       "devDependencies": {
         "@types/react": "~19.2.14",
         "nativewind": "5.0.0-preview.3",

@@ -1,8 +1,9 @@
 import { Router, Response } from 'express';
 import multer from 'multer';
 import Room, { IRoom, MediaQueueItem, RoomStatus, RoomType, OwnerType, BroadcastKind, SpeakerPermission } from '../models/Room';
+import RoomUserPreference, { LiveVisibility, DEFAULT_LIVE_VISIBILITY, isLiveVisibility } from '../models/RoomUserPreference';
 import House, { HouseMemberRole } from '../models/House';
-import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
+import { requireOxyAuth, getRequiredOxyUserId, type OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { isAdmin } from '../middleware/admin';
 import { logger } from '../utils/logger';
 import {
@@ -1062,6 +1063,158 @@ router.get('/top-hosts', async (req: AuthRequest, res: Response) => {
     logger.error('Error fetching top hosts:', { userId: req.user?.id, error });
     res.status(500).json({
       message: 'Error fetching top hosts',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Live presence
+// ---------------------------------------------------------------------------
+
+/** One live-badge entry: this user is broadcasting in this live room. */
+export type LiveUserEntry = { userId: string; roomId: string };
+
+/** The minimal live-room shape {@link selectLiveUsers} needs. */
+type LiveRoomBroadcasters = { _id: unknown; host: string; speakers?: readonly string[] };
+
+/**
+ * Pure core of `GET /rooms/live-users`: from the set of currently-live rooms and
+ * each candidate's visibility preference, produce the `(userId, roomId)`
+ * live-badge entries.
+ *
+ * The "broadcasting" users of a room are its `host` ∪ `speakers` — plain
+ * listeners (who live only in `participants`) are NEVER surfaced. Each broadcaster
+ * is then filtered by their preference:
+ *  - `active`   — surfaced whenever they broadcast in a live room (host or speaker).
+ *  - `speaking` — surfaced only while an active speaker. The cheap signal is
+ *    membership in the room's persisted `speakers` list; we intentionally do NOT
+ *    fan out a per-room Redis `HGETALL` of live/unmuted state across every live
+ *    room. The host is a speaker by construction, so a host who chose `speaking`
+ *    still surfaces while their room is live.
+ *
+ * Yields at most one entry per (userId, roomId); a user broadcasting in multiple
+ * live rooms yields one entry per room.
+ */
+export function selectLiveUsers(
+  rooms: ReadonlyArray<LiveRoomBroadcasters>,
+  visibilityByUserId: ReadonlyMap<string, LiveVisibility>,
+): LiveUserEntry[] {
+  const entries: LiveUserEntry[] = [];
+
+  for (const room of rooms) {
+    const roomId = String(room._id);
+    const speakers = Array.isArray(room.speakers) ? room.speakers : [];
+    const speakerSet = new Set<string>(speakers);
+    // host ∪ speakers, deduped — the room's broadcasters.
+    const broadcasters = new Set<string>([room.host, ...speakers]);
+
+    for (const userId of broadcasters) {
+      if (!userId) continue;
+      const visibility = visibilityByUserId.get(userId) ?? DEFAULT_LIVE_VISIBILITY;
+      if (visibility === 'speaking' && !speakerSet.has(userId)) {
+        continue;
+      }
+      entries.push({ userId, roomId });
+    }
+  }
+
+  return entries;
+}
+
+/**
+ * List the users currently broadcasting in a live room, so apps can render a
+ * "live" badge on their avatar. Public (optional auth); the result is not
+ * viewer-specific.
+ * GET /api/rooms/live-users
+ * → { liveUsers: { userId: string; roomId: string }[] }
+ */
+router.get('/live-users', async (_req: AuthRequest, res: Response) => {
+  try {
+    const rooms = await Room.find({ status: RoomStatus.LIVE })
+      .select('_id host speakers')
+      .lean();
+
+    // Collect every broadcaster (host + speakers) across all live rooms, then
+    // resolve their preferences in a SINGLE batched query (default → active).
+    const candidateIds = new Set<string>();
+    for (const room of rooms) {
+      if (room.host) candidateIds.add(room.host);
+      for (const speaker of room.speakers ?? []) {
+        if (speaker) candidateIds.add(speaker);
+      }
+    }
+
+    const preferences = candidateIds.size > 0
+      ? await RoomUserPreference.find({ userId: { $in: Array.from(candidateIds) } })
+          .select('userId liveVisibility')
+          .lean()
+      : [];
+
+    const visibilityByUserId = new Map<string, LiveVisibility>(
+      preferences.map((pref) => [pref.userId, pref.liveVisibility]),
+    );
+
+    res.json({ liveUsers: selectLiveUsers(rooms, visibilityByUserId) });
+  } catch (error) {
+    logger.error('Error fetching live users:', { error });
+    res.status(500).json({
+      message: 'Error fetching live users',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+/**
+ * Get the current user's live-presence preference.
+ * GET /api/rooms/me/presence-preference
+ * → { liveVisibility: 'active' | 'speaking' } (default 'active' if never set)
+ */
+router.get('/me/presence-preference', requireOxyAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = getRequiredOxyUserId(req);
+    const preference = await RoomUserPreference.findOne({ userId })
+      .select('liveVisibility')
+      .lean();
+
+    res.json({ liveVisibility: preference?.liveVisibility ?? DEFAULT_LIVE_VISIBILITY });
+  } catch (error) {
+    logger.error('Error fetching presence preference:', { userId: req.user?.id, error });
+    res.status(500).json({
+      message: 'Error fetching presence preference',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+/**
+ * Set the current user's live-presence preference (upsert).
+ * PUT /api/rooms/me/presence-preference
+ * Body: { liveVisibility: 'active' | 'speaking' }
+ * → { liveVisibility: 'active' | 'speaking' }
+ */
+router.put('/me/presence-preference', requireOxyAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = getRequiredOxyUserId(req);
+    const { liveVisibility } = (req.body ?? {}) as { liveVisibility?: unknown };
+
+    if (!isLiveVisibility(liveVisibility)) {
+      return res.status(400).json({ message: "liveVisibility must be 'active' or 'speaking'" });
+    }
+
+    const preference = await RoomUserPreference.findOneAndUpdate(
+      { userId },
+      { $set: { liveVisibility } },
+      { new: true, upsert: true, setDefaultsOnInsert: true },
+    )
+      .select('liveVisibility')
+      .lean();
+
+    res.json({ liveVisibility: preference?.liveVisibility ?? liveVisibility });
+  } catch (error) {
+    logger.error('Error updating presence preference:', { userId: req.user?.id, error });
+    res.status(500).json({
+      message: 'Error updating presence preference',
       error: error instanceof Error ? error.message : 'Unknown error',
     });
   }
