@@ -1,6 +1,6 @@
 /**
  * AppProviders
- * Centralizes the provider stack for the creator studio.
+ * Centralizes the provider stack for Syra Studio.
  *
  * ErrorBoundary wraps everything below GestureHandlerRootView so a crash in any
  * provider (OxyProvider, BottomSheetModalProvider, etc.) renders the fallback
@@ -49,6 +49,9 @@ export const AppProviders = memo(function AppProviders({
             <OxyProvider
               oxyServices={oxyServices}
               clientId={OXY_CLIENT_ID}
+              // Intentionally kept as "oxy_syra_creators" for session continuity —
+              // this is the persisted session storage key; renaming it would log
+              // every existing user out. Do not change on the Studio rebrand.
               storageKeyPrefix="oxy_syra_creators"
             >
               <ImageResolverProvider value={resolveImage}>

@@ -1,4 +1,4 @@
-// Base URLs (prod first → env → fallback). Syra for Creators talks to the same
+// Base URLs (prod first → env → fallback). Syra Studio talks to the same
 // backend as the main Syra app (api.syra.fm). The API mounts every route under
 // `/api`, so the base URL includes that prefix and service calls are relative to it.
 export const API_URL =

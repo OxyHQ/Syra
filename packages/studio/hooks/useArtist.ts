@@ -4,10 +4,10 @@ import type { CreateArtistRequest } from '@syra/shared-types';
 import { artistService, type InsightsPeriod } from '@/services/artistService';
 
 export const MUSIC_QUERY_KEYS = {
-  artist: ['creators', 'music', 'artist', 'me'] as const,
-  dashboard: ['creators', 'music', 'dashboard'] as const,
-  insights: (period: InsightsPeriod) => ['creators', 'music', 'insights', period] as const,
-  albums: (artistId: string) => ['creators', 'music', 'albums', artistId] as const,
+  artist: ['studio', 'music', 'artist', 'me'] as const,
+  dashboard: ['studio', 'music', 'dashboard'] as const,
+  insights: (period: InsightsPeriod) => ['studio', 'music', 'insights', period] as const,
+  albums: (artistId: string) => ['studio', 'music', 'albums', artistId] as const,
 };
 
 /**

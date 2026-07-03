@@ -16,7 +16,7 @@ export interface Logger {
   debug: LoggerFunction;
 }
 
-const PREFIX = '[Creators]';
+const PREFIX = '[Studio]';
 
 const LOG_LEVEL: LogLevel = (process.env.LOG_LEVEL as LogLevel) || 'info';
 const isProduction = process.env.NODE_ENV === 'production';

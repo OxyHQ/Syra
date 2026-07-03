@@ -8,7 +8,7 @@ export default function NotFoundScreen() {
       <View className="flex-1 items-center justify-center bg-background px-6">
         <Text className="text-2xl font-bold text-foreground mb-2">Page not found</Text>
         <Text className="text-sm text-muted-foreground text-center mb-6">
-          This screen doesn&apos;t exist in the creator studio.
+          This screen doesn&apos;t exist in Syra Studio.
         </Text>
         <Link href="/" className="text-primary font-semibold text-base">
           Go to dashboard

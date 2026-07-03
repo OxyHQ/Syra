@@ -12,7 +12,7 @@ const MIN_QUERY_LENGTH = 2;
 export function useUserSearch(query: string) {
   const trimmed = query.trim();
   return useQuery<User[]>({
-    queryKey: ['creators', 'user-search', trimmed],
+    queryKey: ['studio', 'user-search', trimmed],
     queryFn: async () => {
       const response = await oxyServices.searchProfiles(trimmed, { limit: 10 });
       return response.data;

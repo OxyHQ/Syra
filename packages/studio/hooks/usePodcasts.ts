@@ -5,9 +5,9 @@ import { podcastService } from '@/services/podcastService';
 import { episodeService, type EpisodeAudioFile, type UploadEpisodeMetadata } from '@/services/episodeService';
 
 export const PODCAST_QUERY_KEYS = {
-  mine: ['creators', 'podcasts', 'mine'] as const,
-  detail: (id: string) => ['creators', 'podcasts', 'detail', id] as const,
-  episodes: (id: string) => ['creators', 'podcasts', 'episodes', id] as const,
+  mine: ['studio', 'podcasts', 'mine'] as const,
+  detail: (id: string) => ['studio', 'podcasts', 'detail', id] as const,
+  episodes: (id: string) => ['studio', 'podcasts', 'episodes', id] as const,
 };
 
 /**

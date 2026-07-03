@@ -1,7 +1,7 @@
 import { QueryClient } from '@tanstack/react-query';
 
 /**
- * React Query client for the creator studio. Server state (shows, episodes) is
+ * React Query client for Syra Studio. Server state (shows, episodes) is
  * owned here; mutations invalidate the relevant keys so the UI updates without a
  * reload.
  */

@@ -42,7 +42,7 @@ function Brand() {
       </View>
       <View>
         <Text className="text-foreground font-bold text-base leading-tight">Syra</Text>
-        <Text className="text-muted-foreground text-[11px] leading-tight">for Creators</Text>
+        <Text className="text-muted-foreground text-[11px] leading-tight">Studio</Text>
       </View>
     </View>
   );

@@ -43,7 +43,7 @@ export interface UploadTrackMetadata {
 }
 
 /**
- * Creator-studio music API service.
+ * Studio music API service.
  *
  * `uploadTrack` posts multipart form data with the audio under the `audioFile`
  * field (multer `.single('audioFile')` in the backend tracks controller); the

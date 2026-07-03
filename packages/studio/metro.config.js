@@ -10,7 +10,7 @@ const config = getDefaultConfig(projectRoot);
 // Explicitly set projectRoot
 config.projectRoot = projectRoot;
 
-// CRITICAL: Watch the creators package and shared-types so Metro can resolve
+// CRITICAL: Watch the studio package and shared-types so Metro can resolve
 // the workspace packages it imports.
 config.watchFolders = [
   projectRoot,
@@ -53,7 +53,7 @@ config.resolver = {
   extraNodeModules: {
     '@syra/shared-types': path.join(monorepoRoot, 'packages/shared-types'),
   },
-  // Resolve from creators node_modules first, then root (for workspaces)
+  // Resolve from studio node_modules first, then root (for workspaces)
   nodeModulesPaths: [
     path.join(projectRoot, 'node_modules'),
     path.join(monorepoRoot, 'node_modules'),

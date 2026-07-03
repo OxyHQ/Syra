@@ -33,7 +33,7 @@ export function SignInGate({ children }: { children: ReactNode }) {
         <View className="w-16 h-16 rounded-2xl bg-primary/10 items-center justify-center mb-5">
           <MaterialCommunityIcons name="microphone-variant" size={30} color={theme.colors.primary} />
         </View>
-        <Text className="text-2xl font-bold text-foreground text-center mb-2">Syra for Creators</Text>
+        <Text className="text-2xl font-bold text-foreground text-center mb-2">Syra Studio</Text>
         <Text className="text-base text-muted-foreground text-center mb-6 max-w-[420px]">
           Sign in with your Oxy account to manage your podcast shows, upload episodes, and get a public RSS feed.
         </Text>
