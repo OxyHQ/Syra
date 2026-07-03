@@ -30,7 +30,7 @@ function parse<T>(schema: z.ZodType<T>, data: unknown, label: string): T {
 export type InsightsPeriod = '7days' | '30days' | 'alltime';
 
 /**
- * Creator-studio artist API service. Every call goes through the linked,
+ * Studio artist API service. Every call goes through the linked,
  * authenticated Syra client; responses are parsed at this boundary so hooks and
  * screens consume typed data.
  */

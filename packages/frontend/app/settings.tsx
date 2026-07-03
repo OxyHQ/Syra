@@ -47,7 +47,7 @@ type RowIconName = React.ComponentProps<typeof RowIcon>['name'];
 
 const logger = createScopedLogger('SettingsScreen');
 
-const CREATORS_URL = 'https://creators.syra.fm';
+const STUDIO_URL = 'https://studio.syra.fm';
 
 const LANGUAGE_OPTIONS: readonly { label: string; value: string }[] = [
   { label: 'English', value: 'en-US' },
@@ -139,9 +139,9 @@ const SettingsScreen: React.FC = () => {
     showBottomSheet?.('ManageAccount');
   }, [showBottomSheet]);
 
-  const handleOpenCreators = useCallback(() => {
-    Linking.openURL(CREATORS_URL).catch((error) => {
-      logger.warn('Failed to open Syra for Creators', error);
+  const handleOpenStudio = useCallback(() => {
+    Linking.openURL(STUDIO_URL).catch((error) => {
+      logger.warn('Failed to open Syra Studio', error);
     });
   }, []);
 
@@ -311,9 +311,9 @@ const SettingsScreen: React.FC = () => {
             <SettingsListGroup title="Create">
               <SettingsListItem
                 icon={<RowIcon name="mic-outline" />}
-                title="Syra for Creators"
+                title="Syra Studio"
                 description="Upload music, manage podcasts and your artist profile"
-                onPress={handleOpenCreators}
+                onPress={handleOpenStudio}
               />
             </SettingsListGroup>
 

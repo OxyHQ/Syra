@@ -8,12 +8,12 @@ module.exports = function (_config) {
 
   return {
     expo: {
-      name: 'Syra for Creators',
-      slug: 'syra-creators',
+      name: 'Syra Studio',
+      slug: 'syra-studio',
       version: VERSION,
       orientation: 'portrait',
       icon: './assets/images/icon.png',
-      scheme: 'syracreators',
+      scheme: 'syrastudio',
       userInterfaceStyle: 'automatic',
       experiments: {
         typedRoutes: true,
@@ -21,14 +21,14 @@ module.exports = function (_config) {
       },
       ios: {
         supportsTablet: true,
-        bundleIdentifier: 'com.syra.creators',
+        bundleIdentifier: 'com.syra.studio',
       },
       android: {
         adaptiveIcon: {
           foregroundImage: './assets/images/app-icon_foreground.png',
           backgroundImage: './assets/images/app-icon_background.png',
         },
-        package: 'com.syra.creators',
+        package: 'com.syra.studio',
         intentFilters: [
           {
             action: 'VIEW',
@@ -36,7 +36,7 @@ module.exports = function (_config) {
             data: [
               {
                 scheme: 'https',
-                host: 'creators.syra.fm',
+                host: 'studio.syra.fm',
               },
               {
                 scheme: 'https',
@@ -58,8 +58,8 @@ module.exports = function (_config) {
           themeColor: '#72184D',
           appleMobileWebAppCapable: 'yes',
           appleMobileWebAppStatusBarStyle: 'default',
-          appleMobileWebAppTitle: 'Syra for Creators',
-          applicationName: 'Syra for Creators',
+          appleMobileWebAppTitle: 'Syra Studio',
+          applicationName: 'Syra Studio',
         },
         build: {
           babel: {

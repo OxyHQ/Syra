@@ -1,4 +1,4 @@
-// packages/creators/babel.config.js
+// packages/studio/babel.config.js
 module.exports = function (api) {
   api.cache(true);
   return {

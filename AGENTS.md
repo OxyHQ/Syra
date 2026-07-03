@@ -6,7 +6,7 @@
 |---------|------|------|
 | `@syra/frontend` | `packages/frontend/` | Expo app — syra.fm |
 | `@syra/backend` | `packages/backend/` | Express API |
-| `@syra/creators` | `packages/creators/` | Creator portal |
+| `@syra/studio` | `packages/studio/` | Creator studio portal |
 | `@syra.fm/sdk` | `packages/sdk/` | Public SDK |
 | `@syra/shared-types` | `packages/shared-types/` | Shared TypeScript DTOs |
 

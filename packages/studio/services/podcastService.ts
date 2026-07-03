@@ -50,7 +50,7 @@ export interface EpisodePage {
 }
 
 /**
- * Creator-studio podcast API service. Every call goes through the linked,
+ * Studio podcast API service. Every call goes through the linked,
  * authenticated Syra client; responses are parsed at this boundary so hooks and
  * screens consume typed data.
  */

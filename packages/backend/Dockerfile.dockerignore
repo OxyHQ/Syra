@@ -17,10 +17,10 @@
 packages/frontend/**
 !packages/frontend/package.json
 
-# Creators (Expo/React Native) app — not part of the backend runtime.
+# Studio (Expo/React Native) app — not part of the backend runtime.
 # Its package.json is force-included below so the Bun workspace graph stays valid.
-packages/creators/**
-!packages/creators/package.json
+packages/studio/**
+!packages/studio/package.json
 
 # SDK (@syra.fm/sdk public client) — not part of the backend runtime.
 # Its package.json is force-included below so the Bun workspace graph stays valid.

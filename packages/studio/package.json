@@ -1,8 +1,8 @@
 {
-  "name": "@syra/creators",
+  "name": "@syra/studio",
   "main": "expo-router/entry",
   "version": "1.0.0",
-  "description": "Syra for Creators — the creator studio (manage podcast shows, upload episodes, generated RSS feed)",
+  "description": "Syra Studio — manage podcast shows, upload episodes, generated RSS feed",
   "scripts": {
     "start": "expo start --reset-cache --clear",
     "dev": "expo start --reset-cache --clear",
