@@ -1,9 +1,19 @@
 # @syra.fm/sdk
 
-Headless, isomorphic client for the public [Syra](https://syra.fm) API. Runs on
-Node 18+, browsers, and React Native — no React, React Native, or DOM
-dependencies; the only runtime dependency is [`zod`](https://zod.dev).
-**Public reads only** (no authentication in this version).
+Isomorphic client for the public [Syra](https://syra.fm) API. The package
+resolves per platform via export conditions:
+
+- **Node / bundlers** (`require`/`import`) get the **headless catalog client** —
+  runs on Node 18+ and browsers, no React, React Native, or DOM dependencies;
+  the only runtime dependency is [`zod`](https://zod.dev). **Public reads only**
+  (no authentication in this version).
+- **React Native** (Metro) and **Expo web** (`browser`) additionally get the
+  **live-rooms engine** (audio rooms over LiveKit) and the `SyraIcon` brand mark.
+  Its React Native / LiveKit / Expo dependencies are declared as **optional peer
+  dependencies**, so headless Node consumers never install them.
+
+Everyone imports from the same `@syra.fm/sdk` root — the condition picks the
+right surface.
 
 ## Install
 
@@ -68,3 +78,22 @@ advancing `offset` by `limit`, never by `items.length`.
 Responses are validated at runtime with the package's own self-contained Zod
 schemas (`trackSummarySchema`), so there are no shared internal dependencies.
 `SyraApiError` (with a `status`) is thrown on non-2xx responses.
+
+## Live rooms (React Native)
+
+On React Native and Expo web, the same root export also carries the live-rooms
+engine — providers, hooks, components, and icons:
+
+```tsx
+import {
+  LiveRoomProvider,
+  useRoomAudio,
+  RoomCard,
+  createRoomsService,
+  SyraIcon,          // Syra brand mark
+} from '@syra.fm/sdk';
+```
+
+These require the optional peer dependencies (`react-native`, `livekit-client`,
+`@livekit/react-native`, `expo-audio`, `react-native-svg`, …) — present in any
+Expo/React Native app, absent from headless Node consumers.
