@@ -1,39 +1,48 @@
 {
   "name": "@syra.fm/sdk",
-  "version": "0.4.0",
-  "description": "Headless, isomorphic client for the Syra public API — catalog reads and 30s preview clips. No React/RN/DOM dependencies; public reads only.",
-  "main": "dist/cjs/index.js",
-  "module": "dist/esm/index.js",
-  "types": "dist/types/index.d.ts",
+  "version": "0.5.0",
+  "description": "Syra SDK — headless, isomorphic catalog client (Node/React-free, public reads + 30s previews) that also ships the Syra live-rooms engine (audio rooms over LiveKit) on React Native and web.",
   "source": "src/index.ts",
+  "main": "lib/commonjs/index.js",
+  "module": "lib/module/index.js",
+  "types": "lib/typescript/commonjs/index.d.ts",
+  "react-native": "src/index.native.ts",
   "sideEffects": false,
   "publishConfig": {
     "access": "public"
   },
   "exports": {
     ".": {
+      "react-native": "./src/index.native.ts",
+      "browser": {
+        "types": "./lib/typescript/module/index.native.d.ts",
+        "import": "./lib/module/index.native.js",
+        "require": "./lib/commonjs/index.native.js"
+      },
       "import": {
-        "types": "./dist/types/index.d.ts",
-        "default": "./dist/esm/index.js"
+        "types": "./lib/typescript/module/index.d.ts",
+        "default": "./lib/module/index.js"
       },
       "require": {
-        "types": "./dist/types/index.d.ts",
-        "default": "./dist/cjs/index.js"
+        "types": "./lib/typescript/commonjs/index.d.ts",
+        "default": "./lib/commonjs/index.js"
       },
-      "default": "./dist/esm/index.js"
+      "default": "./lib/module/index.js"
     },
+    "./src/live/assets/*": "./src/live/assets/*",
     "./package.json": "./package.json"
   },
   "files": [
-    "dist",
-    "src"
+    "src",
+    "lib"
   ],
   "keywords": [
     "syra",
     "sdk",
     "music",
     "api-client",
-    "preview"
+    "preview",
+    "live-rooms"
   ],
   "author": "Syra Team",
   "license": "MIT",
@@ -41,21 +50,124 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "build": "bun run clean && bun run build:cjs && bun run build:esm && bun run build:types && bun run build:markers",
-    "build:cjs": "tsc -p tsconfig.cjs.json",
-    "build:esm": "tsc -p tsconfig.esm.json && node scripts/fix-esm-imports.mjs",
-    "build:types": "tsc -p tsconfig.types.json",
-    "build:markers": "node scripts/write-dist-markers.mjs",
-    "clean": "rm -rf dist",
-    "typecheck": "tsc -p tsconfig.json",
+    "build": "bob build",
+    "clean": "rm -rf lib",
+    "typecheck": "tsc --noEmit -p tsconfig.build.json",
     "test": "bun test src",
     "prepublishOnly": "bun run build"
+  },
+  "react-native-builder-bob": {
+    "source": "src",
+    "output": "lib",
+    "exclude": "{**/{__tests__,__mocks__}/**,**/*.{test,spec}.{ts,tsx},**/*.mp3}",
+    "targets": [
+      [
+        "commonjs",
+        {
+          "esm": true
+        }
+      ],
+      [
+        "module",
+        {
+          "esm": true
+        }
+      ],
+      [
+        "typescript",
+        {
+          "project": "tsconfig.build.json"
+        }
+      ]
+    ]
   },
   "dependencies": {
     "zod": "^3.25.76"
   },
+  "peerDependencies": {
+    "react": "^19.2.3",
+    "react-native": "^0.85.3",
+    "react-native-reanimated": "^4.3.1",
+    "react-native-safe-area-context": "^5.7.0",
+    "@oxyhq/services": "^13.1.7",
+    "@oxyhq/core": "^5.2.1",
+    "livekit-client": "^2.20.0",
+    "@livekit/react-native": "^2.11.1",
+    "expo-audio": "~56.0.12",
+    "expo-image-picker": "~56.0.18",
+    "socket.io-client": "^4.8.1",
+    "@expo/vector-icons": "^15.0.2",
+    "react-native-svg": "15.15.4",
+    "sonner-native": "^0.21.1",
+    "expo-blur": "~56.0.3"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-native": {
+      "optional": true
+    },
+    "react-native-reanimated": {
+      "optional": true
+    },
+    "react-native-safe-area-context": {
+      "optional": true
+    },
+    "@oxyhq/services": {
+      "optional": true
+    },
+    "@oxyhq/core": {
+      "optional": true
+    },
+    "livekit-client": {
+      "optional": true
+    },
+    "@livekit/react-native": {
+      "optional": true
+    },
+    "expo-audio": {
+      "optional": true
+    },
+    "expo-image-picker": {
+      "optional": true
+    },
+    "socket.io-client": {
+      "optional": true
+    },
+    "@expo/vector-icons": {
+      "optional": true
+    },
+    "react-native-svg": {
+      "optional": true
+    },
+    "sonner-native": {
+      "optional": true
+    },
+    "expo-blur": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "typescript": "~5.9.2"
+    "@types/react": "~19.2.14",
+    "react-native-builder-bob": "^0.40.16",
+    "nativewind": "5.0.0-preview.3",
+    "typescript": "~5.9.3",
+    "react": "^19.2.3",
+    "react-native": "^0.85.3",
+    "react-native-reanimated": "^4.3.1",
+    "react-native-safe-area-context": "^5.7.0",
+    "@oxyhq/services": "^13.1.7",
+    "@oxyhq/core": "^5.2.1",
+    "livekit-client": "^2.20.0",
+    "@livekit/react-native": "^2.11.1",
+    "expo-audio": "~56.0.12",
+    "expo-image-picker": "~56.0.18",
+    "socket.io-client": "^4.8.1",
+    "@expo/vector-icons": "^15.0.2",
+    "react-native-svg": "15.15.4",
+    "sonner-native": "^0.21.1",
+    "expo-blur": "~56.0.3"
   }
 }

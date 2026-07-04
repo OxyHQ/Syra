@@ -1,0 +1,692 @@
+import type { Room, Recording, House, HttpClient } from '../types';
+import { validateRooms, validateRoom, validateRecordings, validateRecording, validateHouse, ZStartStreamResponse, ZGenerateStreamKeyResponse } from '../validation';
+
+export interface CreateRoomData {
+  [key: string]: unknown;
+  title: string;
+  description?: string;
+  topic?: string;
+  scheduledStart?: string;
+  speakerPermission?: 'everyone' | 'followers' | 'invited';
+  type?: 'talk' | 'stage' | 'broadcast';
+  ownerType?: 'profile' | 'house';
+  houseId?: string;
+  broadcastKind?: 'user';
+  recordingEnabled?: boolean;
+}
+
+export interface StreamMetadataUpdate extends Record<string, unknown> {
+  url?: string;
+  title?: string;
+  image?: string;
+  description?: string;
+}
+
+/** A Syra podcast show, as proxied by Mention `GET /profile/media/search?type=podcast`. */
+export interface PodcastResult {
+  syraPodcastId: string;
+  title: string;
+  author?: string;
+  artworkUrl?: string;
+}
+
+/**
+ * A single episode row for the picker. Deliberately carries NO audio URL — the
+ * enclosure stays server-owned and is resolved at stream-start by the backend.
+ */
+export interface EpisodeListItem {
+  episodeId: string;
+  title: string;
+  durationSec?: number;
+  publishedAt?: string;
+  artworkUrl?: string;
+}
+
+/**
+ * A single Syra music track row for the listening-party picker. Like the podcast
+ * rows it carries NO audio URL — the playable source (presigned original /
+ * tokenized HLS / Audius passthrough) stays server-owned and is resolved at
+ * stream-start by the backend from the opaque `trackId` alone.
+ */
+export interface MusicTrackResult {
+  trackId: string;
+  title: string;
+  artist?: string;
+  durationSec?: number;
+  artworkUrl?: string;
+}
+
+/** Optional seed to start a track stream: a single track, an album, or a playlist. */
+export interface StartTrackStreamBody extends Record<string, unknown> {
+  trackId?: string;
+  albumId?: string;
+  playlistId?: string;
+  /** Tracks to queue AFTER `trackId` (up-next). Only used with `trackId`. */
+  queue?: { trackId: string }[];
+}
+
+interface PaginatedResult<T> {
+  items: T[];
+  hasMore: boolean;
+  offset: number;
+}
+
+/**
+ * The outcome of a podcast catalog fetch. `ok:false` signals a genuine request
+ * failure (network/transport error), letting the picker distinguish it from a
+ * successful-but-empty result (`ok:true` with `items: []`). Neither
+ * `searchPodcasts` nor `getPodcastEpisodes` throws — a failure resolves to
+ * `{ ok:false }`.
+ */
+export type PodcastFetchResult<T> =
+  | { ok: true; items: T[]; hasMore: boolean; offset: number }
+  | { ok: false };
+
+interface RecordingResponse {
+  recording: Recording;
+  playbackUrl: string;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+/** Page size for the Syra podcast catalog reads (search + episode list). */
+const PODCAST_PAGE_SIZE = 20;
+
+// Podcast catalog reads hit Syra's native endpoints (`/podcasts/search`,
+// `/podcasts/:id/episodes`) — the raw show/episode shape, NOT Mention's
+// pre-mapped `/profile/media/*` proxy. Map `id`→`syraPodcastId`, the absolute
+// `imageSourceUrl`→`artworkUrl`, `duration`/`pubDate`→`durationSec`/`publishedAt`.
+function parsePodcastSearchResponse(data: Record<string, unknown>, requestedOffset: number): PaginatedResult<PodcastResult> {
+  const raw = Array.isArray(data.data) ? data.data : [];
+  const items: PodcastResult[] = [];
+  for (const entry of raw) {
+    if (!isRecord(entry)) continue;
+    if (typeof entry.id !== 'string' || typeof entry.title !== 'string') continue;
+    items.push({
+      syraPodcastId: entry.id,
+      title: entry.title,
+      author: typeof entry.author === 'string' ? entry.author : undefined,
+      artworkUrl: typeof entry.imageSourceUrl === 'string' ? entry.imageSourceUrl : undefined,
+    });
+  }
+  return {
+    items,
+    hasMore: data.hasMore === true,
+    offset: typeof data.offset === 'number' ? data.offset : requestedOffset,
+  };
+}
+
+function parseEpisodeListResponse(data: Record<string, unknown>, requestedOffset: number): PaginatedResult<EpisodeListItem> {
+  const raw = Array.isArray(data.data) ? data.data : [];
+  const items: EpisodeListItem[] = [];
+  for (const entry of raw) {
+    if (!isRecord(entry)) continue;
+    if (typeof entry.id !== 'string' || typeof entry.title !== 'string') continue;
+    items.push({
+      episodeId: entry.id,
+      title: entry.title,
+      durationSec: typeof entry.duration === 'number' ? entry.duration : undefined,
+      publishedAt: typeof entry.pubDate === 'string' ? entry.pubDate : undefined,
+      artworkUrl: typeof entry.imageSourceUrl === 'string' ? entry.imageSourceUrl : undefined,
+    });
+  }
+  // Syra episodes are page-based (`{ data, total, page, limit }`); derive hasMore.
+  const limit = typeof data.limit === 'number' && data.limit > 0 ? data.limit : PODCAST_PAGE_SIZE;
+  const page = typeof data.page === 'number' && data.page > 0 ? data.page : 1;
+  const total = typeof data.total === 'number' ? data.total : requestedOffset + items.length;
+  return { items, hasMore: page * limit < total, offset: requestedOffset };
+}
+
+/**
+ * Parse the Syra track-search response (`{ tracks, total, hasMore }`) into
+ * {@link MusicTrackResult} rows. Unlike the offset-paginated podcast search this
+ * endpoint returns a flat `hasMore` boolean, so the next offset is derived by the
+ * caller (`offset + items.length`). Each track's `coverArt` is the server's image
+ * ref — the host's `AvatarComponent` resolves it, mirroring the podcast rows.
+ */
+function parseMusicSearchResponse(data: Record<string, unknown>, requestedOffset: number): PaginatedResult<MusicTrackResult> {
+  const raw = Array.isArray(data.tracks) ? data.tracks : [];
+  const items: MusicTrackResult[] = [];
+  for (const entry of raw) {
+    if (!isRecord(entry)) continue;
+    if (typeof entry.id !== 'string' || typeof entry.title !== 'string') continue;
+    items.push({
+      trackId: entry.id,
+      title: entry.title,
+      artist: typeof entry.artistName === 'string' ? entry.artistName : undefined,
+      durationSec: typeof entry.duration === 'number' ? entry.duration : undefined,
+      artworkUrl: typeof entry.coverArt === 'string' ? entry.coverArt : undefined,
+    });
+  }
+  return { items, hasMore: data.hasMore === true, offset: requestedOffset };
+}
+
+function parseRecordingResponse(value: unknown): RecordingResponse | null {
+  if (!isRecord(value) || typeof value.playbackUrl !== 'string') {
+    return null;
+  }
+
+  const recording = validateRecording(value.recording);
+  if (!recording) {
+    return null;
+  }
+
+  return {
+    recording,
+    playbackUrl: value.playbackUrl,
+  };
+}
+
+export function createRoomsService(httpClient: HttpClient) {
+  return {
+    async getRooms(status?: string, type?: string): Promise<Room[]> {
+      try {
+        const params: Record<string, string> = {};
+        if (status) params.status = status;
+        if (type) params.type = type;
+        const res = await httpClient.get("/rooms", { params });
+        const raw = res.rooms || res.data || res || [];
+        return validateRooms(Array.isArray(raw) ? raw : []);
+      } catch (error) {
+        console.warn("Failed to fetch rooms", error);
+        return [];
+      }
+    },
+
+    async getRoom(id: string): Promise<Room | null> {
+      if (!id) return null;
+      try {
+        const res = await httpClient.get(`/rooms/${id}`);
+        const raw = res.room || res.data || res || null;
+        return raw ? validateRoom(raw) : null;
+      } catch (error) {
+        console.warn("Failed to fetch room", error);
+        return null;
+      }
+    },
+
+    async createRoom(data: CreateRoomData): Promise<Room | null> {
+      try {
+        const res = await httpClient.post("/rooms", data);
+        const raw = res.room || res.data || res || null;
+        return raw ? validateRoom(raw) : null;
+      } catch (error) {
+        console.warn("Failed to create room", error);
+        return null;
+      }
+    },
+
+    async startRoom(id: string): Promise<boolean> {
+      if (!id) return false;
+      try {
+        await httpClient.post(`/rooms/${id}/start`);
+        return true;
+      } catch (error) {
+        console.warn("Failed to start room", error);
+        return false;
+      }
+    },
+
+    async endRoom(id: string): Promise<boolean> {
+      if (!id) return false;
+      try {
+        await httpClient.post(`/rooms/${id}/end`);
+        return true;
+      } catch (error) {
+        console.warn("Failed to end room", error);
+        return false;
+      }
+    },
+
+    async stopRoom(id: string): Promise<boolean> {
+      if (!id) return false;
+      try {
+        await httpClient.post(`/rooms/${id}/stop`);
+        return true;
+      } catch (error) {
+        console.warn("Failed to stop room", error);
+        return false;
+      }
+    },
+
+    async joinRoom(id: string): Promise<boolean> {
+      if (!id) return false;
+      try {
+        await httpClient.post(`/rooms/${id}/join`);
+        return true;
+      } catch (error) {
+        console.warn("Failed to join room", error);
+        return false;
+      }
+    },
+
+    async leaveRoom(id: string): Promise<boolean> {
+      if (!id) return false;
+      try {
+        await httpClient.post(`/rooms/${id}/leave`);
+        return true;
+      } catch (error) {
+        console.warn("Failed to leave room", error);
+        return false;
+      }
+    },
+
+    async startStream(id: string, data: { url: string; title?: string; image?: string; description?: string }): Promise<{ ingressId: string; url: string } | null> {
+      if (!id) return null;
+      try {
+        const res = await httpClient.post(`/rooms/${id}/stream`, data);
+        const parsed = ZStartStreamResponse.safeParse(res);
+        if (!parsed.success) {
+          console.warn('[live] Invalid startStream response:', parsed.error.issues[0]);
+          return null;
+        }
+        return parsed.data;
+      } catch (error) {
+        console.warn("Failed to start stream", error);
+        return null;
+      }
+    },
+
+    async generateStreamKey(id: string, data?: { title?: string; image?: string; description?: string }): Promise<{ rtmpUrl: string; streamKey: string } | null> {
+      if (!id) return null;
+      try {
+        const res = await httpClient.post(`/rooms/${id}/stream/rtmp`, data || {});
+        const parsed = ZGenerateStreamKeyResponse.safeParse(res);
+        if (!parsed.success) {
+          console.warn('[live] Invalid generateStreamKey response:', parsed.error.issues[0]);
+          return null;
+        }
+        return parsed.data;
+      } catch (error) {
+        console.warn("Failed to generate stream key", error);
+        return null;
+      }
+    },
+
+    async updateStreamMetadata(id: string, data: StreamMetadataUpdate): Promise<boolean> {
+      if (!id) return false;
+      try {
+        await httpClient.patch(`/rooms/${id}/stream`, data);
+        return true;
+      } catch (error) {
+        console.warn("Failed to update stream metadata", error);
+        return false;
+      }
+    },
+
+    async stopStream(id: string): Promise<boolean> {
+      if (!id) return false;
+      try {
+        await httpClient.delete(`/rooms/${id}/stream`);
+        return true;
+      } catch (error) {
+        console.warn("Failed to stop stream", error);
+        return false;
+      }
+    },
+
+    // --- Podcast streaming (Syra catalog → LiveKit URL ingress) ---
+
+    async searchPodcasts(query: string, offset = 0): Promise<PodcastFetchResult<PodcastResult>> {
+      try {
+        const res = await httpClient.get('/podcasts/search', {
+          params: { q: query, offset: String(offset), limit: String(PODCAST_PAGE_SIZE) },
+        });
+        return { ok: true, ...parsePodcastSearchResponse(res, offset) };
+      } catch (error) {
+        console.warn("Failed to search podcasts", error);
+        return { ok: false };
+      }
+    },
+
+    async getPodcastEpisodes(syraPodcastId: string, offset = 0): Promise<PodcastFetchResult<EpisodeListItem>> {
+      // An empty id is not a failure — it is simply an empty (successful) result.
+      if (!syraPodcastId) return { ok: true, items: [], hasMore: false, offset };
+      try {
+        const res = await httpClient.get(`/podcasts/${syraPodcastId}/episodes`, {
+          params: { page: String(Math.floor(offset / PODCAST_PAGE_SIZE) + 1), limit: String(PODCAST_PAGE_SIZE) },
+        });
+        return { ok: true, ...parseEpisodeListResponse(res, offset) };
+      } catch (error) {
+        console.warn("Failed to fetch podcast episodes", error);
+        return { ok: false };
+      }
+    },
+
+    async startPodcastStream(
+      roomId: string,
+      body: { syraPodcastId: string; episodeId: string; queue?: { syraPodcastId?: string; episodeId: string }[] },
+    ): Promise<{ ingressId: string; url: string } | null> {
+      if (!roomId) return null;
+      try {
+        const res = await httpClient.post(`/rooms/${roomId}/stream/podcast`, body);
+        const parsed = ZStartStreamResponse.safeParse(res);
+        if (!parsed.success) {
+          console.warn('[live] Invalid startPodcastStream response:', parsed.error.issues[0]);
+          return null;
+        }
+        return parsed.data;
+      } catch (error) {
+        console.warn("Failed to start podcast stream", error);
+        return null;
+      }
+    },
+
+    /**
+     * Advance a live podcast stream to the next queued episode (manager + live
+     * gated server-side). Resolves `{ ended: false }` when the next episode
+     * started, `{ ended: true }` when the queue drained (the stream will clear
+     * via the `room:stream:stopped` socket event), or `null` on failure.
+     */
+    async skipPodcastNext(roomId: string): Promise<{ ended: boolean } | null> {
+      if (!roomId) return null;
+      try {
+        const res = await httpClient.post(`/rooms/${roomId}/stream/podcast/next`);
+        if (res.ended === true) return { ended: true };
+        const parsed = ZStartStreamResponse.safeParse(res);
+        if (parsed.success) return { ended: false };
+        console.warn('[live] Invalid skipPodcastNext response:', parsed.error.issues[0]);
+        return null;
+      } catch (error) {
+        console.warn("Failed to skip to next podcast episode", error);
+        return null;
+      }
+    },
+
+    // --- Music streaming (Syra catalog → LiveKit URL ingress) ---
+
+    /**
+     * Search the Syra music catalog for the listening-party picker. Reuses the
+     * existing tracks search endpoint (`GET /tracks/search`); like the podcast
+     * search it never throws — a failure resolves to `{ ok:false }` so the picker
+     * can tell a genuine error from a successful-but-empty result.
+     */
+    async searchMusic(query: string, offset = 0): Promise<PodcastFetchResult<MusicTrackResult>> {
+      try {
+        const res = await httpClient.get('/tracks/search', {
+          params: { q: query, offset: String(offset) },
+        });
+        return { ok: true, ...parseMusicSearchResponse(res, offset) };
+      } catch (error) {
+        console.warn("Failed to search music", error);
+        return { ok: false };
+      }
+    },
+
+    /**
+     * Start streaming Syra music into the room (a "listening party"): a single
+     * track (optionally with an up-next `queue`), or an album / playlist whose
+     * ordered tracks the backend resolves into the queue. The client sends only
+     * ids — the playable audio URL is resolved server-side at stream-start.
+     */
+    async startTrackStream(
+      roomId: string,
+      body: StartTrackStreamBody,
+    ): Promise<{ ingressId: string; url: string } | null> {
+      if (!roomId) return null;
+      try {
+        const res = await httpClient.post(`/rooms/${roomId}/stream/track`, body);
+        const parsed = ZStartStreamResponse.safeParse(res);
+        if (!parsed.success) {
+          console.warn('[live] Invalid startTrackStream response:', parsed.error.issues[0]);
+          return null;
+        }
+        return parsed.data;
+      } catch (error) {
+        console.warn("Failed to start track stream", error);
+        return null;
+      }
+    },
+
+    async deleteRoom(id: string): Promise<boolean> {
+      if (!id) return false;
+      try {
+        await httpClient.delete(`/rooms/${id}`);
+        return true;
+      } catch (error) {
+        console.warn("Failed to delete room", error);
+        return false;
+      }
+    },
+
+    async archiveRoom(id: string): Promise<{ success: boolean; archived: boolean }> {
+      if (!id) return { success: false, archived: false };
+      try {
+        const res = await httpClient.patch(`/rooms/${id}/archive`);
+        return {
+          success: res.success !== undefined ? Boolean(res.success) : true,
+          archived: res.archived !== undefined ? Boolean(res.archived) : true,
+        };
+      } catch (error) {
+        console.warn("Failed to archive room", error);
+        return { success: false, archived: false };
+      }
+    },
+
+    async getHouses(search?: string): Promise<House[]> {
+      try {
+        const params: Record<string, string> = {};
+        if (search) params.search = search;
+        const res = await httpClient.get("/houses", { params });
+        const raw = res.houses || res.data || res || [];
+        const items = Array.isArray(raw) ? raw : [];
+        return items
+          .map((h: unknown) => validateHouse(h))
+          .filter((h): h is House => h !== null);
+      } catch (error) {
+        console.warn("Failed to fetch houses", error);
+        return [];
+      }
+    },
+
+    async getHouse(id: string): Promise<House | null> {
+      if (!id) return null;
+      try {
+        const res = await httpClient.get(`/houses/${id}`);
+        const raw = res.house || res.data || res || null;
+        return raw ? validateHouse(raw) : null;
+      } catch (error) {
+        console.warn("Failed to fetch house", error);
+        return null;
+      }
+    },
+
+    async getMyHouses(userId: string): Promise<House[]> {
+      if (!userId) return [];
+      try {
+        const houses = await this.getHouses();
+        const ROLE_HIERARCHY: Record<string, number> = { member: 0, host: 1, admin: 2, owner: 3 };
+        return houses.filter((h) =>
+          h.members.some((m) => m.userId === userId && (ROLE_HIERARCHY[m.role] ?? 0) >= 1)
+        );
+      } catch (error) {
+        console.warn("Failed to fetch user houses", error);
+        return [];
+      }
+    },
+
+    async getUserHouses(userId: string): Promise<House[]> {
+      if (!userId) return [];
+      try {
+        const houses = await this.getHouses();
+        return houses.filter((h) =>
+          h.members.some((m) => m.userId === userId)
+        );
+      } catch (error) {
+        console.warn("Failed to fetch user houses", error);
+        return [];
+      }
+    },
+
+    async getHouseRooms(houseId: string, status?: string): Promise<Room[]> {
+      if (!houseId) return [];
+      try {
+        const params: Record<string, string> = {};
+        if (status) params.status = status;
+        const res = await httpClient.get(`/houses/${houseId}/rooms`, { params });
+        const raw = res.rooms || res.data || res || [];
+        return validateRooms(Array.isArray(raw) ? raw : []);
+      } catch (error) {
+        console.warn("Failed to fetch house rooms", error);
+        return [];
+      }
+    },
+
+    // --- Recording ---
+
+    async startRecording(roomId: string): Promise<boolean> {
+      if (!roomId) return false;
+      try {
+        await httpClient.post(`/rooms/${roomId}/recording/start`);
+        return true;
+      } catch (error) {
+        console.warn("Failed to start recording", error);
+        return false;
+      }
+    },
+
+    async stopRecording(roomId: string): Promise<boolean> {
+      if (!roomId) return false;
+      try {
+        await httpClient.post(`/rooms/${roomId}/recording/stop`);
+        return true;
+      } catch (error) {
+        console.warn("Failed to stop recording", error);
+        return false;
+      }
+    },
+
+    async getRoomRecordings(roomId: string): Promise<Recording[]> {
+      if (!roomId) return [];
+      try {
+        const res = await httpClient.get(`/rooms/${roomId}/recordings`);
+        const raw = res.recordings || [];
+        return validateRecordings(Array.isArray(raw) ? raw : []);
+      } catch (error) {
+        console.warn("Failed to fetch recordings", error);
+        return [];
+      }
+    },
+
+    async getRecording(recordingId: string): Promise<{ recording: Recording; playbackUrl: string } | null> {
+      if (!recordingId) return null;
+      try {
+        const res = await httpClient.get(`/recordings/${recordingId}`);
+        return parseRecordingResponse(res);
+      } catch (error) {
+        console.warn("Failed to fetch recording", error);
+        return null;
+      }
+    },
+
+    async updateRecordingAccess(recordingId: string, access: 'public' | 'participants'): Promise<boolean> {
+      if (!recordingId) return false;
+      try {
+        await httpClient.patch(`/recordings/${recordingId}`, { access });
+        return true;
+      } catch (error) {
+        console.warn("Failed to update recording access", error);
+        return false;
+      }
+    },
+
+    async deleteRecording(recordingId: string): Promise<boolean> {
+      if (!recordingId) return false;
+      try {
+        await httpClient.delete(`/recordings/${recordingId}`);
+        return true;
+      } catch (error) {
+        console.warn("Failed to delete recording", error);
+        return false;
+      }
+    },
+
+    async getRecordings(sortBy?: string, limit?: number): Promise<Recording[]> {
+      try {
+        const params: Record<string, string> = {};
+        if (sortBy) params.sortBy = sortBy;
+        if (limit) params.limit = String(limit);
+        const res = await httpClient.get("/recordings", { params });
+        const raw = res.recordings || res.data || res || [];
+        return validateRecordings(Array.isArray(raw) ? raw : []);
+      } catch (error) {
+        console.warn("Failed to fetch recordings", error);
+        return [];
+      }
+    },
+
+    async getTopHosts(): Promise<{ userId: string; roomCount: number; totalListeners: number }[]> {
+      try {
+        const res = await httpClient.get("/rooms/top-hosts");
+        const raw = res.hosts || res.data || res || [];
+        return Array.isArray(raw) ? raw : [];
+      } catch (error) {
+        console.warn("Failed to fetch top hosts", error);
+        return [];
+      }
+    },
+
+    // --- Houses ---
+
+    async createHouse(data: { name: string; description?: string; tags?: string[]; isPublic?: boolean }): Promise<House | null> {
+      try {
+        const res = await httpClient.post("/houses", data);
+        const raw = res.house || res.data || res || null;
+        return raw ? validateHouse(raw) : null;
+      } catch (error) {
+        console.warn("Failed to create house", error);
+        return null;
+      }
+    },
+
+    // --- Media uploads ---
+
+    async uploadHouseAvatar(houseId: string, formData: FormData): Promise<string | null> {
+      if (!houseId) return null;
+      try {
+        const res = await httpClient.post(`/houses/${houseId}/avatar`, formData);
+        return (res.avatar as string) || null;
+      } catch (error) {
+        console.warn("Failed to upload house avatar", error);
+        return null;
+      }
+    },
+
+    async uploadHouseCover(houseId: string, formData: FormData): Promise<string | null> {
+      if (!houseId) return null;
+      try {
+        const res = await httpClient.post(`/houses/${houseId}/cover`, formData);
+        return (res.coverImage as string) || null;
+      } catch (error) {
+        console.warn("Failed to upload house cover", error);
+        return null;
+      }
+    },
+
+    async uploadRoomImage(roomId: string, formData: FormData): Promise<string | null> {
+      if (!roomId) return null;
+      try {
+        const res = await httpClient.post(`/rooms/${roomId}/image`, formData);
+        return (res.streamImage as string) || null;
+      } catch (error) {
+        console.warn("Failed to upload room image", error);
+        return null;
+      }
+    },
+
+    async uploadSeriesCover(seriesId: string, formData: FormData): Promise<string | null> {
+      if (!seriesId) return null;
+      try {
+        const res = await httpClient.post(`/series/${seriesId}/cover`, formData);
+        return (res.coverImage as string) || null;
+      } catch (error) {
+        console.warn("Failed to upload series cover", error);
+        return null;
+      }
+    },
+  };
+}
+
+export type RoomsServiceInstance = ReturnType<typeof createRoomsService>;
