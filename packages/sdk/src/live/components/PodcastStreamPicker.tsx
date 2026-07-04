@@ -225,7 +225,7 @@ const ErrorState = memo(function ErrorState({
  * Self-contained two-level podcast picker for the live-room stream setup. Level 1
  * is a debounced Syra show search; tapping a show drills into Level 2, its episode
  * list. Tapping an episode reports `(syraPodcastId, episodeId)` to the parent — the
- * picker owns NO room/stream logic. Ships inside @syra.fm/live, so it depends only
+ * picker owns NO room/stream logic. Ships inside @syra.fm/sdk, so it depends only
  * on `useLiveConfig()` injection and never imports from a host app (`@/`).
  *
  * UX affordances (all backend-field-free): a host copyright disclaimer, an honest

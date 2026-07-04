@@ -207,7 +207,6 @@
       "devDependencies": {
         "@expo/vector-icons": "^15.0.2",
         "@livekit/react-native": "^2.11.1",
-        "@oxyhq/core": "^5.2.1",
         "@oxyhq/services": "^13.1.7",
         "@types/node": "^20.0.0",
         "@types/react": "~19.2.14",
@@ -223,13 +222,11 @@
         "react-native-safe-area-context": "^5.7.0",
         "react-native-svg": "15.15.4",
         "socket.io-client": "^4.8.1",
-        "sonner-native": "^0.21.1",
         "typescript": "~5.9.3",
       },
       "peerDependencies": {
         "@expo/vector-icons": "^15.0.2",
         "@livekit/react-native": "^2.11.1",
-        "@oxyhq/core": "^5.2.1",
         "@oxyhq/services": "^13.1.7",
         "expo-audio": "~56.0.12",
         "expo-blur": "~56.0.3",
@@ -241,12 +238,10 @@
         "react-native-safe-area-context": "^5.7.0",
         "react-native-svg": "15.15.4",
         "socket.io-client": "^4.8.1",
-        "sonner-native": "^0.21.1",
       },
       "optionalPeers": [
         "@expo/vector-icons",
         "@livekit/react-native",
-        "@oxyhq/core",
         "@oxyhq/services",
         "expo-audio",
         "expo-blur",
@@ -258,7 +253,6 @@
         "react-native-safe-area-context",
         "react-native-svg",
         "socket.io-client",
-        "sonner-native",
       ],
     },
     "packages/shared-types": {

@@ -90,7 +90,6 @@
     "react-native-reanimated": "^4.3.1",
     "react-native-safe-area-context": "^5.7.0",
     "@oxyhq/services": "^13.1.7",
-    "@oxyhq/core": "^5.2.1",
     "livekit-client": "^2.20.0",
     "@livekit/react-native": "^2.11.1",
     "expo-audio": "~56.0.12",
@@ -98,7 +97,6 @@
     "socket.io-client": "^4.8.1",
     "@expo/vector-icons": "^15.0.2",
     "react-native-svg": "15.15.4",
-    "sonner-native": "^0.21.1",
     "expo-blur": "~56.0.3"
   },
   "peerDependenciesMeta": {
@@ -115,9 +113,6 @@
       "optional": true
     },
     "@oxyhq/services": {
-      "optional": true
-    },
-    "@oxyhq/core": {
       "optional": true
     },
     "livekit-client": {
@@ -141,9 +136,6 @@
     "react-native-svg": {
       "optional": true
     },
-    "sonner-native": {
-      "optional": true
-    },
     "expo-blur": {
       "optional": true
     }
@@ -159,7 +151,6 @@
     "react-native-reanimated": "^4.3.1",
     "react-native-safe-area-context": "^5.7.0",
     "@oxyhq/services": "^13.1.7",
-    "@oxyhq/core": "^5.2.1",
     "livekit-client": "^2.20.0",
     "@livekit/react-native": "^2.11.1",
     "expo-audio": "~56.0.12",
@@ -167,7 +158,6 @@
     "socket.io-client": "^4.8.1",
     "@expo/vector-icons": "^15.0.2",
     "react-native-svg": "15.15.4",
-    "sonner-native": "^0.21.1",
     "expo-blur": "~56.0.3"
   }
 }
