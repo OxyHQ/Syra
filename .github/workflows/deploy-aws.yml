@@ -43,6 +43,7 @@ jobs:
       - run: cd packages/frontend && bunx jest --ci
 
   deploy:
+    if: github.ref == 'refs/heads/main'
     needs: test
     runs-on: ubuntu-24.04-arm
     steps:
