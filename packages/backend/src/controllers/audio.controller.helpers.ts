@@ -63,8 +63,8 @@ export async function fetchAndValidateTrack(trackId: string): Promise<TrackValid
 
   const track = await formatTrackWithCoverArt(trackDoc);
 
-  // Check if track is available
-  if (!track.isAvailable) {
+  // Check if track is available and has not been removed for copyright
+  if (!track.isAvailable || track.copyrightRemoved) {
     return {
       isValid: false,
       statusCode: 403,

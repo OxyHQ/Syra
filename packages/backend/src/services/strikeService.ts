@@ -20,12 +20,13 @@ export function isRepeatInfringer(strikeCount: number): boolean {
 
 // ── Internals ─────────────────────────────────────────────────────────────────
 
-/** Take down every track owned by the artist — mark copyrightRemoved. */
+/** Take down every track owned by the artist and make it unavailable for playback. */
 async function takeDownArtistTracks(artistId: string, reason: string): Promise<void> {
   await TrackModel.updateMany(
     { artistId, copyrightRemoved: { $ne: true } },
     {
       copyrightRemoved: true,
+      isAvailable: false,
       removedAt: new Date(),
       removedReason: reason,
     },
@@ -48,7 +49,7 @@ function applyTermination(artist: IArtist): void {
  *
  * When the artist's cumulative strike count reaches STRIKE_TERMINATION_THRESHOLD
  * the account is permanently terminated and all their tracks are taken down
- * (copyrightRemoved = true). Termination is irreversible via removeStrike.
+ * (copyrightRemoved = true, isAvailable = false). Termination is irreversible via removeStrike.
  */
 export async function addStrike(
   artistId: string,

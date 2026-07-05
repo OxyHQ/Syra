@@ -6,6 +6,7 @@ import {
   rejectCopyrightReport,
 } from '../controllers/copyright.controller';
 import { requireOxyAuth as requireAuth } from '@oxyhq/core/server';
+import { requireCopyrightAdmin } from '../middleware/copyrightAdmin';
 
 const router = Router();
 
@@ -13,10 +14,10 @@ const router = Router();
 // This route is mounted in the public API router, so it works for unauthenticated users
 router.post('/report', reportCopyrightViolation);
 
-// Admin routes - require authentication
-router.get('/reports', requireAuth, getCopyrightReports);
-router.post('/reports/:id/approve', requireAuth, approveCopyrightReport);
-router.post('/reports/:id/reject', requireAuth, rejectCopyrightReport);
+// Admin routes - require authentication and explicit copyright admin allowlist membership
+router.get('/reports', requireAuth, requireCopyrightAdmin, getCopyrightReports);
+router.post('/reports/:id/approve', requireAuth, requireCopyrightAdmin, approveCopyrightReport);
+router.post('/reports/:id/reject', requireAuth, requireCopyrightAdmin, rejectCopyrightReport);
 
 export default router;
 

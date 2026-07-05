@@ -103,6 +103,7 @@ describe('addStrike — termination', () => {
     // Track taken down
     const track = await TrackModel.findById(trackId).lean();
     expect(track?.copyrightRemoved).toBe(true);
+    expect(track?.isAvailable).toBe(false);
     expect(track?.removedAt).toBeInstanceOf(Date);
     expect(track?.removedReason).toContain('Repeat-infringer');
   });
@@ -130,7 +131,9 @@ describe('addStrike — termination', () => {
       TrackModel.findById(track2).lean(),
     ]);
     expect(t1?.copyrightRemoved).toBe(true);
+    expect(t1?.isAvailable).toBe(false);
     expect(t2?.copyrightRemoved).toBe(true);
+    expect(t2?.isAvailable).toBe(false);
   });
 
   it('returns null for unknown artistId', async () => {
