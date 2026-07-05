@@ -205,20 +205,15 @@ describe('createSyraClient.getTrack', () => {
 // ── previewUrl ────────────────────────────────────────────────────────────────
 
 describe('createSyraClient.previewUrl', () => {
-  it('builds the preview URL with a default start of 0', () => {
+  it('builds the fixed preview URL without caller-controlled offsets', () => {
     const client = createSyraClient({ baseURL: 'https://api.example.test' });
-    expect(client.previewUrl('abc')).toBe('https://api.example.test/api/preview/abc.mp3?start=0');
-  });
-
-  it('uses the provided start offset and clamps to an integer >= 0', () => {
-    const client = createSyraClient({ baseURL: 'https://api.example.test' });
-    expect(client.previewUrl('abc', 42.9)).toBe('https://api.example.test/api/preview/abc.mp3?start=42');
-    expect(client.previewUrl('abc', -5)).toBe('https://api.example.test/api/preview/abc.mp3?start=0');
+    expect(client.previewUrl('abc')).toBe('https://api.example.test/api/preview/abc.mp3');
+    expect(client.previewUrl('abc', 42.9)).toBe('https://api.example.test/api/preview/abc.mp3');
   });
 
   it('defaults to the production base URL', () => {
     const client = createSyraClient();
-    expect(client.previewUrl('abc')).toBe(`${DEFAULT_SYRA_BASE_URL}/api/preview/abc.mp3?start=0`);
+    expect(client.previewUrl('abc')).toBe(`${DEFAULT_SYRA_BASE_URL}/api/preview/abc.mp3`);
   });
 });
 
