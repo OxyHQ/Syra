@@ -34,10 +34,10 @@ function makeReq(podcastId: string, userId: string, linkedArtistId?: string): Au
   } as unknown as AuthRequest;
 }
 
-async function makeClaimablePodcast(): Promise<string> {
+async function makeClaimablePodcast(source: 'rss' | 'syra' = 'syra'): Promise<string> {
   const podcast = await PodcastModel.create({
     title: 'Claimable Show',
-    source: 'rss',
+    source,
     feedUrl: `https://feed.example/${Math.random().toString(36).slice(2)}.xml`,
     claimable: true,
   });
@@ -76,7 +76,7 @@ describe('claimPodcast — linkedArtistId IDOR guard', () => {
     expect(after?.linkedArtistId?.toString()).toBe(ownArtist._id.toString());
   });
 
-  it('also accepts a claim with no artist link (200)', async () => {
+  it('also accepts a claim with no artist link for Syra-hosted shows (200)', async () => {
     const podcastId = await makeClaimablePodcast();
 
     const res = makeRes();
@@ -87,4 +87,19 @@ describe('claimPodcast — linkedArtistId IDOR guard', () => {
     expect(after?.claimedByOxyUserId).toBe('owner-A');
     expect(after?.linkedArtistId).toBeUndefined();
   });
+
+  it('rejects RSS podcast claims until ownership verification exists (403)', async () => {
+    const podcastId = await makeClaimablePodcast('rss');
+
+    const res = makeRes();
+    await claimPodcast(makeReq(podcastId, 'attacker-A'), res as unknown as Response);
+
+    expect(res._status).toBe(403);
+    expect(res._body).toEqual({ error: 'RSS podcast claims require ownership verification' });
+    const after = await PodcastModel.findById(podcastId).lean();
+    expect(after?.claimedByOxyUserId).toBeUndefined();
+    expect(after?.ownerOxyUserId).toBeUndefined();
+    expect(after?.claimable).toBe(true);
+  });
+
 });
