@@ -104,7 +104,7 @@ export interface SyraClient {
   searchTracks(query: string, options?: SearchTracksOptions): Promise<SearchPage<TrackSummary>>;
   /** Fetch a single track by id, validated against the track-summary schema. */
   getTrack(id: string): Promise<TrackSummary>;
-  /** Build the public 30s preview URL for a track at the given start offset. */
+  /** Build the public 30s preview URL for a track's fixed excerpt. */
   previewUrl(id: string, startSec?: number): string;
   /**
    * Resolve an absolute artwork URL from a track / cover-art reference. Returns
@@ -301,9 +301,9 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
       return trackSummarySchema.parse(json);
     },
 
-    previewUrl(id, startSec = 0) {
-      const safeStart = Number.isFinite(startSec) ? Math.max(0, Math.trunc(startSec)) : 0;
-      return `${baseURL}/api/preview/${encodeURIComponent(id)}.mp3?start=${safeStart}`;
+    previewUrl(id, _startSec) {
+      void _startSec;
+      return `${baseURL}/api/preview/${encodeURIComponent(id)}.mp3`;
     },
 
     artworkUrl(source, size) {

@@ -342,6 +342,8 @@ export async function storePreviewFromHls(
 
 // ── Lazy resolver used by the public endpoint ───────────────────────────────────
 
+const previewGenerationInFlight = new Map<string, Promise<string | null>>();
+
 /**
  * Ensure a preview clip exists for `(trackId, startSec)` and return its S3 key.
  *
@@ -354,6 +356,27 @@ export async function ensurePreviewClip(
   startSec: number,
 ): Promise<string | null> {
   const previewKey = getS3PreviewKey(track.id, startSec);
+  if (await objectExists(previewKey)) {
+    return previewKey;
+  }
+
+  const inFlight = previewGenerationInFlight.get(previewKey);
+  if (inFlight) {
+    return inFlight;
+  }
+
+  const generation = generatePreviewClipForTrack(track, startSec, previewKey).finally(() => {
+    previewGenerationInFlight.delete(previewKey);
+  });
+  previewGenerationInFlight.set(previewKey, generation);
+  return generation;
+}
+
+async function generatePreviewClipForTrack(
+  track: PreviewSourceRef,
+  startSec: number,
+  previewKey: string,
+): Promise<string | null> {
   if (await objectExists(previewKey)) {
     return previewKey;
   }

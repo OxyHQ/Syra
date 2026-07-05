@@ -39,8 +39,7 @@ if (page.hasMore) {
 const track = await syra.getTrack(page.items[0].id);
 
 // Build a public 30s preview URL (directly playable MP3)
-const url = syra.previewUrl(track.id);          // .../api/preview/<id>.mp3?start=0
-const hook = syra.previewUrl(track.id, 45);     // start 45s in
+const url = syra.previewUrl(track.id);          // .../api/preview/<id>.mp3
 
 // Resolve artwork to an absolute URL
 const cover = syra.artworkUrl(track, 'large');
@@ -64,7 +63,7 @@ authenticated transport can be layered in a future version.
 | --- | --- |
 | `searchTracks(query, { limit, offset })` | A `SearchPage<TrackSummary>` of preview-available tracks (`{ items, hasMore, limit, offset }`). |
 | `getTrack(id)` | A single `TrackSummary`, schema-validated. |
-| `previewUrl(id, startSec = 0)` | Public 30s preview URL. |
+| `previewUrl(id)` | Public 30s preview URL for the fixed excerpt. |
 | `artworkUrl(trackOrCoverArt, size?)` | Absolute artwork URL, or `undefined`. |
 | `searchPodcasts(query, { limit, offset })` | A `SearchPage<PodcastSummary>` of podcast shows. |
 | `getPodcast(id)` | A single `PodcastSummary`, schema-validated. |

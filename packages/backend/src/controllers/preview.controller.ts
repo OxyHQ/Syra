@@ -7,26 +7,17 @@ import { playableTrackFilter } from '../utils/catalogVisibility';
 import { ensurePreviewClip } from '../services/preview/previewService';
 import type { PreviewSourceRef } from '../services/preview/previewService';
 import { streamFromS3 } from '../services/s3Service';
-import { PREVIEW_CONTENT_TYPE, PREVIEW_DURATION_SEC } from '../services/ingest/previewClip';
+import { PREVIEW_CONTENT_TYPE } from '../services/ingest/previewClip';
 import { logger } from '../utils/logger';
 
-// Preview clips are immutable for a given (trackId, startSec) → cache hard.
+// Public preview clips are fixed to one curated excerpt per track. Keeping the
+// offset constant prevents unauthenticated callers from creating unbounded lazy
+// transcode/cache-miss work or enumerating most of a track through previews.
+const PUBLIC_PREVIEW_START_SEC = 0;
 const PREVIEW_CACHE_CONTROL = 'public, max-age=31536000, immutable';
 
 /**
- * Clamp a requested start offset into `[0, max]`. Non-numeric / negative inputs
- * default to 0. The result is an integer second offset.
- */
-function clampStart(value: unknown, max: number): number {
-  const parsed = typeof value === 'string' ? parseInt(value, 10) : Number.NaN;
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return 0;
-  }
-  return Math.min(Math.trunc(parsed), max);
-}
-
-/**
- * GET /api/preview/:trackId.mp3?start=N
+ * GET /api/preview/:trackId.mp3
  *
  * Public, unauthenticated 30s preview of a track. Serves audio to any visitor
  * (including guests). The clip is lazily generated from the retained source on
@@ -53,10 +44,6 @@ export const getTrackPreview = async (req: Request, res: Response, next: NextFun
       return res.status(404).json({ error: 'Preview not available' });
     }
 
-    const durationSec = Number.isFinite(track.duration) ? track.duration : 0;
-    const maxStart = Math.max(0, Math.floor(durationSec) - PREVIEW_DURATION_SEC);
-    const startSec = clampStart(req.query.start, maxStart);
-
     const trackRef: PreviewSourceRef = {
       id: track._id.toString(),
       artistId: track.artistId,
@@ -66,7 +53,7 @@ export const getTrackPreview = async (req: Request, res: Response, next: NextFun
       hls: track.hls,
     };
 
-    const previewKey = await ensurePreviewClip(trackRef, startSec);
+    const previewKey = await ensurePreviewClip(trackRef, PUBLIC_PREVIEW_START_SEC);
     if (!previewKey) {
       return res.status(404).json({ error: 'Preview not available' });
     }
