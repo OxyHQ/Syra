@@ -35,7 +35,7 @@
   },
   "dependencies": {
     "@oxyhq/services": "^15.0.0",
-    "@oxyhq/bloom": "^0.25.2",
+    "@oxyhq/bloom": "^0.29.1",
     "@oxyhq/core": "^6.0.0",
     "@tanstack/react-query": "^5.100.0",
     "@tanstack/react-query-persist-client": "^5.100.0",
