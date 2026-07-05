@@ -230,14 +230,18 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
           ]);
     }
 
-    // Podcast enrichment. For an explicit podcasts search we AWAIT the shallow
+    // Authenticated-only podcast enrichment. For an explicit podcasts search
+    // we AWAIT the shallow
     // upsert of directory candidates so they appear in THIS response (instant,
     // like the old discover); the heavy feed import runs in the background. For
     // 'all' we enrich in the background so the aggregate search stays fast.
+    // Public searches only read the existing catalog so unauthenticated traffic
+    // cannot enqueue unbounded directory/feed/image-processing work.
     // `syncPodcastSearch` is bounded + throttled and never hangs/throws.
     let podcastSyncTriggered = false;
     if (
       process.env.PODCAST_BULK_IMPORT_ENABLED !== 'false' &&
+      getRequestUserId(req as AuthRequest) &&
       query.trim().length >= AUDIUS_IMPORT_MIN_QUERY_LENGTH &&
       searchOffset === 0
     ) {

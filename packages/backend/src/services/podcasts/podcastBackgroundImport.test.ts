@@ -118,6 +118,21 @@ describe('syncPodcastSearch — shallow upsert + deep scheduling', () => {
     expect(await PodcastModel.countDocuments({})).toBe(1); // not upserted twice
   });
 
+  it('does not count deep imports that are dropped by backpressure', async () => {
+    await PodcastModel.insertMany([
+      { title: 'One', source: 'rss', feedUrl: 'https://feeds.example/1.xml', needsDeepImport: true },
+      { title: 'Two', source: 'rss', feedUrl: 'https://feeds.example/2.xml', needsDeepImport: true },
+    ]);
+
+    const result = await syncPodcastSearch('backpressure', {
+      search: async () => [candidate(1), candidate(2)],
+      enqueue: (feedUrl) => feedUrl.endsWith('/1.xml'),
+      now: () => NOW,
+    });
+
+    expect(result.deepEnqueued).toBe(1);
+  });
+
   it('is a no-op for a blank query', async () => {
     const result = await syncPodcastSearch('   ', { search: async () => [candidate(1)], enqueue: () => {} });
     expect(result).toEqual({ skipped: true, candidates: 0, shallowUpserted: 0, deepEnqueued: 0 });

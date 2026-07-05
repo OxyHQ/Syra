@@ -33,6 +33,9 @@ export const MAX_FEEDS_PER_SEARCH = 25;
 /** Hard timeout on the in-request directory call so a search can never hang. */
 const DIRECTORY_TIMEOUT_MS = 3000;
 
+/** Global backpressure for expensive deep imports queued from search. */
+export const MAX_DEEP_IMPORT_QUEUE_SIZE = 100;
+
 /** Re-pull a show's full feed at most this often from search (24h). */
 const DEEP_REFRESH_STALE_MS = 24 * 60 * 60 * 1000;
 
@@ -121,10 +124,18 @@ export async function shallowUpsertCandidates(candidates: PodcastDirectoryCandid
  * Enqueue a SINGLE feed's deep import onto the serialized background queue.
  * Deduped by in-flight feedUrl. Fire-and-forget; never throws.
  */
-export function enqueuePodcastImport(feedUrl: string, directory?: PodcastDirectoryCandidate): void {
+export function enqueuePodcastImport(feedUrl: string, directory?: PodcastDirectoryCandidate): boolean {
   const key = feedUrl.trim().toLowerCase();
-  if (!key) return;
-  if (queuedFeeds.has(key)) return;
+  if (!key) return false;
+  if (queuedFeeds.has(key)) return false;
+  if (queuedFeeds.size >= MAX_DEEP_IMPORT_QUEUE_SIZE) {
+    logger.warn('[podcast-import] deep import queue full; dropping feed import', {
+      feedUrl,
+      queueSize: queuedFeeds.size,
+      maxQueueSize: MAX_DEEP_IMPORT_QUEUE_SIZE,
+    });
+    return false;
+  }
   queuedFeeds.add(key);
 
   importQueue = importQueue
@@ -140,6 +151,8 @@ export function enqueuePodcastImport(feedUrl: string, directory?: PodcastDirecto
         queuedFeeds.delete(key);
       }
     });
+
+  return true;
 }
 
 /**
@@ -150,7 +163,7 @@ export function enqueuePodcastImport(feedUrl: string, directory?: PodcastDirecto
  */
 async function enqueueDeepImports(
   candidates: PodcastDirectoryCandidate[],
-  enqueue: (feedUrl: string, directory?: PodcastDirectoryCandidate) => void,
+  enqueue: (feedUrl: string, directory?: PodcastDirectoryCandidate) => boolean | void,
   now: number,
 ): Promise<number> {
   const feedUrls = candidates.map((c) => c.feedUrl);
@@ -171,8 +184,9 @@ async function enqueueDeepImports(
   let enqueued = 0;
   for (const target of targets) {
     if (!target.feedUrl) continue;
-    enqueue(target.feedUrl, byFeedUrl.get(target.feedUrl));
-    enqueued += 1;
+    if (enqueue(target.feedUrl, byFeedUrl.get(target.feedUrl)) !== false) {
+      enqueued += 1;
+    }
   }
   return enqueued;
 }
@@ -181,7 +195,7 @@ async function enqueueDeepImports(
 
 export interface PodcastSearchSyncDeps {
   search?: (query: string, limit?: number) => Promise<PodcastDirectoryCandidate[]>;
-  enqueue?: (feedUrl: string, directory?: PodcastDirectoryCandidate) => void;
+  enqueue?: (feedUrl: string, directory?: PodcastDirectoryCandidate) => boolean | void;
   now?: () => number;
 }
 

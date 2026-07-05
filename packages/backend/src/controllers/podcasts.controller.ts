@@ -24,6 +24,7 @@ import { PodcastModel } from '../models/Podcast';
 import { EpisodeModel } from '../models/Episode';
 import { UserLibraryModel } from '../models/Library';
 import { ArtistModel } from '../models/CatalogEntity';
+import { getRequestUserId } from '../utils/catalogVisibility';
 import { getParam } from '../utils/reqParams';
 import { logger } from '../utils/logger';
 import { searchPodcasts as directorySearch } from '../services/podcasts/PodcastDirectory';
@@ -134,8 +135,9 @@ function episodeVisibilityFilter(
 /**
  * GET /api/podcasts/search?q=&limit=&offset= — instant directory-backed search.
  *
- * `syncPodcastSearch` shallow-upserts the directory candidates first (bounded +
- * throttled, never hangs) so they appear in THIS response like the old discover
+ * For authenticated users, `syncPodcastSearch` shallow-upserts the directory
+ * candidates first (bounded + throttled, never hangs) so they appear in THIS
+ * response like the old discover
  * screen; the heavy feed import runs in the background. Uses a case-insensitive
  * regex (NOT `$text`) to avoid depending on a text index that is not built in
  * production (`autoIndex` is off) — that was the 502/504 cause. Wrapped so the
@@ -155,8 +157,12 @@ export async function searchPodcasts(req: AuthRequest, res: Response): Promise<v
   const offset = parseOffset(req.query.offset);
 
   try {
-    // Instant enrichment (shallow upsert) before we read — bounded + throttled.
-    await syncPodcastSearch(q);
+    // Authenticated-only enrichment before we read — bounded + throttled.
+    // Public searches only read the existing catalog so unauthenticated traffic
+    // cannot enqueue directory/feed/image-processing work.
+    if (getRequestUserId(req)) {
+      await syncPodcastSearch(q);
+    }
 
     const regex = new RegExp(escapeRegex(q), 'i');
     // Over-fetch one row past the page so `hasMore` is known without a separate
