@@ -435,6 +435,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
     const querySpecificEnough = query.trim().length >= AUDIUS_IMPORT_MIN_QUERY_LENGTH;
     const canImportAudius =
       process.env.AUDIUS_BACKGROUND_IMPORT_ENABLED !== 'false' &&
+      Boolean((req as AuthRequest).user?.id) &&
       isTrackSearch &&
       sparseLocalResults &&
       querySpecificEnough &&

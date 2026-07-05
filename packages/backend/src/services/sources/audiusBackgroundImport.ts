@@ -25,6 +25,12 @@ const MAX_ALBUMS_PER_ARTIST = 3;
 /** Cap on the number of playlists synced per artist per pass. */
 const MAX_PLAYLISTS_PER_ARTIST = 3;
 
+/** Cap on attacker-controlled query keys retained for import throttling. */
+const MAX_IMPORT_THROTTLE_KEYS = 500;
+
+/** Cap on distinct queued imports awaiting the serialized background worker. */
+const MAX_QUEUED_IMPORTS = 25;
+
 // ── Throttle map ──────────────────────────────────────────────────────────────
 
 /**
@@ -34,6 +40,16 @@ const MAX_PLAYLISTS_PER_ARTIST = 3;
 const lastImportAt = new Map<string, number>();
 const queuedImports = new Set<string>();
 let importQueue: Promise<void> = Promise.resolve();
+
+function rememberImportAttempt(key: string, currentTime: number): void {
+  lastImportAt.set(key, currentTime);
+
+  while (lastImportAt.size > MAX_IMPORT_THROTTLE_KEYS) {
+    const oldestKey = lastImportAt.keys().next().value;
+    if (oldestKey === undefined) break;
+    lastImportAt.delete(oldestKey);
+  }
+}
 
 function normalizeQuery(query: string): string {
   return query.trim().toLowerCase();
@@ -134,7 +150,7 @@ export async function runAudiusImport(
   if (lastRun !== undefined && currentTime - lastRun < AUDIUS_IMPORT_TTL_MS) {
     return { imported: 0, skipped: true, albumsSynced: 0, playlistsSynced: 0 };
   }
-  lastImportAt.set(key, currentTime);
+  rememberImportAttempt(key, currentTime);
 
   const tracks = await connector.search(query, AUDIUS_IMPORT_LIMIT);
 
@@ -341,6 +357,10 @@ export function enqueueAudiusImport(query: string, deps?: AudiusImportDeps): voi
   const normalizedQuery = normalizeQuery(query);
   if (!normalizedQuery) return;
   if (queuedImports.has(normalizedQuery)) return;
+  if (queuedImports.size >= MAX_QUEUED_IMPORTS) {
+    logger.warn('[audius-import] queue full; skipping import', { query: normalizedQuery });
+    return;
+  }
   queuedImports.add(normalizedQuery);
 
   importQueue = importQueue
