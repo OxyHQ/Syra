@@ -595,8 +595,9 @@ export async function uploadEpisode(req: AuthRequest, res: Response): Promise<vo
 }
 
 /**
- * POST /api/podcasts/:id/claim — claim a claimable show; optionally link an
- * artist the caller owns. Auth + field whitelist.
+ * POST /api/podcasts/:id/claim — claim a non-RSS claimable show; optionally
+ * link an artist the caller owns. Auth + field whitelist. Imported RSS shows
+ * require an ownership-verification flow before they can be claimed.
  */
 export async function claimPodcast(req: AuthRequest, res: Response): Promise<void> {
   const userId = getRequiredOxyUserId(req);
@@ -613,6 +614,10 @@ export async function claimPodcast(req: AuthRequest, res: Response): Promise<voi
   }
   if (podcast.claimable !== true || podcast.claimedByOxyUserId) {
     res.status(409).json({ error: 'Podcast is not claimable' });
+    return;
+  }
+  if (podcast.source === 'rss') {
+    res.status(403).json({ error: 'RSS podcast claims require ownership verification' });
     return;
   }
 
