@@ -22,6 +22,7 @@ import { useRoomConnection } from '../hooks/useRoomConnection';
 import { useRoomAudio } from '../hooks/useRoomAudio';
 import { useActiveSpeakers } from '../hooks/useActiveSpeakers';
 import { useRoomUsers, getDisplayName, getAvatarUrl } from '../hooks/useRoomUsers';
+import { LIVE_COLOR, LIVE_TINT_COLOR } from '../colors';
 import type { RoomParticipant, Room, StreamInfo, UserEntity, LiveTheme } from '../types';
 
 type ActivePanel = null | 'stream' | 'insights' | 'settings';
@@ -100,7 +101,7 @@ const SpeakerTile = ({
       >
         <AvatarComponent size={64} source={avatarUri} shape="squircle" />
         {participant.isMuted && (
-          <View style={[styles.muteIndicator, { backgroundColor: '#FF4458' }]}>
+          <View style={[styles.muteIndicator, { backgroundColor: LIVE_COLOR }]}>
             <MaterialCommunityIcons name="microphone-off" size={12} color="#FFFFFF" />
           </View>
         )}
@@ -475,7 +476,7 @@ export function LiveRoomSheet({ roomId, isExpanded, onCollapse, onExpand, onLeav
               <TouchableOpacity
                 onPress={isRecording ? handleStopRecording : handleStartRecording}
                 style={[styles.recordingToggle, {
-                  backgroundColor: isRecording ? '#FF4458' : theme.colors.primary,
+                  backgroundColor: isRecording ? LIVE_COLOR : theme.colors.primary,
                 }]}
               >
                 <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 13 }}>
@@ -488,9 +489,9 @@ export function LiveRoomSheet({ roomId, isExpanded, onCollapse, onExpand, onLeav
             style={styles.settingsItem}
             onPress={handleDeleteRoom}
           >
-            <MaterialCommunityIcons name="delete-outline" size={22} color="#FF4458" />
+            <MaterialCommunityIcons name="delete-outline" size={22} color={LIVE_COLOR} />
             <View style={styles.settingsItemText}>
-              <Text style={[styles.settingsItemTitle, { color: '#FF4458' }]}>Delete Room</Text>
+              <Text style={[styles.settingsItemTitle, { color: LIVE_COLOR }]}>Delete Room</Text>
               <Text style={[styles.settingsItemDesc, { color: theme.colors.textSecondary }]}>
                 Permanently remove this room
               </Text>
@@ -510,7 +511,7 @@ export function LiveRoomSheet({ roomId, isExpanded, onCollapse, onExpand, onLeav
 
         <View style={styles.headerCenter}>
           {isRoomLive ? (
-            <View style={[styles.liveBadge, { backgroundColor: '#FF4458' }]}>
+            <View style={[styles.liveBadge, { backgroundColor: LIVE_COLOR }]}>
               <AnimatedPulse />
               <Text style={styles.liveText}>LIVE</Text>
             </View>
@@ -766,7 +767,7 @@ export function LiveRoomSheet({ roomId, isExpanded, onCollapse, onExpand, onLeav
         )}
 
         <TouchableOpacity style={styles.controlItem} onPress={handleLeave}>
-          <View style={[styles.leaveCircle, { backgroundColor: '#FF4458' }]}>
+          <View style={[styles.leaveCircle, { backgroundColor: LIVE_COLOR }]}>
             <MaterialCommunityIcons name="exit-run" size={24} color="#FFFFFF" />
           </View>
           <Text style={[styles.controlLabel, { color: theme.colors.textSecondary }]}>
@@ -810,9 +811,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 6,
     borderRadius: 16,
-    backgroundColor: '#FF44581A',
+    backgroundColor: LIVE_TINT_COLOR,
   },
-  endButtonText: { fontSize: 15, fontWeight: '600', color: '#FF4458' },
+  endButtonText: { fontSize: 15, fontWeight: '600', color: LIVE_COLOR },
   roomInfo: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
   roomTitle: { fontSize: 32, fontWeight: 'bold', lineHeight: 38 },
   roomTopic: { fontSize: 14, marginTop: 4 },

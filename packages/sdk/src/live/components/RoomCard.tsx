@@ -1,11 +1,12 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, StyleProp, ViewStyle } from 'react-native';
+import { View, Text, TouchableOpacity, StyleProp, ViewStyle } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useAuth } from '@oxyhq/services';
 
 import { useLiveConfig } from '../context/LiveConfigContext';
 import { AnimatedPulse } from './AnimatedPulse';
 import { useRoomUsers, getAvatarUrl } from '../hooks/useRoomUsers';
+import { LIVE_COLOR, LIVE_FOREGROUND_COLOR, getRoomTypeMeta, type RoomTypeMeta } from '../colors';
 
 // --- Utility helpers ---
 
@@ -48,11 +49,6 @@ function getTimeLabel(room: RoomCardProps['room']): string {
 }
 
 // --- Constants ---
-
-const ROOM_TYPE_META: Record<string, { icon: 'account-voice' | 'broadcast'; label: string; color: string }> = {
-  stage: { icon: 'account-voice', label: 'Stage', color: '#3B82F6' },
-  broadcast: { icon: 'broadcast', label: 'Broadcast', color: '#FF6B35' },
-};
 
 const MAX_SPEAKER_AVATARS = 4;
 const SPEAKER_AVATAR_SIZE = 44;
@@ -131,61 +127,52 @@ export const RoomCard: React.FC<RoomCardProps> = ({
 
   useRoomUsers(speakerIds);
 
-  const typeMeta = room.type && room.type !== 'talk' ? ROOM_TYPE_META[room.type] : null;
+  const typeMeta = getRoomTypeMeta(room.type);
   const listenerCount = room.participants?.length || room.stats?.totalJoined || 0;
   const timeLabel = getTimeLabel(room);
 
-  // --- Compact variant (kept simple) ---
+  // --- Compact variant (post attachments, composer preview) ---
+  // It lives inside HORIZONTAL carousels, where a percentage width has no parent
+  // to resolve against — hence the intrinsic width, capped at the parent so a
+  // constrained host box (the composer preview) can still shrink it. Hosts
+  // override any of this through `style`, which wins over the className.
   if (isCompact) {
     return (
       <TouchableOpacity
-        style={[styles.compactCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }, style]}
+        className="w-[200px] max-w-full min-h-[140px] justify-between rounded-2xl border border-border bg-surface p-3"
+        style={style}
         onPress={onPress}
         activeOpacity={onPress ? 0.7 : 1}
         disabled={!onPress}
       >
-        <View style={styles.compactHeader}>
+        <View className="flex-1">
           {house && (
-            <Text style={[styles.compactHouseName, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+            <Text
+              className="mb-1 text-[9px] font-bold tracking-[0.5px] text-muted-foreground"
+              numberOfLines={1}
+            >
               {house.name.toUpperCase()}
             </Text>
           )}
-          <Text style={[styles.compactTitle, { color: theme.colors.text }]} numberOfLines={2}>
+          <Text className="text-sm font-semibold leading-[18px] text-foreground" numberOfLines={2}>
             {room.title}
           </Text>
           {(isLive || isScheduled || typeMeta) && (
-            <View style={styles.compactBadgeRow}>
-              {isLive && (
-                <View style={[styles.liveBadge, { backgroundColor: '#FF4458' }]}>
-                  <AnimatedPulse size={6} />
-                  <Text style={styles.liveText}>LIVE</Text>
-                </View>
-              )}
-              {isScheduled && (
-                <View style={[styles.scheduledBadge, { backgroundColor: theme.colors.backgroundSecondary }]}>
-                  <MaterialCommunityIcons name="calendar" size={10} color={theme.colors.textSecondary} />
-                  <Text style={[styles.scheduledText, { color: theme.colors.textSecondary }]}>SCHEDULED</Text>
-                </View>
-              )}
-              {typeMeta && (
-                <View style={[styles.typeBadge, { backgroundColor: typeMeta.color + '20' }]}>
-                  <MaterialCommunityIcons name={typeMeta.icon} size={10} color={typeMeta.color} />
-                  <Text style={[styles.typeText, { color: typeMeta.color }]}>{typeMeta.label}</Text>
-                </View>
-              )}
+            <View className="mt-1 flex-row flex-wrap gap-1">
+              {isLive && <LiveBadge />}
+              {isScheduled && <ScheduledBadge iconSize={10} iconColor={theme.colors.textSecondary} />}
+              {typeMeta && <TypeBadge meta={typeMeta} />}
             </View>
           )}
         </View>
-        <View style={styles.compactFooter}>
+        <View className="mt-2 flex-row items-center gap-1">
           <MaterialCommunityIcons name="account-group" size={14} color={theme.colors.textSecondary} />
-          <Text style={[styles.compactCount, { color: theme.colors.textSecondary }]}>
-            {listenerCount} listening
-          </Text>
-          <Text style={{ color: theme.colors.textSecondary, fontSize: 10 }}>•</Text>
+          <Text className="text-[11px] text-muted-foreground">{listenerCount} listening</Text>
+          <Text className="text-[10px] text-muted-foreground">•</Text>
           {hostAvatarUri && (
             <AvatarComponent size={14} source={hostAvatarUri} shape="squircle" style={{ marginRight: 2 }} />
           )}
-          <Text style={[styles.compactHost, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+          <Text className="flex-1 text-[11px] text-muted-foreground" numberOfLines={1}>
             {hostName}
           </Text>
         </View>
@@ -193,26 +180,30 @@ export const RoomCard: React.FC<RoomCardProps> = ({
     );
   }
 
-  // --- Default variant ---
+  // --- Default variant: a full-width, flush feed row (hairline divider, no card chrome) ---
   return (
     <TouchableOpacity
-      style={[styles.card, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }, style]}
+      className="w-full gap-2 border-b border-border px-3 py-3"
+      style={style}
       onPress={onPress}
       activeOpacity={onPress ? 0.7 : 1}
       disabled={!onPress}
     >
       {/* Section 1: House header + menu */}
       {(house || onMenuPress) && (
-        <View style={styles.houseRow}>
+        <View className="flex-row items-center gap-1.5">
           {house && (
             <>
-              <MaterialCommunityIcons name="home" size={16} color={theme.colors.primary} />
-              <Text style={[styles.houseName, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+              <MaterialCommunityIcons name="home" size={14} color={theme.colors.primary} />
+              <Text
+                className="text-[11px] font-bold tracking-[0.5px] text-muted-foreground"
+                numberOfLines={1}
+              >
                 {house.name.toUpperCase()}
               </Text>
             </>
           )}
-          <View style={{ flex: 1 }} />
+          <View className="flex-1" />
           {onMenuPress && (
             <TouchableOpacity onPress={onMenuPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <MaterialCommunityIcons name="dots-horizontal" size={20} color={theme.colors.textSecondary} />
@@ -223,56 +214,47 @@ export const RoomCard: React.FC<RoomCardProps> = ({
 
       {/* Section 2: Title + status badges */}
       <View>
-        <Text style={[styles.title, { color: theme.colors.text }]} numberOfLines={2}>
+        <Text className="text-[17px] font-bold leading-[22px] text-foreground" numberOfLines={2}>
           {room.title}
         </Text>
         {(isLive || isScheduled || typeMeta) && (
-          <View style={styles.badgeRow}>
-            {isLive && (
-              <View style={[styles.liveBadge, { backgroundColor: '#FF4458' }]}>
-                <AnimatedPulse size={6} />
-                <Text style={styles.liveText}>LIVE</Text>
-              </View>
-            )}
-            {isScheduled && (
-              <View style={[styles.scheduledBadge, { backgroundColor: theme.colors.backgroundSecondary }]}>
-                <MaterialCommunityIcons name="calendar" size={12} color={theme.colors.textSecondary} />
-                <Text style={[styles.scheduledText, { color: theme.colors.textSecondary }]}>SCHEDULED</Text>
-              </View>
-            )}
-            {typeMeta && (
-              <View style={[styles.typeBadge, { backgroundColor: typeMeta.color + '20' }]}>
-                <MaterialCommunityIcons name={typeMeta.icon} size={10} color={typeMeta.color} />
-                <Text style={[styles.typeText, { color: typeMeta.color }]}>{typeMeta.label}</Text>
-              </View>
-            )}
+          <View className="mt-1.5 flex-row flex-wrap items-center gap-1.5">
+            {isLive && <LiveBadge />}
+            {isScheduled && <ScheduledBadge iconColor={theme.colors.textSecondary} />}
+            {typeMeta && <TypeBadge meta={typeMeta} />}
           </View>
         )}
       </View>
 
       {/* Section 3: Speaker avatars + listener count */}
-      <SpeakerRow
-        speakerIds={speakerIds}
-        listenerCount={listenerCount}
-        theme={theme}
-      />
+      <SpeakerRow speakerIds={speakerIds} listenerCount={listenerCount} />
 
       {/* Section 4: Metadata + save */}
       {(timeLabel || onSave) && (
-        <View style={styles.metaRow}>
+        <View className="flex-row items-center justify-between">
           {timeLabel ? (
-            <Text style={[styles.metaText, { color: theme.colors.textSecondary }]}>{timeLabel}</Text>
+            <Text className="text-[13px] text-muted-foreground">{timeLabel}</Text>
           ) : (
             <View />
           )}
           {onSave && (
-            <TouchableOpacity onPress={onSave} style={styles.saveButton} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity
+              className="flex-row items-center gap-1"
+              onPress={onSave}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
               <MaterialCommunityIcons
                 name={isSaved ? 'bookmark' : 'bookmark-outline'}
                 size={18}
                 color={isSaved ? theme.colors.primary : theme.colors.textSecondary}
               />
-              <Text style={[styles.saveText, { color: isSaved ? theme.colors.primary : theme.colors.textSecondary }]}>
+              <Text
+                className={
+                  isSaved
+                    ? 'text-[13px] font-medium text-primary'
+                    : 'text-[13px] font-medium text-muted-foreground'
+                }
+              >
                 Save
               </Text>
             </TouchableOpacity>
@@ -283,25 +265,60 @@ export const RoomCard: React.FC<RoomCardProps> = ({
   );
 };
 
+// --- Badges ---
+
+// The LIVE badge is the one surface that must NOT theme with the host: it is the
+// brand's "on air" signal, so its red comes from the shared live palette and its
+// content sits on white regardless of light/dark mode.
+function LiveBadge() {
+  return (
+    <View
+      className="flex-row items-center gap-1 rounded-[4px] px-2 py-1"
+      style={{ backgroundColor: LIVE_COLOR }}
+    >
+      <AnimatedPulse size={6} color={LIVE_FOREGROUND_COLOR} />
+      <Text className="text-[10px] font-bold text-white">LIVE</Text>
+    </View>
+  );
+}
+
+function ScheduledBadge({ iconSize = 12, iconColor }: { iconSize?: number; iconColor: string }) {
+  return (
+    <View className="flex-row items-center gap-1 rounded-[4px] bg-muted px-2 py-1">
+      <MaterialCommunityIcons name="calendar" size={iconSize} color={iconColor} />
+      <Text className="text-[10px] font-bold text-muted-foreground">SCHEDULED</Text>
+    </View>
+  );
+}
+
+function TypeBadge({ meta }: { meta: RoomTypeMeta }) {
+  return (
+    <View
+      className="flex-row items-center gap-0.5 rounded-[4px] px-1.5 py-0.5"
+      style={{ backgroundColor: meta.tintColor }}
+    >
+      <MaterialCommunityIcons name={meta.icon} size={10} color={meta.color} />
+      <Text className="text-[9px] font-bold" style={{ color: meta.color }}>
+        {meta.label}
+      </Text>
+    </View>
+  );
+}
+
 // --- Speaker row sub-component ---
 
-function SpeakerRow({
-  speakerIds,
-  listenerCount,
-  theme,
-}: {
-  speakerIds: string[];
-  listenerCount: number;
-  theme: ReturnType<ReturnType<typeof useLiveConfig>['useTheme']>;
-}) {
+function SpeakerRow({ speakerIds, listenerCount }: { speakerIds: string[]; listenerCount: number }) {
   return (
-    <View style={styles.avatarRow}>
+    <View className="flex-row items-center gap-2">
       {speakerIds.map((id) => (
         <SpeakerAvatar key={id} userId={id} />
       ))}
       {listenerCount > 0 && (
-        <View style={[styles.countTile, { backgroundColor: theme.colors.backgroundSecondary, borderColor: theme.colors.border }]}>
-          <Text style={[styles.countTileText, { color: theme.colors.textSecondary }]}>
+        <View
+          className="items-center justify-center rounded-[14px] border-2 border-border bg-muted"
+          style={{ width: SPEAKER_AVATAR_SIZE + 4, height: SPEAKER_AVATAR_SIZE + 4 }}
+        >
+          <Text className="text-sm font-bold text-muted-foreground">
             +{formatCompact(listenerCount)}
           </Text>
         </View>
@@ -311,184 +328,16 @@ function SpeakerRow({
 }
 
 function SpeakerAvatar({ userId }: { userId: string }) {
-  const { useUserById, AvatarComponent, getCachedFileDownloadUrlSync, useTheme } = useLiveConfig();
-  const theme = useTheme();
+  const { useUserById, AvatarComponent, getCachedFileDownloadUrlSync } = useLiveConfig();
   const { oxyServices } = useAuth();
   const profile = useUserById(userId);
   const avatarUri = getAvatarUrl(profile, oxyServices, getCachedFileDownloadUrlSync);
 
   return (
-    <View style={[styles.avatarRing, { borderColor: theme.colors.border }]}>
-      <AvatarComponent
-        size={SPEAKER_AVATAR_SIZE}
-        source={avatarUri}
-        shape="squircle"
-      />
+    <View className="rounded-[14px] border-2 border-border p-0.5">
+      <AvatarComponent size={SPEAKER_AVATAR_SIZE} source={avatarUri} shape="squircle" />
     </View>
   );
 }
-
-// --- Styles ---
-
-const styles = StyleSheet.create({
-  card: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 16,
-    marginBottom: 12,
-    gap: 12,
-  },
-  compactCard: {
-    width: 200,
-    minHeight: 140,
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 12,
-    justifyContent: 'space-between',
-  },
-
-  // House header
-  houseRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  houseName: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-
-  // Title
-  title: {
-    fontSize: 32,
-    fontWeight: '700',
-    lineHeight: 38,
-  },
-
-  // Badges
-  badgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 6,
-  },
-  liveBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    gap: 4,
-  },
-  liveText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  scheduledBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    gap: 4,
-  },
-  scheduledText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  typeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 4,
-    gap: 3,
-  },
-  typeText: {
-    fontSize: 9,
-    fontWeight: '700',
-  },
-
-  // Speaker avatars
-  avatarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  avatarRing: {
-    borderRadius: 14,
-    padding: 2,
-    borderWidth: 2,
-  },
-  countTile: {
-    width: SPEAKER_AVATAR_SIZE + 4,
-    height: SPEAKER_AVATAR_SIZE + 4,
-    borderRadius: 14,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-  },
-  countTileText: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-
-  // Metadata
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  metaText: {
-    fontSize: 13,
-  },
-  saveButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  saveText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-
-  // Compact variant
-  compactHeader: {
-    flex: 1,
-  },
-  compactHouseName: {
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  compactTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    lineHeight: 18,
-  },
-  compactBadgeRow: {
-    flexDirection: 'row',
-    marginTop: 4,
-    gap: 4,
-    flexWrap: 'wrap',
-  },
-  compactFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 8,
-  },
-  compactCount: {
-    fontSize: 11,
-  },
-  compactHost: {
-    fontSize: 11,
-    flex: 1,
-  },
-});
 
 export default RoomCard;
