@@ -6,7 +6,8 @@ import { useAuth } from '@oxyhq/services';
 import { useLiveConfig } from '../context/LiveConfigContext';
 import { AnimatedPulse } from './AnimatedPulse';
 import { useRoomUsers, getAvatarUrl } from '../hooks/useRoomUsers';
-import { LIVE_COLOR, LIVE_FOREGROUND_COLOR, getRoomTypeMeta, type RoomTypeMeta } from '../colors';
+import { LIVE_COLOR, LIVE_FOREGROUND_COLOR } from '../colors';
+import type { LiveTheme } from '../types';
 
 // --- Utility helpers ---
 
@@ -25,33 +26,55 @@ function formatDuration(startedAt: string, endedAt: string): string {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
-const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const DAY_MS = 86_400_000;
 
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr);
-  return `${d.getDate()} ${MONTH_SHORT[d.getMonth()]} ${d.getFullYear()}`;
+function startOfDay(date: Date): number {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 }
 
-function getTimeLabel(room: RoomCardProps['room']): string {
-  if (room.status === 'ended' && room.startedAt && room.endedAt) {
-    return `${formatDuration(room.startedAt, room.endedAt)}  ·  ${formatDate(room.endedAt)}`;
-  }
-  if (room.status === 'live' && room.startedAt) {
-    return `Live  ·  Started ${formatDate(room.startedAt)}`;
-  }
+/** `Today` / `Tomorrow` / `Yesterday`, else a locale short date (year only when it differs). */
+function formatDay(date: Date, now: Date): string {
+  const dayDelta = Math.round((startOfDay(date) - startOfDay(now)) / DAY_MS);
+  if (dayDelta === 0) return 'Today';
+  if (dayDelta === 1) return 'Tomorrow';
+  if (dayDelta === -1) return 'Yesterday';
+
+  const options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
+  if (date.getFullYear() !== now.getFullYear()) options.year = 'numeric';
+  return date.toLocaleDateString(undefined, options);
+}
+
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+
+/**
+ * The when-label for a room that is NOT live: the start time for a scheduled room
+ * (`Tomorrow 18:00`), the day + duration for an ended one (`Yesterday · 45 min`).
+ * A live room never uses this — its lead metric is the listener count.
+ */
+function getScheduleLabel(room: RoomCardProps['room'], now: Date): string {
   if (room.status === 'scheduled' && room.scheduledStart) {
-    return formatDate(room.scheduledStart);
+    const start = new Date(room.scheduledStart);
+    return `${formatDay(start, now)} ${formatTime(start)}`;
+  }
+  if (room.status === 'ended' && room.endedAt) {
+    const day = formatDay(new Date(room.endedAt), now);
+    return room.startedAt ? `${day} · ${formatDuration(room.startedAt, room.endedAt)}` : day;
   }
   if (room.createdAt) {
-    return formatDate(room.createdAt);
+    return formatDay(new Date(room.createdAt), now);
   }
   return '';
 }
 
 // --- Constants ---
 
-const MAX_SPEAKER_AVATARS = 4;
+const MAX_SPEAKER_AVATARS = 3;
 const SPEAKER_AVATAR_SIZE = 44;
+const ROW_AVATAR_SIZE = 40;
+const BYLINE_AVATAR_SIZE = 20;
+const ACTION_HIT_SLOP = { top: 8, bottom: 8, left: 8, right: 8 };
 
 // --- Types ---
 
@@ -85,6 +108,24 @@ interface RoomCardProps {
 
 // --- Component ---
 
+/**
+ * A room in a list. The `default` variant renders ONE of two presentations,
+ * selected by `room.status`, because a live room and a listing of one are
+ * different objects:
+ *
+ * - **live** → a featured card: the LIVE chip + the listener count (the only
+ *   number that matters while a room is on air), the speaker faces, the host,
+ *   and an explicit Join CTA.
+ * - **scheduled / ended** → a flush full-width row: host avatar, title + when,
+ *   byline, and one subtle right-side action. No card chrome, no CTA — there is
+ *   nothing to join yet (or ever again).
+ *
+ * At most ONE status chip is ever shown (a live room is not a scheduled one, and
+ * the date already says "scheduled"); the room type carries no badge at all.
+ *
+ * The `compact` variant is the small fixed-width card used by post attachments
+ * and the composer preview, and follows the same rules in miniature.
+ */
 export const RoomCard: React.FC<RoomCardProps> = ({
   room,
   onPress,
@@ -105,6 +146,7 @@ export const RoomCard: React.FC<RoomCardProps> = ({
   const isLive = room.status === 'live';
   const isScheduled = room.status === 'scheduled';
   const isCompact = variant === 'compact';
+  const isFeatured = isLive && !isCompact;
 
   // Resolve host display: an explicit prop wins, then the @handle, then the
   // canonical API-owned `name.displayName` from the Oxy user DTO (never a
@@ -118,18 +160,19 @@ export const RoomCard: React.FC<RoomCardProps> = ({
         || 'Unknown');
   const hostAvatarUri = hostAvatarUriProp ?? getAvatarUrl(hostProfile, oxyServices, getCachedFileDownloadUrlSync);
 
-  // Resolve speaker avatars (default variant only)
+  // Speaker faces only earn their space on the featured (live) card.
   const speakerIds = useMemo(() => {
-    if (isCompact) return [];
+    if (!isFeatured) return [];
     const ids = room.speakers?.length ? room.speakers : [room.host];
     return ids.slice(0, MAX_SPEAKER_AVATARS);
-  }, [room.speakers, room.host, isCompact]);
+  }, [isFeatured, room.speakers, room.host]);
+  const hiddenSpeakerCount = Math.max(0, (room.speakers?.length ?? 0) - speakerIds.length);
 
   useRoomUsers(speakerIds);
 
-  const typeMeta = getRoomTypeMeta(room.type);
   const listenerCount = room.participants?.length || room.stats?.totalJoined || 0;
-  const timeLabel = getTimeLabel(room);
+  const scheduleLabel = isLive ? '' : getScheduleLabel(room, new Date());
+  const byline = house ? `by ${hostName} · ${house.name}` : `by ${hostName}`;
 
   // --- Compact variant (post attachments, composer preview) ---
   // It lives inside HORIZONTAL carousels, where a percentage width has no parent
@@ -146,121 +189,117 @@ export const RoomCard: React.FC<RoomCardProps> = ({
         disabled={!onPress}
       >
         <View className="flex-1">
-          {house && (
-            <Text
-              className="mb-1 text-[9px] font-bold tracking-[0.5px] text-muted-foreground"
-              numberOfLines={1}
-            >
-              {house.name.toUpperCase()}
-            </Text>
+          {isLive && (
+            <View className="mb-1.5 flex-row">
+              <LiveBadge />
+            </View>
           )}
           <Text className="text-sm font-semibold leading-[18px] text-foreground" numberOfLines={2}>
             {room.title}
           </Text>
-          {(isLive || isScheduled || typeMeta) && (
-            <View className="mt-1 flex-row flex-wrap gap-1">
-              {isLive && <LiveBadge />}
-              {isScheduled && <ScheduledBadge iconSize={10} iconColor={theme.colors.textSecondary} />}
-              {typeMeta && <TypeBadge meta={typeMeta} />}
-            </View>
-          )}
         </View>
-        <View className="mt-2 flex-row items-center gap-1">
-          <MaterialCommunityIcons name="account-group" size={14} color={theme.colors.textSecondary} />
-          <Text className="text-[11px] text-muted-foreground">{listenerCount} listening</Text>
-          <Text className="text-[10px] text-muted-foreground">•</Text>
-          {hostAvatarUri && (
-            <AvatarComponent size={14} source={hostAvatarUri} shape="squircle" style={{ marginRight: 2 }} />
-          )}
-          <Text className="flex-1 text-[11px] text-muted-foreground" numberOfLines={1}>
-            {hostName}
+        <View className="mt-2 gap-1">
+          <View className="flex-row items-center gap-1">
+            <AvatarComponent size={14} source={hostAvatarUri} shape="squircle" />
+            <Text className="flex-1 text-[11px] text-muted-foreground" numberOfLines={1}>
+              {byline}
+            </Text>
+          </View>
+          <Text className="text-[11px] text-muted-foreground" numberOfLines={1}>
+            {isLive ? `${formatCompact(listenerCount)} listening` : scheduleLabel}
           </Text>
         </View>
       </TouchableOpacity>
     );
   }
 
-  // --- Default variant: a full-width, flush feed row (hairline divider, no card chrome) ---
+  // --- Featured card: a LIVE room, with presence and an explicit CTA ---
+  if (isFeatured) {
+    return (
+      <TouchableOpacity
+        className="mb-3 w-full gap-2.5 rounded-2xl border border-border bg-surface p-3"
+        style={style}
+        onPress={onPress}
+        activeOpacity={onPress ? 0.7 : 1}
+        disabled={!onPress}
+      >
+        {/* Status + the only number that matters on air, then icon-only actions */}
+        <View className="flex-row items-center gap-1.5">
+          <LiveBadge />
+          {listenerCount > 0 && (
+            <>
+              <Text className="text-[13px] text-muted-foreground">·</Text>
+              <Text className="text-[13px] font-semibold text-muted-foreground" numberOfLines={1}>
+                {formatCompact(listenerCount)} listening
+              </Text>
+            </>
+          )}
+          <View className="flex-1" />
+          {onSave && (
+            <SaveAction onSave={onSave} isSaved={isSaved} isScheduled={false} theme={theme} />
+          )}
+          {onMenuPress && <MenuAction onMenuPress={onMenuPress} theme={theme} />}
+        </View>
+
+        <Text className="text-[17px] font-bold leading-[22px] text-foreground" numberOfLines={2}>
+          {room.title}
+        </Text>
+
+        <SpeakerStack speakerIds={speakerIds} hiddenCount={hiddenSpeakerCount} />
+
+        {/* Host — a room's primary identity — and the join affordance */}
+        <View className="flex-row items-center gap-2">
+          <AvatarComponent size={BYLINE_AVATAR_SIZE} source={hostAvatarUri} shape="squircle" />
+          <Text className="flex-1 text-[13px] text-muted-foreground" numberOfLines={1}>
+            {byline}
+          </Text>
+          {onPress && (
+            <TouchableOpacity
+              className="rounded-full px-4 py-1.5"
+              style={{ backgroundColor: LIVE_COLOR }}
+              onPress={onPress}
+              accessibilityRole="button"
+              accessibilityLabel="Join room"
+            >
+              <Text className="text-[13px] font-bold" style={{ color: LIVE_FOREGROUND_COLOR }}>
+                Join
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  }
+
+  // --- Compact row: a SCHEDULED or ENDED room, flush in the feed ---
   return (
     <TouchableOpacity
-      className="w-full gap-2 border-b border-border px-3 py-3"
+      className="w-full flex-row items-center gap-3 border-b border-border px-3 py-3"
       style={style}
       onPress={onPress}
       activeOpacity={onPress ? 0.7 : 1}
       disabled={!onPress}
     >
-      {/* Section 1: House header + menu */}
-      {(house || onMenuPress) && (
-        <View className="flex-row items-center gap-1.5">
-          {house && (
-            <>
-              <MaterialCommunityIcons name="home" size={14} color={theme.colors.primary} />
-              <Text
-                className="text-[11px] font-bold tracking-[0.5px] text-muted-foreground"
-                numberOfLines={1}
-              >
-                {house.name.toUpperCase()}
-              </Text>
-            </>
-          )}
-          <View className="flex-1" />
-          {onMenuPress && (
-            <TouchableOpacity onPress={onMenuPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <MaterialCommunityIcons name="dots-horizontal" size={20} color={theme.colors.textSecondary} />
-            </TouchableOpacity>
+      <AvatarComponent size={ROW_AVATAR_SIZE} source={hostAvatarUri} shape="squircle" />
+
+      <View className="flex-1 gap-0.5">
+        <View className="flex-row items-baseline gap-1.5">
+          <Text className="shrink text-[15px] font-semibold text-foreground" numberOfLines={1}>
+            {room.title}
+          </Text>
+          {scheduleLabel !== '' && (
+            <Text className="shrink-0 text-[13px] text-muted-foreground" numberOfLines={1}>
+              · {scheduleLabel}
+            </Text>
           )}
         </View>
-      )}
-
-      {/* Section 2: Title + status badges */}
-      <View>
-        <Text className="text-[17px] font-bold leading-[22px] text-foreground" numberOfLines={2}>
-          {room.title}
+        <Text className="text-[13px] text-muted-foreground" numberOfLines={1}>
+          {byline}
         </Text>
-        {(isLive || isScheduled || typeMeta) && (
-          <View className="mt-1.5 flex-row flex-wrap items-center gap-1.5">
-            {isLive && <LiveBadge />}
-            {isScheduled && <ScheduledBadge iconColor={theme.colors.textSecondary} />}
-            {typeMeta && <TypeBadge meta={typeMeta} />}
-          </View>
-        )}
       </View>
 
-      {/* Section 3: Speaker avatars + listener count */}
-      <SpeakerRow speakerIds={speakerIds} listenerCount={listenerCount} />
-
-      {/* Section 4: Metadata + save */}
-      {(timeLabel || onSave) && (
-        <View className="flex-row items-center justify-between">
-          {timeLabel ? (
-            <Text className="text-[13px] text-muted-foreground">{timeLabel}</Text>
-          ) : (
-            <View />
-          )}
-          {onSave && (
-            <TouchableOpacity
-              className="flex-row items-center gap-1"
-              onPress={onSave}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <MaterialCommunityIcons
-                name={isSaved ? 'bookmark' : 'bookmark-outline'}
-                size={18}
-                color={isSaved ? theme.colors.primary : theme.colors.textSecondary}
-              />
-              <Text
-                className={
-                  isSaved
-                    ? 'text-[13px] font-medium text-primary'
-                    : 'text-[13px] font-medium text-muted-foreground'
-                }
-              >
-                Save
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
+      {onSave && <SaveAction onSave={onSave} isSaved={isSaved} isScheduled={isScheduled} theme={theme} />}
+      {onMenuPress && <MenuAction onMenuPress={onMenuPress} theme={theme} />}
     </TouchableOpacity>
   );
 };
@@ -282,44 +321,77 @@ function LiveBadge() {
   );
 }
 
-function ScheduledBadge({ iconSize = 12, iconColor }: { iconSize?: number; iconColor: string }) {
-  return (
-    <View className="flex-row items-center gap-1 rounded-[4px] bg-muted px-2 py-1">
-      <MaterialCommunityIcons name="calendar" size={iconSize} color={iconColor} />
-      <Text className="text-[10px] font-bold text-muted-foreground">SCHEDULED</Text>
-    </View>
-  );
-}
+// --- Actions (icon-only, like the surrounding feed) ---
 
-function TypeBadge({ meta }: { meta: RoomTypeMeta }) {
+/**
+ * The saved-state toggle. On a SCHEDULED room, saving it is how you ask to be
+ * pulled back when it starts, so the icon reads as a reminder bell; anywhere
+ * else it is a bookmark.
+ */
+function SaveAction({
+  onSave,
+  isSaved,
+  isScheduled,
+  theme,
+}: {
+  onSave: () => void;
+  isSaved?: boolean;
+  isScheduled: boolean;
+  theme: LiveTheme;
+}) {
+  const icon = isScheduled
+    ? (isSaved ? 'bell' : 'bell-outline')
+    : (isSaved ? 'bookmark' : 'bookmark-outline');
+
   return (
-    <View
-      className="flex-row items-center gap-0.5 rounded-[4px] px-1.5 py-0.5"
-      style={{ backgroundColor: meta.tintColor }}
+    <TouchableOpacity
+      onPress={onSave}
+      hitSlop={ACTION_HIT_SLOP}
+      accessibilityRole="button"
+      accessibilityLabel={isScheduled ? 'Remind me about this room' : 'Save room'}
+      accessibilityState={{ selected: Boolean(isSaved) }}
     >
-      <MaterialCommunityIcons name={meta.icon} size={10} color={meta.color} />
-      <Text className="text-[9px] font-bold" style={{ color: meta.color }}>
-        {meta.label}
-      </Text>
-    </View>
+      <MaterialCommunityIcons
+        name={icon}
+        size={20}
+        color={isSaved ? theme.colors.primary : theme.colors.textSecondary}
+      />
+    </TouchableOpacity>
   );
 }
 
-// --- Speaker row sub-component ---
-
-function SpeakerRow({ speakerIds, listenerCount }: { speakerIds: string[]; listenerCount: number }) {
+function MenuAction({ onMenuPress, theme }: { onMenuPress: () => void; theme: LiveTheme }) {
   return (
-    <View className="flex-row items-center gap-2">
-      {speakerIds.map((id) => (
-        <SpeakerAvatar key={id} userId={id} />
+    <TouchableOpacity
+      onPress={onMenuPress}
+      hitSlop={ACTION_HIT_SLOP}
+      accessibilityRole="button"
+      accessibilityLabel="Room options"
+    >
+      <MaterialCommunityIcons name="dots-horizontal" size={20} color={theme.colors.textSecondary} />
+    </TouchableOpacity>
+  );
+}
+
+// --- Speaker stack (featured card only) ---
+
+function SpeakerStack({ speakerIds, hiddenCount }: { speakerIds: string[]; hiddenCount: number }) {
+  if (speakerIds.length === 0) return null;
+
+  return (
+    <View className="flex-row items-center">
+      {speakerIds.map((id, index) => (
+        <View key={id} className={index === 0 ? '' : '-ml-3'}>
+          <SpeakerAvatar userId={id} />
+        </View>
       ))}
-      {listenerCount > 0 && (
+      {hiddenCount > 0 && (
         <View
-          className="items-center justify-center rounded-[14px] border-2 border-border bg-muted"
-          style={{ width: SPEAKER_AVATAR_SIZE + 4, height: SPEAKER_AVATAR_SIZE + 4 }}
+          className="-ml-3 items-center justify-center rounded-full border-2 border-surface bg-muted"
+          style={{ width: SPEAKER_AVATAR_SIZE, height: SPEAKER_AVATAR_SIZE }}
         >
-          <Text className="text-sm font-bold text-muted-foreground">
-            +{formatCompact(listenerCount)}
+          <Text className="text-[13px] font-bold text-muted-foreground">
+            +{formatCompact(hiddenCount)}
           </Text>
         </View>
       )}
@@ -333,8 +405,9 @@ function SpeakerAvatar({ userId }: { userId: string }) {
   const profile = useUserById(userId);
   const avatarUri = getAvatarUrl(profile, oxyServices, getCachedFileDownloadUrlSync);
 
+  // The ring is the card's own surface color, so overlapping faces stay separable.
   return (
-    <View className="rounded-[14px] border-2 border-border p-0.5">
+    <View className="rounded-full border-2 border-surface">
       <AvatarComponent size={SPEAKER_AVATAR_SIZE} source={avatarUri} shape="squircle" />
     </View>
   );
