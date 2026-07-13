@@ -12,6 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { useLiveConfig } from '../context/LiveConfigContext';
+import { LIVE_COLOR } from '../colors';
 
 interface MiniRoomBarProps {
   title: string;
@@ -108,7 +109,7 @@ export function MiniRoomBar({
 
         <TouchableOpacity
           onPress={onLeave}
-          style={[styles.controlButton, { backgroundColor: '#FF4458' }]}
+          style={[styles.controlButton, { backgroundColor: LIVE_COLOR }]}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <MaterialCommunityIcons name="close" size={16} color="#FFFFFF" />
@@ -130,7 +131,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#FF4458',
+    backgroundColor: LIVE_COLOR,
     alignItems: 'center',
     justifyContent: 'center',
   },

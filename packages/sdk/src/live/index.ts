@@ -23,6 +23,18 @@ export type {
   FileDownloadService,
 } from './types';
 
+// Colors — the live-rooms brand palette (live-indicator red, room-type accents).
+// Everything else themes with the host app; import these instead of re-hardcoding.
+export {
+  LIVE_COLOR,
+  LIVE_TINT_COLOR,
+  LIVE_FOREGROUND_COLOR,
+  ROOM_TYPE_META,
+  getRoomTypeMeta,
+  type BadgedRoomType,
+  type RoomTypeMeta,
+} from './colors';
+
 // Validation
 export {
   ZRoom,

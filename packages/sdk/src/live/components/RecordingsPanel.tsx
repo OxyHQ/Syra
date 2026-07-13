@@ -4,6 +4,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
 import { PanelHeader } from './PanelHeader';
 import { useLiveConfig } from '../context/LiveConfigContext';
+import { LIVE_COLOR } from '../colors';
 import type { Recording, LiveTheme } from '../types';
 
 interface RecordingsPanelProps {
@@ -174,8 +175,8 @@ export function RecordingsPanel({ roomId, isHost, theme, onClose, onPlay }: Reco
                     style={styles.actionButton}
                     onPress={() => handleDelete(recording)}
                   >
-                    <MaterialCommunityIcons name="delete-outline" size={16} color="#FF4458" />
-                    <Text style={[styles.actionText, { color: '#FF4458' }]}>Delete</Text>
+                    <MaterialCommunityIcons name="delete-outline" size={16} color={LIVE_COLOR} />
+                    <Text style={[styles.actionText, { color: LIVE_COLOR }]}>Delete</Text>
                   </TouchableOpacity>
                 </View>
               )}
