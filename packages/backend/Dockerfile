@@ -98,8 +98,9 @@ COPY packages/backend ./packages/backend
 # - shared-types: backend imports its compiled output at runtime via the
 #   `@syra/shared-types` -> file:../shared-types workspace link.
 # - sdk: the backend's tsc (Node16 module resolution) resolves `@syra.fm/sdk`
-#   from its built `dist/types/*.d.ts`; without the dist the backend build fails
-#   with TS2307, and `node` would fail to load the sdk at runtime.
+#   from its built `lib/typescript/**/*.d.ts` (react-native-builder-bob output);
+#   without lib the backend build fails with TS2307, and `node` would fail to load
+#   the sdk at runtime.
 # Produces packages/backend/dist/server.js.
 RUN bun run build:shared-types \
  && bun run build:sdk \
@@ -159,13 +160,13 @@ COPY --from=builder --chown=node:node /app/packages/backend/package.json ./packa
 COPY --from=builder --chown=node:node /app/packages/shared-types/package.json ./packages/shared-types/package.json
 # sdk manifest: the workspace symlink node_modules/@syra.fm/sdk -> ../../packages/sdk
 # (carried over inside node_modules) resolves here, and package.json main/exports
-# point require() at dist/cjs so the CommonJS backend can load it.
+# point require() at lib/commonjs so the CommonJS backend can load it.
 COPY --from=builder --chown=node:node /app/packages/sdk/package.json ./packages/sdk/package.json
 
 # Compiled JavaScript for the backend and its workspace dependencies.
 COPY --from=builder --chown=node:node /app/packages/backend/dist ./packages/backend/dist
 COPY --from=builder --chown=node:node /app/packages/shared-types/dist ./packages/shared-types/dist
-COPY --from=builder --chown=node:node /app/packages/sdk/dist ./packages/sdk/dist
+COPY --from=builder --chown=node:node /app/packages/sdk/lib ./packages/sdk/lib
 
 # i18n locale files and other runtime assets shipped with the backend source.
 COPY --from=builder --chown=node:node /app/packages/backend/assets ./packages/backend/assets
