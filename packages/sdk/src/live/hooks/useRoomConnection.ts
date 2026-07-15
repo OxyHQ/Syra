@@ -112,7 +112,12 @@ export function useRoomConnection({
         setParticipants(res.participants);
         hasJoined.current = true;
         if (introSound) {
-          try { const player = createAudioPlayer(introSound); player.play(); } catch {}
+          try {
+            const player = createAudioPlayer(introSound);
+            player.play();
+          } catch (err) {
+            console.warn('[RoomConnection] Failed to play intro sound:', err);
+          }
         }
       }
     });

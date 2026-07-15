@@ -16,8 +16,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     const { sortBy = 'recent', limit = '10' } = req.query;
     const limitNum = Math.min(Math.max(parseInt(limit as string, 10) || 10, 1), 50);
 
-    const VALID_SORT = ['popular', 'recent'] as const;
-    const sort = VALID_SORT.includes(sortBy as any) ? (sortBy as string) : 'recent';
+    const sort: 'popular' | 'recent' = sortBy === 'popular' ? 'popular' : 'recent';
 
     let recordings;
 

@@ -6,7 +6,11 @@ import { useLiveConfig } from '../context/LiveConfigContext';
 
 let AudioSession: { startAudioSession: () => void; stopAudioSession: () => void } | null = null;
 if (Platform.OS !== 'web') {
-  try { AudioSession = require('@livekit/react-native').AudioSession; } catch {}
+  try {
+    AudioSession = require('@livekit/react-native').AudioSession;
+  } catch (err) {
+    console.warn('[RoomAudio] @livekit/react-native AudioSession unavailable; continuing without explicit audio session management:', err);
+  }
 }
 
 interface UseRoomAudioOptions {
@@ -37,7 +41,9 @@ export function useRoomAudio({ roomId, isSpeaker, isMuted, isConnected }: UseRoo
     (async () => {
       try {
         await setAudioModeAsync({ shouldPlayInBackground: true, playsInSilentMode: true, interruptionMode: 'duckOthers' });
-      } catch {}
+      } catch (err) {
+        console.warn('[RoomAudio] Failed to set audio mode:', err);
+      }
       if (AudioSession) AudioSession.startAudioSession();
     })();
     return () => { if (AudioSession) AudioSession.stopAudioSession(); };
