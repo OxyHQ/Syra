@@ -1,4 +1,4 @@
-import type { FilterQuery } from 'mongoose';
+import type { QueryFilter } from 'mongoose';
 import { UserMusicPreferencesModel } from '../models/UserMusicPreferences';
 import type { OxyAuthRequest } from '@oxyhq/core/server';
 
@@ -12,31 +12,31 @@ export function isAudiusCatalogEnabled(): boolean {
   return AUDIUS_ENABLED_VALUES.has(String(process.env.AUDIUS_CATALOG_ENABLED ?? '').trim().toLowerCase());
 }
 
-function andFilter<T>(filter: FilterQuery<T>, condition: FilterQuery<T>): FilterQuery<T> {
+function andFilter<T>(filter: QueryFilter<T>, condition: QueryFilter<T>): QueryFilter<T> {
   if (Object.keys(filter).length === 0) {
     return condition;
   }
 
-  return { $and: [filter, condition] } as FilterQuery<T>;
+  return { $and: [filter, condition] } as QueryFilter<T>;
 }
 
-export function visibleCatalogFilter<T>(filter: FilterQuery<T> = {}): FilterQuery<T> {
+export function visibleCatalogFilter<T>(filter: QueryFilter<T> = {}): QueryFilter<T> {
   if (isAudiusCatalogEnabled()) return filter;
-  return andFilter(filter, { source: { $ne: 'audius' } } as FilterQuery<T>);
+  return andFilter(filter, { source: { $ne: 'audius' } } as QueryFilter<T>);
 }
 
 export function syraHostedOrDirectAllowedTrackFilter<T>(
   options: CatalogPlaybackOptions = {},
-): FilterQuery<T> {
-  const hlsReadyAudius: FilterQuery<T> = {
+): QueryFilter<T> {
+  const hlsReadyAudius: QueryFilter<T> = {
     source: 'audius',
     status: 'ready',
     hlsMasterKey: { $exists: true },
     'hls.0': { $exists: true },
-  } as FilterQuery<T>;
+  } as QueryFilter<T>;
 
-  const alternatives: FilterQuery<T>[] = [
-    { source: { $ne: 'audius' } } as FilterQuery<T>,
+  const alternatives: QueryFilter<T>[] = [
+    { source: { $ne: 'audius' } } as QueryFilter<T>,
     hlsReadyAudius,
   ];
 
@@ -45,19 +45,19 @@ export function syraHostedOrDirectAllowedTrackFilter<T>(
       source: 'audius',
       status: 'ready',
       streamUrl: { $exists: true },
-    } as FilterQuery<T>);
+    } as QueryFilter<T>);
   }
 
   return {
     $or: alternatives,
-  } as FilterQuery<T>;
+  } as QueryFilter<T>;
 }
 
 export function playableTrackFilter<T>(
-  filter: FilterQuery<T> = {},
+  filter: QueryFilter<T> = {},
   options: CatalogPlaybackOptions = {},
-): FilterQuery<T> {
-  const available = andFilter(filter, { isAvailable: true } as FilterQuery<T>);
+): QueryFilter<T> {
+  const available = andFilter(filter, { isAvailable: true } as QueryFilter<T>);
   const visible = visibleCatalogFilter<T>(available);
 
   if (!isAudiusCatalogEnabled()) {

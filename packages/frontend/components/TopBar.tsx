@@ -59,7 +59,7 @@ export const TopBar: React.FC = () => {
   const { q } = useLocalSearchParams<{ q?: string }>();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { user, showBottomSheet } = useOxy();
+  const { user, openAccountDialog } = useOxy();
   const { playTrackList } = usePlayerStore();
   const isMobile = useMediaQuery({ maxWidth: 767 });
   const [searchQuery, setSearchQuery] = useState(() => (pathname === '/search' && typeof q === 'string' ? q : ''));
@@ -480,7 +480,7 @@ export const TopBar: React.FC = () => {
       avatarSize={32}
       onNavigateManage={() => router.push('/settings')}
       onNavigateProfile={user?.username ? () => router.push(userHref(user.username)) : undefined}
-      onAddAccount={() => showBottomSheet?.('OxyAuth')}
+      onAddAccount={() => openAccountDialog('add')}
     />
   );
 

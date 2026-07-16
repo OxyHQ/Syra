@@ -1,7 +1,7 @@
-import mongoose, { type FilterQuery, type PipelineStage } from 'mongoose';
-import { AlbumModel, type IAlbum } from '../models/Album';
-import { ArtistModel, type IArtist } from '../models/CatalogEntity';
-import { PlaylistModel, type IPlaylist } from '../models/Playlist';
+import mongoose, { type QueryFilter, type PipelineStage } from 'mongoose';
+import { AlbumModel } from '../models/Album';
+import { ArtistModel } from '../models/CatalogEntity';
+import { PlaylistModel } from '../models/Playlist';
 import { PlaylistTrackModel } from '../models/PlaylistTrack';
 import { TrackModel } from '../models/Track';
 import {
@@ -12,6 +12,13 @@ import {
 
 const PLAYABLE_TRACK_LOOKUP_FIELD = '_playableTracks';
 const PLAYABLE_PLAYLIST_TRACK_LOOKUP_FIELD = '_playablePlaylistTracks';
+
+/**
+ * A dynamically composed aggregation `$match` filter. These helpers build
+ * heterogeneous match objects fed into `aggregate()` pipelines (which mongoose
+ * does not model-strict-type), so a general filter is the honest type here.
+ */
+type CatalogMatchFilter = QueryFilter<Record<string, unknown>>;
 
 export type CatalogSort = Record<string, 1 | -1>;
 
@@ -37,7 +44,7 @@ function paginatedStages(page: CatalogPage): PipelineStage[] {
 function playableTrackRelationFilter(
   relationField: 'albumId' | 'artistId',
   playbackOptions: CatalogPlaybackOptions,
-): FilterQuery<Record<string, unknown>> {
+): QueryFilter<Record<string, unknown>> {
   return {
     $and: [
       playableTrackFilter<Record<string, unknown>>({}, playbackOptions),
@@ -64,8 +71,8 @@ function playableTrackLookup(
   };
 }
 
-function withPlayableTracksPipeline<T>(
-  filter: FilterQuery<T>,
+function withPlayableTracksPipeline(
+  filter: CatalogMatchFilter,
   relationField: 'albumId' | 'artistId',
   playbackOptions: CatalogPlaybackOptions,
 ): PipelineStage[] {
@@ -115,7 +122,7 @@ function playlistTrackLookup(
 }
 
 function withPlayablePlaylistTracksPipeline(
-  filter: FilterQuery<IPlaylist>,
+  filter: CatalogMatchFilter,
   playbackOptions: CatalogPlaybackOptions,
 ): PipelineStage[] {
   return [
@@ -131,7 +138,7 @@ function toObjectId(id: string): mongoose.Types.ObjectId {
 }
 
 export async function findAlbumsWithPlayableTracks(
-  filter: FilterQuery<IAlbum>,
+  filter: CatalogMatchFilter,
   playbackOptions: CatalogPlaybackOptions,
   page: CatalogPage,
 ): Promise<unknown[]> {
@@ -142,7 +149,7 @@ export async function findAlbumsWithPlayableTracks(
 }
 
 export async function countAlbumsWithPlayableTracks(
-  filter: FilterQuery<IAlbum>,
+  filter: CatalogMatchFilter,
   playbackOptions: CatalogPlaybackOptions,
 ): Promise<number> {
   const result = await AlbumModel.aggregate<{ total: number }>([
@@ -170,7 +177,7 @@ export async function findOneAlbumWithPlayableTracks(
 }
 
 export async function findArtistsWithPlayableTracks(
-  filter: FilterQuery<IArtist>,
+  filter: CatalogMatchFilter,
   playbackOptions: CatalogPlaybackOptions,
   page: CatalogPage,
 ): Promise<unknown[]> {
@@ -182,7 +189,7 @@ export async function findArtistsWithPlayableTracks(
 }
 
 export async function countArtistsWithPlayableTracks(
-  filter: FilterQuery<IArtist>,
+  filter: CatalogMatchFilter,
   playbackOptions: CatalogPlaybackOptions,
 ): Promise<number> {
   // aggregate() bypasses the discriminator's `type` scoping — match it explicitly.
@@ -212,7 +219,7 @@ export async function findOneArtistWithPlayableTracks(
 }
 
 export async function findPlaylistsWithPlayableTracks(
-  filter: FilterQuery<IPlaylist>,
+  filter: CatalogMatchFilter,
   playbackOptions: CatalogPlaybackOptions,
   page: CatalogPage,
 ): Promise<unknown[]> {
@@ -223,7 +230,7 @@ export async function findPlaylistsWithPlayableTracks(
 }
 
 export async function countPlaylistsWithPlayableTracks(
-  filter: FilterQuery<IPlaylist>,
+  filter: CatalogMatchFilter,
   playbackOptions: CatalogPlaybackOptions,
 ): Promise<number> {
   const result = await PlaylistModel.aggregate<{ total: number }>([

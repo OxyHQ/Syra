@@ -1,5 +1,4 @@
-// Use built-in fetch if available (Node 18+), otherwise fallback to node-fetch
-const fetch = globalThis.fetch || require('node-fetch');
+const fetch = globalThis.fetch;
 
 const KLIPY_BASE_URL = 'https://api.klipy.com';
 

@@ -95,6 +95,7 @@ const SettingsScreen: React.FC = () => {
     canUsePrivateApi,
     logout,
     showBottomSheet,
+    openAccountDialog,
   } = useOxy();
   const {
     preferences: musicPreferences,
@@ -125,10 +126,10 @@ const SettingsScreen: React.FC = () => {
 
   const requirePrivateSession = useCallback((): boolean => {
     if (canUsePrivateApi) return true;
-    showBottomSheet?.('OxyAuth');
+    openAccountDialog('signin');
     Alert.alert('Log in required', 'Please log in before changing account settings.');
     return false;
-  }, [canUsePrivateApi, showBottomSheet]);
+  }, [canUsePrivateApi, openAccountDialog]);
 
   const handleViewProfile = useCallback(() => {
     if (!user?.username) return;
