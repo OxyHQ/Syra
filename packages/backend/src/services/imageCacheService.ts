@@ -173,7 +173,7 @@ class ImageCacheService {
       return { buffer: imageBuffer, contentType: 'image/svg+xml' };
     }
 
-    const base = sharp(imageBuffer, { failOnError: false });
+    const base = sharp(imageBuffer, { failOn: 'none' });
     const metadata = await base.metadata();
     const isAnimated = (metadata.pages ?? 1) > 1;
 
@@ -185,7 +185,7 @@ class ImageCacheService {
       fastShrinkOnLoad: true,
     };
 
-    let pipeline = sharp(imageBuffer, { failOnError: false })
+    let pipeline = sharp(imageBuffer, { failOn: 'none' })
       .resize(resizeOptions)
       .withMetadata({ orientation: metadata.orientation });
 
