@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { TrackModel } from '../../models/Track';
+import { TrackModel, type ITrack } from '../../models/Track';
 import { ArtistModel } from '../../models/CatalogEntity';
 import { CatalogRelationModel } from '../../models/CatalogRelation';
 import { UserTasteProfileModel } from '../../models/UserTasteProfile';
@@ -44,7 +44,7 @@ interface CatalogArtist {
   terminated?: boolean;
 }
 
-function andMongoFilters<T>(...filters: Array<mongoose.FilterQuery<T>>): mongoose.FilterQuery<T> {
+function andMongoFilters(...filters: Array<mongoose.QueryFilter<ITrack>>): mongoose.QueryFilter<ITrack> {
   const nonEmptyFilters = filters.filter((filter) => Object.keys(filter).length > 0);
   if (nonEmptyFilters.length === 0) {
     return {};
@@ -144,10 +144,10 @@ export async function getSimilarTracks(
   if (!seed) return collaborative.slice(0, limit);
   const exclude = new Set<string>([trackId, ...collaborative.map((t) => t._id.toString())]);
 
-  const contentBaseFilter = playableTrackFilter<CatalogTrack>({
+  const contentBaseFilter = playableTrackFilter<ITrack>({
     _id: { $nin: Array.from(exclude).filter((id) => mongoose.Types.ObjectId.isValid(id)) },
   }, playbackOptions);
-  let contentFilter: mongoose.FilterQuery<CatalogTrack> = contentBaseFilter;
+  let contentFilter: mongoose.QueryFilter<ITrack> = contentBaseFilter;
   if (seed?.genre) {
     contentFilter = andMongoFilters(contentBaseFilter, { $or: [{ genre: seed.genre }, { artistId: seed.artistId }] });
   } else if (seed?.artistId) {
@@ -266,7 +266,7 @@ export async function getMadeForYou(
   const baseTrackFilter = playableTrackFilter<CatalogTrack>({
     _id: { $nin: excludeTrackObjectIds },
   }, playbackOptions);
-  const trackOr: mongoose.FilterQuery<CatalogTrack>[] = [];
+  const trackOr: mongoose.QueryFilter<ITrack>[] = [];
   if (validTopArtists.length) trackOr.push({ artistId: { $in: validTopArtists } });
   if (topGenres.length) trackOr.push({ genre: { $in: topGenres } });
   const trackFilter = trackOr.length

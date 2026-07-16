@@ -12,12 +12,12 @@ import { Loading } from '@oxyhq/bloom/loading';
  * sign-in prompt or the protected children once `canUsePrivateApi` is true.
  */
 export function SignInGate({ children }: { children: ReactNode }) {
-  const { canUsePrivateApi, isPrivateApiPending, showBottomSheet } = useOxy();
+  const { canUsePrivateApi, isPrivateApiPending, openAccountDialog } = useOxy();
   const theme = useTheme();
 
   const onSignIn = useCallback(() => {
-    showBottomSheet?.('OxyAuth');
-  }, [showBottomSheet]);
+    openAccountDialog('signin');
+  }, [openAccountDialog]);
 
   if (isPrivateApiPending) {
     return (

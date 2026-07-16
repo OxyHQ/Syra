@@ -54,15 +54,15 @@ function Brand() {
 // device-account switcher menu. `expanded` renders the full row (avatar + name +
 // handle) in the sidebar; the collapsed avatar-only variant fits the mobile
 // top-bar slot. Manage goes to the ManageAccount sheet (this studio has no
-// standalone settings route); add-account opens the OxyAuth sheet.
+// standalone settings route); add-account opens the account dialog.
 function AccountButton({ expanded = true }: { expanded?: boolean }) {
-  const { showBottomSheet } = useOxy();
+  const { showBottomSheet, openAccountDialog } = useOxy();
   const onNavigateManage = useCallback(() => {
     showBottomSheet?.('ManageAccount');
   }, [showBottomSheet]);
   const onAddAccount = useCallback(() => {
-    showBottomSheet?.('OxyAuth');
-  }, [showBottomSheet]);
+    openAccountDialog('add');
+  }, [openAccountDialog]);
 
   return (
     <ProfileButton

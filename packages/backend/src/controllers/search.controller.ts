@@ -254,7 +254,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
     // Search podcasts (our mirrored catalog; podcasts are free → no playback filter).
     if (categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.PODCASTS) {
       const podcastFilter = {
-        status: 'active',
+        status: 'active' as const,
         $or: [
           { title: searchRegex },
           { author: searchRegex },
@@ -280,10 +280,10 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
     // playability `$or`.
     if (categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.EPISODES) {
       const episodeFilter = {
-        status: 'ready',
+        status: 'ready' as const,
         title: searchRegex,
         $and: [
-          { $or: [{ source: 'syra' }, { enclosureUrl: { $exists: true, $nin: [null, ''] } }] },
+          { $or: [{ source: 'syra' as const }, { enclosureUrl: { $exists: true, $nin: [null, ''] } }] },
         ],
       };
       const episodeFind = EpisodeModel.find(episodeFilter)

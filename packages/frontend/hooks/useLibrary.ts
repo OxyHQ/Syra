@@ -178,14 +178,14 @@ function useToggleMembership(
   options?: { invalidateTracks?: boolean; invalidatePlaylists?: boolean },
 ): UseMutationResult<LibraryMutationResult, Error, ToggleVariables, ToggleContext> {
   const queryClient = useQueryClient();
-  const { canUsePrivateApi, showBottomSheet } = useOxy();
+  const { canUsePrivateApi, openAccountDialog } = useOxy();
   const invalidateTracks = options?.invalidateTracks ?? false;
   const invalidatePlaylists = options?.invalidatePlaylists ?? false;
 
   return useMutation<LibraryMutationResult, Error, ToggleVariables, ToggleContext>({
     mutationFn: ({ id, next }) => {
       if (!canUsePrivateApi) {
-        showBottomSheet?.('OxyAuth');
+        openAccountDialog('signin');
         throw new Error('Sign in to save music to your library');
       }
       return next ? on(id) : off(id);

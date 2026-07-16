@@ -47,8 +47,10 @@ async function replayCredits<TDoc>(
   let credits = 0;
 
   for (;;) {
-    const query: mongoose.FilterQuery<TDoc> = { 'persons.0': { $exists: true } };
-    if (lastId) query._id = { $gt: lastId };
+    const query: mongoose.QueryFilter<TDoc> = {
+      'persons.0': { $exists: true },
+      ...(lastId ? { _id: { $gt: lastId } } : {}),
+    };
 
     const batch = await model
       .find(query, { persons: 1 })

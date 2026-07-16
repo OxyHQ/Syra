@@ -82,14 +82,14 @@
     ]
   },
   "dependencies": {
-    "zod": "^3.25.76"
+    "zod": "^4.4.3"
   },
   "peerDependencies": {
     "react": "^19.2.3",
     "react-native": "^0.85.3",
     "react-native-reanimated": "^4.3.1",
     "react-native-safe-area-context": "^5.7.0",
-    "@oxyhq/services": "^15.0.0",
+    "@oxyhq/services": "^22.1.0",
     "livekit-client": "^2.20.0",
     "@livekit/react-native": "^2.11.1",
     "expo-audio": "~56.0.12",
@@ -150,7 +150,7 @@
     "react-native": "^0.85.3",
     "react-native-reanimated": "^4.3.1",
     "react-native-safe-area-context": "^5.7.0",
-    "@oxyhq/services": "^15.0.0",
+    "@oxyhq/services": "^22.1.0",
     "livekit-client": "^2.20.0",
     "@livekit/react-native": "^2.11.1",
     "expo-audio": "~56.0.12",

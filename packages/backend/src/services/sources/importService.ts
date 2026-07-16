@@ -155,7 +155,7 @@ export async function runImport(
   const enqueueIngest = deps.enqueueIngest ?? defaultEnqueueIngest;
 
   const job = await ImportJobModel.create({
-    provider: connector.provider,
+    provider: connector.provider as IImportJob['provider'],
     query,
     status: 'running',
   });

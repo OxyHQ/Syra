@@ -133,12 +133,12 @@ const EMPTY_SUBSCRIPTIONS: PodcastSubscriptions = { subscriptions: [], total: 0,
  */
 export function useToggleSubscription(): UseMutationResult<void, Error, ToggleSubscriptionVariables, ToggleSubscriptionContext> {
   const queryClient = useQueryClient();
-  const { canUsePrivateApi, showBottomSheet } = useOxy();
+  const { canUsePrivateApi, openAccountDialog } = useOxy();
 
   return useMutation<void, Error, ToggleSubscriptionVariables, ToggleSubscriptionContext>({
     mutationFn: ({ podcastId, next }) => {
       if (!canUsePrivateApi) {
-        showBottomSheet?.('OxyAuth');
+        openAccountDialog('signin');
         throw new Error('Sign in to subscribe to podcasts');
       }
       return next ? podcastService.subscribe(podcastId) : podcastService.unsubscribe(podcastId);
