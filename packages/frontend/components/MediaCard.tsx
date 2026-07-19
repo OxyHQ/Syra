@@ -29,9 +29,18 @@ interface MediaCardProps {
   onGoToArtist?: () => void;
   onGoToAlbum?: () => void;
   shape?: 'square' | 'circle';
+  /** Pre-computed cover accent (DTO field); drives the card's own subtle hover-lift background. */
   primaryColor?: string;
-  onHoverIn?: () => void;
+  /**
+   * Called on hover-in/focus with the card's stable id and its resolved artwork
+   * URL, so the surrounding screen can drive artwork-based ambient theming
+   * (`useArtworkSeed`) from this card without re-deriving the image URL. The card
+   * already computes `resolvedImageUri`; it simply forwards it here.
+   */
+  onHoverIn?: (seed: { id: string; imageUrl: string | undefined }) => void;
   onHoverOut?: () => void;
+  /** Stable id used as the artwork-seed cache key when `onHoverIn` is set. */
+  seedId?: string;
 }
 
 function colorWithAlpha(color: string | undefined, alpha: number): string | undefined {
@@ -70,6 +79,7 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
   primaryColor,
   onHoverIn,
   onHoverOut,
+  seedId,
 }) => {
   const theme = useTheme();
   const resolvedImageUri = resolvedImageUriProp ?? pickCatalogImageUrl(images, imageUri, 'card', imageSizes);
@@ -117,11 +127,13 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
     setIsHovered(nextHovered);
 
     if (nextHovered) {
-      onHoverIn?.();
+      if (seedId !== undefined) {
+        onHoverIn?.({ id: seedId, imageUrl: resolvedImageUri });
+      }
     } else {
       onHoverOut?.();
     }
-  }, [onHoverIn, onHoverOut]);
+  }, [onHoverIn, onHoverOut, seedId, resolvedImageUri]);
 
   const activateHover = React.useCallback(() => {
     isPointerInsideCardRef.current = true;

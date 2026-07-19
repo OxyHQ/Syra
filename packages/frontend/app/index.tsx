@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Animated, Easing, StyleSheet, View, ScrollView, Text, Platform, Pressable } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { StyleSheet, View, ScrollView, Text, Platform, Pressable } from 'react-native';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -12,10 +11,9 @@ import { MediaCard } from '@/components/MediaCard';
 import { ResponsiveGrid } from '@/components/ResponsiveGrid';
 import { QuickAccessGridSkeleton, MediaCardRowSkeleton } from '@/components/skeletons';
 import { musicService } from '@/services/musicService';
-import { Track, Album, Artist, Playlist } from '@syra/shared-types';
+import { Track, Album, Artist, Playlist, Podcast, PlaybackContext } from '@syra/shared-types';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useQueueStore } from '@/stores/queueStore';
-import { useUIStore } from '@/stores/uiStore';
 import {
   useRecentlyPlayed,
   useMadeForYou,
@@ -32,23 +30,10 @@ import { resolvePodcastImageUri } from '@/utils/podcastImages';
 import { authenticatedClient } from '@/utils/api';
 import { liveRoomsQueryKey } from '@/lib/liveConfig';
 import { toast } from '@/lib/sonner';
+import { AmbientArtworkTheme } from '@/components/AmbientArtworkTheme';
+import { useArtworkSeed } from '@/hooks/useArtworkSeed';
 
 const logger = createScopedLogger('HomeScreen');
-
-/**
- * Parse a hex color string into RGB components. Pure helper hoisted to module
- * scope so it can be referenced from effects without a use-before-declaration.
- */
-const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  return result
-    ? {
-      r: parseInt(result[1], 16),
-      g: parseInt(result[2], 16),
-      b: parseInt(result[3], 16),
-    }
-    : null;
-};
 
 /**
  * Quick access item type - can be album, artist, or playlist
@@ -67,14 +52,13 @@ type QuickAccessItem =
  * data fetching. Sections with no real data are hidden rather than faked.
  */
 const HomeScreen: React.FC = () => {
-  const theme = useTheme();
-  const router = useRouter();
   const { t } = useTranslation();
-  const { joinLiveRoom } = useLiveRoom();
   const [now, setNow] = useState(() => new Date());
   const { playTrackList } = usePlayerStore();
   const { addTracksLocally } = useQueueStore();
-  const setShellGradientColor = useUIStore(s => s.setShellGradientColor);
+  // Artwork-based ambient theming: hovering a card extracts its cover's dominant
+  // seed and re-themes the home's ambient surfaces via <AmbientArtworkTheme>.
+  const { seed, activate: activateSeed, deactivate: deactivateSeed } = useArtworkSeed();
 
   // Real, per-section queries — each loads/caches/errors independently.
   const recentlyPlayedQuery = useRecentlyPlayed();
@@ -149,18 +133,6 @@ const HomeScreen: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => () => {
-    setShellGradientColor(null);
-  }, [setShellGradientColor]);
-
-  // Cross-fade gradient layers so hover color changes do not snap.
-  const [hoveredItemColor, setHoveredItemColor] = useState<string | null>(null);
-  const [gradientOpacity] = useState(() => new Animated.Value(1));
-  const displayedGradientColorRef = useRef(theme.colors.primary);
-  const targetGradientColorRef = useRef(theme.colors.primary);
-  const [gradientFromColor, setGradientFromColor] = useState(theme.colors.primary);
-  const [gradientToColor, setGradientToColor] = useState(theme.colors.primary);
-
   // Get greeting based on time
   const greeting = useMemo(() => {
     const hour = now.getHours();
@@ -169,61 +141,19 @@ const HomeScreen: React.FC = () => {
     return 'Good evening';
   }, [now]);
 
-  // Convert hex to rgba string for LinearGradient
-  const hexToRgba = useCallback((hex: string, alpha: number = 0.2): string => {
-    const rgb = hexToRgb(hex);
-    if (!rgb) return `rgba(128, 128, 128, ${alpha})`; // Fallback gray
-    return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
-  }, []);
-
-  const getGradientColors = useCallback((color: string): [string, string, string] => ([
-    hexToRgba(color, 0.46),
-    hexToRgba(color, 0.22),
-    theme.colors.backgroundSecondary,
-  ]), [hexToRgba, theme.colors.backgroundSecondary]);
-
-  useEffect(() => {
-    const nextColor = hoveredItemColor || theme.colors.primary;
-    if (targetGradientColorRef.current === nextColor) {
-      return;
-    }
-
-    setGradientFromColor(targetGradientColorRef.current);
-    setGradientToColor(nextColor);
-    targetGradientColorRef.current = nextColor;
-    gradientOpacity.setValue(0);
-
-    const animation = Animated.timing(gradientOpacity, {
-      toValue: 1,
-      duration: 520,
-      easing: Easing.bezier(0.16, 1, 0.3, 1),
-      useNativeDriver: Platform.OS !== 'web',
-    });
-
-    animation.start(({ finished }) => {
-      if (finished) {
-        displayedGradientColorRef.current = nextColor;
-        setGradientFromColor(nextColor);
-      }
-    });
-
-    return () => {
-      animation.stop();
-    };
-  }, [gradientOpacity, hoveredItemColor, theme.colors.primary]);
-
-  // Handle hover in - set the color
-  const handleHoverIn = useCallback((color: string | null | undefined) => {
-    const nextColor = color || theme.colors.primary;
-    setHoveredItemColor(nextColor);
-    setShellGradientColor(nextColor);
-  }, [setShellGradientColor, theme.colors.primary]);
-
-  // Handle hover out - reset to default
-  const handleHoverOut = useCallback(() => {
-    setHoveredItemColor(null);
-    setShellGradientColor(null);
-  }, [setShellGradientColor]);
+  // Hover a card → extract its cover's dominant seed → re-theme the home's
+  // ambient surfaces (the `<AmbientArtworkTheme>` scope below reads it). Leaving
+  // the card restores the app preset. `MediaCard` forwards its own resolved
+  // image URL + a stable id so the seed is cached per artwork.
+  //
+  // multi-seed: when Bloom ships explicit multi-seed extraction, `useArtworkSeed`
+  // becomes the single place that changes — these handlers keep the same shape.
+  const handleHoverIn = useCallback(
+    ({ id, imageUrl }: { id: string; imageUrl: string | undefined }) => {
+      activateSeed(id, imageUrl);
+    },
+    [activateSeed],
+  );
 
   // Navigate to and start playing an album's first track. Used by album cards'
   // play button so a single tap actually plays real audio.
@@ -369,24 +299,136 @@ const HomeScreen: React.FC = () => {
         title="Syra - Music Streaming"
         description="Discover and play your favorite music"
       />
-      <View style={[styles.gradientContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
-        <LinearGradient
-          colors={getGradientColors(gradientFromColor)}
-          locations={[0, 0.48, 1]}
-          pointerEvents="none"
-          style={styles.fixedGradient}
+      {/* Hovering any card re-themes these ambient surfaces to the card's
+          artwork seed; leaving restores the app preset. Surfaces read the
+          scoped theme via `useTheme()` INSIDE this scope (see `HomeContent`). */}
+      <AmbientArtworkTheme seed={seed}>
+        <HomeContent
+          greeting={greeting}
+          liveRooms={liveRooms}
+          quickAccess={quickAccess}
+          quickAccessLoading={quickAccessLoading}
+          hasQuickAccess={hasQuickAccess}
+          hasMadeForYou={hasMadeForYou}
+          recentlyPlayed={recentlyPlayed}
+          recentlyPlayedPending={recentlyPlayedQuery.isPending}
+          madeForYouArtists={madeForYouArtists}
+          madeForYouPlaylists={madeForYouPlaylists}
+          madeForYouAlbums={madeForYouAlbums}
+          madeForYouPending={madeForYouQuery.isPending}
+          isPersonalized={isPersonalized}
+          podcasts={podcasts}
+          podcastsPending={podcastsQuery.isPending}
+          popularAlbums={popularAlbums}
+          popularAlbumsPending={popularAlbumsQuery.isPending}
+          popularArtists={popularArtists}
+          popularArtistsPending={popularArtistsQuery.isPending}
+          userPlaylists={userPlaylists}
+          userPlaylistsPending={userPlaylistsQuery.isPending}
+          tracks={tracks}
+          tracksPending={tracksQuery.isPending}
+          t={t}
+          onSeedHoverIn={handleHoverIn}
+          onSeedHoverOut={deactivateSeed}
+          playTrackList={playTrackList}
+          playAlbum={playAlbum}
+          playPlaylist={playPlaylist}
+          playArtist={playArtist}
+          addTrackToQueue={addTrackToQueue}
+          addAlbumToQueue={addAlbumToQueue}
+          addPlaylistToQueue={addPlaylistToQueue}
+          addArtistToQueue={addArtistToQueue}
         />
-        <Animated.View
-          pointerEvents="none"
-          style={[styles.fixedGradient, { opacity: gradientOpacity }]}
-        >
-          <LinearGradient
-            colors={getGradientColors(gradientToColor)}
-            locations={[0, 0.48, 1]}
-            pointerEvents="none"
-            style={styles.gradientFill}
-          />
-        </Animated.View>
+      </AmbientArtworkTheme>
+    </>
+  );
+};
+
+interface HomeContentProps {
+  greeting: string;
+  liveRooms: Room[];
+  quickAccess: QuickAccessItem[];
+  quickAccessLoading: boolean;
+  hasQuickAccess: boolean;
+  hasMadeForYou: boolean;
+  recentlyPlayed: Track[];
+  recentlyPlayedPending: boolean;
+  madeForYouArtists: Artist[];
+  madeForYouPlaylists: Playlist[];
+  madeForYouAlbums: Album[];
+  madeForYouPending: boolean;
+  isPersonalized: boolean;
+  podcasts: Podcast[];
+  podcastsPending: boolean;
+  popularAlbums: Album[];
+  popularAlbumsPending: boolean;
+  popularArtists: Artist[];
+  popularArtistsPending: boolean;
+  userPlaylists: Playlist[];
+  userPlaylistsPending: boolean;
+  tracks: Track[];
+  tracksPending: boolean;
+  t: ReturnType<typeof useTranslation>['t'];
+  onSeedHoverIn: (seed: { id: string; imageUrl: string | undefined }) => void;
+  onSeedHoverOut: () => void;
+  playTrackList: (tracks: Track[], startIndex?: number, context?: PlaybackContext) => Promise<void>;
+  playAlbum: (albumId: string, albumName?: string) => void;
+  playPlaylist: (playlistId: string, playlistName?: string) => void;
+  playArtist: (artistId: string, artistName?: string) => void;
+  addTrackToQueue: (track: Track) => void;
+  addAlbumToQueue: (albumId: string) => void;
+  addPlaylistToQueue: (playlistId: string) => void;
+  addArtistToQueue: (artistId: string) => void;
+}
+
+/**
+ * The home's ambient region. Reads `useTheme()` INSIDE `<AmbientArtworkTheme>`
+ * so its surfaces re-theme to the hovered card's artwork seed, then revert to
+ * the app preset on hover-out. All data + handlers are passed by `HomeScreen`
+ * (the data/logic owner) so this stays a pure presentational tree.
+ */
+const HomeContent: React.FC<HomeContentProps> = ({
+  greeting,
+  liveRooms,
+  quickAccess,
+  quickAccessLoading,
+  hasQuickAccess,
+  hasMadeForYou,
+  recentlyPlayed,
+  recentlyPlayedPending,
+  madeForYouArtists,
+  madeForYouPlaylists,
+  madeForYouAlbums,
+  madeForYouPending,
+  isPersonalized,
+  podcasts,
+  podcastsPending,
+  popularAlbums,
+  popularAlbumsPending,
+  popularArtists,
+  popularArtistsPending,
+  userPlaylists,
+  userPlaylistsPending,
+  tracks,
+  tracksPending,
+  t,
+  onSeedHoverIn,
+  onSeedHoverOut,
+  playTrackList,
+  playAlbum,
+  playPlaylist,
+  playArtist,
+  addTrackToQueue,
+  addAlbumToQueue,
+  addPlaylistToQueue,
+  addArtistToQueue,
+}) => {
+  const theme = useTheme();
+  const router = useRouter();
+  const { joinLiveRoom } = useLiveRoom();
+
+  return (
+    <View style={[styles.gradientContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
         <ScrollView
           style={[styles.scrollView, { backgroundColor: 'transparent' }]}
           contentContainerStyle={[
@@ -447,7 +489,6 @@ const HomeScreen: React.FC = () => {
                 const title = item.type === 'album' ? item.data.title : item.data.name;
                 const id = item.data.id;
                 const itemKey = `${item.type}-${id}`;
-                const primaryColor = item.data.primaryColor;
                 const imageUri = item.type === 'artist'
                   ? pickCatalogImageUrl(item.data.images, item.data.image, 'icon', item.data.imageSizes)
                   : pickCatalogImageUrl(undefined, item.data.coverArt, 'icon', item.data.coverArtSizes);
@@ -465,8 +506,8 @@ const HomeScreen: React.FC = () => {
                         router.push(`/p/${id}`);
                       }
                     }}
-                    onHoverIn={() => handleHoverIn(primaryColor)}
-                    onHoverOut={handleHoverOut}
+                    onHoverIn={() => onSeedHoverIn({ id, imageUrl: imageUri })}
+                    onHoverOut={onSeedHoverOut}
                   >
                     <View
                       style={[
@@ -508,7 +549,7 @@ const HomeScreen: React.FC = () => {
 
           {/* Jump back in — REAL recently-played tracks (authed). Hidden when
               the user has no play history yet (no faking). */}
-          {recentlyPlayedQuery.isPending ? (
+          {recentlyPlayedPending ? (
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
                 Jump back in
@@ -549,8 +590,9 @@ const HomeScreen: React.FC = () => {
                       onAddToQueue={() => addTrackToQueue(track)}
                       onGoToAlbum={track.albumId ? () => router.push(`/album/${track.albumId}`) : undefined}
                       onGoToArtist={() => router.push(`/p/${track.artistId}`)}
-                      onHoverIn={() => handleHoverIn(track.primaryColor)}
-                      onHoverOut={handleHoverOut}
+                      seedId={track.id}
+                      onHoverIn={onSeedHoverIn}
+                      onHoverOut={onSeedHoverOut}
                     />
                   </View>
                 ))}
@@ -559,7 +601,7 @@ const HomeScreen: React.FC = () => {
           )}
 
           {/* Made for You — REAL recommendations (popular albums + public playlists) */}
-          {madeForYouQuery.isPending ? (
+          {madeForYouPending ? (
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
                 Made for you
@@ -585,8 +627,9 @@ const HomeScreen: React.FC = () => {
                       onPress={() => router.push(`/p/${artist.id}`)}
                       onPlayPress={() => playArtist(artist.id, artist.name)}
                       onAddToQueue={() => addArtistToQueue(artist.id)}
-                      onHoverIn={() => handleHoverIn(artist.primaryColor)}
-                      onHoverOut={handleHoverOut}
+                      seedId={artist.id}
+                      onHoverIn={onSeedHoverIn}
+                      onHoverOut={onSeedHoverOut}
                     />
                   </View>
                 ))}
@@ -602,8 +645,9 @@ const HomeScreen: React.FC = () => {
                       onPress={() => router.push(`/playlist/${playlist.id}`)}
                       onPlayPress={() => playPlaylist(playlist.id, playlist.name)}
                       onAddToQueue={() => addPlaylistToQueue(playlist.id)}
-                      onHoverIn={() => handleHoverIn(playlist.primaryColor)}
-                      onHoverOut={handleHoverOut}
+                      seedId={playlist.id}
+                      onHoverIn={onSeedHoverIn}
+                      onHoverOut={onSeedHoverOut}
                     />
                   </View>
                 ))}
@@ -620,8 +664,9 @@ const HomeScreen: React.FC = () => {
                       onPlayPress={() => playAlbum(album.id, album.title)}
                       onAddToQueue={() => addAlbumToQueue(album.id)}
                       onGoToArtist={() => router.push(`/p/${album.artistId}`)}
-                      onHoverIn={() => handleHoverIn(album.primaryColor)}
-                      onHoverOut={handleHoverOut}
+                      seedId={album.id}
+                      onHoverIn={onSeedHoverIn}
+                      onHoverOut={onSeedHoverOut}
                     />
                   </View>
                 ))}
@@ -632,7 +677,7 @@ const HomeScreen: React.FC = () => {
           {/* Podcasts — popular shows from the public catalog. Mirrors the music
               rails (same MediaCard + ResponsiveGrid); "See all" opens the
               podcasts browse screen. Hidden when the catalog has no shows. */}
-          {podcastsQuery.isPending ? (
+          {podcastsPending ? (
             <View style={styles.section}>
               <View style={styles.sectionHeaderRow}>
                 <Text style={[styles.sectionHeaderTitle, { color: theme.colors.text }]}>
@@ -664,8 +709,9 @@ const HomeScreen: React.FC = () => {
                       primaryColor={podcast.primaryColor}
                       onPress={() => router.push({ pathname: '/podcasts/[id]', params: { id: podcast.id } })}
                       onPlayPress={() => router.push({ pathname: '/podcasts/[id]', params: { id: podcast.id } })}
-                      onHoverIn={() => handleHoverIn(podcast.primaryColor)}
-                      onHoverOut={handleHoverOut}
+                      seedId={podcast.id}
+                      onHoverIn={onSeedHoverIn}
+                      onHoverOut={onSeedHoverOut}
                     />
                   </View>
                 ))}
@@ -674,7 +720,7 @@ const HomeScreen: React.FC = () => {
           )}
 
           {/* Popular albums — REAL, ranked by catalog popularity */}
-          {popularAlbumsQuery.isPending ? (
+          {popularAlbumsPending ? (
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
                 Popular albums
@@ -700,8 +746,9 @@ const HomeScreen: React.FC = () => {
                       onPlayPress={() => playAlbum(album.id, album.title)}
                       onAddToQueue={() => addAlbumToQueue(album.id)}
                       onGoToArtist={() => router.push(`/p/${album.artistId}`)}
-                      onHoverIn={() => handleHoverIn(album.primaryColor)}
-                      onHoverOut={handleHoverOut}
+                      seedId={album.id}
+                      onHoverIn={onSeedHoverIn}
+                      onHoverOut={onSeedHoverOut}
                     />
                   </View>
                 ))}
@@ -710,7 +757,7 @@ const HomeScreen: React.FC = () => {
           )}
 
           {/* Popular artists — REAL, ranked by catalog popularity */}
-          {popularArtistsQuery.isPending ? null : popularArtists.length > 0 && (
+          {popularArtistsPending ? null : popularArtists.length > 0 && (
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
                 Popular artists
@@ -729,8 +776,9 @@ const HomeScreen: React.FC = () => {
                       onPress={() => router.push(`/p/${artist.id}`)}
                       onPlayPress={() => playArtist(artist.id, artist.name)}
                       onAddToQueue={() => addArtistToQueue(artist.id)}
-                      onHoverIn={() => handleHoverIn(artist.primaryColor)}
-                      onHoverOut={handleHoverOut}
+                      seedId={artist.id}
+                      onHoverIn={onSeedHoverIn}
+                      onHoverOut={onSeedHoverOut}
                     />
                   </View>
                 ))}
@@ -739,7 +787,7 @@ const HomeScreen: React.FC = () => {
           )}
 
           {/* Your playlists — REAL, the signed-in user's own playlists */}
-          {userPlaylistsQuery.isPending ? null : userPlaylists.length > 0 && (
+          {userPlaylistsPending ? null : userPlaylists.length > 0 && (
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
                 Your playlists
@@ -757,8 +805,9 @@ const HomeScreen: React.FC = () => {
                       onPress={() => router.push(`/playlist/${playlist.id}`)}
                       onPlayPress={() => playPlaylist(playlist.id, playlist.name)}
                       onAddToQueue={() => addPlaylistToQueue(playlist.id)}
-                      onHoverIn={() => handleHoverIn(playlist.primaryColor)}
-                      onHoverOut={handleHoverOut}
+                      seedId={playlist.id}
+                      onHoverIn={onSeedHoverIn}
+                      onHoverOut={onSeedHoverOut}
                     />
                   </View>
                 ))}
@@ -767,7 +816,7 @@ const HomeScreen: React.FC = () => {
           )}
 
           {/* Popular tracks — REAL, ranked by catalog popularity */}
-          {tracksQuery.isPending ? (
+          {tracksPending ? (
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
                 Popular tracks
@@ -804,8 +853,9 @@ const HomeScreen: React.FC = () => {
                       onAddToQueue={() => addTrackToQueue(track)}
                       onGoToAlbum={track.albumId ? () => router.push(`/album/${track.albumId}`) : undefined}
                       onGoToArtist={() => router.push(`/p/${track.artistId}`)}
-                      onHoverIn={() => handleHoverIn(track.primaryColor)}
-                      onHoverOut={handleHoverOut}
+                      seedId={track.id}
+                      onHoverIn={onSeedHoverIn}
+                      onHoverOut={onSeedHoverOut}
                     />
                   </View>
                 ))}
@@ -813,8 +863,7 @@ const HomeScreen: React.FC = () => {
             </View>
           )}
         </ScrollView>
-      </View>
-    </>
+    </View>
   );
 };
 
@@ -822,16 +871,6 @@ const styles = StyleSheet.create({
   gradientContainer: {
     flex: 1,
     overflow: 'hidden',
-  },
-  fixedGradient: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 520,
-  },
-  gradientFill: {
-    flex: 1,
   },
   scrollView: {
     flex: 1,

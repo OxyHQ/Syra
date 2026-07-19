@@ -12,6 +12,11 @@ import { usePlayerStore } from '@/stores/playerStore';
 import { resolvePodcastImageUri } from '@/utils/podcastImages';
 import { stripHtml, formatPubDate, formatEpisodeDuration } from '@/utils/podcastFormat';
 import { formatDuration } from '@/utils/musicUtils';
+import { AmbientArtworkTheme } from '@/components/AmbientArtworkTheme';
+import { useArtworkSeed } from '@/hooks/useArtworkSeed';
+
+type EpisodeDetail = NonNullable<ReturnType<typeof useEpisode>['data']>;
+type EpisodeChapters = NonNullable<ReturnType<typeof useEpisodeChapters>['data']>;
 
 /**
  * Episode detail — artwork, show/title, play/resume control, description,
@@ -30,6 +35,7 @@ const EpisodeScreen: React.FC = () => {
   const progress = useEpisodeProgress(id);
 
   const chaptersQuery = useEpisodeChapters(episode?.chapters?.url);
+  const { seed, activate: activateSeed, deactivate: deactivateSeed } = useArtworkSeed();
 
   const currentEpisode = usePlayerStore((s) => s.currentEpisode);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
@@ -81,12 +87,75 @@ const EpisodeScreen: React.FC = () => {
     );
   }
 
-  const metaParts = [formatPubDate(episode.pubDate), formatEpisodeDuration(episode.duration)].filter(Boolean);
   const playLabel = isCurrent && isPlaying
     ? 'Pause'
     : (progress?.progressSec ?? 0) > 5 && !progress?.completed
       ? 'Resume'
       : 'Play';
+
+  // Hover the artwork → extract its dominant colour → re-theme the episode's
+  // ambient surfaces. `EpisodeView` reads the scoped theme via `useTheme()`
+  // inside the ambient region, so the hero + sections ease into the artwork
+  // palette; leaving the artwork restores the app preset. Native is a no-op.
+  return (
+    <AmbientArtworkTheme seed={seed}>
+      <EpisodeView
+        episode={episode}
+        detail={detail}
+        artwork={artwork}
+        description={description}
+        chapters={chaptersQuery.data}
+        isCurrent={isCurrent}
+        isPlaying={isPlaying}
+        playLabel={playLabel}
+        onCoverHoverIn={() => id && activateSeed(id, artwork)}
+        onCoverHoverOut={deactivateSeed}
+        onPlay={handlePlay}
+        onChapterPress={handleChapterPress}
+        onOpenShow={() => router.push({ pathname: '/podcasts/[id]', params: { id: episode.podcastId } })}
+      />
+    </AmbientArtworkTheme>
+  );
+};
+
+interface EpisodeViewProps {
+  episode: NonNullable<EpisodeDetail['episode']>;
+  detail: EpisodeDetail | undefined;
+  artwork: string | undefined;
+  description: string;
+  chapters: EpisodeChapters | undefined;
+  isCurrent: boolean;
+  isPlaying: boolean;
+  playLabel: string;
+  onCoverHoverIn: () => void;
+  onCoverHoverOut: () => void;
+  onPlay: () => void;
+  onChapterPress: (startTime: number) => void;
+  onOpenShow: () => void;
+}
+
+/**
+ * The episode's ambient region. Reads `useTheme()` INSIDE `<AmbientArtworkTheme>`
+ * so its surfaces re-theme to the artwork seed while hovering the artwork, then
+ * revert to the app preset on hover-out.
+ */
+const EpisodeView: React.FC<EpisodeViewProps> = ({
+  episode,
+  detail,
+  artwork,
+  description,
+  chapters,
+  isCurrent,
+  isPlaying,
+  playLabel,
+  onCoverHoverIn,
+  onCoverHoverOut,
+  onPlay,
+  onChapterPress,
+  onOpenShow,
+}) => {
+  const theme = useTheme();
+  const metaParts = [formatPubDate(episode.pubDate), formatEpisodeDuration(episode.duration)].filter(Boolean);
 
   return (
     <>
@@ -98,17 +167,24 @@ const EpisodeScreen: React.FC = () => {
       >
         {/* Header */}
         <View style={styles.header}>
-          {artwork ? (
-            <Image source={{ uri: artwork }} style={styles.artwork} contentFit="cover" />
-          ) : (
-            <View style={[styles.artworkPlaceholder, { backgroundColor: theme.colors.backgroundTertiary }]}>
-              <Ionicons name="mic" size={48} color={theme.colors.textSecondary} />
-            </View>
-          )}
+          {/* Episode artwork — hover (web) / focus to tint the ambient region */}
           <Pressable
-            onPress={() => router.push({ pathname: '/podcasts/[id]', params: { id: episode.podcastId } })}
-            accessibilityRole="link"
+            onHoverIn={onCoverHoverIn}
+            onHoverOut={onCoverHoverOut}
+            onFocus={onCoverHoverIn}
+            onBlur={onCoverHoverOut}
+            accessibilityRole="image"
+            accessibilityLabel={`${episode.title} artwork`}
           >
+            {artwork ? (
+              <Image source={{ uri: artwork }} style={styles.artwork} contentFit="cover" />
+            ) : (
+              <View style={[styles.artworkPlaceholder, { backgroundColor: theme.colors.backgroundTertiary }]}>
+                <Ionicons name="mic" size={48} color={theme.colors.textSecondary} />
+              </View>
+            )}
+          </Pressable>
+          <Pressable onPress={onOpenShow} accessibilityRole="link">
             <Text style={[styles.showLink, { color: theme.colors.primary }]} numberOfLines={1}>
               {episode.podcastTitle}
             </Text>
@@ -119,7 +195,7 @@ const EpisodeScreen: React.FC = () => {
           )}
 
           <Pressable
-            onPress={handlePlay}
+            onPress={onPlay}
             style={[styles.playButton, { backgroundColor: theme.colors.primary }]}
             accessibilityRole="button"
             accessibilityLabel={playLabel}
@@ -137,13 +213,13 @@ const EpisodeScreen: React.FC = () => {
         {detail && <HostsAndGuests persons={detail.persons} />}
 
         {/* Chapters */}
-        {chaptersQuery.data && chaptersQuery.data.length > 0 && (
+        {chapters && chapters.length > 0 && (
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Chapters</Text>
-            {chaptersQuery.data.map((chapter, index) => (
+            {chapters.map((chapter, index) => (
               <Pressable
                 key={`${chapter.startTime}-${index}`}
-                onPress={() => handleChapterPress(chapter.startTime)}
+                onPress={() => onChapterPress(chapter.startTime)}
                 style={styles.chapterRow}
               >
                 <Text style={[styles.chapterTime, { color: theme.colors.textSecondary }]}>

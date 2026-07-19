@@ -24,8 +24,12 @@ import { webViewStyle } from '@/utils/webStyles';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { toast } from '@/lib/sonner';
 import { useOxy } from '@oxyhq/services';
+import { AmbientArtworkTheme } from '@/components/AmbientArtworkTheme';
+import { useArtworkSeed } from '@/hooks/useArtworkSeed';
 
 const HEADER_HEIGHT = 400;
+
+type PlaylistData = NonNullable<Awaited<ReturnType<typeof musicService.getPlaylistById>>>;
 
 /**
  * Playlist Screen
@@ -43,6 +47,7 @@ const PlaylistScreen: React.FC = () => {
   const toggleSave = useToggleSavePlaylist();
   const isSaved = id ? isPlaylistSaved(id) : false;
   const [isDownloaded, setIsDownloaded] = useState(false);
+  const { seed, activate: activateSeed, deactivate: deactivateSeed } = useArtworkSeed();
 
   const handleToggleSave = () => {
     if (!id) {
@@ -50,9 +55,6 @@ const PlaylistScreen: React.FC = () => {
     }
     toggleSave.mutate({ id, next: !isSaved });
   };
-
-  const scrollRef = useAnimatedRef<Animated.ScrollView>();
-  const scrollOffset = useScrollViewOffset(scrollRef);
 
   const { data, isLoading } = useQuery({
     queryKey: ['playlist', id, catalogIdentity],
@@ -70,65 +72,6 @@ const PlaylistScreen: React.FC = () => {
   const tracks = data?.tracks ?? [];
   const canPlay = tracks.length > 0;
   const isCatalogLoading = isPrivateApiPending || isLoading;
-
-  // Parallax animation for header image
-  const headerAnimatedStyle = useAnimatedStyle(() => {
-    return {
-      transform: [
-        {
-          translateY: interpolate(
-            scrollOffset.value,
-            [-HEADER_HEIGHT, 0, HEADER_HEIGHT],
-            [-HEADER_HEIGHT / 2, 0, HEADER_HEIGHT * 0.75]
-          ),
-        },
-        {
-          scale: interpolate(scrollOffset.value, [-HEADER_HEIGHT, 0, HEADER_HEIGHT], [2, 1, 1]),
-        },
-      ],
-    };
-  });
-
-  // Animated style for title in header - fades out as you scroll
-  const headerTitleAnimatedStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(
-      scrollOffset.value,
-      [0, HEADER_HEIGHT - 100, HEADER_HEIGHT - 50],
-      [1, 0.3, 0],
-      'clamp'
-    );
-    return {
-      opacity,
-    };
-  });
-
-  // Animated style for sticky header - fades in as you scroll
-  const stickyHeaderAnimatedStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(
-      scrollOffset.value,
-      [HEADER_HEIGHT - 100, HEADER_HEIGHT - 50],
-      [0, 1],
-      'clamp'
-    );
-    const translateY = interpolate(
-      scrollOffset.value,
-      [HEADER_HEIGHT - 100, HEADER_HEIGHT - 50],
-      [-20, 0],
-      'clamp'
-    );
-    return {
-      opacity,
-      transform: [{ translateY }],
-    };
-  });
-
-  const getGradientColors = (): readonly [string, string, string] => {
-    return [
-      playlist?.primaryColor ?? theme.colors.primary,
-      playlist?.secondaryColor ?? theme.colors.backgroundSecondary,
-      theme.colors.backgroundSecondary,
-    ];
-  };
 
   const handlePlayPlaylist = () => {
     if (!canPlay) {
@@ -152,10 +95,6 @@ const PlaylistScreen: React.FC = () => {
     });
   };
 
-  const totalDurationFormatted = playlist?.totalDuration
-    ? formatTotalDuration(playlist.totalDuration)
-    : '';
-
   if (isCatalogLoading) {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}>
@@ -178,8 +117,141 @@ const PlaylistScreen: React.FC = () => {
     );
   }
 
-  const playlistStickyImage = pickCatalogImageUrl(undefined, playlist.coverArt, 'icon', playlist.coverArtSizes);
   const playlistHeroImage = pickCatalogImageUrl(undefined, playlist.coverArt, 'hero', playlist.coverArtSizes);
+
+  // Hover the cover → extract its dominant colour → re-theme the playlist's
+  // ambient surfaces. `PlaylistView` reads the scoped theme via `useTheme()`
+  // inside the ambient region, so the hero + tracklist ease into the artwork
+  // palette; leaving the cover restores the app preset. Native is a no-op.
+  return (
+    <AmbientArtworkTheme seed={seed}>
+      <PlaylistView
+        playlist={playlist}
+        tracks={tracks}
+        heroImage={playlistHeroImage}
+        currentTrackId={currentTrack?.id}
+        isPlaying={isPlaying}
+        isSaved={isSaved}
+        isDownloaded={isDownloaded}
+        setIsDownloaded={setIsDownloaded}
+        canPlay={canPlay}
+        shuffle={shuffle}
+        toggleShuffle={toggleShuffle}
+        onCoverHoverIn={() => id && activateSeed(id, playlistHeroImage)}
+        onCoverHoverOut={deactivateSeed}
+        onPlayPlaylist={handlePlayPlaylist}
+        onToggleSave={handleToggleSave}
+        onTrackPress={handleTrackPress}
+      />
+    </AmbientArtworkTheme>
+  );
+};
+
+interface PlaylistViewProps {
+  playlist: PlaylistData;
+  tracks: Track[];
+  heroImage: string | undefined;
+  currentTrackId: string | undefined;
+  isPlaying: boolean;
+  isSaved: boolean;
+  isDownloaded: boolean;
+  setIsDownloaded: (next: boolean) => void;
+  canPlay: boolean;
+  shuffle: 'on' | 'off';
+  toggleShuffle: () => void;
+  onCoverHoverIn: () => void;
+  onCoverHoverOut: () => void;
+  onPlayPlaylist: () => void;
+  onToggleSave: () => void;
+  onTrackPress: (track: Track) => void;
+}
+
+/**
+ * The playlist's ambient region. Reads `useTheme()` INSIDE `<AmbientArtworkTheme>`
+ * so its surfaces re-theme to the artwork seed while hovering the cover, then
+ * revert to the app preset on hover-out. Owns the parallax scroll hooks.
+ */
+const PlaylistView: React.FC<PlaylistViewProps> = ({
+  playlist,
+  tracks,
+  heroImage,
+  currentTrackId,
+  isPlaying,
+  isSaved,
+  isDownloaded,
+  setIsDownloaded,
+  canPlay,
+  shuffle,
+  toggleShuffle,
+  onCoverHoverIn,
+  onCoverHoverOut,
+  onPlayPlaylist,
+  onToggleSave,
+  onTrackPress,
+}) => {
+  const theme = useTheme();
+  const scrollRef = useAnimatedRef<Animated.ScrollView>();
+  const scrollOffset = useScrollViewOffset(scrollRef);
+
+  const headerAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        {
+          translateY: interpolate(
+            scrollOffset.value,
+            [-HEADER_HEIGHT, 0, HEADER_HEIGHT],
+            [-HEADER_HEIGHT / 2, 0, HEADER_HEIGHT * 0.75]
+          ),
+        },
+        {
+          scale: interpolate(scrollOffset.value, [-HEADER_HEIGHT, 0, HEADER_HEIGHT], [2, 1, 1]),
+        },
+      ],
+    };
+  });
+
+  const headerTitleAnimatedStyle = useAnimatedStyle(() => {
+    const opacity = interpolate(
+      scrollOffset.value,
+      [0, HEADER_HEIGHT - 100, HEADER_HEIGHT - 50],
+      [1, 0.3, 0],
+      'clamp'
+    );
+    return {
+      opacity,
+    };
+  });
+
+  const stickyHeaderAnimatedStyle = useAnimatedStyle(() => {
+    const opacity = interpolate(
+      scrollOffset.value,
+      [HEADER_HEIGHT - 100, HEADER_HEIGHT - 50],
+      [0, 1],
+      'clamp'
+    );
+    const translateY = interpolate(
+      scrollOffset.value,
+      [HEADER_HEIGHT - 100, HEADER_HEIGHT - 50],
+      [-20, 0],
+      'clamp'
+    );
+    return {
+      opacity,
+      transform: [{ translateY }],
+    };
+  });
+
+  const gradientColors: readonly [string, string, string] = [
+    playlist.primaryColor ?? theme.colors.primary,
+    playlist.secondaryColor ?? theme.colors.backgroundSecondary,
+    theme.colors.backgroundSecondary,
+  ];
+
+  const totalDurationFormatted = playlist.totalDuration
+    ? formatTotalDuration(playlist.totalDuration)
+    : '';
+
+  const playlistStickyImage = pickCatalogImageUrl(undefined, playlist.coverArt, 'icon', playlist.coverArtSizes);
   const playlistInfoImage = pickCatalogImageUrl(undefined, playlist.coverArt, 'smallArtwork', playlist.coverArtSizes);
 
   return (
@@ -228,7 +300,7 @@ const PlaylistScreen: React.FC = () => {
                   { backgroundColor: theme.colors.primary },
                   !canPlay && styles.disabledControl,
                 ]}
-                onPress={handlePlayPlaylist}
+                onPress={onPlayPlaylist}
                 disabled={!canPlay}
                 accessibilityRole="button"
                 accessibilityState={{ disabled: !canPlay }}
@@ -237,7 +309,7 @@ const PlaylistScreen: React.FC = () => {
               </Pressable>
               <Pressable
                 style={styles.stickyHeaderControlButton}
-                onPress={handleToggleSave}
+                onPress={onToggleSave}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isSaved }}
                 accessibilityLabel={isSaved ? 'Remove from your library' : 'Save to your library'}
@@ -265,25 +337,37 @@ const PlaylistScreen: React.FC = () => {
         >
           {/* Parallax Header Section */}
           <Animated.View style={[styles.headerContainer, headerAnimatedStyle]}>
-            {playlistHeroImage ? (
-              <Image
-                source={{ uri: playlistHeroImage }}
-                style={styles.headerImage}
-                resizeMode="cover"
-              />
-            ) : (
-              <View style={[styles.headerPlaceholder, { backgroundColor: theme.colors.backgroundSecondary }]}>
-                <Ionicons name="musical-notes" size={80} color={theme.colors.textSecondary} />
-              </View>
-            )}
+            {/* Cover — hover (web) / focus to tint the ambient region */}
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onHoverIn={onCoverHoverIn}
+              onHoverOut={onCoverHoverOut}
+              onFocus={onCoverHoverIn}
+              onBlur={onCoverHoverOut}
+              accessibilityRole="image"
+              accessibilityLabel={`${playlist.name} cover art`}
+            >
+              {heroImage ? (
+                <Image
+                  source={{ uri: heroImage }}
+                  style={styles.headerImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={[styles.headerPlaceholder, { backgroundColor: theme.colors.backgroundSecondary }]}>
+                  <Ionicons name="musical-notes" size={80} color={theme.colors.textSecondary} />
+                </View>
+              )}
+            </Pressable>
             {/* Gradient overlay for text readability */}
             <LinearGradient
               colors={['transparent', 'rgba(0, 0, 0, 0.3)', 'rgba(0, 0, 0, 0.7)'] as readonly [string, string, string]}
               locations={[0, 0.6, 1] as readonly [number, number, number]}
+              pointerEvents="none"
               style={styles.headerOverlay}
             />
             {/* Playlist Title */}
-            <Animated.View style={[styles.titleContainer, headerTitleAnimatedStyle]}>
+            <Animated.View pointerEvents="none" style={[styles.titleContainer, headerTitleAnimatedStyle]}>
               <Text style={[styles.playlistTitle, { color: '#FFFFFF' }]} numberOfLines={2}>
                 {playlist.name}
               </Text>
@@ -292,7 +376,7 @@ const PlaylistScreen: React.FC = () => {
 
           {/* Content Section with Gradient Background */}
           <LinearGradient
-            colors={getGradientColors()}
+            colors={gradientColors}
             locations={[0, 0.35, 1]}
             style={styles.contentSection}
           >
@@ -353,7 +437,7 @@ const PlaylistScreen: React.FC = () => {
                   { backgroundColor: theme.colors.primary },
                   !canPlay && styles.disabledControl,
                 ]}
-                onPress={handlePlayPlaylist}
+                onPress={onPlayPlaylist}
                 disabled={!canPlay}
                 accessibilityRole="button"
                 accessibilityState={{ disabled: !canPlay }}
@@ -379,7 +463,7 @@ const PlaylistScreen: React.FC = () => {
 
               <Pressable
                 style={styles.controlButton}
-                onPress={handleToggleSave}
+                onPress={onToggleSave}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isSaved }}
                 accessibilityLabel={isSaved ? 'Remove from your library' : 'Save to your library'}
@@ -429,7 +513,7 @@ const PlaylistScreen: React.FC = () => {
                 </View>
               ) : (
                 tracks.map((track, index) => {
-                  const isCurrentTrack = currentTrack?.id === track.id;
+                  const isCurrentTrack = currentTrackId === track.id;
                   const isTrackPlaying = isCurrentTrack && isPlaying;
 
                   return (
@@ -439,8 +523,8 @@ const PlaylistScreen: React.FC = () => {
                       index={index}
                       isCurrentTrack={isCurrentTrack}
                       isTrackPlaying={isTrackPlaying}
-                      onPress={() => handleTrackPress(track)}
-                      onPlayPress={() => handleTrackPress(track)}
+                      onPress={() => onTrackPress(track)}
+                      onPlayPress={() => onTrackPress(track)}
                       showNumber={true}
                     />
                   );

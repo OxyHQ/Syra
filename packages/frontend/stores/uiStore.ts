@@ -11,8 +11,6 @@ interface UIState {
   fullscreenPanel: FullscreenPanel;
   setFullscreenPanel: (panel: FullscreenPanel) => void;
   toggleFullscreen: (panel: 'library' | 'nowPlaying') => void;
-  shellGradientColor: string | null;
-  setShellGradientColor: (color: string | null) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -30,6 +28,4 @@ export const useUIStore = create<UIState>((set) => ({
     fullscreenPanel: state.fullscreenPanel === panel ? null : panel,
     isLibrarySidebarExpanded: panel === 'library' ? true : state.isLibrarySidebarExpanded,
   })),
-  shellGradientColor: null,
-  setShellGradientColor: (color: string | null) => set({ shellGradientColor: color }),
 }));

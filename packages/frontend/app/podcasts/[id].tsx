@@ -20,6 +20,8 @@ import { usePlayerStore } from '@/stores/playerStore';
 import { resolvePodcastImageUri } from '@/utils/podcastImages';
 import { stripHtml } from '@/utils/podcastFormat';
 import { webViewStyle } from '@/utils/webStyles';
+import { AmbientArtworkTheme } from '@/components/AmbientArtworkTheme';
+import { useArtworkSeed } from '@/hooks/useArtworkSeed';
 
 /**
  * Podcast show screen — header (artwork, title, author, description), a Subscribe
@@ -29,17 +31,16 @@ const PodcastShowScreen: React.FC = () => {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
   const router = useRouter();
-  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
 
   const showQuery = usePodcast(id);
   const episodesQuery = useEpisodes(id);
   const progressMap = useEpisodeProgressMap();
   const isSubscribed = useIsSubscribed();
   const toggleSubscription = useToggleSubscription();
+  const { seed, activate: activateSeed, deactivate: deactivateSeed } = useArtworkSeed();
 
   const currentEpisode = usePlayerStore((s) => s.currentEpisode);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
-  const playEpisode = usePlayerStore((s) => s.playEpisode);
   const playEpisodeList = usePlayerStore((s) => s.playEpisodeList);
   const pause = usePlayerStore((s) => s.pause);
   const resume = usePlayerStore((s) => s.resume);
@@ -53,13 +54,6 @@ const PodcastShowScreen: React.FC = () => {
   const subscribed = podcast ? isSubscribed(podcast.id) : false;
   const artwork = resolvePodcastImageUri(podcast, 'detailArtwork');
   const description = stripHtml(podcast?.description);
-
-  // Cover-derived hero gradient, same shape as the album/artist screens.
-  const gradientColors: readonly [string, string, string] = [
-    podcast?.primaryColor ?? theme.colors.backgroundSecondary,
-    podcast?.secondaryColor ?? theme.colors.backgroundSecondary,
-    theme.colors.backgroundSecondary,
-  ];
 
   const handlePlayEpisode = (index: number) => {
     const episode = episodes[index];
@@ -93,6 +87,85 @@ const PodcastShowScreen: React.FC = () => {
     );
   }
 
+  // Hover the cover → extract its dominant colour → re-theme the show's ambient
+  // surfaces. `PodcastShowView` reads the scoped theme via `useTheme()` inside
+  // the ambient region, so the hero + episode list ease into the artwork
+  // palette; leaving the cover restores the app preset. Native is a no-op.
+  return (
+    <AmbientArtworkTheme seed={seed}>
+      <PodcastShowView
+        podcast={podcast}
+        episodes={episodes}
+        persons={showQuery.data?.persons ?? []}
+        artwork={artwork}
+        description={description}
+        subscribed={subscribed}
+        episodesPending={episodesQuery.isPending}
+        currentEpisodeId={currentEpisode?.id}
+        isPlaying={isPlaying}
+        progressMap={progressMap}
+        onCoverHoverIn={() => podcast.id && activateSeed(podcast.id, artwork)}
+        onCoverHoverOut={deactivateSeed}
+        onToggleSubscription={() =>
+          toggleSubscription.mutate({ podcastId: podcast.id, next: !subscribed, podcast })
+        }
+        onPlayEpisode={handlePlayEpisode}
+        onOpenEpisode={(episodeId) => router.push({ pathname: '/episode/[id]', params: { id: episodeId } })}
+      />
+    </AmbientArtworkTheme>
+  );
+};
+
+interface PodcastShowViewProps {
+  podcast: NonNullable<ReturnType<typeof usePodcast>['data']>['podcast'];
+  episodes: NonNullable<ReturnType<typeof useEpisodes>['data']>['episodes'];
+  persons: NonNullable<ReturnType<typeof usePodcast>['data']>['persons'];
+  artwork: string | undefined;
+  description: string;
+  subscribed: boolean;
+  episodesPending: boolean;
+  currentEpisodeId: string | undefined;
+  isPlaying: boolean;
+  progressMap: ReturnType<typeof useEpisodeProgressMap>;
+  onCoverHoverIn: () => void;
+  onCoverHoverOut: () => void;
+  onToggleSubscription: () => void;
+  onPlayEpisode: (index: number) => void;
+  onOpenEpisode: (episodeId: string) => void;
+}
+
+/**
+ * The show's ambient region. Reads `useTheme()` INSIDE `<AmbientArtworkTheme>`
+ * so its surfaces re-theme to the artwork seed while hovering the cover, then
+ * revert to the app preset on hover-out.
+ */
+const PodcastShowView: React.FC<PodcastShowViewProps> = ({
+  podcast,
+  episodes,
+  persons,
+  artwork,
+  description,
+  subscribed,
+  episodesPending,
+  currentEpisodeId,
+  isPlaying,
+  progressMap,
+  onCoverHoverIn,
+  onCoverHoverOut,
+  onToggleSubscription,
+  onPlayEpisode,
+  onOpenEpisode,
+}) => {
+  const theme = useTheme();
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+
+  // Cover-derived hero gradient, same shape as the album/artist screens.
+  const gradientColors: readonly [string, string, string] = [
+    podcast.primaryColor ?? theme.colors.backgroundSecondary,
+    podcast.secondaryColor ?? theme.colors.backgroundSecondary,
+    theme.colors.backgroundSecondary,
+  ];
+
   return (
     <>
       <SEO title={`${podcast.title} - Syra`} description={description.slice(0, 160)} />
@@ -104,13 +177,23 @@ const PodcastShowScreen: React.FC = () => {
         {/* Header — cover-derived gradient hero (bleeds past the content padding). */}
         <LinearGradient colors={gradientColors} locations={[0, 0.45, 1]} style={styles.hero}>
         <View style={styles.header}>
-          {artwork ? (
-            <Image source={{ uri: artwork }} style={styles.headerArtwork} contentFit="cover" />
-          ) : (
-            <View style={[styles.headerArtworkPlaceholder, { backgroundColor: theme.colors.backgroundTertiary }]}>
-              <Ionicons name="mic" size={48} color={theme.colors.textSecondary} />
-            </View>
-          )}
+          {/* Show artwork — hover (web) / focus to tint the ambient region */}
+          <Pressable
+            onHoverIn={onCoverHoverIn}
+            onHoverOut={onCoverHoverOut}
+            onFocus={onCoverHoverIn}
+            onBlur={onCoverHoverOut}
+            accessibilityRole="image"
+            accessibilityLabel={`${podcast.title} cover art`}
+          >
+            {artwork ? (
+              <Image source={{ uri: artwork }} style={styles.headerArtwork} contentFit="cover" />
+            ) : (
+              <View style={[styles.headerArtworkPlaceholder, { backgroundColor: theme.colors.backgroundTertiary }]}>
+                <Ionicons name="mic" size={48} color={theme.colors.textSecondary} />
+              </View>
+            )}
+          </Pressable>
           <View style={styles.headerInfo}>
             <Text style={[styles.showTitle, { color: theme.colors.text }]} numberOfLines={3}>
               {podcast.title}
@@ -121,7 +204,7 @@ const PodcastShowScreen: React.FC = () => {
               </Text>
             ) : null}
             <Pressable
-              onPress={() => podcast && toggleSubscription.mutate({ podcastId: podcast.id, next: !subscribed, podcast })}
+              onPress={onToggleSubscription}
               style={[
                 styles.subscribeButton,
                 subscribed
@@ -165,11 +248,11 @@ const PodcastShowScreen: React.FC = () => {
         ) : null}
 
         {/* Hosts & Guests */}
-        <HostsAndGuests persons={showQuery.data?.persons ?? []} />
+        <HostsAndGuests persons={persons} />
 
         {/* Episodes */}
         <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Episodes</Text>
-        {episodesQuery.isPending && episodes.length === 0 ? (
+        {episodesPending && episodes.length === 0 ? (
           <LibraryListSkeleton count={6} />
         ) : episodes.length === 0 ? (
           <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
@@ -181,11 +264,11 @@ const PodcastShowScreen: React.FC = () => {
               key={episode.id}
               episode={episode}
               progress={progressMap.get(episode.id)}
-              isCurrent={currentEpisode?.id === episode.id}
-              isPlaying={currentEpisode?.id === episode.id && isPlaying}
+              isCurrent={currentEpisodeId === episode.id}
+              isPlaying={currentEpisodeId === episode.id && isPlaying}
               hideArtwork
-              onPress={() => router.push({ pathname: '/episode/[id]', params: { id: episode.id } })}
-              onPlayPress={() => handlePlayEpisode(index)}
+              onPress={() => onOpenEpisode(episode.id)}
+              onPlayPress={() => onPlayEpisode(index)}
             />
           ))
         )}
