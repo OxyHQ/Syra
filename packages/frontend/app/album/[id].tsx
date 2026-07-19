@@ -17,6 +17,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { toast } from '@/lib/sonner';
 import { useOxy } from '@oxyhq/services';
+import { AmbientArtworkTheme } from '@/components/AmbientArtworkTheme';
+import { useArtworkSeed } from '@/hooks/useArtworkSeed';
 
 /**
  * Album Screen
@@ -36,6 +38,7 @@ const AlbumScreen: React.FC = () => {
   const toggleLike = useToggleLikeTrack();
   const isSaved = id ? isAlbumSaved(id) : false;
   const [isDownloaded, setIsDownloaded] = useState(false);
+  const { seed, activate: activateSeed, deactivate: deactivateSeed } = useArtworkSeed();
 
   const handleToggleSave = () => {
     if (!id) {
@@ -115,9 +118,93 @@ const AlbumScreen: React.FC = () => {
     );
   }
 
+  const albumCoverImage = pickCatalogImageUrl(undefined, album.coverArt, 'detailArtwork', album.coverArtSizes);
+
+  // Hover the cover → extract its dominant colour → re-theme the album's ambient
+  // surfaces. `AlbumView` reads the scoped theme via `useTheme()` inside the
+  // ambient region, so the whole hero + tracklist eases into the artwork palette;
+  // leaving the cover restores the app preset. Native is a no-op (web-only).
+  return (
+    <AmbientArtworkTheme seed={seed}>
+      <AlbumView
+        album={album}
+        tracks={tracks}
+        albumCoverImage={albumCoverImage}
+        onCoverHoverIn={() => id && activateSeed(id, albumCoverImage)}
+        onCoverHoverOut={deactivateSeed}
+        currentTrack={currentTrack}
+        isPlaying={isPlaying}
+        isSaved={isSaved}
+        isDownloaded={isDownloaded}
+        setIsDownloaded={setIsDownloaded}
+        canPlay={canPlay}
+        shuffle={shuffle}
+        toggleShuffle={toggleShuffle}
+        isTrackLiked={isTrackLiked}
+        onPlayAlbum={handlePlayAlbum}
+        onToggleSave={handleToggleSave}
+        onToggleTrackLike={handleToggleTrackLike}
+        onTrackPress={handleTrackPress}
+        onGoToArtist={() => router.push(`/p/${album.artistId}`)}
+        formatReleaseDate={formatReleaseDate}
+      />
+    </AmbientArtworkTheme>
+  );
+};
+
+interface AlbumViewProps {
+  album: NonNullable<Awaited<ReturnType<typeof musicService.getAlbumById>>>;
+  tracks: Track[];
+  albumCoverImage: string | undefined;
+  onCoverHoverIn: () => void;
+  onCoverHoverOut: () => void;
+  currentTrack: Track | null;
+  isPlaying: boolean;
+  isSaved: boolean;
+  isDownloaded: boolean;
+  setIsDownloaded: (next: boolean) => void;
+  canPlay: boolean;
+  shuffle: 'on' | 'off';
+  toggleShuffle: () => void;
+  isTrackLiked: (id: string) => boolean;
+  onPlayAlbum: () => void;
+  onToggleSave: () => void;
+  onToggleTrackLike: (track: Track, liked: boolean) => void;
+  onTrackPress: (track: Track) => void;
+  onGoToArtist: () => void;
+  formatReleaseDate: (dateString: string) => string;
+}
+
+/**
+ * The album's ambient region. Reads `useTheme()` INSIDE `<AmbientArtworkTheme>`
+ * so its surfaces re-theme to the artwork seed while hovering the cover, then
+ * revert to the app preset on hover-out.
+ */
+const AlbumView: React.FC<AlbumViewProps> = ({
+  album,
+  tracks,
+  albumCoverImage,
+  onCoverHoverIn,
+  onCoverHoverOut,
+  currentTrack,
+  isPlaying,
+  isSaved,
+  isDownloaded,
+  setIsDownloaded,
+  canPlay,
+  shuffle,
+  toggleShuffle,
+  isTrackLiked,
+  onPlayAlbum,
+  onToggleSave,
+  onToggleTrackLike,
+  onTrackPress,
+  onGoToArtist,
+  formatReleaseDate,
+}) => {
+  const theme = useTheme();
   const releaseDateFormatted = formatReleaseDate(album.releaseDate);
   const totalDurationFormatted = formatTotalDuration(album.totalDuration);
-  const albumCoverImage = pickCatalogImageUrl(undefined, album.coverArt, 'detailArtwork', album.coverArtSizes);
   const albumThumbImage = pickCatalogImageUrl(undefined, album.coverArt, 'icon', album.coverArtSizes);
   const gradientColors: readonly [string, string, string] = [
     album.primaryColor ?? theme.colors.backgroundSecondary,
@@ -139,8 +226,16 @@ const AlbumScreen: React.FC = () => {
         <LinearGradient colors={gradientColors} locations={[0, 0.45, 1]} style={styles.heroSection}>
           {/* Header Section */}
           <View style={styles.header}>
-            {/* Album Cover */}
-            <View style={styles.coverContainer}>
+            {/* Album Cover — hover (web) / focus to tint the ambient region */}
+            <Pressable
+              style={styles.coverContainer}
+              onHoverIn={onCoverHoverIn}
+              onHoverOut={onCoverHoverOut}
+              onFocus={onCoverHoverIn}
+              onBlur={onCoverHoverOut}
+              accessibilityRole="image"
+              accessibilityLabel={`${album.title} cover art`}
+            >
               {albumCoverImage ? (
                 <Image
                   source={{ uri: albumCoverImage }}
@@ -152,7 +247,7 @@ const AlbumScreen: React.FC = () => {
                   <Ionicons name="musical-notes" size={64} color={theme.colors.textSecondary} />
                 </View>
               )}
-            </View>
+            </Pressable>
 
             {/* Album Info */}
             <View style={styles.infoContainer}>
@@ -163,7 +258,7 @@ const AlbumScreen: React.FC = () => {
               {/* Artist Info */}
               <Pressable
                 style={styles.artistRow}
-                onPress={() => router.push(`/p/${album.artistId}`)}
+                onPress={onGoToArtist}
               >
                 <Avatar
                   source={albumThumbImage}
@@ -190,7 +285,7 @@ const AlbumScreen: React.FC = () => {
                 { backgroundColor: theme.colors.primary },
                 !canPlay && styles.disabledControl,
               ]}
-              onPress={handlePlayAlbum}
+              onPress={onPlayAlbum}
               disabled={!canPlay}
               accessibilityRole="button"
               accessibilityState={{ disabled: !canPlay }}
@@ -214,7 +309,7 @@ const AlbumScreen: React.FC = () => {
 
             <Pressable
               style={styles.controlButton}
-              onPress={handleToggleSave}
+              onPress={onToggleSave}
               accessibilityRole="button"
               accessibilityState={{ selected: isSaved }}
               accessibilityLabel={isSaved ? 'Remove from your library' : 'Save to your library'}
@@ -280,7 +375,7 @@ const AlbumScreen: React.FC = () => {
                   styles.trackRow,
                   isCurrentTrack && { backgroundColor: theme.colors.backgroundSecondary + '40' },
                 ]}
-                onPress={() => handleTrackPress(track)}
+                onPress={() => onTrackPress(track)}
               >
                 <View style={styles.trackRowLeft}>
                   <View style={styles.trackNumberContainer}>
@@ -329,7 +424,7 @@ const AlbumScreen: React.FC = () => {
                   <Pressable
                     onPress={(e) => {
                       e?.stopPropagation?.();
-                      handleToggleTrackLike(track, isLiked);
+                      onToggleTrackLike(track, isLiked);
                     }}
                     style={styles.trackLikeButton}
                     accessibilityRole="button"
