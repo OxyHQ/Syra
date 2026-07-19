@@ -34,7 +34,7 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "@oxyhq/bloom": "^0.39.0",
+    "@oxyhq/bloom": "^0.40.0",
     "@oxyhq/core": "^12.4.1",
     "@oxyhq/services": "^22.1.0",
     "@tanstack/query-async-storage-persister": "^5.101.2",
