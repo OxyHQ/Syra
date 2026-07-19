@@ -109,7 +109,8 @@ const SettingsScreen: React.FC = () => {
 
   const appVersion = Constants.expoConfig?.version ?? '2.0.0';
   const userName = getAccountDisplayName(user);
-  const usernameLabel = user?.username ? `@${user.username}` : 'Signed in to Syra';
+  const username = user?.username;
+  const usernameLabel = username ? `@${username}` : 'Signed in to Syra';
 
   const themeMode: 'system' | 'light' | 'dark' =
     bloomMode === 'light' || bloomMode === 'dark' ? bloomMode : 'system';
@@ -132,9 +133,9 @@ const SettingsScreen: React.FC = () => {
   }, [canUsePrivateApi, openAccountDialog]);
 
   const handleViewProfile = useCallback(() => {
-    if (!user?.username) return;
-    router.push(`/u/${user.username}`);
-  }, [router, user?.username]);
+    if (!username) return;
+    router.push(`/u/${username}`);
+  }, [router, username]);
 
   const handleManageAccount = useCallback(() => {
     showBottomSheet?.('ManageAccount');
