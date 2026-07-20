@@ -1,7 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { StyleSheet, View, Text, ScrollView, Pressable, Platform, Linking } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme, useAmbientTheme } from '@oxyhq/bloom/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import SEO from '@/components/SEO';
@@ -13,7 +13,6 @@ import { usePlayerStore } from '@/stores/playerStore';
 import { resolvePodcastArtwork } from '@/utils/pickImage';
 import { stripHtml, formatPubDate, formatEpisodeDuration } from '@/utils/podcastFormat';
 import { formatDuration } from '@/utils/musicUtils';
-import { useViewAmbient } from '@/hooks/useAmbientArtwork';
 
 type EpisodeDetail = NonNullable<ReturnType<typeof useEpisode>['data']>;
 type EpisodeChapters = NonNullable<ReturnType<typeof useEpisodeChapters>['data']>;
@@ -48,9 +47,19 @@ const EpisodeScreen: React.FC = () => {
   const description = useMemo(() => stripHtml(episode?.description ?? episode?.summary), [episode]);
 
   // VIEW MODE: theme the WHOLE app from the episode's server-extracted cover
-  // colours ON VIEW and restore the default on leave. Called before the early
-  // returns so the hook order stays stable; no-ops until the episode loads.
-  useViewAmbient(episode?.primaryColor, episode?.secondaryColor);
+  // colours ON VIEW and restore the default on leave. All theming lives in Bloom —
+  // this thin effect only feeds the cover colours to Bloom's ambient store
+  // (consumed internally by the root provider). Runs before the early returns so
+  // the hook order stays stable; no-ops until the episode loads.
+  const { setAmbient, clearAmbient } = useAmbientTheme();
+  const episodePrimaryColor = episode?.primaryColor;
+  const episodeSecondaryColor = episode?.secondaryColor;
+  useEffect(() => {
+    if (episodePrimaryColor) {
+      setAmbient(episodePrimaryColor, { secondary: episodeSecondaryColor });
+    }
+    return () => clearAmbient();
+  }, [episodePrimaryColor, episodeSecondaryColor, setAmbient, clearAmbient]);
 
   const handlePlay = () => {
     if (!episode) {
@@ -121,9 +130,9 @@ const EpisodeScreen: React.FC = () => {
       ? 'Resume'
       : 'Play';
 
-  // The whole app is themed from this episode's cover ON VIEW (see
-  // `useViewAmbient` above). No per-screen theme wrapper and no cover-hover
-  // theming — `EpisodeView` reads the already-themed app theme.
+  // The whole app is themed from this episode's cover ON VIEW (see the ambient
+  // effect above). No per-screen theme wrapper and no cover-hover theming —
+  // `EpisodeView` reads the already-themed app theme.
   return (
     <EpisodeView
       episode={episode}
@@ -157,7 +166,7 @@ interface EpisodeViewProps {
 
 /**
  * The episode's presentational view. Reads the app theme via `useTheme()`; the
- * app is already themed from the episode cover on view (see `useViewAmbient` in
+ * app is already themed from the episode cover on view (see the ambient effect in
  * `EpisodeScreen`), so the hero + sections reflect the artwork palette with no
  * cover-hover handling here.
  */

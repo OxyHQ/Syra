@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { StyleSheet, View, Text, ScrollView, Pressable, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme, useAmbientTheme } from '@oxyhq/bloom/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -21,7 +21,6 @@ import { usePlayerStore } from '@/stores/playerStore';
 import { resolvePodcastArtwork } from '@/utils/pickImage';
 import { stripHtml } from '@/utils/podcastFormat';
 import { webViewStyle } from '@/utils/webStyles';
-import { useViewAmbient } from '@/hooks/useAmbientArtwork';
 
 /**
  * Podcast show screen — header (artwork, title, author, description), a Subscribe
@@ -55,9 +54,19 @@ const PodcastShowScreen: React.FC = () => {
   const description = stripHtml(podcast?.description);
 
   // VIEW MODE: theme the WHOLE app from the show's server-extracted cover colours
-  // ON VIEW and restore the default on leave. Called before the early returns so
-  // the hook order stays stable; no-ops until the show loads.
-  useViewAmbient(podcast?.primaryColor, podcast?.secondaryColor);
+  // ON VIEW and restore the default on leave. All theming lives in Bloom — this
+  // thin effect only feeds the cover colours to Bloom's ambient store (consumed
+  // internally by the root provider). Runs before the early returns so the hook
+  // order stays stable; no-ops until the show loads.
+  const { setAmbient, clearAmbient } = useAmbientTheme();
+  const podcastPrimaryColor = podcast?.primaryColor;
+  const podcastSecondaryColor = podcast?.secondaryColor;
+  useEffect(() => {
+    if (podcastPrimaryColor) {
+      setAmbient(podcastPrimaryColor, { secondary: podcastSecondaryColor });
+    }
+    return () => clearAmbient();
+  }, [podcastPrimaryColor, podcastSecondaryColor, setAmbient, clearAmbient]);
 
   const handlePlayEpisode = (index: number) => {
     const episode = episodes[index];
@@ -115,8 +124,8 @@ const PodcastShowScreen: React.FC = () => {
     );
   }
 
-  // The whole app is themed from this show's cover ON VIEW (see `useViewAmbient`
-  // above). No per-screen theme wrapper and no cover-hover theming —
+  // The whole app is themed from this show's cover ON VIEW (see the ambient
+  // effect above). No per-screen theme wrapper and no cover-hover theming —
   // `PodcastShowView` reads the already-themed app theme.
   return (
     <PodcastShowView
@@ -163,7 +172,7 @@ interface PodcastShowViewProps {
 
 /**
  * The show's presentational view. Reads the app theme via `useTheme()`; the app
- * is already themed from the show cover on view (see `useViewAmbient` in
+ * is already themed from the show cover on view (see the ambient effect in
  * `PodcastShowScreen`), so the hero + episode list reflect the artwork palette
  * with no cover-hover handling here.
  */

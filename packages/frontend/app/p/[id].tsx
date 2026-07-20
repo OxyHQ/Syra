@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StyleSheet, View, Text, Pressable, Image, ScrollView, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -9,7 +9,7 @@ import Animated, {
   useScrollViewOffset,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme, useAmbientTheme } from '@oxyhq/bloom/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { toast } from '@/lib/sonner';
 import { Track } from '@syra/shared-types';
@@ -30,7 +30,6 @@ import { useAuthGate } from '@/hooks/useAuthGate';
 import { CATALOG_QUERY_KEYS } from '@/hooks/useLibraryCollections';
 import { isNotFoundError } from '@/utils/api';
 import { webViewStyle } from '@/utils/webStyles';
-import { useViewAmbient } from '@/hooks/useAmbientArtwork';
 
 const HEADER_HEIGHT = 400;
 
@@ -100,9 +99,19 @@ const EntityProfileScreen: React.FC = () => {
   const heroImage = entityImage('hero');
 
   // VIEW MODE: theme the WHOLE app from the profile's server-extracted cover
-  // colours ON VIEW and restore the default on leave. Called before the early
-  // returns so the hook order stays stable; no-ops until the entity loads.
-  useViewAmbient(entity?.primaryColor, entity?.secondaryColor);
+  // colours ON VIEW and restore the default on leave. All theming lives in Bloom —
+  // this thin effect only feeds the cover colours to Bloom's ambient store
+  // (consumed internally by the root provider). Runs before the early returns so
+  // the hook order stays stable; no-ops until the entity loads.
+  const { setAmbient, clearAmbient } = useAmbientTheme();
+  const entityPrimaryColor = entity?.primaryColor;
+  const entitySecondaryColor = entity?.secondaryColor;
+  useEffect(() => {
+    if (entityPrimaryColor) {
+      setAmbient(entityPrimaryColor, { secondary: entitySecondaryColor });
+    }
+    return () => clearAmbient();
+  }, [entityPrimaryColor, entitySecondaryColor, setAmbient, clearAmbient]);
 
   const handlePlayAll = () => {
     if (tracks.length === 0) {
@@ -200,8 +209,8 @@ const EntityProfileScreen: React.FC = () => {
     );
   }
 
-  // The whole app is themed from this profile's hero cover ON VIEW (see
-  // `useViewAmbient` above). No per-screen theme wrapper and no cover-hover
+  // The whole app is themed from this profile's hero cover ON VIEW (see the
+  // ambient effect above). No per-screen theme wrapper and no cover-hover
   // theming — `EntityProfileView` reads the already-themed app theme.
   return (
     <EntityProfileView
@@ -256,7 +265,7 @@ interface EntityProfileViewProps {
 
 /**
  * The profile's presentational view. Reads the app theme via `useTheme()`; the
- * app is already themed from the hero cover on view (see `useViewAmbient` in
+ * app is already themed from the hero cover on view (see the ambient effect in
  * `EntityProfileScreen`), so the hero + sections reflect the artwork palette with
  * no cover-hover handling here. Owns the parallax scroll hooks.
  */

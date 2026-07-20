@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { StyleSheet, View, TextInput, Text, ScrollView, Pressable } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme, useAmbientTheme } from '@oxyhq/bloom/theme';
 import SEO from '@/components/SEO';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams, type Href } from 'expo-router';
@@ -22,7 +22,6 @@ import { EmptyState } from '@/components/common/EmptyState';
 import { GenreGridSkeleton, MediaCardRowSkeleton, TrackListSkeleton } from '@/components/skeletons';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
-import { useHoverAmbient } from '@/hooks/useAmbientArtwork';
 import { useMediaQuery } from 'react-responsive';
 
 /**
@@ -35,10 +34,20 @@ const SearchScreen: React.FC = () => {
   const isMobile = useMediaQuery({ maxWidth: 767 });
   const { playTrackList, playEpisode, currentTrack, currentEpisode, isPlaying } = usePlayerStore();
   // HOVER MODE: hovering any card themes the WHOLE app from that card's
-  // server-extracted cover colours; leaving restores the default. The root
-  // provider owns the theming — these handlers only feed the shared driver
-  // (same wiring as the home screen).
-  const { onHoverIn: handleHoverIn, onHoverOut: handleHoverOut } = useHoverAmbient();
+  // server-extracted cover colours; leaving restores the default. All theming
+  // lives in Bloom — these thin handlers only feed the card's DTO colours to
+  // Bloom's ambient store (consumed internally by the root provider; same wiring
+  // as the home screen).
+  const { setAmbient, clearAmbient } = useAmbientTheme();
+  const handleHoverIn = useCallback(
+    (colors: { primaryColor?: string; secondaryColor?: string }) => {
+      if (colors.primaryColor) {
+        setAmbient(colors.primaryColor, { secondary: colors.secondaryColor });
+      }
+    },
+    [setAmbient],
+  );
+  const handleHoverOut = clearAmbient;
   // Seed the search box from a `?q=` deep link (e.g. tapping a #hashtag / @mention),
   // and optionally preselect a `?category=` tab (e.g. the podcasts home search entry).
   const { q, category } = useLocalSearchParams<{ q?: string; category?: string }>();
