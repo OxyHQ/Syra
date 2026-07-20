@@ -73,7 +73,6 @@ function makePlaylist(
   tracks?: ExternalTrack[],
 ): ExternalPlaylist {
   return {
-    provider: 'audius',
     name: `Playlist ${externalId}`,
     externalId,
     images: [{ url: `https://cdn.audius.co/${externalId}/1000x1000.jpg`, width: 1000, height: 1000 }],

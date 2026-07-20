@@ -78,12 +78,21 @@ export const createArtistRequestSchema = z.object({
 });
 export type CreateArtistRequest = z.infer<typeof createArtistRequestSchema>;
 
+/**
+ * Creator-editable artist profile fields.
+ *
+ * `verified` is deliberately NOT here. It is a platform-granted badge, so a shared
+ * "update artist" contract that accepted it would read like permission and hand
+ * self-verification to any endpoint written against this schema. Verification is set
+ * server-side only — `registerAsArtist` hardcodes it to false. If a genuine admin
+ * verification endpoint is ever added, give it its OWN schema rather than widening
+ * this one.
+ */
 export const updateArtistRequestSchema = z.object({
   name: z.string().optional(),
   bio: z.string().optional(),
   image: z.string().optional(),
   genres: z.array(z.string()).optional(),
-  verified: z.boolean().optional(),
 });
 export type UpdateArtistRequest = z.infer<typeof updateArtistRequestSchema>;
 

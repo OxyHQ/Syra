@@ -15,6 +15,8 @@ import { getStoredImageColors } from '../utils/imageColors';
 import { enqueueIngest } from '../services/ingest/ingestTrack';
 import { getErrorMessage, getErrorStack, getHttpStatus } from '../utils/error';
 import { getParam } from '../utils/reqParams';
+import { findOwnedArtist } from '../utils/catalogOwnership';
+import { updateTrackRequestSchema } from '@syra/shared-types';
 import {
   getRequestUserId,
   playableTrackFilter,
@@ -390,4 +392,79 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
       }
     }
   });
+};
+
+/**
+ * PATCH /api/tracks/:id
+ * Edit a track you own. Only the fields in `updateTrackRequestSchema` are accepted —
+ * the request body is parsed, never spread — so a caller cannot reach `artistId`,
+ * `source`, play counts, or the copyright-takedown fields through this endpoint.
+ */
+export const updateTrack = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!isDatabaseConnected()) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
+    const userId = getAuthenticatedUserId(req);
+    const trackId = getParam(req, 'id');
+
+    if (!mongoose.Types.ObjectId.isValid(trackId)) {
+      return res.status(400).json({ error: 'Invalid track id' });
+    }
+
+    const parsed = updateTrackRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid request body', details: parsed.error.issues });
+    }
+
+    const track = await TrackModel.findById(trackId);
+    if (!track) {
+      return res.status(404).json({ error: 'Track not found' });
+    }
+
+    // Ownership comes from the STORED track's artistId, never from the request body.
+    if (!(await findOwnedArtist(track.artistId, userId))) {
+      return res.status(403).json({ error: 'Forbidden', message: 'You do not own this track' });
+    }
+
+    // A copyright takedown is not a creator-reversible state: editing must not be a way
+    // to put a removed track back in the catalog.
+    if (track.copyrightRemoved) {
+      return res.status(409).json({
+        error: 'Track removed',
+        message: 'This track was removed for copyright and cannot be edited',
+      });
+    }
+
+    const updates = parsed.data;
+
+    if (updates.albumId !== undefined) {
+      const album = await AlbumModel.findById(updates.albumId).select('artistId').lean();
+      if (!album || album.artistId !== track.artistId) {
+        return res.status(400).json({
+          error: 'Invalid albumId',
+          message: 'Album not found or not owned by this artist',
+        });
+      }
+    }
+
+    // Explicit field-by-field assignment — the parsed object is never spread onto the doc.
+    if (updates.title !== undefined) track.title = updates.title;
+    if (updates.albumId !== undefined) track.albumId = updates.albumId;
+    if (updates.trackNumber !== undefined) track.trackNumber = updates.trackNumber;
+    if (updates.discNumber !== undefined) track.discNumber = updates.discNumber;
+    if (updates.coverArt !== undefined) track.coverArt = updates.coverArt;
+    if (updates.isAvailable !== undefined) track.isAvailable = updates.isAvailable;
+    if (updates.metadata !== undefined) {
+      track.metadata = { ...track.metadata, ...updates.metadata };
+    }
+
+    await track.save();
+
+    const formattedTrack = await formatTrackWithCoverArt(track.toObject());
+    res.json(formattedTrack);
+  } catch (error) {
+    next(error);
+  }
 };

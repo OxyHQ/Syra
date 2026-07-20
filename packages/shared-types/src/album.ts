@@ -31,6 +31,8 @@ export const albumSchema = timestampsSchema.extend({
   favoriteCount: z.number().optional(),
   repostCount: z.number().optional(),
   isExplicit: z.boolean(),
+  /** Creator-controlled container visibility; absent means available (no backfill). */
+  isAvailable: z.boolean().optional(),
   primaryColor: z.string().optional(),
   secondaryColor: z.string().optional(),
   source: catalogSourceSchema.optional(),

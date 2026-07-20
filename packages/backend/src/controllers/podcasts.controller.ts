@@ -17,11 +17,12 @@ import { getRequiredOxyUserId } from '@oxyhq/core/server';
 import {
   createPodcastRequestSchema,
   importFeedRequestSchema,
+  updatePodcastRequestSchema,
   type AudioSource,
   type EpisodePerson,
 } from '@syra/shared-types';
 import { env } from '../config/env';
-import { PodcastModel } from '../models/Podcast';
+import { PodcastModel, type IPodcast } from '../models/Podcast';
 import { EpisodeModel } from '../models/Episode';
 import { UserLibraryModel } from '../models/Library';
 import { ArtistModel } from '../models/CatalogEntity';
@@ -638,6 +639,128 @@ export async function claimPodcast(req: AuthRequest, res: Response): Promise<voi
   podcast.claimedByOxyUserId = userId;
   podcast.ownerOxyUserId = userId;
   podcast.claimable = false;
+  await podcast.save();
+
+  res.json({ data: serializePodcast(podcast) });
+}
+
+/**
+ * PATCH /api/podcasts/:id — edit a Syra-hosted show you own.
+ *
+ * Same ownership rule as `uploadEpisode`: `source === 'syra'` plus `ownerOxyUserId`.
+ * RSS-mirrored shows are excluded because their fields are overwritten by the next feed
+ * refresh, and claiming a show (`claimedByOxyUserId`) deliberately does not grant write
+ * access — it never has for episode upload either. The body is parsed against the shared
+ * schema and assigned field by field, so `source`, `status`, ownership, and the feed
+ * bookkeeping fields stay unreachable.
+ */
+export async function updatePodcast(req: AuthRequest, res: Response): Promise<void> {
+  const userId = getRequiredOxyUserId(req);
+  const id = getParam(req, 'id');
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    res.status(400).json({ error: 'Invalid podcast ID' });
+    return;
+  }
+
+  const parsed = updatePodcastRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid request body', details: parsed.error.issues });
+    return;
+  }
+
+  const podcast = await PodcastModel.findById(id);
+  if (!podcast) {
+    res.status(404).json({ error: 'Podcast not found' });
+    return;
+  }
+  if (podcast.source !== 'syra' || podcast.ownerOxyUserId !== userId) {
+    res.status(403).json({ error: 'You do not own this podcast' });
+    return;
+  }
+
+  const updates = parsed.data;
+
+  // Explicit field-by-field assignment — the parsed object is never spread onto the doc.
+  if (updates.title !== undefined) podcast.title = updates.title;
+  if (updates.description !== undefined) podcast.description = updates.description;
+  if (updates.author !== undefined) podcast.author = updates.author;
+  if (updates.image !== undefined) podcast.image = updates.image;
+  if (updates.language !== undefined) podcast.language = updates.language;
+  if (updates.categories !== undefined) podcast.categories = updates.categories;
+  if (updates.explicit !== undefined) podcast.explicit = updates.explicit;
+  if (updates.link !== undefined) podcast.link = updates.link;
+  if (updates.type !== undefined) podcast.type = updates.type;
+
+  await podcast.save();
+
+  res.json({ data: serializePodcast(podcast) });
+}
+
+/**
+ * Load a Syra-hosted show the caller owns, or send the matching error response.
+ *
+ * Returns null once a response has been sent, so callers `if (!podcast) return;`.
+ * `status: 'removed'` is a platform takedown, not a creator-reversible state, so a
+ * creator cannot publish their way back out of it.
+ */
+async function loadOwnedShowOrRespond(
+  req: AuthRequest,
+  res: Response,
+): Promise<IPodcast | null> {
+  const userId = getRequiredOxyUserId(req);
+  const id = getParam(req, 'id');
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    res.status(400).json({ error: 'Invalid podcast ID' });
+    return null;
+  }
+
+  const podcast = await PodcastModel.findById(id);
+  if (!podcast) {
+    res.status(404).json({ error: 'Podcast not found' });
+    return null;
+  }
+  if (podcast.source !== 'syra' || podcast.ownerOxyUserId !== userId) {
+    res.status(403).json({ error: 'You do not own this podcast' });
+    return null;
+  }
+  if (podcast.status === 'removed') {
+    res.status(409).json({
+      error: 'Podcast removed',
+      message: 'This show was removed by the platform and cannot be republished',
+    });
+    return null;
+  }
+
+  return podcast;
+}
+
+/**
+ * POST /api/podcasts/:id/unpublish — hide a show from browse, search and discovery.
+ *
+ * Soft by design: `status: 'unavailable'` drops the show out of the `{status:'active'}`
+ * filter used by browse (podcasts.controller browse filter) and search, while leaving the
+ * document, its episodes, and every subscription intact so publishing again is lossless.
+ * Deliberately does NOT cascade to episodes — the show disappears from discovery but an
+ * already-downloaded or directly-linked episode keeps resolving.
+ */
+export async function unpublishPodcast(req: AuthRequest, res: Response): Promise<void> {
+  const podcast = await loadOwnedShowOrRespond(req, res);
+  if (!podcast) return;
+
+  podcast.status = 'unavailable';
+  await podcast.save();
+
+  res.json({ data: serializePodcast(podcast) });
+}
+
+/** POST /api/podcasts/:id/publish — undo `unpublishPodcast`. */
+export async function publishPodcast(req: AuthRequest, res: Response): Promise<void> {
+  const podcast = await loadOwnedShowOrRespond(req, res);
+  if (!podcast) return;
+
+  podcast.status = 'active';
   await podcast.save();
 
   res.json({ data: serializePodcast(podcast) });

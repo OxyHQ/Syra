@@ -6,6 +6,7 @@ import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { env } from '../config/env';
 import { TrackModel } from '../models/Track';
 import { PodcastModel } from '../models/Podcast';
+import { hiddenShowEpisodeFilter } from '../utils/podcastDiscovery';
 import { EpisodeModel } from '../models/Episode';
 import { PersonModel } from '../models/CatalogEntity';
 import { formatTracksWithCoverArt, formatAlbumsWithCoverArt, formatArtistsWithImage, formatPlaylistsWithCoverArt } from '../utils/musicHelpers';
@@ -282,6 +283,8 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
       const episodeFilter = {
         status: 'ready' as const,
         title: searchRegex,
+        // Episodes of an unpublished or removed show drop out of search with it.
+        ...(await hiddenShowEpisodeFilter()),
         $and: [
           { $or: [{ source: 'syra' as const }, { enclosureUrl: { $exists: true, $nin: [null, ''] } }] },
         ],

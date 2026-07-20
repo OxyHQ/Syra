@@ -96,13 +96,20 @@ function playlistTrackLookup(
         {
           $lookup: {
             from: TrackModel.collection.name,
-            let: { trackId: '$trackId' },
+            // `PlaylistTrack.trackId` is a string while `Track._id` is an ObjectId, so
+            // the two sides must be reconciled. Convert on the LOCAL side (in `let`,
+            // evaluated once per playlist-track row) and leave `$_id` a bare field path:
+            // that keeps this an `_id` point lookup. Converting the foreign `$_id`
+            // instead makes the comparison unindexable and degrades every row into a
+            // scan of `tracks`, which is what made playlist-bearing endpoints take 20s+.
+            // A malformed id converts to null and simply matches nothing (not playable).
+            let: { trackId: { $convert: { input: '$trackId', to: 'objectId', onError: null, onNull: null } } },
             pipeline: [
               {
                 $match: {
                   $and: [
                     playableTrackFilter<Record<string, unknown>>({}, playbackOptions),
-                    { $expr: { $eq: [{ $toString: '$_id' }, '$$trackId'] } },
+                    { $expr: { $eq: ['$_id', '$$trackId'] } },
                   ],
                 },
               },
@@ -137,13 +144,27 @@ function toObjectId(id: string): mongoose.Types.ObjectId {
   return new mongoose.Types.ObjectId(id);
 }
 
+/**
+ * Album visibility: an album is hidden when its creator unpublishes the CONTAINER,
+ * independently of whether its tracks are still individually playable.
+ *
+ * `$ne: false` means "absent counts as available", so existing albums need no backfill.
+ * This stays a bare-field condition on the album collection so it lands in the leading
+ * `$match` and can use the `isAvailable` index — deliberately NOT an `$expr` or any
+ * computed comparison against the looked-up track side, which is what made these
+ * pipelines unindexable before.
+ */
+function availableAlbumFilter(filter: CatalogMatchFilter): CatalogMatchFilter {
+  return visibleCatalogFilter({ ...filter, isAvailable: { $ne: false } });
+}
+
 export async function findAlbumsWithPlayableTracks(
   filter: CatalogMatchFilter,
   playbackOptions: CatalogPlaybackOptions,
   page: CatalogPage,
 ): Promise<unknown[]> {
   return AlbumModel.aggregate<unknown>([
-    ...withPlayableTracksPipeline(visibleCatalogFilter(filter), 'albumId', playbackOptions),
+    ...withPlayableTracksPipeline(availableAlbumFilter(filter), 'albumId', playbackOptions),
     ...paginatedStages(page),
   ]).exec();
 }
@@ -153,7 +174,7 @@ export async function countAlbumsWithPlayableTracks(
   playbackOptions: CatalogPlaybackOptions,
 ): Promise<number> {
   const result = await AlbumModel.aggregate<{ total: number }>([
-    ...withPlayableTracksPipeline(visibleCatalogFilter(filter), 'albumId', playbackOptions),
+    ...withPlayableTracksPipeline(availableAlbumFilter(filter), 'albumId', playbackOptions),
     { $count: 'total' },
   ]).exec();
 
@@ -166,7 +187,7 @@ export async function findOneAlbumWithPlayableTracks(
 ): Promise<unknown | null> {
   const albums = await AlbumModel.aggregate<unknown>([
     ...withPlayableTracksPipeline(
-      visibleCatalogFilter({ _id: toObjectId(id) }),
+      availableAlbumFilter({ _id: toObjectId(id) }),
       'albumId',
       playbackOptions,
     ),

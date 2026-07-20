@@ -62,10 +62,10 @@ describe('upsertTrack', () => {
     expect(track.sources?.[0].provider).toBe('audius');
     expect(track.sources?.[0].externalId).toBe('aud-track-001');
     expect(track.sources?.[1].provider).toBe('audius');
-    expect(typeof track.sources?.[1].importedAt).toBe('string');
-    expect(new Date(track.sources?.[1].importedAt ?? '').toISOString()).toBe(
-      track.sources?.[1].importedAt,
-    );
+    const importedAt = track.sources?.[1].importedAt;
+    expect(typeof importedAt).toBe('string');
+    if (importedAt === undefined) throw new Error('expected importedAt');
+    expect(new Date(importedAt).toISOString()).toBe(importedAt);
   });
 
   describe('(c) no-ISRC fuzzy dedup: title + artistName + duration ±2s', () => {

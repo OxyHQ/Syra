@@ -15,7 +15,6 @@ afterEach(async () => {
 afterAll(disconnect);
 
 const basePlaylist: ExternalPlaylist = {
-  provider: 'audius',
   externalId: 'aud-playlist-001',
   name: 'Night Drive Picks',
   description: 'Late night tracks',

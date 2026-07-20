@@ -155,9 +155,16 @@ describe('AudiusConnector.search', () => {
     expect(images[0].url).toBe('https://cdn.audius.co/abc/1000x1000.jpg');
 
     // All three sizes present and in descending width order
-    expect(images[0].width).toBeGreaterThanOrEqual(images[1].width);
-    if (images[2] !== undefined) {
-      expect(images[1].width).toBeGreaterThanOrEqual(images[2].width);
+    const largestWidth = images[0]?.width;
+    const secondWidth = images[1]?.width;
+    if (largestWidth === undefined || secondWidth === undefined) {
+      throw new Error('expected the two largest images to carry widths');
+    }
+    expect(largestWidth).toBeGreaterThanOrEqual(secondWidth);
+
+    const thirdWidth = images[2]?.width;
+    if (thirdWidth !== undefined) {
+      expect(secondWidth).toBeGreaterThanOrEqual(thirdWidth);
     }
 
     const img480 = images.find((i) => i.width === 480);

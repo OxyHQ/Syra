@@ -2,6 +2,9 @@ import { Router } from 'express';
 import { requireOxyAuth as requireAuth } from '@oxyhq/core/server';
 import {
   getEpisode,
+  updateEpisode,
+  publishEpisode,
+  unpublishEpisode,
   updateEpisodeProgress,
   getContinueListening,
 } from '../controllers/episodes.controller';
@@ -14,6 +17,9 @@ const router = Router();
 
 router.get('/continue', requireAuth, getContinueListening);
 router.put('/:id/progress', requireAuth, updateEpisodeProgress);
+router.patch('/:id', requireAuth, updateEpisode);
+router.post('/:id/publish', requireAuth, publishEpisode);
+router.post('/:id/unpublish', requireAuth, unpublishEpisode);
 router.get('/:id', getEpisode);
 
 export default router;

@@ -148,15 +148,30 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 /**
  * Get series details
  * GET /api/series/:id
+ *
+ * A house-owned series inherits its house's visibility: it describes the
+ * house's schedule, so reading it is the same disclosure as listing the
+ * house's series. A profile-owned series has no house to gate on.
  */
 router.get('/:id', async (req: AuthRequest, res: Response) => {
   try {
+    const userId = req.user?.id;
     const { id } = req.params;
 
     const series = await Series.findById(id).lean();
 
     if (!series) {
       return res.status(404).json({ message: 'Series not found' });
+    }
+
+    if (series.houseId) {
+      const house = await House.findById(series.houseId);
+      if (!house || !house.canSeeHouse(userId)) {
+        return res.status(404).json({ message: 'Series not found' });
+      }
+      if (!house.canAccessRooms(userId)) {
+        return res.status(403).json({ message: 'Only members can view this house\'s series' });
+      }
     }
 
     res.json({ series });

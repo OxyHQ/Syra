@@ -283,6 +283,7 @@ publicApiRouter.use('/copyright', copyrightRoutes);
 publicApiRouter.use('/stream', createOptionalOxyAuth(oxy), streamRoutes);
 publicApiRouter.use('/images', imagesPublicRoutes);
 publicApiRouter.use('/preview', createOptionalOxyAuth(oxy), previewRoutes);
+publicApiRouter.use('/lyrics', lyricsRoutes);
 
 publicApiRouter.use('/sources', sourcesRoutes);
 
