@@ -2,11 +2,20 @@ import React from 'react';
 import { StyleSheet, View, Text } from 'react-native';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { MediaCardRowSkeleton } from '@/components/skeletons';
+import { EmptyState } from '@/components/common/EmptyState';
 
 interface ExploreSectionProps {
   title: string;
   isLoading: boolean;
   isEmpty: boolean;
+  /**
+   * Query error for this section. When set, the section renders a retry state
+   * instead of the empty message — a failed request must never read as an
+   * empty catalog.
+   */
+  error?: Error | null;
+  /** Re-runs the section's query. A React Query `refetch` can be passed directly. */
+  onRetry?: () => Promise<unknown>;
   emptyMessage?: string;
   /**
    * Skeleton rendered while loading, mirroring this section's content. Defaults
@@ -18,17 +27,41 @@ interface ExploreSectionProps {
 
 /**
  * Reusable Explore Section Component
- * Handles loading, empty, and content states consistently
+ * Handles loading, error, empty, and content states consistently
  */
 export const ExploreSection: React.FC<ExploreSectionProps> = ({
   title,
   isLoading,
   isEmpty,
+  error,
+  onRetry,
   emptyMessage,
   loadingSkeleton,
   children,
 }) => {
   const theme = useTheme();
+
+  // The error branch wins over `isLoading`: while a failed query refetches,
+  // EmptyState shows its own retry spinner rather than flashing back to the
+  // skeleton, so the user keeps the context of what failed.
+  if (error) {
+    return (
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+          {title}
+        </Text>
+        <EmptyState
+          icon={{ name: 'alert-circle-outline' }}
+          error={{
+            title: "Couldn't load this section",
+            message: 'Something went wrong on our side. Check your connection and try again.',
+            onRetry: onRetry ? async () => { await onRetry(); } : undefined,
+          }}
+          containerStyle={styles.stateContainer}
+        />
+      </View>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -47,11 +80,11 @@ export const ExploreSection: React.FC<ExploreSectionProps> = ({
         {title}
       </Text>
       {isEmpty ? (
-        <View style={styles.sectionLoading}>
-          <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
-            {emptyMessage || 'No content available'}
-          </Text>
-        </View>
+        <EmptyState
+          subtitle={emptyMessage || 'No content available'}
+          accessibilityLabel={emptyMessage || 'No content available'}
+          containerStyle={styles.stateContainer}
+        />
       ) : (
         children
       )}
@@ -68,20 +101,11 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 16,
   },
-  sectionLoading: {
-    padding: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
+  // EmptyState defaults to a full-height, app-background block; inside a section
+  // it must size to its content and let the screen background show through.
+  stateContainer: {
+    flex: 0,
     minHeight: 100,
-  },
-  emptyText: {
-    fontSize: 14,
-    textAlign: 'center',
+    backgroundColor: 'transparent',
   },
 });
-
-
-
-
-
-

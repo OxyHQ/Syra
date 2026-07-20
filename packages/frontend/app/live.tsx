@@ -13,7 +13,7 @@ import {
   type Room,
   type CreateRoomSheetRef,
   type CreateRoomFormState,
-} from '@syra.fm/live';
+} from '@syra.fm/sdk';
 
 import SEO from '@/components/SEO';
 import { authenticatedClient } from '@/utils/api';
@@ -22,7 +22,7 @@ import { liveRoomsQueryKey } from '@/lib/liveConfig';
 /**
  * Live surface — the primary host/join screen for Syra audio rooms. Lists the
  * rooms that are live now and lets any signed-in user start their own. Joining a
- * room hands off to the `@syra.fm/live` engine's floating dock + in-room UI (mounted
+ * room hands off to the `@syra.fm/sdk` engine's floating dock + in-room UI (mounted
  * globally by `LiveRoomProvider`); this screen only surfaces the list + entry.
  */
 export default function LiveScreen() {

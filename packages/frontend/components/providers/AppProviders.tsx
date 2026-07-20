@@ -24,10 +24,11 @@ import { StatusBar } from 'expo-status-bar';
 import { OxyProvider, useOxy } from '@oxyhq/services';
 import { OxyServices } from '@oxyhq/core';
 import { ImageResolverProvider, type ImageResolver } from '@oxyhq/bloom/image-resolver';
-import { LiveConfigProvider, LiveRoomProvider } from '@syra.fm/live';
+import { LiveConfigProvider, LiveRoomProvider } from '@syra.fm/sdk';
 
 import { OXY_CLIENT_ID } from '@/config';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import { OfflineBanner } from '@/components/OfflineBanner';
 import { BottomSheetProvider } from '@/context/BottomSheetContext';
 import { HomeRefreshProvider } from '@/context/HomeRefreshContext';
 import { Toaster } from '@/lib/sonner';
@@ -36,7 +37,10 @@ import { liveConfig, liveRoomsQueryKey } from '@/lib/liveConfig';
 import { useServerAppearanceSync } from '@/hooks/useServerAppearanceSync';
 import { usePlayerPresence } from '@/hooks/usePlayerPresence';
 import { clearStreamResolutionCache } from '@/services/streamService';
-import { persistOptions } from '@/lib/queryPersister';
+import { accountScopeFor, applyAccountScope, persistOptions } from '@/lib/queryPersister';
+import { createScopedLogger } from '@/utils/logger';
+
+const providersLogger = createScopedLogger('AppProviders');
 
 /**
  * Feeds the live-rooms engine and mounts its floating dock. `onRoomChanged` is
@@ -92,10 +96,58 @@ function StreamCacheAuthInvalidator(): null {
   return null;
 }
 
+/**
+ * Non-rendering bridge that keeps the persisted query cache pointed at the
+ * account currently signed in, so one user's library can never rehydrate for
+ * the next user on the same device.
+ *
+ * Driven by the RESOLVED identity rather than by `onTokensChanged`, which also
+ * fires on ordinary token refreshes — clearing the cache on those would wipe it
+ * constantly. The scope only moves when the account itself changes.
+ *
+ * The two sources are combined deliberately. A known `user.id` wins outright,
+ * even while `canUsePrivateApi` is false, so an account whose token is briefly
+ * unusable keeps its own cache instead of being demoted to guest and having its
+ * snapshot deleted. Only a finished resolution with no user at all — a real
+ * sign-out — moves the scope to guest. While the session is still resolving,
+ * nothing happens: an unknown identity must never clear anyone's cache.
+ *
+ * `isPrivateApiPending` is read directly rather than through `useAuthGate`
+ * because the gate's `isResolved` is exactly `!isPrivateApiPending`, and its
+ * time bound exists to stop screens rendering endless skeletons. This bridge
+ * renders nothing, so the bound would only add a timer: an unresolved session
+ * simply leaves the scope untouched, which is already the safe outcome.
+ */
+function QueryCacheAccountScope(): null {
+  const { user, isPrivateApiPending } = useOxy();
+  const queryClient = useQueryClient();
+
+  const userId = user?.id ?? null;
+  const scope =
+    userId !== null ? accountScopeFor(userId) : isPrivateApiPending ? null : accountScopeFor(null);
+
+  React.useEffect(() => {
+    if (scope === null) {
+      return;
+    }
+    applyAccountScope(scope, queryClient).catch((error) => {
+      providersLogger.error('Failed to apply the account cache scope', { error });
+    });
+  }, [scope, queryClient]);
+
+  return null;
+}
+
 interface AppProvidersProps {
   children: React.ReactNode;
   oxyServices: OxyServices;
   queryClient: QueryClient;
+  /**
+   * Whether the app shell is mounted. The offline banner anchors itself below
+   * the TopBar, so before the shell exists it would hang in empty space over the
+   * splash — which reads as a rendering bug rather than a status message.
+   */
+  isAppReady: boolean;
 }
 
 /**
@@ -107,6 +159,7 @@ export const AppProviders = memo(function AppProviders({
   children,
   oxyServices,
   queryClient,
+  isAppReady,
 }: AppProvidersProps) {
   // Single chokepoint that resolves Oxy file IDs to loadable URLs for every
   // Bloom Avatar/Image in the tree. Bloom's Avatar runs bare-string `source`
@@ -129,6 +182,7 @@ export const AppProviders = memo(function AppProviders({
               <ImageResolverProvider value={resolveImage}>
                 <I18nextProvider i18n={i18n}>
                   <AppearanceSync />
+                  <QueryCacheAccountScope />
                   <StreamCacheAuthInvalidator />
                   <PlayerPresence />
                   <BottomSheetModalProvider>
@@ -139,6 +193,10 @@ export const AppProviders = memo(function AppProviders({
                             {children}
                           </LiveRoomsProvider>
                           <StatusBar style="auto" />
+                          {/* Mounted once for the whole app, after `children` so it
+                              overlays content, and before `Toaster` so transient
+                              toasts still stack above it. */}
+                          {isAppReady && <OfflineBanner />}
                           <Toaster
                             position="bottom-center"
                             swipeToDismissDirection="left"

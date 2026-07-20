@@ -20,6 +20,8 @@ import { useRouter } from 'expo-router';
 import SEO from '@/components/SEO';
 import Avatar from '@/components/Avatar';
 import { ThemedView } from '@/components/ThemedView';
+import { EmptyState } from '@/components/common/EmptyState';
+import { useAuthGate } from '@/hooks/useAuthGate';
 import { Slider } from '@/components/Slider';
 import { ColorSwatchPicker } from '@/components/settings/ColorSwatchPicker';
 import { RowIcon } from '@/components/settings/RowIcon';
@@ -88,22 +90,19 @@ const SettingsControlBlock: React.FC<SettingsControlBlockProps> = ({
 
 const SettingsScreen: React.FC = () => {
   const router = useRouter();
-  const {
-    user,
-    isAuthenticated,
-    isPrivateApiPending,
-    canUsePrivateApi,
-    logout,
-    showBottomSheet,
-    openAccountDialog,
-  } = useOxy();
+  const { user, logout, showBottomSheet, openAccountDialog } = useOxy();
+  // Session state comes from the bounded gate, never from raw
+  // `isPrivateApiPending` — an unresolved session must reach a terminal state
+  // instead of parking this screen on "Loading account settings" forever.
+  const gate = useAuthGate();
+  const { canUsePrivateApi } = gate;
   const {
     preferences: musicPreferences,
     updatePreferences: updateMusicPreferences,
   } = useMusicPreferences();
   const privacySettings = useCurrentUserPrivacySettings();
   const updatePrivacySettingsCache = useUpdatePrivacySettingsCache();
-  const { data: appearanceSettings } = useMyAppearanceSettings(!isPrivateApiPending && canUsePrivateApi);
+  const { data: appearanceSettings } = useMyAppearanceSettings(canUsePrivateApi);
   const { mutateAsync: updateAppearanceSettings } = useUpdateMyAppearanceSettings();
   const { colorPreset, mode: bloomMode, setMode, setColorPreset } = useBloomTheme();
 
@@ -240,7 +239,29 @@ const SettingsScreen: React.FC = () => {
     }
   }, []);
 
-  if (isPrivateApiPending) {
+  // Terminal auth failure — the session never resolved within the gate's bound.
+  if (gate.isTimedOut) {
+    return (
+      <>
+        <SEO title="Settings - Syra" description="App settings and preferences" />
+        <ThemedView className="flex-1">
+          <EmptyState
+            containerStyle={styles.gateState}
+            icon={{ name: 'cloud-offline-outline' }}
+            error={{
+              title: 'Session unavailable',
+              message: 'We could not confirm your session, so your settings stayed hidden. Please try again.',
+              onRetry: async () => {
+                gate.retry();
+              },
+            }}
+          />
+        </ThemedView>
+      </>
+    );
+  }
+
+  if (gate.isResolving) {
     return (
       <>
         <SEO title="Settings - Syra" description="App settings and preferences" />
@@ -253,7 +274,7 @@ const SettingsScreen: React.FC = () => {
     );
   }
 
-  if (!isAuthenticated) {
+  if (!gate.isAuthenticated) {
     return (
       <>
         <SEO title="Settings - Syra" description="App settings and preferences" />
@@ -606,6 +627,12 @@ const SettingsScreen: React.FC = () => {
                 title="Help & Support"
                 onPress={() => Alert.alert('Help & Support', 'Help center coming soon.')}
               />
+              <SettingsListItem
+                icon={<RowIcon name="flag-outline" />}
+                title="Report a copyright violation"
+                description="Tell us about content that infringes your rights"
+                onPress={() => router.push('/copyright/report')}
+              />
             </SettingsListGroup>
 
             <SettingsListGroup>
@@ -625,6 +652,10 @@ const SettingsScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
+  // The auth-gate error fills the screen but keeps `ThemedView`'s background.
+  gateState: {
+    backgroundColor: 'transparent',
+  },
   scrollContent: {
     alignItems: 'center',
     paddingTop: 16,

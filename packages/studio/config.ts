@@ -6,7 +6,7 @@ export const API_URL =
     ? 'https://api.syra.fm/api'
     : (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000/api');
 
-// Socket origin for the `@syra.fm/live` rooms engine. Same backend host as the API
+// Socket origin for the `@syra.fm/sdk` rooms engine. Same backend host as the API
 // (api.syra.fm) but the bare origin (no `/api` suffix) — Socket.io mounts at the
 // host root.
 export const API_URL_SOCKET =

@@ -11,13 +11,18 @@ import { useQueueStore } from '@/stores/queueStore';
 import SEO from '@/components/SEO';
 import Avatar from '@/components/Avatar';
 import { MediaHeaderSkeleton } from '@/components/skeletons';
+import { EmptyState } from '@/components/common/EmptyState';
 import { formatDuration, formatTotalDuration } from '@/utils/musicUtils';
 import { useLibrary, useToggleSaveAlbum, useToggleLikeTrack } from '@/hooks/useLibrary';
 import { LinearGradient } from 'expo-linear-gradient';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
+import { isNotFoundError } from '@/utils/api';
 import { toast } from '@/lib/sonner';
-import { useOxy } from '@oxyhq/services';
+import { useAuthGate } from '@/hooks/useAuthGate';
+import { CATALOG_QUERY_KEYS } from '@/hooks/useLibraryCollections';
 import { useViewAmbient } from '@/hooks/useAmbientArtwork';
+import { AddToPlaylistSheet } from '@/components/playlist/AddToPlaylistSheet';
+import { TrackActionsSheet } from '@/components/playlist/TrackActionsSheet';
 
 /**
  * Album Screen
@@ -29,8 +34,7 @@ const AlbumScreen: React.FC = () => {
   const theme = useTheme();
   const { playTrackList, currentTrack, isPlaying } = usePlayerStore();
   const { shuffle, toggleShuffle } = useQueueStore();
-  const { canUsePrivateApi, isPrivateApiPending } = useOxy();
-  const catalogIdentity = canUsePrivateApi ? 'auth' : 'guest';
+  const gate = useAuthGate();
 
   const { isAlbumSaved, isTrackLiked } = useLibrary();
   const toggleSave = useToggleSaveAlbum();
@@ -49,25 +53,29 @@ const AlbumScreen: React.FC = () => {
     toggleLike.mutate({ id: track.id, next: !liked, track });
   };
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['album', id, catalogIdentity],
-    queryFn: async () => {
-      const [albumData, tracksData] = await Promise.all([
-        musicService.getAlbumById(id),
-        musicService.getAlbumTracks(id),
-      ]);
-      return {
-        album: albumData,
-        tracks: tracksData.tracks.sort((a, b) => (a.trackNumber || 0) - (b.trackNumber || 0)),
-      };
-    },
-    enabled: !!id && !isPrivateApiPending,
+  // The album object and its tracks are separate queries so the album entry is
+  // the SAME cache entry the library sidebar hydrates
+  // (`CATALOG_QUERY_KEYS.album`) — opening this screen reuses what the sidebar
+  // already fetched, and vice versa, instead of keeping two copies.
+  const albumQuery = useQuery({
+    queryKey: CATALOG_QUERY_KEYS.album(id, gate.catalogIdentity),
+    queryFn: () => musicService.getAlbumById(id),
+    enabled: !!id && gate.isResolved,
   });
 
-  const album = data?.album ?? null;
-  const tracks = data?.tracks ?? [];
+  const tracksQuery = useQuery({
+    queryKey: CATALOG_QUERY_KEYS.albumTracks(id, gate.catalogIdentity),
+    queryFn: async () => {
+      const { tracks: albumTracks } = await musicService.getAlbumTracks(id);
+      return albumTracks.sort((a, b) => (a.trackNumber || 0) - (b.trackNumber || 0));
+    },
+    enabled: !!id && gate.isResolved,
+  });
+
+  const album = albumQuery.data ?? null;
+  const tracks = tracksQuery.data ?? [];
   const canPlay = tracks.length > 0;
-  const isCatalogLoading = isPrivateApiPending || isLoading;
+  const isCatalogLoading = gate.isResolving || albumQuery.isLoading || tracksQuery.isLoading;
 
   const albumCoverImage = album
     ? pickCatalogImageUrl(undefined, album.coverArt, 'detailArtwork', album.coverArtSizes)
@@ -105,6 +113,24 @@ const AlbumScreen: React.FC = () => {
     });
   };
 
+  // Terminal auth failure — the session never resolved within the gate's bound.
+  // Rendered as an error the user can act on, never as an endless skeleton.
+  if (gate.isTimedOut) {
+    return (
+      <EmptyState
+        containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
+        icon={{ name: 'cloud-offline-outline' }}
+        error={{
+          title: 'Session unavailable',
+          message: 'We could not confirm your session. Check your connection and try again.',
+          onRetry: async () => {
+            gate.retry();
+          },
+        }}
+      />
+    );
+  }
+
   if (isCatalogLoading) {
     return (
       <ScrollView
@@ -117,11 +143,32 @@ const AlbumScreen: React.FC = () => {
     );
   }
 
+  // A failed request is not a missing album: only a 404 falls through to the
+  // "not found" branch below, everything else is a load failure with a retry.
+  if ((albumQuery.isError || tracksQuery.isError) && !isNotFoundError(albumQuery.error)) {
+    return (
+      <EmptyState
+        containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
+        icon={{ name: 'cloud-offline-outline' }}
+        error={{
+          title: 'Could not load this album',
+          message: 'Something went wrong while loading this album. Please try again.',
+          onRetry: async () => {
+            await Promise.all([albumQuery.refetch(), tracksQuery.refetch()]);
+          },
+        }}
+      />
+    );
+  }
+
   if (!album) {
     return (
-      <View style={[styles.errorContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
-        <Text style={[styles.errorText, { color: theme.colors.text }]}>Album not found</Text>
-      </View>
+      <EmptyState
+        containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
+        icon={{ name: 'disc-outline' }}
+        title="Album not found"
+        subtitle="This album may have been removed or is no longer available."
+      />
     );
   }
 
@@ -200,6 +247,8 @@ const AlbumView: React.FC<AlbumViewProps> = ({
   formatReleaseDate,
 }) => {
   const theme = useTheme();
+  const [addingAlbumToPlaylist, setAddingAlbumToPlaylist] = useState(false);
+  const [trackActionsFor, setTrackActionsFor] = useState<Track | null>(null);
   const releaseDateFormatted = formatReleaseDate(album.releaseDate);
   const totalDurationFormatted = formatTotalDuration(album.totalDuration);
   const albumThumbImage = pickCatalogImageUrl(undefined, album.coverArt, 'icon', album.coverArtSizes);
@@ -325,7 +374,12 @@ const AlbumView: React.FC<AlbumViewProps> = ({
               />
             </Pressable>
 
-            <Pressable style={styles.controlButton}>
+            <Pressable
+              style={styles.controlButton}
+              onPress={() => setAddingAlbumToPlaylist(true)}
+              accessibilityRole="button"
+              accessibilityLabel="More options for this album"
+            >
               <Ionicons name="ellipsis-horizontal" size={24} color={theme.colors.text} />
             </Pressable>
 
@@ -433,6 +487,21 @@ const AlbumView: React.FC<AlbumViewProps> = ({
                   <Text style={[styles.trackDuration, { color: theme.colors.textSecondary }]}>
                     {formatDuration(track.duration)}
                   </Text>
+                  <Pressable
+                    onPress={(e) => {
+                      e?.stopPropagation?.();
+                      setTrackActionsFor(track);
+                    }}
+                    style={styles.trackLikeButton}
+                    accessibilityRole="button"
+                    accessibilityLabel={`More options for ${track.title}`}
+                  >
+                    <Ionicons
+                      name="ellipsis-horizontal"
+                      size={18}
+                      color={theme.colors.textSecondary}
+                    />
+                  </Pressable>
                 </View>
               </Pressable>
             );
@@ -453,6 +522,20 @@ const AlbumView: React.FC<AlbumViewProps> = ({
           </View>
         )}
       </ScrollView>
+
+      <AddToPlaylistSheet
+        visible={addingAlbumToPlaylist}
+        onClose={() => setAddingAlbumToPlaylist(false)}
+        tracks={tracks}
+      />
+
+      {trackActionsFor && (
+        <TrackActionsSheet
+          visible
+          onClose={() => setTrackActionsFor(null)}
+          track={trackActionsFor}
+        />
+      )}
     </>
   );
 };
@@ -463,15 +546,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 100,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  errorText: {
-    fontSize: 16,
   },
   heroSection: {
     paddingTop: 0,

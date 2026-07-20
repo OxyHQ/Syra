@@ -16,7 +16,7 @@ const BrowseScreen: React.FC = () => {
   const router = useRouter();
   const { playTrackList } = usePlayerStore();
 
-  const { data: genresData, isLoading: genresLoading } = useQuery({
+  const { data: genresData, isLoading: genresLoading, error: genresError, refetch: refetchGenres } = useQuery({
     queryKey: ['browse', 'genres'],
     queryFn: () => browseService.getGenres(),
     staleTime: 1000 * 60 * 10,
@@ -51,6 +51,8 @@ const BrowseScreen: React.FC = () => {
             title="Browse all"
             isLoading={genresLoading}
             isEmpty={genres.length === 0}
+            error={genresError}
+            onRetry={refetchGenres}
             emptyMessage="No genres available"
             loadingSkeleton={<GenreGridSkeleton count={16} />}
           >

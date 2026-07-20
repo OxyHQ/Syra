@@ -34,9 +34,11 @@ export interface SEOProps {
   modifiedTime?: string;
 }
 
+/** Canonical production origin, used when there is no `window` to read (native, prerender). */
+const SITE_ORIGIN = 'https://syra.fm';
+
 const defaultSEO = {
-  siteName: 'Mention',
-  twitterHandle: '@mention',
+  siteName: 'Syra',
   type: 'website' as const,
 };
 
@@ -47,33 +49,38 @@ export const SEO: React.FC<SEOProps> = ({
   url,
   type = 'website',
   siteName,
-  twitterHandle = defaultSEO.twitterHandle,
+  // No default handle: Syra has no verified X/Twitter account, and the tags below
+  // are omitted entirely rather than pointing at someone else's.
+  twitterHandle,
   author,
   publishedTime,
   modifiedTime,
 }) => {
   const pathname = usePathname();
   const { t } = useTranslation();
-  
+
   // Generate full URL
-  const fullUrl = url || (Platform.OS === 'web' && typeof window !== 'undefined' 
+  const fullUrl = url || (Platform.OS === 'web' && typeof window !== 'undefined'
     ? `${window.location.origin}${pathname}`
-    : `https://mention.earth${pathname}`);
+    : `${SITE_ORIGIN}${pathname}`);
 
   // Use provided siteName or translated default
   const finalSiteName = siteName || t('seo.siteName', { defaultValue: defaultSEO.siteName });
-  
+
   // Default title if not provided (translated)
-  const pageTitle = title || t('seo.defaultTitle', { defaultValue: `${finalSiteName} - Social Platform` });
-  
+  const pageTitle = title || t('seo.defaultTitle', { defaultValue: `${finalSiteName} - Music and podcasts` });
+
   // Default description if not provided (translated)
-  const pageDescription = description || t('seo.defaultDescription', { 
-    defaultValue: `Join ${finalSiteName} and connect with people around the world.`,
+  const pageDescription = description || t('seo.defaultDescription', {
+    defaultValue: `Stream music, podcasts and live audio rooms on ${finalSiteName}.`,
     siteName: finalSiteName
   });
 
-  // Default image (you should add your logo/image)
-  const pageImage = image || 'https://mention.earth/og-image.png';
+  // There is no Syra share image in the repo yet, so pages without an explicit
+  // `image` ship no image tags at all — an absent card degrades gracefully, while
+  // a broken or foreign URL renders as a broken card. Add a 1200x630 asset and
+  // default it here to turn large summary cards back on everywhere.
+  const pageImage = image;
 
   // Only render on web
   if (Platform.OS !== 'web' || !Head) {
@@ -92,15 +99,16 @@ export const SEO: React.FC<SEOProps> = ({
       <meta property="og:url" content={fullUrl} />
       <meta property="og:title" content={pageTitle} />
       <meta property="og:description" content={pageDescription} />
-      <meta property="og:image" content={pageImage} />
-      <meta property="og:site_name" content={siteName} />
-      
-      {/* Twitter Card */}
-      <meta name="twitter:card" content="summary_large_image" />
+      {pageImage && <meta property="og:image" content={pageImage} />}
+      <meta property="og:site_name" content={finalSiteName} />
+
+      {/* Twitter Card — a large-image card without an image renders as a broken
+          box, so fall back to the text-only card when there is no image. */}
+      <meta name="twitter:card" content={pageImage ? 'summary_large_image' : 'summary'} />
       <meta name="twitter:url" content={fullUrl} />
       <meta name="twitter:title" content={pageTitle} />
       <meta name="twitter:description" content={pageDescription} />
-      <meta name="twitter:image" content={pageImage} />
+      {pageImage && <meta name="twitter:image" content={pageImage} />}
       {twitterHandle && <meta name="twitter:site" content={twitterHandle} />}
       {twitterHandle && <meta name="twitter:creator" content={twitterHandle} />}
       

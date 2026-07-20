@@ -7,6 +7,10 @@ import { oxyServices } from '@/lib/oxyServices';
 // API Configuration
 const API_CONFIG = {
   baseURL: API_URL,
+  // Mirrors HttpService's DEFAULT_REQUEST_TIMEOUT_MS, which the linked Oxy client
+  // already applies, so the public client fails fast on a hung connection instead
+  // of leaving the caller pending forever.
+  timeout: 5000,
 };
 
 const syraApiClient = oxyServices.createLinkedClient({ baseURL: API_CONFIG.baseURL });
@@ -22,11 +26,19 @@ export interface ApiRequestOptions {
   timeout?: number;
   signal?: AbortSignal;
   headers?: Record<string, string>;
+  /**
+   * Request body for the verbs whose wrapper takes no `body` argument — i.e.
+   * `delete`. The underlying HttpService already supports this (`RequestConfig.data`
+   * is serialized for every non-GET method); without it, a DELETE that carries a
+   * body — `DELETE /playlists/:id/tracks` — is not expressible through this client.
+   */
+  data?: unknown;
 }
 
 // Public API client (no authentication required)
 const publicClient = axios.create({
   baseURL: API_CONFIG.baseURL,
+  timeout: API_CONFIG.timeout,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -83,22 +95,29 @@ export class ApiError extends Error {
 }
 
 // Error checking utilities
-export function isUnauthorizedError(error: unknown): boolean {
-  const err = error as Record<string, unknown> | undefined;
+
+/**
+ * HTTP status of a failed request, normalized across the two error shapes the app
+ * produces: `@oxyhq/core` HttpService errors expose `status` at the top level,
+ * while bare axios errors (`publicApi`) nest it under `response`.
+ */
+export function getErrorStatus(error: unknown): number | undefined {
+  const err = error as Record<string, unknown> | null | undefined;
   const response = err?.response as Record<string, unknown> | undefined;
-  return response?.status === 401 || err?.status === 401;
+  const status = response?.status ?? err?.status;
+  return typeof status === 'number' ? status : undefined;
+}
+
+export function isUnauthorizedError(error: unknown): boolean {
+  return getErrorStatus(error) === 401;
 }
 
 export function isNotFoundError(error: unknown): boolean {
-  const err = error as Record<string, unknown> | undefined;
-  const response = err?.response as Record<string, unknown> | undefined;
-  return response?.status === 404 || err?.status === 404;
+  return getErrorStatus(error) === 404;
 }
 
 export function isAuthError(error: unknown): boolean {
-  const err = error as Record<string, unknown> | undefined;
-  const response = err?.response as Record<string, unknown> | undefined;
-  const status = response?.status ?? err?.status;
+  const status = getErrorStatus(error);
   return status === 401 || status === 403;
 }
 

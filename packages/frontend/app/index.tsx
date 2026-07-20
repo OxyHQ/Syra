@@ -5,10 +5,12 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
-import { RoomCard, useLiveRoom, createRoomsService, type Room } from '@syra.fm/live';
+import { useOxy } from '@oxyhq/services';
+import { RoomCard, useLiveRoom, createRoomsService, type Room } from '@syra.fm/sdk';
 import SEO from '@/components/SEO';
 import { MediaCard } from '@/components/MediaCard';
 import { ResponsiveGrid } from '@/components/ResponsiveGrid';
+import { EmptyState } from '@/components/common/EmptyState';
 import { QuickAccessGridSkeleton, MediaCardRowSkeleton } from '@/components/skeletons';
 import { musicService } from '@/services/musicService';
 import { Track, Album, Artist, Playlist, Podcast, PlaybackContext } from '@syra/shared-types';
@@ -21,17 +23,21 @@ import {
   usePopularArtists,
   useUserPlaylists,
   usePopularTracks,
+  useHomePodcasts,
+  type HomeSectionStatus,
 } from '@/hooks/useHomeFeed';
-import { usePodcasts } from '@/hooks/usePodcasts';
 import { createScopedLogger } from '@/utils/logger';
 import { Ionicons } from '@expo/vector-icons';
-import { pickCatalogImageUrl } from '@/utils/pickImage';
+import { pickCatalogImageUrl, resolvePodcastArtwork } from '@/utils/pickImage';
 import { authenticatedClient } from '@/utils/api';
 import { liveRoomsQueryKey } from '@/lib/liveConfig';
 import { toast } from '@/lib/sonner';
 import { useHoverAmbient } from '@/hooks/useAmbientArtwork';
 
 const logger = createScopedLogger('HomeScreen');
+
+/** Shared copy for a failed section — the cause is always the same from here. */
+const RETRY_MESSAGE = 'Check your connection and try again.';
 
 /**
  * Quick access item type - can be album, artist, or playlist
@@ -47,29 +53,38 @@ type QuickAccessItem =
  * Spotify-like home built from 100% REAL backend data via React Query — no
  * sliced/relabeled sections. Each section reads its own query hook
  * ({@link file://./../hooks/useHomeFeed.ts}); there is no `useEffect`/`useState`
- * data fetching. Sections with no real data are hidden rather than faked.
+ * data fetching.
+ *
+ * Every section resolves to a terminal state: content, an error card with a
+ * retry, a sign-in call to action for the two account-only rails, or nothing at
+ * all when a successful request came back empty. A skeleton is only ever shown
+ * while a request is actually in flight.
  */
 const HomeScreen: React.FC = () => {
   const { t } = useTranslation();
   const [now, setNow] = useState(() => new Date());
   const { playTrackList } = usePlayerStore();
   const { addTracksLocally } = useQueueStore();
+  const { openAccountDialog } = useOxy();
   // HOVER MODE: hovering any card themes the WHOLE app from that card's
   // server-extracted cover colours; leaving restores the default. The root
   // provider owns the theming — these handlers only feed the shared driver.
   const { onHoverIn: handleHoverIn, onHoverOut: handleHoverOut } = useHoverAmbient();
 
-  // Real, per-section queries — each loads/caches/errors independently.
-  const recentlyPlayedQuery = useRecentlyPlayed();
-  const madeForYouQuery = useMadeForYou();
-  const popularAlbumsQuery = usePopularAlbums();
-  const popularArtistsQuery = usePopularArtists();
-  const userPlaylistsQuery = useUserPlaylists();
-  const tracksQuery = usePopularTracks();
+  // Real, per-section queries — each reports its own terminal status.
+  const recentlyPlayedSection = useRecentlyPlayed();
+  const madeForYouSection = useMadeForYou();
+  const popularAlbumsSection = usePopularAlbums();
+  const popularArtistsSection = usePopularArtists();
+  const userPlaylistsSection = useUserPlaylists();
+  const tracksSection = usePopularTracks();
+  // Podcasts — popular shows from the public catalog; runs for guests too.
+  const podcastsSection = useHomePodcasts();
 
   // Live rooms — the same fetch the Live surface uses (public, error-swallowing:
-  // `getRooms` returns `[]` on failure/no-auth). Keyed off the shared
-  // `liveRoomsQueryKey` so it shares one cache authority with `app/live.tsx`.
+  // `getRooms` returns `[]` on failure/no-auth, so the section is terminal by
+  // construction — it simply disappears when nothing is live). Keyed off the
+  // shared `liveRoomsQueryKey` so it shares one cache authority with `app/live.tsx`.
   const roomsService = useMemo(() => createRoomsService(authenticatedClient), []);
   const liveRoomsQuery = useQuery({
     queryKey: liveRoomsQueryKey,
@@ -77,54 +92,50 @@ const HomeScreen: React.FC = () => {
     staleTime: 30_000,
   });
 
-  // Podcasts — popular shows from the public catalog (same hook the podcasts
-  // browse screen uses); runs for guests too.
-  const podcastsQuery = usePodcasts({ sort: 'popular', limit: 12 });
-
-  // Derive section data from the queries (empty arrays while pending).
+  // Derive section data from the queries (empty arrays until they resolve).
   const recentlyPlayed = useMemo<Track[]>(
-    () => recentlyPlayedQuery.data?.tracks ?? [],
-    [recentlyPlayedQuery.data],
+    () => recentlyPlayedSection.data?.tracks ?? [],
+    [recentlyPlayedSection.data],
   );
   const madeForYouAlbums = useMemo<Album[]>(
-    () => madeForYouQuery.data?.albums ?? [],
-    [madeForYouQuery.data],
+    () => madeForYouSection.data?.albums ?? [],
+    [madeForYouSection.data],
   );
   const madeForYouPlaylists = useMemo<Playlist[]>(
-    () => madeForYouQuery.data?.playlists ?? [],
-    [madeForYouQuery.data],
+    () => madeForYouSection.data?.playlists ?? [],
+    [madeForYouSection.data],
   );
   const madeForYouArtists = useMemo<Artist[]>(
-    () => madeForYouQuery.data?.artists ?? [],
-    [madeForYouQuery.data],
+    () => madeForYouSection.data?.artists ?? [],
+    [madeForYouSection.data],
   );
   const isPersonalized = useMemo<boolean>(
-    () => madeForYouQuery.data?.personalized === true,
-    [madeForYouQuery.data],
+    () => madeForYouSection.data?.personalized === true,
+    [madeForYouSection.data],
   );
   const popularAlbums = useMemo<Album[]>(
-    () => popularAlbumsQuery.data?.albums ?? [],
-    [popularAlbumsQuery.data],
+    () => popularAlbumsSection.data?.albums ?? [],
+    [popularAlbumsSection.data],
   );
   const popularArtists = useMemo<Artist[]>(
-    () => popularArtistsQuery.data?.artists ?? [],
-    [popularArtistsQuery.data],
+    () => popularArtistsSection.data?.artists ?? [],
+    [popularArtistsSection.data],
   );
   const userPlaylists = useMemo<Playlist[]>(
-    () => userPlaylistsQuery.data?.playlists ?? [],
-    [userPlaylistsQuery.data],
+    () => userPlaylistsSection.data?.playlists ?? [],
+    [userPlaylistsSection.data],
   );
   const tracks = useMemo<Track[]>(
-    () => tracksQuery.data?.tracks ?? [],
-    [tracksQuery.data],
+    () => tracksSection.data?.tracks ?? [],
+    [tracksSection.data],
   );
   const liveRooms = useMemo<Room[]>(
     () => liveRoomsQuery.data ?? [],
     [liveRoomsQuery.data],
   );
-  const podcasts = useMemo(
-    () => podcastsQuery.data ?? [],
-    [podcastsQuery.data],
+  const podcasts = useMemo<Podcast[]>(
+    () => podcastsSection.data ?? [],
+    [podcastsSection.data],
   );
 
   useEffect(() => {
@@ -139,6 +150,10 @@ const HomeScreen: React.FC = () => {
     if (hour < 18) return 'Good afternoon';
     return 'Good evening';
   }, [now]);
+
+  const handleSignIn = useCallback(() => {
+    openAccountDialog('signin');
+  }, [openAccountDialog]);
 
   // Navigate to and start playing an album's first track. Used by album cards'
   // play button so a single tap actually plays real audio.
@@ -269,15 +284,6 @@ const HomeScreen: React.FC = () => {
     return items.slice(0, 8);
   }, [popularAlbums, popularArtists, userPlaylists]);
 
-  // Loading gates derived from the queries (skeleton while first load pending).
-  const quickAccessLoading =
-    popularAlbumsQuery.isPending || popularArtistsQuery.isPending;
-  const hasQuickAccess = quickAccess.length > 0;
-  const hasMadeForYou =
-    madeForYouAlbums.length > 0 ||
-    madeForYouPlaylists.length > 0 ||
-    madeForYouArtists.length > 0;
-
   return (
     <>
       <SEO
@@ -291,27 +297,32 @@ const HomeScreen: React.FC = () => {
           greeting={greeting}
           liveRooms={liveRooms}
           quickAccess={quickAccess}
-          quickAccessLoading={quickAccessLoading}
-          hasQuickAccess={hasQuickAccess}
-          hasMadeForYou={hasMadeForYou}
+          /* Quick access, "Made for you", the popular rails and the track list
+             are all served by ONE browse request, so they share one status and
+             one retry — and only the top block renders the error card. */
+          browseStatus={madeForYouSection.status}
+          onRetryBrowse={madeForYouSection.retry}
+          /* A session that never resolved fails every gated rail at once, so it
+             is reported once at the top instead of once per rail. */
+          sessionBlocked={madeForYouSection.blockedBySession}
           recentlyPlayed={recentlyPlayed}
-          recentlyPlayedPending={recentlyPlayedQuery.isPending}
+          recentlyPlayedStatus={recentlyPlayedSection.status}
+          onRetryRecentlyPlayed={recentlyPlayedSection.retry}
           madeForYouArtists={madeForYouArtists}
           madeForYouPlaylists={madeForYouPlaylists}
           madeForYouAlbums={madeForYouAlbums}
-          madeForYouPending={madeForYouQuery.isPending}
           isPersonalized={isPersonalized}
           podcasts={podcasts}
-          podcastsPending={podcastsQuery.isPending}
+          podcastsStatus={podcastsSection.status}
+          onRetryPodcasts={podcastsSection.retry}
           popularAlbums={popularAlbums}
-          popularAlbumsPending={popularAlbumsQuery.isPending}
           popularArtists={popularArtists}
-          popularArtistsPending={popularArtistsQuery.isPending}
           userPlaylists={userPlaylists}
-          userPlaylistsPending={userPlaylistsQuery.isPending}
+          userPlaylistsStatus={userPlaylistsSection.status}
+          onRetryUserPlaylists={userPlaylistsSection.retry}
           tracks={tracks}
-          tracksPending={tracksQuery.isPending}
           t={t}
+          onSignIn={handleSignIn}
           onSeedHoverIn={handleHoverIn}
           onSeedHoverOut={handleHoverOut}
           playTrackList={playTrackList}
@@ -327,31 +338,106 @@ const HomeScreen: React.FC = () => {
   );
 };
 
+interface HomeSectionBlockProps {
+  title: string;
+  status: HomeSectionStatus;
+  /** Whether the resolved section actually has something to render. */
+  hasContent: boolean;
+  skeleton: React.ReactNode;
+  onRetry: () => Promise<void>;
+  /**
+   * Copy for this section's error card. Omitted when a sibling section already
+   * reports the failure of the same request — one error card per request.
+   */
+  error?: { title: string; message: string };
+  /** The sign-in call to action. Omitted for sections guests can see. */
+  signedOut?: { title: string; subtitle: string; onSignIn: () => void };
+  headerAction?: React.ReactNode;
+  children: React.ReactNode;
+}
+
+/**
+ * One titled home rail, resolved to exactly one terminal state.
+ *
+ * The section renders nothing when a successful request came back empty, when
+ * another section owns the error for the same request, or when a guest-visible
+ * section has no sign-in copy to offer.
+ */
+const HomeSectionBlock: React.FC<HomeSectionBlockProps> = ({
+  title,
+  status,
+  hasContent,
+  skeleton,
+  onRetry,
+  error,
+  signedOut,
+  headerAction,
+  children,
+}) => {
+  const theme = useTheme();
+
+  if (
+    (status === 'ready' && !hasContent) ||
+    (status === 'error' && !error) ||
+    (status === 'signed-out' && !signedOut)
+  ) {
+    return null;
+  }
+
+  return (
+    <View style={styles.section}>
+      <View style={styles.sectionHeaderRow}>
+        <Text style={[styles.sectionHeaderTitle, { color: theme.colors.text }]}>{title}</Text>
+        {headerAction}
+      </View>
+      {status === 'loading' ? (
+        skeleton
+      ) : status === 'error' && error ? (
+        <EmptyState
+          icon={{ name: 'cloud-offline-outline' }}
+          error={{ title: error.title, message: error.message, onRetry }}
+          containerStyle={styles.sectionState}
+        />
+      ) : status === 'signed-out' && signedOut ? (
+        <EmptyState
+          icon={{ name: 'person-circle-outline' }}
+          title={signedOut.title}
+          subtitle={signedOut.subtitle}
+          action={{ label: 'Sign in', onPress: signedOut.onSignIn, icon: 'log-in-outline' }}
+          containerStyle={styles.sectionState}
+        />
+      ) : (
+        children
+      )}
+    </View>
+  );
+};
+
 interface HomeContentProps {
   greeting: string;
   liveRooms: Room[];
   quickAccess: QuickAccessItem[];
-  quickAccessLoading: boolean;
-  hasQuickAccess: boolean;
-  hasMadeForYou: boolean;
+  browseStatus: HomeSectionStatus;
+  onRetryBrowse: () => Promise<void>;
+  sessionBlocked: boolean;
   recentlyPlayed: Track[];
-  recentlyPlayedPending: boolean;
+  recentlyPlayedStatus: HomeSectionStatus;
+  onRetryRecentlyPlayed: () => Promise<void>;
   madeForYouArtists: Artist[];
   madeForYouPlaylists: Playlist[];
   madeForYouAlbums: Album[];
-  madeForYouPending: boolean;
   isPersonalized: boolean;
   podcasts: Podcast[];
-  podcastsPending: boolean;
+  podcastsStatus: HomeSectionStatus;
+  onRetryPodcasts: () => Promise<void>;
   popularAlbums: Album[];
-  popularAlbumsPending: boolean;
   popularArtists: Artist[];
-  popularArtistsPending: boolean;
   userPlaylists: Playlist[];
-  userPlaylistsPending: boolean;
+  userPlaylistsStatus: HomeSectionStatus;
+  onRetryUserPlaylists: () => Promise<void>;
   tracks: Track[];
-  tracksPending: boolean;
   t: ReturnType<typeof useTranslation>['t'];
+  onSignIn: () => void;
   onSeedHoverIn: (colors: { primaryColor?: string; secondaryColor?: string }) => void;
   onSeedHoverOut: () => void;
   playTrackList: (tracks: Track[], startIndex?: number, context?: PlaybackContext) => Promise<void>;
@@ -375,27 +461,27 @@ const HomeContent: React.FC<HomeContentProps> = ({
   greeting,
   liveRooms,
   quickAccess,
-  quickAccessLoading,
-  hasQuickAccess,
-  hasMadeForYou,
+  browseStatus,
+  onRetryBrowse,
+  sessionBlocked,
   recentlyPlayed,
-  recentlyPlayedPending,
+  recentlyPlayedStatus,
+  onRetryRecentlyPlayed,
   madeForYouArtists,
   madeForYouPlaylists,
   madeForYouAlbums,
-  madeForYouPending,
   isPersonalized,
   podcasts,
-  podcastsPending,
+  podcastsStatus,
+  onRetryPodcasts,
   popularAlbums,
-  popularAlbumsPending,
   popularArtists,
-  popularArtistsPending,
   userPlaylists,
-  userPlaylistsPending,
+  userPlaylistsStatus,
+  onRetryUserPlaylists,
   tracks,
-  tracksPending,
   t,
+  onSignIn,
   onSeedHoverIn,
   onSeedHoverOut,
   playTrackList,
@@ -430,8 +516,8 @@ const HomeContent: React.FC<HomeContentProps> = ({
 
           {/* Live now — currently-live audio rooms, surfaced at the top because
               live content is time-sensitive. Reuses the Live surface's exact
-              fetch + RoomCard; hidden entirely when nothing is live (the home
-              hides empty sections rather than faking them). */}
+              fetch + RoomCard; hidden entirely when nothing is live (the fetch
+              swallows its own errors and returns an empty list). */}
           {liveRooms.length > 0 && (
             <View style={styles.section}>
               <View style={styles.sectionHeaderRow}>
@@ -464,10 +550,31 @@ const HomeContent: React.FC<HomeContentProps> = ({
             </View>
           )}
 
-          {/* 8-Item Compact Grid (2 columns) - real albums/artists/playlists */}
-          {quickAccessLoading ? (
+          {/* 8-Item Compact Grid (2 columns) - real albums/artists/playlists.
+              This untitled block is the browse request's error owner: when the
+              home feed fails it shows the single retry card for every rail the
+              same request backs. */}
+          {browseStatus === 'loading' ? (
             <QuickAccessGridSkeleton />
-          ) : hasQuickAccess && (
+          ) : browseStatus === 'error' ? (
+            <EmptyState
+              icon={{ name: sessionBlocked ? 'person-circle-outline' : 'cloud-offline-outline' }}
+              error={
+                sessionBlocked
+                  ? {
+                      title: 'We could not confirm your session',
+                      message: 'Your music is still here. Try again to reload the page.',
+                      onRetry: onRetryBrowse,
+                    }
+                  : {
+                      title: 'Could not load your home feed',
+                      message: RETRY_MESSAGE,
+                      onRetry: onRetryBrowse,
+                    }
+              }
+              containerStyle={styles.sectionState}
+            />
+          ) : quickAccess.length > 0 ? (
             <ResponsiveGrid minItemWidth={300} minColumns={2} gap={8} style={styles.compactGrid}>
               {quickAccess.map((item) => {
                 const title = item.type === 'album' ? item.data.title : item.data.name;
@@ -532,323 +639,329 @@ const HomeContent: React.FC<HomeContentProps> = ({
                 );
               })}
             </ResponsiveGrid>
-          )}
+          ) : null}
 
-          {/* Jump back in — REAL recently-played tracks (authed). Hidden when
-              the user has no play history yet (no faking). */}
-          {recentlyPlayedPending ? (
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                Jump back in
-              </Text>
-              <MediaCardRowSkeleton count={5} />
-            </View>
-          ) : recentlyPlayed.length > 0 && (
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                Jump back in
-              </Text>
-              <ResponsiveGrid minItemWidth={180} gap={8}>
-                {recentlyPlayed.map((track) => (
-                  <View key={track.id}>
-                    <MediaCard
-                      title={track.title}
-                      subtitle={track.artistName}
-                      type="track"
-                      imageUri={track.coverArt}
-                      images={track.images}
-                      imageSizes={track.coverArtSizes}
-                      primaryColor={track.primaryColor}
-                      secondaryColor={track.secondaryColor}
-                      onPress={() => {
-                        if (track.albumId) {
-                          router.push(`/album/${track.albumId}`);
-                        } else {
-                          router.push(`/p/${track.artistId}`);
-                        }
-                      }}
-                      onPlayPress={() => playTrackList(
-                        recentlyPlayed,
-                        recentlyPlayed.findIndex((item) => item.id === track.id),
-                        {
-                          type: 'library',
-                          name: 'Recently played',
-                        },
-                      )}
-                      onAddToQueue={() => addTrackToQueue(track)}
-                      onGoToAlbum={track.albumId ? () => router.push(`/album/${track.albumId}`) : undefined}
-                      onGoToArtist={() => router.push(`/p/${track.artistId}`)}
-                      onHoverIn={onSeedHoverIn}
-                      onHoverOut={onSeedHoverOut}
-                    />
-                  </View>
-                ))}
-              </ResponsiveGrid>
-            </View>
-          )}
+          {/* Jump back in — REAL recently-played tracks. Account-only: guests
+              get a sign-in call to action instead of a permanent skeleton. */}
+          <HomeSectionBlock
+            title="Jump back in"
+            status={recentlyPlayedStatus}
+            hasContent={recentlyPlayed.length > 0}
+            skeleton={<MediaCardRowSkeleton count={5} />}
+            onRetry={onRetryRecentlyPlayed}
+            error={sessionBlocked ? undefined : { title: 'Could not load your recent plays', message: RETRY_MESSAGE }}
+            signedOut={{
+              title: 'Pick up where you left off',
+              subtitle: 'Sign in and the music you played most recently shows up here.',
+              onSignIn,
+            }}
+          >
+            <ResponsiveGrid minItemWidth={180} gap={8}>
+              {recentlyPlayed.map((track) => (
+                <View key={track.id}>
+                  <MediaCard
+                    title={track.title}
+                    subtitle={track.artistName}
+                    type="track"
+                    imageUri={track.coverArt}
+                    images={track.images}
+                    imageSizes={track.coverArtSizes}
+                    primaryColor={track.primaryColor}
+                    secondaryColor={track.secondaryColor}
+                    onPress={() => {
+                      if (track.albumId) {
+                        router.push(`/album/${track.albumId}`);
+                      } else {
+                        router.push(`/p/${track.artistId}`);
+                      }
+                    }}
+                    onPlayPress={() => playTrackList(
+                      recentlyPlayed,
+                      recentlyPlayed.findIndex((item) => item.id === track.id),
+                      {
+                        type: 'library',
+                        name: 'Recently played',
+                      },
+                    )}
+                    onAddToQueue={() => addTrackToQueue(track)}
+                    onGoToAlbum={track.albumId ? () => router.push(`/album/${track.albumId}`) : undefined}
+                    onGoToArtist={() => router.push(`/p/${track.artistId}`)}
+                    onHoverIn={onSeedHoverIn}
+                    onHoverOut={onSeedHoverOut}
+                  />
+                </View>
+              ))}
+            </ResponsiveGrid>
+          </HomeSectionBlock>
 
           {/* Made for You — REAL recommendations (popular albums + public playlists) */}
-          {madeForYouPending ? (
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                Made for you
-              </Text>
-              <MediaCardRowSkeleton count={5} />
-            </View>
-          ) : hasMadeForYou && (
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                {isPersonalized ? 'Hecho para ti' : 'Made for you'}
-              </Text>
-              <ResponsiveGrid minItemWidth={180} gap={8}>
-                {madeForYouArtists.map((artist) => (
-                  <View key={artist.id}>
-                    <MediaCard
-                      title={artist.name}
-                      subtitle="Artist"
-                      type="artist"
-                      imageUri={artist.image}
-                      images={artist.images}
-                      imageSizes={artist.imageSizes}
-                      primaryColor={artist.primaryColor}
-                      secondaryColor={artist.secondaryColor}
-                      onPress={() => router.push(`/p/${artist.id}`)}
-                      onPlayPress={() => playArtist(artist.id, artist.name)}
-                      onAddToQueue={() => addArtistToQueue(artist.id)}
-                      onHoverIn={onSeedHoverIn}
-                      onHoverOut={onSeedHoverOut}
-                    />
-                  </View>
-                ))}
-                {madeForYouPlaylists.map((playlist) => (
-                  <View key={playlist.id}>
-                    <MediaCard
-                      title={playlist.name}
-                      subtitle={playlist.description || 'Playlist'}
-                      type="playlist"
-                      imageUri={playlist.coverArt}
-                      imageSizes={playlist.coverArtSizes}
-                      primaryColor={playlist.primaryColor}
-                      secondaryColor={playlist.secondaryColor}
-                      onPress={() => router.push(`/playlist/${playlist.id}`)}
-                      onPlayPress={() => playPlaylist(playlist.id, playlist.name)}
-                      onAddToQueue={() => addPlaylistToQueue(playlist.id)}
-                      onHoverIn={onSeedHoverIn}
-                      onHoverOut={onSeedHoverOut}
-                    />
-                  </View>
-                ))}
-                {madeForYouAlbums.map((album) => (
-                  <View key={album.id}>
-                    <MediaCard
-                      title={album.title}
-                      subtitle={album.artistName}
-                      type="album"
-                      imageUri={album.coverArt}
-                      imageSizes={album.coverArtSizes}
-                      primaryColor={album.primaryColor}
-                      secondaryColor={album.secondaryColor}
-                      onPress={() => router.push(`/album/${album.id}`)}
-                      onPlayPress={() => playAlbum(album.id, album.title)}
-                      onAddToQueue={() => addAlbumToQueue(album.id)}
-                      onGoToArtist={() => router.push(`/p/${album.artistId}`)}
-                      onHoverIn={onSeedHoverIn}
-                      onHoverOut={onSeedHoverOut}
-                    />
-                  </View>
-                ))}
-              </ResponsiveGrid>
-            </View>
-          )}
+          <HomeSectionBlock
+            title={isPersonalized ? 'Hecho para ti' : 'Made for you'}
+            status={browseStatus}
+            hasContent={
+              madeForYouArtists.length > 0 ||
+              madeForYouPlaylists.length > 0 ||
+              madeForYouAlbums.length > 0
+            }
+            skeleton={<MediaCardRowSkeleton count={5} />}
+            onRetry={onRetryBrowse}
+          >
+            <ResponsiveGrid minItemWidth={180} gap={8}>
+              {madeForYouArtists.map((artist) => (
+                <View key={artist.id}>
+                  <MediaCard
+                    title={artist.name}
+                    subtitle="Artist"
+                    type="artist"
+                    imageUri={artist.image}
+                    images={artist.images}
+                    imageSizes={artist.imageSizes}
+                    primaryColor={artist.primaryColor}
+                    secondaryColor={artist.secondaryColor}
+                    onPress={() => router.push(`/p/${artist.id}`)}
+                    onPlayPress={() => playArtist(artist.id, artist.name)}
+                    onAddToQueue={() => addArtistToQueue(artist.id)}
+                    onHoverIn={onSeedHoverIn}
+                    onHoverOut={onSeedHoverOut}
+                  />
+                </View>
+              ))}
+              {madeForYouPlaylists.map((playlist) => (
+                <View key={playlist.id}>
+                  <MediaCard
+                    title={playlist.name}
+                    subtitle={playlist.description || 'Playlist'}
+                    type="playlist"
+                    imageUri={playlist.coverArt}
+                    imageSizes={playlist.coverArtSizes}
+                    primaryColor={playlist.primaryColor}
+                    secondaryColor={playlist.secondaryColor}
+                    onPress={() => router.push(`/playlist/${playlist.id}`)}
+                    onPlayPress={() => playPlaylist(playlist.id, playlist.name)}
+                    onAddToQueue={() => addPlaylistToQueue(playlist.id)}
+                    onHoverIn={onSeedHoverIn}
+                    onHoverOut={onSeedHoverOut}
+                  />
+                </View>
+              ))}
+              {madeForYouAlbums.map((album) => (
+                <View key={album.id}>
+                  <MediaCard
+                    title={album.title}
+                    subtitle={album.artistName}
+                    type="album"
+                    imageUri={album.coverArt}
+                    imageSizes={album.coverArtSizes}
+                    primaryColor={album.primaryColor}
+                    secondaryColor={album.secondaryColor}
+                    onPress={() => router.push(`/album/${album.id}`)}
+                    onPlayPress={() => playAlbum(album.id, album.title)}
+                    onAddToQueue={() => addAlbumToQueue(album.id)}
+                    onGoToArtist={() => router.push(`/p/${album.artistId}`)}
+                    onHoverIn={onSeedHoverIn}
+                    onHoverOut={onSeedHoverOut}
+                  />
+                </View>
+              ))}
+            </ResponsiveGrid>
+          </HomeSectionBlock>
 
           {/* Podcasts — popular shows from the public catalog. Mirrors the music
               rails (same MediaCard + ResponsiveGrid); "See all" opens the
-              podcasts browse screen. Hidden when the catalog has no shows. */}
-          {podcastsPending ? (
-            <View style={styles.section}>
-              <View style={styles.sectionHeaderRow}>
-                <Text style={[styles.sectionHeaderTitle, { color: theme.colors.text }]}>
-                  {t('Podcasts')}
+              podcasts browse screen. Public, so guests see it too. */}
+          <HomeSectionBlock
+            title={t('Podcasts')}
+            status={podcastsStatus}
+            hasContent={podcasts.length > 0}
+            skeleton={<MediaCardRowSkeleton count={5} />}
+            onRetry={onRetryPodcasts}
+            error={{ title: 'Could not load podcasts', message: RETRY_MESSAGE }}
+            headerAction={
+              <Pressable style={styles.seeAllButton} onPress={() => router.push('/podcasts')} hitSlop={8}>
+                <Text style={[styles.seeAll, { color: theme.colors.textSecondary }]}>
+                  {t('See all')}
                 </Text>
-              </View>
-              <MediaCardRowSkeleton count={5} />
-            </View>
-          ) : podcasts.length > 0 && (
-            <View style={styles.section}>
-              <View style={styles.sectionHeaderRow}>
-                <Text style={[styles.sectionHeaderTitle, { color: theme.colors.text }]}>
-                  {t('Podcasts')}
-                </Text>
-                <Pressable style={styles.seeAllButton} onPress={() => router.push('/podcasts')} hitSlop={8}>
-                  <Text style={[styles.seeAll, { color: theme.colors.textSecondary }]}>
-                    {t('See all')}
-                  </Text>
-                </Pressable>
-              </View>
-              <ResponsiveGrid minItemWidth={180} gap={8}>
-                {podcasts.map((podcast) => (
-                  <View key={podcast.id}>
-                    <MediaCard
-                      title={podcast.title}
-                      subtitle={podcast.author ?? t('Podcast')}
-                      type="podcast"
-                      resolvedImageUri={pickCatalogImageUrl(undefined, podcast.image, 'card', podcast.imageSizes, podcast.imageSourceUrl)}
-                      primaryColor={podcast.primaryColor}
-                      secondaryColor={podcast.secondaryColor}
-                      onPress={() => router.push({ pathname: '/podcasts/[id]', params: { id: podcast.id } })}
-                      onPlayPress={() => router.push({ pathname: '/podcasts/[id]', params: { id: podcast.id } })}
-                      onHoverIn={onSeedHoverIn}
-                      onHoverOut={onSeedHoverOut}
-                    />
-                  </View>
-                ))}
-              </ResponsiveGrid>
-            </View>
-          )}
+              </Pressable>
+            }
+          >
+            <ResponsiveGrid minItemWidth={180} gap={8}>
+              {podcasts.map((podcast) => (
+                <View key={podcast.id}>
+                  <MediaCard
+                    title={podcast.title}
+                    subtitle={podcast.author ?? t('Podcast')}
+                    type="podcast"
+                    resolvedImageUri={resolvePodcastArtwork(podcast, 'card')}
+                    primaryColor={podcast.primaryColor}
+                    secondaryColor={podcast.secondaryColor}
+                    onPress={() => router.push({ pathname: '/podcasts/[id]', params: { id: podcast.id } })}
+                    onPlayPress={() => router.push({ pathname: '/podcasts/[id]', params: { id: podcast.id } })}
+                    onHoverIn={onSeedHoverIn}
+                    onHoverOut={onSeedHoverOut}
+                  />
+                </View>
+              ))}
+            </ResponsiveGrid>
+          </HomeSectionBlock>
 
           {/* Popular albums — REAL, ranked by catalog popularity */}
-          {popularAlbumsPending ? (
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                Popular albums
-              </Text>
-              <MediaCardRowSkeleton count={5} />
-            </View>
-          ) : popularAlbums.length > 0 && (
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                Popular albums
-              </Text>
-              <ResponsiveGrid minItemWidth={180} gap={8}>
-                {popularAlbums.map((album) => (
-                  <View key={album.id}>
-                    <MediaCard
-                      title={album.title}
-                      subtitle={album.artistName}
-                      type="album"
-                      imageUri={album.coverArt}
-                      imageSizes={album.coverArtSizes}
-                      primaryColor={album.primaryColor}
-                      secondaryColor={album.secondaryColor}
-                      onPress={() => router.push(`/album/${album.id}`)}
-                      onPlayPress={() => playAlbum(album.id, album.title)}
-                      onAddToQueue={() => addAlbumToQueue(album.id)}
-                      onGoToArtist={() => router.push(`/p/${album.artistId}`)}
-                      onHoverIn={onSeedHoverIn}
-                      onHoverOut={onSeedHoverOut}
-                    />
-                  </View>
-                ))}
-              </ResponsiveGrid>
-            </View>
-          )}
+          <HomeSectionBlock
+            title="Popular albums"
+            status={browseStatus}
+            hasContent={popularAlbums.length > 0}
+            skeleton={<MediaCardRowSkeleton count={5} />}
+            onRetry={onRetryBrowse}
+          >
+            <ResponsiveGrid minItemWidth={180} gap={8}>
+              {popularAlbums.map((album) => (
+                <View key={album.id}>
+                  <MediaCard
+                    title={album.title}
+                    subtitle={album.artistName}
+                    type="album"
+                    imageUri={album.coverArt}
+                    imageSizes={album.coverArtSizes}
+                    primaryColor={album.primaryColor}
+                    secondaryColor={album.secondaryColor}
+                    onPress={() => router.push(`/album/${album.id}`)}
+                    onPlayPress={() => playAlbum(album.id, album.title)}
+                    onAddToQueue={() => addAlbumToQueue(album.id)}
+                    onGoToArtist={() => router.push(`/p/${album.artistId}`)}
+                    onHoverIn={onSeedHoverIn}
+                    onHoverOut={onSeedHoverOut}
+                  />
+                </View>
+              ))}
+            </ResponsiveGrid>
+          </HomeSectionBlock>
 
           {/* Popular artists — REAL, ranked by catalog popularity */}
-          {popularArtistsPending ? null : popularArtists.length > 0 && (
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                Popular artists
-              </Text>
-              <ResponsiveGrid minItemWidth={180} gap={8}>
-                {popularArtists.map((artist) => (
-                  <View key={artist.id}>
-                    <MediaCard
-                      title={artist.name}
-                      subtitle="Artist"
-                      type="artist"
-                      imageUri={artist.image}
-                      images={artist.images}
-                      imageSizes={artist.imageSizes}
-                      primaryColor={artist.primaryColor}
-                      secondaryColor={artist.secondaryColor}
-                      onPress={() => router.push(`/p/${artist.id}`)}
-                      onPlayPress={() => playArtist(artist.id, artist.name)}
-                      onAddToQueue={() => addArtistToQueue(artist.id)}
-                      onHoverIn={onSeedHoverIn}
-                      onHoverOut={onSeedHoverOut}
-                    />
-                  </View>
-                ))}
-              </ResponsiveGrid>
-            </View>
-          )}
+          <HomeSectionBlock
+            title="Popular artists"
+            status={browseStatus}
+            hasContent={popularArtists.length > 0}
+            skeleton={<MediaCardRowSkeleton count={5} />}
+            onRetry={onRetryBrowse}
+          >
+            <ResponsiveGrid minItemWidth={180} gap={8}>
+              {popularArtists.map((artist) => (
+                <View key={artist.id}>
+                  <MediaCard
+                    title={artist.name}
+                    subtitle="Artist"
+                    type="artist"
+                    imageUri={artist.image}
+                    images={artist.images}
+                    imageSizes={artist.imageSizes}
+                    primaryColor={artist.primaryColor}
+                    secondaryColor={artist.secondaryColor}
+                    onPress={() => router.push(`/p/${artist.id}`)}
+                    onPlayPress={() => playArtist(artist.id, artist.name)}
+                    onAddToQueue={() => addArtistToQueue(artist.id)}
+                    onHoverIn={onSeedHoverIn}
+                    onHoverOut={onSeedHoverOut}
+                  />
+                </View>
+              ))}
+            </ResponsiveGrid>
+          </HomeSectionBlock>
 
-          {/* Your playlists — REAL, the signed-in user's own playlists */}
-          {userPlaylistsPending ? null : userPlaylists.length > 0 && (
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                Your playlists
-              </Text>
-              <ResponsiveGrid minItemWidth={180} gap={8}>
-                {userPlaylists.map((playlist) => (
-                  <View key={playlist.id}>
-                    <MediaCard
-                      title={playlist.name}
-                      subtitle={playlist.description || 'Playlist'}
-                      type="playlist"
-                      imageUri={playlist.coverArt}
-                      imageSizes={playlist.coverArtSizes}
-                      primaryColor={playlist.primaryColor}
-                      secondaryColor={playlist.secondaryColor}
-                      onPress={() => router.push(`/playlist/${playlist.id}`)}
-                      onPlayPress={() => playPlaylist(playlist.id, playlist.name)}
-                      onAddToQueue={() => addPlaylistToQueue(playlist.id)}
-                      onHoverIn={onSeedHoverIn}
-                      onHoverOut={onSeedHoverOut}
-                    />
-                  </View>
-                ))}
-              </ResponsiveGrid>
-            </View>
-          )}
+          {/* Your playlists — REAL, the signed-in user's own playlists.
+              Account-only: guests get a sign-in call to action. */}
+          <HomeSectionBlock
+            title="Your playlists"
+            status={userPlaylistsStatus}
+            hasContent={userPlaylists.length > 0}
+            skeleton={<MediaCardRowSkeleton count={5} />}
+            onRetry={onRetryUserPlaylists}
+            error={sessionBlocked ? undefined : { title: 'Could not load your playlists', message: RETRY_MESSAGE }}
+            signedOut={{
+              title: 'Your playlists, everywhere',
+              subtitle: 'Sign in to build playlists and find them on every device.',
+              onSignIn,
+            }}
+          >
+            <ResponsiveGrid minItemWidth={180} gap={8}>
+              {userPlaylists.map((playlist) => (
+                <View key={playlist.id}>
+                  <MediaCard
+                    title={playlist.name}
+                    subtitle={playlist.description || 'Playlist'}
+                    type="playlist"
+                    imageUri={playlist.coverArt}
+                    imageSizes={playlist.coverArtSizes}
+                    primaryColor={playlist.primaryColor}
+                    secondaryColor={playlist.secondaryColor}
+                    onPress={() => router.push(`/playlist/${playlist.id}`)}
+                    onPlayPress={() => playPlaylist(playlist.id, playlist.name)}
+                    onAddToQueue={() => addPlaylistToQueue(playlist.id)}
+                    onHoverIn={onSeedHoverIn}
+                    onHoverOut={onSeedHoverOut}
+                  />
+                </View>
+              ))}
+            </ResponsiveGrid>
+          </HomeSectionBlock>
 
           {/* Popular tracks — REAL, ranked by catalog popularity */}
-          {tracksPending ? (
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                Popular tracks
+          <HomeSectionBlock
+            title="Popular tracks"
+            status={browseStatus}
+            hasContent={tracks.length > 0}
+            skeleton={<MediaCardRowSkeleton count={10} />}
+            onRetry={onRetryBrowse}
+          >
+            <ResponsiveGrid minItemWidth={180} gap={8}>
+              {tracks.map((track) => (
+                <View key={track.id}>
+                  <MediaCard
+                    title={track.title}
+                    subtitle={track.artistName}
+                    type="track"
+                    imageUri={track.coverArt}
+                    images={track.images}
+                    imageSizes={track.coverArtSizes}
+                    primaryColor={track.primaryColor}
+                    secondaryColor={track.secondaryColor}
+                    onPress={() => {
+                      if (track.albumId) {
+                        router.push(`/album/${track.albumId}`);
+                      } else {
+                        router.push(`/p/${track.artistId}`);
+                      }
+                    }}
+                    onPlayPress={() => playTrackList(tracks, tracks.findIndex((item) => item.id === track.id), {
+                      type: 'track',
+                      name: 'Popular tracks',
+                    })}
+                    onAddToQueue={() => addTrackToQueue(track)}
+                    onGoToAlbum={track.albumId ? () => router.push(`/album/${track.albumId}`) : undefined}
+                    onGoToArtist={() => router.push(`/p/${track.artistId}`)}
+                    onHoverIn={onSeedHoverIn}
+                    onHoverOut={onSeedHoverOut}
+                  />
+                </View>
+              ))}
+            </ResponsiveGrid>
+          </HomeSectionBlock>
+
+          {/* Legal. Filing a copyright report is a PUBLIC flow — the endpoint
+              takes no auth because rights holders are usually not Syra users —
+              but Settings, the other entry point, is behind the sign-in wall.
+              Home is the one surface every visitor reaches, so the publicly
+              reachable entry point lives here. */}
+          <View style={styles.footer}>
+            <Pressable
+              onPress={() => router.push('/copyright/report')}
+              hitSlop={8}
+              accessibilityRole="link"
+              accessibilityLabel="Report a copyright violation"
+            >
+              <Text style={[styles.footerLink, { color: theme.colors.textSecondary }]}>
+                Report a copyright violation
               </Text>
-              <MediaCardRowSkeleton count={10} />
-            </View>
-          ) : tracks.length > 0 && (
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                Popular tracks
-              </Text>
-              <ResponsiveGrid minItemWidth={180} gap={8}>
-                {tracks.map((track) => (
-                  <View key={track.id}>
-                    <MediaCard
-                      title={track.title}
-                      subtitle={track.artistName}
-                      type="track"
-                      imageUri={track.coverArt}
-                      images={track.images}
-                      imageSizes={track.coverArtSizes}
-                      primaryColor={track.primaryColor}
-                      secondaryColor={track.secondaryColor}
-                      onPress={() => {
-                        if (track.albumId) {
-                          router.push(`/album/${track.albumId}`);
-                        } else {
-                          router.push(`/p/${track.artistId}`);
-                        }
-                      }}
-                      onPlayPress={() => playTrackList(tracks, tracks.findIndex((item) => item.id === track.id), {
-                        type: 'track',
-                        name: 'Popular tracks',
-                      })}
-                      onAddToQueue={() => addTrackToQueue(track)}
-                      onGoToAlbum={track.albumId ? () => router.push(`/album/${track.albumId}`) : undefined}
-                      onGoToArtist={() => router.push(`/p/${track.artistId}`)}
-                      onHoverIn={onSeedHoverIn}
-                      onHoverOut={onSeedHoverOut}
-                    />
-                  </View>
-                ))}
-              </ResponsiveGrid>
-            </View>
-          )}
+            </Pressable>
+          </View>
         </ScrollView>
     </View>
   );
@@ -907,11 +1020,6 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: 20,
   },
-  sectionTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -921,6 +1029,15 @@ const styles = StyleSheet.create({
   sectionHeaderTitle: {
     fontSize: 22,
     fontWeight: 'bold',
+  },
+  // `EmptyState` is built to fill a screen; inside a rail it has to size to its
+  // own content instead of stretching, and sit on the home background.
+  sectionState: {
+    flexGrow: 0,
+    flexShrink: 0,
+    flexBasis: 'auto',
+    backgroundColor: 'transparent',
+    paddingVertical: 24,
   },
   liveHeading: {
     flexDirection: 'row',
@@ -942,6 +1059,16 @@ const styles = StyleSheet.create({
   rail: {
     gap: 12,
     paddingVertical: 2,
+  },
+  footer: {
+    paddingTop: 4,
+    paddingBottom: 8,
+  },
+  footerLink: {
+    fontSize: 13,
+    fontWeight: '500',
+    textDecorationLine: 'underline',
+    ...Platform.select({ web: { cursor: 'pointer' } }),
   },
 });
 

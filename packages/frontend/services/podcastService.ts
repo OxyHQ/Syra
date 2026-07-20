@@ -24,7 +24,7 @@ import { api, publicApi } from '@/utils/api';
  *
  * Podcast/episode artwork is intentionally NOT run through the catalog image
  * normalizer — external feed images are plain URLs and Syra-hosted ones are Oxy
- * file ids; both are resolved at render time via `resolvePodcastImageUri`.
+ * file ids; both are resolved at render time via `pickCatalogImageUrl`.
  */
 
 const podcastResponseSchema = podcastSchema.passthrough();

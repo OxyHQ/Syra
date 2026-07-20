@@ -10,7 +10,7 @@ import { ResponsiveGrid } from '@/components/ResponsiveGrid';
 import { MediaCardRowSkeleton } from '@/components/skeletons';
 import { usePodcasts, useContinueListening } from '@/hooks/usePodcasts';
 import { usePlayerStore } from '@/stores/playerStore';
-import { pickCatalogImageUrl } from '@/utils/pickImage';
+import { resolvePodcastArtwork } from '@/utils/pickImage';
 import { formatRemaining } from '@/utils/podcastFormat';
 import { webViewStyle } from '@/utils/webStyles';
 import { useHoverAmbient } from '@/hooks/useAmbientArtwork';
@@ -145,7 +145,7 @@ const PodcastsContent: React.FC<PodcastsContentProps> = ({
                     title={entry.episode.title}
                     subtitle={formatRemaining(entry.progressSec, entry.durationSec)}
                     type="podcast"
-                    resolvedImageUri={pickCatalogImageUrl(undefined, entry.episode.image, 'card', entry.episode.imageSizes, entry.episode.imageSourceUrl)}
+                    resolvedImageUri={resolvePodcastArtwork(entry.episode, 'card')}
                     primaryColor={entry.episode.primaryColor}
                     secondaryColor={entry.episode.secondaryColor}
                     onPress={() => onOpenEpisode(entry.episode.id)}
@@ -220,7 +220,7 @@ const PodcastsContent: React.FC<PodcastsContentProps> = ({
                     title={podcast.title}
                     subtitle={podcast.author ?? 'Podcast'}
                     type="podcast"
-                    resolvedImageUri={pickCatalogImageUrl(undefined, podcast.image, 'card', podcast.imageSizes, podcast.imageSourceUrl)}
+                    resolvedImageUri={resolvePodcastArtwork(podcast, 'card')}
                     primaryColor={podcast.primaryColor}
                     secondaryColor={podcast.secondaryColor}
                     onPress={() => onOpenShow(podcast.id)}

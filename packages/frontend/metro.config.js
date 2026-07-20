@@ -43,11 +43,18 @@ config.resolver = {
     /__tests__\/.*/,
     /\.test\.(js|ts|tsx|jsx)$/,
     /\.spec\.(js|ts|tsx|jsx)$/,
-    // Block documentation files
+    // Block documentation files.
+    // `README` is anchored to the final path segment: unanchored, it matches any
+    // path CONTAINING "README", including a directory component, which would
+    // block every module inside a package like `README-generator/`.
     /\.md$/,
-    /README/,
-    // Block source maps in production (they can be large)
-    /\.map$/,
+    /\/README[^/]*$/,
+    // Block source maps in production (they can be large).
+    // The extension is required: a bare /\.map$/ also matches package
+    // DIRECTORIES whose name ends in ".map" — `array.prototype.map` and
+    // `es-iterator-helpers/Iterator.prototype.map` are both real, installed
+    // packages — silently dropping them from the graph.
+    /\.(js|jsx|mjs|cjs|ts|tsx|css)\.map$/,
   ],
   extraNodeModules: {
     '@syra/shared-types': path.join(monorepoRoot, 'packages/shared-types'),

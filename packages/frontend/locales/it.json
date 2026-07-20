@@ -400,7 +400,7 @@
   "common.maybeLater": "Forse più tardi",
   "common.rateNow": "Valuta ora",
   "notification.post": "{{actorName}} ha pubblicato un nuovo aggiornamento",
-    "notifications": {
+  "notifications": {
     "tabs": {
       "all": "Tutto",
       "mentions": "Menzioni",
@@ -500,9 +500,9 @@
     }
   },
   "seo": {
-    "siteName": "Mention",
-    "defaultTitle": "Mention - Piattaforma Sociale",
-    "defaultDescription": "Unisciti a Mention e connettiti con persone di tutto il mondo. Condividi i tuoi pensieri, scopri tendenze e interagisci con una comunità globale.",
+    "siteName": "Syra",
+    "defaultTitle": "Syra - Musica e podcast",
+    "defaultDescription": "Ascolta musica, podcast e stanze audio dal vivo su Syra.",
     "home": {
       "title": "Mention - Piattaforma Sociale",
       "description": "Unisciti a Mention e connettiti con persone di tutto il mondo. Condividi i tuoi pensieri, scopri tendenze e interagisci con una comunità globale."
@@ -605,8 +605,8 @@
       "notFoundDescription": "Il post che stai cercando non esiste o è stato eliminato."
     },
     "notFound": {
-      "title": "Pagina Non Trovata - Mention",
-      "description": "La pagina che stai cercando non esiste."
+      "title": "Pagina non trovata - Syra",
+      "description": "La pagina che cerchi non esiste."
     }
   }
 }
