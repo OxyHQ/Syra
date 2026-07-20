@@ -76,7 +76,6 @@ COPY packages/shared-types/package.json ./packages/shared-types/package.json
 COPY packages/frontend/package.json ./packages/frontend/package.json
 COPY packages/studio/package.json ./packages/studio/package.json
 COPY packages/sdk/package.json ./packages/sdk/package.json
-COPY packages/live/package.json ./packages/live/package.json
 
 # Deterministic install from the lockfile, including devDependencies (TypeScript,
 # ts build tooling) which are required to compile the project.
