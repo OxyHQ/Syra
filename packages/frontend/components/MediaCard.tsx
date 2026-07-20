@@ -35,8 +35,8 @@ interface MediaCardProps {
   secondaryColor?: string;
   /**
    * Called on hover-in/focus with the card's server-extracted cover colours, so
-   * the surrounding browse screen can drive app-wide ambient theming
-   * (`useHoverAmbient`) from this card. The card already receives `primaryColor` /
+   * the surrounding browse screen can drive Bloom's app-wide ambient theming
+   * (`useAmbientTheme`) from this card. The card already receives `primaryColor` /
    * `secondaryColor` from its DTO; it simply forwards them here.
    */
   onHoverIn?: (colors: { primaryColor?: string; secondaryColor?: string }) => void;
