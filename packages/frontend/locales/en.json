@@ -20,27 +20,6 @@
     "processing": "Processing...",
     "please_wait": "Please wait..."
   },
-  "settings": {
-    "title": "Settings",
-    "supportFeedback": {
-      "helpSupport": "Help & Support"
-    },
-    "privacy": {
-      "public": "Public",
-      "private": "Private",
-      "updateError": "Failed to update privacy settings",
-      "showOnlineStatus": "Show online status"
-    },
-    "sections": {
-      "preferences": "Preferences"
-    },
-    "data": {
-      "clearCache": "Clear cache"
-    },
-    "links": {
-      "clearAllCacheError": "Failed to clear cache. Please try again."
-    }
-  },
   "common": {
     "saving": "Saving...",
     "cancel": "Cancel",
@@ -109,6 +88,112 @@
     "notFound": {
       "title": "Page Not Found - Syra",
       "description": "The page you're looking for doesn't exist."
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "seo": {
+      "title": "Settings - Syra",
+      "description": "App settings and preferences"
+    },
+    "gate": {
+      "unavailableTitle": "Session unavailable",
+      "unavailableMessage": "We could not confirm your session, so your settings stayed hidden. Please try again.",
+      "loading": "Loading account settings",
+      "signInRequired": "Please log in to access settings"
+    },
+    "groups": {
+      "account": "Account & profile",
+      "create": "Create",
+      "preferences": "Preferences",
+      "playback": "Playback",
+      "audio": "Audio quality & data",
+      "privacy": "Privacy & data",
+      "about": "About & support"
+    },
+    "account": {
+      "viewProfile": "View profile",
+      "viewProfileHint": "Open your public Syra profile",
+      "manage": "Manage account",
+      "manageHint": "Oxy account, identity and security"
+    },
+    "create": {
+      "studio": "Syra Studio",
+      "studioHint": "Upload music, manage podcasts and your artist profile"
+    },
+    "preferences": {
+      "colorMode": "Color mode",
+      "colorModeHint": "Choose how Syra follows your device theme",
+      "accentColor": "Accent color",
+      "accentColorHint": "Applies to controls and highlighted surfaces",
+      "language": "Language",
+      "languageHint": "App display language"
+    },
+    "playback": {
+      "autoplay": "Autoplay",
+      "autoplayHint": "Automatically play similar songs when your music ends",
+      "gapless": "Gapless playback",
+      "gaplessHint": "Play songs without gaps between tracks",
+      "normalizeVolume": "Normalize volume",
+      "normalizeVolumeHint": "Set the same volume level for all tracks",
+      "explicit": "Explicit content",
+      "explicitHint": "Allow playback of explicit content",
+      "crossfade": "Crossfade",
+      "crossfadeHint": "Overlap songs when switching tracks",
+      "crossfadeOff": "Off"
+    },
+    "audio": {
+      "streamingQuality": "Streaming quality",
+      "streamingQualityHint": "Higher quality uses more data",
+      "downloadQuality": "Download quality",
+      "downloadQualityHint": "Quality for downloaded music",
+      "dataSaver": "Data saver",
+      "dataSaverHint": "Use less data while streaming music"
+    },
+    "privacy": {
+      "profileVisibility": "Profile visibility",
+      "profileVisibilityHint": "Choose who can see your profile",
+      "showContactInfo": "Show contact info",
+      "showContactInfoHint": "Display your contact information on your profile",
+      "showOnlineStatus": "Show online status",
+      "showOnlineStatusHint": "Let others see when you're online",
+      "clearCache": "Clear cache",
+      "clearCacheHint": "Free up space by clearing cached data"
+    },
+    "about": {
+      "version": "Version",
+      "terms": "Terms of Service",
+      "privacyPolicy": "Privacy Policy",
+      "help": "Help & Support",
+      "copyright": "Report a copyright violation",
+      "copyrightHint": "Tell us about content that infringes your rights"
+    },
+    "logOut": "Log out",
+    "options": {
+      "system": "System",
+      "light": "Light",
+      "dark": "Dark",
+      "low": "Low",
+      "normal": "Normal",
+      "high": "High",
+      "veryHigh": "Very high",
+      "public": "Public",
+      "followers": "Followers",
+      "private": "Private"
+    },
+    "alerts": {
+      "signInRequired": {
+        "title": "Log in required",
+        "message": "Please log in before changing account settings."
+      },
+      "languageError": "Failed to change language. Please try again.",
+      "privacyError": "Failed to update privacy settings.",
+      "logoutError": "Failed to log out. Please try again.",
+      "cacheCleared": "Cache cleared successfully.",
+      "clearCacheError": "Failed to clear cache. Please try again.",
+      "termsSoon": "Terms of service page coming soon.",
+      "privacyPolicySoon": "Privacy policy page coming soon.",
+      "helpSoon": "Help center coming soon."
     }
   }
 }

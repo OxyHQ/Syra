@@ -20,27 +20,6 @@
     "processing": "Elaborazione in corso...",
     "please_wait": "Attendere prego..."
   },
-  "settings": {
-    "title": "Impostazioni",
-    "supportFeedback": {
-      "helpSupport": "Aiuto e supporto"
-    },
-    "privacy": {
-      "public": "Pubblico",
-      "private": "Privato",
-      "updateError": "Impossibile aggiornare le impostazioni di privacy",
-      "showOnlineStatus": "Mostra stato online"
-    },
-    "sections": {
-      "preferences": "Preferenze"
-    },
-    "data": {
-      "clearCache": "Cancella cache"
-    },
-    "links": {
-      "clearAllCacheError": "Impossibile cancellare la cache. Riprova."
-    }
-  },
   "common": {
     "saving": "Salvataggio...",
     "cancel": "Annulla",
@@ -109,6 +88,112 @@
     "notFound": {
       "title": "Pagina non trovata - Syra",
       "description": "La pagina che cerchi non esiste."
+    }
+  },
+  "settings": {
+    "title": "Impostazioni",
+    "seo": {
+      "title": "Impostazioni - Syra",
+      "description": "Impostazioni e preferenze dell'app"
+    },
+    "gate": {
+      "unavailableTitle": "Sessione non disponibile",
+      "unavailableMessage": "Non siamo riusciti a confermare la tua sessione, quindi le impostazioni non sono state mostrate. Riprova.",
+      "loading": "Caricamento delle impostazioni dell'account",
+      "signInRequired": "Accedi per visualizzare le impostazioni"
+    },
+    "groups": {
+      "account": "Account e profilo",
+      "create": "Crea",
+      "preferences": "Preferenze",
+      "playback": "Riproduzione",
+      "audio": "Qualità audio e dati",
+      "privacy": "Privacy e dati",
+      "about": "Informazioni e supporto"
+    },
+    "account": {
+      "viewProfile": "Vedi profilo",
+      "viewProfileHint": "Apri il tuo profilo pubblico di Syra",
+      "manage": "Gestisci account",
+      "manageHint": "Account Oxy, identità e sicurezza"
+    },
+    "create": {
+      "studio": "Syra Studio",
+      "studioHint": "Carica musica, gestisci podcast e il tuo profilo artista"
+    },
+    "preferences": {
+      "colorMode": "Modalità colore",
+      "colorModeHint": "Scegli come Syra segue il tema del tuo dispositivo",
+      "accentColor": "Colore d'accento",
+      "accentColorHint": "Si applica ai controlli e alle superfici in evidenza",
+      "language": "Lingua",
+      "languageHint": "Lingua dell'app"
+    },
+    "playback": {
+      "autoplay": "Riproduzione automatica",
+      "autoplayHint": "Riproduci automaticamente brani simili quando la tua musica finisce",
+      "gapless": "Riproduzione senza pause",
+      "gaplessHint": "Riproduci i brani senza silenzi tra le tracce",
+      "normalizeVolume": "Normalizza volume",
+      "normalizeVolumeHint": "Imposta lo stesso livello di volume per tutte le tracce",
+      "explicit": "Contenuti espliciti",
+      "explicitHint": "Consenti la riproduzione di contenuti espliciti",
+      "crossfade": "Dissolvenza incrociata",
+      "crossfadeHint": "Sovrapponi i brani quando cambi traccia",
+      "crossfadeOff": "Disattivato"
+    },
+    "audio": {
+      "streamingQuality": "Qualità di streaming",
+      "streamingQualityHint": "Una qualità più alta consuma più dati",
+      "downloadQuality": "Qualità dei download",
+      "downloadQualityHint": "Qualità della musica scaricata",
+      "dataSaver": "Risparmio dati",
+      "dataSaverHint": "Consuma meno dati mentre ascolti musica"
+    },
+    "privacy": {
+      "profileVisibility": "Visibilità del profilo",
+      "profileVisibilityHint": "Scegli chi può vedere il tuo profilo",
+      "showContactInfo": "Mostra informazioni di contatto",
+      "showContactInfoHint": "Mostra le tue informazioni di contatto sul profilo",
+      "showOnlineStatus": "Mostra stato online",
+      "showOnlineStatusHint": "Permetti agli altri di vedere quando sei online",
+      "clearCache": "Cancella cache",
+      "clearCacheHint": "Libera spazio cancellando i dati nella cache"
+    },
+    "about": {
+      "version": "Versione",
+      "terms": "Termini di servizio",
+      "privacyPolicy": "Informativa sulla privacy",
+      "help": "Aiuto e supporto",
+      "copyright": "Segnala una violazione del copyright",
+      "copyrightHint": "Segnalaci i contenuti che violano i tuoi diritti"
+    },
+    "logOut": "Esci",
+    "options": {
+      "system": "Sistema",
+      "light": "Chiaro",
+      "dark": "Scuro",
+      "low": "Bassa",
+      "normal": "Normale",
+      "high": "Alta",
+      "veryHigh": "Molto alta",
+      "public": "Pubblico",
+      "followers": "Follower",
+      "private": "Privato"
+    },
+    "alerts": {
+      "signInRequired": {
+        "title": "Accesso richiesto",
+        "message": "Accedi prima di modificare le impostazioni dell'account."
+      },
+      "languageError": "Impossibile cambiare lingua. Riprova.",
+      "privacyError": "Impossibile aggiornare le impostazioni sulla privacy.",
+      "logoutError": "Impossibile uscire. Riprova.",
+      "cacheCleared": "Cache cancellata correttamente.",
+      "clearCacheError": "Impossibile cancellare la cache. Riprova.",
+      "termsSoon": "La pagina dei termini di servizio sarà presto disponibile.",
+      "privacyPolicySoon": "La pagina dell'informativa sulla privacy sarà presto disponibile.",
+      "helpSoon": "Il centro assistenza sarà presto disponibile."
     }
   }
 }

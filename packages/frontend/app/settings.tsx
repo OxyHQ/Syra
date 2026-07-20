@@ -37,6 +37,7 @@ import {
 } from '@/store/appearanceStore';
 import { STORAGE_KEYS } from '@/lib/constants';
 import i18n from '@/lib/i18n';
+import { useTranslation } from 'react-i18next';
 import { authenticatedClient } from '@/utils/api';
 import { confirmDialog } from '@/utils/alerts';
 import { createScopedLogger } from '@/utils/logger';
@@ -51,6 +52,9 @@ const logger = createScopedLogger('SettingsScreen');
 
 const STUDIO_URL = 'https://studio.syra.fm';
 
+// Endonyms, deliberately NOT run through `t()`. Someone hunting for Italian
+// should read "Italiano" whatever the current language is — translating these
+// would hide each option from the only people looking for it.
 const LANGUAGE_OPTIONS: readonly { label: string; value: string }[] = [
   { label: 'English', value: 'en-US' },
   { label: 'Español', value: 'es-ES' },
@@ -89,6 +93,7 @@ const SettingsControlBlock: React.FC<SettingsControlBlockProps> = ({
 );
 
 const SettingsScreen: React.FC = () => {
+  const { t } = useTranslation();
   const router = useRouter();
   const { user, logout, showBottomSheet, openAccountDialog } = useOxy();
   // Session state comes from the bounded gate, never from raw
@@ -120,14 +125,14 @@ const SettingsScreen: React.FC = () => {
       await Storage.set(STORAGE_KEYS.LANGUAGE_PREFERENCE, language);
     } catch (error) {
       logger.error('Failed to change language', { error });
-      Alert.alert('Error', 'Failed to change language. Please try again.');
+      Alert.alert(t('common.error'), t('settings.alerts.languageError'));
     }
   }, []);
 
   const requirePrivateSession = useCallback((): boolean => {
     if (canUsePrivateApi) return true;
     openAccountDialog('signin');
-    Alert.alert('Log in required', 'Please log in before changing account settings.');
+    Alert.alert(t('settings.alerts.signInRequired.title'), t('settings.alerts.signInRequired.message'));
     return false;
   }, [canUsePrivateApi, openAccountDialog]);
 
@@ -185,7 +190,7 @@ const SettingsScreen: React.FC = () => {
     },
     onError: (error) => {
       logger.error('Failed to update privacy settings', { error });
-      Alert.alert('Error', 'Failed to update privacy settings.');
+      Alert.alert(t('common.error'), t('settings.alerts.privacyError'));
     },
   });
 
@@ -208,7 +213,7 @@ const SettingsScreen: React.FC = () => {
       router.replace('/');
     } catch (error) {
       logger.error('Logout failed', { error });
-      Alert.alert('Error', 'Failed to log out. Please try again.');
+      Alert.alert(t('common.error'), t('settings.alerts.logoutError'));
     }
   }, [logout, router]);
 
@@ -232,10 +237,10 @@ const SettingsScreen: React.FC = () => {
         key.startsWith('musico_music_preferences'),
       );
       await Promise.all(keysToClear.map((key) => AsyncStorage.removeItem(key)));
-      Alert.alert('Success', 'Cache cleared successfully.');
+      Alert.alert(t('common.success'), t('settings.alerts.cacheCleared'));
     } catch (error) {
       logger.error('Clear cache failed', { error });
-      Alert.alert('Error', 'Failed to clear cache. Please try again.');
+      Alert.alert(t('common.error'), t('settings.alerts.clearCacheError'));
     }
   }, []);
 
@@ -243,14 +248,14 @@ const SettingsScreen: React.FC = () => {
   if (gate.isTimedOut) {
     return (
       <>
-        <SEO title="Settings - Syra" description="App settings and preferences" />
+        <SEO title={t('settings.seo.title')} description={t('settings.seo.description')} />
         <ThemedView className="flex-1">
           <EmptyState
             containerStyle={styles.gateState}
             icon={{ name: 'cloud-offline-outline' }}
             error={{
-              title: 'Session unavailable',
-              message: 'We could not confirm your session, so your settings stayed hidden. Please try again.',
+              title: t('settings.gate.unavailableTitle'),
+              message: t('settings.gate.unavailableMessage'),
               onRetry: async () => {
                 gate.retry();
               },
@@ -264,10 +269,10 @@ const SettingsScreen: React.FC = () => {
   if (gate.isResolving) {
     return (
       <>
-        <SEO title="Settings - Syra" description="App settings and preferences" />
+        <SEO title={t('settings.seo.title')} description={t('settings.seo.description')} />
         <ThemedView className="flex-1 items-center justify-center px-12">
           <Text className="text-base text-center text-muted-foreground">
-            Loading account settings
+            {t('settings.gate.loading')}
           </Text>
         </ThemedView>
       </>
@@ -277,10 +282,10 @@ const SettingsScreen: React.FC = () => {
   if (!gate.isAuthenticated) {
     return (
       <>
-        <SEO title="Settings - Syra" description="App settings and preferences" />
+        <SEO title={t('settings.seo.title')} description={t('settings.seo.description')} />
         <ThemedView className="flex-1 items-center justify-center px-12">
           <Text className="text-base text-center text-muted-foreground">
-            Please log in to access settings
+            {t('settings.gate.signInRequired')}
           </Text>
         </ThemedView>
       </>
@@ -289,7 +294,7 @@ const SettingsScreen: React.FC = () => {
 
   return (
     <>
-      <SEO title="Settings - Syra" description="App settings and preferences" />
+      <SEO title={t('settings.seo.title')} description={t('settings.seo.description')} />
       <ThemedView className="flex-1">
         <ScrollView
           className="flex-1"
@@ -301,7 +306,7 @@ const SettingsScreen: React.FC = () => {
           <View style={styles.contentColumn}>
             <View style={styles.pageHeader}>
               <Text className="text-3xl font-bold text-foreground" numberOfLines={1}>
-                Settings
+                {t('settings.title')}
               </Text>
             </View>
 
@@ -315,71 +320,71 @@ const SettingsScreen: React.FC = () => {
               </Text>
             </View>
 
-            <SettingsListGroup title="Account & profile">
+            <SettingsListGroup title={t('settings.groups.account')}>
               <SettingsListItem
                 icon={<RowIcon name="person-outline" />}
-                title="View profile"
-                description="Open your public Syra profile"
+                title={t('settings.account.viewProfile')}
+                description={t('settings.account.viewProfileHint')}
                 onPress={handleViewProfile}
                 disabled={!user?.username}
               />
               <SettingsListItem
                 icon={<RowIcon name="person-circle-outline" />}
-                title="Manage account"
-                description="Oxy account, identity and security"
+                title={t('settings.account.manage')}
+                description={t('settings.account.manageHint')}
                 onPress={handleManageAccount}
               />
             </SettingsListGroup>
 
-            <SettingsListGroup title="Create">
+            <SettingsListGroup title={t('settings.groups.create')}>
               <SettingsListItem
                 icon={<RowIcon name="mic-outline" />}
-                title="Syra Studio"
-                description="Upload music, manage podcasts and your artist profile"
+                title={t('settings.create.studio')}
+                description={t('settings.create.studioHint')}
                 onPress={handleOpenStudio}
               />
             </SettingsListGroup>
 
-            <SettingsListGroup title="Preferences">
+            <SettingsListGroup title={t('settings.groups.preferences')}>
               <SettingsControlBlock
                 icon="phone-portrait-outline"
-                title="Color mode"
-                description="Choose how Syra follows your device theme"
+                title={t('settings.preferences.colorMode')}
+                description={t('settings.preferences.colorModeHint')}
               >
                 <SegmentedControl<'system' | 'light' | 'dark'>
-                  label="Color mode"
+                  label={t('settings.preferences.colorMode')}
                   type="radio"
                   size="small"
                   value={themeMode}
                   onChange={handleThemeModeChange}
                 >
                   <SegmentedControlItem value="system">
-                    <SegmentedControlItemText numberOfLines={1}>System</SegmentedControlItemText>
+                    <SegmentedControlItemText numberOfLines={1}>{t('settings.options.system')}</SegmentedControlItemText>
                   </SegmentedControlItem>
                   <SegmentedControlItem value="light">
-                    <SegmentedControlItemText numberOfLines={1}>Light</SegmentedControlItemText>
+                    <SegmentedControlItemText numberOfLines={1}>{t('settings.options.light')}</SegmentedControlItemText>
                   </SegmentedControlItem>
                   <SegmentedControlItem value="dark">
-                    <SegmentedControlItemText numberOfLines={1}>Dark</SegmentedControlItemText>
+                    <SegmentedControlItemText numberOfLines={1}>{t('settings.options.dark')}</SegmentedControlItemText>
                   </SegmentedControlItem>
                 </SegmentedControl>
               </SettingsControlBlock>
 
               <SettingsControlBlock
                 icon="color-palette-outline"
-                title="Accent color"
-                description="Applies to controls and highlighted surfaces"
+                title={t('settings.preferences.accentColor')}
+                description={t('settings.preferences.accentColorHint')}
               >
                 <ColorSwatchPicker value={colorPreset} onChange={handleColorChange} />
               </SettingsControlBlock>
 
               <SettingsControlBlock
                 icon="language-outline"
-                title="Language"
-                description="App display language"
+                title={t('settings.preferences.language')}
+                description={t('settings.preferences.languageHint')}
               >
                 <SegmentedControl<string>
-                  label="Language"
+                  label={t('settings.preferences.language')}
                   type="radio"
                   size="small"
                   value={i18n.language || 'en-US'}
@@ -396,11 +401,11 @@ const SettingsScreen: React.FC = () => {
               </SettingsControlBlock>
             </SettingsListGroup>
 
-            <SettingsListGroup title="Playback">
+            <SettingsListGroup title={t('settings.groups.playback')}>
               <SettingsListItem
                 icon={<RowIcon name="play-circle-outline" />}
-                title="Autoplay"
-                description="Automatically play similar songs when your music ends"
+                title={t('settings.playback.autoplay')}
+                description={t('settings.playback.autoplayHint')}
                 showChevron={false}
                 rightElement={
                   <Switch
@@ -411,8 +416,8 @@ const SettingsScreen: React.FC = () => {
               />
               <SettingsListItem
                 icon={<RowIcon name="albums-outline" />}
-                title="Gapless playback"
-                description="Play songs without gaps between tracks"
+                title={t('settings.playback.gapless')}
+                description={t('settings.playback.gaplessHint')}
                 showChevron={false}
                 rightElement={
                   <Switch
@@ -423,8 +428,8 @@ const SettingsScreen: React.FC = () => {
               />
               <SettingsListItem
                 icon={<RowIcon name="volume-medium-outline" />}
-                title="Normalize volume"
-                description="Set the same volume level for all tracks"
+                title={t('settings.playback.normalizeVolume')}
+                description={t('settings.playback.normalizeVolumeHint')}
                 showChevron={false}
                 rightElement={
                   <Switch
@@ -435,8 +440,8 @@ const SettingsScreen: React.FC = () => {
               />
               <SettingsListItem
                 icon={<RowIcon name="alert-circle-outline" />}
-                title="Explicit content"
-                description="Allow playback of explicit content"
+                title={t('settings.playback.explicit')}
+                description={t('settings.playback.explicitHint')}
                 showChevron={false}
                 rightElement={
                   <Switch
@@ -447,8 +452,8 @@ const SettingsScreen: React.FC = () => {
               />
               <SettingsControlBlock
                 icon="options-outline"
-                title="Crossfade"
-                description="Overlap songs when switching tracks"
+                title={t('settings.playback.crossfade')}
+                description={t('settings.playback.crossfadeHint')}
               >
                 <Slider
                   value={musicPreferences?.crossfade ?? 0}
@@ -456,70 +461,70 @@ const SettingsScreen: React.FC = () => {
                   minimumValue={0}
                   maximumValue={12}
                   step={1}
-                  formatValue={(value) => (value === 0 ? 'Off' : `${value}s`)}
+                  formatValue={(value) => (value === 0 ? t('settings.playback.crossfadeOff') : `${value}s`)}
                 />
               </SettingsControlBlock>
             </SettingsListGroup>
 
-            <SettingsListGroup title="Audio quality & data">
+            <SettingsListGroup title={t('settings.groups.audio')}>
               <SettingsControlBlock
                 icon="wifi-outline"
-                title="Streaming quality"
-                description="Higher quality uses more data"
+                title={t('settings.audio.streamingQuality')}
+                description={t('settings.audio.streamingQualityHint')}
               >
                 <SegmentedControl<AudioQuality>
-                  label="Streaming quality"
+                  label={t('settings.audio.streamingQuality')}
                   type="radio"
                   size="small"
                   value={musicPreferences?.audioQuality ?? 'normal'}
                   onChange={(value) => handleMusicPreferenceUpdate({ audioQuality: value })}
                 >
                   <SegmentedControlItem value="low">
-                    <SegmentedControlItemText numberOfLines={1}>Low</SegmentedControlItemText>
+                    <SegmentedControlItemText numberOfLines={1}>{t('settings.options.low')}</SegmentedControlItemText>
                   </SegmentedControlItem>
                   <SegmentedControlItem value="normal">
-                    <SegmentedControlItemText numberOfLines={1}>Normal</SegmentedControlItemText>
+                    <SegmentedControlItemText numberOfLines={1}>{t('settings.options.normal')}</SegmentedControlItemText>
                   </SegmentedControlItem>
                   <SegmentedControlItem value="high">
-                    <SegmentedControlItemText numberOfLines={1}>High</SegmentedControlItemText>
+                    <SegmentedControlItemText numberOfLines={1}>{t('settings.options.high')}</SegmentedControlItemText>
                   </SegmentedControlItem>
                   <SegmentedControlItem value="very_high">
-                    <SegmentedControlItemText numberOfLines={1}>Very high</SegmentedControlItemText>
+                    <SegmentedControlItemText numberOfLines={1}>{t('settings.options.veryHigh')}</SegmentedControlItemText>
                   </SegmentedControlItem>
                 </SegmentedControl>
               </SettingsControlBlock>
 
               <SettingsControlBlock
                 icon="cloud-download-outline"
-                title="Download quality"
-                description="Quality for downloaded music"
+                title={t('settings.audio.downloadQuality')}
+                description={t('settings.audio.downloadQualityHint')}
               >
                 <SegmentedControl<AudioQuality>
-                  label="Download quality"
+                  label={t('settings.audio.downloadQuality')}
                   type="radio"
                   size="small"
                   value={musicPreferences?.downloadQuality ?? 'normal'}
                   onChange={(value) => handleMusicPreferenceUpdate({ downloadQuality: value })}
                 >
                   <SegmentedControlItem value="low">
-                    <SegmentedControlItemText numberOfLines={1}>Low</SegmentedControlItemText>
+                    <SegmentedControlItemText numberOfLines={1}>{t('settings.options.low')}</SegmentedControlItemText>
                   </SegmentedControlItem>
                   <SegmentedControlItem value="normal">
-                    <SegmentedControlItemText numberOfLines={1}>Normal</SegmentedControlItemText>
+                    <SegmentedControlItemText numberOfLines={1}>{t('settings.options.normal')}</SegmentedControlItemText>
                   </SegmentedControlItem>
                   <SegmentedControlItem value="high">
-                    <SegmentedControlItemText numberOfLines={1}>High</SegmentedControlItemText>
+                    <SegmentedControlItemText numberOfLines={1}>{t('settings.options.high')}</SegmentedControlItemText>
                   </SegmentedControlItem>
                   <SegmentedControlItem value="very_high">
-                    <SegmentedControlItemText numberOfLines={1}>Very high</SegmentedControlItemText>
+                    <SegmentedControlItemText numberOfLines={1}>{t('settings.options.veryHigh')}</SegmentedControlItemText>
                   </SegmentedControlItem>
                 </SegmentedControl>
               </SettingsControlBlock>
 
               <SettingsListItem
                 icon={<RowIcon name="radio-outline" />}
-                title="Data saver"
-                description="Use less data while streaming music"
+                title={t('settings.audio.dataSaver')}
+                description={t('settings.audio.dataSaverHint')}
                 showChevron={false}
                 rightElement={
                   <Switch
@@ -530,28 +535,28 @@ const SettingsScreen: React.FC = () => {
               />
             </SettingsListGroup>
 
-            <SettingsListGroup title="Privacy & data">
+            <SettingsListGroup title={t('settings.groups.privacy')}>
               {privacySettings ? (
                 <SettingsControlBlock
                   icon="lock-closed-outline"
-                  title="Profile visibility"
-                  description="Choose who can see your profile"
+                  title={t('settings.privacy.profileVisibility')}
+                  description={t('settings.privacy.profileVisibilityHint')}
                 >
                   <SegmentedControl<ProfileVisibility>
-                    label="Profile visibility"
+                    label={t('settings.privacy.profileVisibility')}
                     type="radio"
                     size="small"
                     value={privacySettings.profileVisibility ?? 'public'}
                     onChange={(value) => handlePrivacyUpdate({ profileVisibility: value })}
                   >
                     <SegmentedControlItem value="public">
-                      <SegmentedControlItemText numberOfLines={1}>Public</SegmentedControlItemText>
+                      <SegmentedControlItemText numberOfLines={1}>{t('settings.options.public')}</SegmentedControlItemText>
                     </SegmentedControlItem>
                     <SegmentedControlItem value="followers_only">
-                      <SegmentedControlItemText numberOfLines={1}>Followers</SegmentedControlItemText>
+                      <SegmentedControlItemText numberOfLines={1}>{t('settings.options.followers')}</SegmentedControlItemText>
                     </SegmentedControlItem>
                     <SegmentedControlItem value="private">
-                      <SegmentedControlItemText numberOfLines={1}>Private</SegmentedControlItemText>
+                      <SegmentedControlItemText numberOfLines={1}>{t('settings.options.private')}</SegmentedControlItemText>
                     </SegmentedControlItem>
                   </SegmentedControl>
                 </SettingsControlBlock>
@@ -559,8 +564,8 @@ const SettingsScreen: React.FC = () => {
               {privacySettings ? (
                 <SettingsListItem
                   icon={<RowIcon name="card-outline" />}
-                  title="Show contact info"
-                  description="Display your contact information on your profile"
+                  title={t('settings.privacy.showContactInfo')}
+                  description={t('settings.privacy.showContactInfoHint')}
                   showChevron={false}
                   rightElement={
                     <Switch
@@ -573,8 +578,8 @@ const SettingsScreen: React.FC = () => {
               {privacySettings ? (
                 <SettingsListItem
                   icon={<RowIcon name="ellipse-outline" />}
-                  title="Show online status"
-                  description="Let others see when you're online"
+                  title={t('settings.privacy.showOnlineStatus')}
+                  description={t('settings.privacy.showOnlineStatusHint')}
                   showChevron={false}
                   rightElement={
                     <Switch
@@ -586,39 +591,39 @@ const SettingsScreen: React.FC = () => {
               ) : null}
               <SettingsListItem
                 icon={<RowIcon name="trash-outline" />}
-                title="Clear cache"
-                description="Free up space by clearing cached data"
+                title={t('settings.privacy.clearCache')}
+                description={t('settings.privacy.clearCacheHint')}
                 onPress={handleClearCache}
                 showChevron={false}
               />
             </SettingsListGroup>
 
-            <SettingsListGroup title="About & support">
+            <SettingsListGroup title={t('settings.groups.about')}>
               <SettingsListItem
                 icon={<RowIcon name="information-circle-outline" />}
-                title="Version"
+                title={t('settings.about.version')}
                 value={`Syra ${appVersion}`}
                 showChevron={false}
               />
               <SettingsListItem
                 icon={<RowIcon name="document-text-outline" />}
-                title="Terms of Service"
-                onPress={() => Alert.alert('Terms of Service', 'Terms of service page coming soon.')}
+                title={t('settings.about.terms')}
+                onPress={() => Alert.alert(t('settings.about.terms'), t('settings.alerts.termsSoon'))}
               />
               <SettingsListItem
                 icon={<RowIcon name="shield-checkmark-outline" />}
-                title="Privacy Policy"
-                onPress={() => Alert.alert('Privacy Policy', 'Privacy policy page coming soon.')}
+                title={t('settings.about.privacyPolicy')}
+                onPress={() => Alert.alert(t('settings.about.privacyPolicy'), t('settings.alerts.privacyPolicySoon'))}
               />
               <SettingsListItem
                 icon={<RowIcon name="help-circle-outline" />}
-                title="Help & Support"
-                onPress={() => Alert.alert('Help & Support', 'Help center coming soon.')}
+                title={t('settings.about.help')}
+                onPress={() => Alert.alert(t('settings.about.help'), t('settings.alerts.helpSoon'))}
               />
               <SettingsListItem
                 icon={<RowIcon name="flag-outline" />}
-                title="Report a copyright violation"
-                description="Tell us about content that infringes your rights"
+                title={t('settings.about.copyright')}
+                description={t('settings.about.copyrightHint')}
                 onPress={() => router.push('/copyright/report')}
               />
             </SettingsListGroup>
@@ -626,7 +631,7 @@ const SettingsScreen: React.FC = () => {
             <SettingsListGroup>
               <SettingsListItem
                 icon={<RowIcon name="log-out-outline" destructive />}
-                title="Log out"
+                title={t('settings.logOut')}
                 onPress={handleLogout}
                 destructive
                 showChevron={false}
