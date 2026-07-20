@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, View, Text, Pressable, Image, ScrollView, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -10,7 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme, useAmbientTheme } from '@oxyhq/bloom/theme';
 import { musicService } from '@/services/musicService';
 import { Track } from '@syra/shared-types';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,7 +28,6 @@ import { isNotFoundError } from '@/utils/api';
 import { toast } from '@/lib/sonner';
 import { useAuthGate } from '@/hooks/useAuthGate';
 import { CATALOG_QUERY_KEYS } from '@/hooks/useLibraryCollections';
-import { useViewAmbient } from '@/hooks/useAmbientArtwork';
 import { useOxy } from '@oxyhq/services';
 import { PlaylistActionsSheet } from '@/components/playlist/PlaylistActionsSheet';
 import { TrackActionsSheet } from '@/components/playlist/TrackActionsSheet';
@@ -97,9 +96,19 @@ const PlaylistScreen: React.FC = () => {
     : undefined;
 
   // VIEW MODE: theme the WHOLE app from the playlist's server-extracted cover
-  // colours ON VIEW and restore the default on leave. Called before the early
-  // returns so the hook order stays stable; no-ops until the playlist loads.
-  useViewAmbient(playlist?.primaryColor, playlist?.secondaryColor);
+  // colours ON VIEW and restore the default on leave. All theming lives in Bloom —
+  // this thin effect only feeds the cover colours to Bloom's ambient store
+  // (consumed internally by the root provider). Runs before the early returns so
+  // the hook order stays stable; no-ops until the playlist loads.
+  const { setAmbient, clearAmbient } = useAmbientTheme();
+  const playlistPrimaryColor = playlist?.primaryColor;
+  const playlistSecondaryColor = playlist?.secondaryColor;
+  useEffect(() => {
+    if (playlistPrimaryColor) {
+      setAmbient(playlistPrimaryColor, { secondary: playlistSecondaryColor });
+    }
+    return () => clearAmbient();
+  }, [playlistPrimaryColor, playlistSecondaryColor, setAmbient, clearAmbient]);
 
   const handlePlayPlaylist = () => {
     if (!canPlay) {
@@ -184,9 +193,9 @@ const PlaylistScreen: React.FC = () => {
     );
   }
 
-  // The whole app is themed from this playlist's cover ON VIEW (see
-  // `useViewAmbient` above). No per-screen theme wrapper and no cover-hover
-  // theming — `PlaylistView` reads the already-themed app theme.
+  // The whole app is themed from this playlist's cover ON VIEW (see the ambient
+  // effect above). No per-screen theme wrapper and no cover-hover theming —
+  // `PlaylistView` reads the already-themed app theme.
   return (
     <PlaylistView
       playlist={playlist}
@@ -228,7 +237,7 @@ interface PlaylistViewProps {
 
 /**
  * The playlist's presentational view. Reads the app theme via `useTheme()`; the
- * app is already themed from the playlist cover on view (see `useViewAmbient` in
+ * app is already themed from the playlist cover on view (see the ambient effect in
  * `PlaylistScreen`), so the hero + tracklist reflect the artwork palette with no
  * cover-hover handling here. Owns the parallax scroll hooks.
  */

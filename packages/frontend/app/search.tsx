@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { StyleSheet, View, TextInput, Text, ScrollView, Pressable } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme, useAmbientTheme } from '@oxyhq/bloom/theme';
 import SEO from '@/components/SEO';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams, type Href } from 'expo-router';
@@ -34,6 +34,21 @@ const SearchScreen: React.FC = () => {
   const router = useRouter();
   const isMobile = useMediaQuery({ maxWidth: 767 });
   const { playTrackList, playEpisode, currentTrack, currentEpisode, isPlaying } = usePlayerStore();
+  // HOVER MODE: hovering any card themes the WHOLE app from that card's
+  // server-extracted cover colours; leaving restores the default. All theming
+  // lives in Bloom — these thin handlers only feed the card's DTO colours to
+  // Bloom's ambient store (consumed internally by the root provider; same wiring
+  // as the home screen).
+  const { setAmbient, clearAmbient } = useAmbientTheme();
+  const handleHoverIn = useCallback(
+    (colors: { primaryColor?: string; secondaryColor?: string }) => {
+      if (colors.primaryColor) {
+        setAmbient(colors.primaryColor, { secondary: colors.secondaryColor });
+      }
+    },
+    [setAmbient],
+  );
+  const handleHoverOut = clearAmbient;
   // Seed the search box from a `?q=` deep link (e.g. tapping a #hashtag / @mention),
   // and optionally preselect a `?category=` tab (e.g. the podcasts home search entry).
   const { q, category } = useLocalSearchParams<{ q?: string; category?: string }>();
@@ -381,7 +396,10 @@ const SearchScreen: React.FC = () => {
                       imageUri={album.coverArt}
                       imageSizes={album.coverArtSizes}
                       primaryColor={album.primaryColor}
+                      secondaryColor={album.secondaryColor}
                       onPress={() => router.push(`/album/${album.id}`)}
+                      onHoverIn={handleHoverIn}
+                      onHoverOut={handleHoverOut}
                     />
                   </View>
                 ))}
@@ -394,7 +412,10 @@ const SearchScreen: React.FC = () => {
                       imageUri={playlist.coverArt}
                       imageSizes={playlist.coverArtSizes}
                       primaryColor={playlist.primaryColor}
+                      secondaryColor={playlist.secondaryColor}
                       onPress={() => router.push({ pathname: '/playlist/[id]', params: { id: playlist.id } } satisfies Href)}
+                      onHoverIn={handleHoverIn}
+                      onHoverOut={handleHoverOut}
                     />
                   </View>
                 ))}
@@ -421,8 +442,11 @@ const SearchScreen: React.FC = () => {
                       images={track.images}
                       imageSizes={track.coverArtSizes}
                       primaryColor={track.primaryColor}
+                      secondaryColor={track.secondaryColor}
                       onPress={() => handleTrackRowPress(track, popularTracks, 'Popular Tracks')}
                       onPlayPress={() => playTrackFromList(track, popularTracks, { type: 'search', name: 'Popular Tracks' })}
+                      onHoverIn={handleHoverIn}
+                      onHoverOut={handleHoverOut}
                     />
                   </View>
                 ))}
@@ -448,7 +472,10 @@ const SearchScreen: React.FC = () => {
                       imageUri={album.coverArt}
                       imageSizes={album.coverArtSizes}
                       primaryColor={album.primaryColor}
+                      secondaryColor={album.secondaryColor}
                       onPress={() => router.push(`/album/${album.id}`)}
+                      onHoverIn={handleHoverIn}
+                      onHoverOut={handleHoverOut}
                     />
                   </View>
                 ))}
@@ -476,7 +503,10 @@ const SearchScreen: React.FC = () => {
                       images={artist.images}
                       imageSizes={artist.imageSizes}
                       primaryColor={artist.primaryColor}
+                      secondaryColor={artist.secondaryColor}
                       onPress={() => router.push({ pathname: '/p/[id]', params: { id: artist.id } } satisfies Href)}
+                      onHoverIn={handleHoverIn}
+                      onHoverOut={handleHoverOut}
                     />
                   </View>
                 ))}
@@ -557,7 +587,10 @@ const SearchScreen: React.FC = () => {
                           imageUri={album.coverArt}
                           imageSizes={album.coverArtSizes}
                           primaryColor={album.primaryColor}
+                          secondaryColor={album.secondaryColor}
                           onPress={() => router.push(`/album/${album.id}`)}
+                          onHoverIn={handleHoverIn}
+                          onHoverOut={handleHoverOut}
                         />
                       </View>
                     ))}
@@ -586,7 +619,10 @@ const SearchScreen: React.FC = () => {
                           images={artist.images}
                           imageSizes={artist.imageSizes}
                           primaryColor={artist.primaryColor}
+                          secondaryColor={artist.secondaryColor}
                           onPress={() => router.push({ pathname: '/p/[id]', params: { id: artist.id } } satisfies Href)}
+                          onHoverIn={handleHoverIn}
+                          onHoverOut={handleHoverOut}
                         />
                       </View>
                     ))}
@@ -613,7 +649,10 @@ const SearchScreen: React.FC = () => {
                           imageUri={playlist.coverArt}
                           imageSizes={playlist.coverArtSizes}
                           primaryColor={playlist.primaryColor}
+                          secondaryColor={playlist.secondaryColor}
                           onPress={() => router.push({ pathname: '/playlist/[id]', params: { id: playlist.id } } satisfies Href)}
+                          onHoverIn={handleHoverIn}
+                          onHoverOut={handleHoverOut}
                         />
                       </View>
                     ))}
@@ -639,7 +678,10 @@ const SearchScreen: React.FC = () => {
                           type="podcast"
                           resolvedImageUri={resolvePodcastArtwork(podcast, 'card')}
                           primaryColor={podcast.primaryColor}
+                          secondaryColor={podcast.secondaryColor}
                           onPress={() => router.push({ pathname: '/podcasts/[id]', params: { id: podcast.id } } satisfies Href)}
+                          onHoverIn={handleHoverIn}
+                          onHoverOut={handleHoverOut}
                         />
                       </View>
                     ))}

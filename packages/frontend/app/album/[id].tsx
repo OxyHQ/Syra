@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, ScrollView, Text, Pressable, Image, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme, useAmbientTheme } from '@oxyhq/bloom/theme';
 import { musicService } from '@/services/musicService';
 import { Track } from '@syra/shared-types';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,7 +21,6 @@ import { isNotFoundError } from '@/utils/api';
 import { toast } from '@/lib/sonner';
 import { useAuthGate } from '@/hooks/useAuthGate';
 import { CATALOG_QUERY_KEYS } from '@/hooks/useLibraryCollections';
-import { useViewAmbient } from '@/hooks/useAmbientArtwork';
 import { AddToPlaylistSheet } from '@/components/playlist/AddToPlaylistSheet';
 import { TrackActionsSheet } from '@/components/playlist/TrackActionsSheet';
 
@@ -84,9 +83,19 @@ const AlbumScreen: React.FC = () => {
     : undefined;
 
   // VIEW MODE: theme the WHOLE app from the album's server-extracted cover colours
-  // ON VIEW and restore the default on leave. Called before the early returns so
-  // the hook order is stable; it no-ops until the album (and its colours) load.
-  useViewAmbient(album?.primaryColor, album?.secondaryColor);
+  // ON VIEW and restore the default on leave. All theming lives in Bloom — this
+  // thin effect only feeds the cover colours to Bloom's ambient store (consumed
+  // internally by the root provider). Runs before the early returns so the hook
+  // order is stable; it no-ops until the album (and its colours) load.
+  const { setAmbient, clearAmbient } = useAmbientTheme();
+  const albumPrimaryColor = album?.primaryColor;
+  const albumSecondaryColor = album?.secondaryColor;
+  useEffect(() => {
+    if (albumPrimaryColor) {
+      setAmbient(albumPrimaryColor, { secondary: albumSecondaryColor });
+    }
+    return () => clearAmbient();
+  }, [albumPrimaryColor, albumSecondaryColor, setAmbient, clearAmbient]);
 
   const formatReleaseDate = (dateString: string): string => {
     const date = new Date(dateString);
@@ -174,8 +183,8 @@ const AlbumScreen: React.FC = () => {
     );
   }
 
-  // The whole app is themed from this album's cover ON VIEW (see `useViewAmbient`
-  // above) — the hero + tracklist read the app theme via `useTheme()`. No
+  // The whole app is themed from this album's cover ON VIEW (see the ambient
+  // effect above) — the hero + tracklist read the app theme via `useTheme()`. No
   // per-screen theme wrapper and no cover-hover theming on detail pages.
   return (
     <AlbumView
@@ -224,7 +233,7 @@ interface AlbumViewProps {
 
 /**
  * The album's presentational view. Reads the app theme via `useTheme()`; the app
- * is already themed from the album cover on view (see `useViewAmbient` in
+ * is already themed from the album cover on view (see the ambient effect in
  * `AlbumScreen`), so the hero + tracklist reflect the artwork palette without any
  * cover-hover handling here.
  */
