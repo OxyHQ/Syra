@@ -248,6 +248,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         return 'library';
       case 'search':
         return 'search';
+      case 'radio':
+        return 'radio';
       default:
         return 'unknown';
     }

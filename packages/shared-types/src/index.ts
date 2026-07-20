@@ -12,6 +12,7 @@ export * from './subscription';
 export * from './person';
 export * from './entityProfile';
 export * from './library';
+export * from './radio';
 export * from './player';
 export * from './search';
 export * from './integrations';

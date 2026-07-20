@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { radioSeedSchema } from './radio';
 import { trackSchema } from './track';
 
 export const audioQualitySchema = z.enum(['low', 'normal', 'high', 'very_high']);
@@ -32,10 +33,22 @@ export const playbackPositionSchema = z.object({
 export type PlaybackPosition = z.infer<typeof playbackPositionSchema>;
 
 export const playbackContextSchema = z.object({
-  type: z.enum(['album', 'artist', 'playlist', 'library', 'search', 'track', 'podcast', 'episode']),
+  type: z.enum([
+    'album',
+    'artist',
+    'playlist',
+    'library',
+    'search',
+    'track',
+    'podcast',
+    'episode',
+    'radio',
+  ]),
   id: z.string().optional(),
   name: z.string().optional(),
   uri: z.string().optional(),
+  /** Present iff `type === 'radio'`; lets the client resume the station after a reload. */
+  radio: radioSeedSchema.optional(),
 });
 export type PlaybackContext = z.infer<typeof playbackContextSchema>;
 
