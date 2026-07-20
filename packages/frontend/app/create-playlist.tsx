@@ -18,7 +18,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { CoverArtPicker } from '@/components/playlists/CoverArtPicker';
 import { PlaylistVisibility } from '@syra/shared-types';
 import { musicService } from '@/services/musicService';
-import { toast } from 'sonner';
+import { toast } from '@/lib/sonner';
 import SEO from '@/components/SEO';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { z } from 'zod';

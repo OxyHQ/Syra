@@ -112,6 +112,12 @@ app.use(compression({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Must be registered BEFORE any router: Express runs middleware in registration
+// order, so mounting this after the /api routers means every API request is
+// terminated by a router before it is ever measured — /health would then report
+// stats built from nothing but /health itself and 404s.
+app.use(performanceMiddleware);
+
 app.use((req, _res, next) => {
   if (req.query && typeof req.query === 'object') {
     const filters: Record<string, unknown> = {};
@@ -314,8 +320,6 @@ authenticatedApiRouter.use('/series', seriesRoutes);
 
 app.use('/api', publicApiRouter);
 app.use('/api', oxy.auth(), authenticatedApiRouter);
-
-app.use(performanceMiddleware);
 
 app.get('', async (_req, res) => {
   res.json({ message: 'Welcome to Syra API', version: '1.0.0' });

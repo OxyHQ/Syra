@@ -17,6 +17,7 @@ import { isDatabaseConnected } from '../utils/database';
 import { enqueueAudiusImport } from '../services/sources/audiusBackgroundImport';
 import { syncPodcastSearch } from '../services/podcasts/podcastBackgroundImport';
 import { withImageFirstSort } from '../utils/imageFirstSort';
+import { parseBoundedLimit, parseOffset } from '../utils/reqParams';
 import { logger } from '../utils/logger';
 import {
   getRequestUserId,
@@ -41,14 +42,6 @@ const AUDIUS_IMPORT_SPARSE_THRESHOLD = 5;
 const AUDIUS_IMPORT_MIN_QUERY_LENGTH = 3;
 const HEADER_PREVIEW_LIMIT = 5;
 const SEARCH_LIMIT_MAX = 50;
-
-function parseSearchLimit(value: unknown): number {
-  const parsed = parseInt(String(value ?? ''), 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return 20;
-  }
-  return Math.min(parsed, SEARCH_LIMIT_MAX);
-}
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -91,8 +84,8 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
     const { q, category = 'all', limit = 20, offset = 0 } = req.query;
     const query = (q as string) || '';
     const searchCategory = category as SearchCategory;
-    const searchLimit = parseSearchLimit(limit);
-    const searchOffset = parseInt(offset as string) || 0;
+    const searchLimit = parseBoundedLimit(limit, 20, SEARCH_LIMIT_MAX);
+    const searchOffset = parseOffset(offset);
     const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
 
     // If no query, return empty results

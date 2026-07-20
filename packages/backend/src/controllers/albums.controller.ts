@@ -7,7 +7,7 @@ import { formatTracksWithCoverArt, formatAlbumWithCoverArt, formatAlbumsWithCove
 import { isDatabaseConnected } from '../utils/database';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { getRequiredOxyUserId as getAuthenticatedUserId } from '@oxyhq/core/server';
-import { getParam } from '../utils/reqParams';
+import { getParam, parseBoundedLimit, parseOffset } from '../utils/reqParams';
 import { CreateAlbumRequest, updateAlbumRequestSchema } from '@syra/shared-types';
 import { findOwnedArtist } from '../utils/catalogOwnership';
 import { getStoredImageColors } from '../utils/imageColors';
@@ -34,8 +34,8 @@ export const getAlbums = async (req: Request, res: Response, next: NextFunction)
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    const limit = parseInt(req.query.limit as string) || 20;
-    const offset = parseInt(req.query.offset as string) || 0;
+    const limit = parseBoundedLimit(req.query.limit, 20);
+    const offset = parseOffset(req.query.offset);
     const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
 
     const [albums, total] = await Promise.all([

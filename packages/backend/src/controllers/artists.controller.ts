@@ -7,7 +7,7 @@ import { formatTracksWithCoverArt, formatAlbumWithCoverArt, formatArtistWithImag
 import { isDatabaseConnected } from '../utils/database';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { getRequiredOxyUserId as getAuthenticatedUserId } from '@oxyhq/core/server';
-import { getParam } from '../utils/reqParams';
+import { getParam, parseBoundedLimit, parseOffset } from '../utils/reqParams';
 import { CreateArtistRequest, ArtistInsights, ArtistDashboard, updateArtistRequestSchema } from '@syra/shared-types';
 import { getStoredImageColors } from '../utils/imageColors';
 import { withImageFirstSort } from '../utils/imageFirstSort';
@@ -35,8 +35,8 @@ export const getArtists = async (req: Request, res: Response, next: NextFunction
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    const limit = parseInt(req.query.limit as string) || 20;
-    const offset = parseInt(req.query.offset as string) || 0;
+    const limit = parseBoundedLimit(req.query.limit, 20);
+    const offset = parseOffset(req.query.offset);
     const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
 
     const [artists, total] = await Promise.all([
@@ -143,8 +143,8 @@ export const getArtistTracks = async (req: Request, res: Response, next: NextFun
     }
 
     const id = getParam(req, 'id');
-    const limit = parseInt(req.query.limit as string) || 20;
-    const offset = parseInt(req.query.offset as string) || 0;
+    const limit = parseBoundedLimit(req.query.limit, 20);
+    const offset = parseOffset(req.query.offset);
     const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
     
     // Validate ObjectId format

@@ -14,7 +14,7 @@ import { logger } from '../utils/logger';
 import { getStoredImageColors } from '../utils/imageColors';
 import { enqueueIngest } from '../services/ingest/ingestTrack';
 import { getErrorMessage, getErrorStack, getHttpStatus } from '../utils/error';
-import { getParam } from '../utils/reqParams';
+import { getParam, parseBoundedLimit, parseOffset } from '../utils/reqParams';
 import { findOwnedArtist } from '../utils/catalogOwnership';
 import { updateTrackRequestSchema } from '@syra/shared-types';
 import {
@@ -37,8 +37,8 @@ export const getTracks = async (req: Request, res: Response, next: NextFunction)
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    const limit = parseInt(req.query.limit as string) || 20;
-    const offset = parseInt(req.query.offset as string) || 0;
+    const limit = parseBoundedLimit(req.query.limit, 20);
+    const offset = parseOffset(req.query.offset);
     const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
 
     const [tracks, total] = await Promise.all([
@@ -104,8 +104,8 @@ export const searchTracks = async (req: Request, res: Response, next: NextFuncti
     }
 
     const query = (req.query.q as string) || '';
-    const limit = parseInt(req.query.limit as string) || 20;
-    const offset = parseInt(req.query.offset as string) || 0;
+    const limit = parseBoundedLimit(req.query.limit, 20);
+    const offset = parseOffset(req.query.offset);
     const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
 
     if (!query.trim()) {

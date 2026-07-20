@@ -12,20 +12,15 @@ import { updateEpisodeProgressRequestSchema, updateEpisodeRequestSchema } from '
 import { EpisodeModel, type IEpisode } from '../models/Episode';
 import { EpisodeProgressModel } from '../models/EpisodeProgress';
 import { PodcastModel } from '../models/Podcast';
-import { getParam } from '../utils/reqParams';
+import { getParam, parseClampedLimit } from '../utils/reqParams';
 import { serializeEpisode } from '../services/podcasts/podcastSerializers';
 import { PODCAST_ARTWORK_PROJECTION, loadShowArtworkByPodcastId } from '../services/podcasts/episodeShowArtwork';
 import { resolvePersons, makeOxyUsersFetcher } from '../services/podcasts/resolvePersons';
 import { oxy } from '../oxyClient';
 
+const CONTINUE_LIMIT_MIN = 1;
 const CONTINUE_LIMIT_DEFAULT = 20;
 const CONTINUE_LIMIT_MAX = 50;
-
-function clampLimit(raw: unknown): number {
-  const parsed = typeof raw === 'string' ? parseInt(raw, 10) : NaN;
-  if (!Number.isFinite(parsed)) return CONTINUE_LIMIT_DEFAULT;
-  return Math.min(CONTINUE_LIMIT_MAX, Math.max(1, parsed));
-}
 
 /**
  * GET /api/episodes/:id — episode detail, including chapters/transcripts and
@@ -107,7 +102,7 @@ export async function updateEpisodeProgress(req: AuthRequest, res: Response): Pr
  */
 export async function getContinueListening(req: AuthRequest, res: Response): Promise<void> {
   const userId = getRequiredOxyUserId(req);
-  const limit = clampLimit(req.query.limit);
+  const limit = parseClampedLimit(req.query.limit, { min: CONTINUE_LIMIT_MIN, max: CONTINUE_LIMIT_MAX, fallback: CONTINUE_LIMIT_DEFAULT });
 
   const progressRows = await EpisodeProgressModel.find({ oxyUserId: userId, completed: false })
     .sort({ updatedAt: -1 })

@@ -11,7 +11,7 @@ import Animated, {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { toast } from 'sonner';
+import { toast } from '@/lib/sonner';
 import { Track } from '@syra/shared-types';
 import { entityService } from '@/services/entityService';
 import { usePlayerStore } from '@/stores/playerStore';

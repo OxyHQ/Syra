@@ -5,7 +5,7 @@ import { UserLibraryModel } from '../models/Library';
 import { RecentlyPlayedModel } from '../models/RecentlyPlayed';
 import { TrackModel } from '../models/Track';
 import { formatTracksWithCoverArt } from '../utils/musicHelpers';
-import { getParam } from '../utils/reqParams';
+import { getParam, parseBoundedLimit } from '../utils/reqParams';
 import { recordPlay } from '../services/recommendations/recordPlay';
 import { applyLikeSignal, applyFollowSignal } from '../services/recommendations/tasteSignals';
 import { LISTENING_SOURCES, type ListeningSource } from '../models/ListeningEvent';
@@ -325,11 +325,12 @@ export const getRecentlyPlayed = async (req: AuthRequest, res: Response, next: N
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const requested = Number(getParam(req, 'limit') || req.query.limit);
-    const limit =
-      Number.isFinite(requested) && requested > 0
-        ? Math.min(Math.floor(requested), RECENTLY_PLAYED_MAX_LIMIT)
-        : RECENTLY_PLAYED_DEFAULT_LIMIT;
+    // The limit arrives as a route param on one mount and a query param on the other.
+    const limit = parseBoundedLimit(
+      getParam(req, 'limit') || req.query.limit,
+      RECENTLY_PLAYED_DEFAULT_LIMIT,
+      RECENTLY_PLAYED_MAX_LIMIT,
+    );
 
     // Collapse plays to the most recent occurrence per trackId, newest first.
     // We over-fetch (retention window) so duplicate plays don't starve the list

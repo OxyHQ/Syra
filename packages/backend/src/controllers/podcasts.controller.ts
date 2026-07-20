@@ -26,7 +26,7 @@ import { PodcastModel, type IPodcast } from '../models/Podcast';
 import { EpisodeModel } from '../models/Episode';
 import { UserLibraryModel } from '../models/Library';
 import { ArtistModel } from '../models/CatalogEntity';
-import { getParam } from '../utils/reqParams';
+import { getParam, parseClampedLimit, parseOffset } from '../utils/reqParams';
 import { logger } from '../utils/logger';
 import { searchPodcasts as directorySearch } from '../services/podcasts/PodcastDirectory';
 import { importFeed } from '../services/podcasts/podcastImportService';
@@ -43,6 +43,7 @@ import { oxy } from '../oxyClient';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
+const LIST_LIMIT_MIN = 1;
 const LIST_LIMIT_DEFAULT = 20;
 const LIST_LIMIT_MAX = 50;
 const RECENT_EPISODES_ON_SHOW = 20;
@@ -72,21 +73,9 @@ interface AudioUploadRequest extends AuthRequest {
   file?: Express.Multer.File;
 }
 
-function clampLimit(raw: unknown): number {
-  const parsed = typeof raw === 'string' ? parseInt(raw, 10) : NaN;
-  if (!Number.isFinite(parsed)) return LIST_LIMIT_DEFAULT;
-  return Math.min(LIST_LIMIT_MAX, Math.max(1, parsed));
-}
-
 function parsePage(raw: unknown): number {
   const parsed = typeof raw === 'string' ? parseInt(raw, 10) : NaN;
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
-}
-
-/** Parse a zero-based pagination offset, clamped to `>= 0`. */
-function parseOffset(raw: unknown): number {
-  const parsed = typeof raw === 'string' ? parseInt(raw, 10) : NaN;
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
 /** Read a string query param (Express types query values loosely). */
@@ -153,7 +142,7 @@ export async function searchPodcasts(req: AuthRequest, res: Response): Promise<v
     res.status(400).json({ error: 'Query parameter q is required' });
     return;
   }
-  const limit = clampLimit(req.query.limit);
+  const limit = parseClampedLimit(req.query.limit, { min: LIST_LIMIT_MIN, max: LIST_LIMIT_MAX, fallback: LIST_LIMIT_DEFAULT });
   const offset = parseOffset(req.query.offset);
 
   try {
@@ -192,7 +181,7 @@ export async function discoverPodcasts(req: AuthRequest, res: Response): Promise
     res.status(400).json({ error: 'Query parameter q is required' });
     return;
   }
-  const candidates = await directorySearch(q, clampLimit(req.query.limit));
+  const candidates = await directorySearch(q, parseClampedLimit(req.query.limit, { min: LIST_LIMIT_MIN, max: LIST_LIMIT_MAX, fallback: LIST_LIMIT_DEFAULT }));
   res.json({ data: candidates });
 }
 
@@ -220,7 +209,7 @@ export async function importPodcast(req: AuthRequest, res: Response): Promise<vo
  * GET /api/podcasts?category=&sort=popular|recent — DB browse.
  */
 export async function browsePodcasts(req: AuthRequest, res: Response): Promise<void> {
-  const limit = clampLimit(req.query.limit);
+  const limit = parseClampedLimit(req.query.limit, { min: LIST_LIMIT_MIN, max: LIST_LIMIT_MAX, fallback: LIST_LIMIT_DEFAULT });
   const page = parsePage(req.query.page);
   const category = queryString(req, 'category');
   const sort = queryString(req, 'sort');
@@ -297,7 +286,7 @@ export async function getPodcastEpisodes(req: AuthRequest, res: Response): Promi
     return;
   }
 
-  const limit = clampLimit(req.query.limit);
+  const limit = parseClampedLimit(req.query.limit, { min: LIST_LIMIT_MIN, max: LIST_LIMIT_MAX, fallback: LIST_LIMIT_DEFAULT });
   const page = parsePage(req.query.page);
 
   // The owner sees processing/failed episodes too; others see only ready ones.
