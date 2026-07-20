@@ -4,7 +4,6 @@ import Room, { IRoom, MediaQueueItem, RoomStatus, RoomType, OwnerType, Broadcast
 import RoomUserPreference, { LiveVisibility, DEFAULT_LIVE_VISIBILITY, isLiveVisibility } from '../models/RoomUserPreference';
 import House, { HouseMemberRole } from '../models/House';
 import { requireOxyAuth, getRequiredOxyUserId, type OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
-import { isAdmin } from '../middleware/admin';
 import { logger } from '../utils/logger';
 import {
   generateRoomToken,
@@ -135,6 +134,15 @@ export function stripInternalStreamFields<T extends object>(
   return sanitized as Pick<T, Extract<keyof T, PublicRoomField>>;
 }
 
+/**
+ * Whether `userId` may manage this room.
+ *
+ * Management is ownership-scoped: the room's own host, or an admin of the owning
+ * house. Platform-owned (AGORA) rooms deliberately fall through to `false` — they
+ * are created and operated server-side by the platform, never over HTTP, and Syra
+ * has no platform-wide superuser role that could grant access here. The omission is
+ * the design, not a gap to fill in later.
+ */
 async function canManageRoom(room: RoomOwnershipFields, userId: string): Promise<boolean> {
   if (room.host === userId) {
     return true;
@@ -147,10 +155,6 @@ async function canManageRoom(room: RoomOwnershipFields, userId: string): Promise
 
     const house = await House.findById(room.houseId);
     return Boolean(house?.hasRole(userId, HouseMemberRole.ADMIN));
-  }
-
-  if (room.ownerType === OwnerType.AGORA) {
-    return isAdmin(userId);
   }
 
   return false;
@@ -923,9 +927,9 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       ? ownerType
       : OwnerType.PROFILE;
 
-    // Reject agora-owned rooms from this endpoint (admin-only)
+    // Platform-owned rooms are provisioned server-side, not through this endpoint.
     if (roomOwnerType === OwnerType.AGORA) {
-      return res.status(403).json({ message: 'Agora-owned rooms can only be created by admins' });
+      return res.status(403).json({ message: 'Agora-owned rooms are created server-side by the platform, not through this endpoint' });
     }
 
     // Validate house ownership permission

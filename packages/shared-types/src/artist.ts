@@ -69,12 +69,21 @@ export const artistWithContextSchema = artistSchema.extend({
 });
 export type ArtistWithContext = z.infer<typeof artistWithContextSchema>;
 
+/**
+ * Self-service artist registration fields.
+ *
+ * `verified` is deliberately NOT here, for the same reason it is absent from
+ * `updateArtistRequestSchema` below — it is a platform-granted badge, never a
+ * client input. It matters more on this schema than on that one: registration
+ * is the self-service path, so a contract that accepted `verified` would invite
+ * a caller to verify themselves at the very moment they create their own
+ * profile. `registerAsArtist` hardcodes it to false server-side.
+ */
 export const createArtistRequestSchema = z.object({
   name: z.string(),
   bio: z.string().optional(),
   image: z.string().optional(),
   genres: z.array(z.string()).optional(),
-  verified: z.boolean().optional(),
 });
 export type CreateArtistRequest = z.infer<typeof createArtistRequestSchema>;
 

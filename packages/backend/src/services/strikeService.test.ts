@@ -10,6 +10,7 @@ import {
   isRepeatInfringer,
   STRIKE_TERMINATION_THRESHOLD,
 } from './strikeService';
+import { playableTrackFilter, isGuestPlayableTrack } from '../utils/catalogVisibility';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -136,6 +137,52 @@ describe('addStrike — termination', () => {
   it('returns null for unknown artistId', async () => {
     const result = await addStrike(new mongoose.Types.ObjectId().toString(), 'reason');
     expect(result).toBeNull();
+  });
+
+  /**
+   * The catalog filter keys off `isAvailable`, the playback gate off
+   * `copyrightRemoved`. A takedown that sets only the latter leaves the track
+   * listed and searchable but unplayable, so termination must set BOTH — the same
+   * pair the single-report takedown in copyright.controller writes.
+   */
+  it('marks taken-down tracks unavailable so they leave the catalog, not just playback', async () => {
+    const artistId = await makeArtist();
+    const trackId = await makeTrack(artistId);
+
+    await addStrike(artistId.toString(), 'infringement 1');
+    await addStrike(artistId.toString(), 'infringement 2');
+    await addStrike(artistId.toString(), 'infringement 3');
+
+    const track = await TrackModel.findById(trackId).lean();
+    expect(track?.copyrightRemoved).toBe(true);
+    expect(track?.isAvailable).toBe(false);
+  });
+
+  it('excludes taken-down tracks from the catalog filter', async () => {
+    const artistId = await makeArtist();
+    await makeTrack(artistId);
+
+    await addStrike(artistId.toString(), 'infringement 1');
+    await addStrike(artistId.toString(), 'infringement 2');
+    await addStrike(artistId.toString(), 'infringement 3');
+
+    const visible = await TrackModel.find(playableTrackFilter({ artistId: artistId.toString() })).lean();
+    expect(visible).toHaveLength(0);
+  });
+
+  /**
+   * Repairs already-struck tracks without a backfill: a track carrying the OLD
+   * takedown shape (copyrightRemoved only, isAvailable still true) must not be
+   * served by the catalog either.
+   */
+  it('excludes a legacy takedown that set copyrightRemoved but left isAvailable true', async () => {
+    const artistId = await makeArtist();
+    const trackId = await makeTrack(artistId);
+    await TrackModel.updateOne({ _id: trackId }, { copyrightRemoved: true, isAvailable: true });
+
+    const visible = await TrackModel.find(playableTrackFilter({ artistId: artistId.toString() })).lean();
+    expect(visible).toHaveLength(0);
+    expect(isGuestPlayableTrack({ isAvailable: true, copyrightRemoved: true, source: 'upload' })).toBe(false);
   });
 });
 

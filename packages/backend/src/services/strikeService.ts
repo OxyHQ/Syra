@@ -20,12 +20,22 @@ export function isRepeatInfringer(strikeCount: number): boolean {
 
 // ── Internals ─────────────────────────────────────────────────────────────────
 
-/** Take down every track owned by the artist — mark copyrightRemoved. */
+/**
+ * Take down every track owned by the artist.
+ *
+ * Sets BOTH `copyrightRemoved` and `isAvailable:false`, matching the single-report
+ * takedown in `copyright.controller`. `copyrightRemoved` alone is not enough: the
+ * playback gate (`isTrackPlayable`) rejects on it, but the catalog filter keys off
+ * `isAvailable`, so a track marked only `copyrightRemoved` stayed listed and
+ * searchable and then failed at play. Termination is irreversible (`removeStrike`
+ * never undoes it), so nothing has to restore these fields.
+ */
 async function takeDownArtistTracks(artistId: string, reason: string): Promise<void> {
   await TrackModel.updateMany(
     { artistId, copyrightRemoved: { $ne: true } },
     {
       copyrightRemoved: true,
+      isAvailable: false,
       removedAt: new Date(),
       removedReason: reason,
     },
