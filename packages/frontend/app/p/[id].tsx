@@ -50,7 +50,7 @@ const EntityProfileScreen: React.FC = () => {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const theme = useTheme();
-  const { playTrackList, playEpisode, currentTrack, currentEpisode, isPlaying } = usePlayerStore();
+  const { playTrackList, playEpisode, startRadio, currentTrack, currentEpisode, isPlaying } = usePlayerStore();
   const gate = useAuthGate();
 
   const entityQuery = useQuery({
@@ -126,6 +126,15 @@ const EntityProfileScreen: React.FC = () => {
   const handleTrackPress = (track: Track) => {
     const index = Math.max(0, tracks.findIndex((item) => item.id === track.id));
     playTrackList(tracks, index, { type: 'artist', id: artistId, name: displayName });
+  };
+
+  // A station seeded on this artist — the endless counterpart to "play all",
+  // and the same discovery thread the "fans also like" rail below pulls on.
+  const handleStartRadio = () => {
+    if (!artistId) {
+      return;
+    }
+    startRadio({ seedType: 'artist', seedId: artistId });
   };
 
   const handleFollow = () => {
@@ -230,6 +239,7 @@ const EntityProfileScreen: React.FC = () => {
       currentEpisodeId={currentEpisode?.id}
       isPlaying={isPlaying}
       onPlayAll={handlePlayAll}
+      onStartRadio={handleStartRadio}
       onTrackPress={handleTrackPress}
       onFollow={handleFollow}
       onPlayEpisode={playEpisode}
@@ -256,6 +266,7 @@ interface EntityProfileViewProps {
   currentEpisodeId: string | undefined;
   isPlaying: boolean;
   onPlayAll: () => void;
+  onStartRadio: () => void;
   onTrackPress: (track: Track) => void;
   onFollow: () => void;
   onPlayEpisode: (episode: AppearsInEpisode) => void;
@@ -286,6 +297,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
   currentEpisodeId,
   isPlaying,
   onPlayAll,
+  onStartRadio,
   onTrackPress,
   onFollow,
   onPlayEpisode,
@@ -518,6 +530,16 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                       size={24}
                       color={isFollowed ? theme.colors.primary : theme.colors.text}
                     />
+                  </Pressable>
+                )}
+                {artistId && (
+                  <Pressable
+                    style={styles.controlButton}
+                    onPress={onStartRadio}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('radio.artistRadio')}
+                  >
+                    <Ionicons name="radio-outline" size={24} color={theme.colors.text} />
                   </Pressable>
                 )}
               </View>

@@ -16,7 +16,7 @@ const BrowseScreen: React.FC = () => {
   const { t } = useTranslation();
   const theme = useTheme();
   const router = useRouter();
-  const { playTrackList } = usePlayerStore();
+  const { startRadio } = usePlayerStore();
 
   const { data: genresData, isLoading: genresLoading, error: genresError, refetch: refetchGenres } = useQuery({
     queryKey: ['browse', 'genres'],
@@ -30,12 +30,11 @@ const BrowseScreen: React.FC = () => {
     router.push({ pathname: '/search', params: { q: genreName } });
   }, [router]);
 
-  const handleGenrePlay = useCallback(async (genreName: string) => {
-    const { tracks } = await browseService.getGenreTracks(genreName, { limit: 50 });
-    if (tracks.length > 0) {
-      playTrackList(tracks, 0, { type: 'search', id: genreName, name: genreName });
-    }
-  }, [playTrackList]);
+  // A genre is a seed, not a fixed tracklist: play it as a station so it keeps
+  // going past the first page instead of ending after 50 tracks.
+  const handleGenrePlay = useCallback((genreName: string) => {
+    startRadio({ seedType: 'genre', seedId: genreName });
+  }, [startRadio]);
 
   return (
     <>

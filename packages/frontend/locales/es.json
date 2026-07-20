@@ -575,6 +575,35 @@
     "addToPlaylist": "Añadir a playlist",
     "removeFromPlaylist": "Quitar de esta playlist"
   },
+  "radio": {
+    "label": "Radio",
+    "restart": "Reiniciar la radio",
+    "artistRadio": "Radio del artista",
+    "songRadio": "Ir a la radio de la canción",
+    "seo": {
+      "title": "{{station}} - Syra"
+    },
+    "sections": {
+      "forYou": "Radio para ti"
+    },
+    "station": {
+      "fallbackTitle": "Radio"
+    },
+    "empty": {
+      "title": "Todavía no hay nada que reproducir",
+      "subtitle": "Esta emisora no tiene canciones disponibles ahora mismo. Reiníciala o empieza una desde una canción o un artista que te guste."
+    },
+    "gate": {
+      "title": "Inicia sesión para seguir escuchando",
+      "subtitle": "Ya has escuchado tus canciones gratuitas. Sin una cuenta, el resto de esta emisora se reproduce en fragmentos de {{seconds}} segundos."
+    },
+    "errors": {
+      "load": "No se ha podido cargar esta emisora",
+      "unknownStation": "Emisora no encontrada",
+      "unknownStationMessage": "Esa dirección no corresponde a ninguna emisora que podamos crear. Empieza una desde una canción, un artista o un género.",
+      "loadMore": "No se ha podido cargar más contenido de esta emisora"
+    }
+  },
   "explore": {
     "errorTitle": "No se ha podido cargar esta sección",
     "errorMessage": "Algo ha fallado por nuestra parte. Comprueba tu conexión e inténtalo de nuevo."
