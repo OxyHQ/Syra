@@ -7,8 +7,8 @@ import { formatTracksWithCoverArt, formatAlbumWithCoverArt, formatArtistWithImag
 import { isDatabaseConnected } from '../utils/database';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { getRequiredOxyUserId as getAuthenticatedUserId } from '@oxyhq/core/server';
-import { getParam } from '../utils/reqParams';
-import { CreateArtistRequest, ArtistInsights, ArtistDashboard } from '@syra/shared-types';
+import { getParam, parseBoundedLimit, parseOffset } from '../utils/reqParams';
+import { CreateArtistRequest, ArtistInsights, ArtistDashboard, updateArtistRequestSchema } from '@syra/shared-types';
 import { getStoredImageColors } from '../utils/imageColors';
 import { withImageFirstSort } from '../utils/imageFirstSort';
 import {
@@ -35,8 +35,8 @@ export const getArtists = async (req: Request, res: Response, next: NextFunction
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    const limit = parseInt(req.query.limit as string) || 20;
-    const offset = parseInt(req.query.offset as string) || 0;
+    const limit = parseBoundedLimit(req.query.limit, 20);
+    const offset = parseOffset(req.query.offset);
     const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
 
     const [artists, total] = await Promise.all([
@@ -143,8 +143,8 @@ export const getArtistTracks = async (req: Request, res: Response, next: NextFun
     }
 
     const id = getParam(req, 'id');
-    const limit = parseInt(req.query.limit as string) || 20;
-    const offset = parseInt(req.query.offset as string) || 0;
+    const limit = parseBoundedLimit(req.query.limit, 20);
+    const offset = parseOffset(req.query.offset);
     const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
     
     // Validate ObjectId format
@@ -471,6 +471,48 @@ export const getArtistInsights = async (req: AuthRequest, res: Response, next: N
     };
 
     res.json(insights);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * PATCH /api/artists/me
+ * Edit the artist profile owned by the authenticated user. The profile is resolved by
+ * `ownerOxyUserId` — there is no id in the path, so one creator cannot address another's
+ * profile at all. The body is parsed, never spread, so ownership, strike state
+ * (`uploadsDisabled`, `strikes`, `terminated`) and stats stay unreachable.
+ */
+export const updateMyArtistProfile = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!isDatabaseConnected()) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
+    const userId = getAuthenticatedUserId(req);
+
+    const parsed = updateArtistRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid request body', details: parsed.error.issues });
+    }
+
+    const artist = await ArtistModel.findOne({ ownerOxyUserId: userId });
+    if (!artist) {
+      return res.status(404).json({ error: 'Artist profile not found' });
+    }
+
+    const updates = parsed.data;
+
+    // Explicit field-by-field assignment — the parsed object is never spread onto the doc.
+    if (updates.name !== undefined) artist.name = updates.name;
+    if (updates.bio !== undefined) artist.bio = updates.bio;
+    if (updates.image !== undefined) artist.image = updates.image;
+    if (updates.genres !== undefined) artist.genres = updates.genres;
+
+    await artist.save();
+
+    const formattedArtist = formatArtistWithImage(artist.toObject());
+    res.json(formattedArtist);
   } catch (error) {
     next(error);
   }

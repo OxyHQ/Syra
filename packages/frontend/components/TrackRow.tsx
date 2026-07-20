@@ -15,6 +15,12 @@ interface TrackRowProps {
   onPress: () => void;
   onPlayPress: () => void;
   showNumber?: boolean;
+  /**
+   * Opens this row's overflow menu (add to playlist / remove from playlist).
+   * The button is omitted entirely when no handler is given, so screens that
+   * have no per-track actions render exactly as before.
+   */
+  onMorePress?: () => void;
 }
 
 /**
@@ -29,6 +35,7 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
   onPress,
   onPlayPress,
   showNumber = true,
+  onMorePress,
 }) => {
   const theme = useTheme();
   const { isTrackLiked } = useLibrary();
@@ -126,6 +133,19 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
         <Text style={[styles.trackDuration, { color: theme.colors.textSecondary }]}>
           {formatDuration(track.duration)}
         </Text>
+        {onMorePress && (
+          <Pressable
+            onPress={(e) => {
+              e?.stopPropagation?.();
+              onMorePress();
+            }}
+            style={styles.moreButton}
+            accessibilityRole="button"
+            accessibilityLabel={`More options for ${track.title}`}
+          >
+            <Ionicons name="ellipsis-horizontal" size={18} color={theme.colors.textSecondary} />
+          </Pressable>
+        )}
       </View>
     </Pressable>
   );
@@ -191,6 +211,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  moreButton: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+      },
+    }),
   },
   likeButton: {
     width: 32,

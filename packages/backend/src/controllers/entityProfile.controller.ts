@@ -4,6 +4,7 @@ import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import type { EntityProfile, EntityMusic, EntityAppearsIn } from '@syra/shared-types';
 import { CatalogEntityModel, PersonModel, type CatalogEntityType } from '../models/CatalogEntity';
 import { PodcastModel } from '../models/Podcast';
+import { hiddenShowEpisodeFilter } from '../utils/podcastDiscovery';
 import { EpisodeModel } from '../models/Episode';
 import { TrackModel } from '../models/Track';
 import {
@@ -107,6 +108,7 @@ async function loadArtistMusic(
  */
 async function loadAppearsIn(person: PersonLike): Promise<EntityAppearsIn> {
   const creditMatch = strongKeyCreditMatch(person);
+  const hiddenShows = await hiddenShowEpisodeFilter();
   const [podcasts, episodes] = await Promise.all([
     PodcastModel.find({ ...creditMatch, status: { $ne: 'removed' } })
       .sort({ popularity: -1, lastEpisodeAt: -1 })
@@ -115,6 +117,8 @@ async function loadAppearsIn(person: PersonLike): Promise<EntityAppearsIn> {
     EpisodeModel.find({
       ...creditMatch,
       status: 'ready',
+      // Episodes of an unpublished or removed show drop out of credit listings with it.
+      ...hiddenShows,
       $and: [{ $or: [{ source: 'syra' }, { enclosureUrl: { $exists: true, $nin: [null, ''] } }] }],
     })
       .sort({ pubDate: -1 })

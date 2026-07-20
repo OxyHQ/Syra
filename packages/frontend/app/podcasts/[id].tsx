@@ -7,6 +7,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import SEO from '@/components/SEO';
 import { EpisodeRow } from '@/components/EpisodeRow';
+import { EmptyState } from '@/components/common/EmptyState';
 import { HostsAndGuests } from '@/components/podcast/HostsAndGuests';
 import { LibraryListSkeleton, PodcastDetailSkeleton } from '@/components/skeletons';
 import {
@@ -17,7 +18,7 @@ import {
   useEpisodeProgressMap,
 } from '@/hooks/usePodcasts';
 import { usePlayerStore } from '@/stores/playerStore';
-import { pickCatalogImageUrl } from '@/utils/pickImage';
+import { resolvePodcastArtwork } from '@/utils/pickImage';
 import { stripHtml } from '@/utils/podcastFormat';
 import { webViewStyle } from '@/utils/webStyles';
 
@@ -49,7 +50,7 @@ const PodcastShowScreen: React.FC = () => {
   );
 
   const subscribed = podcast ? isSubscribed(podcast.id) : false;
-  const artwork = pickCatalogImageUrl(undefined, podcast?.image, 'detailArtwork', podcast?.imageSizes, podcast?.imageSourceUrl);
+  const artwork = resolvePodcastArtwork(podcast, 'detailArtwork');
   const description = stripHtml(podcast?.description);
 
   // VIEW MODE: theme the WHOLE app from the show's server-extracted cover colours
@@ -86,16 +87,40 @@ const PodcastShowScreen: React.FC = () => {
     playEpisodeList(episodes, index, context, progressMap.get(episode.id)?.progressSec);
   };
 
-  if (showQuery.isPending) {
+  // A skeleton only while the request is genuinely in flight. `isPending` would
+  // also be true for the disabled query a missing route param produces, which
+  // would strand this screen on the skeleton and make the not-found branch below
+  // unreachable.
+  if (showQuery.isLoading) {
     return <PodcastDetailSkeleton />;
   }
 
+  if (showQuery.isError) {
+    return (
+      <EmptyState
+        icon={{ name: 'cloud-offline-outline' }}
+        error={{
+          title: 'Could not load this podcast',
+          message: 'Check your connection and try again.',
+          onRetry: async () => {
+            await showQuery.refetch();
+          },
+        }}
+        containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
+      />
+    );
+  }
+
+  // Reached with no id in the route, or a show the catalog does not have.
   if (!podcast) {
     return (
-      <View style={[styles.container, styles.center, { backgroundColor: theme.colors.backgroundSecondary }]}>
-        <Ionicons name="alert-circle-outline" size={48} color={theme.colors.textSecondary} />
-        <Text style={[styles.errorText, { color: theme.colors.textSecondary }]}>Podcast not found</Text>
-      </View>
+      <EmptyState
+        icon={{ name: 'mic-off-outline' }}
+        title="Podcast not found"
+        subtitle="This show is not in the Syra catalog."
+        action={{ label: 'Browse podcasts', onPress: () => router.push('/podcasts'), icon: 'search-outline' }}
+        containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
+      />
     );
   }
 
@@ -110,7 +135,11 @@ const PodcastShowScreen: React.FC = () => {
       artwork={artwork}
       description={description}
       subscribed={subscribed}
-      episodesPending={episodesQuery.isPending}
+      episodesLoading={episodesQuery.isLoading}
+      episodesFailed={episodesQuery.isError}
+      onRetryEpisodes={async () => {
+        await episodesQuery.refetch();
+      }}
       currentEpisodeId={currentEpisode?.id}
       isPlaying={isPlaying}
       progressMap={progressMap}
@@ -130,7 +159,9 @@ interface PodcastShowViewProps {
   artwork: string | undefined;
   description: string;
   subscribed: boolean;
-  episodesPending: boolean;
+  episodesLoading: boolean;
+  episodesFailed: boolean;
+  onRetryEpisodes: () => Promise<void>;
   currentEpisodeId: string | undefined;
   isPlaying: boolean;
   progressMap: ReturnType<typeof useEpisodeProgressMap>;
@@ -152,7 +183,9 @@ const PodcastShowView: React.FC<PodcastShowViewProps> = ({
   artwork,
   description,
   subscribed,
-  episodesPending,
+  episodesLoading,
+  episodesFailed,
+  onRetryEpisodes,
   currentEpisodeId,
   isPlaying,
   progressMap,
@@ -252,8 +285,18 @@ const PodcastShowView: React.FC<PodcastShowViewProps> = ({
 
         {/* Episodes */}
         <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Episodes</Text>
-        {episodesPending && episodes.length === 0 ? (
+        {episodesLoading && episodes.length === 0 ? (
           <LibraryListSkeleton count={6} />
+        ) : episodesFailed && episodes.length === 0 ? (
+          <EmptyState
+            icon={{ name: 'cloud-offline-outline' }}
+            error={{
+              title: 'Could not load episodes',
+              message: 'Check your connection and try again.',
+              onRetry: onRetryEpisodes,
+            }}
+            containerStyle={styles.inlineState}
+          />
         ) : episodes.length === 0 ? (
           <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
             No episodes available yet.
@@ -281,11 +324,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  center: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    padding: 24,
+  // `EmptyState` is built to fill a screen; inside the episode list it has to
+  // size to its own content instead of stretching.
+  inlineState: {
+    flexGrow: 0,
+    flexShrink: 0,
+    flexBasis: 'auto',
+    backgroundColor: 'transparent',
   },
   content: {
     padding: 16,
@@ -367,9 +412,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     paddingVertical: 24,
     textAlign: 'center',
-  },
-  errorText: {
-    fontSize: 16,
   },
 });
 

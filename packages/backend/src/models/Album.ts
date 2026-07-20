@@ -62,6 +62,10 @@ const AlbumSchema = new Schema<IAlbum>({
   favoriteCount: { type: Number, default: 0 },
   repostCount: { type: Number, default: 0 },
   isExplicit: { type: Boolean, default: false, index: true },
+  // Creator-controlled container visibility. Absent means available, so existing albums
+  // need no backfill. Mirrors `Track.isAvailable`, but hides only the CONTAINER — the
+  // album's tracks stay individually discoverable unless they are unpublished too.
+  isAvailable: { type: Boolean, default: true, index: true },
   primaryColor: { type: String },
   secondaryColor: { type: String },
   // Catalog provenance

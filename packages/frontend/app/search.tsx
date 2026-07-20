@@ -9,7 +9,7 @@ import { Image } from 'expo-image';
 import { SearchCategory, SearchUser, Track } from '@syra/shared-types';
 import { searchService } from '@/services/searchService';
 import { searchRefetchInterval } from '@/utils/searchUtils';
-import { pickCatalogImageUrl, resolveExternalImageUri } from '@/utils/pickImage';
+import { resolvePodcastArtwork, resolveExternalImageUri } from '@/utils/pickImage';
 import { browseService } from '@/services/browseService';
 import { MediaCard } from '@/components/MediaCard';
 import { GenreCard } from '@/components/GenreCard';
@@ -18,6 +18,7 @@ import { ResponsiveGrid } from '@/components/ResponsiveGrid';
 import { TrackRow } from '@/components/TrackRow';
 import { EpisodeRow } from '@/components/EpisodeRow';
 import { ExploreSection } from '@/components/ExploreSection';
+import { EmptyState } from '@/components/common/EmptyState';
 import { GenreGridSkeleton, MediaCardRowSkeleton, TrackListSkeleton } from '@/components/skeletons';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
@@ -63,42 +64,72 @@ const SearchScreen: React.FC = () => {
 
   // React Query hooks for explore data - only enabled when no search query
   // Each query loads independently for progressive rendering
-  const { data: genresData, isLoading: genresLoading } = useQuery({
+  const {
+    data: genresData,
+    isLoading: genresLoading,
+    error: genresError,
+    refetch: refetchGenres,
+  } = useQuery({
     queryKey: ['browse', 'genres'],
     queryFn: () => browseService.getGenres(),
     enabled: !hasQuery,
     staleTime: 1000 * 60 * 10, // 10 minutes
   });
 
-  const { data: popularTracksData, isLoading: popularTracksLoading } = useQuery({
+  const {
+    data: popularTracksData,
+    isLoading: popularTracksLoading,
+    error: popularTracksError,
+    refetch: refetchPopularTracks,
+  } = useQuery({
     queryKey: ['browse', 'popular', 'tracks'],
     queryFn: () => browseService.getPopularTracks({ limit: 6 }),
     enabled: !hasQuery,
     staleTime: 1000 * 60 * 10,
   });
 
-  const { data: popularAlbumsData, isLoading: popularAlbumsLoading } = useQuery({
+  const {
+    data: popularAlbumsData,
+    isLoading: popularAlbumsLoading,
+    error: popularAlbumsError,
+    refetch: refetchPopularAlbums,
+  } = useQuery({
     queryKey: ['browse', 'popular', 'albums'],
     queryFn: () => browseService.getPopularAlbums({ limit: 8 }),
     enabled: !hasQuery,
     staleTime: 1000 * 60 * 10,
   });
 
-  const { data: popularArtistsData, isLoading: popularArtistsLoading } = useQuery({
+  const {
+    data: popularArtistsData,
+    isLoading: popularArtistsLoading,
+    error: popularArtistsError,
+    refetch: refetchPopularArtists,
+  } = useQuery({
     queryKey: ['browse', 'popular', 'artists'],
     queryFn: () => browseService.getPopularArtists({ limit: 8 }),
     enabled: !hasQuery,
     staleTime: 1000 * 60 * 10,
   });
 
-  const { data: madeForYouData, isLoading: madeForYouLoading } = useQuery({
+  const {
+    data: madeForYouData,
+    isLoading: madeForYouLoading,
+    error: madeForYouError,
+    refetch: refetchMadeForYou,
+  } = useQuery({
     queryKey: ['browse', 'made-for-you'],
     queryFn: () => browseService.getMadeForYou({ limit: 8 }),
     enabled: !hasQuery,
     staleTime: 1000 * 60 * 10,
   });
 
-  const { data: chartsData, isLoading: chartsLoading } = useQuery({
+  const {
+    data: chartsData,
+    isLoading: chartsLoading,
+    error: chartsError,
+    refetch: refetchCharts,
+  } = useQuery({
     queryKey: ['browse', 'charts'],
     queryFn: () => browseService.getCharts({ limit: 10 }),
     enabled: !hasQuery,
@@ -109,7 +140,12 @@ const SearchScreen: React.FC = () => {
   // Polls at AUDIUS_REFETCH_MS while the server signals a pending background
   // Audius import and local track results are still sparse; stops automatically
   // once tracks appear or pendingAudiusImport flips false.
-  const { data: searchResults, isLoading: searchLoading } = useQuery({
+  const {
+    data: searchResults,
+    isLoading: searchLoading,
+    error: searchError,
+    refetch: refetchSearch,
+  } = useQuery({
     queryKey: ['search', debouncedQuery, activeCategory],
     queryFn: () => searchService.search(debouncedQuery, {
       category: activeCategory,
@@ -301,6 +337,22 @@ const SearchScreen: React.FC = () => {
           </View>
         )}
 
+        {/* Search failure — previously rendered nothing at all, so a failed
+            search was indistinguishable from a query that found nothing. */}
+        {hasQuery && !searchLoading && searchError && (
+          <View style={styles.results}>
+            <EmptyState
+              icon={{ name: 'alert-circle-outline' }}
+              error={{
+                title: 'Search failed',
+                message: "We couldn't run that search. Check your connection and try again.",
+                onRetry: async () => { await refetchSearch(); },
+              }}
+              containerStyle={styles.searchStateContainer}
+            />
+          </View>
+        )}
+
         {/* Explore/Discovery View - No Query */}
         {searchQuery.length === 0 && (
           <View style={styles.exploreView}>
@@ -309,6 +361,8 @@ const SearchScreen: React.FC = () => {
               title="Browse All"
               isLoading={genresLoading}
               isEmpty={genres.length === 0}
+              error={genresError}
+              onRetry={refetchGenres}
               emptyMessage="No genres available"
               loadingSkeleton={<GenreGridSkeleton count={8} />}
             >
@@ -332,6 +386,8 @@ const SearchScreen: React.FC = () => {
               title="Made for You"
               isLoading={madeForYouLoading}
               isEmpty={madeForYouAlbums.length === 0 && madeForYouPlaylists.length === 0}
+              error={madeForYouError}
+              onRetry={refetchMadeForYou}
               emptyMessage="No recommendations available"
             >
               <ResponsiveGrid minItemWidth={180} gap={8}>
@@ -375,6 +431,8 @@ const SearchScreen: React.FC = () => {
               title="Popular Tracks"
               isLoading={popularTracksLoading}
               isEmpty={popularTracks.length === 0}
+              error={popularTracksError}
+              onRetry={refetchPopularTracks}
               emptyMessage="No tracks available"
             >
               <ResponsiveGrid minItemWidth={180} gap={8}>
@@ -404,6 +462,8 @@ const SearchScreen: React.FC = () => {
               title="Top Albums"
               isLoading={popularAlbumsLoading}
               isEmpty={popularAlbums.length === 0}
+              error={popularAlbumsError}
+              onRetry={refetchPopularAlbums}
               emptyMessage="No albums available"
             >
               <ResponsiveGrid minItemWidth={180} gap={8}>
@@ -431,6 +491,8 @@ const SearchScreen: React.FC = () => {
               title="Top Artists"
               isLoading={popularArtistsLoading}
               isEmpty={popularArtists.length === 0}
+              error={popularArtistsError}
+              onRetry={refetchPopularArtists}
               emptyMessage="No artists available"
             >
               <ResponsiveGrid minItemWidth={180} gap={8}>
@@ -460,6 +522,8 @@ const SearchScreen: React.FC = () => {
               title="Charts"
               isLoading={chartsLoading}
               isEmpty={chartsTracks.length === 0}
+              error={chartsError}
+              onRetry={refetchCharts}
               emptyMessage="No charts available"
               loadingSkeleton={<TrackListSkeleton count={10} />}
             >
@@ -616,7 +680,7 @@ const SearchScreen: React.FC = () => {
                           title={podcast.title}
                           subtitle={podcast.author ?? 'Podcast'}
                           type="podcast"
-                          resolvedImageUri={pickCatalogImageUrl(undefined, podcast.image, 'card', podcast.imageSizes, podcast.imageSourceUrl)}
+                          resolvedImageUri={resolvePodcastArtwork(podcast, 'card')}
                           primaryColor={podcast.primaryColor}
                           secondaryColor={podcast.secondaryColor}
                           onPress={() => router.push({ pathname: '/podcasts/[id]', params: { id: podcast.id } } satisfies Href)}
@@ -913,6 +977,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     marginTop: 4,
+  },
+  // EmptyState defaults to a full-height block painted with the app background;
+  // in this scroll view it must size to its content and let the screen show through.
+  searchStateContainer: {
+    flex: 0,
+    paddingVertical: 48,
+    backgroundColor: 'transparent',
   },
   noResultsContainer: {
     padding: 48,

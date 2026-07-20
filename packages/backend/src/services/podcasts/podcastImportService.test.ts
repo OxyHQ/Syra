@@ -33,7 +33,7 @@ const FEED = `<?xml version="1.0" encoding="UTF-8"?>
   </channel>
 </rss>`;
 
-function fakeFetch(): SafeFetchResult {
+async function fakeFetch(): Promise<SafeFetchResult> {
   return {
     status: 200,
     headers: {},

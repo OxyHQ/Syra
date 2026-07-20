@@ -21,6 +21,8 @@ export const LibrarySidebar: React.FC = () => {
     isLibrarySidebarExpanded,
     setLibrarySidebarExpanded,
     toggleFullscreen,
+    librarySortOrder,
+    setLibrarySortOrder,
   } = useUIStore();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -30,7 +32,7 @@ export const LibrarySidebar: React.FC = () => {
   // Library data from the shared React Query layer. Derived from the
   // `['library']` membership cache, so optimistic like/save/follow toggles
   // anywhere keep the sidebar in sync without a local fetch effect.
-  const { playlists, savedAlbums, followedArtists, likedTracksCount, loading, error } =
+  const { playlists, savedAlbums, followedArtists, likedTracksCount, loading, error, retry } =
     useLibraryCollections();
 
   // Hide on mobile
@@ -51,6 +53,8 @@ export const LibrarySidebar: React.FC = () => {
           followedArtists={followedArtists}
           likedTracksCount={likedTracksCount}
           loading={loading}
+          error={error}
+          onRetry={retry}
         />
       ) : (
         <LibrarySidebarExpanded
@@ -62,12 +66,15 @@ export const LibrarySidebar: React.FC = () => {
           onCollapse={() => setLibrarySidebarExpanded(false)}
           onSearchChange={setSearchQuery}
           onFilterChange={setActiveFilter}
+          sortOrder={librarySortOrder}
+          onSortOrderChange={setLibrarySortOrder}
           playlists={playlists}
           savedAlbums={savedAlbums}
           followedArtists={followedArtists}
           likedTracksCount={likedTracksCount}
           loading={loading}
           error={error}
+          onRetry={retry}
         />
       )}
     </View>

@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useTheme } from '@oxyhq/bloom/theme';
 import type { Episode } from '@syra/shared-types';
-import { pickCatalogImageUrl } from '@/utils/pickImage';
+import { resolvePodcastArtwork } from '@/utils/pickImage';
 import { formatEpisodeDuration, formatPubDate, formatRemaining } from '@/utils/podcastFormat';
 import type { EpisodeProgressSnapshot } from '@/hooks/usePodcasts';
 import { webViewStyle } from '@/utils/webStyles';
@@ -38,7 +38,7 @@ const EpisodeRowComponent: React.FC<EpisodeRowProps> = ({
 }) => {
   const theme = useTheme();
   const imageUri = useMemo(
-    () => pickCatalogImageUrl(undefined, episode.image, 'thumbnail', episode.imageSizes, episode.imageSourceUrl),
+    () => resolvePodcastArtwork(episode, 'thumbnail'),
     [episode],
   );
 

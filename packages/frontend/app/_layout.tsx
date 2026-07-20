@@ -63,7 +63,7 @@ interface MainLayoutProps {
 
 const layoutLogger = createScopedLogger('RootLayout');
 
-// NATIVE ONLY: register the LiveKit WebRTC globals the `@syra.fm/live` rooms engine
+// NATIVE ONLY: register the LiveKit WebRTC globals the `@syra.fm/sdk` rooms engine
 // needs before any room connects. Guarded to native (the browser already has
 // WebRTC) and to a soft failure so a missing/unlinked native module never blocks
 // app boot for users who don't open a live room.
@@ -317,7 +317,13 @@ export default function RootLayout() {
       onlineManager.setOnline(Boolean(state.isConnected && state.isInternetReachable !== false));
     });
 
-    // React Query focus manager using AppState
+    // React Query focus manager using AppState.
+    // This is load-bearing even though `refetchOnWindowFocus` is false: query-core
+    // gates `refetchInterval` on `focusManager.isFocused()` unless a query sets
+    // `refetchIntervalInBackground`, and the polling search queries in TopBar.tsx
+    // and app/search.tsx deliberately leave that false. React Native has no
+    // window-focus event, so without this wiring those polls would never pause
+    // while the app is backgrounded. Do not remove it as dead code.
     const onAppStateChange = (status: AppStateStatus) => {
       focusManager.setFocused(status === 'active');
     };
@@ -354,6 +360,7 @@ export default function RootLayout() {
       <AppProviders
         oxyServices={oxyServices}
         queryClient={queryClient}
+        isAppReady={appIsReady}
       >
         {appIsReady ? (
           <>

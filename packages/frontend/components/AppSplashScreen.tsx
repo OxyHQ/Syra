@@ -11,6 +11,11 @@ interface AppSplashScreenProps {
 }
 
 const FADE_DURATION = 500;
+// Hard ceiling on how long the cosmetic fade may withhold readiness. On web the
+// fade is driven by requestAnimationFrame, which a backgrounded tab pauses
+// indefinitely — without this the animation callback would never run and the app
+// would sit on the splash forever.
+const FADE_COMPLETE_TIMEOUT = FADE_DURATION + 250;
 const LOGO_SIZE = 100;
 const SPINNER_SIZE = 28;
 
@@ -23,34 +28,40 @@ const AppSplashScreen: React.FC<AppSplashScreenProps> = ({
     // during render (unlike `useRef(...).current`, which the React Compiler forbids).
     const [fadeAnim] = useState(() => new Animated.Value(1));
     const animationRef = useRef<Animated.CompositeAnimation | null>(null);
+    const completedRef = useRef(false);
 
-    const handleFadeComplete = useCallback(
-        (finished: boolean) => {
-            if (finished && onFadeComplete) {
-                onFadeComplete();
-            }
-        },
-        [onFadeComplete],
-    );
+    // The fade is purely cosmetic and must never gate app readiness, so completion
+    // is reported whether the animation finished, was interrupted, or stalled.
+    // Latched so the animation callback and the timeout below can't double-report.
+    const handleFadeComplete = useCallback(() => {
+        if (completedRef.current) {
+            return;
+        }
+        completedRef.current = true;
+        onFadeComplete?.();
+    }, [onFadeComplete]);
 
     useEffect(() => {
-        if (startFade) {
-            // Cancel any existing animation
-            animationRef.current?.stop();
-
-            // Start fade out animation
-            animationRef.current = Animated.timing(fadeAnim, {
-                toValue: 0,
-                duration: FADE_DURATION,
-                useNativeDriver: Platform.OS !== 'web',
-            });
-
-            animationRef.current.start(({ finished }) => {
-                handleFadeComplete(finished);
-            });
+        if (!startFade) {
+            return;
         }
 
+        // Cancel any existing animation
+        animationRef.current?.stop();
+
+        // Start fade out animation
+        animationRef.current = Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: FADE_DURATION,
+            useNativeDriver: Platform.OS !== 'web',
+        });
+
+        animationRef.current.start(handleFadeComplete);
+
+        const fallbackTimer = setTimeout(handleFadeComplete, FADE_COMPLETE_TIMEOUT);
+
         return () => {
+            clearTimeout(fallbackTimer);
             animationRef.current?.stop();
         };
     }, [startFade, fadeAnim, handleFadeComplete]);

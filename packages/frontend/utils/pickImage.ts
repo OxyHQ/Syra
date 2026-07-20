@@ -106,8 +106,9 @@ export function pickImageUrl(
  * Resolve a catalog image at a named target size — Syra-hosted media first
  * (id/size variants via `/api/images/:id`), then the single-URL `fallback`, then
  * an optional raw `externalFallback` (a never-re-hosted external URL, e.g. an
- * un-backfilled podcast/episode cover). This is the ONE catalog image resolver;
- * there is no separate podcast resolver.
+ * un-backfilled podcast/episode cover). This is the ONE catalog image resolver —
+ * {@link resolvePodcastArtwork} below is a thin argument-shaping wrapper over it,
+ * not a second resolution strategy.
  */
 export function pickCatalogImageUrl(
   images: TrackImage[] | undefined,
@@ -117,4 +118,31 @@ export function pickCatalogImageUrl(
   externalFallback?: string,
 ): string | undefined {
   return pickImageUrl(images, fallback, CATALOG_IMAGE_TARGET_WIDTH[target], sizes, externalFallback);
+}
+
+/** The subset of a podcast or episode needed to resolve its artwork. */
+export interface PodcastArtworkSource {
+  image?: string;
+  imageSizes?: CatalogImageSizes;
+  imageSourceUrl?: string;
+}
+
+/**
+ * Resolve podcast/episode artwork at a target size: Syra-hosted sizes, then the
+ * Syra image id, then the guarded external URL.
+ *
+ * Identical in behaviour to calling {@link pickCatalogImageUrl} directly — it
+ * exists because podcasts and episodes always spread the same three fields, and
+ * `pickCatalogImageUrl(undefined, x.image, target, x.imageSizes, x.imageSourceUrl)`
+ * repeated at a dozen call sites is a leading `undefined` plus four positionals
+ * that are easy to transpose and hard to read.
+ */
+export function resolvePodcastArtwork(
+  source: PodcastArtworkSource | undefined,
+  target: CatalogImageTarget,
+): string | undefined {
+  if (!source) {
+    return undefined;
+  }
+  return pickCatalogImageUrl(undefined, source.image, target, source.imageSizes, source.imageSourceUrl);
 }

@@ -8,24 +8,19 @@ import mongoose from 'mongoose';
 import type { Response } from 'express';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { getRequiredOxyUserId } from '@oxyhq/core/server';
-import { updateEpisodeProgressRequestSchema } from '@syra/shared-types';
-import { EpisodeModel } from '../models/Episode';
+import { updateEpisodeProgressRequestSchema, updateEpisodeRequestSchema } from '@syra/shared-types';
+import { EpisodeModel, type IEpisode } from '../models/Episode';
 import { EpisodeProgressModel } from '../models/EpisodeProgress';
 import { PodcastModel } from '../models/Podcast';
-import { getParam } from '../utils/reqParams';
+import { getParam, parseClampedLimit } from '../utils/reqParams';
 import { serializeEpisode } from '../services/podcasts/podcastSerializers';
 import { PODCAST_ARTWORK_PROJECTION, loadShowArtworkByPodcastId } from '../services/podcasts/episodeShowArtwork';
 import { resolvePersons, makeOxyUsersFetcher } from '../services/podcasts/resolvePersons';
 import { oxy } from '../oxyClient';
 
+const CONTINUE_LIMIT_MIN = 1;
 const CONTINUE_LIMIT_DEFAULT = 20;
 const CONTINUE_LIMIT_MAX = 50;
-
-function clampLimit(raw: unknown): number {
-  const parsed = typeof raw === 'string' ? parseInt(raw, 10) : NaN;
-  if (!Number.isFinite(parsed)) return CONTINUE_LIMIT_DEFAULT;
-  return Math.min(CONTINUE_LIMIT_MAX, Math.max(1, parsed));
-}
 
 /**
  * GET /api/episodes/:id — episode detail, including chapters/transcripts and
@@ -107,7 +102,7 @@ export async function updateEpisodeProgress(req: AuthRequest, res: Response): Pr
  */
 export async function getContinueListening(req: AuthRequest, res: Response): Promise<void> {
   const userId = getRequiredOxyUserId(req);
-  const limit = clampLimit(req.query.limit);
+  const limit = parseClampedLimit(req.query.limit, { min: CONTINUE_LIMIT_MIN, max: CONTINUE_LIMIT_MAX, fallback: CONTINUE_LIMIT_DEFAULT });
 
   const progressRows = await EpisodeProgressModel.find({ oxyUserId: userId, completed: false })
     .sort({ updatedAt: -1 })
@@ -140,4 +135,122 @@ export async function getContinueListening(req: AuthRequest, res: Response): Pro
     .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
 
   res.json({ data });
+}
+
+/**
+ * PATCH /api/episodes/:id — edit an episode on a Syra-hosted show you own.
+ *
+ * Ownership is resolved through the STORED episode's `podcastId`, and requires the same
+ * `source === 'syra'` + owner rule as `uploadEpisode`: RSS-mirrored episodes are a copy
+ * of an external feed, so edits here would be silently overwritten by the next refresh.
+ * The body is parsed against the shared schema, never spread, so `podcastId`, `guid`,
+ * `status`, and the cached-audio/HLS fields stay unreachable.
+ */
+export async function updateEpisode(req: AuthRequest, res: Response): Promise<void> {
+  const userId = getRequiredOxyUserId(req);
+  const id = getParam(req, 'id');
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    res.status(400).json({ error: 'Invalid episode ID' });
+    return;
+  }
+
+  const parsed = updateEpisodeRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid request body', details: parsed.error.issues });
+    return;
+  }
+
+  const episode = await EpisodeModel.findById(id);
+  if (!episode) {
+    res.status(404).json({ error: 'Episode not found' });
+    return;
+  }
+
+  const podcast = await PodcastModel.findById(episode.podcastId)
+    .select(`source ownerOxyUserId ${PODCAST_ARTWORK_PROJECTION}`)
+    .lean();
+  if (!podcast || podcast.source !== 'syra' || podcast.ownerOxyUserId !== userId) {
+    res.status(403).json({ error: 'You do not own this podcast' });
+    return;
+  }
+
+  const updates = parsed.data;
+
+  // Explicit field-by-field assignment — the parsed object is never spread onto the doc.
+  if (updates.title !== undefined) episode.title = updates.title;
+  if (updates.description !== undefined) episode.description = updates.description;
+  if (updates.summary !== undefined) episode.summary = updates.summary;
+  if (updates.season !== undefined) episode.season = updates.season;
+  if (updates.episodeNumber !== undefined) episode.episodeNumber = updates.episodeNumber;
+  if (updates.episodeType !== undefined) episode.episodeType = updates.episodeType;
+  if (updates.image !== undefined) episode.image = updates.image;
+  if (updates.explicit !== undefined) episode.explicit = updates.explicit;
+
+  await episode.save();
+
+  res.json({ data: { episode: serializeEpisode(episode, podcast) } });
+}
+
+/**
+ * Load an episode on a Syra-hosted show the caller owns, or send the matching error.
+ * Returns null once a response has been sent.
+ */
+async function loadOwnedEpisodeOrRespond(
+  req: AuthRequest,
+  res: Response,
+): Promise<IEpisode | null> {
+  const userId = getRequiredOxyUserId(req);
+  const id = getParam(req, 'id');
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    res.status(400).json({ error: 'Invalid episode ID' });
+    return null;
+  }
+
+  const episode = await EpisodeModel.findById(id);
+  if (!episode) {
+    res.status(404).json({ error: 'Episode not found' });
+    return null;
+  }
+
+  const podcast = await PodcastModel.findById(episode.podcastId)
+    .select('source ownerOxyUserId')
+    .lean();
+  if (!podcast || podcast.source !== 'syra' || podcast.ownerOxyUserId !== userId) {
+    res.status(403).json({ error: 'You do not own this podcast' });
+    return null;
+  }
+
+  return episode;
+}
+
+/**
+ * POST /api/episodes/:id/unpublish — hide a single episode.
+ *
+ * Soft by design: `status: 'unavailable'` is the episode-level equivalent of a track's
+ * `isAvailable:false`. The document, its media and every listener's saved progress stay
+ * intact, so republishing is lossless. Note this reuses the same `status` field that
+ * carries processing state, so an episode still importing should not be unpublished —
+ * publishing restores it to 'ready'.
+ */
+export async function unpublishEpisode(req: AuthRequest, res: Response): Promise<void> {
+  const episode = await loadOwnedEpisodeOrRespond(req, res);
+  if (!episode) return;
+
+  episode.status = 'unavailable';
+  await episode.save();
+
+  res.json({ data: { id: episode._id.toString(), status: episode.status } });
+}
+
+/** POST /api/episodes/:id/publish — undo `unpublishEpisode`. */
+export async function publishEpisode(req: AuthRequest, res: Response): Promise<void> {
+  const episode = await loadOwnedEpisodeOrRespond(req, res);
+  if (!episode) return;
+
+  episode.status = 'ready';
+  await episode.save();
+
+  res.json({ data: { id: episode._id.toString(), status: episode.status } });
 }

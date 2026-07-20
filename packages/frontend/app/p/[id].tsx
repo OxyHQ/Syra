@@ -11,8 +11,7 @@ import Animated, {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme, useAmbientTheme } from '@oxyhq/bloom/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { toast } from 'sonner';
-import { useOxy } from '@oxyhq/services';
+import { toast } from '@/lib/sonner';
 import { Track } from '@syra/shared-types';
 import { entityService } from '@/services/entityService';
 import { usePlayerStore } from '@/stores/playerStore';
@@ -22,10 +21,14 @@ import { EpisodeRow } from '@/components/EpisodeRow';
 import { MediaCard } from '@/components/MediaCard';
 import { ResponsiveGrid } from '@/components/ResponsiveGrid';
 import { ArtistDetailSkeleton } from '@/components/skeletons';
-import { pickCatalogImageUrl, type CatalogImageTarget } from '@/utils/pickImage';
+import { EmptyState } from '@/components/common/EmptyState';
+import { pickCatalogImageUrl, resolvePodcastArtwork, type CatalogImageTarget } from '@/utils/pickImage';
 import { oxyServices } from '@/lib/oxyServices';
 import { useLibrary, useToggleFollowArtist } from '@/hooks/useLibrary';
 import { useRelatedArtists } from '@/hooks/useRecommendations';
+import { useAuthGate } from '@/hooks/useAuthGate';
+import { CATALOG_QUERY_KEYS } from '@/hooks/useLibraryCollections';
+import { isNotFoundError } from '@/utils/api';
 import { webViewStyle } from '@/utils/webStyles';
 
 const HEADER_HEIGHT = 400;
@@ -46,18 +49,17 @@ const EntityProfileScreen: React.FC = () => {
   const router = useRouter();
   const theme = useTheme();
   const { playTrackList, playEpisode, currentTrack, currentEpisode, isPlaying } = usePlayerStore();
-  const { isAuthenticated, canUsePrivateApi, isPrivateApiPending } = useOxy();
-  const catalogIdentity = canUsePrivateApi ? 'auth' : 'guest';
+  const gate = useAuthGate();
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['entity', id, catalogIdentity],
+  const entityQuery = useQuery({
+    queryKey: CATALOG_QUERY_KEYS.entity(id, gate.catalogIdentity),
     queryFn: () => entityService.getEntityProfile(id),
-    enabled: !!id && !isPrivateApiPending,
+    enabled: !!id && gate.isResolved,
   });
 
-  const entity = data ?? null;
+  const entity = entityQuery.data ?? null;
   const tracks = entity?.music?.tracks ?? [];
-  const isCatalogLoading = isPrivateApiPending || isLoading;
+  const isCatalogLoading = gate.isResolving || entityQuery.isLoading;
 
   // The follow + related-artist features key off the music artist id: the entity
   // id when this is an artist, else its linked artist.
@@ -125,7 +127,7 @@ const EntityProfileScreen: React.FC = () => {
   };
 
   const handleFollow = () => {
-    if (!isAuthenticated) {
+    if (!gate.isAuthenticated) {
       toast.error('You must be logged in to follow artists');
       return;
     }
@@ -146,6 +148,24 @@ const EntityProfileScreen: React.FC = () => {
     );
   };
 
+  // Terminal auth failure — the session never resolved within the gate's bound.
+  // Rendered as an error the user can act on, never as an endless skeleton.
+  if (gate.isTimedOut) {
+    return (
+      <EmptyState
+        containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
+        icon={{ name: 'cloud-offline-outline' }}
+        error={{
+          title: 'Session unavailable',
+          message: 'We could not confirm your session. Check your connection and try again.',
+          onRetry: async () => {
+            gate.retry();
+          },
+        }}
+      />
+    );
+  }
+
   if (isCatalogLoading) {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}>
@@ -160,11 +180,32 @@ const EntityProfileScreen: React.FC = () => {
     );
   }
 
+  // A failed request is not a missing profile: only a 404 falls through to the
+  // "not found" branch below, everything else is a load failure with a retry.
+  if (entityQuery.isError && !isNotFoundError(entityQuery.error)) {
+    return (
+      <EmptyState
+        containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
+        icon={{ name: 'cloud-offline-outline' }}
+        error={{
+          title: 'Could not load this profile',
+          message: 'Something went wrong while loading this profile. Please try again.',
+          onRetry: async () => {
+            await entityQuery.refetch();
+          },
+        }}
+      />
+    );
+  }
+
   if (!entity) {
     return (
-      <View style={[styles.errorContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
-        <Text style={[styles.errorText, { color: theme.colors.text }]}>Profile not found</Text>
-      </View>
+      <EmptyState
+        containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
+        icon={{ name: 'person-outline' }}
+        title="Profile not found"
+        subtitle="This profile may have been removed or is no longer available."
+      />
     );
   }
 
@@ -291,9 +332,11 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
     return { opacity, transform: [{ translateY }] };
   });
 
-  // Two-color cover gradient (artist primary + secondary), like the artist page.
+  // Cover-derived hero gradient, same shape as the album/playlist/podcast
+  // screens: both colour stops fall back to the neutral secondary background
+  // (never the vivid brand accent).
   const gradientColors: readonly [string, string, string] = [
-    entity.primaryColor ?? theme.colors.primary,
+    entity.primaryColor ?? theme.colors.backgroundSecondary,
     entity.secondaryColor ?? theme.colors.backgroundSecondary,
     theme.colors.backgroundSecondary,
   ];
@@ -540,7 +583,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                         title={podcast.title}
                         subtitle={podcast.author ?? 'Podcast'}
                         type="podcast"
-                        resolvedImageUri={pickCatalogImageUrl(undefined, podcast.image, 'card', podcast.imageSizes, podcast.imageSourceUrl)}
+                        resolvedImageUri={resolvePodcastArtwork(podcast, 'card')}
                         primaryColor={podcast.primaryColor}
                         onPress={() => onNavigatePodcast(podcast.id)}
                       />
@@ -694,15 +737,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 100,
     paddingTop: 0,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  errorText: {
-    fontSize: 16,
   },
   headerContainer: {
     height: HEADER_HEIGHT,

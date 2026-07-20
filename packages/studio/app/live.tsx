@@ -13,7 +13,7 @@ import {
   type Room,
   type CreateRoomSheetRef,
   type CreateRoomFormState,
-} from '@syra.fm/live';
+} from '@syra.fm/sdk';
 
 import { ScreenContainer } from '@/components/AppShell';
 import { SignInGate } from '@/components/SignInGate';
@@ -21,7 +21,7 @@ import { authenticatedClient } from '@/utils/api';
 import { liveRoomsQueryKey } from '@/lib/liveConfig';
 
 /**
- * Studio "Go Live" entry. A creator-flavored surface over the SAME `@syra.fm/live`
+ * Studio "Go Live" entry. A creator-flavored surface over the SAME `@syra.fm/sdk`
  * engine the listener app uses: it leads with a prominent "Go Live" action that
  * opens the shared `CreateRoomSheet`, and lists any rooms that are live now so a
  * creator can hop into one. Joining hands off to the engine's globally-mounted

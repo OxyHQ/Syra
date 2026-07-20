@@ -5,11 +5,12 @@ import { useTheme, useAmbientTheme } from '@oxyhq/bloom/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import SEO from '@/components/SEO';
+import { EmptyState } from '@/components/common/EmptyState';
 import { ArtistDetailSkeleton } from '@/components/skeletons';
 import { HostsAndGuests } from '@/components/podcast/HostsAndGuests';
 import { useEpisode, useEpisodeChapters, useEpisodeProgress } from '@/hooks/usePodcasts';
 import { usePlayerStore } from '@/stores/playerStore';
-import { pickCatalogImageUrl } from '@/utils/pickImage';
+import { resolvePodcastArtwork } from '@/utils/pickImage';
 import { stripHtml, formatPubDate, formatEpisodeDuration } from '@/utils/podcastFormat';
 import { formatDuration } from '@/utils/musicUtils';
 
@@ -42,7 +43,7 @@ const EpisodeScreen: React.FC = () => {
   const seek = usePlayerStore((s) => s.seek);
 
   const isCurrent = currentEpisode?.id === id;
-  const artwork = pickCatalogImageUrl(undefined, episode?.image, 'detailArtwork', episode?.imageSizes, episode?.imageSourceUrl);
+  const artwork = resolvePodcastArtwork(episode, 'detailArtwork');
   const description = useMemo(() => stripHtml(episode?.description ?? episode?.summary), [episode]);
 
   // VIEW MODE: theme the WHOLE app from the episode's server-extracted cover
@@ -86,16 +87,40 @@ const EpisodeScreen: React.FC = () => {
     }
   };
 
-  if (episodeQuery.isPending) {
+  // A skeleton only while the request is genuinely in flight. `isPending` would
+  // also be true for the disabled query a missing route param produces, which
+  // would strand this screen on the skeleton and make the not-found branch below
+  // unreachable.
+  if (episodeQuery.isLoading) {
     return <ArtistDetailSkeleton />;
   }
 
+  if (episodeQuery.isError) {
+    return (
+      <EmptyState
+        icon={{ name: 'cloud-offline-outline' }}
+        error={{
+          title: 'Could not load this episode',
+          message: 'Check your connection and try again.',
+          onRetry: async () => {
+            await episodeQuery.refetch();
+          },
+        }}
+        containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
+      />
+    );
+  }
+
+  // Reached with no id in the route, or an episode the catalog does not have.
   if (!episode) {
     return (
-      <View style={[styles.container, styles.center, { backgroundColor: theme.colors.backgroundSecondary }]}>
-        <Ionicons name="alert-circle-outline" size={48} color={theme.colors.textSecondary} />
-        <Text style={[styles.errorText, { color: theme.colors.textSecondary }]}>Episode not found</Text>
-      </View>
+      <EmptyState
+        icon={{ name: 'mic-off-outline' }}
+        title="Episode not found"
+        subtitle="This episode is not in the Syra catalog."
+        action={{ label: 'Browse podcasts', onPress: () => router.push('/podcasts'), icon: 'search-outline' }}
+        containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
+      />
     );
   }
 
@@ -268,12 +293,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  center: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    padding: 24,
-  },
   content: {
     padding: 16,
     paddingBottom: 120,
@@ -361,9 +380,6 @@ const styles = StyleSheet.create({
   description: {
     fontSize: 14,
     lineHeight: 21,
-  },
-  errorText: {
-    fontSize: 16,
   },
 });
 

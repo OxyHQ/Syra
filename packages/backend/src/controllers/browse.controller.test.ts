@@ -6,7 +6,7 @@ import { ArtistModel } from '../models/CatalogEntity';
 import { PlaylistModel } from '../models/Playlist';
 import { PlaylistTrackModel } from '../models/PlaylistTrack';
 import { UserMusicPreferencesModel } from '../models/UserMusicPreferences';
-import { PlaylistVisibility } from '@syra/shared-types';
+import { PlaylistVisibility, type CatalogSource } from '@syra/shared-types';
 import { getGenres, getHomeBrowse, getMadeForYou, getPopularAlbums, getPopularTracks } from './browse.controller';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import type { Request, Response, NextFunction } from 'express';
@@ -53,7 +53,10 @@ const next: NextFunction = (err?: unknown) => {
 
 // ── Seed helpers ───────────────────────────────────────────────────────────────
 
-async function seedTrack(overrides: Record<string, unknown> = {}): Promise<string> {
+/** Seed overrides: arbitrary model fields, with `source` typed so it can be reused across seeds. */
+type SeedOverrides = Record<string, unknown> & { source?: CatalogSource };
+
+async function seedTrack(overrides: SeedOverrides = {}): Promise<string> {
   const track = await TrackModel.create({
     title: 'A Track',
     artistId: '507f1f77bcf86cd799439011',
@@ -71,8 +74,8 @@ async function seedTrack(overrides: Record<string, unknown> = {}): Promise<strin
 
 async function seedPlaylistWithTrack(
   playlistName: string,
-  trackOverrides: Record<string, unknown> = {},
-  playlistOverrides: Record<string, unknown> = {},
+  trackOverrides: SeedOverrides = {},
+  playlistOverrides: SeedOverrides = {},
 ): Promise<void> {
   const playlist = await PlaylistModel.create({
     name: playlistName,

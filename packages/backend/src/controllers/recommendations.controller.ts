@@ -11,7 +11,7 @@ import {
   formatArtistsWithImage,
 } from '../utils/musicHelpers';
 import { isDatabaseConnected } from '../utils/database';
-import { getParam } from '../utils/reqParams';
+import { getParam, parseBoundedLimit } from '../utils/reqParams';
 
 /** Discovery responses are user-scoped where personalised, public otherwise. */
 function setPublicDiscoveryCache(res: Response): void {
@@ -22,12 +22,6 @@ function setPrivateDiscoveryCache(res: Response): void {
   res.set('Vary', 'Authorization');
 }
 
-function boundedLimit(value: unknown, fallback: number, max: number): number {
-  const parsed = parseInt(String(value ?? ''), 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
-  return Math.min(parsed, max);
-}
-
 /**
  * GET /api/artists/:id/related
  * Artists fans of this artist also listen to (collaborative graph + fallbacks).
@@ -36,7 +30,7 @@ export const getRelatedArtistsHandler = async (req: AuthRequest, res: Response, 
   try {
     if (!isDatabaseConnected()) return res.status(503).json({ error: 'Database not available' });
     const id = getParam(req, 'id');
-    const limit = boundedLimit(req.query.limit, 20, 50);
+    const limit = parseBoundedLimit(req.query.limit, 20, 50);
     const artists = await getRelatedArtists(id, limit);
     setPublicDiscoveryCache(res);
     res.json({ artists: formatArtistsWithImage(artists), total: artists.length });
@@ -53,7 +47,7 @@ export const getSimilarTracksHandler = async (req: AuthRequest, res: Response, n
   try {
     if (!isDatabaseConnected()) return res.status(503).json({ error: 'Database not available' });
     const id = getParam(req, 'id');
-    const limit = boundedLimit(req.query.limit, 20, 50);
+    const limit = parseBoundedLimit(req.query.limit, 20, 50);
     const tracks = await getSimilarTracks(id, limit);
     setPublicDiscoveryCache(res);
     res.json({ tracks: await formatTracksWithCoverArt(tracks), total: tracks.length });
@@ -70,7 +64,7 @@ export const getTrackRadioHandler = async (req: AuthRequest, res: Response, next
   try {
     if (!isDatabaseConnected()) return res.status(503).json({ error: 'Database not available' });
     const id = getParam(req, 'id');
-    const limit = boundedLimit(req.query.limit, 30, 100);
+    const limit = parseBoundedLimit(req.query.limit, 30, 100);
     const tracks = await getTrackRadio(id, limit);
     setPublicDiscoveryCache(res);
     res.json({ tracks: await formatTracksWithCoverArt(tracks), total: tracks.length });
@@ -91,7 +85,7 @@ export const getMadeForYouHandler = async (req: AuthRequest, res: Response, next
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    const limit = boundedLimit(req.query.limit, 20, 50);
+    const limit = parseBoundedLimit(req.query.limit, 20, 50);
     const result = await getMadeForYou(userId, limit);
 
     setPrivateDiscoveryCache(res);

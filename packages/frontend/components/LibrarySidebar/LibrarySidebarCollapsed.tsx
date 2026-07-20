@@ -15,6 +15,10 @@ interface LibrarySidebarCollapsedProps {
   followedArtists: Artist[];
   likedTracksCount: number;
   loading: boolean;
+  /** Library load failure, surfaced as a tap-to-retry indicator in the rail. */
+  error?: string | null;
+  /** Re-arms the auth gate and refetches the library queries behind these props. */
+  onRetry: () => Promise<void>;
 }
 
 /**
@@ -28,6 +32,8 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
   followedArtists,
   likedTracksCount,
   loading,
+  error,
+  onRetry,
 }) => {
   const router = useRouter();
   const theme = useTheme();
@@ -39,6 +45,8 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
         <Pressable
           onPress={onExpand}
           style={styles.expandButton}
+          accessibilityRole="button"
+          accessibilityLabel="Expand library sidebar"
         >
           <Octicons
             name="sidebar-expand"
@@ -70,8 +78,46 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
           </View>
         )}
 
+        {/* Load failure. The rail is too narrow for a message, so it shows a
+            tappable marker that retries — never an empty-looking rail. The
+            retry flips the shared hook back to `loading`, which renders the
+            spinner above, so no local pending state is needed here. */}
+        {!loading && isAuthenticated && error && (
+          <Pressable
+            style={styles.iconButton}
+            onPress={() => { void onRetry(); }}
+            accessibilityRole="button"
+            accessibilityLabel={`Library unavailable: ${error}. Tap to retry.`}
+          >
+            <MaterialCommunityIcons
+              name="alert-circle-outline"
+              size={20}
+              color={theme.colors.error}
+            />
+          </Pressable>
+        )}
+
+        {/* Nothing saved yet — same tap-to-expand treatment as the error marker. */}
+        {!loading && isAuthenticated && !error
+          && playlists.length === 0
+          && followedArtists.length === 0
+          && savedAlbums.length === 0 && (
+          <Pressable
+            style={styles.iconButton}
+            onPress={onExpand}
+            accessibilityRole="button"
+            accessibilityLabel="Your library is empty. Expand library."
+          >
+            <MaterialCommunityIcons
+              name="music-box-multiple-outline"
+              size={20}
+              color={theme.colors.textSecondary}
+            />
+          </Pressable>
+        )}
+
         {/* Playlists */}
-        {!loading && isAuthenticated && playlists.map((playlist) => (
+        {!loading && !error && isAuthenticated && playlists.map((playlist) => (
           <Pressable
             key={playlist.id}
             style={styles.iconButton}
@@ -96,7 +142,7 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
         ))}
 
         {/* Artists */}
-        {!loading && isAuthenticated && followedArtists.map((artist) => (
+        {!loading && !error && isAuthenticated && followedArtists.map((artist) => (
           <Pressable
             key={artist.id}
             style={styles.iconButton}
@@ -121,7 +167,7 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
         ))}
 
         {/* Albums */}
-        {!loading && isAuthenticated && savedAlbums.map((album) => (
+        {!loading && !error && isAuthenticated && savedAlbums.map((album) => (
           <Pressable
             key={album.id}
             style={styles.iconButton}

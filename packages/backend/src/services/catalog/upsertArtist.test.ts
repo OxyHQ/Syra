@@ -91,9 +91,11 @@ describe('upsertArtist', () => {
     const prov = artist.sources?.[0];
     expect(prov?.provider).toBe('audius');
     expect(prov?.externalId).toBe('audius-artist-123');
-    expect(typeof prov?.importedAt).toBe('string');
+    const importedAt = prov?.importedAt;
+    expect(typeof importedAt).toBe('string');
+    if (importedAt === undefined) throw new Error('expected importedAt');
     // importedAt is a valid ISO string
-    expect(new Date(prov?.importedAt ?? '').toISOString()).toBe(prov?.importedAt);
+    expect(new Date(importedAt).toISOString()).toBe(importedAt);
     expect(Array.isArray(prov?.fields)).toBe(true);
   });
 
@@ -113,7 +115,7 @@ describe('upsertArtist', () => {
 
     expect(created).toBe(false);
     if (!artist) throw new Error('expected artist');
-    expect(artist.id).toBe(owned.id);
+    expect(artist._id.toString()).toBe(owned._id.toString());
     // Owned fields are untouched
     expect(artist.bio).toBe('The real one.');
     expect(artist.image).toBe('objectid-abc');

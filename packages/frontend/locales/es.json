@@ -506,9 +506,9 @@
     }
   },
   "seo": {
-    "siteName": "Mention",
-    "defaultTitle": "Mention - Plataforma Social",
-    "defaultDescription": "Únete a Mention y conéctate con personas de todo el mundo. Comparte tus pensamientos, descubre tendencias y participa en una comunidad global.",
+    "siteName": "Syra",
+    "defaultTitle": "Syra - Música y podcasts",
+    "defaultDescription": "Escucha música, podcasts y salas de audio en directo en Syra.",
     "home": {
       "title": "Mention - Plataforma Social",
       "description": "Únete a Mention y conéctate con personas de todo el mundo. Comparte tus pensamientos, descubre tendencias y participa en una comunidad global."
@@ -611,7 +611,7 @@
       "notFoundDescription": "La publicación que buscas no existe o ha sido eliminada."
     },
     "notFound": {
-      "title": "Página No Encontrada - Mention",
+      "title": "Página no encontrada - Syra",
       "description": "La página que buscas no existe."
     }
   }

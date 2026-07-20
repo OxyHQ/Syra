@@ -4,11 +4,12 @@ import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { useOxy } from '@oxyhq/services';
 import { useTranslation } from 'react-i18next';
 import SEO from '@/components/SEO';
 import { TrackRow } from '@/components/TrackRow';
 import { LibraryListSkeleton } from '@/components/skeletons';
+import { EmptyState } from '@/components/common/EmptyState';
+import { useAuthGate } from '@/hooks/useAuthGate';
 import { libraryService } from '@/services/libraryService';
 import { LIBRARY_TRACKS_QUERY_KEY } from '@/hooks/useLibrary';
 import { usePlayerStore } from '@/stores/playerStore';
@@ -26,13 +27,13 @@ const LikedSongsScreen: React.FC = () => {
   const theme = useTheme();
   const router = useRouter();
   const { t } = useTranslation();
-  const { canUsePrivateApi, isPrivateApiPending } = useOxy();
+  const gate = useAuthGate();
   const { playTrackList, currentTrack, isPlaying } = usePlayerStore();
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: LIBRARY_TRACKS_QUERY_KEY,
     queryFn: () => libraryService.getLikedTracks(),
-    enabled: canUsePrivateApi,
+    enabled: gate.canUsePrivateApi,
   });
 
   const tracks = data?.tracks ?? [];
@@ -61,7 +62,25 @@ const LikedSongsScreen: React.FC = () => {
     });
   };
 
-  if (isPrivateApiPending) {
+  // Terminal auth failure — bounded by the gate, so this can never sit on a
+  // skeleton forever the way an unbounded `isPrivateApiPending` check did.
+  if (gate.isTimedOut) {
+    return (
+      <EmptyState
+        containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
+        icon={{ name: 'cloud-offline-outline' }}
+        error={{
+          title: 'Session unavailable',
+          message: 'We could not confirm your session, so your liked songs stayed hidden. Please try again.',
+          onRetry: async () => {
+            gate.retry();
+          },
+        }}
+      />
+    );
+  }
+
+  if (gate.isResolving) {
     return (
       <View style={[styles.centered, { backgroundColor: theme.colors.backgroundSecondary }]}>
         <LibraryListSkeleton count={8} />
@@ -69,7 +88,7 @@ const LikedSongsScreen: React.FC = () => {
     );
   }
 
-  if (!canUsePrivateApi) {
+  if (!gate.canUsePrivateApi) {
     return (
       <View style={[styles.centered, { backgroundColor: theme.colors.backgroundSecondary }]}>
         <Ionicons name="lock-closed-outline" size={48} color={theme.colors.textSecondary} style={styles.centeredIcon} />
@@ -122,12 +141,17 @@ const LikedSongsScreen: React.FC = () => {
             <LibraryListSkeleton count={8} />
           </View>
         ) : isError ? (
-          <View style={styles.centered}>
-            <Ionicons name="alert-circle-outline" size={48} color={theme.colors.textSecondary} style={styles.centeredIcon} />
-            <Text style={[styles.centeredText, { color: theme.colors.textSecondary }]}>
-              Failed to load your liked songs
-            </Text>
-          </View>
+          <EmptyState
+            containerStyle={styles.inlineState}
+            icon={{ name: 'cloud-offline-outline' }}
+            error={{
+              title: 'Could not load your liked songs',
+              message: 'Something went wrong while loading this list. Please try again.',
+              onRetry: async () => {
+                await refetch();
+              },
+            }}
+          />
         ) : tracks.length === 0 ? (
           <View style={styles.centered}>
             <Ionicons name="heart-outline" size={48} color={theme.colors.textSecondary} style={styles.centeredIcon} />
@@ -240,6 +264,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
+  },
+  // States rendered INSIDE the scroll view: no `flex: 1` stretch and no opaque
+  // background of their own, so they sit inline under the header + controls.
+  inlineState: {
+    flex: 0,
+    paddingVertical: 32,
+    backgroundColor: 'transparent',
   },
   centeredIcon: {
     opacity: 0.5,

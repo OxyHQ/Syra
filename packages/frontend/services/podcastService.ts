@@ -24,7 +24,7 @@ import { api, publicApi } from '@/utils/api';
  *
  * Podcast/episode artwork carries a Syra-hosted `image` id (+ `imageSizes`) with
  * the original external `imageSourceUrl` as a fallback; both are resolved at
- * render time via the shared catalog picker `pickCatalogImageUrl` (Syra-hosted
+ * render time via the shared catalog picker `resolvePodcastArtwork` (Syra-hosted
  * first, external URL last).
  */
 

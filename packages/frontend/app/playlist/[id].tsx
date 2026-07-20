@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, View, Text, Pressable, Image, ScrollView, Platform } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import Animated, {
   interpolate,
@@ -18,12 +18,18 @@ import { useQueueStore } from '@/stores/queueStore';
 import SEO from '@/components/SEO';
 import { TrackRow } from '@/components/TrackRow';
 import { MediaHeaderSkeleton } from '@/components/skeletons';
+import { EmptyState } from '@/components/common/EmptyState';
 import { formatTotalDuration } from '@/utils/musicUtils';
 import { useLibrary, useToggleSavePlaylist } from '@/hooks/useLibrary';
 import { webViewStyle } from '@/utils/webStyles';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
+import { isNotFoundError } from '@/utils/api';
 import { toast } from '@/lib/sonner';
+import { useAuthGate } from '@/hooks/useAuthGate';
+import { CATALOG_QUERY_KEYS } from '@/hooks/useLibraryCollections';
 import { useOxy } from '@oxyhq/services';
+import { PlaylistActionsSheet } from '@/components/playlist/PlaylistActionsSheet';
+import { TrackActionsSheet } from '@/components/playlist/TrackActionsSheet';
 
 const HEADER_HEIGHT = 400;
 
@@ -35,11 +41,11 @@ type PlaylistData = NonNullable<Awaited<ReturnType<typeof musicService.getPlayli
  */
 const PlaylistScreen: React.FC = () => {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const theme = useTheme();
   const { playTrackList, currentTrack, isPlaying } = usePlayerStore();
   const { shuffle, toggleShuffle } = useQueueStore();
-  const { canUsePrivateApi, isPrivateApiPending } = useOxy();
-  const catalogIdentity = canUsePrivateApi ? 'auth' : 'guest';
+  const gate = useAuthGate();
 
   const { isPlaylistSaved } = useLibrary();
   const toggleSave = useToggleSavePlaylist();
@@ -53,22 +59,35 @@ const PlaylistScreen: React.FC = () => {
     toggleSave.mutate({ id, next: !isSaved });
   };
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['playlist', id, catalogIdentity],
-    queryFn: async () => {
-      const [playlistData, tracksData] = await Promise.all([
-        musicService.getPlaylistById(id),
-        musicService.getPlaylistTracks(id),
-      ]);
-      return { playlist: playlistData, tracks: tracksData.tracks };
-    },
-    enabled: !!id && !isPrivateApiPending,
+  // A deleted playlist has no screen left to show; fall back to the library.
+  const handleDeleted = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/library');
+    }
+  }, [router]);
+
+  // The playlist object and its tracks are separate queries so the playlist
+  // entry is the SAME cache entry the library sidebar hydrates
+  // (`CATALOG_QUERY_KEYS.playlist`) — opening this screen reuses what the
+  // sidebar already fetched, and vice versa, instead of keeping two copies.
+  const playlistQuery = useQuery({
+    queryKey: CATALOG_QUERY_KEYS.playlist(id, gate.catalogIdentity),
+    queryFn: () => musicService.getPlaylistById(id),
+    enabled: !!id && gate.isResolved,
   });
 
-  const playlist = data?.playlist ?? null;
-  const tracks = data?.tracks ?? [];
+  const tracksQuery = useQuery({
+    queryKey: CATALOG_QUERY_KEYS.playlistTracks(id, gate.catalogIdentity),
+    queryFn: async () => (await musicService.getPlaylistTracks(id)).tracks,
+    enabled: !!id && gate.isResolved,
+  });
+
+  const playlist = playlistQuery.data ?? null;
+  const tracks = tracksQuery.data ?? [];
   const canPlay = tracks.length > 0;
-  const isCatalogLoading = isPrivateApiPending || isLoading;
+  const isCatalogLoading = gate.isResolving || playlistQuery.isLoading || tracksQuery.isLoading;
 
   const playlistHeroImage = playlist
     ? pickCatalogImageUrl(undefined, playlist.coverArt, 'hero', playlist.coverArtSizes)
@@ -111,6 +130,24 @@ const PlaylistScreen: React.FC = () => {
     });
   };
 
+  // Terminal auth failure — the session never resolved within the gate's bound.
+  // Rendered as an error the user can act on, never as an endless skeleton.
+  if (gate.isTimedOut) {
+    return (
+      <EmptyState
+        containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
+        icon={{ name: 'cloud-offline-outline' }}
+        error={{
+          title: 'Session unavailable',
+          message: 'We could not confirm your session. Check your connection and try again.',
+          onRetry: async () => {
+            gate.retry();
+          },
+        }}
+      />
+    );
+  }
+
   if (isCatalogLoading) {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}>
@@ -125,11 +162,32 @@ const PlaylistScreen: React.FC = () => {
     );
   }
 
+  // A failed request is not a missing playlist: only a 404 falls through to the
+  // "not found" branch below, everything else is a load failure with a retry.
+  if ((playlistQuery.isError || tracksQuery.isError) && !isNotFoundError(playlistQuery.error)) {
+    return (
+      <EmptyState
+        containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
+        icon={{ name: 'cloud-offline-outline' }}
+        error={{
+          title: 'Could not load this playlist',
+          message: 'Something went wrong while loading this playlist. Please try again.',
+          onRetry: async () => {
+            await Promise.all([playlistQuery.refetch(), tracksQuery.refetch()]);
+          },
+        }}
+      />
+    );
+  }
+
   if (!playlist) {
     return (
-      <View style={[styles.errorContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
-        <Text style={[styles.errorText, { color: theme.colors.text }]}>Playlist not found</Text>
-      </View>
+      <EmptyState
+        containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
+        icon={{ name: 'musical-notes-outline' }}
+        title="Playlist not found"
+        subtitle="This playlist may have been deleted or is private."
+      />
     );
   }
 
@@ -152,6 +210,7 @@ const PlaylistScreen: React.FC = () => {
       onPlayPlaylist={handlePlayPlaylist}
       onToggleSave={handleToggleSave}
       onTrackPress={handleTrackPress}
+      onDeleted={handleDeleted}
     />
   );
 };
@@ -171,6 +230,7 @@ interface PlaylistViewProps {
   onPlayPlaylist: () => void;
   onToggleSave: () => void;
   onTrackPress: (track: Track) => void;
+  onDeleted: () => void;
 }
 
 /**
@@ -194,8 +254,18 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
   onPlayPlaylist,
   onToggleSave,
   onTrackPress,
+  onDeleted,
 }) => {
   const theme = useTheme();
+  const { user } = useOxy();
+  const [showPlaylistActions, setShowPlaylistActions] = useState(false);
+  const [trackActionsFor, setTrackActionsFor] = useState<Track | null>(null);
+  // Mirrors the backend's `canEditPlaylist` (owner or editor collaborator) so a
+  // viewer is never offered a removal that is certain to 403.
+  const canEditPlaylist = user?.id === playlist.ownerOxyUserId
+    || (playlist.collaborators ?? []).some(
+      (collaborator) => collaborator.oxyUserId === user?.id && collaborator.role === 'editor',
+    );
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const scrollOffset = useScrollViewOffset(scrollRef);
 
@@ -247,8 +317,9 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
     };
   });
 
-  // Cover-derived hero gradient, same neutral fallback as album/podcast: every
-  // stop falls back to `backgroundSecondary` (never the vivid brand accent).
+  // Cover-derived hero gradient, same shape as the album/podcast screens: both
+  // colour stops fall back to the neutral secondary background (never the vivid
+  // brand accent), so a cover with no extracted colours reads as a plain hero.
   const gradientColors: readonly [string, string, string] = [
     playlist.primaryColor ?? theme.colors.backgroundSecondary,
     playlist.secondaryColor ?? theme.colors.backgroundSecondary,
@@ -328,7 +399,12 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
                   color={isSaved ? theme.colors.primary : theme.colors.text}
                 />
               </Pressable>
-              <Pressable style={styles.stickyHeaderControlButton}>
+              <Pressable
+                style={styles.stickyHeaderControlButton}
+                onPress={() => setShowPlaylistActions(true)}
+                accessibilityRole="button"
+                accessibilityLabel="More options for this playlist"
+              >
                 <Ionicons name="ellipsis-horizontal" size={20} color={theme.colors.text} />
               </Pressable>
             </View>
@@ -490,7 +566,12 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
                 />
               </Pressable>
 
-              <Pressable style={styles.controlButton}>
+              <Pressable
+                style={styles.controlButton}
+                onPress={() => setShowPlaylistActions(true)}
+                accessibilityRole="button"
+                accessibilityLabel="More options for this playlist"
+              >
                 <Ionicons name="ellipsis-horizontal" size={24} color={theme.colors.text} />
               </Pressable>
             </View>
@@ -530,6 +611,7 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
                       onPress={() => onTrackPress(track)}
                       onPlayPress={() => onTrackPress(track)}
                       showNumber={true}
+                      onMorePress={() => setTrackActionsFor(track)}
                     />
                   );
                 })
@@ -538,6 +620,26 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
           </LinearGradient>
         </Animated.ScrollView>
       </View>
+
+      <PlaylistActionsSheet
+        visible={showPlaylistActions}
+        onClose={() => setShowPlaylistActions(false)}
+        playlist={playlist}
+        onDeleted={onDeleted}
+      />
+
+      {trackActionsFor && (
+        <TrackActionsSheet
+          visible
+          onClose={() => setTrackActionsFor(null)}
+          track={trackActionsFor}
+          removeFrom={
+            canEditPlaylist
+              ? { playlistId: playlist.id, playlistName: playlist.name }
+              : undefined
+          }
+        />
+      )}
     </>
   );
 };
@@ -649,15 +751,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 100,
     paddingTop: 0,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  errorText: {
-    fontSize: 16,
   },
   headerContainer: {
     height: HEADER_HEIGHT,

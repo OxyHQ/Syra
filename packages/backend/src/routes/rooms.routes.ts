@@ -4,7 +4,6 @@ import Room, { IRoom, MediaQueueItem, RoomStatus, RoomType, OwnerType, Broadcast
 import RoomUserPreference, { LiveVisibility, DEFAULT_LIVE_VISIBILITY, isLiveVisibility } from '../models/RoomUserPreference';
 import House, { HouseMemberRole } from '../models/House';
 import { requireOxyAuth, getRequiredOxyUserId, type OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
-import { isAdmin } from '../middleware/admin';
 import { logger } from '../utils/logger';
 import {
   generateRoomToken,
@@ -58,21 +57,92 @@ interface IngressReplacementResult {
   previousDeletedBeforeCreate: boolean;
 }
 
-type InternalStreamFields = {
-  activeStreamUrl?: unknown;
-  activeIngressId?: unknown;
-  rtmpUrl?: unknown;
-  rtmpStreamKey?: unknown;
-};
+/**
+ * Room fields that are safe to return to a client.
+ *
+ * This is an allowlist, not a denylist: `stripInternalStreamFields` rebuilds the
+ * response from these keys alone. A field added to the room schema later is dropped
+ * from responses until it is listed here — that direction fails closed, so a new
+ * internal field can never ship to clients just because nobody remembered to
+ * exclude it. The internal stream credentials (`rtmpStreamKey`, `rtmpUrl`,
+ * `activeStreamUrl`, `activeIngressId`) are absent by construction.
+ */
+const PUBLIC_ROOM_FIELDS = [
+  '_id',
+  'title',
+  'description',
+  'ownerType',
+  'host',
+  'houseId',
+  'createdByAdmin',
+  'type',
+  'broadcastKind',
+  'status',
+  'scheduledStart',
+  'startedAt',
+  'endedAt',
+  'speakerPermission',
+  'participants',
+  'speakers',
+  'maxParticipants',
+  'topic',
+  'topicId',
+  'tags',
+  'archived',
+  'seriesId',
+  'stats',
+  'recordingEnabled',
+  'recordingEgressId',
+  'streamTitle',
+  'streamImage',
+  'streamDescription',
+  'streamStartedAt',
+  'streamDurationSec',
+  'podcastQueue',
+  'createdAt',
+  'updatedAt',
+] as const;
 
-export function stripInternalStreamFields<T extends InternalStreamFields>(room: T): T {
-  delete room.activeStreamUrl;
-  delete room.activeIngressId;
-  delete room.rtmpUrl;
-  delete room.rtmpStreamKey;
-  return room;
+type PublicRoomField = (typeof PUBLIC_ROOM_FIELDS)[number];
+
+/**
+ * Build the public view of a room, omitting the internal stream credentials.
+ *
+ * Reads each allowed field explicitly and returns a NEW object, which is what makes
+ * this correct for both a `.lean()` plain object and a hydrated Mongoose document.
+ * The previous implementation deleted the credential fields from the input instead;
+ * on a hydrated document that is a silent no-op — schema fields are prototype getters,
+ * not own properties — so a live RTMP publishing key would serialize straight to the
+ * client with no error, no log, and no failing test. Returning a rebuilt object cannot
+ * regress that way regardless of what the caller passes in.
+ *
+ * Callers must use the RETURN VALUE; this no longer mutates its argument.
+ */
+export function stripInternalStreamFields<T extends object>(
+  room: T,
+): Pick<T, Extract<keyof T, PublicRoomField>> {
+  const source = room as Partial<Record<PublicRoomField, unknown>>;
+  const sanitized: Partial<Record<PublicRoomField, unknown>> = {};
+
+  for (const field of PUBLIC_ROOM_FIELDS) {
+    const value = source[field];
+    if (value !== undefined) {
+      sanitized[field] = value;
+    }
+  }
+
+  return sanitized as Pick<T, Extract<keyof T, PublicRoomField>>;
 }
 
+/**
+ * Whether `userId` may manage this room.
+ *
+ * Management is ownership-scoped: the room's own host, or an admin of the owning
+ * house. Platform-owned (AGORA) rooms deliberately fall through to `false` — they
+ * are created and operated server-side by the platform, never over HTTP, and Syra
+ * has no platform-wide superuser role that could grant access here. The omission is
+ * the design, not a gap to fill in later.
+ */
 async function canManageRoom(room: RoomOwnershipFields, userId: string): Promise<boolean> {
   if (room.host === userId) {
     return true;
@@ -85,10 +155,6 @@ async function canManageRoom(room: RoomOwnershipFields, userId: string): Promise
 
     const house = await House.findById(room.houseId);
     return Boolean(house?.hasRole(userId, HouseMemberRole.ADMIN));
-  }
-
-  if (room.ownerType === OwnerType.AGORA) {
-    return isAdmin(userId);
   }
 
   return false;
@@ -861,9 +927,9 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       ? ownerType
       : OwnerType.PROFILE;
 
-    // Reject agora-owned rooms from this endpoint (admin-only)
+    // Platform-owned rooms are provisioned server-side, not through this endpoint.
     if (roomOwnerType === OwnerType.AGORA) {
-      return res.status(403).json({ message: 'Agora-owned rooms can only be created by admins' });
+      return res.status(403).json({ message: 'Agora-owned rooms are created server-side by the platform, not through this endpoint' });
     }
 
     // Validate house ownership permission
@@ -1239,11 +1305,9 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
       ? await canManageRoom(room, userId)
       : false;
 
-    if (!canViewInternalStreamFields) {
-      stripInternalStreamFields(room);
-    }
-
-    res.json({ room });
+    res.json({
+      room: canViewInternalStreamFields ? room : stripInternalStreamFields(room),
+    });
   } catch (error) {
     logger.error('Error fetching room:', { userId: req.user?.id, roomId: req.params.id, error });
     res.status(500).json({
@@ -1520,7 +1584,7 @@ router.post('/:id/join', async (req: AuthRequest, res: Response) => {
     if (room.participants.includes(userId)) {
       return res.json({
         message: 'Already joined',
-        room,
+        room: stripInternalStreamFields(room),
       });
     }
 
@@ -1549,7 +1613,7 @@ router.post('/:id/join', async (req: AuthRequest, res: Response) => {
 
     res.json({
       message: 'Joined room successfully',
-      room,
+      room: stripInternalStreamFields(room),
     });
   } catch (error) {
     logger.error('Error joining room:', { userId: req.user?.id, roomId: req.params.id, error });

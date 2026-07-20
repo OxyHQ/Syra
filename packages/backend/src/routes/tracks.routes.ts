@@ -3,6 +3,7 @@ import {
   getTracks,
   getTrackById,
   searchTracks,
+  updateTrack,
   uploadTrack,
 } from '../controllers/tracks.controller';
 import {
@@ -22,6 +23,7 @@ router.get('/:id/radio', getTrackRadioHandler);
 
 // Authenticated routes
 router.post('/upload', requireAuth, uploadTrack);
+router.patch('/:id', requireAuth, updateTrack);
 
 export default router;
 

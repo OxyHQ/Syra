@@ -1,9 +1,10 @@
 import { Router, Response } from 'express';
 import multer from 'multer';
-import House, { HouseMemberRole, IHouseMember } from '../models/House';
+import House, { HouseMemberRole, HouseVisibility, IHouse, IHouseMember } from '../models/House';
 import Room, { RoomStatus } from '../models/Room';
 import Series from '../models/Series';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
+import { stripInternalStreamFields } from './rooms.routes';
 import { logger } from '../utils/logger';
 import { processImage } from '../utils/imageProcessor';
 import { uploadObject, deleteObject, getAgoraHouseAvatarKey, getAgoraHouseCoverKey, getCdnUrl, cdnUrlToKey } from '../utils/spaces';
@@ -24,13 +25,47 @@ const upload = multer({
 const router = Router();
 
 /**
+ * Narrow a client-supplied value to a visibility level, or `undefined` if it is
+ * not one. Callers decide whether that means "leave unchanged" or "use the
+ * default" — an unrecognised value never silently becomes `public`.
+ */
+function parseVisibility(value: unknown): HouseVisibility | undefined {
+  return typeof value === 'string' && (Object.values(HouseVisibility) as string[]).includes(value)
+    ? (value as HouseVisibility)
+    : undefined;
+}
+
+/**
+ * Serialize a house for a caller who has passed {@link IHouse.canSeeHouse}.
+ *
+ * The member roster names every user in the house, so it is withheld from
+ * non-members of a house that is not `public` — those callers may know the
+ * house exists (that is what `invite_only` means) without learning who is in
+ * it. `memberCount` is kept so the UI can still show how big the house is.
+ *
+ * `createdBy` deliberately survives: an invite-only house is discoverable so
+ * that someone can ask to be let in, which requires knowing who owns it. It is
+ * the one member id a non-member is meant to learn.
+ */
+function serializeHouseFor(house: IHouse, userId: string | undefined): Record<string, unknown> {
+  const serialized = house.toObject();
+
+  if (house.visibility !== HouseVisibility.PUBLIC && !(userId !== undefined && house.isMember(userId))) {
+    const { members, ...withoutRoster } = serialized;
+    return { ...withoutRoster, memberCount: members.length };
+  }
+
+  return serialized;
+}
+
+/**
  * Create a house
  * POST /api/houses
  */
 router.post('/', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { name, description, avatar, coverImage, tags, isPublic } = req.body;
+    const { name, description, avatar, coverImage, tags, visibility } = req.body;
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized' });
@@ -46,7 +81,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       avatar: avatar ? String(avatar).trim() : undefined,
       coverImage: coverImage ? String(coverImage).trim() : undefined,
       createdBy: userId,
-      isPublic: typeof isPublic === 'boolean' ? isPublic : true,
+      visibility: parseVisibility(visibility) ?? HouseVisibility.PUBLIC,
       tags: Array.isArray(tags) ? tags.map((t: unknown) => String(t).trim()).filter(Boolean) : [],
       members: [
         {
@@ -75,33 +110,47 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 });
 
 /**
- * List public houses (paginated, cursor-based)
+ * List discoverable houses (paginated, cursor-based)
  * GET /api/houses
+ *
+ * Returns every `public` and `invite_only` house, plus any house the requester
+ * is a member of — which is how a member still finds their own `private`
+ * houses here. Membership comes from the server-resolved session, never the
+ * request.
  */
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
+    const userId = req.user?.id;
     const { limit = '20', cursor, search } = req.query;
 
-    const query: Record<string, unknown> = {
-      isPublic: true,
-    };
+    // Composed with $and so the visibility $or can never be overwritten by a
+    // later filter that also needs $or.
+    const conditions: Record<string, unknown>[] = [
+      {
+        $or: [
+          { visibility: { $in: [HouseVisibility.PUBLIC, HouseVisibility.INVITE_ONLY] } },
+          ...(userId ? [{ 'members.userId': userId }] : []),
+        ],
+      },
+    ];
 
     // Cursor-based pagination
     if (cursor && typeof cursor === 'string') {
-      query._id = { $lt: cursor };
+      conditions.push({ _id: { $lt: cursor } });
     }
 
     // Optional text search
     if (search && typeof search === 'string' && search.trim().length > 0) {
-      query.$text = { $search: search.trim() };
+      conditions.push({ $text: { $search: search.trim() } });
     }
 
     const limitNum = Math.min(Math.max(parseInt(limit as string, 10) || 20, 1), 100);
 
-    const houses = await House.find(query)
+    // Not `.lean()`: serializing each house needs the schema's instance methods
+    // to decide whether this caller may see its member roster.
+    const houses = await House.find({ $and: conditions })
       .sort({ createdAt: -1 })
-      .limit(limitNum + 1)
-      .lean();
+      .limit(limitNum + 1);
 
     const hasMore = houses.length > limitNum;
     const housesToReturn = hasMore ? houses.slice(0, limitNum) : houses;
@@ -110,7 +159,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       : undefined;
 
     res.json({
-      houses: housesToReturn,
+      houses: housesToReturn.map((house) => serializeHouseFor(house, userId)),
       hasMore,
       nextCursor,
     });
@@ -126,18 +175,22 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 /**
  * Get house details
  * GET /api/houses/:id
+ *
+ * A `private` house is 404 to a non-member so its existence is never
+ * confirmed; an `invite_only` house is readable but without its roster.
  */
 router.get('/:id', async (req: AuthRequest, res: Response) => {
   try {
+    const userId = req.user?.id;
     const { id } = req.params;
 
-    const house = await House.findById(id).lean();
+    const house = await House.findById(id);
 
-    if (!house) {
+    if (!house || !house.canSeeHouse(userId)) {
       return res.status(404).json({ message: 'House not found' });
     }
 
-    res.json({ house });
+    res.json({ house: serializeHouseFor(house, userId) });
   } catch (error) {
     logger.error('Error fetching house:', { userId: req.user?.id, houseId: req.params.id, error });
     res.status(500).json({
@@ -155,7 +208,7 @@ router.patch('/:id', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
     const { id } = req.params;
-    const { name, description, avatar, coverImage, tags, isPublic } = req.body;
+    const { name, description, avatar, coverImage, tags, visibility } = req.body;
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized' });
@@ -188,8 +241,12 @@ router.patch('/:id', async (req: AuthRequest, res: Response) => {
     if (tags !== undefined && Array.isArray(tags)) {
       house.tags = tags.map((t: unknown) => String(t).trim()).filter(Boolean);
     }
-    if (typeof isPublic === 'boolean') {
-      house.isPublic = isPublic;
+    if (visibility !== undefined) {
+      const parsedVisibility = parseVisibility(visibility);
+      if (!parsedVisibility) {
+        return res.status(400).json({ message: 'Invalid visibility' });
+      }
+      house.visibility = parsedVisibility;
     }
 
     await house.save();
@@ -456,13 +513,18 @@ router.delete('/:id/members/:userId', async (req: AuthRequest, res: Response) =>
  */
 router.get('/:id/rooms', async (req: AuthRequest, res: Response) => {
   try {
+    const userId = req.user?.id;
     const { id } = req.params;
     const { status, type, limit = '20', cursor } = req.query;
 
-    // Verify house exists
-    const houseExists = await House.exists({ _id: id });
-    if (!houseExists) {
+    // Load the house rather than just probing existence: rooms carry titles,
+    // hosts and participant ids, so listing them is gated on visibility.
+    const house = await House.findById(id);
+    if (!house || !house.canSeeHouse(userId)) {
       return res.status(404).json({ message: 'House not found' });
+    }
+    if (!house.canAccessRooms(userId)) {
+      return res.status(403).json({ message: 'Only members can view this house\'s rooms' });
     }
 
     const query: Record<string, unknown> = {
@@ -504,7 +566,7 @@ router.get('/:id/rooms', async (req: AuthRequest, res: Response) => {
       : undefined;
 
     res.json({
-      rooms: roomsToReturn,
+      rooms: roomsToReturn.map((room) => stripInternalStreamFields(room)),
       hasMore,
       nextCursor,
     });
@@ -523,12 +585,15 @@ router.get('/:id/rooms', async (req: AuthRequest, res: Response) => {
  */
 router.get('/:id/series', async (req: AuthRequest, res: Response) => {
   try {
+    const userId = req.user?.id;
     const { id } = req.params;
 
-    // Verify house exists
-    const houseExists = await House.exists({ _id: id });
-    if (!houseExists) {
+    const house = await House.findById(id);
+    if (!house || !house.canSeeHouse(userId)) {
       return res.status(404).json({ message: 'House not found' });
+    }
+    if (!house.canAccessRooms(userId)) {
+      return res.status(403).json({ message: 'Only members can view this house\'s series' });
     }
 
     const seriesList = await Series.find({

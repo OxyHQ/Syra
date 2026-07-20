@@ -19,6 +19,26 @@ const i18nResources = {
   'it-IT': { translation: itIT },
 } as const;
 
+/**
+ * Suspense is disabled deliberately.
+ *
+ * react-i18next defaults `useSuspense` to true, which makes `useTranslation`
+ * throw a promise whenever an i18n instance exists but is not yet initialized
+ * (useTranslation.js: `if (i18n && useSuspense && !ready) throw new Promise(...)`).
+ * i18n here initializes from a layout effect, so a component mounted in the
+ * providers tree that calls `t()` can suspend before any Suspense boundary
+ * exists above it — a white screen with no console error.
+ *
+ * Today that is avoided only by accident: on the first render `getI18n()` is
+ * still undefined, so the throw is skipped. That holds until someone moves
+ * initialization earlier or mounts another translated component high in the tree.
+ *
+ * Every locale is bundled synchronously — there is no namespace or backend to
+ * wait on — so suspense buys nothing here. With it off, a `t()` call before
+ * initialization returns the key (or its `defaultValue`) instead of suspending.
+ */
+const REACT_I18NEXT_OPTIONS = { useSuspense: false } as const;
+
 export interface I18nConfig {
   resources: typeof i18nResources;
   lng: string;
@@ -59,6 +79,7 @@ export async function initializeI18n(): Promise<void> {
       lng: initialLanguage,
       fallbackLng: DEFAULT_LANGUAGE,
       interpolation: { escapeValue: false },
+      react: REACT_I18NEXT_OPTIONS,
     });
   } catch (error) {
     console.error('i18n initialization failed:', error);

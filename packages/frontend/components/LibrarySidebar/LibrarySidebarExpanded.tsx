@@ -16,6 +16,8 @@ import { useOxy } from '@oxyhq/services';
 import { Image } from 'expo-image';
 import { Playlist, Album, Artist } from '@syra/shared-types';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
+import { EmptyState } from '@/components/common/EmptyState';
+import type { LibrarySortOrder } from '@/stores/uiStore';
 
 type LibraryFilter = 'All' | 'Playlists' | 'Artists' | 'Albums' | 'Podcasts';
 type LibraryEntryKind = 'playlist' | 'liked' | 'artist' | 'album';
@@ -39,12 +41,16 @@ interface LibrarySidebarExpandedProps {
   onCollapse: () => void;
   onSearchChange: (query: string) => void;
   onFilterChange: (filter: LibraryFilter) => void;
+  sortOrder: LibrarySortOrder;
+  onSortOrderChange: (order: LibrarySortOrder) => void;
   playlists: Playlist[];
   savedAlbums: Album[];
   followedArtists: Artist[];
   likedTracksCount: number;
   loading: boolean;
   error: string | null;
+  /** Re-arms the auth gate and refetches the library queries behind these props. */
+  onRetry: () => Promise<void>;
 }
 
 const FILTERS: LibraryFilter[] = ['All', 'Playlists', 'Artists', 'Albums', 'Podcasts'];
@@ -88,12 +94,15 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
   onCollapse,
   onSearchChange,
   onFilterChange,
+  sortOrder,
+  onSortOrderChange,
   playlists,
   savedAlbums,
   followedArtists,
   likedTracksCount,
   loading,
   error,
+  onRetry,
 }) => {
   const router = useRouter();
   const theme = useTheme();
@@ -142,7 +151,9 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
     }));
 
     const normalizedSearch = searchQuery.trim().toLowerCase();
-    return [...likedSongs, ...playlistEntries, ...artistEntries, ...albumEntries].filter((entry) => {
+    // `type` order is this concatenation itself: liked songs, then playlists,
+    // artists and albums.
+    const visible = [...likedSongs, ...playlistEntries, ...artistEntries, ...albumEntries].filter((entry) => {
       if (!filterAllowsEntry(activeFilter, entry.kind)) {
         return false;
       }
@@ -151,6 +162,14 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
       }
       return `${entry.title} ${entry.subtitle}`.toLowerCase().includes(normalizedSearch);
     });
+
+    if (sortOrder === 'alphabetical') {
+      // Sort a copy: `visible` is about to be memoized and must not be mutated.
+      return [...visible].sort((a, b) =>
+        a.title.localeCompare(b.title, undefined, { sensitivity: 'base', numeric: true }),
+      );
+    }
+    return visible;
   }, [
     activeFilter,
     followedArtists,
@@ -159,6 +178,7 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
     playlists,
     savedAlbums,
     searchQuery,
+    sortOrder,
   ]);
 
   const isGrid = displayMode === 'grid';
@@ -250,9 +270,28 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
             style={[styles.searchInput, { color: theme.colors.text }]}
           />
         </View>
-        <Pressable style={styles.sortButton} accessibilityRole="button" accessibilityLabel="Sort library">
-          <Text style={[styles.sortText, { color: theme.colors.textSecondary }]}>Recents</Text>
-          <Ionicons name="list" size={18} color={theme.colors.textSecondary} />
+        {/* Two orders, so the control is a toggle rather than a menu — the
+            label always names the order currently applied. It deliberately does
+            NOT offer "Recents" or "Recently added": library membership carries
+            no per-user timestamp, so neither can be derived honestly here. */}
+        <Pressable
+          style={styles.sortButton}
+          onPress={() => onSortOrderChange(sortOrder === 'type' ? 'alphabetical' : 'type')}
+          accessibilityRole="button"
+          accessibilityLabel={
+            sortOrder === 'alphabetical'
+              ? 'Sorted A to Z. Activate to group by type.'
+              : 'Grouped by type. Activate to sort A to Z.'
+          }
+        >
+          <Text style={[styles.sortText, { color: theme.colors.textSecondary }]}>
+            {sortOrder === 'alphabetical' ? 'A–Z' : 'By type'}
+          </Text>
+          <Ionicons
+            name={sortOrder === 'alphabetical' ? 'text' : 'list'}
+            size={18}
+            color={theme.colors.textSecondary}
+          />
         </Pressable>
       </View>
 
@@ -261,20 +300,27 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
           <ActivityIndicator size="small" color={theme.colors.primary} />
         </View>
       ) : error ? (
-        <View style={styles.centerState}>
-          <MaterialCommunityIcons name="alert-circle-outline" size={28} color={theme.colors.textSecondary} />
-          <Text style={[styles.stateText, { color: theme.colors.textSecondary }]}>{error}</Text>
-        </View>
+        <EmptyState
+          icon={{ name: 'alert-circle-outline', size: 28 }}
+          error={{
+            title: "Library didn't load",
+            message: error,
+            onRetry,
+          }}
+          containerStyle={styles.stateContainer}
+        />
       ) : !isAuthenticated ? (
-        <View style={styles.centerState}>
-          <MaterialCommunityIcons name="lock-outline" size={28} color={theme.colors.textSecondary} />
-          <Text style={[styles.stateText, { color: theme.colors.textSecondary }]}>Sign in to view your library</Text>
-        </View>
+        <EmptyState
+          icon={{ name: 'lock-closed-outline', size: 28 }}
+          subtitle="Sign in to view your library"
+          containerStyle={styles.stateContainer}
+        />
       ) : entries.length === 0 ? (
-        <View style={styles.centerState}>
-          <MaterialCommunityIcons name="music-box-multiple-outline" size={28} color={theme.colors.textSecondary} />
-          <Text style={[styles.stateText, { color: theme.colors.textSecondary }]}>No items found</Text>
-        </View>
+        <EmptyState
+          icon={{ name: 'musical-notes-outline', size: 28 }}
+          subtitle="No items found"
+          containerStyle={styles.stateContainer}
+        />
       ) : (
         <ScrollView
           style={styles.entriesScroll}
@@ -489,9 +535,10 @@ const styles = StyleSheet.create({
     gap: 10,
     padding: 18,
   },
-  stateText: {
-    fontSize: 13,
-    fontWeight: '600',
-    textAlign: 'center',
+  // EmptyState paints the app background by default; the sidebar sits on the
+  // panel surface, so let that colour show through.
+  stateContainer: {
+    paddingHorizontal: 18,
+    backgroundColor: 'transparent',
   },
 });

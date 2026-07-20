@@ -4,6 +4,7 @@ import { TrackModel } from '../models/Track';
 import { formatTracksWithCoverArt, formatArtistsWithImage, formatPlaylistsWithCoverArt, formatAlbumsWithCoverArt } from '../utils/musicHelpers';
 import { isDatabaseConnected } from '../utils/database';
 import { withImageFirstSort } from '../utils/imageFirstSort';
+import { parseBoundedLimit, parseOffset } from '../utils/reqParams';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { getMadeForYou as getPersonalisedMadeForYou } from '../services/recommendations/recommendationService';
 import {
@@ -64,14 +65,6 @@ function setCatalogCache(res: Response, userId?: string): void {
   }
 
   setDiscoveryCache(res);
-}
-
-function parseBoundedLimit(value: unknown, fallback: number, max: number): number {
-  const parsed = parseInt(String(value ?? ''), 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return fallback;
-  }
-  return Math.min(parsed, max);
 }
 
 /**
@@ -256,8 +249,8 @@ export const getGenreTracks = async (req: Request, res: Response, next: NextFunc
 
     const userId = getRequestUserId(req as AuthRequest);
     const playbackOptions = await resolveCatalogPlaybackOptions(userId);
-    const limit = parseInt(req.query.limit as string) || 50;
-    const offset = parseInt(req.query.offset as string) || 0;
+    const limit = parseBoundedLimit(req.query.limit, 50);
+    const offset = parseOffset(req.query.offset);
 
     const tracks = await TrackModel.find(playableTrackFilter({ genre }, playbackOptions))
       .sort(withImageFirstSort('track', { popularity: -1, playCount: -1, createdAt: -1 }))
@@ -290,8 +283,8 @@ export const getPopularTracks = async (req: Request, res: Response, next: NextFu
 
     const userId = getRequestUserId(req as AuthRequest);
     const playbackOptions = await resolveCatalogPlaybackOptions(userId);
-    const limit = parseInt(req.query.limit as string) || 20;
-    const offset = parseInt(req.query.offset as string) || 0;
+    const limit = parseBoundedLimit(req.query.limit, 20);
+    const offset = parseOffset(req.query.offset);
 
     const tracks = await TrackModel.find(playableTrackFilter({}, playbackOptions))
       .sort(withImageFirstSort('track', { popularity: -1, playCount: -1, createdAt: -1 }))
@@ -322,8 +315,8 @@ export const getPopularAlbums = async (req: Request, res: Response, next: NextFu
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    const limit = parseInt(req.query.limit as string) || 20;
-    const offset = parseInt(req.query.offset as string) || 0;
+    const limit = parseBoundedLimit(req.query.limit, 20);
+    const offset = parseOffset(req.query.offset);
     const userId = getRequestUserId(req as AuthRequest);
     const playbackOptions = await resolveCatalogPlaybackOptions(userId);
 
@@ -356,8 +349,8 @@ export const getPopularArtists = async (req: Request, res: Response, next: NextF
       return res.status(503).json({ error: 'Database not available' });
     }
 
-    const limit = parseInt(req.query.limit as string) || 20;
-    const offset = parseInt(req.query.offset as string) || 0;
+    const limit = parseBoundedLimit(req.query.limit, 20);
+    const offset = parseOffset(req.query.offset);
     const userId = getRequestUserId(req as AuthRequest);
     const playbackOptions = await resolveCatalogPlaybackOptions(userId);
 
@@ -395,7 +388,7 @@ export const getMadeForYou = async (req: Request, res: Response, next: NextFunct
 
     const userId = getRequestUserId(req as AuthRequest);
     const playbackOptions = await resolveCatalogPlaybackOptions(userId);
-    const limit = parseInt(req.query.limit as string) || 20;
+    const limit = parseBoundedLimit(req.query.limit, 20);
     const half = Math.max(1, Math.floor(limit / 2));
 
     const [albums, playlists] = await Promise.all([
@@ -464,7 +457,7 @@ export const getCharts = async (req: Request, res: Response, next: NextFunction)
 
     const userId = getRequestUserId(req as AuthRequest);
     const playbackOptions = await resolveCatalogPlaybackOptions(userId);
-    const limit = parseInt(req.query.limit as string) || 50;
+    const limit = parseBoundedLimit(req.query.limit, 50);
 
     const tracks = await TrackModel.find(playableTrackFilter({}, playbackOptions))
       .sort(withImageFirstSort('track', { popularity: -1, playCount: -1 }))

@@ -12,6 +12,7 @@ import * as Skeleton from '@oxyhq/bloom/skeleton';
 import type { Device, DeviceType } from '@syra/shared-types';
 import { useConnect } from '@/hooks/useConnect';
 import { useCast } from '@/hooks/useCast';
+import { EmptyState } from '@/components/common/EmptyState';
 import { createScopedLogger } from '@/utils/logger';
 
 const logger = createScopedLogger('DevicePicker');
@@ -103,7 +104,7 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({
   onClose,
 }) => {
   const theme = useTheme();
-  const { devices, isLoading, transferTo } = useConnect();
+  const { devices, status, error, retry, transferTo } = useConnect();
   const {
     isSupported: castSupported,
     isCasting,
@@ -162,7 +163,7 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({
             </Pressable>
           </View>
 
-          {isLoading ? (
+          {status === 'loading' ? (
             <View style={styles.skeletonList}>
               {Array.from({ length: 3 }).map((_, i) => (
                 <View
@@ -177,10 +178,28 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({
                 </View>
               ))}
             </View>
+          ) : status === 'signed-out' ? (
+            <EmptyState
+              icon={{ name: 'lock-closed-outline', size: 32 }}
+              subtitle="Sign in to see the devices on your account."
+              containerStyle={styles.stateContainer}
+            />
+          ) : status === 'error' ? (
+            <EmptyState
+              icon={{ name: 'alert-circle-outline', size: 32 }}
+              error={{
+                title: 'Devices unavailable',
+                message: error ?? 'Syra Connect is unreachable right now.',
+                onRetry: async () => { retry(); },
+              }}
+              containerStyle={styles.stateContainer}
+            />
           ) : devices.length === 0 ? (
-            <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
-              No other devices found
-            </Text>
+            <EmptyState
+              icon={{ name: 'phone-portrait-outline', size: 32 }}
+              subtitle="No other devices found"
+              containerStyle={styles.stateContainer}
+            />
           ) : (
             devices.map((device) => (
               <DeviceRow
@@ -289,10 +308,13 @@ const styles = StyleSheet.create({
     minWidth: 0,
     gap: 6,
   },
-  emptyText: {
-    textAlign: 'center',
-    paddingVertical: 24,
-    fontSize: 14,
+  // EmptyState defaults to a full-height block painted with the app background;
+  // inside this sheet it must size to its content and keep the card colour.
+  stateContainer: {
+    flex: 0,
+    paddingVertical: 20,
+    paddingHorizontal: 8,
+    backgroundColor: 'transparent',
   },
   deviceRow: {
     flexDirection: 'row',

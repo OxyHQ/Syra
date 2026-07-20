@@ -6,16 +6,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@oxyhq/bloom/theme';
 import SEO from '@/components/SEO';
 import { LibraryListSkeleton } from '@/components/skeletons';
+import { EmptyState } from '@/components/common/EmptyState';
 import { Fab } from '@/components/ui/Fab';
+import { useAuthGate } from '@/hooks/useAuthGate';
 import { useCollapseOnScroll } from '@/hooks/useCollapseOnScroll';
 import { useLibraryCollections } from '@/hooks/useLibraryCollections';
 import { PLAYER_BAR_HEIGHT } from '@/constants/layout';
 import { Ionicons, Octicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useOxy } from '@oxyhq/services';
 import { Playlist, Album, Artist } from '@syra/shared-types';
 import { Image } from 'expo-image';
-import { pickCatalogImageUrl } from '@/utils/pickImage';
+import { pickCatalogImageUrl, resolvePodcastArtwork } from '@/utils/pickImage';
 import { EpisodeRow } from '@/components/EpisodeRow';
 import { useSubscriptions, useContinueListening } from '@/hooks/usePodcasts';
 import { usePlayerStore } from '@/stores/playerStore';
@@ -31,6 +32,19 @@ import { usePlayerStore } from '@/stores/playerStore';
 const FAB_BOTTOM_OFFSET = 24;
 const FAB_PLAYER_BAR_CLEARANCE = PLAYER_BAR_HEIGHT + 20;
 const FAB_SIDE_OFFSET = 16;
+
+const LIBRARY_FILTERS = ['All', 'Playlists', 'Artists', 'Albums', 'Podcasts', 'Episodes'] as const;
+type LibraryFilter = (typeof LIBRARY_FILTERS)[number];
+
+/** Empty-state copy per filter, shown only once the library is known to be empty. */
+const EMPTY_LIBRARY_TEXT: Record<LibraryFilter, string> = {
+  All: 'Your library is empty',
+  Playlists: 'No playlists yet',
+  Artists: 'No followed artists yet',
+  Albums: 'No saved albums yet',
+  Podcasts: 'No podcast subscriptions yet',
+  Episodes: 'No episodes in progress',
+};
 
 interface LibraryScreenProps {
   // Optional props for sidebar mode
@@ -67,8 +81,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   const theme = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { isAuthenticated, isAuthResolved, canUsePrivateApi, isPrivateApiPending } = useOxy();
-  const authLoading = isPrivateApiPending;
+  const gate = useAuthGate();
   const { t } = useTranslation();
 
   // Collapses the extended FAB to an icon-only circle while scrolling down and
@@ -90,7 +103,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   );
 
   // Filter state
-  const [activeFilter, setActiveFilter] = useState<'Playlists' | 'Artists' | 'Albums' | 'Podcasts' | 'Episodes' | 'All'>('All');
+  const [activeFilter, setActiveFilter] = useState<LibraryFilter>('All');
 
   // Podcasts vertical: subscribed shows + in-progress episodes.
   const subscriptionsQuery = useSubscriptions();
@@ -112,8 +125,21 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   const finalSavedAlbums = isUsingProps ? (propsSavedAlbums || []) : collections.savedAlbums;
   const finalFollowedArtists = isUsingProps ? (propsFollowedArtists || []) : collections.followedArtists;
   const finalLikedTracksCount = isUsingProps ? (propsLikedTracksCount || 0) : collections.likedTracksCount;
-  const finalLoading = authLoading || (isUsingProps ? (propsLoading ?? false) : collections.loading);
-  const finalError = isUsingProps ? (propsError ?? null) : collections.error;
+  const finalLoading = gate.isResolving || (isUsingProps ? (propsLoading ?? false) : collections.loading);
+  // A session that never resolved is an error in BOTH modes — in sidebar mode
+  // the parent passes data but not the session's terminal state, so an
+  // unresolved auth would otherwise fall through to "your library is empty".
+  const finalError = gate.isTimedOut
+    ? 'We could not confirm your session.'
+    : isUsingProps ? (propsError ?? null) : collections.error;
+
+  const isLibraryEmptyForFilter =
+    (activeFilter === 'All' && finalPlaylists.length === 0 && finalFollowedArtists.length === 0 && finalSavedAlbums.length === 0 && subscribedPodcasts.length === 0 && inProgressEpisodes.length === 0) ||
+    (activeFilter === 'Playlists' && finalPlaylists.length === 0) ||
+    (activeFilter === 'Artists' && finalFollowedArtists.length === 0) ||
+    (activeFilter === 'Albums' && finalSavedAlbums.length === 0) ||
+    (activeFilter === 'Podcasts' && subscribedPodcasts.length === 0) ||
+    (activeFilter === 'Episodes' && inProgressEpisodes.length === 0);
 
   return (
     <>
@@ -163,12 +189,12 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
 
         {/* Filters */}
         <View style={styles.filters}>
-          {['All', 'Playlists', 'Artists', 'Albums', 'Podcasts', 'Episodes'].map((filter) => {
+          {LIBRARY_FILTERS.map((filter) => {
             const isActive = activeFilter === filter;
             return (
               <Pressable
                 key={filter}
-                onPress={() => setActiveFilter(filter as 'Playlists' | 'Artists' | 'Albums' | 'Podcasts' | 'Episodes' | 'All')}
+                onPress={() => setActiveFilter(filter)}
                 style={[
                   styles.filterButton,
                   {
@@ -191,8 +217,8 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         </View>
 
         {/* Liked Songs - show only when All or Playlists filter is active */}
-        {isAuthenticated && (activeFilter === 'All' || activeFilter === 'Playlists') && (
-          <Pressable 
+        {gate.isAuthenticated && (activeFilter === 'All' || activeFilter === 'Playlists') && (
+          <Pressable
             style={[styles.libraryItem, { backgroundColor: theme.colors.backgroundTertiary }]}
             onPress={() => router.push('/library/liked')}
           >
@@ -209,7 +235,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         )}
 
         {/* Loading state */}
-        {finalLoading && (isAuthenticated || authLoading) && (
+        {finalLoading && (gate.isAuthenticated || gate.isResolving) && (
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Playlists</Text>
             <View style={styles.itemsContainer}>
@@ -218,19 +244,17 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
           </View>
         )}
 
-        {/* Error state */}
+        {/* Error state — always offers a retry, including the auth timeout */}
         {finalError && !finalLoading && (
-          <View style={styles.emptyState}>
-            <MaterialCommunityIcons
-              name="alert-circle-outline"
-              size={48}
-              color={theme.colors.textSecondary}
-              style={styles.emptyIcon}
-            />
-            <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
-              {finalError}
-            </Text>
-          </View>
+          <EmptyState
+            containerStyle={styles.inlineState}
+            icon={{ name: 'cloud-offline-outline' }}
+            error={{
+              title: 'Could not load your library',
+              message: finalError,
+              onRetry: collections.retry,
+            }}
+          />
         )}
 
         {/* Playlists list */}
@@ -354,12 +378,12 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         )}
 
         {/* Subscribed podcasts */}
-        {isAuthenticated && (activeFilter === 'All' || activeFilter === 'Podcasts') && subscribedPodcasts.length > 0 && (
+        {gate.isAuthenticated && (activeFilter === 'All' || activeFilter === 'Podcasts') && subscribedPodcasts.length > 0 && (
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Podcasts</Text>
             <View style={styles.itemsContainer}>
               {subscribedPodcasts.map(({ podcast }) => {
-                const imageUri = pickCatalogImageUrl(undefined, podcast.image, 'thumbnail', podcast.imageSizes, podcast.imageSourceUrl);
+                const imageUri = resolvePodcastArtwork(podcast, 'thumbnail');
                 return (
                   <Pressable
                     key={podcast.id}
@@ -389,7 +413,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         )}
 
         {/* In-progress episodes */}
-        {isAuthenticated && (activeFilter === 'All' || activeFilter === 'Episodes') && inProgressEpisodes.length > 0 && (
+        {gate.isAuthenticated && (activeFilter === 'All' || activeFilter === 'Episodes') && inProgressEpisodes.length > 0 && (
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Continue listening</Text>
             <View style={styles.itemsContainer}>
@@ -408,58 +432,32 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
           </View>
         )}
 
-        {/* Empty state - show based on active filter */}
-        {!finalLoading && !finalError && canUsePrivateApi && (
-          (activeFilter === 'All' && finalPlaylists.length === 0 && finalFollowedArtists.length === 0 && finalSavedAlbums.length === 0 && subscribedPodcasts.length === 0 && inProgressEpisodes.length === 0) ||
-          (activeFilter === 'Playlists' && finalPlaylists.length === 0) ||
-          (activeFilter === 'Artists' && finalFollowedArtists.length === 0) ||
-          (activeFilter === 'Albums' && finalSavedAlbums.length === 0) ||
-          (activeFilter === 'Podcasts' && subscribedPodcasts.length === 0) ||
-          (activeFilter === 'Episodes' && inProgressEpisodes.length === 0)
-        ) && (
-          <View style={styles.emptyState}>
-            <MaterialCommunityIcons
-              name="playlist-music"
-              size={48}
-              color={theme.colors.textSecondary}
-              style={styles.emptyIcon}
-            />
-            <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
-              {activeFilter === 'All' && 'Your library is empty'}
-              {activeFilter === 'Playlists' && 'No playlists yet'}
-              {activeFilter === 'Artists' && 'No followed artists yet'}
-              {activeFilter === 'Albums' && 'No saved albums yet'}
-              {activeFilter === 'Podcasts' && 'No podcast subscriptions yet'}
-              {activeFilter === 'Episodes' && 'No episodes in progress'}
-            </Text>
-            {activeFilter === 'Playlists' && (
-              <Pressable
-                onPress={() => router.push('/create-playlist')}
-                style={[styles.emptyCreateButton, { backgroundColor: theme.colors.primary }]}
-              >
-                <Text style={[styles.emptyCreateButtonText, { color: theme.colors.primaryForeground }]}>Create your first playlist</Text>
-              </Pressable>
-            )}
-          </View>
+        {/* Empty state — only once the session resolved AND the queries settled,
+            so an unresolved auth is never mistaken for an empty library. */}
+        {!finalLoading && !finalError && gate.canUsePrivateApi && isLibraryEmptyForFilter && (
+          <EmptyState
+            containerStyle={styles.inlineState}
+            icon={{ name: 'musical-notes-outline' }}
+            title={EMPTY_LIBRARY_TEXT[activeFilter]}
+            action={
+              activeFilter === 'Playlists'
+                ? { label: 'Create your first playlist', onPress: () => router.push('/create-playlist') }
+                : undefined
+            }
+          />
         )}
 
-        {/* Not authenticated state */}
-        {isAuthResolved && !isAuthenticated && !finalLoading && (
-          <View style={styles.emptyState}>
-            <MaterialCommunityIcons
-              name="lock-outline"
-              size={48}
-              color={theme.colors.textSecondary}
-              style={styles.emptyIcon}
-            />
-            <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
-              Sign in to view your library
-            </Text>
-          </View>
+        {/* Signed out — a terminal state, distinct from a session still resolving */}
+        {gate.status === 'guest' && !finalLoading && (
+          <EmptyState
+            containerStyle={styles.inlineState}
+            icon={{ name: 'lock-closed-outline' }}
+            title="Sign in to view your library"
+          />
         )}
       </Animated.ScrollView>
 
-        {canUsePrivateApi && (
+        {gate.canUsePrivateApi && (
           <Fab
             onPress={() => router.push('/create-playlist')}
             iconName="plus"
@@ -562,33 +560,12 @@ const styles = StyleSheet.create({
   itemSubtitle: {
     fontSize: 12,
   },
-  emptyState: {
-    padding: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  emptyIcon: {
-    opacity: 0.5,
-  },
-  emptyText: {
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  emptyCreateButton: {
-    marginTop: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    ...Platform.select({
-      web: {
-        cursor: 'pointer',
-      },
-    }),
-  },
-  emptyCreateButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
+  // States rendered INSIDE the scroll view: no `flex: 1` stretch and no opaque
+  // background of their own, so they sit inline under the filter row.
+  inlineState: {
+    flex: 0,
+    paddingVertical: 32,
+    backgroundColor: 'transparent',
   },
   section: {
     marginBottom: 24,

@@ -15,6 +15,9 @@ import {
   createPodcast,
   uploadEpisode,
   claimPodcast,
+  updatePodcast,
+  publishPodcast,
+  unpublishPodcast,
 } from '../controllers/podcasts.controller';
 import {
   getEpisodeAudio,
@@ -64,6 +67,9 @@ router.post('/:id/subscribe', requireAuth, subscribePodcast);
 router.post('/:id/unsubscribe', requireAuth, unsubscribePodcast);
 router.post('/:id/episodes', requireAuth, uploadEpisode);
 router.post('/:id/claim', requireAuth, claimPodcast);
+router.patch('/:id', requireAuth, updatePodcast);
+router.post('/:id/publish', requireAuth, publishPodcast);
+router.post('/:id/unpublish', requireAuth, unpublishPodcast);
 
 // Show resolver (catch-last)
 router.get('/:id', getPodcast);

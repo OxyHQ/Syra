@@ -53,11 +53,23 @@ export function syraHostedOrDirectAllowedTrackFilter<T>(
   } as QueryFilter<T>;
 }
 
+/**
+ * `copyrightRemoved` is checked here as well as `isAvailable` so the CATALOG
+ * authority agrees with the PLAYBACK authority (`isTrackPlayable` in
+ * stream.controller) by construction. Artist-termination takedowns historically
+ * set only `copyrightRemoved`, which left those tracks listed and searchable but
+ * unplayable; keeping both conditions here also repairs already-struck tracks
+ * without a backfill. Both are indexed bare fields, so this stays a leading
+ * `$match` the planner can use.
+ */
 export function playableTrackFilter<T>(
   filter: QueryFilter<T> = {},
   options: CatalogPlaybackOptions = {},
 ): QueryFilter<T> {
-  const available = andFilter(filter, { isAvailable: true } as QueryFilter<T>);
+  const available = andFilter(filter, {
+    isAvailable: true,
+    copyrightRemoved: { $ne: true },
+  } as QueryFilter<T>);
   const visible = visibleCatalogFilter<T>(available);
 
   if (!isAudiusCatalogEnabled()) {
@@ -71,6 +83,7 @@ export function playableTrackFilter<T>(
 /** Minimal shape needed to evaluate guest playability of an in-memory track. */
 export interface PlayableTrackShape {
   isAvailable?: boolean;
+  copyrightRemoved?: boolean;
   source?: string;
   status?: string;
   hlsMasterKey?: string;
@@ -85,7 +98,7 @@ export interface PlayableTrackShape {
  * exactly a track the guest catalog query would surface.
  */
 export function isGuestPlayableTrack(track: PlayableTrackShape): boolean {
-  if (track.isAvailable === false) {
+  if (track.isAvailable === false || track.copyrightRemoved === true) {
     return false;
   }
 

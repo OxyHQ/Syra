@@ -1,7 +1,7 @@
 import { useOxy } from '@oxyhq/services';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { useQuery } from '@tanstack/react-query';
-import type { LiveConfig, LiveTheme, UserEntity } from '@syra.fm/live';
+import type { LiveConfig, LiveTheme, UserEntity } from '@syra.fm/sdk';
 
 import { authenticatedClient } from '@/utils/api';
 import { API_URL_SOCKET } from '@/config';
@@ -68,7 +68,7 @@ const liveToast = Object.assign((message: string) => { toast(message); }, {
 });
 
 /**
- * Dependency-injected configuration for the `@syra.fm/live` engine, mapping every
+ * Dependency-injected configuration for the `@syra.fm/sdk` engine, mapping every
  * engine seam onto a Syra primitive: the linked Oxy HTTP client, the Syra socket
  * URL, Bloom theming, the app's responsive hook, React Query-backed user
  * resolution, the canonical Oxy file-download resolver, the Syra `Avatar`, and
@@ -86,5 +86,5 @@ export const liveConfig: LiveConfig = {
   getCachedFileDownloadUrlSync: (_oxy, fileId, variant) => oxyServices.getFileDownloadUrl(fileId, variant),
   AvatarComponent: Avatar as LiveConfig['AvatarComponent'],
   toast: liveToast,
-  introSound: require('@syra.fm/live/src/assets/sounds/intro.mp3'),
+  introSound: require('@syra.fm/sdk/src/live/assets/sounds/intro.mp3'),
 };
