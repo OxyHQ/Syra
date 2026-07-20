@@ -10,6 +10,7 @@ import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { getParam } from '../utils/reqParams';
 import { withImageFirstSort } from '../utils/imageFirstSort';
 import {
+  canViewPlaylist,
   playableTrackFilter,
 } from '../utils/catalogVisibility';
 
@@ -37,22 +38,11 @@ async function canEditPlaylist(playlistId: string, userId: string): Promise<bool
 /**
  * Check if user has permission to view playlist
  */
-async function canViewPlaylist(playlistId: string, userId?: string): Promise<boolean> {
+async function canViewPlaylistById(playlistId: string, userId?: string): Promise<boolean> {
   const playlist = await PlaylistModel.findById(playlistId).lean();
   if (!playlist) return false;
-  
-  // Public playlists are viewable by anyone
-  if (playlist.visibility === PlaylistVisibility.PUBLIC) return true;
-  
-  // Private playlists require authentication
-  if (!userId) return false;
-  
-  // Owner can view
-  if (playlist.ownerOxyUserId === userId) return true;
-  
-  // Collaborators can view
-  const collaborator = playlist.collaborators?.find(c => c.oxyUserId === userId);
-  return !!collaborator;
+
+  return canViewPlaylist(playlist, userId);
 }
 
 /**
@@ -127,7 +117,7 @@ export const getPlaylistById = async (req: AuthRequest, res: Response, next: Nex
     }
 
     // Check view permission
-    if (!(await canViewPlaylist(id, userId))) {
+    if (!(await canViewPlaylistById(id, userId))) {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
@@ -158,7 +148,7 @@ export const getPlaylistTracks = async (req: AuthRequest, res: Response, next: N
     }
 
     // Check view permission
-    if (!(await canViewPlaylist(id, userId))) {
+    if (!(await canViewPlaylistById(id, userId))) {
       return res.status(403).json({ error: 'Forbidden' });
     }
 

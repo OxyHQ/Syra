@@ -9,6 +9,7 @@ import { withImageFirstSort } from '../../utils/imageFirstSort';
 import {
   playableTrackFilter,
 } from '../../utils/catalogVisibility';
+import { andMongoFilters, orderByIds, rankByTaste, topRelatedArtistIds } from './taste';
 
 /**
  * Read side of the recommendation engine. Every function degrades gracefully:
@@ -40,17 +41,6 @@ interface CatalogArtist {
     followers?: number;
   };
   terminated?: boolean;
-}
-
-function andMongoFilters(...filters: Array<mongoose.QueryFilter<ITrack>>): mongoose.QueryFilter<ITrack> {
-  const nonEmptyFilters = filters.filter((filter) => Object.keys(filter).length > 0);
-  if (nonEmptyFilters.length === 0) {
-    return {};
-  }
-  if (nonEmptyFilters.length === 1) {
-    return nonEmptyFilters[0];
-  }
-  return { $and: nonEmptyFilters };
 }
 
 // ── Related artists ─────────────────────────────────────────────────────────
@@ -306,70 +296,3 @@ export async function getMadeForYou(
   return { tracks, artists: artists.slice(0, limit), personalized: true };
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────
-
-/** Resolve the union of related-artist edges for a set of seed artists. */
-async function topRelatedArtistIds(
-  seedArtistIds: string[],
-  exclude: Set<string>,
-  limit: number,
-): Promise<string[]> {
-  if (seedArtistIds.length === 0) return [];
-
-  const edges = await CatalogRelationModel.find({
-    kind: 'artist',
-    sourceId: { $in: seedArtistIds },
-  })
-    .sort({ score: -1 })
-    .limit(limit * 3)
-    .lean();
-
-  // Sum scores across seeds so an artist related to several of the user's
-  // favourites ranks higher than one related to a single favourite.
-  const scoreById = new Map<string, number>();
-  for (const edge of edges) {
-    if (exclude.has(edge.targetId)) continue;
-    if (seedArtistIds.includes(edge.targetId)) continue;
-    scoreById.set(edge.targetId, (scoreById.get(edge.targetId) ?? 0) + edge.score);
-  }
-
-  return Array.from(scoreById.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, limit)
-    .map(([id]) => id)
-    .filter((id) => mongoose.Types.ObjectId.isValid(id));
-}
-
-/**
- * Re-rank tracks by a blend of taste affinity (genre + artist weight) and a
- * mild global-popularity prior, so personalisation dominates but quality still
- * matters within the user's taste.
- */
-function rankByTaste(
-  tracks: CatalogTrack[],
-  genreWeights: { key: string; weight: number }[],
-  artistWeights: { key: string; weight: number }[],
-): CatalogTrack[] {
-  const genreMap = new Map(genreWeights.map((g) => [g.key, g.weight]));
-  const artistMap = new Map(artistWeights.map((a) => [a.key, a.weight]));
-  const maxGenre = Math.max(1, ...genreWeights.map((g) => g.weight));
-  const maxArtist = Math.max(1, ...artistWeights.map((a) => a.weight));
-
-  return [...tracks].sort((a, b) => taste(b) - taste(a));
-
-  function taste(track: CatalogTrack): number {
-    const genre = track.genre?.trim().toLowerCase();
-    const genreAffinity = genre ? (genreMap.get(genre) ?? 0) / maxGenre : 0;
-    const artistAffinity = (artistMap.get(track.artistId) ?? 0) / maxArtist;
-    const popularityPrior = (track.popularity ?? 0) / 100;
-    return 0.5 * artistAffinity + 0.35 * genreAffinity + 0.15 * popularityPrior;
-  }
-}
-
-/** Re-order documents to match a list of ids (Mongo `$in` ignores order). */
-function orderByIds<T extends { _id: mongoose.Types.ObjectId }>(docs: T[], ids: string[]): T[] {
-  const index = new Map(ids.map((id, i) => [id, i]));
-  return docs
-    .filter((doc) => index.has(doc._id.toString()))
-    .sort((a, b) => (index.get(a._id.toString()) ?? 0) - (index.get(b._id.toString()) ?? 0));
-}

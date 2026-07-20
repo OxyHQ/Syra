@@ -1,5 +1,6 @@
 import type { QueryFilter } from 'mongoose';
 import type { OxyAuthRequest } from '@oxyhq/core/server';
+import { PlaylistVisibility } from '@syra/shared-types';
 
 function andFilter<T>(filter: QueryFilter<T>, condition: QueryFilter<T>): QueryFilter<T> {
   if (Object.keys(filter).length === 0) {
@@ -76,6 +77,29 @@ export function hasRegenerablePreviewSource(track: PlayableTrackShape): boolean 
  */
 export function isPreviewEligibleTrack(track: PlayableTrackShape): boolean {
   return isPlayableTrack(track) && hasRegenerablePreviewSource(track);
+}
+
+/** Minimal shape needed to decide who may read a playlist. */
+export interface ViewablePlaylistShape {
+  visibility?: string;
+  ownerOxyUserId: string;
+  collaborators?: { oxyUserId: string }[];
+}
+
+/**
+ * Playlist readability, in one place.
+ *
+ * Unlike track playability, playlists DO vary per viewer: a public playlist is
+ * readable by anyone, a non-public one only by its owner or a collaborator of
+ * any role. Kept here beside the track predicate so every surface that surfaces
+ * a playlist — the playlists API, radio seeds — asks the same question, and a
+ * change to the rule cannot land in one place and miss the other.
+ */
+export function canViewPlaylist(playlist: ViewablePlaylistShape, userId?: string): boolean {
+  if (playlist.visibility === PlaylistVisibility.PUBLIC) return true;
+  if (!userId) return false;
+  if (playlist.ownerOxyUserId === userId) return true;
+  return playlist.collaborators?.some((entry) => entry.oxyUserId === userId) === true;
 }
 
 export function getRequestUserId(req: Pick<OxyAuthRequest, 'user'>): string | undefined {

@@ -44,7 +44,8 @@ Syra is an own-catalogue platform: every track is Syra-hosted, so a track is pla
 - Catalog reads that vary by identity must use the linked Oxy client (`packages/frontend/utils/api.ts`), not `publicApi`.
 - Identity-sensitive catalog queries must wait until `useOxy().isPrivateApiPending` is false and must separate React Query cache keys for `guest` vs `auth`. Never let a guest cold-boot response populate the authenticated cache.
 - The player resolves playback through `GET /stream/:trackId`; the backend is the sole entitlement authority.
-- Catalog filters must compose conditions with `$and` (`andMongoFilters` in `recommendationService.ts`, or the equivalent helper in `catalogVisibility.ts`), not by spreading filter objects in a way that clobbers an existing `$or`.
+- Catalog filters must compose conditions with `$and` (`andMongoFilters` in `services/recommendations/taste.ts`, or the equivalent helper in `catalogVisibility.ts`), not by spreading filter objects in a way that clobbers an existing `$or`.
+- Playlist readability DOES vary per viewer, unlike track playability: `canViewPlaylist()` (`catalogVisibility.ts`) is the single predicate — public to anyone, otherwise owner or collaborator only. Every surface that exposes a playlist asks it, so the rule cannot change in one place and miss another.
 
 ### `$lookup` correlation — convert on the LOCAL side
 

@@ -11,7 +11,8 @@ function isMongoObjectId(value: unknown): value is string {
   return typeof value === 'string' && /^[a-f\d]{24}$/i.test(value);
 }
 
-function normalizeImageRef(value: unknown): string | undefined {
+/** Resolve a stored image reference (S3 ObjectId or already-normalised path) to `/api/images/:id`. */
+export function normalizeImageRef(value: unknown): string | undefined {
   if (isMongoObjectId(value)) return toImageUrl(value);
   if (typeof value === 'string' && value.startsWith('/api/images/')) return value;
   return undefined;
