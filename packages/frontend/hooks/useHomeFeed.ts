@@ -1,10 +1,11 @@
 import { QueryClient, useQuery, type UseQueryResult } from '@tanstack/react-query';
-import type { Podcast } from '@syra/shared-types';
+import type { Podcast, RadioPage, RadioSeed } from '@syra/shared-types';
 import { browseService } from '@/services/browseService';
 import { libraryService } from '@/services/libraryService';
 import { musicService } from '@/services/musicService';
 import { useAuthGate, type AuthGate, type CatalogIdentity } from '@/hooks/useAuthGate';
 import { usePodcasts } from '@/hooks/usePodcasts';
+import { useRadioStation } from '@/hooks/useRadio';
 import type {
   HomeBrowseResponse,
   MadeForYouResponse,
@@ -211,6 +212,55 @@ export function usePopularTracks() {
     select: (data: HomeBrowseResponse): PopularTracksResponse => data.tracks,
   });
   return toHomeSection(query, gate, { requiresAccount: false, waitsForSession: true });
+}
+
+/**
+ * The listener themselves as the station seed — there is nothing to point at,
+ * hence the empty id. Hoisted to module scope so the seed handed to the query
+ * is one stable object rather than a fresh one per render.
+ */
+export const RADIO_FOR_YOU_SEED: RadioSeed = { seedType: 'user', seedId: '' };
+
+/**
+ * The listener's own radio station, as a home rail.
+ *
+ * Guest-visible on purpose: the backend cold-starts a signed-out listener on
+ * catalogue popularity and flags the station `personalized: false`, so there is
+ * always a station to open. It therefore never reports `signed-out` and never
+ * sets `blockedBySession` — no sign-in wall stands in front of it. It still
+ * waits for the session to reach a terminal identity, because a station built
+ * for a guest must not be served to the account the same boot resolves into
+ * (`useRadioStation` keys guest and authenticated stations separately).
+ *
+ * Only the station's FIRST page feeds the rail; the rest of it lives behind
+ * the "see all" link, on the station screen that owns the pagination.
+ */
+export function useRadioForYou(): HomeSection<RadioPage> {
+  const gate = useAuthGate();
+  const query = useRadioStation(RADIO_FOR_YOU_SEED);
+
+  const status: HomeSectionStatus = gate.isTimedOut
+    ? 'error'
+    : gate.isResolving
+      ? 'loading'
+      : query.isLoading
+        ? 'loading'
+        : query.isError
+          ? 'error'
+          : 'ready';
+
+  return {
+    status,
+    data: query.data?.pages[0],
+    blockedBySession: false,
+    retry: async () => {
+      if (!gate.isResolved) {
+        gate.retry();
+        return;
+      }
+      await query.refetch();
+    },
+  };
 }
 
 /**

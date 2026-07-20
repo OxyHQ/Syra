@@ -24,6 +24,8 @@ import {
   useUserPlaylists,
   usePopularTracks,
   useHomePodcasts,
+  useRadioForYou,
+  RADIO_FOR_YOU_SEED,
   type HomeSectionStatus,
 } from '@/hooks/useHomeFeed';
 import { usePlayEntity } from '@/hooks/usePlayEntity';
@@ -93,6 +95,8 @@ const HomeScreen: React.FC = () => {
   const tracksSection = usePopularTracks();
   // Podcasts — popular shows from the public catalog; runs for guests too.
   const podcastsSection = useHomePodcasts();
+  // The listener's own radio station; guests get a popularity cold start.
+  const radioSection = useRadioForYou();
 
   // Live rooms — the same fetch the Live surface uses (public, error-swallowing:
   // `getRooms` returns `[]` on failure/no-auth, so the section is terminal by
@@ -150,6 +154,11 @@ const HomeScreen: React.FC = () => {
     () => podcastsSection.data ?? [],
     [podcastsSection.data],
   );
+  const radioTracks = useMemo<Track[]>(
+    () => radioSection.data?.tracks ?? [],
+    [radioSection.data],
+  );
+  const radioStationTitle = radioSection.data?.station.title;
 
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date()), 60 * 1000);
@@ -167,6 +176,17 @@ const HomeScreen: React.FC = () => {
   const handleSignIn = useCallback(() => {
     openAccountDialog('signin');
   }, [openAccountDialog]);
+
+  // Playing from the radio rail makes the station the queue and carries its seed
+  // in the context, so autoplay keeps extending from the same station rather
+  // than stopping at the page the rail happens to show.
+  const playRadioFrom = useCallback((track: Track) => {
+    playTrackList(
+      radioTracks,
+      Math.max(0, radioTracks.findIndex((item) => item.id === track.id)),
+      { type: 'radio', name: radioStationTitle, radio: RADIO_FOR_YOU_SEED },
+    );
+  }, [playTrackList, radioTracks, radioStationTitle]);
 
   const addTrackToQueue = useCallback((track: Track) => {
     addTracksLocally([track], 'last');
@@ -270,6 +290,10 @@ const HomeScreen: React.FC = () => {
           madeForYouPlaylists={madeForYouPlaylists}
           madeForYouAlbums={madeForYouAlbums}
           isPersonalized={isPersonalized}
+          radioTracks={radioTracks}
+          radioStatus={radioSection.status}
+          onRetryRadio={radioSection.retry}
+          onPlayRadioFrom={playRadioFrom}
           podcasts={podcasts}
           podcastsStatus={podcastsSection.status}
           onRetryPodcasts={podcastsSection.retry}
@@ -387,6 +411,10 @@ interface HomeContentProps {
   madeForYouPlaylists: Playlist[];
   madeForYouAlbums: Album[];
   isPersonalized: boolean;
+  radioTracks: Track[];
+  radioStatus: HomeSectionStatus;
+  onRetryRadio: () => Promise<void>;
+  onPlayRadioFrom: (track: Track) => void;
   podcasts: Podcast[];
   podcastsStatus: HomeSectionStatus;
   onRetryPodcasts: () => Promise<void>;
@@ -432,6 +460,10 @@ const HomeContent: React.FC<HomeContentProps> = ({
   madeForYouPlaylists,
   madeForYouAlbums,
   isPersonalized,
+  radioTracks,
+  radioStatus,
+  onRetryRadio,
+  onPlayRadioFrom,
   podcasts,
   podcastsStatus,
   onRetryPodcasts,
@@ -752,6 +784,54 @@ const HomeContent: React.FC<HomeContentProps> = ({
                     onPlayPress={() => playAlbum(album.id, album.title)}
                     onAddToQueue={() => addAlbumToQueue(album.id)}
                     onGoToArtist={() => router.push(`/p/${album.artistId}`)}
+                    onHoverIn={onSeedHoverIn}
+                    onHoverOut={onSeedHoverOut}
+                  />
+                </View>
+              ))}
+            </ResponsiveGrid>
+          </HomeSectionBlock>
+
+          {/* Radio for you — the opening page of the listener's own station.
+              Guests see it too: the backend cold-starts them on catalogue
+              popularity, so there is no sign-in copy and no account gate here.
+              "See all" opens the station itself, which owns the pagination. */}
+          <HomeSectionBlock
+            title={t('radio.sections.forYou')}
+            status={radioStatus}
+            hasContent={radioTracks.length > 0}
+            skeleton={<MediaCardRowSkeleton count={5} />}
+            onRetry={onRetryRadio}
+            error={{ title: t('radio.errors.load'), message: t('common.retryHint') }}
+            headerAction={
+              <Pressable
+                style={styles.seeAllButton}
+                onPress={() => router.push({ pathname: '/radio/[...seed]', params: { seed: ['user'] } })}
+                hitSlop={8}
+              >
+                <Text style={[styles.seeAll, { color: theme.colors.textSecondary }]}>
+                  {t('common.seeAll')}
+                </Text>
+              </Pressable>
+            }
+          >
+            <ResponsiveGrid minItemWidth={180} gap={8}>
+              {radioTracks.map((track) => (
+                <View key={track.id}>
+                  <MediaCard
+                    title={track.title}
+                    subtitle={track.artistName}
+                    type="track"
+                    imageUri={track.coverArt}
+                    images={track.images}
+                    imageSizes={track.coverArtSizes}
+                    primaryColor={track.primaryColor}
+                    secondaryColor={track.secondaryColor}
+                    onPress={() => router.push({ pathname: '/radio/[...seed]', params: { seed: ['user'] } })}
+                    onPlayPress={() => onPlayRadioFrom(track)}
+                    onAddToQueue={() => addTrackToQueue(track)}
+                    onGoToAlbum={track.albumId ? () => router.push(`/album/${track.albumId}`) : undefined}
+                    onGoToArtist={() => router.push(`/p/${track.artistId}`)}
                     onHoverIn={onSeedHoverIn}
                     onHoverOut={onSeedHoverOut}
                   />

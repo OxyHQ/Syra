@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import BottomSheet, { type BottomSheetRef } from '@oxyhq/bloom/bottom-sheet';
+import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,7 +22,8 @@ interface TrackActionsSheetProps {
 }
 
 /**
- * Per-track overflow menu: add to a playlist, and remove from the current one.
+ * Per-track overflow menu: open this track's radio station, add it to a
+ * playlist, and remove it from the current one.
  *
  * Removal is not confirmed. It's a single, instantly reversible action (the
  * track is one tap from being re-added) and the row disappears optimistically —
@@ -35,6 +37,7 @@ export const TrackActionsSheet: React.FC<TrackActionsSheetProps> = ({
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
+  const router = useRouter();
   const sheetRef = useRef<BottomSheetRef>(null);
   const [addingToPlaylist, setAddingToPlaylist] = useState(false);
   const removeTracks = useRemoveTracksFromPlaylist();
@@ -72,6 +75,18 @@ export const TrackActionsSheet: React.FC<TrackActionsSheetProps> = ({
           <Text style={[styles.trackArtist, { color: theme.colors.textSecondary }]} numberOfLines={1}>
             {track.artistName}
           </Text>
+
+          <Pressable
+            style={styles.action}
+            onPress={() => {
+              router.push({ pathname: '/radio/[...seed]', params: { seed: ['track', track.id] } });
+              onClose();
+            }}
+            accessibilityRole="button"
+          >
+            <Ionicons name="radio-outline" size={22} color={theme.colors.text} />
+            <Text style={[styles.actionText, { color: theme.colors.text }]}>{t('radio.songRadio')}</Text>
+          </Pressable>
 
           <Pressable
             style={styles.action}

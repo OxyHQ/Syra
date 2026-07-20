@@ -580,6 +580,35 @@
     "addToPlaylist": "Add to playlist",
     "removeFromPlaylist": "Remove from this playlist"
   },
+  "radio": {
+    "label": "Radio",
+    "restart": "Restart radio",
+    "artistRadio": "Artist radio",
+    "songRadio": "Go to song radio",
+    "seo": {
+      "title": "{{station}} - Syra"
+    },
+    "sections": {
+      "forYou": "Radio for you"
+    },
+    "station": {
+      "fallbackTitle": "Radio"
+    },
+    "empty": {
+      "title": "Nothing to play yet",
+      "subtitle": "This station has no tracks available right now. Restart it, or start one from a song or an artist you like."
+    },
+    "gate": {
+      "title": "Sign in to keep listening",
+      "subtitle": "You've heard your free tracks. Without an account, the rest of this station plays {{seconds}} seconds at a time."
+    },
+    "errors": {
+      "load": "Couldn't load this station",
+      "unknownStation": "Station not found",
+      "unknownStationMessage": "That address doesn't point to a station we can build. Start one from a song, an artist or a genre instead.",
+      "loadMore": "Couldn't load more of this station"
+    }
+  },
   "explore": {
     "errorTitle": "Couldn't load this section",
     "errorMessage": "Something went wrong on our side. Check your connection and try again."
