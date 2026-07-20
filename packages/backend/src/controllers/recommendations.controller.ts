@@ -3,7 +3,6 @@ import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import {
   getRelatedArtists,
   getSimilarTracks,
-  getTrackRadio,
   getMadeForYou,
 } from '../services/recommendations/recommendationService';
 import {
@@ -49,23 +48,6 @@ export const getSimilarTracksHandler = async (req: AuthRequest, res: Response, n
     const id = getParam(req, 'id');
     const limit = parseBoundedLimit(req.query.limit, 20, 50);
     const tracks = await getSimilarTracks(id, limit);
-    setPublicDiscoveryCache(res);
-    res.json({ tracks: await formatTracksWithCoverArt(tracks), total: tracks.length });
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * GET /api/tracks/:id/radio
- * A radio station seeded from this track for autoplay queue population.
- */
-export const getTrackRadioHandler = async (req: AuthRequest, res: Response, next: NextFunction) => {
-  try {
-    if (!isDatabaseConnected()) return res.status(503).json({ error: 'Database not available' });
-    const id = getParam(req, 'id');
-    const limit = parseBoundedLimit(req.query.limit, 30, 100);
-    const tracks = await getTrackRadio(id, limit);
     setPublicDiscoveryCache(res);
     res.json({ tracks: await formatTracksWithCoverArt(tracks), total: tracks.length });
   } catch (error) {

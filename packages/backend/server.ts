@@ -40,6 +40,7 @@ import imagesAuthRoutes from './src/routes/images.auth.routes';
 import previewRoutes from './src/routes/preview.routes';
 import streamRoutes from './src/routes/stream.routes';
 import lyricsRoutes from './src/routes/lyrics.routes';
+import radioRoutes from './src/routes/radio.routes';
 import recommendationsRoutes from './src/routes/recommendations.routes';
 import podcastsRoutes from './src/routes/podcasts.routes';
 import episodesRoutes from './src/routes/episodes.routes';
@@ -289,6 +290,10 @@ publicApiRouter.use('/stream', createOptionalOxyAuth(oxy), streamRoutes);
 publicApiRouter.use('/images', imagesPublicRoutes);
 publicApiRouter.use('/preview', createOptionalOxyAuth(oxy), previewRoutes);
 publicApiRouter.use('/lyrics', lyricsRoutes);
+
+// Radio: public stations for guests (preview-capped) and personalised, unlimited
+// ones for a signed-in listener. Optional auth resolves which.
+publicApiRouter.use('/radio', createOptionalOxyAuth(oxy), radioRoutes);
 
 
 // Live rooms: public discovery (optional auth resolves the viewer for

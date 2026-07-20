@@ -149,37 +149,6 @@ export async function getSimilarTracks(
   return [...collaborative, ...contentMatches].slice(0, limit);
 }
 
-// ── Track radio ─────────────────────────────────────────────────────────────
-
-/**
- * A radio station seeded from a track: the seed first, then a deduped blend of
- * its similar tracks and same-genre popular tracks. Suitable for autoplay
- * queue population ("play similar songs" when the queue runs dry).
- */
-export async function getTrackRadio(
-  trackId: string,
-  limit = 30,
-): Promise<CatalogTrack[]> {
-  if (!mongoose.Types.ObjectId.isValid(trackId)) return [];
-
-  const seed = await TrackModel.findOne(playableTrackFilter({ _id: trackId })).lean();
-  if (!seed || seed.isAvailable === false) return [];
-
-  const similar = await getSimilarTracks(trackId, limit * 2);
-
-  const seen = new Set<string>([trackId]);
-  const station: CatalogTrack[] = [seed];
-  for (const track of similar) {
-    const id = track._id.toString();
-    if (seen.has(id)) continue;
-    seen.add(id);
-    station.push(track);
-    if (station.length >= limit) break;
-  }
-
-  return station.slice(0, limit);
-}
-
 // ── Personalised "Made For You" ──────────────────────────────────────────────
 
 export interface MadeForYou {
