@@ -51,7 +51,25 @@
     "playlist": "Playlist",
     "sessionUnavailable": "Session unavailable",
     "public": "Public",
-    "private": "Private"
+    "private": "Private",
+    "all": "All",
+    "tracks": "Tracks",
+    "albums": "Albums",
+    "artists": "Artists",
+    "playlists": "Playlists",
+    "episodes": "Episodes",
+    "people": "People",
+    "users": "Users",
+    "madeForYou": "Made for you",
+    "popularTracks": "Popular tracks",
+    "songCount_one": "{{count}} song",
+    "songCount_other": "{{count}} songs",
+    "followerCount_one": "{{count}} follower",
+    "followerCount_other": "{{count}} followers",
+    "album": "Album",
+    "noPlayableTracks": "No playable tracks available",
+    "playItem": "Play {{title}}",
+    "offline": "You're offline. Showing saved content."
   },
   "agora": {
     "podcastStream": {
@@ -219,10 +237,8 @@
     },
     "sections": {
       "jumpBackIn": "Jump back in",
-      "madeForYou": "Made for you",
       "popularAlbums": "Popular albums",
       "popularArtists": "Popular artists",
-      "popularTracks": "Popular tracks",
       "yourPlaylists": "Your playlists"
     },
     "errors": {
@@ -243,7 +259,6 @@
       "addedToQueue": "Added to queue",
       "addToQueueFailed": "Could not add to queue",
       "playbackFailed": "Could not start playback",
-      "noPlayableTracks": "No playable tracks available",
       "noTracksToAdd": "No tracks to add"
     }
   },
@@ -253,11 +268,6 @@
       "description": "Your music library"
     },
     "title": "Your Library",
-    "tabs": {
-      "playlists": "Playlists",
-      "artists": "Artists",
-      "albums": "Albums"
-    },
     "continueListening": "Continue listening",
     "likedSongs": "Liked Songs",
     "createPlaylist": "Create Playlist",
@@ -267,10 +277,6 @@
       "session": "We could not confirm your session."
     },
     "signedOut": "Sign in to view your library",
-    "filters": {
-      "all": "All",
-      "episodes": "Episodes"
-    },
     "empty": {
       "all": "Your library is empty",
       "playlists": "No playlists yet",
@@ -278,9 +284,7 @@
       "albums": "No saved albums yet",
       "podcasts": "No podcast subscriptions yet",
       "episodes": "No episodes in progress"
-    },
-    "songCount_one": "{{count}} song",
-    "songCount_other": "{{count}} songs"
+    }
   },
   "liked": {
     "seo": {
@@ -299,5 +303,66 @@
     "gate": {
       "unavailableMessage": "We could not confirm your session, so your liked songs stayed hidden. Please try again."
     }
+  },
+  "search": {
+    "seo": {
+      "title": "Search - Syra",
+      "description": "Search for music"
+    },
+    "placeholder": "What do you want to play?",
+    "clear": "Clear search",
+    "browse": "Browse",
+    "sections": {
+      "browseAll": "Browse All",
+      "topAlbums": "Top Albums",
+      "topArtists": "Top Artists",
+      "charts": "Charts"
+    },
+    "resultCount": "{{label}} ({{count}})",
+    "loadingMorePodcasts": "Finding more podcasts…",
+    "errors": {
+      "title": "Search failed",
+      "message": "We couldn't run that search. Check your connection and try again."
+    },
+    "userFallback": "Profile"
+  },
+  "topbar": {
+    "live": "Live",
+    "viewAllResults": "View all results"
+  },
+  "nowPlaying": {
+    "empty": {
+      "title": "No track playing",
+      "subtitle": "Start playing a song to see it here"
+    },
+    "aboutArtist": "About this artist",
+    "credits": "Credits",
+    "lyrics": "Lyrics",
+    "showLyrics": "Show lyrics",
+    "hideLyrics": "Hide lyrics",
+    "nextInQueue": "Next in queue",
+    "queueEmpty": "Your queue is empty",
+    "saveToLiked": "Save to Liked Songs",
+    "removeFromLiked": "Remove from Liked Songs",
+    "label": "Label",
+    "released": "Released"
+  },
+  "artist": {
+    "fansAlsoLike": "Fans also like",
+    "popular": "Popular",
+    "appearsIn": "Appears in",
+    "verified": "Verified Artist",
+    "follow": "Follow artist",
+    "unfollow": "Unfollow artist",
+    "followError": "Failed to update follow status",
+    "followSignIn": "You must be logged in to follow artists",
+    "notFound": "Profile not found",
+    "notFoundMessage": "This profile may have been removed or is no longer available.",
+    "errors": {
+      "load": "Could not load this profile",
+      "message": "Something went wrong while loading this profile. Please try again.",
+      "session": "We could not confirm your session. Check your connection and try again."
+    },
+    "empty": "Nothing to show yet"
   }
 }

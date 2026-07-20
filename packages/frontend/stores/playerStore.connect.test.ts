@@ -60,8 +60,13 @@ jest.mock('@/services/libraryService', () => ({
   libraryService: { recordRecentlyPlayed: jest.fn(async () => {}) },
 }));
 
-jest.mock('@/services/browseService', () => ({
-  browseService: { getPopularTracks: jest.fn(async () => ({ tracks: [] })) },
+// A closed, empty station: autoplay finds nothing to append, so these suites
+// exercise remote-state handling without the radio engine extending the queue.
+jest.mock('@/services/radioService', () => ({
+  radioService: {
+    getPage: jest.fn(async () => ({ tracks: [], cursor: null, gate: null })),
+    reset: jest.fn(async () => {}),
+  },
 }));
 
 jest.mock('@/services/episodeService', () => ({

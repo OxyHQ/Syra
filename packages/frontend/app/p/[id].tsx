@@ -9,6 +9,7 @@ import Animated, {
   useScrollViewOffset,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { toast } from '@/lib/sonner';
@@ -46,6 +47,7 @@ type AppearsInEpisode = NonNullable<NonNullable<EntityProfile['appearsIn']>['epi
  * the `appearsIn` (podcasts/episodes) half. A linked entity shows both.
  */
 const EntityProfileScreen: React.FC = () => {
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const theme = useTheme();
@@ -106,7 +108,7 @@ const EntityProfileScreen: React.FC = () => {
 
   const handlePlayAll = () => {
     if (tracks.length === 0) {
-      toast.info('No playable tracks available');
+      toast.info(t('common.noPlayableTracks'));
       return;
     }
     playTrackList(tracks, 0, { type: 'artist', id: artistId, name: displayName });
@@ -119,7 +121,7 @@ const EntityProfileScreen: React.FC = () => {
 
   const handleFollow = () => {
     if (!gate.isAuthenticated) {
-      toast.error('You must be logged in to follow artists');
+      toast.error(t('artist.followSignIn'));
       return;
     }
     if (!artistId) {
@@ -133,7 +135,7 @@ const EntityProfileScreen: React.FC = () => {
           toast.success(next ? `Following ${displayName}` : `Unfollowed ${displayName}`);
         },
         onError: (error) => {
-          toast.error(error instanceof Error ? error.message : 'Failed to update follow status');
+          toast.error(error instanceof Error ? error.message : t('artist.followError'));
         },
       },
     );
@@ -147,8 +149,8 @@ const EntityProfileScreen: React.FC = () => {
         containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
         icon={{ name: 'cloud-offline-outline' }}
         error={{
-          title: 'Session unavailable',
-          message: 'We could not confirm your session. Check your connection and try again.',
+          title: t('common.sessionUnavailable'),
+          message: t('artist.errors.session'),
           onRetry: async () => {
             gate.retry();
           },
@@ -179,8 +181,8 @@ const EntityProfileScreen: React.FC = () => {
         containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
         icon={{ name: 'cloud-offline-outline' }}
         error={{
-          title: 'Could not load this profile',
-          message: 'Something went wrong while loading this profile. Please try again.',
+          title: t('artist.errors.load'),
+          message: t('artist.errors.message'),
           onRetry: async () => {
             await entityQuery.refetch();
           },
@@ -194,8 +196,8 @@ const EntityProfileScreen: React.FC = () => {
       <EmptyState
         containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
         icon={{ name: 'person-outline' }}
-        title="Profile not found"
-        subtitle="This profile may have been removed or is no longer available."
+        title={t('artist.notFound')}
+        subtitle={t('artist.notFoundMessage')}
       />
     );
   }
@@ -283,6 +285,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
   onNavigatePodcast,
   onNavigateEpisode,
 }) => {
+  const { t } = useTranslation();
   const theme = useTheme();
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const scrollOffset = useScrollViewOffset(scrollRef);
@@ -399,7 +402,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                   disabled={followPending}
                   accessibilityRole="button"
                   accessibilityState={{ selected: isFollowed }}
-                  accessibilityLabel={isFollowed ? 'Unfollow artist' : 'Follow artist'}
+                  accessibilityLabel={isFollowed ? t('artist.unfollow') : t('artist.follow')}
                 >
                   <Ionicons
                     name={isFollowed ? 'heart' : 'heart-outline'}
@@ -461,7 +464,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                   {entity.verified ? (
                     <View style={styles.verifiedRow}>
                       <Ionicons name="checkmark-circle" size={18} color={theme.colors.primary} />
-                      <Text style={[styles.verifiedText, { color: theme.colors.text }]}>Verified Artist</Text>
+                      <Text style={[styles.verifiedText, { color: theme.colors.text }]}>{t('artist.verified')}</Text>
                     </View>
                   ) : null}
                   {entity.bio ? (
@@ -499,7 +502,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                     disabled={followPending}
                     accessibilityRole="button"
                     accessibilityState={{ selected: isFollowed }}
-                    accessibilityLabel={isFollowed ? 'Unfollow artist' : 'Follow artist'}
+                    accessibilityLabel={isFollowed ? t('artist.unfollow') : t('artist.follow')}
                   >
                     <Ionicons
                       name={isFollowed ? 'heart' : 'heart-outline'}
@@ -515,7 +518,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
             {tracks.length > 0 && (
               <>
                 <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Popular</Text>
+                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('artist.popular')}</Text>
                 </View>
                 <View style={styles.trackList}>
                   {tracks.slice(0, 10).map((track, index) => {
@@ -541,7 +544,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
             {albums.length > 0 && (
               <>
                 <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Albums</Text>
+                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('common.albums')}</Text>
                 </View>
                 <ResponsiveGrid minItemWidth={180} gap={8} style={styles.albumsGrid}>
                   {albums.map((album) => (
@@ -565,14 +568,14 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
             {podcasts.length > 0 && (
               <>
                 <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Appears in</Text>
+                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('artist.appearsIn')}</Text>
                 </View>
                 <ResponsiveGrid minItemWidth={160} gap={8} style={styles.albumsGrid}>
                   {podcasts.map((podcast) => (
                     <View key={podcast.id}>
                       <MediaCard
                         title={podcast.title}
-                        subtitle={podcast.author ?? 'Podcast'}
+                        subtitle={podcast.author ?? t('common.podcast')}
                         type="podcast"
                         resolvedImageUri={resolvePodcastArtwork(podcast, 'card')}
                         primaryColor={podcast.primaryColor}
@@ -588,7 +591,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
             {episodes.length > 0 && (
               <>
                 <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Episodes</Text>
+                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('common.episodes')}</Text>
                 </View>
                 <View style={styles.trackList}>
                   {episodes.map((episode) => (
@@ -610,7 +613,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
               <>
                 <View style={styles.sectionHeader}>
                   <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                    A los fans también les gusta
+                    {t('artist.fansAlsoLike')}
                   </Text>
                 </View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.relatedArtistsRow}>
@@ -618,7 +621,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                     <View key={relatedArtist.id} style={styles.relatedArtistCard}>
                       <MediaCard
                         title={relatedArtist.name}
-                        subtitle="Artist"
+                        subtitle={t('common.artist')}
                         type="artist"
                         imageUri={relatedArtist.image}
                         images={relatedArtist.images}
@@ -636,7 +639,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
             {tracks.length === 0 && albums.length === 0 && podcasts.length === 0 && episodes.length === 0 && (
               <View style={styles.emptyState}>
                 <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>
-                  Nothing to show yet
+                  {t('artist.empty')}
                 </Text>
               </View>
             )}

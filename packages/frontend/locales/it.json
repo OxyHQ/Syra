@@ -51,7 +51,25 @@
     "playlist": "Playlist",
     "sessionUnavailable": "Sessione non disponibile",
     "public": "Pubblico",
-    "private": "Privato"
+    "private": "Privato",
+    "all": "Tutto",
+    "tracks": "Brani",
+    "albums": "Album",
+    "artists": "Artisti",
+    "playlists": "Playlist",
+    "episodes": "Episodi",
+    "people": "Persone",
+    "users": "Utenti",
+    "madeForYou": "Fatto per te",
+    "popularTracks": "Brani popolari",
+    "songCount_one": "{{count}} brano",
+    "songCount_other": "{{count}} brani",
+    "followerCount_one": "{{count}} follower",
+    "followerCount_other": "{{count}} follower",
+    "album": "Album",
+    "noPlayableTracks": "Nessun brano disponibile per la riproduzione",
+    "playItem": "Riproduci {{title}}",
+    "offline": "Sei offline. Vengono mostrati i contenuti salvati."
   },
   "agora": {
     "podcastStream": {
@@ -219,10 +237,8 @@
     },
     "sections": {
       "jumpBackIn": "Riprendi l'ascolto",
-      "madeForYou": "Fatto per te",
       "popularAlbums": "Album popolari",
       "popularArtists": "Artisti popolari",
-      "popularTracks": "Brani popolari",
       "yourPlaylists": "Le tue playlist"
     },
     "errors": {
@@ -243,7 +259,6 @@
       "addedToQueue": "Aggiunto alla coda",
       "addToQueueFailed": "Impossibile aggiungere alla coda",
       "playbackFailed": "Impossibile avviare la riproduzione",
-      "noPlayableTracks": "Nessun brano disponibile per la riproduzione",
       "noTracksToAdd": "Nessun brano da aggiungere"
     }
   },
@@ -253,11 +268,6 @@
       "description": "La tua libreria musicale"
     },
     "title": "La tua libreria",
-    "tabs": {
-      "playlists": "Playlist",
-      "artists": "Artisti",
-      "albums": "Album"
-    },
     "continueListening": "Continua ad ascoltare",
     "likedSongs": "Brani che ti piacciono",
     "createPlaylist": "Crea playlist",
@@ -267,10 +277,6 @@
       "session": "Non siamo riusciti a confermare la tua sessione."
     },
     "signedOut": "Accedi per vedere la tua libreria",
-    "filters": {
-      "all": "Tutto",
-      "episodes": "Episodi"
-    },
     "empty": {
       "all": "La tua libreria è vuota",
       "playlists": "Ancora nessuna playlist",
@@ -278,9 +284,7 @@
       "albums": "Ancora nessun album salvato",
       "podcasts": "Ancora nessun podcast seguito",
       "episodes": "Nessun episodio in corso"
-    },
-    "songCount_one": "{{count}} brano",
-    "songCount_other": "{{count}} brani"
+    }
   },
   "liked": {
     "seo": {
@@ -299,5 +303,66 @@
     "gate": {
       "unavailableMessage": "Non siamo riusciti a confermare la tua sessione, quindi i brani che ti piacciono non sono stati mostrati. Riprova."
     }
+  },
+  "search": {
+    "seo": {
+      "title": "Cerca - Syra",
+      "description": "Cerca musica"
+    },
+    "placeholder": "Cosa vuoi ascoltare?",
+    "clear": "Cancella ricerca",
+    "browse": "Esplora",
+    "sections": {
+      "browseAll": "Esplora tutto",
+      "topAlbums": "Album in evidenza",
+      "topArtists": "Artisti in evidenza",
+      "charts": "Classifiche"
+    },
+    "resultCount": "{{label}} ({{count}})",
+    "loadingMorePodcasts": "Altri podcast in arrivo…",
+    "errors": {
+      "title": "Ricerca non riuscita",
+      "message": "Non siamo riusciti a eseguire la ricerca. Controlla la connessione e riprova."
+    },
+    "userFallback": "Profilo"
+  },
+  "topbar": {
+    "live": "In diretta",
+    "viewAllResults": "Vedi tutti i risultati"
+  },
+  "nowPlaying": {
+    "empty": {
+      "title": "Nessun brano in riproduzione",
+      "subtitle": "Inizia ad ascoltare qualcosa e comparirà qui"
+    },
+    "aboutArtist": "Info sull'artista",
+    "credits": "Crediti",
+    "lyrics": "Testo",
+    "showLyrics": "Mostra testo",
+    "hideLyrics": "Nascondi testo",
+    "nextInQueue": "Prossimo in coda",
+    "queueEmpty": "La tua coda è vuota",
+    "saveToLiked": "Salva nei brani che ti piacciono",
+    "removeFromLiked": "Rimuovi dai brani che ti piacciono",
+    "label": "Etichetta",
+    "released": "Pubblicato"
+  },
+  "artist": {
+    "fansAlsoLike": "Piace anche ai fan",
+    "popular": "Popolari",
+    "appearsIn": "Compare in",
+    "verified": "Artista verificato",
+    "follow": "Segui artista",
+    "unfollow": "Smetti di seguire",
+    "followError": "Impossibile aggiornare lo stato di seguito",
+    "followSignIn": "Accedi per seguire gli artisti",
+    "notFound": "Profilo non trovato",
+    "notFoundMessage": "Questo profilo potrebbe essere stato rimosso o non essere più disponibile.",
+    "errors": {
+      "load": "Impossibile caricare questo profilo",
+      "message": "Qualcosa è andato storto durante il caricamento del profilo. Riprova.",
+      "session": "Non siamo riusciti a confermare la tua sessione. Controlla la connessione e riprova."
+    },
+    "empty": "Ancora niente da mostrare"
   }
 }

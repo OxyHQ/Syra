@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, ScrollView, Pressable, Platform } from 'react-native';
 import { webViewStyle, webDimension } from '@/utils/webStyles';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { Ionicons, Octicons } from '@expo/vector-icons';
 import { useMediaQuery } from 'react-responsive';
@@ -25,6 +26,7 @@ import { CastButton } from '@/components/CastButton';
  * Collapsible and hidden on mobile/tablet
  */
 export const NowPlaying: React.FC = () => {
+  const { t } = useTranslation();
   const theme = useTheme();
   const router = useRouter();
   const isDesktop = useMediaQuery({ minWidth: 1024 });
@@ -197,7 +199,7 @@ export const NowPlaying: React.FC = () => {
                     style={styles.likeButton}
                     accessibilityRole="button"
                     accessibilityState={{ selected: isLiked }}
-                    accessibilityLabel={isLiked ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
+                    accessibilityLabel={isLiked ? t('nowPlaying.removeFromLiked') : t('nowPlaying.saveToLiked')}
                   >
                     <Ionicons
                       name={isLiked ? 'heart' : 'heart-outline'}
@@ -211,7 +213,7 @@ export const NowPlaying: React.FC = () => {
                 {artist && (
                   <View style={[styles.card, { backgroundColor: theme.colors.backgroundTertiary }]}>
                     <View style={styles.cardHeader}>
-                      <Text style={[styles.cardTitle, { color: theme.colors.text }]}>About this artist</Text>
+                      <Text style={[styles.cardTitle, { color: theme.colors.text }]}>{t('nowPlaying.aboutArtist')}</Text>
                     </View>
                     <Pressable
                       onPress={() => router.push(`/p/${artist.id}`)}
@@ -244,10 +246,10 @@ export const NowPlaying: React.FC = () => {
                     style={styles.cardHeader}
                     onPress={() => setLyricsExpanded((v) => !v)}
                     accessibilityRole="button"
-                    accessibilityLabel={lyricsExpanded ? 'Hide lyrics' : 'Show lyrics'}
+                    accessibilityLabel={lyricsExpanded ? t('nowPlaying.hideLyrics') : t('nowPlaying.showLyrics')}
                   >
                     <View style={styles.cardHeaderRow}>
-                      <Text style={[styles.cardTitle, { color: theme.colors.text }]}>Lyrics</Text>
+                      <Text style={[styles.cardTitle, { color: theme.colors.text }]}>{t('nowPlaying.lyrics')}</Text>
                       <Ionicons
                         name={lyricsExpanded ? 'chevron-up' : 'chevron-down'}
                         size={16}
@@ -264,11 +266,11 @@ export const NowPlaying: React.FC = () => {
                 {album && (
                   <View style={[styles.card, { backgroundColor: theme.colors.backgroundTertiary }]}>
                     <View style={styles.cardHeader}>
-                      <Text style={[styles.cardTitle, { color: theme.colors.text }]}>Credits</Text>
+                      <Text style={[styles.cardTitle, { color: theme.colors.text }]}>{t('nowPlaying.credits')}</Text>
                     </View>
                     <View style={styles.creditsContent}>
                       <View style={styles.creditRow}>
-                        <Text style={[styles.creditLabel, { color: theme.colors.textSecondary }]}>Album</Text>
+                        <Text style={[styles.creditLabel, { color: theme.colors.textSecondary }]}>{t('common.album')}</Text>
                         <Pressable
                           onPress={() => router.push(`/album/${album.id}`)}
                           style={styles.creditValuePressable}
@@ -279,7 +281,7 @@ export const NowPlaying: React.FC = () => {
                         </Pressable>
                       </View>
                       <View style={styles.creditRow}>
-                        <Text style={[styles.creditLabel, { color: theme.colors.textSecondary }]}>Artist</Text>
+                        <Text style={[styles.creditLabel, { color: theme.colors.textSecondary }]}>{t('common.artist')}</Text>
                         <Pressable
                           onPress={() => router.push(`/p/${album.artistId}`)}
                           style={styles.creditValuePressable}
@@ -291,7 +293,7 @@ export const NowPlaying: React.FC = () => {
                       </View>
                       {album.releaseDate && (
                         <View style={styles.creditRow}>
-                          <Text style={[styles.creditLabel, { color: theme.colors.textSecondary }]}>Released</Text>
+                          <Text style={[styles.creditLabel, { color: theme.colors.textSecondary }]}>{t('nowPlaying.released')}</Text>
                           <Text style={[styles.creditValue, { color: theme.colors.text }]}>
                             {new Date(album.releaseDate).getFullYear()}
                           </Text>
@@ -299,7 +301,7 @@ export const NowPlaying: React.FC = () => {
                       )}
                       {album.label && (
                         <View style={styles.creditRow}>
-                          <Text style={[styles.creditLabel, { color: theme.colors.textSecondary }]}>Label</Text>
+                          <Text style={[styles.creditLabel, { color: theme.colors.textSecondary }]}>{t('nowPlaying.label')}</Text>
                           <Text style={[styles.creditValue, { color: theme.colors.text }]} numberOfLines={1}>
                             {album.label}
                           </Text>
@@ -312,7 +314,7 @@ export const NowPlaying: React.FC = () => {
                 {/* Next in Queue Card */}
                 <View style={[styles.card, { backgroundColor: theme.colors.backgroundTertiary }]}>
                   <View style={styles.cardHeader}>
-                    <Text style={[styles.cardTitle, { color: theme.colors.text }]}>Next in queue</Text>
+                    <Text style={[styles.cardTitle, { color: theme.colors.text }]}>{t('nowPlaying.nextInQueue')}</Text>
                   </View>
                   {nextTracks.length > 0 ? (
                     <View style={styles.queueContent}>
@@ -347,7 +349,7 @@ export const NowPlaying: React.FC = () => {
                   ) : (
                     <View style={styles.emptyQueue}>
                       <Text style={[styles.emptyQueueText, { color: theme.colors.textSecondary }]}>
-                        Your queue is empty
+                        {t('nowPlaying.queueEmpty')}
                       </Text>
                     </View>
                   )}
@@ -357,10 +359,10 @@ export const NowPlaying: React.FC = () => {
               <View style={styles.placeholder}>
                 <Ionicons name="musical-notes-outline" size={48} color={theme.colors.textSecondary} style={styles.placeholderIcon} />
                 <Text style={[styles.placeholderText, { color: theme.colors.textSecondary }]}>
-                  No track playing
+                  {t('nowPlaying.empty.title')}
                 </Text>
                 <Text style={[styles.placeholderSubtext, { color: theme.colors.textSecondary }]}>
-                  Start playing a song to see it here
+                  {t('nowPlaying.empty.subtitle')}
                 </Text>
               </View>
             )}

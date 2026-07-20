@@ -167,7 +167,7 @@ const HomeScreen: React.FC = () => {
         });
         return;
       }
-      toast.info(t('home.toasts.noPlayableTracks'));
+      toast.info(t('common.noPlayableTracks'));
     } catch (error) {
       logger.error('Error playing album', { albumId, error });
       toast.error(t('home.toasts.playbackFailed'));
@@ -185,7 +185,7 @@ const HomeScreen: React.FC = () => {
         });
         return;
       }
-      toast.info(t('home.toasts.noPlayableTracks'));
+      toast.info(t('common.noPlayableTracks'));
     } catch (error) {
       logger.error('Error playing playlist', { playlistId, error });
       toast.error(t('home.toasts.playbackFailed'));
@@ -203,7 +203,7 @@ const HomeScreen: React.FC = () => {
         });
         return;
       }
-      toast.info(t('home.toasts.noPlayableTracks'));
+      toast.info(t('common.noPlayableTracks'));
     } catch (error) {
       logger.error('Error playing artist', { artistId, error });
       toast.error(t('home.toasts.playbackFailed'));
@@ -728,7 +728,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
 
           {/* Made for You — REAL recommendations (popular albums + public playlists) */}
           <HomeSectionBlock
-            title={t('home.sections.madeForYou')}
+            title={t('common.madeForYou')}
             status={browseStatus}
             hasContent={
               madeForYouArtists.length > 0 ||
@@ -937,7 +937,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
 
           {/* Popular tracks — REAL, ranked by catalog popularity */}
           <HomeSectionBlock
-            title={t('home.sections.popularTracks')}
+            title={t('common.popularTracks')}
             status={browseStatus}
             hasContent={tracks.length > 0}
             skeleton={<MediaCardRowSkeleton count={10} />}

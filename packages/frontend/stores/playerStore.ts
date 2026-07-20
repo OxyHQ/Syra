@@ -13,7 +13,7 @@
 import { create } from 'zustand';
 import { createAudioPlayer } from 'expo-audio';
 import { Platform } from 'react-native';
-import { Queue, Track, Episode, PlaybackContext, RepeatMode, ConnectPlaybackState } from '@syra/shared-types';
+import { Queue, Track, Episode, PlaybackContext, RadioSeed, RepeatMode, ConnectPlaybackState } from '@syra/shared-types';
 import { createScopedLogger } from '@/utils/logger';
 import { useQueueStore } from './queueStore';
 import { musicService } from '@/services/musicService';
@@ -37,7 +37,7 @@ import { prefetchStreams, resolveStream, resolveEpisodeStream, StreamResolution 
 import { episodeService } from '@/services/episodeService';
 import { getApiOrigin } from '@/utils/api';
 import { libraryService, type ListeningSource, type PlaySignal } from '@/services/libraryService';
-import { browseService } from '@/services/browseService';
+import { radioService } from '@/services/radioService';
 import { oxyServices } from '@/lib/oxyServices';
 import { attachSource } from './playback/attachSource';
 import type { AttachResult } from './playback/attachSource.types';
@@ -63,6 +63,8 @@ const EPISODE_COMPLETE_THRESHOLD_SEC = 30;
 const RESUME_MIN_SEC = 5;
 /** Default podcast playback speed (1×). */
 const DEFAULT_PLAYBACK_RATE = 1;
+/** Tracks requested per radio page, both to start a station and to extend one. */
+const RADIO_PAGE_SIZE = 20;
 
 interface PendingPlaySignal {
   trackId: string;
@@ -125,6 +127,8 @@ interface PlayerState {
   // Actions
   playTrack: (track: Track, context?: PlaybackContext, addToQueue?: boolean) => Promise<void>;
   playTrackList: (tracks: Track[], startIndex?: number, context?: PlaybackContext) => Promise<void>;
+  /** Start a Syra Radio station: play its first page and make it the queue. */
+  startRadio: (seed: RadioSeed) => Promise<void>;
   playEpisode: (episode: Episode, options?: PlayEpisodeOptions) => Promise<void>;
   playEpisodeList: (episodes: Episode[], startIndex?: number, context?: PlaybackContext, resumeFromSec?: number) => Promise<void>;
   playFromQueue: (index: number) => Promise<void>;
@@ -167,6 +171,20 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
    * backend distinguish a real play from a skip and learn the user's taste.
    */
   let activePlay: { trackId: string; source: ListeningSource; durationSec: number } | null = null;
+
+  /**
+   * Position within the active radio station. The station is stateful
+   * server-side, so this cursor is transient local bookkeeping — never React
+   * state, never mirrored remote state — and is only ever read from an event
+   * handler, never from a memoized render position.
+   *
+   * `radioStationKey` identifies which station the cursor belongs to; when the
+   * seed changes the cursor is dropped so the new station starts from its head.
+   */
+  let radioStationKey: string | null = null;
+  let radioCursor: string | null = null;
+
+  const radioStationKeyOf = (seed: RadioSeed): string => `${seed.seedType}:${seed.seedId}`;
 
   const removePendingPlaySignal = (pending: PendingPlaySignal): void => {
     const index = pendingPlaySignals.indexOf(pending);
@@ -457,6 +475,37 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     return repeat === RepeatMode.ALL ? 0 : null;
   };
 
+  /**
+   * Which station should keep playing once the queue runs dry.
+   *
+   * An already-playing station keeps its own seed so its cursor stays valid.
+   * A finite context (album / artist / playlist) becomes the station for that
+   * entity, which is what makes "album ends → more of this" feel intentional
+   * rather than random. Failing both, the finished track seeds the station;
+   * with nothing playing at all the listener themselves is the seed.
+   */
+  const deriveRadioSeed = (finishedTrack?: Track | null): RadioSeed => {
+    const context = useQueueStore.getState().queue?.context ?? get().context;
+
+    if (context?.type === 'radio' && context.radio) {
+      return context.radio;
+    }
+
+    if (context?.id) {
+      switch (context.type) {
+        case 'artist':
+        case 'album':
+        case 'playlist':
+          return { seedType: context.type, seedId: context.id };
+        default:
+          break;
+      }
+    }
+
+    const trackId = finishedTrack?.id ?? get().currentTrack?.id;
+    return trackId ? { seedType: 'track', seedId: trackId } : { seedType: 'user', seedId: '' };
+  };
+
   const extendQueueForAutoplay = async (finishedTrack?: Track | null): Promise<boolean> => {
     const preferences = getCurrentMusicPreferences();
     if (preferences?.autoplay === false) {
@@ -464,32 +513,52 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     }
 
     const queueStore = useQueueStore.getState();
-    const queue = queueStore.queue;
-    const seenIds = new Set(queue?.tracks.map((track) => track.id) ?? []);
+    const seenIds = new Set(queueStore.queue?.tracks.map((track) => track.id) ?? []);
     const currentTrackId = finishedTrack?.id ?? get().currentTrack?.id;
     if (currentTrackId) {
       seenIds.add(currentTrackId);
     }
 
+    const seed = deriveRadioSeed(finishedTrack);
+    const stationKey = radioStationKeyOf(seed);
+    if (stationKey !== radioStationKey) {
+      radioStationKey = stationKey;
+      radioCursor = null;
+    }
+
     try {
-      const response = await browseService.getPopularTracks({ limit: 30, offset: 0 });
-      const candidates = response.tracks.filter((track) => track.id && !seenIds.has(track.id));
-      if (candidates.length === 0) {
+      const page = await radioService.getPage({
+        seedType: seed.seedType,
+        seedId: seed.seedId,
+        cursor: radioCursor ?? undefined,
+        limit: RADIO_PAGE_SIZE,
+      });
+      radioCursor = page.cursor;
+
+      // The station tracks what it has handed out, but the queue may already
+      // hold tracks from elsewhere — dedupe against what is actually queued.
+      const additions = page.tracks.filter((track) => track.id && !seenIds.has(track.id));
+      if (additions.length === 0) {
         return false;
       }
 
-      const additions = candidates.slice(0, 12);
-      queueStore.syncQueue({
-        current: queue?.current ?? -1,
-        tracks: [...(queue?.tracks ?? []), ...additions],
-        context: queue?.context ?? {
-          type: 'track',
-          name: 'Autoplay',
-        },
-      });
+      await queueStore.addTracksLocally(additions, 'last');
+
+      // From here the queue IS the station: the context carries the seed so a
+      // reload can resume it, and every subsequent play reports source 'radio'.
+      const radioContext: PlaybackContext = {
+        type: 'radio',
+        name: page.station.title,
+        radio: seed,
+      };
+      const extendedQueue = useQueueStore.getState().queue;
+      if (extendedQueue) {
+        queueStore.syncQueue({ ...extendedQueue, context: radioContext });
+      }
+      set({ context: radioContext });
       return true;
     } catch (error) {
-      logger.warn('Failed to extend queue for autoplay', error);
+      logger.warn('Failed to extend queue for autoplay', { seed, error });
       return false;
     }
   };
@@ -1021,6 +1090,37 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
       prefetchQueueStreams(queue.tracks, queue.current, { includeCurrent: true });
       await get().playTrack(queue.tracks[queue.current], context ?? queue.context, false);
+    },
+
+    /**
+     * Start a Syra Radio station from a seed. Loads the station's first page,
+     * makes it the queue, and arms the cursor so the queue keeps extending from
+     * the same station once those tracks run out.
+     */
+    startRadio: async (seed: RadioSeed) => {
+      try {
+        const page = await radioService.getPage({
+          seedType: seed.seedType,
+          seedId: seed.seedId,
+          limit: RADIO_PAGE_SIZE,
+        });
+        radioStationKey = radioStationKeyOf(seed);
+        radioCursor = page.cursor;
+
+        if (page.tracks.length === 0) {
+          logger.warn('Radio station returned no playable tracks', { seed });
+          return;
+        }
+
+        await get().playTrackList(page.tracks, 0, {
+          type: 'radio',
+          name: page.station.title,
+          radio: seed,
+        });
+      } catch (error) {
+        logger.error('Failed to start radio station', { seed, error });
+        set({ error: error instanceof Error ? error.message : 'Failed to start radio' });
+      }
     },
 
     /**

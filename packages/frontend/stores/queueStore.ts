@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Queue, QueueWithMetadata, Track, RepeatMode, ShuffleMode } from '@syra/shared-types';
 import { queueService } from '../services/queueService';
+import { isUnauthorizedError } from '../utils/api';
 
 const RECOVERABLE_CURRENT_INDEX_ERRORS = new Set(['Queue not found', 'Index out of bounds']);
 
@@ -175,6 +176,14 @@ export const useQueueStore = create<QueueState>((set, get) => ({
       const result = await queueService.replaceQueue(queue);
       set({ queue: result.queue });
     } catch (error) {
+      // `PUT /queue` sits behind requireAuth, so a guest cannot have a
+      // server-side queue at all — reverting would wipe the queue they just
+      // started playing. Theirs is legitimately local-only. The optimistic set
+      // above already cleared the error, so there is nothing left to clear.
+      if (isUnauthorizedError(error)) {
+        return;
+      }
+
       console.error('[QueueStore] Error replacing queue:', error);
       set({
         queue: previousQueue,
@@ -195,6 +204,12 @@ export const useQueueStore = create<QueueState>((set, get) => ({
       const result = await queueService.addToQueue(tracks.map((track) => track.id), position);
       set({ queue: result.queue });
     } catch (error) {
+      // Same as replaceQueue: `POST /queue/add` requires auth, so for a guest
+      // every radio append would otherwise revert and silently empty the queue.
+      if (isUnauthorizedError(error)) {
+        return;
+      }
+
       console.error('[QueueStore] Error adding local tracks to queue:', error);
       set({
         queue: previousQueue,

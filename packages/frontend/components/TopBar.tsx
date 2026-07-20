@@ -3,6 +3,7 @@ import { StyleSheet, View, Text, Pressable, Platform, ViewStyle, TextInput, Imag
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { webTextStyle, webViewStyle } from '@/utils/webStyles';
 import { useRouter, usePathname, useLocalSearchParams, type Href } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { useOxy, ProfileButton } from '@oxyhq/services';
 import { useQuery } from '@tanstack/react-query';
@@ -36,6 +37,18 @@ type HeaderSearchItem = {
   onPlay?: () => Promise<void> | void;
 };
 
+/**
+ * `section` is an identifier: it is compared against `item.section` to group
+ * rows, so it must never be translated. These are its display labels.
+ */
+const SEARCH_SECTION_KEYS: Record<HeaderSearchItem['section'], string> = {
+  Tracks: 'common.tracks',
+  Albums: 'common.albums',
+  Artists: 'common.artists',
+  Playlists: 'common.playlists',
+  Users: 'common.users',
+};
+
 const albumHref = (id: string): Href => ({ pathname: '/album/[id]', params: { id } });
 const artistHref = (id: string): Href => ({ pathname: '/p/[id]', params: { id } });
 const playlistHref = (id: string): Href => ({ pathname: '/playlist/[id]', params: { id } });
@@ -53,6 +66,7 @@ export const TOP_BAR_HEIGHT = 64;
  * Spotify-like top bar with logo, navigation, search, and user controls
  */
 export const TopBar: React.FC = () => {
+  const { t } = useTranslation();
   const router = useRouter();
   const pathname = usePathname();
   const { q } = useLocalSearchParams<{ q?: string }>();
@@ -143,7 +157,7 @@ export const TopBar: React.FC = () => {
       await playTrackList(tracks, 0, { type: 'album', id: albumId, name: albumName });
       return;
     }
-    toast.info('No playable tracks available');
+    toast.info(t('common.noPlayableTracks'));
   };
 
   const playPlaylist = async (playlistId: string, playlistName?: string) => {
@@ -152,7 +166,7 @@ export const TopBar: React.FC = () => {
       await playTrackList(tracks, 0, { type: 'playlist', id: playlistId, name: playlistName });
       return;
     }
-    toast.info('No playable tracks available');
+    toast.info(t('common.noPlayableTracks'));
   };
 
   const playArtist = async (artistId: string, artistName?: string) => {
@@ -161,7 +175,7 @@ export const TopBar: React.FC = () => {
       await playTrackList(tracks, 0, { type: 'artist', id: artistId, name: artistName });
       return;
     }
-    toast.info('No playable tracks available');
+    toast.info(t('common.noPlayableTracks'));
   };
 
   const buildSearchItems = (): HeaderSearchItem[] => {
@@ -195,7 +209,7 @@ export const TopBar: React.FC = () => {
       key: `artist-${artist.id}`,
       section: 'Artists' as const,
       title: artist.name,
-      subtitle: 'Artist',
+      subtitle: t('common.artist'),
       href: artistHref(artist.id),
       imageUri: pickCatalogImageUrl(artist.images, artist.image, 'icon', artist.imageSizes),
       icon: 'account-music-outline' as const,
@@ -313,7 +327,7 @@ export const TopBar: React.FC = () => {
           onPress={(event) => handleSearchItemPlay(item, event)}
           style={styles.searchResultPlayOverlay}
           accessibilityRole="button"
-          accessibilityLabel={`Play ${item.title}`}
+          accessibilityLabel={t('common.playItem', { title: item.title })}
         >
           <View style={[styles.searchResultPlayButton, { backgroundColor: theme.colors.primary }]}>
             <MaterialCommunityIcons name="play" size={18} color={theme.colors.primaryForeground} />
@@ -363,7 +377,7 @@ export const TopBar: React.FC = () => {
 
     return (
       <View style={styles.searchResultSection}>
-        <Text style={[styles.searchResultSectionTitle, { color: theme.colors.textSecondary }]}>{title}</Text>
+        <Text style={[styles.searchResultSectionTitle, { color: theme.colors.textSecondary }]}>{t(SEARCH_SECTION_KEYS[title])}</Text>
         {sectionItems.map((item) => renderSearchResultRow({
           item,
           index: searchItems.findIndex((candidate) => candidate.key === item.key),
@@ -409,7 +423,7 @@ export const TopBar: React.FC = () => {
                 (pressed || isViewAllActive) && { backgroundColor: theme.colors.backgroundTertiary },
               ]}
             >
-              <Text style={[styles.viewAllText, { color: theme.colors.primary }]}>View all results</Text>
+              <Text style={[styles.viewAllText, { color: theme.colors.primary }]}>{t('topbar.viewAllResults')}</Text>
               <MaterialCommunityIcons name="arrow-right" size={18} color={theme.colors.primary} />
             </Pressable>
           </>
@@ -442,7 +456,7 @@ export const TopBar: React.FC = () => {
           <MaterialCommunityIcons name="magnify" size={20} color={theme.colors.textSecondary} />
           <TextInput
             style={[styles.searchInput, { color: theme.colors.text }]}
-            placeholder="What do you want to play?"
+            placeholder={t('search.placeholder')}
             placeholderTextColor={theme.colors.textSecondary}
             value={searchQuery}
             onFocus={handleSearch}
@@ -452,12 +466,12 @@ export const TopBar: React.FC = () => {
             returnKeyType="search"
           />
           {searchQuery.length > 0 && (
-            <Pressable onPress={handleClearSearch} accessibilityRole="button" accessibilityLabel="Clear search">
+            <Pressable onPress={handleClearSearch} accessibilityRole="button" accessibilityLabel={t('search.clear')}>
               <MaterialCommunityIcons name="close-circle" size={18} color={theme.colors.textSecondary} />
             </Pressable>
           )}
           <View style={[styles.searchActionSeparator, { backgroundColor: theme.colors.border }]} />
-          <Pressable onPress={handleBrowse} accessibilityRole="button" accessibilityLabel="Browse">
+          <Pressable onPress={handleBrowse} accessibilityRole="button" accessibilityLabel={t('search.browse')}>
             <MaterialCommunityIcons name="view-grid-outline" size={19} color={theme.colors.textSecondary} />
           </Pressable>
         </View>
@@ -525,7 +539,7 @@ export const TopBar: React.FC = () => {
             onPress={() => router.push('/live')}
             style={[styles.iconButton, pathname.startsWith('/live') && activeButtonStyle]}
             accessibilityRole="button"
-            accessibilityLabel="Live"
+            accessibilityLabel={t('topbar.live')}
           >
             <MaterialCommunityIcons
               name="access-point"
@@ -538,7 +552,7 @@ export const TopBar: React.FC = () => {
             onPress={() => router.push('/podcasts')}
             style={[styles.iconButton, pathname.startsWith('/podcasts') && activeButtonStyle]}
             accessibilityRole="button"
-            accessibilityLabel="Podcasts"
+            accessibilityLabel={t('common.podcasts')}
           >
             <MaterialCommunityIcons
               name="podcast"

@@ -10,6 +10,15 @@ jest.mock('../services/queueService', () => ({
   },
 }));
 
+// Only the Oxy SDK singleton is stubbed — `utils/api` builds its linked client
+// at module load. The predicate the guest-queue behaviour turns on,
+// `isUnauthorizedError`, stays the real implementation.
+jest.mock('@/lib/oxyServices', () => ({
+  oxyServices: {
+    createLinkedClient: () => ({ client: {} }),
+  },
+}));
+
 const mockedQueueService = queueService as jest.Mocked<typeof queueService>;
 
 const baseTrack: Track = {
@@ -171,5 +180,66 @@ describe('queueStore', () => {
 
     expect(mockedQueueService.addToQueue).toHaveBeenCalledWith([secondTrack.id], 'last');
     expect(useQueueStore.getState().queue).toEqual(persistedQueue);
+  });
+
+  it('keeps the local queue when a guest appends tracks the backend will not store', async () => {
+    const firstTrack = track('6a34c2c5d1646e517424358f');
+    const secondTrack = track('6a34c2c5d1646e5174243592');
+    const initialQueue: Queue = {
+      current: 0,
+      tracks: [firstTrack],
+    };
+    resetQueueStore(initialQueue);
+    // `POST /queue/add` is behind requireAuth: a guest gets 401 for every
+    // append. Reverting here would wipe the radio queue they are listening to.
+    mockedQueueService.addToQueue.mockRejectedValueOnce({ status: 401 });
+
+    await useQueueStore.getState().addTracksLocally([secondTrack], 'last');
+
+    expect(useQueueStore.getState().queue).toEqual({
+      current: 0,
+      tracks: [firstTrack, secondTrack],
+    });
+    expect(useQueueStore.getState().error).toBeNull();
+  });
+
+  it('reverts and reports a real append failure', async () => {
+    const firstTrack = track('6a34c2c5d1646e517424358f');
+    const secondTrack = track('6a34c2c5d1646e5174243592');
+    const initialQueue: Queue = {
+      current: 0,
+      tracks: [firstTrack],
+    };
+    resetQueueStore(initialQueue);
+    const error = Object.assign(new Error('Internal Server Error'), { status: 500 });
+    mockedQueueService.addToQueue.mockRejectedValueOnce(error);
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    try {
+      await useQueueStore.getState().addTracksLocally([secondTrack], 'last');
+
+      expect(useQueueStore.getState().queue).toEqual(initialQueue);
+      expect(useQueueStore.getState().error).toBe('Internal Server Error');
+      expect(consoleError).toHaveBeenCalledWith(
+        '[QueueStore] Error adding local tracks to queue:',
+        error,
+      );
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it('keeps a guest queue when the backend refuses to replace it', async () => {
+    const queue: Queue = {
+      current: 0,
+      tracks: [track('6a34c2c5d1646e517424358f')],
+    };
+    resetQueueStore();
+    mockedQueueService.replaceQueue.mockRejectedValueOnce({ response: { status: 401 } });
+
+    await useQueueStore.getState().replaceQueue(queue);
+
+    expect(useQueueStore.getState().queue).toEqual(queue);
+    expect(useQueueStore.getState().error).toBeNull();
   });
 });

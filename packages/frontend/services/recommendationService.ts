@@ -1,4 +1,4 @@
-import { api, publicApi } from '@/utils/api';
+import { api } from '@/utils/api';
 import { Track, Artist } from '@syra/shared-types';
 import { normalizeTrackImages, normalizeArtistImages } from '@/utils/catalogImages';
 
@@ -8,11 +8,6 @@ export interface RelatedArtistsResponse {
 }
 
 export interface SimilarTracksResponse {
-  tracks: Track[];
-  total: number;
-}
-
-export interface RadioResponse {
   tracks: Track[];
   total: number;
 }
@@ -28,25 +23,23 @@ export interface MadeForYouResponse {
  * Recommendation API service.
  *
  * Surfaces the backend's taste-learning engine: collaborative related artists /
- * similar tracks (mined from everyone's listening), seedable radio for autoplay,
- * and the signed-in user's personalised "Made For You".
+ * similar tracks (mined from everyone's listening) and the signed-in user's
+ * personalised "Made For You". Stations live in
+ * {@link file://./radioService.ts}, which owns the stateful radio engine.
+ *
+ * Every read goes through the linked Oxy client: these results vary by identity
+ * and by playback preference, so they must be fetched as the current session.
  */
 export const recommendationService = {
-  /** Artists fans of `artistId` also listen to. Public. */
+  /** Artists fans of `artistId` also listen to. Works for guests too. */
   async getRelatedArtists(artistId: string, params?: { limit?: number }): Promise<RelatedArtistsResponse> {
-    const response = await publicApi.get<RelatedArtistsResponse>(`/artists/${artistId}/related`, params);
+    const response = await api.get<RelatedArtistsResponse>(`/artists/${artistId}/related`, params);
     return { ...response.data, artists: response.data.artists.map(normalizeArtistImages) };
   },
 
-  /** Tracks similar to `trackId`. Public. */
+  /** Tracks similar to `trackId`. Works for guests too. */
   async getSimilarTracks(trackId: string, params?: { limit?: number }): Promise<SimilarTracksResponse> {
-    const response = await publicApi.get<SimilarTracksResponse>(`/tracks/${trackId}/similar`, params);
-    return { ...response.data, tracks: response.data.tracks.map(normalizeTrackImages) };
-  },
-
-  /** A radio station seeded from `trackId` for autoplay queue population. Public. */
-  async getTrackRadio(trackId: string, params?: { limit?: number }): Promise<RadioResponse> {
-    const response = await publicApi.get<RadioResponse>(`/tracks/${trackId}/radio`, params);
+    const response = await api.get<SimilarTracksResponse>(`/tracks/${trackId}/similar`, params);
     return { ...response.data, tracks: response.data.tracks.map(normalizeTrackImages) };
   },
 

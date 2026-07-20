@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { StyleSheet, View, TextInput, Text, ScrollView, Pressable } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import SEO from '@/components/SEO';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,6 +29,7 @@ import { useMediaQuery } from 'react-responsive';
  * Spotify-like search interface for tracks, albums, artists, and playlists
  */
 const SearchScreen: React.FC = () => {
+  const { t } = useTranslation();
   const theme = useTheme();
   const router = useRouter();
   const isMobile = useMediaQuery({ maxWidth: 767 });
@@ -201,15 +203,15 @@ const SearchScreen: React.FC = () => {
 
   // Memoized categories
   const categories: { value: SearchCategory; label: string }[] = useMemo(() => [
-    { value: SearchCategory.ALL, label: 'All' },
-    { value: SearchCategory.TRACKS, label: 'Tracks' },
-    { value: SearchCategory.ALBUMS, label: 'Albums' },
-    { value: SearchCategory.ARTISTS, label: 'Artists' },
-    { value: SearchCategory.PLAYLISTS, label: 'Playlists' },
-    { value: SearchCategory.PODCASTS, label: 'Podcasts' },
-    { value: SearchCategory.EPISODES, label: 'Episodes' },
-    { value: SearchCategory.PEOPLE, label: 'People' },
-    { value: SearchCategory.USERS, label: 'Users' },
+    { value: SearchCategory.ALL, label: t('common.all') },
+    { value: SearchCategory.TRACKS, label: t('common.tracks') },
+    { value: SearchCategory.ALBUMS, label: t('common.albums') },
+    { value: SearchCategory.ARTISTS, label: t('common.artists') },
+    { value: SearchCategory.PLAYLISTS, label: t('common.playlists') },
+    { value: SearchCategory.PODCASTS, label: t('common.podcasts') },
+    { value: SearchCategory.EPISODES, label: t('common.episodes') },
+    { value: SearchCategory.PEOPLE, label: t('common.people') },
+    { value: SearchCategory.USERS, label: t('common.users') },
   ], []);
 
   // Memoized computed values
@@ -219,8 +221,8 @@ const SearchScreen: React.FC = () => {
   return (
     <>
       <SEO
-        title="Search - Syra"
-        description="Search for music"
+        title={t('search.seo.title')}
+        description={t('search.seo.description')}
       />
       <ScrollView
         style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}
@@ -236,7 +238,7 @@ const SearchScreen: React.FC = () => {
               <Ionicons name="search" size={20} color={theme.colors.textSecondary} />
               <TextInput
                 style={[styles.searchInput, { color: theme.colors.text }]}
-                placeholder="What do you want to play?"
+                placeholder={t('search.placeholder')}
                 placeholderTextColor={theme.colors.textSecondary}
                 value={searchQuery}
                 onChangeText={handleSearchQueryChange}
@@ -244,12 +246,12 @@ const SearchScreen: React.FC = () => {
                 autoFocus
               />
               {searchQuery.length > 0 && (
-                <Pressable onPress={handleClearSearch} accessibilityRole="button" accessibilityLabel="Clear search">
+                <Pressable onPress={handleClearSearch} accessibilityRole="button" accessibilityLabel={t('search.clear')}>
                   <Ionicons name="close-circle" size={18} color={theme.colors.textSecondary} />
                 </Pressable>
               )}
               <View style={[styles.searchActionSeparator, { backgroundColor: theme.colors.border }]} />
-              <Pressable onPress={handleBrowse} accessibilityRole="button" accessibilityLabel="Browse">
+              <Pressable onPress={handleBrowse} accessibilityRole="button" accessibilityLabel={t('search.browse')}>
                 <Ionicons name="grid-outline" size={19} color={theme.colors.textSecondary} />
               </Pressable>
             </View>
@@ -301,7 +303,7 @@ const SearchScreen: React.FC = () => {
           <View style={styles.results}>
             <View style={styles.searchSkeletonSection}>
               <Text style={[styles.searchSkeletonTitle, { color: theme.colors.text }]}>
-                Tracks
+                {t('common.tracks')}
               </Text>
               <View style={styles.trackList}>
                 <TrackListSkeleton count={5} />
@@ -309,7 +311,7 @@ const SearchScreen: React.FC = () => {
             </View>
             <View style={styles.searchSkeletonSection}>
               <Text style={[styles.searchSkeletonTitle, { color: theme.colors.text }]}>
-                Albums
+                {t('common.albums')}
               </Text>
               <MediaCardRowSkeleton count={5} />
             </View>
@@ -323,8 +325,8 @@ const SearchScreen: React.FC = () => {
             <EmptyState
               icon={{ name: 'alert-circle-outline' }}
               error={{
-                title: 'Search failed',
-                message: "We couldn't run that search. Check your connection and try again.",
+                title: t('search.errors.title'),
+                message: t('search.errors.message'),
                 onRetry: async () => { await refetchSearch(); },
               }}
               containerStyle={styles.searchStateContainer}
@@ -337,7 +339,7 @@ const SearchScreen: React.FC = () => {
           <View style={styles.exploreView}>
             {/* Browse All - Genre Cards */}
             <ExploreSection
-              title="Browse All"
+              title={t('search.sections.browseAll')}
               isLoading={genresLoading}
               isEmpty={genres.length === 0}
               error={genresError}
@@ -362,7 +364,7 @@ const SearchScreen: React.FC = () => {
 
             {/* Made for You */}
             <ExploreSection
-              title="Made for You"
+              title={t('common.madeForYou')}
               isLoading={madeForYouLoading}
               isEmpty={madeForYouAlbums.length === 0 && madeForYouPlaylists.length === 0}
               error={madeForYouError}
@@ -387,7 +389,7 @@ const SearchScreen: React.FC = () => {
                   <View key={playlist.id}>
                     <MediaCard
                       title={playlist.name}
-                      subtitle={`Playlist • ${playlist.trackCount || 0} songs`}
+                      subtitle={`${t('common.playlist')} • ${t('common.songCount', { count: playlist.trackCount || 0 })}`}
                       type="playlist"
                       imageUri={playlist.coverArt}
                       imageSizes={playlist.coverArtSizes}
@@ -401,7 +403,7 @@ const SearchScreen: React.FC = () => {
 
             {/* Popular Tracks */}
             <ExploreSection
-              title="Popular Tracks"
+              title={t('common.popularTracks')}
               isLoading={popularTracksLoading}
               isEmpty={popularTracks.length === 0}
               error={popularTracksError}
@@ -429,7 +431,7 @@ const SearchScreen: React.FC = () => {
 
             {/* Top Albums */}
             <ExploreSection
-              title="Top Albums"
+              title={t('search.sections.topAlbums')}
               isLoading={popularAlbumsLoading}
               isEmpty={popularAlbums.length === 0}
               error={popularAlbumsError}
@@ -455,7 +457,7 @@ const SearchScreen: React.FC = () => {
 
             {/* Top Artists */}
             <ExploreSection
-              title="Top Artists"
+              title={t('search.sections.topArtists')}
               isLoading={popularArtistsLoading}
               isEmpty={popularArtists.length === 0}
               error={popularArtistsError}
@@ -467,7 +469,7 @@ const SearchScreen: React.FC = () => {
                   <View key={artist.id}>
                     <MediaCard
                       title={artist.name}
-                      subtitle="Artist"
+                      subtitle={t('common.artist')}
                       type="artist"
                       shape="circle"
                       imageUri={artist.image}
@@ -483,7 +485,7 @@ const SearchScreen: React.FC = () => {
 
             {/* Charts */}
             <ExploreSection
-              title="Charts"
+              title={t('search.sections.charts')}
               isLoading={chartsLoading}
               isEmpty={chartsTracks.length === 0}
               error={chartsError}
@@ -516,7 +518,7 @@ const SearchScreen: React.FC = () => {
               searchResults.results.tracks &&
               searchResults.results.tracks.length > 0 && (
                 <ExploreSection
-                  title={`Tracks (${searchResults.counts.tracks})`}
+                  title={t('search.resultCount', { label: t('common.tracks'), count: searchResults.counts.tracks })}
                   isLoading={false}
                   isEmpty={false}
                 >
@@ -541,7 +543,7 @@ const SearchScreen: React.FC = () => {
               searchResults.results.albums &&
               searchResults.results.albums.length > 0 && (
                 <ExploreSection
-                  title={`Albums (${searchResults.counts.albums})`}
+                  title={t('search.resultCount', { label: t('common.albums'), count: searchResults.counts.albums })}
                   isLoading={false}
                   isEmpty={false}
                 >
@@ -568,7 +570,7 @@ const SearchScreen: React.FC = () => {
               searchResults.results.artists &&
               searchResults.results.artists.length > 0 && (
                 <ExploreSection
-                  title={`Artists (${searchResults.counts.artists})`}
+                  title={t('search.resultCount', { label: t('common.artists'), count: searchResults.counts.artists })}
                   isLoading={false}
                   isEmpty={false}
                 >
@@ -577,7 +579,7 @@ const SearchScreen: React.FC = () => {
                       <View key={artist.id}>
                         <MediaCard
                           title={artist.name}
-                          subtitle="Artist"
+                          subtitle={t('common.artist')}
                           type="artist"
                           shape="circle"
                           imageUri={artist.image}
@@ -597,7 +599,7 @@ const SearchScreen: React.FC = () => {
               searchResults.results.playlists &&
               searchResults.results.playlists.length > 0 && (
                 <ExploreSection
-                  title={`Playlists (${searchResults.counts.playlists})`}
+                  title={t('search.resultCount', { label: t('common.playlists'), count: searchResults.counts.playlists })}
                   isLoading={false}
                   isEmpty={false}
                 >
@@ -606,7 +608,7 @@ const SearchScreen: React.FC = () => {
                       <View key={playlist.id}>
                         <MediaCard
                           title={playlist.name}
-                          subtitle={`Playlist • ${playlist.trackCount || 0} songs`}
+                          subtitle={`${t('common.playlist')} • ${t('common.songCount', { count: playlist.trackCount || 0 })}`}
                           type="playlist"
                           imageUri={playlist.coverArt}
                           imageSizes={playlist.coverArtSizes}
@@ -624,7 +626,7 @@ const SearchScreen: React.FC = () => {
               searchResults.results.podcasts &&
               searchResults.results.podcasts.length > 0 && (
                 <ExploreSection
-                  title={`Podcasts (${searchResults.counts.podcasts})`}
+                  title={t('search.resultCount', { label: t('common.podcasts'), count: searchResults.counts.podcasts })}
                   isLoading={false}
                   isEmpty={false}
                 >
@@ -633,7 +635,7 @@ const SearchScreen: React.FC = () => {
                       <View key={podcast.id}>
                         <MediaCard
                           title={podcast.title}
-                          subtitle={podcast.author ?? 'Podcast'}
+                          subtitle={podcast.author ?? t('common.podcast')}
                           type="podcast"
                           resolvedImageUri={resolvePodcastArtwork(podcast, 'card')}
                           primaryColor={podcast.primaryColor}
@@ -649,7 +651,7 @@ const SearchScreen: React.FC = () => {
             {(activeCategory === SearchCategory.ALL || activeCategory === SearchCategory.PODCASTS) &&
               searchResults.pendingPodcastImport && (
                 <Text style={[styles.podcastImportHint, { color: theme.colors.textSecondary }]}>
-                  Finding more podcasts…
+                  {t('search.loadingMorePodcasts')}
                 </Text>
               )}
 
@@ -658,7 +660,7 @@ const SearchScreen: React.FC = () => {
               searchResults.results.episodes &&
               searchResults.results.episodes.length > 0 && (
                 <ExploreSection
-                  title={`Episodes (${searchResults.counts.episodes})`}
+                  title={t('search.resultCount', { label: t('common.episodes'), count: searchResults.counts.episodes })}
                   isLoading={false}
                   isEmpty={false}
                 >
@@ -682,7 +684,7 @@ const SearchScreen: React.FC = () => {
               searchResults.results.people &&
               searchResults.results.people.length > 0 && (
                 <ExploreSection
-                  title={`People (${searchResults.counts.people})`}
+                  title={t('search.resultCount', { label: t('common.people'), count: searchResults.counts.people })}
                   isLoading={false}
                   isEmpty={false}
                 >
@@ -742,15 +744,15 @@ const SearchScreen: React.FC = () => {
               searchResults.results.users &&
               searchResults.results.users.length > 0 && (
                 <ExploreSection
-                  title={`Users (${searchResults.counts.users})`}
+                  title={t('search.resultCount', { label: t('common.users'), count: searchResults.counts.users })}
                   isLoading={false}
                   isEmpty={false}
                 >
                   <View style={styles.userList}>
                     {searchResults.results.users.map((user) => {
                       const followers = typeof user.followers === 'number'
-                        ? `${user.followers.toLocaleString()} followers`
-                        : 'Profile';
+                        ? t('common.followerCount', { count: user.followers })
+                        : t('search.userFallback');
 
                       return (
                         <Pressable

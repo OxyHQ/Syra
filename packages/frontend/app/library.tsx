@@ -41,12 +41,12 @@ type LibraryFilter = (typeof LIBRARY_FILTERS)[number];
 
 /** Chip label per filter. */
 const LIBRARY_FILTER_KEYS: Record<LibraryFilter, string> = {
-  All: 'library.filters.all',
-  Playlists: 'library.tabs.playlists',
-  Artists: 'library.tabs.artists',
-  Albums: 'library.tabs.albums',
+  All: 'common.all',
+  Playlists: 'common.playlists',
+  Artists: 'common.artists',
+  Albums: 'common.albums',
   Podcasts: 'common.podcasts',
-  Episodes: 'library.filters.episodes',
+  Episodes: 'common.episodes',
 };
 
 /** Empty-state copy per filter, shown only once the library is known to be empty. */
@@ -250,7 +250,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         {/* Loading state */}
         {finalLoading && (gate.isAuthenticated || gate.isResolving) && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('library.tabs.playlists')}</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('common.playlists')}</Text>
             <View style={styles.itemsContainer}>
               <LibraryListSkeleton count={6} />
             </View>
@@ -273,7 +273,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         {/* Playlists list */}
         {!finalLoading && !finalError && finalPlaylists.length > 0 && (activeFilter === 'All' || activeFilter === 'Playlists') && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('library.tabs.playlists')}</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('common.playlists')}</Text>
             <View style={styles.itemsContainer}>
               {finalPlaylists.map((playlist) => (
                 <Pressable
@@ -301,7 +301,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                       {playlist.name}
                     </Text>
                     <Text style={[styles.itemSubtitle, { color: theme.colors.textSecondary }]}>
-                      {playlist.visibility === 'public' ? t('common.public') : t('common.private')} • {t('library.songCount', { count: playlist.trackCount || 0 })}
+                      {playlist.visibility === 'public' ? t('common.public') : t('common.private')} • {t('common.songCount', { count: playlist.trackCount || 0 })}
                     </Text>
                   </View>
                 </Pressable>
@@ -313,7 +313,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         {/* Artists list */}
         {!finalLoading && !finalError && finalFollowedArtists.length > 0 && (activeFilter === 'All' || activeFilter === 'Artists') && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('library.tabs.artists')}</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('common.artists')}</Text>
             <View style={styles.itemsContainer}>
               {finalFollowedArtists.map((artist) => (
                 <Pressable
@@ -353,7 +353,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         {/* Albums list */}
         {!finalLoading && !finalError && finalSavedAlbums.length > 0 && (activeFilter === 'All' || activeFilter === 'Albums') && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('library.tabs.albums')}</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('common.albums')}</Text>
             <View style={styles.itemsContainer}>
               {finalSavedAlbums.map((album) => (
                 <Pressable

@@ -1,4 +1,5 @@
 import React, { useMemo, useSyncExternalStore } from 'react';
+import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { onlineManager } from '@tanstack/react-query';
@@ -25,10 +26,13 @@ import { TOP_BAR_HEIGHT } from '@/components/TopBar';
  * plain read: `onlineManager.isOnline()` is external mutable state, so reading it
  * in a memoized position would let the React Compiler freeze the first value.
  *
- * No `useTranslation` here on purpose. This is mounted unconditionally in the
- * providers tree, and react-i18next defaults to `useSuspense: true`, so a
- * boot-mounted `t()` call deadlocks the app while i18n initializes from a layout
- * effect — the exact hazard the offline case is most likely to hit.
+ * Translated via `t()` with an explicit `defaultValue`. This component mounts
+ * unconditionally in the providers tree, which used to make `t()` unsafe here:
+ * react-i18next defaults `useSuspense` to true, so a boot-mounted `t()` would
+ * suspend before any Suspense boundary existed and hang the app on a white
+ * screen. `lib/i18n.ts` now sets `useSuspense: false`, so the call is safe — and
+ * the `defaultValue` covers the window before i18n finishes initializing, when
+ * `t()` would otherwise render the raw key.
  */
 
 const subscribeToOnlineManager = (onStoreChange: () => void) => onlineManager.subscribe(onStoreChange);
@@ -38,6 +42,7 @@ const getIsOnline = () => onlineManager.isOnline();
 const getIsOnlineForServer = () => true;
 
 export function OfflineBanner() {
+    const { t } = useTranslation();
     const isOnline = useSyncExternalStore(subscribeToOnlineManager, getIsOnline, getIsOnlineForServer);
     const insets = useSafeAreaInsets();
     const theme = useTheme();
@@ -85,7 +90,9 @@ export function OfflineBanner() {
     return (
         <View style={styles.container} pointerEvents="none" accessibilityRole="alert">
             <View style={styles.banner}>
-                <Text style={styles.text}>You&apos;re offline. Showing saved content.</Text>
+                <Text style={styles.text}>
+                    {t('common.offline', { defaultValue: "You're offline. Showing saved content." })}
+                </Text>
             </View>
         </View>
     );

@@ -5,14 +5,14 @@ import { recommendationService } from '@/services/recommendationService';
 /**
  * React Query hooks for the recommendation engine.
  *
- * Related artists / similar tracks / radio are public (work for guests too);
- * "Made For You" is personalised and gated to authenticated users.
+ * Related artists / similar tracks work for guests too; "Made For You" is
+ * personalised and gated to authenticated users. Radio stations are not here —
+ * they are stateful and live in {@link file://./useRadio.ts}.
  */
 
 export const RECOMMENDATION_QUERY_KEYS = {
   relatedArtists: (artistId: string) => ['recommendations', 'related-artists', artistId] as const,
   similarTracks: (trackId: string) => ['recommendations', 'similar-tracks', trackId] as const,
-  trackRadio: (trackId: string) => ['recommendations', 'track-radio', trackId] as const,
   madeForYou: ['recommendations', 'made-for-you'] as const,
 };
 
@@ -33,16 +33,6 @@ export function useSimilarTracks(trackId: string | undefined, limit = 20) {
     queryFn: () => recommendationService.getSimilarTracks(trackId as string, { limit }),
     enabled: Boolean(trackId),
     staleTime: 1000 * 60 * 30,
-  });
-}
-
-/** A radio station seeded from a track (for "start radio" actions). */
-export function useTrackRadio(trackId: string | undefined, limit = 30) {
-  return useQuery({
-    queryKey: RECOMMENDATION_QUERY_KEYS.trackRadio(trackId ?? ''),
-    queryFn: () => recommendationService.getTrackRadio(trackId as string, { limit }),
-    enabled: Boolean(trackId),
-    staleTime: 1000 * 60 * 10,
   });
 }
 
