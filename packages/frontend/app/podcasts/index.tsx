@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { StyleSheet, View, Text, ScrollView, Pressable, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme, useAmbientTheme } from '@oxyhq/bloom/theme';
 import { Ionicons } from '@expo/vector-icons';
 import type { Podcast } from '@syra/shared-types';
 import SEO from '@/components/SEO';
@@ -13,7 +13,6 @@ import { usePlayerStore } from '@/stores/playerStore';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { formatRemaining } from '@/utils/podcastFormat';
 import { webViewStyle } from '@/utils/webStyles';
-import { useHoverAmbient } from '@/hooks/useAmbientArtwork';
 
 type ContinueEntry = NonNullable<ReturnType<typeof useContinueListening>['data']>[number];
 
@@ -39,8 +38,19 @@ const PODCAST_CATEGORIES = [
 const PodcastsScreen: React.FC = () => {
   const router = useRouter();
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
-  // HOVER MODE: hovering a card themes the WHOLE app from its artwork.
-  const { onHoverIn: handleHoverIn, onHoverOut: handleHoverOut } = useHoverAmbient();
+  // HOVER MODE: hovering a card themes the WHOLE app from its artwork. All
+  // theming lives in Bloom — these thin handlers only feed the card's DTO colours
+  // to Bloom's ambient store (consumed internally by the root provider).
+  const { setAmbient, clearAmbient } = useAmbientTheme();
+  const handleHoverIn = useCallback(
+    (colors: { primaryColor?: string; secondaryColor?: string }) => {
+      if (colors.primaryColor) {
+        setAmbient(colors.primaryColor, { secondary: colors.secondaryColor });
+      }
+    },
+    [setAmbient],
+  );
+  const handleHoverOut = clearAmbient;
 
   const browseQuery = usePodcasts(
     activeCategory ? { category: activeCategory, sort: 'popular' } : { sort: 'popular' },
@@ -56,8 +66,8 @@ const PodcastsScreen: React.FC = () => {
   );
 
   // Hovering a card themes the WHOLE app from that card's artwork; leaving
-  // restores the default. The root `BloomThemeProvider` owns the theming via the
-  // shared `useHoverAmbient` driver — no per-screen theme wrapper.
+  // restores the default. Bloom owns the theming (fed via `useAmbientTheme`,
+  // applied by the root provider) — no per-screen theme wrapper.
   return (
     <PodcastsContent
       podcasts={podcasts}

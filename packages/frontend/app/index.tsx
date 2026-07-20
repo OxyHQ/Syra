@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { StyleSheet, View, ScrollView, Text, Platform, Pressable } from 'react-native';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme, useAmbientTheme } from '@oxyhq/bloom/theme';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
@@ -29,7 +29,6 @@ import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { authenticatedClient } from '@/utils/api';
 import { liveRoomsQueryKey } from '@/lib/liveConfig';
 import { toast } from '@/lib/sonner';
-import { useHoverAmbient } from '@/hooks/useAmbientArtwork';
 
 const logger = createScopedLogger('HomeScreen');
 
@@ -55,9 +54,19 @@ const HomeScreen: React.FC = () => {
   const { playTrackList } = usePlayerStore();
   const { addTracksLocally } = useQueueStore();
   // HOVER MODE: hovering any card themes the WHOLE app from that card's
-  // server-extracted cover colours; leaving restores the default. The root
-  // provider owns the theming — these handlers only feed the shared driver.
-  const { onHoverIn: handleHoverIn, onHoverOut: handleHoverOut } = useHoverAmbient();
+  // server-extracted cover colours; leaving restores the default. All theming
+  // lives in Bloom — these thin handlers only feed the card's DTO colours to
+  // Bloom's ambient store (which the root provider consumes internally).
+  const { setAmbient, clearAmbient } = useAmbientTheme();
+  const handleHoverIn = useCallback(
+    (colors: { primaryColor?: string; secondaryColor?: string }) => {
+      if (colors.primaryColor) {
+        setAmbient(colors.primaryColor, { secondary: colors.secondaryColor });
+      }
+    },
+    [setAmbient],
+  );
+  const handleHoverOut = clearAmbient;
 
   // Real, per-section queries — each loads/caches/errors independently.
   const recentlyPlayedQuery = useRecentlyPlayed();
@@ -285,8 +294,9 @@ const HomeScreen: React.FC = () => {
         description="Discover and play your favorite music"
       />
       {/* Hovering any card themes the WHOLE app from that card's artwork; leaving
-          restores the default. Theming is owned by the root `BloomThemeProvider`
-          via the shared `useHoverAmbient` driver — no per-screen theme wrapper. */}
+          restores the default. Theming is owned by Bloom's ambient store (fed via
+          `useAmbientTheme`) and applied by the root `BloomThemeProvider` — no
+          per-screen theme wrapper. */}
       <HomeContent
           greeting={greeting}
           liveRooms={liveRooms}
