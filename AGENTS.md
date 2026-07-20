@@ -33,14 +33,33 @@ Production: web `https://syra.fm`, API/WebSocket `https://api.syra.fm` / `wss://
 - Mutations must invalidate relevant TanStack Query keys immediately — like/unlike must update the button, library lists, album/track screens, and player state without reload.
 - Queue/playback Zustand state may optimistically update but must persist through `queueService` and repair backend drift by replacing the queue, not hiding 400 errors with local-only state.
 
-## Audius Catalog — Implementation Rules
+## Catalog — Implementation Rules
 
-High-level Audius policy (`AUDIUS_CATALOG_ENABLED`, `directAudiusStreaming`, ingest model) is in `~/Oxy/AGENTS.md`. Syra-specific implementation rules:
+Syra is an own-catalogue platform: every track is Syra-hosted, so a track is playable iff it is available and not copyright-removed — no provider dimension, no deployment flag, no per-user variation. The single predicate lives in `playableTrackFilter()` (`packages/backend/src/utils/catalogVisibility.ts`); every catalog/playback read goes through it rather than reimplementing the check.
 
-- Tracks with Syra HLS (`status: ready`, `hlsMasterKey`, `hls[]`) must be visible and playable even when `directAudiusStreaming` is false.
-- Track-bearing containers (albums, artists, playlists, genre cards, search/browse) must be filtered by the same playable-track policy for the current user. Do not show a container as playable if opening it returns zero playable tracks under that policy.
-- Catalog reads that vary by identity or playback preference must use the linked Oxy client (`packages/frontend/utils/api.ts`), not `publicApi`.
+**Music enters through exactly one path: creator upload.** The upload endpoint in `tracks.controller` builds the `Track` directly and calls `enqueueIngest` to start HLS transcoding (`status: processing → ready | failed`). There is no external ingest — no connector layer, no import service, no provider reconciliation, and no dormant pipeline to revive. Adding an external source means building one from scratch; do not assume a hook exists. (Podcasts are a separate vertical and DO mirror external RSS — see the podcast import services.)
+
+- Track-bearing containers (albums, artists, playlists, genre cards, search/browse) must be filtered by the same playable-track predicate. Do not show a container as playable if opening it returns zero playable tracks. An album also carries its own `isAvailable`, so a creator can unpublish the container while its tracks stay individually discoverable.
+- The catalog authority and the playback authority must agree. `playableTrackFilter` gates listing; `isTrackPlayable` (`stream.controller`) gates playback. Any field that hides a track from one MUST hide it from the other, or takedowns stay listed and searchable and then fail at play. `isPlayableTrack` is the in-memory twin of the Mongo filter — change them together.
+- Catalog reads that vary by identity must use the linked Oxy client (`packages/frontend/utils/api.ts`), not `publicApi`.
 - Identity-sensitive catalog queries must wait until `useOxy().isPrivateApiPending` is false and must separate React Query cache keys for `guest` vs `auth`. Never let a guest cold-boot response populate the authenticated cache.
-- The player must resolve HLS and direct-only Audius playback through `GET /stream/:trackId`; the backend is the authority for entitlement and `directAudiusStreaming`.
-- Catalog filters must compose conditions with `$and`; do not spread filters in a way that overwrites `$or` clauses from playback visibility.
-- Long-term ingest path: classify Audius legal/technical copyability in the connector, ingest copyable tracks through Syra S3/HLS, persist stream-only policy explicitly. Do not solve this by treating all Audius as direct streaming.
+- The player resolves playback through `GET /stream/:trackId`; the backend is the sole entitlement authority.
+- Catalog filters must compose conditions with `$and` (`andMongoFilters` in `recommendationService.ts`, or the equivalent helper in `catalogVisibility.ts`), not by spreading filter objects in a way that clobbers an existing `$or`.
+
+### `$lookup` correlation — convert on the LOCAL side
+
+When a `$lookup` sub-pipeline correlates fields of different BSON types (typically a string id on one side, an `ObjectId` on the other), convert the LOCAL value in `let` and leave the foreign field a bare path:
+
+```js
+// CORRECT — stays an indexable _id point lookup
+let: { trackId: { $convert: { input: '$trackId', to: 'objectId', onError: null, onNull: null } } },
+pipeline: [{ $match: { $expr: { $eq: ['$_id', '$$trackId'] } } }]
+
+// WRONG — no index can serve a computed foreign field; every lookup degrades to a collection scan
+let: { trackId: '$trackId' },
+pipeline: [{ $match: { $expr: { $eq: [{ $toString: '$_id' }, '$$trackId'] } } }]
+```
+
+`let` is evaluated once per outer document, so the converted value is a constant the planner can use; a conversion applied to the foreign field cannot be indexed. Use `$convert` with `onError`/`onNull` rather than `$toObjectId`, so a malformed id yields `null` and matches nothing instead of throwing.
+
+This matters most in `utils/playableContainers.ts`, whose pipelines run the `$lookup` BEFORE `$sort`/`$limit` — every container in the collection is evaluated on every request, so per-lookup cost must stay O(1). Prefer bare indexed fields in the leading `$match` over any computed comparison.
