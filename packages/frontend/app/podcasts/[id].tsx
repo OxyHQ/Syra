@@ -17,7 +17,7 @@ import {
   useEpisodeProgressMap,
 } from '@/hooks/usePodcasts';
 import { usePlayerStore } from '@/stores/playerStore';
-import { resolvePodcastImageUri } from '@/utils/podcastImages';
+import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { stripHtml } from '@/utils/podcastFormat';
 import { webViewStyle } from '@/utils/webStyles';
 import { useViewAmbient } from '@/hooks/useAmbientArtwork';
@@ -50,13 +50,13 @@ const PodcastShowScreen: React.FC = () => {
   );
 
   const subscribed = podcast ? isSubscribed(podcast.id) : false;
-  const artwork = resolvePodcastImageUri(podcast, 'detailArtwork');
+  const artwork = pickCatalogImageUrl(undefined, podcast?.image, 'detailArtwork', podcast?.imageSizes, podcast?.imageSourceUrl);
   const description = stripHtml(podcast?.description);
 
-  // VIEW MODE: theme the WHOLE app from the show's cover ON VIEW (once it
-  // resolves) and restore the default on leave. Called before the early returns
-  // so the hook order stays stable; no-ops until the artwork URL is available.
-  useViewAmbient(id, artwork);
+  // VIEW MODE: theme the WHOLE app from the show's server-extracted cover colours
+  // ON VIEW and restore the default on leave. Called before the early returns so
+  // the hook order stays stable; no-ops until the show loads.
+  useViewAmbient(podcast?.primaryColor, podcast?.secondaryColor);
 
   const handlePlayEpisode = (index: number) => {
     const episode = episodes[index];

@@ -9,7 +9,7 @@ import { ArtistDetailSkeleton } from '@/components/skeletons';
 import { HostsAndGuests } from '@/components/podcast/HostsAndGuests';
 import { useEpisode, useEpisodeChapters, useEpisodeProgress } from '@/hooks/usePodcasts';
 import { usePlayerStore } from '@/stores/playerStore';
-import { resolvePodcastImageUri } from '@/utils/podcastImages';
+import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { stripHtml, formatPubDate, formatEpisodeDuration } from '@/utils/podcastFormat';
 import { formatDuration } from '@/utils/musicUtils';
 import { useViewAmbient } from '@/hooks/useAmbientArtwork';
@@ -43,13 +43,13 @@ const EpisodeScreen: React.FC = () => {
   const seek = usePlayerStore((s) => s.seek);
 
   const isCurrent = currentEpisode?.id === id;
-  const artwork = resolvePodcastImageUri(episode, 'detailArtwork');
+  const artwork = pickCatalogImageUrl(undefined, episode?.image, 'detailArtwork', episode?.imageSizes, episode?.imageSourceUrl);
   const description = useMemo(() => stripHtml(episode?.description ?? episode?.summary), [episode]);
 
-  // VIEW MODE: theme the WHOLE app from the episode's cover ON VIEW (once it
-  // resolves) and restore the default on leave. Called before the early returns
-  // so the hook order stays stable; no-ops until the artwork URL is available.
-  useViewAmbient(id, artwork);
+  // VIEW MODE: theme the WHOLE app from the episode's server-extracted cover
+  // colours ON VIEW and restore the default on leave. Called before the early
+  // returns so the hook order stays stable; no-ops until the episode loads.
+  useViewAmbient(episode?.primaryColor, episode?.secondaryColor);
 
   const handlePlay = () => {
     if (!episode) {

@@ -75,10 +75,10 @@ const PlaylistScreen: React.FC = () => {
     ? pickCatalogImageUrl(undefined, playlist.coverArt, 'hero', playlist.coverArtSizes)
     : undefined;
 
-  // VIEW MODE: theme the WHOLE app from the playlist cover ON VIEW (once it
-  // resolves) and restore the default on leave. Called before the early returns
-  // so the hook order stays stable; no-ops until the cover URL is available.
-  useViewAmbient(id, playlistHeroImage);
+  // VIEW MODE: theme the WHOLE app from the playlist's server-extracted cover
+  // colours ON VIEW and restore the default on leave. Called before the early
+  // returns so the hook order stays stable; no-ops until the playlist loads.
+  useViewAmbient(playlist?.primaryColor, playlist?.secondaryColor);
 
   const handlePlayPlaylist = () => {
     if (!canPlay) {
@@ -238,8 +238,10 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
     };
   });
 
+  // Cover-derived hero gradient, same neutral fallback as album/podcast: every
+  // stop falls back to `backgroundSecondary` (never the vivid brand accent).
   const gradientColors: readonly [string, string, string] = [
-    playlist.primaryColor ?? theme.colors.primary,
+    playlist.primaryColor ?? theme.colors.backgroundSecondary,
     playlist.secondaryColor ?? theme.colors.backgroundSecondary,
     theme.colors.backgroundSecondary,
   ];
