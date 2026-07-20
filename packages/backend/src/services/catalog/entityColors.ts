@@ -1,7 +1,3 @@
-import type { TrackImage } from '@syra/shared-types';
-import { tryExtractPredominantColors } from '../colorExtractionService';
-import { firstUsableImageUrl } from './externalImages';
-
 export interface EntityColors {
   primaryColor?: string;
   secondaryColor?: string;
@@ -10,23 +6,6 @@ export interface EntityColors {
 export interface EntityColorTarget {
   primaryColor?: string;
   secondaryColor?: string;
-}
-
-export function firstImageUrl(images: TrackImage[] | undefined): string | undefined {
-  return firstUsableImageUrl(images);
-}
-
-export async function colorsFromImages(
-  images: TrackImage[] | undefined,
-): Promise<EntityColors | undefined> {
-  const imageUrl = firstImageUrl(images);
-  if (!imageUrl) return undefined;
-  const colors = await tryExtractPredominantColors(imageUrl);
-  if (!colors) return undefined;
-  return {
-    primaryColor: colors.primary,
-    secondaryColor: colors.secondary,
-  };
 }
 
 export function assignMissingColors(
