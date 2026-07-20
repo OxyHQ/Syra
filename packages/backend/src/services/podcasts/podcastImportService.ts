@@ -1,5 +1,5 @@
 /**
- * Podcast import orchestrator — mirrors `services/sources/importService`.
+ * Podcast import orchestrator: fetch a feed, upsert the show and its episodes.
  *
  * Flow: fetch+parse the RSS feed (SSRF-safe, conditional GET) → upsert the
  * `Podcast` (by feedUrl, falling back to podcastGuid when a feed moved) → upsert
@@ -16,6 +16,10 @@
 import type { CatalogImageSizes } from '@syra/shared-types';
 import { PodcastModel, IPodcast } from '../../models/Podcast';
 import { EpisodeModel } from '../../models/Episode';
+import {
+  notifySubscribersOfNewEpisode,
+  type PublishedEpisode,
+} from '../notifications/triggers/episodePublished';
 import { logger } from '../../utils/logger';
 import { assignMissingColors, replaceColors } from '../catalog/entityColors';
 import { fetchAndParse, type ParsedEpisode, type ParsedShow, type SafeFetchFn } from './RssConnector';
@@ -217,6 +221,8 @@ export async function importFeed(feedUrl: string, options: ImportFeedOptions = {
 
   let importedEpisodes = 0;
   let failedEpisodes = 0;
+  /** Episodes this run actually INSERTED — the only ones worth notifying about. */
+  const newlyPublished: PublishedEpisode[] = [];
   let rehostedEpisodeImages = 0;
 
   for (const episode of fetched.episodes) {
@@ -253,7 +259,7 @@ export async function importFeed(feedUrl: string, options: ImportFeedOptions = {
         // Existing episode → leave its cover as-is (idempotent).
       }
 
-      await EpisodeModel.findOneAndUpdate(
+      const upsert = await EpisodeModel.findOneAndUpdate(
         { podcastId: podcast._id, guid: episode.guid },
         {
           $set: buildEpisodeSet(podcast.title, episode, media),
@@ -266,9 +272,24 @@ export async function importFeed(feedUrl: string, options: ImportFeedOptions = {
             ...(episode.pubDate ? {} : { pubDate: new Date() }),
           },
         },
-        { upsert: true, new: true },
+        { upsert: true, new: true, includeResultMetadata: true },
       );
       importedEpisodes += 1;
+
+      // `importedEpisodes` counts episodes PROCESSED, so it cannot drive notifications —
+      // every refresh re-processes the whole feed. MongoDB reports a genuine insert as
+      // `updatedExisting: false` (and returns the new id in `upserted`); an update to an
+      // already-known episode reports `updatedExisting: true`. Collected here and fanned
+      // out AFTER the import is durable, so notification work never sits in this loop.
+      if (upsert?.lastErrorObject?.updatedExisting === false && upsert.value) {
+        newlyPublished.push({
+          episodeId: String(upsert.value._id),
+          podcastId: String(podcast._id),
+          podcastTitle: podcast.title,
+          episodeTitle: episode.title,
+          pubDate: episode.pubDate,
+        });
+      }
     } catch (err) {
       logger.error('[podcasts] per-episode upsert failed', { feedUrl, guid: episode.guid, err });
       failedEpisodes += 1;
@@ -287,6 +308,22 @@ export async function importFeed(feedUrl: string, options: ImportFeedOptions = {
   if (fetched.etag) podcast.etag = fetched.etag;
   if (fetched.lastModified) podcast.lastModified = fetched.lastModified;
   await podcast.save();
+
+  // Fire-and-forget, and explicitly non-fatal: this is the only ingest Syra has, so a
+  // notification problem must never stop podcasts updating. `notifySubscribersOfNewEpisode`
+  // already swallows delivery failures; this catch covers the fan-out itself (the
+  // subscriber query) so nothing can escape into the import at all.
+  for (const published of newlyPublished) {
+    try {
+      await notifySubscribersOfNewEpisode(published);
+    } catch (err) {
+      logger.error('[podcasts] episode notification fan-out failed', {
+        feedUrl,
+        episodeId: published.episodeId,
+        err,
+      });
+    }
+  }
 
   return { podcast, notModified: false, importedEpisodes, failedEpisodes };
 }
