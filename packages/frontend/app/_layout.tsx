@@ -29,6 +29,7 @@ import { BloomThemeProvider, useTheme } from '@oxyhq/bloom/theme';
 import { LayoutScrollProvider, useLayoutScroll } from '@/context/LayoutScrollContext';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useUIStore } from '@/stores/uiStore';
+import { useAmbientThemeStore } from '@/stores/ambientTheme';
 import { prefetchHomeBrowse } from '@/hooks/useHomeFeed';
 
 // Services & Utils
@@ -281,6 +282,16 @@ export default function RootLayout() {
   const isScreenNotMobile = useIsScreenNotMobile();
   const keyboardVisible = useKeyboardVisibility();
 
+  // App-wide dynamic ambient theme. Driven by the artwork the user hovers (home /
+  // browse) or is viewing (detail pages) via the `useAmbientArtwork` driver, which
+  // writes the extracted seed trio into this store. Passing it to the single root
+  // `BloomThemeProvider` re-themes the WHOLE app (sidebar, background, shell); a
+  // `null` seed falls back to the app's default preset. Subscribing here (an
+  // external-store read, not mutable state) is React-Compiler-safe.
+  const ambientSeed = useAmbientThemeStore((s) => s.seed);
+  const ambientSecondary = useAmbientThemeStore((s) => s.secondarySeed);
+  const ambientTertiary = useAmbientThemeStore((s) => s.tertiarySeed);
+
   // Font loading is owned entirely by Bloom's `BloomThemeProvider`/`FontLoader`:
   // it loads the Bloom font families on native (and sets the default `Text`
   // family) and injects the `@font-face` rules + `--bloom-font-*` tokens on web.
@@ -392,6 +403,12 @@ export default function RootLayout() {
       // WEB shows the custom splash while fonts load; NATIVE shows nothing here
       // because the held OS splash is already covering the screen.
       onFontsLoading={Platform.OS === 'web' ? <AppSplashScreen /> : null}
+      // App-wide dynamic ambient theming: when set, the WHOLE app themes from the
+      // hovered/viewed artwork's extracted seed trio; when null it falls back to
+      // the `defaultColorPreset` (or the user's saved appearance preset).
+      seed={ambientSeed ?? undefined}
+      secondaryColor={ambientSecondary ?? undefined}
+      tertiaryColor={ambientTertiary ?? undefined}
     >
       <ThemedView style={{ flex: 1 }}>
         {appContent}

@@ -30,8 +30,7 @@ import { resolvePodcastImageUri } from '@/utils/podcastImages';
 import { authenticatedClient } from '@/utils/api';
 import { liveRoomsQueryKey } from '@/lib/liveConfig';
 import { toast } from '@/lib/sonner';
-import { AmbientArtworkTheme } from '@/components/AmbientArtworkTheme';
-import { useArtworkSeed } from '@/hooks/useArtworkSeed';
+import { useHoverAmbient } from '@/hooks/useAmbientArtwork';
 
 const logger = createScopedLogger('HomeScreen');
 
@@ -56,9 +55,10 @@ const HomeScreen: React.FC = () => {
   const [now, setNow] = useState(() => new Date());
   const { playTrackList } = usePlayerStore();
   const { addTracksLocally } = useQueueStore();
-  // Artwork-based ambient theming: hovering a card extracts its cover's dominant
-  // seed and re-themes the home's ambient surfaces via <AmbientArtworkTheme>.
-  const { seed, activate: activateSeed, deactivate: deactivateSeed } = useArtworkSeed();
+  // HOVER MODE: hovering any card extracts its cover's seed trio and themes the
+  // WHOLE app from it; leaving restores the default. The root provider owns the
+  // theming — these handlers only feed the shared driver.
+  const { onHoverIn: handleHoverIn, onHoverOut: handleHoverOut } = useHoverAmbient();
 
   // Real, per-section queries — each loads/caches/errors independently.
   const recentlyPlayedQuery = useRecentlyPlayed();
@@ -140,20 +140,6 @@ const HomeScreen: React.FC = () => {
     if (hour < 18) return 'Good afternoon';
     return 'Good evening';
   }, [now]);
-
-  // Hover a card → extract its cover's dominant seed → re-theme the home's
-  // ambient surfaces (the `<AmbientArtworkTheme>` scope below reads it). Leaving
-  // the card restores the app preset. `MediaCard` forwards its own resolved
-  // image URL + a stable id so the seed is cached per artwork.
-  //
-  // multi-seed: when Bloom ships explicit multi-seed extraction, `useArtworkSeed`
-  // becomes the single place that changes — these handlers keep the same shape.
-  const handleHoverIn = useCallback(
-    ({ id, imageUrl }: { id: string; imageUrl: string | undefined }) => {
-      activateSeed(id, imageUrl);
-    },
-    [activateSeed],
-  );
 
   // Navigate to and start playing an album's first track. Used by album cards'
   // play button so a single tap actually plays real audio.
@@ -299,11 +285,10 @@ const HomeScreen: React.FC = () => {
         title="Syra - Music Streaming"
         description="Discover and play your favorite music"
       />
-      {/* Hovering any card re-themes these ambient surfaces to the card's
-          artwork seed; leaving restores the app preset. Surfaces read the
-          scoped theme via `useTheme()` INSIDE this scope (see `HomeContent`). */}
-      <AmbientArtworkTheme seed={seed}>
-        <HomeContent
+      {/* Hovering any card themes the WHOLE app from that card's artwork; leaving
+          restores the default. Theming is owned by the root `BloomThemeProvider`
+          via the shared `useHoverAmbient` driver — no per-screen theme wrapper. */}
+      <HomeContent
           greeting={greeting}
           liveRooms={liveRooms}
           quickAccess={quickAccess}
@@ -329,7 +314,7 @@ const HomeScreen: React.FC = () => {
           tracksPending={tracksQuery.isPending}
           t={t}
           onSeedHoverIn={handleHoverIn}
-          onSeedHoverOut={deactivateSeed}
+          onSeedHoverOut={handleHoverOut}
           playTrackList={playTrackList}
           playAlbum={playAlbum}
           playPlaylist={playPlaylist}
@@ -339,7 +324,6 @@ const HomeScreen: React.FC = () => {
           addPlaylistToQueue={addPlaylistToQueue}
           addArtistToQueue={addArtistToQueue}
         />
-      </AmbientArtworkTheme>
     </>
   );
 };
@@ -382,10 +366,11 @@ interface HomeContentProps {
 }
 
 /**
- * The home's ambient region. Reads `useTheme()` INSIDE `<AmbientArtworkTheme>`
- * so its surfaces re-theme to the hovered card's artwork seed, then revert to
- * the app preset on hover-out. All data + handlers are passed by `HomeScreen`
- * (the data/logic owner) so this stays a pure presentational tree.
+ * The home's content tree. Cards forward hover intent up via `onSeedHoverIn` /
+ * `onSeedHoverOut`, which drive the app-wide ambient theme (the root provider
+ * re-themes the WHOLE app from the hovered card's artwork). All data + handlers
+ * are passed by `HomeScreen` (the data/logic owner) so this stays a pure
+ * presentational tree.
  */
 const HomeContent: React.FC<HomeContentProps> = ({
   greeting,
