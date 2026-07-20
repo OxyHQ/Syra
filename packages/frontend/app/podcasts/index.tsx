@@ -10,7 +10,7 @@ import { ResponsiveGrid } from '@/components/ResponsiveGrid';
 import { MediaCardRowSkeleton } from '@/components/skeletons';
 import { usePodcasts, useContinueListening } from '@/hooks/usePodcasts';
 import { usePlayerStore } from '@/stores/playerStore';
-import { resolvePodcastImageUri } from '@/utils/podcastImages';
+import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { formatRemaining } from '@/utils/podcastFormat';
 import { webViewStyle } from '@/utils/webStyles';
 import { useHoverAmbient } from '@/hooks/useAmbientArtwork';
@@ -81,7 +81,7 @@ interface PodcastsContentProps {
   inProgress: ContinueEntry[];
   activeCategory: string | null;
   onSelectCategory: (category: string | null) => void;
-  onSeedHoverIn: (seed: { id: string; imageUrl: string | undefined }) => void;
+  onSeedHoverIn: (colors: { primaryColor?: string; secondaryColor?: string }) => void;
   onSeedHoverOut: () => void;
   onOpenShow: (id: string) => void;
   onOpenEpisode: (id: string) => void;
@@ -145,11 +145,11 @@ const PodcastsContent: React.FC<PodcastsContentProps> = ({
                     title={entry.episode.title}
                     subtitle={formatRemaining(entry.progressSec, entry.durationSec)}
                     type="podcast"
-                    resolvedImageUri={resolvePodcastImageUri(entry.episode, 'card')}
+                    resolvedImageUri={pickCatalogImageUrl(undefined, entry.episode.image, 'card', entry.episode.imageSizes, entry.episode.imageSourceUrl)}
                     primaryColor={entry.episode.primaryColor}
+                    secondaryColor={entry.episode.secondaryColor}
                     onPress={() => onOpenEpisode(entry.episode.id)}
                     onPlayPress={() => onPlayEpisode(entry)}
-                    seedId={entry.episode.id}
                     onHoverIn={onSeedHoverIn}
                     onHoverOut={onSeedHoverOut}
                   />
@@ -220,11 +220,11 @@ const PodcastsContent: React.FC<PodcastsContentProps> = ({
                     title={podcast.title}
                     subtitle={podcast.author ?? 'Podcast'}
                     type="podcast"
-                    resolvedImageUri={resolvePodcastImageUri(podcast, 'card')}
+                    resolvedImageUri={pickCatalogImageUrl(undefined, podcast.image, 'card', podcast.imageSizes, podcast.imageSourceUrl)}
                     primaryColor={podcast.primaryColor}
+                    secondaryColor={podcast.secondaryColor}
                     onPress={() => onOpenShow(podcast.id)}
                     onPlayPress={() => onOpenShow(podcast.id)}
-                    seedId={podcast.id}
                     onHoverIn={onSeedHoverIn}
                     onHoverOut={onSeedHoverOut}
                   />

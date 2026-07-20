@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useTheme } from '@oxyhq/bloom/theme';
 import type { Episode } from '@syra/shared-types';
-import { resolvePodcastImageUri } from '@/utils/podcastImages';
+import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { formatEpisodeDuration, formatPubDate, formatRemaining } from '@/utils/podcastFormat';
 import type { EpisodeProgressSnapshot } from '@/hooks/usePodcasts';
 import { webViewStyle } from '@/utils/webStyles';
@@ -37,7 +37,10 @@ const EpisodeRowComponent: React.FC<EpisodeRowProps> = ({
   hideArtwork = false,
 }) => {
   const theme = useTheme();
-  const imageUri = useMemo(() => resolvePodcastImageUri(episode, 'thumbnail'), [episode]);
+  const imageUri = useMemo(
+    () => pickCatalogImageUrl(undefined, episode.image, 'thumbnail', episode.imageSizes, episode.imageSourceUrl),
+    [episode],
+  );
 
   const completed = progress?.completed ?? false;
   const hasProgress = !completed && (progress?.progressSec ?? 0) > 0 && (progress?.durationSec ?? 0) > 0;

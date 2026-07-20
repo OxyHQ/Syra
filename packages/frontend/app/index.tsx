@@ -26,7 +26,6 @@ import { usePodcasts } from '@/hooks/usePodcasts';
 import { createScopedLogger } from '@/utils/logger';
 import { Ionicons } from '@expo/vector-icons';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
-import { resolvePodcastImageUri } from '@/utils/podcastImages';
 import { authenticatedClient } from '@/utils/api';
 import { liveRoomsQueryKey } from '@/lib/liveConfig';
 import { toast } from '@/lib/sonner';
@@ -55,9 +54,9 @@ const HomeScreen: React.FC = () => {
   const [now, setNow] = useState(() => new Date());
   const { playTrackList } = usePlayerStore();
   const { addTracksLocally } = useQueueStore();
-  // HOVER MODE: hovering any card extracts its cover's seed trio and themes the
-  // WHOLE app from it; leaving restores the default. The root provider owns the
-  // theming — these handlers only feed the shared driver.
+  // HOVER MODE: hovering any card themes the WHOLE app from that card's
+  // server-extracted cover colours; leaving restores the default. The root
+  // provider owns the theming — these handlers only feed the shared driver.
   const { onHoverIn: handleHoverIn, onHoverOut: handleHoverOut } = useHoverAmbient();
 
   // Real, per-section queries — each loads/caches/errors independently.
@@ -353,7 +352,7 @@ interface HomeContentProps {
   tracks: Track[];
   tracksPending: boolean;
   t: ReturnType<typeof useTranslation>['t'];
-  onSeedHoverIn: (seed: { id: string; imageUrl: string | undefined }) => void;
+  onSeedHoverIn: (colors: { primaryColor?: string; secondaryColor?: string }) => void;
   onSeedHoverOut: () => void;
   playTrackList: (tracks: Track[], startIndex?: number, context?: PlaybackContext) => Promise<void>;
   playAlbum: (albumId: string, albumName?: string) => void;
@@ -491,7 +490,10 @@ const HomeContent: React.FC<HomeContentProps> = ({
                         router.push(`/p/${id}`);
                       }
                     }}
-                    onHoverIn={() => onSeedHoverIn({ id, imageUrl: imageUri })}
+                    onHoverIn={() => onSeedHoverIn({
+                      primaryColor: item.data.primaryColor,
+                      secondaryColor: item.data.secondaryColor,
+                    })}
                     onHoverOut={onSeedHoverOut}
                   >
                     <View
@@ -557,6 +559,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
                       images={track.images}
                       imageSizes={track.coverArtSizes}
                       primaryColor={track.primaryColor}
+                      secondaryColor={track.secondaryColor}
                       onPress={() => {
                         if (track.albumId) {
                           router.push(`/album/${track.albumId}`);
@@ -575,7 +578,6 @@ const HomeContent: React.FC<HomeContentProps> = ({
                       onAddToQueue={() => addTrackToQueue(track)}
                       onGoToAlbum={track.albumId ? () => router.push(`/album/${track.albumId}`) : undefined}
                       onGoToArtist={() => router.push(`/p/${track.artistId}`)}
-                      seedId={track.id}
                       onHoverIn={onSeedHoverIn}
                       onHoverOut={onSeedHoverOut}
                     />
@@ -609,10 +611,10 @@ const HomeContent: React.FC<HomeContentProps> = ({
                       images={artist.images}
                       imageSizes={artist.imageSizes}
                       primaryColor={artist.primaryColor}
+                      secondaryColor={artist.secondaryColor}
                       onPress={() => router.push(`/p/${artist.id}`)}
                       onPlayPress={() => playArtist(artist.id, artist.name)}
                       onAddToQueue={() => addArtistToQueue(artist.id)}
-                      seedId={artist.id}
                       onHoverIn={onSeedHoverIn}
                       onHoverOut={onSeedHoverOut}
                     />
@@ -627,10 +629,10 @@ const HomeContent: React.FC<HomeContentProps> = ({
                       imageUri={playlist.coverArt}
                       imageSizes={playlist.coverArtSizes}
                       primaryColor={playlist.primaryColor}
+                      secondaryColor={playlist.secondaryColor}
                       onPress={() => router.push(`/playlist/${playlist.id}`)}
                       onPlayPress={() => playPlaylist(playlist.id, playlist.name)}
                       onAddToQueue={() => addPlaylistToQueue(playlist.id)}
-                      seedId={playlist.id}
                       onHoverIn={onSeedHoverIn}
                       onHoverOut={onSeedHoverOut}
                     />
@@ -645,11 +647,11 @@ const HomeContent: React.FC<HomeContentProps> = ({
                       imageUri={album.coverArt}
                       imageSizes={album.coverArtSizes}
                       primaryColor={album.primaryColor}
+                      secondaryColor={album.secondaryColor}
                       onPress={() => router.push(`/album/${album.id}`)}
                       onPlayPress={() => playAlbum(album.id, album.title)}
                       onAddToQueue={() => addAlbumToQueue(album.id)}
                       onGoToArtist={() => router.push(`/p/${album.artistId}`)}
-                      seedId={album.id}
                       onHoverIn={onSeedHoverIn}
                       onHoverOut={onSeedHoverOut}
                     />
@@ -690,11 +692,11 @@ const HomeContent: React.FC<HomeContentProps> = ({
                       title={podcast.title}
                       subtitle={podcast.author ?? t('Podcast')}
                       type="podcast"
-                      resolvedImageUri={resolvePodcastImageUri(podcast, 'card')}
+                      resolvedImageUri={pickCatalogImageUrl(undefined, podcast.image, 'card', podcast.imageSizes, podcast.imageSourceUrl)}
                       primaryColor={podcast.primaryColor}
+                      secondaryColor={podcast.secondaryColor}
                       onPress={() => router.push({ pathname: '/podcasts/[id]', params: { id: podcast.id } })}
                       onPlayPress={() => router.push({ pathname: '/podcasts/[id]', params: { id: podcast.id } })}
-                      seedId={podcast.id}
                       onHoverIn={onSeedHoverIn}
                       onHoverOut={onSeedHoverOut}
                     />
@@ -727,11 +729,11 @@ const HomeContent: React.FC<HomeContentProps> = ({
                       imageUri={album.coverArt}
                       imageSizes={album.coverArtSizes}
                       primaryColor={album.primaryColor}
+                      secondaryColor={album.secondaryColor}
                       onPress={() => router.push(`/album/${album.id}`)}
                       onPlayPress={() => playAlbum(album.id, album.title)}
                       onAddToQueue={() => addAlbumToQueue(album.id)}
                       onGoToArtist={() => router.push(`/p/${album.artistId}`)}
-                      seedId={album.id}
                       onHoverIn={onSeedHoverIn}
                       onHoverOut={onSeedHoverOut}
                     />
@@ -758,10 +760,10 @@ const HomeContent: React.FC<HomeContentProps> = ({
                       images={artist.images}
                       imageSizes={artist.imageSizes}
                       primaryColor={artist.primaryColor}
+                      secondaryColor={artist.secondaryColor}
                       onPress={() => router.push(`/p/${artist.id}`)}
                       onPlayPress={() => playArtist(artist.id, artist.name)}
                       onAddToQueue={() => addArtistToQueue(artist.id)}
-                      seedId={artist.id}
                       onHoverIn={onSeedHoverIn}
                       onHoverOut={onSeedHoverOut}
                     />
@@ -787,10 +789,10 @@ const HomeContent: React.FC<HomeContentProps> = ({
                       imageUri={playlist.coverArt}
                       imageSizes={playlist.coverArtSizes}
                       primaryColor={playlist.primaryColor}
+                      secondaryColor={playlist.secondaryColor}
                       onPress={() => router.push(`/playlist/${playlist.id}`)}
                       onPlayPress={() => playPlaylist(playlist.id, playlist.name)}
                       onAddToQueue={() => addPlaylistToQueue(playlist.id)}
-                      seedId={playlist.id}
                       onHoverIn={onSeedHoverIn}
                       onHoverOut={onSeedHoverOut}
                     />
@@ -824,6 +826,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
                       images={track.images}
                       imageSizes={track.coverArtSizes}
                       primaryColor={track.primaryColor}
+                      secondaryColor={track.secondaryColor}
                       onPress={() => {
                         if (track.albumId) {
                           router.push(`/album/${track.albumId}`);
@@ -838,7 +841,6 @@ const HomeContent: React.FC<HomeContentProps> = ({
                       onAddToQueue={() => addTrackToQueue(track)}
                       onGoToAlbum={track.albumId ? () => router.push(`/album/${track.albumId}`) : undefined}
                       onGoToArtist={() => router.push(`/p/${track.artistId}`)}
-                      seedId={track.id}
                       onHoverIn={onSeedHoverIn}
                       onHoverOut={onSeedHoverOut}
                     />

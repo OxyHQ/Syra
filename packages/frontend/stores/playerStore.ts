@@ -50,7 +50,6 @@ import { castController } from '@/services/cast/castService';
 import { CAST_HLS_CONTENT_TYPE, CAST_PROGRESSIVE_CONTENT_TYPE } from '@/services/cast/types';
 import type { CastMediaMetadata, CastSessionState } from '@/services/cast/types';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
-import { resolvePodcastImageUri } from '@/utils/podcastImages';
 
 const logger = createScopedLogger('PlayerStore');
 const PLAY_SIGNAL_AUTH_WAIT_MS = 20_000;
@@ -508,7 +507,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       return {
         title: currentEpisode.title,
         subtitle: currentEpisode.podcastTitle,
-        artworkUrl: resolvePodcastImageUri(currentEpisode, 'detailArtwork'),
+        artworkUrl: pickCatalogImageUrl(
+          undefined,
+          currentEpisode.image,
+          'detailArtwork',
+          currentEpisode.imageSizes,
+          currentEpisode.imageSourceUrl,
+        ),
       };
     }
     if (currentTrack) {

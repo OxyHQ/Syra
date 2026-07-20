@@ -6,7 +6,7 @@ import { Image } from 'expo-image';
 import { useTheme } from '@oxyhq/bloom/theme';
 import type { ResolvedPerson } from '@syra/shared-types';
 import Avatar from '@/components/Avatar';
-import { resolveExternalImageUri } from '@/utils/podcastImages';
+import { resolveExternalImageUri } from '@/utils/pickImage';
 
 interface HostsAndGuestsProps {
   persons: ResolvedPerson[];

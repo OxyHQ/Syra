@@ -19,7 +19,6 @@ import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { EpisodeRow } from '@/components/EpisodeRow';
 import { useSubscriptions, useContinueListening } from '@/hooks/usePodcasts';
 import { usePlayerStore } from '@/stores/playerStore';
-import { resolvePodcastImageUri } from '@/utils/podcastImages';
 
 /**
  * Bottom offset (in px) for the Create Playlist FAB. Clears the floating
@@ -360,7 +359,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Podcasts</Text>
             <View style={styles.itemsContainer}>
               {subscribedPodcasts.map(({ podcast }) => {
-                const imageUri = resolvePodcastImageUri(podcast, 'thumbnail');
+                const imageUri = pickCatalogImageUrl(undefined, podcast.image, 'thumbnail', podcast.imageSizes, podcast.imageSourceUrl);
                 return (
                   <Pressable
                     key={podcast.id}
