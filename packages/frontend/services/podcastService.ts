@@ -22,9 +22,10 @@ import { api, publicApi } from '@/utils/api';
  * Every response is Zod-parsed at the boundary so backend drift fails loudly in
  * the service layer instead of surfacing as `undefined` deep in the UI.
  *
- * Podcast/episode artwork is intentionally NOT run through the catalog image
- * normalizer — external feed images are plain URLs and Syra-hosted ones are Oxy
- * file ids; both are resolved at render time via `resolvePodcastImageUri`.
+ * Podcast/episode artwork carries a Syra-hosted `image` id (+ `imageSizes`) with
+ * the original external `imageSourceUrl` as a fallback; both are resolved at
+ * render time via the shared catalog picker `pickCatalogImageUrl` (Syra-hosted
+ * first, external URL last).
  */
 
 const podcastResponseSchema = podcastSchema.passthrough();

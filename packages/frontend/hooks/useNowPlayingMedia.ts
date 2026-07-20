@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { usePlayerStore } from '@/stores/playerStore';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
-import { resolvePodcastImageUri } from '@/utils/podcastImages';
 
 /**
  * Unified now-playing view model so the player bars and the now-playing panel
@@ -27,7 +26,13 @@ export function useNowPlayingMedia(): NowPlayingMedia | null {
         id: currentEpisode.id,
         title: currentEpisode.title,
         subtitle: currentEpisode.podcastTitle,
-        imageUri: resolvePodcastImageUri(currentEpisode, 'thumbnail'),
+        imageUri: pickCatalogImageUrl(
+          undefined,
+          currentEpisode.image,
+          'thumbnail',
+          currentEpisode.imageSizes,
+          currentEpisode.imageSourceUrl,
+        ),
       };
     }
     if (currentTrack) {

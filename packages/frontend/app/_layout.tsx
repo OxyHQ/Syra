@@ -284,7 +284,8 @@ export default function RootLayout() {
 
   // App-wide dynamic ambient theme. Driven by the artwork the user hovers (home /
   // browse) or is viewing (detail pages) via the `useAmbientArtwork` driver, which
-  // writes the extracted seed trio into this store. Passing it to the single root
+  // writes the cover's SERVER-EXTRACTED colours (the `primaryColor`/`secondaryColor`
+  // DTO fields) into this store. Passing them to the single root
   // `BloomThemeProvider` re-themes the WHOLE app (sidebar, background, shell); a
   // `null` seed falls back to the app's default preset. Subscribing here (an
   // external-store read, not mutable state) is React-Compiler-safe.
@@ -404,7 +405,7 @@ export default function RootLayout() {
       // because the held OS splash is already covering the screen.
       onFontsLoading={Platform.OS === 'web' ? <AppSplashScreen /> : null}
       // App-wide dynamic ambient theming: when set, the WHOLE app themes from the
-      // hovered/viewed artwork's extracted seed trio; when null it falls back to
+      // hovered/viewed cover's server-extracted colours; when null it falls back to
       // the `defaultColorPreset` (or the user's saved appearance preset).
       seed={ambientSeed ?? undefined}
       secondaryColor={ambientSecondary ?? undefined}

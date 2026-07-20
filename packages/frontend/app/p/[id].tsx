@@ -23,7 +23,6 @@ import { MediaCard } from '@/components/MediaCard';
 import { ResponsiveGrid } from '@/components/ResponsiveGrid';
 import { ArtistDetailSkeleton } from '@/components/skeletons';
 import { pickCatalogImageUrl, type CatalogImageTarget } from '@/utils/pickImage';
-import { resolvePodcastImageUri } from '@/utils/podcastImages';
 import { oxyServices } from '@/lib/oxyServices';
 import { useLibrary, useToggleFollowArtist } from '@/hooks/useLibrary';
 import { useRelatedArtists } from '@/hooks/useRecommendations';
@@ -98,10 +97,10 @@ const EntityProfileScreen: React.FC = () => {
 
   const heroImage = entityImage('hero');
 
-  // VIEW MODE: theme the WHOLE app from the profile's hero cover ON VIEW (once it
-  // resolves) and restore the default on leave. Called before the early returns
-  // so the hook order stays stable; no-ops until the hero URL is available.
-  useViewAmbient(id, heroImage);
+  // VIEW MODE: theme the WHOLE app from the profile's server-extracted cover
+  // colours ON VIEW and restore the default on leave. Called before the early
+  // returns so the hook order stays stable; no-ops until the entity loads.
+  useViewAmbient(entity?.primaryColor, entity?.secondaryColor);
 
   const handlePlayAll = () => {
     if (tracks.length === 0) {
@@ -532,7 +531,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                         title={podcast.title}
                         subtitle={podcast.author ?? 'Podcast'}
                         type="podcast"
-                        resolvedImageUri={resolvePodcastImageUri(podcast, 'card')}
+                        resolvedImageUri={pickCatalogImageUrl(undefined, podcast.image, 'card', podcast.imageSizes, podcast.imageSourceUrl)}
                         primaryColor={podcast.primaryColor}
                         onPress={() => onNavigatePodcast(podcast.id)}
                       />

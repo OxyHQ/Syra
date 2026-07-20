@@ -11,7 +11,8 @@ import { normalizeAlbumImages, normalizeTrackImages } from '@/utils/catalogImage
  *
  * Catalog read → `publicApi`. Music track/album cover ids are normalized through
  * the shared catalog image pipeline (same as `musicService`); podcast/episode
- * artwork stays raw and resolves at render via `resolvePodcastImageUri`.
+ * artwork resolves at render via the shared catalog picker `pickCatalogImageUrl`
+ * (Syra-hosted `image`/`imageSizes` first, external `imageSourceUrl` last).
  */
 
 const entityProfileResponseSchema = z.object({
