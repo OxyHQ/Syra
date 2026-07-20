@@ -2,6 +2,7 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
@@ -9,6 +10,7 @@ import { NoUpdatesIllustration } from '@/assets/illustrations/NoUpdates';
 import { Button } from '@/components/ui/Button';
 
 export default function NotFoundScreen() {
+  const { t } = useTranslation();
     const router = useRouter();
     const theme = useTheme();
 
@@ -21,21 +23,21 @@ export default function NotFoundScreen() {
                 </View>
 
                 {/* Title */}
-                <ThemedText style={styles.title}>Page Not Found</ThemedText>
+                <ThemedText style={styles.title}>{t('notFound.title')}</ThemedText>
 
                 {/* Message */}
                 <ThemedText style={[styles.message, { color: theme.colors.textSecondary }]}>
-                    The page you&apos;re looking for doesn&apos;t exist or has been moved.
+                    {t('notFound.message')}
                 </ThemedText>
 
                 {/* Buttons */}
                 <View style={styles.buttonsContainer}>
                     <Button variant="primary" onPress={() => router.back()}>
-                        Go Back
+                        {t('common.goBack')}
                     </Button>
 
                     <Button variant="secondary" onPress={() => router.push('/')}>
-                        Home
+                        {t('common.home')}
                     </Button>
                 </View>
             </ThemedView>

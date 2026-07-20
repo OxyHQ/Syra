@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import BottomSheet, { type BottomSheetRef } from '@oxyhq/bloom/bottom-sheet';
 import { AlertDialog } from '@oxyhq/bloom/alert-dialog';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useOxy } from '@oxyhq/services';
@@ -33,6 +34,7 @@ export const PlaylistActionsSheet: React.FC<PlaylistActionsSheetProps> = ({
   playlist,
   onDeleted,
 }) => {
+  const { t } = useTranslation();
   const theme = useTheme();
   const { user, canUsePrivateApi, openAccountDialog } = useOxy();
   const sheetRef = useRef<BottomSheetRef>(null);
@@ -73,7 +75,7 @@ export const PlaylistActionsSheet: React.FC<PlaylistActionsSheetProps> = ({
   const handleRenameSubmit = () => {
     const trimmed = name.trim();
     if (!trimmed) {
-      toast.error('Playlist name cannot be empty');
+      toast.error(t('playlistActions.nameEmpty'));
       return;
     }
     if (trimmed === playlist.name) {
@@ -84,7 +86,7 @@ export const PlaylistActionsSheet: React.FC<PlaylistActionsSheetProps> = ({
       { playlistId: playlist.id, updates: { name: trimmed } },
       {
         onSuccess: () => {
-          toast.success('Playlist renamed');
+          toast.success(t('playlistActions.renamed'));
           onClose();
         },
       },
@@ -118,7 +120,7 @@ export const PlaylistActionsSheet: React.FC<PlaylistActionsSheetProps> = ({
               <TextInput
                 value={name}
                 onChangeText={setName}
-                placeholder="Playlist name"
+                placeholder={t('playlistActions.namePlaceholder')}
                 placeholderTextColor={theme.colors.textSecondary}
                 style={[
                   styles.input,
@@ -140,7 +142,7 @@ export const PlaylistActionsSheet: React.FC<PlaylistActionsSheetProps> = ({
                   accessibilityRole="button"
                 >
                   <Text style={[styles.secondaryButtonText, { color: theme.colors.text }]}>
-                    Cancel
+                    {t('common.cancel')}
                   </Text>
                 </Pressable>
                 <Pressable
@@ -151,7 +153,7 @@ export const PlaylistActionsSheet: React.FC<PlaylistActionsSheetProps> = ({
                   accessibilityState={{ disabled: updatePlaylist.isPending }}
                 >
                   <Text style={[styles.primaryButtonText, { color: theme.colors.primaryForeground }]}>
-                    {updatePlaylist.isPending ? 'Saving…' : 'Save'}
+                    {updatePlaylist.isPending ? t('common.saving') : t('common.save')}
                   </Text>
                 </Pressable>
               </View>
@@ -164,7 +166,7 @@ export const PlaylistActionsSheet: React.FC<PlaylistActionsSheetProps> = ({
                 accessibilityRole="button"
               >
                 <Ionicons name="pencil-outline" size={22} color={theme.colors.text} />
-                <Text style={[styles.actionText, { color: theme.colors.text }]}>Rename</Text>
+                <Text style={[styles.actionText, { color: theme.colors.text }]}>{t('common.rename')}</Text>
               </Pressable>
 
               {isOwner && (
@@ -177,7 +179,7 @@ export const PlaylistActionsSheet: React.FC<PlaylistActionsSheetProps> = ({
                 >
                   <Ionicons name="trash-outline" size={22} color={theme.colors.error} />
                   <Text style={[styles.actionText, { color: theme.colors.error }]}>
-                    Delete playlist
+                    {t('playlistActions.delete')}
                   </Text>
                 </Pressable>
               )}
@@ -185,9 +187,9 @@ export const PlaylistActionsSheet: React.FC<PlaylistActionsSheetProps> = ({
           ) : !canUsePrivateApi ? (
             <EmptyState
               icon={{ name: 'lock-closed-outline', size: 30 }}
-              subtitle="Sign in to edit playlists you own."
+              subtitle={t('playlistActions.signInSubtitle')}
               action={{
-                label: 'Sign in',
+                label: t('common.signIn'),
                 onPress: () => openAccountDialog('signin'),
                 icon: 'log-in-outline',
               }}
@@ -195,7 +197,7 @@ export const PlaylistActionsSheet: React.FC<PlaylistActionsSheetProps> = ({
             />
           ) : (
             <Text style={[styles.viewerNote, { color: theme.colors.textSecondary }]}>
-              You can play this playlist, but only its owner can change it.
+              {t('playlistActions.readOnly')}
             </Text>
           )}
         </View>
@@ -205,7 +207,7 @@ export const PlaylistActionsSheet: React.FC<PlaylistActionsSheetProps> = ({
         visible={confirmingDelete}
         onClose={() => setConfirmingDelete(false)}
         title={`Delete "${playlist.name}"?`}
-        description="This removes the playlist for everyone it's shared with. It can't be undone."
+        description={t('playlistActions.deleteDescription')}
         confirmLabel="Delete"
         cancelLabel="Keep"
         destructive

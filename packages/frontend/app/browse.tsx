@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { useRouter } from 'expo-router';
 import SEO from '@/components/SEO';
@@ -12,6 +13,7 @@ import { browseService } from '@/services/browseService';
 import { usePlayerStore } from '@/stores/playerStore';
 
 const BrowseScreen: React.FC = () => {
+  const { t } = useTranslation();
   const theme = useTheme();
   const router = useRouter();
   const { playTrackList } = usePlayerStore();
@@ -38,8 +40,8 @@ const BrowseScreen: React.FC = () => {
   return (
     <>
       <SEO
-        title="Browse - Syra"
-        description="Browse music by genre"
+        title={t('browse.seo.title')}
+        description={t('browse.seo.description')}
       />
       <ScrollView
         style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}
@@ -48,7 +50,7 @@ const BrowseScreen: React.FC = () => {
       >
         <View style={styles.content}>
           <ExploreSection
-            title="Browse all"
+            title={t('browse.all')}
             isLoading={genresLoading}
             isEmpty={genres.length === 0}
             error={genresError}

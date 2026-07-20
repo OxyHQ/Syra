@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { StyleSheet, View, ScrollView, Text, Pressable, Image, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { musicService } from '@/services/musicService';
 import { Track } from '@syra/shared-types';
@@ -29,6 +30,7 @@ import { TrackActionsSheet } from '@/components/playlist/TrackActionsSheet';
  * Displays album details, tracks, and playback controls
  */
 const AlbumScreen: React.FC = () => {
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const theme = useTheme();
@@ -93,7 +95,7 @@ const AlbumScreen: React.FC = () => {
 
   const handlePlayAlbum = () => {
     if (!canPlay) {
-      toast.info('No playable tracks available');
+      toast.info(t('common.noPlayableTracks'));
       return;
     }
 
@@ -121,8 +123,8 @@ const AlbumScreen: React.FC = () => {
         containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
         icon={{ name: 'cloud-offline-outline' }}
         error={{
-          title: 'Session unavailable',
-          message: 'We could not confirm your session. Check your connection and try again.',
+          title: t('common.sessionUnavailable'),
+          message: t('common.sessionErrorMessage'),
           onRetry: async () => {
             gate.retry();
           },
@@ -151,8 +153,8 @@ const AlbumScreen: React.FC = () => {
         containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
         icon={{ name: 'cloud-offline-outline' }}
         error={{
-          title: 'Could not load this album',
-          message: 'Something went wrong while loading this album. Please try again.',
+          title: t('album.errors.load'),
+          message: t('album.errors.message'),
           onRetry: async () => {
             await Promise.all([albumQuery.refetch(), tracksQuery.refetch()]);
           },
@@ -166,8 +168,8 @@ const AlbumScreen: React.FC = () => {
       <EmptyState
         containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
         icon={{ name: 'disc-outline' }}
-        title="Album not found"
-        subtitle="This album may have been removed or is no longer available."
+        title={t('album.notFound')}
+        subtitle={t('album.notFoundMessage')}
       />
     );
   }
@@ -246,6 +248,7 @@ const AlbumView: React.FC<AlbumViewProps> = ({
   onGoToArtist,
   formatReleaseDate,
 }) => {
+  const { t } = useTranslation();
   const theme = useTheme();
   const [addingAlbumToPlaylist, setAddingAlbumToPlaylist] = useState(false);
   const [trackActionsFor, setTrackActionsFor] = useState<Track | null>(null);
@@ -340,7 +343,7 @@ const AlbumView: React.FC<AlbumViewProps> = ({
               onPress={toggleShuffle}
               accessibilityRole="button"
               accessibilityState={{ selected: shuffle === 'on' }}
-              accessibilityLabel={shuffle === 'on' ? 'Turn shuffle off' : 'Turn shuffle on'}
+              accessibilityLabel={shuffle === 'on' ? t('common.shuffleOff') : t('common.shuffleOn')}
             >
               <Ionicons
                 name="shuffle"
@@ -354,7 +357,7 @@ const AlbumView: React.FC<AlbumViewProps> = ({
               onPress={onToggleSave}
               accessibilityRole="button"
               accessibilityState={{ selected: isSaved }}
-              accessibilityLabel={isSaved ? 'Remove from your library' : 'Save to your library'}
+              accessibilityLabel={isSaved ? t('common.removeFromLibrary') : t('common.saveToLibrary')}
             >
               <Ionicons
                 name={isSaved ? "checkmark-circle" : "checkmark-circle-outline"}
@@ -378,13 +381,13 @@ const AlbumView: React.FC<AlbumViewProps> = ({
               style={styles.controlButton}
               onPress={() => setAddingAlbumToPlaylist(true)}
               accessibilityRole="button"
-              accessibilityLabel="More options for this album"
+              accessibilityLabel={t('album.moreOptions')}
             >
               <Ionicons name="ellipsis-horizontal" size={24} color={theme.colors.text} />
             </Pressable>
 
             <View style={styles.listViewContainer}>
-              <Text style={[styles.listViewText, { color: theme.colors.text }]}>List</Text>
+              <Text style={[styles.listViewText, { color: theme.colors.text }]}>{t('common.list')}</Text>
               <Ionicons name="list" size={20} color={theme.colors.text} />
             </View>
           </View>
@@ -397,7 +400,7 @@ const AlbumView: React.FC<AlbumViewProps> = ({
         <View style={styles.trackListHeader}>
           <View style={styles.trackListHeaderLeft}>
             <Text style={[styles.trackListHeaderText, { color: theme.colors.textSecondary }]}>#</Text>
-            <Text style={[styles.trackListHeaderText, { color: theme.colors.textSecondary }]}>Title</Text>
+            <Text style={[styles.trackListHeaderText, { color: theme.colors.textSecondary }]}>{t('common.title')}</Text>
           </View>
           <Ionicons name="time-outline" size={16} color={theme.colors.textSecondary} />
         </View>
@@ -407,7 +410,7 @@ const AlbumView: React.FC<AlbumViewProps> = ({
           {tracks.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>
-                No playable tracks available
+                {t('common.noPlayableTracks')}
               </Text>
             </View>
           ) : tracks.map((track, index) => {
@@ -476,7 +479,7 @@ const AlbumView: React.FC<AlbumViewProps> = ({
                     style={styles.trackLikeButton}
                     accessibilityRole="button"
                     accessibilityState={{ selected: isLiked }}
-                    accessibilityLabel={isLiked ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
+                    accessibilityLabel={isLiked ? t('common.removeFromLiked') : t('common.saveToLiked')}
                   >
                     <Ionicons
                       name={isLiked ? 'heart' : 'heart-outline'}

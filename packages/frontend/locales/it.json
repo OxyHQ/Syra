@@ -20,7 +20,7 @@
     "please_wait": "Attendere prego..."
   },
   "common": {
-    "saving": "Salvataggio...",
+    "saving": "Salvataggio…",
     "cancel": "Annulla",
     "save": "Salva",
     "confirm": "Conferma",
@@ -69,7 +69,36 @@
     "album": "Album",
     "noPlayableTracks": "Nessun brano disponibile per la riproduzione",
     "playItem": "Riproduci {{title}}",
-    "offline": "Sei offline. Vengono mostrati i contenuti salvati."
+    "offline": "Sei offline. Vengono mostrati i contenuti salvati.",
+    "sessionErrorMessage": "Non siamo riusciti a confermare la tua sessione. Controlla la connessione e riprova.",
+    "shuffleOn": "Attiva la riproduzione casuale",
+    "shuffleOff": "Disattiva la riproduzione casuale",
+    "saveToLibrary": "Salva nella tua libreria",
+    "removeFromLibrary": "Rimuovi dalla tua libreria",
+    "saveToLiked": "Salva nei brani che ti piacciono",
+    "removeFromLiked": "Rimuovi dai brani che ti piacciono",
+    "title": "Titolo",
+    "list": "Elenco",
+    "unlisted": "Non in elenco",
+    "followers": "Follower",
+    "following": "Seguiti",
+    "create": "Crea",
+    "close": "Chiudi",
+    "rename": "Rinomina",
+    "new": "Nuova",
+    "about": "Info",
+    "showMore": "Mostra di più",
+    "showLess": "Mostra di meno",
+    "open": "Apri",
+    "addToQueue": "Aggiungi alla coda",
+    "goToAlbum": "Vai all'album",
+    "goToArtist": "Vai all'artista",
+    "tryAgain": "Riprova",
+    "home": "Home",
+    "goBack": "Torna indietro",
+    "previous": "Precedente",
+    "nextTrack": "Brano successivo",
+    "createAccount": "Crea account"
   },
   "agora": {
     "podcastStream": {
@@ -342,8 +371,6 @@
     "hideLyrics": "Nascondi testo",
     "nextInQueue": "Prossimo in coda",
     "queueEmpty": "La tua coda è vuota",
-    "saveToLiked": "Salva nei brani che ti piacciono",
-    "removeFromLiked": "Rimuovi dai brani che ti piacciono",
     "label": "Etichetta",
     "released": "Pubblicato"
   },
@@ -364,5 +391,201 @@
       "session": "Non siamo riusciti a confermare la tua sessione. Controlla la connessione e riprova."
     },
     "empty": "Ancora niente da mostrare"
+  },
+  "album": {
+    "notFound": "Album non trovato",
+    "notFoundMessage": "Questo album potrebbe essere stato rimosso o non essere più disponibile.",
+    "moreOptions": "Altre opzioni per questo album",
+    "errors": {
+      "load": "Impossibile caricare questo album",
+      "message": "Qualcosa è andato storto durante il caricamento dell'album. Riprova."
+    }
+  },
+  "playlist": {
+    "notFound": "Playlist non trovata",
+    "notFoundMessage": "Questa playlist potrebbe essere stata eliminata o essere privata.",
+    "moreOptions": "Altre opzioni per questa playlist",
+    "errors": {
+      "load": "Impossibile caricare questa playlist",
+      "message": "Qualcosa è andato storto durante il caricamento della playlist. Riprova."
+    },
+    "empty": "Nessun brano in questa playlist"
+  },
+  "user": {
+    "seo": {
+      "description": "Profilo utente",
+      "notFoundTitle": "Utente non trovato - Syra",
+      "notFoundDescription": "Profilo utente non trovato"
+    },
+    "notFound": "Utente non trovato",
+    "notFoundMessage": "Questo utente non esiste o il profilo è privato.",
+    "publicPlaylists": "Playlist pubbliche",
+    "noPublicPlaylists": "Ancora nessuna playlist pubblica"
+  },
+  "createPlaylist": {
+    "seo": {
+      "title": "Crea playlist - Syra",
+      "description": "Crea una nuova playlist"
+    },
+    "namePlaceholder": "Nome della playlist",
+    "descriptionPlaceholder": "Aggiungi una descrizione (facoltativa)",
+    "privacy": "Privacy",
+    "signInRequired": "Accedi per creare playlist",
+    "publicHint": "Chiunque può trovarla e ascoltarla",
+    "privateHint": "Solo tu puoi accedervi",
+    "unlistedHint": "Accessibile solo tramite link"
+  },
+  "copyright": {
+    "seo": {
+      "title": "Segnala violazione del copyright - Syra"
+    },
+    "title": "Segnala violazione del copyright",
+    "intro": "Se ritieni che un brano su Syra violi il copyright, cercalo qui sotto e forniscici i dettagli della violazione.",
+    "searchLabel": "Cerca il brano *",
+    "searchPlaceholder": "Cerca per brano o artista...",
+    "searchError": "Impossibile cercare i brani. Riprova.",
+    "reasonLabel": "Motivo della violazione *",
+    "reasonPlaceholder": "Fornisci i dettagli della violazione...",
+    "submit": "Invia segnalazione",
+    "submitError": "Impossibile inviare la segnalazione. Riprova.",
+    "submitted": "Segnalazione di violazione inviata correttamente"
+  },
+  "playlistActions": {
+    "namePlaceholder": "Nome della playlist",
+    "signInSubtitle": "Accedi per modificare le tue playlist.",
+    "delete": "Elimina playlist",
+    "deleteDescription": "La playlist verrà rimossa per tutte le persone con cui è stata condivisa. Non è reversibile.",
+    "readOnly": "Puoi ascoltare questa playlist, ma solo chi l'ha creata può modificarla.",
+    "nameEmpty": "Il nome della playlist non può essere vuoto",
+    "renamed": "Playlist rinominata"
+  },
+  "addToPlaylist": {
+    "signInTitle": "Accedi per salvare i brani",
+    "signInSubtitle": "Le tue playlist sono legate al tuo account.",
+    "empty": "Ancora nessuna playlist",
+    "emptySubtitle": "Creane una e comparirà qui.",
+    "create": "Crea una nuova playlist",
+    "new": "Nuova playlist",
+    "loadError": "Impossibile caricare le tue playlist",
+    "addCount_one": "Aggiungi alla playlist",
+    "addCount_other": "Aggiungi {{count}} brani alla playlist"
+  },
+  "sidebar": {
+    "collapse": "Comprimi libreria",
+    "expand": "Espandi libreria",
+    "exitFullscreen": "Esci dalla libreria a schermo intero",
+    "createPlaylist": "Crea playlist",
+    "searchPlaceholder": "Cerca nella tua libreria",
+    "noItems": "Nessun elemento trovato",
+    "loadError": "La libreria non si è caricata",
+    "publicPlaylist": "Playlist pubblica",
+    "privatePlaylist": "Playlist privata",
+    "sortedAZ": "Ordinato dalla A alla Z. Attiva per raggruppare per tipo.",
+    "groupedByType": "Raggruppato per tipo. Attiva per ordinare dalla A alla Z.",
+    "byType": "Per tipo",
+    "expandAccessibility": "Espandi la barra della libreria",
+    "emptyCollapsed": "La tua libreria è vuota. Espandila."
+  },
+  "devices": {
+    "title": "Connetti a un dispositivo",
+    "castAndSpeakers": "Cast e altoparlanti",
+    "playing": "In riproduzione",
+    "connected": "Connesso",
+    "disconnect": "Disconnetti",
+    "connectToCast": "Connetti a Cast",
+    "castDevice": "Dispositivo Cast",
+    "signInSubtitle": "Accedi per vedere i dispositivi del tuo account.",
+    "none": "Nessun altro dispositivo trovato",
+    "unavailable": "Dispositivi non disponibili",
+    "unreachable": "Syra Connect non è raggiungibile al momento.",
+    "castStartError": "Impossibile avviare la sessione di Cast",
+    "castEndError": "Impossibile terminare la sessione di Cast",
+    "disconnectFrom": "Disconnetti da {{name}}"
+  },
+  "podcasts": {
+    "seo": {
+      "title": "Podcast - Syra",
+      "description": "Scopri e ascolta podcast su Syra"
+    },
+    "find": "Trova un podcast",
+    "findAccessibility": "Trova podcast",
+    "continueListening": "Continua ad ascoltare",
+    "popularShows": "Programmi popolari",
+    "empty": "Ancora nessun programma. Cerca un podcast per aggiungerlo al catalogo.",
+    "notFound": "Podcast non trovato",
+    "notFoundMessage": "Questo programma non è nel catalogo di Syra.",
+    "errors": {
+      "load": "Impossibile caricare questo podcast",
+      "episodes": "Impossibile caricare gli episodi"
+    },
+    "noEpisodes": "Ancora nessun episodio disponibile.",
+    "subscribe": "Iscriviti",
+    "subscribed": "Iscritto",
+    "browse": "Esplora i podcast"
+  },
+  "live": {
+    "seo": {
+      "title": "In diretta - Syra",
+      "description": "Partecipa alle stanze audio dal vivo su Syra o creane una tua."
+    },
+    "title": "In diretta",
+    "subtitle": "Entra in una stanza o creane una tua.",
+    "startRoom": "Crea una stanza",
+    "startNow": "Inizia ora",
+    "creating": "Creazione…",
+    "scheduleRoom": "Programma stanza",
+    "empty": "Nessuna stanza dal vivo al momento",
+    "emptySubtitle": "Sii il primo ad andare in diretta: crea una stanza e invita altri ad ascoltare e parlare."
+  },
+  "episode": {
+    "notFound": "Episodio non trovato",
+    "notFoundMessage": "Questo episodio non è nel catalogo di Syra.",
+    "errors": {
+      "load": "Impossibile caricare questo episodio"
+    },
+    "chapters": "Capitoli",
+    "transcript": "Trascrizione",
+    "viewTranscript": "Vedi la trascrizione",
+    "untitledChapter": "Capitolo senza titolo",
+    "pause": "Pausa",
+    "resume": "Riprendi"
+  },
+  "notFound": {
+    "title": "Pagina non trovata",
+    "message": "La pagina che cerchi non esiste o è stata spostata.",
+    "oops": "Ops!",
+    "screenMissing": "Questa schermata non esiste.",
+    "goHome": "Vai alla schermata iniziale"
+  },
+  "welcome": {
+    "explore": "Esplora l'app"
+  },
+  "player": {
+    "connectDevice": "Connetti a un dispositivo",
+    "showQueue": "Mostra coda e riproduzione in corso"
+  },
+  "browse": {
+    "seo": {
+      "title": "Esplora - Syra",
+      "description": "Esplora la musica per genere"
+    },
+    "all": "Esplora tutto"
+  },
+  "trackActions": {
+    "addToPlaylist": "Aggiungi alla playlist",
+    "removeFromPlaylist": "Rimuovi da questa playlist"
+  },
+  "explore": {
+    "errorTitle": "Impossibile caricare questa sezione",
+    "errorMessage": "Qualcosa è andato storto dalla nostra parte. Controlla la connessione e riprova."
+  },
+  "podcast": {
+    "hostsAndGuests": "Conduttori e ospiti"
+  },
+  "coverArt": {
+    "add": "Aggiungi copertina"
+  },
+  "lyrics": {
+    "unavailable": "Nessun testo disponibile"
   }
 }

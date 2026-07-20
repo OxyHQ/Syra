@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { StyleSheet, View, Text, ScrollView, Pressable, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -28,6 +29,7 @@ import { useViewAmbient } from '@/hooks/useAmbientArtwork';
  * toggle, and the full reverse-chronological episode list with resume progress.
  */
 const PodcastShowScreen: React.FC = () => {
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
   const router = useRouter();
@@ -91,8 +93,8 @@ const PodcastShowScreen: React.FC = () => {
       <EmptyState
         icon={{ name: 'cloud-offline-outline' }}
         error={{
-          title: 'Could not load this podcast',
-          message: 'Check your connection and try again.',
+          title: t('podcasts.errors.load'),
+          message: t('common.retryHint'),
           onRetry: async () => {
             await showQuery.refetch();
           },
@@ -107,9 +109,9 @@ const PodcastShowScreen: React.FC = () => {
     return (
       <EmptyState
         icon={{ name: 'mic-off-outline' }}
-        title="Podcast not found"
-        subtitle="This show is not in the Syra catalog."
-        action={{ label: 'Browse podcasts', onPress: () => router.push('/podcasts'), icon: 'search-outline' }}
+        title={t('podcasts.notFound')}
+        subtitle={t('podcasts.notFoundMessage')}
+        action={{ label: t('podcasts.browse'), onPress: () => router.push('/podcasts'), icon: 'search-outline' }}
         containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
       />
     );
@@ -184,6 +186,7 @@ const PodcastShowView: React.FC<PodcastShowViewProps> = ({
   onPlayEpisode,
   onOpenEpisode,
 }) => {
+  const { t } = useTranslation();
   const theme = useTheme();
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
 
@@ -249,7 +252,7 @@ const PodcastShowView: React.FC<PodcastShowViewProps> = ({
                   { color: subscribed ? theme.colors.text : theme.colors.primaryForeground },
                 ]}
               >
-                {subscribed ? 'Subscribed' : 'Subscribe'}
+                {subscribed ? t('podcasts.subscribed') : t('podcasts.subscribe')}
               </Text>
             </Pressable>
           </View>
@@ -266,7 +269,7 @@ const PodcastShowView: React.FC<PodcastShowViewProps> = ({
               {description}
             </Text>
             <Text style={[styles.descriptionToggle, { color: theme.colors.primary }]}>
-              {descriptionExpanded ? 'Show less' : 'Show more'}
+              {descriptionExpanded ? t('common.showLess') : t('common.showMore')}
             </Text>
           </Pressable>
         ) : null}
@@ -275,22 +278,22 @@ const PodcastShowView: React.FC<PodcastShowViewProps> = ({
         <HostsAndGuests persons={persons} />
 
         {/* Episodes */}
-        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Episodes</Text>
+        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('common.episodes')}</Text>
         {episodesLoading && episodes.length === 0 ? (
           <LibraryListSkeleton count={6} />
         ) : episodesFailed && episodes.length === 0 ? (
           <EmptyState
             icon={{ name: 'cloud-offline-outline' }}
             error={{
-              title: 'Could not load episodes',
-              message: 'Check your connection and try again.',
+              title: t('podcasts.errors.episodes'),
+              message: t('common.retryHint'),
               onRetry: onRetryEpisodes,
             }}
             containerStyle={styles.inlineState}
           />
         ) : episodes.length === 0 ? (
           <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
-            No episodes available yet.
+            {t('podcasts.noEpisodes')}
           </Text>
         ) : (
           episodes.map((episode, index) => (

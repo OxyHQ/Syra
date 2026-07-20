@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, View, Text, Pressable, Platform } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { usePlayerStore } from '@/stores/playerStore';
@@ -38,6 +39,7 @@ const getProgressPercent = (currentTime: number, duration: number) => {
  * Full-featured player bar for desktop with all controls
  */
 export const PlayerBar: React.FC = () => {
+  const { t } = useTranslation();
   const theme = useTheme();
   const toggleNowPlaying = useUIStore(s => s.toggleNowPlaying);
   const [isDevicePickerVisible, setIsDevicePickerVisible] = useState(false);
@@ -228,7 +230,7 @@ export const PlayerBar: React.FC = () => {
             onPress={playPrevious}
             disabled={!hasMedia}
             accessibilityRole="button"
-            accessibilityLabel="Previous"
+            accessibilityLabel={t('common.previous')}
           >
             <MaterialCommunityIcons
               name="skip-previous"
@@ -296,7 +298,7 @@ export const PlayerBar: React.FC = () => {
             style={styles.controlButton}
             onPress={toggleNowPlaying}
             accessibilityRole="button"
-            accessibilityLabel="Show queue and now playing"
+            accessibilityLabel={t('player.showQueue')}
           >
             <MaterialCommunityIcons name="playlist-music" size={20} color={theme.colors.textSecondary} />
           </Pressable>
@@ -304,7 +306,7 @@ export const PlayerBar: React.FC = () => {
             style={styles.controlButton}
             onPress={() => setIsDevicePickerVisible(true)}
             accessibilityRole="button"
-            accessibilityLabel="Connect to a device"
+            accessibilityLabel={t('player.connectDevice')}
           >
             <MaterialCommunityIcons name="devices" size={20} color={theme.colors.textSecondary} />
           </Pressable>

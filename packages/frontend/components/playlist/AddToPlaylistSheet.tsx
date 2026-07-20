@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import BottomSheet, { type BottomSheetRef } from '@oxyhq/bloom/bottom-sheet';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -37,6 +38,7 @@ export const AddToPlaylistSheet: React.FC<AddToPlaylistSheetProps> = ({
   tracks,
   excludePlaylistId,
 }) => {
+  const { t } = useTranslation();
   const theme = useTheme();
   const router = useRouter();
   const { canUsePrivateApi, isPrivateApiPending, openAccountDialog } = useOxy();
@@ -90,9 +92,9 @@ export const AddToPlaylistSheet: React.FC<AddToPlaylistSheetProps> = ({
       return (
         <EmptyState
           icon={{ name: 'lock-closed-outline', size: 32 }}
-          title="Sign in to save songs"
-          subtitle="Your playlists live on your account."
-          action={{ label: 'Sign in', onPress: () => openAccountDialog('signin'), icon: 'log-in-outline' }}
+          title={t('addToPlaylist.signInTitle')}
+          subtitle={t('addToPlaylist.signInSubtitle')}
+          action={{ label: t('common.signIn'), onPress: () => openAccountDialog('signin'), icon: 'log-in-outline' }}
           containerStyle={styles.stateContainer}
         />
       );
@@ -107,8 +109,8 @@ export const AddToPlaylistSheet: React.FC<AddToPlaylistSheetProps> = ({
         <EmptyState
           icon={{ name: 'alert-circle-outline', size: 32 }}
           error={{
-            title: "Couldn't load your playlists",
-            message: 'Check your connection and try again.',
+            title: t('addToPlaylist.loadError'),
+            message: t('common.retryHint'),
             onRetry: async () => { await playlistsQuery.refetch(); },
           }}
           containerStyle={styles.stateContainer}
@@ -120,9 +122,9 @@ export const AddToPlaylistSheet: React.FC<AddToPlaylistSheetProps> = ({
       return (
         <EmptyState
           icon={{ name: 'musical-notes-outline', size: 32 }}
-          title="No playlists yet"
-          subtitle="Create one and it'll show up here."
-          action={{ label: 'New playlist', onPress: handleCreateNew, icon: 'add' }}
+          title={t('addToPlaylist.empty')}
+          subtitle={t('addToPlaylist.emptySubtitle')}
+          action={{ label: t('addToPlaylist.new'), onPress: handleCreateNew, icon: 'add' }}
           containerStyle={styles.stateContainer}
         />
       );
@@ -173,17 +175,17 @@ export const AddToPlaylistSheet: React.FC<AddToPlaylistSheetProps> = ({
       <View style={styles.sheet}>
         <View style={styles.header}>
           <Text style={[styles.title, { color: theme.colors.text }]}>
-            {tracks.length === 1 ? 'Add to playlist' : `Add ${tracks.length} songs to playlist`}
+            {t('addToPlaylist.addCount', { count: tracks.length })}
           </Text>
           {canUsePrivateApi && (
             <Pressable
               onPress={handleCreateNew}
               style={styles.newButton}
               accessibilityRole="button"
-              accessibilityLabel="Create a new playlist"
+              accessibilityLabel={t('addToPlaylist.create')}
             >
               <Ionicons name="add" size={20} color={theme.colors.text} />
-              <Text style={[styles.newButtonText, { color: theme.colors.text }]}>New</Text>
+              <Text style={[styles.newButtonText, { color: theme.colors.text }]}>{t('common.new')}</Text>
             </Pressable>
           )}
         </View>

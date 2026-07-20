@@ -199,7 +199,7 @@ export const NowPlaying: React.FC = () => {
                     style={styles.likeButton}
                     accessibilityRole="button"
                     accessibilityState={{ selected: isLiked }}
-                    accessibilityLabel={isLiked ? t('nowPlaying.removeFromLiked') : t('nowPlaying.saveToLiked')}
+                    accessibilityLabel={isLiked ? t('common.removeFromLiked') : t('common.saveToLiked')}
                   >
                     <Ionicons
                       name={isLiked ? 'heart' : 'heart-outline'}

@@ -20,7 +20,7 @@
     "please_wait": "Please wait..."
   },
   "common": {
-    "saving": "Saving...",
+    "saving": "Saving…",
     "cancel": "Cancel",
     "save": "Save",
     "confirm": "Confirm",
@@ -69,7 +69,36 @@
     "album": "Album",
     "noPlayableTracks": "No playable tracks available",
     "playItem": "Play {{title}}",
-    "offline": "You're offline. Showing saved content."
+    "offline": "You're offline. Showing saved content.",
+    "sessionErrorMessage": "We could not confirm your session. Check your connection and try again.",
+    "shuffleOn": "Turn shuffle on",
+    "shuffleOff": "Turn shuffle off",
+    "saveToLibrary": "Save to your library",
+    "removeFromLibrary": "Remove from your library",
+    "saveToLiked": "Save to Liked Songs",
+    "removeFromLiked": "Remove from Liked Songs",
+    "title": "Title",
+    "list": "List",
+    "unlisted": "Unlisted",
+    "followers": "Followers",
+    "following": "Following",
+    "create": "Create",
+    "close": "Close",
+    "rename": "Rename",
+    "new": "New",
+    "about": "About",
+    "showMore": "Show more",
+    "showLess": "Show less",
+    "open": "Open",
+    "addToQueue": "Add to queue",
+    "goToAlbum": "Go to album",
+    "goToArtist": "Go to artist",
+    "tryAgain": "Try again",
+    "home": "Home",
+    "goBack": "Go Back",
+    "previous": "Previous",
+    "nextTrack": "Next track",
+    "createAccount": "Create account"
   },
   "agora": {
     "podcastStream": {
@@ -342,8 +371,6 @@
     "hideLyrics": "Hide lyrics",
     "nextInQueue": "Next in queue",
     "queueEmpty": "Your queue is empty",
-    "saveToLiked": "Save to Liked Songs",
-    "removeFromLiked": "Remove from Liked Songs",
     "label": "Label",
     "released": "Released"
   },
@@ -364,5 +391,201 @@
       "session": "We could not confirm your session. Check your connection and try again."
     },
     "empty": "Nothing to show yet"
+  },
+  "album": {
+    "notFound": "Album not found",
+    "notFoundMessage": "This album may have been removed or is no longer available.",
+    "moreOptions": "More options for this album",
+    "errors": {
+      "load": "Could not load this album",
+      "message": "Something went wrong while loading this album. Please try again."
+    }
+  },
+  "playlist": {
+    "notFound": "Playlist not found",
+    "notFoundMessage": "This playlist may have been deleted or is private.",
+    "moreOptions": "More options for this playlist",
+    "errors": {
+      "load": "Could not load this playlist",
+      "message": "Something went wrong while loading this playlist. Please try again."
+    },
+    "empty": "No tracks in this playlist"
+  },
+  "user": {
+    "seo": {
+      "description": "User profile",
+      "notFoundTitle": "User Not Found - Syra",
+      "notFoundDescription": "User profile not found"
+    },
+    "notFound": "User not found",
+    "notFoundMessage": "This user doesn't exist or the profile is private.",
+    "publicPlaylists": "Public Playlists",
+    "noPublicPlaylists": "No public playlists yet"
+  },
+  "createPlaylist": {
+    "seo": {
+      "title": "Create Playlist - Syra",
+      "description": "Create a new playlist"
+    },
+    "namePlaceholder": "Playlist name",
+    "descriptionPlaceholder": "Add a description (optional)",
+    "privacy": "Privacy",
+    "signInRequired": "You must be logged in to create playlists",
+    "publicHint": "Anyone can find and play",
+    "privateHint": "Only you can access",
+    "unlistedHint": "Only accessible via link"
+  },
+  "copyright": {
+    "seo": {
+      "title": "Report Copyright Violation - Syra"
+    },
+    "title": "Report Copyright Violation",
+    "intro": "If you believe a track on Syra violates copyright, please search for the track below and provide details about the violation.",
+    "searchLabel": "Search for Track *",
+    "searchPlaceholder": "Search by track name or artist...",
+    "searchError": "Failed to search tracks. Please try again.",
+    "reasonLabel": "Reason for Copyright Violation *",
+    "reasonPlaceholder": "Please provide details about the copyright violation...",
+    "submit": "Submit Report",
+    "submitError": "Failed to submit report. Please try again.",
+    "submitted": "Copyright violation report submitted successfully"
+  },
+  "playlistActions": {
+    "namePlaceholder": "Playlist name",
+    "signInSubtitle": "Sign in to edit playlists you own.",
+    "delete": "Delete playlist",
+    "deleteDescription": "This removes the playlist for everyone it's shared with. It can't be undone.",
+    "readOnly": "You can play this playlist, but only its owner can change it.",
+    "nameEmpty": "Playlist name cannot be empty",
+    "renamed": "Playlist renamed"
+  },
+  "addToPlaylist": {
+    "signInTitle": "Sign in to save songs",
+    "signInSubtitle": "Your playlists live on your account.",
+    "empty": "No playlists yet",
+    "emptySubtitle": "Create one and it'll show up here.",
+    "create": "Create a new playlist",
+    "new": "New playlist",
+    "loadError": "Couldn't load your playlists",
+    "addCount_one": "Add to playlist",
+    "addCount_other": "Add {{count}} songs to playlist"
+  },
+  "sidebar": {
+    "collapse": "Collapse library",
+    "expand": "Expand library",
+    "exitFullscreen": "Exit fullscreen library",
+    "createPlaylist": "Create playlist",
+    "searchPlaceholder": "Search in Your Library",
+    "noItems": "No items found",
+    "loadError": "Library didn't load",
+    "publicPlaylist": "Public playlist",
+    "privatePlaylist": "Private playlist",
+    "sortedAZ": "Sorted A to Z. Activate to group by type.",
+    "groupedByType": "Grouped by type. Activate to sort A to Z.",
+    "byType": "By type",
+    "expandAccessibility": "Expand library sidebar",
+    "emptyCollapsed": "Your library is empty. Expand library."
+  },
+  "devices": {
+    "title": "Connect to a Device",
+    "castAndSpeakers": "Cast & speakers",
+    "playing": "Playing",
+    "connected": "Connected",
+    "disconnect": "Disconnect",
+    "connectToCast": "Connect to Cast",
+    "castDevice": "Cast device",
+    "signInSubtitle": "Sign in to see the devices on your account.",
+    "none": "No other devices found",
+    "unavailable": "Devices unavailable",
+    "unreachable": "Syra Connect is unreachable right now.",
+    "castStartError": "Failed to start cast session",
+    "castEndError": "Failed to end cast session",
+    "disconnectFrom": "Disconnect from {{name}}"
+  },
+  "podcasts": {
+    "seo": {
+      "title": "Podcasts - Syra",
+      "description": "Discover and listen to podcasts on Syra"
+    },
+    "find": "Find a podcast",
+    "findAccessibility": "Find podcasts",
+    "continueListening": "Continue listening",
+    "popularShows": "Popular shows",
+    "empty": "No shows here yet. Try finding a podcast to add it to the catalog.",
+    "notFound": "Podcast not found",
+    "notFoundMessage": "This show is not in the Syra catalog.",
+    "errors": {
+      "load": "Could not load this podcast",
+      "episodes": "Could not load episodes"
+    },
+    "noEpisodes": "No episodes available yet.",
+    "subscribe": "Subscribe",
+    "subscribed": "Subscribed",
+    "browse": "Browse podcasts"
+  },
+  "live": {
+    "seo": {
+      "title": "Live - Syra",
+      "description": "Join live audio rooms on Syra or start your own."
+    },
+    "title": "Live",
+    "subtitle": "Drop into a room, or start your own.",
+    "startRoom": "Start a room",
+    "startNow": "Start now",
+    "creating": "Creating…",
+    "scheduleRoom": "Schedule room",
+    "empty": "No live rooms right now",
+    "emptySubtitle": "Be the first to go live — start a room and invite people to listen and talk."
+  },
+  "episode": {
+    "notFound": "Episode not found",
+    "notFoundMessage": "This episode is not in the Syra catalog.",
+    "errors": {
+      "load": "Could not load this episode"
+    },
+    "chapters": "Chapters",
+    "transcript": "Transcript",
+    "viewTranscript": "View transcript",
+    "untitledChapter": "Untitled chapter",
+    "pause": "Pause",
+    "resume": "Resume"
+  },
+  "notFound": {
+    "title": "Page Not Found",
+    "message": "The page you're looking for doesn't exist or has been moved.",
+    "oops": "Oops!",
+    "screenMissing": "This screen does not exist.",
+    "goHome": "Go to home screen!"
+  },
+  "welcome": {
+    "explore": "Explore the app"
+  },
+  "player": {
+    "connectDevice": "Connect to a device",
+    "showQueue": "Show queue and now playing"
+  },
+  "browse": {
+    "seo": {
+      "title": "Browse - Syra",
+      "description": "Browse music by genre"
+    },
+    "all": "Browse all"
+  },
+  "trackActions": {
+    "addToPlaylist": "Add to playlist",
+    "removeFromPlaylist": "Remove from this playlist"
+  },
+  "explore": {
+    "errorTitle": "Couldn't load this section",
+    "errorMessage": "Something went wrong on our side. Check your connection and try again."
+  },
+  "podcast": {
+    "hostsAndGuests": "Hosts & Guests"
+  },
+  "coverArt": {
+    "add": "Add Cover Art"
+  },
+  "lyrics": {
+    "unavailable": "No lyrics available"
   }
 }

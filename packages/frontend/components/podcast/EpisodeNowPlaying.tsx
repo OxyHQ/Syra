@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image as ExpoImage } from 'expo-image';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useEpisodeChapters } from '@/hooks/usePodcasts';
@@ -17,6 +18,7 @@ import { SpeedPill, SkipButton } from './PodcastTransportControls';
  * Podcasting 2.0 chapter list when present (tap a chapter to seek).
  */
 export const EpisodeNowPlaying: React.FC = () => {
+  const { t } = useTranslation();
   const theme = useTheme();
   const router = useRouter();
 
@@ -89,7 +91,7 @@ export const EpisodeNowPlaying: React.FC = () => {
       {/* Chapters */}
       {chapters.length > 0 && (
         <View style={[styles.card, { backgroundColor: theme.colors.backgroundTertiary }]}>
-          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>Chapters</Text>
+          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>{t('episode.chapters')}</Text>
           {chapters.map((chapter, index) => {
             const isActive = index === activeChapterIndex;
             return (

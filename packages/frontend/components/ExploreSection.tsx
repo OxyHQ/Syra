@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, View, Text } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { MediaCardRowSkeleton } from '@/components/skeletons';
 import { EmptyState } from '@/components/common/EmptyState';
@@ -39,6 +40,7 @@ export const ExploreSection: React.FC<ExploreSectionProps> = ({
   loadingSkeleton,
   children,
 }) => {
+  const { t } = useTranslation();
   const theme = useTheme();
 
   // The error branch wins over `isLoading`: while a failed query refetches,
@@ -53,8 +55,8 @@ export const ExploreSection: React.FC<ExploreSectionProps> = ({
         <EmptyState
           icon={{ name: 'alert-circle-outline' }}
           error={{
-            title: "Couldn't load this section",
-            message: 'Something went wrong on our side. Check your connection and try again.',
+            title: t('explore.errorTitle'),
+            message: t('explore.errorMessage'),
             onRetry: onRetry ? async () => { await onRetry(); } : undefined,
           }}
           containerStyle={styles.stateContainer}

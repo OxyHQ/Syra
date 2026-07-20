@@ -3,6 +3,7 @@ import { StyleSheet, View, Text, Pressable, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import type { ResolvedPerson } from '@syra/shared-types';
 import Avatar from '@/components/Avatar';
@@ -10,7 +11,7 @@ import { resolveExternalImageUri } from '@/utils/pickImage';
 
 interface HostsAndGuestsProps {
   persons: ResolvedPerson[];
-  /** Section heading. Defaults to "Hosts & Guests". */
+  /** Section heading. Defaults to the translated "Hosts & Guests". */
   title?: string;
 }
 
@@ -26,7 +27,9 @@ interface HostsAndGuestsProps {
  * profile → `/p/[personId]`. The Oxy-user link is gated on `username` being in
  * the payload (the `/u/[username]` route resolves by username, not by Oxy id).
  */
-export const HostsAndGuests: React.FC<HostsAndGuestsProps> = ({ persons, title = 'Hosts & Guests' }) => {
+export const HostsAndGuests: React.FC<HostsAndGuestsProps> = ({ persons, title }) => {
+  const { t } = useTranslation();
+  const heading = title ?? t('podcast.hostsAndGuests');
   const theme = useTheme();
   const router = useRouter();
 
@@ -36,7 +39,7 @@ export const HostsAndGuests: React.FC<HostsAndGuestsProps> = ({ persons, title =
 
   return (
     <View style={styles.section}>
-      <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{title}</Text>
+      <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{heading}</Text>
       {persons.map((person, index) => {
         const isOxyLinked = Boolean(person.linkedOxyUserId);
         const label = person.displayName || person.name;

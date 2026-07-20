@@ -4,6 +4,7 @@ import * as Skeleton from '@oxyhq/bloom/skeleton';
 import { useLyrics } from '@/hooks/useLyrics';
 import { usePlayerStore } from '@/stores/playerStore';
 import { activeLyricLineIndex } from '@/utils/lyrics';
+import { useTranslation } from 'react-i18next';
 
 const SECONDS_TO_MS = 1000;
 
@@ -24,6 +25,7 @@ interface LyricsViewProps {
  * - Plain lyrics: scrollable text block.
  */
 export const LyricsView: React.FC<LyricsViewProps> = React.memo(({ trackId }) => {
+  const { t } = useTranslation();
   const { lyrics, isLoading } = useLyrics(trackId);
 
   // currentTime is in seconds — convert to ms for the active-line computation.
@@ -53,7 +55,7 @@ export const LyricsView: React.FC<LyricsViewProps> = React.memo(({ trackId }) =>
     return (
       <View className="flex-1 items-center justify-center px-6">
         <Text className="text-lg font-medium text-muted-foreground text-center">
-          No lyrics available
+          {t('lyrics.unavailable')}
         </Text>
       </View>
     );

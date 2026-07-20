@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { useOxy } from '@oxyhq/services';
 import { Image } from 'expo-image';
@@ -104,6 +105,7 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
   error,
   onRetry,
 }) => {
+  const { t } = useTranslation();
   const router = useRouter();
   const theme = useTheme();
   const { isAuthenticated, canUsePrivateApi } = useOxy();
@@ -113,7 +115,7 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
       ? [{
           id: 'liked',
           kind: 'liked',
-          title: 'Liked Songs',
+          title: t('library.likedSongs'),
           subtitle: `Playlist • ${likedTracksCount} ${likedTracksCount === 1 ? 'song' : 'songs'}`,
           href: '/library/liked',
           imageShape: 'square',
@@ -134,7 +136,7 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
       id: artist.id,
       kind: 'artist',
       title: artist.name,
-      subtitle: 'Artist',
+      subtitle: t('common.artist'),
       href: { pathname: '/p/[id]', params: { id: artist.id } },
       imageUrl: pickCatalogImageUrl(artist.images, artist.image, 'thumbnail', artist.imageSizes),
       imageShape: 'circle',
@@ -194,11 +196,11 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
             onPress={onCollapse}
             style={styles.iconButton}
             accessibilityRole="button"
-            accessibilityLabel="Collapse library"
+            accessibilityLabel={t('sidebar.collapse')}
           >
             <Octicons name="sidebar-collapse" size={19} color={theme.colors.textSecondary} />
           </Pressable>
-          <Text style={[styles.title, { color: theme.colors.text }]}>Your Library</Text>
+          <Text style={[styles.title, { color: theme.colors.text }]}>{t('library.title')}</Text>
         </View>
 
         <View style={styles.headerActions}>
@@ -207,7 +209,7 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
               onPress={() => router.push('/create-playlist')}
               style={styles.iconButton}
               accessibilityRole="button"
-              accessibilityLabel="Create playlist"
+              accessibilityLabel={t('sidebar.createPlaylist')}
             >
               <Ionicons name="add" size={22} color={theme.colors.textSecondary} />
             </Pressable>
@@ -265,7 +267,7 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
           <TextInput
             value={searchQuery}
             onChangeText={onSearchChange}
-            placeholder="Search in Your Library"
+            placeholder={t('sidebar.searchPlaceholder')}
             placeholderTextColor={theme.colors.textSecondary}
             style={[styles.searchInput, { color: theme.colors.text }]}
           />
@@ -303,7 +305,7 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
         <EmptyState
           icon={{ name: 'alert-circle-outline', size: 28 }}
           error={{
-            title: "Library didn't load",
+            title: t('sidebar.loadError'),
             message: error,
             onRetry,
           }}
@@ -312,13 +314,13 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
       ) : !isAuthenticated ? (
         <EmptyState
           icon={{ name: 'lock-closed-outline', size: 28 }}
-          subtitle="Sign in to view your library"
+          subtitle={t('library.signedOut')}
           containerStyle={styles.stateContainer}
         />
       ) : entries.length === 0 ? (
         <EmptyState
           icon={{ name: 'musical-notes-outline', size: 28 }}
-          subtitle="No items found"
+          subtitle={t('sidebar.noItems')}
           containerStyle={styles.stateContainer}
         />
       ) : (

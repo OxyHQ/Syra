@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, View, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons, Octicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { Playlist, Album, Artist } from '@syra/shared-types';
 import { Image } from 'expo-image';
@@ -35,6 +36,7 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
   error,
   onRetry,
 }) => {
+  const { t } = useTranslation();
   const router = useRouter();
   const theme = useTheme();
   const { isAuthenticated } = useOxy();
@@ -46,7 +48,7 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
           onPress={onExpand}
           style={styles.expandButton}
           accessibilityRole="button"
-          accessibilityLabel="Expand library sidebar"
+          accessibilityLabel={t('sidebar.expandAccessibility')}
         >
           <Octicons
             name="sidebar-expand"
@@ -106,7 +108,7 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
             style={styles.iconButton}
             onPress={onExpand}
             accessibilityRole="button"
-            accessibilityLabel="Your library is empty. Expand library."
+            accessibilityLabel={t('sidebar.emptyCollapsed')}
           >
             <MaterialCommunityIcons
               name="music-box-multiple-outline"

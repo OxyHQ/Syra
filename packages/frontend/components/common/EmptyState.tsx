@@ -1,5 +1,6 @@
 import React, { memo, useState, ReactNode } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ViewStyle, TextStyle } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { flattenStyleArray } from '@/styles/shared';
 import { Ionicons } from '@expo/vector-icons';
@@ -51,6 +52,7 @@ export const EmptyState = memo<EmptyStateProps>(
         accessible = true,
         accessibilityLabel,
     }) => {
+        const { t } = useTranslation();
         const theme = useTheme();
         const [isRetrying, setIsRetrying] = useState(false);
 
@@ -144,7 +146,7 @@ export const EmptyState = memo<EmptyStateProps>(
                                                 { color: theme.colors.card },
                                             ]}
                                         >
-                                            Try again
+                                            {t('common.tryAgain')}
                                         </Text>
                                     </>
                                 )}

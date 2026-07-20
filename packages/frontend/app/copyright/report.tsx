@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -28,7 +29,11 @@ const copyrightReportFormSchema = z.object({
   reason: z.string().trim().min(1, 'Please provide a reason for the copyright violation'),
 });
 
-function getCopyrightReportErrorMessage(error: unknown): string {
+/**
+ * Server-supplied error text, or `null` when there is none. Module scope, so it
+ * cannot translate — the caller supplies the localized fallback.
+ */
+function getCopyrightReportErrorMessage(error: unknown): string | null {
   if (error && typeof error === 'object' && 'response' in error) {
     const response = (error as { response?: unknown }).response;
     if (response && typeof response === 'object' && 'data' in response) {
@@ -39,9 +44,7 @@ function getCopyrightReportErrorMessage(error: unknown): string {
       }
     }
   }
-  return error instanceof Error
-    ? error.message
-    : 'Failed to submit report. Please try again.';
+  return error instanceof Error ? error.message : null;
 }
 
 /**
@@ -49,6 +52,7 @@ function getCopyrightReportErrorMessage(error: unknown): string {
  * Public screen to report copyright violations
  */
 const CopyrightReportScreen: React.FC = () => {
+  const { t } = useTranslation();
   const theme = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -77,7 +81,7 @@ const CopyrightReportScreen: React.FC = () => {
     mutationFn: (input: { trackId: string; reason: string }) =>
       copyrightService.reportCopyrightViolation(input),
     onSuccess: () => {
-      toast.success('Copyright violation report submitted successfully');
+      toast.success(t('copyright.submitted'));
       setSelectedTrack(null);
       setSearchQuery('');
       setReason('');
@@ -87,7 +91,7 @@ const CopyrightReportScreen: React.FC = () => {
     },
     onError: (error: unknown) => {
       console.error('Failed to submit copyright report:', error);
-      toast.error(getCopyrightReportErrorMessage(error));
+      toast.error(getCopyrightReportErrorMessage(error) ?? t('copyright.submitError'));
     },
   });
 
@@ -119,7 +123,7 @@ const CopyrightReportScreen: React.FC = () => {
 
   return (
     <>
-      <SEO title="Report Copyright Violation - Syra" description="Report a copyright violation" />
+      <SEO title={t('copyright.seo.title')} description={t('common.reportCopyright')} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}
@@ -149,7 +153,7 @@ const CopyrightReportScreen: React.FC = () => {
             />
           </Pressable>
           <Text style={[styles.title, { color: theme.colors.text }]}>
-            Report Copyright Violation
+            {t('copyright.title')}
           </Text>
           <View style={{ width: 24 }} />
         </View>
@@ -166,14 +170,14 @@ const CopyrightReportScreen: React.FC = () => {
           {/* Instructions */}
           <View style={styles.section}>
             <Text style={[styles.instructions, { color: theme.colors.textSecondary }]}>
-              If you believe a track on Syra violates copyright, please search for the track below and provide details about the violation.
+              {t('copyright.intro')}
             </Text>
           </View>
 
           {/* Track Search */}
           <View style={styles.section}>
             <Text style={[styles.label, { color: theme.colors.text }]}>
-              Search for Track *
+              {t('copyright.searchLabel')}
             </Text>
             <View style={styles.searchContainer}>
               <TextInput
@@ -185,7 +189,7 @@ const CopyrightReportScreen: React.FC = () => {
                     borderColor: selectedTrack ? theme.colors.primary : theme.colors.border,
                   },
                 ]}
-                placeholder="Search by track name or artist..."
+                placeholder={t('copyright.searchPlaceholder')}
                 placeholderTextColor={theme.colors.textSecondary}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
@@ -201,7 +205,7 @@ const CopyrightReportScreen: React.FC = () => {
               )}
               {isSearchError && (
                 <Text style={[styles.errorText, { color: theme.colors.error }]}>
-                  Failed to search tracks. Please try again.
+                  {t('copyright.searchError')}
                 </Text>
               )}
             </View>
@@ -271,7 +275,7 @@ const CopyrightReportScreen: React.FC = () => {
           {/* Reason Input */}
           <View style={styles.section}>
             <Text style={[styles.label, { color: theme.colors.text }]}>
-              Reason for Copyright Violation *
+              {t('copyright.reasonLabel')}
             </Text>
             <TextInput
               style={[
@@ -282,7 +286,7 @@ const CopyrightReportScreen: React.FC = () => {
                   borderColor: theme.colors.border,
                 },
               ]}
-              placeholder="Please provide details about the copyright violation..."
+              placeholder={t('copyright.reasonPlaceholder')}
               placeholderTextColor={theme.colors.textSecondary}
               value={reason}
               onChangeText={setReason}
@@ -314,7 +318,7 @@ const CopyrightReportScreen: React.FC = () => {
             {isSubmitting ? (
               <ActivityIndicator size="small" color={theme.colors.primaryForeground} />
             ) : (
-              <Text style={[styles.submitButtonText, { color: theme.colors.primaryForeground }]}>Submit Report</Text>
+              <Text style={[styles.submitButtonText, { color: theme.colors.primaryForeground }]}>{t('copyright.submit')}</Text>
             )}
           </Pressable>
         </ScrollView>

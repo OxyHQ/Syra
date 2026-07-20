@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { StyleSheet, View, Text, ScrollView, Pressable, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { Ionicons } from '@expo/vector-icons';
 import type { Podcast } from '@syra/shared-types';
@@ -37,6 +38,7 @@ const PODCAST_CATEGORIES = [
  * point lets users pull in shows that are not yet mirrored.
  */
 const PodcastsScreen: React.FC = () => {
+  const { t } = useTranslation();
   const router = useRouter();
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   // HOVER MODE: hovering a card themes the WHOLE app from its artwork.
@@ -106,11 +108,12 @@ const PodcastsContent: React.FC<PodcastsContentProps> = ({
   onFindPodcast,
   onPlayEpisode,
 }) => {
+  const { t } = useTranslation();
   const theme = useTheme();
 
   return (
     <>
-      <SEO title="Podcasts - Syra" description="Discover and listen to podcasts on Syra" />
+      <SEO title={t('podcasts.seo.title')} description={t('podcasts.seo.description')} />
       <View style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}>
         <ScrollView
           style={styles.scrollView}
@@ -118,22 +121,22 @@ const PodcastsContent: React.FC<PodcastsContentProps> = ({
           showsVerticalScrollIndicator={false}
         >
         <View style={styles.header}>
-          <Text style={[styles.title, { color: theme.colors.text }]}>Podcasts</Text>
+          <Text style={[styles.title, { color: theme.colors.text }]}>{t('common.podcasts')}</Text>
           <Pressable
             onPress={onFindPodcast}
             style={[styles.discoverButton, { backgroundColor: theme.colors.backgroundTertiary }]}
             accessibilityRole="button"
-            accessibilityLabel="Find podcasts"
+            accessibilityLabel={t('podcasts.findAccessibility')}
           >
             <Ionicons name="search" size={16} color={theme.colors.text} />
-            <Text style={[styles.discoverText, { color: theme.colors.text }]}>Find a podcast</Text>
+            <Text style={[styles.discoverText, { color: theme.colors.text }]}>{t('podcasts.find')}</Text>
           </Pressable>
         </View>
 
         {/* Continue listening rail */}
         {inProgress.length > 0 && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Continue listening</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('podcasts.continueListening')}</Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -178,7 +181,7 @@ const PodcastsContent: React.FC<PodcastsContentProps> = ({
                 { color: activeCategory === null ? theme.colors.primaryForeground : theme.colors.text },
               ]}
             >
-              All
+              {t('common.all')}
             </Text>
           </Pressable>
           {PODCAST_CATEGORIES.map((category) => {
@@ -208,7 +211,7 @@ const PodcastsContent: React.FC<PodcastsContentProps> = ({
         {/* Browse grid */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-            {activeCategory ?? 'Popular shows'}
+            {activeCategory ?? t('podcasts.popularShows')}
           </Text>
           {podcastsPending ? (
             <MediaCardRowSkeleton count={8} />
@@ -235,14 +238,14 @@ const PodcastsContent: React.FC<PodcastsContentProps> = ({
             <View style={styles.empty}>
               <Ionicons name="mic-outline" size={48} color={theme.colors.textSecondary} />
               <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
-                No shows here yet. Try finding a podcast to add it to the catalog.
+                {t('podcasts.empty')}
               </Text>
               <Pressable
                 onPress={onFindPodcast}
                 style={[styles.emptyButton, { backgroundColor: theme.colors.primary }]}
               >
                 <Text style={[styles.emptyButtonText, { color: theme.colors.primaryForeground }]}>
-                  Find a podcast
+                  {t('podcasts.find')}
                 </Text>
               </Pressable>
             </View>

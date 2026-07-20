@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import BottomSheet, { type BottomSheetRef } from '@oxyhq/bloom/bottom-sheet';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { Ionicons } from '@expo/vector-icons';
 import type { Track } from '@syra/shared-types';
@@ -32,6 +33,7 @@ export const TrackActionsSheet: React.FC<TrackActionsSheetProps> = ({
   track,
   removeFrom,
 }) => {
+  const { t } = useTranslation();
   const theme = useTheme();
   const sheetRef = useRef<BottomSheetRef>(null);
   const [addingToPlaylist, setAddingToPlaylist] = useState(false);
@@ -77,7 +79,7 @@ export const TrackActionsSheet: React.FC<TrackActionsSheetProps> = ({
             accessibilityRole="button"
           >
             <Ionicons name="add-circle-outline" size={22} color={theme.colors.text} />
-            <Text style={[styles.actionText, { color: theme.colors.text }]}>Add to playlist</Text>
+            <Text style={[styles.actionText, { color: theme.colors.text }]}>{t('trackActions.addToPlaylist')}</Text>
           </Pressable>
 
           {removeFrom && (
@@ -90,7 +92,7 @@ export const TrackActionsSheet: React.FC<TrackActionsSheetProps> = ({
             >
               <Ionicons name="remove-circle-outline" size={22} color={theme.colors.error} />
               <Text style={[styles.actionText, { color: theme.colors.error }]}>
-                Remove from this playlist
+                {t('trackActions.removeFromPlaylist')}
               </Text>
             </Pressable>
           )}

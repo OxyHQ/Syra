@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, View, Text, Pressable, Platform } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -36,6 +37,7 @@ const getProgressPercent = (currentTime: number, duration: number) => {
  * Floating, fully rounded player bar for mobile devices
  */
 export const MobilePlayerBar: React.FC = () => {
+  const { t } = useTranslation();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const [progressBarWidth, setProgressBarWidth] = useState(0);
@@ -220,7 +222,7 @@ export const MobilePlayerBar: React.FC = () => {
               onPress={playNext}
               disabled={!currentTrack}
               accessibilityRole="button"
-              accessibilityLabel="Next track"
+              accessibilityLabel={t('common.nextTrack')}
             >
               <MaterialCommunityIcons name="skip-next" size={24} color={theme.colors.primaryForeground} />
             </Pressable>

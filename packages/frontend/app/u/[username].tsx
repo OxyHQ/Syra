@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, View, Text, ScrollView } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import SEO from '@/components/SEO';
 import Avatar from '@/components/Avatar';
@@ -13,6 +14,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
  * Displays a user's profile with their music library, playlists, etc.
  */
 const UserProfileScreen: React.FC = () => {
+  const { t } = useTranslation();
   const theme = useTheme();
   const { username } = useLocalSearchParams<{ username: string }>();
   const { data: profileData, loading } = useProfileData(username);
@@ -20,7 +22,7 @@ const UserProfileScreen: React.FC = () => {
   if (loading) {
     return (
       <>
-        <SEO title={`${username || 'User'} - Syra`} description="User profile" />
+        <SEO title={`${username || 'User'} - Syra`} description={t('user.seo.description')} />
         <ScrollView
           style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}
           showsVerticalScrollIndicator={false}
@@ -34,14 +36,14 @@ const UserProfileScreen: React.FC = () => {
   if (!profileData) {
     return (
       <>
-        <SEO title="User Not Found - Syra" description="User profile not found" />
+        <SEO title={t('user.seo.notFoundTitle')} description={t('user.seo.notFoundDescription')} />
         <View style={[styles.container, styles.centered, { backgroundColor: theme.colors.backgroundSecondary }]}>
           <MaterialCommunityIcons name="account-off" size={64} color={theme.colors.textSecondary} />
           <Text style={[styles.errorText, { color: theme.colors.textSecondary }]}>
-            User not found
+            {t('user.notFound')}
           </Text>
           <Text style={[styles.errorSubtext, { color: theme.colors.textSecondary }]}>
-            This user doesn&apos;t exist or the profile is private.
+            {t('user.notFoundMessage')}
           </Text>
         </View>
       </>
@@ -103,7 +105,7 @@ const UserProfileScreen: React.FC = () => {
               {profileData.postsCount || 0}
             </Text>
             <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
-              Playlists
+              {t('common.playlists')}
             </Text>
           </View>
           <View style={styles.statItem}>
@@ -111,7 +113,7 @@ const UserProfileScreen: React.FC = () => {
               {profileData.stats?.followers || 0}
             </Text>
             <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
-              Followers
+              {t('common.followers')}
             </Text>
           </View>
           <View style={styles.statItem}>
@@ -119,7 +121,7 @@ const UserProfileScreen: React.FC = () => {
               {profileData.stats?.following || 0}
             </Text>
             <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
-              Following
+              {t('common.following')}
             </Text>
           </View>
         </View>
@@ -127,7 +129,7 @@ const UserProfileScreen: React.FC = () => {
         {/* Content Section */}
         <View style={styles.contentSection}>
           <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-            Public Playlists
+            {t('user.publicPlaylists')}
           </Text>
           <View style={styles.emptyState}>
             <MaterialCommunityIcons 
@@ -136,7 +138,7 @@ const UserProfileScreen: React.FC = () => {
               color={theme.colors.textSecondary} 
             />
             <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
-              No public playlists yet
+              {t('user.noPublicPlaylists')}
             </Text>
           </View>
         </View>

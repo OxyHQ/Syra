@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { View, Text, ScrollView, RefreshControl, Pressable, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import BottomSheet, { type BottomSheetRef } from '@oxyhq/bloom/bottom-sheet';
 import { useQuery } from '@tanstack/react-query';
@@ -26,6 +27,7 @@ import { liveRoomsQueryKey } from '@/lib/liveConfig';
  * globally by `LiveRoomProvider`); this screen only surfaces the list + entry.
  */
 export default function LiveScreen() {
+  const { t } = useTranslation();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { joinLiveRoom } = useLiveRoom();
@@ -65,7 +67,7 @@ export default function LiveScreen() {
 
   return (
     <View className="flex-1" style={{ backgroundColor: theme.colors.background }}>
-      <SEO title="Live - Syra" description="Join live audio rooms on Syra or start your own." />
+      <SEO title={t('live.seo.title')} description={t('live.seo.description')} />
 
       <ScrollView
         className="flex-1"
@@ -78,11 +80,11 @@ export default function LiveScreen() {
           <View className="flex-row items-center gap-2">
             <View className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: theme.colors.error }} />
             <Text className="text-3xl font-extrabold" style={{ color: theme.colors.text }}>
-              Live
+              {t('live.title')}
             </Text>
           </View>
           <Text className="mt-1 text-base" style={{ color: theme.colors.textSecondary }}>
-            Drop into a room, or start your own.
+            {t('live.subtitle')}
           </Text>
         </View>
 
@@ -93,7 +95,7 @@ export default function LiveScreen() {
         >
           <MaterialCommunityIcons name="microphone-plus" size={20} color={theme.colors.primaryForeground} />
           <Text className="text-base font-semibold" style={{ color: theme.colors.primaryForeground }}>
-            Start a room
+            {t('live.startRoom')}
           </Text>
         </Pressable>
 
@@ -111,10 +113,10 @@ export default function LiveScreen() {
           <View className="items-center justify-center px-8 py-16">
             <MaterialCommunityIcons name="broadcast-off" size={56} color={theme.colors.textTertiary} />
             <Text className="mt-4 text-lg font-semibold" style={{ color: theme.colors.text }}>
-              No live rooms right now
+              {t('live.empty')}
             </Text>
             <Text className="mt-1 text-center text-sm" style={{ color: theme.colors.textSecondary }}>
-              Be the first to go live — start a room and invite people to listen and talk.
+              {t('live.emptySubtitle')}
             </Text>
           </View>
         )}
@@ -150,7 +152,7 @@ export default function LiveScreen() {
               className="text-base font-semibold"
               style={{ color: formState.isValid ? theme.colors.primaryForeground : theme.colors.textSecondary }}
             >
-              {formState.loading ? 'Creating…' : 'Start now'}
+              {formState.loading ? t('live.creating') : t('live.startNow')}
             </Text>
           </Pressable>
 
@@ -168,7 +170,7 @@ export default function LiveScreen() {
             >
               <MaterialCommunityIcons name="calendar" size={20} color={theme.colors.text} />
               <Text className="text-base font-semibold" style={{ color: theme.colors.text }}>
-                Schedule room
+                {t('live.scheduleRoom')}
               </Text>
             </Pressable>
           )}

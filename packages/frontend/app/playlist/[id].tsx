@@ -9,6 +9,7 @@ import Animated, {
   useScrollViewOffset,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { musicService } from '@/services/musicService';
 import { Track } from '@syra/shared-types';
@@ -41,6 +42,7 @@ type PlaylistData = NonNullable<Awaited<ReturnType<typeof musicService.getPlayli
  * Displays playlist details with parallax header, gradient overlay, and track list
  */
 const PlaylistScreen: React.FC = () => {
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const theme = useTheme();
@@ -101,7 +103,7 @@ const PlaylistScreen: React.FC = () => {
 
   const handlePlayPlaylist = () => {
     if (!canPlay) {
-      toast.info('No playable tracks available');
+      toast.info(t('common.noPlayableTracks'));
       return;
     }
 
@@ -129,8 +131,8 @@ const PlaylistScreen: React.FC = () => {
         containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
         icon={{ name: 'cloud-offline-outline' }}
         error={{
-          title: 'Session unavailable',
-          message: 'We could not confirm your session. Check your connection and try again.',
+          title: t('common.sessionUnavailable'),
+          message: t('common.sessionErrorMessage'),
           onRetry: async () => {
             gate.retry();
           },
@@ -161,8 +163,8 @@ const PlaylistScreen: React.FC = () => {
         containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
         icon={{ name: 'cloud-offline-outline' }}
         error={{
-          title: 'Could not load this playlist',
-          message: 'Something went wrong while loading this playlist. Please try again.',
+          title: t('playlist.errors.load'),
+          message: t('playlist.errors.message'),
           onRetry: async () => {
             await Promise.all([playlistQuery.refetch(), tracksQuery.refetch()]);
           },
@@ -176,8 +178,8 @@ const PlaylistScreen: React.FC = () => {
       <EmptyState
         containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
         icon={{ name: 'musical-notes-outline' }}
-        title="Playlist not found"
-        subtitle="This playlist may have been deleted or is private."
+        title={t('playlist.notFound')}
+        subtitle={t('playlist.notFoundMessage')}
       />
     );
   }
@@ -247,6 +249,7 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
   onTrackPress,
   onDeleted,
 }) => {
+  const { t } = useTranslation();
   const theme = useTheme();
   const { user } = useOxy();
   const [showPlaylistActions, setShowPlaylistActions] = useState(false);
@@ -382,7 +385,7 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
                 onPress={onToggleSave}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isSaved }}
-                accessibilityLabel={isSaved ? 'Remove from your library' : 'Save to your library'}
+                accessibilityLabel={isSaved ? t('common.removeFromLibrary') : t('common.saveToLibrary')}
               >
                 <Ionicons
                   name={isSaved ? "heart" : "heart-outline"}
@@ -394,7 +397,7 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
                 style={styles.stickyHeaderControlButton}
                 onPress={() => setShowPlaylistActions(true)}
                 accessibilityRole="button"
-                accessibilityLabel="More options for this playlist"
+                accessibilityLabel={t('playlist.moreOptions')}
               >
                 <Ionicons name="ellipsis-horizontal" size={20} color={theme.colors.text} />
               </Pressable>
@@ -523,7 +526,7 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
                 onPress={toggleShuffle}
                 accessibilityRole="button"
                 accessibilityState={{ selected: shuffle === 'on' }}
-                accessibilityLabel={shuffle === 'on' ? 'Turn shuffle off' : 'Turn shuffle on'}
+                accessibilityLabel={shuffle === 'on' ? t('common.shuffleOff') : t('common.shuffleOn')}
               >
                 <Ionicons
                   name="shuffle"
@@ -537,7 +540,7 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
                 onPress={onToggleSave}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isSaved }}
-                accessibilityLabel={isSaved ? 'Remove from your library' : 'Save to your library'}
+                accessibilityLabel={isSaved ? t('common.removeFromLibrary') : t('common.saveToLibrary')}
               >
                 <Ionicons
                   name={isSaved ? "heart" : "heart-outline"}
@@ -561,7 +564,7 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
                 style={styles.controlButton}
                 onPress={() => setShowPlaylistActions(true)}
                 accessibilityRole="button"
-                accessibilityLabel="More options for this playlist"
+                accessibilityLabel={t('playlist.moreOptions')}
               >
                 <Ionicons name="ellipsis-horizontal" size={24} color={theme.colors.text} />
               </Pressable>
@@ -574,7 +577,7 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
             <View style={styles.trackListHeader}>
               <View style={styles.trackListHeaderLeft}>
                 <Text style={[styles.trackListHeaderText, { color: theme.colors.textSecondary }]}>#</Text>
-                <Text style={[styles.trackListHeaderText, { color: theme.colors.textSecondary }]}>Title</Text>
+                <Text style={[styles.trackListHeaderText, { color: theme.colors.textSecondary }]}>{t('common.title')}</Text>
               </View>
               <Ionicons name="time-outline" size={16} color={theme.colors.textSecondary} />
             </View>
@@ -584,7 +587,7 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
               {tracks.length === 0 ? (
                 <View style={styles.emptyState}>
                   <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>
-                    No tracks in this playlist
+                    {t('playlist.empty')}
                   </Text>
                 </View>
               ) : (

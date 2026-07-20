@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, View, Text, Image, Pressable, Platform, GestureResponderEvent } from 'react-native';
 import { webViewStyle } from '@/utils/webStyles';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { Menu, MenuTrigger, MenuContent, MenuItem, MenuItemText, MenuGroup, useMenuControl } from '@oxyhq/bloom';
 import { Ionicons } from '@expo/vector-icons';
@@ -81,6 +82,7 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
   onHoverIn,
   onHoverOut,
 }) => {
+  const { t } = useTranslation();
   const theme = useTheme();
   const resolvedImageUri = resolvedImageUriProp ?? pickCatalogImageUrl(images, imageUri, 'card', imageSizes);
   const [isHovered, setIsHovered] = React.useState(false);
@@ -235,50 +237,50 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
             <MenuGroup>
               {onPress && (
                 <MenuItem
-                  label="Open"
+                  label={t('common.open')}
                   onPress={(event) => {
                     event.stopPropagation?.();
                     onPress();
                   }}
                 >
                   {renderMenuIcon('open-outline')}
-                  <MenuItemText>Open</MenuItemText>
+                  <MenuItemText>{t('common.open')}</MenuItemText>
                 </MenuItem>
               )}
               {onAddToQueue && (
                 <MenuItem
-                  label="Add to queue"
+                  label={t('common.addToQueue')}
                   onPress={(event) => {
                     event.stopPropagation?.();
                     onAddToQueue();
                   }}
                 >
                   {renderMenuIcon('list-outline')}
-                  <MenuItemText>Add to queue</MenuItemText>
+                  <MenuItemText>{t('common.addToQueue')}</MenuItemText>
                 </MenuItem>
               )}
               {onGoToAlbum && (
                 <MenuItem
-                  label="Go to album"
+                  label={t('common.goToAlbum')}
                   onPress={(event) => {
                     event.stopPropagation?.();
                     onGoToAlbum();
                   }}
                 >
                   {renderMenuIcon('disc-outline')}
-                  <MenuItemText>Go to album</MenuItemText>
+                  <MenuItemText>{t('common.goToAlbum')}</MenuItemText>
                 </MenuItem>
               )}
               {onGoToArtist && (
                 <MenuItem
-                  label="Go to artist"
+                  label={t('common.goToArtist')}
                   onPress={(event) => {
                     event.stopPropagation?.();
                     onGoToArtist();
                   }}
                 >
                   {renderMenuIcon('person-outline')}
-                  <MenuItemText>Go to artist</MenuItemText>
+                  <MenuItemText>{t('common.goToArtist')}</MenuItemText>
                 </MenuItem>
               )}
             </MenuGroup>

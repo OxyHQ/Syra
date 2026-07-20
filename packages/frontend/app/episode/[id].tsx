@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { StyleSheet, View, Text, ScrollView, Pressable, Platform, Linking } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -24,6 +25,7 @@ type EpisodeChapters = NonNullable<ReturnType<typeof useEpisodeChapters>['data']
  * credits linked to Syra artists where resolved.
  */
 const EpisodeScreen: React.FC = () => {
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
   const router = useRouter();
@@ -91,8 +93,8 @@ const EpisodeScreen: React.FC = () => {
       <EmptyState
         icon={{ name: 'cloud-offline-outline' }}
         error={{
-          title: 'Could not load this episode',
-          message: 'Check your connection and try again.',
+          title: t('episode.errors.load'),
+          message: t('common.retryHint'),
           onRetry: async () => {
             await episodeQuery.refetch();
           },
@@ -107,19 +109,19 @@ const EpisodeScreen: React.FC = () => {
     return (
       <EmptyState
         icon={{ name: 'mic-off-outline' }}
-        title="Episode not found"
-        subtitle="This episode is not in the Syra catalog."
-        action={{ label: 'Browse podcasts', onPress: () => router.push('/podcasts'), icon: 'search-outline' }}
+        title={t('episode.notFound')}
+        subtitle={t('episode.notFoundMessage')}
+        action={{ label: t('podcasts.browse'), onPress: () => router.push('/podcasts'), icon: 'search-outline' }}
         containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
       />
     );
   }
 
   const playLabel = isCurrent && isPlaying
-    ? 'Pause'
+    ? t('episode.pause')
     : (progress?.progressSec ?? 0) > 5 && !progress?.completed
-      ? 'Resume'
-      : 'Play';
+      ? t('episode.resume')
+      : t('common.play');
 
   // The whole app is themed from this episode's cover ON VIEW (see
   // `useViewAmbient` above). No per-screen theme wrapper and no cover-hover
@@ -174,6 +176,7 @@ const EpisodeView: React.FC<EpisodeViewProps> = ({
   onChapterPress,
   onOpenShow,
 }) => {
+  const { t } = useTranslation();
   const theme = useTheme();
   const metaParts = [formatPubDate(episode.pubDate), formatEpisodeDuration(episode.duration)].filter(Boolean);
 
@@ -231,7 +234,7 @@ const EpisodeView: React.FC<EpisodeViewProps> = ({
         {/* Chapters */}
         {chapters && chapters.length > 0 && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Chapters</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('episode.chapters')}</Text>
             {chapters.map((chapter, index) => (
               <Pressable
                 key={`${chapter.startTime}-${index}`}
@@ -242,7 +245,7 @@ const EpisodeView: React.FC<EpisodeViewProps> = ({
                   {formatDuration(chapter.startTime)}
                 </Text>
                 <Text style={[styles.chapterTitle, { color: theme.colors.text }]} numberOfLines={1}>
-                  {chapter.title ?? 'Untitled chapter'}
+                  {chapter.title ?? t('episode.untitledChapter')}
                 </Text>
               </Pressable>
             ))}
@@ -252,7 +255,7 @@ const EpisodeView: React.FC<EpisodeViewProps> = ({
         {/* Transcripts */}
         {episode.transcripts && episode.transcripts.length > 0 && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Transcript</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('episode.transcript')}</Text>
             {episode.transcripts.map((transcript, index) => (
               <Pressable
                 key={`${transcript.url}-${index}`}
@@ -261,7 +264,7 @@ const EpisodeView: React.FC<EpisodeViewProps> = ({
               >
                 <Ionicons name="document-text-outline" size={18} color={theme.colors.primary} />
                 <Text style={[styles.linkText, { color: theme.colors.primary }]} numberOfLines={1}>
-                  {transcript.language ? `Transcript (${transcript.language})` : 'View transcript'}
+                  {transcript.language ? `Transcript (${transcript.language})` : t('episode.viewTranscript')}
                 </Text>
               </Pressable>
             ))}
@@ -271,7 +274,7 @@ const EpisodeView: React.FC<EpisodeViewProps> = ({
         {/* Description */}
         {description ? (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>About</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('common.about')}</Text>
             <Text style={[styles.description, { color: theme.colors.textSecondary }]}>{description}</Text>
           </View>
         ) : null}

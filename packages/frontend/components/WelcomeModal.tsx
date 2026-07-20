@@ -21,6 +21,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { useOxy } from '@oxyhq/services';
 import { useRouter } from 'expo-router';
@@ -108,6 +109,7 @@ const WelcomeModal: React.FC<WelcomeModalProps> = ({
   visible,
   onClose,
 }) => {
+  const { t } = useTranslation();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { openAccountDialog } = useOxy();
@@ -267,13 +269,13 @@ const WelcomeModal: React.FC<WelcomeModalProps> = ({
                 onPress={handleCreateAccount}
                 style={[styles.createAccountButton, { backgroundColor: theme.colors.primary }]}
               >
-                <Text style={[styles.createAccountButtonText, { color: theme.colors.primaryForeground }]}>Create account</Text>
+                <Text style={[styles.createAccountButtonText, { color: theme.colors.primaryForeground }]}>{t('common.createAccount')}</Text>
               </Pressable>
 
               {/* Explore the app link */}
               <Pressable onPress={handleExploreApp} style={styles.exploreLink}>
                 <Text style={[styles.exploreLinkText, { color: theme.colors.primary }]}>
-                  Explore the app
+                  {t('welcome.explore')}
                 </Text>
               </Pressable>
 
@@ -284,7 +286,7 @@ const WelcomeModal: React.FC<WelcomeModalProps> = ({
                 </Text>
                 <Pressable onPress={handleSignIn}>
                   <Text style={[styles.signInLink, { color: theme.colors.primary }]}>
-                    Sign in
+                    {t('common.signIn')}
                   </Text>
                 </Pressable>
               </View>

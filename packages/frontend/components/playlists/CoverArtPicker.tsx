@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, View, Text, Pressable, Image, Platform, Alert, ActivityIndicator } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useImagePicker } from '@/hooks/useImagePicker';
@@ -22,6 +23,7 @@ export const CoverArtPicker: React.FC<CoverArtPickerProps> = ({
   size = 200,
   disabled = false,
 }) => {
+  const { t } = useTranslation();
   const theme = useTheme();
   // Web-only hover state to fade in the "change cover" overlay.
   const [isHovered, setIsHovered] = useState(false);
@@ -133,7 +135,7 @@ export const CoverArtPicker: React.FC<CoverArtPickerProps> = ({
             color={theme.colors.textSecondary}
           />
           <Text style={[styles.placeholderText, { color: theme.colors.textSecondary }]}>
-            Add Cover Art
+            {t('coverArt.add')}
           </Text>
         </View>
       )}

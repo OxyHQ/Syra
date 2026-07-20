@@ -6,6 +6,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Skeleton from '@oxyhq/bloom/skeleton';
@@ -37,6 +38,7 @@ interface DeviceRowProps {
 }
 
 const DeviceRow: React.FC<DeviceRowProps> = ({ device, isActive, onPress }) => {
+  const { t } = useTranslation();
   const theme = useTheme();
 
   const rowStyle = useMemo(
@@ -64,7 +66,7 @@ const DeviceRow: React.FC<DeviceRowProps> = ({ device, isActive, onPress }) => {
         </Text>
         {isActive && (
           <Text style={[styles.deviceStatus, { color: theme.colors.primary }]}>
-            Playing
+            {t('devices.playing')}
           </Text>
         )}
       </View>
@@ -103,6 +105,7 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({
   activeDeviceId,
   onClose,
 }) => {
+  const { t } = useTranslation();
   const theme = useTheme();
   const { devices, status, error, retry, transferTo } = useConnect();
   const {
@@ -136,7 +139,7 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({
         await requestCast();
       }
     } catch (error) {
-      logger.error(isCasting ? 'Failed to end cast session' : 'Failed to start cast session', error);
+      logger.error(isCasting ? t('devices.castEndError') : t('devices.castStartError'), error);
     }
   };
 
@@ -152,9 +155,9 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({
         <Pressable style={sheetStyle} onPress={() => undefined}>
           <View style={styles.header}>
             <Text style={[styles.title, { color: theme.colors.text }]}>
-              Connect to a Device
+              {t('devices.title')}
             </Text>
-            <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close">
+            <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel={t('common.close')}>
               <MaterialCommunityIcons
                 name="close"
                 size={20}
@@ -181,15 +184,15 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({
           ) : status === 'signed-out' ? (
             <EmptyState
               icon={{ name: 'lock-closed-outline', size: 32 }}
-              subtitle="Sign in to see the devices on your account."
+              subtitle={t('devices.signInSubtitle')}
               containerStyle={styles.stateContainer}
             />
           ) : status === 'error' ? (
             <EmptyState
               icon={{ name: 'alert-circle-outline', size: 32 }}
               error={{
-                title: 'Devices unavailable',
-                message: error ?? 'Syra Connect is unreachable right now.',
+                title: t('devices.unavailable'),
+                message: error ?? t('devices.unreachable'),
                 onRetry: async () => { retry(); },
               }}
               containerStyle={styles.stateContainer}
@@ -197,7 +200,7 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({
           ) : devices.length === 0 ? (
             <EmptyState
               icon={{ name: 'phone-portrait-outline', size: 32 }}
-              subtitle="No other devices found"
+              subtitle={t('devices.none')}
               containerStyle={styles.stateContainer}
             />
           ) : (
@@ -216,7 +219,7 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({
           {castSupported && (
             <View style={[styles.castSection, { borderTopColor: theme.colors.border }]}>
               <Text style={[styles.sectionLabel, { color: theme.colors.textSecondary }]}>
-                Cast & speakers
+                {t('devices.castAndSpeakers')}
               </Text>
               <Pressable
                 style={styles.deviceRow}
@@ -225,8 +228,8 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({
                 accessibilityState={{ selected: isCasting }}
                 accessibilityLabel={
                   isCasting
-                    ? `Disconnect from ${castDeviceName ?? 'Cast'}`
-                    : 'Connect to Cast'
+                    ? t('devices.disconnectFrom', { name: castDeviceName ?? 'Cast' })
+                    : t('devices.connectToCast')
                 }
               >
                 <MaterialCommunityIcons
@@ -240,17 +243,17 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({
                     style={[styles.deviceName, { color: theme.colors.text }]}
                     numberOfLines={1}
                   >
-                    {isCasting ? (castDeviceName ?? 'Cast device') : 'Connect to Cast'}
+                    {isCasting ? (castDeviceName ?? t('devices.castDevice')) : t('devices.connectToCast')}
                   </Text>
                   {isCasting && (
                     <Text style={[styles.deviceStatus, { color: theme.colors.primary }]}>
-                      Connected
+                      {t('devices.connected')}
                     </Text>
                   )}
                 </View>
                 {isCasting && (
                   <Text style={[styles.disconnectText, { color: theme.colors.primary }]}>
-                    Disconnect
+                    {t('devices.disconnect')}
                   </Text>
                 )}
               </Pressable>

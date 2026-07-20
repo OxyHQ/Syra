@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import { useMutation } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { useOxy } from '@oxyhq/services';
 import { useRouter } from 'expo-router';
@@ -47,6 +48,7 @@ function getErrorMessage(error: unknown): string | undefined {
  * Spotify-like playlist creation interface
  */
 const CreatePlaylistScreen: React.FC = () => {
+  const { t } = useTranslation();
   const theme = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -100,7 +102,7 @@ const CreatePlaylistScreen: React.FC = () => {
 
   const handleCreate = useCallback(async () => {
     if (!isAuthenticated) {
-      toast.error('You must be logged in to create playlists');
+      toast.error(t('createPlaylist.signInRequired'));
       return;
     }
 
@@ -119,14 +121,14 @@ const CreatePlaylistScreen: React.FC = () => {
   }, [isCreating, router]);
 
   const visibilityOptions = [
-    { label: 'Public', value: PlaylistVisibility.PUBLIC, description: 'Anyone can find and play' },
-    { label: 'Private', value: PlaylistVisibility.PRIVATE, description: 'Only you can access' },
-    { label: 'Unlisted', value: PlaylistVisibility.UNLISTED, description: 'Only accessible via link' },
+    { label: t('common.public'), value: PlaylistVisibility.PUBLIC, description: t('createPlaylist.publicHint') },
+    { label: t('common.private'), value: PlaylistVisibility.PRIVATE, description: t('createPlaylist.privateHint') },
+    { label: t('common.unlisted'), value: PlaylistVisibility.UNLISTED, description: t('createPlaylist.unlistedHint') },
   ];
 
   return (
     <>
-      <SEO title="Create Playlist - Syra" description="Create a new playlist" />
+      <SEO title={t('createPlaylist.seo.title')} description={t('createPlaylist.seo.description')} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}
@@ -156,7 +158,7 @@ const CreatePlaylistScreen: React.FC = () => {
             />
           </Pressable>
           <Text style={[styles.title, { color: theme.colors.text }]}>
-            Create Playlist
+            {t('library.createPlaylist')}
           </Text>
           <Pressable
             onPress={handleCreate}
@@ -175,7 +177,7 @@ const CreatePlaylistScreen: React.FC = () => {
             {isCreating ? (
               <ActivityIndicator size="small" color={theme.colors.primaryForeground} />
             ) : (
-              <Text style={[styles.createHeaderButtonText, { color: theme.colors.primaryForeground }]}>Create</Text>
+              <Text style={[styles.createHeaderButtonText, { color: theme.colors.primaryForeground }]}>{t('common.create')}</Text>
             )}
           </Pressable>
         </View>
@@ -212,7 +214,7 @@ const CreatePlaylistScreen: React.FC = () => {
                     borderColor: errors.name ? theme.colors.error : theme.colors.border,
                   },
                 ]}
-                placeholder="Playlist name"
+                placeholder={t('createPlaylist.namePlaceholder')}
                 placeholderTextColor={theme.colors.textSecondary}
                 value={name}
                 onChangeText={(text) => {
@@ -246,7 +248,7 @@ const CreatePlaylistScreen: React.FC = () => {
                     borderColor: errors.description ? theme.colors.error : theme.colors.border,
                   },
                 ]}
-                placeholder="Add a description (optional)"
+                placeholder={t('createPlaylist.descriptionPlaceholder')}
                 placeholderTextColor={theme.colors.textSecondary}
                 value={description}
                 onChangeText={(text) => {
@@ -274,7 +276,7 @@ const CreatePlaylistScreen: React.FC = () => {
             {/* Privacy/Visibility Selector */}
             <View style={styles.inputGroup}>
               <Text style={[styles.label, { color: theme.colors.text }]}>
-                Privacy
+                {t('createPlaylist.privacy')}
               </Text>
               <View style={styles.visibilityOptions}>
                 {visibilityOptions.map((option) => (
