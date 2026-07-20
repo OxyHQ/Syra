@@ -5,6 +5,7 @@ import { useTheme } from '@oxyhq/bloom/theme';
 import { Track } from '@syra/shared-types';
 import { formatDuration } from '@/utils/musicUtils';
 import { useLibrary, useToggleLikeTrack } from '@/hooks/useLibrary';
+import { usePlayerStore } from '@/stores/playerStore';
 import { webViewStyle } from '@/utils/webStyles';
 
 interface TrackRowProps {
@@ -13,6 +14,11 @@ interface TrackRowProps {
   isCurrentTrack: boolean;
   isTrackPlaying: boolean;
   onPress: () => void;
+  /**
+   * Starts this track in the caller's list context. Only invoked when the track
+   * is NOT the one already loaded in the player — a loaded track is toggled by
+   * the row itself, so this never restarts what is already playing.
+   */
   onPlayPress: () => void;
   showNumber?: boolean;
   /**
@@ -41,9 +47,33 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
   const { isTrackLiked } = useLibrary();
   const toggleLike = useToggleLikeTrack();
   const isLiked = isTrackLiked(track.id);
+  const pause = usePlayerStore((state) => state.pause);
+  const resume = usePlayerStore((state) => state.resume);
 
   const handleToggleLike = () => {
     toggleLike.mutate({ id: track.id, next: !isLiked, track });
+  };
+
+  /**
+   * The one contract for this control, so its icon and its action can never
+   * disagree: showing pause means pressing pauses, and showing play on the
+   * loaded track means pressing resumes where it stopped. Only a track that is
+   * NOT loaded is handed to the caller to start from its list.
+   *
+   * The row owns this rather than each caller because the callers wire
+   * `onPlayPress` to a list-play that restarts from zero — which is exactly what
+   * made a pause icon restart the track.
+   */
+  const handlePlayPress = () => {
+    if (!isCurrentTrack) {
+      onPlayPress();
+      return;
+    }
+    if (isTrackPlaying) {
+      void pause();
+      return;
+    }
+    void resume();
   };
 
   return (
@@ -120,9 +150,11 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
         <Pressable
           onPress={(e) => {
             e?.stopPropagation?.();
-            onPlayPress();
+            handlePlayPress();
           }}
           style={styles.playButton}
+          accessibilityRole="button"
+          accessibilityLabel={isTrackPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
         >
           <Ionicons
             name={isTrackPlaying ? 'pause' : 'play'}

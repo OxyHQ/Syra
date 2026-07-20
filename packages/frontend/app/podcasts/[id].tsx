@@ -42,8 +42,6 @@ const PodcastShowScreen: React.FC = () => {
   const currentEpisode = usePlayerStore((s) => s.currentEpisode);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const playEpisodeList = usePlayerStore((s) => s.playEpisodeList);
-  const pause = usePlayerStore((s) => s.pause);
-  const resume = usePlayerStore((s) => s.resume);
 
   const podcast = showQuery.data?.podcast;
   const episodes = useMemo(
@@ -70,17 +68,12 @@ const PodcastShowScreen: React.FC = () => {
     return () => clearAmbient();
   }, [podcastPrimaryColor, podcastSecondaryColor, setAmbient, clearAmbient]);
 
+  // Starting an episode only — pausing and resuming the one already loaded is
+  // `EpisodeRow`'s own contract, so every screen behaves identically and this
+  // screen no longer needs its own copy of that toggle.
   const handlePlayEpisode = (index: number) => {
     const episode = episodes[index];
     if (!episode) {
-      return;
-    }
-    if (currentEpisode?.id === episode.id) {
-      if (isPlaying) {
-        pause();
-      } else {
-        resume();
-      }
       return;
     }
     const context = podcast

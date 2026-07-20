@@ -21,6 +21,7 @@ import { ExploreSection } from '@/components/ExploreSection';
 import { EmptyState } from '@/components/common/EmptyState';
 import { GenreGridSkeleton, MediaCardRowSkeleton, TrackListSkeleton } from '@/components/skeletons';
 import { usePlayerStore } from '@/stores/playerStore';
+import { usePlayEntity } from '@/hooks/usePlayEntity';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useMediaQuery } from 'react-responsive';
 
@@ -34,6 +35,9 @@ const SearchScreen: React.FC = () => {
   const router = useRouter();
   const isMobile = useMediaQuery({ maxWidth: 767 });
   const { playTrackList, playEpisode, currentTrack, currentEpisode, isPlaying } = usePlayerStore();
+  // Every playable entity on this screen — album, playlist, artist, show — gets
+  // a working play button from the one shared hook.
+  const { playAlbum, playPlaylist, playArtist, playPodcast } = usePlayEntity();
   // HOVER MODE: hovering any card themes the WHOLE app from that card's
   // server-extracted cover colours; leaving restores the default. All theming
   // lives in Bloom — these thin handlers only feed the card's DTO colours to
@@ -398,6 +402,7 @@ const SearchScreen: React.FC = () => {
                       primaryColor={album.primaryColor}
                       secondaryColor={album.secondaryColor}
                       onPress={() => router.push(`/album/${album.id}`)}
+                      onPlayPress={() => playAlbum(album.id, album.title)}
                       onHoverIn={handleHoverIn}
                       onHoverOut={handleHoverOut}
                     />
@@ -414,6 +419,7 @@ const SearchScreen: React.FC = () => {
                       primaryColor={playlist.primaryColor}
                       secondaryColor={playlist.secondaryColor}
                       onPress={() => router.push({ pathname: '/playlist/[id]', params: { id: playlist.id } } satisfies Href)}
+                      onPlayPress={() => playPlaylist(playlist.id, playlist.name)}
                       onHoverIn={handleHoverIn}
                       onHoverOut={handleHoverOut}
                     />
@@ -474,6 +480,7 @@ const SearchScreen: React.FC = () => {
                       primaryColor={album.primaryColor}
                       secondaryColor={album.secondaryColor}
                       onPress={() => router.push(`/album/${album.id}`)}
+                      onPlayPress={() => playAlbum(album.id, album.title)}
                       onHoverIn={handleHoverIn}
                       onHoverOut={handleHoverOut}
                     />
@@ -505,6 +512,7 @@ const SearchScreen: React.FC = () => {
                       primaryColor={artist.primaryColor}
                       secondaryColor={artist.secondaryColor}
                       onPress={() => router.push({ pathname: '/p/[id]', params: { id: artist.id } } satisfies Href)}
+                      onPlayPress={() => playArtist(artist.id, artist.name)}
                       onHoverIn={handleHoverIn}
                       onHoverOut={handleHoverOut}
                     />
@@ -589,6 +597,7 @@ const SearchScreen: React.FC = () => {
                           primaryColor={album.primaryColor}
                           secondaryColor={album.secondaryColor}
                           onPress={() => router.push(`/album/${album.id}`)}
+                          onPlayPress={() => playAlbum(album.id, album.title)}
                           onHoverIn={handleHoverIn}
                           onHoverOut={handleHoverOut}
                         />
@@ -621,6 +630,7 @@ const SearchScreen: React.FC = () => {
                           primaryColor={artist.primaryColor}
                           secondaryColor={artist.secondaryColor}
                           onPress={() => router.push({ pathname: '/p/[id]', params: { id: artist.id } } satisfies Href)}
+                          onPlayPress={() => playArtist(artist.id, artist.name)}
                           onHoverIn={handleHoverIn}
                           onHoverOut={handleHoverOut}
                         />
@@ -651,6 +661,7 @@ const SearchScreen: React.FC = () => {
                           primaryColor={playlist.primaryColor}
                           secondaryColor={playlist.secondaryColor}
                           onPress={() => router.push({ pathname: '/playlist/[id]', params: { id: playlist.id } } satisfies Href)}
+                          onPlayPress={() => playPlaylist(playlist.id, playlist.name)}
                           onHoverIn={handleHoverIn}
                           onHoverOut={handleHoverOut}
                         />
@@ -680,6 +691,7 @@ const SearchScreen: React.FC = () => {
                           primaryColor={podcast.primaryColor}
                           secondaryColor={podcast.secondaryColor}
                           onPress={() => router.push({ pathname: '/podcasts/[id]', params: { id: podcast.id } } satisfies Href)}
+                          onPlayPress={() => playPodcast(podcast.id, podcast.title)}
                           onHoverIn={handleHoverIn}
                           onHoverOut={handleHoverOut}
                         />

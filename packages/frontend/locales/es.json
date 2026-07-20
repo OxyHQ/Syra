@@ -98,7 +98,9 @@
     "goBack": "Volver",
     "previous": "Anterior",
     "nextTrack": "Siguiente canción",
-    "createAccount": "Crear cuenta"
+    "createAccount": "Crear cuenta",
+    "playbackFailed": "No se ha podido iniciar la reproducción",
+    "playTitle": "Reproducir {{title}}"
   },
   "agora": {
     "podcastStream": {
@@ -287,7 +289,6 @@
     "toasts": {
       "addedToQueue": "Añadido a la cola",
       "addToQueueFailed": "No se ha podido añadir a la cola",
-      "playbackFailed": "No se ha podido iniciar la reproducción",
       "noTracksToAdd": "No hay canciones que añadir"
     }
   },
@@ -562,7 +563,11 @@
   },
   "player": {
     "connectDevice": "Conectar a un dispositivo",
-    "showQueue": "Mostrar cola y reproducción actual"
+    "showQueue": "Mostrar cola y reproducción actual",
+    "errors": {
+      "signInToListen": "Inicia sesión para escuchar",
+      "playbackFailed": "No se ha podido reproducir ahora mismo"
+    }
   },
   "browse": {
     "seo": {

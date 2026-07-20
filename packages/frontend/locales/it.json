@@ -98,7 +98,9 @@
     "goBack": "Torna indietro",
     "previous": "Precedente",
     "nextTrack": "Brano successivo",
-    "createAccount": "Crea account"
+    "createAccount": "Crea account",
+    "playbackFailed": "Impossibile avviare la riproduzione",
+    "playTitle": "Riproduci {{title}}"
   },
   "agora": {
     "podcastStream": {
@@ -287,7 +289,6 @@
     "toasts": {
       "addedToQueue": "Aggiunto alla coda",
       "addToQueueFailed": "Impossibile aggiungere alla coda",
-      "playbackFailed": "Impossibile avviare la riproduzione",
       "noTracksToAdd": "Nessun brano da aggiungere"
     }
   },
@@ -562,7 +563,11 @@
   },
   "player": {
     "connectDevice": "Connetti a un dispositivo",
-    "showQueue": "Mostra coda e riproduzione in corso"
+    "showQueue": "Mostra coda e riproduzione in corso",
+    "errors": {
+      "signInToListen": "Accedi per ascoltare",
+      "playbackFailed": "Impossibile riprodurre in questo momento"
+    }
   },
   "browse": {
     "seo": {

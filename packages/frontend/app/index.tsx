@@ -26,6 +26,7 @@ import {
   useHomePodcasts,
   type HomeSectionStatus,
 } from '@/hooks/useHomeFeed';
+import { usePlayEntity } from '@/hooks/usePlayEntity';
 import { createScopedLogger } from '@/utils/logger';
 import { Ionicons } from '@expo/vector-icons';
 import { pickCatalogImageUrl, resolvePodcastArtwork } from '@/utils/pickImage';
@@ -64,6 +65,10 @@ const HomeScreen: React.FC = () => {
   const { playTrackList } = usePlayerStore();
   const { addTracksLocally } = useQueueStore();
   const { openAccountDialog } = useOxy();
+  // Album / playlist / artist / show play buttons all resolve through the one
+  // shared hook, so every card that offers play behaves identically here and on
+  // the other browse surfaces.
+  const { playAlbum, playPlaylist, playArtist, playPodcast } = usePlayEntity();
   // HOVER MODE: hovering any card themes the WHOLE app from that card's
   // server-extracted cover colours; leaving restores the default. All theming
   // lives in Bloom — these thin handlers only feed the card's DTO colours to
@@ -162,62 +167,6 @@ const HomeScreen: React.FC = () => {
   const handleSignIn = useCallback(() => {
     openAccountDialog('signin');
   }, [openAccountDialog]);
-
-  // Navigate to and start playing an album's first track. Used by album cards'
-  // play button so a single tap actually plays real audio.
-  const playAlbum = useCallback(async (albumId: string, albumName?: string) => {
-    try {
-      const { tracks: albumTracks } = await musicService.getAlbumTracks(albumId);
-      if (albumTracks.length > 0) {
-        await playTrackList(albumTracks, 0, {
-          type: 'album',
-          id: albumId,
-          name: albumName,
-        });
-        return;
-      }
-      toast.info(t('common.noPlayableTracks'));
-    } catch (error) {
-      logger.error('Error playing album', { albumId, error });
-      toast.error(t('home.toasts.playbackFailed'));
-    }
-  }, [playTrackList]);
-
-  const playPlaylist = useCallback(async (playlistId: string, playlistName?: string) => {
-    try {
-      const { tracks: playlistTracks } = await musicService.getPlaylistTracks(playlistId);
-      if (playlistTracks.length > 0) {
-        await playTrackList(playlistTracks, 0, {
-          type: 'playlist',
-          id: playlistId,
-          name: playlistName,
-        });
-        return;
-      }
-      toast.info(t('common.noPlayableTracks'));
-    } catch (error) {
-      logger.error('Error playing playlist', { playlistId, error });
-      toast.error(t('home.toasts.playbackFailed'));
-    }
-  }, [playTrackList]);
-
-  const playArtist = useCallback(async (artistId: string, artistName?: string) => {
-    try {
-      const { tracks: artistTracks } = await musicService.getArtistTracks(artistId, { limit: 50 });
-      if (artistTracks.length > 0) {
-        await playTrackList(artistTracks, 0, {
-          type: 'artist',
-          id: artistId,
-          name: artistName,
-        });
-        return;
-      }
-      toast.info(t('common.noPlayableTracks'));
-    } catch (error) {
-      logger.error('Error playing artist', { artistId, error });
-      toast.error(t('home.toasts.playbackFailed'));
-    }
-  }, [playTrackList]);
 
   const addTrackToQueue = useCallback((track: Track) => {
     addTracksLocally([track], 'last');
@@ -338,6 +287,7 @@ const HomeScreen: React.FC = () => {
           playAlbum={playAlbum}
           playPlaylist={playPlaylist}
           playArtist={playArtist}
+          playPodcast={playPodcast}
           addTrackToQueue={addTrackToQueue}
           addAlbumToQueue={addAlbumToQueue}
           addPlaylistToQueue={addPlaylistToQueue}
@@ -454,6 +404,7 @@ interface HomeContentProps {
   playAlbum: (albumId: string, albumName?: string) => void;
   playPlaylist: (playlistId: string, playlistName?: string) => void;
   playArtist: (artistId: string, artistName?: string) => void;
+  playPodcast: (podcastId: string, podcastTitle?: string) => void;
   addTrackToQueue: (track: Track) => void;
   addAlbumToQueue: (albumId: string) => void;
   addPlaylistToQueue: (playlistId: string) => void;
@@ -498,6 +449,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
   playAlbum,
   playPlaylist,
   playArtist,
+  playPodcast,
   addTrackToQueue,
   addAlbumToQueue,
   addPlaylistToQueue,
@@ -837,7 +789,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
                     primaryColor={podcast.primaryColor}
                     secondaryColor={podcast.secondaryColor}
                     onPress={() => router.push({ pathname: '/podcasts/[id]', params: { id: podcast.id } })}
-                    onPlayPress={() => router.push({ pathname: '/podcasts/[id]', params: { id: podcast.id } })}
+                    onPlayPress={() => playPodcast(podcast.id, podcast.title)}
                     onHoverIn={onSeedHoverIn}
                     onHoverOut={onSeedHoverOut}
                   />

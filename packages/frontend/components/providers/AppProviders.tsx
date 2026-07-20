@@ -15,7 +15,7 @@
 import React, { memo, useCallback, useMemo } from 'react';
 import { QueryClient, useQueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
-import { I18nextProvider } from 'react-i18next';
+import { I18nextProvider, useTranslation } from 'react-i18next';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { MenuProvider } from 'react-native-popup-menu';
@@ -31,8 +31,9 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { BottomSheetProvider } from '@/context/BottomSheetContext';
 import { HomeRefreshProvider } from '@/context/HomeRefreshContext';
-import { Toaster } from '@/lib/sonner';
+import { Toaster, toast } from '@/lib/sonner';
 import i18n from '@/lib/i18n';
+import { usePlayerStore } from '@/stores/playerStore';
 import { liveConfig, liveRoomsQueryKey } from '@/lib/liveConfig';
 import { useServerAppearanceSync } from '@/hooks/useServerAppearanceSync';
 import { usePlayerPresence } from '@/hooks/usePlayerPresence';
@@ -77,6 +78,46 @@ function AppearanceSync(): null {
  */
 function PlayerPresence(): null {
   usePlayerPresence();
+  return null;
+}
+
+/**
+ * Non-rendering bridge that turns a failed play into something the listener can
+ * actually see.
+ *
+ * Every play path in the app — cards, rows, the player bar, queue advances,
+ * radio — funnels through the player store, so subscribing to its failures once
+ * here is what makes all of them report. The alternative, wrapping each of the
+ * ~30 call sites, would guarantee the next one added forgets.
+ *
+ * A failed play is an event rather than a status, so the store stamps each one
+ * with a fresh id and this effect fires per failure, not per distinct message.
+ * `useTranslation` is safe in a boot-mounted component here only because this
+ * app disables i18next suspense explicitly (see `lib/i18n.ts`).
+ */
+function PlaybackFailureReporter(): null {
+  const { t } = useTranslation();
+  const { openAccountDialog } = useOxy();
+  const failure = usePlayerStore((state) => state.failure);
+
+  React.useEffect(() => {
+    if (!failure) {
+      return;
+    }
+
+    if (failure.reason === 'auth-required') {
+      // The backend is the sole entitlement authority and there is no
+      // unauthenticated preview endpoint, so signing in is genuinely the only
+      // path to audio — say so and open the SDK's in-app sign-in, matching how
+      // every other guest-gated action in the app responds.
+      toast.info(t('player.errors.signInToListen'));
+      openAccountDialog('signin');
+      return;
+    }
+
+    toast.error(t('player.errors.playbackFailed'));
+  }, [failure, t, openAccountDialog]);
+
   return null;
 }
 
@@ -184,6 +225,7 @@ export const AppProviders = memo(function AppProviders({
                   <AppearanceSync />
                   <QueryCacheAccountScope />
                   <StreamCacheAuthInvalidator />
+                  <PlaybackFailureReporter />
                   <PlayerPresence />
                   <BottomSheetModalProvider>
                     <BottomSheetProvider>

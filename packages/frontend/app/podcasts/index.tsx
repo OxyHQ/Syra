@@ -10,6 +10,7 @@ import { MediaCard } from '@/components/MediaCard';
 import { ResponsiveGrid } from '@/components/ResponsiveGrid';
 import { MediaCardRowSkeleton } from '@/components/skeletons';
 import { usePodcasts, useContinueListening } from '@/hooks/usePodcasts';
+import { usePlayEntity } from '@/hooks/usePlayEntity';
 import { usePlayerStore } from '@/stores/playerStore';
 import { resolvePodcastArtwork } from '@/utils/pickImage';
 import { formatRemaining } from '@/utils/podcastFormat';
@@ -60,6 +61,7 @@ const PodcastsScreen: React.FC = () => {
   const continueQuery = useContinueListening();
 
   const playEpisode = usePlayerStore((s) => s.playEpisode);
+  const { playPodcast } = usePlayEntity();
 
   const podcasts = browseQuery.data ?? [];
   const inProgress = useMemo(
@@ -83,6 +85,7 @@ const PodcastsScreen: React.FC = () => {
       onOpenEpisode={(id) => router.push({ pathname: '/episode/[id]', params: { id } })}
       onFindPodcast={() => router.push({ pathname: '/search', params: { category: 'podcasts' } })}
       onPlayEpisode={(entry) => playEpisode(entry.episode, { resumeFromSec: entry.progressSec })}
+      onPlayShow={(podcast) => playPodcast(podcast.id, podcast.title)}
     />
   );
 };
@@ -99,6 +102,8 @@ interface PodcastsContentProps {
   onOpenEpisode: (id: string) => void;
   onFindPodcast: () => void;
   onPlayEpisode: (entry: ContinueEntry) => void;
+  /** Plays a show's latest episode, the way the rail plays a saved one. */
+  onPlayShow: (podcast: Podcast) => void;
 }
 
 /**
@@ -117,6 +122,7 @@ const PodcastsContent: React.FC<PodcastsContentProps> = ({
   onOpenEpisode,
   onFindPodcast,
   onPlayEpisode,
+  onPlayShow,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -237,7 +243,7 @@ const PodcastsContent: React.FC<PodcastsContentProps> = ({
                     primaryColor={podcast.primaryColor}
                     secondaryColor={podcast.secondaryColor}
                     onPress={() => onOpenShow(podcast.id)}
-                    onPlayPress={() => onOpenShow(podcast.id)}
+                    onPlayPress={() => onPlayShow(podcast)}
                     onHoverIn={onSeedHoverIn}
                     onHoverOut={onSeedHoverOut}
                   />

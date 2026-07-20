@@ -98,7 +98,9 @@
     "goBack": "Go Back",
     "previous": "Previous",
     "nextTrack": "Next track",
-    "createAccount": "Create account"
+    "createAccount": "Create account",
+    "playbackFailed": "Could not start playback",
+    "playTitle": "Play {{title}}"
   },
   "agora": {
     "podcastStream": {
@@ -287,7 +289,6 @@
     "toasts": {
       "addedToQueue": "Added to queue",
       "addToQueueFailed": "Could not add to queue",
-      "playbackFailed": "Could not start playback",
       "noTracksToAdd": "No tracks to add"
     }
   },
@@ -562,7 +563,11 @@
   },
   "player": {
     "connectDevice": "Connect to a device",
-    "showQueue": "Show queue and now playing"
+    "showQueue": "Show queue and now playing",
+    "errors": {
+      "signInToListen": "Sign in to listen",
+      "playbackFailed": "Could not play that right now"
+    }
   },
   "browse": {
     "seo": {

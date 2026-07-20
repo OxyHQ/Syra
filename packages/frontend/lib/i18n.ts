@@ -92,6 +92,11 @@ export async function initializeI18n(): Promise<void> {
           lng: DEFAULT_LANGUAGE,
           fallbackLng: DEFAULT_LANGUAGE,
           interpolation: { escapeValue: false },
+          // Must carry the same react options as the primary init above: a
+          // boot-mounted consumer calling `useTranslation` suspends forever if
+          // this path ever runs with the library default of `useSuspense: true`,
+          // and the symptom is a white screen with no console error.
+          react: REACT_I18NEXT_OPTIONS,
         });
       } catch (fallbackError) {
         console.error('i18n fallback initialization failed:', fallbackError);

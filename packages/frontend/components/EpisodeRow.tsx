@@ -7,6 +7,7 @@ import type { Episode } from '@syra/shared-types';
 import { resolvePodcastArtwork } from '@/utils/pickImage';
 import { formatEpisodeDuration, formatPubDate, formatRemaining } from '@/utils/podcastFormat';
 import type { EpisodeProgressSnapshot } from '@/hooks/usePodcasts';
+import { usePlayerStore } from '@/stores/playerStore';
 import { webViewStyle } from '@/utils/webStyles';
 
 interface EpisodeRowProps {
@@ -18,6 +19,11 @@ interface EpisodeRowProps {
   /** Whether the player is actively playing this episode. */
   isPlaying?: boolean;
   onPress: () => void;
+  /**
+   * Starts this episode in the caller's queue context. Only invoked when the
+   * episode is NOT the one already loaded in the player — a loaded episode is
+   * toggled by the row itself, so this never restarts what is already playing.
+   */
   onPlayPress: () => void;
   /** Hide the show artwork (e.g. when already inside that show's screen). */
   hideArtwork?: boolean;
@@ -37,10 +43,31 @@ const EpisodeRowComponent: React.FC<EpisodeRowProps> = ({
   hideArtwork = false,
 }) => {
   const theme = useTheme();
+  const pause = usePlayerStore((state) => state.pause);
+  const resume = usePlayerStore((state) => state.resume);
   const imageUri = useMemo(
     () => resolvePodcastArtwork(episode, 'thumbnail'),
     [episode],
   );
+
+  /**
+   * The one contract for this control, so its icon and its action can never
+   * disagree — pressing pause pauses, and pressing play on the loaded episode
+   * resumes instead of restarting it from the beginning. Owning it here is what
+   * makes every screen behave the same; callers only start episodes that are
+   * not already loaded.
+   */
+  const handlePlayPress = () => {
+    if (!isCurrent) {
+      onPlayPress();
+      return;
+    }
+    if (isPlaying) {
+      void pause();
+      return;
+    }
+    void resume();
+  };
 
   const completed = progress?.completed ?? false;
   const hasProgress = !completed && (progress?.progressSec ?? 0) > 0 && (progress?.durationSec ?? 0) > 0;
@@ -115,7 +142,7 @@ const EpisodeRowComponent: React.FC<EpisodeRowProps> = ({
       <Pressable
         onPress={(event) => {
           event?.stopPropagation?.();
-          onPlayPress();
+          handlePlayPress();
         }}
         style={[styles.playButton, { borderColor: theme.colors.border }]}
         accessibilityRole="button"

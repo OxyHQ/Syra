@@ -1,4 +1,7 @@
 import { api } from '@/utils/api';
+import { createScopedLogger } from '@/utils/logger';
+
+const logger = createScopedLogger('StreamService');
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -160,8 +163,12 @@ export function resolveEpisodeStream(episodeId: string): Promise<StreamResolutio
 export function prefetchStreams(trackIds: string[]): void {
   const uniqueTrackIds = [...new Set(trackIds.filter(Boolean))];
   for (const trackId of uniqueTrackIds) {
-    void resolveStream(trackId).catch(() => {
-      // Prefetch is opportunistic; playback will surface a real error if needed.
+    // Prefetch is opportunistic — these tracks have not been asked for yet, so a
+    // failure must not reach the listener; the real play attempt resolves again
+    // and reports its own. Logged so it is never entirely invisible: a signed-out
+    // listener's 401s show up here first.
+    void resolveStream(trackId).catch((error) => {
+      logger.debug('Stream prefetch failed', { trackId, error });
     });
   }
 }

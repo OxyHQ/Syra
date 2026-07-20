@@ -16,6 +16,7 @@ import { toast } from '@/lib/sonner';
 import { Track } from '@syra/shared-types';
 import { entityService } from '@/services/entityService';
 import { usePlayerStore } from '@/stores/playerStore';
+import { usePlayEntity } from '@/hooks/usePlayEntity';
 import SEO from '@/components/SEO';
 import { TrackRow } from '@/components/TrackRow';
 import { EpisodeRow } from '@/components/EpisodeRow';
@@ -51,6 +52,9 @@ const EntityProfileScreen: React.FC = () => {
   const router = useRouter();
   const theme = useTheme();
   const { playTrackList, playEpisode, currentTrack, currentEpisode, isPlaying } = usePlayerStore();
+  // The albums, shows and related artists on this profile are all playable, so
+  // their cards get real play buttons from the one shared hook.
+  const { playAlbum, playPodcast, playArtist } = usePlayEntity();
   const gate = useAuthGate();
 
   const entityQuery = useQuery({
@@ -233,6 +237,9 @@ const EntityProfileScreen: React.FC = () => {
       onTrackPress={handleTrackPress}
       onFollow={handleFollow}
       onPlayEpisode={playEpisode}
+      onPlayAlbum={playAlbum}
+      onPlayPodcast={playPodcast}
+      onPlayArtist={playArtist}
       onNavigateArtist={(artist) => router.push({ pathname: '/p/[id]', params: { id: artist } })}
       onNavigateAlbum={(album) => router.push(`/album/${album}`)}
       onNavigatePodcast={(podcast) => router.push({ pathname: '/podcasts/[id]', params: { id: podcast } })}
@@ -259,6 +266,9 @@ interface EntityProfileViewProps {
   onTrackPress: (track: Track) => void;
   onFollow: () => void;
   onPlayEpisode: (episode: AppearsInEpisode) => void;
+  onPlayAlbum: (albumId: string, albumTitle?: string) => void;
+  onPlayPodcast: (podcastId: string, podcastTitle?: string) => void;
+  onPlayArtist: (artistId: string, artistName?: string) => void;
   onNavigateArtist: (artistId: string) => void;
   onNavigateAlbum: (albumId: string) => void;
   onNavigatePodcast: (podcastId: string) => void;
@@ -289,6 +299,9 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
   onTrackPress,
   onFollow,
   onPlayEpisode,
+  onPlayAlbum,
+  onPlayPodcast,
+  onPlayArtist,
   onNavigateArtist,
   onNavigateAlbum,
   onNavigatePodcast,
@@ -566,6 +579,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                         imageSizes={album.coverArtSizes}
                         primaryColor={album.primaryColor}
                         onPress={() => onNavigateAlbum(album.id)}
+                        onPlayPress={() => onPlayAlbum(album.id, album.title)}
                       />
                     </View>
                   ))}
@@ -589,6 +603,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                         resolvedImageUri={resolvePodcastArtwork(podcast, 'card')}
                         primaryColor={podcast.primaryColor}
                         onPress={() => onNavigatePodcast(podcast.id)}
+                        onPlayPress={() => onPlayPodcast(podcast.id, podcast.title)}
                       />
                     </View>
                   ))}
@@ -637,6 +652,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                         imageSizes={relatedArtist.imageSizes}
                         primaryColor={relatedArtist.primaryColor}
                         onPress={() => onNavigateArtist(relatedArtist.id)}
+                        onPlayPress={() => onPlayArtist(relatedArtist.id, relatedArtist.name)}
                       />
                     </View>
                   ))}

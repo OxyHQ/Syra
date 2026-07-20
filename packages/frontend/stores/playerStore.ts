@@ -72,6 +72,29 @@ interface PendingPlaySignal {
 }
 
 /**
+ * Why a play attempt failed, in the only two terms the UI acts on: the listener
+ * needs a session, or something genuinely went wrong.
+ */
+export type PlaybackFailureReason = 'auth-required' | 'error';
+
+/**
+ * A failed play, shaped as an EVENT rather than a status flag. `id` increments
+ * on every failure so two identical failures in a row are still two distinct
+ * notifications for whoever surfaces them — a plain message string would
+ * compare equal and be silently dropped the second time.
+ */
+export interface PlaybackFailure {
+  id: number;
+  reason: PlaybackFailureReason;
+}
+
+/** A track's playable source, resolved before any state is committed. */
+interface ResolvedSource {
+  audioUrl: string;
+  resolution: StreamResolution | null;
+}
+
+/**
  * Minimal metadata both `Track` and `Episode` satisfy — all the engine setup
  * helpers need is an id (for logging) and an optional known duration.
  */
@@ -111,7 +134,12 @@ interface PlayerState {
   duration: number;
   volume: number;
   player: PlayerEngine | null;
-  error: string | null;
+  /**
+   * The most recent failed play, or null. Written by every play path and read
+   * by the app-wide reporter that turns it into a toast or a sign-in prompt —
+   * playback never fails silently.
+   */
+  failure: PlaybackFailure | null;
   context: PlaybackContext | null;
   /** Whether playback is currently routed to a Google Cast receiver. */
   isCasting: boolean;
@@ -160,6 +188,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   /** Teardown for the active attachSource (hls.js etc.) — called before attach or stop. */
   let currentDetach: AttachResult | null = null;
   let completionInFlight = false;
+  /** Monotonic stamp that makes each failure a distinct event. */
+  let failureCounter = 0;
   let tokenDrainUnsubscribe: (() => void) | null = null;
   let pendingSignalDrainInFlight = false;
   const pendingPlaySignals: PendingPlaySignal[] = [];
@@ -185,6 +215,22 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   let radioCursor: string | null = null;
 
   const radioStationKeyOf = (seed: RadioSeed): string => `${seed.seedType}:${seed.seedId}`;
+
+  /**
+   * Publish a failed play and leave the player in a settled, non-loading state.
+   *
+   * Every play path funnels through this store, so reporting here is what lets a
+   * failure reach the listener without any of the ~30 play call sites across the
+   * app knowing that toasts or a sign-in modal exist.
+   */
+  const reportFailure = (reason: PlaybackFailureReason): void => {
+    failureCounter += 1;
+    set({
+      failure: { id: failureCounter, reason },
+      isLoading: false,
+      isPlaying: false,
+    });
+  };
 
   const removePendingPlaySignal = (pending: PendingPlaySignal): void => {
     const index = pendingPlaySignals.indexOf(pending);
@@ -396,23 +442,17 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     });
   };
 
+  /**
+   * Make `tracks` the active queue, positioned at `index`. Callers filter and
+   * clamp beforehand, because they need the starting track in hand to resolve
+   * it before the queue is replaced.
+   */
   const seedLocalQueue = async (
     tracks: Track[],
-    startIndex: number,
+    index: number,
     context?: PlaybackContext,
-  ): Promise<Queue | null> => {
-    const playableTracks = tracks.filter((track) => track?.id);
-    if (playableTracks.length === 0) {
-      return null;
-    }
-
-    const clampedIndex = Math.max(0, Math.min(startIndex, playableTracks.length - 1));
-    const queue = {
-      current: clampedIndex,
-      tracks: playableTracks,
-      context,
-    };
-
+  ): Promise<Queue> => {
+    const queue = { current: index, tracks, context };
     await useQueueStore.getState().replaceQueue(queue);
     return queue;
   };
@@ -420,12 +460,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   const shouldResolveViaStreamEndpoint = (track: Track): boolean =>
     track.status === 'ready' && Array.isArray(track.hls) && track.hls.length > 0;
 
-  const prefetchQueueStreams = (
-    tracks: Track[],
-    startIndex: number,
-    options: { includeCurrent?: boolean } = {},
-  ): void => {
-    const from = options.includeCurrent ? startIndex : startIndex + 1;
+  /**
+   * Warm the stream cache for the tracks AFTER `startIndex`. The track being
+   * played is always resolved by the play path itself, so it is never included.
+   */
+  const prefetchQueueStreams = (tracks: Track[], startIndex: number): void => {
+    const from = startIndex + 1;
     const ids = tracks
       .slice(Math.max(0, from), Math.max(0, from) + 4)
       .filter(shouldResolveViaStreamEndpoint)
@@ -746,6 +786,112 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     return resolveStream(track.id);
   };
 
+  /**
+   * Resolve a track's playable source BEFORE any queue or player state is
+   * touched, so a play that cannot start leaves the app exactly as it was.
+   *
+   * Returns null — having already published the failure — when the track cannot
+   * be resolved. A signed-out listener is asked to sign in without a pointless
+   * round trip: `GET /stream/:trackId` is the backend's entitlement authority
+   * and answers 401 without a session by design, and there is no unauthenticated
+   * preview endpoint to fall back to.
+   */
+  const resolvePlayableSource = async (track: Track): Promise<ResolvedSource | null> => {
+    // Read without waiting on the session: a still-resolving cold boot would
+    // look like a guest here, but the screens that render play buttons already
+    // gate their content on the resolved session (`useAuthGate`), so a button
+    // cannot be pressed before the session has settled. Waiting instead would
+    // put a delay in front of every genuine guest's sign-in prompt.
+    if (shouldResolveViaStreamEndpoint(track) && !oxyServices.hasValidToken()) {
+      logger.info('Play needs a session', { trackId: track.id });
+      reportFailure('auth-required');
+      return null;
+    }
+
+    try {
+      const resolution = await getPhase3Resolution(track);
+      const audioUrl = resolution ? resolution.url : await getAudioUrl(track);
+      logger.debug('Audio URL resolved', { url: audioUrl, type: resolution?.type });
+      return { audioUrl, resolution };
+    } catch (error) {
+      logger.error('Failed to resolve a playable source', { trackId: track.id, error });
+      reportFailure('error');
+      return null;
+    }
+  };
+
+  /**
+   * Start playback of an already-resolved track. Split out from `playTrack` so
+   * that resolution — the only step that fails for reasons outside the player —
+   * happens before the first state mutation, and so `playTrackList` /
+   * `playFromQueue` can resolve once and hand the source straight through
+   * instead of paying for a second resolve.
+   */
+  const playResolvedTrack = async (
+    track: Track,
+    source: ResolvedSource,
+    context: PlaybackContext | undefined,
+    addToQueue: boolean,
+  ): Promise<void> => {
+    try {
+      logger.info('Playing track', {
+        trackId: track.id,
+        title: track.title,
+        url: track.audioSource?.url,
+      });
+
+      // Stop current track if playing
+      const { player: currentPlayer, stop } = get();
+      if (currentPlayer) {
+        await stop();
+      }
+
+      set({
+        isLoading: true,
+        failure: null,
+        currentTrack: track,
+        currentEpisode: null,
+        episodeQueue: [],
+        episodeIndex: 0,
+        playbackRate: DEFAULT_PLAYBACK_RATE,
+        context: context || null,
+      });
+
+      // Initialize the engine — for web+HLS this creates a WebHlsPlayer;
+      // all other cases use expo-audio's AudioPlayer.
+      const player = await initializePlayer(source.audioUrl, track, source.resolution);
+
+      // Attach source via platform-aware fork. The engine was already
+      // selected above so attachSource.web.ts simply calls player.replace(),
+      // which routes to hls.loadSource() inside WebHlsPlayer for hlsjs mode.
+      if (currentDetach) {
+        currentDetach.detach();
+        currentDetach = null;
+      }
+      // The cast receiver loads the URL directly; attachSource is hls.js-only.
+      if (source.resolution && !get().isCasting) {
+        currentDetach = attachSource(player, source.resolution);
+      }
+
+      set({
+        player,
+        isLoading: true,
+        currentTime: 0,
+        duration: track.duration || 0,
+      });
+
+      await updateQueueState(track, addToQueue);
+      await startPlayback(player, track);
+      startPositionUpdates(player);
+      prefetchUpcomingQueueStreams();
+      // Track started successfully — record it for real recently-played.
+      recordPlay(track, context);
+    } catch (error) {
+      logger.error('Error playing track', error);
+      reportFailure('error');
+    }
+  };
+
   // ── Episode playback helpers ───────────────────────────────────────────────
 
   /** Apply the store's playback rate to an engine that supports it. */
@@ -982,7 +1128,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     duration: 0,
     volume: DEFAULT_VOLUME,
     player: null,
-    error: null,
+    failure: null,
     context: null,
     isCasting: castController.getSessionState() === 'connected',
     castDeviceName:
@@ -996,85 +1142,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
      * @param addToQueue - Whether to add track to queue
      */
     playTrack: async (track: Track, context?: PlaybackContext, addToQueue: boolean = false) => {
-      try {
-        logger.info('Playing track', {
-          trackId: track.id,
-          title: track.title,
-          url: track.audioSource?.url,
-        });
-        
-        // Stop current track if playing
-        const { player: currentPlayer, stop } = get();
-        if (currentPlayer) {
-          await stop();
-        }
-
-        set({
-          isLoading: true,
-          error: null,
-          currentTrack: track,
-          currentEpisode: null,
-          episodeQueue: [],
-          episodeIndex: 0,
-          playbackRate: DEFAULT_PLAYBACK_RATE,
-          context: context || null,
-        });
-
-        // Resolve stream — Phase-3 HLS tracks use resolveStream;
-        // legacy/processing tracks fall back to the authenticated-URL path.
-        const resolution = await getPhase3Resolution(track);
-        const audioUrl = resolution
-          ? resolution.url
-          : await getAudioUrl(track);
-        logger.debug('Audio URL resolved', { url: audioUrl, type: resolution?.type });
-
-        // Initialize the engine — for web+HLS this creates a WebHlsPlayer;
-        // all other cases use expo-audio's AudioPlayer.
-        const player = await initializePlayer(audioUrl, track, resolution);
-
-        // Attach source via platform-aware fork. The engine was already
-        // selected above so attachSource.web.ts simply calls player.replace(),
-        // which routes to hls.loadSource() inside WebHlsPlayer for hlsjs mode.
-        if (currentDetach) {
-          currentDetach.detach();
-          currentDetach = null;
-        }
-        // The cast receiver loads the URL directly; attachSource is hls.js-only.
-        if (resolution && !get().isCasting) {
-          currentDetach = attachSource(player, resolution);
-        }
-
-        set({
-          player,
-          isLoading: true,
-          currentTime: 0,
-          duration: track.duration || 0,
-        });
-
-        try {
-          await updateQueueState(track, addToQueue);
-          await startPlayback(player, track);
-          startPositionUpdates(player);
-          prefetchUpcomingQueueStreams();
-          // Track started successfully — record it for real recently-played.
-          recordPlay(track, context);
-        } catch (playError) {
-          logger.error('Error during playback', playError);
-          set({ 
-            isPlaying: false,
-            isLoading: false,
-            error: playError instanceof Error ? playError.message : 'Failed to play audio',
-          });
-          throw playError;
-        }
-      } catch (error) {
-        logger.error('Error playing track', error);
-        set({ 
-          error: error instanceof Error ? error.message : 'Failed to play track',
-          isLoading: false,
-          isPlaying: false,
-        });
+      const source = await resolvePlayableSource(track);
+      if (!source) {
+        return;
       }
+      await playResolvedTrack(track, source, context, addToQueue);
     },
 
     /**
@@ -1083,13 +1155,26 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
      * this instead of playing an isolated track.
      */
     playTrackList: async (tracks: Track[], startIndex: number = 0, context?: PlaybackContext) => {
-      const queue = await seedLocalQueue(tracks, startIndex, context);
-      if (!queue) {
+      const playableTracks = tracks.filter((track) => track?.id);
+      if (playableTracks.length === 0) {
         return;
       }
 
-      prefetchQueueStreams(queue.tracks, queue.current, { includeCurrent: true });
-      await get().playTrack(queue.tracks[queue.current], context ?? queue.context, false);
+      const clampedIndex = Math.max(0, Math.min(startIndex, playableTracks.length - 1));
+      const startTrack = playableTracks[clampedIndex];
+
+      // Resolve BEFORE the queue is seeded. `replaceQueue` is persisted
+      // server-side, so seeding first and failing afterwards would leave the
+      // listener looking at a queue they never chose with nothing playing.
+      const source = await resolvePlayableSource(startTrack);
+      if (!source) {
+        return;
+      }
+
+      const queue = await seedLocalQueue(playableTracks, clampedIndex, context);
+      // The starting track is already resolved above, so prefetch what follows.
+      prefetchQueueStreams(queue.tracks, queue.current);
+      await playResolvedTrack(startTrack, source, context ?? queue.context, false);
     },
 
     /**
@@ -1119,7 +1204,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         });
       } catch (error) {
         logger.error('Failed to start radio station', { seed, error });
-        set({ error: error instanceof Error ? error.message : 'Failed to start radio' });
+        reportFailure('error');
       }
     },
 
@@ -1133,6 +1218,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     playEpisode: async (episode: Episode, options?: PlayEpisodeOptions) => {
       try {
         logger.info('Playing episode', { episodeId: episode.id, title: episode.title });
+
+        // Resolve before committing any state, matching the track path. Episodes
+        // always resolve to something — a guest, or a failed HLS resolve, falls
+        // back to the public progressive proxy — so podcasts stay playable
+        // signed out, unlike music.
+        const { url, resolution } = await resolveEpisodeAudio(episode);
+        logger.debug('Episode audio resolved', { url, type: resolution?.type });
 
         const { player: currentPlayer, stop } = get();
         if (currentPlayer) {
@@ -1148,7 +1240,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
         set({
           isLoading: true,
-          error: null,
+          failure: null,
           currentTrack: null,
           currentEpisode: episode,
           episodeQueue: nextQueue,
@@ -1157,9 +1249,6 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           currentTime: 0,
           duration: episode.duration || 0,
         });
-
-        const { url, resolution } = await resolveEpisodeAudio(episode);
-        logger.debug('Episode audio resolved', { url, type: resolution?.type });
 
         const player = await initializePlayer(url, episode, resolution);
 
@@ -1175,35 +1264,21 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         applyPlaybackRate(player);
         set({ player, isLoading: true });
 
-        try {
-          await startPlayback(player, episode);
-          // Some engines reset rate on (re)load — re-apply once playing.
-          applyPlaybackRate(player);
+        await startPlayback(player, episode);
+        // Some engines reset rate on (re)load — re-apply once playing.
+        applyPlaybackRate(player);
 
-          const resumeFromSec = finiteSeconds(options?.resumeFromSec);
-          if (resumeFromSec >= RESUME_MIN_SEC) {
-            await player.seekTo(resumeFromSec);
-            set({ currentTime: resumeFromSec });
-          }
-
-          startPositionUpdates(player);
-          startProgressSaves();
-        } catch (playError) {
-          logger.error('Error during episode playback', playError);
-          set({
-            isPlaying: false,
-            isLoading: false,
-            error: playError instanceof Error ? playError.message : 'Failed to play episode',
-          });
-          throw playError;
+        const resumeFromSec = finiteSeconds(options?.resumeFromSec);
+        if (resumeFromSec >= RESUME_MIN_SEC) {
+          await player.seekTo(resumeFromSec);
+          set({ currentTime: resumeFromSec });
         }
+
+        startPositionUpdates(player);
+        startProgressSaves();
       } catch (error) {
         logger.error('Error playing episode', error);
-        set({
-          error: error instanceof Error ? error.message : 'Failed to play episode',
-          isLoading: false,
-          isPlaying: false,
-        });
+        reportFailure('error');
       }
     },
 
@@ -1352,7 +1427,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         isPlaying: false,
         currentTime: 0,
         duration: 0,
-        error: null,
+        failure: null,
       });
       logger.debug('Playback stopped');
     },
@@ -1387,8 +1462,16 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       }
 
       const track = queue.tracks[index];
+      // Resolve first so a play that cannot start leaves the queue cursor where
+      // the listener left it, rather than silently moving to a track that never
+      // played.
+      const source = await resolvePlayableSource(track);
+      if (!source) {
+        return;
+      }
+
       await queueStore.setCurrentIndex(index);
-      await get().playTrack(track, queue.context, false);
+      await playResolvedTrack(track, source, queue.context, false);
     },
 
     /**

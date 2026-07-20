@@ -337,15 +337,18 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
             <Ionicons name={getIcon()} size={48} color={theme.colors.textSecondary} />
           </View>
         )}
-        {/* Play button overlay on hover */}
+        {/* Play control on hover — a discrete button rather than a full-cover
+            overlay, so the rest of the artwork still opens the entity. A fill
+            made the whole cover a play target and left only the title strip
+            navigating, the inverse of what a listener expects. */}
         {showPlayButton && (
-          <Pressable 
-            style={styles.playOverlay}
+          <Pressable
+            style={[styles.playButton, { backgroundColor: theme.colors.primary }]}
             onPress={handlePlayPress}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.playTitle', { title })}
           >
-            <View style={[styles.playButton, { backgroundColor: theme.colors.primary }]}>
-              <Ionicons name="play" size={24} color={theme.colors.primaryForeground} />
-            </View>
+            <Ionicons name="play" size={22} color={theme.colors.primaryForeground} />
           </Pressable>
         )}
       </View>
@@ -413,28 +416,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  playOverlay: {
+  playButton: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    right: 8,
+    bottom: 8,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
     ...Platform.select({
       web: {
         cursor: 'pointer',
+        boxShadow: '0 8px 16px rgba(0, 0, 0, 0.3)',
       },
     }),
-  },
-  playButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    transform: [{ translateY: 8 }], // Slight offset like Spotify
   },
   menuContainer: {
     position: 'relative',

@@ -194,7 +194,7 @@ function resetPlayerStore(): void {
     duration: 0,
     volume: 1,
     player: null,
-    error: null,
+    failure: null,
     context: null,
     isCasting: false,
     castDeviceName: null,
