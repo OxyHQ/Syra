@@ -4,11 +4,7 @@ import { ArtistModel } from '../models/CatalogEntity';
 import { PlaylistModel } from '../models/Playlist';
 import { PlaylistTrackModel } from '../models/PlaylistTrack';
 import { TrackModel } from '../models/Track';
-import {
-  type CatalogPlaybackOptions,
-  playableTrackFilter,
-  visibleCatalogFilter,
-} from './catalogVisibility';
+import { playableTrackFilter } from './catalogVisibility';
 
 const PLAYABLE_TRACK_LOOKUP_FIELD = '_playableTracks';
 const PLAYABLE_PLAYLIST_TRACK_LOOKUP_FIELD = '_playablePlaylistTracks';
@@ -43,11 +39,10 @@ function paginatedStages(page: CatalogPage): PipelineStage[] {
 
 function playableTrackRelationFilter(
   relationField: 'albumId' | 'artistId',
-  playbackOptions: CatalogPlaybackOptions,
 ): QueryFilter<Record<string, unknown>> {
   return {
     $and: [
-      playableTrackFilter<Record<string, unknown>>({}, playbackOptions),
+      playableTrackFilter<Record<string, unknown>>({}),
       { $expr: { $eq: [`$${relationField}`, '$$containerId'] } },
     ],
   };
@@ -55,14 +50,13 @@ function playableTrackRelationFilter(
 
 function playableTrackLookup(
   relationField: 'albumId' | 'artistId',
-  playbackOptions: CatalogPlaybackOptions,
 ): PipelineStage.Lookup {
   return {
     $lookup: {
       from: TrackModel.collection.name,
       let: { containerId: { $toString: '$_id' } },
       pipeline: [
-        { $match: playableTrackRelationFilter(relationField, playbackOptions) },
+        { $match: playableTrackRelationFilter(relationField) },
         { $limit: 1 },
         { $project: { _id: 1 } },
       ],
@@ -74,19 +68,16 @@ function playableTrackLookup(
 function withPlayableTracksPipeline(
   filter: CatalogMatchFilter,
   relationField: 'albumId' | 'artistId',
-  playbackOptions: CatalogPlaybackOptions,
 ): PipelineStage[] {
   return [
     { $match: filter },
-    playableTrackLookup(relationField, playbackOptions),
+    playableTrackLookup(relationField),
     { $match: { [`${PLAYABLE_TRACK_LOOKUP_FIELD}.0`]: { $exists: true } } },
     { $project: { [PLAYABLE_TRACK_LOOKUP_FIELD]: 0 } },
   ];
 }
 
-function playlistTrackLookup(
-  playbackOptions: CatalogPlaybackOptions,
-): PipelineStage.Lookup {
+function playlistTrackLookup(): PipelineStage.Lookup {
   return {
     $lookup: {
       from: PlaylistTrackModel.collection.name,
@@ -108,7 +99,7 @@ function playlistTrackLookup(
               {
                 $match: {
                   $and: [
-                    playableTrackFilter<Record<string, unknown>>({}, playbackOptions),
+                    playableTrackFilter<Record<string, unknown>>({}),
                     { $expr: { $eq: ['$_id', '$$trackId'] } },
                   ],
                 },
@@ -130,11 +121,10 @@ function playlistTrackLookup(
 
 function withPlayablePlaylistTracksPipeline(
   filter: CatalogMatchFilter,
-  playbackOptions: CatalogPlaybackOptions,
 ): PipelineStage[] {
   return [
-    { $match: visibleCatalogFilter(filter) },
-    playlistTrackLookup(playbackOptions),
+    { $match: filter },
+    playlistTrackLookup(),
     { $match: { [`${PLAYABLE_PLAYLIST_TRACK_LOOKUP_FIELD}.0`]: { $exists: true } } },
     { $project: { [PLAYABLE_PLAYLIST_TRACK_LOOKUP_FIELD]: 0 } },
   ];
@@ -155,26 +145,24 @@ function toObjectId(id: string): mongoose.Types.ObjectId {
  * pipelines unindexable before.
  */
 function availableAlbumFilter(filter: CatalogMatchFilter): CatalogMatchFilter {
-  return visibleCatalogFilter({ ...filter, isAvailable: { $ne: false } });
+  return { ...filter, isAvailable: { $ne: false } };
 }
 
 export async function findAlbumsWithPlayableTracks(
   filter: CatalogMatchFilter,
-  playbackOptions: CatalogPlaybackOptions,
   page: CatalogPage,
 ): Promise<unknown[]> {
   return AlbumModel.aggregate<unknown>([
-    ...withPlayableTracksPipeline(availableAlbumFilter(filter), 'albumId', playbackOptions),
+    ...withPlayableTracksPipeline(availableAlbumFilter(filter), 'albumId'),
     ...paginatedStages(page),
   ]).exec();
 }
 
 export async function countAlbumsWithPlayableTracks(
   filter: CatalogMatchFilter,
-  playbackOptions: CatalogPlaybackOptions,
 ): Promise<number> {
   const result = await AlbumModel.aggregate<{ total: number }>([
-    ...withPlayableTracksPipeline(availableAlbumFilter(filter), 'albumId', playbackOptions),
+    ...withPlayableTracksPipeline(availableAlbumFilter(filter), 'albumId'),
     { $count: 'total' },
   ]).exec();
 
@@ -183,13 +171,11 @@ export async function countAlbumsWithPlayableTracks(
 
 export async function findOneAlbumWithPlayableTracks(
   id: string,
-  playbackOptions: CatalogPlaybackOptions,
 ): Promise<unknown | null> {
   const albums = await AlbumModel.aggregate<unknown>([
     ...withPlayableTracksPipeline(
       availableAlbumFilter({ _id: toObjectId(id) }),
       'albumId',
-      playbackOptions,
     ),
     { $limit: 1 },
   ]).exec();
@@ -199,23 +185,21 @@ export async function findOneAlbumWithPlayableTracks(
 
 export async function findArtistsWithPlayableTracks(
   filter: CatalogMatchFilter,
-  playbackOptions: CatalogPlaybackOptions,
   page: CatalogPage,
 ): Promise<unknown[]> {
   // aggregate() bypasses the discriminator's `type` scoping — match it explicitly.
   return ArtistModel.aggregate<unknown>([
-    ...withPlayableTracksPipeline(visibleCatalogFilter({ ...filter, type: 'artist' }), 'artistId', playbackOptions),
+    ...withPlayableTracksPipeline({ ...filter, type: 'artist' }, 'artistId'),
     ...paginatedStages(page),
   ]).exec();
 }
 
 export async function countArtistsWithPlayableTracks(
   filter: CatalogMatchFilter,
-  playbackOptions: CatalogPlaybackOptions,
 ): Promise<number> {
   // aggregate() bypasses the discriminator's `type` scoping — match it explicitly.
   const result = await ArtistModel.aggregate<{ total: number }>([
-    ...withPlayableTracksPipeline(visibleCatalogFilter({ ...filter, type: 'artist' }), 'artistId', playbackOptions),
+    ...withPlayableTracksPipeline({ ...filter, type: 'artist' }, 'artistId'),
     { $count: 'total' },
   ]).exec();
 
@@ -224,14 +208,12 @@ export async function countArtistsWithPlayableTracks(
 
 export async function findOneArtistWithPlayableTracks(
   id: string,
-  playbackOptions: CatalogPlaybackOptions,
 ): Promise<unknown | null> {
   // aggregate() bypasses the discriminator's `type` scoping — match it explicitly.
   const artists = await ArtistModel.aggregate<unknown>([
     ...withPlayableTracksPipeline(
-      visibleCatalogFilter({ _id: toObjectId(id), type: 'artist' }),
+      { _id: toObjectId(id), type: 'artist' },
       'artistId',
-      playbackOptions,
     ),
     { $limit: 1 },
   ]).exec();
@@ -241,21 +223,19 @@ export async function findOneArtistWithPlayableTracks(
 
 export async function findPlaylistsWithPlayableTracks(
   filter: CatalogMatchFilter,
-  playbackOptions: CatalogPlaybackOptions,
   page: CatalogPage,
 ): Promise<unknown[]> {
   return PlaylistModel.aggregate<unknown>([
-    ...withPlayablePlaylistTracksPipeline(filter, playbackOptions),
+    ...withPlayablePlaylistTracksPipeline(filter),
     ...paginatedStages(page),
   ]).exec();
 }
 
 export async function countPlaylistsWithPlayableTracks(
   filter: CatalogMatchFilter,
-  playbackOptions: CatalogPlaybackOptions,
 ): Promise<number> {
   const result = await PlaylistModel.aggregate<{ total: number }>([
-    ...withPlayablePlaylistTracksPipeline(filter, playbackOptions),
+    ...withPlayablePlaylistTracksPipeline(filter),
     { $count: 'total' },
   ]).exec();
 

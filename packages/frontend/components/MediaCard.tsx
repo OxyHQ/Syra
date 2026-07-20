@@ -18,7 +18,7 @@ interface MediaCardProps {
    * are dropped by `pickCatalogImageUrl` (it only resolves Oxy/catalog ids).
    */
   resolvedImageUri?: string;
-  /** External image set (Audius / CC); used to pick the best size for this card (~300 px). */
+  /** External image set (CC); used to pick the best size for this card (~300 px). */
   images?: TrackImage[];
   /** Internal catalog image variants; used before the large coverArt fallback. */
   imageSizes?: CatalogImageSizes;

@@ -45,8 +45,8 @@ export interface EpisodeListItem {
 /**
  * A single Syra music track row for the listening-party picker. Like the podcast
  * rows it carries NO audio URL — the playable source (presigned original /
- * tokenized HLS / Audius passthrough) stays server-owned and is resolved at
- * stream-start by the backend from the opaque `trackId` alone.
+ * tokenized HLS) stays server-owned and is resolved at stream-start by the
+ * backend from the opaque `trackId` alone.
  */
 export interface MusicTrackResult {
   trackId: string;

@@ -203,9 +203,8 @@ describe('album unpublish (container-only)', () => {
   it('hides the album from listings while its tracks stay individually discoverable', async () => {
     const { album, artistId, track } = await seedOwnedCatalog();
     await TrackModel.updateOne({ _id: track._id }, { albumId: album._id.toString() });
-    const playbackOptions = { allowDirectAudiusStreaming: false };
 
-    expect(await countAlbumsWithPlayableTracks({ artistId }, playbackOptions)).toBe(1);
+    expect(await countAlbumsWithPlayableTracks({ artistId })).toBe(1);
 
     await withRouter('/api/albums', albumsRoutes, OWNER_ID, async (baseUrl) => {
       const response = await fetch(
@@ -216,20 +215,19 @@ describe('album unpublish (container-only)', () => {
     });
 
     // The container is gone from listings...
-    expect(await countAlbumsWithPlayableTracks({ artistId }, playbackOptions)).toBe(0);
-    expect(await findOneAlbumWithPlayableTracks(album._id.toString(), playbackOptions)).toBeNull();
+    expect(await countAlbumsWithPlayableTracks({ artistId })).toBe(0);
+    expect(await findOneAlbumWithPlayableTracks(album._id.toString())).toBeNull();
 
     // ...but the track itself is untouched and still individually playable. This is the
     // whole point of option B: retiring an album must not silently retire its songs.
     const storedTrack = await TrackModel.findById(track._id).lean();
     expect(storedTrack?.isAvailable).not.toBe(false);
-    expect(await TrackModel.countDocuments(playableTrackFilter({ artistId }, playbackOptions))).toBe(1);
+    expect(await TrackModel.countDocuments(playableTrackFilter({ artistId }))).toBe(1);
   });
 
   it('republishes losslessly', async () => {
     const { album, artistId, track } = await seedOwnedCatalog();
     await TrackModel.updateOne({ _id: track._id }, { albumId: album._id.toString() });
-    const playbackOptions = { allowDirectAudiusStreaming: false };
 
     await withRouter('/api/albums', albumsRoutes, OWNER_ID, async (baseUrl) => {
       const albumUrl = `${baseUrl}/api/albums/${album._id.toString()}`;
@@ -237,7 +235,7 @@ describe('album unpublish (container-only)', () => {
       expect((await fetch(`${albumUrl}/publish`, { method: 'POST' })).status).toBe(200);
     });
 
-    expect(await countAlbumsWithPlayableTracks({ artistId }, playbackOptions)).toBe(1);
+    expect(await countAlbumsWithPlayableTracks({ artistId })).toBe(1);
     expect((await AlbumModel.findById(album._id).lean())?.title).toBe('Original Album');
   });
 
@@ -261,9 +259,7 @@ describe('album unpublish (container-only)', () => {
     // Simulate a document written before the field existed — no backfill should be needed.
     await AlbumModel.collection.updateOne({ _id: album._id }, { $unset: { isAvailable: '' } });
 
-    expect(
-      await countAlbumsWithPlayableTracks({ artistId }, { allowDirectAudiusStreaming: false }),
-    ).toBe(1);
+    expect(await countAlbumsWithPlayableTracks({ artistId })).toBe(1);
   });
 });
 

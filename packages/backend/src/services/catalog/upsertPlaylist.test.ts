@@ -18,24 +18,24 @@ const basePlaylist: ExternalPlaylist = {
   externalId: 'aud-playlist-001',
   name: 'Night Drive Picks',
   description: 'Late night tracks',
-  images: [{ url: 'https://cdn.audius.co/playlist/1000x1000.jpg', width: 1000, height: 1000 }],
+  images: [{ url: 'https://cdn.example/playlist/1000x1000.jpg', width: 1000, height: 1000 }],
   trackExternalIds: ['aud-playlist-track'],
 };
 
 async function seedTrack(externalId: string): Promise<void> {
   const external: ExternalTrack = {
-    provider: 'audius',
+    provider: 'cc',
     externalId,
     title: `Track ${externalId}`,
     artists: [{
       name: 'Playlist Artist',
       externalId: 'aud-playlist-artist',
-      images: [{ url: 'https://cdn.audius.co/artist/1000x1000.jpg' }],
+      images: [{ url: 'https://cdn.example/artist/1000x1000.jpg' }],
     }],
     durationSec: 180,
-    images: [{ url: `https://cdn.audius.co/${externalId}/1000x1000.jpg` }],
+    images: [{ url: `https://cdn.example/${externalId}/1000x1000.jpg` }],
   };
-  const { track } = await upsertTrack(external, 'audius');
+  const { track } = await upsertTrack(external, 'cc');
   if (!track) throw new Error('expected track');
 }
 
@@ -43,7 +43,7 @@ describe('upsertPlaylist', () => {
   it('inserts a playlist with internal cover art and linked tracks', async () => {
     await seedTrack('aud-playlist-track');
 
-    const { playlist, created } = await upsertPlaylist(basePlaylist, 'audius');
+    const { playlist, created } = await upsertPlaylist(basePlaylist, 'cc');
 
     expect(created).toBe(true);
     if (!playlist) throw new Error('expected playlist');
@@ -58,7 +58,7 @@ describe('upsertPlaylist', () => {
     await seedTrack('aud-playlist-track');
     setCatalogImageMirrorImplementationForTests(async () => undefined);
 
-    const { playlist, created } = await upsertPlaylist(basePlaylist, 'audius');
+    const { playlist, created } = await upsertPlaylist(basePlaylist, 'cc');
 
     expect(created).toBe(false);
     expect(playlist).toBeNull();

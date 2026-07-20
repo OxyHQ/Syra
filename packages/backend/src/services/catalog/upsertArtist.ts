@@ -25,17 +25,12 @@ function buildProvenance(
 /**
  * Find an existing artist document that matches this external entity.
  *
- * Dedup strategy:
- *  - audius: match by `externalIds.audiusId`
- *  - others: match by a `sources[]` entry with the same provider + externalId
+ * Dedup strategy: match by a `sources[]` entry with the same provider + externalId.
  */
 async function findExisting(
   source: CatalogSource,
   externalId: string,
 ): Promise<IArtist | null> {
-  if (source === 'audius') {
-    return ArtistModel.findOne({ 'externalIds.audiusId': externalId });
-  }
   return ArtistModel.findOne({
     sources: { $elemMatch: { provider: source, externalId } },
   });
@@ -90,7 +85,6 @@ export async function upsertArtist(
       name: external.name,
       source,
       claimable: true,
-      externalIds: source === 'audius' ? { audiusId: external.externalId } : undefined,
       image: mirroredImage?.imageId,
       imageSizes: mirroredImage?.imageSizes,
       images: [],
@@ -118,12 +112,6 @@ export async function upsertArtist(
       replaceColors(existing, mirroredImage);
     } else {
       assignMissingColors(existing, mirroredImage);
-    }
-    if (source === 'audius' && external.externalId) {
-      existing.externalIds = {
-        ...(existing.externalIds ?? {}),
-        audiusId: external.externalId,
-      };
     }
   }
 

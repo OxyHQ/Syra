@@ -2042,7 +2042,7 @@ function parseTrackStreamBody(body: unknown): ParsedTrackStreamBody {
  * `utils/syraMedia.ts`) and the host is shown a rights disclaimer in the picker.
  *
  * The client sends only ids — never a media URL. The backend resolves the
- * playable audio (presigned original → tokenized HLS → Audius passthrough) +
+ * playable audio (presigned original → tokenized HLS) +
  * metadata server-side, SSRF-validates it, then feeds it into the SAME LiveKit
  * URL ingress as the other stream routes. `albumId` / `playlistId` additionally
  * seed `room.podcastQueue` (the generic up-next queue) from the container's

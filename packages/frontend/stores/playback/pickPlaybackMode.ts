@@ -3,7 +3,6 @@
 export type PlaybackMode = 'native' | 'hlsjs' | 'progressive';
 
 export interface PlaybackModeInput {
-  type: 'hls' | 'audius';
   isWeb: boolean;
   canPlayHlsNatively: boolean;
 }
@@ -11,25 +10,23 @@ export interface PlaybackModeInput {
 // ── Pure decision function ────────────────────────────────────────────────────
 
 /**
- * Determine which playback strategy to use for a given stream resolution.
+ * Determine which playback engine to use for a resolved HLS stream.
  *
- * Decision table:
- *  - `audius`                                → `'progressive'`  (direct URL, any platform)
- *  - `hls`  + native (iOS/Android)           → `'native'`       (AVPlayer/ExoPlayer, both play HLS+AES-128)
- *  - `hls`  + web + Safari                   → `'native'`       (Safari <audio> plays HLS natively)
- *  - `hls`  + web + Chrome/Firefox           → `'hlsjs'`        (hls.js required)
+ * Every stream the resolver returns is HLS, so the only question is which
+ * engine can play it:
+ *  - native (iOS/Android)           → `'native'`  (AVPlayer/ExoPlayer, both play HLS+AES-128)
+ *  - web + Safari                   → `'native'`  (Safari <audio> plays HLS natively)
+ *  - web + Chrome/Firefox           → `'hlsjs'`   (hls.js required)
+ *
+ * `'progressive'` is not chosen here: it is the caller's fallback for tracks
+ * with no stream resolution at all (uploaded audio served as a plain URL).
  *
  * This function is intentionally pure (no side-effects, no DOM access) so it
  * can be tested without a browser environment.
  */
 export function pickPlaybackMode(input: PlaybackModeInput): PlaybackMode {
-  const { type, isWeb, canPlayHlsNatively } = input;
+  const { isWeb, canPlayHlsNatively } = input;
 
-  if (type === 'audius') {
-    return 'progressive';
-  }
-
-  // type === 'hls'
   if (!isWeb) {
     // Native: AVPlayer (iOS) / ExoPlayer (Android) handle HLS+AES-128 natively
     return 'native';

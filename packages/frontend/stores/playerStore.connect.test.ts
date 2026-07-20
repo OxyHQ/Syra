@@ -122,7 +122,7 @@ function makeTrack(id: string): Track {
     duration: 180,
     isExplicit: false,
     isAvailable: true,
-    source: 'audius',
+    source: 'upload',
     status: 'ready',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',

@@ -13,13 +13,13 @@ const mockApiGet = api.get as jest.MockedFunction<typeof api.get>;
 
 const track: Track = {
   id: 'track-1',
-  title: 'Direct Audius Track',
+  title: 'Stream Only Track',
   artistId: 'artist-1',
   artistName: 'Artist One',
   duration: 180,
   isExplicit: false,
   isAvailable: true,
-  source: 'audius',
+  source: 'upload',
   status: 'ready',
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
@@ -49,7 +49,7 @@ const artist: Artist = {
     tracks: 1,
     totalPlays: 0,
   },
-  source: 'audius',
+  source: 'upload',
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
@@ -79,11 +79,11 @@ describe('musicService client selection', () => {
 
     await musicService.getTracks({ limit: 1, offset: 0 });
     await musicService.getTrackById('track-1');
-    await musicService.searchTracks('audius', { limit: 1 });
+    await musicService.searchTracks('nocturne', { limit: 1 });
 
     expect(mockApiGet).toHaveBeenCalledWith('/tracks', { limit: 1, offset: 0 });
     expect(mockApiGet).toHaveBeenCalledWith('/tracks/track-1');
-    expect(mockApiGet).toHaveBeenCalledWith('/tracks/search', { q: 'audius', limit: 1 });
+    expect(mockApiGet).toHaveBeenCalledWith('/tracks/search', { q: 'nocturne', limit: 1 });
   });
 
   it('uses the linked Oxy client for album, artist, and playlist reads', async () => {

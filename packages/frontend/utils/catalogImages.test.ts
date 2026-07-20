@@ -25,7 +25,7 @@ describe('catalog image URL normalization', () => {
   });
 
   it('rejects external provider image URLs', () => {
-    expect(resolveCatalogImageUrl('https://cdn.audius.co/art.jpg')).toBeUndefined();
+    expect(resolveCatalogImageUrl('https://cdn.example.com/art.jpg')).toBeUndefined();
   });
 
   it('normalizes image sizes and drops external variants', () => {

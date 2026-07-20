@@ -1,7 +1,7 @@
 import mongoose, { Document, Model, Schema } from 'mongoose';
 
 export interface IImportJob extends Document {
-  provider: 'audius' | 'cc';
+  provider: 'cc';
   query: string;
   status: 'pending' | 'running' | 'completed' | 'failed';
   total: number;
@@ -17,7 +17,7 @@ const ImportJobSchema = new Schema<IImportJob>(
   {
     provider: {
       type: String,
-      enum: ['audius', 'cc'],
+      enum: ['cc'],
       required: true,
     },
     query: {

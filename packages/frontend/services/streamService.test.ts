@@ -78,20 +78,6 @@ describe('resolveStream', () => {
     expect(mockGet).toHaveBeenCalledWith('/stream/t2');
   });
 
-  it('resolves Audius stream and returns the resolution', async () => {
-    const resolution = {
-      url: 'https://audius.co/stream/abc123',
-      type: 'audius' as const,
-      expiresAt: null,
-    };
-    mockGet.mockResolvedValueOnce({ data: resolution });
-
-    const result = await resolveStream('t2');
-
-    expect(mockGet).toHaveBeenCalledWith('/stream/t2');
-    expect(result).toEqual(resolution);
-  });
-
   it('throws a descriptive error when api.get rejects', async () => {
     mockGet.mockRejectedValueOnce(new Error('Network error'));
 

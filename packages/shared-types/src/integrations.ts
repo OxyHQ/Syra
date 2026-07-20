@@ -30,7 +30,6 @@ export const externalTrackSchema: z.ZodType<ExternalTrack> = z.lazy(() =>
     tags: z.array(z.string()).optional(),
     releaseDate: z.string().optional(),
     popularity: externalPopularitySchema.optional(),
-    streamUrl: z.string().optional(),
     downloadUrl: z.string().optional(),
     license: z.string().optional(),
   })
@@ -50,7 +49,6 @@ export type ExternalTrack = {
   tags?: string[];
   releaseDate?: string;
   popularity?: ExternalPopularity;
-  streamUrl?: string;
   downloadUrl?: string;
   license?: string;
 };

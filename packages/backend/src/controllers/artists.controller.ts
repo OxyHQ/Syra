@@ -14,7 +14,6 @@ import { withImageFirstSort } from '../utils/imageFirstSort';
 import {
   getRequestUserId,
   playableTrackFilter,
-  resolveCatalogPlaybackOptions,
 } from '../utils/catalogVisibility';
 import {
   countArtistsWithPlayableTracks,
@@ -37,15 +36,14 @@ export const getArtists = async (req: Request, res: Response, next: NextFunction
 
     const limit = parseBoundedLimit(req.query.limit, 20);
     const offset = parseOffset(req.query.offset);
-    const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
 
     const [artists, total] = await Promise.all([
-      findArtistsWithPlayableTracks({}, playbackOptions, {
+      findArtistsWithPlayableTracks({}, {
         sort: withImageFirstSort('artist', { popularity: -1, 'stats.followers': -1 }),
         offset,
         limit,
       }),
-      countArtistsWithPlayableTracks({}, playbackOptions),
+      countArtistsWithPlayableTracks({}),
     ]);
 
     const formattedArtists = formatArtistsWithImage(artists);
@@ -77,8 +75,7 @@ export const getArtistById = async (req: Request, res: Response, next: NextFunct
       return res.status(404).json({ error: 'Artist not found' });
     }
 
-    const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
-    const artist = await findOneArtistWithPlayableTracks(id, playbackOptions);
+    const artist = await findOneArtistWithPlayableTracks(id);
 
     if (!artist) {
       return res.status(404).json({ error: 'Artist not found' });
@@ -109,14 +106,13 @@ export const getArtistAlbums = async (req: Request, res: Response, next: NextFun
     }
     
     // Verify artist exists
-    const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
-    const artist = await findOneArtistWithPlayableTracks(id, playbackOptions);
+    const artist = await findOneArtistWithPlayableTracks(id);
     if (!artist) {
       return res.status(404).json({ error: 'Artist not found' });
     }
 
     // Fetch albums for this artist, sorted by release date
-    const albums = await findAlbumsWithPlayableTracks({ artistId: id }, playbackOptions, {
+    const albums = await findAlbumsWithPlayableTracks({ artistId: id }, {
       sort: withImageFirstSort('album', { releaseDate: -1 }),
       limit: ARTIST_ALBUMS_LIMIT,
     });
@@ -145,7 +141,6 @@ export const getArtistTracks = async (req: Request, res: Response, next: NextFun
     const id = getParam(req, 'id');
     const limit = parseBoundedLimit(req.query.limit, 20);
     const offset = parseOffset(req.query.offset);
-    const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
     
     // Validate ObjectId format
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -153,19 +148,19 @@ export const getArtistTracks = async (req: Request, res: Response, next: NextFun
     }
     
     // Verify artist exists
-    const artist = await findOneArtistWithPlayableTracks(id, playbackOptions);
+    const artist = await findOneArtistWithPlayableTracks(id);
     if (!artist) {
       return res.status(404).json({ error: 'Artist not found' });
     }
 
     // Fetch tracks for this artist, sorted by popularity then date
     const [tracks, total] = await Promise.all([
-      TrackModel.find(playableTrackFilter({ artistId: id }, playbackOptions))
+      TrackModel.find(playableTrackFilter({ artistId: id }))
         .sort(withImageFirstSort('track', { popularity: -1, createdAt: -1 }))
         .skip(offset)
         .limit(limit)
         .lean(),
-      TrackModel.countDocuments(playableTrackFilter({ artistId: id }, playbackOptions)),
+      TrackModel.countDocuments(playableTrackFilter({ artistId: id })),
     ]);
 
     const formattedTracks = await formatTracksWithCoverArt(tracks);

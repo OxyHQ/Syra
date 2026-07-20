@@ -528,18 +528,6 @@ const SettingsScreen: React.FC = () => {
                   />
                 }
               />
-              <SettingsListItem
-                icon={<RowIcon name="musical-notes-outline" />}
-                title="Direct Audius streaming"
-                description="Play provider streams only when Syra-hosted audio is unavailable"
-                showChevron={false}
-                rightElement={
-                  <Switch
-                    value={musicPreferences?.directAudiusStreaming ?? false}
-                    onValueChange={(value) => handleMusicPreferenceUpdate({ directAudiusStreaming: value })}
-                  />
-                }
-              />
             </SettingsListGroup>
 
             <SettingsListGroup title="Privacy & data">

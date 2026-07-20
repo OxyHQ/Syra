@@ -9,7 +9,7 @@ import { getParam, parseBoundedLimit } from '../utils/reqParams';
 import { recordPlay } from '../services/recommendations/recordPlay';
 import { applyLikeSignal, applyFollowSignal } from '../services/recommendations/tasteSignals';
 import { LISTENING_SOURCES, type ListeningSource } from '../models/ListeningEvent';
-import { playableTrackFilter, resolveCatalogPlaybackOptions } from '../utils/catalogVisibility';
+import { playableTrackFilter } from '../utils/catalogVisibility';
 
 /** Validate a client-supplied listening source against the known set. */
 function parseListeningSource(value: unknown): ListeningSource {
@@ -125,7 +125,6 @@ export const getLikedTracks = async (req: AuthRequest, res: Response, next: Next
 
     const library = await UserLibraryModel.findOne({ oxyUserId: userId }).lean();
     const likedTrackIds = library?.likedTracks ?? [];
-    const playbackOptions = await resolveCatalogPlaybackOptions(userId);
 
     if (likedTrackIds.length === 0) {
       return res.json({ tracks: [], total: 0, oxyUserId: userId });
@@ -136,7 +135,7 @@ export const getLikedTracks = async (req: AuthRequest, res: Response, next: Next
 
     const tracks = await TrackModel.find(playableTrackFilter({
       _id: { $in: validTrackIds },
-    }, playbackOptions)).lean();
+    })).lean();
 
     const formattedTracks = await formatTracksWithCoverArt(tracks);
 
@@ -355,11 +354,10 @@ export const getRecentlyPlayed = async (req: AuthRequest, res: Response, next: N
     if (orderedTrackIds.length === 0) {
       return res.json({ tracks: [] });
     }
-    const playbackOptions = await resolveCatalogPlaybackOptions(userId);
 
     const tracks = await TrackModel.find(playableTrackFilter({
       _id: { $in: orderedTrackIds },
-    }, playbackOptions)).lean();
+    })).lean();
 
     const formattedTracks = await formatTracksWithCoverArt(tracks);
 

@@ -19,7 +19,7 @@ import type { MediaQueueItem } from '../models/Room';
  *
  * COPYRIGHT / LICENSING NOTE: streaming a full track into a live room is a
  * *broadcast* / public performance, NOT a private listen. This is intentionally
- * scoped to Syra's OWN catalog (uploads, Creative-Commons imports, and Audius —
+ * scoped to Syra's OWN catalog (uploads and Creative-Commons imports —
  * all carrying a permissive rights model), and the host is shown a rights
  * disclaimer in the picker before starting a listening party. Do NOT extend this
  * to arbitrary third-party catalog URLs without a broadcast license.
@@ -39,7 +39,7 @@ const HLS_STREAM_TOKEN_TTL_SEC = 3600;
 /** Minimal raw-track shape needed to pick a playable audio URL. */
 type PlayableTrackFields = Pick<
   ITrack,
-  'audioSource' | 'artistId' | 'albumId' | 'title' | 'hlsMasterKey' | 'hls' | 'streamUrl' | 'source' | 'status'
+  'audioSource' | 'artistId' | 'albumId' | 'title' | 'hlsMasterKey' | 'hls' | 'source' | 'status'
 > & { _id: mongoose.Types.ObjectId; isAvailable?: boolean; copyrightRemoved?: boolean };
 
 type AudioUrlOutcome =
@@ -54,7 +54,6 @@ type AudioUrlOutcome =
  *   2. Tokenized HLS master — for tracks with only an encrypted HLS ladder.
  *      Requires an absolute `STREAM_KEY_BASE_URL` (LiveKit + the SSRF probe need
  *      a public URL) and a mintable stream token.
- *   3. Audius passthrough (`streamUrl`) — an external, directly-playable URL.
  *
  * `none` when the track is playable but carries no usable source (a data gap);
  * `unavailable` when a source exists but producing its URL threw (S3 / token
@@ -100,11 +99,6 @@ async function resolveTrackAudioUrl(track: PlayableTrackFields): Promise<AudioUr
         reason: err instanceof Error ? err.message : 'unknown',
       });
     }
-  }
-
-  // 3. Audius passthrough — an external, directly-playable URL.
-  if (track.source === 'audius' && track.streamUrl) {
-    return { status: 'ok', audioUrl: track.streamUrl };
   }
 
   return { status: transient ? 'unavailable' : 'none' };

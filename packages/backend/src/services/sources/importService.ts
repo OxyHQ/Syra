@@ -188,11 +188,8 @@ export async function runImport(
       }
       importedTracks.push(external);
 
-      if (connector.provider === 'cc') {
-        await downloadAndStore(external, track._id.toString(), track.artistId.toString());
-        enqueueIngest(track._id.toString());
-      }
-      // Audius: stream-only — no download or ingest needed; streamUrl is already on the track.
+      await downloadAndStore(external, track._id.toString(), track.artistId.toString());
+      enqueueIngest(track._id.toString());
 
       job.imported += 1;
     } catch (err) {

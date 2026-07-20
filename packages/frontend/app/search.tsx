@@ -8,7 +8,6 @@ import { useRouter, useLocalSearchParams, type Href } from 'expo-router';
 import { Image } from 'expo-image';
 import { SearchCategory, SearchUser, Track } from '@syra/shared-types';
 import { searchService } from '@/services/searchService';
-import { searchRefetchInterval } from '@/utils/searchUtils';
 import { resolvePodcastArtwork, resolveExternalImageUri } from '@/utils/pickImage';
 import { browseService } from '@/services/browseService';
 import { MediaCard } from '@/components/MediaCard';
@@ -122,9 +121,6 @@ const SearchScreen: React.FC = () => {
   });
 
   // Search query - only enabled when there's a search query.
-  // Polls at AUDIUS_REFETCH_MS while the server signals a pending background
-  // Audius import and local track results are still sparse; stops automatically
-  // once tracks appear or pendingAudiusImport flips false.
   const {
     data: searchResults,
     isLoading: searchLoading,
@@ -139,8 +135,6 @@ const SearchScreen: React.FC = () => {
     }),
     enabled: hasQuery,
     staleTime: 1000 * 60 * 5, // 5 minutes
-    refetchInterval: (query) => searchRefetchInterval(query.state.data),
-    refetchIntervalInBackground: false,
   });
 
   // Memoize explore data
@@ -373,7 +367,7 @@ const SearchScreen: React.FC = () => {
               isEmpty={madeForYouAlbums.length === 0 && madeForYouPlaylists.length === 0}
               error={madeForYouError}
               onRetry={refetchMadeForYou}
-              emptyMessage="No recommendations available"
+              emptyMessage="Recommendations appear once there is music to recommend"
             >
               <ResponsiveGrid minItemWidth={180} gap={8}>
                 {madeForYouAlbums.map((album) => (
@@ -412,7 +406,7 @@ const SearchScreen: React.FC = () => {
               isEmpty={popularTracks.length === 0}
               error={popularTracksError}
               onRetry={refetchPopularTracks}
-              emptyMessage="No tracks available"
+              emptyMessage="No tracks yet — the catalogue fills up as artists upload"
             >
               <ResponsiveGrid minItemWidth={180} gap={8}>
                 {popularTracks.map((track) => (
@@ -440,7 +434,7 @@ const SearchScreen: React.FC = () => {
               isEmpty={popularAlbums.length === 0}
               error={popularAlbumsError}
               onRetry={refetchPopularAlbums}
-              emptyMessage="No albums available"
+              emptyMessage="No albums yet — the catalogue fills up as artists upload"
             >
               <ResponsiveGrid minItemWidth={180} gap={8}>
                 {popularAlbums.map((album) => (
@@ -466,7 +460,7 @@ const SearchScreen: React.FC = () => {
               isEmpty={popularArtists.length === 0}
               error={popularArtistsError}
               onRetry={refetchPopularArtists}
-              emptyMessage="No artists available"
+              emptyMessage="No artists yet — the first uploads will show up here"
             >
               <ResponsiveGrid minItemWidth={180} gap={8}>
                 {popularArtists.map((artist) => (
@@ -494,7 +488,7 @@ const SearchScreen: React.FC = () => {
               isEmpty={chartsTracks.length === 0}
               error={chartsError}
               onRetry={refetchCharts}
-              emptyMessage="No charts available"
+              emptyMessage="Charts start once tracks have been played"
               loadingSkeleton={<TrackListSkeleton count={10} />}
             >
               <View style={styles.trackList}>

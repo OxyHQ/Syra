@@ -76,5 +76,5 @@ export interface CastController {
 /** MIME type used when loading Syra HLS master playlists onto a receiver. */
 export const CAST_HLS_CONTENT_TYPE = 'application/x-mpegURL';
 
-/** MIME type used when loading progressive (Audius / MP3) streams onto a receiver. */
+/** MIME type used when loading progressive (MP3) streams onto a receiver. */
 export const CAST_PROGRESSIVE_CONTENT_TYPE = 'audio/mpeg';

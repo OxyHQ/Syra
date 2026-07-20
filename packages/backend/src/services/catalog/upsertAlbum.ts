@@ -57,12 +57,8 @@ function buildProvenance(
   };
 }
 
-/** Find an existing album by provenance — audiusId, or provider+externalId in sources[]. */
+/** Find an existing album by provenance — provider+externalId in sources[]. */
 async function findExisting(source: CatalogSource, externalId: string): Promise<IAlbum | null> {
-  if (source === 'audius') {
-    const byAudiusId = await AlbumModel.findOne({ 'externalIds.audiusId': externalId });
-    if (byAudiusId) return byAudiusId;
-  }
   return AlbumModel.findOne({
     sources: { $elemMatch: { provider: source, externalId } },
   });
@@ -103,12 +99,9 @@ async function resolveMemberTracks(
   const tracks: IAlbumMemberTrack[] = [];
 
   for (const externalId of trackExternalIds) {
-    const query =
-      source === 'audius'
-        ? { 'externalIds.audiusId': externalId }
-        : { sources: { $elemMatch: { provider: source, externalId } } };
-
-    const track = await TrackModel.findOne(query);
+    const track = await TrackModel.findOne({
+      sources: { $elemMatch: { provider: source, externalId } },
+    });
     if (!track) continue;
     tracks.push(track);
   }
@@ -141,7 +134,7 @@ async function linkMemberTracks(
 /**
  * Upsert an external album into the catalog.
  *
- * Dedup by provenance: same provider + externalId (audiusId for Audius). New
+ * Dedup by provenance: same provider + externalId. New
  * albums are inserted; existing matches merge non-empty fields without
  * clobbering and always append a provenance entry.
  *
@@ -186,7 +179,6 @@ export async function upsertAlbum(
       genre: genres,
       type: 'album',
       source,
-      externalIds: source === 'audius' ? { audiusId: external.externalId } : undefined,
       sources: [provenance],
       primaryColor: mirroredCover?.primaryColor,
       secondaryColor: mirroredCover?.secondaryColor,
@@ -228,9 +220,6 @@ export async function upsertAlbum(
   }
   if (external.genre && !existing.genre?.includes(external.genre)) {
     existing.genre = [...(existing.genre ?? []), external.genre];
-  }
-  if (source === 'audius' && external.externalId && !existing.externalIds?.audiusId) {
-    existing.externalIds = { ...(existing.externalIds ?? {}), audiusId: external.externalId };
   }
   if (!existing.source) existing.source = source;
   // Popularity counts are monotonic — only refresh upward.

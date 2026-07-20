@@ -497,6 +497,18 @@ const HomeContent: React.FC<HomeContentProps> = ({
   const router = useRouter();
   const { joinLiveRoom } = useLiveRoom();
 
+  // Whether the browse request returned any music at all, across every rail it
+  // feeds. Podcasts are excluded deliberately: they are a separate catalogue
+  // with its own source, and they stay populated when music is empty.
+  const hasAnyMusic =
+    quickAccess.length > 0 ||
+    madeForYouArtists.length > 0 ||
+    madeForYouPlaylists.length > 0 ||
+    madeForYouAlbums.length > 0 ||
+    popularAlbums.length > 0 ||
+    popularArtists.length > 0 ||
+    tracks.length > 0;
+
   return (
     <View style={[styles.gradientContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
         <ScrollView
@@ -640,6 +652,26 @@ const HomeContent: React.FC<HomeContentProps> = ({
               })}
             </ResponsiveGrid>
           ) : null}
+
+          {/* Every music rail on this screen is served by the one browse
+              request, and each hides itself when it has nothing to show. So a
+              catalogue with no music in it would collapse the whole screen to a
+              greeting and a podcast rail, with no explanation. Syra's catalogue
+              is built from creator uploads, which makes "empty" a real state
+              with a real reason — not a failure, and not a blank page. */}
+          {browseStatus === 'ready' && !hasAnyMusic && (
+            <EmptyState
+              icon={{ name: 'musical-notes-outline' }}
+              title="No music here yet"
+              subtitle="Syra's catalogue is built from what artists upload. As creators publish their work, it will show up here."
+              action={{
+                label: 'Browse podcasts',
+                onPress: () => router.push('/podcasts'),
+                icon: 'mic-outline',
+              }}
+              containerStyle={styles.sectionState}
+            />
+          )}
 
           {/* Jump back in — REAL recently-played tracks. Account-only: guests
               get a sign-in call to action instead of a permanent skeleton. */}

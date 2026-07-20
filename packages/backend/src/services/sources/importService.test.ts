@@ -45,19 +45,6 @@ const CC_TRACK_B: ExternalTrack = {
   license: 'https://creativecommons.org/licenses/by-sa/4.0/',
 };
 
-const AUDIUS_TRACK_A: ExternalTrack = {
-  provider: 'audius',
-  externalId: 'aud-001',
-  title: 'Electric Dream',
-  durationSec: 240,
-  artists: [{
-    name: 'DJ Test',
-    externalId: 'dj-001',
-    images: [{ url: 'https://cdn.audius.co/dj-test/1000x1000.jpg', source: 'audius' }],
-  }],
-  images: [{ url: 'https://cdn.audius.co/electric-dream/1000x1000.jpg', source: 'audius' }],
-  streamUrl: 'https://discoveryprovider.audius.co/v1/tracks/aud-001/stream?app_name=Syra',
-};
 
 // ── Fake connectors ───────────────────────────────────────────────────────────
 
@@ -68,12 +55,6 @@ function makeCcConnector(tracks: ExternalTrack[] = [CC_TRACK_A, CC_TRACK_B]): Mu
   };
 }
 
-function makeAudiusConnector(tracks: ExternalTrack[] = [AUDIUS_TRACK_A]): MusicSourceConnector {
-  return {
-    provider: 'audius',
-    search: async () => tracks,
-  };
-}
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
@@ -156,29 +137,6 @@ describe('runImport — CC path', () => {
   });
 });
 
-describe('runImport — Audius path', () => {
-  it('persists track with status "ready"; downloadAndStore / enqueueIngest NOT called', async () => {
-    const downloadedIds: string[] = [];
-    const enqueuedIds: string[] = [];
-
-    const job = await runImport(makeAudiusConnector(), 'electric', {
-      deps: {
-        downloadAndStore: async (_ext, trackId) => { downloadedIds.push(trackId); },
-        enqueueIngest: (trackId) => { enqueuedIds.push(trackId); },
-      },
-    });
-
-    expect(job.status).toBe('completed');
-    expect(job.imported).toBe(1);
-
-    const track = await TrackModel.findOne({ title: 'Electric Dream' });
-    expect(track).toBeDefined();
-    expect(track?.status).toBe('ready');
-
-    expect(downloadedIds).toHaveLength(0);
-    expect(enqueuedIds).toHaveLength(0);
-  });
-});
 
 describe('runImport — per-track failure isolation', () => {
   it('increments job.failed for a failing track; other tracks still imported; job status = completed', async () => {

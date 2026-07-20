@@ -19,7 +19,7 @@ export interface IPlaybackState extends Document {
   updatedAt: Date;
 }
 
-const CATALOG_SOURCES: CatalogSource[] = ['upload', 'cc', 'audius'];
+const CATALOG_SOURCES: CatalogSource[] = ['upload', 'cc'];
 
 const PlaybackStateSchema = new Schema<IPlaybackState>(
   {

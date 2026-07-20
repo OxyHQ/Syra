@@ -20,7 +20,7 @@ import {
   clearQueue as clearUserQueue,
   setCurrentIndex,
 } from '../services/queueService';
-import { playableTrackFilter, resolveCatalogPlaybackOptions } from '../utils/catalogVisibility';
+import { playableTrackFilter } from '../utils/catalogVisibility';
 
 function uniqueValues(values: string[]): string[] {
   return [...new Set(values)];
@@ -111,7 +111,6 @@ export const addToQueue = async (req: AuthRequest, res: Response, next: NextFunc
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
-    const playbackOptions = await resolveCatalogPlaybackOptions(userId);
 
     const { trackIds, position }: AddToQueueRequest = req.body;
 
@@ -128,7 +127,7 @@ export const addToQueue = async (req: AuthRequest, res: Response, next: NextFunc
     // Fetch tracks from database
     const tracks = await TrackModel.find(playableTrackFilter({
       _id: { $in: validTrackIds },
-    }, playbackOptions)).lean();
+    })).lean();
 
     if (tracks.length === 0) {
       return res.status(404).json({ error: 'No valid tracks found' });
@@ -191,11 +190,10 @@ export const replaceQueue = async (req: AuthRequest, res: Response, next: NextFu
       });
     }
 
-    const playbackOptions = await resolveCatalogPlaybackOptions(userId);
     const uniqueTrackIds = uniqueValues(trackIds);
     const tracks = await TrackModel.find(playableTrackFilter({
       _id: { $in: uniqueTrackIds },
-    }, playbackOptions)).lean();
+    })).lean();
     const formattedTracks: Queue['tracks'] = await formatTracksWithCoverArt(tracks);
     const unavailableTrackIds = missingTrackIds(trackIds, formattedTracks);
 

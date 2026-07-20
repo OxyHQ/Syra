@@ -22,11 +22,10 @@ const PlaylistCollaboratorSchema = new Schema<PlaylistCollaborator>({
 
 const ExternalIdsSchema = new Schema<ExternalIds>({
   isrc: { type: String },
-  audiusId: { type: String },
 }, { _id: false });
 
 const SourceProvenanceSchema = new Schema<SourceProvenance>({
-  provider: { type: String, enum: ['upload', 'cc', 'audius'] as CatalogSource[], required: true },
+  provider: { type: String, enum: ['upload', 'cc'] as CatalogSource[], required: true },
   externalId: { type: String, required: true },
   importedAt: { type: String, required: true },
   fields: [{ type: String }],
@@ -62,7 +61,7 @@ const PlaylistSchema = new Schema<IPlaylist>({
   primaryColor: { type: String },
   secondaryColor: { type: String },
   collaborators: [{ type: PlaylistCollaboratorSchema }],
-  source: { type: String, enum: ['upload', 'cc', 'audius'] as CatalogSource[], index: true },
+  source: { type: String, enum: ['upload', 'cc'] as CatalogSource[], index: true },
   externalIds: { type: ExternalIdsSchema },
   sources: [{ type: SourceProvenanceSchema }],
 }, {
@@ -72,6 +71,5 @@ const PlaylistSchema = new Schema<IPlaylist>({
 PlaylistSchema.index({ ownerOxyUserId: 1, createdAt: -1 });
 PlaylistSchema.index({ name: 'text', description: 'text' });
 PlaylistSchema.index({ visibility: 1, followers: -1 });
-PlaylistSchema.index({ 'externalIds.audiusId': 1 }, { sparse: true });
 
 export const PlaylistModel = mongoose.model<IPlaylist>('Playlist', PlaylistSchema);

@@ -22,9 +22,9 @@ describe('formatTrackWithCoverArt — internal image formatting', () => {
   it('does not expose images[0].url as coverArt when no internal coverArt exists', async () => {
     const track = {
       _id: new mongoose.Types.ObjectId(),
-      title: 'Audius Track',
+      title: 'External Track',
       artistName: 'Artist',
-      images: [{ url: 'https://audius.co/art.jpg' }],
+      images: [{ url: 'https://cdn.example/art.jpg' }],
     };
 
     const result = await formatTrackWithCoverArt(track);
@@ -41,7 +41,7 @@ describe('formatTrackWithCoverArt — internal image formatting', () => {
       title: 'Upload Track',
       artistName: 'Artist',
       coverArt: objectId.toString(),
-      images: [{ url: 'https://audius.co/art.jpg' }],
+      images: [{ url: 'https://cdn.example/art.jpg' }],
     };
 
     const result = await formatTrackWithCoverArt(track);
@@ -126,72 +126,15 @@ describe('formatTrackWithCoverArt — previewAvailable', () => {
   });
 });
 
-// ── previewAvailable — Audius rehosted to Syra HLS (no audioSource) ────────────
-
-describe('formatTrackWithCoverArt — previewAvailable for Audius-HLS', () => {
-  const prev = process.env.AUDIUS_CATALOG_ENABLED;
-  beforeAll(() => { process.env.AUDIUS_CATALOG_ENABLED = 'true'; });
-  afterAll(() => {
-    if (prev === undefined) delete process.env.AUDIUS_CATALOG_ENABLED;
-    else process.env.AUDIUS_CATALOG_ENABLED = prev;
-  });
-
-  it('is true for an Audius track rehosted to ready Syra HLS (no audioSource)', async () => {
-    const result = await formatTrackWithCoverArt({
-      _id: new mongoose.Types.ObjectId(),
-      title: 'Audius HLS Track',
-      artistName: 'Artist',
-      source: 'audius',
-      status: 'ready',
-      isAvailable: true,
-      hlsMasterKey: 'hls/a/t/master.m3u8',
-      hls: [{ manifestKey: 'hls/a/t/96/stream.m3u8', bitrateKbps: 96, encrypted: true }],
-    });
-
-    expect(result).not.toBeNull();
-    expect(result.previewAvailable).toBe(true);
-  });
-
-  it('is false for an Audius track with only a direct provider stream (no Syra HLS)', async () => {
-    const result = await formatTrackWithCoverArt({
-      _id: new mongoose.Types.ObjectId(),
-      title: 'Audius Direct Track',
-      artistName: 'Artist',
-      source: 'audius',
-      status: 'ready',
-      isAvailable: true,
-      streamUrl: 'https://audius.example/stream',
-    });
-
-    expect(result).not.toBeNull();
-    expect(result.previewAvailable).toBe(false);
-  });
-
-  it('is false for an Audius track whose HLS is not yet ready (processing)', async () => {
-    const result = await formatTrackWithCoverArt({
-      _id: new mongoose.Types.ObjectId(),
-      title: 'Audius Processing Track',
-      artistName: 'Artist',
-      source: 'audius',
-      status: 'processing',
-      isAvailable: true,
-      hls: [{ manifestKey: 'hls/a/t/96/stream.m3u8', bitrateKbps: 96, encrypted: true }],
-    });
-
-    expect(result).not.toBeNull();
-    expect(result.previewAvailable).toBe(false);
-  });
-});
-
 // ── Album — internal image formatting ─────────────────────────────────────────
 
 describe('formatAlbumWithCoverArt — internal image formatting', () => {
   it('does not expose images[0].url as coverArt when no internal coverArt exists', () => {
     const album = {
       _id: new mongoose.Types.ObjectId(),
-      title: 'Audius Album',
+      title: 'External Album',
       artistName: 'Artist',
-      images: [{ url: 'https://audius.co/album.jpg' }],
+      images: [{ url: 'https://cdn.example/album.jpg' }],
     };
 
     const result = formatAlbumWithCoverArt(album);
@@ -208,7 +151,7 @@ describe('formatAlbumWithCoverArt — internal image formatting', () => {
       title: 'Upload Album',
       artistName: 'Artist',
       coverArt: objectId.toString(),
-      images: [{ url: 'https://audius.co/album.jpg' }],
+      images: [{ url: 'https://cdn.example/album.jpg' }],
     };
 
     const result = formatAlbumWithCoverArt(album);
@@ -237,8 +180,8 @@ describe('formatArtistWithImage — internal image formatting', () => {
   it('does not expose images[0].url as image when no internal image exists', () => {
     const artist = {
       _id: new mongoose.Types.ObjectId(),
-      name: 'Audius Artist',
-      images: [{ url: 'https://audius.co/artist.jpg' }],
+      name: 'External Artist',
+      images: [{ url: 'https://cdn.example/artist.jpg' }],
     };
 
     const result = formatArtistWithImage(artist);
@@ -254,7 +197,7 @@ describe('formatArtistWithImage — internal image formatting', () => {
       _id: new mongoose.Types.ObjectId(),
       name: 'Upload Artist',
       image: objectId.toString(),
-      images: [{ url: 'https://audius.co/artist.jpg' }],
+      images: [{ url: 'https://cdn.example/artist.jpg' }],
     };
 
     const result = formatArtistWithImage(artist);
@@ -295,8 +238,8 @@ describe('formatPlaylistWithCoverArt — internal image formatting', () => {
   it('does not expose images[0].url as coverArt when no internal coverArt exists', () => {
     const playlist = {
       _id: new mongoose.Types.ObjectId(),
-      name: 'Audius Playlist',
-      images: [{ url: 'https://audius.co/playlist.jpg' }],
+      name: 'External Playlist',
+      images: [{ url: 'https://cdn.example/playlist.jpg' }],
     };
 
     const result = formatPlaylistWithCoverArt(playlist);
@@ -312,7 +255,7 @@ describe('formatPlaylistWithCoverArt — internal image formatting', () => {
       _id: new mongoose.Types.ObjectId(),
       name: 'Upload Playlist',
       coverArt: objectId.toString(),
-      images: [{ url: 'https://audius.co/playlist.jpg' }],
+      images: [{ url: 'https://cdn.example/playlist.jpg' }],
     };
 
     const result = formatPlaylistWithCoverArt(playlist);
@@ -329,20 +272,20 @@ describe('formatTrackWithCoverArt — album internal cover art', () => {
     const albumId = new mongoose.Types.ObjectId();
     await AlbumModel.collection.insertOne({
       _id: albumId,
-      title: 'Audius Album',
+      title: 'External Album',
       artistId: 'artist-1',
-      artistName: 'Audius Artist',
-      provider: 'audius',
+      artistName: 'External Artist',
+      provider: 'cc',
       externalId: 'aud-alb-1',
       importedAt: new Date().toISOString(),
       releaseDate: '2024-01-01',
-      images: [{ url: 'https://x.com/album.jpg', width: 480, height: 480, source: 'audius' }],
+      images: [{ url: 'https://x.com/album.jpg', width: 480, height: 480, source: 'cc' }],
     });
 
     const track = {
       _id: new mongoose.Types.ObjectId(),
-      title: 'Audius Track',
-      artistName: 'Audius Artist',
+      title: 'External Track',
+      artistName: 'External Artist',
       albumId: albumId.toString(),
       // no coverArt, no own images[]
     };

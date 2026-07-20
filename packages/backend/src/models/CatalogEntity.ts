@@ -125,11 +125,10 @@ const StrikeSchema = new Schema({
 
 const ExternalIdsSchema = new Schema<ExternalIds>({
   isrc: { type: String },
-  audiusId: { type: String },
 }, { _id: false });
 
 const SourceProvenanceSchema = new Schema<SourceProvenance>({
-  provider: { type: String, enum: ['upload', 'cc', 'audius'] as CatalogSource[], required: true },
+  provider: { type: String, enum: ['upload', 'cc'] as CatalogSource[], required: true },
   externalId: { type: String, required: true },
   importedAt: { type: String, required: true },
   fields: [{ type: String }],
@@ -139,7 +138,7 @@ const ArtistImageSchema = new Schema<TrackImage>({
   url: { type: String, required: true },
   width: { type: Number },
   height: { type: Number },
-  source: { type: String, enum: ['upload', 'cc', 'audius'] as CatalogSource[] },
+  source: { type: String, enum: ['upload', 'cc'] as CatalogSource[] },
 }, { _id: false });
 
 // ── Base schema (common identity fields) ────────────────────────────────────
@@ -187,7 +186,7 @@ const ArtistDiscriminatorSchema = new Schema<IArtist>({
   terminated: { type: Boolean, default: false, index: true },
   terminatedAt: { type: Date },
   terminationReason: { type: String },
-  source: { type: String, enum: ['upload', 'cc', 'audius'] as CatalogSource[], required: true, index: true },
+  source: { type: String, enum: ['upload', 'cc'] as CatalogSource[], required: true, index: true },
   externalIds: { type: ExternalIdsSchema },
   sources: [{ type: SourceProvenanceSchema }],
   images: [{ type: ArtistImageSchema }],
@@ -196,7 +195,6 @@ const ArtistDiscriminatorSchema = new Schema<IArtist>({
 
 ArtistDiscriminatorSchema.index({ 'stats.followers': -1 });
 ArtistDiscriminatorSchema.index({ verified: 1, popularity: -1 });
-ArtistDiscriminatorSchema.index({ 'externalIds.audiusId': 1 }, { sparse: true });
 
 // ── Person discriminator (type:'person') ────────────────────────────────────
 const PersonDiscriminatorSchema = new Schema<IPerson>({

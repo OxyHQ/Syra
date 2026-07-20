@@ -9,6 +9,7 @@
     "start": "ts-node --transpile-only server.ts",
     "dev": "nodemon --watch \"**/*.ts\" --exec ts-node --transpile-only server.ts",
     "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
     "migrate": "ts-node --transpile-only scripts/migrate.ts",
     "migrate:dev": "NODE_ENV=development ts-node --transpile-only scripts/migrate.ts",
     "seed:music": "ts-node --transpile-only src/scripts/seedMusicData.ts",

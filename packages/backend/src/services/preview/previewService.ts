@@ -6,7 +6,7 @@
  *    file and upload it to the public preview key. Used at ingest time, where
  *    the retained source is already on disk.
  *  - `storePreviewFromHls` — generate a clip from the track's own ENCRYPTED Syra
- *    HLS (Audius rehosted to Syra HLS, or any HLS-only track): the server holds
+ *    HLS (any HLS-only track): the server holds
  *    the AES-128 key + segments, so it materializes them locally and lets ffmpeg
  *    decrypt + clip.
  *  - `ensurePreviewClip` — lazy path used by the public endpoint: if the clip is
@@ -15,7 +15,7 @@
  *    the cached object.
  *
  * A track is preview-eligible only when a clip is regenerable from a Syra-native
- * source. It NEVER depends on a direct-Audius provider stream. Tracks with no
+ * source. Tracks with no
  * regenerable source resolve to `null`.
  */
 
@@ -385,7 +385,7 @@ export async function ensurePreviewClip(
     }
   }
 
-  // Path 2: the track's own encrypted Syra HLS (Audius rehosted to Syra, etc.).
+  // Path 2: the track's own encrypted Syra HLS.
   if (track.hls && track.hls.length > 0) {
     return storePreviewFromHls({ trackId: track.id, hls: track.hls, startSec });
   }

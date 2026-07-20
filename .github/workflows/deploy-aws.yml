@@ -38,6 +38,12 @@ jobs:
       # The backend imports @syra.fm/sdk (workspace); build its dist so tsc/tests resolve it.
       - run: bun run build:sdk
 
+      # Typecheck before tests: it is faster and covers strictly more files. It runs
+      # against tsconfig.json (NOT tsconfig.build.json), because the build config
+      # excludes **/*.test.ts — and test files are exactly where type errors hide when
+      # nothing checks them. Depends on the shared-types/sdk dists built above.
+      - run: cd packages/backend && bun run typecheck
+
       - run: cd packages/backend && bun run test
 
       - run: cd packages/frontend && bunx jest --ci

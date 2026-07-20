@@ -46,9 +46,7 @@ export const getTrackPreview = async (req: Request, res: Response, next: NextFun
       return res.status(404).json({ error: 'Preview not available' });
     }
 
-    // The preview is a public surface: always resolve playability for a guest
-    // (no direct Audius streaming), independent of any optional session.
-    const track = await TrackModel.findOne(playableTrackFilter({ _id: trackId }, {})).lean();
+    const track = await TrackModel.findOne(playableTrackFilter({ _id: trackId })).lean();
     if (!track) {
       return res.status(404).json({ error: 'Preview not available' });
     }

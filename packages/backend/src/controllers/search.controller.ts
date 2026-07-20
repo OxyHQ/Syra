@@ -14,7 +14,6 @@ import { serializePodcast, serializeEpisode, type PodcastDocument, type EpisodeD
 import { loadShowArtworkByPodcastId } from '../services/podcasts/episodeShowArtwork';
 import { enrichPersons, makeOxyUsersFetcher, type PersonLike } from '../services/podcasts/resolvePersons';
 import { isDatabaseConnected } from '../utils/database';
-import { enqueueAudiusImport } from '../services/sources/audiusBackgroundImport';
 import { syncPodcastSearch } from '../services/podcasts/podcastBackgroundImport';
 import { withImageFirstSort } from '../utils/imageFirstSort';
 import { parseBoundedLimit, parseOffset } from '../utils/reqParams';
@@ -22,7 +21,6 @@ import { logger } from '../utils/logger';
 import {
   getRequestUserId,
   playableTrackFilter,
-  resolveCatalogPlaybackOptions,
 } from '../utils/catalogVisibility';
 import {
   countAlbumsWithPlayableTracks,
@@ -34,12 +32,8 @@ import {
 } from '../utils/playableContainers';
 import { oxy } from '../oxyClient';
 
-/**
- * Local track count below this threshold triggers a background Audius import
- * for the same query and signals `pendingAudiusImport: true` to the client.
- */
-const AUDIUS_IMPORT_SPARSE_THRESHOLD = 5;
-const AUDIUS_IMPORT_MIN_QUERY_LENGTH = 3;
+/** Shortest query worth triggering a background podcast directory import for. */
+const MIN_IMPORT_QUERY_LENGTH = 3;
 const HEADER_PREVIEW_LIMIT = 5;
 const SEARCH_LIMIT_MAX = 50;
 
@@ -86,7 +80,6 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
     const searchCategory = category as SearchCategory;
     const searchLimit = parseBoundedLimit(limit, 20, SEARCH_LIMIT_MAX);
     const searchOffset = parseOffset(offset);
-    const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
 
     // If no query, return empty results
     if (!query.trim()) {
@@ -150,7 +143,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
             { title: searchRegex },
             { artistName: searchRegex },
           ],
-        }, playbackOptions);
+        });
       const trackFind = TrackModel.find(trackFilter)
           .sort(withImageFirstSort('track', { popularity: -1, createdAt: -1 }))
           .skip(searchOffset)
@@ -172,7 +165,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
             { artistName: searchRegex },
           ],
         };
-      const albumFind = findAlbumsWithPlayableTracks(albumFilter, playbackOptions, {
+      const albumFind = findAlbumsWithPlayableTracks(albumFilter, {
         sort: withImageFirstSort('album', { popularity: -1, releaseDate: -1 }),
         offset: searchOffset,
         limit: searchLimit,
@@ -181,7 +174,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
         ? albumFind.then((docs) => [docs, docs.length])
         : Promise.all([
             albumFind,
-            countAlbumsWithPlayableTracks(albumFilter, playbackOptions),
+            countAlbumsWithPlayableTracks(albumFilter),
           ]);
     }
 
@@ -190,7 +183,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
       const artistFilter = {
           name: searchRegex,
         };
-      const artistFind = findArtistsWithPlayableTracks(artistFilter, playbackOptions, {
+      const artistFind = findArtistsWithPlayableTracks(artistFilter, {
         sort: withImageFirstSort('artist', { popularity: -1, 'stats.followers': -1 }),
         offset: searchOffset,
         limit: searchLimit,
@@ -199,7 +192,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
         ? artistFind.then((docs) => [docs, docs.length])
         : Promise.all([
             artistFind,
-            countArtistsWithPlayableTracks(artistFilter, playbackOptions),
+            countArtistsWithPlayableTracks(artistFilter),
           ]);
     }
 
@@ -212,7 +205,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
           { description: searchRegex },
         ],
       };
-      const playlistFind = findPlaylistsWithPlayableTracks(playlistFilter, playbackOptions, {
+      const playlistFind = findPlaylistsWithPlayableTracks(playlistFilter, {
         sort: withImageFirstSort('playlist', { followers: -1, createdAt: -1 }),
         offset: searchOffset,
         limit: searchLimit,
@@ -221,7 +214,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
         ? playlistFind.then((docs) => [docs, docs.length])
         : Promise.all([
             playlistFind,
-            countPlaylistsWithPlayableTracks(playlistFilter, playbackOptions),
+            countPlaylistsWithPlayableTracks(playlistFilter),
           ]);
     }
 
@@ -233,7 +226,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
     let podcastSyncTriggered = false;
     if (
       env.PODCAST_BULK_IMPORT_ENABLED !== 'false' &&
-      query.trim().length >= AUDIUS_IMPORT_MIN_QUERY_LENGTH &&
+      query.trim().length >= MIN_IMPORT_QUERY_LENGTH &&
       searchOffset === 0
     ) {
       if (categoryValue === SearchCategory.PODCASTS) {
@@ -424,29 +417,11 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
       limit: searchLimit,
     };
 
-    // Fire-and-forget background Audius import for track/all searches.
-    // Kicks off asynchronously — never delays the response.
-    const isTrackSearch =
-      categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.TRACKS;
-    const sparseLocalResults = tracksCount < AUDIUS_IMPORT_SPARSE_THRESHOLD;
-    const querySpecificEnough = query.trim().length >= AUDIUS_IMPORT_MIN_QUERY_LENGTH;
-    const canImportAudius =
-      env.AUDIUS_BACKGROUND_IMPORT_ENABLED !== 'false' &&
-      isTrackSearch &&
-      sparseLocalResults &&
-      querySpecificEnough &&
-      searchOffset === 0;
-    const pendingAudiusImport = canImportAudius;
-
-    if (canImportAudius) {
-      enqueueAudiusImport(query);
-    }
-
     // True when a background deep import may still be enriching podcasts (the
     // shallow upsert already ran synchronously above for explicit searches).
     const pendingPodcastImport = podcastSyncTriggered;
 
-    res.json({ ...results, pendingAudiusImport, pendingPodcastImport });
+    res.json({ ...results, pendingPodcastImport });
   } catch (error) {
     next(error);
   }

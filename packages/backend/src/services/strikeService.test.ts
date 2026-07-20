@@ -10,7 +10,7 @@ import {
   isRepeatInfringer,
   STRIKE_TERMINATION_THRESHOLD,
 } from './strikeService';
-import { playableTrackFilter, isGuestPlayableTrack } from '../utils/catalogVisibility';
+import { playableTrackFilter, isPlayableTrack } from '../utils/catalogVisibility';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -182,7 +182,7 @@ describe('addStrike — termination', () => {
 
     const visible = await TrackModel.find(playableTrackFilter({ artistId: artistId.toString() })).lean();
     expect(visible).toHaveLength(0);
-    expect(isGuestPlayableTrack({ isAvailable: true, copyrightRemoved: true, source: 'upload' })).toBe(false);
+    expect(isPlayableTrack({ isAvailable: true, copyrightRemoved: true })).toBe(false);
   });
 });
 

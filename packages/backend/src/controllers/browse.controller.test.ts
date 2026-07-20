@@ -13,7 +13,6 @@ import type { Request, Response, NextFunction } from 'express';
 
 beforeAll(connect);
 afterEach(async () => {
-  delete process.env.AUDIUS_CATALOG_ENABLED;
   await clear();
 });
 afterAll(disconnect);
@@ -146,7 +145,7 @@ describe('getGenres', () => {
   it('does not use track images[] external URLs as genre cover art', async () => {
     await seedTrack({
       genre: 'Electronic',
-      images: [{ url: 'https://cdn/track-art.jpg', width: 1000, height: 1000, source: 'audius' }],
+      images: [{ url: 'https://cdn/track-art.jpg', width: 1000, height: 1000, source: 'cc' }],
     });
 
     const res = makeRes();
@@ -173,108 +172,43 @@ describe('getPopularTracks', () => {
     expect(body.tracks.map((t) => t.title)).toEqual(['High', 'Mid', 'Low']);
   });
 
-  it('excludes Audius tracks by default', async () => {
-    await seedTrack({ title: 'Audius High', source: 'audius', playCount: 100000, popularity: 99 });
-    await seedTrack({ title: 'Playable Low', source: 'cc', playCount: 10, popularity: 1 });
 
-    const res = makeRes();
-    await getPopularTracks(makeReq(), res as unknown as Response, next);
 
-    const body = res._body as { tracks: Array<{ title: string }> };
-    expect(body.tracks.map((t) => t.title)).toEqual(['Playable Low']);
-  });
-
-  it('includes Audius tracks rehosted through Syra when the Audius catalog is enabled', async () => {
-    process.env.AUDIUS_CATALOG_ENABLED = 'true';
-    await seedTrack({
-      title: 'Audius Rehosted',
-      source: 'audius',
-      status: 'ready',
-      playCount: 100000,
-      popularity: 99,
-      hlsMasterKey: 'hls/audius/rehosted/master.m3u8',
-      hls: [{ manifestKey: 'hls/audius/rehosted/160/index.m3u8', bitrateKbps: 160, encrypted: true }],
-    });
-    await seedTrack({
-      title: 'Audius Direct Only',
-      source: 'audius',
-      status: 'ready',
-      streamUrl: 'https://discoveryprovider.audius.co/v1/tracks/direct/stream?app_name=Syra',
-      playCount: 90000,
-      popularity: 90,
-    });
-
-    const res = makeRes();
-    await getPopularTracks(makeReq(), res as unknown as Response, next);
-
-    const body = res._body as { tracks: Array<{ title: string }> };
-    expect(body.tracks.map((t) => t.title)).toEqual(['Audius Rehosted']);
-  });
-
-  it('includes direct-only Audius tracks when the signed-in user enabled direct streaming', async () => {
-    process.env.AUDIUS_CATALOG_ENABLED = 'true';
-    await seedTrack({
-      title: 'Audius Direct Only',
-      source: 'audius',
-      status: 'ready',
-      streamUrl: 'https://discoveryprovider.audius.co/v1/tracks/direct/stream?app_name=Syra',
-      playCount: 100000,
-      popularity: 99,
-    });
-    await UserMusicPreferencesModel.create({
-      oxyUserId: 'oxy-user-direct',
-      directAudiusStreaming: true,
-    });
-
-    const res = makeRes();
-    await getPopularTracks(makeReq({}, 'oxy-user-direct'), res as unknown as Response, next);
-
-    const body = res._body as { tracks: Array<{ title: string }> };
-    expect(body.tracks.map((t) => t.title)).toEqual(['Audius Direct Only']);
-    expect(res._headers['Cache-Control']).toBe('private, max-age=30, stale-while-revalidate=120');
-    expect(res._headers.Vary).toBe('Authorization');
-  });
 });
 
 // ── getPopularAlbums ─────────────────────────────────────────────────────────
 
 describe('getPopularAlbums', () => {
-  it('excludes albums with no playable tracks for the current playback policy', async () => {
-    process.env.AUDIUS_CATALOG_ENABLED = 'true';
+  it('excludes albums whose only tracks are not playable', async () => {
     const playableAlbum = await AlbumModel.create({
       title: 'Playable Album',
       artistId: '507f1f77bcf86cd799439011',
       artistName: 'An Artist',
       releaseDate: '2026-01-01T00:00:00Z',
       coverArt: '507f1f77bcf86cd799439012',
-      source: 'audius',
       popularity: 80,
     });
-    const directOnlyAlbum = await AlbumModel.create({
-      title: 'Direct Only Album',
+    const unplayableAlbum = await AlbumModel.create({
+      title: 'Unplayable Album',
       artistId: '507f1f77bcf86cd799439011',
       artistName: 'An Artist',
       releaseDate: '2026-01-01T00:00:00Z',
       coverArt: '507f1f77bcf86cd799439013',
-      source: 'audius',
       popularity: 99,
     });
     await seedTrack({
-      title: 'Syra Hosted Audius',
-      source: 'audius',
+      title: 'Available',
       albumId: playableAlbum._id.toString(),
       status: 'ready',
       popularity: 80,
-      hlsMasterKey: 'hls/audius/rehosted/master.m3u8',
-      hls: [{ manifestKey: 'hls/audius/rehosted/160/index.m3u8', bitrateKbps: 160, encrypted: true }],
     });
+    // Higher popularity, so it would sort FIRST if it were not filtered out.
     await seedTrack({
-      title: 'Direct Audius',
-      source: 'audius',
-      albumId: directOnlyAlbum._id.toString(),
+      title: 'Taken Down',
+      albumId: unplayableAlbum._id.toString(),
       status: 'ready',
       popularity: 99,
-      streamUrl: 'https://discoveryprovider.audius.co/v1/tracks/direct/stream?app_name=Syra',
+      copyrightRemoved: true,
     });
 
     const res = makeRes();
@@ -284,62 +218,20 @@ describe('getPopularAlbums', () => {
     expect(body.albums.map((album) => album.title)).toEqual(['Playable Album']);
   });
 
-  it('includes direct-only Audius albums when the signed-in user enabled direct streaming', async () => {
-    process.env.AUDIUS_CATALOG_ENABLED = 'true';
-    const album = await AlbumModel.create({
-      title: 'Direct Only Album',
-      artistId: '507f1f77bcf86cd799439011',
-      artistName: 'An Artist',
-      releaseDate: '2026-01-01T00:00:00Z',
-      coverArt: '507f1f77bcf86cd799439013',
-      source: 'audius',
-      popularity: 99,
-    });
-    await seedTrack({
-      title: 'Direct Audius',
-      source: 'audius',
-      albumId: album._id.toString(),
-      status: 'ready',
-      popularity: 99,
-      streamUrl: 'https://discoveryprovider.audius.co/v1/tracks/direct/stream?app_name=Syra',
-    });
-    await UserMusicPreferencesModel.create({
-      oxyUserId: 'oxy-user-direct',
-      directAudiusStreaming: true,
-    });
-
-    const res = makeRes();
-    await getPopularAlbums(makeReq({}, 'oxy-user-direct'), res as unknown as Response, next);
-
-    const body = res._body as { albums: Array<{ title: string }> };
-    expect(body.albums.map((listedAlbum) => listedAlbum.title)).toEqual(['Direct Only Album']);
-    expect(res._headers['Cache-Control']).toBe('private, max-age=30, stale-while-revalidate=120');
-    expect(res._headers.Vary).toBe('Authorization');
-  });
 });
 
 // ── getHomeBrowse ───────────────────────────────────────────────────────────
 
 describe('getHomeBrowse', () => {
-  it('does not surface playlists whose tracks are not playable for the current playback policy', async () => {
-    process.env.AUDIUS_CATALOG_ENABLED = 'true';
+  it('does not surface playlists whose only tracks are not playable', async () => {
     await seedPlaylistWithTrack(
-      'Direct Only Playlist',
-      {
-        source: 'audius',
-        status: 'ready',
-        streamUrl: 'https://discoveryprovider.audius.co/v1/tracks/direct/stream?app_name=Syra',
-      },
+      'Unplayable Playlist',
+      { status: 'ready', isAvailable: false },
       { followers: 100 },
     );
     await seedPlaylistWithTrack(
-      'Syra Hosted Playlist',
-      {
-        source: 'audius',
-        status: 'ready',
-        hlsMasterKey: 'hls/audius/rehosted/master.m3u8',
-        hls: [{ manifestKey: 'hls/audius/rehosted/160/index.m3u8', bitrateKbps: 160, encrypted: true }],
-      },
+      'Playable Playlist',
+      { status: 'ready' },
       { followers: 1 },
     );
 
@@ -347,44 +239,18 @@ describe('getHomeBrowse', () => {
     await getHomeBrowse(makeReq({ sectionLimit: '4', tracksLimit: '4' }), res as unknown as Response, next);
 
     const body = res._body as { madeForYou: { playlists: Array<{ name: string }> } };
-    expect(body.madeForYou.playlists.map((playlist) => playlist.name)).toEqual(['Syra Hosted Playlist']);
+    expect(body.madeForYou.playlists.map((playlist) => playlist.name)).toEqual(['Playable Playlist']);
   });
 
-  it('surfaces direct-only playlists when the signed-in user enabled direct streaming', async () => {
-    process.env.AUDIUS_CATALOG_ENABLED = 'true';
-    await seedPlaylistWithTrack(
-      'Direct Only Playlist',
-      {
-        source: 'audius',
-        status: 'ready',
-        streamUrl: 'https://discoveryprovider.audius.co/v1/tracks/direct/stream?app_name=Syra',
-      },
-      { followers: 100 },
-    );
-    await UserMusicPreferencesModel.create({
-      oxyUserId: 'oxy-user-direct',
-      directAudiusStreaming: true,
-    });
-
-    const res = makeRes();
-    await getHomeBrowse(makeReq({ sectionLimit: '4', tracksLimit: '4' }, 'oxy-user-direct'), res as unknown as Response, next);
-
-    const body = res._body as { madeForYou: { playlists: Array<{ name: string }> } };
-    expect(body.madeForYou.playlists.map((playlist) => playlist.name)).toEqual(['Direct Only Playlist']);
-    expect(res._headers['Cache-Control']).toBe('private, max-age=60, stale-while-revalidate=300');
-    expect(res._headers.Vary).toBe('Authorization');
-  });
 });
 
 // ── getMadeForYou ─────────────────────────────────────────────────────────────
 
 describe('getMadeForYou', () => {
   it('excludes playlists with no playable tracks from public discovery', async () => {
-    process.env.AUDIUS_CATALOG_ENABLED = 'true';
-    await seedPlaylistWithTrack('Direct Only Playlist', {
-      source: 'audius',
+    await seedPlaylistWithTrack('Unplayable Playlist', {
       status: 'ready',
-      streamUrl: 'https://discoveryprovider.audius.co/v1/tracks/direct/stream?app_name=Syra',
+      isAvailable: false,
     });
 
     const res = makeRes();

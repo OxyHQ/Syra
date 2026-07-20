@@ -34,7 +34,6 @@ export interface MusicPreferences {
   audioQuality?: 'low' | 'normal' | 'high' | 'very_high';
   downloadQuality?: 'low' | 'normal' | 'high' | 'very_high';
   dataSaver?: boolean;
-  directAudiusStreaming?: boolean;
   monoAudio?: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -50,14 +49,12 @@ export const DEFAULT_MUSIC_PREFERENCES: Omit<MusicPreferences, 'oxyUserId'> = {
   audioQuality: 'normal',
   downloadQuality: 'normal',
   dataSaver: false,
-  directAudiusStreaming: false,
   monoAudio: false,
 };
 
 const STREAM_RELEVANT_PREFERENCES: Array<keyof MusicPreferences> = [
   'audioQuality',
   'dataSaver',
-  'directAudiusStreaming',
 ];
 
 function touchesStreamPreferences(partial: Partial<MusicPreferences>): boolean {

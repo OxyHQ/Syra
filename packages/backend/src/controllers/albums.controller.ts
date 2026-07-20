@@ -16,7 +16,6 @@ import { withImageFirstSort } from '../utils/imageFirstSort';
 import {
   getRequestUserId,
   playableTrackFilter,
-  resolveCatalogPlaybackOptions,
 } from '../utils/catalogVisibility';
 import {
   countAlbumsWithPlayableTracks,
@@ -36,15 +35,14 @@ export const getAlbums = async (req: Request, res: Response, next: NextFunction)
 
     const limit = parseBoundedLimit(req.query.limit, 20);
     const offset = parseOffset(req.query.offset);
-    const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
 
     const [albums, total] = await Promise.all([
-      findAlbumsWithPlayableTracks({}, playbackOptions, {
+      findAlbumsWithPlayableTracks({}, {
         sort: withImageFirstSort('album', { releaseDate: -1, createdAt: -1 }),
         offset,
         limit,
       }),
-      countAlbumsWithPlayableTracks({}, playbackOptions),
+      countAlbumsWithPlayableTracks({}),
     ]);
 
     const formattedAlbums = formatAlbumsWithCoverArt(albums);
@@ -76,8 +74,7 @@ export const getAlbumById = async (req: Request, res: Response, next: NextFuncti
       return res.status(404).json({ error: 'Album not found' });
     }
 
-    const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
-    const album = await findOneAlbumWithPlayableTracks(id, playbackOptions);
+    const album = await findOneAlbumWithPlayableTracks(id);
 
     if (!album) {
       return res.status(404).json({ error: 'Album not found' });
@@ -101,7 +98,6 @@ export const getAlbumTracks = async (req: Request, res: Response, next: NextFunc
     }
 
     const id = getParam(req, 'id');
-    const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
     
     // Validate ObjectId format
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -109,13 +105,13 @@ export const getAlbumTracks = async (req: Request, res: Response, next: NextFunc
     }
     
     // Verify album exists
-    const album = await findOneAlbumWithPlayableTracks(id, playbackOptions);
+    const album = await findOneAlbumWithPlayableTracks(id);
     if (!album) {
       return res.status(404).json({ error: 'Album not found' });
     }
 
     // Fetch tracks for this album, sorted by track number
-    const tracks = await TrackModel.find(playableTrackFilter({ albumId: id }, playbackOptions))
+    const tracks = await TrackModel.find(playableTrackFilter({ albumId: id }))
       .sort({ discNumber: 1, trackNumber: 1 })
       .lean();
 

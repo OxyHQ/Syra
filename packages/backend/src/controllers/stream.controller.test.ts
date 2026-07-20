@@ -68,7 +68,7 @@ async function seedTrack(overrides: Record<string, unknown> = {}) {
     artistId: new mongoose.Types.ObjectId().toString(),
     artistName: 'Artist',
     duration: 180,
-    source: 'audius',
+    source: 'upload',
     status: 'ready',
     isExplicit: false,
     isAvailable: true,
@@ -96,67 +96,8 @@ function hlsTrackFields() {
 // ── getStream — existing tests ────────────────────────────────────────────────
 
 describe('getStream', () => {
-  it('200 audius: returns direct provider stream only when the user enabled it', async () => {
-    const track = await seedTrack({
-      source: 'audius',
-      status: 'ready',
-      streamUrl: 'https://audius.co/stream/abc123',
-    });
-    await UserMusicPreferencesModel.create({
-      oxyUserId: 'oxy-user-abc',
-      directAudiusStreaming: true,
-    });
 
-    const req = makeReq(track._id.toString());
-    const res = makeRes();
-    await getStream(req, res as unknown as Response);
 
-    expect(res._status).toBe(200);
-    const body = res._body as Record<string, unknown>;
-    expect(body.type).toBe('audius');
-    expect(body.url).toBe('https://audius.co/stream/abc123');
-    expect(res._headers['Cache-Control']).toBe('private, max-age=300');
-    expect(res._headers.Vary).toBe('Authorization');
-  });
-
-  it('422 audius: direct provider streaming is disabled by default', async () => {
-    const saved = process.env.AUDIUS_CATALOG_ENABLED;
-    delete process.env.AUDIUS_CATALOG_ENABLED;
-    const track = await seedTrack({
-      source: 'audius',
-      status: 'ready',
-      streamUrl: 'https://audius.co/stream/abc123',
-    });
-
-    try {
-      const req = makeReq(track._id.toString());
-      const res = makeRes();
-      await getStream(req, res as unknown as Response);
-
-      expect(res._status).toBe(422);
-    } finally {
-      if (saved !== undefined) process.env.AUDIUS_CATALOG_ENABLED = saved;
-      else delete process.env.AUDIUS_CATALOG_ENABLED;
-    }
-  });
-
-  it('200 audius with Syra HLS: direct provider streaming preference is not required', async () => {
-    const track = await seedTrack({
-      ...hlsTrackFields(),
-      source: 'audius',
-      status: 'ready',
-    });
-
-    const req = makeReq(track._id.toString());
-    const res = makeRes();
-    await getStream(req, res as unknown as Response);
-
-    expect(res._status).toBe(200);
-    const body = res._body as Record<string, unknown>;
-    expect(body.type).toBe('hls');
-    expect(typeof body.url).toBe('string');
-    expect(String(body.url)).toContain(`/api/stream/${track._id.toString()}/master.m3u8?t=`);
-  });
 
   it('200 hls: mints stream token and returns master.m3u8 url', async () => {
     const track = await seedTrack({
@@ -189,27 +130,7 @@ describe('getStream', () => {
     expect(res._headers.Vary).toBe('Authorization');
   });
 
-  it('401 audius: no auth cannot use direct provider streaming', async () => {
-    const track = await seedTrack({
-      source: 'audius',
-      status: 'ready',
-      streamUrl: 'https://audius.co/stream/anon123',
-    });
 
-    const req = makeReq(track._id.toString(), { authed: false });
-    const res = makeRes();
-    await getStream(req, res as unknown as Response);
-
-    expect(res._status).toBe(401);
-  });
-
-  it('401 audius: no auth + missing streamUrl returns 401', async () => {
-    const track = await seedTrack({ source: 'audius', status: 'ready', streamUrl: undefined });
-    const req = makeReq(track._id.toString(), { authed: false });
-    const res = makeRes();
-    await getStream(req, res as unknown as Response);
-    expect(res._status).toBe(401);
-  });
 
   it('401: HLS track with no auth returns 401', async () => {
     const track = await seedTrack({

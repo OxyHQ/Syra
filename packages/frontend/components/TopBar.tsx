@@ -12,7 +12,6 @@ import { Logo } from './Logo';
 import { useMediaQuery } from 'react-responsive';
 import { searchService } from '@/services/searchService';
 import { musicService } from '@/services/musicService';
-import { searchRefetchInterval } from '@/utils/searchUtils';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { Album, Artist, Playlist, SearchCategory, SearchUser, Track } from '@syra/shared-types';
@@ -89,8 +88,6 @@ export const TopBar: React.FC = () => {
     }),
     enabled: !isMobile && hasHeaderSearchQuery,
     staleTime: 1000 * 60 * 5,
-    refetchInterval: (query) => searchRefetchInterval(query.state.data),
-    refetchIntervalInBackground: false,
   });
 
   const handleHome = () => {

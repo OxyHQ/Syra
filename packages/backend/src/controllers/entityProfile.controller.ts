@@ -18,8 +18,6 @@ import { getParam } from '../utils/reqParams';
 import {
   getRequestUserId,
   playableTrackFilter,
-  resolveCatalogPlaybackOptions,
-  type CatalogPlaybackOptions,
 } from '../utils/catalogVisibility';
 import { findAlbumsWithPlayableTracks } from '../utils/playableContainers';
 import { serializePodcast, serializeEpisode } from '../services/podcasts/podcastSerializers';
@@ -82,14 +80,13 @@ function artistDisplayFields(formatted: FormattedArtistProfile | null): ArtistDi
  */
 async function loadArtistMusic(
   artistId: string,
-  playbackOptions: CatalogPlaybackOptions,
 ): Promise<EntityMusic> {
   const [albums, tracks] = await Promise.all([
-    findAlbumsWithPlayableTracks({ artistId }, playbackOptions, {
+    findAlbumsWithPlayableTracks({ artistId }, {
       sort: withImageFirstSort('album', { releaseDate: -1 }),
       limit: ARTIST_ALBUMS_LIMIT,
     }),
-    TrackModel.find(playableTrackFilter({ artistId }, playbackOptions))
+    TrackModel.find(playableTrackFilter({ artistId }))
       .sort(withImageFirstSort('track', { popularity: -1, createdAt: -1 }))
       .limit(ARTIST_TRACKS_LIMIT)
       .lean(),
@@ -189,7 +186,6 @@ export const getEntityProfile = async (req: Request, res: Response, next: NextFu
       return res.status(404).json({ error: 'Not found' });
     }
 
-    const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
 
     const entity = await CatalogEntityModel.findById(id).lean<CatalogEntityLean>();
     if (!entity) {
@@ -200,7 +196,7 @@ export const getEntityProfile = async (req: Request, res: Response, next: NextFu
     if (entity.type === 'artist') {
       const formatted = formatArtistWithImage(entity) as FormattedArtistProfile | null;
       const [music, linkedPerson] = await Promise.all([
-        loadArtistMusic(id, playbackOptions),
+        loadArtistMusic(id),
         PersonModel.findOne({ linkedArtistId: entity._id }).lean<CatalogEntityLean>(),
       ]);
 
@@ -231,7 +227,7 @@ export const getEntityProfile = async (req: Request, res: Response, next: NextFu
     let linkedArtistFields: ArtistDisplayFields = artistDisplayFields(null);
     if (linkedArtist) {
       const formattedLinked = formatArtistWithImage(linkedArtist) as FormattedArtistProfile | null;
-      music = await loadArtistMusic(linkedArtist._id.toString(), playbackOptions);
+      music = await loadArtistMusic(linkedArtist._id.toString());
       linkedArtistFields = artistDisplayFields(formattedLinked);
     }
 

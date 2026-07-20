@@ -12,8 +12,8 @@ import { assignMissingColors, replaceColors } from './entityColors';
 import { usableImages } from './externalImages';
 import { mirrorCatalogImage, type CatalogImageAsset } from './catalogImageAssets';
 
-const EXTERNAL_OWNER_ID = 'system:audius';
-const EXTERNAL_OWNER_NAME = 'Audius';
+const EXTERNAL_OWNER_ID = 'system:import';
+const EXTERNAL_OWNER_NAME = 'Imported';
 
 export interface UpsertPlaylistResult {
   playlist: IPlaylist | null;
@@ -49,10 +49,6 @@ function buildProvenance(
 }
 
 async function findExisting(source: CatalogSource, externalId: string): Promise<IPlaylist | null> {
-  if (source === 'audius') {
-    const byAudiusId = await PlaylistModel.findOne({ 'externalIds.audiusId': externalId });
-    if (byAudiusId) return byAudiusId;
-  }
   return PlaylistModel.findOne({
     sources: { $elemMatch: { provider: source, externalId } },
   });
@@ -89,17 +85,12 @@ async function resolveOrderedTrackIds(
   if (!trackExternalIds?.length) return [];
 
   const uniqueExternalIds = [...new Set(trackExternalIds)];
-  const query =
-    source === 'audius'
-      ? { 'externalIds.audiusId': { $in: uniqueExternalIds } }
-      : { sources: { $elemMatch: { provider: source, externalId: { $in: uniqueExternalIds } } } };
-
-  const tracks = await TrackModel.find(query).lean();
+  const tracks = await TrackModel.find({
+    sources: { $elemMatch: { provider: source, externalId: { $in: uniqueExternalIds } } },
+  }).lean();
   const byExternalId = new Map<string, string>();
   for (const track of tracks) {
-    const externalId = source === 'audius'
-      ? track.externalIds?.audiusId
-      : track.sources?.find((entry) => entry.provider === source)?.externalId;
+    const externalId = track.sources?.find((entry) => entry.provider === source)?.externalId;
     if (externalId) byExternalId.set(externalId, track._id.toString());
   }
 
@@ -175,7 +166,6 @@ export async function upsertPlaylist(
       totalDuration: 0,
       followers: 0,
       source,
-      externalIds: source === 'audius' ? { audiusId: external.externalId } : undefined,
       sources: [provenance],
       primaryColor: mirroredCover?.primaryColor,
       secondaryColor: mirroredCover?.secondaryColor,
@@ -200,9 +190,6 @@ export async function upsertPlaylist(
     replaceColors(existing, mirroredCover);
   } else {
     assignMissingColors(existing, mirroredCover);
-  }
-  if (source === 'audius' && external.externalId && !existing.externalIds?.audiusId) {
-    existing.externalIds = { ...(existing.externalIds ?? {}), audiusId: external.externalId };
   }
   if (!existing.source) existing.source = source;
   existing.visibility = PlaylistVisibility.PUBLIC;

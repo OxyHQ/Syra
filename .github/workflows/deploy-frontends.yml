@@ -25,6 +25,14 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Build shared types
         run: bun run build:shared-types
+      # Gates run before the build so a failure is reported in seconds rather than after
+      # a 60-minute bundle. Both depend on shared-types being built above.
+      # NOTE: the frontend runner is jest (`jest --watchAll=false`), NOT `bun test` —
+      # the two are not interchangeable and running the wrong one reports false failures.
+      - name: Test frontend
+        run: cd packages/frontend && bun run test
+      - name: Typecheck frontend
+        run: cd packages/frontend && bun run typecheck
       - name: Build frontend
         run: bun run build:frontend
         timeout-minutes: 60

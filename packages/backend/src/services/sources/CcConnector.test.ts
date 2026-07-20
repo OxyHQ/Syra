@@ -162,7 +162,6 @@ describe('CcConnector.search', () => {
 
     expect(track.downloadUrl).toBe('https://storage.jamendo.com/tracks/j100/audio.mp3');
     expect(track.license).toBe('https://creativecommons.org/licenses/by/4.0/');
-    expect(track.streamUrl).toBeUndefined();
   });
 
   it('returns [] when results is not an array', async () => {

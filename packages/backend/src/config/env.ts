@@ -51,9 +51,12 @@ const schema = z.object({
 
   PREMIUM_USER_IDS: z.string().optional(),
 
-  FIREBASE_PROJECT_ID: z.string().optional(),
-  FIREBASE_CLIENT_EMAIL: z.string().optional(),
-  FIREBASE_PRIVATE_KEY: z.string().optional(),
+  // Oxy service-app credentials (OAuth2 client-credentials). Exchanged at
+  // `POST /auth/service-token` for a short-lived service JWT used to create
+  // notifications server-to-server. Absent in local dev — the notifier then
+  // refuses to emit rather than pretending to deliver.
+  OXY_SERVICE_API_KEY: z.string().optional(),
+  OXY_SERVICE_API_SECRET: z.string().optional(),
 
   TELEGRAM_BOT_TOKEN: z.string().optional(),
 
@@ -62,10 +65,6 @@ const schema = z.object({
   ACRCLOUD_HOST: z.string().optional(),
   ACRCLOUD_ACCESS_KEY: z.string().optional(),
   ACRCLOUD_ACCESS_SECRET: z.string().optional(),
-
-  AUDIUS_API_URL: z.string().optional(),
-  AUDIUS_APP_NAME: z.string().optional(),
-  AUDIUS_BACKGROUND_IMPORT_ENABLED: z.string().optional(),
 
   JAMENDO_CLIENT_ID: z.string().optional(),
   JAMENDO_API_URL: z.string().optional(),

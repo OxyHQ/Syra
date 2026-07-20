@@ -34,7 +34,6 @@ function normalizeImageSizes(value: unknown): unknown {
 
 function stripExternalCatalogFields(formatted: Record<string, unknown>): void {
   delete formatted.images;
-  delete formatted.streamUrl;
 }
 
 /**
@@ -118,13 +117,12 @@ export async function formatTrackWithCoverArt(
   stripExternalCatalogFields(formatted);
   formatted.coverArtSizes = normalizeImageSizes(formatted.coverArtSizes);
 
-  // A public 30s preview can be served iff the track is guest-playable AND a
-  // clip is regenerable from a Syra-native source (retained `audioSource` OR the
-  // track's own ready HLS — e.g. Audius rehosted to Syra HLS). The SDK derives
-  // the preview URL from this flag — we never persist or expose a raw preview URL.
+  // A public 30s preview can be served iff the track is playable AND a clip is
+  // regenerable (retained `audioSource` OR the track's own ready HLS). The SDK
+  // derives the preview URL from this flag — we never persist or expose a raw one.
   formatted.previewAvailable = isPreviewEligibleTrack({
     isAvailable: formatted.isAvailable,
-    source: formatted.source,
+    copyrightRemoved: formatted.copyrightRemoved,
     status: formatted.status,
     hlsMasterKey: formatted.hlsMasterKey,
     hls: formatted.hls,

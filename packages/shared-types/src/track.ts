@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { timestampsSchema } from './common';
 
-export const catalogSourceSchema = z.enum(['upload', 'cc', 'audius']);
+export const catalogSourceSchema = z.enum(['upload', 'cc']);
 export type CatalogSource = z.infer<typeof catalogSourceSchema>;
 
 export const trackStatusSchema = z.enum(['processing', 'ready', 'failed']);
@@ -9,7 +9,6 @@ export type TrackStatus = z.infer<typeof trackStatusSchema>;
 
 export const externalIdsSchema = z.object({
   isrc: z.string().optional(),
-  audiusId: z.string().optional(),
 });
 export type ExternalIds = z.infer<typeof externalIdsSchema>;
 
@@ -113,7 +112,6 @@ export const trackSchema = timestampsSchema.extend({
   images: z.array(trackImageSchema).optional(),
   hls: z.array(hlsRenditionSchema).optional(),
   loudnessLufs: z.number().optional(),
-  streamUrl: z.string().optional(),
   hlsMasterKey: z.string().optional(),
   /**
    * Whether a public 30s preview clip can be served for this track. Derived by

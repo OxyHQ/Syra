@@ -20,7 +20,6 @@ import { updateTrackRequestSchema } from '@syra/shared-types';
 import {
   getRequestUserId,
   playableTrackFilter,
-  resolveCatalogPlaybackOptions,
 } from '../utils/catalogVisibility';
 
 interface AudioUploadRequest extends AuthRequest {
@@ -39,15 +38,14 @@ export const getTracks = async (req: Request, res: Response, next: NextFunction)
 
     const limit = parseBoundedLimit(req.query.limit, 20);
     const offset = parseOffset(req.query.offset);
-    const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
 
     const [tracks, total] = await Promise.all([
-      TrackModel.find(playableTrackFilter({}, playbackOptions))
+      TrackModel.find(playableTrackFilter({}))
         .sort({ createdAt: -1 })
         .skip(offset)
         .limit(limit)
         .lean(),
-      TrackModel.countDocuments(playableTrackFilter({}, playbackOptions)),
+      TrackModel.countDocuments(playableTrackFilter({})),
     ]);
 
     const formattedTracks = await formatTracksWithCoverArt(tracks);
@@ -73,14 +71,13 @@ export const getTrackById = async (req: Request, res: Response, next: NextFuncti
     }
 
     const id = getParam(req, 'id');
-    const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
     
     // Validate ObjectId format
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(404).json({ error: 'Track not found' });
     }
     
-    const track = await TrackModel.findOne(playableTrackFilter({ _id: id }, playbackOptions)).lean();
+    const track = await TrackModel.findOne(playableTrackFilter({ _id: id })).lean();
 
     if (!track) {
       return res.status(404).json({ error: 'Track not found' });
@@ -106,7 +103,6 @@ export const searchTracks = async (req: Request, res: Response, next: NextFuncti
     const query = (req.query.q as string) || '';
     const limit = parseBoundedLimit(req.query.limit, 20);
     const offset = parseOffset(req.query.offset);
-    const playbackOptions = await resolveCatalogPlaybackOptions(getRequestUserId(req as AuthRequest));
 
     if (!query.trim()) {
       return res.json({
@@ -124,7 +120,7 @@ export const searchTracks = async (req: Request, res: Response, next: NextFuncti
             { title: searchRegex },
             { artistName: searchRegex },
           ],
-        }, playbackOptions),
+        }),
       )
         .sort({ popularity: -1, createdAt: -1 })
         .skip(offset)
@@ -135,7 +131,7 @@ export const searchTracks = async (req: Request, res: Response, next: NextFuncti
           { title: searchRegex },
           { artistName: searchRegex },
         ],
-      }, playbackOptions)),
+      })),
     ]);
 
     const formattedTracks = await formatTracksWithCoverArt(tracks);

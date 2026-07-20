@@ -99,7 +99,6 @@ function resolveManifestToken(
  *
  * Response shape:
  *   - HLS:     { url, type: 'hls', expiresAt }  (url includes ?t=<streamToken>)
- *   - Audius:  { url, type: 'audius', expiresAt } only when user enabled direct provider streaming
  *
  * The token embeds maxBitrateKbps derived from the user's entitlement + prefs.
  * Free users receive cap=160; premium users receive cap=320; data-saver forces 96.
@@ -163,13 +162,6 @@ export async function getStream(req: AuthRequest, res: Response): Promise<void> 
     res.set('Cache-Control', CACHE_CONTROL_STREAM_RESOLUTION);
     res.set('Vary', 'Authorization');
     res.status(200).json({ url, type: 'hls', expiresAt });
-    return;
-  }
-
-  if (track.source === 'audius' && track.streamUrl && prefs?.directAudiusStreaming === true) {
-    res.set('Cache-Control', CACHE_CONTROL_STREAM_RESOLUTION);
-    res.set('Vary', 'Authorization');
-    res.status(200).json({ url: track.streamUrl, type: 'audius', expiresAt: null });
     return;
   }
 

@@ -22,26 +22,26 @@ const baseAlbum: ExternalAlbum = {
   externalId: 'aud-album-001',
   releaseDate: '2021-06-26T14:24:05Z',
   genre: 'Electronic',
-  images: [{ url: 'https://cdn.audius.co/alb/1000x1000.jpg', width: 1000, height: 1000 }],
+  images: [{ url: 'https://cdn.example/alb/1000x1000.jpg', width: 1000, height: 1000 }],
   popularity: { playCount: 5000, favoriteCount: 12, repostCount: 3 },
   trackExternalIds: ['aud-trk-base'],
 };
 
-/** Helper: import a track and return its DB _id + audius externalId. */
+/** Helper: import a track and return its DB _id + provider externalId. */
 async function seedTrack(externalId: string, durationSec: number): Promise<string> {
   const external: ExternalTrack = {
-    provider: 'audius',
+    provider: 'cc',
     externalId,
     title: `Track ${externalId}`,
     artists: [{
       name: 'Album Artist',
       externalId: 'aud-album-artist',
-      images: [{ url: 'https://cdn.audius.co/artist/1000x1000.jpg' }],
+      images: [{ url: 'https://cdn.example/artist/1000x1000.jpg' }],
     }],
     durationSec,
-    images: [{ url: `https://cdn.audius.co/${externalId}/1000x1000.jpg` }],
+    images: [{ url: `https://cdn.example/${externalId}/1000x1000.jpg` }],
   };
-  const { track } = await upsertTrack(external, 'audius');
+  const { track } = await upsertTrack(external, 'cc');
   if (!track) throw new Error('expected track');
   return track._id.toString();
 }
@@ -49,7 +49,7 @@ async function seedTrack(externalId: string, durationSec: number): Promise<strin
 describe('upsertAlbum', () => {
   it('(a) inserts a new album with normalised metadata', async () => {
     await seedTrack('aud-trk-base', 120);
-    const { album, created } = await upsertAlbum(baseAlbum, ARTIST, 'audius');
+    const { album, created } = await upsertAlbum(baseAlbum, ARTIST, 'cc');
 
     expect(created).toBe(true);
     if (!album) throw new Error('expected album');
@@ -60,22 +60,21 @@ describe('upsertAlbum', () => {
     expect(album.genre).toEqual(['Electronic']);
     expect(album.coverArt).toMatch(/^[a-f\d]{24}$/i);
     expect(album.coverArtSizes?.large?.url).toBe(`/api/images/${album.coverArt}`);
-    expect(album.source).toBe('audius');
-    expect(album.externalIds?.audiusId).toBe('aud-album-001');
+    expect(album.source).toBe('cc');
     expect(album.playCount).toBe(5000);
     expect(album.favoriteCount).toBe(12);
     expect(album.popularity).toBeGreaterThan(0);
-    expect(album.sources?.[0].provider).toBe('audius');
+    expect(album.sources?.[0].provider).toBe('cc');
     expect(album.sources?.[0].externalId).toBe('aud-album-001');
   });
 
   it('(b) re-import with same externalId updates the SAME doc and appends provenance', async () => {
     await seedTrack('aud-trk-base', 120);
-    await upsertAlbum(baseAlbum, ARTIST, 'audius');
+    await upsertAlbum(baseAlbum, ARTIST, 'cc');
     const { album, created } = await upsertAlbum(
       { ...baseAlbum, name: 'Night Drive (Deluxe)' },
       ARTIST,
-      'audius',
+      'cc',
     );
 
     expect(created).toBe(false);
@@ -92,7 +91,7 @@ describe('upsertAlbum', () => {
     const { album } = await upsertAlbum(
       { ...baseAlbum, trackExternalIds: ['aud-trk-1', 'aud-trk-2'] },
       ARTIST,
-      'audius',
+      'cc',
     );
 
     if (!album) throw new Error('expected album');
@@ -112,7 +111,7 @@ describe('upsertAlbum', () => {
     const { album } = await upsertAlbum(
       { ...baseAlbum, trackExternalIds: ['aud-trk-1', 'aud-missing'] },
       ARTIST,
-      'audius',
+      'cc',
     );
 
     // Only the one known track is linked; totals reflect only it.
@@ -126,7 +125,7 @@ describe('upsertAlbum', () => {
     const { album, created } = await upsertAlbum(
       { ...baseAlbum, images: undefined },
       ARTIST,
-      'audius',
+      'cc',
     );
 
     // No cover art → not persisted (Album.coverArt is required); reported as not created.
@@ -139,22 +138,11 @@ describe('upsertAlbum', () => {
     await seedTrack('aud-trk-base', 120);
     setCatalogImageMirrorImplementationForTests(async () => undefined);
 
-    const { album, created } = await upsertAlbum(baseAlbum, ARTIST, 'audius');
+    const { album, created } = await upsertAlbum(baseAlbum, ARTIST, 'cc');
 
     expect(created).toBe(false);
     expect(album).toBeNull();
     expect(await AlbumModel.countDocuments()).toBe(0);
   });
 
-  it('(f) skips Audius albums with no resolved tracks', async () => {
-    const { album, created } = await upsertAlbum(
-      { ...baseAlbum, trackExternalIds: ['aud-missing'] },
-      ARTIST,
-      'audius',
-    );
-
-    expect(created).toBe(false);
-    expect(album).toBeNull();
-    expect(await AlbumModel.countDocuments()).toBe(0);
-  });
 });

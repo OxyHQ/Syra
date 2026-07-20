@@ -9,7 +9,7 @@
  * `results.sort is not a function` gotcha does not apply here.
  *
  * The RSS body is NEVER read at request time by clients — it is mirrored into
- * Mongo by `podcastImportService`, mirroring how `AudiusConnector` feeds the
+ * Mongo by `podcastImportService`, mirroring how the music connectors feed the
  * catalog upsert path. Conditional GET (`ETag` / `Last-Modified`) makes repeat
  * crawls cheap (a `304` short-circuits to a no-op).
  */

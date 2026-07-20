@@ -277,7 +277,7 @@ describe('toConnectPlaybackState', () => {
   it('maps every field, with updatedAt serialized as an ISO string', async () => {
     await setNowPlaying(USER, {
       trackId: 'track-abc',
-      source: 'audius',
+      source: 'cc',
       queue: ['track-abc', 'track-def'],
       contextType: 'album',
       contextId: 'album-1',
@@ -292,7 +292,7 @@ describe('toConnectPlaybackState', () => {
 
     expect(connect).toEqual({
       trackId: 'track-abc',
-      source: 'audius',
+      source: 'cc',
       positionMs: 42000,
       isPlaying: true,
       queue: ['track-abc', 'track-def'],

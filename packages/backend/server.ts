@@ -40,7 +40,6 @@ import imagesAuthRoutes from './src/routes/images.auth.routes';
 import previewRoutes from './src/routes/preview.routes';
 import streamRoutes from './src/routes/stream.routes';
 import lyricsRoutes from './src/routes/lyrics.routes';
-import sourcesRoutes from './src/routes/sources.routes';
 import recommendationsRoutes from './src/routes/recommendations.routes';
 import podcastsRoutes from './src/routes/podcasts.routes';
 import episodesRoutes from './src/routes/episodes.routes';
@@ -291,7 +290,6 @@ publicApiRouter.use('/images', imagesPublicRoutes);
 publicApiRouter.use('/preview', createOptionalOxyAuth(oxy), previewRoutes);
 publicApiRouter.use('/lyrics', lyricsRoutes);
 
-publicApiRouter.use('/sources', sourcesRoutes);
 
 // Live rooms: public discovery (optional auth resolves the viewer for
 // visibility gating); write routes self-enforce auth internally.

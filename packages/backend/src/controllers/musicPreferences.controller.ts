@@ -27,7 +27,6 @@ export async function ensureMusicPreferences(oxyUserId: string): Promise<UserMus
     audioQuality: 'normal',
     downloadQuality: 'normal',
     dataSaver: false,
-    directAudiusStreaming: false,
     monoAudio: false,
   });
   await newPreferences.save();
@@ -95,10 +94,6 @@ export async function updateMusicPreferences(
   // Validate and set dataSaver
   if (typeof updates.dataSaver === 'boolean') {
     update.dataSaver = updates.dataSaver;
-  }
-
-  if (typeof updates.directAudiusStreaming === 'boolean') {
-    update.directAudiusStreaming = updates.directAudiusStreaming;
   }
 
   // Validate and set monoAudio

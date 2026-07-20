@@ -7,7 +7,7 @@ export type HttpGetJson = (url: string) => Promise<unknown>;
  * Common interface for all external music catalog connectors.
  *
  * Each connector is responsible for:
- *  - Querying a single external provider (Audius, CC/Jamendo, etc.)
+ *  - Querying a single external provider (CC/Jamendo, etc.)
  *  - Normalising results to `ExternalTrack` before returning them
  *  - Filtering out tracks that Syra cannot legally host (e.g. NC licenses for CC)
  *

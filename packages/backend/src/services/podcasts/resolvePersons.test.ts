@@ -68,7 +68,7 @@ describe('resolvePersons — strong-key dedup', () => {
   });
 
   it('does NOT link to an UNCLAIMED Artist (name match alone is insufficient)', async () => {
-    await ArtistModel.create({ name: 'Unclaimed Name', source: 'audius' }); // no owner/claim
+    await ArtistModel.create({ name: 'Unclaimed Name', source: 'cc' }); // no owner/claim
     const r = await resolvePersons([{ name: 'Unclaimed Name', href: 'https://x/un' }], noOxy);
     expect(r[0].linkedArtistId).toBeUndefined();
   });

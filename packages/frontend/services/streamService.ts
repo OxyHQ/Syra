@@ -4,7 +4,7 @@ import { api } from '@/utils/api';
 
 export interface StreamResolution {
   url: string;
-  type: 'hls' | 'audius';
+  type: 'hls';
   expiresAt: string | null;
 }
 
@@ -131,8 +131,8 @@ async function resolveFromEndpoint(
  * Calls `GET /api/stream/:trackId` (bearer-authenticated) which returns the
  * resolved URL along with its type and optional expiry.
  *
- * - `type: 'hls'`    — API-served tokenized HLS master playlist.
- * - `type: 'audius'` — Direct Audius network stream URL.
+ * Resolutions are always `type: 'hls'` — an API-served tokenized HLS master
+ * playlist.
  *
  * @throws Error on any network or API error, with a descriptive message
  *   including the trackId and the original error message.

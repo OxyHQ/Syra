@@ -106,8 +106,8 @@ const resolveStreamMock = resolveStream as jest.Mock;
 const createAudioPlayerMock = createAudioPlayer as jest.Mock;
 const attachSourceMock = attachSource as jest.Mock;
 
-/** Audius stream-only track → routed through resolveStream / the stream endpoint. */
-const audiusTrack: Track = {
+/** Track with HLS renditions → routed through resolveStream / the stream endpoint. */
+const hlsTrack: Track = {
   id: '6a34c2c5d1646e517424358f',
   title: 'Track One',
   artistId: '6a34c2c5d1646e5174243590',
@@ -115,8 +115,30 @@ const audiusTrack: Track = {
   duration: 180,
   isExplicit: false,
   isAvailable: true,
-  source: 'audius',
+  source: 'upload',
   status: 'ready',
+  hls: [{ manifestKey: 'hls/a/master.m3u8', bitrateKbps: 128, encrypted: true }],
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+};
+
+/**
+ * Uploaded track with no HLS renditions → no stream resolution, so playback
+ * falls back to the plain authenticated-URL path and the receiver is handed a
+ * PROGRESSIVE stream. This is the only way a progressive stream reaches the
+ * cast receiver now that provider streams are gone.
+ */
+const progressiveTrack: Track = {
+  id: '6a34c2c5d1646e5174243591',
+  title: 'Track Two',
+  artistId: '6a34c2c5d1646e5174243590',
+  artistName: 'Artist One',
+  duration: 200,
+  isExplicit: false,
+  isAvailable: true,
+  source: 'upload',
+  status: 'ready',
+  audioSource: { url: '/audio/track-two.mp3', format: 'mp3' },
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
@@ -184,7 +206,7 @@ describe('playerStore — Google Cast routing', () => {
     fireCastSessionState('connected');
     expect(usePlayerStore.getState().isCasting).toBe(true);
 
-    await usePlayerStore.getState().playTrack(audiusTrack);
+    await usePlayerStore.getState().playTrack(hlsTrack);
 
     expect(castTestEngine.replace).toHaveBeenCalledWith({ uri: 'https://cdn/hls/a.m3u8' });
     expect(castController.setMediaMetadata).toHaveBeenCalled();
@@ -196,19 +218,16 @@ describe('playerStore — Google Cast routing', () => {
     expect(usePlayerStore.getState().player).toBe(castTestEngine);
   });
 
-  it('loads an Audius progressive stream onto the cast receiver as audio/mpeg, not HLS', async () => {
-    resolveStreamMock.mockResolvedValue({
-      url: 'https://audius-cdn/track.mp3',
-      type: 'audius',
-      expiresAt: null,
-    });
-
+  it('loads a progressive stream onto the cast receiver as audio/mpeg, not HLS', async () => {
     fireCastSessionState('connected');
     expect(usePlayerStore.getState().isCasting).toBe(true);
 
-    await usePlayerStore.getState().playTrack(audiusTrack);
+    await usePlayerStore.getState().playTrack(progressiveTrack);
 
-    expect(castTestEngine.replace).toHaveBeenCalledWith({ uri: 'https://audius-cdn/track.mp3' });
+    // No HLS renditions → no stream resolution → the authenticated-URL path,
+    // which falls back to the track's own audio source.
+    expect(resolveStreamMock).not.toHaveBeenCalled();
+    expect(castTestEngine.replace).toHaveBeenCalledWith({ uri: 'https://api.syra.fm/audio/track-two.mp3' });
     // A progressive MP3 must NOT be announced as HLS or the receiver plays silence.
     expect(castController.setContentType).toHaveBeenCalledWith(CAST_PROGRESSIVE_CONTENT_TYPE);
     expect(getCastContentType()).toBe(CAST_PROGRESSIVE_CONTENT_TYPE);
@@ -219,7 +238,7 @@ describe('playerStore — Google Cast routing', () => {
     resolveStreamMock.mockResolvedValue({ url: 'https://cdn/hls/b.m3u8', type: 'hls', expiresAt: null });
     const previousPlayer = makeFakeEngine();
     usePlayerStore.setState({
-      currentTrack: audiusTrack,
+      currentTrack: hlsTrack,
       currentTime: 30,
       isPlaying: true,
       isCasting: false,
@@ -243,7 +262,7 @@ describe('playerStore — Google Cast routing', () => {
     resolveStreamMock.mockResolvedValue({ url: 'https://cdn/hls/c.m3u8', type: 'hls', expiresAt: null });
     setCastSessionState('connected');
     usePlayerStore.setState({
-      currentTrack: audiusTrack,
+      currentTrack: hlsTrack,
       currentTime: 12,
       isPlaying: true,
       isCasting: true,

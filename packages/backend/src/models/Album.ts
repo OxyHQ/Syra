@@ -17,11 +17,10 @@ export interface IAlbum extends Omit<Album, 'id' | '_id' | 'createdAt' | 'update
 
 const ExternalIdsSchema = new Schema<ExternalIds>({
   isrc: { type: String },
-  audiusId: { type: String },
 }, { _id: false });
 
 const SourceProvenanceSchema = new Schema<SourceProvenance>({
-  provider: { type: String, enum: ['upload', 'cc', 'audius'] as CatalogSource[], required: true },
+  provider: { type: String, enum: ['upload', 'cc'] as CatalogSource[], required: true },
   externalId: { type: String, required: true },
   importedAt: { type: String, required: true },
   fields: [{ type: String }],
@@ -69,7 +68,7 @@ const AlbumSchema = new Schema<IAlbum>({
   primaryColor: { type: String },
   secondaryColor: { type: String },
   // Catalog provenance
-  source: { type: String, enum: ['upload', 'cc', 'audius'] as CatalogSource[], index: true },
+  source: { type: String, enum: ['upload', 'cc'] as CatalogSource[], index: true },
   externalIds: { type: ExternalIdsSchema },
   sources: [{ type: SourceProvenanceSchema }],
 }, {
@@ -83,7 +82,6 @@ AlbumSchema.index({ popularity: -1 });
 AlbumSchema.index({ releaseDate: -1 });
 // External identifier lookups
 AlbumSchema.index({ 'externalIds.isrc': 1 }, { sparse: true });
-AlbumSchema.index({ 'externalIds.audiusId': 1 }, { sparse: true });
 
 export const AlbumModel: mongoose.Model<IAlbum> =
   (mongoose.models.Album as mongoose.Model<IAlbum>) ??

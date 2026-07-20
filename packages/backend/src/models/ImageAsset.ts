@@ -36,7 +36,7 @@ export interface IImageAsset extends Document {
 }
 
 const CatalogMetadataSchema = new Schema<ImageAssetCatalogMetadata>({
-  provider: { type: String, enum: ['upload', 'cc', 'audius', 'rss', 'syra'] as CatalogImageProvider[] },
+  provider: { type: String, enum: ['upload', 'cc', 'rss', 'syra'] as CatalogImageProvider[] },
   entityType: { type: String, enum: ['artist', 'track', 'album', 'playlist', 'podcast', 'episode'] },
   externalId: { type: String },
   size: { type: String },

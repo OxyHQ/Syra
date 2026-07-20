@@ -10,7 +10,6 @@ import { getMadeForYou as getPersonalisedMadeForYou } from '../services/recommen
 import {
   getRequestUserId,
   playableTrackFilter,
-  resolveCatalogPlaybackOptions,
 } from '../utils/catalogVisibility';
 import {
   findAlbumsWithPlayableTracks,
@@ -80,7 +79,6 @@ export const getHomeBrowse = async (req: Request, res: Response, next: NextFunct
     }
 
     const userId = getRequestUserId(req as AuthRequest);
-    const playbackOptions = await resolveCatalogPlaybackOptions(userId);
     const tracksLimit = parseBoundedLimit(req.query.tracksLimit, 20, 50);
     const sectionLimit = parseBoundedLimit(req.query.sectionLimit, 8, 20);
     const madeForYouHalf = Math.max(1, Math.floor(sectionLimit / 2));
@@ -92,23 +90,23 @@ export const getHomeBrowse = async (req: Request, res: Response, next: NextFunct
       popularArtists,
       tracks,
     ] = await Promise.all([
-      findAlbumsWithPlayableTracks({}, playbackOptions, {
+      findAlbumsWithPlayableTracks({}, {
         sort: withImageFirstSort('album', { popularity: -1, playCount: -1 }),
         limit: madeForYouHalf,
       }),
-      findPlaylistsWithPlayableTracks({ visibility: PlaylistVisibility.PUBLIC }, playbackOptions, {
+      findPlaylistsWithPlayableTracks({ visibility: PlaylistVisibility.PUBLIC }, {
         sort: withImageFirstSort('playlist', { followers: -1, createdAt: -1 }),
         limit: madeForYouHalf,
       }),
-      findAlbumsWithPlayableTracks({}, playbackOptions, {
+      findAlbumsWithPlayableTracks({}, {
         sort: withImageFirstSort('album', { popularity: -1, releaseDate: -1 }),
         limit: sectionLimit,
       }),
-      findArtistsWithPlayableTracks({}, playbackOptions, {
+      findArtistsWithPlayableTracks({}, {
         sort: withImageFirstSort('artist', { popularity: -1, 'stats.followers': -1 }),
         limit: sectionLimit,
       }),
-      TrackModel.find(playableTrackFilter({}, playbackOptions))
+      TrackModel.find(playableTrackFilter({}))
         .sort(withImageFirstSort('track', { popularity: -1, playCount: -1, createdAt: -1 }))
         .limit(tracksLimit)
         .lean(),
@@ -127,7 +125,7 @@ export const getHomeBrowse = async (req: Request, res: Response, next: NextFunct
     };
 
     if (userId) {
-      const personalised = await getPersonalisedMadeForYou(userId, sectionLimit, playbackOptions);
+      const personalised = await getPersonalisedMadeForYou(userId, sectionLimit);
       madeForYou = {
         albums: formatAlbumsWithCoverArt(madeForYouAlbums),
         playlists: formatPlaylistsWithCoverArt(madeForYouPlaylists),
@@ -139,11 +137,11 @@ export const getHomeBrowse = async (req: Request, res: Response, next: NextFunct
       const sparse = madeForYouAlbums.length + madeForYouPlaylists.length < madeForYouHalf;
       const [fallbackTracks, fallbackArtists] = sparse
         ? await Promise.all([
-            TrackModel.find(playableTrackFilter({}, playbackOptions))
+            TrackModel.find(playableTrackFilter({}))
               .sort(withImageFirstSort('track', { popularity: -1, playCount: -1, createdAt: -1 }))
               .limit(sectionLimit)
               .lean(),
-            findArtistsWithPlayableTracks({}, playbackOptions, {
+            findArtistsWithPlayableTracks({}, {
               sort: withImageFirstSort('artist', { popularity: -1, 'stats.followers': -1 }),
               limit: sectionLimit,
             }),
@@ -200,18 +198,17 @@ export const getGenres = async (req: Request, res: Response, next: NextFunction)
     }
 
     const userId = getRequestUserId(req as AuthRequest);
-    const playbackOptions = await resolveCatalogPlaybackOptions(userId);
 
     // Aggregate unique genres from playable tracks, so genres only surface when
     // the current user can actually play music in that genre.
-    const trackGenres = await TrackModel.distinct('genre', playableTrackFilter({}, playbackOptions));
+    const trackGenres = await TrackModel.distinct('genre', playableTrackFilter({}));
 
     const allGenres = [...new Set(trackGenres.flat().filter(Boolean))];
 
     // Get a playable sample track for each genre to supply cover art.
     const genresWithSamples = await Promise.all(
       allGenres.slice(0, 20).map(async (genre) => {
-        const sampleTracks = await TrackModel.find(playableTrackFilter({ genre: genre }, playbackOptions))
+        const sampleTracks = await TrackModel.find(playableTrackFilter({ genre: genre }))
           .sort(withImageFirstSort('track', { popularity: -1, playCount: -1 }))
           .limit(1)
           .lean();
@@ -248,11 +245,10 @@ export const getGenreTracks = async (req: Request, res: Response, next: NextFunc
     }
 
     const userId = getRequestUserId(req as AuthRequest);
-    const playbackOptions = await resolveCatalogPlaybackOptions(userId);
     const limit = parseBoundedLimit(req.query.limit, 50);
     const offset = parseOffset(req.query.offset);
 
-    const tracks = await TrackModel.find(playableTrackFilter({ genre }, playbackOptions))
+    const tracks = await TrackModel.find(playableTrackFilter({ genre }))
       .sort(withImageFirstSort('track', { popularity: -1, playCount: -1, createdAt: -1 }))
       .skip(offset)
       .limit(limit)
@@ -282,11 +278,10 @@ export const getPopularTracks = async (req: Request, res: Response, next: NextFu
     }
 
     const userId = getRequestUserId(req as AuthRequest);
-    const playbackOptions = await resolveCatalogPlaybackOptions(userId);
     const limit = parseBoundedLimit(req.query.limit, 20);
     const offset = parseOffset(req.query.offset);
 
-    const tracks = await TrackModel.find(playableTrackFilter({}, playbackOptions))
+    const tracks = await TrackModel.find(playableTrackFilter({}))
       .sort(withImageFirstSort('track', { popularity: -1, playCount: -1, createdAt: -1 }))
       .skip(offset)
       .limit(limit)
@@ -318,9 +313,8 @@ export const getPopularAlbums = async (req: Request, res: Response, next: NextFu
     const limit = parseBoundedLimit(req.query.limit, 20);
     const offset = parseOffset(req.query.offset);
     const userId = getRequestUserId(req as AuthRequest);
-    const playbackOptions = await resolveCatalogPlaybackOptions(userId);
 
-    const albums = await findAlbumsWithPlayableTracks({}, playbackOptions, {
+    const albums = await findAlbumsWithPlayableTracks({}, {
       sort: withImageFirstSort('album', { popularity: -1, releaseDate: -1 }),
       offset,
       limit,
@@ -352,9 +346,8 @@ export const getPopularArtists = async (req: Request, res: Response, next: NextF
     const limit = parseBoundedLimit(req.query.limit, 20);
     const offset = parseOffset(req.query.offset);
     const userId = getRequestUserId(req as AuthRequest);
-    const playbackOptions = await resolveCatalogPlaybackOptions(userId);
 
-    const artists = await findArtistsWithPlayableTracks({}, playbackOptions, {
+    const artists = await findArtistsWithPlayableTracks({}, {
       sort: withImageFirstSort('artist', { popularity: -1, 'stats.followers': -1 }),
       offset,
       limit,
@@ -387,23 +380,22 @@ export const getMadeForYou = async (req: Request, res: Response, next: NextFunct
     }
 
     const userId = getRequestUserId(req as AuthRequest);
-    const playbackOptions = await resolveCatalogPlaybackOptions(userId);
     const limit = parseBoundedLimit(req.query.limit, 20);
     const half = Math.max(1, Math.floor(limit / 2));
 
     const [albums, playlists] = await Promise.all([
-      findAlbumsWithPlayableTracks({}, playbackOptions, {
+      findAlbumsWithPlayableTracks({}, {
         sort: withImageFirstSort('album', { popularity: -1, playCount: -1 }),
         limit: half,
       }),
-      findPlaylistsWithPlayableTracks({ visibility: PlaylistVisibility.PUBLIC }, playbackOptions, {
+      findPlaylistsWithPlayableTracks({ visibility: PlaylistVisibility.PUBLIC }, {
         sort: withImageFirstSort('playlist', { followers: -1, createdAt: -1 }),
         limit: half,
       }),
     ]);
 
     if (userId) {
-      const personalised = await getPersonalisedMadeForYou(userId, limit, playbackOptions);
+      const personalised = await getPersonalisedMadeForYou(userId, limit);
       res.set('Cache-Control', 'private, max-age=60, stale-while-revalidate=300');
       res.set('Vary', 'Authorization');
       res.json({
@@ -421,11 +413,11 @@ export const getMadeForYou = async (req: Request, res: Response, next: NextFunct
     const sparse = albums.length + playlists.length < half;
     const [tracks, artists] = sparse
       ? await Promise.all([
-          TrackModel.find(playableTrackFilter({}, playbackOptions))
+          TrackModel.find(playableTrackFilter({}))
             .sort(withImageFirstSort('track', { popularity: -1, playCount: -1, createdAt: -1 }))
             .limit(limit)
             .lean(),
-          findArtistsWithPlayableTracks({}, playbackOptions, {
+          findArtistsWithPlayableTracks({}, {
             sort: withImageFirstSort('artist', { popularity: -1, 'stats.followers': -1 }),
             limit,
           }),
@@ -456,10 +448,9 @@ export const getCharts = async (req: Request, res: Response, next: NextFunction)
     }
 
     const userId = getRequestUserId(req as AuthRequest);
-    const playbackOptions = await resolveCatalogPlaybackOptions(userId);
     const limit = parseBoundedLimit(req.query.limit, 50);
 
-    const tracks = await TrackModel.find(playableTrackFilter({}, playbackOptions))
+    const tracks = await TrackModel.find(playableTrackFilter({}))
       .sort(withImageFirstSort('track', { popularity: -1, playCount: -1 }))
       .limit(limit)
       .lean();

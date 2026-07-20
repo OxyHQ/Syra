@@ -397,12 +397,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     return queue;
   };
 
-  const shouldResolveViaStreamEndpoint = (track: Track): boolean => {
-    const hasHls = track.status === 'ready' && Array.isArray(track.hls) && track.hls.length > 0;
-    const isAudiusProviderTrack = track.source === 'audius' && !track.audioSource;
-
-    return hasHls || isAudiusProviderTrack;
-  };
+  const shouldResolveViaStreamEndpoint = (track: Track): boolean =>
+    track.status === 'ready' && Array.isArray(track.hls) && track.hls.length > 0;
 
   const prefetchQueueStreams = (
     tracks: Track[],
@@ -548,7 +544,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         logger.debug('Routing playback to cast receiver', { trackId: media.id });
         // Metadata and content type must be set before replace() so they are
         // applied to the load. HLS streams use the m3u8 MIME type; everything
-        // else (Audius / progressive MP3, or the legacy no-resolution path) is a
+        // else (a progressive MP3 from the legacy no-resolution path) is a
         // progressive stream the receiver must not be told is HLS.
         castController.setMediaMetadata(buildCastMetadata());
         castController.setContentType(
@@ -564,7 +560,6 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     const mode =
       resolution !== null
         ? pickPlaybackMode({
-            type: resolution.type,
             isWeb: Platform.OS === 'web',
             canPlayHlsNatively: canPlayHlsNatively(),
           })
@@ -626,9 +621,6 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
    */
   const getAudioUrl = async (track: Track): Promise<string> => {
     if (!track.audioSource) {
-      if (track.source === 'audius') {
-        throw new Error('This Audius track is not available through Syra streaming. Enable direct Audius streaming in Settings to try the provider stream.');
-      }
       throw new Error(`Track ${track.id} has no playable audio source`);
     }
 
@@ -650,9 +642,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   };
 
   /**
-   * Resolve the stream for tracks that have Phase-3 HLS renditions or are
-   * Audius-sourced. Returns null for tracks that should use the legacy
-   * `getAudioUrl` path (still-processing, failed, or upload-only).
+   * Resolve the stream for tracks that have Phase-3 HLS renditions. Returns
+   * null for tracks that should use the legacy `getAudioUrl` path
+   * (still-processing, failed, or upload-only).
    */
   /**
    * Record a play in the user's recently-played history.
@@ -957,7 +949,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           context: context || null,
         });
 
-        // Resolve stream — Phase-3 HLS or Audius tracks use resolveStream;
+        // Resolve stream — Phase-3 HLS tracks use resolveStream;
         // legacy/processing tracks fall back to the authenticated-URL path.
         const resolution = await getPhase3Resolution(track);
         const audioUrl = resolution

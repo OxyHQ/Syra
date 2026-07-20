@@ -2,9 +2,9 @@ import { pickCatalogImageUrl, pickImageUrl } from './pickImage';
 import type { CatalogImageSizes, TrackImage } from '@syra/shared-types';
 
 const IMAGES: TrackImage[] = [
-  { url: '/api/images/111111111111111111111111', width: 150, height: 150, source: 'audius' },
-  { url: '/api/images/222222222222222222222222', width: 480, height: 480, source: 'audius' },
-  { url: '/api/images/333333333333333333333333', width: 1000, height: 1000, source: 'audius' },
+  { url: '/api/images/111111111111111111111111', width: 150, height: 150, source: 'upload' },
+  { url: '/api/images/222222222222222222222222', width: 480, height: 480, source: 'upload' },
+  { url: '/api/images/333333333333333333333333', width: 1000, height: 1000, source: 'upload' },
 ];
 
 const API_IMAGES = 'http://localhost:3000/api/images';
@@ -93,8 +93,8 @@ describe('pickImageUrl — fallback behaviour', () => {
 describe('pickImageUrl — robustness', () => {
   it('entry with missing width treated as 0, does not crash', () => {
     const imgs = [
-      { url: 'no-width', source: 'audius' } as unknown as TrackImage,
-      { url: '/api/images/bbbbbbbbbbbbbbbbbbbbbbbb', width: 480, height: 480, source: 'audius' } as TrackImage,
+      { url: 'no-width', source: 'upload' } as unknown as TrackImage,
+      { url: '/api/images/bbbbbbbbbbbbbbbbbbbbbbbb', width: 480, height: 480, source: 'upload' } as TrackImage,
     ];
     // preferredWidth 200 → only 480 qualifies
     expect(pickImageUrl(imgs, FALLBACK, 200)).toBe(`${API_IMAGES}/bbbbbbbbbbbbbbbbbbbbbbbb`);
@@ -102,8 +102,8 @@ describe('pickImageUrl — robustness', () => {
 
   it('all entries missing width → returns the first (ties go to first iterated)', () => {
     const imgs = [
-      { url: '/api/images/cccccccccccccccccccccccc', source: 'audius' } as unknown as TrackImage,
-      { url: '/api/images/dddddddddddddddddddddddd', source: 'audius' } as unknown as TrackImage,
+      { url: '/api/images/cccccccccccccccccccccccc', source: 'upload' } as unknown as TrackImage,
+      { url: '/api/images/dddddddddddddddddddddddd', source: 'upload' } as unknown as TrackImage,
     ];
     // all widths normalised to 0; no entry >= 1; largest-fallback path iterates
     // in order and keeps the last one with width > best (never since 0 > 0 = false)
@@ -117,13 +117,13 @@ describe('pickImageUrl — robustness', () => {
   });
 
   it('single image, any preferredWidth → returns that image url', () => {
-    const single: TrackImage[] = [{ url: '/api/images/eeeeeeeeeeeeeeeeeeeeeeee', width: 480, height: 480, source: 'audius' }];
+    const single: TrackImage[] = [{ url: '/api/images/eeeeeeeeeeeeeeeeeeeeeeee', width: 480, height: 480, source: 'upload' }];
     expect(pickImageUrl(single, FALLBACK, 80)).toBe(`${API_IMAGES}/eeeeeeeeeeeeeeeeeeeeeeee`);
     expect(pickImageUrl(single, FALLBACK, 800)).toBe(`${API_IMAGES}/eeeeeeeeeeeeeeeeeeeeeeee`);
   });
 
   it('does not return external catalog URLs', () => {
-    const external: TrackImage[] = [{ url: 'https://cdn.example.com/cover.jpg', width: 480, height: 480, source: 'audius' }];
+    const external: TrackImage[] = [{ url: 'https://cdn.example.com/cover.jpg', width: 480, height: 480, source: 'upload' }];
     expect(pickImageUrl(external, undefined, 300)).toBeUndefined();
   });
 

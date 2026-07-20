@@ -40,7 +40,6 @@ const searchResultWithPendingResponseSchema = z.object({
   hasMore: z.boolean(),
   offset: z.number(),
   limit: z.number(),
-  pendingAudiusImport: z.boolean().optional(),
   pendingPodcastImport: z.boolean().optional(),
 }).passthrough();
 

@@ -68,7 +68,7 @@ export interface CcConnectorDeps {
  * downloadable (`audiodownload_allowed === false`) are also rejected since
  * we cannot re-host the audio.
  *
- * Unlike the Audius connector there is no `streamUrl` — the flow is:
+ * There is no `streamUrl` — the flow is:
  *   download via `audiodownload` → ingest → store on our S3 → serve via HLS.
  */
 export class CcConnector implements MusicSourceConnector {

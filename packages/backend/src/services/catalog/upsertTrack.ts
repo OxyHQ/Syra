@@ -36,7 +36,6 @@ function contributedFields(external: ExternalTrack): string[] {
   if (external.durationSec) fields.push('duration');
   if (external.isrc) fields.push('isrc');
   if (external.images?.length) fields.push('images');
-  if (external.streamUrl) fields.push('streamUrl');
   if (external.downloadUrl) fields.push('downloadUrl');
   if (external.album?.name) fields.push('albumName');
   if (external.artists.length > 1) fields.push('artistIds');
@@ -87,16 +86,12 @@ async function findByIsrc(isrc: string): Promise<ITrack | null> {
 
 /**
  * Find an existing track by provenance — same provider + externalId recorded
- * in sources[], or by audiusId for Audius tracks (tier 2).
+ * in sources[] (tier 2).
  */
 async function findByProvenance(
   source: CatalogSource,
   externalId: string,
 ): Promise<ITrack | null> {
-  if (source === 'audius') {
-    const byAudiusId = await TrackModel.findOne({ 'externalIds.audiusId': externalId });
-    if (byAudiusId) return byAudiusId;
-  }
   return TrackModel.findOne({
     sources: { $elemMatch: { provider: source, externalId } },
   });
@@ -141,7 +136,7 @@ async function findByFuzzy(
  *
  * Dedup order:
  *  1. ISRC (`externalIds.isrc`) — strongest global identifier.
- *  2. Provenance match — same provider + externalId in sources[], or audiusId.
+ *  2. Provenance match — same provider + externalId in sources[].
  *  3. Fuzzy — normalized title + primary artistName + duration ±2s.
  *
  * The primary artist is resolved (and upserted) via `upsertArtist` so that
@@ -219,14 +214,12 @@ export async function upsertTrack(
       isAvailable: true,
       externalIds: {
         ...(external.isrc ? { isrc: external.isrc } : {}),
-        ...(source === 'audius' ? { audiusId: external.externalId } : {}),
       },
       coverArt: mirroredCover?.imageId,
       coverArtSizes: mirroredCover?.imageSizes,
       images: [],
       primaryColor: mirroredCover?.primaryColor,
       secondaryColor: mirroredCover?.secondaryColor,
-      streamUrl: external.streamUrl,
       genre: external.genre,
       mood: external.mood,
       tags: external.tags ?? [],
@@ -263,19 +256,9 @@ export async function upsertTrack(
   } else {
     assignMissingColors(existing, mirroredCover);
   }
-  // Only set streamUrl if not already present.
-  if (external.streamUrl && !existing.streamUrl) {
-    existing.streamUrl = external.streamUrl;
-  }
   // Merge externalIds without clobbering.
   if (external.isrc && !existing.externalIds?.isrc) {
     existing.externalIds = { ...(existing.externalIds ?? {}), isrc: external.isrc };
-  }
-  if (source === 'audius' && external.externalId && !existing.externalIds?.audiusId) {
-    existing.externalIds = {
-      ...(existing.externalIds ?? {}),
-      audiusId: external.externalId,
-    };
   }
 
   // Provider metadata — only set when incoming has a value AND existing lacks one,

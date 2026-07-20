@@ -3,8 +3,8 @@ import { MAX_PAGE_SIZE, parseBoundedLimit, parseClampedLimit, parseOffset } from
 
 /**
  * These two helpers have the same shape and DIFFERENT published contracts, which
- * is how a shared implementation previously changed `?limit=0` on the Audius
- * search endpoint from 1 to 20. The boundary cases below are the contracts —
+ * is how a shared implementation previously changed `?limit=0` on a
+ * clamped search endpoint from 1 to 20. The boundary cases below are the contracts —
  * if one of these assertions disagrees with the implementation, the
  * implementation is what changed.
  */
