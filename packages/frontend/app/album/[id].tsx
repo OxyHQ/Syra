@@ -17,8 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { toast } from '@/lib/sonner';
 import { useOxy } from '@oxyhq/services';
-import { AmbientArtworkTheme } from '@/components/AmbientArtworkTheme';
-import { useArtworkSeed } from '@/hooks/useArtworkSeed';
+import { useViewAmbient } from '@/hooks/useAmbientArtwork';
 
 /**
  * Album Screen
@@ -38,7 +37,6 @@ const AlbumScreen: React.FC = () => {
   const toggleLike = useToggleLikeTrack();
   const isSaved = id ? isAlbumSaved(id) : false;
   const [isDownloaded, setIsDownloaded] = useState(false);
-  const { seed, activate: activateSeed, deactivate: deactivateSeed } = useArtworkSeed();
 
   const handleToggleSave = () => {
     if (!id) {
@@ -70,6 +68,15 @@ const AlbumScreen: React.FC = () => {
   const tracks = data?.tracks ?? [];
   const canPlay = tracks.length > 0;
   const isCatalogLoading = isPrivateApiPending || isLoading;
+
+  const albumCoverImage = album
+    ? pickCatalogImageUrl(undefined, album.coverArt, 'detailArtwork', album.coverArtSizes)
+    : undefined;
+
+  // VIEW MODE: theme the WHOLE app from the album cover ON VIEW (once it resolves)
+  // and restore the default on leave. Called before the early returns so the hook
+  // order is stable; it no-ops until the cover URL is available.
+  useViewAmbient(id, albumCoverImage);
 
   const formatReleaseDate = (dateString: string): string => {
     const date = new Date(dateString);
@@ -118,37 +125,30 @@ const AlbumScreen: React.FC = () => {
     );
   }
 
-  const albumCoverImage = pickCatalogImageUrl(undefined, album.coverArt, 'detailArtwork', album.coverArtSizes);
-
-  // Hover the cover → extract its dominant colour → re-theme the album's ambient
-  // surfaces. `AlbumView` reads the scoped theme via `useTheme()` inside the
-  // ambient region, so the whole hero + tracklist eases into the artwork palette;
-  // leaving the cover restores the app preset. Native is a no-op (web-only).
+  // The whole app is themed from this album's cover ON VIEW (see `useViewAmbient`
+  // above) — the hero + tracklist read the app theme via `useTheme()`. No
+  // per-screen theme wrapper and no cover-hover theming on detail pages.
   return (
-    <AmbientArtworkTheme seed={seed}>
-      <AlbumView
-        album={album}
-        tracks={tracks}
-        albumCoverImage={albumCoverImage}
-        onCoverHoverIn={() => id && activateSeed(id, albumCoverImage)}
-        onCoverHoverOut={deactivateSeed}
-        currentTrack={currentTrack}
-        isPlaying={isPlaying}
-        isSaved={isSaved}
-        isDownloaded={isDownloaded}
-        setIsDownloaded={setIsDownloaded}
-        canPlay={canPlay}
-        shuffle={shuffle}
-        toggleShuffle={toggleShuffle}
-        isTrackLiked={isTrackLiked}
-        onPlayAlbum={handlePlayAlbum}
-        onToggleSave={handleToggleSave}
-        onToggleTrackLike={handleToggleTrackLike}
-        onTrackPress={handleTrackPress}
-        onGoToArtist={() => router.push(`/p/${album.artistId}`)}
-        formatReleaseDate={formatReleaseDate}
-      />
-    </AmbientArtworkTheme>
+    <AlbumView
+      album={album}
+      tracks={tracks}
+      albumCoverImage={albumCoverImage}
+      currentTrack={currentTrack}
+      isPlaying={isPlaying}
+      isSaved={isSaved}
+      isDownloaded={isDownloaded}
+      setIsDownloaded={setIsDownloaded}
+      canPlay={canPlay}
+      shuffle={shuffle}
+      toggleShuffle={toggleShuffle}
+      isTrackLiked={isTrackLiked}
+      onPlayAlbum={handlePlayAlbum}
+      onToggleSave={handleToggleSave}
+      onToggleTrackLike={handleToggleTrackLike}
+      onTrackPress={handleTrackPress}
+      onGoToArtist={() => router.push(`/p/${album.artistId}`)}
+      formatReleaseDate={formatReleaseDate}
+    />
   );
 };
 
@@ -156,8 +156,6 @@ interface AlbumViewProps {
   album: NonNullable<Awaited<ReturnType<typeof musicService.getAlbumById>>>;
   tracks: Track[];
   albumCoverImage: string | undefined;
-  onCoverHoverIn: () => void;
-  onCoverHoverOut: () => void;
   currentTrack: Track | null;
   isPlaying: boolean;
   isSaved: boolean;
@@ -176,16 +174,15 @@ interface AlbumViewProps {
 }
 
 /**
- * The album's ambient region. Reads `useTheme()` INSIDE `<AmbientArtworkTheme>`
- * so its surfaces re-theme to the artwork seed while hovering the cover, then
- * revert to the app preset on hover-out.
+ * The album's presentational view. Reads the app theme via `useTheme()`; the app
+ * is already themed from the album cover on view (see `useViewAmbient` in
+ * `AlbumScreen`), so the hero + tracklist reflect the artwork palette without any
+ * cover-hover handling here.
  */
 const AlbumView: React.FC<AlbumViewProps> = ({
   album,
   tracks,
   albumCoverImage,
-  onCoverHoverIn,
-  onCoverHoverOut,
   currentTrack,
   isPlaying,
   isSaved,
@@ -226,13 +223,9 @@ const AlbumView: React.FC<AlbumViewProps> = ({
         <LinearGradient colors={gradientColors} locations={[0, 0.45, 1]} style={styles.heroSection}>
           {/* Header Section */}
           <View style={styles.header}>
-            {/* Album Cover — hover (web) / focus to tint the ambient region */}
-            <Pressable
+            {/* Album Cover (the app is themed from it on view, not on hover) */}
+            <View
               style={styles.coverContainer}
-              onHoverIn={onCoverHoverIn}
-              onHoverOut={onCoverHoverOut}
-              onFocus={onCoverHoverIn}
-              onBlur={onCoverHoverOut}
               accessibilityRole="image"
               accessibilityLabel={`${album.title} cover art`}
             >
@@ -247,7 +240,7 @@ const AlbumView: React.FC<AlbumViewProps> = ({
                   <Ionicons name="musical-notes" size={64} color={theme.colors.textSecondary} />
                 </View>
               )}
-            </Pressable>
+            </View>
 
             {/* Album Info */}
             <View style={styles.infoContainer}>

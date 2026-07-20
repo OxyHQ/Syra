@@ -12,8 +12,7 @@ import { usePlayerStore } from '@/stores/playerStore';
 import { resolvePodcastImageUri } from '@/utils/podcastImages';
 import { stripHtml, formatPubDate, formatEpisodeDuration } from '@/utils/podcastFormat';
 import { formatDuration } from '@/utils/musicUtils';
-import { AmbientArtworkTheme } from '@/components/AmbientArtworkTheme';
-import { useArtworkSeed } from '@/hooks/useArtworkSeed';
+import { useViewAmbient } from '@/hooks/useAmbientArtwork';
 
 type EpisodeDetail = NonNullable<ReturnType<typeof useEpisode>['data']>;
 type EpisodeChapters = NonNullable<ReturnType<typeof useEpisodeChapters>['data']>;
@@ -35,7 +34,6 @@ const EpisodeScreen: React.FC = () => {
   const progress = useEpisodeProgress(id);
 
   const chaptersQuery = useEpisodeChapters(episode?.chapters?.url);
-  const { seed, activate: activateSeed, deactivate: deactivateSeed } = useArtworkSeed();
 
   const currentEpisode = usePlayerStore((s) => s.currentEpisode);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
@@ -47,6 +45,11 @@ const EpisodeScreen: React.FC = () => {
   const isCurrent = currentEpisode?.id === id;
   const artwork = resolvePodcastImageUri(episode, 'detailArtwork');
   const description = useMemo(() => stripHtml(episode?.description ?? episode?.summary), [episode]);
+
+  // VIEW MODE: theme the WHOLE app from the episode's cover ON VIEW (once it
+  // resolves) and restore the default on leave. Called before the early returns
+  // so the hook order stays stable; no-ops until the artwork URL is available.
+  useViewAmbient(id, artwork);
 
   const handlePlay = () => {
     if (!episode) {
@@ -93,28 +96,23 @@ const EpisodeScreen: React.FC = () => {
       ? 'Resume'
       : 'Play';
 
-  // Hover the artwork → extract its dominant colour → re-theme the episode's
-  // ambient surfaces. `EpisodeView` reads the scoped theme via `useTheme()`
-  // inside the ambient region, so the hero + sections ease into the artwork
-  // palette; leaving the artwork restores the app preset. Native is a no-op.
+  // The whole app is themed from this episode's cover ON VIEW (see
+  // `useViewAmbient` above). No per-screen theme wrapper and no cover-hover
+  // theming — `EpisodeView` reads the already-themed app theme.
   return (
-    <AmbientArtworkTheme seed={seed}>
-      <EpisodeView
-        episode={episode}
-        detail={detail}
-        artwork={artwork}
-        description={description}
-        chapters={chaptersQuery.data}
-        isCurrent={isCurrent}
-        isPlaying={isPlaying}
-        playLabel={playLabel}
-        onCoverHoverIn={() => id && activateSeed(id, artwork)}
-        onCoverHoverOut={deactivateSeed}
-        onPlay={handlePlay}
-        onChapterPress={handleChapterPress}
-        onOpenShow={() => router.push({ pathname: '/podcasts/[id]', params: { id: episode.podcastId } })}
-      />
-    </AmbientArtworkTheme>
+    <EpisodeView
+      episode={episode}
+      detail={detail}
+      artwork={artwork}
+      description={description}
+      chapters={chaptersQuery.data}
+      isCurrent={isCurrent}
+      isPlaying={isPlaying}
+      playLabel={playLabel}
+      onPlay={handlePlay}
+      onChapterPress={handleChapterPress}
+      onOpenShow={() => router.push({ pathname: '/podcasts/[id]', params: { id: episode.podcastId } })}
+    />
   );
 };
 
@@ -127,17 +125,16 @@ interface EpisodeViewProps {
   isCurrent: boolean;
   isPlaying: boolean;
   playLabel: string;
-  onCoverHoverIn: () => void;
-  onCoverHoverOut: () => void;
   onPlay: () => void;
   onChapterPress: (startTime: number) => void;
   onOpenShow: () => void;
 }
 
 /**
- * The episode's ambient region. Reads `useTheme()` INSIDE `<AmbientArtworkTheme>`
- * so its surfaces re-theme to the artwork seed while hovering the artwork, then
- * revert to the app preset on hover-out.
+ * The episode's presentational view. Reads the app theme via `useTheme()`; the
+ * app is already themed from the episode cover on view (see `useViewAmbient` in
+ * `EpisodeScreen`), so the hero + sections reflect the artwork palette with no
+ * cover-hover handling here.
  */
 const EpisodeView: React.FC<EpisodeViewProps> = ({
   episode,
@@ -148,8 +145,6 @@ const EpisodeView: React.FC<EpisodeViewProps> = ({
   isCurrent,
   isPlaying,
   playLabel,
-  onCoverHoverIn,
-  onCoverHoverOut,
   onPlay,
   onChapterPress,
   onOpenShow,
@@ -167,12 +162,8 @@ const EpisodeView: React.FC<EpisodeViewProps> = ({
       >
         {/* Header */}
         <View style={styles.header}>
-          {/* Episode artwork — hover (web) / focus to tint the ambient region */}
-          <Pressable
-            onHoverIn={onCoverHoverIn}
-            onHoverOut={onCoverHoverOut}
-            onFocus={onCoverHoverIn}
-            onBlur={onCoverHoverOut}
+          {/* Episode artwork (the app is themed from it on view, not on hover) */}
+          <View
             accessibilityRole="image"
             accessibilityLabel={`${episode.title} artwork`}
           >
@@ -183,7 +174,7 @@ const EpisodeView: React.FC<EpisodeViewProps> = ({
                 <Ionicons name="mic" size={48} color={theme.colors.textSecondary} />
               </View>
             )}
-          </Pressable>
+          </View>
           <Pressable onPress={onOpenShow} accessibilityRole="link">
             <Text style={[styles.showLink, { color: theme.colors.primary }]} numberOfLines={1}>
               {episode.podcastTitle}

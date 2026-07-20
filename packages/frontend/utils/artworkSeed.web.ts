@@ -1,12 +1,18 @@
-import { argbFromRgb, seedHexFromImagePixels } from '@oxyhq/bloom/theme';
+import { argbFromRgb, hexFromArgb, seedsFromImagePixels } from '@oxyhq/bloom/theme';
+
+import type { ArtworkSeeds } from './artworkSeed.types';
 
 /**
- * Extract the dominant seed colour (`#rrggbb`) from an artwork image on web.
+ * Extract the top-3 seed colours from an artwork image on web.
  *
  * Draws the image to a small (~96×96) offscreen canvas, reads back the pixels,
  * packs each as an ARGB int, and runs Bloom's colour-engine image quantizer
- * (`seedHexFromImagePixels`) to pick the most theme-suitable seed. Extraction is
- * deterministic for a given image, so callers can cache the result per artwork.
+ * (`seedsFromImagePixels`, ranked best-first) to pick the most theme-suitable
+ * seeds. The top result becomes the app-wide `seed`; the 2nd/3rd (when present)
+ * become the pinned `secondarySeed` / `tertiarySeed` accents so the theme
+ * reflects the artwork's real supporting colours instead of hue-rotations.
+ * Extraction is deterministic for a given image, so callers can cache the result
+ * per artwork.
  *
  * Returns `null` (never throws) when extraction is not possible — no canvas
  * support, the image fails to load, or the canvas is CORS-tainted so
@@ -14,8 +20,8 @@ import { argbFromRgb, seedHexFromImagePixels } from '@oxyhq/bloom/theme';
  */
 const SAMPLE_SIZE = 96;
 
-export async function extractArtworkSeed(imageUrl: string): Promise<string | null> {
-  if (!canExtractArtworkSeed() || !imageUrl) return null;
+export async function extractArtworkSeeds(imageUrl: string): Promise<ArtworkSeeds | null> {
+  if (!canExtractArtworkSeeds() || !imageUrl) return null;
 
   const image = await loadImage(imageUrl);
   if (!image) return null;
@@ -49,15 +55,24 @@ export async function extractArtworkSeed(imageUrl: string): Promise<string | nul
   }
   if (pixels.length === 0) return null;
 
+  let seeds: number[];
   try {
-    return seedHexFromImagePixels(pixels);
+    // Ranked best-first; ask for up to 3 so we can pin secondary/tertiary accents.
+    seeds = seedsFromImagePixels(pixels, { desired: 3 });
   } catch {
     return null;
   }
+  if (seeds.length === 0) return null;
+
+  return {
+    seed: hexFromArgb(seeds[0]),
+    secondarySeed: seeds.length > 1 ? hexFromArgb(seeds[1]) : undefined,
+    tertiarySeed: seeds.length > 2 ? hexFromArgb(seeds[2]) : undefined,
+  };
 }
 
-/** Whether the current environment can extract a seed from an image. */
-export function canExtractArtworkSeed(): boolean {
+/** Whether the current environment can extract seeds from an image. */
+export function canExtractArtworkSeeds(): boolean {
   return typeof document !== 'undefined' && typeof document.createElement === 'function';
 }
 

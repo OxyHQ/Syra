@@ -20,8 +20,7 @@ import { usePlayerStore } from '@/stores/playerStore';
 import { resolvePodcastImageUri } from '@/utils/podcastImages';
 import { stripHtml } from '@/utils/podcastFormat';
 import { webViewStyle } from '@/utils/webStyles';
-import { AmbientArtworkTheme } from '@/components/AmbientArtworkTheme';
-import { useArtworkSeed } from '@/hooks/useArtworkSeed';
+import { useViewAmbient } from '@/hooks/useAmbientArtwork';
 
 /**
  * Podcast show screen — header (artwork, title, author, description), a Subscribe
@@ -37,7 +36,6 @@ const PodcastShowScreen: React.FC = () => {
   const progressMap = useEpisodeProgressMap();
   const isSubscribed = useIsSubscribed();
   const toggleSubscription = useToggleSubscription();
-  const { seed, activate: activateSeed, deactivate: deactivateSeed } = useArtworkSeed();
 
   const currentEpisode = usePlayerStore((s) => s.currentEpisode);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
@@ -54,6 +52,11 @@ const PodcastShowScreen: React.FC = () => {
   const subscribed = podcast ? isSubscribed(podcast.id) : false;
   const artwork = resolvePodcastImageUri(podcast, 'detailArtwork');
   const description = stripHtml(podcast?.description);
+
+  // VIEW MODE: theme the WHOLE app from the show's cover ON VIEW (once it
+  // resolves) and restore the default on leave. Called before the early returns
+  // so the hook order stays stable; no-ops until the artwork URL is available.
+  useViewAmbient(id, artwork);
 
   const handlePlayEpisode = (index: number) => {
     const episode = episodes[index];
@@ -87,32 +90,27 @@ const PodcastShowScreen: React.FC = () => {
     );
   }
 
-  // Hover the cover → extract its dominant colour → re-theme the show's ambient
-  // surfaces. `PodcastShowView` reads the scoped theme via `useTheme()` inside
-  // the ambient region, so the hero + episode list ease into the artwork
-  // palette; leaving the cover restores the app preset. Native is a no-op.
+  // The whole app is themed from this show's cover ON VIEW (see `useViewAmbient`
+  // above). No per-screen theme wrapper and no cover-hover theming —
+  // `PodcastShowView` reads the already-themed app theme.
   return (
-    <AmbientArtworkTheme seed={seed}>
-      <PodcastShowView
-        podcast={podcast}
-        episodes={episodes}
-        persons={showQuery.data?.persons ?? []}
-        artwork={artwork}
-        description={description}
-        subscribed={subscribed}
-        episodesPending={episodesQuery.isPending}
-        currentEpisodeId={currentEpisode?.id}
-        isPlaying={isPlaying}
-        progressMap={progressMap}
-        onCoverHoverIn={() => podcast.id && activateSeed(podcast.id, artwork)}
-        onCoverHoverOut={deactivateSeed}
-        onToggleSubscription={() =>
-          toggleSubscription.mutate({ podcastId: podcast.id, next: !subscribed, podcast })
-        }
-        onPlayEpisode={handlePlayEpisode}
-        onOpenEpisode={(episodeId) => router.push({ pathname: '/episode/[id]', params: { id: episodeId } })}
-      />
-    </AmbientArtworkTheme>
+    <PodcastShowView
+      podcast={podcast}
+      episodes={episodes}
+      persons={showQuery.data?.persons ?? []}
+      artwork={artwork}
+      description={description}
+      subscribed={subscribed}
+      episodesPending={episodesQuery.isPending}
+      currentEpisodeId={currentEpisode?.id}
+      isPlaying={isPlaying}
+      progressMap={progressMap}
+      onToggleSubscription={() =>
+        toggleSubscription.mutate({ podcastId: podcast.id, next: !subscribed, podcast })
+      }
+      onPlayEpisode={handlePlayEpisode}
+      onOpenEpisode={(episodeId) => router.push({ pathname: '/episode/[id]', params: { id: episodeId } })}
+    />
   );
 };
 
@@ -127,17 +125,16 @@ interface PodcastShowViewProps {
   currentEpisodeId: string | undefined;
   isPlaying: boolean;
   progressMap: ReturnType<typeof useEpisodeProgressMap>;
-  onCoverHoverIn: () => void;
-  onCoverHoverOut: () => void;
   onToggleSubscription: () => void;
   onPlayEpisode: (index: number) => void;
   onOpenEpisode: (episodeId: string) => void;
 }
 
 /**
- * The show's ambient region. Reads `useTheme()` INSIDE `<AmbientArtworkTheme>`
- * so its surfaces re-theme to the artwork seed while hovering the cover, then
- * revert to the app preset on hover-out.
+ * The show's presentational view. Reads the app theme via `useTheme()`; the app
+ * is already themed from the show cover on view (see `useViewAmbient` in
+ * `PodcastShowScreen`), so the hero + episode list reflect the artwork palette
+ * with no cover-hover handling here.
  */
 const PodcastShowView: React.FC<PodcastShowViewProps> = ({
   podcast,
@@ -150,8 +147,6 @@ const PodcastShowView: React.FC<PodcastShowViewProps> = ({
   currentEpisodeId,
   isPlaying,
   progressMap,
-  onCoverHoverIn,
-  onCoverHoverOut,
   onToggleSubscription,
   onPlayEpisode,
   onOpenEpisode,
@@ -177,12 +172,8 @@ const PodcastShowView: React.FC<PodcastShowViewProps> = ({
         {/* Header — cover-derived gradient hero (bleeds past the content padding). */}
         <LinearGradient colors={gradientColors} locations={[0, 0.45, 1]} style={styles.hero}>
         <View style={styles.header}>
-          {/* Show artwork — hover (web) / focus to tint the ambient region */}
-          <Pressable
-            onHoverIn={onCoverHoverIn}
-            onHoverOut={onCoverHoverOut}
-            onFocus={onCoverHoverIn}
-            onBlur={onCoverHoverOut}
+          {/* Show artwork (the app is themed from it on view, not on hover) */}
+          <View
             accessibilityRole="image"
             accessibilityLabel={`${podcast.title} cover art`}
           >
@@ -193,7 +184,7 @@ const PodcastShowView: React.FC<PodcastShowViewProps> = ({
                 <Ionicons name="mic" size={48} color={theme.colors.textSecondary} />
               </View>
             )}
-          </Pressable>
+          </View>
           <View style={styles.headerInfo}>
             <Text style={[styles.showTitle, { color: theme.colors.text }]} numberOfLines={3}>
               {podcast.title}

@@ -24,8 +24,7 @@ import { webViewStyle } from '@/utils/webStyles';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { toast } from '@/lib/sonner';
 import { useOxy } from '@oxyhq/services';
-import { AmbientArtworkTheme } from '@/components/AmbientArtworkTheme';
-import { useArtworkSeed } from '@/hooks/useArtworkSeed';
+import { useViewAmbient } from '@/hooks/useAmbientArtwork';
 
 const HEADER_HEIGHT = 400;
 
@@ -47,7 +46,6 @@ const PlaylistScreen: React.FC = () => {
   const toggleSave = useToggleSavePlaylist();
   const isSaved = id ? isPlaylistSaved(id) : false;
   const [isDownloaded, setIsDownloaded] = useState(false);
-  const { seed, activate: activateSeed, deactivate: deactivateSeed } = useArtworkSeed();
 
   const handleToggleSave = () => {
     if (!id) {
@@ -72,6 +70,15 @@ const PlaylistScreen: React.FC = () => {
   const tracks = data?.tracks ?? [];
   const canPlay = tracks.length > 0;
   const isCatalogLoading = isPrivateApiPending || isLoading;
+
+  const playlistHeroImage = playlist
+    ? pickCatalogImageUrl(undefined, playlist.coverArt, 'hero', playlist.coverArtSizes)
+    : undefined;
+
+  // VIEW MODE: theme the WHOLE app from the playlist cover ON VIEW (once it
+  // resolves) and restore the default on leave. Called before the early returns
+  // so the hook order stays stable; no-ops until the cover URL is available.
+  useViewAmbient(id, playlistHeroImage);
 
   const handlePlayPlaylist = () => {
     if (!canPlay) {
@@ -117,33 +124,26 @@ const PlaylistScreen: React.FC = () => {
     );
   }
 
-  const playlistHeroImage = pickCatalogImageUrl(undefined, playlist.coverArt, 'hero', playlist.coverArtSizes);
-
-  // Hover the cover → extract its dominant colour → re-theme the playlist's
-  // ambient surfaces. `PlaylistView` reads the scoped theme via `useTheme()`
-  // inside the ambient region, so the hero + tracklist ease into the artwork
-  // palette; leaving the cover restores the app preset. Native is a no-op.
+  // The whole app is themed from this playlist's cover ON VIEW (see
+  // `useViewAmbient` above). No per-screen theme wrapper and no cover-hover
+  // theming — `PlaylistView` reads the already-themed app theme.
   return (
-    <AmbientArtworkTheme seed={seed}>
-      <PlaylistView
-        playlist={playlist}
-        tracks={tracks}
-        heroImage={playlistHeroImage}
-        currentTrackId={currentTrack?.id}
-        isPlaying={isPlaying}
-        isSaved={isSaved}
-        isDownloaded={isDownloaded}
-        setIsDownloaded={setIsDownloaded}
-        canPlay={canPlay}
-        shuffle={shuffle}
-        toggleShuffle={toggleShuffle}
-        onCoverHoverIn={() => id && activateSeed(id, playlistHeroImage)}
-        onCoverHoverOut={deactivateSeed}
-        onPlayPlaylist={handlePlayPlaylist}
-        onToggleSave={handleToggleSave}
-        onTrackPress={handleTrackPress}
-      />
-    </AmbientArtworkTheme>
+    <PlaylistView
+      playlist={playlist}
+      tracks={tracks}
+      heroImage={playlistHeroImage}
+      currentTrackId={currentTrack?.id}
+      isPlaying={isPlaying}
+      isSaved={isSaved}
+      isDownloaded={isDownloaded}
+      setIsDownloaded={setIsDownloaded}
+      canPlay={canPlay}
+      shuffle={shuffle}
+      toggleShuffle={toggleShuffle}
+      onPlayPlaylist={handlePlayPlaylist}
+      onToggleSave={handleToggleSave}
+      onTrackPress={handleTrackPress}
+    />
   );
 };
 
@@ -159,17 +159,16 @@ interface PlaylistViewProps {
   canPlay: boolean;
   shuffle: 'on' | 'off';
   toggleShuffle: () => void;
-  onCoverHoverIn: () => void;
-  onCoverHoverOut: () => void;
   onPlayPlaylist: () => void;
   onToggleSave: () => void;
   onTrackPress: (track: Track) => void;
 }
 
 /**
- * The playlist's ambient region. Reads `useTheme()` INSIDE `<AmbientArtworkTheme>`
- * so its surfaces re-theme to the artwork seed while hovering the cover, then
- * revert to the app preset on hover-out. Owns the parallax scroll hooks.
+ * The playlist's presentational view. Reads the app theme via `useTheme()`; the
+ * app is already themed from the playlist cover on view (see `useViewAmbient` in
+ * `PlaylistScreen`), so the hero + tracklist reflect the artwork palette with no
+ * cover-hover handling here. Owns the parallax scroll hooks.
  */
 const PlaylistView: React.FC<PlaylistViewProps> = ({
   playlist,
@@ -183,8 +182,6 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
   canPlay,
   shuffle,
   toggleShuffle,
-  onCoverHoverIn,
-  onCoverHoverOut,
   onPlayPlaylist,
   onToggleSave,
   onTrackPress,
@@ -337,13 +334,9 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
         >
           {/* Parallax Header Section */}
           <Animated.View style={[styles.headerContainer, headerAnimatedStyle]}>
-            {/* Cover — hover (web) / focus to tint the ambient region */}
-            <Pressable
+            {/* Cover (the app is themed from it on view, not on hover) */}
+            <View
               style={StyleSheet.absoluteFill}
-              onHoverIn={onCoverHoverIn}
-              onHoverOut={onCoverHoverOut}
-              onFocus={onCoverHoverIn}
-              onBlur={onCoverHoverOut}
               accessibilityRole="image"
               accessibilityLabel={`${playlist.name} cover art`}
             >
@@ -358,7 +351,7 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
                   <Ionicons name="musical-notes" size={80} color={theme.colors.textSecondary} />
                 </View>
               )}
-            </Pressable>
+            </View>
             {/* Gradient overlay for text readability */}
             <LinearGradient
               colors={['transparent', 'rgba(0, 0, 0, 0.3)', 'rgba(0, 0, 0, 0.7)'] as readonly [string, string, string]}

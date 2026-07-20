@@ -28,8 +28,7 @@ import { oxyServices } from '@/lib/oxyServices';
 import { useLibrary, useToggleFollowArtist } from '@/hooks/useLibrary';
 import { useRelatedArtists } from '@/hooks/useRecommendations';
 import { webViewStyle } from '@/utils/webStyles';
-import { AmbientArtworkTheme } from '@/components/AmbientArtworkTheme';
-import { useArtworkSeed } from '@/hooks/useArtworkSeed';
+import { useViewAmbient } from '@/hooks/useAmbientArtwork';
 
 const HEADER_HEIGHT = 400;
 
@@ -51,7 +50,6 @@ const EntityProfileScreen: React.FC = () => {
   const { playTrackList, playEpisode, currentTrack, currentEpisode, isPlaying } = usePlayerStore();
   const { isAuthenticated, canUsePrivateApi, isPrivateApiPending } = useOxy();
   const catalogIdentity = canUsePrivateApi ? 'auth' : 'guest';
-  const { seed, activate: activateSeed, deactivate: deactivateSeed } = useArtworkSeed();
 
   const { data, isLoading } = useQuery({
     queryKey: ['entity', id, catalogIdentity],
@@ -97,6 +95,13 @@ const EntityProfileScreen: React.FC = () => {
   };
 
   const displayName = entity ? (entity.displayName || entity.name) : '';
+
+  const heroImage = entityImage('hero');
+
+  // VIEW MODE: theme the WHOLE app from the profile's hero cover ON VIEW (once it
+  // resolves) and restore the default on leave. Called before the early returns
+  // so the hook order stays stable; no-ops until the hero URL is available.
+  useViewAmbient(id, heroImage);
 
   const handlePlayAll = () => {
     if (tracks.length === 0) {
@@ -155,40 +160,33 @@ const EntityProfileScreen: React.FC = () => {
     );
   }
 
-  const heroImage = entityImage('hero');
-
-  // Hover the hero cover → extract its dominant colour → re-theme the profile's
-  // ambient surfaces. `EntityProfileView` reads the scoped theme via `useTheme()`
-  // inside the ambient region, so the hero + sections ease into the artwork
-  // palette; leaving the cover restores the app preset. Native is a no-op.
+  // The whole app is themed from this profile's hero cover ON VIEW (see
+  // `useViewAmbient` above). No per-screen theme wrapper and no cover-hover
+  // theming — `EntityProfileView` reads the already-themed app theme.
   return (
-    <AmbientArtworkTheme seed={seed}>
-      <EntityProfileView
-        entity={entity}
-        displayName={displayName}
-        artistId={artistId}
-        isFollowed={isFollowed}
-        followPending={toggleFollow.isPending}
-        relatedArtists={relatedArtists}
-        relatedArtistsPending={relatedArtistsQuery.isPending}
-        heroImage={heroImage}
-        smallImage={entityImage('smallArtwork')}
-        iconImage={entityImage('icon')}
-        currentTrackId={currentTrack?.id}
-        currentEpisodeId={currentEpisode?.id}
-        isPlaying={isPlaying}
-        onCoverHoverIn={() => id && activateSeed(id, heroImage)}
-        onCoverHoverOut={deactivateSeed}
-        onPlayAll={handlePlayAll}
-        onTrackPress={handleTrackPress}
-        onFollow={handleFollow}
-        onPlayEpisode={playEpisode}
-        onNavigateArtist={(artist) => router.push({ pathname: '/p/[id]', params: { id: artist } })}
-        onNavigateAlbum={(album) => router.push(`/album/${album}`)}
-        onNavigatePodcast={(podcast) => router.push({ pathname: '/podcasts/[id]', params: { id: podcast } })}
-        onNavigateEpisode={(episode) => router.push({ pathname: '/episode/[id]', params: { id: episode } })}
-      />
-    </AmbientArtworkTheme>
+    <EntityProfileView
+      entity={entity}
+      displayName={displayName}
+      artistId={artistId}
+      isFollowed={isFollowed}
+      followPending={toggleFollow.isPending}
+      relatedArtists={relatedArtists}
+      relatedArtistsPending={relatedArtistsQuery.isPending}
+      heroImage={heroImage}
+      smallImage={entityImage('smallArtwork')}
+      iconImage={entityImage('icon')}
+      currentTrackId={currentTrack?.id}
+      currentEpisodeId={currentEpisode?.id}
+      isPlaying={isPlaying}
+      onPlayAll={handlePlayAll}
+      onTrackPress={handleTrackPress}
+      onFollow={handleFollow}
+      onPlayEpisode={playEpisode}
+      onNavigateArtist={(artist) => router.push({ pathname: '/p/[id]', params: { id: artist } })}
+      onNavigateAlbum={(album) => router.push(`/album/${album}`)}
+      onNavigatePodcast={(podcast) => router.push({ pathname: '/podcasts/[id]', params: { id: podcast } })}
+      onNavigateEpisode={(episode) => router.push({ pathname: '/episode/[id]', params: { id: episode } })}
+    />
   );
 };
 
@@ -206,8 +204,6 @@ interface EntityProfileViewProps {
   currentTrackId: string | undefined;
   currentEpisodeId: string | undefined;
   isPlaying: boolean;
-  onCoverHoverIn: () => void;
-  onCoverHoverOut: () => void;
   onPlayAll: () => void;
   onTrackPress: (track: Track) => void;
   onFollow: () => void;
@@ -219,9 +215,10 @@ interface EntityProfileViewProps {
 }
 
 /**
- * The profile's ambient region. Reads `useTheme()` INSIDE `<AmbientArtworkTheme>`
- * so its surfaces re-theme to the artwork seed while hovering the hero cover,
- * then revert to the app preset on hover-out. Owns the parallax scroll hooks.
+ * The profile's presentational view. Reads the app theme via `useTheme()`; the
+ * app is already themed from the hero cover on view (see `useViewAmbient` in
+ * `EntityProfileScreen`), so the hero + sections reflect the artwork palette with
+ * no cover-hover handling here. Owns the parallax scroll hooks.
  */
 const EntityProfileView: React.FC<EntityProfileViewProps> = ({
   entity,
@@ -237,8 +234,6 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
   currentTrackId,
   currentEpisodeId,
   isPlaying,
-  onCoverHoverIn,
-  onCoverHoverOut,
   onPlayAll,
   onTrackPress,
   onFollow,
@@ -385,13 +380,9 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
         >
           {/* Parallax Header Section */}
           <Animated.View style={[styles.headerContainer, headerAnimatedStyle]}>
-            {/* Hero cover — hover (web) / focus to tint the ambient region */}
-            <Pressable
+            {/* Hero cover (the app is themed from it on view, not on hover) */}
+            <View
               style={StyleSheet.absoluteFill}
-              onHoverIn={onCoverHoverIn}
-              onHoverOut={onCoverHoverOut}
-              onFocus={onCoverHoverIn}
-              onBlur={onCoverHoverOut}
               accessibilityRole="image"
               accessibilityLabel={`${displayName} cover art`}
             >
@@ -402,7 +393,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                   <Ionicons name="person" size={80} color={theme.colors.textSecondary} />
                 </View>
               )}
-            </Pressable>
+            </View>
             <LinearGradient
               colors={['transparent', 'rgba(0, 0, 0, 0.3)', 'rgba(0, 0, 0, 0.7)'] as readonly [string, string, string]}
               locations={[0, 0.6, 1] as readonly [number, number, number]}

@@ -71,6 +71,31 @@ html, body, #root {
   font-family: var(--bloom-font-sans), sans-serif;
 }
 
+/*
+ * App-wide ambient-theme cross-fade (web only).
+ *
+ * The root `<BloomThemeProvider seed=…>` re-themes the WHOLE app by rewriting the
+ * role CSS vars (`--background`, `--card`, `--primary`, …) on
+ * `document.documentElement` when the user hovers/views artwork. Without this the
+ * swap would hard-flash. A single global transition on the colour properties that
+ * consume those vars eases every themed surface (sidebar, background, shell) into
+ * the new palette at once — declared in ONE place, not per-screen.
+ *
+ * Only colour properties transition (never layout/opacity), so this cannot cause
+ * reflow jank. Respects reduced-motion: the rule is scoped inside
+ * `prefers-reduced-motion: no-preference`, so reduced-motion users get an instant
+ * snap with no transition at all.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  #root *,
+  #root *::before,
+  #root *::after {
+    transition-property: background-color, color, border-color, fill, stroke;
+    transition-duration: 480ms;
+    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+}
+
 @keyframes bloomDialogFadeIn {
   from { opacity: 0; }
   to { opacity: 1; }

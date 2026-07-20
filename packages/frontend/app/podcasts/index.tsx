@@ -13,8 +13,7 @@ import { usePlayerStore } from '@/stores/playerStore';
 import { resolvePodcastImageUri } from '@/utils/podcastImages';
 import { formatRemaining } from '@/utils/podcastFormat';
 import { webViewStyle } from '@/utils/webStyles';
-import { AmbientArtworkTheme } from '@/components/AmbientArtworkTheme';
-import { useArtworkSeed } from '@/hooks/useArtworkSeed';
+import { useHoverAmbient } from '@/hooks/useAmbientArtwork';
 
 type ContinueEntry = NonNullable<ReturnType<typeof useContinueListening>['data']>[number];
 
@@ -40,7 +39,8 @@ const PODCAST_CATEGORIES = [
 const PodcastsScreen: React.FC = () => {
   const router = useRouter();
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
-  const { seed, activate: activateSeed, deactivate: deactivateSeed } = useArtworkSeed();
+  // HOVER MODE: hovering a card themes the WHOLE app from its artwork.
+  const { onHoverIn: handleHoverIn, onHoverOut: handleHoverOut } = useHoverAmbient();
 
   const browseQuery = usePodcasts(
     activeCategory ? { category: activeCategory, sort: 'popular' } : { sort: 'popular' },
@@ -55,29 +55,23 @@ const PodcastsScreen: React.FC = () => {
     [continueQuery.data],
   );
 
-  // Hover a card → extract its cover's dominant seed → re-theme the podcasts
-  // home's ambient surfaces (the `<AmbientArtworkTheme>` scope below reads it).
-  // Leaving restores the app preset. `MediaCard` forwards its own resolved image
-  // URL + a stable id so the seed is cached per artwork.
-  //
-  // multi-seed: when Bloom ships explicit multi-seed extraction, `useArtworkSeed`
-  // becomes the single place that changes.
+  // Hovering a card themes the WHOLE app from that card's artwork; leaving
+  // restores the default. The root `BloomThemeProvider` owns the theming via the
+  // shared `useHoverAmbient` driver — no per-screen theme wrapper.
   return (
-    <AmbientArtworkTheme seed={seed}>
-      <PodcastsContent
-        podcasts={podcasts}
-        podcastsPending={browseQuery.isPending}
-        inProgress={inProgress}
-        activeCategory={activeCategory}
-        onSelectCategory={setActiveCategory}
-        onSeedHoverIn={(next) => activateSeed(next.id, next.imageUrl)}
-        onSeedHoverOut={deactivateSeed}
-        onOpenShow={(id) => router.push({ pathname: '/podcasts/[id]', params: { id } })}
-        onOpenEpisode={(id) => router.push({ pathname: '/episode/[id]', params: { id } })}
-        onFindPodcast={() => router.push({ pathname: '/search', params: { category: 'podcasts' } })}
-        onPlayEpisode={(entry) => playEpisode(entry.episode, { resumeFromSec: entry.progressSec })}
-      />
-    </AmbientArtworkTheme>
+    <PodcastsContent
+      podcasts={podcasts}
+      podcastsPending={browseQuery.isPending}
+      inProgress={inProgress}
+      activeCategory={activeCategory}
+      onSelectCategory={setActiveCategory}
+      onSeedHoverIn={handleHoverIn}
+      onSeedHoverOut={handleHoverOut}
+      onOpenShow={(id) => router.push({ pathname: '/podcasts/[id]', params: { id } })}
+      onOpenEpisode={(id) => router.push({ pathname: '/episode/[id]', params: { id } })}
+      onFindPodcast={() => router.push({ pathname: '/search', params: { category: 'podcasts' } })}
+      onPlayEpisode={(entry) => playEpisode(entry.episode, { resumeFromSec: entry.progressSec })}
+    />
   );
 };
 
@@ -96,9 +90,8 @@ interface PodcastsContentProps {
 }
 
 /**
- * The podcasts home's ambient region. Reads `useTheme()` INSIDE
- * `<AmbientArtworkTheme>` so its surfaces re-theme to the hovered card's artwork
- * seed, then revert to the app preset on hover-out.
+ * The podcasts home's content tree. Cards forward hover intent up via
+ * `onSeedHoverIn` / `onSeedHoverOut`, which drive the app-wide ambient theme.
  */
 const PodcastsContent: React.FC<PodcastsContentProps> = ({
   podcasts,
