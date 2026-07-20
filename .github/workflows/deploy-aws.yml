@@ -48,6 +48,11 @@ jobs:
 
       - run: cd packages/frontend && bunx jest --ci
 
+      # i18n key integrity. tsc cannot see this: i18next renders the raw key when it
+      # cannot resolve one, so a renamed key ships as dotted identifiers on screen in
+      # every language rather than failing anything.
+      - run: cd packages/frontend && bun run check-i18n
+
   deploy:
     needs: test
     runs-on: ubuntu-24.04-arm

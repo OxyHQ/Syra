@@ -17,6 +17,7 @@
     "build-web:prod": "expo export --platform web --output-dir dist && bun ./scripts/remove-css-preloads.mjs",
     "test": "jest --watchAll=false",
     "typecheck": "tsc --noEmit",
+    "check-i18n": "bun ./scripts/check-i18n.mjs",
     "lint": "expo lint",
     "clean": "rm -rf dist .expo",
     "analyze-bundle": "bun ./scripts/analyze-bundle.js"

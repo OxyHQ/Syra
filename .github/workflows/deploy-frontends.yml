@@ -33,6 +33,11 @@ jobs:
         run: cd packages/frontend && bun run test
       - name: Typecheck frontend
         run: cd packages/frontend && bun run typecheck
+      # i18n key integrity. tsc cannot see this: i18next renders the raw key when it
+      # cannot resolve one, so a renamed key ships as dotted identifiers on screen in
+      # every language rather than failing anything.
+      - name: Check i18n keys
+        run: cd packages/frontend && bun run check-i18n
       - name: Build frontend
         run: bun run build:frontend
         timeout-minutes: 60
