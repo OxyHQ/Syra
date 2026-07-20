@@ -1,5 +1,4 @@
 {
-  "Create Playlist": "Create Playlist",
   "error": {
     "boundary": {
       "title": "Oops! Something went wrong",
@@ -40,7 +39,19 @@
     "maybeLater": "Maybe later",
     "rateNow": "Rate now",
     "unknown": "unknown",
-    "someone": "Someone"
+    "someone": "Someone",
+    "artist": "Artist",
+    "podcast": "Podcast",
+    "podcasts": "Podcasts",
+    "seeAll": "See all",
+    "signIn": "Sign in",
+    "retryHint": "Check your connection and try again.",
+    "reportCopyright": "Report a copyright violation",
+    "play": "Play",
+    "playlist": "Playlist",
+    "sessionUnavailable": "Session unavailable",
+    "public": "Public",
+    "private": "Private"
   },
   "agora": {
     "podcastStream": {
@@ -77,10 +88,6 @@
       "clearQueue": "Clear"
     }
   },
-  "Live now": "Live now",
-  "Podcasts": "Podcasts",
-  "See all": "See all",
-  "Podcast": "Podcast",
   "seo": {
     "siteName": "Syra",
     "defaultTitle": "Syra - Music and podcasts",
@@ -97,7 +104,6 @@
       "description": "App settings and preferences"
     },
     "gate": {
-      "unavailableTitle": "Session unavailable",
       "unavailableMessage": "We could not confirm your session, so your settings stayed hidden. Please try again.",
       "loading": "Loading account settings",
       "signInRequired": "Please log in to access settings"
@@ -165,7 +171,6 @@
       "terms": "Terms of Service",
       "privacyPolicy": "Privacy Policy",
       "help": "Help & Support",
-      "copyright": "Report a copyright violation",
       "copyrightHint": "Tell us about content that infringes your rights"
     },
     "logOut": "Log out",
@@ -177,9 +182,7 @@
       "normal": "Normal",
       "high": "High",
       "veryHigh": "Very high",
-      "public": "Public",
-      "followers": "Followers",
-      "private": "Private"
+      "followers": "Followers"
     },
     "alerts": {
       "signInRequired": {
@@ -193,7 +196,108 @@
       "clearCacheError": "Failed to clear cache. Please try again.",
       "termsSoon": "Terms of service page coming soon.",
       "privacyPolicySoon": "Privacy policy page coming soon.",
-      "helpSoon": "Help center coming soon."
+      "helpSoon": "Help center coming soon.",
+      "logout": {
+        "message": "Are you sure you want to log out?"
+      },
+      "clearCache": {
+        "message": "This will clear all cached data. You may need to reload some content."
+      }
+    },
+    "signedInFallback": "Signed in to Syra"
+  },
+  "home": {
+    "seo": {
+      "title": "Syra - Music Streaming",
+      "description": "Discover and play your favorite music"
+    },
+    "liveNow": "Live now",
+    "empty": {
+      "title": "No music here yet",
+      "subtitle": "Syra's catalogue is built from what artists upload. As creators publish their work, it will show up here.",
+      "action": "Browse podcasts"
+    },
+    "sections": {
+      "jumpBackIn": "Jump back in",
+      "madeForYou": "Made for you",
+      "popularAlbums": "Popular albums",
+      "popularArtists": "Popular artists",
+      "popularTracks": "Popular tracks",
+      "yourPlaylists": "Your playlists"
+    },
+    "errors": {
+      "homeFeed": "Could not load your home feed",
+      "recentPlays": "Could not load your recent plays",
+      "playlists": "Could not load your playlists",
+      "podcasts": "Could not load podcasts",
+      "session": "We could not confirm your session",
+      "sessionMessage": "Your music is still here. Try again to reload the page."
+    },
+    "signedOut": {
+      "recentTitle": "Pick up where you left off",
+      "recentSubtitle": "Sign in and the music you played most recently shows up here.",
+      "playlistsTitle": "Your playlists, everywhere",
+      "playlistsSubtitle": "Sign in to build playlists and find them on every device."
+    },
+    "toasts": {
+      "addedToQueue": "Added to queue",
+      "addToQueueFailed": "Could not add to queue",
+      "playbackFailed": "Could not start playback",
+      "noPlayableTracks": "No playable tracks available",
+      "noTracksToAdd": "No tracks to add"
+    }
+  },
+  "library": {
+    "seo": {
+      "title": "Your Library - Syra",
+      "description": "Your music library"
+    },
+    "title": "Your Library",
+    "tabs": {
+      "playlists": "Playlists",
+      "artists": "Artists",
+      "albums": "Albums"
+    },
+    "continueListening": "Continue listening",
+    "likedSongs": "Liked Songs",
+    "createPlaylist": "Create Playlist",
+    "createFirstPlaylist": "Create your first playlist",
+    "errors": {
+      "load": "Could not load your library",
+      "session": "We could not confirm your session."
+    },
+    "signedOut": "Sign in to view your library",
+    "filters": {
+      "all": "All",
+      "episodes": "Episodes"
+    },
+    "empty": {
+      "all": "Your library is empty",
+      "playlists": "No playlists yet",
+      "artists": "No followed artists yet",
+      "albums": "No saved albums yet",
+      "podcasts": "No podcast subscriptions yet",
+      "episodes": "No episodes in progress"
+    },
+    "songCount_one": "{{count}} song",
+    "songCount_other": "{{count}} songs"
+  },
+  "liked": {
+    "seo": {
+      "title": "Liked Songs - Syra",
+      "description": "Your liked songs"
+    },
+    "empty": {
+      "title": "Songs you like will appear here",
+      "action": "Find something to like"
+    },
+    "signedOut": "Sign in to view your liked songs",
+    "errors": {
+      "load": "Could not load your liked songs",
+      "message": "Something went wrong while loading this list. Please try again."
+    },
+    "gate": {
+      "unavailableMessage": "We could not confirm your session, so your liked songs stayed hidden. Please try again."
     }
   }
 }

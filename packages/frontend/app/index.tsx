@@ -37,7 +37,6 @@ import { useHoverAmbient } from '@/hooks/useAmbientArtwork';
 const logger = createScopedLogger('HomeScreen');
 
 /** Shared copy for a failed section — the cause is always the same from here. */
-const RETRY_MESSAGE = 'Check your connection and try again.';
 
 /**
  * Quick access item type - can be album, artist, or playlist
@@ -168,10 +167,10 @@ const HomeScreen: React.FC = () => {
         });
         return;
       }
-      toast.info('No playable tracks available');
+      toast.info(t('home.toasts.noPlayableTracks'));
     } catch (error) {
       logger.error('Error playing album', { albumId, error });
-      toast.error('Could not start playback');
+      toast.error(t('home.toasts.playbackFailed'));
     }
   }, [playTrackList]);
 
@@ -186,10 +185,10 @@ const HomeScreen: React.FC = () => {
         });
         return;
       }
-      toast.info('No playable tracks available');
+      toast.info(t('home.toasts.noPlayableTracks'));
     } catch (error) {
       logger.error('Error playing playlist', { playlistId, error });
-      toast.error('Could not start playback');
+      toast.error(t('home.toasts.playbackFailed'));
     }
   }, [playTrackList]);
 
@@ -204,30 +203,30 @@ const HomeScreen: React.FC = () => {
         });
         return;
       }
-      toast.info('No playable tracks available');
+      toast.info(t('home.toasts.noPlayableTracks'));
     } catch (error) {
       logger.error('Error playing artist', { artistId, error });
-      toast.error('Could not start playback');
+      toast.error(t('home.toasts.playbackFailed'));
     }
   }, [playTrackList]);
 
   const addTrackToQueue = useCallback((track: Track) => {
     addTracksLocally([track], 'last');
-    toast.success('Added to queue');
+    toast.success(t('home.toasts.addedToQueue'));
   }, [addTracksLocally]);
 
   const addAlbumToQueue = useCallback(async (albumId: string) => {
     try {
       const { tracks: albumTracks } = await musicService.getAlbumTracks(albumId);
       if (albumTracks.length === 0) {
-        toast.info('No tracks to add');
+        toast.info(t('home.toasts.noTracksToAdd'));
         return;
       }
       addTracksLocally(albumTracks, 'last');
-      toast.success('Added to queue');
+      toast.success(t('home.toasts.addedToQueue'));
     } catch (error) {
       logger.error('Error adding album to queue', { albumId, error });
-      toast.error('Could not add to queue');
+      toast.error(t('home.toasts.addToQueueFailed'));
     }
   }, [addTracksLocally]);
 
@@ -235,14 +234,14 @@ const HomeScreen: React.FC = () => {
     try {
       const { tracks: playlistTracks } = await musicService.getPlaylistTracks(playlistId);
       if (playlistTracks.length === 0) {
-        toast.info('No tracks to add');
+        toast.info(t('home.toasts.noTracksToAdd'));
         return;
       }
       addTracksLocally(playlistTracks, 'last');
-      toast.success('Added to queue');
+      toast.success(t('home.toasts.addedToQueue'));
     } catch (error) {
       logger.error('Error adding playlist to queue', { playlistId, error });
-      toast.error('Could not add to queue');
+      toast.error(t('home.toasts.addToQueueFailed'));
     }
   }, [addTracksLocally]);
 
@@ -250,14 +249,14 @@ const HomeScreen: React.FC = () => {
     try {
       const { tracks: artistTracks } = await musicService.getArtistTracks(artistId, { limit: 50 });
       if (artistTracks.length === 0) {
-        toast.info('No tracks to add');
+        toast.info(t('home.toasts.noTracksToAdd'));
         return;
       }
       addTracksLocally(artistTracks, 'last');
-      toast.success('Added to queue');
+      toast.success(t('home.toasts.addedToQueue'));
     } catch (error) {
       logger.error('Error adding artist to queue', { artistId, error });
-      toast.error('Could not add to queue');
+      toast.error(t('home.toasts.addToQueueFailed'));
     }
   }, [addTracksLocally]);
 
@@ -287,8 +286,8 @@ const HomeScreen: React.FC = () => {
   return (
     <>
       <SEO
-        title="Syra - Music Streaming"
-        description="Discover and play your favorite music"
+        title={t('home.seo.title')}
+        description={t('home.seo.description')}
       />
       {/* Hovering any card themes the WHOLE app from that card's artwork; leaving
           restores the default. Theming is owned by the root `BloomThemeProvider`
@@ -374,6 +373,7 @@ const HomeSectionBlock: React.FC<HomeSectionBlockProps> = ({
   headerAction,
   children,
 }) => {
+  const { t } = useTranslation();
   const theme = useTheme();
 
   if (
@@ -403,7 +403,7 @@ const HomeSectionBlock: React.FC<HomeSectionBlockProps> = ({
           icon={{ name: 'person-circle-outline' }}
           title={signedOut.title}
           subtitle={signedOut.subtitle}
-          action={{ label: 'Sign in', onPress: signedOut.onSignIn, icon: 'log-in-outline' }}
+          action={{ label: t('common.signIn'), onPress: signedOut.onSignIn, icon: 'log-in-outline' }}
           containerStyle={styles.sectionState}
         />
       ) : (
@@ -536,12 +536,12 @@ const HomeContent: React.FC<HomeContentProps> = ({
                 <View style={styles.liveHeading}>
                   <View style={[styles.liveDot, { backgroundColor: theme.colors.error }]} />
                   <Text style={[styles.sectionHeaderTitle, { color: theme.colors.text }]}>
-                    {t('Live now')}
+                    {t('home.liveNow')}
                   </Text>
                 </View>
                 <Pressable style={styles.seeAllButton} onPress={() => router.push('/live')} hitSlop={8}>
                   <Text style={[styles.seeAll, { color: theme.colors.textSecondary }]}>
-                    {t('See all')}
+                    {t('common.seeAll')}
                   </Text>
                 </Pressable>
               </View>
@@ -574,13 +574,13 @@ const HomeContent: React.FC<HomeContentProps> = ({
               error={
                 sessionBlocked
                   ? {
-                      title: 'We could not confirm your session',
-                      message: 'Your music is still here. Try again to reload the page.',
+                      title: t('home.errors.session'),
+                      message: t('home.errors.sessionMessage'),
                       onRetry: onRetryBrowse,
                     }
                   : {
-                      title: 'Could not load your home feed',
-                      message: RETRY_MESSAGE,
+                      title: t('home.errors.homeFeed'),
+                      message: t('common.retryHint'),
                       onRetry: onRetryBrowse,
                     }
               }
@@ -662,10 +662,10 @@ const HomeContent: React.FC<HomeContentProps> = ({
           {browseStatus === 'ready' && !hasAnyMusic && (
             <EmptyState
               icon={{ name: 'musical-notes-outline' }}
-              title="No music here yet"
-              subtitle="Syra's catalogue is built from what artists upload. As creators publish their work, it will show up here."
+              title={t('home.empty.title')}
+              subtitle={t('home.empty.subtitle')}
               action={{
-                label: 'Browse podcasts',
+                label: t('home.empty.action'),
                 onPress: () => router.push('/podcasts'),
                 icon: 'mic-outline',
               }}
@@ -676,15 +676,15 @@ const HomeContent: React.FC<HomeContentProps> = ({
           {/* Jump back in — REAL recently-played tracks. Account-only: guests
               get a sign-in call to action instead of a permanent skeleton. */}
           <HomeSectionBlock
-            title="Jump back in"
+            title={t('home.sections.jumpBackIn')}
             status={recentlyPlayedStatus}
             hasContent={recentlyPlayed.length > 0}
             skeleton={<MediaCardRowSkeleton count={5} />}
             onRetry={onRetryRecentlyPlayed}
-            error={sessionBlocked ? undefined : { title: 'Could not load your recent plays', message: RETRY_MESSAGE }}
+            error={sessionBlocked ? undefined : { title: t('home.errors.recentPlays'), message: t('common.retryHint') }}
             signedOut={{
-              title: 'Pick up where you left off',
-              subtitle: 'Sign in and the music you played most recently shows up here.',
+              title: t('home.signedOut.recentTitle'),
+              subtitle: t('home.signedOut.recentSubtitle'),
               onSignIn,
             }}
           >
@@ -728,7 +728,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
 
           {/* Made for You — REAL recommendations (popular albums + public playlists) */}
           <HomeSectionBlock
-            title={isPersonalized ? 'Hecho para ti' : 'Made for you'}
+            title={t('home.sections.madeForYou')}
             status={browseStatus}
             hasContent={
               madeForYouArtists.length > 0 ||
@@ -743,7 +743,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
                 <View key={artist.id}>
                   <MediaCard
                     title={artist.name}
-                    subtitle="Artist"
+                    subtitle={t('common.artist')}
                     type="artist"
                     imageUri={artist.image}
                     images={artist.images}
@@ -802,16 +802,16 @@ const HomeContent: React.FC<HomeContentProps> = ({
               rails (same MediaCard + ResponsiveGrid); "See all" opens the
               podcasts browse screen. Public, so guests see it too. */}
           <HomeSectionBlock
-            title={t('Podcasts')}
+            title={t('common.podcasts')}
             status={podcastsStatus}
             hasContent={podcasts.length > 0}
             skeleton={<MediaCardRowSkeleton count={5} />}
             onRetry={onRetryPodcasts}
-            error={{ title: 'Could not load podcasts', message: RETRY_MESSAGE }}
+            error={{ title: t('home.errors.podcasts'), message: t('common.retryHint') }}
             headerAction={
               <Pressable style={styles.seeAllButton} onPress={() => router.push('/podcasts')} hitSlop={8}>
                 <Text style={[styles.seeAll, { color: theme.colors.textSecondary }]}>
-                  {t('See all')}
+                  {t('common.seeAll')}
                 </Text>
               </Pressable>
             }
@@ -821,7 +821,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
                 <View key={podcast.id}>
                   <MediaCard
                     title={podcast.title}
-                    subtitle={podcast.author ?? t('Podcast')}
+                    subtitle={podcast.author ?? t('common.podcast')}
                     type="podcast"
                     resolvedImageUri={resolvePodcastArtwork(podcast, 'card')}
                     primaryColor={podcast.primaryColor}
@@ -838,7 +838,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
 
           {/* Popular albums — REAL, ranked by catalog popularity */}
           <HomeSectionBlock
-            title="Popular albums"
+            title={t('home.sections.popularAlbums')}
             status={browseStatus}
             hasContent={popularAlbums.length > 0}
             skeleton={<MediaCardRowSkeleton count={5} />}
@@ -869,7 +869,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
 
           {/* Popular artists — REAL, ranked by catalog popularity */}
           <HomeSectionBlock
-            title="Popular artists"
+            title={t('home.sections.popularArtists')}
             status={browseStatus}
             hasContent={popularArtists.length > 0}
             skeleton={<MediaCardRowSkeleton count={5} />}
@@ -880,7 +880,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
                 <View key={artist.id}>
                   <MediaCard
                     title={artist.name}
-                    subtitle="Artist"
+                    subtitle={t('common.artist')}
                     type="artist"
                     imageUri={artist.image}
                     images={artist.images}
@@ -901,15 +901,15 @@ const HomeContent: React.FC<HomeContentProps> = ({
           {/* Your playlists — REAL, the signed-in user's own playlists.
               Account-only: guests get a sign-in call to action. */}
           <HomeSectionBlock
-            title="Your playlists"
+            title={t('home.sections.yourPlaylists')}
             status={userPlaylistsStatus}
             hasContent={userPlaylists.length > 0}
             skeleton={<MediaCardRowSkeleton count={5} />}
             onRetry={onRetryUserPlaylists}
-            error={sessionBlocked ? undefined : { title: 'Could not load your playlists', message: RETRY_MESSAGE }}
+            error={sessionBlocked ? undefined : { title: t('home.errors.playlists'), message: t('common.retryHint') }}
             signedOut={{
-              title: 'Your playlists, everywhere',
-              subtitle: 'Sign in to build playlists and find them on every device.',
+              title: t('home.signedOut.playlistsTitle'),
+              subtitle: t('home.signedOut.playlistsSubtitle'),
               onSignIn,
             }}
           >
@@ -937,7 +937,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
 
           {/* Popular tracks — REAL, ranked by catalog popularity */}
           <HomeSectionBlock
-            title="Popular tracks"
+            title={t('home.sections.popularTracks')}
             status={browseStatus}
             hasContent={tracks.length > 0}
             skeleton={<MediaCardRowSkeleton count={10} />}
@@ -987,10 +987,10 @@ const HomeContent: React.FC<HomeContentProps> = ({
               onPress={() => router.push('/copyright/report')}
               hitSlop={8}
               accessibilityRole="link"
-              accessibilityLabel="Report a copyright violation"
+              accessibilityLabel={t('common.reportCopyright')}
             >
               <Text style={[styles.footerLink, { color: theme.colors.textSecondary }]}>
-                Report a copyright violation
+                {t('common.reportCopyright')}
               </Text>
             </Pressable>
           </View>

@@ -114,7 +114,7 @@ const SettingsScreen: React.FC = () => {
   const appVersion = Constants.expoConfig?.version ?? '2.0.0';
   const userName = getAccountDisplayName(user);
   const username = user?.username;
-  const usernameLabel = username ? `@${username}` : 'Signed in to Syra';
+  const usernameLabel = username ? `@${username}` : t('settings.signedInFallback');
 
   const themeMode: 'system' | 'light' | 'dark' =
     bloomMode === 'light' || bloomMode === 'dark' ? bloomMode : 'system';
@@ -201,10 +201,10 @@ const SettingsScreen: React.FC = () => {
 
   const handleLogout = useCallback(async () => {
     const confirmed = await confirmDialog({
-      title: 'Log out',
-      message: 'Are you sure you want to log out?',
-      okText: 'Log out',
-      cancelText: 'Cancel',
+      title: t('settings.logOut'),
+      message: t('settings.alerts.logout.message'),
+      okText: t('settings.logOut'),
+      cancelText: t('common.cancel'),
       destructive: true,
     });
     if (!confirmed) return;
@@ -219,10 +219,10 @@ const SettingsScreen: React.FC = () => {
 
   const handleClearCache = useCallback(async () => {
     const confirmed = await confirmDialog({
-      title: 'Clear Cache',
-      message: 'This will clear all cached data. You may need to reload some content.',
-      okText: 'Clear',
-      cancelText: 'Cancel',
+      title: t('settings.privacy.clearCache'),
+      message: t('settings.alerts.clearCache.message'),
+      okText: t('common.clear'),
+      cancelText: t('common.cancel'),
     });
     if (!confirmed) return;
     try {
@@ -254,7 +254,7 @@ const SettingsScreen: React.FC = () => {
             containerStyle={styles.gateState}
             icon={{ name: 'cloud-offline-outline' }}
             error={{
-              title: t('settings.gate.unavailableTitle'),
+              title: t('common.sessionUnavailable'),
               message: t('settings.gate.unavailableMessage'),
               onRetry: async () => {
                 gate.retry();
@@ -550,13 +550,13 @@ const SettingsScreen: React.FC = () => {
                     onChange={(value) => handlePrivacyUpdate({ profileVisibility: value })}
                   >
                     <SegmentedControlItem value="public">
-                      <SegmentedControlItemText numberOfLines={1}>{t('settings.options.public')}</SegmentedControlItemText>
+                      <SegmentedControlItemText numberOfLines={1}>{t('common.public')}</SegmentedControlItemText>
                     </SegmentedControlItem>
                     <SegmentedControlItem value="followers_only">
                       <SegmentedControlItemText numberOfLines={1}>{t('settings.options.followers')}</SegmentedControlItemText>
                     </SegmentedControlItem>
                     <SegmentedControlItem value="private">
-                      <SegmentedControlItemText numberOfLines={1}>{t('settings.options.private')}</SegmentedControlItemText>
+                      <SegmentedControlItemText numberOfLines={1}>{t('common.private')}</SegmentedControlItemText>
                     </SegmentedControlItem>
                   </SegmentedControl>
                 </SettingsControlBlock>
@@ -622,7 +622,7 @@ const SettingsScreen: React.FC = () => {
               />
               <SettingsListItem
                 icon={<RowIcon name="flag-outline" />}
-                title={t('settings.about.copyright')}
+                title={t('common.reportCopyright')}
                 description={t('settings.about.copyrightHint')}
                 onPress={() => router.push('/copyright/report')}
               />

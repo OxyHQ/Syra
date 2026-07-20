@@ -1,5 +1,4 @@
 {
-  "Create Playlist": "Crea playlist",
   "error": {
     "boundary": {
       "title": "Ops! Qualcosa è andato storto",
@@ -40,7 +39,19 @@
     "maybeLater": "Forse più tardi",
     "rateNow": "Valuta ora",
     "unknown": "sconosciuto",
-    "someone": "Qualcuno"
+    "someone": "Qualcuno",
+    "artist": "Artista",
+    "podcast": "Podcast",
+    "podcasts": "Podcast",
+    "seeAll": "Vedi tutto",
+    "signIn": "Accedi",
+    "retryHint": "Controlla la connessione e riprova.",
+    "reportCopyright": "Segnala una violazione del copyright",
+    "play": "Riproduci",
+    "playlist": "Playlist",
+    "sessionUnavailable": "Sessione non disponibile",
+    "public": "Pubblico",
+    "private": "Privato"
   },
   "agora": {
     "podcastStream": {
@@ -77,10 +88,6 @@
       "clearQueue": "Svuota"
     }
   },
-  "Live now": "In diretta ora",
-  "Podcasts": "Podcast",
-  "See all": "Vedi tutti",
-  "Podcast": "Podcast",
   "seo": {
     "siteName": "Syra",
     "defaultTitle": "Syra - Musica e podcast",
@@ -97,7 +104,6 @@
       "description": "Impostazioni e preferenze dell'app"
     },
     "gate": {
-      "unavailableTitle": "Sessione non disponibile",
       "unavailableMessage": "Non siamo riusciti a confermare la tua sessione, quindi le impostazioni non sono state mostrate. Riprova.",
       "loading": "Caricamento delle impostazioni dell'account",
       "signInRequired": "Accedi per visualizzare le impostazioni"
@@ -165,7 +171,6 @@
       "terms": "Termini di servizio",
       "privacyPolicy": "Informativa sulla privacy",
       "help": "Aiuto e supporto",
-      "copyright": "Segnala una violazione del copyright",
       "copyrightHint": "Segnalaci i contenuti che violano i tuoi diritti"
     },
     "logOut": "Esci",
@@ -177,9 +182,7 @@
       "normal": "Normale",
       "high": "Alta",
       "veryHigh": "Molto alta",
-      "public": "Pubblico",
-      "followers": "Follower",
-      "private": "Privato"
+      "followers": "Follower"
     },
     "alerts": {
       "signInRequired": {
@@ -193,7 +196,108 @@
       "clearCacheError": "Impossibile cancellare la cache. Riprova.",
       "termsSoon": "La pagina dei termini di servizio sarà presto disponibile.",
       "privacyPolicySoon": "La pagina dell'informativa sulla privacy sarà presto disponibile.",
-      "helpSoon": "Il centro assistenza sarà presto disponibile."
+      "helpSoon": "Il centro assistenza sarà presto disponibile.",
+      "logout": {
+        "message": "Vuoi davvero uscire?"
+      },
+      "clearCache": {
+        "message": "Verranno cancellati tutti i dati nella cache. Potresti dover ricaricare alcuni contenuti."
+      }
+    },
+    "signedInFallback": "Accesso effettuato su Syra"
+  },
+  "home": {
+    "seo": {
+      "title": "Syra - Musica in streaming",
+      "description": "Scopri e ascolta la tua musica preferita"
+    },
+    "liveNow": "Ora in diretta",
+    "empty": {
+      "title": "Ancora nessuna musica",
+      "subtitle": "Il catalogo di Syra lo costruiscono gli artisti. Man mano che pubblicano la loro musica, comparirà qui.",
+      "action": "Esplora i podcast"
+    },
+    "sections": {
+      "jumpBackIn": "Riprendi l'ascolto",
+      "madeForYou": "Fatto per te",
+      "popularAlbums": "Album popolari",
+      "popularArtists": "Artisti popolari",
+      "popularTracks": "Brani popolari",
+      "yourPlaylists": "Le tue playlist"
+    },
+    "errors": {
+      "homeFeed": "Impossibile caricare la tua home",
+      "recentPlays": "Impossibile caricare i tuoi ascolti recenti",
+      "playlists": "Impossibile caricare le tue playlist",
+      "podcasts": "Impossibile caricare i podcast",
+      "session": "Non siamo riusciti a confermare la tua sessione",
+      "sessionMessage": "La tua musica è ancora qui. Riprova per ricaricare la pagina."
+    },
+    "signedOut": {
+      "recentTitle": "Riprendi da dove avevi lasciato",
+      "recentSubtitle": "Accedi e qui comparirà la musica che hai ascoltato di recente.",
+      "playlistsTitle": "Le tue playlist, ovunque",
+      "playlistsSubtitle": "Accedi per creare playlist e ritrovarle su ogni dispositivo."
+    },
+    "toasts": {
+      "addedToQueue": "Aggiunto alla coda",
+      "addToQueueFailed": "Impossibile aggiungere alla coda",
+      "playbackFailed": "Impossibile avviare la riproduzione",
+      "noPlayableTracks": "Nessun brano disponibile per la riproduzione",
+      "noTracksToAdd": "Nessun brano da aggiungere"
+    }
+  },
+  "library": {
+    "seo": {
+      "title": "La tua libreria - Syra",
+      "description": "La tua libreria musicale"
+    },
+    "title": "La tua libreria",
+    "tabs": {
+      "playlists": "Playlist",
+      "artists": "Artisti",
+      "albums": "Album"
+    },
+    "continueListening": "Continua ad ascoltare",
+    "likedSongs": "Brani che ti piacciono",
+    "createPlaylist": "Crea playlist",
+    "createFirstPlaylist": "Crea la tua prima playlist",
+    "errors": {
+      "load": "Impossibile caricare la tua libreria",
+      "session": "Non siamo riusciti a confermare la tua sessione."
+    },
+    "signedOut": "Accedi per vedere la tua libreria",
+    "filters": {
+      "all": "Tutto",
+      "episodes": "Episodi"
+    },
+    "empty": {
+      "all": "La tua libreria è vuota",
+      "playlists": "Ancora nessuna playlist",
+      "artists": "Non segui ancora nessun artista",
+      "albums": "Ancora nessun album salvato",
+      "podcasts": "Ancora nessun podcast seguito",
+      "episodes": "Nessun episodio in corso"
+    },
+    "songCount_one": "{{count}} brano",
+    "songCount_other": "{{count}} brani"
+  },
+  "liked": {
+    "seo": {
+      "title": "Brani che ti piacciono - Syra",
+      "description": "I brani che ti piacciono"
+    },
+    "empty": {
+      "title": "Qui compariranno i brani che ti piacciono",
+      "action": "Trova qualcosa che ti piaccia"
+    },
+    "signedOut": "Accedi per vedere i brani che ti piacciono",
+    "errors": {
+      "load": "Impossibile caricare i brani che ti piacciono",
+      "message": "Qualcosa è andato storto durante il caricamento. Riprova."
+    },
+    "gate": {
+      "unavailableMessage": "Non siamo riusciti a confermare la tua sessione, quindi i brani che ti piacciono non sono stati mostrati. Riprova."
     }
   }
 }

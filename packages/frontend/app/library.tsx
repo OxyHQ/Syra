@@ -33,17 +33,30 @@ const FAB_BOTTOM_OFFSET = 24;
 const FAB_PLAYER_BAR_CLEARANCE = PLAYER_BAR_HEIGHT + 20;
 const FAB_SIDE_OFFSET = 16;
 
+// These stay English identifiers: they are the filter's VALUE (and the source of
+// `LibraryFilter`), not its label. The label comes from the key maps below, so a
+// translated UI never changes what the state machine compares against.
 const LIBRARY_FILTERS = ['All', 'Playlists', 'Artists', 'Albums', 'Podcasts', 'Episodes'] as const;
 type LibraryFilter = (typeof LIBRARY_FILTERS)[number];
 
+/** Chip label per filter. */
+const LIBRARY_FILTER_KEYS: Record<LibraryFilter, string> = {
+  All: 'library.filters.all',
+  Playlists: 'library.tabs.playlists',
+  Artists: 'library.tabs.artists',
+  Albums: 'library.tabs.albums',
+  Podcasts: 'common.podcasts',
+  Episodes: 'library.filters.episodes',
+};
+
 /** Empty-state copy per filter, shown only once the library is known to be empty. */
-const EMPTY_LIBRARY_TEXT: Record<LibraryFilter, string> = {
-  All: 'Your library is empty',
-  Playlists: 'No playlists yet',
-  Artists: 'No followed artists yet',
-  Albums: 'No saved albums yet',
-  Podcasts: 'No podcast subscriptions yet',
-  Episodes: 'No episodes in progress',
+const EMPTY_LIBRARY_KEYS: Record<LibraryFilter, string> = {
+  All: 'library.empty.all',
+  Playlists: 'library.empty.playlists',
+  Artists: 'library.empty.artists',
+  Albums: 'library.empty.albums',
+  Podcasts: 'library.empty.podcasts',
+  Episodes: 'library.empty.episodes',
 };
 
 interface LibraryScreenProps {
@@ -130,7 +143,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   // the parent passes data but not the session's terminal state, so an
   // unresolved auth would otherwise fall through to "your library is empty".
   const finalError = gate.isTimedOut
-    ? 'We could not confirm your session.'
+    ? t('library.errors.session')
     : isUsingProps ? (propsError ?? null) : collections.error;
 
   const isLibraryEmptyForFilter =
@@ -145,8 +158,8 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
     <>
       {!showSidebarControls && (
         <SEO
-          title="Your Library - Syra"
-          description="Your music library"
+          title={t('library.seo.title')}
+          description={t('library.seo.description')}
         />
       )}
       <View style={styles.libraryContainer}>
@@ -158,7 +171,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         scrollEventThrottle={16}
       >
         <View style={styles.header}>
-          <Text style={[styles.title, { color: theme.colors.text }]}>Your Library</Text>
+          <Text style={[styles.title, { color: theme.colors.text }]}>{t('library.title')}</Text>
           <View style={styles.headerActions}>
             {showSidebarControls && onFullscreen && (
               <Pressable
@@ -209,7 +222,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                     fontWeight: isActive ? '700' : '600'
                   }
                 ]}>
-                  {filter}
+                  {t(LIBRARY_FILTER_KEYS[filter])}
                 </Text>
               </Pressable>
             );
@@ -226,7 +239,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
               <Ionicons name="heart" size={24} color={theme.colors.primaryForeground} />
             </View>
             <View style={styles.itemContent}>
-              <Text style={[styles.itemTitle, { color: theme.colors.text }]}>Liked Songs</Text>
+              <Text style={[styles.itemTitle, { color: theme.colors.text }]}>{t('library.likedSongs')}</Text>
               <Text style={[styles.itemSubtitle, { color: theme.colors.textSecondary }]}>
                 Playlist • {finalLoading ? '...' : `${finalLikedTracksCount} ${finalLikedTracksCount === 1 ? 'song' : 'songs'}`}
               </Text>
@@ -237,7 +250,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         {/* Loading state */}
         {finalLoading && (gate.isAuthenticated || gate.isResolving) && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Playlists</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('library.tabs.playlists')}</Text>
             <View style={styles.itemsContainer}>
               <LibraryListSkeleton count={6} />
             </View>
@@ -250,7 +263,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
             containerStyle={styles.inlineState}
             icon={{ name: 'cloud-offline-outline' }}
             error={{
-              title: 'Could not load your library',
+              title: t('library.errors.load'),
               message: finalError,
               onRetry: collections.retry,
             }}
@@ -260,7 +273,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         {/* Playlists list */}
         {!finalLoading && !finalError && finalPlaylists.length > 0 && (activeFilter === 'All' || activeFilter === 'Playlists') && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Playlists</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('library.tabs.playlists')}</Text>
             <View style={styles.itemsContainer}>
               {finalPlaylists.map((playlist) => (
                 <Pressable
@@ -288,7 +301,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                       {playlist.name}
                     </Text>
                     <Text style={[styles.itemSubtitle, { color: theme.colors.textSecondary }]}>
-                      {playlist.visibility === 'public' ? 'Public' : 'Private'} • {playlist.trackCount || 0} {playlist.trackCount === 1 ? 'song' : 'songs'}
+                      {playlist.visibility === 'public' ? t('common.public') : t('common.private')} • {t('library.songCount', { count: playlist.trackCount || 0 })}
                     </Text>
                   </View>
                 </Pressable>
@@ -300,7 +313,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         {/* Artists list */}
         {!finalLoading && !finalError && finalFollowedArtists.length > 0 && (activeFilter === 'All' || activeFilter === 'Artists') && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Artists</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('library.tabs.artists')}</Text>
             <View style={styles.itemsContainer}>
               {finalFollowedArtists.map((artist) => (
                 <Pressable
@@ -328,7 +341,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                       {artist.name}
                     </Text>
                     <Text style={[styles.itemSubtitle, { color: theme.colors.textSecondary }]}>
-                      Artist
+                      {t('common.artist')}
                     </Text>
                   </View>
                 </Pressable>
@@ -340,7 +353,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         {/* Albums list */}
         {!finalLoading && !finalError && finalSavedAlbums.length > 0 && (activeFilter === 'All' || activeFilter === 'Albums') && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Albums</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('library.tabs.albums')}</Text>
             <View style={styles.itemsContainer}>
               {finalSavedAlbums.map((album) => (
                 <Pressable
@@ -380,7 +393,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         {/* Subscribed podcasts */}
         {gate.isAuthenticated && (activeFilter === 'All' || activeFilter === 'Podcasts') && subscribedPodcasts.length > 0 && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Podcasts</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('common.podcasts')}</Text>
             <View style={styles.itemsContainer}>
               {subscribedPodcasts.map(({ podcast }) => {
                 const imageUri = resolvePodcastArtwork(podcast, 'thumbnail');
@@ -402,7 +415,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                         {podcast.title}
                       </Text>
                       <Text style={[styles.itemSubtitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>
-                        {podcast.author ?? 'Podcast'}
+                        {podcast.author ?? t('common.podcast')}
                       </Text>
                     </View>
                   </Pressable>
@@ -415,7 +428,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         {/* In-progress episodes */}
         {gate.isAuthenticated && (activeFilter === 'All' || activeFilter === 'Episodes') && inProgressEpisodes.length > 0 && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Continue listening</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('library.continueListening')}</Text>
             <View style={styles.itemsContainer}>
               {inProgressEpisodes.map((entry) => (
                 <EpisodeRow
@@ -438,10 +451,10 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
           <EmptyState
             containerStyle={styles.inlineState}
             icon={{ name: 'musical-notes-outline' }}
-            title={EMPTY_LIBRARY_TEXT[activeFilter]}
+            title={t(EMPTY_LIBRARY_KEYS[activeFilter])}
             action={
               activeFilter === 'Playlists'
-                ? { label: 'Create your first playlist', onPress: () => router.push('/create-playlist') }
+                ? { label: t('library.createFirstPlaylist'), onPress: () => router.push('/create-playlist') }
                 : undefined
             }
           />
@@ -452,7 +465,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
           <EmptyState
             containerStyle={styles.inlineState}
             icon={{ name: 'lock-closed-outline' }}
-            title="Sign in to view your library"
+            title={t('library.signedOut')}
           />
         )}
       </Animated.ScrollView>
@@ -461,8 +474,8 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
           <Fab
             onPress={() => router.push('/create-playlist')}
             iconName="plus"
-            accessibilityLabel={t('Create Playlist')}
-            label={t('Create Playlist')}
+            accessibilityLabel={t('library.createPlaylist')}
+            label={t('library.createPlaylist')}
             expanded={fabExpanded}
             size={showSidebarControls ? 48 : 56}
             style={fabStyle}

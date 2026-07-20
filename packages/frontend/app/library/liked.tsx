@@ -70,8 +70,8 @@ const LikedSongsScreen: React.FC = () => {
         containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
         icon={{ name: 'cloud-offline-outline' }}
         error={{
-          title: 'Session unavailable',
-          message: 'We could not confirm your session, so your liked songs stayed hidden. Please try again.',
+          title: t('common.sessionUnavailable'),
+          message: t('liked.gate.unavailableMessage'),
           onRetry: async () => {
             gate.retry();
           },
@@ -93,7 +93,7 @@ const LikedSongsScreen: React.FC = () => {
       <View style={[styles.centered, { backgroundColor: theme.colors.backgroundSecondary }]}>
         <Ionicons name="lock-closed-outline" size={48} color={theme.colors.textSecondary} style={styles.centeredIcon} />
         <Text style={[styles.centeredText, { color: theme.colors.textSecondary }]}>
-          Sign in to view your liked songs
+          {t('liked.signedOut')}
         </Text>
       </View>
     );
@@ -101,7 +101,7 @@ const LikedSongsScreen: React.FC = () => {
 
   return (
     <>
-      <SEO title="Liked Songs - Syra" description="Your liked songs" />
+      <SEO title={t('liked.seo.title')} description={t('liked.seo.description')} />
       <ScrollView
         style={[styles.scrollView, { backgroundColor: theme.colors.backgroundSecondary }]}
         contentContainerStyle={styles.scrollContent}
@@ -113,8 +113,8 @@ const LikedSongsScreen: React.FC = () => {
             <Ionicons name="heart" size={64} color={theme.colors.primaryForeground} />
           </View>
           <View style={styles.headerInfo}>
-            <Text style={[styles.headerEyebrow, { color: theme.colors.textSecondary }]}>Playlist</Text>
-            <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Liked Songs</Text>
+            <Text style={[styles.headerEyebrow, { color: theme.colors.textSecondary }]}>{t('common.playlist')}</Text>
+            <Text style={[styles.headerTitle, { color: theme.colors.text }]}>{t('library.likedSongs')}</Text>
             <Text style={[styles.headerMeta, { color: theme.colors.textSecondary }]}>
               {isLoading ? '...' : `${total} ${total === 1 ? 'song' : 'songs'}`}
               {totalDurationFormatted ? ` • ${totalDurationFormatted}` : ''}
@@ -129,7 +129,7 @@ const LikedSongsScreen: React.FC = () => {
             onPress={handlePlayAll}
             disabled={tracks.length === 0}
             accessibilityRole="button"
-            accessibilityLabel={t('Play')}
+            accessibilityLabel={t('common.play')}
           >
             <Ionicons name="play" size={28} color={theme.colors.primaryForeground} />
           </Pressable>
@@ -145,8 +145,8 @@ const LikedSongsScreen: React.FC = () => {
             containerStyle={styles.inlineState}
             icon={{ name: 'cloud-offline-outline' }}
             error={{
-              title: 'Could not load your liked songs',
-              message: 'Something went wrong while loading this list. Please try again.',
+              title: t('liked.errors.load'),
+              message: t('liked.errors.message'),
               onRetry: async () => {
                 await refetch();
               },
@@ -156,13 +156,13 @@ const LikedSongsScreen: React.FC = () => {
           <View style={styles.centered}>
             <Ionicons name="heart-outline" size={48} color={theme.colors.textSecondary} style={styles.centeredIcon} />
             <Text style={[styles.centeredText, { color: theme.colors.textSecondary }]}>
-              Songs you like will appear here
+              {t('liked.empty.title')}
             </Text>
             <Pressable
               onPress={() => router.push('/search')}
               style={[styles.findButton, { backgroundColor: theme.colors.primary }]}
             >
-              <Text style={[styles.findButtonText, { color: theme.colors.primaryForeground }]}>Find something to like</Text>
+              <Text style={[styles.findButtonText, { color: theme.colors.primaryForeground }]}>{t('liked.empty.action')}</Text>
             </Pressable>
           </View>
         ) : (
