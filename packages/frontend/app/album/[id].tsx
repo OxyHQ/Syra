@@ -73,10 +73,10 @@ const AlbumScreen: React.FC = () => {
     ? pickCatalogImageUrl(undefined, album.coverArt, 'detailArtwork', album.coverArtSizes)
     : undefined;
 
-  // VIEW MODE: theme the WHOLE app from the album cover ON VIEW (once it resolves)
-  // and restore the default on leave. Called before the early returns so the hook
-  // order is stable; it no-ops until the cover URL is available.
-  useViewAmbient(id, albumCoverImage);
+  // VIEW MODE: theme the WHOLE app from the album's server-extracted cover colours
+  // ON VIEW and restore the default on leave. Called before the early returns so
+  // the hook order is stable; it no-ops until the album (and its colours) load.
+  useViewAmbient(album?.primaryColor, album?.secondaryColor);
 
   const formatReleaseDate = (dateString: string): string => {
     const date = new Date(dateString);

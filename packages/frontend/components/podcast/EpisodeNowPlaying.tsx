@@ -7,7 +7,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useEpisodeChapters } from '@/hooks/usePodcasts';
-import { resolvePodcastImageUri } from '@/utils/podcastImages';
+import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { formatDuration } from '@/utils/musicUtils';
 import { SpeedPill, SkipButton } from './PodcastTransportControls';
 
@@ -33,7 +33,7 @@ export const EpisodeNowPlaying: React.FC = () => {
     return null;
   }
 
-  const artwork = resolvePodcastImageUri(episode, 'hero');
+  const artwork = pickCatalogImageUrl(undefined, episode.image, 'hero', episode.imageSizes, episode.imageSourceUrl);
   const chapters = chaptersQuery.data ?? [];
   const activeChapterIndex = chapters.reduce(
     (active, chapter, index) => (currentTime >= chapter.startTime ? index : active),
