@@ -1,0 +1,41 @@
+name: Quality
+
+# Typecheck + lint every workspace on every change. The deploy workflows are
+# path-filtered (backend deploys on backend changes, etc.), so a change confined
+# to @syra.fm/sdk or @syra/shared-types — both consumed by all the apps — would
+# otherwise reach main with no type coverage at all. This job is deliberately
+# NOT path-filtered so that never happens.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+      - run: bun install --frozen-lockfile
+      # shared-types and the SDK are consumed as built output (dist/lib) by the
+      # apps, so their typechecks — and the apps' — need them built first, same
+      # order the deploy workflows use.
+      - run: bun run build:shared-types
+      - run: bun run build:sdk
+      - name: Typecheck all packages
+        run: bun run --filter '*' typecheck
+      # Lint only the packages that carry an eslint config today (frontend,
+      # studio). `expo lint` exits non-zero only on errors, not warnings, so this
+      # gates real breakage without failing on the existing warning backlog.
+      # backend / sdk / shared-types have no eslint config yet — adding one is a
+      # separate change so this gate can land without a lint-fix sweep.
+      - name: Lint
+        run: |
+          cd packages/frontend && bun run lint
+          cd ../studio && bun run lint
