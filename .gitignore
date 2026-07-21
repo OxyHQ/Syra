@@ -118,3 +118,5 @@ temp/
 package-lock.json
 # NativeWind generated
 nativewind-env.d.ts
+expo-env.d.ts
+.claude/worktrees/
