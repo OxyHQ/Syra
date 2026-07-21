@@ -3,23 +3,29 @@ import express from 'express';
 import type { Server } from 'http';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { clear, connect, disconnect } from '../test/mongo';
-import House, { HouseMemberRole, HouseVisibility } from '../models/House';
+import House, {
+  HouseDiscovery,
+  HouseJoin,
+  HouseMemberRole,
+  HouseRooms,
+  IHouseVisibility,
+} from '../models/House';
 import Room, { OwnerType, RoomStatus, RoomType } from '../models/Room';
 import Series, { RecurrenceType } from '../models/Series';
 import housesRoutes from './houses.routes';
 import seriesRoutes from './series.routes';
+import roomsRoutes from './rooms.routes';
 
 /**
- * Route-level enforcement of {@link HouseVisibility}.
+ * Route-level enforcement of the three visibility axes (discovery / rooms /
+ * join). These go through the real routers rather than calling the model
+ * methods directly, because the class of bug being guarded against was never a
+ * wrong predicate — it was a predicate that simply wasn't called. Only a
+ * request through the router proves the gate is wired.
  *
- * These go through the real router rather than calling the model methods
- * directly, because the bug being fixed was never a wrong predicate — the
- * predicate simply was not called: `GET /houses/:id/rooms` checked only that
- * the house existed, so any authenticated user could enumerate a private
- * house's rooms. Only a request through the router proves the gate is wired.
- *
- * Each level is exercised against all three caller kinds: a member, an
- * authenticated non-member, and an unauthenticated caller.
+ * The axes are exercised independently: the required `{listed, members}` case
+ * proves discovery and rooms move separately (the house is findable but its
+ * rooms are sealed), and `{hidden, ...}` proves discovery wins over rooms.
  */
 
 const OWNER_ID = 'owner-1';
@@ -27,19 +33,18 @@ const MEMBER_ID = 'member-1';
 /** Authenticated, but in none of the houses under test. */
 const OUTSIDER_ID = 'outsider-1';
 
-/** Appears only inside a house's rooms — must never reach a barred caller. */
 const SECRET_ROOM_TITLE = 'Strategy sync (members only)';
-/** Appears only inside a house's series — same. */
 const SECRET_SERIES_TITLE = 'Weekly members standup';
 
 beforeAll(connect);
 afterEach(clear);
 afterAll(disconnect);
 
-/** A house at `visibility` with an owner and one plain member. */
-async function houseAt(visibility: HouseVisibility) {
+/** A house at the given axes (missing axes take the schema defaults), with an
+ * owner and one plain member. */
+async function houseWith(visibility: Partial<IHouseVisibility>) {
   return House.create({
-    name: `${visibility} house`,
+    name: `${visibility.discovery ?? 'listed'}/${visibility.rooms ?? 'anyone'}/${visibility.join ?? 'invite'} house`,
     createdBy: OWNER_ID,
     visibility,
     members: [
@@ -49,7 +54,7 @@ async function houseAt(visibility: HouseVisibility) {
   });
 }
 
-/** A scheduled room owned by `houseId`, carrying the secret title. */
+/** A live room owned by `houseId`, carrying the secret title. */
 async function roomIn(houseId: string) {
   return Room.create({
     title: SECRET_ROOM_TITLE,
@@ -58,10 +63,11 @@ async function roomIn(houseId: string) {
     houseId,
     type: RoomType.TALK,
     status: RoomStatus.LIVE,
+    maxParticipants: 100,
   });
 }
 
-/** An active series owned by `houseId` (or by a profile when omitted). */
+/** An active series owned by `houseId` (or a profile when omitted). */
 async function seriesIn(houseId?: string) {
   return Series.create({
     title: SECRET_SERIES_TITLE,
@@ -75,9 +81,9 @@ async function seriesIn(houseId?: string) {
 
 /**
  * Serve `router` on an ephemeral port acting as `actingUserId`, run `exercise`,
- * then close. Passing `undefined` attaches no session at all, standing in for
- * an unauthenticated caller — the handler must still refuse rather than lean on
- * the `oxy.auth()` mount in server.ts being present.
+ * then close. `undefined` attaches no session at all — the unauthenticated case,
+ * where the handler must refuse on its own rather than lean on `oxy.auth()`
+ * being mounted upstream in server.ts.
  */
 async function withRouter(
   mountPath: string,
@@ -110,254 +116,282 @@ async function withRouter(
   }
 }
 
-/** GET `path` on the houses router as `actingUserId`. */
-async function getHouses(path: string, actingUserId: string | undefined) {
-  let result = { status: 0, body: '' };
-  await withRouter('/api/houses', housesRoutes, actingUserId, async (baseUrl) => {
-    const response = await fetch(`${baseUrl}/api/houses${path}`);
+type Result = { status: number; body: string };
+
+async function request(
+  mountPath: string,
+  router: express.Router,
+  path: string,
+  actingUserId: string | undefined,
+  init?: { method?: string; json?: unknown },
+): Promise<Result> {
+  let result: Result = { status: 0, body: '' };
+  await withRouter(mountPath, router, actingUserId, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}${mountPath}${path}`, {
+      method: init?.method ?? 'GET',
+      headers: init?.json ? { 'content-type': 'application/json' } : undefined,
+      body: init?.json ? JSON.stringify(init.json) : undefined,
+    });
     result = { status: response.status, body: await response.text() };
   });
   return result;
 }
 
-/** GET `path` on the series router as `actingUserId`. */
-async function getSeries(path: string, actingUserId: string | undefined) {
-  let result = { status: 0, body: '' };
-  await withRouter('/api/series', seriesRoutes, actingUserId, async (baseUrl) => {
-    const response = await fetch(`${baseUrl}/api/series${path}`);
-    result = { status: response.status, body: await response.text() };
-  });
-  return result;
-}
+const getHouses = (path: string, user: string | undefined) =>
+  request('/api/houses', housesRoutes, path, user);
+const getSeries = (path: string, user: string | undefined) =>
+  request('/api/series', seriesRoutes, path, user);
 
-describe('GET /api/houses/:id/rooms', () => {
-  it('serves a public house to a member, a non-member and an anonymous caller', async () => {
-    const house = await houseAt(HouseVisibility.PUBLIC);
-    await roomIn(house._id.toString());
-    const path = `/${house._id.toString()}/rooms`;
-
+describe('discovery axis — GET /api/houses/:id (see the house exists)', () => {
+  it('listed: readable by member, non-member and anonymous', async () => {
+    const house = await houseWith({ discovery: HouseDiscovery.LISTED });
     for (const caller of [MEMBER_ID, OUTSIDER_ID, undefined]) {
-      const { status, body } = await getHouses(path, caller);
-      expect(status).toBe(200);
-      // Proves the room really is in the payload, so the 403/404 cases below
-      // are not passing merely because the house has no rooms.
-      expect(body).toContain(SECRET_ROOM_TITLE);
+      expect((await getHouses(`/${house._id.toString()}`, caller)).status).toBe(200);
     }
   });
 
-  it('hides an invite-only house\'s rooms from non-members without hiding the house', async () => {
-    const house = await houseAt(HouseVisibility.INVITE_ONLY);
-    await roomIn(house._id.toString());
-    const path = `/${house._id.toString()}/rooms`;
-
-    const member = await getHouses(path, MEMBER_ID);
-    expect(member.status).toBe(200);
-    expect(member.body).toContain(SECRET_ROOM_TITLE);
-
+  it('unlisted: readable by id for everyone, but absent from the listing for a non-member', async () => {
+    const house = await houseWith({ discovery: HouseDiscovery.UNLISTED });
     for (const caller of [OUTSIDER_ID, undefined]) {
-      const { status, body } = await getHouses(path, caller);
-      // 403 not 404: an invite-only house is allowed to be known to exist.
-      expect(status).toBe(403);
-      expect(body).not.toContain(SECRET_ROOM_TITLE);
+      expect((await getHouses(`/${house._id.toString()}`, caller)).status).toBe(200);
+      // Reachable by id, but not discoverable in the listing.
+      expect((await getHouses('/', caller)).body).not.toContain(house.name);
     }
   });
 
-  it('denies a private house\'s existence to non-members', async () => {
-    const house = await houseAt(HouseVisibility.PRIVATE);
-    await roomIn(house._id.toString());
-    const path = `/${house._id.toString()}/rooms`;
-
-    const member = await getHouses(path, MEMBER_ID);
-    expect(member.status).toBe(200);
-    expect(member.body).toContain(SECRET_ROOM_TITLE);
-
+  it('hidden: 404 to non-members and anonymous, 200 to a member', async () => {
+    const house = await houseWith({ discovery: HouseDiscovery.HIDDEN });
+    expect((await getHouses(`/${house._id.toString()}`, MEMBER_ID)).status).toBe(200);
     for (const caller of [OUTSIDER_ID, undefined]) {
-      const { status, body } = await getHouses(path, caller);
-      // 404 not 403: a 403 would confirm the house id is real.
+      const { status, body } = await getHouses(`/${house._id.toString()}`, caller);
+      // 404 not 403 — a 403 would confirm a guessed id is real.
       expect(status).toBe(404);
-      expect(body).not.toContain(SECRET_ROOM_TITLE);
+      expect(body).not.toContain(house.name);
     }
   });
 });
 
-describe('GET /api/houses/:id', () => {
-  it('returns a public house, roster included, to every caller', async () => {
-    const house = await houseAt(HouseVisibility.PUBLIC);
-    const path = `/${house._id.toString()}`;
-
-    for (const caller of [MEMBER_ID, OUTSIDER_ID, undefined]) {
-      const { status, body } = await getHouses(path, caller);
-      expect(status).toBe(200);
-      expect(body).toContain(MEMBER_ID);
-    }
-  });
-
-  it('returns an invite-only house without its roster to non-members', async () => {
-    const house = await houseAt(HouseVisibility.INVITE_ONLY);
-    const path = `/${house._id.toString()}`;
-
-    const member = await getHouses(path, MEMBER_ID);
-    expect(member.status).toBe(200);
-    expect(member.body).toContain(MEMBER_ID);
-
-    for (const caller of [OUTSIDER_ID, undefined]) {
-      const { status, body } = await getHouses(path, caller);
-      expect(status).toBe(200);
-      expect(body).toContain('invite_only house');
-      // The house is visible; who is in it is not.
-      expect(body).not.toContain(MEMBER_ID);
-      expect(body).not.toContain('"members"');
-      expect(body).toContain('memberCount');
-      // ...except the owner, kept as attribution so a stranger knows who to
-      // ask for an invite. See serializeHouseFor.
-      expect(body).toContain(`"createdBy":"${OWNER_ID}"`);
-    }
-  });
-
-  it('404s a private house for non-members and serves it to members', async () => {
-    const house = await houseAt(HouseVisibility.PRIVATE);
-    const path = `/${house._id.toString()}`;
-
-    const member = await getHouses(path, MEMBER_ID);
-    expect(member.status).toBe(200);
-    expect(member.body).toContain('private house');
-
-    for (const caller of [OUTSIDER_ID, undefined]) {
-      const { status, body } = await getHouses(path, caller);
-      expect(status).toBe(404);
-      expect(body).not.toContain('private house');
-    }
-  });
-});
-
-describe('GET /api/houses (discovery)', () => {
-  it('lists public and invite-only houses but never a private one to a non-member', async () => {
-    await houseAt(HouseVisibility.PUBLIC);
-    await houseAt(HouseVisibility.INVITE_ONLY);
-    await houseAt(HouseVisibility.PRIVATE);
+describe('discovery axis — GET /api/houses (listing)', () => {
+  it('lists only `listed` houses to a non-member, plus that member\'s own hidden/unlisted', async () => {
+    await houseWith({ discovery: HouseDiscovery.LISTED });
+    await houseWith({ discovery: HouseDiscovery.UNLISTED });
+    await houseWith({ discovery: HouseDiscovery.HIDDEN });
 
     for (const caller of [OUTSIDER_ID, undefined]) {
       const { status, body } = await getHouses('/', caller);
       expect(status).toBe(200);
-      expect(body).toContain('public house');
-      expect(body).toContain('invite_only house');
-      expect(body).not.toContain('private house');
+      expect(body).toContain('listed/anyone/invite house');
+      expect(body).not.toContain('unlisted/anyone/invite house');
+      expect(body).not.toContain('hidden/anyone/invite house');
     }
-  });
 
-  it('lists a member\'s own private house back to them', async () => {
-    await houseAt(HouseVisibility.PRIVATE);
-
-    const { status, body } = await getHouses('/', MEMBER_ID);
-    expect(status).toBe(200);
-    expect(body).toContain('private house');
+    // A member finds their own non-listed houses in the listing.
+    const asMember = await getHouses('/', MEMBER_ID);
+    expect(asMember.body).toContain('unlisted/anyone/invite house');
+    expect(asMember.body).toContain('hidden/anyone/invite house');
   });
 });
 
-describe('GET /api/houses/:id/series', () => {
-  it('gates a house\'s series exactly like its rooms', async () => {
-    const publicHouse = await houseAt(HouseVisibility.PUBLIC);
-    await seriesIn(publicHouse._id.toString());
-    const publicResult = await getHouses(`/${publicHouse._id.toString()}/series`, OUTSIDER_ID);
-    expect(publicResult.status).toBe(200);
-    expect(publicResult.body).toContain(SECRET_SERIES_TITLE);
+describe('rooms axis — GET /api/houses/:id/rooms and /series', () => {
+  it('anyone: lists rooms and series to everyone', async () => {
+    const house = await houseWith({ rooms: HouseRooms.ANYONE });
+    const id = house._id.toString();
+    await roomIn(id);
+    await seriesIn(id);
 
-    const inviteHouse = await houseAt(HouseVisibility.INVITE_ONLY);
-    await seriesIn(inviteHouse._id.toString());
-    const invitePath = `/${inviteHouse._id.toString()}/series`;
-    const inviteMember = await getHouses(invitePath, MEMBER_ID);
-    expect(inviteMember.status).toBe(200);
-    expect(inviteMember.body).toContain(SECRET_SERIES_TITLE);
-    for (const caller of [OUTSIDER_ID, undefined]) {
-      const { status, body } = await getHouses(invitePath, caller);
-      expect(status).toBe(403);
-      expect(body).not.toContain(SECRET_SERIES_TITLE);
+    for (const caller of [MEMBER_ID, OUTSIDER_ID, undefined]) {
+      const rooms = await getHouses(`/${id}/rooms`, caller);
+      expect(rooms.status).toBe(200);
+      expect(rooms.body).toContain(SECRET_ROOM_TITLE);
+      const series = await getHouses(`/${id}/series`, caller);
+      expect(series.status).toBe(200);
+      expect(series.body).toContain(SECRET_SERIES_TITLE);
     }
+  });
 
-    const privateHouse = await houseAt(HouseVisibility.PRIVATE);
-    await seriesIn(privateHouse._id.toString());
-    const privatePath = `/${privateHouse._id.toString()}/series`;
-    const privateMember = await getHouses(privatePath, MEMBER_ID);
-    expect(privateMember.status).toBe(200);
-    expect(privateMember.body).toContain(SECRET_SERIES_TITLE);
+  it('members: 200 for a member, 403 for a non-member — independently of discovery', async () => {
+    // The required combo: LISTED discovery (findable) but MEMBERS rooms (sealed).
+    const house = await houseWith({ discovery: HouseDiscovery.LISTED, rooms: HouseRooms.MEMBERS });
+    const id = house._id.toString();
+    await roomIn(id);
+    await seriesIn(id);
+
+    // Discovery is independent: the house itself is readable by a non-member...
+    expect((await getHouses(`/${id}`, OUTSIDER_ID)).status).toBe(200);
+
+    const member = await getHouses(`/${id}/rooms`, MEMBER_ID);
+    expect(member.status).toBe(200);
+    expect(member.body).toContain(SECRET_ROOM_TITLE);
+
     for (const caller of [OUTSIDER_ID, undefined]) {
-      const { status, body } = await getHouses(privatePath, caller);
+      // ...but its rooms and series are sealed: 403, not 404 — the house is
+      // known to exist, the caller just isn't in it.
+      const rooms = await getHouses(`/${id}/rooms`, caller);
+      expect(rooms.status).toBe(403);
+      expect(rooms.body).not.toContain(SECRET_ROOM_TITLE);
+      const series = await getHouses(`/${id}/series`, caller);
+      expect(series.status).toBe(403);
+      expect(series.body).not.toContain(SECRET_SERIES_TITLE);
+    }
+  });
+
+  it('hidden wins over rooms: a hidden house 404s its rooms even to a non-member', async () => {
+    const house = await houseWith({ discovery: HouseDiscovery.HIDDEN, rooms: HouseRooms.ANYONE });
+    const id = house._id.toString();
+    await roomIn(id);
+
+    expect((await getHouses(`/${id}/rooms`, MEMBER_ID)).status).toBe(200);
+    for (const caller of [OUTSIDER_ID, undefined]) {
+      const { status, body } = await getHouses(`/${id}/rooms`, caller);
+      // 404, not the 403 a discoverable sealed house would give.
       expect(status).toBe(404);
-      expect(body).not.toContain(SECRET_SERIES_TITLE);
+      expect(body).not.toContain(SECRET_ROOM_TITLE);
     }
   });
 });
 
-describe('GET /api/series/:id', () => {
-  it('inherits the owning house\'s visibility', async () => {
-    const inviteHouse = await houseAt(HouseVisibility.INVITE_ONLY);
-    const inviteSeries = await seriesIn(inviteHouse._id.toString());
-    const invitePath = `/${inviteSeries._id.toString()}`;
-    expect((await getSeries(invitePath, MEMBER_ID)).status).toBe(200);
+describe('rooms axis — GET /api/series/:id inherits the owning house', () => {
+  it('sealed house series 403 a non-member; profile series stay open', async () => {
+    const sealed = await houseWith({ rooms: HouseRooms.MEMBERS });
+    const houseSeries = await seriesIn(sealed._id.toString());
+    const seriesPath = `/${houseSeries._id.toString()}`;
+    expect((await getSeries(seriesPath, MEMBER_ID)).status).toBe(200);
     for (const caller of [OUTSIDER_ID, undefined]) {
-      const { status, body } = await getSeries(invitePath, caller);
-      expect(status).toBe(403);
-      expect(body).not.toContain(SECRET_SERIES_TITLE);
+      expect((await getSeries(seriesPath, caller)).status).toBe(403);
     }
 
-    const privateHouse = await houseAt(HouseVisibility.PRIVATE);
-    const privateSeries = await seriesIn(privateHouse._id.toString());
-    const privatePath = `/${privateSeries._id.toString()}`;
-    expect((await getSeries(privatePath, MEMBER_ID)).status).toBe(200);
-    for (const caller of [OUTSIDER_ID, undefined]) {
-      const { status, body } = await getSeries(privatePath, caller);
-      expect(status).toBe(404);
-      expect(body).not.toContain(SECRET_SERIES_TITLE);
-    }
+    const profileSeries = await seriesIn();
+    const open = await getSeries(`/${profileSeries._id.toString()}`, OUTSIDER_ID);
+    expect(open.status).toBe(200);
+    expect(open.body).toContain(SECRET_SERIES_TITLE);
   });
+});
 
-  it('leaves a profile-owned series ungated', async () => {
-    const series = await seriesIn();
-
-    const { status, body } = await getSeries(`/${series._id.toString()}`, OUTSIDER_ID);
+describe('rooms axis — member roster in serialization', () => {
+  it('withholds the roster from a non-member of a sealed house, keeping owner + count', async () => {
+    const house = await houseWith({ discovery: HouseDiscovery.LISTED, rooms: HouseRooms.MEMBERS });
+    const { status, body } = await getHouses(`/${house._id.toString()}`, OUTSIDER_ID);
     expect(status).toBe(200);
-    expect(body).toContain(SECRET_SERIES_TITLE);
+    // Parse rather than substring-match: the string "members" also appears as
+    // the `rooms` axis value, so a naive body.contains would false-positive.
+    const parsed = JSON.parse(body) as { house: Record<string, unknown> };
+    expect(parsed.house.members).toBeUndefined();
+    expect(parsed.house.memberCount).toBe(2);
+    // createdBy survives as attribution — who to ask for an invite.
+    expect(parsed.house.createdBy).toBe(OWNER_ID);
+    expect(body).not.toContain(MEMBER_ID);
+  });
+
+  it('shows the full roster on an open house', async () => {
+    const house = await houseWith({ rooms: HouseRooms.ANYONE });
+    const body = (await getHouses(`/${house._id.toString()}`, OUTSIDER_ID)).body;
+    expect(body).toContain(MEMBER_ID);
   });
 });
 
-describe('house visibility writes', () => {
-  it('defaults a new house to public and rejects an unrecognised level', async () => {
+describe('join axis — POST /api/houses/:id/join', () => {
+  it('anyone: a non-member self-joins, and a second attempt is rejected', async () => {
+    const house = await houseWith({ join: HouseJoin.ANYONE });
+    const id = house._id.toString();
+
+    const joined = await request('/api/houses', housesRoutes, `/${id}/join`, OUTSIDER_ID, { method: 'POST' });
+    expect(joined.status).toBe(200);
+
+    // Persisted as a real MEMBER.
+    const after = await House.findById(id);
+    expect(after?.isMember(OUTSIDER_ID)).toBe(true);
+    expect(after?.getMemberRole(OUTSIDER_ID)).toBe(HouseMemberRole.MEMBER);
+
+    const again = await request('/api/houses', housesRoutes, `/${id}/join`, OUTSIDER_ID, { method: 'POST' });
+    expect(again.status).toBe(400);
+  });
+
+  it('invite: a non-member is refused with 403', async () => {
+    const house = await houseWith({ join: HouseJoin.INVITE });
+    const result = await request('/api/houses', housesRoutes, `/${house._id.toString()}/join`, OUTSIDER_ID, { method: 'POST' });
+    expect(result.status).toBe(403);
+    const after = await House.findById(house._id);
+    expect(after?.isMember(OUTSIDER_ID)).toBe(false);
+  });
+
+  it('hidden + anyone: a stranger 404s (cannot join what they cannot see)', async () => {
+    const house = await houseWith({ discovery: HouseDiscovery.HIDDEN, join: HouseJoin.ANYONE });
+    const result = await request('/api/houses', housesRoutes, `/${house._id.toString()}/join`, OUTSIDER_ID, { method: 'POST' });
+    expect(result.status).toBe(404);
+    const after = await House.findById(house._id);
+    expect(after?.isMember(OUTSIDER_ID)).toBe(false);
+  });
+
+  it('rejects an unauthenticated caller with 401', async () => {
+    const house = await houseWith({ join: HouseJoin.ANYONE });
+    const result = await request('/api/houses', housesRoutes, `/${house._id.toString()}/join`, undefined, { method: 'POST' });
+    expect(result.status).toBe(401);
+  });
+});
+
+describe('room-entry gate — POST /api/rooms/:id/join inherits the house rooms axis', () => {
+  it('sealed house: a non-member is refused, a member is admitted', async () => {
+    const house = await houseWith({ rooms: HouseRooms.MEMBERS });
+    const room = await roomIn(house._id.toString());
+    const roomPath = `/${room._id.toString()}/join`;
+
+    const outsider = await request('/api/rooms', roomsRoutes, roomPath, OUTSIDER_ID, { method: 'POST' });
+    expect(outsider.status).toBe(403);
+
+    const member = await request('/api/rooms', roomsRoutes, roomPath, MEMBER_ID, { method: 'POST' });
+    expect(member.status).toBe(200);
+    expect(member.body).toContain('Joined room successfully');
+  });
+
+  it('open house: a non-member may enter', async () => {
+    const house = await houseWith({ rooms: HouseRooms.ANYONE });
+    const room = await roomIn(house._id.toString());
+    const result = await request('/api/rooms', roomsRoutes, `/${room._id.toString()}/join`, OUTSIDER_ID, { method: 'POST' });
+    expect(result.status).toBe(200);
+  });
+});
+
+describe('visibility writes — POST and PATCH /api/houses', () => {
+  it('defaults a new house to listed/anyone/invite', async () => {
     const created = await House.create({ name: 'Defaulted', createdBy: OWNER_ID });
-    expect(created.visibility).toBe(HouseVisibility.PUBLIC);
-
-    const house = await houseAt(HouseVisibility.PUBLIC);
-    await withRouter('/api/houses', housesRoutes, OWNER_ID, async (baseUrl) => {
-      const response = await fetch(`${baseUrl}/api/houses/${house._id.toString()}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ visibility: 'semi-public' }),
-      });
-      expect(response.status).toBe(400);
-    });
-
-    // The rejected write must not have silently downgraded anything.
-    const unchanged = await House.findById(house._id);
-    expect(unchanged?.visibility).toBe(HouseVisibility.PUBLIC);
+    expect(created.visibility.discovery).toBe(HouseDiscovery.LISTED);
+    expect(created.visibility.rooms).toBe(HouseRooms.ANYONE);
+    expect(created.visibility.join).toBe(HouseJoin.INVITE);
   });
 
-  it('lets an admin change the level and applies it immediately to room listing', async () => {
-    const house = await houseAt(HouseVisibility.PUBLIC);
-    await roomIn(house._id.toString());
-    const roomsPath = `/${house._id.toString()}/rooms`;
-
-    expect((await getHouses(roomsPath, OUTSIDER_ID)).status).toBe(200);
-
-    await withRouter('/api/houses', housesRoutes, OWNER_ID, async (baseUrl) => {
-      const response = await fetch(`${baseUrl}/api/houses/${house._id.toString()}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ visibility: HouseVisibility.PRIVATE }),
-      });
-      expect(response.status).toBe(200);
+  it('rejects an unrecognised axis value with 400 without mutating the house', async () => {
+    const house = await houseWith({ rooms: HouseRooms.ANYONE });
+    const result = await request('/api/houses', housesRoutes, `/${house._id.toString()}`, OWNER_ID, {
+      method: 'PATCH',
+      json: { visibility: { rooms: 'semi-open' } },
     });
+    expect(result.status).toBe(400);
+    const after = await House.findById(house._id);
+    expect(after?.visibility.rooms).toBe(HouseRooms.ANYONE);
+  });
 
-    const after = await getHouses(roomsPath, OUTSIDER_ID);
-    expect(after.status).toBe(404);
-    expect(after.body).not.toContain(SECRET_ROOM_TITLE);
+  it('PATCH changes one axis and leaves the others intact, applying immediately', async () => {
+    const house = await houseWith({ discovery: HouseDiscovery.LISTED, rooms: HouseRooms.ANYONE });
+    const id = house._id.toString();
+    await roomIn(id);
+
+    // Rooms listing is open beforehand.
+    expect((await getHouses(`/${id}/rooms`, OUTSIDER_ID)).status).toBe(200);
+
+    const patched = await request('/api/houses', housesRoutes, `/${id}`, OWNER_ID, {
+      method: 'PATCH',
+      json: { visibility: { rooms: HouseRooms.MEMBERS } },
+    });
+    expect(patched.status).toBe(200);
+
+    const after = await House.findById(id);
+    // Only rooms changed; discovery/join untouched.
+    expect(after?.visibility.rooms).toBe(HouseRooms.MEMBERS);
+    expect(after?.visibility.discovery).toBe(HouseDiscovery.LISTED);
+    expect(after?.visibility.join).toBe(HouseJoin.INVITE);
+
+    // And the sealed rooms are now 403 to a non-member (house still discoverable).
+    expect((await getHouses(`/${id}`, OUTSIDER_ID)).status).toBe(200);
+    expect((await getHouses(`/${id}/rooms`, OUTSIDER_ID)).status).toBe(403);
   });
 });

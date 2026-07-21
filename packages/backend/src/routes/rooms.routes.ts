@@ -1573,6 +1573,16 @@ router.post('/:id/join', async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Room not found' });
     }
 
+    // A room in a house inherits that house's `rooms` visibility axis: entering
+    // a room in a `members`-only house requires membership. The house is
+    // resolved from the room's own houseId; the user comes from the session.
+    if (room.houseId) {
+      const house = await House.findById(room.houseId);
+      if (house && !house.canAccessRooms(userId)) {
+        return res.status(403).json({ message: 'Only members can join this house\'s rooms' });
+      }
+    }
+
     // Can only join live rooms
     if (room.status !== RoomStatus.LIVE) {
       return res.status(400).json({

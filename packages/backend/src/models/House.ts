@@ -10,49 +10,89 @@ export enum HouseMemberRole {
 }
 
 /**
- * How much of a house is exposed to a user who is not a member of it.
+ * House visibility as three ORTHOGONAL axes, not a single ladder.
  *
- * This is the authoritative access contract for every house-scoped read. The
- * levels form a ladder — each one removes exactly one capability from the one
- * above it — and membership (`members[].userId`) is the only thing that grants
- * access back. Role (`HouseMemberRole`) governs what a *member* may do; it
- * never widens visibility for a non-member.
+ * A flat level (public / invite-only / private) can only express three points on
+ * one line. Real houses vary along three independent questions, and the axes let
+ * every combination be meaningful by construction — e.g. `{ discovery: listed,
+ * rooms: members }` is "anyone can find the house, but only members see what's
+ * happening in it", which no single level could express. Each axis is one small
+ * enum; each read site is one field comparison.
  *
- * | capability                | public | invite_only | private        |
- * |---------------------------|--------|-------------|----------------|
- * | (a) see the house exists  | anyone | anyone      | members only   |
- * | (b) list its rooms/series | anyone | members     | members        |
- * | (c) join one of its rooms | anyone | members     | members        |
- * | (d) be invited            | n/a    | admin+ adds | admin+ adds    |
+ * Capabilities, and the axis that governs each:
  *
- * Precise semantics:
+ *   (a) see the house exists   → `discovery`
+ *   (b) list its rooms/series  → `rooms`
+ *   (c) enter one of its rooms  → `rooms`
+ *   (d) become a member         → `join`
  *
- * - `public` — fully open. The house appears in discovery (`GET /houses`), its
- *   detail, rooms and series are readable by any caller, and anyone may join a
- *   room in it. Membership only affects write permissions.
+ * ── `discovery` — can this user learn the house exists? ──
+ *   listed    (a) anyone; the house appears in `GET /houses`.
+ *   unlisted  (a) anyone holding its id; absent from listings. Link-sharing, not
+ *             secrecy — the id is the capability.
+ *   hidden    (a) members only. A non-member gets 404 on EVERY house-scoped
+ *             route, so the house's existence is never confirmed. 404 rather
+ *             than 403 is deliberate and load-bearing: a 403 would tell a
+ *             stranger that the id they guessed is real.
  *
- * - `invite_only` — discoverable but sealed. The house still appears in
- *   discovery and its detail is readable, so people can find it and request an
- *   invitation, but the member roster is withheld from non-members and rooms,
- *   series and room joins are members-only (403 — the house is known to exist,
- *   the caller simply is not in it).
+ * ── `rooms` — can this user see and enter what's happening inside? ──
+ *   anyone    (b)+(c) any caller who has cleared `discovery` may list the rooms
+ *             and series and enter the rooms.
+ *   members   (b)+(c) members only; a non-member gets 403 — the house is known
+ *             to exist, the caller simply is not in it. The member roster is
+ *             also withheld from non-members of a `members` house.
  *
- * - `private` — undiscoverable. The house is absent from discovery and every
- *   house-scoped read answers 404 to a non-member, so its existence is never
- *   confirmed. Distinguishing 403 from 404 here is deliberate: a 403 on a
- *   private house would leak that the id is real.
+ * ── `join` — how does a non-member become a member? ──
+ *   anyone    (d) self-service via `POST /houses/:id/join`.
+ *   invite    (d) an admin or owner adds them via `POST /houses/:id/members`.
+ *   (A request-to-join flow is intentionally NOT a value here. A `request` value
+ *   would need pending-request storage and approve/deny endpoints that do not
+ *   exist; shipping it as a setting that silently behaved like `invite` would be
+ *   a control that lies. It is deferred to its own task.)
  *
- * (d) is uniform across all three levels: joining is never self-service for a
- * non-public house — an admin or the owner adds members via
- * `POST /houses/:id/members`, which is role-gated independently of visibility.
+ * ── Composition ── Effective access is the STRICTEST applicable axis, evaluated
+ * `discovery` then `rooms`. A `hidden` house is invisible to non-members
+ * regardless of `rooms`, so `{ hidden, anyone }` behaves as `{ hidden, members }`
+ * — well-defined, not forbidden, and it fails closed.
+ *
+ * Role (`HouseMemberRole`) is orthogonal to all three: it governs what a
+ * *member* may DO inside the house. It never widens visibility for a non-member.
  */
-export enum HouseVisibility {
-  PUBLIC = 'public',
-  INVITE_ONLY = 'invite_only',
-  PRIVATE = 'private'
+export enum HouseDiscovery {
+  LISTED = 'listed',
+  UNLISTED = 'unlisted',
+  HIDDEN = 'hidden'
 }
 
+export enum HouseRooms {
+  ANYONE = 'anyone',
+  MEMBERS = 'members'
+}
+
+export enum HouseJoin {
+  ANYONE = 'anyone',
+  INVITE = 'invite'
+}
+
+/**
+ * Defaults for a new house, and the effective value for any document whose
+ * `visibility` (or an individual axis) is absent. Chosen to reproduce the old
+ * `isPublic: true` behaviour exactly — `join: invite` is today's only membership
+ * mechanism (admin-adds), so existing behaviour is preserved with no backfill.
+ */
+export const DEFAULT_HOUSE_VISIBILITY: IHouseVisibility = {
+  discovery: HouseDiscovery.LISTED,
+  rooms: HouseRooms.ANYONE,
+  join: HouseJoin.INVITE
+};
+
 // --- Interfaces ---
+
+export interface IHouseVisibility {
+  discovery: HouseDiscovery;
+  rooms: HouseRooms;
+  join: HouseJoin;
+}
 
 export interface IHouseMember {
   userId: string;
@@ -71,7 +111,7 @@ export interface IHouse extends Document {
   createdBy: string; // userId of the original creator
 
   // Settings
-  visibility: HouseVisibility;
+  visibility: IHouseVisibility;
   tags: string[];
 
   // Timestamps
@@ -85,9 +125,28 @@ export interface IHouse extends Document {
   canCreateRoom(userId: string): boolean;
   canSeeHouse(userId: string | undefined): boolean;
   canAccessRooms(userId: string | undefined): boolean;
+  isSelfJoinable(): boolean;
 }
 
 // --- Schema ---
+
+const HouseVisibilitySchema = new Schema<IHouseVisibility>({
+  discovery: {
+    type: String,
+    enum: Object.values(HouseDiscovery),
+    default: HouseDiscovery.LISTED
+  },
+  rooms: {
+    type: String,
+    enum: Object.values(HouseRooms),
+    default: HouseRooms.ANYONE
+  },
+  join: {
+    type: String,
+    enum: Object.values(HouseJoin),
+    default: HouseJoin.INVITE
+  }
+}, { _id: false });
 
 const HouseMemberSchema = new Schema({
   userId: {
@@ -142,9 +201,10 @@ const HouseSchema = new Schema({
 
   // Settings
   visibility: {
-    type: String,
-    enum: Object.values(HouseVisibility),
-    default: HouseVisibility.PUBLIC
+    type: HouseVisibilitySchema,
+    // A function default instantiates the subdocument so its per-axis defaults
+    // apply on any document created without an explicit `visibility`.
+    default: () => ({})
   },
   tags: {
     type: [String],
@@ -159,8 +219,8 @@ const HouseSchema = new Schema({
 // Find houses by member
 HouseSchema.index({ 'members.userId': 1 });
 
-// Discovery: the houses a non-member is allowed to see, newest first
-HouseSchema.index({ visibility: 1, createdAt: -1 });
+// Discovery: the houses a non-member is allowed to find, newest first.
+HouseSchema.index({ 'visibility.discovery': 1, createdAt: -1 });
 
 // Text search on name and description
 HouseSchema.index({ name: 'text', description: 'text' });
@@ -208,28 +268,39 @@ HouseSchema.methods.canCreateRoom = function(userId: string): boolean {
 };
 
 /**
- * Capability (a): may this user know the house exists?
+ * Capability (a) — the `discovery` axis. May this user know the house exists?
  *
- * Only `private` hides existence. A caller who fails this check must get 404,
- * never 403 — see {@link HouseVisibility}.
+ * Only `hidden` withholds existence. A caller who fails this check must get 404,
+ * never 403 — see {@link HouseDiscovery}.
  */
 HouseSchema.methods.canSeeHouse = function(userId: string | undefined): boolean {
-  if (this.visibility !== HouseVisibility.PRIVATE) return true;
+  if (this.visibility.discovery !== HouseDiscovery.HIDDEN) return true;
   return userId !== undefined && this.isMember(userId);
 };
 
 /**
- * Capabilities (b) and (c): may this user list the house's rooms and series,
- * and join a room in it?
+ * Capabilities (b) and (c) — the `rooms` axis. May this user list the house's
+ * rooms and series, and enter a room in it?
  *
- * Listing and joining share one rule at every visibility level — anyone for a
- * `public` house, members only otherwise — so they share one method rather
- * than two identical ones. Callers still choose the failure code themselves:
- * 404 when {@link canSeeHouse} also fails, 403 when it does not.
+ * Listing and entering share one rule per axis value, so they share one method.
+ * The caller chooses the failure code: 404 when {@link canSeeHouse} also fails,
+ * 403 when it does not.
  */
 HouseSchema.methods.canAccessRooms = function(userId: string | undefined): boolean {
-  if (this.visibility === HouseVisibility.PUBLIC) return true;
+  if (this.visibility.rooms === HouseRooms.ANYONE) return true;
   return userId !== undefined && this.isMember(userId);
+};
+
+/**
+ * Capability (d) — the `join` axis. Does this house allow self-service joining?
+ *
+ * A house-level policy, independent of who is asking. The endpoint still gates
+ * `canSeeHouse` (404) and already-a-member (400) around this; a `hidden` house is
+ * therefore never self-joinable by a stranger, because they 404 before reaching
+ * the join policy.
+ */
+HouseSchema.methods.isSelfJoinable = function(): boolean {
+  return this.visibility.join === HouseJoin.ANYONE;
 };
 
 export default mongoose.model<IHouse>("House", HouseSchema);

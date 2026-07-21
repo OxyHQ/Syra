@@ -1,6 +1,15 @@
 import { Router, Response } from 'express';
 import multer from 'multer';
-import House, { HouseMemberRole, HouseVisibility, IHouse, IHouseMember } from '../models/House';
+import House, {
+  DEFAULT_HOUSE_VISIBILITY,
+  HouseDiscovery,
+  HouseJoin,
+  HouseMemberRole,
+  HouseRooms,
+  IHouse,
+  IHouseMember,
+  IHouseVisibility,
+} from '../models/House';
 import Room, { RoomStatus } from '../models/Room';
 import Series from '../models/Series';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
@@ -25,32 +34,76 @@ const upload = multer({
 const router = Router();
 
 /**
- * Narrow a client-supplied value to a visibility level, or `undefined` if it is
- * not one. Callers decide whether that means "leave unchanged" or "use the
- * default" — an unrecognised value never silently becomes `public`.
+ * Narrow a client-supplied value to one of an axis's allowed strings, or
+ * `undefined` if it is not one. An unrecognised value is never silently coerced
+ * to a default — callers reject it.
  */
-function parseVisibility(value: unknown): HouseVisibility | undefined {
-  return typeof value === 'string' && (Object.values(HouseVisibility) as string[]).includes(value)
-    ? (value as HouseVisibility)
+function parseAxis<T extends string>(value: unknown, allowed: readonly T[]): T | undefined {
+  return typeof value === 'string' && (allowed as readonly string[]).includes(value)
+    ? (value as T)
     : undefined;
+}
+
+/**
+ * Merge a client-supplied `visibility` object onto a base, validating each axis.
+ *
+ * Only axes present in the input are touched, so PATCH callers change one axis
+ * without restating the others (base = the house's current visibility) and POST
+ * callers omit axes to accept the defaults (base = {@link DEFAULT_HOUSE_VISIBILITY}).
+ * A present-but-invalid axis is a 400, never a silent default — a visibility
+ * control that quietly ignored a value would be a control that lies.
+ */
+function resolveVisibility(
+  input: unknown,
+  base: IHouseVisibility,
+): { visibility: IHouseVisibility } | { error: string } {
+  if (input === undefined) return { visibility: base };
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) {
+    return { error: 'visibility must be an object' };
+  }
+
+  const raw = input as Record<string, unknown>;
+  const result: IHouseVisibility = { ...base };
+
+  if (raw.discovery !== undefined) {
+    const discovery = parseAxis(raw.discovery, Object.values(HouseDiscovery));
+    if (!discovery) return { error: 'Invalid visibility.discovery' };
+    result.discovery = discovery;
+  }
+  if (raw.rooms !== undefined) {
+    const rooms = parseAxis(raw.rooms, Object.values(HouseRooms));
+    if (!rooms) return { error: 'Invalid visibility.rooms' };
+    result.rooms = rooms;
+  }
+  if (raw.join !== undefined) {
+    const join = parseAxis(raw.join, Object.values(HouseJoin));
+    if (!join) return { error: 'Invalid visibility.join' };
+    result.join = join;
+  }
+
+  return { visibility: result };
 }
 
 /**
  * Serialize a house for a caller who has passed {@link IHouse.canSeeHouse}.
  *
  * The member roster names every user in the house, so it is withheld from
- * non-members of a house that is not `public` — those callers may know the
- * house exists (that is what `invite_only` means) without learning who is in
- * it. `memberCount` is kept so the UI can still show how big the house is.
+ * non-members whenever the house is content-sealed (`rooms: members`) — those
+ * callers may know the house exists without learning who is in it. When
+ * `rooms: anyone`, participants are visible in the rooms anyway, so the roster
+ * adds no disclosure and is kept. `memberCount` replaces the withheld roster so
+ * the UI can still show how big the house is.
  *
- * `createdBy` deliberately survives: an invite-only house is discoverable so
- * that someone can ask to be let in, which requires knowing who owns it. It is
+ * `createdBy` deliberately survives the withholding: a discoverable sealed house
+ * is one you might ask to be let into, which requires knowing who owns it. It is
  * the one member id a non-member is meant to learn.
  */
 function serializeHouseFor(house: IHouse, userId: string | undefined): Record<string, unknown> {
   const serialized = house.toObject();
 
-  if (house.visibility !== HouseVisibility.PUBLIC && !(userId !== undefined && house.isMember(userId))) {
+  const sealed = house.visibility.rooms === HouseRooms.MEMBERS;
+  const isMember = userId !== undefined && house.isMember(userId);
+  if (sealed && !isMember) {
     const { members, ...withoutRoster } = serialized;
     return { ...withoutRoster, memberCount: members.length };
   }
@@ -75,13 +128,18 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Name is required' });
     }
 
+    const resolvedVisibility = resolveVisibility(visibility, DEFAULT_HOUSE_VISIBILITY);
+    if ('error' in resolvedVisibility) {
+      return res.status(400).json({ message: resolvedVisibility.error });
+    }
+
     const house = new House({
       name: name.trim(),
       description: description ? String(description).trim() : undefined,
       avatar: avatar ? String(avatar).trim() : undefined,
       coverImage: coverImage ? String(coverImage).trim() : undefined,
       createdBy: userId,
-      visibility: parseVisibility(visibility) ?? HouseVisibility.PUBLIC,
+      visibility: resolvedVisibility.visibility,
       tags: Array.isArray(tags) ? tags.map((t: unknown) => String(t).trim()).filter(Boolean) : [],
       members: [
         {
@@ -113,10 +171,9 @@ router.post('/', async (req: AuthRequest, res: Response) => {
  * List discoverable houses (paginated, cursor-based)
  * GET /api/houses
  *
- * Returns every `public` and `invite_only` house, plus any house the requester
- * is a member of — which is how a member still finds their own `private`
- * houses here. Membership comes from the server-resolved session, never the
- * request.
+ * Returns every `listed` house, plus any house the requester is a member of —
+ * which is how a member still finds their own `unlisted` or `hidden` houses
+ * here. Membership comes from the server-resolved session, never the request.
  */
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
@@ -124,11 +181,13 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     const { limit = '20', cursor, search } = req.query;
 
     // Composed with $and so the visibility $or can never be overwritten by a
-    // later filter that also needs $or.
+    // later filter that also needs $or. `$nin` also matches a document with no
+    // `visibility.discovery` at all, so an untouched legacy house stays listed —
+    // the same fail-open-to-visible default a brand-new house gets.
     const conditions: Record<string, unknown>[] = [
       {
         $or: [
-          { visibility: { $in: [HouseVisibility.PUBLIC, HouseVisibility.INVITE_ONLY] } },
+          { 'visibility.discovery': { $nin: [HouseDiscovery.UNLISTED, HouseDiscovery.HIDDEN] } },
           ...(userId ? [{ 'members.userId': userId }] : []),
         ],
       },
@@ -242,11 +301,13 @@ router.patch('/:id', async (req: AuthRequest, res: Response) => {
       house.tags = tags.map((t: unknown) => String(t).trim()).filter(Boolean);
     }
     if (visibility !== undefined) {
-      const parsedVisibility = parseVisibility(visibility);
-      if (!parsedVisibility) {
-        return res.status(400).json({ message: 'Invalid visibility' });
+      // Merge onto the house's CURRENT visibility so a partial update touches
+      // only the axes it names.
+      const resolvedVisibility = resolveVisibility(visibility, house.visibility);
+      if ('error' in resolvedVisibility) {
+        return res.status(400).json({ message: resolvedVisibility.error });
       }
-      house.visibility = parsedVisibility;
+      house.visibility = resolvedVisibility.visibility;
     }
 
     await house.save();
@@ -502,6 +563,62 @@ router.delete('/:id/members/:userId', async (req: AuthRequest, res: Response) =>
     logger.error('Error removing member:', { userId: req.user?.id, houseId: req.params.id, targetUserId: req.params.userId, error });
     res.status(500).json({
       message: 'Error removing member',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+/**
+ * Join a house (self-service)
+ * POST /api/houses/:id/join
+ *
+ * Succeeds only when the house's `join` axis is `anyone`. The joining user is
+ * resolved from the session, never the body — membership is an identity claim.
+ * Checks compose in order: a house the caller cannot see 404s (a `hidden` house
+ * is thus never self-joinable by a stranger, who never learns it exists); an
+ * already-member gets 400; an `invite`-only house gets 403. The admin-add path
+ * (`POST /:id/members`) is unchanged and independent of this.
+ */
+router.post('/:id/join', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    const { id } = req.params;
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const house = await House.findById(id);
+    if (!house || !house.canSeeHouse(userId)) {
+      return res.status(404).json({ message: 'House not found' });
+    }
+
+    if (house.isMember(userId)) {
+      return res.status(400).json({ message: 'You are already a member' });
+    }
+
+    if (!house.isSelfJoinable()) {
+      return res.status(403).json({ message: 'This house is invite-only' });
+    }
+
+    house.members.push({
+      userId,
+      role: HouseMemberRole.MEMBER,
+      joinedAt: new Date(),
+    } as IHouseMember);
+
+    await house.save();
+
+    logger.info(`User ${userId} self-joined house ${id}`);
+
+    res.json({
+      message: 'Joined house successfully',
+      house: serializeHouseFor(house, userId),
+    });
+  } catch (error) {
+    logger.error('Error joining house:', { userId: req.user?.id, houseId: req.params.id, error });
+    res.status(500).json({
+      message: 'Error joining house',
       error: error instanceof Error ? error.message : 'Unknown error',
     });
   }
