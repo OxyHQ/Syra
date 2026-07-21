@@ -6,6 +6,7 @@ export type {
   Recording,
   House,
   HouseMember,
+  HouseVisibility,
   Series,
   SeriesEpisode,
   Recurrence,

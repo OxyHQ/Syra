@@ -103,6 +103,20 @@ export const ZHouseMember = z.object({
 
 export type HouseMember = z.infer<typeof ZHouseMember>;
 
+/**
+ * House visibility as three orthogonal axes — mirrors the backend `House`
+ * model. `discovery` (who can find it), `rooms` (who can see/enter its rooms),
+ * `join` (how one becomes a member). See the backend model for the full
+ * contract.
+ */
+export const ZHouseVisibility = z.object({
+  discovery: z.enum(['listed', 'unlisted', 'hidden']).default('listed'),
+  rooms: z.enum(['anyone', 'members']).default('anyone'),
+  join: z.enum(['anyone', 'invite']).default('invite'),
+}).passthrough();
+
+export type HouseVisibility = z.infer<typeof ZHouseVisibility>;
+
 export const ZHouse = z.object({
   _id: z.string(),
   id: z.string().optional(),
@@ -110,9 +124,12 @@ export const ZHouse = z.object({
   description: z.string().optional(),
   avatar: z.string().optional().nullable(),
   coverImage: z.string().optional().nullable(),
+  // Withheld from non-members of a `rooms: members` house; `memberCount` is sent
+  // in its place. Both survive `.passthrough()`.
   members: z.array(ZHouseMember).default([]),
+  memberCount: z.number().optional(),
   createdBy: z.string(),
-  isPublic: z.boolean().default(true),
+  visibility: ZHouseVisibility.default({ discovery: 'listed', rooms: 'anyone', join: 'invite' }),
   tags: z.array(z.string()).optional(),
   createdAt: z.string(),
 }).passthrough();

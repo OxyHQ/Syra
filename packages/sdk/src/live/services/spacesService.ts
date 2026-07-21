@@ -1,4 +1,4 @@
-import type { Room, Recording, House, HttpClient } from '../types';
+import type { Room, Recording, House, HouseVisibility, HttpClient } from '../types';
 import { validateRooms, validateRoom, validateRecordings, validateRecording, validateHouse, ZStartStreamResponse, ZGenerateStreamKeyResponse } from '../validation';
 
 export interface CreateRoomData {
@@ -630,7 +630,7 @@ export function createRoomsService(httpClient: HttpClient) {
 
     // --- Houses ---
 
-    async createHouse(data: { name: string; description?: string; tags?: string[]; isPublic?: boolean }): Promise<House | null> {
+    async createHouse(data: { name: string; description?: string; tags?: string[]; visibility?: Partial<HouseVisibility> }): Promise<House | null> {
       try {
         const res = await httpClient.post("/houses", data);
         const raw = res.house || res.data || res || null;
