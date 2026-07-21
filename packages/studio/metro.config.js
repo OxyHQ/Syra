@@ -50,9 +50,6 @@ config.resolver = {
     // Block source maps in production (they can be large)
     /\.map$/,
   ],
-  extraNodeModules: {
-    '@syra/shared-types': path.join(monorepoRoot, 'packages/shared-types'),
-  },
   // Resolve from studio node_modules first, then root (for workspaces)
   nodeModulesPaths: [
     path.join(projectRoot, 'node_modules'),

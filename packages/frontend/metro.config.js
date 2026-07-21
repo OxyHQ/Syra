@@ -56,9 +56,6 @@ config.resolver = {
     // packages — silently dropping them from the graph.
     /\.(js|jsx|mjs|cjs|ts|tsx|css)\.map$/,
   ],
-  extraNodeModules: {
-    '@syra/shared-types': path.join(monorepoRoot, 'packages/shared-types'),
-  },
   // Resolve from frontend node_modules first, then root (for workspaces)
   nodeModulesPaths: [
     path.join(projectRoot, 'node_modules'),

@@ -23,7 +23,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1087.0",
     "@socket.io/redis-adapter": "^8.2.0",
     "@syra.fm/sdk": "workspace:*",
-    "@syra/shared-types": "file:../shared-types",
+    "@syra/shared-types": "workspace:*",
     "@types/compression": "^1.8.1",
     "@types/multer": "^2.2.0",
     "@types/sharp": "^0.32.0",
