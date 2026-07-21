@@ -51,7 +51,7 @@
   },
   "scripts": {
     "build": "bob build",
-    "prepare": "bob build",
+    "prepare": "bun run build",
     "clean": "rm -rf lib",
     "typecheck": "tsc --noEmit -p tsconfig.build.json",
     "test": "bun test src",
