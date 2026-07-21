@@ -69,6 +69,11 @@ const ALLOWED_ORIGINS: string[] = [
   ...env.ALLOWED_ORIGINS,
 ];
 
+// One source of truth for the CORS allow-list so the HTTP and Socket.IO
+// configs can never drift apart. `X-Syra-Device-Id` lets a guest identify its
+// device for radio/session reads (not a security boundary — see radio.controller).
+const ALLOWED_HEADERS = ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-Requested-With', 'Accept', 'Accept-Version', 'Content-Length', 'Content-MD5', 'Date', 'X-Api-Version', 'X-Syra-Device-Id'];
+
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin || ALLOWED_ORIGINS.includes(origin)) {
@@ -79,7 +84,7 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-Requested-With', 'Accept', 'Accept-Version', 'Content-Length', 'Content-MD5', 'Date', 'X-Api-Version'],
+  allowedHeaders: ALLOWED_HEADERS,
 }));
 
 // LiveKit webhook — mounted BEFORE the global JSON parser (and the rate limiter)
@@ -181,7 +186,7 @@ const io = new SocketIOServer(server, {
     origin: ALLOWED_ORIGINS,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-Requested-With', 'Accept', 'Accept-Version', 'Content-Length', 'Content-MD5', 'Date', 'X-Api-Version'],
+    allowedHeaders: ALLOWED_HEADERS,
   },
   perMessageDeflate: {
     threshold: SOCKET_CONFIG.COMPRESSION_THRESHOLD,
