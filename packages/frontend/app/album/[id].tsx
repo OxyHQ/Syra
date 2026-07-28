@@ -18,7 +18,7 @@ import { useLibrary, useToggleSaveAlbum, useToggleLikeTrack } from '@/hooks/useL
 import { LinearGradient } from 'expo-linear-gradient';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { isNotFoundError } from '@/utils/api';
-import { toast } from '@/lib/sonner';
+import { toast } from '@oxyhq/bloom/toast';
 import { useAuthGate } from '@/hooks/useAuthGate';
 import { CATALOG_QUERY_KEYS } from '@/hooks/useLibraryCollections';
 import { AddToPlaylistSheet } from '@/components/playlist/AddToPlaylistSheet';

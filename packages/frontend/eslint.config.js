@@ -12,28 +12,13 @@ module.exports = defineConfig([
       'no-restricted-imports': [
         'error',
         {
-          paths: [
-            {
-              name: 'sonner',
-              message:
-                "Import { toast, Toaster } from '@/lib/sonner' instead. The bare package is web-only; the platform fork picks sonner-native on iOS/Android.",
-            },
-            {
-              name: 'sonner-native',
-              message:
-                "Import { toast, Toaster } from '@/lib/sonner' instead. The bare package is native-only; the platform fork picks sonner on web.",
-            },
-          ],
+          paths: ['sonner', 'sonner-native'].map((name) => ({
+            name,
+            message:
+              "Import { toast } from '@oxyhq/bloom/toast' instead. Bloom ships the toast engine for both web and native, and OxyProvider already mounts the one outlet that renders it.",
+          })),
         },
       ],
-    },
-  },
-  {
-    // The platform fork itself: these two files are the only legitimate place to
-    // import the real packages, and are what every other call site resolves to.
-    files: ['lib/sonner.ts', 'lib/sonner.web.ts'],
-    rules: {
-      'no-restricted-imports': 'off',
     },
   },
 ]);

@@ -25,7 +25,7 @@ import { useLibrary, useToggleSavePlaylist } from '@/hooks/useLibrary';
 import { webViewStyle } from '@/utils/webStyles';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { isNotFoundError } from '@/utils/api';
-import { toast } from '@/lib/sonner';
+import { toast } from '@oxyhq/bloom/toast';
 import { useAuthGate } from '@/hooks/useAuthGate';
 import { CATALOG_QUERY_KEYS } from '@/hooks/useLibraryCollections';
 import { useOxy } from '@oxyhq/services';

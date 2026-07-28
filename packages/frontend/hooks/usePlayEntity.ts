@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { musicService } from '@/services/musicService';
 import { podcastService } from '@/services/podcastService';
 import { usePlayerStore } from '@/stores/playerStore';
-import { toast } from '@/lib/sonner';
+import { toast } from '@oxyhq/bloom/toast';
 import { createScopedLogger } from '@/utils/logger';
 
 const logger = createScopedLogger('PlayEntity');

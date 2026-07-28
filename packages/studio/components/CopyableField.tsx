@@ -3,7 +3,7 @@ import { Pressable, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { copyToClipboard } from '@/utils/clipboard';
-import { toast } from '@/lib/sonner';
+import { toast } from '@oxyhq/bloom/toast';
 
 /**
  * Read-only value (e.g. the generated public RSS URL) with a one-tap copy

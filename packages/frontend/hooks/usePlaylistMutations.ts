@@ -14,7 +14,7 @@ import {
 import { CATALOG_QUERY_KEYS } from '@/hooks/useLibraryCollections';
 import { LIBRARY_QUERY_KEY } from '@/hooks/useLibrary';
 import { useAuthGate } from '@/hooks/useAuthGate';
-import { toast } from '@/lib/sonner';
+import { toast } from '@oxyhq/bloom/toast';
 
 /**
  * Playlist edit mutations, following the optimistic pattern established by

@@ -13,7 +13,7 @@ import {
   type LibraryMembership,
   type LibraryMutationResult,
 } from '@/services/libraryService';
-import { toast } from '@/lib/sonner';
+import { toast } from '@oxyhq/bloom/toast';
 
 /**
  * Shared React Query library layer — the single source of truth for the

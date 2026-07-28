@@ -9,7 +9,7 @@ import { useOxy } from '@oxyhq/services';
 import type { Playlist } from '@syra/shared-types';
 import { useDeletePlaylist, useUpdatePlaylist } from '@/hooks/usePlaylistMutations';
 import { EmptyState } from '@/components/common/EmptyState';
-import { toast } from '@/lib/sonner';
+import { toast } from '@oxyhq/bloom/toast';
 
 interface PlaylistActionsSheetProps {
   visible: boolean;

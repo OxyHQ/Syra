@@ -14,7 +14,7 @@ import { CoverArtPicker } from '@/components/CoverArtPicker';
 import { useMyArtistProfile } from '@/hooks/useArtist';
 import { useCreateAlbum } from '@/hooks/useMusic';
 import { getApiErrorMessage } from '@/utils/api';
-import { toast } from '@/lib/sonner';
+import { toast } from '@oxyhq/bloom/toast';
 import { cn } from '@/lib/utils';
 
 type AlbumType = NonNullable<CreateAlbumRequest['type']>;

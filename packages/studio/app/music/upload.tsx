@@ -16,7 +16,7 @@ import { useMyArtistProfile } from '@/hooks/useArtist';
 import { useMyAlbums, useUploadTrack } from '@/hooks/useMusic';
 import type { TrackAudioFile } from '@/services/musicService';
 import { getApiErrorMessage } from '@/utils/api';
-import { toast } from '@/lib/sonner';
+import { toast } from '@oxyhq/bloom/toast';
 import { cn } from '@/lib/utils';
 
 function parsePositiveNumber(value: string): number | undefined {

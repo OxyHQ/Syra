@@ -34,7 +34,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { pickCatalogImageUrl, resolvePodcastArtwork } from '@/utils/pickImage';
 import { authenticatedClient } from '@/utils/api';
 import { liveRoomsQueryKey } from '@/lib/liveConfig';
-import { toast } from '@/lib/sonner';
+import { toast } from '@oxyhq/bloom/toast';
 
 const logger = createScopedLogger('HomeScreen');
 

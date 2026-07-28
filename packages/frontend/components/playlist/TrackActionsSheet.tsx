@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { Track } from '@syra/shared-types';
 import { useRemoveTracksFromPlaylist } from '@/hooks/usePlaylistMutations';
 import { AddToPlaylistSheet } from '@/components/playlist/AddToPlaylistSheet';
-import { toast } from '@/lib/sonner';
+import { toast } from '@oxyhq/bloom/toast';
 
 interface TrackActionsSheetProps {
   visible: boolean;

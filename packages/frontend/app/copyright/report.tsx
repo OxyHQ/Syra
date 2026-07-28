@@ -18,7 +18,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { copyrightService } from '@/services/copyrightService';
 import { musicService } from '@/services/musicService';
 import { Track } from '@syra/shared-types';
-import { toast } from '@/lib/sonner';
+import { toast } from '@oxyhq/bloom/toast';
 import SEO from '@/components/SEO';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';

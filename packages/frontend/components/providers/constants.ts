@@ -5,7 +5,7 @@
  */
 
 import { QueryCache, type QueryClientConfig } from '@tanstack/react-query';
-import { toast } from '@/lib/sonner';
+import { toast } from '@oxyhq/bloom/toast';
 import { getErrorStatus } from '@/utils/api';
 
 // A single toast id collapses a burst of simultaneous failures (e.g. a screen

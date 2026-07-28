@@ -9,7 +9,7 @@ import { API_URL_SOCKET } from '@/config';
 import { useResponsive } from '@/hooks/useResponsive';
 import { oxyServices } from '@/lib/oxyServices';
 import { queryClient } from '@/lib/queryClient';
-import { toast } from '@/lib/sonner';
+import { toast } from '@oxyhq/bloom/toast';
 
 /**
  * React Query key for the shared "live rooms" list. Owned here so the Go Live
@@ -76,7 +76,7 @@ const liveToast = Object.assign((message: string) => { toast(message); }, {
  * engine as the listener app, wired to Studio's primitives: the linked Oxy HTTP
  * client, the Syra socket URL, Bloom theming + Avatar, Studio's responsive hook,
  * React Query-backed user resolution, the canonical Oxy file-download resolver,
- * and sonner toasts. `onRoomChanged` is injected in `AppProviders`.
+ * and Bloom toasts. `onRoomChanged` is injected in `AppProviders`.
  */
 export const liveConfig: LiveConfig = {
   httpClient: authenticatedClient,

@@ -31,7 +31,7 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { BottomSheetProvider } from '@/context/BottomSheetContext';
 import { HomeRefreshProvider } from '@/context/HomeRefreshContext';
-import { Toaster, toast } from '@/lib/sonner';
+import { toast } from '@oxyhq/bloom/toast';
 import i18n from '@/lib/i18n';
 import { usePlayerStore } from '@/stores/playerStore';
 import { liveConfig, liveRoomsQueryKey } from '@/lib/liveConfig';
@@ -236,14 +236,10 @@ export const AppProviders = memo(function AppProviders({
                           </LiveRoomsProvider>
                           <StatusBar style="auto" />
                           {/* Mounted once for the whole app, after `children` so it
-                              overlays content, and before `Toaster` so transient
-                              toasts still stack above it. */}
+                              overlays content. Toasts are rendered by the single
+                              `ToastOutlet` that `OxyProvider` already mounts, which
+                              sits above this banner. */}
                           {isAppReady && <OfflineBanner />}
-                          <Toaster
-                            position="bottom-center"
-                            swipeToDismissDirection="left"
-                            offset={15}
-                          />
                         </HomeRefreshProvider>
                       </MenuProvider>
                     </BottomSheetProvider>

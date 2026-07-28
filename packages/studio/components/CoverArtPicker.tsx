@@ -6,7 +6,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { api } from '@/utils/api';
 import { resolveCatalogImageUrl } from '@/utils/catalogImages';
-import { toast } from '@/lib/sonner';
+import { toast } from '@oxyhq/bloom/toast';
 import { cn } from '@/lib/utils';
 
 interface CoverArtPickerProps {

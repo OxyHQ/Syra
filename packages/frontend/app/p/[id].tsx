@@ -12,7 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import { useTheme, useAmbientTheme } from '@oxyhq/bloom/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { toast } from '@/lib/sonner';
+import { toast } from '@oxyhq/bloom/toast';
 import { Track } from '@syra/shared-types';
 import { entityService } from '@/services/entityService';
 import { usePlayerStore } from '@/stores/playerStore';

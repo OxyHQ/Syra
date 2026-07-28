@@ -14,7 +14,7 @@ import { HostsGuestsPicker, type HostsGuests } from '@/components/HostsGuestsPic
 import { useUploadEpisode } from '@/hooks/usePodcasts';
 import type { EpisodeAudioFile } from '@/services/episodeService';
 import { extractInvalidIds } from '@/utils/api';
-import { toast } from '@/lib/sonner';
+import { toast } from '@oxyhq/bloom/toast';
 import { cn } from '@/lib/utils';
 
 const EPISODE_TYPES: { value: EpisodeType; label: string }[] = [

@@ -9,7 +9,7 @@ import { FormField } from '@/components/FormField';
 import { CoverArtPicker } from '@/components/CoverArtPicker';
 import { useRegisterArtist } from '@/hooks/useArtist';
 import { getApiErrorMessage } from '@/utils/api';
-import { toast } from '@/lib/sonner';
+import { toast } from '@oxyhq/bloom/toast';
 
 function RegisterArtistForm() {
   const router = useRouter();

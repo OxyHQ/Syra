@@ -10,7 +10,7 @@ import { FormField } from '@/components/FormField';
 import { HostsGuestsPicker, type HostsGuests } from '@/components/HostsGuestsPicker';
 import { useCreatePodcast } from '@/hooks/usePodcasts';
 import { extractInvalidIds } from '@/utils/api';
-import { toast } from '@/lib/sonner';
+import { toast } from '@oxyhq/bloom/toast';
 import { cn } from '@/lib/utils';
 
 const TYPES: { value: PodcastType; label: string; hint: string }[] = [

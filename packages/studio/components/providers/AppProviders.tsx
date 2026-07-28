@@ -21,7 +21,6 @@ import { LiveConfigProvider, LiveRoomProvider } from '@syra.fm/sdk';
 
 import { OXY_CLIENT_ID } from '@/config';
 import ErrorBoundary from '@/components/ErrorBoundary';
-import { Toaster } from '@/lib/sonner';
 import { liveConfig, liveRoomsQueryKey } from '@/lib/liveConfig';
 
 interface AppProvidersProps {
@@ -80,7 +79,6 @@ export const AppProviders = memo(function AppProviders({
                     {children}
                   </LiveRoomsProvider>
                   <StatusBar style="auto" />
-                  <Toaster position="bottom-center" swipeToDismissDirection="left" offset={15} />
                 </BottomSheetModalProvider>
               </ImageResolverProvider>
             </OxyProvider>

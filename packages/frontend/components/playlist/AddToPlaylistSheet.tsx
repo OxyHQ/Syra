@@ -14,7 +14,7 @@ import { useAddTracksToPlaylist } from '@/hooks/usePlaylistMutations';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { EmptyState } from '@/components/common/EmptyState';
 import { LibraryListSkeleton } from '@/components/skeletons';
-import { toast } from '@/lib/sonner';
+import { toast } from '@oxyhq/bloom/toast';
 
 interface AddToPlaylistSheetProps {
   visible: boolean;

@@ -18,7 +18,7 @@ import {
   type EpisodeDetail,
   type ContinueListeningEntry,
 } from '@/services/episodeService';
-import { toast } from '@/lib/sonner';
+import { toast } from '@oxyhq/bloom/toast';
 
 /**
  * React Query layer for the podcasts vertical.

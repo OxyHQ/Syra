@@ -8,7 +8,7 @@ import { API_URL_SOCKET } from '@/config';
 import { useIsDesktop } from '@/hooks/useOptimizedMediaQuery';
 import { oxyServices } from '@/lib/oxyServices';
 import { queryClient } from '@/lib/queryClient';
-import { toast } from '@/lib/sonner';
+import { toast } from '@oxyhq/bloom/toast';
 import Avatar from '@/components/Avatar';
 
 /**
@@ -72,7 +72,7 @@ const liveToast = Object.assign((message: string) => { toast(message); }, {
  * engine seam onto a Syra primitive: the linked Oxy HTTP client, the Syra socket
  * URL, Bloom theming, the app's responsive hook, React Query-backed user
  * resolution, the canonical Oxy file-download resolver, the Syra `Avatar`, and
- * sonner toasts. `onRoomChanged` is injected in `AppProviders` where a
+ * Bloom toasts. `onRoomChanged` is injected in `AppProviders` where a
  * `QueryClient` is in scope.
  */
 export const liveConfig: LiveConfig = {
