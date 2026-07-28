@@ -35,7 +35,7 @@
   },
   "dependencies": {},
   "overrides": {
-    "@oxyhq/bloom": "^0.45.0",
+    "@oxyhq/bloom": "^0.67.0",
     "@oxyhq/core": "^12.4.1",
     "mongodb-connection-string-url": "7.0.2",
     "react": "19.2.3",
