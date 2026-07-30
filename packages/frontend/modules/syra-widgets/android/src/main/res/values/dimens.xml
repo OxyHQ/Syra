@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Placement sizes, in dp, under the App Widget sizing guide's `70 × cells − 30`
+    conversion. `targetCellWidth`/`targetCellHeight` in integers.xml are the API
+    31+ equivalents and must describe the same footprint.
+-->
+<resources>
+    <!-- Default placement: 4 × 3 cells (250 × 180dp), which is the size that
+         holds the title bar plus two rooms. -->
+    <dimen name="syra_live_rooms_widget_min_width">250dp</dimen>
+    <dimen name="syra_live_rooms_widget_min_height">180dp</dimen>
+
+    <!-- 2 × 1 cells. At this height the title bar drops and one room is drawn,
+         which is the smallest thing this widget can still be useful as. -->
+    <dimen name="syra_live_rooms_widget_min_resize_width">110dp</dimen>
+    <dimen name="syra_live_rooms_widget_min_resize_height">40dp</dimen>
+
+    <!-- 5 × 5 cells. Beyond this the row count is capped by MAX_STORED_ROOMS
+         anyway, so more height would only add blank space. -->
+    <dimen name="syra_live_rooms_widget_max_resize_width">320dp</dimen>
+    <dimen name="syra_live_rooms_widget_max_resize_height">320dp</dimen>
+</resources>

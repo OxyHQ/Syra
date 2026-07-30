@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The API 31+ cell footprint. Mirrors the dp default in dimens.xml. -->
+<resources>
+    <integer name="syra_live_rooms_widget_target_cell_width">4</integer>
+    <integer name="syra_live_rooms_widget_target_cell_height">3</integer>
+</resources>

@@ -1,0 +1,25 @@
+<!--
+    The Syra mark: three bars, transcribed from the canonical `SyraIcon`
+    (`packages/sdk/src/live/assets/icons/syra-icon.tsx`) — same 500×500 viewBox,
+    same three rects, so the widget carries the same mark as the app rather than
+    a redrawn approximation of it.
+
+    A vector rather than the app's monochrome PNG because `TitleBar` tints its
+    start icon, and the adaptive monochrome asset carries the adaptive-icon safe
+    zone, which would render the mark small and off-centre in a 48dp icon box.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="500"
+    android:viewportHeight="500">
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M303.35,46.22h128.77v407.56h-128.77z" />
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M153.71,88.97h106.76v322.05h-106.76z" />
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M25,131.94h86.2v236.13h-86.2z" />
+</vector>

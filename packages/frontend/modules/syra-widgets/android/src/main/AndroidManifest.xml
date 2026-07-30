@@ -1,0 +1,24 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application>
+        <receiver
+            android:name="com.syra.widgets.rooms.LiveRoomsWidgetReceiver"
+            android:enabled="@bool/glance_appwidget_available"
+            android:exported="false"
+            android:label="@string/syra_live_rooms_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <!-- Rebuild the already-rendered RemoteViews when the system
+                     language changes; without this the widget keeps the strings
+                     it was last drawn with until its next data change. -->
+                <action android:name="android.intent.action.LOCALE_CHANGED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/syra_live_rooms_widget_info" />
+        </receiver>
+    </application>
+
+</manifest>

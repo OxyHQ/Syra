@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Production origins. The widget runs outside the JS runtime and cannot read
+    `config.ts`, so these are baked as string resources; `app.plugin.js`
+    overrides them from the app module for a dev or staging build.
+
+    Both are bare ORIGINS, with no path. The `/api` prefix that `API_URL` in
+    `packages/frontend/config.ts` carries lives in `RoomsApi` instead, next to
+    the endpoint path it prefixes. That split is what lets `app.plugin.js`
+    validate these as bare origins — an earlier version shipped
+    `https://api.syra.fm/api` here, which the plugin's own `assertBaseUrl`
+    would have rejected, so no dev build could ever have reproduced the
+    production shape. `appPlugin.test.ts` now runs the validator over these
+    exact values so the two cannot disagree again.
+-->
+<resources>
+    <string name="syra_widget_api_base_url" translatable="false">https://api.syra.fm</string>
+    <string name="syra_widget_web_base_url" translatable="false">https://syra.fm</string>
+</resources>

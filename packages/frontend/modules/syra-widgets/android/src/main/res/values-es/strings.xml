@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="syra_live_rooms_widget_label">Salas en directo</string>
+    <string name="syra_live_rooms_widget_description">Las salas de Syra que están en directo ahora mismo, y cuánta gente está escuchando.</string>
+    <string name="syra_live_rooms_widget_title">En directo</string>
+
+    <string name="syra_live_rooms_widget_open_live">Abrir salas en directo</string>
+    <string name="syra_live_rooms_widget_open_app">Abrir Syra</string>
+
+    <string name="syra_live_rooms_widget_none_live">Nadie está en directo ahora mismo</string>
+    <string name="syra_live_rooms_widget_unknown">Mira quién está en directo en Syra</string>
+
+    <string name="syra_live_rooms_widget_just_started">Acaba de empezar</string>
+
+    <plurals name="syra_live_rooms_widget_listeners">
+        <item quantity="one">%1$s escuchando</item>
+        <item quantity="other">%1$s escuchando</item>
+    </plurals>
+
+    <plurals name="syra_live_rooms_widget_as_of">
+        <item quantity="one">hace %1$d min</item>
+        <item quantity="other">hace %1$d min</item>
+    </plurals>
+</resources>

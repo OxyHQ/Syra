@@ -1,0 +1,47 @@
+buildscript {
+  repositories {
+    mavenCentral()
+  }
+  dependencies {
+    // `kotlinVersion` is the root-project extra `expo-root-project` sets from the
+    // Expo version catalog, so the Compose compiler plugin always matches the
+    // Kotlin the app is actually built with. Pinning a literal here is how a
+    // module ends up failing to compile after an SDK bump.
+    classpath("org.jetbrains.kotlin.plugin.compose:org.jetbrains.kotlin.plugin.compose.gradle.plugin:${kotlinVersion}")
+  }
+}
+
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+apply plugin: 'org.jetbrains.kotlin.plugin.compose'
+
+group = 'com.syra.widgets'
+version = '1.0.0'
+
+android {
+  namespace "com.syra.widgets"
+  defaultConfig {
+    versionCode 1
+    versionName "1.0.0"
+  }
+  buildFeatures {
+    compose true
+  }
+}
+
+dependencies {
+  implementation "androidx.glance:glance-appwidget:1.1.1"
+  implementation "androidx.compose.runtime:runtime:1.9.0"
+  implementation "androidx.work:work-runtime-ktx:2.10.5"
+  implementation "androidx.datastore:datastore-preferences:1.2.1"
+
+  testImplementation "junit:junit:4.13.2"
+  // The mockable `android.jar` AGP puts on the unit-test classpath stubs every
+  // `org.json` method to throw, which would fail the parser tests for a reason
+  // that has nothing to do with the parser. Declaring the real implementation as
+  // a test dependency puts it ahead of the stub.
+  testImplementation "org.json:json:20250517"
+}

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="syra_live_rooms_widget_label">Live rooms</string>
+    <string name="syra_live_rooms_widget_description">The Syra rooms that are live right now, and how many people are listening.</string>
+    <string name="syra_live_rooms_widget_title">Live now</string>
+
+    <string name="syra_live_rooms_widget_open_live">Open live rooms</string>
+    <string name="syra_live_rooms_widget_open_app">Open Syra</string>
+
+    <!-- Shown when a recent check found nobody broadcasting. -->
+    <string name="syra_live_rooms_widget_none_live">No one is live right now</string>
+    <!-- Shown when the widget has never fetched, or its last batch is older than
+         a refresh cycle — it cannot claim anyone is still live. -->
+    <string name="syra_live_rooms_widget_unknown">Check who\'s live on Syra</string>
+
+    <!-- A room that is live but nobody has joined yet; "0 listening" reads as broken. -->
+    <string name="syra_live_rooms_widget_just_started">Just started</string>
+
+    <plurals name="syra_live_rooms_widget_listeners">
+        <item quantity="one">%1$s listening</item>
+        <item quantity="other">%1$s listening</item>
+    </plurals>
+
+    <plurals name="syra_live_rooms_widget_as_of">
+        <item quantity="one">as of %1$d min ago</item>
+        <item quantity="other">as of %1$d min ago</item>
+    </plurals>
+
+    <!-- Pure punctuation joining two already-localized strings. -->
+    <string name="syra_live_rooms_widget_supporting_pair" translatable="false">%1$s · %2$s</string>
+</resources>

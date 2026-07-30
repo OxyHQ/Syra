@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:description="@string/syra_live_rooms_widget_description"
+    android:minWidth="@dimen/syra_live_rooms_widget_min_width"
+    android:minHeight="@dimen/syra_live_rooms_widget_min_height"
+    android:minResizeWidth="@dimen/syra_live_rooms_widget_min_resize_width"
+    android:minResizeHeight="@dimen/syra_live_rooms_widget_min_resize_height"
+    android:maxResizeWidth="@dimen/syra_live_rooms_widget_max_resize_width"
+    android:maxResizeHeight="@dimen/syra_live_rooms_widget_max_resize_height"
+    android:targetCellWidth="@integer/syra_live_rooms_widget_target_cell_width"
+    android:targetCellHeight="@integer/syra_live_rooms_widget_target_cell_height"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen" />
