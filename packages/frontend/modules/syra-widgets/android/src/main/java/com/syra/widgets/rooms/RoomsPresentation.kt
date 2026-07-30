@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import com.syra.widgets.R
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /**
  * Turning stored rooms into the strings and intents the layout draws.
@@ -79,14 +80,31 @@ internal fun asOfLine(context: Context, ageMinutes: Int): String =
     )
 
 /**
- * 1_200 → "1.2K". Kept to one decimal so a count never widens the row enough to
- * push the title's ellipsis around as it changes.
+ * 1_200 → "1.2K", and "1,2 K" on a device whose locale writes it that way.
+ *
+ * Kept to one decimal so a count never widens the row enough to push the title's
+ * ellipsis around as it changes.
+ *
+ * Formatted in the DEVICE's locale, not `Locale.US`: this module ships strings in
+ * en/es/it, and both Spanish and Italian write the decimal separator as a comma,
+ * so a hardcoded US format would render "1.2K" beside otherwise-translated text.
+ *
+ * The whole-number case is decided ARITHMETICALLY rather than by stripping a
+ * ".0" suffix, which is the trap that makes the locale-correct version wrong: on
+ * an es device the formatter emits "1,0" and a `removeSuffix(".0")` silently
+ * matches nothing, leaving "1,0K" where every other locale shows "1K".
  */
 internal fun formatCompactCount(count: Int): String = when {
     count < 1_000 -> count.toString()
-    count < 1_000_000 -> trimTrailingZero(count / 1_000.0) + "K"
-    else -> trimTrailingZero(count / 1_000_000.0) + "M"
+    count < 1_000_000 -> scaled(count / 1_000.0, "K")
+    else -> scaled(count / 1_000_000.0, "M")
 }
 
-private fun trimTrailingZero(value: Double): String =
-    String.format(Locale.US, "%.1f", value).removeSuffix(".0")
+private fun scaled(value: Double, suffix: String): String {
+    val locale = Locale.getDefault()
+    // Round FIRST, so the whole-number test asks about the digits that will
+    // actually be drawn: 1.04 formats as "1.0" and must come out as "1".
+    val rounded = (value * 10).roundToInt() / 10.0
+    val pattern = if (rounded % 1.0 == 0.0) "%.0f" else "%.1f"
+    return String.format(locale, pattern, rounded) + suffix
+}
