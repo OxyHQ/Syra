@@ -14,11 +14,11 @@ function getCatalogApiOrigin(): string {
   try {
     const url = new URL(API_URL);
     if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
-      return `${url.protocol}//${url.hostname}:3000`;
+      return `${url.protocol}//${url.hostname}:4120`;
     }
     return url.origin;
   } catch {
-    return 'http://localhost:3000';
+    return 'http://localhost:4120';
   }
 }
 

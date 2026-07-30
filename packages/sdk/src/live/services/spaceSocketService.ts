@@ -26,7 +26,7 @@ export class RoomSocketService {
       this.socket = null;
     }
 
-    const baseUrl = this.socketUrl || 'ws://localhost:3000';
+    const baseUrl = this.socketUrl || 'ws://localhost:4120';
 
     this.socket = io(`${baseUrl}/rooms`, {
       transports: ['websocket', 'polling'],

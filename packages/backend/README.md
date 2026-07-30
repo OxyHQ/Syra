@@ -63,7 +63,9 @@ MONGODB_URI=your_mongodb_connection_string
 # WE USE OXY FOR AUTHENTICATION
 
 # Server Configuration
-PORT=3000
+# 4120 is Syra's slot in the per-app local dev port map (the code default too),
+# so several Oxy backends can run side by side on one machine.
+PORT=4120
 NODE_ENV=development
 
 # External Services
@@ -317,7 +319,7 @@ Response: {
 docker build -t syra-api .
 
 # Run the container
-docker run -p 3000:3000 -e MONGODB_URI=your_mongodb_uri syra-api
+docker run -p 4120:3000 -e MONGODB_URI=your_mongodb_uri syra-api
 ```
 
 ### Cloud Deployment (AWS ECS)

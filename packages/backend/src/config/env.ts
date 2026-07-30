@@ -3,7 +3,10 @@ import { z } from 'zod';
 
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  PORT: z.coerce.number().default(3000),
+  // Local dev default only — ECS injects PORT explicitly (oxy-infra
+  // terraform-uswest2/app-services.tf). 4120 is Syra's slot in the
+  // per-app port map so several Oxy backends can run side by side.
+  PORT: z.coerce.number().default(4120),
   LOG_LEVEL: z.string().optional(),
 
   // Optional at parse time so `env` stays importable in any context (tests,

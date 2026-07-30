@@ -128,8 +128,8 @@ The app uses environment variables for configuration. Create a `.env` file in th
 
 ```env
 # API Configuration
-EXPO_PUBLIC_API_URL=http://localhost:3000
-EXPO_PUBLIC_WS_URL=ws://localhost:3000
+EXPO_PUBLIC_API_URL=http://localhost:4120
+EXPO_PUBLIC_WS_URL=ws://localhost:4120
 
 # Analytics and Monitoring
 EXPO_PUBLIC_POSTHOG_KEY=your_posthog_key

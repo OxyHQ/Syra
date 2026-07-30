@@ -12,7 +12,7 @@
 
 ## AWS Deployment
 
-- **Port**: `3000` | **Domain**: `api.syra.fm`
+- **Port**: `3000` (deployed; ECS sets `PORT` explicitly — the local dev default is `4120`) | **Domain**: `api.syra.fm`
 - **Deploy**: `.github/workflows/deploy-aws.yml` → `linux/arm64` Docker → ECR `237343248947.dkr.ecr.us-west-2.amazonaws.com/oxy/syra` → `ecs update-service --force-new-deployment`
 - **Secrets**: GitHub Actions secrets → SSM `/oxy/syra/*`.
 

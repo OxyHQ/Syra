@@ -7,7 +7,7 @@ const IMAGES: TrackImage[] = [
   { url: '/api/images/333333333333333333333333', width: 1000, height: 1000, source: 'upload' },
 ];
 
-const API_IMAGES = 'http://localhost:3000/api/images';
+const API_IMAGES = 'http://localhost:4120/api/images';
 const FALLBACK = '/api/images/aaaaaaaaaaaaaaaaaaaaaaaa';
 const SIZES: CatalogImageSizes = {
   small: {
