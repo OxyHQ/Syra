@@ -9,10 +9,10 @@ import { resolveCatalogImageUrl } from './catalogImages';
  * that reached this function would be handed straight to `expo-image` as a URL.
  *
  * With `EXPO_PUBLIC_API_URL` unset, `API_URL` falls back to
- * `http://localhost:3000/api`, so the expected origin here is localhost:3000.
+ * `http://localhost:4120/api`, so the expected origin here is localhost:4120.
  */
 
-const ORIGIN = 'http://localhost:3000';
+const ORIGIN = 'http://localhost:4120';
 const OBJECT_ID = '507f1f77bcf86cd799439011';
 
 describe('resolveCatalogImageUrl — accepted forms', () => {

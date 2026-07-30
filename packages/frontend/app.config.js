@@ -70,25 +70,13 @@ return {
                                 scheme: 'https',
                                 host: 'syra.fm',
                             },
-                            IS_DEV && {
-                                scheme: 'http',
-                                host: 'localhost:3001',
-                            },
-                            IS_DEV && {
-                                scheme: 'http',
-                                host: '192.168.86.44:3001',
-                            },
-                            IS_DEV && {
-                                scheme: 'http',
-                                host: '192.168.86.44:3000',
-                            },
                             {
                                 scheme: 'https',
                                 host: 'oxy.so',
                             },
                             IS_DEV && {
                                 scheme: 'http',
-                                host: 'localhost:3000',
+                                host: 'localhost:4120',
                             },
                         ],
                         category: ['BROWSABLE', 'DEFAULT'],

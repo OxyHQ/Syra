@@ -162,28 +162,28 @@ export const publicApi = {
 };
 
 /**
- * Get API origin, ensuring correct port for localhost (3000)
- * This is critical: backend API runs on port 3000, regardless of frontend dev server port
+ * Get API origin, ensuring correct port for localhost (4120)
+ * This is critical: backend API runs on port 4120, regardless of frontend dev server port
  */
 export function getApiOrigin(): string {
   try {
     const apiBaseUrlObj = new URL(API_CONFIG.baseURL);
-    // Force port 3000 for localhost API (development)
+    // Force port 4120 for localhost API (development)
     if (apiBaseUrlObj.hostname === 'localhost' || apiBaseUrlObj.hostname === '127.0.0.1') {
-      return `${apiBaseUrlObj.protocol}//${apiBaseUrlObj.hostname}:3000`;
+      return `${apiBaseUrlObj.protocol}//${apiBaseUrlObj.hostname}:4120`;
     }
     // Production or other environments - use origin as-is
     return apiBaseUrlObj.origin;
   } catch {
-    // Fallback: extract origin manually, defaulting to port 3000 for localhost
+    // Fallback: extract origin manually, defaulting to port 4120 for localhost
     const match = API_CONFIG.baseURL.match(/^(https?:\/\/)([^\/:]+)(:\d+)?/);
     if (match) {
       const [, protocol, hostname] = match;
       return (hostname === 'localhost' || hostname === '127.0.0.1')
-        ? `${protocol}${hostname}:3000`
+        ? `${protocol}${hostname}:4120`
         : match[0] || `${protocol}${hostname}`;
     }
-    return 'http://localhost:3000';
+    return 'http://localhost:4120';
   }
 }
 

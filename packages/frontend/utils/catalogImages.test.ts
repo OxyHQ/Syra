@@ -4,7 +4,7 @@ import {
   resolveCatalogImageUrl,
 } from './catalogImages';
 
-const API_IMAGES = 'http://localhost:3000/api/images';
+const API_IMAGES = 'http://localhost:4120/api/images';
 
 describe('catalog image URL normalization', () => {
   it('turns a Mongo image id into an absolute backend image URL', () => {

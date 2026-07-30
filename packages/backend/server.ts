@@ -67,8 +67,8 @@ const ALLOWED_ORIGINS: string[] = [
   'https://syra.fm',
   'https://mention.earth',
   'https://www.mention.earth',
-  'http://localhost:8081',
-  'http://localhost:8082',
+  'http://localhost:8120',
+  'http://localhost:8121',
   ...env.ALLOWED_ORIGINS,
 ];
 

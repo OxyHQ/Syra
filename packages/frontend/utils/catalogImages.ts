@@ -17,11 +17,11 @@ function getCatalogApiOrigin(): string {
   try {
     const apiBaseUrlObj = new URL(API_URL);
     if (apiBaseUrlObj.hostname === 'localhost' || apiBaseUrlObj.hostname === '127.0.0.1') {
-      return `${apiBaseUrlObj.protocol}//${apiBaseUrlObj.hostname}:3000`;
+      return `${apiBaseUrlObj.protocol}//${apiBaseUrlObj.hostname}:4120`;
     }
     return apiBaseUrlObj.origin;
   } catch {
-    return 'http://localhost:3000';
+    return 'http://localhost:4120';
   }
 }
 
