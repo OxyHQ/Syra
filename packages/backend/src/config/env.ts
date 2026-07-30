@@ -83,6 +83,17 @@ const schema = z.object({
   LINK_PREVIEW_PNG_QUALITY: z.coerce.number().default(80),
   LINK_PREVIEW_WEBP_QUALITY: z.coerce.number().default(80),
   LINK_PREVIEW_MAX_FILE_SIZE: z.coerce.number().default(500 * 1024),
+
+  /**
+   * CrowdSource participatory moderation is deliberately NOT declared here.
+   *
+   * `env` is parsed once at import, which is right for every value above and
+   * wrong for this one: the enabled flag, the service credential and the webhook
+   * secret have to be validated as a UNIT (enabled requires both, or Syra sends
+   * reports that can never come back), and that combination has to be
+   * re-derivable rather than frozen at first import. `src/moderation/config.ts`
+   * owns those reads and the validation that makes them meaningful.
+   */
 });
 
 export const env = schema.parse(process.env);
