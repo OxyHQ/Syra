@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import multer from 'multer';
 import Room, { IRoom, MediaQueueItem, RoomStatus, RoomType, OwnerType, BroadcastKind, SpeakerPermission } from '../models/Room';
 import RoomUserPreference, { LiveVisibility, DEFAULT_LIVE_VISIBILITY, isLiveVisibility } from '../models/RoomUserPreference';
-import House, { HouseMemberRole } from '../models/House';
+import House, { HouseMemberRole, houseIdsWithRoomsHiddenFrom } from '../models/House';
 import { requireOxyAuth, getRequiredOxyUserId, type OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { logger } from '../utils/logger';
 import {
@@ -1074,6 +1074,19 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       query._id = { $lt: cursor };
     }
 
+    // Withhold rooms owned by a house this caller may not see into. Without
+    // this the global listing hands out titles, hosts and participant ids that
+    // `GET /api/houses/:id/rooms` refuses for the very same rooms — and since
+    // `?houseId=` is honoured above, it also made this route an exact bypass of
+    // that refusal. Composed with `$and` so it can never be clobbered by (or
+    // clobber) the `houseId` equality filter.
+    const hiddenHouseIds = await houseIdsWithRoomsHiddenFrom(req.user?.id);
+    if (hiddenHouseIds.length > 0) {
+      // A profile-owned room has `houseId: null`, which `$nin` matches, so
+      // rooms that were never house-owned are untouched.
+      query.$and = [{ houseId: { $nin: hiddenHouseIds } }];
+    }
+
     const limitNum = Math.min(Math.max(parseInt(limit as string, 10) || 20, 1), 100);
 
     const rooms = await Room.find(query)
@@ -1301,6 +1314,21 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
     }
 
     const userId = req.user?.id;
+
+    // Fetching a house room by id is the same disclosure as listing it, so it
+    // answers to the same axes — and with the same codes as
+    // `GET /api/houses/:id/rooms`: 404 when the house is hidden (never confirm
+    // a guessed id is real), 403 when it is merely sealed.
+    if (room.houseId) {
+      const owningHouse = await House.findById(room.houseId);
+      if (!owningHouse || !owningHouse.canSeeHouse(userId)) {
+        return res.status(404).json({ message: 'Room not found' });
+      }
+      if (!owningHouse.canAccessRooms(userId)) {
+        return res.status(403).json({ message: 'Only members can view this house\'s rooms' });
+      }
+    }
+
     const canViewInternalStreamFields = userId
       ? await canManageRoom(room, userId)
       : false;

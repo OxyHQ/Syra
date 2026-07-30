@@ -8,6 +8,7 @@ import House, {
   HouseJoin,
   HouseMemberRole,
   HouseRooms,
+  houseIdsWithRoomsHiddenFrom,
   IHouseVisibility,
 } from '../models/House';
 import Room, { OwnerType, RoomStatus, RoomType } from '../models/Room';
@@ -35,6 +36,8 @@ const OUTSIDER_ID = 'outsider-1';
 
 const SECRET_ROOM_TITLE = 'Strategy sync (members only)';
 const SECRET_SERIES_TITLE = 'Weekly members standup';
+/** A room owned by a profile, which no house axis may ever hide. */
+const PROFILE_ROOM_TITLE = 'Open profile room';
 
 beforeAll(connect);
 afterEach(clear);
@@ -61,6 +64,18 @@ async function roomIn(houseId: string) {
     host: OWNER_ID,
     ownerType: OwnerType.HOUSE,
     houseId,
+    type: RoomType.TALK,
+    status: RoomStatus.LIVE,
+    maxParticipants: 100,
+  });
+}
+
+/** A live room owned by a profile rather than a house. */
+async function profileRoom() {
+  return Room.create({
+    title: PROFILE_ROOM_TITLE,
+    host: OWNER_ID,
+    ownerType: OwnerType.PROFILE,
     type: RoomType.TALK,
     status: RoomStatus.LIVE,
     maxParticipants: 100,
@@ -141,6 +156,8 @@ const getHouses = (path: string, user: string | undefined) =>
   request('/api/houses', housesRoutes, path, user);
 const getSeries = (path: string, user: string | undefined) =>
   request('/api/series', seriesRoutes, path, user);
+const getRooms = (path: string, user: string | undefined) =>
+  request('/api/rooms', roomsRoutes, path, user);
 
 describe('discovery axis — GET /api/houses/:id (see the house exists)', () => {
   it('listed: readable by member, non-member and anonymous', async () => {
@@ -246,6 +263,153 @@ describe('rooms axis — GET /api/houses/:id/rooms and /series', () => {
       // 404, not the 403 a discoverable sealed house would give.
       expect(status).toBe(404);
       expect(body).not.toContain(SECRET_ROOM_TITLE);
+    }
+  });
+});
+
+/**
+ * The GLOBAL room listing has to honour the same `rooms` axis as the
+ * house-scoped one above, because both hand back the same documents.
+ *
+ * The house-scoped route was gated and this one was not, which made
+ * `GET /api/rooms?houseId=<sealed>` an exact bypass of the 403 that
+ * `GET /api/houses/:id/rooms` returns for the very same query — and the
+ * unfiltered listing leaked sealed rooms into everyone's feed besides. What
+ * leaks is what the gate on the house-scoped route exists to protect: the room
+ * title, its host, and its participant ids.
+ *
+ * Entry was never affected — `POST /api/rooms/:id/join` has always refused a
+ * non-member — so this is a confidentiality gap, not an access-control one.
+ */
+describe('rooms axis — GET /api/rooms (global listing)', () => {
+  it('omits a sealed house\'s room, for a non-member and anonymous alike', async () => {
+    const sealed = await houseWith({ discovery: HouseDiscovery.LISTED, rooms: HouseRooms.MEMBERS });
+    await roomIn(sealed._id.toString());
+
+    // A member still sees it — the fix withholds, it does not blanket-hide.
+    const member = await getRooms('/', MEMBER_ID);
+    expect(member.status).toBe(200);
+    expect(member.body).toContain(SECRET_ROOM_TITLE);
+
+    for (const caller of [OUTSIDER_ID, undefined]) {
+      const { status, body } = await getRooms('/', caller);
+      expect(status).toBe(200);
+      expect(body).not.toContain(SECRET_ROOM_TITLE);
+      // The host id is as sensitive as the title, and travels on the same doc.
+      expect(body).not.toContain(OWNER_ID);
+    }
+  });
+
+  it('omits a hidden house\'s room even when its rooms axis is open', async () => {
+    const hidden = await houseWith({ discovery: HouseDiscovery.HIDDEN, rooms: HouseRooms.ANYONE });
+    await roomIn(hidden._id.toString());
+
+    expect((await getRooms('/', MEMBER_ID)).body).toContain(SECRET_ROOM_TITLE);
+    for (const caller of [OUTSIDER_ID, undefined]) {
+      // discovery wins over rooms here exactly as it does on the house route.
+      expect((await getRooms('/', caller)).body).not.toContain(SECRET_ROOM_TITLE);
+    }
+  });
+
+  it('?houseId= cannot enumerate a sealed house\'s rooms', async () => {
+    const sealed = await houseWith({ rooms: HouseRooms.MEMBERS });
+    const id = sealed._id.toString();
+    await roomIn(id);
+
+    for (const caller of [OUTSIDER_ID, undefined]) {
+      // The house-scoped route answers 403 for this exact query; the global one
+      // must not become a way around it.
+      expect((await getHouses(`/${id}/rooms`, caller)).status).toBe(403);
+      const { status, body } = await getRooms(`/?houseId=${id}`, caller);
+      expect(status).toBe(200);
+      expect(body).not.toContain(SECRET_ROOM_TITLE);
+    }
+  });
+
+  it('keeps open-house and profile-owned rooms listed for everyone', async () => {
+    const open = await houseWith({ rooms: HouseRooms.ANYONE });
+    await roomIn(open._id.toString());
+    await profileRoom();
+
+    for (const caller of [MEMBER_ID, OUTSIDER_ID, undefined]) {
+      const { status, body } = await getRooms('/', caller);
+      expect(status).toBe(200);
+      // Both kinds survive: the filter must not over-reach into rooms that were
+      // never house-owned, which is the way a visibility fix usually breaks.
+      expect(body).toContain(SECRET_ROOM_TITLE);
+      expect(body).toContain(PROFILE_ROOM_TITLE);
+    }
+  });
+});
+
+describe('rooms axis — GET /api/rooms/:id (fetch one by id)', () => {
+  it('sealed house: 403 to a non-member, 200 to a member', async () => {
+    const sealed = await houseWith({ discovery: HouseDiscovery.LISTED, rooms: HouseRooms.MEMBERS });
+    const room = await roomIn(sealed._id.toString());
+    const path = `/${room._id.toString()}`;
+
+    expect((await getRooms(path, MEMBER_ID)).status).toBe(200);
+    for (const caller of [OUTSIDER_ID, undefined]) {
+      const { status, body } = await getRooms(path, caller);
+      expect(status).toBe(403);
+      expect(body).not.toContain(SECRET_ROOM_TITLE);
+    }
+  });
+
+  it('hidden house: 404 to a non-member, so a guessed room id is never confirmed', async () => {
+    const hidden = await houseWith({ discovery: HouseDiscovery.HIDDEN, rooms: HouseRooms.ANYONE });
+    const room = await roomIn(hidden._id.toString());
+    const path = `/${room._id.toString()}`;
+
+    expect((await getRooms(path, MEMBER_ID)).status).toBe(200);
+    for (const caller of [OUTSIDER_ID, undefined]) {
+      const { status, body } = await getRooms(path, caller);
+      // 404, matching a room that does not exist at all.
+      expect(status).toBe(404);
+      expect(body).not.toContain(SECRET_ROOM_TITLE);
+    }
+  });
+
+  it('profile-owned room stays fetchable by anyone', async () => {
+    const room = await profileRoom();
+    const { status, body } = await getRooms(`/${room._id.toString()}`, undefined);
+    expect(status).toBe(200);
+    expect(body).toContain(PROFILE_ROOM_TITLE);
+  });
+});
+
+/**
+ * `houseIdsWithRoomsHiddenFrom` restates `canSeeHouse() && canAccessRooms()` as
+ * a Mongo filter. Two expressions of one rule drift, so this walks every
+ * combination of the two governing axes against all three caller kinds and
+ * asserts they agree — which is the only thing keeping the global listing and
+ * the house-scoped route from diverging as the axes grow.
+ */
+describe('rooms axis — the query filter agrees with the document methods', () => {
+  it('matches canSeeHouse && canAccessRooms on every axis combination', async () => {
+    const houses = [];
+    for (const discovery of Object.values(HouseDiscovery)) {
+      for (const rooms of Object.values(HouseRooms)) {
+        houses.push({ discovery, rooms, house: await houseWith({ discovery, rooms }) });
+      }
+    }
+    // A vacuity floor: a traversal that silently produced nothing would
+    // otherwise pass every assertion below.
+    expect(houses.length).toBe(6);
+
+    for (const caller of [MEMBER_ID, OUTSIDER_ID, undefined]) {
+      const hidden = new Set(await houseIdsWithRoomsHiddenFrom(caller));
+
+      for (const { discovery, rooms, house } of houses) {
+        const fresh = await House.findById(house._id);
+        if (fresh === null) throw new Error('house vanished mid-test');
+
+        const methodsAllow = fresh.canSeeHouse(caller) && fresh.canAccessRooms(caller);
+        const filterAllows = !hidden.has(house._id.toString());
+
+        expect(`${discovery}/${rooms} as ${caller ?? 'anonymous'} → ${filterAllows}`)
+          .toBe(`${discovery}/${rooms} as ${caller ?? 'anonymous'} → ${methodsAllow}`);
+      }
     }
   });
 });

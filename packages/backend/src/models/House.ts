@@ -222,6 +222,11 @@ HouseSchema.index({ 'members.userId': 1 });
 // Discovery: the houses a non-member is allowed to find, newest first.
 HouseSchema.index({ 'visibility.discovery': 1, createdAt: -1 });
 
+// The `rooms` axis, so `houseIdsWithRoomsHiddenFrom` can be served by an index
+// union with the `discovery` index above rather than a collection scan. That
+// helper runs on every global room listing, which is a hot path.
+HouseSchema.index({ 'visibility.rooms': 1 });
+
 // Text search on name and description
 HouseSchema.index({ name: 'text', description: 'text' });
 
@@ -303,4 +308,38 @@ HouseSchema.methods.isSelfJoinable = function(): boolean {
   return this.visibility.join === HouseJoin.ANYONE;
 };
 
-export default mongoose.model<IHouse>("House", HouseSchema);
+const HouseModel = mongoose.model<IHouse>("House", HouseSchema);
+
+/**
+ * The ids of houses whose rooms `userId` must NOT be shown.
+ *
+ * This is the QUERY-level twin of `canSeeHouse(userId) && canAccessRooms(userId)`
+ * — the same rule, expressed as a filter instead of a per-document predicate,
+ * because the global room listing has to withhold rooms across many houses at
+ * once and cannot load each owning house to ask.
+ *
+ * Two expressions of one rule is exactly the shape that drifts, so
+ * `houseVisibility.test.ts` pins them together: it asserts this helper and the
+ * two methods agree on every combination of the axes, for a member, a
+ * non-member and an anonymous caller. Change one without the other and that
+ * test fails by name.
+ *
+ * A house that predates the `visibility` field matches neither restricted
+ * branch and so stays listed — the same direction `GET /api/houses` already
+ * takes, and the same answer the two methods give for it.
+ */
+export async function houseIdsWithRoomsHiddenFrom(userId: string | undefined): Promise<string[]> {
+  const restricted = await HouseModel.find({
+    $or: [
+      { 'visibility.discovery': HouseDiscovery.HIDDEN },
+      { 'visibility.rooms': HouseRooms.MEMBERS },
+    ],
+    // A member is restricted by neither axis, so their own houses drop out of
+    // the exclusion set. An anonymous caller is a member of nothing.
+    ...(userId === undefined ? {} : { 'members.userId': { $ne: userId } }),
+  }, { _id: 1 }).lean<{ _id: mongoose.Types.ObjectId }[]>();
+
+  return restricted.map((house) => house._id.toString());
+}
+
+export default HouseModel;
