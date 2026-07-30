@@ -38,5 +38,9 @@ yarn-error.*
 
 app-example
 
-android/
-ios/
+# The CNG-generated native projects, anchored to this directory. A bare
+# `android/` matches at ANY depth, which also excluded the hand-written native
+# source of local Expo modules under `modules/*/android/` — committing one
+# looked complete and silently shipped no Kotlin at all.
+/android/
+/ios/
