@@ -14,10 +14,24 @@
  */
 
 import mongoose from 'mongoose';
-import { MongoMemoryServer } from 'mongodb-memory-server';
+import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { setCatalogImageMirrorImplementationForTests } from '../services/catalog/catalogImageAssets';
 
-let server: MongoMemoryServer | undefined;
+/**
+ * A single-member REPLICA SET, not a standalone.
+ *
+ * Multi-document transactions require a replica set or a sharded cluster, and the
+ * moderation outbox is built on one: a report and its delivery event commit
+ * together or not at all. On a standalone the first such write throws, so the
+ * coupling could not be tested at all — and an untested coupling is exactly the
+ * one that fails silently in production as a report answered 201 that nothing
+ * ever sends.
+ *
+ * One member behaves identically to a standalone for every other test, and it is
+ * still ONE mongod for the whole process, so the resource-contention fix this
+ * module was written for is preserved.
+ */
+let server: MongoMemoryReplSet | undefined;
 let connecting: Promise<void> | undefined;
 
 export function installCatalogImageMirrorMockForTests(): void {
@@ -60,7 +74,7 @@ export async function connect(): Promise<void> {
   if (connecting) return connecting;                // in-flight — share the promise
 
   connecting = (async () => {
-    server = await MongoMemoryServer.create();
+    server = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
     await mongoose.connect(server.getUri());
   })();
   await connecting;

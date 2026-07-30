@@ -50,6 +50,9 @@ import housesRoutes from './src/routes/houses.routes';
 import seriesRoutes from './src/routes/series.routes';
 import recordingsRoutes from './src/routes/recordings.routes';
 import livekitWebhookRoutes from './src/routes/livekitWebhook.routes';
+import reportsRoutes from './src/routes/reports.routes';
+import { createCrowdSourceWebhookRoutes } from './src/routes/crowdsourceWebhook.routes';
+import { moderationOutboxDispatcher } from './src/moderation/dispatcher';
 import { initializeRoomSocket } from './src/sockets/roomSocket';
 import { initializeIO } from './src/utils/socket';
 import { startRecommendationScheduler } from './src/services/recommendations/scheduler';
@@ -93,6 +96,14 @@ app.use(cors({
 // The route is machine-to-machine and gated entirely by cryptographic signature
 // verification, so it needs no per-request rate limit.
 app.use('/livekit', livekitWebhookRoutes);
+
+// The CrowdSource webhook receiver, mounted here for the SAME reason and with the
+// same consequence if it moves: its HMAC covers the exact bytes that arrived, and
+// it reads the request stream itself. Below the JSON parser it would be verifying
+// a signature over a re-serialization. The route refuses outright rather than
+// falling back (`assertRawBody`), and a test asserts the refusal, because a mount
+// order is not something a type can hold.
+app.use('/webhooks', createCrowdSourceWebhookRoutes());
 
 // Create Redis store for distributed rate limiting
 const redisStore = new RedisStore({ 
@@ -325,6 +336,7 @@ authenticatedApiRouter.use('/recommendations', recommendationsRoutes);
 authenticatedApiRouter.use('/recordings', recordingsRoutes);
 authenticatedApiRouter.use('/houses', housesRoutes);
 authenticatedApiRouter.use('/series', seriesRoutes);
+authenticatedApiRouter.use('/reports', reportsRoutes);
 
 app.use('/api', publicApiRouter);
 app.use('/api', oxy.auth(), authenticatedApiRouter);
@@ -428,6 +440,14 @@ const bootServer = async () => {
   // Periodic re-crawl of subscribed/popular RSS feeds (same lock-guarded timer
   // pattern; skipped when Redis is unavailable).
   startPodcastRefreshScheduler();
+
+  // Drain the moderation outbox. Deliberately NOT lock-guarded like the two
+  // schedulers above: every event is claimed under a Mongo lease with an owner
+  // check, so N instances share the work and a dead instance's lease is reclaimed
+  // rather than stranding a report. No-ops when the integration is disabled — the
+  // loop is gated, never the durable record, so reports taken while it is off
+  // deliver when it is switched on.
+  moderationOutboxDispatcher.start();
 };
 
 if (require.main === module) {
