@@ -4,7 +4,10 @@ import type { AddressInfo } from 'net';
 import type { Server } from 'http';
 import { caseDecidedEventFixture, signWebhookDelivery } from '@oxyhq/crowdsource-testing';
 import { connect, clear, disconnect } from '../test/mongo';
+import { ModerationEventModel } from '../models/ModerationEvent';
+import { ModerationOutboxModel } from '../models/ModerationOutbox';
 import { resetCrowdSourceConfig } from '../moderation/config';
+import { logger } from '../utils/logger';
 import { assertRawBody, createCrowdSourceWebhookRoutes } from './crowdsourceWebhook.routes';
 
 /**
@@ -98,7 +101,17 @@ function signedDelivery() {
 }
 
 describe('CrowdSource webhook mount order', () => {
-  it('reaches the verifier when mounted above the parser', async () => {
+  /**
+   * The acceptance sibling — asserted on SIDE EFFECTS, not on a status code.
+   *
+   * A refusal test alone only proves the request was malformed somehow. This is
+   * its pair, and it has to prove the same delivery is genuinely handled, which a
+   * status code cannot do: this receiver answers `200 { handled: false }` to an
+   * envelope the schema rejects, so an endpoint that ran no handler at all would
+   * satisfy every status assertion. The decision reaching the database is the
+   * only thing that distinguishes "accepted" from "acknowledged and dropped".
+   */
+  it('accepts a signed delivery and records the decision', async () => {
     harness = await listen(correctlyMountedApp());
     const delivery = signedDelivery();
     const response = await fetch(`${harness.url}/webhooks/crowdsource`, {
@@ -106,9 +119,70 @@ describe('CrowdSource webhook mount order', () => {
       headers: delivery.headers,
       body: delivery.body,
     });
-    // No 500: the guard passed and the SDK middleware took the request.
-    expect(response.status).not.toBe(500);
-    expect(response.status).not.toBe(404);
+
+    expect(response.status).toBeGreaterThanOrEqual(200);
+    expect(response.status).toBeLessThan(300);
+    expect(await response.json()).toMatchObject({ handled: true });
+
+    // §10.8: the event is recorded and the work is queued, in one transaction.
+    expect(await ModerationEventModel.countDocuments({ state: 'queued' })).toBe(1);
+    expect(await ModerationOutboxModel.countDocuments({ kind: 'decision.apply' })).toBe(1);
+  });
+
+  /**
+   * That the HMAC is actually compared, which nothing else here proves.
+   *
+   * Every other test in this file would pass with the signature check deleted —
+   * they turn on the mount, not on the cryptography. A tampered body against a
+   * valid signature is refused, and the assertion names the rejection REASON
+   * rather than the status: a 401 for a missing header would satisfy a
+   * status-only test while proving the signature was never compared at all.
+   */
+  it('refuses a tampered body, for the signature reason specifically', async () => {
+    /**
+     * Observed through the route's own `onRejected`, which logs the reason —
+     * rather than by adding a test-only parameter to the factory. The production
+     * path is the thing under test; a seam built for the test would be a
+     * different path that happens to agree.
+     */
+    const rejections: string[] = [];
+    const originalWarn = logger.warn;
+    logger.warn = ((message: string, meta?: unknown) => {
+      const rejection =
+        meta && typeof meta === 'object' && 'rejection' in meta
+          ? (meta as { rejection: unknown }).rejection
+          : undefined;
+      if (typeof rejection === 'string') rejections.push(rejection);
+      return originalWarn(message, meta);
+    }) as typeof logger.warn;
+
+    harness = await listen(correctlyMountedApp());
+
+    const event = caseDecidedEventFixture();
+    const delivery = signWebhookDelivery({
+      secret: SECRET,
+      event,
+      // Signed over the real event, delivered as something else.
+      tamperedBody: JSON.stringify({ ...event, data: { caseId: 'case_forged' } }),
+    });
+
+    const response = await fetch(`${harness.url}/webhooks/crowdsource`, {
+      method: 'POST',
+      headers: delivery.headers,
+      body: delivery.body,
+    });
+
+    logger.warn = originalWarn;
+
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    // `signature_mismatch` specifically, taken from the SDK's own emitted token
+    // rather than guessed: it is what proves the signature was COMPARED. A
+    // missing-header rejection would also be a 4xx and would also be "refused",
+    // while proving the comparison never happened.
+    expect(rejections).toEqual(['signature_mismatch']);
+    // Nothing recorded: a forged delivery must not reach the database at all.
+    expect(await ModerationEventModel.countDocuments({})).toBe(0);
+    expect(await ModerationOutboxModel.countDocuments({})).toBe(0);
   });
 
   /**
