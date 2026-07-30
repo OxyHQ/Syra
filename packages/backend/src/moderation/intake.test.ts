@@ -225,6 +225,41 @@ describe('enqueueModerationOutboxEvent', () => {
    * concurrent duplicate submissions upsert the SAME row rather than queueing two
    * deliveries.
    */
+  /**
+   * A repeated enqueue must not WRITE, not merely not duplicate.
+   *
+   * `$setOnInsert` promises the row is left alone once it exists, and with
+   * `timestamps: true` Mongoose quietly breaks that promise by adding its own
+   * `$set: { updatedAt }` — measured before the fix as `modifiedCount: 1` with
+   * `updatedAt` moving on the second call. That is a write this function has no
+   * business making, and a transaction retry touching a row the dispatcher is
+   * concurrently claiming is a write conflict that aborts the intake. The row's
+   * own timestamp is the only thing that can witness it, since the document is
+   * otherwise identical either way.
+   */
+  it('does not touch the row when the same event is enqueued twice', async () => {
+    const session = await mongoose.startSession();
+    const enqueue = () =>
+      session.withTransaction(async () => {
+        await enqueueModerationOutboxEvent(
+          { eventId: reportSubmitEventId('r2'), kind: 'report.submit', payload: { reportId: 'r2' } },
+          session,
+        );
+      });
+    try {
+      await enqueue();
+      const first = await ModerationOutboxModel.findById(reportSubmitEventId('r2')).lean();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      await enqueue();
+      const second = await ModerationOutboxModel.findById(reportSubmitEventId('r2')).lean();
+
+      expect(first?.updatedAt).toBeDefined();
+      expect(second?.updatedAt?.getTime()).toBe(first?.updatedAt?.getTime() as number);
+    } finally {
+      await session.endSession();
+    }
+  });
+
   it('upserts the same row when called twice for one report', async () => {
     const session = await mongoose.startSession();
     try {

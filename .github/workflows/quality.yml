@@ -39,3 +39,12 @@ jobs:
         run: |
           cd packages/frontend && bun run lint
           cd ../studio && bun run lint
+      # The backend suite was not run by ANY workflow before this: quality
+      # typechecked and linted, and the deploy workflows only build. A guard that
+      # no job executes is a comment — the moderation integration's invariants
+      # (the intake transaction commits both writes or neither; the webhook
+      # receiver refuses a parsed body) are enforced only by these tests, and
+      # they run against a real in-memory MongoDB replica set rather than a mock,
+      # which is what makes them worth gating on.
+      - name: Backend tests
+        run: bun run --filter @syra/backend test

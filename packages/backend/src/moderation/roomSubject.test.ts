@@ -124,6 +124,31 @@ describe('room subject provider', () => {
     expect(serialised).not.toContain('egress-1');
   });
 
+  /**
+   * The credential question, not the disclosure one.
+   *
+   * `rtmpStreamKey` + `rtmpUrl` are what a broadcaster authenticates with, so a
+   * juror who read them could broadcast into the very room they were asked to
+   * judge. This is the test that keeps the provider's projection a whitelist: it
+   * fails if anyone widens it to a bare `findById()`.
+   */
+  it('never carries the RTMP stream credential a juror could broadcast with', async () => {
+    const room = await makeRoom({
+      rtmpUrl: 'rtmp://ingress.example/live',
+      rtmpStreamKey: 'sk_live_super_secret_stream_key',
+      activeStreamUrl: 'https://cdn.example/stream.m3u8',
+    });
+
+    const snapshot = await provider?.snapshot(String(room._id));
+    const serialised = JSON.stringify(snapshot);
+
+    expect(serialised).not.toContain('sk_live_super_secret_stream_key');
+    expect(serialised).not.toContain('rtmp://ingress.example/live');
+    expect(serialised).not.toContain('rtmpStreamKey');
+    // The report is still a real report — the room's own text survives.
+    expect(snapshot?.content).toMatchObject({ data: { title: 'Late night talk' } });
+  });
+
   it('says so plainly when there is no recording', async () => {
     const room = await makeRoom();
     const snapshot = await provider?.snapshot(String(room._id));

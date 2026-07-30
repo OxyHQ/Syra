@@ -335,6 +335,21 @@ function roomProvider(): ModerationSubjectProvider {
 
     async snapshot(reportedId: string): Promise<ModerationSubjectSnapshot | null> {
       if (!mongoose.isValidObjectId(reportedId)) return null;
+      /**
+       * A WHITELIST, and the exclusion is the point rather than a side effect.
+       *
+       * The question to ask of any reported document is not only "what would a
+       * jury learn that it should not" but "is there anything here a jury could
+       * USE". On a room there is: `rtmpStreamKey` and `rtmpUrl` together are the
+       * credential for broadcasting INTO the room. A juror who read them could
+       * take over the stream of the room they were asked to judge.
+       *
+       * They are excluded at the Mongo projection so they are never loaded into
+       * this process at all — not filtered out later, where a future field added
+       * to a snapshot object could quietly pick them up again. Never widen this
+       * to a bare `findById()`; `roomSubject.test.ts` fails if the key ever
+       * reaches a snapshot.
+       */
       const room = await RoomModel.findById(reportedId)
         .select('title description topic tags host status streamTitle streamDescription createdAt')
         .lean<{
