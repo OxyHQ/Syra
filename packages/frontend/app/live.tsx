@@ -17,6 +17,7 @@ import {
 } from '@syra.fm/sdk';
 
 import SEO from '@/components/SEO';
+import { refreshLiveRoomsWidget } from '@/modules/syra-widgets';
 import { authenticatedClient } from '@/utils/api';
 import { liveRoomsQueryKey } from '@/lib/liveConfig';
 
@@ -63,6 +64,11 @@ export default function LiveScreen() {
   const handleRoomCreated = useCallback(() => {
     closeCreateSheet();
     refetch();
+    // The home-screen widget polls on WorkManager's 15-minute floor, so without
+    // a nudge the user's own new room would be missing from their home screen
+    // for up to a quarter of an hour. No-ops on web and on any build without the
+    // native module.
+    void refreshLiveRoomsWidget();
   }, [closeCreateSheet, refetch]);
 
   return (
