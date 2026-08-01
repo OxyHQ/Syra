@@ -1110,19 +1110,23 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
       // 2. Acoustic fingerprint. A missing `fpcalc` is a degraded environment, not
       //    a bad file: screening continues without the acoustic signal. A fpcalc
       //    that RAN and rejected the file is a file problem and is refused.
+      // A missing fingerprint NEVER rejects the upload, whatever the cause.
+      // `ffprobe` has already established that this is decodable audio and given
+      // us its real duration and codec, so `fpcalc` failing is not evidence the
+      // file is bad — it means Chromaprint could not derive a fingerprint from
+      // it. `ERROR: Empty fingerprint` on a very short or near-silent clip is the
+      // common case. Rejecting here also made the outcome depend on WHY the
+      // signal is absent: a missing binary (`unavailable`) let the upload
+      // through while an unfingerprintable file did not, which is incoherent —
+      // both end in the same place, an upload screened without an acoustic
+      // signal. The consequences are bounded and already handled downstream:
+      // dedup tier 3 and the foreign-artist marker simply do not contribute.
       const fingerprintResult = await fingerprintFile(file.path);
-      if (fingerprintResult.status === 'failed') {
-        logger.warn('[uploads] fingerprinting rejected the file', {
+      if (fingerprintResult.status !== 'ok') {
+        logger.warn('[uploads] acoustic screening skipped', {
+          status: fingerprintResult.status,
           reason: fingerprintResult.reason,
         });
-        res.status(400).json({
-          error: 'Unreadable audio',
-          message: 'The audio file could not be analysed. Please upload a valid audio file.',
-        });
-        return;
-      }
-      if (fingerprintResult.status === 'unavailable') {
-        logger.warn('[uploads] acoustic screening skipped', { reason: fingerprintResult.reason });
       }
       const fingerprint: Fingerprint | undefined =
         fingerprintResult.status === 'ok'
