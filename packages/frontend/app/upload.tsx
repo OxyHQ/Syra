@@ -332,7 +332,21 @@ const UploadScreen: React.FC = () => {
                         return (
                           <Pressable
                             key={destination}
-                            onPress={() => updateFile(file.key, { destination })}
+                            // Choosing the public path opens the details panel.
+                            // The catalogue refuses a contribution with no
+                            // artist — there is nobody to attribute the work to,
+                            // and nobody to address a takedown at — but the
+                            // artist field lives behind this collapsed panel, so
+                            // the requirement was invisible until the whole file
+                            // had uploaded and come back rejected. Surfacing it
+                            // at the moment the choice is made costs nothing and
+                            // turns a wasted upload into a filled-in field.
+                            onPress={() =>
+                              updateFile(file.key, {
+                                destination,
+                                showDetails: destination === 'public' ? true : file.showDetails,
+                              })
+                            }
                             disabled={isUploading}
                             style={[
                               styles.destinationChip,
