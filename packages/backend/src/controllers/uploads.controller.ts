@@ -635,6 +635,11 @@ async function screenPublicContribution(params: {
    */
   acoustic?: { artistId: string; artistName: string };
   attestation?: string;
+  /**
+   * Image asset id for the ARTIST's photo, supplied by the uploader. Consumed
+   * only when the target profile has none — see the refusal below.
+   */
+  artistImage?: string;
   report: ScreeningReport;
 }): Promise<PublicGateResult> {
   const { metadata, report } = params;
@@ -701,6 +706,7 @@ async function screenPublicContribution(params: {
         name,
         musicbrainzArtistId: metadata.musicbrainz.artistId,
         genres: metadata.genres,
+        image: params.artistImage,
       });
       if (!contributed) {
         return refuse(
@@ -712,6 +718,56 @@ async function screenPublicContribution(params: {
         );
       }
       artistId = contributed._id.toString();
+    }
+  }
+
+  /**
+   * An artist profile without a photo is the state nothing ever goes back to
+   * fix: the page renders as a placeholder, and the person it names has no
+   * reason to visit it, so it stays bare indefinitely.
+   *
+   * Checked AFTER resolution rather than before, because whether a photo is
+   * needed depends on the target: a profile that already has one keeps it —
+   * their branding is not a contributor's to overwrite — and only a bare one
+   * asks the uploader for it. That also repairs profiles an earlier
+   * contribution left empty, instead of grandfathering them forever.
+   *
+   * `ensureContributedArtist` already stored the supplied image when it CREATED
+   * the profile; this fills the gap for a profile that already existed. Only an
+   * unclaimed one is written to: once somebody has claimed the profile, its
+   * photo is theirs.
+   */
+  if (artistId) {
+    const target = await ArtistModel.findById(artistId)
+      .select('image claimable claimedByOxyUserId')
+      .lean();
+    /**
+     * Filling a bare profile is offered, NOT required, and that is a deliberate
+     * reversal.
+     *
+     * A refusal cannot work here. The ISRC gate above guarantees the background
+     * enrichment has a path to a Wikidata/Commons photo, so a profile that looks
+     * bare at this instant is usually seconds from being complete — and it
+     * cannot be checked synchronously either, because MusicBrainz allows one
+     * request per second and an upload must never block behind it. A refusal
+     * would therefore reject publications that are about to be fine while never
+     * firing for the case it was written for: a rule that cannot trigger.
+     *
+     * Where enrichment finds nothing — an artist Wikidata does not know — the
+     * profile stays bare until the artist claims it and uploads their own.
+     *
+     * Only a bare, UNCLAIMED profile is written to: an artist who already has a
+     * photo keeps it, because their branding is not a contributor's to
+     * overwrite, and once claimed the photo is theirs.
+     */
+    if (
+      target &&
+      !target.image &&
+      params.artistImage &&
+      target.claimable !== false &&
+      !target.claimedByOxyUserId
+    ) {
+      await ArtistModel.updateOne({ _id: artistId }, { $set: { image: params.artistImage } });
     }
   }
 
@@ -1272,6 +1328,34 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
        * page is exactly what that minimum exists to prevent. A user-supplied
        * image comes through the picker and is accepted as-is.
        */
+      /**
+       * The catalogue takes a RECORDING, and an ISRC is what says which one.
+       * Without it the artist can only be matched on a name, which fails both
+       * ways: `C. Giró` and `Carlota Giró` become two profiles for one person,
+       * while two different artists sharing a name are forced into one by the
+       * unique name key. With it, the recording resolves in MusicBrainz to a
+       * specific artist with an ISNI, and the photo and credits follow.
+       *
+       * Checked before the artwork rule and before the contribution matrix, so
+       * a file that can never be attributed is refused before any work is done
+       * and before any artist stub exists.
+       *
+       * Creators publishing their OWN music are unaffected: they upload through
+       * the studio, where they already own the artist profile.
+       */
+      if (report.verdict !== 'commercial' && !metadata.isrc?.trim()) {
+        res.status(422).json({
+          outcome: 'blocked',
+          code: 'isrc_required',
+          message:
+            'This file carries no ISRC, the international code that identifies a ' +
+            'recording. The public catalogue needs one to attribute the track to the ' +
+            'right artist. Keep the file in your private library instead.',
+          markers: report.markers,
+        });
+        return;
+      }
+
       const hasCatalogCover = request.coverArt
         ? true
         : embeddedCover?.catalogEligible === true;
@@ -1319,6 +1403,7 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
           artistName: acousticNeighbour.artistName,
         },
         attestation: request.attestation,
+        artistImage: request.artistImage,
         report,
       });
 

@@ -287,6 +287,12 @@ export interface ContributedArtistInput {
   /** From `MUSICBRAINZ_ARTISTID`, when the file carried one. */
   musicbrainzArtistId?: string;
   genres?: string[];
+  /**
+   * Image asset id for the artist's photo. A contributed profile is created
+   * WITH one or not at all — the caller enforces that, because a bare profile
+   * is the state nothing ever goes back to fix.
+   */
+  image?: string;
 }
 
 /**
@@ -317,6 +323,7 @@ export async function ensureContributedArtist(
   try {
     const created = await ArtistModel.create({
       name: primary,
+      ...(input.image ? { image: input.image } : {}),
       nameKey,
       source: 'upload',
       origin: 'contributed',

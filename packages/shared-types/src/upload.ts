@@ -328,6 +328,14 @@ export const uploadTrackRequestSchema = z.object({
    * The uploader's signed statement that they may distribute this recording.
    * Required by the backend when `destination` is `public`; ignored otherwise.
    */
+  /**
+   * Image asset id for the ARTIST's photo, distinct from `coverArt`, which is
+   * the release. Required on the public path only when the target artist has no
+   * photo yet — either because this contribution creates the profile, or because
+   * an earlier one left it bare. An artist who already has a photo keeps it:
+   * their branding is not a contributor's to overwrite.
+   */
+  artistImage: z.string().optional(),
   attestation: z.string().optional(),
 });
 export type UploadTrackRequest = z.infer<typeof uploadTrackRequestSchema>;
@@ -391,6 +399,15 @@ export const uploadBlockedReasonSchema = z.enum([
    * minimum exists to prevent.
    */
   'cover_art_required',
+  /**
+   * The file carries no ISRC. Required on the public path because it is the only
+   * thing that identifies the RECORDING exactly: from it the artist resolves via
+   * MusicBrainz to a specific person with an ISNI, instead of being matched on a
+   * name. Name matching fails in both directions — `C. Giró` and `Carlota Giró`
+   * become two profiles, while two genuinely different artists sharing a name are
+   * forced into one by the unique name key.
+   */
+  'isrc_required',
   'artist_contributions_closed',
   'artist_uploads_disabled',
   /**

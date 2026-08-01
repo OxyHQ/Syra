@@ -356,7 +356,7 @@ describe('POST /api/uploads — already in the public catalogue', () => {
 // ── Public destination ───────────────────────────────────────────────────────
 
 describe('POST /api/uploads — public destination', () => {
-  it('REJECTS a file with no artist instead of quietly filing it in the locker', async () => {
+  it('REJECTS an unidentifiable file instead of quietly filing it in the locker', async () => {
     const { status, body } = await postUpload('untagged.wav', {
       destination: 'public',
       attestation: 'I have the right to distribute this recording.',
@@ -364,7 +364,12 @@ describe('POST /api/uploads — public destination', () => {
 
     expect(status).toBe(422);
     expect(body.outcome).toBe('blocked');
-    expect(body.code).toBe('artist_unresolved');
+    // `isrc_required`, not `artist_unresolved`, and the precedence is the point:
+    // this file has neither, but only one of the two is worth telling the
+    // uploader about. Without an ISRC the track cannot publish however good the
+    // artist name is, so naming the artist would send them to fix something that
+    // changes nothing — the same reason a `commercial` verdict outranks both.
+    expect(body.code).toBe('isrc_required');
     expect(typeof body.message).toBe('string');
 
     // The refusal is the point: a silent downgrade would leave the uploader
