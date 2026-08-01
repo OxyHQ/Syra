@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Platform } from 'react-native';
-import { webViewStyle } from '@/utils/webStyles';
+import { View } from 'react-native';
 import { useMediaQuery } from 'react-responsive';
 import { useUIStore } from '@/stores/uiStore';
 import { useLibraryCollections } from '@/hooks/useLibraryCollections';
@@ -43,8 +42,10 @@ export const LibrarySidebar: React.FC = () => {
   // Determine display mode for expanded view
   const displayMode = isFullscreen ? 'grid' : 'list';
 
+  // `overflow-y` is a web-only property, hence the `web:` variant; this sidebar
+  // only scrolls on web.
   return (
-    <View style={styles.container}>
+    <View className="flex-1 h-full web:overflow-y-auto">
       {!isLibrarySidebarExpanded ? (
         <LibrarySidebarCollapsed 
           onExpand={() => setLibrarySidebarExpanded(true)}
@@ -80,16 +81,3 @@ export const LibrarySidebar: React.FC = () => {
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  // `overflowY` is a react-native-web value; this sidebar only scrolls on web.
-  container: webViewStyle({
-    height: '100%',
-    overflowY: 'auto',
-    ...Platform.select({
-      default: {
-        flex: 1,
-      },
-    }),
-  }),
-});

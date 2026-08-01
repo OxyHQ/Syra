@@ -26,7 +26,7 @@ interface LibrarySidebarCollapsedProps {
  * Library Sidebar Collapsed View
  * Compact icon-only sidebar showing liked songs and playlists
  */
-export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = ({ 
+export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = ({
   onExpand,
   playlists,
   savedAlbums,
@@ -42,11 +42,11 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
   const { isAuthenticated } = useOxy();
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
+    <View className="flex-1 items-center justify-start p-2">
+      <View className="w-full items-center justify-center mb-2">
         <Pressable
           onPress={onExpand}
-          style={styles.expandButton}
+          className="w-7 h-7 items-center justify-center rounded-[14px]"
           accessibilityRole="button"
           accessibilityLabel={t('sidebar.expandAccessibility')}
         >
@@ -58,15 +58,15 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
         </Pressable>
       </View>
 
-      <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+      <ScrollView
+        className="flex-1 w-full"
+        contentContainerClassName="items-center gap-2 pb-2"
         showsVerticalScrollIndicator={false}
       >
         {/* Liked Songs */}
         {isAuthenticated && (
           <Pressable
-            style={[styles.iconButton, { backgroundColor: theme.colors.primary }]}
+            className="w-10 h-10 rounded-[4px] items-center justify-center bg-primary"
             onPress={() => router.push('/library/liked')}
           >
             <Ionicons name="heart" size={18} color={theme.colors.primaryForeground} />
@@ -75,7 +75,7 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
 
         {/* Loading state */}
         {loading && isAuthenticated && (
-          <View style={styles.loadingContainer}>
+          <View className="p-2 items-center justify-center">
             <ActivityIndicator size="small" color={theme.colors.primary} />
           </View>
         )}
@@ -86,7 +86,7 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
             spinner above, so no local pending state is needed here. */}
         {!loading && isAuthenticated && error && (
           <Pressable
-            style={styles.iconButton}
+            className="w-10 h-10 rounded-[4px] items-center justify-center"
             onPress={() => { void onRetry(); }}
             accessibilityRole="button"
             accessibilityLabel={`Library unavailable: ${error}. Tap to retry.`}
@@ -105,7 +105,7 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
           && followedArtists.length === 0
           && savedAlbums.length === 0 && (
           <Pressable
-            style={styles.iconButton}
+            className="w-10 h-10 rounded-[4px] items-center justify-center"
             onPress={onExpand}
             accessibilityRole="button"
             accessibilityLabel={t('sidebar.emptyCollapsed')}
@@ -122,17 +122,17 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
         {!loading && !error && isAuthenticated && playlists.map((playlist) => (
           <Pressable
             key={playlist.id}
-            style={styles.iconButton}
+            className="w-10 h-10 rounded-[4px] items-center justify-center"
             onPress={() => router.push(`/playlist/${playlist.id}`)}
           >
             {playlist.coverArt ? (
               <Image
                 source={{ uri: pickCatalogImageUrl(undefined, playlist.coverArt, 'icon', playlist.coverArtSizes) }}
-                style={styles.playlistIcon}
+                style={styles.squareIcon}
                 contentFit="cover"
               />
             ) : (
-              <View style={[styles.playlistIconPlaceholder, { backgroundColor: theme.colors.backgroundTertiary }]}>
+              <View className="w-10 h-10 rounded-[4px] items-center justify-center bg-popover">
                 <MaterialCommunityIcons
                   name="playlist-music"
                   size={18}
@@ -147,17 +147,17 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
         {!loading && !error && isAuthenticated && followedArtists.map((artist) => (
           <Pressable
             key={artist.id}
-            style={styles.iconButton}
+            className="w-10 h-10 rounded-[4px] items-center justify-center"
             onPress={() => router.push(`/p/${artist.id}`)}
           >
             {(artist.image || artist.images?.length) ? (
               <Image
                 source={{ uri: pickCatalogImageUrl(artist.images, artist.image, 'icon', artist.imageSizes) }}
-                style={styles.artistIcon}
+                style={styles.roundIcon}
                 contentFit="cover"
               />
             ) : (
-              <View style={[styles.artistIconPlaceholder, { backgroundColor: theme.colors.backgroundTertiary }]}>
+              <View className="w-10 h-10 rounded-[20px] items-center justify-center bg-popover">
                 <Ionicons
                   name="person"
                   size={18}
@@ -172,17 +172,17 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
         {!loading && !error && isAuthenticated && savedAlbums.map((album) => (
           <Pressable
             key={album.id}
-            style={styles.iconButton}
+            className="w-10 h-10 rounded-[4px] items-center justify-center"
             onPress={() => router.push(`/album/${album.id}`)}
           >
             {album.coverArt ? (
               <Image
                 source={{ uri: pickCatalogImageUrl(undefined, album.coverArt, 'icon', album.coverArtSizes) }}
-                style={styles.playlistIcon}
+                style={styles.squareIcon}
                 contentFit="cover"
               />
             ) : (
-              <View style={[styles.playlistIconPlaceholder, { backgroundColor: theme.colors.backgroundTertiary }]}>
+              <View className="w-10 h-10 rounded-[4px] items-center justify-center bg-popover">
                 <MaterialCommunityIcons
                   name="album"
                   size={18}
@@ -197,69 +197,16 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
   );
 };
 
+// `expo-image` has no `className` prop, so the artwork sizing stays a style.
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    padding: 8,
-  },
-  header: {
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  expandButton: {
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 14,
-  },
-  scrollView: {
-    flex: 1,
-    width: '100%',
-  },
-  scrollContent: {
-    alignItems: 'center',
-    gap: 8,
-    paddingBottom: 8,
-  },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  playlistIcon: {
+  squareIcon: {
     width: 40,
     height: 40,
     borderRadius: 4,
   },
-  playlistIconPlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  artistIcon: {
+  roundIcon: {
     width: 40,
     height: 40,
     borderRadius: 20,
-  },
-  artistIconPlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingContainer: {
-    padding: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });

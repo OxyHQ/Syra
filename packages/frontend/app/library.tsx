@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { StyleSheet, View, Text, Pressable, Platform } from 'react-native';
+import { StyleSheet, View, Text, Pressable, type ViewStyle } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,6 +21,7 @@ import { EpisodeRow } from '@/components/EpisodeRow';
 import { useSubscriptions, useContinueListening } from '@/hooks/usePodcasts';
 import { useUploads } from '@/hooks/useUploads';
 import { usePlayerStore } from '@/stores/playerStore';
+import { cn } from '@/lib/utils';
 
 /**
  * Bottom offset (in px) for the Create Playlist FAB. Clears the floating
@@ -107,14 +108,12 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
 
   // Absolute positioning for the FAB. `insets.bottom` is its only dynamic
   // input, so memoize to keep the reference stable for the memoized `Fab`.
-  const fabStyle = useMemo(
-    () => [
-      styles.fab,
-      {
-        right: FAB_SIDE_OFFSET,
-        bottom: FAB_BOTTOM_OFFSET + FAB_PLAYER_BAR_CLEARANCE + insets.bottom,
-      },
-    ],
+  const fabStyle = useMemo<ViewStyle>(
+    () => ({
+      position: 'absolute',
+      right: FAB_SIDE_OFFSET,
+      bottom: FAB_BOTTOM_OFFSET + FAB_PLAYER_BAR_CLEARANCE + insets.bottom,
+    }),
     [insets.bottom]
   );
 
@@ -170,21 +169,21 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
           description={t('library.seo.description')}
         />
       )}
-      <View style={styles.libraryContainer}>
+      <View className="flex-1 relative">
       <Animated.ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.contentContainer}
+        className="flex-1"
+        contentContainerClassName="px-3 pt-3 pb-[100px]"
         showsVerticalScrollIndicator={false}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
       >
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: theme.colors.text }]}>{t('library.title')}</Text>
-          <View style={styles.headerActions}>
+        <View className="flex-row items-center justify-between mb-3">
+          <Text className="text-[24px] font-bold text-foreground">{t('library.title')}</Text>
+          <View className="flex-row gap-2 items-center">
             {showSidebarControls && onFullscreen && (
               <Pressable
                 onPress={onFullscreen}
-                style={[styles.headerButton, { backgroundColor: theme.colors.backgroundTertiary }]}
+                className="w-7 h-7 items-center justify-center rounded-[14px] bg-popover web:cursor-pointer"
               >
                 <Ionicons
                   name={isFullscreen ? 'contract' : 'expand'}
@@ -196,7 +195,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
             {showSidebarControls && onCollapse && !isFullscreen && (
               <Pressable
                 onPress={onCollapse}
-                style={[styles.headerButton, { backgroundColor: theme.colors.backgroundTertiary }]}
+                className="w-7 h-7 items-center justify-center rounded-[14px] bg-popover web:cursor-pointer"
               >
                 <Octicons
                   name="sidebar-collapse"
@@ -209,27 +208,24 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         </View>
 
         {/* Filters */}
-        <View style={styles.filters}>
+        <View className="flex-row gap-1.5 mb-3 items-center">
           {LIBRARY_FILTERS.map((filter) => {
             const isActive = activeFilter === filter;
             return (
               <Pressable
                 key={filter}
                 onPress={() => setActiveFilter(filter)}
-                style={[
-                  styles.filterButton,
-                  {
-                    backgroundColor: isActive ? theme.colors.primary : theme.colors.backgroundTertiary
-                  }
-                ]}
+                className={cn(
+                  'px-2.5 py-[3px] rounded-[12px] h-6 justify-center items-center',
+                  isActive ? 'bg-primary' : 'bg-popover',
+                )}
               >
-                <Text style={[
-                  styles.filterText, 
-                  { 
-                    color: isActive ? theme.colors.primaryForeground : theme.colors.text,
-                    fontWeight: isActive ? '700' : '600'
-                  }
-                ]}>
+                <Text
+                  className={cn(
+                    'text-[11px] leading-[13px]',
+                    isActive ? 'font-bold text-primary-foreground' : 'font-semibold text-foreground',
+                  )}
+                >
                   {t(LIBRARY_FILTER_KEYS[filter])}
                 </Text>
               </Pressable>
@@ -240,15 +236,15 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         {/* Liked Songs - show only when All or Playlists filter is active */}
         {gate.isAuthenticated && (activeFilter === 'All' || activeFilter === 'Playlists') && (
           <Pressable
-            style={[styles.libraryItem, { backgroundColor: theme.colors.backgroundTertiary }]}
+            className="flex-row items-center gap-3 p-2 rounded-[6px] mb-2 bg-popover"
             onPress={() => router.push('/library/liked')}
           >
-            <View style={[styles.likedIcon, { backgroundColor: theme.colors.primary }]}>
+            <View className="w-12 h-12 rounded-[4px] items-center justify-center bg-primary">
               <Ionicons name="heart" size={24} color={theme.colors.primaryForeground} />
             </View>
-            <View style={styles.itemContent}>
-              <Text style={[styles.itemTitle, { color: theme.colors.text }]}>{t('library.likedSongs')}</Text>
-              <Text style={[styles.itemSubtitle, { color: theme.colors.textSecondary }]}>
+            <View className="flex-1">
+              <Text className="text-[14px] font-semibold mb-0.5 text-foreground">{t('library.likedSongs')}</Text>
+              <Text className="text-[12px] text-muted-foreground">
                 Playlist • {finalLoading ? '...' : `${finalLikedTracksCount} ${finalLikedTracksCount === 1 ? 'song' : 'songs'}`}
               </Text>
             </View>
@@ -259,15 +255,15 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
             inside the saved-album lists, because nothing in it is catalogue. */}
         {gate.isAuthenticated && (activeFilter === 'All' || activeFilter === 'Uploads') && uploads.length > 0 && (
           <Pressable
-            style={[styles.libraryItem, { backgroundColor: theme.colors.backgroundTertiary }]}
+            className="flex-row items-center gap-3 p-2 rounded-[6px] mb-2 bg-popover"
             onPress={() => router.push('/library/uploads')}
           >
-            <View style={[styles.likedIcon, { backgroundColor: theme.colors.backgroundSecondary }]}>
+            <View className="w-12 h-12 rounded-[4px] items-center justify-center bg-surface">
               <MaterialCommunityIcons name="folder-music" size={24} color={theme.colors.text} />
             </View>
-            <View style={styles.itemContent}>
-              <Text style={[styles.itemTitle, { color: theme.colors.text }]}>{t('uploads.locker.title')}</Text>
-              <Text style={[styles.itemSubtitle, { color: theme.colors.textSecondary }]}>
+            <View className="flex-1">
+              <Text className="text-[14px] font-semibold mb-0.5 text-foreground">{t('uploads.locker.title')}</Text>
+              <Text className="text-[12px] text-muted-foreground">
                 {t('uploads.locker.trackCount', { count: uploadCount })}
               </Text>
             </View>
@@ -276,9 +272,9 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
 
         {/* Loading state */}
         {finalLoading && (gate.isAuthenticated || gate.isResolving) && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('common.playlists')}</Text>
-            <View style={styles.itemsContainer}>
+          <View className="mb-6">
+            <Text className="text-[16px] font-bold mb-3 text-foreground">{t('common.playlists')}</Text>
+            <View className="gap-0">
               <LibraryListSkeleton count={6} />
             </View>
           </View>
@@ -299,23 +295,23 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
 
         {/* Playlists list */}
         {!finalLoading && !finalError && finalPlaylists.length > 0 && (activeFilter === 'All' || activeFilter === 'Playlists') && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('common.playlists')}</Text>
-            <View style={styles.itemsContainer}>
+          <View className="mb-6">
+            <Text className="text-[16px] font-bold mb-3 text-foreground">{t('common.playlists')}</Text>
+            <View className="gap-0">
               {finalPlaylists.map((playlist) => (
                 <Pressable
                   key={playlist.id}
-                  style={[styles.libraryItem, { backgroundColor: theme.colors.backgroundTertiary }]}
+                  className="flex-row items-center gap-3 p-2 rounded-[6px] mb-2 bg-popover"
                   onPress={() => router.push(`/playlist/${playlist.id}`)}
                 >
                   {playlist.coverArt ? (
                     <Image
                       source={{ uri: pickCatalogImageUrl(undefined, playlist.coverArt, 'thumbnail', playlist.coverArtSizes) }}
-                      style={styles.playlistImage}
+                      style={styles.squareArtwork}
                       contentFit="cover"
                     />
                   ) : (
-                    <View style={[styles.playlistImagePlaceholder, { backgroundColor: theme.colors.background }]}>
+                    <View className="w-12 h-12 rounded-[4px] items-center justify-center bg-background">
                       <MaterialCommunityIcons
                         name="playlist-music"
                         size={24}
@@ -323,11 +319,11 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                       />
                     </View>
                   )}
-                  <View style={styles.itemContent}>
-                    <Text style={[styles.itemTitle, { color: theme.colors.text }]} numberOfLines={1}>
+                  <View className="flex-1">
+                    <Text className="text-[14px] font-semibold mb-0.5 text-foreground" numberOfLines={1}>
                       {playlist.name}
                     </Text>
-                    <Text style={[styles.itemSubtitle, { color: theme.colors.textSecondary }]}>
+                    <Text className="text-[12px] text-muted-foreground">
                       {playlist.visibility === 'public' ? t('common.public') : t('common.private')} • {t('common.songCount', { count: playlist.trackCount || 0 })}
                     </Text>
                   </View>
@@ -339,23 +335,23 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
 
         {/* Artists list */}
         {!finalLoading && !finalError && finalFollowedArtists.length > 0 && (activeFilter === 'All' || activeFilter === 'Artists') && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('common.artists')}</Text>
-            <View style={styles.itemsContainer}>
+          <View className="mb-6">
+            <Text className="text-[16px] font-bold mb-3 text-foreground">{t('common.artists')}</Text>
+            <View className="gap-0">
               {finalFollowedArtists.map((artist) => (
                 <Pressable
                   key={artist.id}
-                  style={[styles.libraryItem, { backgroundColor: theme.colors.backgroundTertiary }]}
+                  className="flex-row items-center gap-3 p-2 rounded-[6px] mb-2 bg-popover"
                   onPress={() => router.push(`/p/${artist.id}`)}
                 >
                   {(artist.image || artist.images?.length) ? (
                     <Image
                       source={{ uri: pickCatalogImageUrl(artist.images, artist.image, 'thumbnail', artist.imageSizes) }}
-                      style={styles.artistImage}
+                      style={styles.roundArtwork}
                       contentFit="cover"
                     />
                   ) : (
-                    <View style={[styles.artistImagePlaceholder, { backgroundColor: theme.colors.background }]}>
+                    <View className="w-12 h-12 rounded-[24px] items-center justify-center bg-background">
                       <Ionicons
                         name="person"
                         size={24}
@@ -363,11 +359,11 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                       />
                     </View>
                   )}
-                  <View style={styles.itemContent}>
-                    <Text style={[styles.itemTitle, { color: theme.colors.text }]} numberOfLines={1}>
+                  <View className="flex-1">
+                    <Text className="text-[14px] font-semibold mb-0.5 text-foreground" numberOfLines={1}>
                       {artist.name}
                     </Text>
-                    <Text style={[styles.itemSubtitle, { color: theme.colors.textSecondary }]}>
+                    <Text className="text-[12px] text-muted-foreground">
                       {t('common.artist')}
                     </Text>
                   </View>
@@ -379,23 +375,23 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
 
         {/* Albums list */}
         {!finalLoading && !finalError && finalSavedAlbums.length > 0 && (activeFilter === 'All' || activeFilter === 'Albums') && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('common.albums')}</Text>
-            <View style={styles.itemsContainer}>
+          <View className="mb-6">
+            <Text className="text-[16px] font-bold mb-3 text-foreground">{t('common.albums')}</Text>
+            <View className="gap-0">
               {finalSavedAlbums.map((album) => (
                 <Pressable
                   key={album.id}
-                  style={[styles.libraryItem, { backgroundColor: theme.colors.backgroundTertiary }]}
+                  className="flex-row items-center gap-3 p-2 rounded-[6px] mb-2 bg-popover"
                   onPress={() => router.push(`/album/${album.id}`)}
                 >
                   {album.coverArt ? (
                     <Image
                       source={{ uri: pickCatalogImageUrl(undefined, album.coverArt, 'thumbnail', album.coverArtSizes) }}
-                      style={styles.playlistImage}
+                      style={styles.squareArtwork}
                       contentFit="cover"
                     />
                   ) : (
-                    <View style={[styles.playlistImagePlaceholder, { backgroundColor: theme.colors.background }]}>
+                    <View className="w-12 h-12 rounded-[4px] items-center justify-center bg-background">
                       <MaterialCommunityIcons
                         name="album"
                         size={24}
@@ -403,11 +399,11 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                       />
                     </View>
                   )}
-                  <View style={styles.itemContent}>
-                    <Text style={[styles.itemTitle, { color: theme.colors.text }]} numberOfLines={1}>
+                  <View className="flex-1">
+                    <Text className="text-[14px] font-semibold mb-0.5 text-foreground" numberOfLines={1}>
                       {album.title}
                     </Text>
-                    <Text style={[styles.itemSubtitle, { color: theme.colors.textSecondary }]}>
+                    <Text className="text-[12px] text-muted-foreground">
                       {album.artistName} • {album.releaseDate ? new Date(album.releaseDate).getFullYear() : ''}
                     </Text>
                   </View>
@@ -419,29 +415,29 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
 
         {/* Subscribed podcasts */}
         {gate.isAuthenticated && (activeFilter === 'All' || activeFilter === 'Podcasts') && subscribedPodcasts.length > 0 && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('common.podcasts')}</Text>
-            <View style={styles.itemsContainer}>
+          <View className="mb-6">
+            <Text className="text-[16px] font-bold mb-3 text-foreground">{t('common.podcasts')}</Text>
+            <View className="gap-0">
               {subscribedPodcasts.map(({ podcast }) => {
                 const imageUri = resolvePodcastArtwork(podcast, 'thumbnail');
                 return (
                   <Pressable
                     key={podcast.id}
-                    style={[styles.libraryItem, { backgroundColor: theme.colors.backgroundTertiary }]}
+                    className="flex-row items-center gap-3 p-2 rounded-[6px] mb-2 bg-popover"
                     onPress={() => router.push({ pathname: '/podcasts/[id]', params: { id: podcast.id } })}
                   >
                     {imageUri ? (
-                      <Image source={{ uri: imageUri }} style={styles.playlistImage} contentFit="cover" />
+                      <Image source={{ uri: imageUri }} style={styles.squareArtwork} contentFit="cover" />
                     ) : (
-                      <View style={[styles.playlistImagePlaceholder, { backgroundColor: theme.colors.background }]}>
+                      <View className="w-12 h-12 rounded-[4px] items-center justify-center bg-background">
                         <MaterialCommunityIcons name="podcast" size={24} color={theme.colors.textSecondary} />
                       </View>
                     )}
-                    <View style={styles.itemContent}>
-                      <Text style={[styles.itemTitle, { color: theme.colors.text }]} numberOfLines={1}>
+                    <View className="flex-1">
+                      <Text className="text-[14px] font-semibold mb-0.5 text-foreground" numberOfLines={1}>
                         {podcast.title}
                       </Text>
-                      <Text style={[styles.itemSubtitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+                      <Text className="text-[12px] text-muted-foreground" numberOfLines={1}>
                         {podcast.author ?? t('common.podcast')}
                       </Text>
                     </View>
@@ -454,9 +450,9 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
 
         {/* In-progress episodes */}
         {gate.isAuthenticated && (activeFilter === 'All' || activeFilter === 'Episodes') && inProgressEpisodes.length > 0 && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('library.continueListening')}</Text>
-            <View style={styles.itemsContainer}>
+          <View className="mb-6">
+            <Text className="text-[16px] font-bold mb-3 text-foreground">{t('library.continueListening')}</Text>
+            <View className="gap-0">
               {inProgressEpisodes.map((entry) => (
                 <EpisodeRow
                   key={entry.episode.id}
@@ -515,93 +511,10 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   );
 };
 
+// The only styles left are the ones no NativeWind class can reach: `expo-image`
+// has no `className` prop, and `EmptyState` takes a `ViewStyle` through
+// `containerStyle` rather than a class.
 const styles = StyleSheet.create({
-  libraryContainer: {
-    flex: 1,
-    position: 'relative',
-  },
-  container: {
-    flex: 1,
-  },
-  fab: {
-    position: 'absolute',
-  },
-  contentContainer: {
-    padding: 12,
-    paddingBottom: 100,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center',
-  },
-  headerButton: {
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 14,
-    ...Platform.select({
-      web: {
-        cursor: 'pointer',
-      },
-    }),
-  },
-  filters: {
-    flexDirection: 'row',
-    gap: 6,
-    marginBottom: 12,
-    alignItems: 'center',
-  },
-  filterButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 12,
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  filterText: {
-    fontSize: 11,
-    fontWeight: '600',
-    lineHeight: 13,
-  },
-  libraryItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 8,
-    borderRadius: 6,
-    marginBottom: 8,
-  },
-  likedIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  itemContent: {
-    flex: 1,
-  },
-  itemTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  itemSubtitle: {
-    fontSize: 12,
-  },
   // States rendered INSIDE the scroll view: no `flex: 1` stretch and no opaque
   // background of their own, so they sit inline under the filter row.
   inlineState: {
@@ -609,40 +522,15 @@ const styles = StyleSheet.create({
     paddingVertical: 32,
     backgroundColor: 'transparent',
   },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 12,
-  },
-  itemsContainer: {
-    gap: 0,
-  },
-  playlistImage: {
+  squareArtwork: {
     width: 48,
     height: 48,
     borderRadius: 4,
   },
-  playlistImagePlaceholder: {
-    width: 48,
-    height: 48,
-    borderRadius: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  artistImage: {
+  roundArtwork: {
     width: 48,
     height: 48,
     borderRadius: 24,
-  },
-  artistImagePlaceholder: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });
 
