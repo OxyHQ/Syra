@@ -50,7 +50,19 @@ class PlayerSocketService {
       this.disconnect();
     }
 
-    if (this.socket?.connected) {
+    /**
+     * `active` as well as `connected`, and that is the whole fix.
+     *
+     * Checking only `connected` treated a socket that was still HANDSHAKING as
+     * stale, so the cleanup below tore it down mid-connection — which the
+     * browser reports as "WebSocket is closed before the connection is
+     * established". Two `connect()` calls in quick succession are ordinary
+     * here: the caller is an effect keyed on `canUsePrivateApi` and `userId`,
+     * both of which settle during boot, and React re-invokes effects in
+     * StrictMode. `active` is true while socket.io is connecting or retrying,
+     * so an in-flight attempt is now left alone to finish.
+     */
+    if (this.socket?.connected || this.socket?.active) {
       return;
     }
 

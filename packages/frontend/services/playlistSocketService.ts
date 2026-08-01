@@ -25,7 +25,15 @@ class PlaylistSocketService {
    * Connect to playlist socket namespace
    */
   connect(userId?: string, token?: string) {
-    if (this.socket?.connected) {
+    /**
+     * `active` as well as `connected` — same fix as the player socket.
+     * Checking only `connected` lets a second call fall through while the first
+     * is still handshaking, and the socket created below replaces one that was
+     * about to succeed. The browser reports that as "WebSocket is closed before
+     * the connection is established". `active` is true while socket.io is
+     * connecting or retrying, so an in-flight attempt is left to finish.
+     */
+    if (this.socket?.connected || this.socket?.active) {
       return;
     }
 
