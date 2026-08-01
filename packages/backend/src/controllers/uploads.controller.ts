@@ -1257,7 +1257,55 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
         return;
       }
 
-      // 5b. Public destination — the contribution matrix decides.
+      /**
+       * 5b. Public destination.
+       *
+       * Cover art is checked FIRST, before the contribution matrix, and the
+       * order is load-bearing: `screenPublicContribution` creates a claimable
+       * artist stub for an unknown name, so refusing after it would leave an
+       * orphan artist row behind for a track that never published — a slow leak
+       * of junk into the catalogue that nothing would ever clean up.
+       *
+       * "Has a cover" is not enough; it has to be one the catalogue can show.
+       * An embedded thumbnail below `MIN_CATALOG_COVER_ART_PX` is stored and
+       * displayed in the owner's own library, but promoting it to a catalogue
+       * page is exactly what that minimum exists to prevent. A user-supplied
+       * image comes through the picker and is accepted as-is.
+       */
+      const hasCatalogCover = request.coverArt
+        ? true
+        : embeddedCover?.catalogEligible === true;
+      /**
+       * Two refusals outrank this one and must keep their own codes, because
+       * telling someone to attach artwork when the real problem is "this is a
+       * purchased commercial recording" or "this file says who nobody" sends
+       * them to fix the wrong thing:
+       *
+       * - a `commercial` verdict is the more serious finding, and
+       * - no artist at all is more fundamental — there is nobody to attribute
+       *   the work to.
+       *
+       * Neither case reaches stub creation either: `ensureContributedArtist`
+       * needs a name, so a nameless file leaks nothing by being refused later.
+       * The leak this ordering exists to prevent is the narrow one — a
+       * resolvable artist plus no cover, where the stub would be created and
+       * then stranded.
+       */
+      const wouldResolveArtist = Boolean(
+        request.artistName?.trim() || metadata.artistName?.trim(),
+      );
+      if (report.verdict !== 'commercial' && wouldResolveArtist && !hasCatalogCover) {
+        res.status(422).json({
+          outcome: 'blocked',
+          code: 'cover_art_required',
+          message: embeddedCover
+            ? 'This file’s artwork is too small to publish. Attach a larger image, or keep the file in your private library instead.'
+            : 'This file has no artwork, and the catalogue needs one. Attach an image, or keep the file in your private library instead.',
+          markers: report.markers,
+        });
+        return;
+      }
+
       const gate = await screenPublicContribution({
         uploaderOxyUserId: userId,
         metadata,

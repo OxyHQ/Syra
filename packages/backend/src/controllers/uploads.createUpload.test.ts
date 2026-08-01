@@ -418,24 +418,30 @@ describe('embedded cover art', () => {
     expect(await ImageAssetModel.countDocuments({})).toBe(1);
   });
 
-  it('keeps a thumbnail out of the catalogue while keeping it in the locker', async () => {
+  it('refuses a thumbnail for the catalogue while keeping it in the locker', async () => {
     // 96×96 is fine in somebody's own library and blurry on an album page, and
-    // promoting one is not reversible in practice.
-    const { body } = await postUpload('indie-id3v2.mp3', {
+    // promoting one is not reversible in practice. The catalogue therefore
+    // requires artwork it can actually show: this used to publish a track with
+    // no cover at all, which is worse than refusing, because a coverless
+    // catalogue entry looks broken and nothing ever goes back to fix it.
+    const { status, body } = await postUpload('indie-id3v2.mp3', {
       destination: 'public',
       attestation: 'I have the right to distribute this recording.',
     });
 
-    if (body.outcome !== 'published') {
-      throw new Error(`expected the fixture to publish, got ${JSON.stringify(body)}`);
-    }
+    expect(status).toBe(422);
+    expect(body.outcome).toBe('blocked');
+    expect(body.code).toBe('cover_art_required');
 
-    const track = await TrackModel.findById(String(body.trackId)).lean();
-    expect(track?.coverArt).toBeUndefined();
-    // ...and with no artwork there is no album, because the alternative is
-    // inventing a placeholder cover.
-    expect(track?.albumId).toBeUndefined();
+    // Nothing is left behind: no track, no album, and — because the refusal
+    // lands before the contribution matrix — no orphan artist stub either.
+    expect(await TrackModel.countDocuments({})).toBe(0);
     expect(await AlbumModel.countDocuments({})).toBe(0);
+
+    // The same file is still a perfectly good PRIVATE upload, thumbnail and all.
+    const priv = await postUpload('indie-id3v2.mp3', { destination: 'private' });
+    expect(priv.status).toBe(201);
+    expect(priv.body.outcome).toBe('stored');
   });
 });
 

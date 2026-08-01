@@ -382,6 +382,15 @@ export const uploadBlockedReasonSchema = z.enum([
   'artist_unresolved',
   'artist_not_found',
   'artist_name_denylisted',
+  /**
+   * The catalogue refuses a release with no usable cover art. Distinct from the
+   * artist codes because the fix is different and the user can act on it: attach
+   * an image, or keep the file private. "Usable" means it clears the catalogue
+   * minimum — an embedded thumbnail is stored and shown in the owner's own
+   * library, but promoting a 200px image to a catalogue page is the thing the
+   * minimum exists to prevent.
+   */
+  'cover_art_required',
   'artist_contributions_closed',
   'artist_uploads_disabled',
   /**
