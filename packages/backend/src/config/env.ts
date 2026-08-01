@@ -68,6 +68,17 @@ const schema = z.object({
   JAMENDO_CLIENT_ID: z.string().optional(),
   JAMENDO_API_URL: z.string().optional(),
 
+  /**
+   * AcoustID web-service client key (https://acoustid.org/new-application).
+   *
+   * Optional, and the absence is a supported mode rather than a misconfiguration:
+   * `services/uploads/acoustid.ts` answers `unavailable` without it and every
+   * caller carries on with the evidence it already had. Screening is strictly
+   * weaker without it — an untagged rip is no longer identified by its audio —
+   * so a deploy that wants acoustic identification must set it.
+   */
+  ACOUSTID_API_KEY: z.string().optional(),
+
   PODCAST_INDEX_KEY: z.string().optional(),
   PODCAST_INDEX_SECRET: z.string().optional(),
   PODCAST_BULK_IMPORT_ENABLED: z.string().optional(),

@@ -281,12 +281,81 @@ describe('stripped tags at release-grade encoding', () => {
     expect(report.verdict).toBe('clean');
   });
 
-  it('does not fire on a file that still has tags, however few', () => {
-    const oneTag: ExtractedMetadata = {
+  /**
+   * The shape a real laundered file arrives in, and the reason this marker tests
+   * release IDENTITY rather than tag COUNT.
+   *
+   * Measured from a file a user actually tried to upload: title and artist
+   * present, `album = "Unknown Album"`, an embedded 300 px cover, and not one
+   * identifier of any kind. A tag-count test reads that as a tagged file and
+   * lets it through — which is exactly backwards, because somebody kept the
+   * artwork and removed the provenance.
+   */
+  it('fires on a file whose tags were reduced to a placeholder album', () => {
+    const laundered: ExtractedMetadata = {
       ...untagged,
-      nativeTags: [{ tagType: 'ID3v2.4', id: 'TIT2', value: 'Something' }],
+      title: 'Por interés',
+      artistName: 'Carlota Giró',
+      albumName: 'Unknown Album',
+      nativeTags: [
+        { tagType: 'ID3v2.4', id: 'TIT2', value: 'Por interés' },
+        { tagType: 'ID3v2.4', id: 'TPE1', value: 'Carlota Giró' },
+        { tagType: 'ID3v2.4', id: 'TALB', value: 'Unknown Album' },
+      ],
     };
-    expect(codes(scoreProvenance(oneTag))).not.toContain('tags.stripped-commercial-encoding');
+
+    const report = scoreProvenance(laundered);
+
+    expect(codes(report)).toContain('tags.stripped-commercial-encoding');
+    const detail = detailOf(report, 'tags.stripped-commercial-encoding');
+    expect(detail).toContain('none identifying a release');
+    expect(detail).toContain('Unknown Album');
+  });
+
+  it('weighs `medium`, and medium alone cannot refuse a file', () => {
+    // The correction this weight exists to make: the scorer only counts markers
+    // that are PRESENT, so an erased file scores cleaner than an honest one. And
+    // the limit on that correction: absence is weak evidence — a genuine home
+    // recording has no label and no ISRC either — so it must contribute without
+    // deciding.
+    const report = scoreProvenance(untagged);
+    const marker = report.markers.find(
+      (entry) => entry.code === 'tags.stripped-commercial-encoding',
+    );
+
+    expect(marker?.weight).toBe('medium');
+    expect(report.score).toBeLessThan(COMMERCIAL_SCORE_THRESHOLD);
+    expect(report.verdict).not.toBe('commercial');
+  });
+
+  it('does NOT fire on a file that names a real release', () => {
+    const named: ExtractedMetadata = { ...untagged, albumName: 'Harbour Lights' };
+    expect(codes(scoreProvenance(named))).not.toContain('tags.stripped-commercial-encoding');
+  });
+
+  it('does NOT fire on a file carrying any release identity at all', () => {
+    // One field each, so a regression that drops one from the set is caught
+    // individually rather than being masked by the others.
+    const identities: Array<Partial<ExtractedMetadata>> = [
+      { isrc: 'ESA452300137' },
+      { upc: '0602557891234' },
+      { catalogNumber: 'LW-0042' },
+      { label: 'Longwave Recordings' },
+      { copyright: '℗ 2023 Longwave Recordings' },
+      { publisher: 'Longwave Recordings' },
+      { asin: 'B01N5IB20Q' },
+      { acoustidId: 'e7d1b7dc-9d1e-4a1f-9f0a-2f3a1b6c8d90' },
+      { musicbrainz: { recordingId: '5f0a1b2c-3d4e-4f50-8a61-72b3c4d5e6f7' } },
+      { musicbrainz: { artistId: 'aaaa1111-2222-3333-4444-555566667777' } },
+    ];
+
+    for (const identity of identities) {
+      const withIdentity: ExtractedMetadata = { ...untagged, ...identity };
+      expect(
+        codes(scoreProvenance(withIdentity)),
+        `a file carrying ${Object.keys(identity)[0]} is not a file with its provenance removed`,
+      ).not.toContain('tags.stripped-commercial-encoding');
+    }
   });
 });
 
@@ -360,9 +429,93 @@ describe('store and acoustic markers', () => {
   });
 
   it('a blocking marker decides regardless of the score arithmetic', () => {
-    const report = scoreProvenance({ ...untagged, asin: 'B01N5IB20Q' });
-    // Only one blocking marker plus one low one; the verdict is not a sum.
+    // An `xid` names the vendor that issued the identifier — blocking — while
+    // the file still carries no release identity of its own, so the weak
+    // stripped-tags marker fires beside it. The verdict comes from the blocking
+    // marker's presence, never from adding the two together.
+    const report = scoreProvenance({
+      ...untagged,
+      nativeTags: [
+        { tagType: 'iTunes', id: 'xid', value: 'Longwave Recordings:isrc:GBAHT1600042' },
+      ],
+    });
+
+    expect(codes(report)).toContain('store.xid-vendor');
+    expect(codes(report)).toContain('tags.stripped-commercial-encoding');
     expect(report.verdict).toBe('commercial');
+  });
+});
+
+// ── Acoustic identification ─────────────────────────────────────────────────
+
+/**
+ * The marker no tagger can defeat.
+ *
+ * Every other commercial signal here reads something written INTO the file, and
+ * all of it comes off with a tag editor. The fingerprint does not, so a file
+ * scrubbed of every identifier still resolves to the recording it was made from.
+ */
+describe('what the audio itself identifies as', () => {
+  const RECORDING_MBID = 'b1a9c0de-1111-2222-3333-444455556666';
+
+  it('a recording carried on releases BLOCKS the public path', () => {
+    const report = scoreProvenance(untagged, {
+      acousticIdentityMatch: {
+        recordingMbid: RECORDING_MBID,
+        score: 0.973,
+        title: 'Por interés',
+        artistName: 'Carlota Giró',
+        releaseCount: 4,
+      },
+    });
+
+    expect(report.verdict).toBe('commercial');
+    expect(codes(report)).toContain('acoustid.commercial-release');
+    const detail = detailOf(report, 'acoustid.commercial-release');
+    expect(detail).toContain(RECORDING_MBID);
+    expect(detail).toContain('Carlota Giró');
+    expect(detail).toContain('4 release entities');
+    expect(detail).toContain('0.973');
+  });
+
+  it('blocks a file whose tags are otherwise spotless', () => {
+    // The point of the whole feature: `indie-id3v2.mp3` scores CLEAN on tags
+    // alone. Identifying the audio is the only thing that can contradict them.
+    expect(scoreProvenance(indie).verdict).toBe('clean');
+
+    const report = scoreProvenance(indie, {
+      acousticIdentityMatch: {
+        recordingMbid: RECORDING_MBID,
+        score: 0.99,
+        releaseCount: 1,
+      },
+    });
+
+    expect(report.verdict).toBe('commercial');
+    expect(detailOf(report, 'acoustid.commercial-release')).toContain('1 release entity');
+  });
+
+  it('a recording on NO release is high, not blocking', () => {
+    // Genuinely ambiguous: an artist who catalogued their own unreleased work
+    // looks exactly like this. It weighs heavily without deciding.
+    const report = scoreProvenance(indie, {
+      acousticIdentityMatch: {
+        recordingMbid: RECORDING_MBID,
+        score: 0.95,
+        releaseCount: 0,
+      },
+    });
+
+    expect(codes(report)).toContain('acoustid.known-recording');
+    expect(codes(report)).not.toContain('acoustid.commercial-release');
+    expect(report.verdict).toBe('suspect');
+    expect(report.markers.every((marker) => marker.weight !== 'blocking')).toBe(true);
+  });
+
+  it('no identification means no marker — silence is not evidence', () => {
+    // The degraded arm. No key, service down, or nothing above the threshold all
+    // arrive here as an absent context, and none of them may look like a finding.
+    expect(scoreProvenance(indie, {}).markers).toEqual([]);
   });
 });
 

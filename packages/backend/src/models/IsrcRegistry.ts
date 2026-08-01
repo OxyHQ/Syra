@@ -39,7 +39,15 @@ export interface IIsrcRegistry extends Document {
 
 const IsrcRegistrySchema = new Schema<IIsrcRegistry>({
   isrc: { type: String, required: true, unique: true, index: true },
-  recordingMbid: { type: String, required: true },
+  /**
+   * Indexed because the join runs in BOTH directions. `isrc` answers "what is
+   * this identifier?", and the acoustic path (`services/uploads/acoustid.ts`)
+   * asks the reverse — "AcoustID says this audio is recording X; does X have an
+   * ISRC?" — which is how a file whose tags carry no identifier gets one. Without
+   * the index that read is a collection scan over the whole MusicBrainz slice,
+   * on the upload path.
+   */
+  recordingMbid: { type: String, required: true, index: true },
   title: { type: String, required: true },
   artistCredit: { type: String, required: true },
   artistCreditNameKey: { type: String, required: true, index: true },

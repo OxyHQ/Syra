@@ -21,6 +21,9 @@ import type { AddressInfo } from 'net';
 import { connect, clear, disconnect } from '../test/mongo';
 import * as realS3 from '../services/s3Service';
 import * as realIngestQueue from '../services/ingest/ingestQueue';
+import * as realAcoustid from '../services/uploads/acoustid';
+import type { AcousticIdentity } from '../services/uploads/acoustid';
+import type { Fingerprint } from '../services/uploads/fingerprint';
 import { UserUploadModel } from '../models/UserUpload';
 import { TrackModel } from '../models/Track';
 import { ArtistModel } from '../models/CatalogEntity';
@@ -92,6 +95,30 @@ mock.module('../services/ingest/ingestQueue', () => ({
   },
 }));
 
+/**
+ * AcoustID, stubbed at the identification boundary rather than at the socket.
+ *
+ * The HTTP client, the Chromaprint compressor and the score threshold are tested
+ * against real `fpcalc` output and real response payloads in
+ * `services/uploads/acoustid.test.ts`. What is under test HERE is the wiring:
+ * whether the controller asks, when it asks, and what it does with the answer.
+ *
+ * `undefined` by default — the same answer an unconfigured deploy gets — so the
+ * process-global `mock.module` leaves every other test in the run behaving
+ * exactly as it did before this feature existed.
+ */
+let acousticIdentity: AcousticIdentity | undefined;
+/** Every fingerprint the pipeline asked about, so "did it ask at all" is observable. */
+const identifiedDurations: number[] = [];
+
+mock.module('../services/uploads/acoustid', () => ({
+  ...realAcoustid,
+  identifyRecording: async (fingerprint: Fingerprint): Promise<AcousticIdentity | undefined> => {
+    identifiedDurations.push(fingerprint.durationSec);
+    return acousticIdentity;
+  },
+}));
+
 
 // ── Server ───────────────────────────────────────────────────────────────────
 
@@ -129,6 +156,8 @@ afterEach(async () => {
   deletedKeys.length = 0;
   deletedPrefixes.length = 0;
   ingestedUploadIds.length = 0;
+  identifiedDurations.length = 0;
+  acousticIdentity = undefined;
   currentUserId = OWNER;
 });
 
@@ -399,6 +428,165 @@ describe('POST /api/uploads — public destination', () => {
     // Screening runs before resolution precisely so a refused upload does not
     // seed the catalogue with a claimable artist profile.
     expect(await ArtistModel.countDocuments({})).toBe(0);
+  });
+});
+
+// ── Acoustic identification ──────────────────────────────────────────────────
+
+/**
+ * What the AUDIO says, and what the pipeline does about it.
+ *
+ * One lookup produces both outcomes, which is what makes it safe to run: it
+ * rescues an upload that carries no identifier, and it refuses one whose
+ * identifier proves the file is not the uploader's to distribute. A feature that
+ * only did the first would be a way around screening.
+ */
+describe('POST /api/uploads — the recording the fingerprint resolves to', () => {
+  const RECORDING_MBID = 'b1a9c0de-1111-2222-3333-444455556666';
+  const ARTIST_MBID = 'aaaa1111-2222-3333-4444-555566667777';
+
+  /**
+   * The only fixture long enough to FINGERPRINT.
+   *
+   * The other four are 2.5 s and Chromaprint yields nothing below ~2.6 s, so
+   * `fingerprintFile` reports `failed` for them and the controller — correctly —
+   * never asks AcoustID about a recording it has no fingerprint for. A test
+   * written against one of those would assert on a lookup that never happened.
+   */
+  const RIP = 'untagged-fingerprintable.mp3';
+
+  it('BLOCKS the public path when the audio is a commercially released recording', async () => {
+    // The shape of the file that prompted this feature: commercial-quality
+    // audio, no ISRC, nothing in the tags to identify it. Refused today for
+    // having no ISRC; refused here for what it turned out to BE, which is the
+    // more serious finding and the one the uploader needs to hear.
+    acousticIdentity = {
+      acoustid: 'e7d1b7dc-9d1e-4a1f-9f0a-2f3a1b6c8d90',
+      score: 0.973,
+      recordingMbid: RECORDING_MBID,
+      artistName: 'Carlota Giró',
+      musicbrainzArtistId: ARTIST_MBID,
+      releaseMbid: 'r-1',
+      releaseCount: 4,
+    };
+
+    const { status, body } = await postUpload(RIP, {
+      destination: 'public',
+      attestation: 'I have the right to distribute this recording.',
+    });
+
+    expect(status).toBe(403);
+    expect(body.outcome).toBe('blocked');
+    expect(body.code).toBe('commercial_provenance');
+
+    const markers = body.markers as Array<{ code: string; weight: string }>;
+    expect(markers.map((marker) => marker.code)).toContain('acoustid.commercial-release');
+    expect(
+      markers.find((marker) => marker.code === 'acoustid.commercial-release')?.weight,
+    ).toBe('blocking');
+
+    // Nothing was published and no claimable artist was left behind — the
+    // refusal happens before resolution, so a blocked upload seeds nothing.
+    expect(await TrackModel.countDocuments({})).toBe(0);
+    expect(await ArtistModel.countDocuments({})).toBe(0);
+  });
+
+  it('leaves the SAME file untouched on its private locker route', async () => {
+    // The asymmetry this whole feature rests on. A listener may keep a
+    // commercial recording in their own locker; that is what a locker is. Only
+    // DISTRIBUTING it is refused.
+    acousticIdentity = {
+      acoustid: 'e7d1b7dc-9d1e-4a1f-9f0a-2f3a1b6c8d90',
+      score: 0.973,
+      recordingMbid: RECORDING_MBID,
+      releaseCount: 4,
+    };
+
+    const { status, body } = await postUpload(RIP, { destination: 'private' });
+
+    expect(status).toBe(201);
+    expect(body.outcome).toBe('stored');
+    expect(await UserUploadModel.countDocuments({})).toBe(1);
+  });
+
+  it('asks about a PUBLIC upload, using the fingerprint already computed for it', async () => {
+    // The other half of the pair below. Without this, "no lookup happened" could
+    // not tell "the private path correctly skips it" from "the wiring is dead".
+    await postUpload(RIP, {
+      destination: 'public',
+      attestation: 'I have the right to distribute this recording.',
+    });
+
+    expect(identifiedDurations.length).toBe(1);
+    // `fpcalc`'s own duration for this fixture — proof the fingerprint was
+    // handed on rather than the audio being decoded a second time.
+    expect(identifiedDurations[0]).toBeGreaterThan(5);
+  });
+
+  it('does not spend a lookup on a private upload at all', async () => {
+    // Not an optimisation detail — it is why the 3 req/s budget survives contact
+    // with locker volume, and the reason the inline call is affordable on the
+    // one path where the answer decides an outcome. Same file as the assertion
+    // above; only the destination differs.
+    const { status } = await postUpload(RIP, { destination: 'private' });
+
+    expect(status).toBe(201);
+    expect(identifiedDurations).toEqual([]);
+  });
+
+  it('RESOLVES the missing ISRC instead of refusing the file for not having one', async () => {
+    // The same file the last assertion in this block is refused `isrc_required`.
+    // The audio is identical; the difference is that the pipeline now goes and
+    // finds what the file does not say.
+    acousticIdentity = {
+      acoustid: 'e7d1b7dc-9d1e-4a1f-9f0a-2f3a1b6c8d90',
+      score: 0.95,
+      recordingMbid: RECORDING_MBID,
+      isrc: 'ESA452300137',
+      title: 'Midnight Ferry',
+      artistName: 'Nadia Ortiz',
+      musicbrainzArtistId: ARTIST_MBID,
+      // Known to MusicBrainz, on no release: the ambiguous case, which weighs
+      // heavily without blocking. A released recording would be refused instead.
+      releaseCount: 0,
+    };
+
+    const { status, body } = await postUpload(RIP, {
+      destination: 'public',
+      attestation: 'I have the right to distribute this recording.',
+    });
+
+    expect(status).toBe(201);
+    expect(body.outcome).toBe('published');
+
+    // Persisting the recovered identifier is the point of recovering it: it is
+    // what dedup tier 2 and artist resolution tier 1 read, so without this the
+    // next upload of the same recording arrives unidentifiable all over again.
+    const track = await TrackModel.findById(String(body.trackId)).lean();
+    expect(track?.externalIds?.isrc).toBe('ESA452300137');
+
+    // The artist MBID travels too, because it is what lets background enrichment
+    // give the contributed profile a photograph — enrichment refuses any artist
+    // without one, so a stub created without it stays a bare page forever.
+    const artist = await ArtistModel.findById(track?.artistId).lean();
+    expect(artist?.name).toBe('Nadia Ortiz');
+    expect(artist?.externalIds?.musicbrainzArtistId).toBe(ARTIST_MBID);
+  });
+
+  it('the existing refusal stands unchanged when the lookup finds nothing', async () => {
+    // The degraded path, which is the state of every deploy until the key is
+    // configured: no identification, no new evidence, and the gate answers
+    // exactly as it did before.
+    acousticIdentity = undefined;
+
+    const { status, body } = await postUpload(RIP, {
+      destination: 'public',
+      attestation: 'I have the right to distribute this recording.',
+    });
+
+    expect(status).toBe(422);
+    expect(body.code).toBe('isrc_required');
+    expect(await TrackModel.countDocuments({})).toBe(0);
   });
 });
 

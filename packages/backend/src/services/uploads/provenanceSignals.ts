@@ -53,6 +53,8 @@ export type ProvenanceMarkerCode =
   | 'cdrip.encoder'
   | 'fingerprint.other-artist'
   | 'fingerprint.copyright-removed'
+  | 'acoustid.commercial-release'
+  | 'acoustid.known-recording'
   | 'tags.stripped-commercial-encoding';
 
 /**
@@ -248,9 +250,110 @@ function hasCommercialEncodingQuality(metadata: ExtractedMetadata): boolean {
   return bitrateKbps !== undefined && bitrateKbps >= 192;
 }
 
+/**
+ * The identifiers a released record carries, whoever released it.
+ *
+ * Every one of these is written by the pipeline that PUBLISHES a recording — a
+ * distributor's ISRC, a label's barcode and catalogue number, the copyright
+ * line, the MusicBrainz ids a tagger added. An independent artist's own export
+ * arrives with several of them; a file somebody laundered arrives with none,
+ * because removing them is the entire point of laundering it.
+ */
+function hasReleaseIdentity(metadata: ExtractedMetadata): boolean {
+  const { musicbrainz } = metadata;
+  return Boolean(
+    metadata.isrc ||
+      metadata.upc ||
+      metadata.catalogNumber ||
+      metadata.label ||
+      metadata.copyright ||
+      metadata.publisher ||
+      metadata.asin ||
+      metadata.acoustidId ||
+      musicbrainz.recordingId ||
+      musicbrainz.trackId ||
+      musicbrainz.releaseId ||
+      musicbrainz.releaseGroupId ||
+      musicbrainz.artistId ||
+      musicbrainz.albumArtistId,
+  );
+}
+
+/**
+ * Album names that name no album.
+ *
+ * `Unknown Album` is what a ripper writes when it had no release to write, and
+ * it is the reason this marker cannot simply test `albumName === undefined`: the
+ * file that prompted this signal carries the string, so a presence check would
+ * read it as a named release and let the file through.
+ *
+ * Deliberately NOT `isDenylistedArtistName`. That list guards a different thing —
+ * the artist rows a catalogue can be permanently poisoned by — and its entries
+ * (`va`, `none`, `null`) are keys chosen for that job. Reusing it here would tie
+ * two unrelated policies together, so an entry added for one silently changes
+ * the other. Keys, not spellings: compared through `normalizeNameKey`, the same
+ * normalisation every other name comparison in this pipeline uses.
+ */
+const PLACEHOLDER_ALBUM_NAME_KEYS: ReadonlySet<string> = new Set([
+  '',
+  'unknown',
+  'unknown album',
+  'album unknown',
+  'untitled',
+  'untitled album',
+  'no album',
+  'album desconocido',
+  'sin album',
+  'none',
+  'null',
+  'undefined',
+]);
+
+function namesARelease(albumName: string | undefined): boolean {
+  if (!albumName) return false;
+  return !PLACEHOLDER_ALBUM_NAME_KEYS.has(normalizeNameKey(albumName));
+}
+
+/**
+ * Somebody removed this file's provenance.
+ *
+ * ## Why this weighs `medium` rather than `low`
+ *
+ * The scorer only weighs markers that are PRESENT, which means an absence costs
+ * nothing — and every other marker here is a presence. A file whose tags were
+ * deliberately erased therefore scores CLEANER than an honest one: the indie
+ * artist who exported with a label, a copyright line and a distributor's ISRC
+ * accumulates points for saying so, while the rip that had all three stripped
+ * accumulates none. That is the scoring function rewarding the laundering, and
+ * the weight is the correction.
+ *
+ * ## Why it can never decide on its own
+ *
+ * Absence is weak evidence. A genuine home recording has no label, no ISRC and
+ * no album either, and it is exactly the upload this platform exists for. At
+ * `medium` the marker lands the file in `suspect`, which asks for an attestation;
+ * reaching `commercial` needs 80 points, so this marker requires three more
+ * independent findings before it contributes to a refusal. It cannot block, and
+ * it must not: the point is that it CONTRIBUTES.
+ *
+ * ## What it actually tests
+ *
+ * All three of: release-grade audio, no release identity of any kind, and no
+ * album name that names a release. The three together are the shape — somebody
+ * had a finished commercial master and removed everything that said where it
+ * came from. Any one of them alone is ordinary.
+ *
+ * Embedded artwork is reported in the detail rather than required. A file with a
+ * cover but no album name is the sharpest form of the pattern (somebody kept the
+ * picture and dropped the provenance), but the fully-stripped file — no tags at
+ * all, which is what this marker originally tested — carries no artwork either
+ * and is the plainest case there is.
+ */
 function detectStrippedTags(metadata: ExtractedMetadata): ScreeningMarker | undefined {
-  if (metadata.nativeTags.length > 0) return undefined;
   if (!hasCommercialEncodingQuality(metadata)) return undefined;
+  if (hasReleaseIdentity(metadata)) return undefined;
+  if (namesARelease(metadata.albumName)) return undefined;
+
   const { codec, sampleRate, channels, bitrateKbps } = metadata.technical;
   const quality = [
     codec,
@@ -260,10 +363,19 @@ function detectStrippedTags(metadata: ExtractedMetadata): ScreeningMarker | unde
   ]
     .filter((part): part is string => part !== undefined)
     .join(', ');
+
+  const observed = [
+    metadata.nativeTags.length === 0
+      ? 'no tags of any kind'
+      : `${metadata.nativeTags.length} tag(s), none identifying a release`,
+    metadata.albumName ? `album named "${metadata.albumName}"` : 'no album name',
+    ...(metadata.pictures.length > 0 ? ['embedded artwork'] : []),
+  ].join('; ');
+
   return {
     code: 'tags.stripped-commercial-encoding',
-    weight: 'low',
-    detail: `No tags of any kind, at release-grade encoding (${quality})`,
+    weight: 'medium',
+    detail: `Release-grade encoding (${quality}) with no release identity — ${observed}`,
   };
 }
 
@@ -296,9 +408,27 @@ export interface ForeignFingerprintMatch {
   copyrightRemoved?: boolean;
 }
 
+/**
+ * The recording AcoustID says this audio IS.
+ *
+ * Distinct from {@link ForeignFingerprintMatch}, which is a match against Syra's
+ * own catalogue. This one reaches the world's index, so it answers for a file
+ * whose recording Syra has never hosted — which is most of them.
+ */
+export interface AcousticIdentityMatch {
+  recordingMbid: string;
+  /** AcoustID's bit-agreement score for the match, for the audit trail. */
+  score: number;
+  title?: string;
+  artistName?: string;
+  /** How many MusicBrainz release entities carry this recording. */
+  releaseCount: number;
+}
+
 export interface ProvenanceContext {
   isrcRegistryMatch?: IsrcRegistryMatch;
   foreignFingerprintMatch?: ForeignFingerprintMatch;
+  acousticIdentityMatch?: AcousticIdentityMatch;
 }
 
 /**
@@ -369,6 +499,61 @@ function detectIsrcResolution(
   return markers;
 }
 
+/**
+ * The audio was identified, by the audio.
+ *
+ * This is the marker no tagger can defeat. Every other commercial signal in this
+ * file reads something written INTO the file — a purchase atom, a store id, an
+ * ISRC frame — and all of them come off with a tag editor. The fingerprint does
+ * not, so a file scrubbed clean of every identifier still resolves to the
+ * recording it was made from.
+ *
+ * The split mirrors {@link detectIsrcResolution}, and for the same reason:
+ *
+ *  - **carried on a release → `blocking`.** A recording that MusicBrainz records
+ *    as published is a recording somebody published. Whoever holds those rights,
+ *    it is not a stranger uploading it to a listener's locker, and no amount of
+ *    clean-looking metadata changes that. The public path refuses it; the private
+ *    locker is untouched, which is what the locker is for.
+ *  - **known but on no release → `high`.** The recording exists in MusicBrainz
+ *    and somebody submitted its fingerprint, but nothing records it as released.
+ *    That is genuinely ambiguous — an artist who catalogued their own unreleased
+ *    work looks exactly like this — so it weighs heavily without deciding.
+ *
+ * The false positive this accepts, stated plainly: an artist who registered
+ * their own released recording in MusicBrainz and AcoustID, then uploads their
+ * own file here, is refused the public path. That is already true of the ISRC
+ * marker above and it is the same answer — a creator publishes their own music
+ * through the studio, where they own the artist profile, not through the
+ * listener-contribution endpoint.
+ */
+function detectAcousticIdentity(match: AcousticIdentityMatch): ScreeningMarker {
+  const named = [match.title && `"${match.title}"`, match.artistName && `by ${match.artistName}`]
+    .filter((part): part is string => typeof part === 'string')
+    .join(' ');
+  const describes = named ? ` (${named})` : '';
+  const scored = `AcoustID score ${match.score.toFixed(3)}`;
+
+  if (match.releaseCount > 0) {
+    return {
+      code: 'acoustid.commercial-release',
+      weight: 'blocking',
+      detail:
+        `The audio itself identifies as MusicBrainz recording ${match.recordingMbid}${describes}, ` +
+        `carried on ${match.releaseCount} release entit${match.releaseCount === 1 ? 'y' : 'ies'} ` +
+        `— a commercially released recording (${scored})`,
+    };
+  }
+
+  return {
+    code: 'acoustid.known-recording',
+    weight: 'high',
+    detail:
+      `The audio itself identifies as MusicBrainz recording ${match.recordingMbid}${describes}, ` +
+      `with no release recorded (${scored})`,
+  };
+}
+
 function detectForeignFingerprint(match: ForeignFingerprintMatch): ScreeningMarker {
   if (match.copyrightRemoved) {
     return {
@@ -413,6 +598,9 @@ export function scoreProvenance(
   }
   if (context.foreignFingerprintMatch) {
     markers.push(detectForeignFingerprint(context.foreignFingerprintMatch));
+  }
+  if (context.acousticIdentityMatch) {
+    markers.push(detectAcousticIdentity(context.acousticIdentityMatch));
   }
   push(detectMusicBrainzTagging(metadata));
   push(detectCuesheet(metadata));

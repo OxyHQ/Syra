@@ -278,16 +278,20 @@ async function makeCoverArt(tmpDir: string, name: string, hue: number): Promise<
  * a fixture with one constant pitch fingerprints to a near-constant vector and
  * would make any fingerprint assertion meaningless.
  */
-async function makeAudioBed(tmpDir: string): Promise<string> {
+async function makeAudioBed(
+  tmpDir: string,
+  durationSec: number = DURATION_SEC,
+  name = 'bed.wav',
+): Promise<string> {
   const notes = [261.63, 329.63, 392.0, 493.88, 440.0];
-  const noteDuration = DURATION_SEC / notes.length;
+  const noteDuration = durationSec / notes.length;
   const inputs = notes.flatMap((frequency) => [
     '-f', 'lavfi',
     '-t', noteDuration.toFixed(4),
     '-i', `sine=frequency=${frequency}:sample_rate=44100`,
   ]);
   const concatInputs = notes.map((_, index) => `[${index}]`).join('');
-  const out = path.join(tmpDir, 'bed.wav');
+  const out = path.join(tmpDir, name);
   await execFile('ffmpeg', [
     '-nostdin', '-loglevel', 'error',
     ...inputs,
@@ -513,7 +517,39 @@ async function writeUntaggedWav(bedPath: string): Promise<void> {
   ]);
 }
 
-// ── Fixture 5: the Chromaprint corpus behind the BER threshold ──────────────
+// ── Fixture 5: an untagged file long enough to FINGERPRINT ──────────────────
+
+/**
+ * The four fixtures above are 2.5 s, and Chromaprint produces NOTHING below
+ * about 2.6 s — `fpcalc` exits with `ERROR: Empty fingerprint` on every one of
+ * them (measured: 2.5 s → 0 items, 3 s → 3, 5 s → 19). That is fine for the
+ * tag-reading fixtures, and fatal for anything that has to exercise a code path
+ * downstream of a SUCCESSFUL fingerprint: acoustic identification, dedup tier 3,
+ * the acoustic index. Those paths were reachable only on a machine with no
+ * `fpcalc` at all, where the pipeline skips them for the opposite reason.
+ *
+ * Six seconds at 192 kbps is ~145 kB — comfortably clear of the floor, small
+ * enough to commit. MP3 rather than WAV for that size, and 44.1 kHz stereo at
+ * 192 kbps so it still reads as release-grade encoding.
+ *
+ * Untagged on purpose: it stands in for the file this whole feature exists for —
+ * commercial-quality audio whose identifiers somebody removed, which the public
+ * path can only identify by listening to it.
+ */
+async function writeFingerprintableUntaggedMp3(tmpDir: string): Promise<void> {
+  const bed = await makeAudioBed(tmpDir, 6, 'long-bed.wav');
+  await execFile('ffmpeg', [
+    '-nostdin', '-loglevel', 'error',
+    '-i', bed,
+    '-map_metadata', '-1',
+    '-write_id3v1', '0', '-id3v2_version', '0',
+    '-fflags', '+bitexact',
+    '-c:a', 'libmp3lame', '-b:a', '192k', '-ac', '2', '-ar', '44100',
+    path.join(FIXTURE_DIR, 'untagged-fingerprintable.mp3'), '-y',
+  ]);
+}
+
+// ── Fixture 6: the Chromaprint corpus behind the BER threshold ──────────────
 
 /**
  * `fingerprints.json` — real Chromaprint fingerprints, committed so the bit
@@ -846,6 +882,7 @@ async function main(): Promise<void> {
     await writePurchasedM4a(bed, tmpDir);
     await writeCdRipFlac(bed, tmpDir);
     await writeUntaggedWav(bed);
+    await writeFingerprintableUntaggedMp3(tmpDir);
     await writeFingerprintCorpus(tmpDir);
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
