@@ -323,8 +323,14 @@ describe('the request the service actually receives', () => {
     // `recordings`, not `recordingids`: the artist MBID is the identifier the
     // whole feature exists to recover, and `recordingids` returns no artists.
     expect(sent.get('meta')).toContain('recordings');
-    expect(sent.get('meta')).toContain('releaseids');
-    expect(sent.get('meta')).toContain('releasegroupids');
+    // BOTH spellings of the release meta. The live service does not reject an
+    // unrecognised `meta` value — it answers `200 ok` — so a wrong name here
+    // would silently return no releases, which reads as "not commercially
+    // released" and downgrades the blocking marker. Asking under both names is
+    // what makes that failure mode unreachable.
+    for (const value of ['releaseids', 'releasegroupids', 'releases', 'releasegroups']) {
+      expect(sent.get('meta')).toContain(value);
+    }
     // AcoustID buckets its index by duration and rejects a fractional value.
     expect(sent.get('duration')).toBe('215');
     expect(sent.get('fingerprint')).toBe(sample.compressed);
@@ -342,27 +348,56 @@ describe('the request the service actually receives', () => {
     expect(result.reason).toContain('503');
   });
 
-  it('gives up rather than queueing past what an upload may wait', async () => {
-    // The property that makes an inline call safe. The answer is needed BEFORE
-    // the upload is accepted or refused, so the call cannot be deferred to a
-    // queue — the protection is that it is BOUNDED. Past the bound the request
-    // is never made and the caller gets `unavailable`, which it already handles.
+  /**
+   * The property that makes an inline call safe: the answer is needed BEFORE the
+   * upload is accepted or refused, so the call cannot be deferred to a queue —
+   * the protection is that it is BOUNDED. Past the bound the request is never
+   * made and the caller gets `unavailable`, which it already handles.
+   *
+   * Asserted as a direction rather than an exact count, deliberately. The
+   * limiter reserves against the wall clock, so a burst's Nth reservation lands
+   * where the scheduler puts it; pinning "exactly one refusal" made this test
+   * fail under full-suite parallel load, which is a flaky gate — and a flaky
+   * gate is one somebody disables. Both directions are still pinned, by the pair
+   * of cases below, so a limiter that refused everything or nothing fails.
+   */
+  const budget = Math.floor(ACOUSTID_MAX_QUEUE_WAIT_MS / ACOUSTID_MIN_REQUEST_INTERVAL_MS) + 1;
+  const fingerprint = { values: [1, 2, 3], durationSec: 30 };
+
+  it('serves a burst that fits inside the bound', async () => {
     setAcoustidFetchForTests(async () => ({ status: 'ok', results: [] }));
 
-    const budget = Math.floor(ACOUSTID_MAX_QUEUE_WAIT_MS / ACOUSTID_MIN_REQUEST_INTERVAL_MS) + 1;
-    const fingerprint = { values: [1, 2, 3], durationSec: 30 };
+    // Two requests wait 0 ms and ~334 ms — an order of magnitude inside the
+    // 1500 ms bound, so no plausible scheduling delay makes this refuse.
+    const results = await Promise.all([
+      requestAcoustidLookup('client-key-1', fingerprint),
+      requestAcoustidLookup('client-key-1', fingerprint),
+    ]);
 
-    // Fired together so the reservations are taken in one burst, the way a
-    // batch of concurrent uploads would take them.
+    expect(results.every((result) => result.status === 'no-match')).toBe(true);
+  });
+
+  it('gives up rather than queueing past what an upload may wait', async () => {
+    setAcoustidFetchForTests(async () => ({ status: 'ok', results: [] }));
+
+    // Twice the budget, fired together the way a batch of concurrent uploads
+    // would take reservations, so the far end of the burst is past the bound by
+    // a wide margin rather than by one slot.
     const results = await Promise.all(
-      Array.from({ length: budget + 1 }, () => requestAcoustidLookup('client-key-1', fingerprint)),
+      Array.from({ length: budget * 2 }, () => requestAcoustidLookup('client-key-1', fingerprint)),
     );
 
-    expect(results.filter((result) => result.status === 'no-match').length).toBe(budget);
     const refused = results.filter((result) => result.status === 'unavailable');
-    expect(refused.length).toBe(1);
-    if (refused[0]?.status !== 'unavailable') throw new Error('unreachable');
-    expect(refused[0].reason).toContain('may wait');
+    const served = results.filter((result) => result.status === 'no-match');
+
+    expect(refused.length).toBeGreaterThan(0);
+    // The other direction: a limiter that refused everything would satisfy the
+    // assertion above and be just as broken.
+    expect(served.length).toBeGreaterThan(0);
+    for (const result of refused) {
+      if (result.status !== 'unavailable') throw new Error('unreachable');
+      expect(result.reason).toContain('may wait');
+    }
   });
 });
 

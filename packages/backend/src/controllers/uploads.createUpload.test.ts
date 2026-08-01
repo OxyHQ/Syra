@@ -893,6 +893,16 @@ describe('GET /api/uploads/albums', () => {
 
 // ── The invisibility guarantee ───────────────────────────────────────────────
 
+/**
+ * The invisibility test drives four heavy catalogue aggregations (search,
+ * popular, charts, home browse) after a real upload, and it sat close enough to
+ * bun's 5 s default that full-suite load tipped it over intermittently — twice
+ * in fifteen runs. Nothing about it is a performance assertion; the budget was
+ * incidental, and a privacy guarantee that fails at random is a gate somebody
+ * eventually disables. The assertions are untouched.
+ */
+const INVISIBILITY_TIMEOUT_MS = 30_000;
+
 describe('a private upload is invisible to everybody else', () => {
   it('never appears in search, browse, charts or the home feed for another user', async () => {
     const { body } = await postUpload('indie-id3v2.mp3', { destination: 'private' });
@@ -948,7 +958,7 @@ describe('a private upload is invisible to everybody else', () => {
       rethrow,
     );
     expect((searchRes._body as { counts: { total: number } }).counts.total).toBe(0);
-  });
+  }, INVISIBILITY_TIMEOUT_MS);
 
   it('positive control: the same search DOES find a catalogue track', async () => {
     // Without this, the assertions above pass just as happily against a search

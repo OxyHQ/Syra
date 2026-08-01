@@ -62,10 +62,23 @@ const ACOUSTID_USER_AGENT = 'SyraCatalogEnrichment/1.0 (+https://syra.fm)';
  *  - `releaseids` + `releasegroupids`: whether the recording is CARRIED ON a
  *    release is the discriminator between the blocking marker and the merely
  *    high one, so it has to come back with the match rather than be guessed.
+ *  - `releases` + `releasegroups`: the same facts under the fuller meta names,
+ *    requested as REDUNDANCY rather than for the extra fields, which are never
+ *    read. Measured against the live service on 2026-08-02: a corrupted
+ *    fingerprint is rejected outright (HTTP 400, `code 3`), but an unrecognised
+ *    `meta` value is NOT — the request still answers `200 ok`. So a wrong meta
+ *    name here would not fail loudly; it would silently return no releases, and
+ *    a commercially released recording would be reported as an unreleased one,
+ *    downgrading a BLOCKING marker to a merely high one and publishing a rip.
+ *    That asymmetry — a slightly larger payload against a rip published — is why
+ *    both spellings are asked for. It could not be settled by experiment: with
+ *    no match there are no results for the server to attach metadata to, and
+ *    obtaining a real match would mean fingerprinting a commercial recording.
  *  - `compress`: response compression. Free, and these payloads are mostly
  *    repeated MBIDs.
  */
-const ACOUSTID_META = 'recordings+releaseids+releasegroupids+compress';
+const ACOUSTID_META =
+  'recordings+releaseids+releasegroupids+releases+releasegroups+compress';
 
 /**
  * A score at or above this is the same recording.
