@@ -39,6 +39,13 @@ jobs:
         env:
           NODE_OPTIONS: '--max-old-space-size=4096'
           NODE_ENV: production
+          # Same Oxy application as the main app — studio is a surface of Syra,
+          # not a separate client. `config.ts` falls back to the development id
+          # when unset, so a local build works unconfigured; without this the
+          # production bundle would silently ship the dev client. Public by
+          # design (it travels inside the bundle); it lives in a secret only so
+          # the two environments can differ, not because it is confidential.
+          EXPO_PUBLIC_OXY_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_OXY_CLIENT_ID }}
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v4
         with:
