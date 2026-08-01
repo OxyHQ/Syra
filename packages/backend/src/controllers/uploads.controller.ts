@@ -69,7 +69,12 @@ import {
   type ExtractedPicture,
 } from '../services/uploads/extractMetadata';
 import { fingerprintFile, type Fingerprint } from '../services/uploads/fingerprint';
-import { collectProvenanceSignals, type ScreeningReport } from '../services/uploads/provenanceSignals';
+import { identifyRecording, type AcousticIdentity } from '../services/uploads/acoustid';
+import {
+  collectProvenanceSignals,
+  type ProvenanceContext,
+  type ScreeningReport,
+} from '../services/uploads/provenanceSignals';
 import { matchCatalog } from '../services/uploads/matchCatalog';
 import { ensureContributedArtist, resolveArtist } from '../services/uploads/resolveArtist';
 import {
@@ -260,6 +265,53 @@ function preferOverride(override: string | undefined, extracted: string | undefi
   return trimmed ? trimmed : extracted;
 }
 
+// ── Acoustic identification ──────────────────────────────────────────────────
+
+/**
+ * Ask AcoustID what recording this audio is, when there is anything to ask
+ * about. Shared by the two paths that publish — the direct upload and the
+ * promote — so the precondition is stated once.
+ *
+ * No fingerprint means no question to put: `fpcalc` produces nothing at all
+ * below about 2.6 s and fails on some inputs outright, and spending a request on
+ * an empty fingerprint would burn budget to be told nothing.
+ *
+ * `undefined` — no fingerprint, no key, no budget, service down, or nothing
+ * above the score threshold — leaves every existing refusal exactly as it was.
+ */
+async function identifyForPublication(
+  fingerprint: Fingerprint | undefined,
+): Promise<AcousticIdentity | undefined> {
+  if (!fingerprint) return undefined;
+  return identifyRecording(fingerprint);
+}
+
+/**
+ * The identification as the provenance scorer reads it.
+ *
+ * Only the evidence half travels: the scorer is told what the recording IS and
+ * how widely it was released, and never the identifiers recovered from it. What
+ * the audio proves and what we then fill into the file's gaps are two different
+ * facts, and merging them would let this feature manufacture evidence against an
+ * uploader — a file whose MusicBrainz ids WE supplied would score as "tagged
+ * against MusicBrainz", a marker that is supposed to mean the uploader's tagger
+ * did it.
+ */
+function acousticEvidence(
+  identity: AcousticIdentity | undefined,
+): Pick<ProvenanceContext, 'acousticIdentityMatch'> {
+  if (!identity) return {};
+  return {
+    acousticIdentityMatch: {
+      recordingMbid: identity.recordingMbid,
+      score: identity.score,
+      title: identity.title,
+      artistName: identity.artistName,
+      releaseCount: identity.releaseCount,
+    },
+  };
+}
+
 // ── Embedded artwork ─────────────────────────────────────────────────────────
 
 /**
@@ -435,7 +487,7 @@ async function findOwnedUpload(
   return UserUploadModel.findOne({
     _id: uploadId,
     ownerOxyUserId,
-    deletedAt: { $exists: false },
+    deletedAt: null,
   }).exec();
 }
 
@@ -641,8 +693,16 @@ async function screenPublicContribution(params: {
    */
   artistImage?: string;
   report: ScreeningReport;
+  /**
+   * What the fingerprint resolved to, when it resolved to anything.
+   *
+   * Consumed only to FILL what the file did not say. Its identifiers are strong
+   * — they come from one MusicBrainz record rather than from a tagger — but a
+   * value the file states is the uploader's own declaration and stays theirs.
+   */
+  identity?: AcousticIdentity;
 }): Promise<PublicGateResult> {
-  const { metadata, report } = params;
+  const { metadata, report, identity } = params;
 
   const refuse = (
     status: number,
@@ -673,9 +733,16 @@ async function screenPublicContribution(params: {
   }
 
   const resolution = await resolveArtist({
-    isrc: metadata.isrc,
-    musicbrainzArtistId: metadata.musicbrainz.artistId,
-    artistName: params.declaredArtistName ?? metadata.artistName,
+    isrc: metadata.isrc ?? identity?.isrc,
+    // Tier 4. The file's own `MUSICBRAINZ_ARTISTID` when it has one, otherwise
+    // the artist the acoustic match named — and the NAME beside it, because that
+    // tier deliberately refuses to stand on an identifier alone ("a name is
+    // still needed to create anything"). Both halves come from the same
+    // MusicBrainz record, so supplying them together is what makes the tier
+    // reachable for a file that names nobody, which is the case it was written
+    // for and could not previously serve.
+    musicbrainzArtistId: metadata.musicbrainz.artistId ?? identity?.musicbrainzArtistId,
+    artistName: params.declaredArtistName ?? metadata.artistName ?? identity?.artistName,
     albumArtistName: metadata.albumArtistName,
     // Tier 3. The one signal that can name an artist for a file carrying no
     // usable tags at all, which is exactly the case the chain exists for.
@@ -700,11 +767,18 @@ async function screenPublicContribution(params: {
     resolution.confidence === 'high' ? resolution.linkedArtistId : undefined;
 
   if (!artistId) {
-    const name = resolution.name ?? params.declaredArtistName ?? metadata.artistName;
+    const name =
+      resolution.name ?? params.declaredArtistName ?? metadata.artistName ?? identity?.artistName;
     if (name) {
       const contributed = await ensureContributedArtist({
         name,
-        musicbrainzArtistId: metadata.musicbrainz.artistId,
+        /**
+         * The MBID is what makes the new profile more than a name.
+         * `ensureContributedArtist` queues background enrichment only for an
+         * artist that has one — enrichment refuses the rest — so a stub created
+         * without it stays a bare page nothing ever goes back to fill.
+         */
+        musicbrainzArtistId: metadata.musicbrainz.artistId ?? identity?.musicbrainzArtistId,
         genres: metadata.genres,
         image: params.artistImage,
       });
@@ -827,6 +901,11 @@ interface PublishParams {
    */
   fingerprint?: Fingerprint;
   report: ScreeningReport;
+  /**
+   * The recording the fingerprint resolved to, when it resolved to one. Fills
+   * the identifiers the file itself did not carry — never replaces them.
+   */
+  identity?: AcousticIdentity;
   ip?: string;
   userAgent?: string;
 }
@@ -857,7 +936,7 @@ interface PublishParams {
 async function resolveContributedAlbum(
   params: PublishParams,
 ): Promise<{ id: string; title: string } | undefined> {
-  const { metadata, overrides } = params;
+  const { metadata, overrides, identity } = params;
 
   const albumName = preferOverride(overrides.albumName, metadata.albumName);
   if (!albumName) return undefined;
@@ -868,7 +947,7 @@ async function resolveContributedAlbum(
     artistId: params.artistId,
     year: overrides.year ?? metadata.year,
     upc: metadata.upc,
-    musicbrainzReleaseId: metadata.musicbrainz.releaseId,
+    musicbrainzReleaseId: metadata.musicbrainz.releaseId ?? identity?.releaseMbid,
     totalTracks: metadata.totalTracks,
     /**
      * Deliberately absent.
@@ -911,7 +990,7 @@ async function resolveContributedAlbum(
     totalTracks: metadata.totalTracks,
     genres: overrides.genres?.length ? overrides.genres : metadata.genres,
     upc: metadata.upc,
-    musicbrainzReleaseId: metadata.musicbrainz.releaseId,
+    musicbrainzReleaseId: metadata.musicbrainz.releaseId ?? identity?.releaseMbid,
     /**
      * The release-GROUP id, which is the fallback Cover Art Archive lookup.
      *
@@ -921,7 +1000,7 @@ async function resolveContributedAlbum(
      * lives there is not merely uncovered — it is never created at all, and the
      * tracks stay loose under the artist.
      */
-    musicbrainzReleaseGroupId: metadata.musicbrainz.releaseGroupId,
+    musicbrainzReleaseGroupId: metadata.musicbrainz.releaseGroupId ?? identity?.releaseGroupMbid,
     label: metadata.label,
     copyright: metadata.copyright,
     isExplicit: overrides.isExplicit ?? metadata.isExplicit,
@@ -951,6 +1030,16 @@ async function resolveContributedAlbum(
  */
 async function publishContribution(params: PublishParams): Promise<string> {
   const { metadata, overrides, format } = params;
+
+  /**
+   * The file's ISRC, or the one its fingerprint resolved to.
+   *
+   * Persisting the recovered identifier is the point of recovering it: it is
+   * what `matchCatalog` tier 2 dedups on and what `resolveArtist` tier 1 reads,
+   * so a track published without it would meet the next upload of the same
+   * recording as a fresh unidentifiable file.
+   */
+  const isrc = metadata.isrc ?? params.identity?.isrc;
 
   const trackId = new mongoose.Types.ObjectId();
   const coverArtColors = overrides.coverArt
@@ -993,7 +1082,7 @@ async function publishContribution(params: PublishParams): Promise<string> {
     popularity: 0,
     source: 'upload',
     status: 'processing',
-    externalIds: metadata.isrc ? { isrc: metadata.isrc.toUpperCase() } : undefined,
+    externalIds: isrc ? { isrc: isrc.toUpperCase() } : undefined,
     /**
      * The content hash travels with the track, and without this line the whole
      * first tier of dedup is dead.
@@ -1228,6 +1317,21 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
        * marker unreachable in production.
        */
       const acousticNeighbour = match.nearestFingerprint;
+
+      /**
+       * What the AUDIO says this recording is, before anything is decided.
+       *
+       * Placed here, ahead of screening and therefore ahead of every gate below,
+       * because it changes both answers a gate can give. A file carrying no ISRC
+       * gets one resolved instead of being refused for not having one; a file
+       * that resolves to a commercially released recording is refused however
+       * clean its tags look. The same lookup does both — which is the reason it
+       * is safe to run at all, since it identifies rips as readily as it rescues
+       * legitimate uploads.
+       */
+      const identity =
+        request.destination === 'public' ? await identifyForPublication(fingerprint) : undefined;
+
       const { report } = await collectProvenanceSignals(metadata, {
         ...(acousticNeighbour && {
           foreignFingerprintMatch: {
@@ -1236,6 +1340,7 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
             bitErrorRate: acousticNeighbour.bitErrorRate,
           },
         }),
+        ...acousticEvidence(identity),
       });
 
       /**
@@ -1343,7 +1448,18 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
        * Creators publishing their OWN music are unaffected: they upload through
        * the studio, where they already own the artist profile.
        */
-      if (report.verdict !== 'commercial' && !metadata.isrc?.trim()) {
+      /**
+       * The file's own ISRC, or the one the fingerprint resolved to.
+       *
+       * The gap-filling direction the whole pipeline uses: what the file
+       * declares always wins, and a recovered value only ever fills an absence.
+       * A file that declares an ISRC and resolves to a different recording is
+       * NOT reconciled here — that disagreement is evidence, and the markers
+       * carry it.
+       */
+      const resolvedIsrc = metadata.isrc?.trim() || identity?.isrc;
+
+      if (report.verdict !== 'commercial' && !resolvedIsrc) {
         res.status(422).json({
           outcome: 'blocked',
           code: 'isrc_required',
@@ -1405,6 +1521,7 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
         attestation: request.attestation,
         artistImage: request.artistImage,
         report,
+        identity,
       });
 
       if (!gate.allowed) {
@@ -1432,6 +1549,7 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
         filePath: file.path,
         fingerprint,
         report,
+        identity,
         ip: req.ip,
         userAgent: req.get('user-agent'),
       });
@@ -1479,7 +1597,7 @@ export const listUploads = async (
     const userId = getRequiredOxyUserId(req);
     const limit = parseBoundedLimit(req.query.limit, 50);
     const offset = parseOffset(req.query.offset);
-    const filter = { ownerOxyUserId: userId, deletedAt: { $exists: false } };
+    const filter = { ownerOxyUserId: userId, deletedAt: null };
 
     const [uploads, total] = await Promise.all([
       UserUploadModel.find(filter).sort({ createdAt: -1 }).skip(offset).limit(limit).exec(),
@@ -1541,7 +1659,7 @@ export const listUploadAlbums = async (
       {
         $match: {
           ownerOxyUserId: userId,
-          deletedAt: { $exists: false },
+          deletedAt: null,
           // A file with no album tags has no release to belong to. Grouping the
           // untagged ones together would invent an album called nothing.
           albumKey: { $nin: [null, ''] },
@@ -1837,6 +1955,22 @@ export const promoteUpload = async (
     // Only the `none` arm carries acoustic evidence: a locker hit here is this
     // file finding ITSELF, which says nothing about the catalogue.
     const promoteAcoustic = match.kind === 'none' ? match.nearestFingerprint : undefined;
+
+    /**
+     * The same acoustic identification the direct upload performs, and it has to
+     * happen here too rather than being inherited from the locker record: the
+     * lookup is deliberately skipped for a private file, so promotion is the
+     * FIRST time this recording is asked about. Without it, filing a rip in the
+     * locker and promoting it a minute later would be the way around the block.
+     *
+     * The stored fingerprint is reused, so promotion costs no extra decode.
+     */
+    const promoteFingerprint: Fingerprint | undefined =
+      upload.fingerprint?.length && upload.fingerprintDurationSec !== undefined
+        ? { values: upload.fingerprint, durationSec: upload.fingerprintDurationSec }
+        : undefined;
+    const identity = await identifyForPublication(promoteFingerprint);
+
     const { report } = await collectProvenanceSignals(metadata, {
       ...(promoteAcoustic && {
         foreignFingerprintMatch: {
@@ -1845,6 +1979,7 @@ export const promoteUpload = async (
           bitErrorRate: promoteAcoustic.bitErrorRate,
         },
       }),
+      ...acousticEvidence(identity),
     });
 
     const gate = await screenPublicContribution({
@@ -1857,6 +1992,7 @@ export const promoteUpload = async (
       },
       attestation: request.attestation,
       report,
+      identity,
     });
 
     if (!gate.allowed) {
@@ -1890,11 +2026,9 @@ export const promoteUpload = async (
       },
       format: upload.audioSource.format,
       filePath: stagedPath,
-      fingerprint:
-        upload.fingerprint?.length && upload.fingerprintDurationSec !== undefined
-          ? { values: upload.fingerprint, durationSec: upload.fingerprintDurationSec }
-          : undefined,
+      fingerprint: promoteFingerprint,
       report,
+      identity,
       ip: req.ip,
       userAgent: req.get('user-agent'),
     });

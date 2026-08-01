@@ -90,7 +90,7 @@ export async function recordUploadPlay(
   now: Date = new Date(),
 ): Promise<boolean> {
   const result = await UserUploadModel.updateOne(
-    { _id: uploadId, ownerOxyUserId, deletedAt: { $exists: false } },
+    { _id: uploadId, ownerOxyUserId, deletedAt: null },
     {
       $set: {
         lastPlayedAt: now,
@@ -241,7 +241,7 @@ async function sweepNotices(
   const noticeHorizon = new Date(now.getTime() + DELETION_NOTICE_LEAD_DAYS * DAY_MS);
 
   const due = await UserUploadModel.find({
-    deletedAt: { $exists: false },
+    deletedAt: null,
     deletionNoticeSentAt: { $exists: false },
     expiresAt: { $gt: now, $lte: noticeHorizon },
   })
@@ -288,7 +288,7 @@ async function sweepNotices(
 /** Phase 2 — hide expired files. Bytes stay; only the document is stamped. */
 async function sweepSoftDeletes(now: Date): Promise<number> {
   const expired = await UserUploadModel.find({
-    deletedAt: { $exists: false },
+    deletedAt: null,
     expiresAt: { $lte: now },
   })
     .limit(SWEEP_BATCH_SIZE)
