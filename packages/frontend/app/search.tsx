@@ -167,6 +167,25 @@ const SearchScreen: React.FC = () => {
   const madeForYouPlaylists = useMemo(() => madeForYouData?.playlists || [], [madeForYouData]);
   const chartsTracks = useMemo(() => chartsData?.tracks || [], [chartsData]);
 
+  // Every explore section hides itself when a successful request came back
+  // empty, and together they ARE the screen's body while there is no query — so
+  // an empty catalogue leaves nothing under the search box. One page-level state
+  // stands in for the whole view; a section still loading or still reporting a
+  // failure is drawing something of its own, and pre-empts it.
+  const exploreSettled =
+    !genresLoading && !madeForYouLoading && !popularTracksLoading &&
+    !popularAlbumsLoading && !popularArtistsLoading && !chartsLoading &&
+    !genresError && !madeForYouError && !popularTracksError &&
+    !popularAlbumsError && !popularArtistsError && !chartsError;
+  const exploreIsEmpty =
+    genres.length === 0 &&
+    madeForYouAlbums.length === 0 &&
+    madeForYouPlaylists.length === 0 &&
+    popularTracks.length === 0 &&
+    popularAlbums.length === 0 &&
+    popularArtists.length === 0 &&
+    chartsTracks.length === 0;
+
   // Memoized event handlers
   const playTrackFromList = useCallback((
     track: Track,
@@ -363,7 +382,6 @@ const SearchScreen: React.FC = () => {
               isEmpty={genres.length === 0}
               error={genresError}
               onRetry={refetchGenres}
-              emptyMessage="No genres available"
               loadingSkeleton={<GenreGridSkeleton count={8} />}
             >
               <ResponsiveGrid minItemWidth={160} gap={12}>
@@ -388,7 +406,6 @@ const SearchScreen: React.FC = () => {
               isEmpty={madeForYouAlbums.length === 0 && madeForYouPlaylists.length === 0}
               error={madeForYouError}
               onRetry={refetchMadeForYou}
-              emptyMessage="Recommendations appear once there is music to recommend"
             >
               <ResponsiveGrid minItemWidth={180} gap={8}>
                 {madeForYouAlbums.map((album) => (
@@ -435,7 +452,6 @@ const SearchScreen: React.FC = () => {
               isEmpty={popularTracks.length === 0}
               error={popularTracksError}
               onRetry={refetchPopularTracks}
-              emptyMessage="No tracks yet — the catalogue fills up as artists upload"
             >
               <ResponsiveGrid minItemWidth={180} gap={8}>
                 {popularTracks.map((track) => (
@@ -466,7 +482,6 @@ const SearchScreen: React.FC = () => {
               isEmpty={popularAlbums.length === 0}
               error={popularAlbumsError}
               onRetry={refetchPopularAlbums}
-              emptyMessage="No albums yet — the catalogue fills up as artists upload"
             >
               <ResponsiveGrid minItemWidth={180} gap={8}>
                 {popularAlbums.map((album) => (
@@ -496,7 +511,6 @@ const SearchScreen: React.FC = () => {
               isEmpty={popularArtists.length === 0}
               error={popularArtistsError}
               onRetry={refetchPopularArtists}
-              emptyMessage="No artists yet — the first uploads will show up here"
             >
               <ResponsiveGrid minItemWidth={180} gap={8}>
                 {popularArtists.map((artist) => (
@@ -528,7 +542,6 @@ const SearchScreen: React.FC = () => {
               isEmpty={chartsTracks.length === 0}
               error={chartsError}
               onRetry={refetchCharts}
-              emptyMessage="Charts start once tracks have been played"
               loadingSkeleton={<TrackListSkeleton count={10} />}
             >
               <View style={styles.trackList}>
@@ -545,6 +558,15 @@ const SearchScreen: React.FC = () => {
                 ))}
               </View>
             </ExploreSection>
+
+            {exploreSettled && exploreIsEmpty && (
+              <EmptyState
+                icon={{ name: 'musical-notes-outline' }}
+                title={t('catalog.empty.title')}
+                subtitle={t('catalog.empty.subtitle')}
+                containerStyle={styles.searchStateContainer}
+              />
+            )}
           </View>
         )}
 
@@ -859,11 +881,13 @@ const SearchScreen: React.FC = () => {
                 </ExploreSection>
               )}
 
-            {/* No Results */}
+            {/* No Results — a search the user typed always gets an answer, even
+                when the answer is nothing; silence here would read as a broken
+                search box rather than an empty catalogue. */}
             {!hasResults && (
               <View style={styles.noResultsContainer}>
                 <Text style={[styles.noResultsText, { color: theme.colors.textSecondary }]}>
-                  No results found for &quot;{debouncedQuery}&quot;
+                  {t('search.noResults', { query: debouncedQuery })}
                 </Text>
               </View>
             )}

@@ -102,6 +102,12 @@
     "playbackFailed": "Impossibile avviare la riproduzione",
     "playTitle": "Riproduci {{title}}"
   },
+  "catalog": {
+    "empty": {
+      "title": "Ancora nessuna musica",
+      "subtitle": "Il catalogo di Syra lo costruiscono gli artisti. Man mano che pubblicano la loro musica, comparirà qui."
+    }
+  },
   "agora": {
     "podcastStream": {
       "disclaimer": "Sei responsabile di avere i diritti per trasmettere questo audio nella tua stanza.",
@@ -261,11 +267,6 @@
       "description": "Scopri e ascolta la tua musica preferita"
     },
     "liveNow": "Ora in diretta",
-    "empty": {
-      "title": "Ancora nessuna musica",
-      "subtitle": "Il catalogo di Syra lo costruiscono gli artisti. Man mano che pubblicano la loro musica, comparirà qui.",
-      "action": "Esplora i podcast"
-    },
     "sections": {
       "jumpBackIn": "Riprendi l'ascolto",
       "popularAlbums": "Album popolari",
@@ -349,6 +350,7 @@
       "charts": "Classifiche"
     },
     "resultCount": "{{label}} ({{count}})",
+    "noResults": "Nessun risultato per «{{query}}»",
     "loadingMorePodcasts": "Altri podcast in arrivo…",
     "errors": {
       "title": "Ricerca non riuscita",

@@ -11,13 +11,12 @@ interface ExploreSectionProps {
   isEmpty: boolean;
   /**
    * Query error for this section. When set, the section renders a retry state
-   * instead of the empty message — a failed request must never read as an
-   * empty catalog.
+   * instead of disappearing — a failed request must never read as an empty
+   * catalog.
    */
   error?: Error | null;
   /** Re-runs the section's query. A React Query `refetch` can be passed directly. */
   onRetry?: () => Promise<unknown>;
-  emptyMessage?: string;
   /**
    * Skeleton rendered while loading, mirroring this section's content. Defaults
    * to a media-card grid; pass a matching skeleton for non-card sections.
@@ -36,7 +35,6 @@ export const ExploreSection: React.FC<ExploreSectionProps> = ({
   isEmpty,
   error,
   onRetry,
-  emptyMessage,
   loadingSkeleton,
   children,
 }) => {
@@ -76,20 +74,20 @@ export const ExploreSection: React.FC<ExploreSectionProps> = ({
     );
   }
 
+  // A successful request that came back empty is not something to announce: the
+  // section has nothing to show, so it shows nothing — heading included. Only a
+  // FAILED request (above) still speaks up, because that is the one case where
+  // silence would hide something the user can act on.
+  if (isEmpty) {
+    return null;
+  }
+
   return (
     <View style={styles.section}>
       <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
         {title}
       </Text>
-      {isEmpty ? (
-        <EmptyState
-          subtitle={emptyMessage || 'No content available'}
-          accessibilityLabel={emptyMessage || 'No content available'}
-          containerStyle={styles.stateContainer}
-        />
-      ) : (
-        children
-      )}
+      {children}
     </View>
   );
 };

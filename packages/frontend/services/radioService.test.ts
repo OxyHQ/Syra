@@ -71,6 +71,20 @@ describe('radioService', () => {
     expect(page.cursor).toBe('cursor-2');
   });
 
+  it('omits the seed id of the user station rather than sending it empty', async () => {
+    mockApiGet.mockResolvedValueOnce({
+      data: { station: { ...station, seedType: 'user', seedId: '' }, tracks: [], cursor: null, gate: null },
+    });
+
+    await radioService.getPage({ seedType: 'user', seedId: '' });
+
+    expect(mockApiGet).toHaveBeenCalledWith(
+      '/radio',
+      { seedType: 'user', seedId: undefined, cursor: undefined, limit: undefined },
+      { cache: false, headers: { 'X-Syra-Device-Id': DEVICE_ID } },
+    );
+  });
+
   it('carries the guest preview gate through untouched', async () => {
     mockApiGet.mockResolvedValueOnce({
       data: {
@@ -109,6 +123,16 @@ describe('radioService', () => {
     await radioService.reset({ seedType: 'artist', seedId: 'artist-1' });
 
     expect(mockApiDelete).toHaveBeenCalledWith('/radio?seedType=artist&seedId=artist-1', {
+      headers: { 'X-Syra-Device-Id': DEVICE_ID },
+    });
+  });
+
+  it('resets the user station without an empty seed id in the query', async () => {
+    mockApiDelete.mockResolvedValueOnce({ data: undefined });
+
+    await radioService.reset({ seedType: 'user', seedId: '' });
+
+    expect(mockApiDelete).toHaveBeenCalledWith('/radio?seedType=user', {
       headers: { 'X-Syra-Device-Id': DEVICE_ID },
     });
   });

@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { useRouter } from 'expo-router';
 import SEO from '@/components/SEO';
+import { EmptyState } from '@/components/common/EmptyState';
 import { ExploreSection } from '@/components/ExploreSection';
 import { GenreCard } from '@/components/GenreCard';
 import { ResponsiveGrid } from '@/components/ResponsiveGrid';
@@ -54,7 +55,6 @@ const BrowseScreen: React.FC = () => {
             isEmpty={genres.length === 0}
             error={genresError}
             onRetry={refetchGenres}
-            emptyMessage="No genres available"
             loadingSkeleton={<GenreGridSkeleton count={16} />}
           >
             <ResponsiveGrid minItemWidth={160} gap={12}>
@@ -71,6 +71,19 @@ const BrowseScreen: React.FC = () => {
               ))}
             </ResponsiveGrid>
           </ExploreSection>
+
+          {/* Genres are derived from the catalogue, so an empty catalogue means
+              an empty grid — and the grid is this screen's entire body. Unlike a
+              rail that can quietly disappear from a populated page, hiding it
+              here leaves nothing at all, so the screen says why once. */}
+          {!genresLoading && !genresError && genres.length === 0 && (
+            <EmptyState
+              icon={{ name: 'musical-notes-outline' }}
+              title={t('catalog.empty.title')}
+              subtitle={t('catalog.empty.subtitle')}
+              containerStyle={styles.emptyState}
+            />
+          )}
         </View>
       </ScrollView>
     </>
@@ -87,6 +100,13 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 18,
+  },
+  // `EmptyState` fills a screen by default; inside this scroll view it sizes to
+  // its own content and lets the screen background show through.
+  emptyState: {
+    flex: 0,
+    paddingVertical: 48,
+    backgroundColor: 'transparent',
   },
 });
 

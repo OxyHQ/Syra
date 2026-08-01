@@ -39,8 +39,6 @@ import { toast } from '@oxyhq/bloom/toast';
 
 const logger = createScopedLogger('HomeScreen');
 
-/** Shared copy for a failed section — the cause is always the same from here. */
-
 /**
  * Quick access item type - can be album, artist, or playlist
  */
@@ -504,6 +502,26 @@ const HomeContent: React.FC<HomeContentProps> = ({
     popularArtists.length > 0 ||
     tracks.length > 0;
 
+  // Whether ANY block on this screen has something to draw. Podcasts, live
+  // rooms and the radio rail count: they are what keeps the screen populated
+  // while the music catalogue is empty.
+  const hasAnyContent =
+    hasAnyMusic ||
+    recentlyPlayed.length > 0 ||
+    radioTracks.length > 0 ||
+    podcasts.length > 0 ||
+    liveRooms.length > 0;
+
+  // A section that has not resolved is still drawing something — a skeleton, an
+  // error card with a retry, or a sign-in call to action — so the screen is not
+  // blank and needs nothing said about it.
+  const everySectionResolved =
+    browseStatus === 'ready' &&
+    recentlyPlayedStatus === 'ready' &&
+    userPlaylistsStatus === 'ready' &&
+    radioStatus === 'ready' &&
+    podcastsStatus === 'ready';
+
   return (
     <View style={[styles.gradientContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
         <ScrollView
@@ -648,22 +666,16 @@ const HomeContent: React.FC<HomeContentProps> = ({
             </ResponsiveGrid>
           ) : null}
 
-          {/* Every music rail on this screen is served by the one browse
-              request, and each hides itself when it has nothing to show. So a
-              catalogue with no music in it would collapse the whole screen to a
-              greeting and a podcast rail, with no explanation. Syra's catalogue
-              is built from creator uploads, which makes "empty" a real state
-              with a real reason — not a failure, and not a blank page. */}
-          {browseStatus === 'ready' && !hasAnyMusic && (
+          {/* Every rail hides itself when a successful request came back empty,
+              so an empty music catalogue collapses this screen to a greeting.
+              That — and ONLY that — is worth one line of explanation: while the
+              podcast rail, a live room or the radio still has something to
+              show, an empty music catalogue is not news and says nothing. */}
+          {everySectionResolved && !hasAnyContent && (
             <EmptyState
               icon={{ name: 'musical-notes-outline' }}
-              title={t('home.empty.title')}
-              subtitle={t('home.empty.subtitle')}
-              action={{
-                label: t('home.empty.action'),
-                onPress: () => router.push('/podcasts'),
-                icon: 'mic-outline',
-              }}
+              title={t('catalog.empty.title')}
+              subtitle={t('catalog.empty.subtitle')}
               containerStyle={styles.sectionState}
             />
           )}

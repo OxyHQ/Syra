@@ -102,6 +102,12 @@
     "playbackFailed": "Could not start playback",
     "playTitle": "Play {{title}}"
   },
+  "catalog": {
+    "empty": {
+      "title": "No music here yet",
+      "subtitle": "Syra's catalogue is built from what artists upload. As creators publish their work, it will show up here."
+    }
+  },
   "agora": {
     "podcastStream": {
       "disclaimer": "You're responsible for having the rights to stream this audio into your room.",
@@ -261,11 +267,6 @@
       "description": "Discover and play your favorite music"
     },
     "liveNow": "Live now",
-    "empty": {
-      "title": "No music here yet",
-      "subtitle": "Syra's catalogue is built from what artists upload. As creators publish their work, it will show up here.",
-      "action": "Browse podcasts"
-    },
     "sections": {
       "jumpBackIn": "Jump back in",
       "popularAlbums": "Popular albums",
@@ -349,6 +350,7 @@
       "charts": "Charts"
     },
     "resultCount": "{{label}} ({{count}})",
+    "noResults": "No results found for \"{{query}}\"",
     "loadingMorePodcasts": "Finding more podcasts…",
     "errors": {
       "title": "Search failed",

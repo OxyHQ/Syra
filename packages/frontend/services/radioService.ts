@@ -34,8 +34,23 @@ export interface RadioPageParams {
   limit?: number;
 }
 
+/**
+ * The `user` station carries no seed id — the listener IS the seed, so
+ * {@link RadioSeed} models it as the empty string. The endpoint expects that as
+ * an ABSENT parameter: an empty `seedId=` is rejected as too short and the whole
+ * station comes back 400, which the screen can only report as a failed station.
+ */
+function radioSeedParam(seedId: string): string | undefined {
+  return seedId.length > 0 ? seedId : undefined;
+}
+
 function radioSeedQuery(seed: RadioSeed): string {
-  return new URLSearchParams({ seedType: seed.seedType, seedId: seed.seedId }).toString();
+  const query = new URLSearchParams({ seedType: seed.seedType });
+  const seedId = radioSeedParam(seed.seedId);
+  if (seedId) {
+    query.set('seedId', seedId);
+  }
+  return query.toString();
 }
 
 /**
@@ -54,7 +69,7 @@ export const radioService = {
       '/radio',
       {
         seedType: params.seedType,
-        seedId: params.seedId,
+        seedId: radioSeedParam(params.seedId),
         cursor: params.cursor,
         limit: params.limit,
       },
