@@ -48,10 +48,11 @@ jobs:
           # development id when this is unset, so a local build still works —
           # which is exactly why it has to be injected here: without it the
           # production bundle silently ships the dev client and every sign-in
-          # authenticates against the wrong application. Public by design (it
-          # travels inside the bundle); it lives in a secret only so the two
-          # environments can differ, not because it is confidential.
-          EXPO_PUBLIC_OXY_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_OXY_CLIENT_ID }}
+          # authenticates against the wrong application. A repo VARIABLE, not a
+          # secret: the id travels inside the bundle, so it is public by
+          # construction, and a secret would only make it unreadable in the UI —
+          # costing the ability to check what production uses without deploying.
+          EXPO_PUBLIC_OXY_CLIENT_ID: ${{ vars.EXPO_PUBLIC_OXY_CLIENT_ID }}
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v4
         with:
