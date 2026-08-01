@@ -44,6 +44,14 @@ jobs:
       # nothing checks them. Depends on the shared-types/sdk dists built above.
       - run: cd packages/backend && bun run typecheck
 
+      # The upload screening suite shells out to real binaries: ffprobe for a
+      # fixture's true duration/codec, ffmpeg to build fixtures and drive the HLS
+      # packager, fpcalc for the Chromaprint fingerprints the dedup tiers match on.
+      # Without them 43 tests fail in under a millisecond each — a missing
+      # executable, not a bad assertion. `libchromaprint-tools` provides fpcalc on
+      # Ubuntu; the runtime image uses Alpine's `chromaprint` for the same binary.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg libchromaprint-tools
+
       - run: cd packages/backend && bun run test
 
       - run: cd packages/frontend && bunx jest --ci

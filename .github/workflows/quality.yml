@@ -46,5 +46,15 @@ jobs:
       # receiver refuses a parsed body) are enforced only by these tests, and
       # they run against a real in-memory MongoDB replica set rather than a mock,
       # which is what makes them worth gating on.
+      # The upload screening suite shells out to real binaries rather than mocking
+      # them: ffprobe measures a fixture's true duration/codec, ffmpeg builds the
+      # fixtures and drives the HLS packager, and fpcalc produces the Chromaprint
+      # fingerprints the dedup tiers match on. Without them 43 tests fail in under
+      # a millisecond each — the signature of a missing executable, not a bad
+      # assertion. `chromaprint` is the package that provides fpcalc (the Debian
+      # name `libchromaprint-tools` is a different distribution's).
+      - name: Install audio toolchain
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg libchromaprint-tools
+
       - name: Backend tests
         run: bun run --filter @syra/backend test
