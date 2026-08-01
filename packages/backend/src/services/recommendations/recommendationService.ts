@@ -9,6 +9,7 @@ import { withImageFirstSort } from '../../utils/imageFirstSort';
 import {
   playableTrackFilter,
 } from '../../utils/catalogVisibility';
+import { findArtistsWithPlayableTracks } from '../../utils/playableContainers';
 import { andMongoFilters, orderByIds, rankByTaste, topRelatedArtistIds } from './taste';
 
 /**
@@ -46,9 +47,42 @@ interface CatalogArtist {
 // ── Related artists ─────────────────────────────────────────────────────────
 
 /**
+ * Drop artists with nothing left to play.
+ *
+ * Applied to the FINAL list rather than to each source, because all three
+ * sources can produce one: the co-listen graph is rewritten on the job's
+ * schedule and so outlives takedowns, and both fallbacks exclude only
+ * `terminated` — which is a property of the ACCOUNT, not of the catalog. An
+ * artist whose every track was taken down individually, or who was created as a
+ * claimable stub and has no tracks yet, passes every one of those checks and
+ * then opens to an empty page.
+ *
+ * The list can come back shorter than `limit`. That is the intended trade: a
+ * short shelf is honest, a padded one sends listeners to dead ends.
+ */
+async function withPlayableCatalog(artists: CatalogArtist[]): Promise<CatalogArtist[]> {
+  if (artists.length === 0) return artists;
+
+  const playable = await findArtistsWithPlayableTracks(
+    { _id: { $in: artists.map((artist) => artist._id) } },
+    { sort: { popularity: -1 }, limit: artists.length },
+  );
+  const keep = new Set(
+    playable.map((artist) => (artist as { _id: mongoose.Types.ObjectId })._id.toString()),
+  );
+
+  return artists.filter((artist) => keep.has(artist._id.toString()));
+}
+
+/**
  * Artists fans of `artistId` also listen to. Primary source is the precomputed
  * co-listen graph; falls back to artists sharing a genre, then to globally
  * popular artists, never returning the seed artist itself.
+ *
+ * Every path ends in {@link withPlayableCatalog}, so no caller can surface an
+ * artist with no playable catalog — this is the single reader of the artist
+ * co-listen graph, and both `GET /api/artists/:id/related` and the artist
+ * profile page go through it.
  */
 export async function getRelatedArtists(artistId: string, limit = DEFAULT_RELATED_LIMIT): Promise<CatalogArtist[]> {
   if (!mongoose.Types.ObjectId.isValid(artistId)) return [];
@@ -66,11 +100,11 @@ export async function getRelatedArtists(artistId: string, limit = DEFAULT_RELATE
     ? orderByIds(await ArtistModel.find({ _id: { $in: relatedIds }, terminated: { $ne: true } }).lean(), relatedIds)
     : [];
 
-  if (collaborative.length >= limit) return collaborative.slice(0, limit);
+  if (collaborative.length >= limit) return withPlayableCatalog(collaborative.slice(0, limit));
 
   // Content fallback: artists sharing a genre with the seed.
   const seed = await ArtistModel.findOne({ _id: artistId }).select({ genres: 1 }).lean();
-  if (!seed) return collaborative.slice(0, limit);
+  if (!seed) return withPlayableCatalog(collaborative.slice(0, limit));
   const exclude = new Set<string>([artistId, ...collaborative.map((a) => a._id.toString())]);
 
   const genreMatches = seed?.genres?.length
@@ -86,7 +120,7 @@ export async function getRelatedArtists(artistId: string, limit = DEFAULT_RELATE
 
   genreMatches.forEach((a) => exclude.add(a._id.toString()));
   const combined = [...collaborative, ...genreMatches];
-  if (combined.length >= limit) return combined.slice(0, limit);
+  if (combined.length >= limit) return withPlayableCatalog(combined.slice(0, limit));
 
   // Popularity fallback to fill any remainder.
   const popular = await ArtistModel.find({
@@ -97,7 +131,7 @@ export async function getRelatedArtists(artistId: string, limit = DEFAULT_RELATE
     .limit(limit - combined.length)
     .lean();
 
-  return [...combined, ...popular].slice(0, limit);
+  return withPlayableCatalog([...combined, ...popular].slice(0, limit));
 }
 
 // ── Similar tracks ──────────────────────────────────────────────────────────

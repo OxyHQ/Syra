@@ -4,10 +4,16 @@
  * Oxy-linked credits with the live Oxy identity (avatar + displayName).
  *
  * Dedup is STRONG-key only (see `Person` model): `linkedOxyUserId` or `href`.
- * Name-only credits are low-confidence — deduped by exact name ONLY among other
+ * Name-only credits are low-confidence — deduped by `nameKey` ONLY among other
  * name-only persons, never merged into/over a strong-key person. Artist auto-link
  * happens only on a strong signal (same Oxy user owns/claimed the Artist), never
  * a loose name.
+ *
+ * `nameKey` comes from the shared `normalizeNameKey` in `@syra/shared-types` —
+ * the SAME function artists, credits and locker album grouping use. It has to be
+ * the same one: `Person.nameKey` and `Artist.nameKey` are one field on one
+ * physical collection, so two normalisations would put two key spaces in the same
+ * column and quietly break any cross-type query written against it later.
  *
  * The Oxy identity fetch is an injected dependency (`makeOxyUsersFetcher(oxy)` at
  * the call site) so this module stays decoupled from the server + unit-testable.
@@ -15,6 +21,7 @@
 
 import mongoose from 'mongoose';
 import type { EpisodePerson, ResolvedPerson, SearchPerson } from '@syra/shared-types';
+import { normalizeNameKey } from '@syra/shared-types';
 import { getAccountDisplayName } from '@oxyhq/core';
 import type { OxyServices, User } from '@oxyhq/core';
 import { PersonModel, ArtistModel, type IPerson } from '../../models/CatalogEntity';
@@ -45,10 +52,6 @@ export function makeOxyUsersFetcher(oxy: Pick<OxyServices, 'getUsersByIds'>): Ge
   };
 }
 
-function nameKey(name: string): string {
-  return name.trim().toLowerCase();
-}
-
 /**
  * Find or create the global `Person` for a credit using strong keys only.
  * Returns null only on a transient error (caller isolates per-credit).
@@ -59,7 +62,7 @@ async function findOrCreatePerson(credit: EpisodePerson): Promise<IPerson | null
     return PersonModel.findOneAndUpdate(
       { linkedOxyUserId: credit.linkedOxyUserId },
       {
-        $setOnInsert: { name: credit.name, nameKey: nameKey(credit.name), linkedOxyUserId: credit.linkedOxyUserId },
+        $setOnInsert: { name: credit.name, nameKey: normalizeNameKey(credit.name), linkedOxyUserId: credit.linkedOxyUserId },
       },
       { upsert: true, new: true },
     );
@@ -70,7 +73,7 @@ async function findOrCreatePerson(credit: EpisodePerson): Promise<IPerson | null
     return PersonModel.findOneAndUpdate(
       { href: credit.href },
       {
-        $setOnInsert: { name: credit.name, nameKey: nameKey(credit.name), href: credit.href },
+        $setOnInsert: { name: credit.name, nameKey: normalizeNameKey(credit.name), href: credit.href },
         ...(credit.img ? { $set: { img: credit.img } } : {}),
       },
       { upsert: true, new: true },
@@ -80,7 +83,7 @@ async function findOrCreatePerson(credit: EpisodePerson): Promise<IPerson | null
   // Low-confidence — name-only. Match ONLY other name-only persons; never a
   // strong-key person of the same name.
   const existing = await PersonModel.findOne({
-    nameKey: nameKey(credit.name),
+    nameKey: normalizeNameKey(credit.name),
     linkedOxyUserId: { $exists: false },
     href: { $exists: false },
   });
@@ -91,7 +94,7 @@ async function findOrCreatePerson(credit: EpisodePerson): Promise<IPerson | null
     }
     return existing;
   }
-  return PersonModel.create({ name: credit.name, nameKey: nameKey(credit.name), img: credit.img });
+  return PersonModel.create({ name: credit.name, nameKey: normalizeNameKey(credit.name), img: credit.img });
 }
 
 /**

@@ -5,6 +5,7 @@ import path from 'path';
 import { connect, clear, disconnect } from '../../test/mongo';
 import { TrackKeyModel } from '../../models/TrackKey';
 import { storePackagedHls } from './hlsStorage';
+import { getS3HlsKey, getS3LockerHlsKey } from '../../config/s3.config';
 import type { PackageResult } from './hlsPackager';
 
 beforeAll(connect);
@@ -17,8 +18,26 @@ let packageDir: string;
 
 const TRACK_ID = 'aabbccddeeff001122334455';
 const ARTIST_ID = 'ffeeddccbbaa554433221100';
+const UPLOAD_ID = '0011223344556677889900aa';
+const OWNER_ID = 'oxy-locker-owner';
 const FAKE_KEY_HEX = 'deadbeefdeadbeefdeadbeefdeadbeef';
 const BITRATES = [96, 160, 320] as const;
+
+/** Catalog target: keys under the artist, AES key filed under the track id. */
+function catalogTarget() {
+  return {
+    recordId: TRACK_ID,
+    buildKey: (relPath: string) => getS3HlsKey(ARTIST_ID, TRACK_ID, relPath),
+  };
+}
+
+/** Locker target: keys under `hls/uploads/{owner}/{uploadId}/`, no artist id. */
+function lockerTarget() {
+  return {
+    recordId: UPLOAD_ID,
+    buildKey: (relPath: string) => getS3LockerHlsKey(OWNER_ID, UPLOAD_ID, relPath),
+  };
+}
 
 function buildSyntheticPackage(): PackageResult {
   packageDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hls-storage-test-'));
@@ -66,7 +85,7 @@ describe('storePackagedHls', () => {
       uploaded.push({ key, contentType: opts.contentType, length: body.length });
     };
 
-    await storePackagedHls(result, { trackId: TRACK_ID, artistId: ARTIST_ID }, { upload: fakeUpload });
+    await storePackagedHls(result, catalogTarget(), { upload: fakeUpload });
 
     // 7 files total: 1 master + 3 × (1 playlist + 1 segment)
     expect(uploaded).toHaveLength(7);
@@ -93,7 +112,7 @@ describe('storePackagedHls', () => {
     const result = buildSyntheticPackage();
     const { hls } = await storePackagedHls(
       result,
-      { trackId: TRACK_ID, artistId: ARTIST_ID },
+      catalogTarget(),
       { upload: async () => {} },
     );
 
@@ -111,7 +130,7 @@ describe('storePackagedHls', () => {
     const result = buildSyntheticPackage();
     const { hlsMasterKey } = await storePackagedHls(
       result,
-      { trackId: TRACK_ID, artistId: ARTIST_ID },
+      catalogTarget(),
       { upload: async () => {} },
     );
 
@@ -122,7 +141,7 @@ describe('storePackagedHls', () => {
     const result = buildSyntheticPackage();
     await storePackagedHls(
       result,
-      { trackId: TRACK_ID, artistId: ARTIST_ID },
+      catalogTarget(),
       { upload: async () => {} },
     );
 
@@ -136,11 +155,60 @@ describe('storePackagedHls', () => {
     const result = buildSyntheticPackage();
     const updatedResult = { ...result, keyHex: 'cafecafecafecafecafecafecafecafe' };
 
-    await storePackagedHls(result, { trackId: TRACK_ID, artistId: ARTIST_ID }, { upload: async () => {} });
-    await storePackagedHls(updatedResult, { trackId: TRACK_ID, artistId: ARTIST_ID }, { upload: async () => {} });
+    await storePackagedHls(result, catalogTarget(), { upload: async () => {} });
+    await storePackagedHls(updatedResult, catalogTarget(), { upload: async () => {} });
 
     const docs = await TrackKeyModel.find({ trackId: TRACK_ID });
     expect(docs).toHaveLength(1);
     expect(docs[0].keyHex).toBe('cafecafecafecafecafecafecafecafe');
+  });
+
+  it('a locker target writes under hls/uploads/, never into the catalog artist space', async () => {
+    const result = buildSyntheticPackage();
+    const uploaded: string[] = [];
+
+    const { hlsMasterKey, hls } = await storePackagedHls(result, lockerTarget(), {
+      upload: async (key: string) => {
+        uploaded.push(key);
+      },
+    });
+
+    expect(hlsMasterKey).toBe(`hls/uploads/${OWNER_ID}/${UPLOAD_ID}/master.m3u8`);
+    for (const key of [...uploaded, hlsMasterKey, ...hls.map((r) => r.manifestKey)]) {
+      expect(key.startsWith(`hls/uploads/${OWNER_ID}/${UPLOAD_ID}/`)).toBe(true);
+    }
+  });
+
+  it('a locker target files the AES key under the UPLOAD id', async () => {
+    // `GET /api/uploads/:id/stream/key` looks it up by the upload id; filed under
+    // anything else the locker plays back silence.
+    const result = buildSyntheticPackage();
+    await storePackagedHls(result, lockerTarget(), { upload: async () => {} });
+
+    expect(await TrackKeyModel.findOne({ trackId: UPLOAD_ID })).not.toBeNull();
+    expect(await TrackKeyModel.findOne({ trackId: TRACK_ID })).toBeNull();
+  });
+
+  it('every locker key keeps the upload id as a whole path segment above the manifest', async () => {
+    /**
+     * This is the exact predicate `compliance/takedown.ts` `hlsDirectoryPrefix()`
+     * applies: find the upload id as a segment, and require it NOT to be the last
+     * one. Fail it and a copyright purge deletes the documents while leaving every
+     * .ts segment in the bucket — silently, with only a WARN.
+     */
+    const result = buildSyntheticPackage();
+    const { hlsMasterKey, hls } = await storePackagedHls(result, lockerTarget(), {
+      upload: async () => {},
+    });
+
+    for (const key of [hlsMasterKey, ...hls.map((r) => r.manifestKey)]) {
+      const segments = key.split('/');
+      const index = segments.indexOf(UPLOAD_ID);
+      expect(index).toBeGreaterThanOrEqual(0);
+      expect(index).toBeLessThan(segments.length - 1);
+      expect(`${segments.slice(0, index + 1).join('/')}/`).toBe(
+        `hls/uploads/${OWNER_ID}/${UPLOAD_ID}/`,
+      );
+    }
   });
 });

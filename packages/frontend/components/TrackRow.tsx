@@ -27,6 +27,15 @@ interface TrackRowProps {
    * have no per-track actions render exactly as before.
    */
   onMorePress?: () => void;
+  /**
+   * Short qualifier shown beside the artist, e.g. "Contributed" on an artist
+   * profile where a third party published the recording rather than the artist.
+   *
+   * Additive and defaulted off: every existing caller renders exactly as before.
+   * It sits next to the explicit badge because it answers the same kind of
+   * question — what IS this row — rather than being an action.
+   */
+  badge?: string;
 }
 
 /**
@@ -42,6 +51,7 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
   onPlayPress,
   showNumber = true,
   onMorePress,
+  badge,
 }) => {
   const theme = useTheme();
   const { isTrackLiked } = useLibrary();
@@ -121,6 +131,16 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
                 <Text style={[styles.explicitText, { color: theme.colors.textSecondary }]}>E</Text>
               </View>
             )}
+            {badge ? (
+              <View style={[styles.badge, { backgroundColor: theme.colors.backgroundTertiary }]}>
+                <Text
+                  style={[styles.badgeText, { color: theme.colors.textSecondary }]}
+                  numberOfLines={1}
+                >
+                  {badge}
+                </Text>
+              </View>
+            ) : null}
             <Text
               style={[styles.trackArtist, { color: theme.colors.textSecondary }]}
               numberOfLines={1}
@@ -236,8 +256,30 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
   },
+  /**
+   * Variable-length qualifier, unlike the fixed 18x18 explicit box next to it.
+   *
+   * Sized to its content with NO max-width: a percentage cap made the label wrap
+   * to a second line and overflow the row, colliding with the artist name. The
+   * artist text shrinks instead (`trackArtist.flexShrink`), which is the right
+   * way round — the qualifier is short and fixed, the name is what can truncate.
+   */
+  badge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 3,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
   trackArtist: {
     fontSize: 14,
+    // Shrinks beside a badge instead of overlapping it.
+    flexShrink: 1,
   },
   trackRowRight: {
     flexDirection: 'row',

@@ -39,7 +39,11 @@ export const NowPlaying: React.FC = () => {
   const queue = useQueueStore(s => s.queue);
   const { isTrackLiked } = useLibrary();
   const toggleLike = useToggleLikeTrack();
-  const isLiked = currentTrack ? isTrackLiked(currentTrack.id) : false;
+  // Liking, lyrics and artist pages are CATALOG features: they address the
+  // `tracks` collection, which a locker file is deliberately not in. Offering
+  // them for an upload would send its id to endpoints that will never find it.
+  const isCatalogTrack = currentTrack?.kind === 'track';
+  const isLiked = isCatalogTrack ? isTrackLiked(currentTrack.id) : false;
   const isFullscreen = fullscreenPanel === 'nowPlaying';
   const [album, setAlbum] = useState<Album | null>(null);
   const [artist, setArtist] = useState<Artist | null>(null);
@@ -79,7 +83,7 @@ export const NowPlaying: React.FC = () => {
   }, [currentTrack?.id]);
 
   const handleToggleLike = () => {
-    if (!currentTrack) {
+    if (!currentTrack || !isCatalogTrack) {
       return;
     }
     toggleLike.mutate({ id: currentTrack.id, next: !isLiked, track: currentTrack });
@@ -185,28 +189,33 @@ export const NowPlaying: React.FC = () => {
                     <Pressable
                       onPress={() => router.push(`/p/${currentTrack.artistId}`)}
                       style={styles.artistPressable}
+                      disabled={!currentTrack.artistId}
                     >
                       <Text
                         style={[styles.trackArtist, { color: '#fff' }]}
                         numberOfLines={1}
                       >
-                        {currentTrack.artistName}
+                        {/* A locker file with no resolved artist is valid, not
+                            broken — it renders as unknown rather than blank. */}
+                        {currentTrack.artistName || t('uploads.unknownArtist')}
                       </Text>
                     </Pressable>
                   </View>
-                  <Pressable
-                    onPress={handleToggleLike}
-                    style={styles.likeButton}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: isLiked }}
-                    accessibilityLabel={isLiked ? t('common.removeFromLiked') : t('common.saveToLiked')}
-                  >
-                    <Ionicons
-                      name={isLiked ? 'heart' : 'heart-outline'}
-                      size={28}
-                      color={isLiked ? theme.colors.primary : '#fff'}
-                    />
-                  </Pressable>
+                  {isCatalogTrack && (
+                    <Pressable
+                      onPress={handleToggleLike}
+                      style={styles.likeButton}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: isLiked }}
+                      accessibilityLabel={isLiked ? t('common.removeFromLiked') : t('common.saveToLiked')}
+                    >
+                      <Ionicons
+                        name={isLiked ? 'heart' : 'heart-outline'}
+                        size={28}
+                        color={isLiked ? theme.colors.primary : '#fff'}
+                      />
+                    </Pressable>
+                  )}
                 </View>
 
                 {/* About This Artist Card */}
@@ -240,7 +249,9 @@ export const NowPlaying: React.FC = () => {
                   </View>
                 )}
 
-                {/* Lyrics Card */}
+                {/* Lyrics Card — catalog only: the `Lyrics` collection is keyed
+                    by track id, and a locker file has no row in it. */}
+                {isCatalogTrack && (
                 <View style={[styles.card, { backgroundColor: theme.colors.backgroundTertiary }]}>
                   <Pressable
                     style={styles.cardHeader}
@@ -261,6 +272,7 @@ export const NowPlaying: React.FC = () => {
                     <LyricsView trackId={currentTrack.id} />
                   )}
                 </View>
+                )}
 
                 {/* Credits Card */}
                 {album && (

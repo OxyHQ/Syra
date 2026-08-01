@@ -19,13 +19,6 @@ import { getApiErrorMessage } from '@/utils/api';
 import { toast } from '@oxyhq/bloom/toast';
 import { cn } from '@/lib/utils';
 
-function parsePositiveNumber(value: string): number | undefined {
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  const parsed = Number(trimmed);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
-}
-
 function AudioPicker({ file, onPick, disabled }: { file: TrackAudioFile | null; onPick: () => void; disabled: boolean }) {
   const theme = useTheme();
   return (
@@ -136,13 +129,11 @@ function UploadTrackForm({ artistId, uploadsDisabled }: { artistId: string; uplo
 
   const [audioFile, setAudioFile] = useState<TrackAudioFile | null>(null);
   const [title, setTitle] = useState('');
-  const [duration, setDuration] = useState('');
   const [albumId, setAlbumId] = useState<string | null>(null);
   const [coverArt, setCoverArt] = useState<string | null>(null);
   const [genres, setGenres] = useState('');
   const [explicit, setExplicit] = useState(false);
   const [titleError, setTitleError] = useState<string | undefined>(undefined);
-  const [durationError, setDurationError] = useState<string | undefined>(undefined);
   const [audioError, setAudioError] = useState<string | undefined>(undefined);
 
   const busy = uploadTrack.isPending;
@@ -167,7 +158,6 @@ function UploadTrackForm({ artistId, uploadsDisabled }: { artistId: string; uplo
 
   const onSubmit = useCallback(async () => {
     const trimmedTitle = title.trim();
-    const durationSeconds = parsePositiveNumber(duration);
     let valid = true;
 
     if (!trimmedTitle) {
@@ -176,17 +166,11 @@ function UploadTrackForm({ artistId, uploadsDisabled }: { artistId: string; uplo
     } else {
       setTitleError(undefined);
     }
-    if (durationSeconds === undefined) {
-      setDurationError('Enter the duration in seconds');
-      valid = false;
-    } else {
-      setDurationError(undefined);
-    }
     if (!audioFile) {
       setAudioError('Choose an audio file to upload');
       valid = false;
     }
-    if (!valid || !audioFile || durationSeconds === undefined) return;
+    if (!valid || !audioFile) return;
 
     const genreList = genres
       .split(',')
@@ -203,7 +187,6 @@ function UploadTrackForm({ artistId, uploadsDisabled }: { artistId: string; uplo
           coverArt: coverArt ?? undefined,
           genre: genreList.length > 0 ? genreList : undefined,
           isExplicit: explicit,
-          duration: durationSeconds,
         },
       });
 
@@ -221,7 +204,7 @@ function UploadTrackForm({ artistId, uploadsDisabled }: { artistId: string; uplo
       toast.error(getApiErrorMessage(error, 'Upload failed. Please try again.'));
       uploadTrack.reset();
     }
-  }, [title, duration, audioFile, genres, artistId, albumId, coverArt, explicit, uploadTrack, router]);
+  }, [title, audioFile, genres, artistId, albumId, coverArt, explicit, uploadTrack, router]);
 
   return (
     <ScreenContainer title="Upload song" subtitle="Add a track to your catalog" onBack={() => router.back()}>
@@ -240,15 +223,6 @@ function UploadTrackForm({ artistId, uploadsDisabled }: { artistId: string; uplo
         onChangeText={setTitle}
         error={titleError}
         maxLength={120}
-        editable={!busy}
-      />
-      <FormField
-        label="Duration (seconds)"
-        placeholder="180"
-        value={duration}
-        onChangeText={setDuration}
-        error={durationError}
-        keyboardType="number-pad"
         editable={!busy}
       />
 

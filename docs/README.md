@@ -13,6 +13,10 @@ Documentation for the Syra music streaming platform.
 
 - **[Performance Guide](./PERFORMANCE_GUIDE.md)** — Performance optimization guide.
 
+### Runbooks
+
+- **[User uploads deploy](./runbooks/user-uploads-deploy.md)** — ordered one-time production steps for the user-upload feature; the order is not interchangeable.
+
 ### Compliance
 
 - **[Compliance](./compliance/)** — Legal and compliance documentation.

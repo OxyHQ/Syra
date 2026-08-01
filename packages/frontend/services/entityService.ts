@@ -1,7 +1,16 @@
 import { z } from 'zod';
-import { entityProfileSchema, type EntityProfile } from '@syra/shared-types';
-import { publicApi } from '@/utils/api';
-import { normalizeAlbumImages, normalizeTrackImages } from '@/utils/catalogImages';
+import {
+  artistClaimResponseSchema,
+  entityProfileSchema,
+  type ArtistClaim,
+  type EntityProfile,
+} from '@syra/shared-types';
+import { api, publicApi } from '@/utils/api';
+import {
+  normalizeAlbumImages,
+  normalizePlaylistImages,
+  normalizeTrackImages,
+} from '@/utils/catalogImages';
 
 /**
  * Unified entity profile service — `GET /api/p/:id` returns the merged
@@ -28,6 +37,10 @@ export const entityService = {
     }
     const profile = parsed.data.data;
 
+    // EVERY shelf that renders artwork is normalized, not just `music`. The
+    // catalog ships bare image ids; a section whose ids never pass through here
+    // renders a grid of blank cards, which looks like missing data rather than a
+    // missing conversion.
     return {
       ...profile,
       music: profile.music
@@ -36,6 +49,35 @@ export const entityService = {
             albums: profile.music.albums.map(normalizeAlbumImages),
           }
         : undefined,
+      discography: profile.discography
+        ? {
+            albums: profile.discography.albums.map(normalizeAlbumImages),
+            singlesAndEps: profile.discography.singlesAndEps.map(normalizeAlbumImages),
+            compilations: profile.discography.compilations.map(normalizeAlbumImages),
+          }
+        : undefined,
+      creditedOn: profile.creditedOn?.map((credited) => ({
+        ...credited,
+        track: normalizeTrackImages(credited.track),
+      })),
+      playlists: profile.playlists?.map(normalizePlaylistImages),
     };
+  },
+
+  /**
+   * Ask to be recognised as this artist.
+   *
+   * NEVER grants anything: the backend opens a PENDING `ArtistClaim` for a human
+   * to review, because an auto-granted claim on a profile built from a stranger's
+   * file tags is the impersonation risk the whole contribution path is designed
+   * around.
+   */
+  async claimArtist(artistId: string, evidence: string): Promise<ArtistClaim> {
+    const response = await api.post<unknown>(`/artists/${artistId}/claim`, { evidence });
+    const parsed = artistClaimResponseSchema.safeParse(response.data);
+    if (!parsed.success) {
+      throw new Error(`Invalid artist claim response: ${parsed.error.message}`);
+    }
+    return parsed.data.claim;
   },
 };

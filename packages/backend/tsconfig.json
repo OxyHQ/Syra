@@ -23,6 +23,7 @@
   },
   "include": [
     "**/*.ts",
+    "src/**/*.json",
     "package.json"
   ],
   "references": [

@@ -5,10 +5,24 @@ import {
   catalogSourceSchema,
   catalogImageSizesSchema,
   externalIdsSchema,
+  imageLicenceSchema,
   sourceProvenanceSchema,
 } from './track';
 
 const albumTypeSchema = z.enum(['album', 'single', 'ep', 'compilation']);
+
+/**
+ * External identifiers for a release.
+ *
+ * `musicbrainzReleaseId` is dedup tier 2 for album resolution, behind `upc`
+ * (which is a top-level field and already carries its own sparse-unique index).
+ * It stays off the shared `externalIds` shape because a track has no use for a
+ * release MBID.
+ */
+export const albumExternalIdsSchema = externalIdsSchema.extend({
+  musicbrainzReleaseId: z.string().optional(),
+});
+export type AlbumExternalIds = z.infer<typeof albumExternalIdsSchema>;
 
 export const albumSchema = timestampsSchema.extend({
   id: z.string(),
@@ -17,15 +31,45 @@ export const albumSchema = timestampsSchema.extend({
   artistId: z.string(),
   artistName: z.string(),
   releaseDate: z.string(),
+  /**
+   * REQUIRED, and load-bearing. An album is not created at all unless real cover
+   * art was found — embedded in the file, or recovered from Cover Art Archive by
+   * release MBID. Its tracks stay individually discoverable under the artist
+   * instead. A placeholder must never be invented: it is indistinguishable from
+   * real art at every later read, so it can never be cleaned up.
+   */
   coverArt: z.string(),
   coverArtSizes: catalogImageSizesSchema.optional(),
+  /**
+   * Licence and authorship of `coverArt`, when it came from outside.
+   *
+   * Cover Art Archive art is reusable WITH ATTRIBUTION, so it carries the same
+   * obligation as a Commons photo and needs the same field. Its absence would
+   * be worse than untidy: the importer's rule is that an image whose licence
+   * cannot be stored does not get imported, so with nowhere to put the CAA
+   * licence the album stays coverless — and `coverArt` is required, so the
+   * album is never created at all. That is precisely the blocker CAA exists to
+   * clear.
+   *
+   * Absent means the cover came from the uploaded file's own embedded artwork,
+   * which arrives with the same provenance as the audio and credits nobody.
+   */
+  coverArtLicence: imageLicenceSchema.optional(),
   genre: z.array(z.string()).optional(),
   totalTracks: z.number(),
   totalDuration: z.number(),
   type: albumTypeSchema,
   label: z.string().optional(),
   copyright: z.string().optional(),
+  /** Dedup tier 1 for album resolution — sparse-unique in the model. */
   upc: z.string().optional(),
+  catalogNumber: z.string().optional(),
+  /** Edition medium as the source names it — `CD`, `Vinyl`, `Digital Media`, … */
+  media: z.string().optional(),
+  releaseCountry: z.string().optional(),
+  /** `TDOR` — when the work was first released, if this edition is a reissue. */
+  originalReleaseDate: z.string().optional(),
+  totalDiscs: z.number().optional(),
   popularity: z.number().optional(),
   playCount: z.number().optional(),
   favoriteCount: z.number().optional(),
@@ -36,7 +80,7 @@ export const albumSchema = timestampsSchema.extend({
   primaryColor: z.string().optional(),
   secondaryColor: z.string().optional(),
   source: catalogSourceSchema.optional(),
-  externalIds: externalIdsSchema.optional(),
+  externalIds: albumExternalIdsSchema.optional(),
   sources: z.array(sourceProvenanceSchema).optional(),
 });
 export type Album = z.infer<typeof albumSchema>;

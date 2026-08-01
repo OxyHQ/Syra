@@ -33,8 +33,10 @@ import playlistsRoutes from './src/routes/playlists.routes';
 import libraryRoutes from './src/routes/library.routes';
 import audioRoutes from './src/routes/audio.routes';
 import queueRoutes from './src/routes/queue.routes';
+import uploadsRoutes from './src/routes/uploads.routes';
 import musicPreferencesRoutes from './src/routes/musicPreferences.routes';
 import copyrightRoutes from './src/routes/copyright.routes';
+import artistClaimsRoutes from './src/routes/artistClaims.routes';
 import imagesPublicRoutes from './src/routes/images.public.routes';
 import imagesAuthRoutes from './src/routes/images.auth.routes';
 import previewRoutes from './src/routes/preview.routes';
@@ -57,6 +59,8 @@ import { initializeRoomSocket } from './src/sockets/roomSocket';
 import { initializeIO } from './src/utils/socket';
 import { startRecommendationScheduler } from './src/services/recommendations/scheduler';
 import { startPodcastRefreshScheduler } from './src/services/podcasts/podcastRefreshScheduler';
+import { startIngestWorker } from './src/services/ingest/ingestQueue';
+import { startExpirySweeper } from './src/services/uploads/expirySweeper';
 
 const app = express();
 
@@ -301,8 +305,19 @@ publicApiRouter.use('/playlists', playlistsRoutes);
 
 publicApiRouter.use('/search', searchRoutes);
 publicApiRouter.use('/browse', browseRoutes);
-publicApiRouter.use('/copyright', copyrightRoutes);
+// Copyright: public reporting (a rightsholder need not have a Syra account) plus
+// the reviewer-gated queue and resolution, which self-enforce with requireAuth +
+// the compliance reviewer allowlist. Mounted ONCE — a second mount on the
+// authenticated router below was unreachable, because this one matches first, and
+// its only effect was that every report recorded an undefined reporter.
+publicApiRouter.use('/copyright', createOptionalOxyAuth(oxy), copyrightRoutes);
 publicApiRouter.use('/stream', createOptionalOxyAuth(oxy), streamRoutes);
+// Listener uploads: every handler self-enforces (`requireAuth`, plus an owner
+// check inside the query that loads the document). Optional auth rather than the
+// authenticated router for the same reason `/stream` is here — the HLS
+// sub-resources are fetched by media players that carry a `?t=` stream token in
+// the URL and cannot set an Authorization header.
+publicApiRouter.use('/uploads', createOptionalOxyAuth(oxy), uploadsRoutes);
 publicApiRouter.use('/images', imagesPublicRoutes);
 publicApiRouter.use('/preview', createOptionalOxyAuth(oxy), previewRoutes);
 publicApiRouter.use('/lyrics', lyricsRoutes);
@@ -331,7 +346,7 @@ authenticatedApiRouter.use('/library', libraryRoutes);
 authenticatedApiRouter.use('/audio', audioRoutes);
 authenticatedApiRouter.use('/queue', queueRoutes);
 authenticatedApiRouter.use('/music', musicPreferencesRoutes);
-authenticatedApiRouter.use('/copyright', copyrightRoutes);
+authenticatedApiRouter.use('/artist-claims', artistClaimsRoutes);
 authenticatedApiRouter.use('/recommendations', recommendationsRoutes);
 authenticatedApiRouter.use('/recordings', recordingsRoutes);
 authenticatedApiRouter.use('/houses', housesRoutes);
@@ -440,6 +455,17 @@ const bootServer = async () => {
   // Periodic re-crawl of subscribed/popular RSS feeds (same lock-guarded timer
   // pattern; skipped when Redis is unavailable).
   startPodcastRefreshScheduler();
+
+  // Consume durable HLS ingest jobs. Started at boot rather than on first upload
+  // so a restart picks up work queued by an instance that is already gone.
+  // No-ops when REDIS_URL is unset — ingest then runs in-process on the uploader.
+  startIngestWorker();
+
+  // Locker retention: warn at T-14d, hide at T0, delete bytes and document at
+  // T+30d. Lock-guarded in Mongo (not Redis like the two schedulers above)
+  // because this job deletes, and its mutual exclusion must not depend on a
+  // second store that can be down while the deletes still run.
+  startExpirySweeper();
 
   // Drain the moderation outbox. Deliberately NOT lock-guarded like the two
   // schedulers above: every event is claimed under a Mongo lease with an owner

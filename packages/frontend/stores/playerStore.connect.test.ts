@@ -1,4 +1,4 @@
-import type { ConnectPlaybackState, Track } from '@syra/shared-types';
+import type { ConnectPlaybackState, PlayableItem } from '@syra/shared-types';
 import { usePlayerStore } from './playerStore';
 import { resetCastMock } from '@/services/cast/__mocks__/castService';
 import { musicService } from '@/services/musicService';
@@ -118,8 +118,9 @@ jest.mock('./playerStore.config', () => ({
 const THIS_DEVICE = 'device-this';
 const OTHER_DEVICE = 'device-other';
 
-function makeTrack(id: string): Track {
+function makeTrack(id: string): PlayableItem {
   return {
+    kind: 'track',
     id,
     title: `Track ${id}`,
     artistId: 'artist-1',

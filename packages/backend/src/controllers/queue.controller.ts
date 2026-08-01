@@ -1,16 +1,24 @@
 import { Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
 import {
-  Queue,
-  QueueWithMetadata,
-  AddToQueueRequest,
-  ReplaceQueueRequest,
+  addToQueueRequestSchema,
+  removeFromQueueRequestSchema,
   replaceQueueRequestSchema,
+  playableRefSchema,
+  type PlayableItem,
+  type PlayableRef,
+  type PlayableTrack,
+  type Queue,
+  type QueueWithMetadata,
+  type Track,
 } from '@syra/shared-types';
+import { z } from 'zod';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { isDatabaseConnected } from '../utils/database';
 import { TrackModel } from '../models/Track';
-import { toApiFormatArray, formatTracksWithCoverArt } from '../utils/musicHelpers';
+import { UserUploadModel } from '../models/UserUpload';
+import { toUploadTrackDto } from './uploads.controller';
+import { formatTracksWithCoverArt } from '../utils/musicHelpers';
 import {
   getQueue,
   setQueue,
@@ -22,28 +30,91 @@ import {
 } from '../services/queueService';
 import { playableTrackFilter } from '../utils/catalogVisibility';
 
-function uniqueValues(values: string[]): string[] {
-  return [...new Set(values)];
+/**
+ * The queue is addressed by (kind, id), because two collections back it.
+ *
+ * Everything below resolves a `PlayableRef` through the authority for its kind
+ * and NEVER by trying one and falling back to the other: a catalog ref goes
+ * through `playableTrackFilter`, and an upload ref is looked up with
+ * `ownerOxyUserId` in the same query, so somebody else's locker item is not
+ * addressable at all — it resolves to nothing, exactly as a nonexistent id does.
+ */
+function refKey(ref: PlayableRef | PlayableItem): string {
+  return `${ref.kind}:${ref.id}`;
 }
 
-function orderedTracksFromIds(trackIds: string[], tracks: Queue['tracks']): Queue['tracks'] {
-  const trackById = new Map(tracks.map((track) => [track.id, track]));
-  const orderedTracks: Queue['tracks'] = [];
+interface ResolvedRefs {
+  byKey: Map<string, PlayableItem>;
+  /** Refs that resolved to nothing: unplayable, not owned, or not there. */
+  missing: PlayableRef[];
+}
 
-  for (const trackId of trackIds) {
-    const track = trackById.get(trackId);
-    if (track) {
-      orderedTracks.push(track);
-    }
+async function resolvePlayableRefs(
+  refs: PlayableRef[],
+  userId: string,
+): Promise<ResolvedRefs> {
+  const trackIds = [...new Set(refs.filter((ref) => ref.kind === 'track').map((ref) => ref.id))];
+  const uploadIds = [...new Set(refs.filter((ref) => ref.kind === 'upload').map((ref) => ref.id))];
+
+  const validTrackIds = trackIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
+  const validUploadIds = uploadIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
+
+  const [tracks, uploads] = await Promise.all([
+    validTrackIds.length
+      ? TrackModel.find(playableTrackFilter({ _id: { $in: validTrackIds } })).lean()
+      : Promise.resolve([]),
+    validUploadIds.length
+      ? UserUploadModel.find({
+          _id: { $in: validUploadIds },
+          ownerOxyUserId: userId,
+          deletedAt: { $exists: false },
+          // The locker's equivalent of `playableTrackFilter`: a file still being
+          // transcoded has no HLS ladder, so queueing it would queue silence.
+          status: 'ready',
+        }).exec()
+      : Promise.resolve([]),
+  ]);
+
+  const byKey = new Map<string, PlayableItem>();
+
+  const formattedTracks: PlayableTrack[] = (await formatTracksWithCoverArt(tracks)).map(
+    (track: Track): PlayableTrack => ({ ...track, kind: 'track' }),
+  );
+  for (const track of formattedTracks) {
+    byKey.set(refKey(track), track);
   }
 
-  return orderedTracks;
+  for (const upload of uploads) {
+    const item = toUploadTrackDto(upload);
+    byKey.set(refKey(item), item);
+  }
+
+  const seen = new Set<string>();
+  const missing: PlayableRef[] = [];
+  for (const ref of refs) {
+    const key = refKey(ref);
+    if (byKey.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    missing.push(ref);
+  }
+
+  return { byKey, missing };
 }
 
-function missingTrackIds(trackIds: string[], tracks: Queue['tracks']): string[] {
-  const availableTrackIds = new Set(tracks.map((track) => track.id));
-  return uniqueValues(trackIds).filter((trackId) => !availableTrackIds.has(trackId));
+/** Re-expand the caller's ordering (duplicates included) from the resolved set. */
+function orderedItemsFromRefs(refs: PlayableRef[], resolved: ResolvedRefs): PlayableItem[] {
+  const items: PlayableItem[] = [];
+  for (const ref of refs) {
+    const item = resolved.byKey.get(refKey(ref));
+    if (item) items.push(item);
+  }
+  return items;
 }
+
+/** `PUT /api/queue/reorder` has no request schema of its own; it reuses the shared ref. */
+const reorderQueueBodySchema = z.object({
+  refs: z.array(playableRefSchema).min(1),
+});
 
 /**
  * GET /api/queue
@@ -112,30 +183,22 @@ export const addToQueue = async (req: AuthRequest, res: Response, next: NextFunc
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const { trackIds, position }: AddToQueueRequest = req.body;
-
-    if (!Array.isArray(trackIds) || trackIds.length === 0) {
-      return res.status(400).json({ error: 'trackIds must be a non-empty array' });
+    const parsed = addToQueueRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid queue payload', details: parsed.error.issues });
     }
 
-    // Validate track IDs
-    const validTrackIds = trackIds.filter(tid => mongoose.Types.ObjectId.isValid(tid));
-    if (validTrackIds.length === 0) {
-      return res.status(400).json({ error: 'No valid track IDs provided' });
+    const { refs, position } = parsed.data;
+    if (refs.length === 0) {
+      return res.status(400).json({ error: 'refs must be a non-empty array' });
     }
 
-    // Fetch tracks from database
-    const tracks = await TrackModel.find(playableTrackFilter({
-      _id: { $in: validTrackIds },
-    })).lean();
+    const resolved = await resolvePlayableRefs(refs, userId);
+    const orderedTracks = orderedItemsFromRefs(refs, resolved);
 
-    if (tracks.length === 0) {
-      return res.status(404).json({ error: 'No valid tracks found' });
+    if (orderedTracks.length === 0) {
+      return res.status(404).json({ error: 'No playable items found' });
     }
-
-    // Format tracks for API
-    const formattedTracks: Queue['tracks'] = await formatTracksWithCoverArt(tracks);
-    const orderedTracks = orderedTracksFromIds(validTrackIds, formattedTracks);
 
     // Add to queue
     const updatedQueue = await addTracksToQueue(userId, orderedTracks, position);
@@ -177,36 +240,32 @@ export const replaceQueue = async (req: AuthRequest, res: Response, next: NextFu
       });
     }
 
-    const { trackIds, current, context }: ReplaceQueueRequest = parsed.data;
-    if (current >= trackIds.length) {
+    const { refs, current, context } = parsed.data;
+    if (current >= refs.length) {
       return res.status(400).json({ error: 'Current index out of bounds' });
     }
 
-    const invalidTrackIds = uniqueValues(trackIds).filter((trackId) => !mongoose.Types.ObjectId.isValid(trackId));
-    if (invalidTrackIds.length > 0) {
-      return res.status(400).json({
-        error: 'Some track IDs are invalid',
-        invalidTrackIds,
-      });
+    const invalidRefs = refs.filter((ref) => !mongoose.Types.ObjectId.isValid(ref.id));
+    if (invalidRefs.length > 0) {
+      return res.status(400).json({ error: 'Some refs are invalid', invalidRefs });
     }
 
-    const uniqueTrackIds = uniqueValues(trackIds);
-    const tracks = await TrackModel.find(playableTrackFilter({
-      _id: { $in: uniqueTrackIds },
-    })).lean();
-    const formattedTracks: Queue['tracks'] = await formatTracksWithCoverArt(tracks);
-    const unavailableTrackIds = missingTrackIds(trackIds, formattedTracks);
+    const resolved = await resolvePlayableRefs(refs, userId);
 
-    if (unavailableTrackIds.length > 0) {
+    // Replacing a queue is all-or-nothing: a partial queue would silently drop
+    // whatever the caller was actually trying to play. An upload ref belonging to
+    // somebody else lands here as "not playable", indistinguishable from one that
+    // does not exist — which is the point.
+    if (resolved.missing.length > 0) {
       return res.status(404).json({
-        error: 'Some tracks are not playable',
-        unavailableTrackIds,
+        error: 'Some items are not playable',
+        unavailableRefs: resolved.missing,
       });
     }
 
     const queue: Queue = {
       current,
-      tracks: orderedTracksFromIds(trackIds, formattedTracks),
+      tracks: orderedItemsFromRefs(refs, resolved),
       context,
     };
     const success = await setQueue(userId, queue);
@@ -233,13 +292,17 @@ export const removeFromQueue = async (req: AuthRequest, res: Response, next: Nex
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const { trackIds } = req.body;
-
-    if (!Array.isArray(trackIds) || trackIds.length === 0) {
-      return res.status(400).json({ error: 'trackIds must be a non-empty array' });
+    const parsed = removeFromQueueRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid queue payload', details: parsed.error.issues });
     }
 
-    const updatedQueue = await removeTracksFromQueue(userId, trackIds);
+    const { refs } = parsed.data;
+    if (refs.length === 0) {
+      return res.status(400).json({ error: 'refs must be a non-empty array' });
+    }
+
+    const updatedQueue = await removeTracksFromQueue(userId, refs);
 
     if (!updatedQueue) {
       return res.status(503).json({ error: 'Failed to update queue' });
@@ -247,7 +310,7 @@ export const removeFromQueue = async (req: AuthRequest, res: Response, next: Nex
 
     res.json({
       queue: updatedQueue,
-      removed: trackIds.length,
+      removed: refs.length,
     });
   } catch (error) {
     next(error);
@@ -266,28 +329,30 @@ export const reorderQueueHandler = async (req: AuthRequest, res: Response, next:
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const { trackIds } = req.body;
-
-    if (!Array.isArray(trackIds) || trackIds.length === 0) {
-      return res.status(400).json({ error: 'trackIds must be a non-empty array' });
+    const parsed = reorderQueueBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid queue payload', details: parsed.error.issues });
     }
+
+    const { refs } = parsed.data;
 
     const queue = await getQueue(userId);
     if (!queue || queue.tracks.length === 0) {
       return res.status(400).json({ error: 'Queue is empty' });
     }
 
-    // Validate all track IDs exist in queue
-    const queueTrackIds = new Set(queue.tracks.map(t => t.id));
-    const invalidTrackIds = trackIds.filter(tid => !queueTrackIds.has(tid));
-    if (invalidTrackIds.length > 0) {
+    // Reorder addresses items ALREADY in the queue — already resolved, already
+    // owner-checked — so it needs no database read, only that every ref names one.
+    const queueKeys = new Set(queue.tracks.map(refKey));
+    const invalidRefs = refs.filter((ref) => !queueKeys.has(refKey(ref)));
+    if (invalidRefs.length > 0) {
       return res.status(400).json({
-        error: 'Some track IDs are not in the queue',
-        invalidTrackIds,
+        error: 'Some refs are not in the queue',
+        invalidRefs,
       });
     }
 
-    const updatedQueue = await reorderQueue(userId, trackIds);
+    const updatedQueue = await reorderQueue(userId, refs);
 
     if (!updatedQueue) {
       return res.status(503).json({ error: 'Failed to reorder queue' });
@@ -295,7 +360,7 @@ export const reorderQueueHandler = async (req: AuthRequest, res: Response, next:
 
     res.json({
       queue: updatedQueue,
-      reordered: trackIds.length,
+      reordered: refs.length,
     });
   } catch (error) {
     next(error);

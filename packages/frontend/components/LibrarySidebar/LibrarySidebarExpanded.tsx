@@ -14,14 +14,16 @@ import { Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { useOxy } from '@oxyhq/services';
+import { useUploads } from '@/hooks/useUploads';
 import { Image } from 'expo-image';
 import { Playlist, Album, Artist } from '@syra/shared-types';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { EmptyState } from '@/components/common/EmptyState';
 import type { LibrarySortOrder } from '@/stores/uiStore';
 
-type LibraryFilter = 'All' | 'Playlists' | 'Artists' | 'Albums' | 'Podcasts';
-type LibraryEntryKind = 'playlist' | 'liked' | 'artist' | 'album';
+/** Exported so the sidebar's filter state cannot drift from the chips it renders. */
+export type LibraryFilter = 'All' | 'Playlists' | 'Artists' | 'Albums' | 'Uploads' | 'Podcasts';
+type LibraryEntryKind = 'playlist' | 'liked' | 'artist' | 'album' | 'uploads';
 
 interface LibraryEntry {
   id: string;
@@ -54,7 +56,7 @@ interface LibrarySidebarExpandedProps {
   onRetry: () => Promise<void>;
 }
 
-const FILTERS: LibraryFilter[] = ['All', 'Playlists', 'Artists', 'Albums', 'Podcasts'];
+const FILTERS: LibraryFilter[] = ['All', 'Playlists', 'Artists', 'Albums', 'Uploads', 'Podcasts'];
 
 function filterAllowsEntry(filter: LibraryFilter, kind: LibraryEntryKind): boolean {
   if (filter === 'All') {
@@ -69,6 +71,9 @@ function filterAllowsEntry(filter: LibraryFilter, kind: LibraryEntryKind): boole
   if (filter === 'Albums') {
     return kind === 'album';
   }
+  if (filter === 'Uploads') {
+    return kind === 'uploads';
+  }
   return false;
 }
 
@@ -78,6 +83,9 @@ function entryIcon(kind: LibraryEntryKind): keyof typeof MaterialCommunityIcons.
   }
   if (kind === 'artist') {
     return 'account-music';
+  }
+  if (kind === 'uploads') {
+    return 'folder-music';
   }
   return 'playlist-music';
 }
@@ -109,6 +117,9 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
   const router = useRouter();
   const theme = useTheme();
   const { isAuthenticated, canUsePrivateApi } = useOxy();
+  // The listener's own uploads: private by construction, so a quick-access entry
+  // of their own rather than a row mixed in with saved catalogue albums.
+  const { total: uploadCount } = useUploads();
 
   const entries = useMemo<LibraryEntry[]>(() => {
     const likedSongs: LibraryEntry[] = isAuthenticated
@@ -118,6 +129,17 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
           title: t('library.likedSongs'),
           subtitle: `Playlist • ${likedTracksCount} ${likedTracksCount === 1 ? 'song' : 'songs'}`,
           href: '/library/liked',
+          imageShape: 'square',
+        }]
+      : [];
+
+    const uploadsEntry: LibraryEntry[] = isAuthenticated && uploadCount > 0
+      ? [{
+          id: 'uploads',
+          kind: 'uploads',
+          title: t('uploads.locker.title'),
+          subtitle: t('uploads.locker.trackCount', { count: uploadCount }),
+          href: '/library/uploads',
           imageShape: 'square',
         }]
       : [];
@@ -155,7 +177,7 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
     const normalizedSearch = searchQuery.trim().toLowerCase();
     // `type` order is this concatenation itself: liked songs, then playlists,
     // artists and albums.
-    const visible = [...likedSongs, ...playlistEntries, ...artistEntries, ...albumEntries].filter((entry) => {
+    const visible = [...likedSongs, ...uploadsEntry, ...playlistEntries, ...artistEntries, ...albumEntries].filter((entry) => {
       if (!filterAllowsEntry(activeFilter, entry.kind)) {
         return false;
       }
@@ -181,6 +203,8 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
     savedAlbums,
     searchQuery,
     sortOrder,
+    t,
+    uploadCount,
   ]);
 
   const isGrid = displayMode === 'grid';

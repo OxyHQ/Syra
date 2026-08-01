@@ -5,10 +5,10 @@
  * rather than duplicating them; only the entity-specific orchestration (load the
  * `Episode`, fetch its source audio from S3, write back hls/status) lives here.
  *
- * `storePackagedHls` is invoked with `{ trackId: episodeId, artistId: podcastId }`
- * so the AES key is stored in `TrackKey` keyed by the episode id and HLS files
- * land under `hls/<podcastId>/<episodeId>/…` — the same key store the episode
- * stream `/key` endpoint reads.
+ * `storePackagedHls` is invoked with `recordId: episodeId` and a key builder over
+ * `getS3HlsKey(podcastId, episodeId, …)`, so the AES key is stored in `TrackKey`
+ * keyed by the episode id and HLS files land under `hls/<podcastId>/<episodeId>/…`
+ * — the same key store the episode stream `/key` endpoint reads.
  *
  * Status transitions: processing (on enqueue) → ready (success) | failed (error).
  */
@@ -19,12 +19,12 @@ import path from 'path';
 import { Readable } from 'stream';
 import { EpisodeModel, IEpisode } from '../../models/Episode';
 import { logger } from '../../utils/logger';
-import { getS3PodcastEpisodeAudioKey } from '../../config/s3.config';
+import { getS3HlsKey, getS3PodcastEpisodeAudioKey } from '../../config/s3.config';
 import { streamFromS3 } from '../s3Service';
 import { packageToEncryptedHls } from '../ingest/hlsPackager';
 import type { PackageOptions, PackageResult } from '../ingest/hlsPackager';
 import { storePackagedHls } from '../ingest/hlsStorage';
-import type { StoredHls } from '../ingest/hlsStorage';
+import type { StoreHlsTarget, StoredHls } from '../ingest/hlsStorage';
 import { buildStreamKeyUriFor } from '../ingest/streamKeyUri';
 
 export interface EpisodeFetchSourceResult {
@@ -35,7 +35,7 @@ export interface EpisodeFetchSourceResult {
 export interface IngestEpisodeDeps {
   fetchSource?: (episode: IEpisode) => Promise<EpisodeFetchSourceResult>;
   packageHls?: (opts: PackageOptions) => Promise<PackageResult>;
-  storeHls?: (result: PackageResult, ids: { trackId: string; artistId: string }) => Promise<StoredHls>;
+  storeHls?: (result: PackageResult, target: StoreHlsTarget) => Promise<StoredHls>;
   keyUri?: string;
 }
 
@@ -104,9 +104,11 @@ export async function ingestEpisode(episodeId: string, deps?: IngestEpisodeDeps)
     outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'episode-hls-'));
     const result = await packageHls({ inputPath: fetched.localPath, outputDir, keyUri });
 
+    // Episodes keep their existing `hls/{podcastId}/{episodeId}/…` layout — the
+    // key builder is now supplied per caller, so this is the same output as before.
     const stored = await doStoreHls(result, {
-      trackId: episodeId,
-      artistId: episode.podcastId.toString(),
+      recordId: episodeId,
+      buildKey: (relPath) => getS3HlsKey(episode.podcastId.toString(), episodeId, relPath),
     });
 
     episode.hls = stored.hls;

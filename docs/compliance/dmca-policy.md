@@ -131,8 +131,10 @@ Under the exemption, the obligation is limited to:
 
 ### 5.2 Best-Efforts Measures (Pre-Exemption Expiry)
 
-- The ACRCloud fingerprint hook (`services/compliance/acrcloud.ts`) is the planned pre-publish screen. Once credentials are configured, `screenBeforePublish()` gates uploads against known commercial recordings.
-- Maintain a list of takedown-notified content to prevent re-upload (`CopyrightReport` model with `trackId` + `fingerprintHash` when available).
+- The pre-publish screen is **local and free**: Chromaprint (`fpcalc`) fingerprints every upload, `services/uploads/provenanceSignals.ts` reads the file's tags forensically (iTunes purchase atoms, store provenance, CD-rip markers), and ISRCs are resolved against the MusicBrainz slice in `IsrcRegistry`. A `commercial` verdict blocks the public path outright. No third-party identification service is used, and none is planned — paid screening was declined, so nothing here should be read as waiting on credentials.
+- Takedowns are purged from private lockers as well as the catalogue, matched by `sha256` and by Chromaprint so a re-encode does not survive (`services/compliance/takedown.ts`).
+- Repeat infringers are terminated at three strikes, whether they hold an artist profile (`CatalogEntity.strikes`) or are an ordinary account contributing to the catalogue (`ContributorStanding`).
+- Maintain a list of takedown-notified content to prevent re-upload (`CopyrightReport` model with `trackId`, plus `TrackFingerprint` for acoustic matching).
 
 ---
 

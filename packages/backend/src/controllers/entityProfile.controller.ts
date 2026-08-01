@@ -1,7 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
-import type { EntityProfile, EntityMusic, EntityAppearsIn } from '@syra/shared-types';
+import type {
+  EntityProfile,
+  EntityMusic,
+  EntityAppearsIn,
+  ArtistOrigin,
+  SourceProvenance,
+} from '@syra/shared-types';
 import { CatalogEntityModel, PersonModel, type CatalogEntityType } from '../models/CatalogEntity';
 import { PodcastModel } from '../models/Podcast';
 import { hiddenShowEpisodeFilter } from '../utils/podcastDiscovery';
@@ -20,6 +26,10 @@ import {
   playableTrackFilter,
 } from '../utils/catalogVisibility';
 import { findAlbumsWithPlayableTracks } from '../utils/playableContainers';
+import {
+  loadArtistProfileSections,
+  type ArtistProfileSource,
+} from '../services/catalog/artistProfile';
 import { serializePodcast, serializeEpisode } from '../services/podcasts/podcastSerializers';
 import { loadShowArtworkByPodcastId } from '../services/podcasts/episodeShowArtwork';
 import {
@@ -51,12 +61,25 @@ type FormattedArtistProfile = {
   verified?: boolean;
   stats?: EntityProfile['stats'];
   links?: EntityProfile['links'];
+  country?: string;
+  imageLicence?: EntityProfile['imageLicence'];
+  sortName?: string;
+  disambiguation?: string;
+  artistType?: EntityProfile['artistType'];
+  activeFrom?: string;
+  activeUntil?: string;
+  aliases?: string[];
+  labels?: string[];
+  members?: EntityProfile['members'];
 };
 
 /** The display fields shared by the old artist screen — pulled from the (formatted) Artist doc. */
 type ArtistDisplayFields = Pick<
   EntityProfile,
-  'image' | 'imageSizes' | 'primaryColor' | 'secondaryColor' | 'bio' | 'genres' | 'verified' | 'stats' | 'links'
+  | 'image' | 'imageSizes' | 'primaryColor' | 'secondaryColor' | 'bio' | 'genres'
+  | 'verified' | 'stats' | 'links' | 'country' | 'imageLicence' | 'sortName'
+  | 'disambiguation' | 'artistType' | 'activeFrom' | 'activeUntil' | 'aliases'
+  | 'labels' | 'members'
 >;
 
 function artistDisplayFields(formatted: FormattedArtistProfile | null): ArtistDisplayFields {
@@ -70,6 +93,21 @@ function artistDisplayFields(formatted: FormattedArtistProfile | null): ArtistDi
     verified: formatted?.verified,
     stats: formatted?.stats,
     links: formatted?.links,
+    country: formatted?.country,
+    /**
+     * Shipped with the image it describes. CC BY-SA is satisfied by naming the
+     * author and linking the licence WHERE THE PHOTO IS SHOWN, so this travelling
+     * with the profile is what makes displaying a Commons photo lawful at all.
+     */
+    imageLicence: formatted?.imageLicence,
+    sortName: formatted?.sortName,
+    disambiguation: formatted?.disambiguation,
+    artistType: formatted?.artistType,
+    activeFrom: formatted?.activeFrom,
+    activeUntil: formatted?.activeUntil,
+    aliases: formatted?.aliases,
+    labels: formatted?.labels,
+    members: formatted?.members,
   };
 }
 
@@ -95,6 +133,27 @@ async function loadArtistMusic(
   const formattedAlbums = albums.map((album) => formatAlbumWithCoverArt(album)).filter(Boolean);
   const formattedTracks = await formatTracksWithCoverArt(tracks);
   return { tracks: formattedTracks, albums: formattedAlbums };
+}
+
+/**
+ * The artist-only sections of a profile: discography split by release type, the
+ * tracks they were credited on without being the primary artist, playlists that
+ * include them, and the claim/provenance state.
+ *
+ * Loaded for BOTH artist branches — an artist id directly, and a person id that
+ * links to one — because a profile shows the same shelves however it was
+ * addressed. `trackIds` is the list already under `music.tracks`, so the
+ * contributed-versus-own distinction is computed for exactly the tracks rendered.
+ */
+async function loadArtistSections(
+  artist: ArtistProfileSource,
+  music: EntityMusic,
+  viewerOxyUserId?: string,
+): Promise<Pick<EntityProfile, 'discography' | 'creditedOn' | 'playlists' | 'profileState'>> {
+  return loadArtistProfileSections(artist, {
+    trackIds: music.tracks.map((track) => track.id),
+    viewerOxyUserId,
+  });
 }
 
 /**
@@ -168,6 +227,23 @@ type CatalogEntityLean = {
   href?: string;
   linkedOxyUserId?: string;
   linkedArtistId?: mongoose.Types.ObjectId;
+  /**
+   * Artist-side fields the profile sections read.
+   *
+   * Listed even though the query has no projection and loads them anyway,
+   * because `ArtistProfileSource` makes every one of them optional — so a caller
+   * that failed to load `nameKey` would still typecheck and would silently return
+   * an empty "credited on" section. Naming them here is what makes the
+   * requirement visible at the read.
+   */
+  country?: string;
+  nameKey?: string;
+  origin?: ArtistOrigin;
+  claimable?: boolean;
+  claimedByOxyUserId?: string;
+  ownerOxyUserId?: string;
+  acceptsContributions?: boolean;
+  sources?: SourceProvenance[];
 };
 
 /**
@@ -193,6 +269,8 @@ export const getEntityProfile = async (req: Request, res: Response, next: NextFu
     }
 
     // Artist entity → profile + music; attach a linked person's appearances.
+    const viewerOxyUserId = getRequestUserId(req as AuthRequest);
+
     if (entity.type === 'artist') {
       const formatted = formatArtistWithImage(entity) as FormattedArtistProfile | null;
       const [music, linkedPerson] = await Promise.all([
@@ -208,6 +286,7 @@ export const getEntityProfile = async (req: Request, res: Response, next: NextFu
         linkedOxyUserId: linkedPerson?.linkedOxyUserId,
         music,
         appearsIn: linkedPerson ? await loadAppearsIn(toPersonLike(linkedPerson)) : undefined,
+        ...await loadArtistSections(entity, music, viewerOxyUserId),
       };
       return res.json({ data: profile });
     }
@@ -225,10 +304,14 @@ export const getEntityProfile = async (req: Request, res: Response, next: NextFu
 
     let music: EntityMusic | undefined;
     let linkedArtistFields: ArtistDisplayFields = artistDisplayFields(null);
+    // A person page that links to an artist shows the SAME shelves as that
+    // artist's own page — the profile is the artist's however it was addressed.
+    let artistSections: Awaited<ReturnType<typeof loadArtistSections>> | undefined;
     if (linkedArtist) {
       const formattedLinked = formatArtistWithImage(linkedArtist) as FormattedArtistProfile | null;
       music = await loadArtistMusic(linkedArtist._id.toString());
       linkedArtistFields = artistDisplayFields(formattedLinked);
+      artistSections = await loadArtistSections(linkedArtist, music, viewerOxyUserId);
     }
 
     const profile: EntityProfile = {
@@ -243,6 +326,7 @@ export const getEntityProfile = async (req: Request, res: Response, next: NextFu
       linkedOxyUserId: entity.linkedOxyUserId,
       music,
       appearsIn,
+      ...artistSections,
     };
     return res.json({ data: profile });
   } catch (error) {

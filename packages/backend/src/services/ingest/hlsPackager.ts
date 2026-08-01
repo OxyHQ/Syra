@@ -23,7 +23,18 @@ const EXEC_OPTS = { maxBuffer: 32 * 1024 * 1024 } as const;
 
 // ── Public API ──────────────────────────────────────────────────────────────
 
+/** Catalog ladder: adaptive switching across three qualities. */
 export const HLS_BITRATES_KBPS = [96, 160, 320] as const;
+
+/**
+ * Personal-locker ladder: a single rendition.
+ *
+ * A locker file is audible to exactly one listener, so the adaptive ladder buys
+ * nothing and transcoding cost drops to a third. Everything else is identical to
+ * the catalog path — same AES-128 encrypted HLS, same per-track key persisted as
+ * a TrackKey — so the player needs no branch.
+ */
+export const LOCKER_HLS_BITRATES_KBPS = [160] as const;
 
 export interface PackagedRendition {
   bitrateKbps: number;
@@ -49,6 +60,11 @@ export interface PackageOptions {
   outputDir: string;
   /** URI placed in each HLS key line (default: "key") */
   keyUri?: string;
+  /**
+   * Rendition ladder in kbps (default: `HLS_BITRATES_KBPS`). Pass
+   * `LOCKER_HLS_BITRATES_KBPS` for personal-locker uploads.
+   */
+  bitratesKbps?: readonly number[];
 }
 
 // ── Loudnorm measurement ────────────────────────────────────────────────────
@@ -72,6 +88,13 @@ async function measureLoudness(
       [
         '-nostdin',
         '-i', inputPath,
+        // `-f null` tolerates a cover-art video stream where the MP4 muxer does
+        // not, so this pass was never the one that failed. Kept in step with the
+        // transcode anyway: all three ffmpeg call sites should only ever see
+        // audio, and an input carrying a real video stream rather than a still
+        // would otherwise decode it here for nothing. Verified not to change the
+        // measurement — the same file reports input_i "-24.33" either way.
+        '-vn',
         '-af', 'loudnorm=I=-14:TP=-1:LRA=11:print_format=json',
         '-f', 'null',
         '-',
@@ -126,6 +149,13 @@ async function transcodeRendition(
     [
       '-nostdin',
       '-i', inputPath,
+      // Drop every video stream. ffmpeg exposes embedded cover art (ID3 APIC,
+      // FLAC PICTURE, MP4 covr) as a VIDEO stream, so default stream selection
+      // picks one up and tries to encode it to H.264 alongside the audio — which
+      // the MP4 muxer then rejects ("Could not find tag for codec h264"), failing
+      // the whole transcode. Most real music files carry artwork, so without this
+      // the pipeline fails for the common case and succeeds only for bare audio.
+      '-vn',
       '-af', loudnormFilter,
       '-c:a', 'aac',
       '-b:a', `${bitrateKbps}k`,
@@ -207,6 +237,11 @@ function buildMasterPlaylist(renditions: PackagedRendition[]): string {
 export async function packageToEncryptedHls(opts: PackageOptions): Promise<PackageResult> {
   const { inputPath, outputDir } = opts;
   const keyUri = opts.keyUri ?? 'key';
+  const bitratesKbps = opts.bitratesKbps ?? HLS_BITRATES_KBPS;
+
+  if (bitratesKbps.length === 0) {
+    throw new Error('packageToEncryptedHls: bitratesKbps must contain at least one rendition');
+  }
 
   fs.mkdirSync(outputDir, { recursive: true });
 
@@ -222,7 +257,7 @@ export async function packageToEncryptedHls(opts: PackageOptions): Promise<Packa
   try {
     const renditions: PackagedRendition[] = [];
 
-    for (const bitrateKbps of HLS_BITRATES_KBPS) {
+    for (const bitrateKbps of bitratesKbps) {
       const mp4Path = await transcodeRendition(inputPath, bitrateKbps, measurement, tmpDir);
       const fragPath = await fragmentMp4(mp4Path, tmpDir, bitrateKbps);
       const rendition = await packageRendition(fragPath, bitrateKbps, keyHex, keyUri, outputDir);

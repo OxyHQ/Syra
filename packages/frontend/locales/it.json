@@ -391,7 +391,28 @@
       "message": "Qualcosa è andato storto durante il caricamento del profilo. Riprova.",
       "session": "Non siamo riusciti a confermare la tua sessione. Controlla la connessione e riprova."
     },
-    "empty": "Ancora niente da mostrare"
+    "empty": "Ancora niente da mostrare",
+    "singlesAndEps": "Singoli ed EP",
+    "compilations": "Raccolte",
+    "appearsOn": "Compare in",
+    "inPlaylists": "Nelle playlist",
+    "contributedBadge": "Contribuita",
+    "externallySourced": "Importato da fonti pubbliche, non scritto dall'artista: {{fields}}. Chi rivendica questo profilo potrà sostituirlo.",
+    "linkFailed": "Impossibile aprire il link.",
+    "claim": {
+      "title": "Sei tu, {{name}}?",
+      "body": "Questo profilo è stato creato dai tag di un file caricato da qualcun altro. Se sei questo artista puoi chiedere di prenderlo in carico: decidere cosa resta pubblicato, correggere i dati e scegliere se altre persone possono contribuire registrazioni.",
+      "cta": "Rivendica questo profilo",
+      "evidenceLabel": "Come possiamo verificare che sei tu?",
+      "evidencePlaceholder": "Un link al tuo sito ufficiale o ai social, al tuo distributore, o qualsiasi cosa dimostri che è opera tua.",
+      "submit": "Invia richiesta",
+      "submitted": "Richiesta inviata per la revisione",
+      "failed": "Impossibile inviare la richiesta",
+      "pendingTitle": "Richiesta in revisione",
+      "pendingBody": "Ogni richiesta è rivista da una persona: nulla viene concesso automaticamente, perché questi profili nascono da file caricati da sconosciuti. Ti faremo sapere in ogni caso.",
+      "signInRequired": "Accedi per rivendicare questo profilo."
+    },
+    "emptyContributed": "Questo profilo è stato creato da un file caricato, quindi qui c'è ancora poco. Stiamo raccogliendo dati da database musicali pubblici: compariranno man mano che arrivano."
   },
   "album": {
     "notFound": "Album non trovato",
@@ -621,5 +642,110 @@
   },
   "lyrics": {
     "unavailable": "Nessun testo disponibile"
+  },
+  "uploads": {
+    "seo": {
+      "title": "Carica musica - Syra",
+      "description": "Carica la tua musica nel tuo archivio privato o contribuiscila al catalogo di Syra"
+    },
+    "title": "Carica musica",
+    "subtitle": "Tieni i file in privato nel tuo archivio, oppure contribuiscili al catalogo pubblico sotto l'artista indicato nel file.",
+    "pick": "Scegli file audio",
+    "pickMore": "Aggiungi altri file",
+    "emptyHint": "MP3, FLAC, OGG, M4A e WAV, fino a 200 MB ciascuno.",
+    "remove": "Rimuovi questo file",
+    "uploading": "Caricamento…",
+    "submit_one": "Carica 1 file",
+    "submit_other": "Carica {{count}} file",
+    "unknownArtist": "Artista sconosciuto",
+    "openLocker": "Apri i tuoi caricamenti",
+    "signedOut": "Accedi per caricare musica",
+    "signedOutHint": "I tuoi caricamenti sono privati del tuo account, quindi serve una sessione.",
+    "destination": {
+      "private": "Archivio privato",
+      "privateHint": "Puoi ascoltarlo solo tu. Non viene pubblicato nulla e nulla finisce nel catalogo.",
+      "public": "Contribuisci al catalogo",
+      "publicHint": "Pubblicato per tutti e attribuito all'artista indicato nei tag del file, non a te. Syra controlla prima il file."
+    },
+    "details": {
+      "toggle": "Aggiungi dettagli",
+      "hint": "Lascia vuoto per tenere quello che dicono i tag del file. Quello che scrivi qui li sostituisce.",
+      "title": "Titolo",
+      "artist": "Artista",
+      "album": "Album"
+    },
+    "attestation": {
+      "title": "Dichiarazione di diritti",
+      "statement": "Detengo i diritti di questa registrazione, oppure ho il permesso del titolare per distribuirla su Syra. Capisco che questa dichiarazione viene registrata insieme al mio caricamento.",
+      "required": "Accetta la dichiarazione di diritti prima di contribuire al catalogo."
+    },
+    "matched": {
+      "title": "Già su Syra",
+      "body": "Questa registrazione è già nel catalogo, quindi il tuo file non è stato trasferito: non c'è nulla da caricare. Aggiungi la versione del catalogo alla tua libreria e si riproduce da lì.",
+      "addToLibrary": "Aggiungi alla libreria",
+      "added": "Nella tua libreria"
+    },
+    "duplicate": {
+      "title": "Già nei tuoi caricamenti",
+      "body": "Avevi già caricato esattamente questo file. È ancora nel tuo archivio."
+    },
+    "stored": {
+      "title": "Salvato nel tuo archivio",
+      "processing": "Preparazione per la riproduzione…",
+      "ready": "Pronto da riprodurre",
+      "failed": "Syra non è riuscita a elaborare questo file."
+    },
+    "published": {
+      "title": "Pubblicato nel catalogo",
+      "body": "È attribuito all'artista indicato nel file. Se quell'artista arriva su Syra potrà rivendicare il profilo e decidere che farne."
+    },
+    "blocked": {
+      "title": "Non pubblicato",
+      "evidence": "Cosa è stato trovato nel file",
+      "keepPrivate": "Salvalo invece nel mio archivio",
+      "artist_unresolved": "Questo file non ha il tag dell'artista, e Syra non è riuscita a dedurlo da nient'altro. Il catalogo pubblico ha bisogno di un artista: senza non c'è nessuno da accreditare, nessun profilo che l'artista vero possa rivendicare e nessun destinatario per una rivendicazione di diritti. Aggiungi l'artista in «Aggiungi dettagli», oppure tieni il file nel tuo archivio privato, dove un artista sconosciuto va benissimo.",
+      "artist_not_found": "L'artista a cui punta questo file non esiste su Syra.",
+      "artist_name_denylisted": "Il nome dell'artista in questo file è un segnaposto del tagger — «Unknown Artist», «Various Artists» o simili — e non può diventare un profilo di catalogo. Scrivi l'artista vero in «Aggiungi dettagli», oppure tieni il file in privato.",
+      "artist_contributions_closed": "Questo artista è già su Syra e non ha aperto la sua pagina ai contributi di altre persone. Solo lui può pubblicare le proprie registrazioni. Puoi comunque tenere questo file nel tuo archivio privato.",
+      "artist_uploads_disabled": "Questo artista non può ricevere nuove tracce al momento.",
+      "contributor_blocked": "Il tuo account non può più contribuire al catalogo pubblico: sono state accolte più segnalazioni di violazione del copyright su registrazioni che hai pubblicato. Riguarda il tuo account, non questo artista né questo file. Il tuo archivio privato non è toccato: puoi comunque tenere il file e ascoltarlo. Se pensi sia un errore, contatta l'assistenza per fare ricorso.",
+      "attestation_required": "Per contribuire al catalogo bisogna prima accettare la dichiarazione di diritti.",
+      "commercial_provenance": "Questo file porta i segni di una pubblicazione commerciale: tag di acquisto in un negozio, identificativi di un'etichetta, o una registrazione commerciale nota. Syra non lo pubblicherà. Puoi comunque tenerlo nel tuo archivio privato: ascoltare la tua copia non è come distribuirla."
+    },
+    "locker": {
+      "seo": {
+        "title": "I tuoi caricamenti - Syra",
+        "description": "La musica che hai caricato nel tuo archivio privato di Syra"
+      },
+      "title": "I tuoi caricamenti",
+      "subtitle": "I tuoi file. Puoi ascoltarli solo tu, e non compaiono mai nella ricerca, in esplora o nella libreria di nessun altro.",
+      "empty": "Non hai ancora caricato nulla",
+      "emptyHint": "Qui vivono i file che carichi in privato.",
+      "loadError": "Impossibile caricare i tuoi file",
+      "trackCount_one": "{{count}} file",
+      "trackCount_other": "{{count}} file",
+      "otherFiles": "Altri file",
+      "actions": "Opzioni del file",
+      "editHint": "Correggi quello che Syra ha letto dai tag del file.",
+      "save": "Salva le modifiche",
+      "saved": "Salvato",
+      "saveFailed": "Impossibile salvare le modifiche",
+      "contributeHint": "Contribuisci questo file al catalogo pubblico, attribuito al suo artista e non a te.",
+      "contribute": "Contribuisci al catalogo",
+      "contributed": "Contribuito al catalogo",
+      "contributeFailed": "Impossibile contribuire questo file",
+      "delete": "Elimina questo file",
+      "deleted": "Eliminato",
+      "deleteFailed": "Impossibile eliminare questo file",
+      "expiringToday": "Scade oggi",
+      "expiringIn_one": "Scade tra {{count}} giorno",
+      "expiringIn_other": "Scade tra {{count}} giorni",
+      "untitledAlbum": "Pubblicazione senza titolo"
+    },
+    "errors": {
+      "picker": "Impossibile aprire il selettore di file.",
+      "upload": "Il caricamento non è riuscito. Riprova.",
+      "session": "Non siamo riusciti a confermare la tua sessione."
+    }
   }
 }

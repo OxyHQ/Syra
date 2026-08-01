@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "dev": "tsc --watch",
     "clean": "rm -rf dist",
-    "test": "echo \"No tests specified\" && exit 0",
+    "test": "bun test src",
     "prepublishOnly": "bun run build"
   },
   "keywords": [

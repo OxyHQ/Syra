@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, View, Text, Pressable, Image, ScrollView, Platform } from 'react-native';
+import { StyleSheet, View, Text, Pressable, Image, ScrollView, Platform, Linking } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import Animated, {
@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { toast } from '@oxyhq/bloom/toast';
 import { Track } from '@syra/shared-types';
 import { entityService } from '@/services/entityService';
+import { ArtistClaimCta } from '@/components/artist/ArtistClaimCta';
 import { usePlayerStore } from '@/stores/playerStore';
 import { usePlayEntity } from '@/hooks/usePlayEntity';
 import SEO from '@/components/SEO';
@@ -32,12 +33,41 @@ import { useAuthGate } from '@/hooks/useAuthGate';
 import { CATALOG_QUERY_KEYS } from '@/hooks/useLibraryCollections';
 import { isNotFoundError } from '@/utils/api';
 import { webViewStyle } from '@/utils/webStyles';
+import { createScopedLogger } from '@/utils/logger';
+
+const logger = createScopedLogger('EntityProfile');
 
 const HEADER_HEIGHT = 400;
 
 type EntityProfile = NonNullable<Awaited<ReturnType<typeof entityService.getEntityProfile>>>;
 type RelatedArtist = NonNullable<ReturnType<typeof useRelatedArtists>['data']>['artists'][number];
 type AppearsInEpisode = NonNullable<NonNullable<EntityProfile['appearsIn']>['episodes']>[number];
+
+/** One album shelf: the release-type split the backend already computed. */
+interface AlbumShelf {
+  key: string;
+  titleKey: string;
+  albums: NonNullable<EntityProfile['discography']>['albums'];
+}
+
+/**
+ * Outbound links, in the order they are rendered.
+ *
+ * A declared list rather than `Object.entries(links)`: it fixes the order, and
+ * it pairs each key with its icon at the point the key is named, so a link added
+ * to the contract cannot appear here without someone choosing how it looks.
+ */
+const ARTIST_LINKS: { key: keyof NonNullable<EntityProfile['links']>; icon: keyof typeof Ionicons.glyphMap; label: string }[] = [
+  { key: 'website', icon: 'globe-outline', label: 'Website' },
+  { key: 'instagram', icon: 'logo-instagram', label: 'Instagram' },
+  { key: 'x', icon: 'logo-twitter', label: 'X' },
+  { key: 'youtube', icon: 'logo-youtube', label: 'YouTube' },
+  { key: 'soundcloud', icon: 'cloud-outline', label: 'SoundCloud' },
+  { key: 'bandcamp', icon: 'musical-notes-outline', label: 'Bandcamp' },
+  { key: 'discogs', icon: 'disc-outline', label: 'Discogs' },
+  { key: 'wikipedia', icon: 'book-outline', label: 'Wikipedia' },
+  { key: 'wikidata', icon: 'library-outline', label: 'Wikidata' },
+];
 
 /**
  * Unified entity profile screen (`/p/[id]`) — a merged music **artist** +
@@ -130,6 +160,24 @@ const EntityProfileScreen: React.FC = () => {
   const handleTrackPress = (track: Track) => {
     const index = Math.max(0, tracks.findIndex((item) => item.id === track.id));
     playTrackList(tracks, index, { type: 'artist', id: artistId, name: displayName });
+  };
+
+  /**
+   * Play a track this artist is only credited on.
+   *
+   * Played on its own rather than inside `tracks`: `creditedOn` entries are not
+   * in this artist's own list, so seeding the queue from `tracks` would either
+   * fail to find the track or start something else entirely.
+   */
+  const handleCreditedTrackPress = (track: Track) => {
+    playTrackList([track], 0, { type: 'track', id: track.id, name: track.title });
+  };
+
+  const handleOpenLink = (url: string) => {
+    void Linking.openURL(url).catch((error: unknown) => {
+      toast.error(t('artist.linkFailed'));
+      logger.warn('Failed to open artist link', { url, error });
+    });
   };
 
   // A station seeded on this artist — the endless counterpart to "play all",
@@ -254,6 +302,9 @@ const EntityProfileScreen: React.FC = () => {
       onNavigateAlbum={(album) => router.push(`/album/${album}`)}
       onNavigatePodcast={(podcast) => router.push({ pathname: '/podcasts/[id]', params: { id: podcast } })}
       onNavigateEpisode={(episode) => router.push({ pathname: '/episode/[id]', params: { id: episode } })}
+      onNavigatePlaylist={(playlist) => router.push({ pathname: '/playlist/[id]', params: { id: playlist } })}
+      onCreditedTrackPress={handleCreditedTrackPress}
+      onOpenLink={handleOpenLink}
     />
   );
 };
@@ -284,6 +335,15 @@ interface EntityProfileViewProps {
   onNavigateAlbum: (albumId: string) => void;
   onNavigatePodcast: (podcastId: string) => void;
   onNavigateEpisode: (episodeId: string) => void;
+  onNavigatePlaylist: (playlistId: string) => void;
+  /**
+   * Play a track this artist is only CREDITED on. Separate from `onTrackPress`
+   * because the context differs: a credited track belongs to somebody else's
+   * catalogue, so it must not be played as if it were an item in this artist's
+   * own list — the queue would then be a list this page never showed.
+   */
+  onCreditedTrackPress: (track: Track) => void;
+  onOpenLink: (url: string) => void;
 }
 
 /**
@@ -318,6 +378,9 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
   onNavigateAlbum,
   onNavigatePodcast,
   onNavigateEpisode,
+  onNavigatePlaylist,
+  onCreditedTrackPress,
+  onOpenLink,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -325,10 +388,51 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
   const scrollOffset = useScrollViewOffset(scrollRef);
 
   const tracks = entity.music?.tracks ?? [];
-  const albums = entity.music?.albums ?? [];
   const podcasts = entity.appearsIn?.podcasts ?? [];
   const episodes = entity.appearsIn?.episodes ?? [];
   const canPlay = tracks.length > 0;
+
+  const discography = entity.discography;
+  const creditedOn = entity.creditedOn ?? [];
+  const playlists = entity.playlists ?? [];
+  const profileState = entity.profileState;
+
+  /**
+   * The album shelves, split by release type.
+   *
+   * `discography` is the authority when the serializer supplies it. `music.albums`
+   * is the fallback for a profile that has no artist half (or an older response),
+   * and it is rendered as ONE shelf rather than being partitioned here — the
+   * `single | ep` → "Singles & EPs" mapping lives on the backend precisely so it
+   * does not get a second implementation.
+   */
+  const albumShelves: AlbumShelf[] = discography
+    ? [
+        { key: 'albums', titleKey: 'common.albums', albums: discography.albums },
+        { key: 'singlesAndEps', titleKey: 'artist.singlesAndEps', albums: discography.singlesAndEps },
+        { key: 'compilations', titleKey: 'artist.compilations', albums: discography.compilations },
+      ]
+    : [{ key: 'albums', titleKey: 'common.albums', albums: entity.music?.albums ?? [] }];
+
+  // Only for the count in the metadata line; the shelves render themselves.
+  const albums = discography
+    ? [...discography.albums, ...discography.singlesAndEps, ...discography.compilations]
+    : entity.music?.albums ?? [];
+
+  /**
+   * Recordings on this page that a third party contributed rather than the
+   * artist uploading them. A `Set` because it is asked once per rendered row.
+   */
+  const contributedTrackIds = new Set(profileState?.contributedTrackIds ?? []);
+
+  /**
+   * Which profile values did not come from the artist.
+   *
+   * `externallySourcedFields` is already the flattened union of every
+   * `sources[].fields`, so this only maps the field names to labels — it never
+   * walks provenance rows.
+   */
+  const externallySourced = profileState?.externallySourcedFields ?? [];
 
   const headerAnimatedStyle = useAnimatedStyle(() => ({
     transform: [
@@ -511,8 +615,56 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                       <Text style={[styles.metadata, { color: theme.colors.textSecondary }]}>{metadata}</Text>
                     </View>
                   ) : null}
+                  {entity.country ? (
+                    <View style={styles.metadataRow}>
+                      <Ionicons name="location-outline" size={14} color={theme.colors.textSecondary} />
+                      <Text style={[styles.metadata, { color: theme.colors.textSecondary }]}>
+                        {entity.country}
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {/* Outbound links. Only the ones actually present render —
+                      enrichment lands incrementally, so a fixed row of dead
+                      icons would misrepresent what is known about the artist. */}
+                  {entity.links ? (
+                    <View style={styles.linksRow}>
+                      {ARTIST_LINKS.map(({ key, icon, label }) => {
+                        const href = entity.links?.[key];
+                        if (!href) {
+                          return null;
+                        }
+                        return (
+                          <Pressable
+                            key={key}
+                            onPress={() => onOpenLink(href)}
+                            style={[styles.linkChip, { backgroundColor: theme.colors.backgroundTertiary }]}
+                            accessibilityRole="link"
+                            accessibilityLabel={label}
+                          >
+                            <Ionicons name={icon} size={14} color={theme.colors.text} />
+                            <Text style={[styles.linkChipText, { color: theme.colors.text }]}>{label}</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  ) : null}
+
+                  {/* What the artist did not write. Shown because a claimed
+                      profile lets them overwrite it, and they cannot decide what
+                      to replace without knowing which values came from outside. */}
+                  {externallySourced.length > 0 ? (
+                    <Text style={[styles.provenanceNote, { color: theme.colors.textSecondary }]}>
+                      {t('artist.externallySourced', { fields: externallySourced.join(', ') })}
+                    </Text>
+                  ) : null}
                 </View>
               </View>
+
+              {/* Claim CTA — contributed profile, still unclaimed. */}
+              {artistId && profileState?.origin === 'contributed' && profileState.claimable ? (
+                <ArtistClaimCta artistId={artistId} artistName={displayName} />
+              ) : null}
             </View>
 
             {/* Playback Controls (music) */}
@@ -577,6 +729,10 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                         onPress={() => onTrackPress(track)}
                         onPlayPress={() => onTrackPress(track)}
                         showNumber
+                        // Published by a listener, not by the artist. A claimed
+                        // artist otherwise sees a discography containing
+                        // recordings they never uploaded, with no way to tell.
+                        badge={contributedTrackIds.has(track.id) ? t('artist.contributedBadge') : undefined}
                       />
                     );
                   })}
@@ -584,24 +740,88 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
               </>
             )}
 
-            {/* Albums Section */}
-            {albums.length > 0 && (
+            {/* Discography — three shelves off the release-type split the
+                backend computed. A shelf with nothing in it does not render at
+                all, rather than opening onto an empty grid. */}
+            {albumShelves.map((shelf) =>
+              shelf.albums.length === 0 ? null : (
+                <React.Fragment key={shelf.key}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t(shelf.titleKey)}</Text>
+                  </View>
+                  <ResponsiveGrid minItemWidth={180} gap={8} style={styles.albumsGrid}>
+                    {shelf.albums.map((album) => (
+                      <View key={album.id}>
+                        <MediaCard
+                          title={album.title}
+                          subtitle={album.artistName}
+                          type="album"
+                          imageUri={album.coverArt}
+                          imageSizes={album.coverArtSizes}
+                          primaryColor={album.primaryColor}
+                          onPress={() => onNavigateAlbum(album.id)}
+                          onPlayPress={() => onPlayAlbum(album.id, album.title)}
+                        />
+                      </View>
+                    ))}
+                  </ResponsiveGrid>
+                </React.Fragment>
+              ),
+            )}
+
+            {/* Appears on — tracks this artist took part in WITHOUT being the
+                primary artist. Only expressible since `Track.credits[]` exists;
+                before that a guest verse or a production credit had nowhere to
+                live, so this shelf could not have been built at all. */}
+            {creditedOn.length > 0 && (
               <>
                 <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('common.albums')}</Text>
+                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+                    {t('artist.appearsOn')}
+                  </Text>
+                </View>
+                <View style={styles.trackList}>
+                  {creditedOn.map((credited, index) => {
+                    const isCurrentTrack = currentTrackId === credited.track.id;
+                    return (
+                      <TrackRow
+                        key={credited.track.id}
+                        track={credited.track}
+                        index={index}
+                        isCurrentTrack={isCurrentTrack}
+                        isTrackPlaying={isCurrentTrack && isPlaying}
+                        onPress={() => onCreditedTrackPress(credited.track)}
+                        onPlayPress={() => onCreditedTrackPress(credited.track)}
+                        showNumber={false}
+                        // The roles ARE the reason this row is on this page —
+                        // "featured" and "produced" are different facts, and one
+                        // person is routinely several of them on one recording.
+                        badge={credited.roles.length > 0 ? credited.roles.join(', ') : undefined}
+                      />
+                    );
+                  })}
+                </View>
+              </>
+            )}
+
+            {/* Playlists that include this artist and that the viewer may read. */}
+            {playlists.length > 0 && (
+              <>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+                    {t('artist.inPlaylists')}
+                  </Text>
                 </View>
                 <ResponsiveGrid minItemWidth={180} gap={8} style={styles.albumsGrid}>
-                  {albums.map((album) => (
-                    <View key={album.id}>
+                  {playlists.map((playlist) => (
+                    <View key={playlist.id}>
                       <MediaCard
-                        title={album.title}
-                        subtitle={album.artistName}
-                        type="album"
-                        imageUri={album.coverArt}
-                        imageSizes={album.coverArtSizes}
-                        primaryColor={album.primaryColor}
-                        onPress={() => onNavigateAlbum(album.id)}
-                        onPlayPress={() => onPlayAlbum(album.id, album.title)}
+                        title={playlist.name}
+                        subtitle={t('common.songCount', { count: playlist.trackCount ?? 0 })}
+                        type="playlist"
+                        imageUri={playlist.coverArt}
+                        imageSizes={playlist.coverArtSizes}
+                        onPress={() => onNavigatePlaylist(playlist.id)}
                       />
                     </View>
                   ))}
@@ -682,11 +902,27 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
               </>
             )}
 
-            {/* Empty State */}
-            {tracks.length === 0 && albums.length === 0 && podcasts.length === 0 && episodes.length === 0 && (
+            {/* Empty State — counts every shelf, including the ones added with
+                the credits work. A profile whose only content is a production
+                credit is not empty, and saying so while rendering that credit
+                directly above would contradict itself. */}
+            {tracks.length === 0 &&
+              albums.length === 0 &&
+              podcasts.length === 0 &&
+              episodes.length === 0 &&
+              creditedOn.length === 0 &&
+              playlists.length === 0 && (
               <View style={styles.emptyState}>
                 <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>
-                  {t('artist.empty')}
+                  {/* A contributed stub is sparse BY DESIGN for a while: the
+                      profile is created from one file's tags and enrichment is
+                      queued behind a rate-limited external source, so it can be
+                      minutes or hours before anything else lands. Saying that is
+                      the difference between a page that looks unfinished and one
+                      that looks broken. */}
+                  {profileState?.origin === 'contributed'
+                    ? t('artist.emptyContributed')
+                    : t('artist.empty')}
                 </Text>
               </View>
             )}
@@ -852,6 +1088,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 12,
     lineHeight: 20,
+  },
+  linksRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+  },
+  linkChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    ...Platform.select({ web: { cursor: 'pointer' } }),
+  },
+  linkChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  provenanceNote: {
+    fontSize: 11,
+    lineHeight: 15,
+    marginTop: 8,
   },
   metadataRow: {
     flexDirection: 'row',

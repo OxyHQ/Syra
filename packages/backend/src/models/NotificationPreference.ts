@@ -17,6 +17,24 @@ export const SYRA_NOTIFICATION_EVENTS = [
   'room.started',
   /** Someone changed a playlist the user collaborates on. */
   'playlist.collaboration',
+  /**
+   * A file in the user's private locker is about to expire for inactivity
+   * (T−14d). Enabled by default like every other event, because the opt-out
+   * shape means a new member needs no backfill — and "your music is about to be
+   * deleted" is the last thing anyone should have to opt IN to.
+   */
+  'upload.expiring',
+  /**
+   * A file was REMOVED from the user's private locker by the platform — a
+   * copyright takedown of that recording, or the termination of an account.
+   *
+   * The counterpart to `upload.expiring`, and needed for the same reason: a file
+   * disappearing from someone's own library with no explanation is
+   * indistinguishable from a bug, and they cannot appeal a removal nobody told
+   * them about. Like every event here it is opt-OUT, so nobody has to have opted
+   * in to be told their music is gone.
+   */
+  'upload.removed',
 ] as const;
 
 export type SyraNotificationEvent = (typeof SYRA_NOTIFICATION_EVENTS)[number];

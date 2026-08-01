@@ -78,7 +78,71 @@ export function getS3AudioKey(
   return `${S3_AUDIO_PREFIX}/${artistId}/${trackId}${extension}`;
 }
 
+/**
+ * Key space for listener uploads — the private locker.
+ *
+ * Deliberately a top-level prefix of its own rather than a corner of the
+ * catalog's `audio/`. Catalog audio is addressed by artist and album because that
+ * is what it belongs to; a locker file belongs to a PERSON, and may have no
+ * artist at all (an upload with no artist is a valid private upload). Reusing the
+ * artist helpers would mean fabricating a placeholder artist id, which scatters
+ * locker objects through the catalog's key space and makes them indistinguishable
+ * from catalog audio.
+ *
+ * Keeping them apart is what lets a bucket lifecycle rule, a bulk deletion or an
+ * audit operate on the locker without touching the catalog — and it is what makes
+ * the retention sweeper's prefix delete safe, since a locker prefix contains
+ * nothing else.
+ *
+ * Nothing under this prefix is ever served directly: playback goes through
+ * `GET /api/uploads/:id/stream`, which checks ownership first, and the manifests
+ * and segments beneath it are tokenized exactly as `stream.controller` does.
+ */
+export const S3_UPLOADS_PREFIX = process.env.S3_UPLOADS_PREFIX || 'uploads';
+
+/**
+ * The SOURCE audio of a locker upload.
+ * Format: uploads/{ownerOxyUserId}/{uploadId}.{format}
+ */
+export function getS3LockerAudioKey(
+  ownerOxyUserId: string,
+  uploadId: string,
+  format: string,
+): string {
+  const extension = format.startsWith('.') ? format : `.${format}`;
+  return `${S3_UPLOADS_PREFIX}/${ownerOxyUserId}/${uploadId}${extension}`;
+}
+
 export const S3_HLS_PREFIX = process.env.S3_HLS_PREFIX || 'hls';
+
+/**
+ * An encrypted-HLS file (playlist or segment) of a locker upload.
+ * Format: hls/uploads/{ownerOxyUserId}/{uploadId}/{relPath}
+ *
+ * The upload id is a whole PATH SEGMENT, and that is load-bearing rather than
+ * cosmetic: the copyright purge and the retention sweeper both delete this
+ * directory as a PREFIX, and `compliance/takedown.ts` refuses to sweep a prefix
+ * that does not contain the upload's own id as a segment. Flatten this layout and
+ * the delete silently degrades to "recorded keys only", leaving every segment in
+ * the bucket — no error, no orphan report, just cost.
+ */
+export function getS3LockerHlsKey(
+  ownerOxyUserId: string,
+  uploadId: string,
+  relPath: string,
+): string {
+  const normalised = relPath.replace(/\\/g, '/').replace(/^\/+/, '');
+  return `${S3_HLS_PREFIX}/${S3_UPLOADS_PREFIX}/${ownerOxyUserId}/${uploadId}/${normalised}`;
+}
+
+/**
+ * The directory every HLS object of one locker upload lives under — what a
+ * takedown or an expiry sweep deletes as a prefix. Trailing slash included, so it
+ * can never match a sibling id that merely starts with the same characters.
+ */
+export function getS3LockerHlsPrefix(ownerOxyUserId: string, uploadId: string): string {
+  return `${S3_HLS_PREFIX}/${S3_UPLOADS_PREFIX}/${ownerOxyUserId}/${uploadId}/`;
+}
 
 /**
  * Get S3 key for an HLS file (playlist or segment).

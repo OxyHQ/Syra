@@ -1,5 +1,12 @@
 import { api, authenticatedClient } from '@/utils/api';
-import { Queue, QueueWithMetadata, AddToQueueRequest, ReplaceQueueRequest } from '@syra/shared-types';
+import {
+  Queue,
+  QueueWithMetadata,
+  AddToQueueRequest,
+  PlayableRef,
+  RemoveFromQueueRequest,
+  ReplaceQueueRequest,
+} from '@syra/shared-types';
 import { normalizeTrackImages } from '@/utils/catalogImages';
 
 function normalizeQueue<T extends Queue>(queue: T): T {
@@ -20,6 +27,13 @@ function normalizeQueueWithMetadata(queue: QueueWithMetadata): QueueWithMetadata
 /**
  * Queue API service
  * Handles queue operations (add, remove, reorder, clear)
+ *
+ * Every write addresses items by {@link PlayableRef} — `{ kind, id }` — never by
+ * a bare id. The queue spans two collections, so the kind is what decides which
+ * one the backend reads and which ownership check it applies: `track` goes
+ * through the public catalog filter, `upload` resolves scoped to the caller's own
+ * locker. An id on its own would have to be tried against both, which puts the
+ * owner check on the second attempt only.
  */
 export const queueService = {
   /**
@@ -31,14 +45,14 @@ export const queueService = {
   },
 
   /**
-   * Add tracks to queue
+   * Add items to the queue.
    */
   async addToQueue(
-    trackIds: string[],
+    refs: PlayableRef[],
     position?: 'next' | 'last' | number
   ): Promise<{ queue: Queue; added: number }> {
     const body: AddToQueueRequest = {
-      trackIds,
+      refs,
       position,
     };
     const response = await api.post<{ queue: Queue; added: number }>('/queue/add', body);
@@ -50,7 +64,7 @@ export const queueService = {
    */
   async replaceQueue(queue: Queue): Promise<{ queue: Queue }> {
     const body: ReplaceQueueRequest = {
-      trackIds: queue.tracks.map((track) => track.id),
+      refs: queue.tracks.map((item) => ({ kind: item.kind, id: item.id })),
       current: queue.current,
       context: queue.context,
     };
@@ -59,23 +73,24 @@ export const queueService = {
   },
 
   /**
-   * Remove tracks from queue
+   * Remove items from the queue.
    */
-  async removeFromQueue(trackIds: string[]): Promise<{ queue: Queue; removed: number }> {
+  async removeFromQueue(refs: PlayableRef[]): Promise<{ queue: Queue; removed: number }> {
     // Express delete routes can accept body via req.body.
     // authenticatedClient (HttpService) resolves to the parsed body directly.
+    const body: RemoveFromQueueRequest = { refs };
     const response = await authenticatedClient.delete<{ queue: Queue; removed: number }>('/queue/remove', {
-      data: { trackIds },
+      data: body,
     });
     return { ...response, queue: normalizeQueue(response.queue) };
   },
 
   /**
-   * Reorder queue tracks
+   * Reorder queue items. The refs are the queue's new order in full.
    */
-  async reorderQueue(trackIds: string[]): Promise<{ queue: Queue; reordered: number }> {
+  async reorderQueue(refs: PlayableRef[]): Promise<{ queue: Queue; reordered: number }> {
     const response = await api.put<{ queue: Queue; reordered: number }>('/queue/reorder', {
-      trackIds,
+      refs,
     });
     return { ...response.data, queue: normalizeQueue(response.data.queue) };
   },

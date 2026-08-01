@@ -38,8 +38,6 @@ export interface UploadTrackMetadata {
   coverArt?: string;
   genre?: string[];
   isExplicit?: boolean;
-  /** Duration in seconds (required, must be > 0). */
-  duration: number;
 }
 
 /**
@@ -51,6 +49,9 @@ export interface UploadTrackMetadata {
  * HLS ingest finishes. Web sends the picked `File`/blob, native sends the RN
  * `{ uri, name, type }` descriptor — the same universal pattern as
  * `episodeService.uploadEpisode`.
+ *
+ * Duration is deliberately absent from the payload: the backend measures it with
+ * ffprobe from the uploaded file, so a client value would be ignored anyway.
  */
 export const musicService = {
   async uploadTrack(audioFile: TrackAudioFile, metadata: UploadTrackMetadata): Promise<Track> {
@@ -80,7 +81,6 @@ export const musicService = {
       for (const g of metadata.genre) formData.append('genre', g);
     }
     if (metadata.isExplicit !== undefined) formData.append('isExplicit', String(metadata.isExplicit));
-    formData.append('duration', String(metadata.duration));
 
     const response = await api.post<unknown>('/tracks/upload', formData);
     return parse(trackResponseSchema, response.data, 'track upload');

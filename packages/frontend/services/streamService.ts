@@ -1,3 +1,4 @@
+import type { PlayableRef } from '@syra/shared-types';
 import { api } from '@/utils/api';
 import { createScopedLogger } from '@/utils/logger';
 
@@ -160,15 +161,50 @@ export function resolveEpisodeStream(episodeId: string): Promise<StreamResolutio
   );
 }
 
-export function prefetchStreams(trackIds: string[]): void {
-  const uniqueTrackIds = [...new Set(trackIds.filter(Boolean))];
-  for (const trackId of uniqueTrackIds) {
-    // Prefetch is opportunistic — these tracks have not been asked for yet, so a
+/**
+ * Resolve the tokenized HLS stream for a file in the caller's own locker.
+ *
+ * Calls `GET /api/uploads/:id/stream`, whose ownership check is part of the
+ * query that loads the document — a stranger's upload id answers 404, the same
+ * as one that does not exist. Everything else matches catalog playback: the same
+ * LRU, the same 60s safety window, the same `type: 'hls'` resolution the player
+ * already knows how to attach.
+ *
+ * The cache key is namespaced because an upload id and a track id are ids in
+ * two different collections; sharing one keyspace would let a locker resolution
+ * answer a catalog request the moment two ids ever collided.
+ */
+export function resolveUploadStream(uploadId: string): Promise<StreamResolution> {
+  return resolveFromEndpoint(
+    `upload:${uploadId}`,
+    `/uploads/${uploadId}/stream`,
+    `upload ${uploadId}`,
+  );
+}
+
+/**
+ * Warm the resolution cache for items the listener has not asked for yet.
+ *
+ * Takes refs rather than ids because the two kinds resolve through different
+ * endpoints, and a locker id sent to the catalog resolver would be a 404 that
+ * looks exactly like an entitlement failure.
+ */
+export function prefetchStreams(refs: PlayableRef[]): void {
+  const seen = new Set<string>();
+  for (const ref of refs) {
+    const key = `${ref.kind}:${ref.id}`;
+    if (!ref.id || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+
+    // Prefetch is opportunistic — these items have not been asked for yet, so a
     // failure must not reach the listener; the real play attempt resolves again
     // and reports its own. Logged so it is never entirely invisible: a signed-out
     // listener's 401s show up here first.
-    void resolveStream(trackId).catch((error) => {
-      logger.debug('Stream prefetch failed', { trackId, error });
+    const resolving = ref.kind === 'upload' ? resolveUploadStream(ref.id) : resolveStream(ref.id);
+    void resolving.catch((error) => {
+      logger.debug('Stream prefetch failed', { ref, error });
     });
   }
 }

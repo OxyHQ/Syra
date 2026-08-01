@@ -64,3 +64,47 @@ pipeline: [{ $match: { $expr: { $eq: [{ $toString: '$_id' }, '$$trackId'] } } }]
 `let` is evaluated once per outer document, so the converted value is a constant the planner can use; a conversion applied to the foreign field cannot be indexed. Use `$convert` with `onError`/`onNull` rather than `$toObjectId`, so a malformed id yields `null` and matches nothing instead of throwing.
 
 This matters most in `utils/playableContainers.ts`, whose pipelines run the `$lookup` BEFORE `$sort`/`$limit` — every container in the collection is evaluated on every request, so per-lookup cost must stay O(1). Prefer bare indexed fields in the leading `$match` over any computed comparison.
+
+## Server-only fields — `select: false` is not access control
+
+`select: false` on a Mongoose path is a QUERY PROJECTION, and `aggregate()`
+ignores it entirely. Syra's catalog reads ARE aggregations
+(`utils/playableContainers.ts`, `findOneArtistWithPlayableTracks`), so a field
+protected only that way is returned in full on exactly those routes. Compounding
+it, `toApiFormat` is untyped and SPREADS the document, so a field's absence from
+the zod schema does not remove it from the response either — two "independent"
+guards, both inert on the same path.
+
+Treat `select: false` as a bytes-on-the-wire optimisation. The load-bearing
+guards are:
+
+- **Catalog serializers** — an explicit `delete` in `stripExternalCatalogFields`
+  (`utils/musicHelpers.ts`), the one funnel they all pass through. Thirteen
+  modules format tracks through it, so a field left out of that strip is exposed
+  by all of them at once.
+- **Hand-written DTOs** — an explicit object literal that NAMES every key it
+  returns (`toUploadTrackDto`). An allowlist also excludes whatever gets added to
+  the model tomorrow. Do NOT add a `delete` to one: it can never fire, and it
+  advertises a denylist where the real guard is an allowlist.
+- **Aggregation output reaching a client unmapped** — an explicit `$project`.
+
+Mutation-test which guard is load-bearing: deleting the strip must fail the test;
+deleting `select: false` will not. And never read a guard's presence from its
+comment — a guard can be removed while the comment asserting it survives.
+
+## A zod DTO field with no Mongoose path is silently discarded
+
+Mongoose strict mode drops a `$set` on an undeclared path with no throw and no
+warning. Because the zod schema is the source of the TypeScript type, the write
+still typechecks — so tsc is clean, the function returns success, the logs list
+the fields, and the database keeps none of them.
+
+`src/models/zodPathsExistInMongoose.test.ts` is the standing gate: every zod DTO
+field must resolve to a real Mongoose path. When adding a field to a DTO, add the
+schema path in the same change.
+
+The detector that works at runtime is an **idempotency test** — a write that never
+lands is redone on the next pass, whereas asserting the return value reports
+success either way. Note `schema.path('links.wikidata')` does NOT resolve for a
+single-nested subdocument; the walk has to descend explicitly, and a check that
+misses this reports every nested field as missing.

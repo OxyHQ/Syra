@@ -1,9 +1,26 @@
-import { Queue, Track } from '@syra/shared-types';
+import { PlayableItem, PlayableRef, Queue } from '@syra/shared-types';
 import { getRedisClient } from '../utils/redis';
 import { logger } from '../utils/logger';
 
 const QUEUE_KEY_PREFIX = 'queue:';
 const QUEUE_TTL_SECONDS = 24 * 60 * 60; // 24 hours
+
+/**
+ * A queue entry's identity is (kind, id), not id alone.
+ *
+ * The queue now holds two kinds of item from two collections. Addressing an entry
+ * by bare id happens to work while every id is a distinct ObjectId, but it
+ * encodes an assumption nothing enforces — and the entry it would remove or
+ * reorder by accident is somebody's private file.
+ *
+ * Anything that is not explicitly an upload is a catalog track, which also
+ * absorbs the queues already sitting in Redis when this shipped: they were
+ * written as untagged tracks, nothing re-parses them on read, and they expire on
+ * their own within a day.
+ */
+function refKey(ref: PlayableRef | PlayableItem): string {
+  return ref.kind === 'upload' ? `upload:${ref.id}` : `track:${ref.id}`;
+}
 
 /**
  * Get queue key for a user
@@ -66,7 +83,7 @@ export async function setQueue(userId: string, queue: Queue): Promise<boolean> {
  */
 export async function addTracks(
   userId: string,
-  tracks: Track[],
+  tracks: PlayableItem[],
   position?: 'next' | 'last' | number
 ): Promise<Queue | null> {
   try {
@@ -124,7 +141,7 @@ export async function addTracks(
  */
 export async function removeTracks(
   userId: string,
-  trackIds: string[]
+  refs: PlayableRef[]
 ): Promise<Queue | null> {
   try {
     const redis = getRedisClient();
@@ -139,12 +156,12 @@ export async function removeTracks(
     }
 
     // Create set for fast lookup
-    const trackIdSet = new Set(trackIds);
+    const doomedKeys = new Set(refs.map(refKey));
 
     // Remove tracks and track indices
     const indicesToRemove: number[] = [];
     queue.tracks = queue.tracks.filter((track, index) => {
-      if (trackIdSet.has(track.id)) {
+      if (doomedKeys.has(refKey(track))) {
         indicesToRemove.push(index);
         return false;
       }
@@ -182,7 +199,7 @@ export async function removeTracks(
  */
 export async function reorderQueue(
   userId: string,
-  newOrder: string[]
+  newOrder: PlayableRef[]
 ): Promise<Queue | null> {
   try {
     const redis = getRedisClient();
@@ -197,12 +214,14 @@ export async function reorderQueue(
     }
 
     // Create map for fast lookup
-    const trackMap = new Map(queue.tracks.map(track => [track.id, track]));
+    const trackMap = new Map(queue.tracks.map(track => [refKey(track), track]));
+    const orderedKeys = newOrder.map(refKey);
+    const orderedKeySet = new Set(orderedKeys);
 
     // Build new tracks array in specified order
-    const newTracks: Track[] = [];
-    for (const trackId of newOrder) {
-      const track = trackMap.get(trackId);
+    const newTracks: PlayableItem[] = [];
+    for (const key of orderedKeys) {
+      const track = trackMap.get(key);
       if (track) {
         newTracks.push(track);
       }
@@ -210,7 +229,7 @@ export async function reorderQueue(
 
     // Add any remaining tracks that weren't in newOrder
     for (const track of queue.tracks) {
-      if (!newOrder.includes(track.id)) {
+      if (!orderedKeySet.has(refKey(track))) {
         newTracks.push(track);
       }
     }
@@ -221,7 +240,8 @@ export async function reorderQueue(
     if (queue.current >= 0 && queue.tracks.length > 0) {
       const oldCurrentTrack = queue.tracks[queue.current];
       if (oldCurrentTrack) {
-        const newIndex = newTracks.findIndex(t => t.id === oldCurrentTrack.id);
+        const oldKey = refKey(oldCurrentTrack);
+        const newIndex = newTracks.findIndex(t => refKey(t) === oldKey);
         queue.current = newIndex >= 0 ? newIndex : 0;
       }
     }
@@ -281,7 +301,7 @@ export async function setCurrentIndex(userId: string, index: number): Promise<Qu
 /**
  * Get next track in queue
  */
-export async function getNextTrack(userId: string): Promise<Track | null> {
+export async function getNextTrack(userId: string): Promise<PlayableItem | null> {
   try {
     const queue = await getQueue(userId);
     if (!queue || queue.tracks.length === 0) {
@@ -303,7 +323,7 @@ export async function getNextTrack(userId: string): Promise<Track | null> {
 /**
  * Get previous track in queue
  */
-export async function getPreviousTrack(userId: string): Promise<Track | null> {
+export async function getPreviousTrack(userId: string): Promise<PlayableItem | null> {
   try {
     const queue = await getQueue(userId);
     if (!queue || queue.tracks.length === 0) {

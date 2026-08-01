@@ -66,10 +66,10 @@ WORKDIR /app
 # the lockfile and the bun config (hoisted linker) so this layer is reused
 # unless dependencies change. EVERY workspace member's package.json must be
 # present — `bun install --frozen-lockfile` validates the full workspace graph
-# against the lockfile and aborts if any member is missing (frontend/studio
-# depend on @syra/live, so its manifest is required even though the backend does
-# not use it). The rest of the non-backend workspaces' source is excluded via
-# Dockerfile.dockerignore.
+# against the lockfile and aborts if any member is missing, so a new workspace
+# needs a COPY line here even when the backend never imports it. The five below
+# are exactly the members `bun.lock` records. The rest of the non-backend
+# workspaces' source is excluded via Dockerfile.dockerignore.
 COPY package.json bun.lock bunfig.toml ./
 COPY packages/backend/package.json ./packages/backend/package.json
 COPY packages/shared-types/package.json ./packages/shared-types/package.json
@@ -134,10 +134,15 @@ ENV NODE_ENV=production \
 
 # libc6-compat: glibc shim some prebuilt native binaries expect on Alpine/musl.
 # dumb-init: proper PID 1 so SIGTERM/SIGINT reach Node for graceful shutdown.
-# ffmpeg: provides ffmpeg + ffprobe for EBU R128 measurement and AAC transcoding.
+# ffmpeg: provides ffmpeg + ffprobe for EBU R128 measurement, AAC transcoding and
+#         the source probe that is the sole authority for a track's duration.
+# chromaprint: provides /usr/bin/fpcalc, the Chromaprint fingerprinter used to
+#              match an upload against the existing catalogue. On Alpine the
+#              package is named `chromaprint`; `libchromaprint-tools` is the
+#              Debian name and does not exist here.
 # libstdc++: C++ runtime required by the Bento4 binaries (ffmpeg pulls it too,
 #            but listed explicitly so the dependency is obvious and auditable).
-RUN apk add --no-cache libc6-compat dumb-init ffmpeg libstdc++
+RUN apk add --no-cache libc6-compat dumb-init ffmpeg chromaprint libstdc++
 
 # Copy Bento4 binaries from the build stage. Placed here (as root, before
 # USER node) so the binaries land in /usr/local/bin with correct ownership and

@@ -13,7 +13,17 @@
 import { create } from 'zustand';
 import { createAudioPlayer } from 'expo-audio';
 import { Platform } from 'react-native';
-import { Queue, Track, Episode, PlaybackContext, RadioSeed, RepeatMode, ConnectPlaybackState } from '@syra/shared-types';
+import {
+  Queue,
+  Track,
+  Episode,
+  PlayableItem,
+  PlaybackContext,
+  RadioSeed,
+  RepeatMode,
+  ConnectPlaybackState,
+} from '@syra/shared-types';
+import { toPlayableItem, type PlayableInput } from '@/utils/playableItem';
 import { createScopedLogger } from '@/utils/logger';
 import { useQueueStore } from './queueStore';
 import { musicService } from '@/services/musicService';
@@ -33,7 +43,13 @@ import {
   calculateTrackDuration,
   clampVolume,
 } from './playerStore.helpers';
-import { prefetchStreams, resolveStream, resolveEpisodeStream, StreamResolution } from '@/services/streamService';
+import {
+  prefetchStreams,
+  resolveStream,
+  resolveEpisodeStream,
+  resolveUploadStream,
+  StreamResolution,
+} from '@/services/streamService';
 import { episodeService } from '@/services/episodeService';
 import { getApiOrigin } from '@/utils/api';
 import { libraryService, type ListeningSource, type PlaySignal } from '@/services/libraryService';
@@ -94,6 +110,7 @@ interface ResolvedSource {
   resolution: StreamResolution | null;
 }
 
+
 /**
  * Minimal metadata both `Track` and `Episode` satisfy — all the engine setup
  * helpers need is an id (for logging) and an optional known duration.
@@ -119,7 +136,16 @@ export interface PlayEpisodeOptions {
  * Player state interface
  */
 interface PlayerState {
-  currentTrack: Track | null;
+  /**
+   * What is loaded in the player, tagged with the collection it came from.
+   *
+   * `PlayableItem` rather than `Track` because the tag is what routes stream
+   * resolution: a locker file is only reachable through its owner-checked
+   * endpoint, and reading it as a catalog track would send its id to the catalog
+   * resolver. Every field readers already use is still present — the shape is a
+   * Track plus the tag.
+   */
+  currentTrack: PlayableItem | null;
   /** The episode currently playing (mutually exclusive with `currentTrack`). */
   currentEpisode: Episode | null;
   /** Sequential episode queue for the active podcast playback session. */
@@ -153,8 +179,8 @@ interface PlayerState {
   connectActiveDeviceId: string | null;
 
   // Actions
-  playTrack: (track: Track, context?: PlaybackContext, addToQueue?: boolean) => Promise<void>;
-  playTrackList: (tracks: Track[], startIndex?: number, context?: PlaybackContext) => Promise<void>;
+  playTrack: (track: PlayableInput, context?: PlaybackContext, addToQueue?: boolean) => Promise<void>;
+  playTrackList: (tracks: PlayableInput[], startIndex?: number, context?: PlaybackContext) => Promise<void>;
   /** Start a Syra Radio station: play its first page and make it the queue. */
   startRadio: (seed: RadioSeed) => Promise<void>;
   playEpisode: (episode: Episode, options?: PlayEpisodeOptions) => Promise<void>;
@@ -418,17 +444,19 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   /**
    * Update queue state after track starts playing
    */
-  const updateQueueState = async (track: Track, addToQueue: boolean) => {
+  const updateQueueState = async (item: PlayableItem, addToQueue: boolean) => {
     const queueStore = useQueueStore.getState();
-    
+
     if (addToQueue) {
-      await queueStore.addToQueue([track.id], 'last');
+      await queueStore.addToQueue([{ kind: item.kind, id: item.id }], 'last');
       return;
     }
 
     const queue = queueStore.queue;
     if (queue) {
-      const trackIndex = queue.tracks.findIndex(t => t.id === track.id);
+      // Matched on kind as well as id: the two collections have independent id
+      // spaces, so an id alone is not an identity across them.
+      const trackIndex = queue.tracks.findIndex((t) => t.id === item.id && t.kind === item.kind);
       if (trackIndex >= 0) {
         await queueStore.setCurrentIndex(trackIndex);
         return;
@@ -437,42 +465,47 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
     await queueStore.replaceQueue({
       current: 0,
-      tracks: [track],
+      tracks: [item],
       context: get().context ?? undefined,
     });
   };
 
   /**
-   * Make `tracks` the active queue, positioned at `index`. Callers filter and
-   * clamp beforehand, because they need the starting track in hand to resolve
+   * Make `items` the active queue, positioned at `index`. Callers filter and
+   * clamp beforehand, because they need the starting item in hand to resolve
    * it before the queue is replaced.
    */
   const seedLocalQueue = async (
-    tracks: Track[],
+    items: PlayableItem[],
     index: number,
     context?: PlaybackContext,
   ): Promise<Queue> => {
-    const queue = { current: index, tracks, context };
+    const queue = { current: index, tracks: items, context };
     await useQueueStore.getState().replaceQueue(queue);
     return queue;
   };
 
-  const shouldResolveViaStreamEndpoint = (track: Track): boolean =>
-    track.status === 'ready' && Array.isArray(track.hls) && track.hls.length > 0;
+  /**
+   * Whether this item plays through a resolver endpoint rather than a URL in its
+   * own payload. True for both kinds once ingest has produced an HLS ladder —
+   * only the endpoint differs, which {@link getPhase3Resolution} decides.
+   */
+  const shouldResolveViaStreamEndpoint = (item: PlayableItem): boolean =>
+    item.status === 'ready' && Array.isArray(item.hls) && item.hls.length > 0;
 
   /**
-   * Warm the stream cache for the tracks AFTER `startIndex`. The track being
+   * Warm the stream cache for the items AFTER `startIndex`. The item being
    * played is always resolved by the play path itself, so it is never included.
    */
-  const prefetchQueueStreams = (tracks: Track[], startIndex: number): void => {
+  const prefetchQueueStreams = (items: PlayableItem[], startIndex: number): void => {
     const from = startIndex + 1;
-    const ids = tracks
+    const refs = items
       .slice(Math.max(0, from), Math.max(0, from) + 4)
       .filter(shouldResolveViaStreamEndpoint)
-      .map((track) => track.id);
+      .map((item) => ({ kind: item.kind, id: item.id }));
 
-    if (ids.length > 0) {
-      prefetchStreams(ids);
+    if (refs.length > 0) {
+      prefetchStreams(refs);
     }
   };
 
@@ -523,8 +556,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
    * entity, which is what makes "album ends → more of this" feel intentional
    * rather than random. Failing both, the finished track seeds the station;
    * with nothing playing at all the listener themselves is the seed.
+   *
+   * A locker file can never be the seed. Radio seeds are catalog ids the backend
+   * looks up in `tracks`, so a `track` seed carrying an upload id would resolve
+   * to nothing — the listener themselves is the honest fallback there.
    */
-  const deriveRadioSeed = (finishedTrack?: Track | null): RadioSeed => {
+  const deriveRadioSeed = (finishedTrack?: PlayableItem | null): RadioSeed => {
     const context = useQueueStore.getState().queue?.context ?? get().context;
 
     if (context?.type === 'radio' && context.radio) {
@@ -542,11 +579,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       }
     }
 
-    const trackId = finishedTrack?.id ?? get().currentTrack?.id;
-    return trackId ? { seedType: 'track', seedId: trackId } : { seedType: 'user', seedId: '' };
+    const seedCandidate = finishedTrack ?? get().currentTrack;
+    return seedCandidate && seedCandidate.kind === 'track'
+      ? { seedType: 'track', seedId: seedCandidate.id }
+      : { seedType: 'user', seedId: '' };
   };
 
-  const extendQueueForAutoplay = async (finishedTrack?: Track | null): Promise<boolean> => {
+  const extendQueueForAutoplay = async (finishedTrack?: PlayableItem | null): Promise<boolean> => {
     const preferences = getCurrentMusicPreferences();
     if (preferences?.autoplay === false) {
       return false;
@@ -577,7 +616,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
       // The station tracks what it has handed out, but the queue may already
       // hold tracks from elsewhere — dedupe against what is actually queued.
-      const additions = page.tracks.filter((track) => track.id && !seenIds.has(track.id));
+      // Radio only ever returns catalog tracks, so they are tagged as such here.
+      const additions = page.tracks
+        .filter((track) => track.id && !seenIds.has(track.id))
+        .map((track) => toPlayableItem(track));
       if (additions.length === 0) {
         return false;
       }
@@ -730,7 +772,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
    *
    * @throws Error when the track has no resolvable playable source
    */
-  const getAudioUrl = async (track: Track): Promise<string> => {
+  const getAudioUrl = async (track: PlayableItem): Promise<string> => {
     if (!track.audioSource) {
       throw new Error(`Track ${track.id} has no playable audio source`);
     }
@@ -766,24 +808,41 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
    * boot, signals wait briefly for OxyProvider to publish the restored token;
    * true guests expire without affecting playback.
    */
-  const recordPlay = (track: Track, context?: PlaybackContext | null): void => {
+  const recordPlay = (item: PlayableItem, context?: PlaybackContext | null): void => {
     // Flush the engagement signal for whatever was playing before this track so
     // the outgoing play's completion/skip is captured exactly once.
     flushPlaySignal();
 
+    // A locker file is not catalog: recently-played and the taste signals built
+    // on it are keyed by catalog track id, so sending an upload id would either
+    // resolve to nothing or, worse, to an unrelated track. A private file's play
+    // count is bookkeeping the uploads endpoint does on its own.
+    if (item.kind === 'upload') {
+      return;
+    }
+
     const source = contextToSource(context ?? get().context);
     // Signal-less start ping: populates "Jump back in" immediately. The
     // engagement ping (with listenedSec/completion) is sent on flush.
-    submitPlaySignal(track.id, { source });
-    activePlay = { trackId: track.id, source, durationSec: finiteSeconds(track.duration) };
+    submitPlaySignal(item.id, { source });
+    activePlay = { trackId: item.id, source, durationSec: finiteSeconds(item.duration) };
   };
 
-  const getPhase3Resolution = async (track: Track): Promise<StreamResolution | null> => {
-    if (!shouldResolveViaStreamEndpoint(track)) {
+  /**
+   * Resolve the tokenized HLS stream, through whichever endpoint owns the item.
+   *
+   * This is the branch the whole `kind` tag exists for: a catalog track resolves
+   * through `GET /stream/:trackId` behind the entitlement check, and a locker
+   * file through `GET /api/uploads/:id/stream` behind an ownership check. An
+   * untagged upload taking the catalog path would be a 404 presented as an
+   * entitlement failure.
+   */
+  const getPhase3Resolution = async (item: PlayableItem): Promise<StreamResolution | null> => {
+    if (!shouldResolveViaStreamEndpoint(item)) {
       return null;
     }
-    logger.debug('Resolving Phase-3 stream', { trackId: track.id });
-    return resolveStream(track.id);
+    logger.debug('Resolving stream', { id: item.id, kind: item.kind });
+    return item.kind === 'upload' ? resolveUploadStream(item.id) : resolveStream(item.id);
   };
 
   /**
@@ -796,25 +855,36 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
    * and answers 401 without a session by design, and there is no unauthenticated
    * preview endpoint to fall back to.
    */
-  const resolvePlayableSource = async (track: Track): Promise<ResolvedSource | null> => {
+  const resolvePlayableSource = async (item: PlayableItem): Promise<ResolvedSource | null> => {
     // Read without waiting on the session: a still-resolving cold boot would
     // look like a guest here, but the screens that render play buttons already
     // gate their content on the resolved session (`useAuthGate`), so a button
     // cannot be pressed before the session has settled. Waiting instead would
     // put a delay in front of every genuine guest's sign-in prompt.
-    if (shouldResolveViaStreamEndpoint(track) && !oxyServices.hasValidToken()) {
-      logger.info('Play needs a session', { trackId: track.id });
+    if ((item.kind === 'upload' || shouldResolveViaStreamEndpoint(item)) && !oxyServices.hasValidToken()) {
+      logger.info('Play needs a session', { id: item.id, kind: item.kind });
       reportFailure('auth-required');
       return null;
     }
 
+    // A locker file has exactly one address, and it is the owner-checked stream
+    // endpoint: its DTO deliberately carries no `audioSource`, so there is no
+    // progressive URL to degrade to while it is still transcoding. Saying so
+    // here keeps the failure honest instead of letting `getAudioUrl` report a
+    // missing source for a file that simply is not ready yet.
+    if (item.kind === 'upload' && !shouldResolveViaStreamEndpoint(item)) {
+      logger.info('Locker file is not playable yet', { uploadId: item.id, status: item.status });
+      reportFailure('error');
+      return null;
+    }
+
     try {
-      const resolution = await getPhase3Resolution(track);
-      const audioUrl = resolution ? resolution.url : await getAudioUrl(track);
+      const resolution = await getPhase3Resolution(item);
+      const audioUrl = resolution ? resolution.url : await getAudioUrl(item);
       logger.debug('Audio URL resolved', { url: audioUrl, type: resolution?.type });
       return { audioUrl, resolution };
     } catch (error) {
-      logger.error('Failed to resolve a playable source', { trackId: track.id, error });
+      logger.error('Failed to resolve a playable source', { id: item.id, kind: item.kind, error });
       reportFailure('error');
       return null;
     }
@@ -828,7 +898,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
    * instead of paying for a second resolve.
    */
   const playResolvedTrack = async (
-    track: Track,
+    track: PlayableItem,
     source: ResolvedSource,
     context: PlaybackContext | undefined,
     addToQueue: boolean,
@@ -836,6 +906,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     try {
       logger.info('Playing track', {
         trackId: track.id,
+        kind: track.kind,
         title: track.title,
         url: track.audioSource?.url,
       });
@@ -1141,12 +1212,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
      * @param context - Optional playback context
      * @param addToQueue - Whether to add track to queue
      */
-    playTrack: async (track: Track, context?: PlaybackContext, addToQueue: boolean = false) => {
-      const source = await resolvePlayableSource(track);
+    playTrack: async (track: PlayableInput, context?: PlaybackContext, addToQueue: boolean = false) => {
+      const item = toPlayableItem(track);
+      const source = await resolvePlayableSource(item);
       if (!source) {
         return;
       }
-      await playResolvedTrack(track, source, context, addToQueue);
+      await playResolvedTrack(item, source, context, addToQueue);
     },
 
     /**
@@ -1154,8 +1226,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
      * active queue. Album, playlist, liked songs, and search screens should use
      * this instead of playing an isolated track.
      */
-    playTrackList: async (tracks: Track[], startIndex: number = 0, context?: PlaybackContext) => {
-      const playableTracks = tracks.filter((track) => track?.id);
+    playTrackList: async (tracks: PlayableInput[], startIndex: number = 0, context?: PlaybackContext) => {
+      const playableTracks = tracks.filter((track) => track?.id).map(toPlayableItem);
       if (playableTracks.length === 0) {
         return;
       }

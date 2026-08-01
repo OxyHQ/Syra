@@ -1,4 +1,9 @@
-import { clearStreamResolutionCache, prefetchStreams, resolveStream } from './streamService';
+import {
+  clearStreamResolutionCache,
+  prefetchStreams,
+  resolveStream,
+  resolveUploadStream,
+} from './streamService';
 import { api } from '@/utils/api';
 
 jest.mock('@/utils/api', () => ({
@@ -62,7 +67,7 @@ describe('resolveStream', () => {
     expect(mockGet).toHaveBeenCalledTimes(1);
   });
 
-  it('prefetches unique track ids without throwing to the caller', async () => {
+  it('prefetches unique refs without throwing to the caller', async () => {
     const resolution = {
       url: 'https://x/api/stream/t1/master.m3u8?t=tok',
       type: 'hls' as const,
@@ -70,12 +75,20 @@ describe('resolveStream', () => {
     };
     mockGet.mockResolvedValue({ data: resolution });
 
-    prefetchStreams(['t1', 't1', 't2']);
+    prefetchStreams([
+      { kind: 'track', id: 't1' },
+      { kind: 'track', id: 't1' },
+      { kind: 'track', id: 't2' },
+      // Same id as the catalog track above: two collections, two keyspaces. A
+      // ref-blind dedupe would drop this one as "already prefetched".
+      { kind: 'upload', id: 't1' },
+    ]);
     await Promise.resolve();
 
-    expect(mockGet).toHaveBeenCalledTimes(2);
+    expect(mockGet).toHaveBeenCalledTimes(3);
     expect(mockGet).toHaveBeenCalledWith('/stream/t1');
     expect(mockGet).toHaveBeenCalledWith('/stream/t2');
+    expect(mockGet).toHaveBeenCalledWith('/uploads/t1/stream');
   });
 
   it('throws a descriptive error when api.get rejects', async () => {
@@ -105,5 +118,47 @@ describe('resolveStream', () => {
     await expect(resolveStream('t5')).rejects.toThrow(
       'Failed to resolve stream for t5: Track not playable',
     );
+  });
+});
+
+describe('resolveUploadStream', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    clearStreamResolutionCache();
+  });
+
+  it('resolves a locker file through the uploads endpoint', async () => {
+    const resolution = {
+      url: 'https://x/api/uploads/u1/stream/master.m3u8?t=tok',
+      type: 'hls' as const,
+      expiresAt: '2999-12-31T00:00:00.000Z',
+    };
+    mockGet.mockResolvedValueOnce({ data: resolution });
+
+    await expect(resolveUploadStream('u1')).resolves.toEqual(resolution);
+
+    expect(mockGet).toHaveBeenCalledTimes(1);
+    expect(mockGet).toHaveBeenCalledWith('/uploads/u1/stream');
+  });
+
+  it('does not share cache entries with a catalog track of the same id', async () => {
+    const catalogResolution = {
+      url: 'https://x/api/stream/same/master.m3u8?t=tok',
+      type: 'hls' as const,
+      expiresAt: '2999-12-31T00:00:00.000Z',
+    };
+    const uploadResolution = {
+      url: 'https://x/api/uploads/same/stream/master.m3u8?t=tok',
+      type: 'hls' as const,
+      expiresAt: '2999-12-31T00:00:00.000Z',
+    };
+    mockGet
+      .mockResolvedValueOnce({ data: catalogResolution })
+      .mockResolvedValueOnce({ data: uploadResolution });
+
+    await expect(resolveStream('same')).resolves.toEqual(catalogResolution);
+    await expect(resolveUploadStream('same')).resolves.toEqual(uploadResolution);
+
+    expect(mockGet).toHaveBeenCalledTimes(2);
   });
 });

@@ -1,4 +1,4 @@
-import { PlaybackContext, Queue, RepeatMode, Track } from '@syra/shared-types';
+import { PlaybackContext, PlayableItem, Queue, RepeatMode, UserUploadAsTrack } from '@syra/shared-types';
 import { queueService } from '../services/queueService';
 import { useQueueStore } from './queueStore';
 
@@ -21,7 +21,8 @@ jest.mock('@/lib/oxyServices', () => ({
 
 const mockedQueueService = queueService as jest.Mocked<typeof queueService>;
 
-const baseTrack: Track = {
+const baseTrack: PlayableItem = {
+  kind: 'track',
   id: '6a34c2c5d1646e517424358f',
   title: 'Track One',
   artistId: '6a34c2c5d1646e5174243590',
@@ -35,11 +36,25 @@ const baseTrack: Track = {
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
 
-function track(id: string): Track {
+function track(id: string): PlayableItem {
   return {
     ...baseTrack,
     id,
     title: `Track ${id}`,
+  };
+}
+
+/** A locker file as the uploads endpoint serialises one: Track-shaped, tagged. */
+function upload(id: string): UserUploadAsTrack {
+  return {
+    ...baseTrack,
+    kind: 'upload',
+    id,
+    title: `Upload ${id}`,
+    // A locker file with no resolvable artist is valid, and the empty strings
+    // are exactly what the backend DTO ships for one.
+    artistId: '',
+    artistName: '',
   };
 }
 
@@ -178,7 +193,36 @@ describe('queueStore', () => {
 
     await addPromise;
 
-    expect(mockedQueueService.addToQueue).toHaveBeenCalledWith([secondTrack.id], 'last');
+    expect(mockedQueueService.addToQueue).toHaveBeenCalledWith(
+      [{ kind: 'track', id: secondTrack.id }],
+      'last',
+    );
+    expect(useQueueStore.getState().queue).toEqual(persistedQueue);
+  });
+
+  it('appends a locker file by its own kind, not as a catalog track', async () => {
+    const firstTrack = track('6a34c2c5d1646e517424358f');
+    const lockerFile = upload('6a34c2c5d1646e5174243593');
+    const initialQueue: Queue = {
+      current: 0,
+      tracks: [firstTrack],
+    };
+    const persistedQueue: Queue = {
+      current: 0,
+      tracks: [firstTrack, lockerFile],
+    };
+    resetQueueStore(initialQueue);
+    mockedQueueService.addToQueue.mockResolvedValueOnce({ queue: persistedQueue, added: 1 });
+
+    await useQueueStore.getState().addTracksLocally([lockerFile], 'last');
+
+    // The whole point of the ref: this id addresses `userUploads`, scoped to the
+    // caller's own locker. Sent as a bare id — or tagged `track` — it would be
+    // looked up in the catalog, where it does not exist.
+    expect(mockedQueueService.addToQueue).toHaveBeenCalledWith(
+      [{ kind: 'upload', id: lockerFile.id }],
+      'last',
+    );
     expect(useQueueStore.getState().queue).toEqual(persistedQueue);
   });
 

@@ -1,4 +1,4 @@
-import type { Track } from '@syra/shared-types';
+import type { PlayableItem } from '@syra/shared-types';
 import { createAudioPlayer } from 'expo-audio';
 import { resolveStream } from '@/services/streamService';
 import { attachSource } from './playback/attachSource';
@@ -112,7 +112,8 @@ const createAudioPlayerMock = createAudioPlayer as jest.Mock;
 const attachSourceMock = attachSource as jest.Mock;
 
 /** Track with HLS renditions → routed through resolveStream / the stream endpoint. */
-const hlsTrack: Track = {
+const hlsTrack: PlayableItem = {
+  kind: 'track',
   id: '6a34c2c5d1646e517424358f',
   title: 'Track One',
   artistId: '6a34c2c5d1646e5174243590',
@@ -133,7 +134,8 @@ const hlsTrack: Track = {
  * PROGRESSIVE stream. This is the only way a progressive stream reaches the
  * cast receiver now that provider streams are gone.
  */
-const progressiveTrack: Track = {
+const progressiveTrack: PlayableItem = {
+  kind: 'track',
   id: '6a34c2c5d1646e5174243591',
   title: 'Track Two',
   artistId: '6a34c2c5d1646e5174243590',

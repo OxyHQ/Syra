@@ -391,7 +391,28 @@
       "message": "Something went wrong while loading this profile. Please try again.",
       "session": "We could not confirm your session. Check your connection and try again."
     },
-    "empty": "Nothing to show yet"
+    "empty": "Nothing to show yet",
+    "singlesAndEps": "Singles & EPs",
+    "compilations": "Compilations",
+    "appearsOn": "Appears on",
+    "inPlaylists": "In playlists",
+    "contributedBadge": "Contributed",
+    "externallySourced": "Imported from public sources, not written by the artist: {{fields}}. Whoever claims this profile can replace them.",
+    "linkFailed": "Could not open that link.",
+    "claim": {
+      "title": "Is this you, {{name}}?",
+      "body": "This profile was created from the tags of a file somebody else uploaded. If you are this artist, you can ask to take it over — decide what stays published, correct the details, and choose whether other people may contribute recordings to it.",
+      "cta": "Claim this profile",
+      "evidenceLabel": "How can we verify this is you?",
+      "evidencePlaceholder": "A link to your official site or socials, your distributor, or anything else that shows this is your work.",
+      "submit": "Send claim",
+      "submitted": "Claim sent for review",
+      "failed": "Could not send your claim",
+      "pendingTitle": "Claim under review",
+      "pendingBody": "A person reviews every claim — nothing is granted automatically, because these profiles are built from files uploaded by strangers. We will let you know either way.",
+      "signInRequired": "Sign in to claim this profile."
+    },
+    "emptyContributed": "This profile was created from an uploaded file, so there is not much here yet. We are gathering details from public music databases — they will appear as they arrive."
   },
   "album": {
     "notFound": "Album not found",
@@ -621,5 +642,110 @@
   },
   "lyrics": {
     "unavailable": "No lyrics available"
+  },
+  "uploads": {
+    "seo": {
+      "title": "Upload music - Syra",
+      "description": "Upload your own music to your private locker or contribute it to the Syra catalogue"
+    },
+    "title": "Upload music",
+    "subtitle": "Keep files privately in your own locker, or contribute them to the public catalogue under the artist named in the file.",
+    "pick": "Choose audio files",
+    "pickMore": "Add more files",
+    "emptyHint": "MP3, FLAC, OGG, M4A and WAV, up to 200 MB each.",
+    "remove": "Remove this file",
+    "uploading": "Uploading…",
+    "submit_one": "Upload 1 file",
+    "submit_other": "Upload {{count}} files",
+    "unknownArtist": "Unknown artist",
+    "openLocker": "Open your uploads",
+    "signedOut": "Sign in to upload music",
+    "signedOutHint": "Your uploads are private to your account, so they need a session.",
+    "destination": {
+      "private": "Private locker",
+      "privateHint": "Only you can hear it. Nothing is published and nothing is added to the catalogue.",
+      "public": "Contribute to the catalogue",
+      "publicHint": "Published for everyone and credited to the artist named in the file's tags — not to you. Syra checks the file first."
+    },
+    "details": {
+      "toggle": "Add details",
+      "hint": "Leave blank to keep whatever the file's own tags say. Anything you type here replaces it.",
+      "title": "Title",
+      "artist": "Artist",
+      "album": "Album"
+    },
+    "attestation": {
+      "title": "Rights declaration",
+      "statement": "I own the rights to this recording, or I have the rights holder's permission to distribute it on Syra. I understand this declaration is recorded with my upload.",
+      "required": "Accept the rights declaration before contributing to the catalogue."
+    },
+    "matched": {
+      "title": "Already on Syra",
+      "body": "This recording is already in the catalogue, so your file was not transferred — there is nothing to upload. Add the catalogue version to your library and it plays from there.",
+      "addToLibrary": "Add to library",
+      "added": "In your library"
+    },
+    "duplicate": {
+      "title": "Already in your uploads",
+      "body": "You uploaded this exact file before. It is still in your locker."
+    },
+    "stored": {
+      "title": "Saved to your locker",
+      "processing": "Preparing it for playback…",
+      "ready": "Ready to play",
+      "failed": "Syra could not process this file."
+    },
+    "published": {
+      "title": "Published to the catalogue",
+      "body": "It is credited to the artist named in the file. If that artist joins Syra they can claim the profile and decide what happens to it."
+    },
+    "blocked": {
+      "title": "Not published",
+      "evidence": "What was found in the file",
+      "keepPrivate": "Save it to my locker instead",
+      "artist_unresolved": "This file has no artist tag, and Syra could not work out who the artist is from anything else in it. The public catalogue needs an artist: without one there is nobody to credit, no profile for the real artist to claim, and no one to send a copyright claim to. Add the artist under \"Add details\", or keep the file in your private locker, where an unknown artist is perfectly fine.",
+      "artist_not_found": "The artist this file points at does not exist on Syra.",
+      "artist_name_denylisted": "The artist name in this file is a tagger's placeholder — \"Unknown Artist\", \"Various Artists\" or similar — which cannot become a catalogue profile. Type the real artist under \"Add details\", or keep the file privately.",
+      "artist_contributions_closed": "This artist is already on Syra and has not opened their page to contributions from other people. Only they can publish their own recordings. You can still keep this file in your private locker.",
+      "artist_uploads_disabled": "This artist cannot receive new tracks right now.",
+      "contributor_blocked": "Your account can no longer contribute to the public catalogue: repeated copyright complaints were upheld against recordings you published. This is about your account, not about this artist or this file. Your private locker is unaffected — you can still keep this file and listen to it. If you think this is wrong, contact support to appeal.",
+      "attestation_required": "Contributing to the catalogue needs the rights declaration accepted first.",
+      "commercial_provenance": "This file carries the marks of a commercial release — store purchase tags, a label's identifiers, or a known commercial recording. Syra will not publish it. You can still keep it in your private locker: listening to your own copy is not the same as distributing it."
+    },
+    "locker": {
+      "seo": {
+        "title": "Your uploads - Syra",
+        "description": "The music you uploaded to your private Syra locker"
+      },
+      "title": "Your uploads",
+      "subtitle": "Your own files. Only you can hear them, and they never appear in search, browse or anyone else's library.",
+      "empty": "Nothing uploaded yet",
+      "emptyHint": "Files you upload privately live here.",
+      "loadError": "Could not load your uploads",
+      "trackCount_one": "{{count}} file",
+      "trackCount_other": "{{count}} files",
+      "otherFiles": "Other files",
+      "actions": "File options",
+      "editHint": "Correct what Syra read from the file's tags.",
+      "save": "Save changes",
+      "saved": "Saved",
+      "saveFailed": "Could not save your changes",
+      "contributeHint": "Contribute this file to the public catalogue, credited to its artist rather than to you.",
+      "contribute": "Contribute to the catalogue",
+      "contributed": "Contributed to the catalogue",
+      "contributeFailed": "Could not contribute this file",
+      "delete": "Delete this file",
+      "deleted": "Deleted",
+      "deleteFailed": "Could not delete this file",
+      "expiringToday": "Expires today",
+      "expiringIn_one": "Expires in {{count}} day",
+      "expiringIn_other": "Expires in {{count}} days",
+      "untitledAlbum": "Untitled release"
+    },
+    "errors": {
+      "picker": "Could not open the file picker.",
+      "upload": "The upload failed. Please try again.",
+      "session": "We could not confirm your session."
+    }
   }
 }

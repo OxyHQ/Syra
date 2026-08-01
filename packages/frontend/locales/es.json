@@ -391,7 +391,28 @@
       "message": "Algo ha fallado al cargar este perfil. Inténtalo de nuevo.",
       "session": "No hemos podido confirmar tu sesión. Comprueba tu conexión e inténtalo de nuevo."
     },
-    "empty": "Aún no hay nada que mostrar"
+    "empty": "Aún no hay nada que mostrar",
+    "singlesAndEps": "Sencillos y EP",
+    "compilations": "Recopilatorios",
+    "appearsOn": "Aparece en",
+    "inPlaylists": "En playlists",
+    "contributedBadge": "Contribuida",
+    "externallySourced": "Importado de fuentes públicas, no lo ha escrito el artista: {{fields}}. Quien reclame este perfil podrá sustituirlo.",
+    "linkFailed": "No se ha podido abrir el enlace.",
+    "claim": {
+      "title": "¿Eres tú, {{name}}?",
+      "body": "Este perfil se ha creado a partir de las etiquetas de un archivo que subió otra persona. Si eres este artista, puedes pedir quedártelo: decidir qué sigue publicado, corregir los datos y elegir si otras personas pueden contribuir grabaciones.",
+      "cta": "Reclamar este perfil",
+      "evidenceLabel": "¿Cómo podemos verificar que eres tú?",
+      "evidencePlaceholder": "Un enlace a tu web oficial o a tus redes, tu distribuidora, o cualquier cosa que demuestre que es tu obra.",
+      "submit": "Enviar reclamación",
+      "submitted": "Reclamación enviada para revisión",
+      "failed": "No se ha podido enviar tu reclamación",
+      "pendingTitle": "Reclamación en revisión",
+      "pendingBody": "Una persona revisa cada reclamación: no se concede nada automáticamente, porque estos perfiles se construyen con archivos que suben desconocidos. Te avisaremos en cualquier caso.",
+      "signInRequired": "Inicia sesión para reclamar este perfil."
+    },
+    "emptyContributed": "Este perfil se ha creado a partir de un archivo subido, así que todavía hay poco aquí. Estamos recopilando datos de bases de datos musicales públicas: irán apareciendo según lleguen."
   },
   "album": {
     "notFound": "Álbum no encontrado",
@@ -621,5 +642,110 @@
   },
   "lyrics": {
     "unavailable": "No hay letra disponible"
+  },
+  "uploads": {
+    "seo": {
+      "title": "Subir música - Syra",
+      "description": "Sube tu propia música a tu taquilla privada o contribúyela al catálogo de Syra"
+    },
+    "title": "Subir música",
+    "subtitle": "Guarda archivos en privado en tu propia taquilla, o contribúyelos al catálogo público bajo el artista que indique el archivo.",
+    "pick": "Elegir archivos de audio",
+    "pickMore": "Añadir más archivos",
+    "emptyHint": "MP3, FLAC, OGG, M4A y WAV, hasta 200 MB cada uno.",
+    "remove": "Quitar este archivo",
+    "uploading": "Subiendo…",
+    "submit_one": "Subir 1 archivo",
+    "submit_other": "Subir {{count}} archivos",
+    "unknownArtist": "Artista desconocido",
+    "openLocker": "Abrir tus subidas",
+    "signedOut": "Inicia sesión para subir música",
+    "signedOutHint": "Tus subidas son privadas de tu cuenta, así que necesitan una sesión.",
+    "destination": {
+      "private": "Taquilla privada",
+      "privateHint": "Solo tú puedes escucharlo. No se publica nada ni se añade nada al catálogo.",
+      "public": "Contribuir al catálogo",
+      "publicHint": "Se publica para todo el mundo y se atribuye al artista que indican las etiquetas del archivo, no a ti. Syra revisa antes el archivo."
+    },
+    "details": {
+      "toggle": "Añadir datos",
+      "hint": "Déjalo en blanco para conservar lo que digan las etiquetas del archivo. Lo que escribas aquí las sustituye.",
+      "title": "Título",
+      "artist": "Artista",
+      "album": "Álbum"
+    },
+    "attestation": {
+      "title": "Declaración de derechos",
+      "statement": "Soy titular de los derechos de esta grabación, o tengo permiso del titular para distribuirla en Syra. Entiendo que esta declaración queda registrada junto con mi subida.",
+      "required": "Acepta la declaración de derechos antes de contribuir al catálogo."
+    },
+    "matched": {
+      "title": "Ya está en Syra",
+      "body": "Esta grabación ya está en el catálogo, así que tu archivo no se ha transferido: no hay nada que subir. Añade la versión del catálogo a tu biblioteca y se reproduce desde ahí.",
+      "addToLibrary": "Añadir a la biblioteca",
+      "added": "En tu biblioteca"
+    },
+    "duplicate": {
+      "title": "Ya está en tus subidas",
+      "body": "Ya habías subido este mismo archivo. Sigue en tu taquilla."
+    },
+    "stored": {
+      "title": "Guardado en tu taquilla",
+      "processing": "Preparándolo para reproducir…",
+      "ready": "Listo para reproducir",
+      "failed": "Syra no ha podido procesar este archivo."
+    },
+    "published": {
+      "title": "Publicado en el catálogo",
+      "body": "Se atribuye al artista que indica el archivo. Si ese artista llega a Syra podrá reclamar el perfil y decidir qué pasa con él."
+    },
+    "blocked": {
+      "title": "No se ha publicado",
+      "evidence": "Lo que se ha encontrado en el archivo",
+      "keepPrivate": "Guardarlo en mi taquilla",
+      "artist_unresolved": "Este archivo no lleva etiqueta de artista, y Syra tampoco ha podido deducirlo de nada más. El catálogo público necesita un artista: sin él no hay a quién atribuir la obra, ni perfil que el artista real pueda reclamar, ni destinatario para una reclamación de derechos. Añade el artista en «Añadir datos», o guarda el archivo en tu taquilla privada, donde un artista desconocido no es ningún problema.",
+      "artist_not_found": "El artista al que apunta este archivo no existe en Syra.",
+      "artist_name_denylisted": "El nombre de artista del archivo es un relleno de etiquetador — «Unknown Artist», «Various Artists» o similar — y no puede convertirse en un perfil del catálogo. Escribe el artista real en «Añadir datos», o guarda el archivo en privado.",
+      "artist_contributions_closed": "Este artista ya está en Syra y no ha abierto su página a contribuciones de otras personas. Solo él puede publicar sus grabaciones. Puedes guardar el archivo en tu taquilla privada igualmente.",
+      "artist_uploads_disabled": "Este artista no puede recibir pistas nuevas ahora mismo.",
+      "contributor_blocked": "Tu cuenta ya no puede contribuir al catálogo público: se han resuelto en tu contra varias reclamaciones de derechos sobre grabaciones que publicaste. Esto es por tu cuenta, no por este artista ni por este archivo. Tu taquilla privada no se ve afectada: puedes guardar el archivo y escucharlo igualmente. Si crees que es un error, escribe a soporte para recurrirlo.",
+      "attestation_required": "Para contribuir al catálogo hay que aceptar antes la declaración de derechos.",
+      "commercial_provenance": "Este archivo lleva marcas de una publicación comercial: etiquetas de compra en una tienda, identificadores de un sello, o una grabación comercial conocida. Syra no lo va a publicar. Puedes guardarlo en tu taquilla privada: escuchar tu propia copia no es lo mismo que distribuirla."
+    },
+    "locker": {
+      "seo": {
+        "title": "Tus subidas - Syra",
+        "description": "La música que has subido a tu taquilla privada de Syra"
+      },
+      "title": "Tus subidas",
+      "subtitle": "Tus propios archivos. Solo tú puedes escucharlos, y nunca aparecen en la búsqueda, en explorar ni en la biblioteca de nadie más.",
+      "empty": "Aún no has subido nada",
+      "emptyHint": "Aquí viven los archivos que subas en privado.",
+      "loadError": "No se han podido cargar tus subidas",
+      "trackCount_one": "{{count}} archivo",
+      "trackCount_other": "{{count}} archivos",
+      "otherFiles": "Otros archivos",
+      "actions": "Opciones del archivo",
+      "editHint": "Corrige lo que Syra ha leído de las etiquetas del archivo.",
+      "save": "Guardar cambios",
+      "saved": "Guardado",
+      "saveFailed": "No se han podido guardar los cambios",
+      "contributeHint": "Contribuye este archivo al catálogo público, atribuido a su artista y no a ti.",
+      "contribute": "Contribuir al catálogo",
+      "contributed": "Contribuido al catálogo",
+      "contributeFailed": "No se ha podido contribuir este archivo",
+      "delete": "Eliminar este archivo",
+      "deleted": "Eliminado",
+      "deleteFailed": "No se ha podido eliminar este archivo",
+      "expiringToday": "Caduca hoy",
+      "expiringIn_one": "Caduca en {{count}} día",
+      "expiringIn_other": "Caduca en {{count}} días",
+      "untitledAlbum": "Publicación sin título"
+    },
+    "errors": {
+      "picker": "No se ha podido abrir el selector de archivos.",
+      "upload": "La subida ha fallado. Inténtalo de nuevo.",
+      "session": "No hemos podido confirmar tu sesión."
+    }
   }
 }

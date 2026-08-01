@@ -5,7 +5,7 @@ import { useMediaQuery } from 'react-responsive';
 import { useUIStore } from '@/stores/uiStore';
 import { useLibraryCollections } from '@/hooks/useLibraryCollections';
 import { LibrarySidebarCollapsed } from './LibrarySidebar/LibrarySidebarCollapsed';
-import { LibrarySidebarExpanded } from './LibrarySidebar/LibrarySidebarExpanded';
+import { LibrarySidebarExpanded, type LibraryFilter } from './LibrarySidebar/LibrarySidebarExpanded';
 
 /**
  * Library Sidebar Component
@@ -26,7 +26,7 @@ export const LibrarySidebar: React.FC = () => {
   } = useUIStore();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState<'All' | 'Playlists' | 'Artists' | 'Albums' | 'Podcasts'>('All');
+  const [activeFilter, setActiveFilter] = useState<LibraryFilter>('All');
   const isFullscreen = fullscreenPanel === 'library';
 
   // Library data from the shared React Query layer. Derived from the

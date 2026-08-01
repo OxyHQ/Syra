@@ -58,10 +58,15 @@ export const MobilePlayerBar: React.FC = () => {
 
   const { isTrackLiked } = useLibrary();
   const toggleLike = useToggleLikeTrack();
-  const isLiked = currentTrack ? isTrackLiked(currentTrack.id) : false;
+  // Liking, lyrics and artist pages are CATALOG features: they address the
+  // `tracks` collection, which a locker file is deliberately not in. Sending an
+  // upload id to `/library/tracks/:id/like` would be a request for a track that
+  // does not exist, so the control is not offered for one.
+  const isCatalogTrack = currentTrack?.kind === 'track';
+  const isLiked = isCatalogTrack ? isTrackLiked(currentTrack.id) : false;
 
   const handleToggleLike = () => {
-    if (!currentTrack) {
+    if (!currentTrack || !isCatalogTrack) {
       return;
     }
     toggleLike.mutate({ id: currentTrack.id, next: !isLiked, track: currentTrack });
@@ -165,7 +170,9 @@ export const MobilePlayerBar: React.FC = () => {
               numberOfLines={1}
             >
               {media
-                ? media.subtitle
+                // A locker file with no resolved artist ships an empty name by
+                // design; it is an unknown artist, not a missing one.
+                ? media.subtitle || t('uploads.unknownArtist')
                 : (isLoading ? '' : 'Choose a track to play')}
             </Text>
           </View>
@@ -177,7 +184,7 @@ export const MobilePlayerBar: React.FC = () => {
           <CastButton size={24} color={theme.colors.primaryForeground} />
           {isEpisode ? (
             <SpeedPill size="sm" tint={theme.colors.primaryForeground} />
-          ) : (
+          ) : isCatalogTrack ? (
             <Pressable
               style={styles.controlButton}
               onPress={handleToggleLike}
@@ -192,7 +199,7 @@ export const MobilePlayerBar: React.FC = () => {
                 color={theme.colors.primaryForeground}
               />
             </Pressable>
-          )}
+          ) : null}
           <Pressable
             style={[
               styles.playButton,

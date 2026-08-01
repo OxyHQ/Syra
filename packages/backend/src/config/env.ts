@@ -65,10 +65,6 @@ const schema = z.object({
 
   OPENAI_API_KEY: z.string().optional(),
 
-  ACRCLOUD_HOST: z.string().optional(),
-  ACRCLOUD_ACCESS_KEY: z.string().optional(),
-  ACRCLOUD_ACCESS_SECRET: z.string().optional(),
-
   JAMENDO_CLIENT_ID: z.string().optional(),
   JAMENDO_API_URL: z.string().optional(),
 

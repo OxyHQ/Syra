@@ -48,6 +48,11 @@ export async function generatePreviewClip(opts: GeneratePreviewClipOptions): Pro
       '-ss', String(startSec),
       '-t', String(PREVIEW_DURATION_SEC),
       '-i', inputPath,
+      // Same reason as the packager: embedded cover art is a video stream. The
+      // MP3 muxer accepts one where MP4 does not, so this path did not fail — it
+      // logged "No packets were sent for some of the attached pictures" and
+      // carried the artwork into a 30-second preview clip that has no use for it.
+      '-vn',
       '-c:a', 'libmp3lame',
       '-b:a', `${PREVIEW_BITRATE_KBPS}k`,
       '-movflags', '+faststart',

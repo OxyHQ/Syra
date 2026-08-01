@@ -1,5 +1,12 @@
 import { create } from 'zustand';
-import { Queue, QueueWithMetadata, Track, RepeatMode, ShuffleMode } from '@syra/shared-types';
+import {
+  Queue,
+  QueueWithMetadata,
+  PlayableItem,
+  PlayableRef,
+  RepeatMode,
+  ShuffleMode,
+} from '@syra/shared-types';
 import { queueService } from '../services/queueService';
 import { isUnauthorizedError } from '../utils/api';
 
@@ -79,9 +86,9 @@ function userFacingError(error: unknown, fallback: string): string {
   return getErrorMessage(error) ?? fallback;
 }
 
-function queueWithInsertedTracks(
+function queueWithInsertedItems(
   queue: Queue | null,
-  tracks: Track[],
+  items: PlayableItem[],
   position?: 'next' | 'last' | number,
 ): Queue {
   const baseQueue = queue ?? {
@@ -99,11 +106,11 @@ function queueWithInsertedTracks(
   }
 
   const nextTracks = [...baseQueue.tracks];
-  nextTracks.splice(insertIndex, 0, ...tracks);
+  nextTracks.splice(insertIndex, 0, ...items);
 
   return {
     ...baseQueue,
-    current: baseQueue.current >= insertIndex ? baseQueue.current + tracks.length : baseQueue.current,
+    current: baseQueue.current >= insertIndex ? baseQueue.current + items.length : baseQueue.current,
     tracks: nextTracks,
   };
 }
@@ -117,11 +124,16 @@ interface QueueState {
 
   // Actions
   loadQueue: () => Promise<void>;
-  addToQueue: (trackIds: string[], position?: 'next' | 'last' | number) => Promise<void>;
+  addToQueue: (refs: PlayableRef[], position?: 'next' | 'last' | number) => Promise<void>;
   replaceQueue: (queue: Queue) => Promise<void>;
-  addTracksLocally: (tracks: Track[], position?: 'next' | 'last' | number) => Promise<void>;
-  removeFromQueue: (trackIds: string[]) => Promise<void>;
-  reorderQueue: (trackIds: string[]) => Promise<void>;
+  /**
+   * Append items the caller already holds in full, so the queue updates before
+   * the round trip. Takes items rather than refs precisely because it renders
+   * them optimistically — a ref alone would have nothing to show.
+   */
+  addTracksLocally: (items: PlayableItem[], position?: 'next' | 'last' | number) => Promise<void>;
+  removeFromQueue: (refs: PlayableRef[]) => Promise<void>;
+  reorderQueue: (refs: PlayableRef[]) => Promise<void>;
   clearQueue: () => Promise<void>;
   setCurrentIndex: (index: number) => Promise<void>;
   playNext: () => Promise<void>;
@@ -154,10 +166,10 @@ export const useQueueStore = create<QueueState>((set, get) => ({
     }
   },
 
-  addToQueue: async (trackIds: string[], position?: 'next' | 'last' | number) => {
+  addToQueue: async (refs: PlayableRef[], position?: 'next' | 'last' | number) => {
     try {
       set({ isLoading: true, error: null });
-      const result = await queueService.addToQueue(trackIds, position);
+      const result = await queueService.addToQueue(refs, position);
       set({ queue: result.queue, isLoading: false });
     } catch (error) {
       console.error('[QueueStore] Error adding to queue:', error);
@@ -192,16 +204,19 @@ export const useQueueStore = create<QueueState>((set, get) => ({
     }
   },
 
-  addTracksLocally: async (tracks: Track[], position?: 'next' | 'last' | number) => {
-    if (tracks.length === 0) {
+  addTracksLocally: async (items: PlayableItem[], position?: 'next' | 'last' | number) => {
+    if (items.length === 0) {
       return;
     }
 
     const previousQueue = get().queue;
-    set({ queue: queueWithInsertedTracks(previousQueue, tracks, position), error: null });
+    set({ queue: queueWithInsertedItems(previousQueue, items, position), error: null });
 
     try {
-      const result = await queueService.addToQueue(tracks.map((track) => track.id), position);
+      const result = await queueService.addToQueue(
+        items.map((item) => ({ kind: item.kind, id: item.id })),
+        position,
+      );
       set({ queue: result.queue });
     } catch (error) {
       // Same as replaceQueue: `POST /queue/add` requires auth, so for a guest
@@ -218,10 +233,10 @@ export const useQueueStore = create<QueueState>((set, get) => ({
     }
   },
 
-  removeFromQueue: async (trackIds: string[]) => {
+  removeFromQueue: async (refs: PlayableRef[]) => {
     try {
       set({ isLoading: true, error: null });
-      const result = await queueService.removeFromQueue(trackIds);
+      const result = await queueService.removeFromQueue(refs);
       set({ queue: result.queue, isLoading: false });
     } catch (error) {
       console.error('[QueueStore] Error removing from queue:', error);
@@ -232,10 +247,10 @@ export const useQueueStore = create<QueueState>((set, get) => ({
     }
   },
 
-  reorderQueue: async (trackIds: string[]) => {
+  reorderQueue: async (refs: PlayableRef[]) => {
     try {
       set({ isLoading: true, error: null });
-      const result = await queueService.reorderQueue(trackIds);
+      const result = await queueService.reorderQueue(refs);
       set({ queue: result.queue, isLoading: false });
     } catch (error) {
       console.error('[QueueStore] Error reordering queue:', error);

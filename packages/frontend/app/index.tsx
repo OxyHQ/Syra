@@ -30,6 +30,7 @@ import {
 } from '@/hooks/useHomeFeed';
 import { usePlayEntity } from '@/hooks/usePlayEntity';
 import { createScopedLogger } from '@/utils/logger';
+import { toPlayableItem } from '@/utils/playableItem';
 import { Ionicons } from '@expo/vector-icons';
 import { pickCatalogImageUrl, resolvePodcastArtwork } from '@/utils/pickImage';
 import { authenticatedClient } from '@/utils/api';
@@ -189,7 +190,7 @@ const HomeScreen: React.FC = () => {
   }, [playTrackList, radioTracks, radioStationTitle]);
 
   const addTrackToQueue = useCallback((track: Track) => {
-    addTracksLocally([track], 'last');
+    addTracksLocally([toPlayableItem(track)], 'last');
     toast.success(t('home.toasts.addedToQueue'));
   }, [addTracksLocally]);
 
@@ -200,7 +201,7 @@ const HomeScreen: React.FC = () => {
         toast.info(t('home.toasts.noTracksToAdd'));
         return;
       }
-      addTracksLocally(albumTracks, 'last');
+      addTracksLocally(albumTracks.map(toPlayableItem), 'last');
       toast.success(t('home.toasts.addedToQueue'));
     } catch (error) {
       logger.error('Error adding album to queue', { albumId, error });
@@ -215,7 +216,7 @@ const HomeScreen: React.FC = () => {
         toast.info(t('home.toasts.noTracksToAdd'));
         return;
       }
-      addTracksLocally(playlistTracks, 'last');
+      addTracksLocally(playlistTracks.map(toPlayableItem), 'last');
       toast.success(t('home.toasts.addedToQueue'));
     } catch (error) {
       logger.error('Error adding playlist to queue', { playlistId, error });
@@ -230,7 +231,7 @@ const HomeScreen: React.FC = () => {
         toast.info(t('home.toasts.noTracksToAdd'));
         return;
       }
-      addTracksLocally(artistTracks, 'last');
+      addTracksLocally(artistTracks.map(toPlayableItem), 'last');
       toast.success(t('home.toasts.addedToQueue'));
     } catch (error) {
       logger.error('Error adding artist to queue', { artistId, error });

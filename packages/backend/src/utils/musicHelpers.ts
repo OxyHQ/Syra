@@ -35,6 +35,44 @@ function normalizeImageSizes(value: unknown): unknown {
 
 function stripExternalCatalogFields(formatted: Record<string, unknown>): void {
   delete formatted.images;
+  /**
+   * Suggested profile photos are server-only, and this is the mechanism that
+   * actually holds on the catalog read path.
+   *
+   * `CatalogEntity.imageSuggestions` is declared `select: false`, which excludes
+   * it from QUERIES — but `findOneArtistWithPlayableTracks` and every other
+   * container helper use `aggregate()`, and an aggregation pipeline ignores
+   * schema-level `select` entirely. `toApiFormat` then spreads the whole
+   * document, so `GET /api/artists/:id` returned the suggestions to anybody who
+   * asked (verified against the real handler, not reasoned about).
+   *
+   * A suggestion is a GUESS about what a real person looks like, taken from a
+   * stranger's file or matched from Commons by name. It is only ever answerable
+   * by the artist, through the claim flow, so it is deleted here — the one place
+   * every catalog serializer funnels through.
+   */
+  delete formatted.imageSuggestions;
+  /**
+   * The audio content hash — server-only, and stripped here for the same reason,
+   * one step ahead of the same failure.
+   *
+   * `Track.sha256` is `select: false`, and today that ALONE is what keeps it off
+   * the wire: track reads are `find()` queries, so the projection applies. A
+   * sweep proved how thin that is — removing the flag leaked it from eleven
+   * handlers at once (`/tracks`, `/search`, `/browse`, charts, the home feed,
+   * album and artist track lists), because `toApiFormat` spreads and `trackSchema`
+   * having no `sha256` field does not constrain an untyped formatter.
+   *
+   * So the single point of failure is "no track read is ever an aggregation" —
+   * which is not a property anyone can hold in their head, and `imageSuggestions`
+   * is the proof of what happens when it lapses. Deleting it here costs nothing
+   * and removes the dependency.
+   *
+   * `rawTags` is deliberately NOT listed: no catalog model has the field
+   * (`UserUpload` and `ContributionAttestation` do, and neither passes through
+   * these helpers), so a delete for it would be a line that can never fire.
+   */
+  delete formatted.sha256;
 }
 
 /**

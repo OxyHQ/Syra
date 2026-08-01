@@ -19,6 +19,7 @@ import { Image } from 'expo-image';
 import { pickCatalogImageUrl, resolvePodcastArtwork } from '@/utils/pickImage';
 import { EpisodeRow } from '@/components/EpisodeRow';
 import { useSubscriptions, useContinueListening } from '@/hooks/usePodcasts';
+import { useUploads } from '@/hooks/useUploads';
 import { usePlayerStore } from '@/stores/playerStore';
 
 /**
@@ -36,7 +37,7 @@ const FAB_SIDE_OFFSET = 16;
 // These stay English identifiers: they are the filter's VALUE (and the source of
 // `LibraryFilter`), not its label. The label comes from the key maps below, so a
 // translated UI never changes what the state machine compares against.
-const LIBRARY_FILTERS = ['All', 'Playlists', 'Artists', 'Albums', 'Podcasts', 'Episodes'] as const;
+const LIBRARY_FILTERS = ['All', 'Playlists', 'Artists', 'Albums', 'Uploads', 'Podcasts', 'Episodes'] as const;
 type LibraryFilter = (typeof LIBRARY_FILTERS)[number];
 
 /** Chip label per filter. */
@@ -45,6 +46,7 @@ const LIBRARY_FILTER_KEYS: Record<LibraryFilter, string> = {
   Playlists: 'common.playlists',
   Artists: 'common.artists',
   Albums: 'common.albums',
+  Uploads: 'uploads.locker.title',
   Podcasts: 'common.podcasts',
   Episodes: 'common.episodes',
 };
@@ -55,6 +57,7 @@ const EMPTY_LIBRARY_KEYS: Record<LibraryFilter, string> = {
   Playlists: 'library.empty.playlists',
   Artists: 'library.empty.artists',
   Albums: 'library.empty.albums',
+  Uploads: 'uploads.locker.empty',
   Podcasts: 'library.empty.podcasts',
   Episodes: 'library.empty.episodes',
 };
@@ -123,6 +126,10 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   const continueQuery = useContinueListening();
   const subscribedPodcasts = subscriptionsQuery.data?.subscriptions ?? [];
   const inProgressEpisodes = (continueQuery.data ?? []).filter((entry) => !entry.completed);
+  // The listener's own uploads. Private by construction — a separate collection
+  // no catalogue query reads — so they get their own entry rather than being
+  // mixed into saved albums or playlists.
+  const { uploads, total: uploadCount } = useUploads();
   const currentEpisode = usePlayerStore((s) => s.currentEpisode);
   const isEpisodePlaying = usePlayerStore((s) => s.isPlaying);
   const playEpisode = usePlayerStore((s) => s.playEpisode);
@@ -151,6 +158,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
     (activeFilter === 'Playlists' && finalPlaylists.length === 0) ||
     (activeFilter === 'Artists' && finalFollowedArtists.length === 0) ||
     (activeFilter === 'Albums' && finalSavedAlbums.length === 0) ||
+    (activeFilter === 'Uploads' && uploads.length === 0) ||
     (activeFilter === 'Podcasts' && subscribedPodcasts.length === 0) ||
     (activeFilter === 'Episodes' && inProgressEpisodes.length === 0);
 
@@ -242,6 +250,25 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
               <Text style={[styles.itemTitle, { color: theme.colors.text }]}>{t('library.likedSongs')}</Text>
               <Text style={[styles.itemSubtitle, { color: theme.colors.textSecondary }]}>
                 Playlist • {finalLoading ? '...' : `${finalLikedTracksCount} ${finalLikedTracksCount === 1 ? 'song' : 'songs'}`}
+              </Text>
+            </View>
+          </Pressable>
+        )}
+
+        {/* Your uploads — the private locker, alongside Liked Songs rather than
+            inside the saved-album lists, because nothing in it is catalogue. */}
+        {gate.isAuthenticated && (activeFilter === 'All' || activeFilter === 'Uploads') && uploads.length > 0 && (
+          <Pressable
+            style={[styles.libraryItem, { backgroundColor: theme.colors.backgroundTertiary }]}
+            onPress={() => router.push('/library/uploads')}
+          >
+            <View style={[styles.likedIcon, { backgroundColor: theme.colors.backgroundSecondary }]}>
+              <MaterialCommunityIcons name="folder-music" size={24} color={theme.colors.text} />
+            </View>
+            <View style={styles.itemContent}>
+              <Text style={[styles.itemTitle, { color: theme.colors.text }]}>{t('uploads.locker.title')}</Text>
+              <Text style={[styles.itemSubtitle, { color: theme.colors.textSecondary }]}>
+                {t('uploads.locker.trackCount', { count: uploadCount })}
               </Text>
             </View>
           </Pressable>
@@ -455,7 +482,9 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
             action={
               activeFilter === 'Playlists'
                 ? { label: t('library.createFirstPlaylist'), onPress: () => router.push('/create-playlist') }
-                : undefined
+                : activeFilter === 'Uploads'
+                  ? { label: t('uploads.title'), onPress: () => router.push('/upload') }
+                  : undefined
             }
           />
         )}

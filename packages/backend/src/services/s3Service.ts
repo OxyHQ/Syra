@@ -4,6 +4,8 @@ import {
   PutObjectCommand,
   HeadObjectCommand,
   DeleteObjectCommand,
+  DeleteObjectsCommand,
+  ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { s3Client, S3_BUCKET_NAME, S3_REGION, S3_ENDPOINT } from '../config/s3.config';
@@ -240,6 +242,66 @@ export async function deleteFromS3(key: string): Promise<void> {
       errorMessage: e.message,
     };
     logger.error(`[S3Service] Error deleting from S3:`, errorDetails, error);
+    throw error;
+  }
+}
+
+/**
+ * Delete every object under a key prefix, and return how many were deleted.
+ *
+ * Needed because HLS output is a DIRECTORY: the document records the master
+ * manifest and each variant manifest, but the segments beside them are named by
+ * the packager and stored nowhere. Deleting only the recorded keys would leave
+ * the actual audio in the bucket after the document that pointed at it is gone —
+ * which for a copyright takedown is the difference between removing a work and
+ * merely hiding it.
+ *
+ * The listing is paginated (S3 returns at most 1000 keys per page) and each page
+ * is deleted in one batched call. The caller is responsible for passing a prefix
+ * that belongs to exactly one object; this function will happily empty whatever
+ * it is given.
+ */
+export async function deleteS3Prefix(prefix: string): Promise<number> {
+  if (!prefix) {
+    throw new Error('deleteS3Prefix requires a non-empty prefix');
+  }
+
+  let deleted = 0;
+  let continuationToken: string | undefined;
+
+  try {
+    do {
+      const listed = await s3Client.send(new ListObjectsV2Command({
+        Bucket: S3_BUCKET_NAME,
+        Prefix: prefix,
+        ContinuationToken: continuationToken,
+      }));
+
+      const keys = (listed.Contents ?? [])
+        .map((object) => object.Key)
+        .filter((key): key is string => typeof key === 'string');
+
+      if (keys.length > 0) {
+        await s3Client.send(new DeleteObjectsCommand({
+          Bucket: S3_BUCKET_NAME,
+          Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true },
+        }));
+        deleted += keys.length;
+      }
+
+      continuationToken = listed.IsTruncated ? listed.NextContinuationToken : undefined;
+    } while (continuationToken);
+
+    logger.debug(`[S3Service] Deleted ${deleted} object(s) under prefix: ${prefix}`);
+    return deleted;
+  } catch (error: unknown) {
+    const e = asAwsError(error);
+    logger.error(`[S3Service] Error deleting prefix:`, {
+      prefix,
+      bucket: S3_BUCKET_NAME,
+      errorCode: e.Code ?? e.name,
+      errorMessage: e.message,
+    }, error);
     throw error;
   }
 }

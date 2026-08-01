@@ -71,10 +71,15 @@ export const PlayerBar: React.FC = () => {
 
   const { isTrackLiked } = useLibrary();
   const toggleLike = useToggleLikeTrack();
-  const isLiked = currentTrack ? isTrackLiked(currentTrack.id) : false;
+  // Liking, lyrics and artist pages are CATALOG features: they address the
+  // `tracks` collection, which a locker file is deliberately not in. Sending an
+  // upload id to `/library/tracks/:id/like` would be a request for a track that
+  // does not exist, so the control is not offered for one.
+  const isCatalogTrack = currentTrack?.kind === 'track';
+  const isLiked = isCatalogTrack ? isTrackLiked(currentTrack.id) : false;
 
   const handleToggleLike = () => {
-    if (!currentTrack) {
+    if (!currentTrack || !isCatalogTrack) {
       return;
     }
     toggleLike.mutate({ id: currentTrack.id, next: !isLiked, track: currentTrack });
@@ -182,12 +187,15 @@ export const PlayerBar: React.FC = () => {
               numberOfLines={1}
             >
               {media
-                ? media.subtitle
+                // A locker file with no resolved artist ships an empty name by
+                // design; it is an unknown artist, not a missing one.
+                ? media.subtitle || t('uploads.unknownArtist')
                 : (isLoading ? '' : 'Choose a track to play')}
             </Text>
           </View>
-          {/* Like is track-only; episodes use the show subscribe action instead. */}
-          {!isEpisode && (
+          {/* Like is CATALOG-track-only: episodes use the show subscribe action,
+              and a locker file is not in the collection the library addresses. */}
+          {!isEpisode && isCatalogTrack && (
             <Pressable
               style={styles.likeButton}
               onPress={handleToggleLike}
