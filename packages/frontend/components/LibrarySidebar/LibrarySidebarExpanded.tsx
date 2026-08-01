@@ -6,13 +6,13 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
+import { Search } from '@oxyhq/bloom/search';
 import { useOxy } from '@oxyhq/services';
 import { useUploads } from '@/hooks/useUploads';
 import { Image } from 'expo-image';
@@ -286,14 +286,17 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
       </ScrollView>
 
       <View style={styles.toolRow}>
-        <View style={[styles.searchBox, { backgroundColor: theme.colors.backgroundTertiary }]}>
-          <Ionicons name="search" size={16} color={theme.colors.textSecondary} />
-          <TextInput
+        {/* Bloom's Search rather than a hand-rolled box: it carries the pill
+            field, the magnifying glass and the clear button, and it tracks the
+            design system when that changes. `label` doubles as the placeholder,
+            and clearing is a real control instead of the user deleting
+            character by character. */}
+        <View style={styles.searchBox}>
+          <Search
             value={searchQuery}
             onChangeText={onSearchChange}
-            placeholder={t('sidebar.searchPlaceholder')}
-            placeholderTextColor={theme.colors.textSecondary}
-            style={[styles.searchInput, { color: theme.colors.text }]}
+            label={t('sidebar.searchPlaceholder')}
+            onClearText={() => onSearchChange('')}
           />
         </View>
         {/* Two orders, so the control is a toggle rather than a menu — the
@@ -474,12 +477,6 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     paddingHorizontal: 10,
     minWidth: 0,
-  },
-  searchInput: {
-    flex: 1,
-    height: 34,
-    fontSize: 13,
-    paddingVertical: 0,
   },
   sortButton: {
     height: 34,
