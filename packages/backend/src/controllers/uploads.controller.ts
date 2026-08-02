@@ -74,6 +74,7 @@ import { fingerprintFile, type Fingerprint } from '../services/uploads/fingerpri
 import { identifyRecording, type AcousticIdentity } from '../services/uploads/acoustid';
 import { discoverIsrc, verifyIsrcClaim, type IsrcRecording } from '../services/uploads/isrcLookup';
 import { findArtistMbidByIsrc } from '../services/uploads/musicbrainzLookup';
+import { enqueueArtistEnrichment } from '../services/ingest/ingestQueue';
 import {
   collectProvenanceSignals,
   type ProvenanceContext,
@@ -1048,14 +1049,32 @@ async function screenPublicContribution(params: {
    */
   if (artistId) {
     const target = await ArtistModel.findById(artistId)
-      .select('image claimable claimedByOxyUserId')
+      .select('image claimable claimedByOxyUserId ownerOxyUserId externalIds.musicbrainzArtistId')
       .lean();
-    /**
-     * Only a bare, UNCLAIMED profile is written to: an artist who already has a
-     * photo keeps it, because their branding is not a contributor's to
-     * overwrite, and once claimed the photo is theirs.
-     */
 
+    /**
+     * A profile the artist owns is never touched and never gated.
+     *
+     * Owned or claimed means they made it or took it over, and from then on the
+     * photo is theirs to set, keep or leave empty. A contributor may neither
+     * overwrite it nor be refused because of it.
+     */
+    const artistOwnsProfile = Boolean(target?.claimedByOxyUserId ?? target?.ownerOxyUserId);
+
+    if (target && !artistOwnsProfile) {
+      /**
+       * Refresh on every contribution, rather than only when the profile is bare.
+       *
+       * New music is exactly when the upstream record is most likely to have
+       * gained a photograph, and enrichment fills only what is still missing —
+       * so re-queueing is an upsert, not an overwrite. Queued and never awaited:
+       * the sources are rate limited to one request a second and an upload must
+       * not wait behind them.
+       */
+      const mbid = resolvedArtistMbid ?? target.externalIds?.musicbrainzArtistId;
+      if (mbid) void enqueueArtistEnrichment(artistId);
+
+    }
   }
 
   const decision = await evaluatePublicContribution({
