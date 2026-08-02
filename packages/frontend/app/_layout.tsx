@@ -26,7 +26,6 @@ import { PLAYER_BAR_HEIGHT } from '@/constants/layout';
 import { useKeyboardVisibility } from "@/hooks/useKeyboardVisibility";
 import { useIsScreenNotMobile, useIsDesktop } from "@/hooks/useOptimizedMediaQuery";
 import { BloomThemeProvider, useTheme } from '@oxyhq/bloom/theme';
-import { ToastOutlet } from '@oxyhq/bloom/toast';
 import { LayoutScrollProvider, useLayoutScroll } from '@/context/LayoutScrollContext';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -406,16 +405,6 @@ export default function RootLayout() {
     >
       <ThemedView style={{ flex: 1 }}>
         {appContent}
-        {/*
-          Mounted at the ROOT, outside `appContent`, so a toast raised from any
-          screen has a host to render into — and so it survives the splash/ready
-          swap that remounts everything below.
-
-          Takes no `t()`-dependent props: a boot-mounted component that calls a
-          suspenseful hook deadlocks the whole tree before i18n finishes
-          initialising, which is a white screen with no console output.
-        */}
-        <ToastOutlet />
       </ThemedView>
     </BloomThemeProvider>
   );
