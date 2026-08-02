@@ -411,15 +411,6 @@ export const uploadBlockedReasonSchema = z.enum([
    */
   'cover_art_required',
   /**
-   * The artist this file resolves to has no photo, and none can be obtained.
-   *
-   * A contributed artist with no MusicBrainz entry has no licensed enrichment
-   * path to one, so a profile created bare stays bare — nothing ever goes back
-   * to fill it. Refusing is the only rule that keeps faceless artist pages out
-   * of the catalogue, given contributors supply no images.
-   */
-  'artist_image_required',
-  /**
    * The file carries no ISRC. Required on the public path because it is the only
    * thing that identifies the RECORDING exactly: from it the artist resolves via
    * MusicBrainz to a specific person with an ISNI, instead of being matched on a

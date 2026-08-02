@@ -87,15 +87,28 @@ function resolveAlbums(
 }
 
 /**
- * Files that belong to no release.
+ * Every file this page is not already showing inside a release.
  *
- * `albumKey` is absent — not empty — for a file with no album tag, deliberately:
- * the key builder is a pure join and would answer `"||"` for an untagged file,
- * which a "has a key" filter would collect into one phantom album containing
- * every untagged upload in the locker.
+ * Defined as a SET DIFFERENCE against what `resolveAlbums` rendered, not as
+ * "has no `albumKey`". The two are not the same, and the gap between them was a
+ * locker that counted a file it never displayed: an upload carrying an
+ * `albumKey` whose release did not come back from `GET /api/uploads/albums` —
+ * or came back naming ids this page has not loaded — belonged to neither list.
+ * Not to an album, because no album claimed it; not to the loose ones, because
+ * it had a key. The row existed, the header counted it, and nothing rendered it.
+ *
+ * Asking what was rendered cannot leave a hole, whatever the two endpoints
+ * disagree about. `albumKey` is still absent — not empty — for a file with no
+ * album tag, deliberately: the key builder is a pure join and would answer
+ * `"||"` for an untagged file, which a "has a key" filter would collect into one
+ * phantom album containing every untagged upload in the locker.
  */
-function looseUploads(uploads: UserUploadAsTrack[]): UserUploadAsTrack[] {
-  return uploads.filter((upload) => !upload.albumKey);
+function looseUploads(
+  uploads: UserUploadAsTrack[],
+  grouped: { album: UploadAlbum; tracks: UserUploadAsTrack[] }[],
+): UserUploadAsTrack[] {
+  const shown = new Set(grouped.flatMap((entry) => entry.tracks.map((track) => track.id)));
+  return uploads.filter((upload) => !shown.has(upload.id));
 }
 
 /**
@@ -397,7 +410,7 @@ const UploadsScreen: React.FC = () => {
   const currentTrack = usePlayerStore((state) => state.currentTrack);
 
   const albums = useMemo(() => resolveAlbums(lockerAlbums, uploads), [lockerAlbums, uploads]);
-  const singles = useMemo(() => looseUploads(uploads), [uploads]);
+  const singles = useMemo(() => looseUploads(uploads, albums), [uploads, albums]);
 
   // Only a ready file has an HLS ladder to resolve; a processing one would fail
   // at the resolver, so it is not part of any play context.
