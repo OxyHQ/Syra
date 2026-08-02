@@ -36,12 +36,44 @@ const DIRECTORY_TIMEOUT_MS = 3000;
 /** Re-pull a show's full feed at most this often from search (24h). */
 const DEEP_REFRESH_STALE_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * Cap on retained throttle keys.
+ *
+ * `lastSyncAt` is keyed on the normalized SEARCH QUERY, which reaches us from
+ * `GET /api/search` with no authentication — so its key space is chosen by the
+ * caller, not by our catalog. Every distinct query long enough to trigger an
+ * import used to add an entry that nothing ever removed, which makes anonymous
+ * search a slow, permanent memory leak: cheap to drive, invisible until the
+ * process is restarted, and indistinguishable from ordinary traffic.
+ *
+ * Insertion order is what makes eviction correct here. A JS `Map` iterates in
+ * insertion order, and a repeat query inside its TTL returns early WITHOUT
+ * re-setting the key, so the oldest key is always the least recently admitted —
+ * exactly the one whose TTL is closest to expiring anyway. Evicting it can
+ * therefore only ever allow an import that the TTL was about to allow regardless.
+ */
+export const MAX_THROTTLE_KEYS = 500;
+
 const lastSyncAt = new Map<string, number>();
 const queuedFeeds = new Set<string>();
 let importQueue: Promise<void> = Promise.resolve();
 
 function normalizeQuery(query: string): string {
   return query.trim().toLowerCase();
+}
+
+/**
+ * Record a sync and hold the throttle map at {@link MAX_THROTTLE_KEYS} entries,
+ * dropping the oldest-admitted keys first. A loop rather than a single delete so
+ * the bound holds even if the cap is ever lowered below the current size.
+ */
+function rememberSync(key: string, now: number): void {
+  lastSyncAt.set(key, now);
+  while (lastSyncAt.size > MAX_THROTTLE_KEYS) {
+    const oldest = lastSyncAt.keys().next().value;
+    if (oldest === undefined) break;
+    lastSyncAt.delete(oldest);
+  }
 }
 
 function bulkImportEnabled(): boolean {
@@ -214,7 +246,7 @@ export async function syncPodcastSearch(
 
   const last = lastSyncAt.get(key);
   if (last !== undefined && now - last < SEARCH_IMPORT_TTL_MS) return empty;
-  lastSyncAt.set(key, now);
+  rememberSync(key, now);
 
   let candidates: PodcastDirectoryCandidate[];
   try {

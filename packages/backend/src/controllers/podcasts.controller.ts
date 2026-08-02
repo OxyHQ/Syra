@@ -602,6 +602,19 @@ export async function claimPodcast(req: AuthRequest, res: Response): Promise<voi
     res.status(404).json({ error: 'Podcast not found' });
     return;
   }
+  // An RSS-mirrored show is somebody else's podcast that we imported from their
+  // feed. Claiming one hands over `ownerOxyUserId` on the strength of nothing but
+  // "I asked first", so it must stay closed until a feed-ownership proof exists
+  // (the usual shape being a token the real owner publishes in their own feed).
+  //
+  // Nothing marks an RSS podcast `claimable` today, so this is not currently
+  // reachable — which is precisely why it is worth writing down rather than
+  // relying on. The protection is an absence, and the obvious next feature
+  // ("claim your show") restores the flag without anyone re-deriving this.
+  if (podcast.source === 'rss') {
+    res.status(403).json({ error: 'RSS podcast claims require ownership verification' });
+    return;
+  }
   if (podcast.claimable !== true || podcast.claimedByOxyUserId) {
     res.status(409).json({ error: 'Podcast is not claimable' });
     return;
