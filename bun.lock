@@ -176,7 +176,7 @@
     },
     "packages/sdk": {
       "name": "@syra.fm/sdk",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "dependencies": {
         "zod": "^4.4.3",
       },
@@ -203,7 +203,7 @@
       "peerDependencies": {
         "@expo/vector-icons": "^15.0.2",
         "@livekit/react-native": "^2.11.1",
-        "@oxyhq/services": "^22.13.1",
+        "@oxyhq/services": "^22.13.1 || ^23.0.0 || ^24.0.0 || ^25.0.0 || ^26.0.0",
         "expo-audio": "~56.0.12",
         "expo-blur": "~56.0.3",
         "expo-image-picker": "~56.0.18",

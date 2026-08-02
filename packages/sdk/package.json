@@ -1,6 +1,6 @@
 {
   "name": "@syra.fm/sdk",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Syra SDK — headless, isomorphic catalog client (Node/React-free, public reads + 30s previews) that also ships the Syra live-rooms engine (audio rooms over LiveKit) on React Native and web.",
   "source": "src/index.ts",
   "main": "lib/commonjs/index.js",
@@ -90,7 +90,7 @@
     "react-native": "^0.85.3",
     "react-native-reanimated": "^4.3.1",
     "react-native-safe-area-context": "^5.7.0",
-    "@oxyhq/services": "^22.13.1",
+    "@oxyhq/services": "^22.13.1 || ^23.0.0 || ^24.0.0 || ^25.0.0 || ^26.0.0",
     "livekit-client": "^2.20.0",
     "@livekit/react-native": "^2.11.1",
     "expo-audio": "~56.0.12",
