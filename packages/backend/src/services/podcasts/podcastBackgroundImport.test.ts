@@ -6,6 +6,7 @@ import {
   syncPodcastSearch,
   resetPodcastImportStateForTests,
   MAX_FEEDS_PER_SEARCH,
+  MAX_THROTTLE_KEYS,
 } from './podcastBackgroundImport';
 
 beforeAll(connect);
@@ -122,5 +123,41 @@ describe('syncPodcastSearch — shallow upsert + deep scheduling', () => {
     const result = await syncPodcastSearch('   ', { search: async () => [candidate(1)], enqueue: () => {} });
     expect(result).toEqual({ skipped: true, candidates: 0, shallowUpserted: 0, deepEnqueued: 0 });
     expect(await PodcastModel.countDocuments({})).toBe(0);
+  });
+});
+
+describe('syncPodcastSearch — the throttle map is bounded', () => {
+  // `lastSyncAt` is keyed on the caller's own search string and reached without
+  // authentication, so an unbounded map is a memory leak anyone can drive. These
+  // assert the bound BEHAVIOURALLY — an evicted key stops being throttled — so
+  // they keep working if the eviction strategy is ever rewritten.
+  const noCandidates = { search: async () => [], enqueue: async () => {}, now: () => NOW };
+
+  it('evicts the oldest key once the cap is exceeded, so it can sync again inside its TTL', async () => {
+    const first = await syncPodcastSearch('oldest query', noCandidates);
+    expect(first.skipped).toBe(false);
+
+    for (let i = 0; i < MAX_THROTTLE_KEYS; i += 1) {
+      await syncPodcastSearch(`filler query ${i}`, noCandidates);
+    }
+
+    // One millisecond later — far inside SEARCH_IMPORT_TTL_MS. Admitted only
+    // because the key itself is gone.
+    const again = await syncPodcastSearch('oldest query', { ...noCandidates, now: () => NOW + 1 });
+    expect(again.skipped).toBe(false);
+  });
+
+  it('CONTROL: without exceeding the cap the same key stays throttled', async () => {
+    // Without this, the test above passes just as well against a map that never
+    // remembers anything at all.
+    const first = await syncPodcastSearch('sticky query', noCandidates);
+    expect(first.skipped).toBe(false);
+
+    for (let i = 0; i < 10; i += 1) {
+      await syncPodcastSearch(`few fillers ${i}`, noCandidates);
+    }
+
+    const again = await syncPodcastSearch('sticky query', { ...noCandidates, now: () => NOW + 1 });
+    expect(again.skipped).toBe(true);
   });
 });

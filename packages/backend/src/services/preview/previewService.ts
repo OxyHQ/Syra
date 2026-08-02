@@ -349,6 +349,23 @@ export async function storePreviewFromHls(
  * first, else the track's own ready HLS. Returns `null` when neither source is
  * resolvable (the endpoint then 404s).
  */
+/**
+ * Clip generations currently running, keyed by the S3 preview key.
+ *
+ * `GET /api/preview/:trackId.mp3` takes no authentication, and a cache MISS on it
+ * costs an S3 source download, an ffmpeg transcode and an upload. Without this
+ * map, N concurrent requests for the SAME clip each pay that in full: every one
+ * of them observes `objectExists` as false, because the first writer has not
+ * uploaded yet. One request is the intended cost; N is amplification an anonymous
+ * caller chooses the size of.
+ *
+ * Keyed on the preview key rather than the track id because two different
+ * `startSec` values are genuinely different clips and must not share a promise.
+ * The entry is removed in `finally`, so a rejection is not cached — the next
+ * caller retries rather than inheriting a failure it did not cause.
+ */
+const inFlightGenerations = new Map<string, Promise<string | null>>();
+
 export async function ensurePreviewClip(
   track: PreviewSourceRef,
   startSec: number,
@@ -358,6 +375,27 @@ export async function ensurePreviewClip(
     return previewKey;
   }
 
+  const running = inFlightGenerations.get(previewKey);
+  if (running) {
+    return running;
+  }
+
+  const generation = runPreviewGeneration(track, startSec).finally(() => {
+    inFlightGenerations.delete(previewKey);
+  });
+  inFlightGenerations.set(previewKey, generation);
+  return generation;
+}
+
+/** Test-only: clear in-flight generation state between cases. */
+export function resetPreviewGenerationStateForTests(): void {
+  inFlightGenerations.clear();
+}
+
+async function runPreviewGeneration(
+  track: PreviewSourceRef,
+  startSec: number,
+): Promise<string | null> {
   // Path 1: retained source audio (uploads / CC).
   if (track.audioSource) {
     const sourceRef: TrackAudioRef = {

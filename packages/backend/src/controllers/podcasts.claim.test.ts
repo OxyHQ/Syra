@@ -34,10 +34,10 @@ function makeReq(podcastId: string, userId: string, linkedArtistId?: string): Au
   } as unknown as AuthRequest;
 }
 
-async function makeClaimablePodcast(): Promise<string> {
+async function makeClaimablePodcast(source: 'rss' | 'syra' = 'syra'): Promise<string> {
   const podcast = await PodcastModel.create({
     title: 'Claimable Show',
-    source: 'rss',
+    source,
     feedUrl: `https://feed.example/${Math.random().toString(36).slice(2)}.xml`,
     claimable: true,
   });
@@ -86,5 +86,41 @@ describe('claimPodcast — linkedArtistId IDOR guard', () => {
     const after = await PodcastModel.findById(podcastId).lean();
     expect(after?.claimedByOxyUserId).toBe('owner-A');
     expect(after?.linkedArtistId).toBeUndefined();
+  });
+});
+
+describe('claimPodcast — RSS shows are not claimable', () => {
+  it('refuses to hand over an RSS-mirrored show (403)', async () => {
+    // An RSS show is somebody else's podcast that we mirrored from their feed.
+    // Claiming it would transfer ownership on no evidence but arriving first.
+    const podcastId = await makeClaimablePodcast('rss');
+
+    const res = makeRes();
+    await claimPodcast(makeReq(podcastId, 'attacker-A'), res as unknown as Response);
+
+    expect(res._status).toBe(403);
+    expect(res._body).toEqual({ error: 'RSS podcast claims require ownership verification' });
+
+    const after = await PodcastModel.findById(podcastId).lean();
+    expect(after?.claimedByOxyUserId).toBeUndefined();
+    expect(after?.ownerOxyUserId).toBeUndefined();
+    expect(after?.claimable).toBe(true);
+  });
+
+  it('refuses BEFORE the claimable check, so the source is what decides', async () => {
+    // Ordering matters: were the guard placed after `claimable !== true`, an RSS
+    // show would answer 409 "not claimable" and the rule would silently depend on
+    // a flag nothing sets today rather than on the show's provenance.
+    const podcast = await PodcastModel.create({
+      title: 'Unclaimable RSS Show',
+      source: 'rss',
+      feedUrl: 'https://feed.example/not-claimable.xml',
+      claimable: false,
+    });
+
+    const res = makeRes();
+    await claimPodcast(makeReq(podcast._id.toString(), 'attacker-A'), res as unknown as Response);
+
+    expect(res._status).toBe(403);
   });
 });
