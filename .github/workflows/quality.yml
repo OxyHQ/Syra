@@ -15,6 +15,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Gates the rollout logic deploy-aws.yml runs against production. The script
+  # and this harness are byte-identical copies of Mention's, so they share its
+  # test rather than growing a second, drifting one. Separate job: it needs no
+  # bun install and no workspace build, so it should not queue behind them.
+  deploy-script-test:
+    name: Deploy Script Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify deployment transaction safeguards
+        run: |
+          bash -n .github/scripts/*.sh
+          bash .github/scripts/test-deploy-ecs-image.sh
+
   quality:
     runs-on: ubuntu-latest
     steps:
