@@ -507,6 +507,15 @@ function acousticEvidence(
 const MIN_CATALOG_COVER_ART_PX = 300;
 
 /**
+ * How long an upload may wait for the artist id that unlocks a licensed photo.
+ *
+ * Deliberately far below the enrichment client's own 15s ceiling: this runs in
+ * the user's request, and the value it fetches only affects a photograph that
+ * arrives later anyway.
+ */
+const ARTIST_MBID_LOOKUP_BUDGET_MS = 2_000;
+
+/**
  * Picture types that are a PERSON, not a release.
  *
  * ID3 and FLAC both carry a type byte, and `0x07`/`0x08`/`0x0A` mean soloist,
@@ -949,7 +958,28 @@ async function screenPublicContribution(params: {
     const recordingCode = metadata.isrc ?? identity?.isrc ?? verifiedIsrc?.isrc;
     if (recordingCode) {
       try {
-        resolvedArtistMbid = await findArtistMbidByIsrc(recordingCode);
+        /**
+         * Raced against a short deadline, because this runs INSIDE the upload
+         * request.
+         *
+         * The enrichment client allows 15s per request and serialises calls at
+         * one per second, so an unraced lookup can hold a user's upload open for
+         * fifteen seconds or more while MusicBrainz is slow — for a value that
+         * only decides whether a photograph can be fetched later. The upload
+         * must not pay that.
+         *
+         * Losing the race costs this upload its artist id, not the photograph:
+         * every later contribution re-queues enrichment for the same profile, so
+         * the id arrives the next time the lookup wins. The right long-term home
+         * for this is the background job itself, which has no user waiting.
+         */
+        resolvedArtistMbid = await Promise.race([
+          findArtistMbidByIsrc(recordingCode),
+          new Promise<undefined>((resolve) => {
+            const timer = setTimeout(() => resolve(undefined), ARTIST_MBID_LOOKUP_BUDGET_MS);
+            timer.unref?.();
+          }),
+        ]);
       } catch (error: unknown) {
         logger.info('[uploads] could not resolve an artist id from the recording code', {
           message: getErrorMessage(error),
