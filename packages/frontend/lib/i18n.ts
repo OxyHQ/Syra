@@ -13,6 +13,21 @@ import itIT from '@/locales/it.json';
 import { DEFAULT_LANGUAGE, STORAGE_KEYS } from './constants';
 import { getData } from '@/utils/storage';
 
+/**
+ * Registered SYNCHRONOUSLY, at module load, and deliberately not inside
+ * `initializeI18n`.
+ *
+ * `initReactI18next` is what installs the global instance react-i18next falls
+ * back to when a component has no `I18nextProvider` above it. Doing it inside
+ * the async initializer left a window — from first render until that promise
+ * resolved — in which no global existed at all, and every `useTranslation()`
+ * reached in that window threw `NO_I18NEXT_INSTANCE`. The window is exactly the
+ * app's cold boot, which is when the most components mount at once.
+ *
+ * The language still loads asynchronously; only the registration moves.
+ */
+i18nUse(initReactI18next);
+
 const i18nResources = {
   'en-US': { translation: enUS },
   'es-ES': { translation: esES },
@@ -72,8 +87,8 @@ export async function initializeI18n(): Promise<void> {
       return;
     }
 
-    // Initialize i18n with the saved language
-    i18nUse(initReactI18next);
+    // Initialize i18n with the saved language. `initReactI18next` is already
+    // registered at module load — see the note beside that call.
     await i18nInit({
       resources: i18nResources,
       lng: initialLanguage,
@@ -86,7 +101,6 @@ export async function initializeI18n(): Promise<void> {
     // Fallback to default initialization
     if (!i18n.isInitialized) {
       try {
-        i18nUse(initReactI18next);
         await i18nInit({
           resources: i18nResources,
           lng: DEFAULT_LANGUAGE,
