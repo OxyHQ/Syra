@@ -114,6 +114,24 @@ let acousticIdentity: AcousticIdentity | undefined;
 /** Every fingerprint the pipeline asked about, so "did it ask at all" is observable. */
 const identifiedDurations: number[] = [];
 
+/**
+ * MusicBrainz, stubbed at the boundary for the same reason Deezer is.
+ *
+ * `publishContribution` resolves an artist id from the recording code so the
+ * licensed-image chain has something to key on, and that call goes out over
+ * `fetchEnrichmentJson` — a DIFFERENT client from the Deezer one, so the stub
+ * beside it does not cover it. Unstubbed, this suite reached musicbrainz.org for
+ * real and three tests died on the 5s timeout in CI, where the host is slow or
+ * blocked. A suite that touches the network fails on a plane and hammers a
+ * service that owes us nothing.
+ *
+ * Always `undefined`: the answer for an artist MusicBrainz does not know, which
+ * is the contributed population this whole path exists for.
+ */
+mock.module('../services/uploads/musicbrainzLookup', () => ({
+  findArtistMbidByIsrc: async (): Promise<string | undefined> => undefined,
+}));
+
 mock.module('../services/uploads/acoustid', () => ({
   ...realAcoustid,
   identifyRecording: async (fingerprint: Fingerprint): Promise<AcousticIdentity | undefined> => {
