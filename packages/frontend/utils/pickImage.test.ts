@@ -1,4 +1,10 @@
-import { pickCatalogImageUrl, pickImageUrl } from './pickImage';
+import {
+  CATALOG_IMAGE_TARGET_WIDTH,
+  oxyImageVariantForTarget,
+  pickCatalogImageUrl,
+  pickImageUrl,
+  type CatalogImageTarget,
+} from './pickImage';
 import type { CatalogImageSizes, TrackImage } from '@syra/shared-types';
 
 const IMAGES: TrackImage[] = [
@@ -129,5 +135,66 @@ describe('pickImageUrl — robustness', () => {
 
   it('does not return an external fallback URL', () => {
     expect(pickImageUrl(undefined, 'https://cdn.example.com/cover.jpg', 300)).toBeUndefined();
+  });
+});
+
+/**
+ * The variant names oxy-api's `VariantService.imageVariants` actually serves for
+ * an image. Spelled out independently of the implementation so that a name the
+ * CDN does not know cannot be introduced on both sides at once — every other
+ * string, `full` included, is a 404 with no fallback.
+ */
+const REAL_OXY_IMAGE_VARIANTS = ['w96', 'w128', 'thumb', 'w320', 'w640', 'w1280', 'w2048'];
+
+/** Names that look plausible, have never existed, and 404 the CDN. */
+const NON_EXISTENT_OXY_VARIANTS = ['full', 'large', 'original'];
+
+describe('oxyImageVariantForTarget', () => {
+  const targets = Object.keys(CATALOG_IMAGE_TARGET_WIDTH) as CatalogImageTarget[];
+
+  it('covers every catalog target (vacuity floor)', () => {
+    // Guards the two loops below: were the target table to come back empty,
+    // their assertions would pass without ever running.
+    expect(targets).toHaveLength(6);
+    expect(targets).toEqual(
+      expect.arrayContaining(['icon', 'thumbnail', 'smallArtwork', 'card', 'detailArtwork', 'hero']),
+    );
+  });
+
+  it('maps every target to a variant the Oxy CDN actually serves', () => {
+    for (const target of targets) {
+      expect(REAL_OXY_IMAGE_VARIANTS).toContain(oxyImageVariantForTarget(target));
+    }
+  });
+
+  it('never emits a variant that 404s', () => {
+    for (const target of targets) {
+      expect(NON_EXISTENT_OXY_VARIANTS).not.toContain(oxyImageVariantForTarget(target));
+    }
+  });
+
+  it('picks the narrowest rung at least as wide as the target', () => {
+    expect(oxyImageVariantForTarget('icon')).toBe('w96'); // 64 → 96
+    expect(oxyImageVariantForTarget('thumbnail')).toBe('w96'); // 80 → 96
+    expect(oxyImageVariantForTarget('smallArtwork')).toBe('thumb'); // 180 → 256
+    expect(oxyImageVariantForTarget('card')).toBe('w320'); // 300 → 320
+    expect(oxyImageVariantForTarget('detailArtwork')).toBe('w640'); // 520 → 640
+    expect(oxyImageVariantForTarget('hero')).toBe('w1280'); // 1000 → 1280
+  });
+
+  it('returns a rung at least as wide as the target wherever the ladder allows', () => {
+    const widthOf: Record<string, number> = {
+      w96: 96,
+      w128: 128,
+      thumb: 256,
+      w320: 320,
+      w640: 640,
+      w1280: 1280,
+      w2048: 2048,
+    };
+    for (const target of targets) {
+      const width = widthOf[oxyImageVariantForTarget(target)];
+      expect(width).toBeGreaterThanOrEqual(CATALOG_IMAGE_TARGET_WIDTH[target]);
+    }
   });
 });

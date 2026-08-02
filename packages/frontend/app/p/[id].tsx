@@ -25,7 +25,7 @@ import { MediaCard } from '@/components/MediaCard';
 import { ResponsiveGrid } from '@/components/ResponsiveGrid';
 import { ArtistDetailSkeleton } from '@/components/skeletons';
 import { EmptyState } from '@/components/common/EmptyState';
-import { pickCatalogImageUrl, resolvePodcastArtwork, type CatalogImageTarget } from '@/utils/pickImage';
+import { oxyImageVariantForTarget, pickCatalogImageUrl, resolvePodcastArtwork, type CatalogImageTarget } from '@/utils/pickImage';
 import { oxyServices } from '@/lib/oxyServices';
 import { useLibrary, useToggleFollowArtist } from '@/hooks/useLibrary';
 import { useRelatedArtists } from '@/hooks/useRecommendations';
@@ -124,8 +124,7 @@ const EntityProfileScreen: React.FC = () => {
       if (fromCatalog) return fromCatalog;
     }
     if (entity.avatar) {
-      const variant = target === 'hero' || target === 'detailArtwork' ? 'full' : 'thumb';
-      return oxyServices.getFileDownloadUrl(entity.avatar, variant);
+      return oxyServices.getFileDownloadUrl(entity.avatar, oxyImageVariantForTarget(target));
     }
     return undefined;
   };

@@ -30,6 +30,43 @@ export const CATALOG_IMAGE_TARGET_WIDTH = {
 
 export type CatalogImageTarget = keyof typeof CATALOG_IMAGE_TARGET_WIDTH;
 
+/**
+ * Oxy's public image variant ladder, narrowest first, mirroring oxy-api's
+ * `VariantService.imageVariants`.
+ *
+ * This list is the entire vocabulary the Oxy CDN accepts for an image, and it
+ * answers an unknown name with a hard 404 and no fallback — `full`, `large` and
+ * `original` are not variants and never were. Video files carry a disjoint set
+ * (`poster`, `hls_master`), so a name from this ladder must only ever be asked
+ * of a file known to be an image.
+ */
+const OXY_IMAGE_VARIANT_LADDER = [
+  { variant: 'w96', width: 96 },
+  { variant: 'w128', width: 128 },
+  { variant: 'thumb', width: 256 },
+  { variant: 'w320', width: 320 },
+  { variant: 'w640', width: 640 },
+  { variant: 'w1280', width: 1280 },
+  { variant: 'w2048', width: 2048 },
+] as const;
+
+/** The widest rung — what a target wider than the whole ladder settles for. */
+const WIDEST_OXY_IMAGE_VARIANT = OXY_IMAGE_VARIANT_LADDER[OXY_IMAGE_VARIANT_LADDER.length - 1];
+
+/**
+ * The Oxy media variant to request for an image rendered at a catalog target
+ * size: the narrowest rung at least as wide as the target, else the widest rung.
+ *
+ * This is the same "big enough, no bigger" rule {@link pickImageUrl} applies to
+ * Syra-hosted catalog images, so an Oxy avatar and a Syra cover standing in for
+ * each other at the same target are fetched at comparable sizes.
+ */
+export function oxyImageVariantForTarget(target: CatalogImageTarget): string {
+  const preferredWidth = CATALOG_IMAGE_TARGET_WIDTH[target];
+  const rung = OXY_IMAGE_VARIANT_LADDER.find((entry) => entry.width >= preferredWidth);
+  return (rung ?? WIDEST_OXY_IMAGE_VARIANT).variant;
+}
+
 function normalizeCandidate(urlValue: string | undefined, widthValue: number | undefined): ImageCandidate | null {
   if (!urlValue) return null;
   const url = resolveCatalogImageUrl(urlValue);
