@@ -249,6 +249,22 @@ const UploadScreen: React.FC = () => {
     }
     setUploadingKey(null);
 
+    /**
+     * A single file gets a toast too.
+     *
+     * The card is the detailed answer and stays on screen, but it renders
+     * inline in a list the reader may have scrolled past — so on its own it
+     * left "did that work?" answerable only by hunting for the card, or by
+     * opening the console. The toast is the acknowledgement; the card remains
+     * the explanation, and the toast never restates a refusal's `code` because
+     * that is exactly what the card is for.
+     */
+    if (batch.length === 1) {
+      if (failed > 0) toast.error(t('uploads.toasts.oneFailed'));
+      else if (refused > 0) toast.info(t('uploads.toasts.oneRefused'));
+      else toast.success(t('uploads.toasts.oneDone'));
+      return;
+    }
     if (batch.length < 2) {
       return;
     }

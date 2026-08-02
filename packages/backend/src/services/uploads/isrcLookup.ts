@@ -78,6 +78,8 @@ export interface IsrcRecording {
   releaseDate?: string;
   /** How many tracks the release carries. Known to Deezer, not to the slice. */
   totalTracks?: number;
+  /** The release's genres, as the source names them. Deezer only. */
+  genres?: string[];
   durationSec?: number;
 }
 
@@ -289,6 +291,35 @@ export function parseDeezerAlbumTrackCount(payload: unknown): number | undefined
   return count !== undefined && Number.isInteger(count) ? count : undefined;
 }
 
+/**
+ * The release's genres.
+ *
+ * Deezer states these on the RELEASE, not the track, which is why they are read
+ * from the same payload the track count comes from rather than costing a third
+ * request. Metadata, like everything else taken from this source — the artwork
+ * URLs alongside them are licensed per work and are not read.
+ *
+ * Worth recovering because a file frequently carries no genre tag at all, and
+ * `/browse` is built ENTIRELY from the genres of the tracks in the catalogue:
+ * a catalogue of ungenred tracks renders an empty browse screen no matter how
+ * much music is in it.
+ */
+export function parseDeezerAlbumGenres(payload: unknown): string[] {
+  const root = asRecord(payload);
+  if (!root || asRecord(root.error)) return [];
+  const container = asRecord(root.genres);
+  if (!container || !Array.isArray(container.data)) return [];
+
+  const names: string[] = [];
+  for (const entry of container.data) {
+    const name = asString(asRecord(entry)?.name);
+    // Deezer repeats a genre across a release's sub-entries; the catalogue wants
+    // it once.
+    if (name && !names.includes(name)) names.push(name);
+  }
+  return names;
+}
+
 // ── Cache ───────────────────────────────────────────────────────────────────
 
 interface CacheEntry {
@@ -372,11 +403,18 @@ async function resolveFromDeezer(isrc: string): Promise<IsrcLookupResult> {
   const albumId = deezerAlbumId(payload);
   if (albumId) {
     try {
-      const totalTracks = parseDeezerAlbumTrackCount(
-        await requestDeezer(`${DEEZER_ALBUM_URL}${albumId}`),
-      );
-      if (totalTracks !== undefined) {
-        return { status: 'found', recording: { ...recording, totalTracks } };
+      const albumPayload = await requestDeezer(`${DEEZER_ALBUM_URL}${albumId}`);
+      const totalTracks = parseDeezerAlbumTrackCount(albumPayload);
+      const genres = parseDeezerAlbumGenres(albumPayload);
+      if (totalTracks !== undefined || genres.length > 0) {
+        return {
+          status: 'found',
+          recording: {
+            ...recording,
+            ...(totalTracks !== undefined && { totalTracks }),
+            ...(genres.length > 0 && { genres }),
+          },
+        };
       }
     } catch (err) {
       logger.debug('[isrc] Deezer release lookup failed; the recording still resolved', {

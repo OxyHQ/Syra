@@ -759,7 +759,10 @@
     "toasts": {
       "batchDone": "Los {{total}} archivos han terminado.",
       "batchNeedsAttention_one": "{{count}} de {{total}} archivos necesita tu atención: mira su ficha más abajo.",
-      "batchNeedsAttention_other": "{{count}} de {{total}} archivos necesitan tu atención: mira sus fichas más abajo."
+      "batchNeedsAttention_other": "{{count}} de {{total}} archivos necesitan tu atención: mira sus fichas más abajo.",
+      "oneDone": "Subida terminada.",
+      "oneRefused": "Este archivo no se publicó: abajo tienes el motivo.",
+      "oneFailed": "La subida no se completó."
     }
   }
 }

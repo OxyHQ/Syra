@@ -1231,7 +1231,20 @@ async function publishContribution(params: PublishParams): Promise<string> {
     primaryColor: coverArtColors?.primaryColor,
     secondaryColor: coverArtColors?.secondaryColor,
     metadata: {
-      genre: overrides.genres?.length ? overrides.genres : metadata.genres,
+      /**
+       * The file's genres, or — for a file that states none — the release's.
+       *
+       * Gap-filling only, in the same direction as every other recovered fact.
+       * It matters more than it looks: `/browse` is built entirely from the
+       * genres of the catalogue's tracks, so a file with no genre tag
+       * contributes nothing to it and a catalogue of such files renders an
+       * empty browse screen however much music it holds.
+       */
+      genre: overrides.genres?.length
+        ? overrides.genres
+        : metadata.genres.length
+          ? metadata.genres
+          : (params.verifiedIsrc?.genres ?? []),
       bpm: metadata.bpm,
       key: metadata.key,
       explicit: overrides.isExplicit ?? metadata.isExplicit ?? false,

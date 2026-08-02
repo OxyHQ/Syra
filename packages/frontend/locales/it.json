@@ -759,7 +759,10 @@
     "toasts": {
       "batchDone": "Tutti i {{total}} file sono stati completati.",
       "batchNeedsAttention_one": "{{count}} file su {{total}} richiede attenzione: guarda la scheda qui sotto.",
-      "batchNeedsAttention_other": "{{count}} file su {{total}} richiedono attenzione: guarda le schede qui sotto."
+      "batchNeedsAttention_other": "{{count}} file su {{total}} richiedono attenzione: guarda le schede qui sotto.",
+      "oneDone": "Caricamento completato.",
+      "oneRefused": "Questo file non è stato pubblicato: sotto trovi il motivo.",
+      "oneFailed": "Il caricamento non è andato a buon fine."
     }
   }
 }
