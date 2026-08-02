@@ -438,8 +438,15 @@ function acousticEvidence(
  * blurry on an album page. Promoting one is not reversible in practice — it
  * becomes the artwork every listener sees, and nothing later knows it was a
  * thumbnail.
+ *
+ * 300, lowered from 500 deliberately. The floor is a QUALITY judgement, not a
+ * correctness one, and 500 was refusing real releases: a distributor-embedded
+ * 300×300 front cover is what a legitimate rights-holder's own file commonly
+ * carries, and rejecting it pushed them toward copying artwork from a streaming
+ * service's CDN — which is the one thing that is genuinely not ours to take.
+ * Better a slightly soft cover the uploader owns than a sharp one they do not.
  */
-const MIN_CATALOG_COVER_ART_PX = 500;
+const MIN_CATALOG_COVER_ART_PX = 300;
 
 /**
  * Picture types that are a PERSON, not a release.
