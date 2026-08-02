@@ -105,6 +105,16 @@ export interface UploadRequest {
   albumName?: string;
   /** Cover art as an uploaded image id (MongoDB ObjectId), never a URL or blob. */
   coverArt?: string;
+  /**
+   * The ISRC the uploader says this recording has — the one field here that is
+   * not an override of a tag.
+   *
+   * It answers a refusal rather than correcting a value: the public path needs
+   * an identifier and cannot always find one. Sent verbatim, hyphens and all —
+   * the shared schema normalises it, so the client must not second-guess a
+   * spelling the code is legitimately printed in.
+   */
+  isrc?: string;
   /** Required by the backend when `destination` is `public`. */
   attestation?: string;
 }
@@ -165,6 +175,7 @@ function appendOverrides(formData: FormData, request: Omit<UploadRequest, 'desti
   if (request.title?.trim()) formData.append('title', request.title.trim());
   if (request.artistName?.trim()) formData.append('artistName', request.artistName.trim());
   if (request.albumName?.trim()) formData.append('albumName', request.albumName.trim());
+  if (request.isrc?.trim()) formData.append('isrc', request.isrc.trim());
   if (request.coverArt) formData.append('coverArt', request.coverArt);
   if (request.attestation) formData.append('attestation', request.attestation);
 }

@@ -24,7 +24,9 @@ import * as realIngestQueue from '../services/ingest/ingestQueue';
 import * as realAcoustid from '../services/uploads/acoustid';
 import type { AcousticIdentity } from '../services/uploads/acoustid';
 import type { Fingerprint } from '../services/uploads/fingerprint';
+import { setDeezerFetchForTests } from '../services/uploads/isrcLookup';
 import { UserUploadModel } from '../models/UserUpload';
+import { IsrcRegistryModel } from '../models/IsrcRegistry';
 import { TrackModel } from '../models/Track';
 import { ArtistModel } from '../models/CatalogEntity';
 import { AlbumModel } from '../models/Album';
@@ -120,6 +122,30 @@ mock.module('../services/uploads/acoustid', () => ({
 }));
 
 
+/**
+ * Deezer, stubbed for the WHOLE file rather than per test.
+ *
+ * Not a convenience: the ISRC lookup is the one step in this pipeline that can
+ * reach the public internet, and a test suite that reaches a keyless third-party
+ * API is a suite that fails when somebody runs it on a plane and hammers a
+ * service that owes us nothing. Installed unconditionally so a future test that
+ * supplies an ISRC cannot silently start making requests.
+ *
+ * The DEFAULT answer is Deezer's real "no data" payload, so an unprepared code
+ * resolves nowhere. `deezerTrack` is what a test uses to say "this code exists".
+ * Everything else about verification — the duration comparison, the name keys,
+ * the tiers — runs for real.
+ */
+const DEEZER_NO_DATA = { error: { type: 'DataException', message: 'no data', code: 800 } };
+let deezerTrack: Record<string, unknown> | undefined;
+
+function installDeezerStub(): void {
+  setDeezerFetchForTests(async (url: string) => {
+    if (url.includes('/album/')) return DEEZER_NO_DATA;
+    return deezerTrack ?? DEEZER_NO_DATA;
+  });
+}
+
 // ── Server ───────────────────────────────────────────────────────────────────
 
 const FIXTURES = path.join(__dirname, '../services/uploads/__fixtures__');
@@ -133,6 +159,7 @@ let currentUserId = OWNER;
 
 beforeAll(async () => {
   await connect();
+  installDeezerStub();
 
   const app = express();
   // Stand in for `oxy.auth()`: the routes self-enforce with `requireOxyAuth`,
@@ -159,10 +186,15 @@ afterEach(async () => {
   identifiedDurations.length = 0;
   acousticIdentity = undefined;
   currentUserId = OWNER;
+  deezerTrack = undefined;
+  // Re-installing also clears the per-ISRC cache, so one test's `not-found`
+  // cannot answer the next test's lookup.
+  installDeezerStub();
 });
 
 afterAll(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
+  setDeezerFetchForTests();
   await disconnect();
 });
 
@@ -587,6 +619,325 @@ describe('POST /api/uploads — the recording the fingerprint resolves to', () =
     expect(status).toBe(422);
     expect(body.code).toBe('isrc_required');
     expect(await TrackModel.countDocuments({})).toBe(0);
+  });
+});
+
+// ── The ISRC the uploader supplies ───────────────────────────────────────────
+
+/**
+ * Tier 3: the code a person types, checked against the file they uploaded.
+ *
+ * The fixture is the shape this tier exists for and the only one that can
+ * exercise it: real title and artist tags, artwork, and no identifier of any
+ * kind. `indie-id3v2.mp3` carries a `TSRC`, so tier 1 answers there and a claim
+ * is never consulted; the untagged files declare no names, so there is nothing
+ * in them for a claim to be corroborated against.
+ *
+ * Nothing here stubs the verification. The registry rows are real rows and the
+ * Deezer payloads are the real payload shape, so the duration comparison and the
+ * name-key comparison both run — what is asserted is the OUTCOME the pipeline
+ * actually produces, not that a mock was called.
+ */
+describe('POST /api/uploads — the ISRC the uploader supplies', () => {
+  const UNIDENTIFIED = 'unidentified-id3v2.mp3';
+  /** `ffprobe`'s measurement of the fixture: 2.533878 s. */
+  const FIXTURE_DURATION_MS = 2_534;
+  const CLAIMED = 'ESA092607944';
+
+  /** The catalogue floor is 500 px and every fixture's embedded art is 96 px. */
+  async function catalogCover(): Promise<string> {
+    const asset = await ImageAssetModel.create({
+      s3Key: 'images/cover/large.jpg',
+      filename: 'large.jpg',
+      contentType: 'image/jpeg',
+      byteSize: 4096,
+      width: 1400,
+      height: 1400,
+      ownerType: 'album',
+    });
+    return asset._id.toString();
+  }
+
+  /** A row in the local MusicBrainz slice — the first source the lookup asks. */
+  async function registerInSlice(fields: {
+    title: string;
+    artistCredit: string;
+    lengthMs?: number;
+  }): Promise<void> {
+    await IsrcRegistryModel.create({
+      isrc: CLAIMED,
+      recordingMbid: 'd9e8f7a6-5b4c-4d3e-9f10-2a3b4c5d6e7f',
+      artistCreditNameKey: fields.artistCredit.toLowerCase(),
+      releaseCount: 1,
+      ...fields,
+    });
+  }
+
+  it('publishes a file whose only missing piece was the code', async () => {
+    // The whole point of the tier. This exact upload is refused `isrc_required`
+    // without the field (asserted below), and the audio is identical.
+    await registerInSlice({
+      title: 'Cielo Partido',
+      artistCredit: 'Lucía Arenas',
+      lengthMs: FIXTURE_DURATION_MS,
+    });
+
+    const { status, body } = await postUpload(UNIDENTIFIED, {
+      destination: 'public',
+      isrc: CLAIMED,
+      coverArt: await catalogCover(),
+      attestation: 'I have the right to distribute this recording.',
+    });
+
+    expect(status).toBe(201);
+    expect(body.outcome).toBe('published');
+
+    // Persisted, because persisting it is the point: dedup tier 2 and artist
+    // resolution tier 1 both read it, so a track published without it meets the
+    // next upload of the same recording as a fresh unidentifiable file.
+    const track = await TrackModel.findById(String(body.trackId)).lean();
+    expect(track?.externalIds?.isrc).toBe(CLAIMED);
+    expect(track?.artistName).toBe('Lucía Arenas');
+  });
+
+  it('refuses the SAME upload with no code at all', async () => {
+    // The control. Without this, "published" above could not tell a working
+    // tier from a gate that had stopped firing.
+    const { status, body } = await postUpload(UNIDENTIFIED, {
+      destination: 'public',
+      coverArt: await catalogCover(),
+      attestation: 'I have the right to distribute this recording.',
+    });
+
+    expect(status).toBe(422);
+    expect(body.code).toBe('isrc_required');
+    expect(await TrackModel.countDocuments({})).toBe(0);
+  });
+
+  it('accepts the code in the hyphenated form it is PRINTED in', async () => {
+    await registerInSlice({
+      title: 'Cielo Partido',
+      artistCredit: 'Lucía Arenas',
+      lengthMs: FIXTURE_DURATION_MS,
+    });
+
+    const { status, body } = await postUpload(UNIDENTIFIED, {
+      destination: 'public',
+      // How a distributor's dashboard and a registration certificate print it.
+      isrc: 'ES-A09-26-07944',
+      coverArt: await catalogCover(),
+      attestation: 'I have the right to distribute this recording.',
+    });
+
+    expect(status).toBe(201);
+    expect(
+      (await TrackModel.findById(String(body.trackId)).lean())?.externalIds?.isrc,
+    ).toBe(CLAIMED);
+  });
+
+  it('REFUSES a well-formed code that belongs to a different recording', async () => {
+    // The security-relevant case. A code that resolves is not a code that
+    // belongs to this audio, and accepting one would write another artist's
+    // recording identifier onto this track — which `resolveArtist` tier 1 then
+    // turns into a HIGH-confidence link to that artist's profile.
+    await registerInSlice({
+      title: 'Midnight Ferry',
+      artistCredit: 'Nadia Ortiz',
+      lengthMs: 210_000,
+    });
+
+    const { status, body } = await postUpload(UNIDENTIFIED, {
+      destination: 'public',
+      isrc: CLAIMED,
+      coverArt: await catalogCover(),
+      attestation: 'I have the right to distribute this recording.',
+    });
+
+    expect(status).toBe(422);
+    expect(body.outcome).toBe('blocked');
+    expect(body.code).toBe('isrc_mismatch');
+    // The message names the recording the code really belongs to and what
+    // disagreed, so a mistyped character reads differently from a code copied
+    // off the wrong row.
+    expect(body.message).toContain('Midnight Ferry');
+    expect(body.message).toContain('length');
+
+    // Refused before anything is created: no track, and no claimable artist
+    // stub left behind for a contribution that never happened.
+    expect(await TrackModel.countDocuments({})).toBe(0);
+    expect(await ArtistModel.countDocuments({})).toBe(0);
+    expect(await UserUploadModel.countDocuments({})).toBe(0);
+  });
+
+  it('REFUSES a well-formed code that resolves nowhere', async () => {
+    // No registry row, and Deezer answers "no data". A code nothing knows is
+    // not accepted for being the right shape: twelve characters are trivially
+    // invented, and trusting them would make the whole ISRC requirement
+    // satisfiable by anyone willing to type.
+    const { status, body } = await postUpload(UNIDENTIFIED, {
+      destination: 'public',
+      isrc: CLAIMED,
+      coverArt: await catalogCover(),
+      attestation: 'I have the right to distribute this recording.',
+    });
+
+    expect(status).toBe(422);
+    expect(body.code).toBe('isrc_unverifiable');
+    expect(body.message).toContain(CLAIMED);
+    expect(await TrackModel.countDocuments({})).toBe(0);
+    expect(await ArtistModel.countDocuments({})).toBe(0);
+  });
+
+  it('rejects a malformed code at the schema, before any work is done', async () => {
+    const { status, body } = await postUpload(UNIDENTIFIED, {
+      destination: 'public',
+      isrc: 'NOT-AN-ISRC',
+      coverArt: await catalogCover(),
+      attestation: 'I have the right to distribute this recording.',
+    });
+
+    // A 400 with the field named, not a `blocked` outcome: this is a malformed
+    // request rather than a refused contribution.
+    expect(status).toBe(400);
+    expect(body.error).toBe('Invalid request body');
+    expect(await UserUploadModel.countDocuments({})).toBe(0);
+  });
+
+  it('lets the FILE’S OWN tag win over a code the uploader typed', async () => {
+    // Precedence, and the reason for it: the file's tag is the recording's own
+    // declaration, and a typed code is a person's recollection. A disagreement
+    // between them is evidence about the file, not a correction to it.
+    await registerInSlice({
+      title: 'Cielo Partido',
+      artistCredit: 'Lucía Arenas',
+      lengthMs: FIXTURE_DURATION_MS,
+    });
+
+    const { status, body } = await postUpload('indie-id3v2.mp3', {
+      destination: 'public',
+      isrc: CLAIMED,
+      coverArt: await catalogCover(),
+      attestation: 'I have the right to distribute this recording.',
+    });
+
+    expect(status).toBe(201);
+    // `ESA452300137` is the fixture's `TSRC`. The typed code would have verified
+    // against the slice row above — it is simply never consulted.
+    expect(
+      (await TrackModel.findById(String(body.trackId)).lean())?.externalIds?.isrc,
+    ).toBe('ESA452300137');
+  });
+
+  it('fills the release facts the file left blank, and never the one it declared', async () => {
+    // Gap-filling in both directions at once. The file declares `Unknown Album`,
+    // a tagger's placeholder — and a declaration is still a declaration, so it
+    // stands. The date and the track count it does NOT declare are recovered.
+    deezerTrack = {
+      id: 4059541821,
+      isrc: CLAIMED,
+      title: 'Cielo Partido',
+      duration: 3,
+      release_date: '2026-06-26',
+      artist: { id: 350189862, name: 'Lucía Arenas' },
+      album: { id: 996677771, title: 'Cielo Partido', release_date: '2026-06-26' },
+    };
+    setDeezerFetchForTests(async (url: string) =>
+      url.includes('/album/') ? { id: 996677771, nb_tracks: 9 } : deezerTrack,
+    );
+
+    const { status, body } = await postUpload(UNIDENTIFIED, {
+      destination: 'public',
+      isrc: CLAIMED,
+      coverArt: await catalogCover(),
+      attestation: 'I have the right to distribute this recording.',
+    });
+
+    expect(status).toBe(201);
+
+    const album = await AlbumModel.findOne({}).lean();
+    // Declared by the file, placeholder and all — not replaced by the release
+    // title the lookup recovered.
+    expect(album?.title).toBe('Unknown Album');
+    // Absent from the file, recovered: without a date `ensureContributedAlbum`
+    // refuses to create the container at all and the track hangs loose.
+    expect(album?.releaseDate).toBe('2026-06-26');
+    // The release's own track count. Nine tracks is an album; the classifier
+    // reads "under thirty minutes" as EP-shaped without it.
+    expect(album?.totalTracks).toBe(9);
+    expect(album?.type).toBe('album');
+    expect((await TrackModel.findById(String(body.trackId)).lean())?.albumId).toBe(
+      album?._id.toString(),
+    );
+  });
+
+  it('never rehosts the artwork the lookup could have handed it', async () => {
+    // Deezer's real payload carries five cover URLs and five artist pictures.
+    // Their terms cover metadata; cover art is licensed per work. The uploader's
+    // own image is the only artwork this track may carry.
+    const coverArt = await catalogCover();
+    deezerTrack = {
+      id: 4059541821,
+      isrc: CLAIMED,
+      title: 'Cielo Partido',
+      duration: 3,
+      artist: {
+        id: 1,
+        name: 'Lucía Arenas',
+        picture_xl: 'https://cdn-images.dzcdn.net/artist.jpg',
+      },
+      album: {
+        id: 2,
+        title: 'Cielo Partido',
+        cover_xl: 'https://cdn-images.dzcdn.net/cover.jpg',
+        md5_image: '7ef331a7e548282509748fe055b15d6e',
+      },
+    };
+
+    const { body } = await postUpload(UNIDENTIFIED, {
+      destination: 'public',
+      isrc: CLAIMED,
+      coverArt,
+      attestation: 'I have the right to distribute this recording.',
+    });
+
+    const track = await TrackModel.findById(String(body.trackId)).lean();
+    expect(track?.coverArt).toBe(coverArt);
+    expect(JSON.stringify(track)).not.toContain('dzcdn.net');
+
+    const artist = await ArtistModel.findById(track?.artistId).lean();
+    expect(JSON.stringify(artist)).not.toContain('dzcdn.net');
+  });
+
+  it('does not spend a lookup on a private upload', async () => {
+    // The locker has no ISRC requirement, so there is no claim to check and no
+    // request to make. A code typed on the private path costs nothing.
+    let requested = 0;
+    setDeezerFetchForTests(async () => {
+      requested += 1;
+      return DEEZER_NO_DATA;
+    });
+
+    const { status } = await postUpload(UNIDENTIFIED, {
+      destination: 'private',
+      isrc: CLAIMED,
+    });
+
+    expect(status).toBe(201);
+    expect(requested).toBe(0);
+  });
+
+  it('leaves a commercial refusal saying `commercial`, not `isrc`', async () => {
+    // Precedence again, and the reason is the uploader's: telling somebody their
+    // code does not match, when the finding is that the file names its
+    // purchaser, sends them to fix the wrong thing.
+    const { status, body } = await postUpload('purchased-itunes.m4a', {
+      destination: 'public',
+      isrc: CLAIMED,
+      attestation: 'I have the right to distribute this recording.',
+    });
+
+    expect(status).toBe(403);
+    expect(body.code).toBe('commercial_provenance');
   });
 });
 

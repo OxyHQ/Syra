@@ -5,6 +5,7 @@ import {
   audioFormatSchema,
   catalogImageSizesSchema,
   hlsRenditionSchema,
+  isrcSchema,
   playableKindSchema,
   playableTrackSchema,
   releaseEditionFields,
@@ -321,6 +322,24 @@ export const uploadTrackRequestSchema = z.object({
   discNumber: z.number().int().positive().optional(),
   year: z.number().int().optional(),
   genres: z.array(z.string()).optional(),
+  /**
+   * The ISRC the uploader says this recording has — a CLAIM, not a fact.
+   *
+   * Unlike every other field here it is not an override of a tag: it is the
+   * answer to a refusal. `isrc_required` turns away a file that carries no
+   * identifier, and the identification chain in front of that gate cannot always
+   * supply one — AcoustID's index is community-submitted, so a recording nobody
+   * has ever fingerprinted is simply absent from it, however legitimately
+   * released it is. The person holding the file usually knows the code.
+   *
+   * Accepted ONLY where it can be checked against the audio that was actually
+   * uploaded (`services/uploads/isrcLookup.ts`). Anyone can type twelve
+   * characters, so an unverified claim would turn the requirement into a
+   * formality — which is the one outcome that would be worse than not having the
+   * field, because the resulting attribution would look identifier-backed while
+   * being a stranger's guess.
+   */
+  isrc: isrcSchema.optional(),
   /** Cover art as an uploaded image id (MongoDB ObjectId), never a URL or blob. */
   coverArt: z.string().optional(),
   isExplicit: z.boolean().optional(),
@@ -408,6 +427,30 @@ export const uploadBlockedReasonSchema = z.enum([
    * forced into one by the unique name key.
    */
   'isrc_required',
+  /**
+   * The uploader supplied an ISRC and it resolves to a DIFFERENT recording than
+   * the one in the file.
+   *
+   * Separate from `isrc_required` because the two are opposite situations: one
+   * uploader has no code, the other has the wrong one, and telling the second
+   * "this file carries no ISRC" would read as a bug. The message names what
+   * disagreed — length, title, artist — so a mistyped character is
+   * distinguishable from a code copied off the wrong row of a distributor's
+   * catalogue.
+   */
+  'isrc_mismatch',
+  /**
+   * The uploader supplied a well-formed ISRC that no source could resolve.
+   *
+   * NOT accepted on the grounds of being well-formed. Twelve characters in the
+   * right shape are trivially invented, so trusting an unresolvable code would
+   * make the ISRC requirement satisfiable by anyone willing to type — and the
+   * track would then carry an identifier that looks authoritative and belongs to
+   * no recording, which is worse than carrying none. Distinct from
+   * `isrc_mismatch` because nothing was contradicted: the code may well be real
+   * and simply absent from the local MusicBrainz slice and from Deezer.
+   */
+  'isrc_unverifiable',
   'artist_contributions_closed',
   'artist_uploads_disabled',
   /**

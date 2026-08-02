@@ -1,7 +1,7 @@
 /**
  * Generator for the committed upload-screening fixtures.
  *
- * The four audio files in this directory are REAL files — real MPEG frames, a
+ * The audio files in this directory are REAL files — real MPEG frames, a
  * real FLAC stream, a real MP4 — carrying real tag structures, because the whole
  * point of the extraction and provenance services is to read what taggers,
  * rippers and stores actually write. A hand-written object literal standing in
@@ -375,7 +375,52 @@ async function writeIndieMp3(bedPath: string, tmpDir: string): Promise<void> {
   );
 }
 
-// ── Fixture 2: an iTunes Store purchase ─────────────────────────────────────
+// ── Fixture 2: a tagged release that carries NO identifier ──────────────────
+
+/**
+ * The shape the user-supplied ISRC exists for: an ordinary, honestly tagged
+ * release with a title, an artist and artwork — and no ISRC, no MusicBrainz
+ * identifiers, no store atoms, nothing that names the RECORDING.
+ *
+ * Every other fixture is unusable for that path, and each for its own reason:
+ * `indie-id3v2.mp3` carries a `TSRC`, so tier 1 answers and the uploader's claim
+ * is never consulted; `cdrip-picard.flac` carries one too and screens
+ * `commercial` besides; the two untagged files declare no title or artist, so
+ * there is nothing in them for a claim to be corroborated against. Without this
+ * fixture the accept path could only be tested by asserting on a code path the
+ * pipeline does not take.
+ *
+ * `TALB` is deliberately the tagger's placeholder `Unknown Album`, because that
+ * is what the real file that prompted the feature carried: it makes the fixture
+ * exercise gap-filling as it actually behaves — a declared placeholder is still
+ * a declaration and WINS over the release title a lookup recovers.
+ */
+async function writeUnidentifiedMp3(bedPath: string, tmpDir: string): Promise<void> {
+  const raw = path.join(tmpDir, 'unidentified-raw.mp3');
+  await execFile('ffmpeg', [
+    '-nostdin', '-loglevel', 'error',
+    '-i', bedPath,
+    '-map_metadata', '-1',
+    '-write_id3v1', '0', '-id3v2_version', '0',
+    '-c:a', 'libmp3lame', '-b:a', '192k',
+    raw, '-y',
+  ]);
+
+  const tag = buildId3v2Tag([
+    textFrame('TIT2', 'Cielo Partido'),
+    textFrame('TPE1', 'Lucía Arenas'),
+    textFrame('TALB', 'Unknown Album'),
+    textFrame('TCON', 'Cantautor'),
+    pictureFrame('image/jpeg', 3, 'Front cover', await makeCoverArt(tmpDir, 'cielo-front', 300)),
+  ]);
+
+  fs.writeFileSync(
+    path.join(FIXTURE_DIR, 'unidentified-id3v2.mp3'),
+    Buffer.concat([tag, fs.readFileSync(raw)]),
+  );
+}
+
+// ── Fixture 3: an iTunes Store purchase ─────────────────────────────────────
 
 /**
  * An M4A carrying the atoms the iTunes Store stamps into a purchased file,
@@ -415,7 +460,7 @@ async function writePurchasedM4a(bedPath: string, tmpDir: string): Promise<void>
   fs.writeFileSync(path.join(FIXTURE_DIR, 'purchased-itunes.m4a'), injected);
 }
 
-// ── Fixture 3: a Picard-tagged CD rip ───────────────────────────────────────
+// ── Fixture 4: a Picard-tagged CD rip ───────────────────────────────────────
 
 /**
  * A FLAC as a ripper leaves it: Vorbis comments, a CUESHEET, album ReplayGain,
@@ -493,7 +538,7 @@ async function writeCdRipFlac(bedPath: string, tmpDir: string): Promise<void> {
   ]);
 }
 
-// ── Fixture 4: an untagged WAV ──────────────────────────────────────────────
+// ── Fixture 5: an untagged WAV ──────────────────────────────────────────────
 
 /**
  * No tags whatsoever — not even ffmpeg's own `ISFT` encoder string, which
@@ -517,7 +562,7 @@ async function writeUntaggedWav(bedPath: string): Promise<void> {
   ]);
 }
 
-// ── Fixture 5: an untagged file long enough to FINGERPRINT ──────────────────
+// ── Fixture 6: an untagged file long enough to FINGERPRINT ──────────────────
 
 /**
  * The four fixtures above are 2.5 s, and Chromaprint produces NOTHING below
@@ -549,7 +594,7 @@ async function writeFingerprintableUntaggedMp3(tmpDir: string): Promise<void> {
   ]);
 }
 
-// ── Fixture 6: the Chromaprint corpus behind the BER threshold ──────────────
+// ── Fixture 7: the Chromaprint corpus behind the BER threshold ──────────────
 
 /**
  * `fingerprints.json` — real Chromaprint fingerprints, committed so the bit
@@ -879,6 +924,7 @@ async function main(): Promise<void> {
   try {
     const bed = await makeAudioBed(tmpDir);
     await writeIndieMp3(bed, tmpDir);
+    await writeUnidentifiedMp3(bed, tmpDir);
     await writePurchasedM4a(bed, tmpDir);
     await writeCdRipFlac(bed, tmpDir);
     await writeUntaggedWav(bed);

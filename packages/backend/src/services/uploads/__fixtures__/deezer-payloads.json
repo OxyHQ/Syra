@@ -1,0 +1,150 @@
+{
+  "producedBy": {
+    "capturedAt": "2026-08-02",
+    "requests": [
+      "GET https://api.deezer.com/track/isrc:ESA092607944",
+      "GET https://api.deezer.com/album/996677771",
+      "GET https://api.deezer.com/track/isrc:ZZZZZ9900001"
+    ],
+    "note": "Verbatim responses, with four fields removed: `available_countries` (240 entries), the album's embedded `tracks` list and its duplicated `contributors` for size, and the track's `preview` and `track_token`, which carry expiring signed credentials that do not belong in a repository. Nothing the parser reads was altered."
+  },
+  "trackByIsrc": {
+    "id": 4059541821,
+    "readable": true,
+    "title": "Por interés",
+    "title_short": "Por interés",
+    "title_version": "",
+    "isrc": "ESA092607944",
+    "link": "https://www.deezer.com/track/4059541821",
+    "share": "https://www.deezer.com/track/4059541821?utm_source=deezer&utm_content=track-4059541821&utm_term=0_1785628944&utm_medium=web",
+    "duration": 191,
+    "track_position": 1,
+    "disk_number": 1,
+    "rank": 100000,
+    "release_date": "2026-06-26",
+    "explicit_lyrics": false,
+    "explicit_content_lyrics": 0,
+    "explicit_content_cover": 2,
+    "bpm": 0,
+    "gain": -10.3,
+    "contributors": [
+      {
+        "id": 350189862,
+        "name": "Carlota Giró",
+        "link": "https://www.deezer.com/artist/350189862",
+        "share": "https://www.deezer.com/artist/350189862?utm_source=deezer&utm_content=artist-350189862&utm_term=0_1785628944&utm_medium=web",
+        "picture": "https://api.deezer.com/artist/350189862/image",
+        "picture_small": "https://cdn-images.dzcdn.net/images/artist/aff07a109f97ba73ae3fcfe91fc69792/56x56-000000-80-0-0.jpg",
+        "picture_medium": "https://cdn-images.dzcdn.net/images/artist/aff07a109f97ba73ae3fcfe91fc69792/250x250-000000-80-0-0.jpg",
+        "picture_big": "https://cdn-images.dzcdn.net/images/artist/aff07a109f97ba73ae3fcfe91fc69792/500x500-000000-80-0-0.jpg",
+        "picture_xl": "https://cdn-images.dzcdn.net/images/artist/aff07a109f97ba73ae3fcfe91fc69792/1000x1000-000000-80-0-0.jpg",
+        "radio": true,
+        "tracklist": "https://api.deezer.com/artist/350189862/top?limit=50",
+        "type": "artist",
+        "role": "Main"
+      }
+    ],
+    "md5_image": "7ef331a7e548282509748fe055b15d6e",
+    "artist": {
+      "id": 350189862,
+      "name": "Carlota Giró",
+      "link": "https://www.deezer.com/artist/350189862",
+      "share": "https://www.deezer.com/artist/350189862?utm_source=deezer&utm_content=artist-350189862&utm_term=0_1785628944&utm_medium=web",
+      "picture": "https://api.deezer.com/artist/350189862/image",
+      "picture_small": "https://cdn-images.dzcdn.net/images/artist/aff07a109f97ba73ae3fcfe91fc69792/56x56-000000-80-0-0.jpg",
+      "picture_medium": "https://cdn-images.dzcdn.net/images/artist/aff07a109f97ba73ae3fcfe91fc69792/250x250-000000-80-0-0.jpg",
+      "picture_big": "https://cdn-images.dzcdn.net/images/artist/aff07a109f97ba73ae3fcfe91fc69792/500x500-000000-80-0-0.jpg",
+      "picture_xl": "https://cdn-images.dzcdn.net/images/artist/aff07a109f97ba73ae3fcfe91fc69792/1000x1000-000000-80-0-0.jpg",
+      "radio": true,
+      "tracklist": "https://api.deezer.com/artist/350189862/top?limit=50",
+      "type": "artist"
+    },
+    "album": {
+      "id": 996677771,
+      "title": "Por interés",
+      "link": "https://www.deezer.com/album/996677771",
+      "cover": "https://api.deezer.com/album/996677771/image",
+      "cover_small": "https://cdn-images.dzcdn.net/images/cover/7ef331a7e548282509748fe055b15d6e/56x56-000000-80-0-0.jpg",
+      "cover_medium": "https://cdn-images.dzcdn.net/images/cover/7ef331a7e548282509748fe055b15d6e/250x250-000000-80-0-0.jpg",
+      "cover_big": "https://cdn-images.dzcdn.net/images/cover/7ef331a7e548282509748fe055b15d6e/500x500-000000-80-0-0.jpg",
+      "cover_xl": "https://cdn-images.dzcdn.net/images/cover/7ef331a7e548282509748fe055b15d6e/1000x1000-000000-80-0-0.jpg",
+      "md5_image": "7ef331a7e548282509748fe055b15d6e",
+      "release_date": "2026-06-26",
+      "tracklist": "https://api.deezer.com/album/996677771/tracks",
+      "type": "album"
+    },
+    "type": "track"
+  },
+  "album": {
+    "id": 996677771,
+    "title": "Por interés",
+    "upc": "8447721554207",
+    "link": "https://www.deezer.com/album/996677771",
+    "share": "https://www.deezer.com/album/996677771?utm_source=deezer&utm_content=album-996677771&utm_term=0_1785628947&utm_medium=web",
+    "cover": "https://api.deezer.com/album/996677771/image",
+    "cover_small": "https://cdn-images.dzcdn.net/images/cover/7ef331a7e548282509748fe055b15d6e/56x56-000000-80-0-0.jpg",
+    "cover_medium": "https://cdn-images.dzcdn.net/images/cover/7ef331a7e548282509748fe055b15d6e/250x250-000000-80-0-0.jpg",
+    "cover_big": "https://cdn-images.dzcdn.net/images/cover/7ef331a7e548282509748fe055b15d6e/500x500-000000-80-0-0.jpg",
+    "cover_xl": "https://cdn-images.dzcdn.net/images/cover/7ef331a7e548282509748fe055b15d6e/1000x1000-000000-80-0-0.jpg",
+    "md5_image": "7ef331a7e548282509748fe055b15d6e",
+    "genre_id": 85,
+    "genres": {
+      "data": [
+        {
+          "id": 85,
+          "name": "Alternative",
+          "picture": "https://api.deezer.com/genre/85/image",
+          "type": "genre"
+        },
+        {
+          "id": 132,
+          "name": "Pop",
+          "picture": "https://api.deezer.com/genre/132/image",
+          "type": "genre"
+        },
+        {
+          "id": 152,
+          "name": "Rock",
+          "picture": "https://api.deezer.com/genre/152/image",
+          "type": "genre"
+        },
+        {
+          "id": 154,
+          "name": "Indie Rock/Rock Pop",
+          "picture": "https://api.deezer.com/genre/154/image",
+          "type": "genre"
+        }
+      ]
+    },
+    "label": "Carlota Giró",
+    "nb_tracks": 1,
+    "duration": 191,
+    "fans": 0,
+    "release_date": "2026-06-26",
+    "record_type": "single",
+    "available": true,
+    "tracklist": "https://api.deezer.com/album/996677771/tracks",
+    "explicit_lyrics": false,
+    "explicit_content_lyrics": 0,
+    "explicit_content_cover": 2,
+    "artist": {
+      "id": 350189862,
+      "name": "Carlota Giró",
+      "picture": "https://api.deezer.com/artist/350189862/image",
+      "picture_small": "https://cdn-images.dzcdn.net/images/artist/aff07a109f97ba73ae3fcfe91fc69792/56x56-000000-80-0-0.jpg",
+      "picture_medium": "https://cdn-images.dzcdn.net/images/artist/aff07a109f97ba73ae3fcfe91fc69792/250x250-000000-80-0-0.jpg",
+      "picture_big": "https://cdn-images.dzcdn.net/images/artist/aff07a109f97ba73ae3fcfe91fc69792/500x500-000000-80-0-0.jpg",
+      "picture_xl": "https://cdn-images.dzcdn.net/images/artist/aff07a109f97ba73ae3fcfe91fc69792/1000x1000-000000-80-0-0.jpg",
+      "tracklist": "https://api.deezer.com/artist/350189862/top?limit=50",
+      "type": "artist"
+    },
+    "type": "album"
+  },
+  "unknownIsrc": {
+    "error": {
+      "type": "DataException",
+      "message": "no data",
+      "code": 800
+    }
+  }
+}

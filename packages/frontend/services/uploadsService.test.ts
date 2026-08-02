@@ -163,4 +163,30 @@ describe('uploadsService.createUpload', () => {
       uploadsService.createUpload(audioFile, { destination: 'private' }),
     ).rejects.toThrow('Network unavailable');
   });
+
+  it('sends a supplied ISRC verbatim, hyphens and all', async () => {
+    // The client must NOT normalise it. The shared schema strips the separators
+    // and folds the case in one place, and a second implementation here would be
+    // free to drift from it — while the hyphenated spelling is exactly how the
+    // code is printed on the registration the uploader is reading it off.
+    mockApiPost.mockResolvedValueOnce({ data: { outcome: 'published', trackId: 't1' } });
+
+    await uploadsService.createUpload(audioFile, {
+      destination: 'public',
+      isrc: '  ES-A09-26-07944  ',
+    });
+
+    const body = mockApiPost.mock.calls[0]?.[1] as FormData;
+    expect(body.get('isrc')).toBe('ES-A09-26-07944');
+  });
+
+  it('omits the field entirely when no code was typed', async () => {
+    // An absent override means "the file's own tags stand"; an empty string is a
+    // value, and would reach the schema as a malformed code and 400 the upload.
+    mockApiPost.mockResolvedValueOnce({ data: { outcome: 'published', trackId: 't1' } });
+
+    await uploadsService.createUpload(audioFile, { destination: 'private', isrc: '   ' });
+
+    expect((mockApiPost.mock.calls[0]?.[1] as FormData).has('isrc')).toBe(false);
+  });
 });

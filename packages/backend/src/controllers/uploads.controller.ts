@@ -44,6 +44,7 @@ import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { getRequiredOxyUserId } from '@oxyhq/core/server';
 import {
   buildAlbumKey,
+  normalizeIsrc,
   uploadTrackRequestSchema,
   updateUserUploadRequestSchema,
   type AudioFormat,
@@ -70,6 +71,7 @@ import {
 } from '../services/uploads/extractMetadata';
 import { fingerprintFile, type Fingerprint } from '../services/uploads/fingerprint';
 import { identifyRecording, type AcousticIdentity } from '../services/uploads/acoustid';
+import { verifyIsrcClaim, type IsrcRecording } from '../services/uploads/isrcLookup';
 import {
   collectProvenanceSignals,
   type ProvenanceContext,
@@ -284,6 +286,120 @@ async function identifyForPublication(
 ): Promise<AcousticIdentity | undefined> {
   if (!fingerprint) return undefined;
   return identifyRecording(fingerprint);
+}
+
+/**
+ * Tier 3 of identification: the ISRC the UPLOADER supplied, checked against the
+ * file they uploaded.
+ *
+ * The tier order is a precedence of evidence, and it runs strictly downhill:
+ *
+ *  1. the file's own `TSRC`/`ISRC` tag — the recording's own declaration;
+ *  2. the acoustic match — what the audio itself resolves to;
+ *  3. this — what a person typed into a text box.
+ *
+ * Which is why the first thing this does is stand down. An ISRC already
+ * identified by either tier above ENDS the question: a file that declares a code
+ * is not overridden by a typed one, and a disagreement between the two is
+ * evidence about the file rather than a correction to it. It is logged and the
+ * declared code stands.
+ *
+ * When the claim IS consulted, it is never simply believed. The only reason this
+ * tier can exist at all is that `verifyIsrcClaim` can refuse it: an accepted
+ * fabrication would put a stranger's recording identifier on a track, which
+ * `resolveArtist` tier 1 turns into a HIGH-confidence link to that stranger's
+ * artist profile — a wrong link is an accusation, and one nothing downstream can
+ * tell from a right one.
+ *
+ * Returns the recording on acceptance (its facts fill the gaps the file left),
+ * nothing when there is no claim to consider, and a refusal otherwise.
+ */
+async function verifyClaimedIsrc(params: {
+  /** What the uploader typed, already normalised and format-checked by the schema. */
+  claimed: string | undefined;
+  /** What tiers 1 and 2 produced, if anything. */
+  identified: string | undefined;
+  metadata: ExtractedMetadata;
+  report: ScreeningReport;
+}): Promise<
+  | { accepted: true; recording?: IsrcRecording }
+  | { accepted: false; status: number; outcome: UploadOutcome }
+> {
+  const { claimed, identified, metadata, report } = params;
+  if (!claimed) return { accepted: true };
+
+  if (identified) {
+    // Compared through the shared normaliser, because a `TSRC` frame is free to
+    // carry the hyphenated spelling the code is printed in — and reporting
+    // `ES-A09-26-07944` as contradicting `ESA092607944` would be a fabricated
+    // disagreement in the one record anybody would consult about a real one.
+    if (normalizeIsrc(identified) !== claimed) {
+      logger.info('[uploads] the uploader supplied an ISRC that the file already contradicts', {
+        identified: normalizeIsrc(identified),
+        claimed,
+      });
+    }
+    return { accepted: true };
+  }
+
+  const refuse = (code: UploadBlockedReason, message: string) => ({
+    accepted: false as const,
+    status: 422,
+    outcome: { outcome: 'blocked' as const, code, message, markers: report.markers },
+  });
+
+  const verdict = await verifyIsrcClaim(claimed, {
+    // `ffprobe`'s measurement, which is the one input to this decision that
+    // nobody typed — see `ISRC_DURATION_TOLERANCE_SEC`.
+    durationSec: metadata.technical.durationSec,
+    // The FILE's own tags, never the uploader's override fields: a value typed
+    // on the same form as the claim is the same person asserting the same thing
+    // twice, and corroborates nothing.
+    title: metadata.title,
+    artistName: metadata.artistName,
+    albumArtistName: metadata.albumArtistName,
+  });
+
+  if (verdict.status === 'unverifiable') {
+    logger.info('[uploads] a supplied ISRC could not be checked', {
+      claimed,
+      reason: verdict.reason,
+    });
+    return refuse(
+      'isrc_unverifiable',
+      `${claimed} could not be found in any recording database, so there is nothing to ` +
+        'check it against. Confirm the code with whoever registered the recording, or keep ' +
+        'the file in your private library instead.',
+    );
+  }
+
+  if (verdict.status === 'mismatch') {
+    /**
+     * Naming what disagreed is what separates a mistyped character from a code
+     * copied off the wrong row of a distributor's catalogue — two different
+     * mistakes with two different fixes. The name half is reported as the pair
+     * it was tested as ("title or artist"), because either one alone would have
+     * satisfied the rule, so neither one alone is what failed.
+     */
+    const disagreed = verdict.disagreed.includes('duration') ? ['length'] : [];
+    const names = verdict.disagreed.filter((field) => field !== 'duration');
+    if (names.length > 0) disagreed.push(names.join(' or '));
+
+    const registered = [verdict.recording.title, verdict.recording.artistName]
+      .filter(Boolean)
+      .join(' — ');
+
+    return refuse(
+      'isrc_mismatch',
+      `${claimed} belongs to a different recording — ` +
+        `${registered || 'one this file does not match'}, ` +
+        `${Math.round(verdict.recording.durationSec)} seconds long. It disagrees with ` +
+        `this file's ${disagreed.join(' and ')}. Check the code, or keep the file in your ` +
+        'private library instead.',
+    );
+  }
+
+  return { accepted: true, recording: verdict.recording };
 }
 
 /**
@@ -701,8 +817,15 @@ async function screenPublicContribution(params: {
    * value the file states is the uploader's own declaration and stays theirs.
    */
   identity?: AcousticIdentity;
+  /**
+   * The recording the uploader's own ISRC resolved to, once it was CHECKED
+   * against the audio (see `verifyClaimedIsrc`). Tier 3, so it is consulted only
+   * where the file's tag and the acoustic match both said nothing — and, like
+   * the acoustic identity, only ever to fill a gap.
+   */
+  verifiedIsrc?: IsrcRecording;
 }): Promise<PublicGateResult> {
-  const { metadata, report, identity } = params;
+  const { metadata, report, identity, verifiedIsrc } = params;
 
   const refuse = (
     status: number,
@@ -733,7 +856,10 @@ async function screenPublicContribution(params: {
   }
 
   const resolution = await resolveArtist({
-    isrc: metadata.isrc ?? identity?.isrc,
+    // Tier 1, from whichever tier of identification produced a code — the file's
+    // own tag, the acoustic match, or the uploader's verified claim, in that
+    // order of precedence.
+    isrc: metadata.isrc ?? identity?.isrc ?? verifiedIsrc?.isrc,
     // Tier 4. The file's own `MUSICBRAINZ_ARTISTID` when it has one, otherwise
     // the artist the acoustic match named — and the NAME beside it, because that
     // tier deliberately refuses to stand on an identifier alone ("a name is
@@ -742,7 +868,11 @@ async function screenPublicContribution(params: {
     // reachable for a file that names nobody, which is the case it was written
     // for and could not previously serve.
     musicbrainzArtistId: metadata.musicbrainz.artistId ?? identity?.musicbrainzArtistId,
-    artistName: params.declaredArtistName ?? metadata.artistName ?? identity?.artistName,
+    artistName:
+      params.declaredArtistName ??
+      metadata.artistName ??
+      identity?.artistName ??
+      verifiedIsrc?.artistName,
     albumArtistName: metadata.albumArtistName,
     // Tier 3. The one signal that can name an artist for a file carrying no
     // usable tags at all, which is exactly the case the chain exists for.
@@ -768,7 +898,11 @@ async function screenPublicContribution(params: {
 
   if (!artistId) {
     const name =
-      resolution.name ?? params.declaredArtistName ?? metadata.artistName ?? identity?.artistName;
+      resolution.name ??
+      params.declaredArtistName ??
+      metadata.artistName ??
+      identity?.artistName ??
+      verifiedIsrc?.artistName;
     if (name) {
       const contributed = await ensureContributedArtist({
         name,
@@ -906,6 +1040,12 @@ interface PublishParams {
    * the identifiers the file itself did not carry — never replaces them.
    */
   identity?: AcousticIdentity;
+  /**
+   * The recording the uploader's VERIFIED ISRC resolved to. Same gap-filling
+   * rule, one tier lower: it supplies the release facts (title, date, track
+   * count) for a file whose tags carry none, and never overwrites one that does.
+   */
+  verifiedIsrc?: IsrcRecording;
   ip?: string;
   userAgent?: string;
 }
@@ -936,9 +1076,11 @@ interface PublishParams {
 async function resolveContributedAlbum(
   params: PublishParams,
 ): Promise<{ id: string; title: string } | undefined> {
-  const { metadata, overrides, identity } = params;
+  const { metadata, overrides, identity, verifiedIsrc } = params;
 
-  const albumName = preferOverride(overrides.albumName, metadata.albumName);
+  // The release the file names, or — for a file that names none — the one the
+  // verified ISRC resolved to. A recovered title only ever fills an absence.
+  const albumName = preferOverride(overrides.albumName, metadata.albumName) ?? verifiedIsrc?.albumName;
   if (!albumName) return undefined;
 
   const resolutionInput = {
@@ -948,7 +1090,13 @@ async function resolveContributedAlbum(
     year: overrides.year ?? metadata.year,
     upc: metadata.upc,
     musicbrainzReleaseId: metadata.musicbrainz.releaseId ?? identity?.releaseMbid,
-    totalTracks: metadata.totalTracks,
+    /**
+     * The release's own track count. Recovering it matters for what it
+     * prevents: `classifyAlbumType` reads "under thirty minutes" as EP-shaped,
+     * so a release that cannot state how many tracks it has has already been
+     * mis-typed once.
+     */
+    totalTracks: metadata.totalTracks ?? verifiedIsrc?.totalTracks,
     /**
      * Deliberately absent.
      *
@@ -978,7 +1126,8 @@ async function resolveContributedAlbum(
    */
   const releaseDate =
     metadata.releaseDate ??
-    (resolutionInput.year !== undefined ? String(resolutionInput.year) : undefined);
+    (resolutionInput.year !== undefined ? String(resolutionInput.year) : undefined) ??
+    verifiedIsrc?.releaseDate;
 
   const created = await ensureContributedAlbum({
     title: albumName,
@@ -987,7 +1136,7 @@ async function resolveContributedAlbum(
     coverArt: overrides.coverArt,
     releaseDate,
     type: classifyAlbumType(resolutionInput),
-    totalTracks: metadata.totalTracks,
+    totalTracks: resolutionInput.totalTracks,
     genres: overrides.genres?.length ? overrides.genres : metadata.genres,
     upc: metadata.upc,
     musicbrainzReleaseId: metadata.musicbrainz.releaseId ?? identity?.releaseMbid,
@@ -1032,14 +1181,16 @@ async function publishContribution(params: PublishParams): Promise<string> {
   const { metadata, overrides, format } = params;
 
   /**
-   * The file's ISRC, or the one its fingerprint resolved to.
+   * The file's ISRC, the one its fingerprint resolved to, or the one the
+   * uploader supplied and this pipeline then VERIFIED against the audio — in
+   * that order of precedence.
    *
    * Persisting the recovered identifier is the point of recovering it: it is
    * what `matchCatalog` tier 2 dedups on and what `resolveArtist` tier 1 reads,
    * so a track published without it would meet the next upload of the same
    * recording as a fresh unidentifiable file.
    */
-  const isrc = metadata.isrc ?? params.identity?.isrc;
+  const isrc = metadata.isrc ?? params.identity?.isrc ?? params.verifiedIsrc?.isrc;
 
   const trackId = new mongoose.Types.ObjectId();
   const coverArtColors = overrides.coverArt
@@ -1457,7 +1608,34 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
        * NOT reconciled here — that disagreement is evidence, and the markers
        * carry it.
        */
-      const resolvedIsrc = metadata.isrc?.trim() || identity?.isrc;
+      const identifiedIsrc = metadata.isrc?.trim() || identity?.isrc;
+
+      /**
+       * Tier 3, and it runs ONLY where the two tiers above found nothing and
+       * the file is not already refused as a commercial release.
+       *
+       * The `commercial` guard is the same precedence the gates below follow:
+       * telling somebody their ISRC does not match, when the real finding is
+       * that the file names its purchaser, sends them to fix the wrong thing —
+       * and it would spend a network request on an upload that is about to be
+       * refused anyway.
+       */
+      const claim =
+        report.verdict === 'commercial'
+          ? { accepted: true as const, recording: undefined }
+          : await verifyClaimedIsrc({
+              claimed: request.isrc,
+              identified: identifiedIsrc,
+              metadata,
+              report,
+            });
+
+      if (!claim.accepted) {
+        res.status(claim.status).json(claim.outcome);
+        return;
+      }
+
+      const resolvedIsrc = identifiedIsrc || claim.recording?.isrc;
 
       if (report.verdict !== 'commercial' && !resolvedIsrc) {
         res.status(422).json({
@@ -1522,6 +1700,7 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
         artistImage: request.artistImage,
         report,
         identity,
+        verifiedIsrc: claim.recording,
       });
 
       if (!gate.allowed) {
@@ -1550,6 +1729,7 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
         fingerprint,
         report,
         identity,
+        verifiedIsrc: claim.recording,
         ip: req.ip,
         userAgent: req.get('user-agent'),
       });
@@ -1982,6 +2162,29 @@ export const promoteUpload = async (
       ...acousticEvidence(identity),
     });
 
+    /**
+     * The same tier-3 check the direct upload performs, for the same reason it
+     * performs the acoustic lookup here rather than inheriting one: promotion is
+     * a PUBLICATION, and every rule the public path enforces has to hold on it
+     * or filing a file privately first becomes the way around them. Omitting it
+     * would leave a supplied ISRC silently ignored on this path — the quiet
+     * failure this feature exists to prevent.
+     */
+    const claim =
+      report.verdict === 'commercial'
+        ? { accepted: true as const, recording: undefined }
+        : await verifyClaimedIsrc({
+            claimed: request.isrc,
+            identified: metadata.isrc?.trim() || identity?.isrc,
+            metadata,
+            report,
+          });
+
+    if (!claim.accepted) {
+      res.status(claim.status).json(claim.outcome);
+      return;
+    }
+
     const gate = await screenPublicContribution({
       uploaderOxyUserId: userId,
       metadata,
@@ -1993,6 +2196,7 @@ export const promoteUpload = async (
       attestation: request.attestation,
       report,
       identity,
+      verifiedIsrc: claim.recording,
     });
 
     if (!gate.allowed) {
@@ -2029,6 +2233,7 @@ export const promoteUpload = async (
       fingerprint: promoteFingerprint,
       report,
       identity,
+      verifiedIsrc: claim.recording,
       ip: req.ip,
       userAgent: req.get('user-agent'),
     });

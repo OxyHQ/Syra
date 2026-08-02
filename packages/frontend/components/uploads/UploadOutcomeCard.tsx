@@ -48,6 +48,12 @@ const BLOCKED_REASON_KEYS: Record<UploadBlockedReason, string> = {
   artist_name_denylisted: 'uploads.blocked.artist_name_denylisted',
   cover_art_required: 'uploads.blocked.cover_art_required',
   isrc_required: 'uploads.blocked.isrc_required',
+  // Opposite situations, which is why they are separate codes: one uploader has
+  // no code, the other has one that resolves to somebody else's recording, and
+  // the third has one nothing can find. Telling any of them the other's story
+  // sends them to fix the wrong thing.
+  isrc_mismatch: 'uploads.blocked.isrc_mismatch',
+  isrc_unverifiable: 'uploads.blocked.isrc_unverifiable',
   artist_contributions_closed: 'uploads.blocked.artist_contributions_closed',
   artist_uploads_disabled: 'uploads.blocked.artist_uploads_disabled',
   // Says "you are barred", not "this profile is closed" — the contract keeps the

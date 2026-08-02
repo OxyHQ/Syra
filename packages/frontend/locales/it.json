@@ -674,7 +674,9 @@
       "hint": "Lascia vuoto per tenere quello che dicono i tag del file. Quello che scrivi qui li sostituisce.",
       "title": "Titolo",
       "artist": "Artista",
-      "album": "Album"
+      "album": "Album",
+      "isrc": "ISRC (facoltativo)",
+      "isrcHint": "Se conosci l’ISRC di questa registrazione, scrivilo qui: Syra lo verifica sul file prima di usarlo. Serve solo per il catalogo pubblico."
     },
     "attestation": {
       "title": "Dichiarazione di diritti",
@@ -710,6 +712,8 @@
       "artist_name_denylisted": "Il nome dell'artista in questo file è un segnaposto del tagger — «Unknown Artist», «Various Artists» o simili — e non può diventare un profilo di catalogo. Scrivi l'artista vero in «Aggiungi dettagli», oppure tieni il file in privato.",
       "cover_art_required": "Questo file non ha un'immagine che il catalogo possa mostrare, e una pubblicazione ne ha bisogno: una scheda senza copertina sembra rotta ovunque compaia, e nessuno torna poi a sistemarla. L'immagine incorporata nel file conta solo se è abbastanza grande; una miniatura piccola resta nella tua libreria ma è troppo sfocata per la pagina di un album. Allega un'immagine in «Aggiungi dettagli», oppure tieni il file nel tuo archivio privato, dove qualsiasi copertina — o nessuna — va benissimo.",
       "isrc_required": "Questo file non ha un ISRC, il codice internazionale che identifica una registrazione. Il catalogo pubblico ne ha bisogno: è ciò che lega il brano a un artista preciso invece che a un nome, e l'abbinamento per solo nome divide uno stesso artista su più profili e allo stesso tempo fonde artisti diversi che si chiamano allo stesso modo. Tieni il file nel tuo archivio privato, dove non serve alcun codice, oppure pubblicalo da Syra for Creators se la musica è tua.",
+      "isrc_mismatch": "L’ISRC che hai inserito appartiene a un’altra registrazione: quella a cui è registrato non corrisponde alla durata, al titolo o all’artista di questo file. Controlla il codice — basta un carattere sbagliato per puntare al brano di qualcun altro — oppure tieni il file nel tuo archivio privato, dove non serve alcun codice.",
+      "isrc_unverifiable": "L’ISRC che hai inserito non si trova in nessun database di registrazioni, quindi non c’è nulla con cui verificarlo, e Syra non pubblica un codice che non può verificare, perché uno non verificato non attribuisce il brano a nessuno. Conferma il codice con chi ha registrato la registrazione, oppure tieni il file nel tuo archivio privato, dove non serve alcun codice.",
       "artist_contributions_closed": "Questo artista è già su Syra e non ha aperto la sua pagina ai contributi di altre persone. Solo lui può pubblicare le proprie registrazioni. Puoi comunque tenere questo file nel tuo archivio privato.",
       "artist_uploads_disabled": "Questo artista non può ricevere nuove tracce al momento.",
       "contributor_blocked": "Il tuo account non può più contribuire al catalogo pubblico: sono state accolte più segnalazioni di violazione del copyright su registrazioni che hai pubblicato. Riguarda il tuo account, non questo artista né questo file. Il tuo archivio privato non è toccato: puoi comunque tenere il file e ascoltarlo. Se pensi sia un errore, contatta l'assistenza per fare ricorso.",
@@ -749,7 +753,13 @@
     "errors": {
       "picker": "Impossibile aprire il selettore di file.",
       "upload": "Il caricamento non è riuscito. Riprova.",
-      "session": "Non siamo riusciti a confermare la tua sessione."
+      "session": "Non siamo riusciti a confermare la tua sessione.",
+      "keepPrivate": "Non è stato possibile salvare il file nel tuo archivio."
+    },
+    "toasts": {
+      "batchDone": "Tutti i {{total}} file sono stati completati.",
+      "batchNeedsAttention_one": "{{count}} file su {{total}} richiede attenzione: guarda la scheda qui sotto.",
+      "batchNeedsAttention_other": "{{count}} file su {{total}} richiedono attenzione: guarda le schede qui sotto."
     }
   }
 }

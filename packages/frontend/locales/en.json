@@ -674,7 +674,9 @@
       "hint": "Leave blank to keep whatever the file's own tags say. Anything you type here replaces it.",
       "title": "Title",
       "artist": "Artist",
-      "album": "Album"
+      "album": "Album",
+      "isrc": "ISRC (optional)",
+      "isrcHint": "If you know this recording's ISRC, type it here — Syra checks it against the file before using it. Only needed for the public catalogue."
     },
     "attestation": {
       "title": "Rights declaration",
@@ -710,6 +712,8 @@
       "artist_name_denylisted": "The artist name in this file is a tagger's placeholder — \"Unknown Artist\", \"Various Artists\" or similar — which cannot become a catalogue profile. Type the real artist under \"Add details\", or keep the file privately.",
       "cover_art_required": "This file has no artwork the catalogue can show, and a release needs one — a coverless entry looks broken everywhere it appears, and nothing ever goes back to fix it. An image embedded in the file counts only if it is large enough; a small thumbnail stays in your own library but is too blurry for an album page. Attach an image under \"Add details\", or keep the file in your private locker, where any artwork — or none — is perfectly fine.",
       "isrc_required": "This file carries no ISRC — the international code that identifies a recording. The public catalogue needs one: it is what pins the track to a specific artist rather than to a name, and matching on names alone both splits one artist across several profiles and merges different artists who happen to share a name. Keep the file in your private locker, where no code is needed, or publish through Syra for Creators if the music is yours.",
+      "isrc_mismatch": "The ISRC you entered belongs to a different recording: the one it is registered to disagrees with this file's length, title or artist. Check the code — a single wrong character points at somebody else's track — or keep the file in your private locker, where no code is needed.",
+      "isrc_unverifiable": "The ISRC you entered could not be found in any recording database, so there is nothing to check it against — and Syra will not publish a code it cannot verify, because an unverified one attributes the track to nobody. Confirm the code with whoever registered the recording, or keep the file in your private locker, where no code is needed.",
       "artist_contributions_closed": "This artist is already on Syra and has not opened their page to contributions from other people. Only they can publish their own recordings. You can still keep this file in your private locker.",
       "artist_uploads_disabled": "This artist cannot receive new tracks right now.",
       "contributor_blocked": "Your account can no longer contribute to the public catalogue: repeated copyright complaints were upheld against recordings you published. This is about your account, not about this artist or this file. Your private locker is unaffected — you can still keep this file and listen to it. If you think this is wrong, contact support to appeal.",
@@ -749,7 +753,13 @@
     "errors": {
       "picker": "Could not open the file picker.",
       "upload": "The upload failed. Please try again.",
-      "session": "We could not confirm your session."
+      "session": "We could not confirm your session.",
+      "keepPrivate": "Could not save the file to your locker."
+    },
+    "toasts": {
+      "batchDone": "All {{total}} files finished.",
+      "batchNeedsAttention_one": "{{count}} of {{total}} files needs a look — see the card below it.",
+      "batchNeedsAttention_other": "{{count}} of {{total}} files need a look — see the cards below them."
     }
   }
 }

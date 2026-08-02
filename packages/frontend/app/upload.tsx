@@ -59,6 +59,17 @@ interface PickedFile {
   title: string;
   artistName: string;
   albumName: string;
+  /**
+   * The recording's ISRC, typed by the uploader.
+   *
+   * Not an override like the fields above it: the catalogue REQUIRES an
+   * identifier, and the two tiers that try to find one without asking — the
+   * file's own tag and an acoustic match — both come up empty for plenty of
+   * legitimate releases. Only offered on the public path, because the locker
+   * asks for no identifier at all and a field that changes nothing is worse
+   * than no field.
+   */
+  isrc: string;
   coverArt: string | null;
   /** Whether the per-file override fields are expanded. */
   showDetails: boolean;
@@ -131,6 +142,7 @@ const UploadScreen: React.FC = () => {
         title: '',
         artistName: '',
         albumName: '',
+        isrc: '',
         coverArt: null,
         showDetails: false,
       }));
@@ -158,9 +170,16 @@ const UploadScreen: React.FC = () => {
     });
   }, []);
 
-  /** Send one file and record what came back — including a refusal. */
+  /**
+   * Send one file and record what came back — including a refusal.
+   *
+   * Returns the outcome as well as storing it. A batch cannot count its own
+   * results from `outcomes` afterwards: `setOutcomes` does not apply inside the
+   * loop that produced it, so a summary read from state would describe the
+   * batch before this one.
+   */
   const uploadOne = useCallback(
-    async (file: PickedFile, destination: UploadDestination): Promise<void> => {
+    async (file: PickedFile, destination: UploadDestination): Promise<UploadOutcome> => {
       const outcome = await createUpload.mutateAsync({
         audioFile: file.audioFile,
         request: {
@@ -168,6 +187,10 @@ const UploadScreen: React.FC = () => {
           title: file.title,
           artistName: file.artistName,
           albumName: file.albumName,
+          // Only the public path has anything to do with it, and `destination`
+          // is the argument rather than `file.destination` because this is also
+          // the retry that sends a refused public file to the locker.
+          isrc: destination === 'public' ? file.isrc : undefined,
           coverArt: file.coverArt ?? undefined,
           // Sent verbatim as it was displayed: an attestation is evidence that
           // this person agreed to THIS text, so storing a different string —
@@ -180,17 +203,44 @@ const UploadScreen: React.FC = () => {
         const { [file.key]: _cleared, ...rest } = current;
         return rest;
       });
+      return outcome;
     },
     [attestationStatement, createUpload],
   );
 
+  /**
+   * Upload the queue, then say how the BATCH went — and only that.
+   *
+   * The one fact no outcome card can carry: a card is a per-file end state, and
+   * "the run you started is finished, here is how much of it needs you" is a
+   * property of the run. Files are sent one at a time, so a batch of twenty is
+   * minutes of watching a list to find out it stopped.
+   *
+   * Everything the toast does NOT say is deliberate. It never restates a
+   * refusal, because a refusal is a `code` with an actionable explanation
+   * attached — `isrc_mismatch` names which of the length, title or artist
+   * disagreed — and none of that survives a sentence in a toast. It counts, and
+   * points at the cards, which persist and name the file.
+   *
+   * Skipped entirely for a single file: its card appears in place, and a toast
+   * saying "1 file finished" beside a card saying what happened to it is the
+   * duplication this whole surface is supposed to avoid.
+   */
   const handleUploadAll = useCallback(async () => {
-    for (const file of pendingFiles) {
+    const batch = pendingFiles;
+    let refused = 0;
+    let failed = 0;
+
+    for (const file of batch) {
       setUploadingKey(file.key);
       try {
-        await uploadOne(file, file.destination);
+        const outcome = await uploadOne(file, file.destination);
+        if (outcome.outcome === 'blocked') {
+          refused += 1;
+        }
       } catch (error) {
         logger.error('Upload failed', { fileName: file.audioFile.name, error });
+        failed += 1;
         setFailures((current) => ({
           ...current,
           [file.key]: error instanceof Error ? error.message : t('uploads.errors.upload'),
@@ -198,6 +248,32 @@ const UploadScreen: React.FC = () => {
       }
     }
     setUploadingKey(null);
+
+    if (batch.length < 2) {
+      return;
+    }
+    const needsAttention = refused + failed;
+    if (needsAttention === 0) {
+      // `total`, not `count`: passing `count` puts i18next into plural
+      // resolution, and this string has no plural forms because it is only ever
+      // shown for two files or more.
+      toast.success(t('uploads.toasts.batchDone', { total: batch.length }));
+      return;
+    }
+    // Same sentence, two levels: a refusal is a decision about a file and a
+    // transport failure is something that broke, and only the second is an
+    // error. The words stay identical because the CARDS are where the
+    // difference is explained, and a toast that tried to would be guessing
+    // which of the two the reader cares about.
+    const summary = t('uploads.toasts.batchNeedsAttention', {
+      count: needsAttention,
+      total: batch.length,
+    });
+    if (failed > 0) {
+      toast.error(summary);
+    } else {
+      toast.info(summary);
+    }
   }, [pendingFiles, t, uploadOne]);
 
   /**
@@ -206,6 +282,15 @@ const UploadScreen: React.FC = () => {
    * Offered rather than done automatically: the public path REFUSES instead of
    * silently downgrading precisely so the listener's stated intent is never
    * quietly changed. Choosing the locker has to be their decision.
+   *
+   * A failure here is the ONE event on this screen with nowhere to appear, and a
+   * toast is the whole of the fix. The inline failure line renders only while a
+   * file has no outcome (`failure && !outcome`), and this retry is offered only
+   * from a `blocked` card — so the file always has one. Writing to `failures`
+   * from here therefore stored a message nothing could ever render: the spinner
+   * stopped, the card stayed as it was, and the listener was told nothing at
+   * all. Success needs no toast, because the card itself changes from the
+   * refusal to the stored file.
    */
   const handleKeepPrivate = useCallback(
     async (file: PickedFile) => {
@@ -214,10 +299,7 @@ const UploadScreen: React.FC = () => {
         await uploadOne(file, 'private');
       } catch (error) {
         logger.error('Private retry failed', { fileName: file.audioFile.name, error });
-        setFailures((current) => ({
-          ...current,
-          [file.key]: error instanceof Error ? error.message : t('uploads.errors.upload'),
-        }));
+        toast.error(error instanceof Error ? error.message : t('uploads.errors.keepPrivate'));
       } finally {
         setKeepingPrivateKey(null);
       }
@@ -437,6 +519,26 @@ const UploadScreen: React.FC = () => {
                             { backgroundColor: theme.colors.backgroundSecondary, color: theme.colors.text },
                           ]}
                         />
+                        {file.destination === 'public' && (
+                          <>
+                            <TextInput
+                              value={file.isrc}
+                              onChangeText={(isrc) => updateFile(file.key, { isrc })}
+                              placeholder={t('uploads.details.isrc')}
+                              placeholderTextColor={theme.colors.textSecondary}
+                              editable={!isUploading}
+                              autoCapitalize="characters"
+                              autoCorrect={false}
+                              style={[
+                                styles.input,
+                                { backgroundColor: theme.colors.backgroundSecondary, color: theme.colors.text },
+                              ]}
+                            />
+                            <Text style={[styles.detailsHint, { color: theme.colors.textSecondary }]}>
+                              {t('uploads.details.isrcHint')}
+                            </Text>
+                          </>
+                        )}
                         <CoverArtPicker
                           value={file.coverArt ?? undefined}
                           onChange={(coverArt) => updateFile(file.key, { coverArt })}

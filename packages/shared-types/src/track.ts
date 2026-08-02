@@ -13,6 +13,61 @@ export const externalIdsSchema = z.object({
 export type ExternalIds = z.infer<typeof externalIdsSchema>;
 
 /**
+ * An ISRC, once the punctuation people type into it has been removed.
+ *
+ * The code is twelve characters — `CCXXXYYNNNNN` — but it is PRINTED with
+ * hyphens (`ES-A09-26-07944`) on the label copy, the distributor dashboard and
+ * the registration certificate somebody is reading it off. Every one of those is
+ * a place an uploader copies from, so the separators are stripped rather than
+ * rejected: refusing the spelling the code is published in would fail exactly
+ * the people who have the right code in front of them.
+ *
+ * Case is folded up because the standard defines the alphabet as uppercase, and
+ * `Track.externalIds.isrc` is written uppercase by the publication path. A
+ * lowercase copy of the same code would compare unequal to it and dedup as a
+ * different recording.
+ *
+ * NOTE: no Unicode property escapes anywhere here — this module is bundled into
+ * the apps and mobile Hermes rejects them at runtime. ASCII classes only.
+ */
+export function normalizeIsrc(value: string): string {
+  return value.replace(/[\s-]/g, '').toUpperCase();
+}
+
+/**
+ * The structure of a normalised ISRC, in the four parts the standard defines:
+ * a two-letter country code, a three-character alphanumeric registrant, the two
+ * final digits of the year of reference, and a five-digit designation.
+ *
+ * Written as four groups rather than the equivalent `\d{7}` tail so the shape it
+ * is enforcing stays readable — a wrong-length designation and a wrong-length
+ * year are different mistakes, and the pattern should say which parts exist.
+ */
+export const ISRC_PATTERN = /^[A-Z]{2}[A-Z0-9]{3}[0-9]{2}[0-9]{5}$/;
+
+/**
+ * A user-supplied ISRC: normalised first, then validated.
+ *
+ * Validating the NORMALISED form is what makes the hyphenated spelling legal
+ * without the pattern having to admit hyphens in arbitrary positions, which
+ * would also admit `E-S-A-0-9-2...`.
+ *
+ * A well-formed code is NOT a true one — twelve characters in the right shape
+ * are trivially invented. This schema is the syntax gate only; whether the code
+ * actually belongs to the uploaded recording is decided by the backend against
+ * the audio itself (`services/uploads/isrcLookup.ts`), and a claim that cannot
+ * be checked is refused rather than trusted.
+ */
+export const isrcSchema = z
+  .string()
+  .transform(normalizeIsrc)
+  .refine((value) => ISRC_PATTERN.test(value), {
+    message:
+      'An ISRC is 12 characters: two country letters, three registrant characters, ' +
+      'a two-digit year and a five-digit designation (for example ESA092607944).',
+  });
+
+/**
  * Who a single imported FIELD came from — the provenance log's vocabulary.
  *
  * Deliberately NOT `catalogSourceSchema`, which is a different question with a
