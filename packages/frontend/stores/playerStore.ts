@@ -710,8 +710,24 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       }
     }
 
+    /**
+     * The mode follows the SOURCE, not whether the resolver returned an object.
+     *
+     * Gating on `resolution !== null` conflated two different facts. A source
+     * can be an HLS manifest while the resolver returned nothing — a cached or
+     * pre-resolved URL takes that path — and the fallback then handed a
+     * `master.m3u8` straight to `createAudioPlayer`, which sets `audio.src`.
+     * Chrome cannot play HLS natively, so the element fetched the manifest
+     * (visible in the network log as `Type: media`, initiated by the element
+     * rather than by hls.js) and then failed with "The element has no supported
+     * sources". Playback was dead on every non-Safari browser while the manifest
+     * itself downloaded perfectly.
+     *
+     * Asking the URL cannot drift from what is actually being played.
+     */
+    const isHlsSource = /\.m3u8(\?|$)/i.test(audioUrl);
     const mode =
-      resolution !== null
+      resolution !== null || isHlsSource
         ? pickPlaybackMode({
             isWeb: Platform.OS === 'web',
             canPlayHlsNatively: canPlayHlsNatively(),
