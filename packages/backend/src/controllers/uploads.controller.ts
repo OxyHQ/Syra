@@ -390,13 +390,27 @@ async function verifyClaimedIsrc(params: {
       .filter(Boolean)
       .join(' — ');
 
+    /**
+     * BOTH lengths, never just the registered one.
+     *
+     * Stating only what the code names left the reader unable to see the size of
+     * the disagreement — the difference between a two-second master variation
+     * and a seventy-second one is the difference between "widen the tolerance"
+     * and "this is a different recording, or an incomplete download", and only
+     * the second number distinguishes them. Reported observed-then-registered so
+     * the file the uploader is holding comes first.
+     */
+    const lengths =
+      `${Math.round(metadata.technical.durationSec)}s here against ` +
+      `${Math.round(verdict.recording.durationSec)}s registered`;
+
     return refuse(
       'isrc_mismatch',
       `${claimed} belongs to a different recording — ` +
-        `${registered || 'one this file does not match'}, ` +
-        `${Math.round(verdict.recording.durationSec)} seconds long. It disagrees with ` +
-        `this file's ${disagreed.join(' and ')}. Check the code, or keep the file in your ` +
-        'private library instead.',
+        `${registered || 'one this file does not match'}. It disagrees with ` +
+        `this file's ${disagreed.join(' and ')}` +
+        `${verdict.disagreed.includes('duration') ? ` (${lengths})` : ''}. ` +
+        'Check the code, or keep the file in your private library instead.',
     );
   }
 
