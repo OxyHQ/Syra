@@ -923,6 +923,45 @@ describe('POST /api/uploads — the ISRC the uploader supplies', () => {
     );
   });
 
+  it('publishes on a duration-only disagreement, and writes no code for it', async () => {
+    // The distinction the refusal used to collapse: the claim identifies the
+    // ARTIST (title and artist both agree) without identifying the RECORDING
+    // (the registered one is a different length). A released work routinely
+    // exists as several — album cut, single edit, radio version — each with its
+    // own code and length, so refusing outright rejected files whose provenance
+    // was never in doubt.
+    //
+    // Both halves are asserted, because either alone would pass a broken
+    // implementation: publishing while writing the code would assert this audio
+    // IS a recording measured to be a different length, and refusing would be
+    // the old behaviour.
+    deezerTrack = {
+      id: 4059541821,
+      isrc: CLAIMED,
+      title: 'Cielo Partido',
+      // The fixture is 3s; this is the same recording registered far longer.
+      duration: 293,
+      artist: { id: 350189862, name: 'Lucía Arenas' },
+      album: { id: 996677771, title: 'Cielo Partido' },
+    };
+
+    const { status, body } = await postUpload(UNIDENTIFIED, {
+      destination: 'public',
+      isrc: CLAIMED,
+      coverArt: await catalogCover(),
+      attestation: 'I have the right to distribute this recording.',
+    });
+
+    expect(status).toBe(201);
+    expect(body.outcome).toBe('published');
+
+    const track = await TrackModel.findById(String(body.trackId)).lean();
+    // The code is NOT persisted: nothing may claim this audio is that recording.
+    expect(track?.externalIds?.isrc).toBeUndefined();
+    // The artist still resolved, which is the whole point of accepting it.
+    expect(track?.artistId).toBeTruthy();
+  });
+
   it('never rehosts the artwork the lookup could have handed it', async () => {
     // Deezer's real payload carries five cover URLs and five artist pictures.
     // Their terms cover metadata; cover art is licensed per work. The uploader's

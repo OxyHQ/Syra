@@ -323,7 +323,16 @@ async function verifyClaimedIsrc(params: {
   metadata: ExtractedMetadata;
   report: ScreeningReport;
 }): Promise<
-  | { accepted: true; recording?: IsrcRecording }
+  | {
+      accepted: true;
+      recording?: IsrcRecording;
+      /**
+       * False when the claim identified the artist but NOT this recording — the
+       * recording's facts may be used, its code may not be written. Absent means
+       * the usual case, where the code names this audio.
+       */
+      identifiesRecording?: false;
+    }
   | { accepted: false; status: number; outcome: UploadOutcome }
 > {
   const { claimed, identified, metadata, report } = params;
@@ -372,6 +381,38 @@ async function verifyClaimedIsrc(params: {
         'check it against. Confirm the code with whoever registered the recording, or keep ' +
         'the file in your private library instead.',
     );
+  }
+
+  /**
+   * A duration-only disagreement identifies the ARTIST without identifying the
+   * RECORDING, and those deserve different answers.
+   *
+   * The whole reason the public path demands an identifier is attribution: a
+   * name matched loosely links a track to a stranger's profile, and
+   * `resolveArtist` tier 1 reads a code as HIGH confidence. When the claimed
+   * code resolves to a recording whose title AND artist both agree with the
+   * file's own tags, that danger is already answered twice over — the artist is
+   * corroborated. What remains unproven is only whether this is that exact
+   * recording, and a released work routinely exists as several: album cut,
+   * single edit, radio version, each with its own code and its own length.
+   *
+   * Refusing the upload for that treated a metadata imprecision as a
+   * misattribution risk, and rejected files whose provenance was never in
+   * doubt. So the claim is accepted for what it proves and not for what it does
+   * not: the recording travels on, supplying the artist and the release facts,
+   * and the ISRC is deliberately NOT persisted — Syra never asserts that this
+   * audio is a recording it has measured to be a different length.
+   *
+   * The uploader is told, because a track published without its identifier is
+   * worth knowing about, and because the honest fix is the code for THIS edit.
+   */
+  if (verdict.status === 'mismatch' && verdict.disagreed.join() === 'duration') {
+    logger.info('[uploads] an ISRC claim matched the artist but not the recording', {
+      claimed,
+      fileDurationSec: Math.round(metadata.technical.durationSec),
+      registeredDurationSec: Math.round(verdict.recording.durationSec),
+    });
+    return { accepted: true, recording: verdict.recording, identifiesRecording: false };
   }
 
   if (verdict.status === 'mismatch') {
@@ -844,7 +885,15 @@ async function screenPublicContribution(params: {
    * where the file's tag and the acoustic match both said nothing — and, like
    * the acoustic identity, only ever to fill a gap.
    */
-  verifiedIsrc?: IsrcRecording;
+  /**
+   * The release facts a claimed or discovered code resolved to.
+   *
+   * `isrc` is OPTIONAL here while it is required on `IsrcRecording`, and that
+   * difference is load-bearing: a claim can identify the ARTIST without
+   * identifying this recording (same title and artist, different length), and
+   * then the facts are usable while the code must never be written.
+   */
+  verifiedIsrc?: Omit<IsrcRecording, 'isrc'> & { isrc?: string };
 }): Promise<PublicGateResult> {
   const { metadata, report, identity, verifiedIsrc } = params;
 
@@ -1043,7 +1092,15 @@ interface PublishParams {
    * rule, one tier lower: it supplies the release facts (title, date, track
    * count) for a file whose tags carry none, and never overwrites one that does.
    */
-  verifiedIsrc?: IsrcRecording;
+  /**
+   * The release facts a claimed or discovered code resolved to.
+   *
+   * `isrc` is OPTIONAL here while it is required on `IsrcRecording`, and that
+   * difference is load-bearing: a claim can identify the ARTIST without
+   * identifying this recording (same title and artist, different length), and
+   * then the facts are usable while the code must never be written.
+   */
+  verifiedIsrc?: Omit<IsrcRecording, 'isrc'> & { isrc?: string };
   ip?: string;
   userAgent?: string;
 }
@@ -1722,9 +1779,43 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
       }
 
       const discoveredRecording = discovered?.status === 'found' ? discovered.recording : undefined;
-      const resolvedIsrc = identifiedIsrc || claim.recording?.isrc || discoveredRecording?.isrc;
+      /**
+       * The release facts to fill gaps with, carrying a code ONLY where one was
+       * actually established for this audio. Stripping it here rather than at
+       * each reader is deliberate: `publishContribution` reads
+       * `verifiedIsrc?.isrc` straight into `Track.externalIds`, so a reader that
+       * forgot the distinction would persist the very assertion this avoids.
+       */
+      const claimRecording =
+        claim.identifiesRecording === false && claim.recording
+          ? { ...claim.recording, isrc: undefined }
+          : claim.recording;
+      const verifiedRecording = claimRecording ?? discoveredRecording;
+      /**
+       * A claim that identified only the ARTIST contributes no code here.
+       *
+       * `identifiesRecording: false` means the claimed code resolves to a
+       * recording of a different length, so writing it would assert that this
+       * audio IS that recording. Its facts still travel — see `verifiedIsrc`
+       * below — but the identifier does not.
+       */
+      const claimedIsrc = claim.identifiesRecording === false ? undefined : claim.recording?.isrc;
+      const resolvedIsrc = identifiedIsrc || claimedIsrc || discoveredRecording?.isrc;
 
-      if (report.verdict !== 'commercial' && !resolvedIsrc) {
+      /**
+       * The requirement is ATTRIBUTION, and a code is how it is normally met —
+       * not the requirement itself.
+       *
+       * A claim that resolved to a registered recording whose title and artist
+       * both agree with the file has met it: the artist is corroborated twice
+       * against a real release, which is the danger this gate exists for. Only
+       * the recording-level identity is unproven, and that is why no code is
+       * written. Demanding one anyway would refuse the upload for the exact
+       * reason it had already answered.
+       */
+      const attributionEstablished = Boolean(resolvedIsrc) || claim.identifiesRecording === false;
+
+      if (report.verdict !== 'commercial' && !attributionEstablished) {
         res.status(422).json({
           outcome: 'blocked',
           code: 'isrc_required',
@@ -1786,7 +1877,7 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
         attestation: request.attestation,
         report,
         identity,
-        verifiedIsrc: claim.recording ?? discoveredRecording,
+        verifiedIsrc: verifiedRecording,
       });
 
       if (!gate.allowed) {
@@ -1815,7 +1906,7 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
         fingerprint,
         report,
         identity,
-        verifiedIsrc: claim.recording ?? discoveredRecording,
+        verifiedIsrc: verifiedRecording,
         ip: req.ip,
         userAgent: req.get('user-agent'),
       });
