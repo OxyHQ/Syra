@@ -93,6 +93,16 @@ export type IsrcLookupResult =
   | { status: 'not-found' }
   | { status: 'unavailable'; reason: string };
 
+/**
+ * Discovery can answer a weaker question than lookup can.
+ *
+ * `attributed` means a registered recording agrees on title AND artist but not
+ * on length: WHO made this is established, WHICH recording it is is not. The
+ * distinction exists because editions are real and because the search that finds
+ * them is incomplete — see the note at the fallback in `discoverIsrc`.
+ */
+export type IsrcDiscoveryResult = IsrcLookupResult | { status: 'attributed'; artistName?: string };
+
 // ── Deezer ──────────────────────────────────────────────────────────────────
 
 /**
@@ -746,7 +756,7 @@ function candidateMatches(candidate: DeezerSearchCandidate, evidence: IsrcClaimE
  * point is that it now refuses files that genuinely cannot be identified rather
  * than files that merely arrived without a tag.
  */
-export async function discoverIsrc(evidence: IsrcClaimEvidence): Promise<IsrcLookupResult> {
+export async function discoverIsrc(evidence: IsrcClaimEvidence): Promise<IsrcDiscoveryResult> {
   if (!evidence.title || !(evidence.artistName ?? evidence.albumArtistName)) {
     return {
       status: 'unavailable',
@@ -772,7 +782,34 @@ export async function discoverIsrc(evidence: IsrcClaimEvidence): Promise<IsrcLoo
   }
 
   const match = candidates.find((candidate) => candidateMatches(candidate, evidence));
-  if (!match) return { status: 'not-found' };
+  if (!match) {
+    /**
+     * Nothing matched on all three, but a hit agreeing on title AND artist has
+     * still established WHO made this — and that is the question the public path
+     * actually needs answered.
+     *
+     * A release exists in editions: album cut, single, live, remix, each its own
+     * recording with its own length. Two files from one album went different ways
+     * here purely because one happened to match the edition Deezer's search
+     * surfaced first — and that search is demonstrably incomplete, so which
+     * edition it returns is not a fact about the music. Refusing on it published
+     * one track and rejected its neighbour.
+     *
+     * So the artist is reported without a code. The caller may attribute; nothing
+     * may claim this audio is a recording measured at another length.
+     */
+    const attributed = candidates.find(
+      (candidate) =>
+        anyKeyInCommon(nameKeys(evidence.title), nameKeys(candidate.title)) &&
+        anyKeyInCommon(
+          nameKeys(evidence.artistName, evidence.albumArtistName),
+          nameKeys(candidate.artistName),
+        ),
+    );
+    return attributed
+      ? { status: 'attributed', artistName: attributed.artistName }
+      : { status: 'not-found' };
+  }
 
   // The search result does not carry the code — only the track resource does —
   // so identifying the recording and reading its identifier are two calls.

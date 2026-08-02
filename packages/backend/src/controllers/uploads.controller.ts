@@ -1812,6 +1812,14 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
 
       const discoveredRecording = discovered?.status === 'found' ? discovered.recording : undefined;
       /**
+       * Discovery agreed on title AND artist but not on length.
+       *
+       * WHO made this is established; WHICH recording it is is not, so no code
+       * is written — the same split the typed-claim path makes, applied to the
+       * automatic one so two files from one album cannot go different ways.
+       */
+      const discoveryAttributed = discovered?.status === 'attributed';
+      /**
        * The release facts to fill gaps with, carrying a code ONLY where one was
        * actually established for this audio. Stripping it here rather than at
        * each reader is deliberate: `publishContribution` reads
@@ -1845,7 +1853,8 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
        * written. Demanding one anyway would refuse the upload for the exact
        * reason it had already answered.
        */
-      const attributionEstablished = Boolean(resolvedIsrc) || claim.identifiesRecording === false;
+      const attributionEstablished =
+        Boolean(resolvedIsrc) || claim.identifiesRecording === false || discoveryAttributed;
 
       if (report.verdict !== 'commercial' && !attributionEstablished) {
         res.status(422).json({

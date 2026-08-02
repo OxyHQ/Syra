@@ -962,6 +962,49 @@ describe('POST /api/uploads — the ISRC the uploader supplies', () => {
     expect(track?.artistId).toBeTruthy();
   });
 
+  it('publishes when discovery agrees on the artist but not the length', async () => {
+    // Two files from one album went different ways here: one happened to match
+    // the edition Deezer's search surfaced first, its neighbour was 14 seconds
+    // off and was refused. A release exists in editions — album cut, single,
+    // live — each its own recording with its own length, and the search that
+    // finds them is demonstrably incomplete, so WHICH edition it returns is not
+    // a fact about the music.
+    //
+    // No code is supplied here at all: this is the automatic path, and it must
+    // reach the same answer as the typed-claim path or the two disagree about
+    // the same file.
+    deezerTrack = undefined;
+    setDeezerFetchForTests(async (url: string) =>
+      url.includes('/search')
+        ? {
+            data: [
+              {
+                id: 2956018411,
+                title: 'Cielo Partido',
+                // The fixture is 3s. Same title, same artist, another edition.
+                duration: 223,
+                artist: { id: 350189862, name: 'Lucía Arenas' },
+              },
+            ],
+          }
+        : DEEZER_NO_DATA,
+    );
+
+    const { status, body } = await postUpload(UNIDENTIFIED, {
+      destination: 'public',
+      coverArt: await catalogCover(),
+      attestation: 'I have the right to distribute this recording.',
+    });
+
+    expect(status).toBe(201);
+    expect(body.outcome).toBe('published');
+
+    const track = await TrackModel.findById(String(body.trackId)).lean();
+    // Attributed, not identified: nothing may claim this is that recording.
+    expect(track?.externalIds?.isrc).toBeUndefined();
+    expect(track?.artistId).toBeTruthy();
+  });
+
   it('never rehosts the artwork the lookup could have handed it', async () => {
     // Deezer's real payload carries five cover URLs and five artist pictures.
     // Their terms cover metadata; cover art is licensed per work. The uploader's
