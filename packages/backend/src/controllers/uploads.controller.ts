@@ -73,6 +73,7 @@ import {
 import { fingerprintFile, type Fingerprint } from '../services/uploads/fingerprint';
 import { identifyRecording, type AcousticIdentity } from '../services/uploads/acoustid';
 import { discoverIsrc, verifyIsrcClaim, type IsrcRecording } from '../services/uploads/isrcLookup';
+import { findArtistMbidByIsrc } from '../services/uploads/musicbrainzLookup';
 import {
   collectProvenanceSignals,
   type ProvenanceContext,
@@ -925,6 +926,37 @@ async function screenPublicContribution(params: {
     );
   }
 
+  /**
+   * The artist id, resolved from the recording code when neither the tags nor
+   * the acoustic match carried one — and this is what makes a licensed
+   * photograph reachable at all.
+   *
+   * `enrichArtistProfile` is gated on this id and refuses any artist without
+   * one, so before this the whole Wikidata/Commons chain was built and never
+   * fired for a contributed artist: a stream ripper writes no
+   * `MUSICBRAINZ_ARTISTID`, and the local MusicBrainz slice stores a credited
+   * NAME rather than an id. The result was a catalogue of faceless profiles that
+   * nothing would ever go back and fill.
+   *
+   * Best-effort by construction: a missing photograph degrades a profile, while
+   * a failed lookup must never cost a publication. MusicBrainz is rate limited
+   * to one request a second across all enrichment, so this can simply time out.
+   */
+  const knownArtistMbid = metadata.musicbrainz.artistId ?? identity?.musicbrainzArtistId;
+  let resolvedArtistMbid = knownArtistMbid;
+  if (!resolvedArtistMbid) {
+    const recordingCode = metadata.isrc ?? identity?.isrc ?? verifiedIsrc?.isrc;
+    if (recordingCode) {
+      try {
+        resolvedArtistMbid = await findArtistMbidByIsrc(recordingCode);
+      } catch (error: unknown) {
+        logger.info('[uploads] could not resolve an artist id from the recording code', {
+          message: getErrorMessage(error),
+        });
+      }
+    }
+  }
+
   const resolution = await resolveArtist({
     // Tier 1, from whichever tier of identification produced a code — the file's
     // own tag, the acoustic match, or the uploader's verified claim, in that
@@ -937,7 +969,7 @@ async function screenPublicContribution(params: {
     // MusicBrainz record, so supplying them together is what makes the tier
     // reachable for a file that names nobody, which is the case it was written
     // for and could not previously serve.
-    musicbrainzArtistId: metadata.musicbrainz.artistId ?? identity?.musicbrainzArtistId,
+    musicbrainzArtistId: resolvedArtistMbid,
     artistName:
       params.declaredArtistName ??
       metadata.artistName ??
@@ -982,7 +1014,7 @@ async function screenPublicContribution(params: {
          * artist that has one — enrichment refuses the rest — so a stub created
          * without it stays a bare page nothing ever goes back to fill.
          */
-        musicbrainzArtistId: metadata.musicbrainz.artistId ?? identity?.musicbrainzArtistId,
+        musicbrainzArtistId: resolvedArtistMbid,
         genres: metadata.genres,
       });
       if (!contributed) {

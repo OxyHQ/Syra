@@ -84,10 +84,16 @@ describe('enrichmentHttp — the host allowlist', () => {
     ).rejects.toThrow(/not an allowed enrichment host/);
   });
 
-  it('allows exactly the three documented sources', () => {
+  it('allows exactly the four documented sources', () => {
+    // A closed set, restated here so widening it is a deliberate act rather than
+    // a line someone adds to the array. Each entry is a source whose licence
+    // permits reuse; a host that merely serves images is not a candidate.
     expect([...ENRICHMENT_HOSTS].sort()).toEqual([
       'commons.wikimedia.org',
       'coverartarchive.org',
+      // Answers "which artist is credited on the recording this ISRC names" —
+      // the id every other host here is keyed by.
+      'musicbrainz.org',
       'www.wikidata.org',
     ]);
   });

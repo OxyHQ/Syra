@@ -33,6 +33,9 @@ export const ENRICHMENT_HOSTS: readonly string[] = [
   'www.wikidata.org',
   'commons.wikimedia.org',
   'coverartarchive.org',
+  // Answers "which artist is credited on the recording this ISRC names", which
+  // is the id every other host here is keyed by. See `musicbrainzLookup.ts`.
+  'musicbrainz.org',
 ];
 
 /**
