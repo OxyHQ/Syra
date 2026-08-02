@@ -137,6 +137,44 @@ export function isDenylistedArtistName(value: string): boolean {
 }
 
 /**
+ * The album equivalent, and it needed its own list rather than reusing the
+ * artist one.
+ *
+ * A ripper that had no release to write puts a placeholder in `TALB`, and
+ * `Unknown Album` is the overwhelmingly common one — the exact string the file
+ * that exposed this carries. Treating it as a real title created a catalog
+ * `Album` document literally named "Unknown Album", which every later upload
+ * carrying the same placeholder then JOINED, silently gathering unrelated
+ * recordings by unrelated artists into one release.
+ *
+ * The lists cannot be shared: `various artists` is a placeholder for an artist
+ * and a legitimate album title, and `single` / `ep` are placeholders here and
+ * ordinary words there. Overlapping entries are duplicated on purpose.
+ */
+export const DENYLISTED_ALBUM_NAME_KEYS: readonly string[] = [
+  '',
+  'unknown',
+  'unknown album',
+  'album desconocido',
+  'desconocido',
+  'sin album',
+  'untitled',
+  'untitled album',
+  'no album',
+  'none',
+  'n a',
+  'null',
+  'undefined',
+];
+
+const DENYLISTED_ALBUM_NAME_KEY_SET = new Set(DENYLISTED_ALBUM_NAME_KEYS);
+
+/** Is this a tagger's placeholder rather than a release title? */
+export function isDenylistedAlbumName(value: string): boolean {
+  return DENYLISTED_ALBUM_NAME_KEY_SET.has(normalizeNameKey(value));
+}
+
+/**
  * How much of each component survives into an {@link buildAlbumKey} key.
  *
  * A tag field is arbitrary user-supplied text and some files carry absurd ones.

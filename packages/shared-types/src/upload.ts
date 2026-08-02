@@ -347,14 +347,6 @@ export const uploadTrackRequestSchema = z.object({
    * The uploader's signed statement that they may distribute this recording.
    * Required by the backend when `destination` is `public`; ignored otherwise.
    */
-  /**
-   * Image asset id for the ARTIST's photo, distinct from `coverArt`, which is
-   * the release. Required on the public path only when the target artist has no
-   * photo yet — either because this contribution creates the profile, or because
-   * an earlier one left it bare. An artist who already has a photo keeps it:
-   * their branding is not a contributor's to overwrite.
-   */
-  artistImage: z.string().optional(),
   attestation: z.string().optional(),
 });
 export type UploadTrackRequest = z.infer<typeof uploadTrackRequestSchema>;

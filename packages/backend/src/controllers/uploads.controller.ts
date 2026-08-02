@@ -44,6 +44,7 @@ import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { getRequiredOxyUserId } from '@oxyhq/core/server';
 import {
   buildAlbumKey,
+  isDenylistedAlbumName,
   normalizeIsrc,
   uploadTrackRequestSchema,
   updateUserUploadRequestSchema,
@@ -71,7 +72,7 @@ import {
 } from '../services/uploads/extractMetadata';
 import { fingerprintFile, type Fingerprint } from '../services/uploads/fingerprint';
 import { identifyRecording, type AcousticIdentity } from '../services/uploads/acoustid';
-import { verifyIsrcClaim, type IsrcRecording } from '../services/uploads/isrcLookup';
+import { discoverIsrc, verifyIsrcClaim, type IsrcRecording } from '../services/uploads/isrcLookup';
 import {
   collectProvenanceSignals,
   type ProvenanceContext,
@@ -814,7 +815,6 @@ async function screenPublicContribution(params: {
    * Image asset id for the ARTIST's photo, supplied by the uploader. Consumed
    * only when the target profile has none — see the refusal below.
    */
-  artistImage?: string;
   report: ScreeningReport;
   /**
    * What the fingerprint resolved to, when it resolved to anything.
@@ -921,7 +921,6 @@ async function screenPublicContribution(params: {
          */
         musicbrainzArtistId: metadata.musicbrainz.artistId ?? identity?.musicbrainzArtistId,
         genres: metadata.genres,
-        image: params.artistImage,
       });
       if (!contributed) {
         return refuse(
@@ -957,33 +956,11 @@ async function screenPublicContribution(params: {
       .select('image claimable claimedByOxyUserId')
       .lean();
     /**
-     * Filling a bare profile is offered, NOT required, and that is a deliberate
-     * reversal.
-     *
-     * A refusal cannot work here. The ISRC gate above guarantees the background
-     * enrichment has a path to a Wikidata/Commons photo, so a profile that looks
-     * bare at this instant is usually seconds from being complete — and it
-     * cannot be checked synchronously either, because MusicBrainz allows one
-     * request per second and an upload must never block behind it. A refusal
-     * would therefore reject publications that are about to be fine while never
-     * firing for the case it was written for: a rule that cannot trigger.
-     *
-     * Where enrichment finds nothing — an artist Wikidata does not know — the
-     * profile stays bare until the artist claims it and uploads their own.
-     *
      * Only a bare, UNCLAIMED profile is written to: an artist who already has a
      * photo keeps it, because their branding is not a contributor's to
      * overwrite, and once claimed the photo is theirs.
      */
-    if (
-      target &&
-      !target.image &&
-      params.artistImage &&
-      target.claimable !== false &&
-      !target.claimedByOxyUserId
-    ) {
-      await ArtistModel.updateOne({ _id: artistId }, { $set: { image: params.artistImage } });
-    }
+
   }
 
   const decision = await evaluatePublicContribution({
@@ -1087,8 +1064,27 @@ async function resolveContributedAlbum(
 
   // The release the file names, or — for a file that names none — the one the
   // verified ISRC resolved to. A recovered title only ever fills an absence.
-  const albumName = preferOverride(overrides.albumName, metadata.albumName) ?? verifiedIsrc?.albumName;
-  if (!albumName) return undefined;
+  /**
+   * A placeholder is an ABSENCE, not a declaration — and that distinction
+   * decides two things at once.
+   *
+   * `provenanceSignals` already reads `Unknown Album` as evidence that a ripper
+   * had no release to name, while this function was accepting the same string
+   * as a title: the two halves of the pipeline disagreed about what it meant.
+   * Believing it created a catalog `Album` document literally called "Unknown
+   * Album" that every later file carrying the same placeholder then JOINED,
+   * gathering unrelated recordings by unrelated artists into one release.
+   *
+   * Treating it as absent rather than merely rejecting it is what lets the
+   * release title a verified ISRC recovered fill the hole — the file that has a
+   * placeholder is exactly the file whose real release we had to look up. And
+   * where nothing fills it, no album is created and the track hangs under the
+   * artist, which is the right shape for a recording whose release is unknown.
+   */
+  const declared = preferOverride(overrides.albumName, metadata.albumName);
+  const albumName =
+    declared && !isDenylistedAlbumName(declared) ? declared : verifiedIsrc?.albumName;
+  if (!albumName || isDenylistedAlbumName(albumName)) return undefined;
 
   const resolutionInput = {
     albumName,
@@ -1205,6 +1201,7 @@ async function publishContribution(params: PublishParams): Promise<string> {
     : undefined;
 
   const album = await resolveContributedAlbum(params);
+  const taggedAlbumName = preferOverride(overrides.albumName, metadata.albumName);
 
   const track = new TrackModel({
     _id: trackId,
@@ -1212,7 +1209,15 @@ async function publishContribution(params: PublishParams): Promise<string> {
     artistId: params.artistId,
     artistName: params.artistName,
     albumId: album?.id,
-    albumName: album?.title ?? preferOverride(overrides.albumName, metadata.albumName),
+    /**
+     * The free-text fallback runs through the same placeholder check as the
+     * album document, or refusing to CREATE an "Unknown Album" release would
+     * still leave every track captioned with the placeholder — the pollution
+     * moved rather than stopped.
+     */
+    albumName:
+      album?.title ??
+      (taggedAlbumName && !isDenylistedAlbumName(taggedAlbumName) ? taggedAlbumName : undefined),
     duration: metadata.technical.durationSec,
     trackNumber: overrides.trackNumber ?? metadata.trackNumber,
     discNumber: overrides.discNumber ?? metadata.discNumber,
@@ -1255,11 +1260,24 @@ async function publishContribution(params: PublishParams): Promise<string> {
     sha256: metadata.sha256,
   });
 
+  /**
+   * The album id MUST match what the track is saved with.
+   *
+   * `getS3AudioKey` puts the object under `audio/{artist}/{album}/{track}` when
+   * an album is known and `audio/{artist}/{track}` when it is not — so the id
+   * passed here does not merely tag the object, it decides the key. Ingest
+   * re-derives that key from the PERSISTED track, so passing `undefined` while
+   * saving `album?.id` wrote the audio to one path and read it from another:
+   * every contribution that resolved an album ingested to `NoSuchKey`, left no
+   * HLS behind, and surfaced to the listener as a track that lists fine and
+   * plays "no supported source was found". Contributions with no album resolved
+   * kept working, which is what made it look like metadata rather than storage.
+   */
   await uploadTrackAudio(
     {
       id: trackId.toString(),
       artistId: params.artistId,
-      albumId: undefined,
+      albumId: album?.id,
       title: track.title,
       audioSource: track.audioSource,
     },
@@ -1642,7 +1660,42 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
         return;
       }
 
-      const resolvedIsrc = identifiedIsrc || claim.recording?.isrc;
+      /**
+       * Tier 4: search for the recording by what the file already says.
+       *
+       * Runs last and only on total absence, so it never overrides a code the
+       * file declares, one AcoustID resolved, or one the uploader typed. Its
+       * whole population is the file that tiers 1–3 miss together — a real
+       * release, tagged with title and artist, with no `TSRC`, never
+       * fingerprinted, uploaded by somebody who has no way to know a twelve-
+       * character code. That file was being refused for carrying no identifier
+       * when its identifier was a search away.
+       *
+       * `discovered` is held separately from `identifiedIsrc` rather than
+       * folded into it, because a code Syra went and found is not a code the
+       * file declared: the enrichment below reads the recording it resolved to,
+       * and the distinction is what keeps a discovered value from being treated
+       * as the file's own declaration.
+       */
+      const discovered =
+        report.verdict !== 'commercial' && !identifiedIsrc && !claim.recording
+          ? await discoverIsrc({
+              durationSec: metadata.technical.durationSec,
+              title: metadata.title,
+              artistName: metadata.artistName,
+              albumArtistName: metadata.albumArtistName,
+            })
+          : undefined;
+
+      if (discovered?.status === 'unavailable') {
+        // Not a negative result: nothing could be asked. Logged rather than
+        // surfaced, because the gate below still decides the outcome and the
+        // uploader can supply the code themselves either way.
+        logger.warn('[uploads] ISRC discovery unavailable', { reason: discovered.reason });
+      }
+
+      const discoveredRecording = discovered?.status === 'found' ? discovered.recording : undefined;
+      const resolvedIsrc = identifiedIsrc || claim.recording?.isrc || discoveredRecording?.isrc;
 
       if (report.verdict !== 'commercial' && !resolvedIsrc) {
         res.status(422).json({
@@ -1704,10 +1757,9 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
           artistName: acousticNeighbour.artistName,
         },
         attestation: request.attestation,
-        artistImage: request.artistImage,
         report,
         identity,
-        verifiedIsrc: claim.recording,
+        verifiedIsrc: claim.recording ?? discoveredRecording,
       });
 
       if (!gate.allowed) {
@@ -1736,7 +1788,7 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
         fingerprint,
         report,
         identity,
-        verifiedIsrc: claim.recording,
+        verifiedIsrc: claim.recording ?? discoveredRecording,
         ip: req.ip,
         userAgent: req.get('user-agent'),
       });

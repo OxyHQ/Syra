@@ -20,6 +20,7 @@ import path from 'path';
 import type { AddressInfo } from 'net';
 import { connect, clear, disconnect } from '../test/mongo';
 import * as realS3 from '../services/s3Service';
+import { getS3AudioKey } from '../config/s3.config';
 import * as realIngestQueue from '../services/ingest/ingestQueue';
 import * as realAcoustid from '../services/uploads/acoustid';
 import type { AcousticIdentity } from '../services/uploads/acoustid';
@@ -829,9 +830,11 @@ describe('POST /api/uploads — the ISRC the uploader supplies', () => {
   });
 
   it('fills the release facts the file left blank, and never the one it declared', async () => {
-    // Gap-filling in both directions at once. The file declares `Unknown Album`,
-    // a tagger's placeholder — and a declaration is still a declaration, so it
-    // stands. The date and the track count it does NOT declare are recovered.
+    // Gap-filling. The file's `Unknown Album` is a tagger's placeholder, which
+    // is an ABSENCE and not a declaration — so the release title the lookup
+    // recovered fills it, alongside the date and track count the file also
+    // omits. A file carrying a placeholder is precisely the file whose real
+    // release had to be looked up.
     deezerTrack = {
       id: 4059541821,
       isrc: CLAIMED,
@@ -855,9 +858,9 @@ describe('POST /api/uploads — the ISRC the uploader supplies', () => {
     expect(status).toBe(201);
 
     const album = await AlbumModel.findOne({}).lean();
-    // Declared by the file, placeholder and all — not replaced by the release
-    // title the lookup recovered.
-    expect(album?.title).toBe('Unknown Album');
+    // The recovered release title, because the file names no release — only a
+    // placeholder. Nothing in the catalogue is ever called "Unknown Album".
+    expect(album?.title).toBe('Cielo Partido');
     // Absent from the file, recovered: without a date `ensureContributedAlbum`
     // refuses to create the container at all and the track hangs loose.
     expect(album?.releaseDate).toBe('2026-06-26');
@@ -867,6 +870,56 @@ describe('POST /api/uploads — the ISRC the uploader supplies', () => {
     expect(album?.type).toBe('album');
     expect((await TrackModel.findById(String(body.trackId)).lean())?.albumId).toBe(
       album?._id.toString(),
+    );
+  });
+
+  it('stores the audio at the key ingest will read it back from', async () => {
+    // The check that was missing, and its absence cost a silent catalogue.
+    //
+    // `getS3AudioKey` puts the object under `audio/{artist}/{album}/{track}`
+    // when an album is known and `audio/{artist}/{track}` when it is not, and
+    // ingest re-derives that key from the PERSISTED track. Publishing passed
+    // `albumId: undefined` while saving the resolved album, so every
+    // contribution that resolved an album wrote to one key and was read from
+    // another: ingest died on `NoSuchKey`, no HLS was ever produced, and the
+    // track listed normally and played "no supported source was found".
+    //
+    // Asserting that the upload merely stored SOMETHING would have passed
+    // throughout. What has to be asserted is that the two sides agree, so the
+    // expected key is derived the way the reader derives it — from the saved
+    // document — rather than restated.
+    deezerTrack = {
+      id: 4059541821,
+      isrc: CLAIMED,
+      title: 'Cielo Partido',
+      duration: 3,
+      release_date: '2026-06-26',
+      artist: { id: 350189862, name: 'Lucía Arenas' },
+      album: { id: 996677771, title: 'Cielo Partido', release_date: '2026-06-26' },
+    };
+    setDeezerFetchForTests(async (url: string) =>
+      url.includes('/album/') ? { id: 996677771, nb_tracks: 9 } : deezerTrack,
+    );
+
+    const { status, body } = await postUpload(UNIDENTIFIED, {
+      destination: 'public',
+      isrc: CLAIMED,
+      coverArt: await catalogCover(),
+      attestation: 'I have the right to distribute this recording.',
+    });
+    expect(status).toBe(201);
+
+    const track = await TrackModel.findById(String(body.trackId)).lean();
+    // The album has to have resolved, or this asserts the case that never broke.
+    expect(track?.albumId).toBeTruthy();
+
+    expect(storedKeys).toContain(
+      getS3AudioKey(
+        String(track?._id),
+        String(track?.artistId),
+        track?.albumId ? String(track.albumId) : undefined,
+        track?.audioSource?.format ?? 'mp3',
+      ),
     );
   });
 

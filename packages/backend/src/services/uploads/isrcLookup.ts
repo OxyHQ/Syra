@@ -609,3 +609,147 @@ export async function verifyIsrcClaim(
   if (disagreed.length > 0) return { status: 'mismatch', recording, disagreed };
   return { status: 'verified', recording };
 }
+
+// ── Discovery ───────────────────────────────────────────────────────────────
+
+/**
+ * Deezer's search endpoint, used ONLY to turn a file's own tags back into the
+ * recording identifier that names it.
+ *
+ * This is the metadata half of what Deezer's terms permit, and deliberately not
+ * the other half: the response also carries `cover_*` artwork URLs, which are
+ * licensed per work and are never read here or anywhere downstream. What is
+ * taken is the ISRC — an identifier the file's rights-holder was assigned and
+ * that no one licenses.
+ */
+export const DEEZER_SEARCH_URL = 'https://api.deezer.com/search?q=';
+const DEEZER_TRACK_BY_ID_URL = 'https://api.deezer.com/track/';
+
+/**
+ * How many search hits are considered before giving up.
+ *
+ * Deezer orders by its own relevance, and a recording that is not in the first
+ * few hits for its own exact title and artist is not going to be identified
+ * correctly by looking further down — past that point the extra hits are other
+ * recordings, and every one of them is a chance to attach the WRONG code.
+ */
+export const ISRC_DISCOVERY_MAX_CANDIDATES = 5;
+
+/** A search hit, reduced to the fields discovery is allowed to judge it on. */
+export interface DeezerSearchCandidate {
+  id: string;
+  title?: string;
+  artistName?: string;
+  durationSec?: number;
+}
+
+export function parseDeezerSearchCandidates(payload: unknown): DeezerSearchCandidate[] {
+  const root = asRecord(payload);
+  if (!root || asRecord(root.error) || !Array.isArray(root.data)) return [];
+
+  const candidates: DeezerSearchCandidate[] = [];
+  for (const entry of root.data.slice(0, ISRC_DISCOVERY_MAX_CANDIDATES)) {
+    const record = asRecord(entry);
+    if (!record) continue;
+    // Deezer states ids as numbers; anything else is not addressable and is
+    // dropped rather than coerced into a URL path.
+    const id = asPositiveNumber(record.id);
+    if (id === undefined) continue;
+    const title = asString(record.title);
+    const artistName = asString(asRecord(record.artist)?.name);
+    const durationSec = asPositiveNumber(record.duration);
+    candidates.push({
+      id: String(id),
+      ...(title && { title }),
+      ...(artistName && { artistName }),
+      ...(durationSec !== undefined && { durationSec }),
+    });
+  }
+  return candidates;
+}
+
+/**
+ * Does this search hit describe the SAME recording as the uploaded file?
+ *
+ * Both names AND the duration must agree — deliberately stricter than
+ * {@link verifyIsrcClaim}, which accepts either name. The two answer different
+ * questions. Verification starts from a code a human typed and asks whether the
+ * file contradicts it; a disagreeing title with an agreeing artist is a
+ * plausible tagging difference there. Discovery starts from nothing and ASSIGNS
+ * a code on this evidence alone, so a single agreeing field is not enough: a
+ * prolific artist has many recordings and matching only the artist would pick
+ * one at random and stamp its identifier onto a different song. A wrong code
+ * links the track to a stranger's artist profile at high confidence.
+ */
+function candidateMatches(candidate: DeezerSearchCandidate, evidence: IsrcClaimEvidence): boolean {
+  if (candidate.durationSec === undefined) return false;
+  if (Math.abs(candidate.durationSec - evidence.durationSec) > ISRC_DURATION_TOLERANCE_SEC) {
+    return false;
+  }
+  if (!anyKeyInCommon(nameKeys(evidence.title), nameKeys(candidate.title))) return false;
+  return anyKeyInCommon(
+    nameKeys(evidence.artistName, evidence.albumArtistName),
+    nameKeys(candidate.artistName),
+  );
+}
+
+/**
+ * Find the ISRC of an uploaded recording from what the file already says.
+ *
+ * The fourth tier, and the one that removes the last routine reason to refuse a
+ * legitimate upload. Tags supply the code, AcoustID supplies it for anything
+ * ever fingerprinted, the uploader can type it — and this covers the case all
+ * three miss together: a real commercial release, tagged with its title and
+ * artist but no `TSRC`, that nobody has submitted to AcoustID. That is not an
+ * edge case; it is what a file downloaded from a stream ripper looks like, and
+ * it was making the public path demand a code the uploader had no way to know.
+ *
+ * `not-found` here is a real negative and the caller may still refuse; the
+ * point is that it now refuses files that genuinely cannot be identified rather
+ * than files that merely arrived without a tag.
+ */
+export async function discoverIsrc(evidence: IsrcClaimEvidence): Promise<IsrcLookupResult> {
+  if (!evidence.title || !(evidence.artistName ?? evidence.albumArtistName)) {
+    return {
+      status: 'unavailable',
+      reason: 'the file states no title and artist to search a recording by',
+    };
+  }
+
+  // Deezer's advanced syntax, so the terms are matched as the fields they are
+  // rather than as loose text. Both values are quoted and URL-encoded: they come
+  // from an uploaded file's tags and are the one part of this URL that is not a
+  // constant.
+  const artist = evidence.artistName ?? evidence.albumArtistName ?? '';
+  const query = `artist:"${artist.replace(/"/g, '')}" track:"${evidence.title.replace(/"/g, '')}"`;
+
+  let candidates: DeezerSearchCandidate[];
+  try {
+    candidates = parseDeezerSearchCandidates(await requestDeezer(DEEZER_SEARCH_URL + encodeURIComponent(query)));
+  } catch (error: unknown) {
+    return {
+      status: 'unavailable',
+      reason: error instanceof Error ? error.message : 'the recording search could not be reached',
+    };
+  }
+
+  const match = candidates.find((candidate) => candidateMatches(candidate, evidence));
+  if (!match) return { status: 'not-found' };
+
+  // The search result does not carry the code — only the track resource does —
+  // so identifying the recording and reading its identifier are two calls.
+  let recording: IsrcRecording | undefined;
+  try {
+    const payload = asRecord(await requestDeezer(DEEZER_TRACK_BY_ID_URL + encodeURIComponent(match.id)));
+    const isrc = payload && !asRecord(payload.error) ? asString(payload.isrc) : undefined;
+    recording = isrc ? parseDeezerTrack(payload, normalizeIsrc(isrc)) : undefined;
+  } catch (error: unknown) {
+    return {
+      status: 'unavailable',
+      reason: error instanceof Error ? error.message : 'the recording could not be read',
+    };
+  }
+
+  if (!recording) return { status: 'not-found' };
+  return { status: 'found', recording };
+}
