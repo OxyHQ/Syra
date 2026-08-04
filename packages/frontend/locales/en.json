@@ -382,10 +382,12 @@
     "popular": "Popular",
     "appearsIn": "Appears in",
     "verified": "Verified Artist",
-    "follow": "Follow artist",
-    "unfollow": "Unfollow artist",
-    "followError": "Failed to update follow status",
-    "followSignIn": "You must be logged in to follow artists",
+    "followLabels": {
+      "idle": "Follow",
+      "active": "Following",
+      "pending": "Requested",
+      "disabled": "Off here"
+    },
     "notFound": "Profile not found",
     "notFoundMessage": "This profile may have been removed or is no longer available.",
     "errors": {
