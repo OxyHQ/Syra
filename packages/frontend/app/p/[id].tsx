@@ -16,6 +16,7 @@ import { toast } from '@oxyhq/bloom/toast';
 import { Track } from '@syra/shared-types';
 import { entityService } from '@/services/entityService';
 import { ArtistClaimCta } from '@/components/artist/ArtistClaimCta';
+import { ArtistFollowControl } from '@/components/artist/ArtistFollowControl';
 import { usePlayerStore } from '@/stores/playerStore';
 import { usePlayEntity } from '@/hooks/usePlayEntity';
 import SEO from '@/components/SEO';
@@ -27,7 +28,6 @@ import { ArtistDetailSkeleton } from '@/components/skeletons';
 import { EmptyState } from '@/components/common/EmptyState';
 import { oxyImageVariantForTarget, pickCatalogImageUrl, resolvePodcastArtwork, type CatalogImageTarget } from '@/utils/pickImage';
 import { oxyServices } from '@/lib/oxyServices';
-import { useLibrary, useToggleFollowArtist } from '@/hooks/useLibrary';
 import { useRelatedArtists } from '@/hooks/useRecommendations';
 import { useAuthGate } from '@/hooks/useAuthGate';
 import { CATALOG_QUERY_KEYS } from '@/hooks/useLibraryCollections';
@@ -102,10 +102,6 @@ const EntityProfileScreen: React.FC = () => {
   const artistId = entity
     ? (entity.kind === 'artist' ? entity.id : entity.linkedArtistId)
     : undefined;
-
-  const { isArtistFollowed } = useLibrary();
-  const toggleFollow = useToggleFollowArtist();
-  const isFollowed = artistId ? isArtistFollowed(artistId) : false;
 
   const relatedArtistsQuery = useRelatedArtists(artistId);
   const relatedArtists = relatedArtistsQuery.data?.artists ?? [];
@@ -188,28 +184,6 @@ const EntityProfileScreen: React.FC = () => {
     startRadio({ seedType: 'artist', seedId: artistId });
   };
 
-  const handleFollow = () => {
-    if (!gate.isAuthenticated) {
-      toast.error(t('artist.followSignIn'));
-      return;
-    }
-    if (!artistId) {
-      return;
-    }
-    const next = !isFollowed;
-    toggleFollow.mutate(
-      { id: artistId, next },
-      {
-        onSuccess: () => {
-          toast.success(next ? `Following ${displayName}` : `Unfollowed ${displayName}`);
-        },
-        onError: (error) => {
-          toast.error(error instanceof Error ? error.message : t('artist.followError'));
-        },
-      },
-    );
-  };
-
   // Terminal auth failure — the session never resolved within the gate's bound.
   // Rendered as an error the user can act on, never as an endless skeleton.
   if (gate.isTimedOut) {
@@ -279,8 +253,6 @@ const EntityProfileScreen: React.FC = () => {
       entity={entity}
       displayName={displayName}
       artistId={artistId}
-      isFollowed={isFollowed}
-      followPending={toggleFollow.isPending}
       relatedArtists={relatedArtists}
       relatedArtistsPending={relatedArtistsQuery.isPending}
       heroImage={heroImage}
@@ -292,7 +264,6 @@ const EntityProfileScreen: React.FC = () => {
       onPlayAll={handlePlayAll}
       onStartRadio={handleStartRadio}
       onTrackPress={handleTrackPress}
-      onFollow={handleFollow}
       onPlayEpisode={playEpisode}
       onPlayAlbum={playAlbum}
       onPlayPodcast={playPodcast}
@@ -312,8 +283,6 @@ interface EntityProfileViewProps {
   entity: EntityProfile;
   displayName: string;
   artistId: string | undefined;
-  isFollowed: boolean;
-  followPending: boolean;
   relatedArtists: RelatedArtist[];
   relatedArtistsPending: boolean;
   heroImage: string | undefined;
@@ -325,7 +294,6 @@ interface EntityProfileViewProps {
   onPlayAll: () => void;
   onStartRadio: () => void;
   onTrackPress: (track: Track) => void;
-  onFollow: () => void;
   onPlayEpisode: (episode: AppearsInEpisode) => void;
   onPlayAlbum: (albumId: string, albumTitle?: string) => void;
   onPlayPodcast: (podcastId: string, podcastTitle?: string) => void;
@@ -355,8 +323,6 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
   entity,
   displayName,
   artistId,
-  isFollowed,
-  followPending,
   relatedArtists,
   relatedArtistsPending,
   heroImage,
@@ -368,7 +334,6 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
   onPlayAll,
   onStartRadio,
   onTrackPress,
-  onFollow,
   onPlayEpisode,
   onPlayAlbum,
   onPlayPodcast,
@@ -533,20 +498,12 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                 </Pressable>
               )}
               {artistId && (
-                <Pressable
-                  style={styles.stickyHeaderControlButton}
-                  onPress={onFollow}
-                  disabled={followPending}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: isFollowed }}
-                  accessibilityLabel={isFollowed ? t('artist.unfollow') : t('artist.follow')}
-                >
-                  <Ionicons
-                    name={isFollowed ? 'heart' : 'heart-outline'}
-                    size={20}
-                    color={isFollowed ? theme.colors.primary : theme.colors.text}
-                  />
-                </Pressable>
+                <ArtistFollowControl
+                  artistId={artistId}
+                  artistName={displayName}
+                  size="small"
+                  showOptions={false}
+                />
               )}
             </View>
           </View>
@@ -681,20 +638,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                   </Pressable>
                 )}
                 {artistId && (
-                  <Pressable
-                    style={styles.controlButton}
-                    onPress={onFollow}
-                    disabled={followPending}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: isFollowed }}
-                    accessibilityLabel={isFollowed ? t('artist.unfollow') : t('artist.follow')}
-                  >
-                    <Ionicons
-                      name={isFollowed ? 'heart' : 'heart-outline'}
-                      size={24}
-                      color={isFollowed ? theme.colors.primary : theme.colors.text}
-                    />
-                  </Pressable>
+                  <ArtistFollowControl artistId={artistId} artistName={displayName} />
                 )}
                 {artistId && (
                   <Pressable
@@ -992,15 +936,6 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...Platform.select({
-      web: { cursor: 'pointer' },
-    }),
-  },
-  stickyHeaderControlButton: {
-    width: 40,
-    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
     ...Platform.select({
