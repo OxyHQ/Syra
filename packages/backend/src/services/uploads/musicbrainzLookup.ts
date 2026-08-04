@@ -19,18 +19,12 @@
  * unambiguous answer: which artist is credited on the recording this code names.
  */
 
-import { fetchEnrichmentJson } from './enrichmentHttp';
+import { asArray, asRecord, fetchEnrichmentJson } from './enrichmentHttp';
+import { ISRC_PATTERN, normalizeIsrc } from '@syra/shared-types';
 import { logger } from '../../utils/logger';
 
 const MBID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-/** Matches the shape the shared schema normalises to; nothing else reaches a URL. */
-const ISRC_PATTERN = /^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$/;
 
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
-}
 
 /**
  * The artist MusicBrainz credits on the recording this ISRC names.
@@ -46,7 +40,10 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
  * same "primary artist" rule `splitArtistCredit` applies to a `feat.` string, so
  * a track and its profile agree about who the containing artist is.
  */
-export async function findArtistMbidByIsrc(isrc: string): Promise<string | undefined> {
+export async function findArtistMbidByIsrc(rawIsrc: string): Promise<string | undefined> {
+  // Normalise then test, matching `resolveIsrc` — a code arrives in the
+  // hyphenated form it is printed in as often as not.
+  const isrc = normalizeIsrc(rawIsrc);
   if (!ISRC_PATTERN.test(isrc)) return undefined;
 
   const body = asRecord(
@@ -56,13 +53,12 @@ export async function findArtistMbidByIsrc(isrc: string): Promise<string | undef
     ),
   );
 
-  const recordings = Array.isArray(body?.recordings) ? body.recordings : [];
-  if (recordings.length === 0) return undefined;
+  const recordings = asArray(body?.recordings);
 
   const credited = new Set<string>();
   for (const entry of recordings) {
     const credits = asRecord(entry)?.['artist-credit'];
-    const first = Array.isArray(credits) ? asRecord(credits[0]) : undefined;
+    const first = asRecord(asArray(credits)[0]);
     const id = asRecord(first?.artist)?.id;
     if (typeof id === 'string' && MBID_PATTERN.test(id)) credited.add(id.toLowerCase());
   }

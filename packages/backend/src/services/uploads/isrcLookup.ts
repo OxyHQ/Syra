@@ -101,7 +101,7 @@ export type IsrcLookupResult =
  * distinction exists because editions are real and because the search that finds
  * them is incomplete — see the note at the fallback in `discoverIsrc`.
  */
-export type IsrcDiscoveryResult = IsrcLookupResult | { status: 'attributed'; artistName?: string };
+export type IsrcDiscoveryResult = IsrcLookupResult | { status: 'attributed' };
 
 // ── Deezer ──────────────────────────────────────────────────────────────────
 
@@ -729,16 +729,20 @@ export function parseDeezerSearchCandidates(payload: unknown): DeezerSearchCandi
  * one at random and stamp its identifier onto a different song. A wrong code
  * links the track to a stranger's artist profile at high confidence.
  */
-function candidateMatches(candidate: DeezerSearchCandidate, evidence: IsrcClaimEvidence): boolean {
-  if (candidate.durationSec === undefined) return false;
-  if (Math.abs(candidate.durationSec - evidence.durationSec) > ISRC_DURATION_TOLERANCE_SEC) {
-    return false;
-  }
+function namesAgree(candidate: DeezerSearchCandidate, evidence: IsrcClaimEvidence): boolean {
   if (!anyKeyInCommon(nameKeys(evidence.title), nameKeys(candidate.title))) return false;
   return anyKeyInCommon(
     nameKeys(evidence.artistName, evidence.albumArtistName),
     nameKeys(candidate.artistName),
   );
+}
+
+function candidateMatches(candidate: DeezerSearchCandidate, evidence: IsrcClaimEvidence): boolean {
+  if (candidate.durationSec === undefined) return false;
+  if (Math.abs(candidate.durationSec - evidence.durationSec) > ISRC_DURATION_TOLERANCE_SEC) {
+    return false;
+  }
+  return namesAgree(candidate, evidence);
 }
 
 /**
@@ -798,16 +802,8 @@ export async function discoverIsrc(evidence: IsrcClaimEvidence): Promise<IsrcDis
      * So the artist is reported without a code. The caller may attribute; nothing
      * may claim this audio is a recording measured at another length.
      */
-    const attributed = candidates.find(
-      (candidate) =>
-        anyKeyInCommon(nameKeys(evidence.title), nameKeys(candidate.title)) &&
-        anyKeyInCommon(
-          nameKeys(evidence.artistName, evidence.albumArtistName),
-          nameKeys(candidate.artistName),
-        ),
-    );
-    return attributed
-      ? { status: 'attributed', artistName: attributed.artistName }
+    return candidates.some((candidate) => namesAgree(candidate, evidence))
+      ? { status: 'attributed' }
       : { status: 'not-found' };
   }
 

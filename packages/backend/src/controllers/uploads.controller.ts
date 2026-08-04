@@ -952,10 +952,9 @@ async function screenPublicContribution(params: {
    * a failed lookup must never cost a publication. MusicBrainz is rate limited
    * to one request a second across all enrichment, so this can simply time out.
    */
-  const knownArtistMbid = metadata.musicbrainz.artistId ?? identity?.musicbrainzArtistId;
-  let resolvedArtistMbid = knownArtistMbid;
+  const recordingCode = metadata.isrc ?? identity?.isrc ?? verifiedIsrc?.isrc;
+  let resolvedArtistMbid = metadata.musicbrainz.artistId ?? identity?.musicbrainzArtistId;
   if (!resolvedArtistMbid) {
-    const recordingCode = metadata.isrc ?? identity?.isrc ?? verifiedIsrc?.isrc;
     if (recordingCode) {
       try {
         /**
@@ -973,13 +972,21 @@ async function screenPublicContribution(params: {
          * the id arrives the next time the lookup wins. The right long-term home
          * for this is the background job itself, which has no user waiting.
          */
-        resolvedArtistMbid = await Promise.race([
-          findArtistMbidByIsrc(recordingCode),
-          new Promise<undefined>((resolve) => {
-            const timer = setTimeout(() => resolve(undefined), ARTIST_MBID_LOOKUP_BUDGET_MS);
-            timer.unref?.();
-          }),
-        ]);
+        // Cleared when the lookup wins, matching the timeout helpers elsewhere in
+        // the codebase: `unref` keeps a stray timer from holding the event loop,
+        // but it still leaves one pending per upload until it fires.
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          resolvedArtistMbid = await Promise.race([
+            findArtistMbidByIsrc(recordingCode),
+            new Promise<undefined>((resolve) => {
+              timer = setTimeout(() => resolve(undefined), ARTIST_MBID_LOOKUP_BUDGET_MS);
+              timer.unref?.();
+            }),
+          ]);
+        } finally {
+          if (timer) clearTimeout(timer);
+        }
       } catch (error: unknown) {
         logger.info('[uploads] could not resolve an artist id from the recording code', {
           message: getErrorMessage(error),
@@ -992,7 +999,7 @@ async function screenPublicContribution(params: {
     // Tier 1, from whichever tier of identification produced a code — the file's
     // own tag, the acoustic match, or the uploader's verified claim, in that
     // order of precedence.
-    isrc: metadata.isrc ?? identity?.isrc ?? verifiedIsrc?.isrc,
+    isrc: recordingCode,
     // Tier 4. The file's own `MUSICBRAINZ_ARTISTID` when it has one, otherwise
     // the artist the acoustic match named — and the NAME beside it, because that
     // tier deliberately refuses to stand on an identifier alone ("a name is
@@ -1061,25 +1068,9 @@ async function screenPublicContribution(params: {
     }
   }
 
-  /**
-   * An artist profile without a photo is the state nothing ever goes back to
-   * fix: the page renders as a placeholder, and the person it names has no
-   * reason to visit it, so it stays bare indefinitely.
-   *
-   * Checked AFTER resolution rather than before, because whether a photo is
-   * needed depends on the target: a profile that already has one keeps it —
-   * their branding is not a contributor's to overwrite — and only a bare one
-   * asks the uploader for it. That also repairs profiles an earlier
-   * contribution left empty, instead of grandfathering them forever.
-   *
-   * `ensureContributedArtist` already stored the supplied image when it CREATED
-   * the profile; this fills the gap for a profile that already existed. Only an
-   * unclaimed one is written to: once somebody has claimed the profile, its
-   * photo is theirs.
-   */
   if (artistId) {
     const target = await ArtistModel.findById(artistId)
-      .select('image claimable claimedByOxyUserId ownerOxyUserId externalIds.musicbrainzArtistId')
+      .select('claimedByOxyUserId ownerOxyUserId externalIds.musicbrainzArtistId')
       .lean();
 
     /**
@@ -1101,8 +1092,25 @@ async function screenPublicContribution(params: {
        * the sources are rate limited to one request a second and an upload must
        * not wait behind them.
        */
-      const mbid = resolvedArtistMbid ?? target.externalIds?.musicbrainzArtistId;
-      if (mbid) void enqueueArtistEnrichment(artistId);
+      /**
+       * PERSIST the id before queueing, or the job discards itself.
+       *
+       * `enrichArtistProfile` reads the MusicBrainz id off the STORED artist
+       * document and returns early without one — so a resolved id held only in
+       * this request enqueued work that was guaranteed to skip. Writing it also
+       * means the next contribution to this artist short-circuits instead of
+       * paying for the same lookup again.
+       *
+       * Only ever fills an absence: an id already on the profile is left alone.
+       */
+      const storedMbid = target.externalIds?.musicbrainzArtistId;
+      if (!storedMbid && resolvedArtistMbid) {
+        await ArtistModel.updateOne(
+          { _id: artistId },
+          { $set: { 'externalIds.musicbrainzArtistId': resolvedArtistMbid } },
+        );
+      }
+      if (storedMbid ?? resolvedArtistMbid) void enqueueArtistEnrichment(artistId);
 
     }
   }

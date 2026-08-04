@@ -98,10 +98,7 @@ function resolveAlbums(
  * it had a key. The row existed, the header counted it, and nothing rendered it.
  *
  * Asking what was rendered cannot leave a hole, whatever the two endpoints
- * disagree about. `albumKey` is still absent — not empty — for a file with no
- * album tag, deliberately: the key builder is a pure join and would answer
- * `"||"` for an untagged file, which a "has a key" filter would collect into one
- * phantom album containing every untagged upload in the locker.
+ * disagree about.
  */
 function looseUploads(
   uploads: UserUploadAsTrack[],
