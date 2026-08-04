@@ -29,7 +29,7 @@
     "@expo/vector-icons": "^15.0.2",
     "@gorhom/bottom-sheet": "^5.2.6",
     "@livekit/react-native": "^2.11.1",
-    "@oxyhq/bloom": "0.78.0",
+    "@oxyhq/bloom": "0.79.1",
     "@oxyhq/core": "^19.1.2",
     "@oxyhq/services": "^27.1.1",
     "@react-native-async-storage/async-storage": "2.2.0",
