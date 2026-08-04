@@ -185,6 +185,65 @@ across.
 - Identity-sensitive catalog reads keep separate cache keys for `guest` and
   `auth`, and keep waiting on `isPrivateApiPending`.
 
+## The moderation vertical is not Syra's to port alone
+
+Measured 2026-08-05, and it blocks phase 6 rather than complicating it.
+
+Syra's moderation is the adopter half of **CrowdSource**, Oxy's multi-tenant
+participatory-moderation infrastructure (`api.crowdsource.oxy.so`): applications
+send universal reports, randomly drawn juries review them blind, a consensus
+engine publishes versioned decisions, and webhooks return those decisions.
+`packages/backend/package.json` depends on `@oxyhq/crowdsource` 0.3.0,
+`@oxyhq/crowdsource-contracts` and `@oxyhq/crowdsource-express`, and
+`src/moderation/` holds nineteen files implementing intake, the transactional
+outbox, delivery, the decision worker, the processed-event store, enforcement
+planning and execution, and the subject-provider registry.
+
+**CrowdSource's own binding rule says most of that should not exist here.**
+`@oxyhq/crowdsource-app` owns the adopter's half, and an adopting application is
+supposed to write only four things: its subject providers, its
+category→allegation mapping, its enforcement tables plus one `apply`, and its own
+report model. The transactional outbox, delivery, the webhook receiver,
+cross-instance dedupe, decision application, the enforcement claim and the
+enforcement planning algorithm "belong here, not in seven repos". Syra has a copy
+of all seven.
+
+Two facts decide what the port can and cannot do:
+
+- **`@oxyhq/crowdsource-app` is bound to Mongoose by peer dependency**
+  (`"mongoose": "^8.0.0 || ^9.0.0"`), ships Mongoose models, and its suite runs
+  against a real `mongodb-memory-server` replica set because transactions and
+  unique indexes are load-bearing in it. It is not storage-agnostic.
+- **It is not published.** npm returns 404; it exists locally at 0.4.0. The
+  client `@oxyhq/crowdsource` IS published at 0.4.0, two minors ahead of the
+  0.3.0 Syra pins.
+
+So there are three routes, and picking one is an owner decision, not an
+implementation detail:
+
+1. **Adopt `@oxyhq/crowdsource-app` and keep MongoDB for moderation only.**
+   Honours the no-copying rule and leaves the shared moderation stack alone —
+   CrowdSource is on MongoDB by an explicit recorded owner decision that
+   overrides its own plan's RDS PostgreSQL. Costs Syra a second database
+   permanently, and requires publishing the package first.
+2. **Give `@oxyhq/crowdsource-app` a PostgreSQL implementation** (the
+   fix-upstream route). Correct in the long run and the only route that lets
+   every Oxy backend move; large, because the outbox, the dedupe store, the
+   enforcement claim and their transactional guarantees all need a second
+   storage backend, and it changes the ecosystem's moderation stack.
+3. **Port Syra's own copy to PostgreSQL and stay forked.** Cheapest for this
+   migration and the worst long-term: it makes permanent exactly the duplication
+   the shared package exists to end, on a copy already two minors behind.
+
+Until that is decided, phase 6 is blocked. Every other phase is unaffected.
+
+**`CopyrightReport` is NOT part of this and ports normally.** The universal
+taxonomy has forty codes across eleven families and none is copyright — a
+deliberate absence, because DMCA carries statutory process, counter-notice and
+safe-harbour consequences and is routed to specialists rather than to a randomly
+drawn jury. CrowdSource decides conduct and content; `CopyrightReport` decides
+copyright. It stays in phase 5, where it already is.
+
 ## Phasing
 
 **Phase 1 — the whole schema, no call sites.** All 41 models' tables, indexes,
@@ -201,7 +260,7 @@ updating frontend/studio/SDK in the same PR:
 | 3 | Library and playlists | Library (→ junctions), Playlist, PlaylistTrack, RecentlyPlayed, PlaybackState, Device |
 | 4 | Podcasts | Podcast, Episode, EpisodeProgress |
 | 5 | Creators and uploads | UserUpload, ArtistClaim, ContributionAttestation, ContributorStanding, CopyrightReport |
-| 6 | Moderation | ModerationEnforcement, ModerationEvent, ModerationOutbox, Report |
+| 6 | Moderation — **BLOCKED**, see the section above | ModerationEnforcement, ModerationEvent, ModerationOutbox, Report |
 | 7 | Rooms and live | House, Room, RoomUserPreference, Recording, Series |
 | 8 | User and recommendations | UserSettings, UserMusicPreferences, UserBehavior, UserTasteProfile, ListeningEvent, CatalogRelation, NotificationPreference, NotificationSuppression |
 
@@ -266,6 +325,8 @@ one.
 
 ## Open items to resolve during planning, not silently
 
+0. **Which of the three moderation routes above** — it blocks phase 6, and route 2
+   is an ecosystem decision rather than a Syra one.
 1. `Room.topicId` → the missing `Topic` model: table or column removal.
 2. Whether the published `@syra.fm/sdk` major version bumps on the `_id` → `id`
    change, and who its external consumers are.
