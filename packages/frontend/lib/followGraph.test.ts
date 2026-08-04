@@ -128,25 +128,18 @@ describe('ensureArtistFollowTarget', () => {
     );
   });
 
-  it('carries an Oxy avatar as the icon, and omits it entirely when there is none', async () => {
+  it('sends a name-only snapshot, with no icon', async () => {
     const { ensureArtistFollowTarget } = loadModule();
+    await ensureArtistFollowTarget({ artistId: 'artist-1', name: 'Artist One' });
 
-    await ensureArtistFollowTarget({
-      artistId: 'artist-1',
-      name: 'Artist One',
-      avatarFileId: 'file-1',
-    });
-    expect(mockEnsureFollowTarget).toHaveBeenLastCalledWith(
-      expect.objectContaining({ metadata: { name: 'Artist One', icon: 'file-1' } }),
-    );
-
-    // An empty string is the shape a missing avatar actually arrives in from the
-    // catalogue, and it is the one that tells a truthiness check from a
-    // presence check — `icon: ''` would ship an unresolvable id to every other
-    // application's follow list.
-    await ensureArtistFollowTarget({ artistId: 'artist-2', name: 'Artist Two', avatarFileId: '' });
-    expect(mockEnsureFollowTarget).toHaveBeenLastCalledWith(
-      expect.objectContaining({ metadata: { name: 'Artist Two' } }),
+    // Exact, not `objectContaining`: the point is that nothing ELSE is in here.
+    // Every image Syra could reach varies between two of its own sessions — the
+    // catalogue cover by environment, the linked person's avatar by which URL
+    // the viewer opened — and only the providing application refreshes this
+    // snapshot, so a varying field silently overwrites what every other app
+    // renders. Adding one should fail here and make somebody think.
+    expect(mockEnsureFollowTarget).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: { name: 'Artist One' } }),
     );
   });
 });

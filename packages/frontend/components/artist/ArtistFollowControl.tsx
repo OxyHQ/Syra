@@ -26,8 +26,6 @@ export interface ArtistFollowControlProps {
   artistId: string;
   /** Display name for the shared target snapshot other applications render. */
   artistName: string;
-  /** The artist's Oxy avatar file id, when they have one. */
-  avatarFileId?: string;
   size?: 'small' | 'medium' | 'large';
   /**
    * Show the disclosure chevron. Off in the sticky header, where the row is a
@@ -40,7 +38,6 @@ export interface ArtistFollowControlProps {
 export const ArtistFollowControl = memo(function ArtistFollowControl({
   artistId,
   artistName,
-  avatarFileId,
   size = 'medium',
   showOptions = true,
 }: ArtistFollowControlProps) {
@@ -64,17 +61,15 @@ export const ArtistFollowControl = memo(function ArtistFollowControl({
   // well before the first, and a registration sent in that window 401s.
   //
   // A target id never changes once registered, hence `staleTime: Infinity`. The
-  // key is the artist alone: the name and avatar ride along as a display
-  // snapshot, and refreshing that snapshot is not what this query is for.
+  // key is the artist alone: the name rides along as a display snapshot, and
+  // refreshing that snapshot is not what this query is for.
   const targetQuery = useQuery({
     queryKey: ['follow-target', ARTIST_FOLLOW_KIND, artistId],
     queryFn: () =>
-      ensureArtistFollowTarget({ artistId, name: artistName, avatarFileId }).catch(
-        (error: unknown) => {
-          logger.error('Could not resolve the artist follow target', { error, artistId });
-          throw error;
-        },
-      ),
+      ensureArtistFollowTarget({ artistId, name: artistName }).catch((error: unknown) => {
+        logger.error('Could not resolve the artist follow target', { error, artistId });
+        throw error;
+      }),
     enabled: gate.canUsePrivateApi && Boolean(artistId),
     staleTime: Infinity,
   });

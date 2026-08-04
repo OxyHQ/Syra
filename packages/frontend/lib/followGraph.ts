@@ -104,17 +104,6 @@ export interface ArtistFollowTargetInput {
   artistId: string;
   /** Display name for the shared snapshot other applications render. */
   name: string;
-  /**
-   * The artist's Oxy avatar file id, when they have one.
-   *
-   * Only an Oxy file id is passed, never a resolved image URL: Syra's own
-   * catalogue images resolve through Syra's API origin, which differs per
-   * environment, and a target's metadata is REFRESHED by the application that
-   * provides it — so one developer opening an artist page would overwrite the
-   * shared snapshot with a `localhost` URL for everyone. An artist with no Oxy
-   * avatar therefore ships a name and no icon, which degrades to initials.
-   */
-  avatarFileId?: string;
 }
 
 /**
@@ -128,13 +117,28 @@ export interface ArtistFollowTargetInput {
 export async function ensureArtistFollowTarget({
   artistId,
   name,
-  avatarFileId,
 }: ArtistFollowTargetInput): Promise<string> {
   await ensureSyraFollowRegistry();
   const target = await oxyServices.ensureFollowTarget({
     uri: artistFollowUri(artistId),
     kind: ARTIST_FOLLOW_KIND,
-    metadata: { name, ...(avatarFileId ? { icon: avatarFileId } : {}) },
+    // Name only, and no `icon`, deliberately.
+    //
+    // Metadata is a snapshot every other application renders, and only the
+    // PROVIDING application refreshes it — so anything that varies between two
+    // Syra sessions overwrites what everyone else sees. Neither image Syra
+    // holds survives that test. The artist's own cover is a Syra-hosted
+    // catalogue image whose URL is built from the API origin (a `localhost` one
+    // in development) and sits outside the Oxy media chokepoint, so no consumer
+    // could resolve it as a file id either. The one Oxy file id in reach is the
+    // avatar on a linked podcast PERSON row, and the profile controller sets it
+    // on the person branch only — so the same artist would carry an icon when
+    // reached at `/p/<personId>` and none at `/p/<artistId>`, making the shared
+    // snapshot depend on which URL a viewer happened to open.
+    //
+    // A name alone is deterministic, and an icon can be added the day an artist
+    // has an id the Oxy resolver understands.
+    metadata: { name },
     // Syra's own id for the thing, so a later reverse lookup does not have to
     // parse it back out of the URI.
     providerReference: artistId,

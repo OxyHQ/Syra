@@ -501,7 +501,6 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                 <ArtistFollowControl
                   artistId={artistId}
                   artistName={displayName}
-                  avatarFileId={entity.avatar}
                   size="small"
                   showOptions={false}
                 />
@@ -639,11 +638,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                   </Pressable>
                 )}
                 {artistId && (
-                  <ArtistFollowControl
-                    artistId={artistId}
-                    artistName={displayName}
-                    avatarFileId={entity.avatar}
-                  />
+                  <ArtistFollowControl artistId={artistId} artistName={displayName} />
                 )}
                 {artistId && (
                   <Pressable
