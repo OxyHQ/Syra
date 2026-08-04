@@ -51,9 +51,6 @@ const playlistsResponseSchema = z.object({
   playlists: z.array(playlistResponseSchema),
   total: z.number(),
 }).passthrough();
-const successResponseSchema = z.object({
-  success: z.boolean(),
-}).passthrough();
 
 function parseMusicResponse<T>(schema: z.ZodType<T>, data: unknown, label: string): T {
   const parsed = schema.safeParse(data);
@@ -128,16 +125,6 @@ export const musicService = {
     const response = await api.get<unknown>(`/artists/${artistId}/tracks`, params);
     const data = parseMusicResponse(tracksResponseSchema, response.data, 'artist tracks');
     return { ...data, tracks: data.tracks.map(normalizeTrackImages) };
-  },
-
-  async followArtist(artistId: string): Promise<{ success: boolean }> {
-    const response = await api.post<unknown>(`/artists/${artistId}/follow`);
-    return parseMusicResponse(successResponseSchema, response.data, 'follow artist');
-  },
-
-  async unfollowArtist(artistId: string): Promise<{ success: boolean }> {
-    const response = await api.post<unknown>(`/artists/${artistId}/unfollow`);
-    return parseMusicResponse(successResponseSchema, response.data, 'unfollow artist');
   },
 
   // Playlists

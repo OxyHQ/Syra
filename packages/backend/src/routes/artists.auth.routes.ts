@@ -1,7 +1,5 @@
 import { Router } from 'express';
 import {
-  followArtist,
-  unfollowArtist,
   registerAsArtist,
   getMyArtistProfile,
   updateMyArtistProfile,
@@ -41,10 +39,6 @@ router.patch('/me/contribution-settings', requireAuth, updateMyContributionSetti
 router.get('/me/image-suggestions', requireAuth, getMyImageSuggestions);
 router.post('/me/image-suggestions/accept', requireAuth, acceptMyImageSuggestion);
 router.post('/me/image-suggestions/discard', requireAuth, discardMyImageSuggestion);
-
-// Authenticated routes for following/unfollowing
-router.post('/:id/follow', requireAuth, followArtist);
-router.post('/:id/unfollow', requireAuth, unfollowArtist);
 
 // Claiming a contributed artist profile. Opens a PENDING claim and NEVER grants —
 // resolution lives on /api/artist-claims and is reviewer-only.
