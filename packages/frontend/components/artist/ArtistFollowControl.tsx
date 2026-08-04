@@ -77,13 +77,8 @@ export const ArtistFollowControl = memo(function ArtistFollowControl({
   /**
    * Keep Syra's own shelf in step with the press.
    *
-   * `onChange` reports what the listener ASKED for: `FollowTargetButton` fires
-   * it once `follow()`/`unfollow()` resolve, and those report a refusal through
-   * the button's own error state instead of rejecting. So a graph write the
-   * server refused still lands here, and the shelf can sit one press ahead of
-   * the graph until the next press reconciles it. That is a library row, not a
-   * claim about what the listener follows — the button itself is the thing that
-   * reports the truth, and it stays on the state the server actually holds.
+   * `onChange` fires only for a write the server accepted (`@oxyhq/services`
+   * >= 27.1.1), so this is a plain mirror with nothing to reconcile.
    */
   const handleChange = useCallback(
     (following: boolean) => {
