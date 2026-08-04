@@ -382,10 +382,12 @@
     "popular": "Popolari",
     "appearsIn": "Compare in",
     "verified": "Artista verificato",
-    "follow": "Segui artista",
-    "unfollow": "Smetti di seguire",
-    "followError": "Impossibile aggiornare lo stato di seguito",
-    "followSignIn": "Accedi per seguire gli artisti",
+    "followLabels": {
+      "idle": "Segui",
+      "active": "Seguito",
+      "pending": "Richiesto",
+      "disabled": "Disattivato qui"
+    },
     "notFound": "Profilo non trovato",
     "notFoundMessage": "Questo profilo potrebbe essere stato rimosso o non essere più disponibile.",
     "errors": {
