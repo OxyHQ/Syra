@@ -1,5 +1,7 @@
 # Syra
 
+> Org-wide engineering standards (TypeScript, React, naming, error handling, security, testing, git, bun) live at <https://github.com/OxyHQ/engineering/blob/main/AGENTS.md> and are not repeated here. This file holds ONLY Syra-specific content.
+
 ## Monorepo Structure
 
 | Package | Path | Role |
