@@ -14,7 +14,9 @@
 
 - **bun only.** Never `npm`, never `yarn`, never `npx` — use `bunx`. After any dependency change run `bun install` and commit `bun.lock` **in the same commit**.
 - **`drizzle-orm` and `postgres` are `peerDependencies`, never `dependencies`.** Both repos resolve `drizzle-orm` to exactly `0.45.2` and `postgres` to `3.4.9` today. Peer range: `"drizzle-orm": "^0.45.2"`, `"postgres": "^3.4.9"`.
-- **Behaviour of oxy-api and Mention does not change.** The proof is their existing suites passing with **no test file edited** — only import paths move. The single deliberate exception is the `createdAt` precision change in oxy-api (Task 3), which is reviewed as a change.
+- **Behaviour of oxy-api and Mention does not change**, except where explicitly sanctioned below. The proof is their existing suites passing with **no test file edited** — only import paths move. **Two exceptions are sanctioned, both reviewed as changes rather than absorbed as refactors:**
+  1. The `createdAt` precision change in oxy-api (Task 3): `defaultNow()` writes a microsecond value a JS `Date` cannot round-trip.
+  2. **oxy-api gains the unreachable-migration guard** (Task 7). Its own `migrate.ts` calls bare `pendingEntries`; Mention's calls the guard; the shared runner uses the protective version for both. It fails CLOSED, so a run that previously proceeded can now refuse — but measured against oxy-api's real journal on `origin/main` (20 entries, strictly monotonic timestamps, no inversions) it does not fire against the actual history, and Mention's own journal has already hit this failure class once. Sanctioned by Nate on 2026-08-05.
 - **Choose, never merge.** One implementation wins per module; the loser is deleted. Base per module: `casing`, `pgErrors`, `expiry`, `migrationLedger`, `columns`, `extensions`, `targetDatabase`, `testDatabase` → Mention. `migrationPhases` + its CI gate → oxy-api.
 - **Clean cut on every consumer migration.** The local module is deleted, every import rewritten. No re-export shim, no barrel file, no compatibility alias, no `@deprecated`.
 - **Assertion helpers never call `expect`.** oxy-api runs jest, Mention runs vitest, Syra runs `bun test`.
