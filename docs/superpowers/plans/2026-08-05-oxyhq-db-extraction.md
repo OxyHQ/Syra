@@ -1166,6 +1166,10 @@ export function findSchemaInvariantViolations(
 
 **The vacuity floor is a violation, not a separate assertion.** Folding it in is what makes a single `expect(violations).toEqual([])` in the consumer safe: a broken catalogue query returns zero rows and would otherwise pass by examining nothing.
 
+**A fake that answers queries cannot validate the queries — so this gate needs a live-Postgres suite as well, and that suite is part of the deliverable.** Measured during implementation: mutating a check's regex PARAMETER (the value the query searches for, not a predicate) left all ten fake-driven tests green, because the fake only ever exercises post-processing. A schema gate exists to ask the right question of the catalogue, and no fixture that supplies the answers can tell you whether it did. Ship `__tests__/schemaInvariants.live.test.ts` alongside, gated on `OXYDB_TEST_ADMIN_URL`, skipping visibly without a server.
+
+**The fake must THROW on an unrecognised query, never return `[]`.** A fixture that silently answers "no rows" to a query it does not match manufactures a vacuous pass for every check at once. Dispatch on a clause-unique predicate, and render the SQL through `PgDialect#sqlToQuery` — `String(chunk)` on a drizzle StringChunk renders `"[object Object]"` and matches nothing.
+
 Checks, ported one for one from the oxy-api test: `vacuity` (table and column counts below the floors), `snake_case_table`, `snake_case_column`, `timestamp_without_time_zone`, `empty_string_default`, `missing_primary_key`, `mongoose_artifact` (`_id` / `__v`).
 
 - [ ] **Step 1: Write the failing test**
@@ -1318,6 +1322,10 @@ export function findUnsupportedExpiryColumns(
   targets: readonly ExpirySweepTarget[]
 ): Promise<InvariantViolation[]>;
 ```
+
+**The lesson from Task 10 applies here too, and this task has three fakes rather than one.** A fixture that supplies query answers can only exercise post-processing; it cannot tell you the query asked the right thing. `findUnsupportedExpiryColumns` reads the catalogue for supporting indexes, so it needs a live-Postgres companion suite for the same reason `findSchemaInvariantViolations` did. `findIdColumnViolations` and `publicColumns` read drizzle schema objects rather than a database, so their fakes are the real thing and no live suite is owed.
+
+**`executeRows<TRow extends Record<string, unknown>>` rejects named `interface`s.** Only `type` aliases and inline object literals satisfy the implicit index signature. Declare row shapes as `type`, and say why in a comment so the next reader does not "tidy" it back.
 
 `publicColumns` must exclude at the **type** level, so a serializer reading a protected column fails `tsc` rather than shipping it. Preserve oxy-api's typing approach exactly; if the generic cannot be expressed against a caller-supplied registry, keep the runtime filter and record the type-level gap explicitly in the doc comment rather than papering over it with `as`.
 
