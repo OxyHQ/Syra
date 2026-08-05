@@ -522,7 +522,17 @@ Every later module needs to accept "a thing you can run SQL on" without importin
 
 **Interfaces:**
 - Consumes: `DATABASE_CASING` from `./casing`.
-- Produces, from `@oxyhq/db`: `type SqlExecutor` (structural: `execute<T>(query: SQL): Promise<T[]>`), `type OxyDatabase<TSchema extends Record<string, unknown>>`, `createDatabase<TSchema>(options: CreateDatabaseOptions<TSchema>): { db: OxyDatabase<TSchema>; client: postgres.Sql }`.
+- Produces, from `@oxyhq/db`: `type SqlExecutor` (structural: `execute(query: SQL): Promise<Record<string, unknown>[]>`), `executeRows<TRow extends Record<string, unknown>>(executor: SqlExecutor, query: SQL): Promise<TRow[]>`, `type OxyDatabase<TSchema extends Record<string, unknown>>`, `createDatabase<TSchema>(options: CreateDatabaseOptions<TSchema>): { db: OxyDatabase<TSchema>; client: postgres.Sql }`.
+
+**`execute` is NOT generic on the method, and that is load-bearing.** The obvious
+`execute<T>(query: SQL): Promise<T[]>` does not type-check against a real
+`PostgresJsDatabase` or a real transaction handle — drizzle's
+`PgRaw`/`RowList` nesting fails an unconstrained method generic with TS2322, so
+the one property this type exists to provide would be absent. Row typing moves to
+the free function `executeRows`. A `Pick<PgDatabase<…>, 'execute'>` alias fixes
+real-handle assignability and keeps row typing, but breaks assignability from any
+plain fake object AND narrows the parameter to `string | SQLWrapper`, so every
+fake-driven test in Tasks 8, 10 and 11 would fail — measured, not reasoned.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -536,7 +546,7 @@ describe('SqlExecutor', () => {
   it('is satisfied by anything that can run a drizzle SQL chunk', async () => {
     const calls: string[] = [];
     const fake: SqlExecutor = {
-      execute: async <T>(query: Parameters<SqlExecutor['execute']>[0]): Promise<T[]> => {
+      execute: async (query: Parameters<SqlExecutor['execute']>[0]): Promise<Record<string, unknown>[]> => {
         calls.push(query.queryChunks.length > 0 ? 'chunked' : 'empty');
         return [] as T[];
       },
@@ -575,7 +585,21 @@ import { DATABASE_CASING } from './casing';
  * what lets a sweep or a gate run inside one.
  */
 export interface SqlExecutor {
-  execute<T>(query: SQL): Promise<T[]>;
+  execute(query: SQL): Promise<Record<string, unknown>[]>;
+}
+
+/**
+ * Row typing at the call site, as a free function rather than a method generic.
+ *
+ * A generic METHOD on the interface would make a real drizzle handle
+ * unassignable to it; a generic FUNCTION over the interface costs the caller
+ * nothing and keeps both real handles and plain fakes assignable.
+ */
+export async function executeRows<TRow extends Record<string, unknown>>(
+  executor: SqlExecutor,
+  query: SQL
+): Promise<TRow[]> {
+  return (await executor.execute(query)) as TRow[];
 }
 
 /** A drizzle handle over the consumer's own schema. */
@@ -621,6 +645,73 @@ Expected: PASS.
 ```bash
 git add packages/db/src
 git commit -m "feat(db): schema-agnostic database handle and SqlExecutor"
+```
+
+---
+
+### Task 4b: Restore type-checking of test files
+
+Discovered during Task 4, verified twice: this package's Jest run does not
+type-check test files at all. Appending `const x: number = 'not a number';` to
+`packages/db/src/__tests__/casing.test.ts` leaves `bun run --filter @oxyhq/db test`
+reporting 26/26 passed, exit 0.
+
+Every test file in the package has been unchecked since Task 1, so a type-level
+assertion written under `__tests__` proves nothing. That matters most for Task 11,
+whose whole contract is that `publicColumns` excludes AT THE TYPE LEVEL so a leak
+fails `tsc` rather than shipping — a claim this package currently cannot test
+where tests live.
+
+**Files:**
+- Modify: `packages/db/jest.config.js`, and/or `packages/db/tsconfig.json`, whichever the diagnosis names
+- Test: the mutation below IS the test
+
+**Interfaces:**
+- Consumes: nothing.
+- Produces: nothing importable — this restores a gate.
+
+- [ ] **Step 1: Reproduce, and record the exact output**
+
+```bash
+cd /home/nate/Oxy/OxyHQServices/packages/db
+printf '\nconst deliberateTypeError: number = "not a number";\nvoid deliberateTypeError;\n' >> src/__tests__/casing.test.ts
+bun run --filter @oxyhq/db test
+```
+
+Expected today: the suite PASSES. That is the defect.
+
+- [ ] **Step 2: Diagnose the real cause before changing anything**
+
+Two candidates, and they need different fixes: ts-jest's own `isolatedModules` /
+`transpilation` option (deprecated in ts-jest 29, read from its transform config),
+versus `compilerOptions.isolatedModules` in `tsconfig.json`. Establish which one
+this package is actually hitting by reading the installed ts-jest's source, not by
+assuming. Report what you found.
+
+Do NOT reflexively delete `isolatedModules` from `tsconfig.json`: it is inherited
+from `packages/federation`'s config, it is required for correct single-file
+transpilation, and removing it may be both wrong and insufficient.
+
+- [ ] **Step 3: Fix so a type error in a test file fails the suite**
+
+- [ ] **Step 4: Prove the restored gate can fail**
+
+With the deliberate type error still present, `bun run --filter @oxyhq/db test`
+must now FAIL and name `casing.test.ts`. Then remove the injected lines, confirm
+`git diff --exit-code packages/db/src/__tests__/casing.test.ts` is silent, and
+confirm the suite is green again.
+
+- [ ] **Step 5: Report whether the four existing test files still type-check**
+
+Turning the gate on may surface real type errors that were always there. Fix them
+if they are genuine, and say what they were. If any of them turns out to be a
+test asserting something untrue, that is a finding, not a cleanup.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add packages/db
+git commit -m "fix(db): type-check test files, so a type error in a test fails the suite"
 ```
 
 ---
@@ -913,11 +1004,11 @@ function executor(perBatch: number, batches: number): SqlExecutor & { statements
   let remaining = batches;
   return {
     statements,
-    execute: async <T>(query: SQL): Promise<T[]> => {
+    execute: async (query: SQL): Promise<Record<string, unknown>[]> => {
       statements.push(query);
       const rows = remaining > 0 ? perBatch : 0;
       remaining -= 1;
-      return Array.from({ length: rows }, () => ({ ctid: '(0,1)' })) as T[];
+      return Array.from({ length: rows }, () => ({ ctid: '(0,1)' }));
     },
   };
 }
@@ -956,7 +1047,13 @@ Expected: FAIL, `Cannot find module '../expiry'`.
 
 - [ ] **Step 3: Move and re-signature**
 
-Copy Mention's `expiry.ts` → `packages/db/src/expiry.ts`, keeping `expiredPredicate`, the `ctid` batching and both defaults. Delete `EXPIRY_SWEEP_TARGETS` and every `./schema/*` import. Change `Database` to `SqlExecutor` and add the `targets` parameter to `sweepAllExpiredRows`. Keep the doc comment explaining why the column is interpolated as a drizzle Column and never `sql.identifier(column.name)`.
+Copy Mention's `expiry.ts` → `packages/db/src/expiry.ts`, keeping `expiredPredicate`, the `ctid` batching and both defaults. Delete `EXPIRY_SWEEP_TARGETS` and every `./schema/*` import. Change `Database` to `SqlExecutor` and add the `targets` parameter to `sweepAllExpiredRows`.
+
+**The batching call site changes shape.** Mention's sweep reads
+`await db.execute<{ ctid: string }>(sql\`…\`)`, and `SqlExecutor.execute` is not
+generic — see Task 4. Use `await executeRows<{ ctid: string }>(db, sql\`…\`)`
+instead. The row type is what the batch-size comparison depends on, so this is
+not cosmetic. Keep the doc comment explaining why the column is interpolated as a drizzle Column and never `sql.identifier(column.name)`.
 
 - [ ] **Step 4: Run the tests**
 
@@ -1081,10 +1178,10 @@ import { findSchemaInvariantViolations } from '../assert/schemaInvariants';
 /** Answers each catalogue query by the fragment of SQL text it contains. */
 function catalogue(answers: Array<{ match: string; rows: unknown[] }>): SqlExecutor {
   return {
-    execute: async <T>(query: SQL): Promise<T[]> => {
+    execute: async (query: SQL): Promise<Record<string, unknown>[]> => {
       const text = query.queryChunks.map((chunk) => String(chunk)).join(' ');
       const answer = answers.find((candidate) => text.includes(candidate.match));
-      return (answer?.rows ?? []) as T[];
+      return (answer?.rows ?? []) as Record<string, unknown>[];
     },
   };
 }
@@ -1308,7 +1405,7 @@ describe('publicColumns', () => {
 
 describe('findUnsupportedExpiryColumns', () => {
   it('reports a swept column with no supporting btree index', async () => {
-    const db: SqlExecutor = { execute: async <T>(_q: SQL): Promise<T[]> => [] as T[] };
+    const db: SqlExecutor = { execute: async (_q: SQL): Promise<Record<string, unknown>[]> => [] };
     const violations = await findUnsupportedExpiryColumns(db, [
       { table: posts, column: posts.id, retentionSeconds: 60, reason: 'fixture' },
     ]);
