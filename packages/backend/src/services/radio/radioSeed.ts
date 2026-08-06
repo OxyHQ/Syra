@@ -1,11 +1,10 @@
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import type { RadioSeed } from '@syra/shared-types';
 import { UserLibraryModel } from '../../models/Library';
-import { PlaylistModel } from '../../models/Playlist';
-import { PlaylistTrackModel } from '../../models/PlaylistTrack';
 import { UserTasteProfileModel } from '../../models/UserTasteProfile';
 import { getDb } from '../../db/postgres';
 import { albums, catalogEntities, tracks } from '../../db/schema/catalog';
+import { playlistCollaborators, playlistTracks, playlists } from '../../db/schema/library';
 import {
   canViewPlaylist,
   notTerminatedArtist,
@@ -27,10 +26,17 @@ import { orderByIds } from '../recommendations/taste';
  * caller asked for something that does not exist or that they may not read, and
  * the route turns that into a 404.
  *
- * `Playlist`, `PlaylistTrack`, `UserLibrary` and `UserTasteProfile` belong to the
- * library and user verticals (Tasks 11 and 15) and are still Mongoose. Each is
- * read for a list of ids or a set of weights that is then looked up in Postgres,
- * never joined to a catalog collection in one pipeline.
+ * `UserLibrary` and `UserTasteProfile` belong to the library and user verticals
+ * (Tasks 11 and 15) and are still Mongoose. Each is read for a list of ids or a
+ * set of weights that is then looked up in Postgres, never joined to a catalog
+ * collection in one pipeline.
+ *
+ * The PLAYLIST read is Postgres, unlike those two, and deliberately so: Task 10a
+ * already put `playlists` and `playlist_tracks` on the drizzle side inside
+ * `db/catalog/containers.ts`, and `services/catalog/artistProfile.ts` reads them
+ * there. Leaving this one on Mongoose would have meant two catalog services
+ * disagreeing about which database holds a playlist — which is worse than either
+ * choice, and is what the radio suite caught the moment the fixtures moved.
  */
 export interface SeedResolution {
   /** Collaborative-filtering sources of `kind: 'track'`. */
@@ -265,27 +271,45 @@ async function resolvePlaylistSeed(
   seedId: string,
   oxyUserId: string | undefined
 ): Promise<SeedResolution | null> {
-  const playlist = await PlaylistModel.findById(seedId).lean();
+  const [playlist] = await getDb()
+    .select({
+      id: playlists.id,
+      name: playlists.name,
+      visibility: playlists.visibility,
+      ownerOxyUserId: playlists.ownerOxyUserId,
+      coverArtId: playlists.coverArtId,
+    })
+    .from(playlists)
+    .where(eq(playlists.id, seedId))
+    .limit(1);
   if (!playlist) return null;
 
   // A private playlist is not a public station: the same rule the playlists API
   // enforces decides whether this caller may seed from it. The collaborators are
-  // projected to the id list the predicate takes — the embedded array is still
-  // Mongo's shape here, and `playlist_collaborators` lands in Task 11.
+  // loaded rather than omitted — passing `undefined` would make the predicate
+  // fail closed on every non-public playlist, which reads as "working" for a
+  // guest and silently hides a viewer's own collaboration.
+  const collaborators = await getDb()
+    .select({ oxyUserId: playlistCollaborators.oxyUserId })
+    .from(playlistCollaborators)
+    .where(eq(playlistCollaborators.playlistId, seedId));
+
   const viewable = canViewPlaylist(
     {
       visibility: playlist.visibility,
       ownerOxyUserId: playlist.ownerOxyUserId,
-      collaboratorOxyUserIds: (playlist.collaborators ?? []).map((entry) => entry.oxyUserId),
+      collaboratorOxyUserIds: collaborators.map((entry) => entry.oxyUserId),
     },
     oxyUserId
   );
   if (!viewable) return null;
 
-  const entries = await PlaylistTrackModel.find({ playlistId: seedId })
-    .sort({ order: 1 })
-    .limit(PLAYLIST_SEED_TRACK_LIMIT)
-    .lean();
+  const entries = await getDb()
+    .select({ trackId: playlistTracks.trackId })
+    .from(playlistTracks)
+    .where(eq(playlistTracks.playlistId, seedId))
+    .orderBy(asc(playlistTracks.position))
+    .limit(PLAYLIST_SEED_TRACK_LIMIT);
 
   const orderedIds = entries.map((entry) => entry.trackId);
   const seedTracks = orderedIds.length
@@ -306,7 +330,7 @@ async function resolvePlaylistSeed(
     tags: distinct(seedTracks.flatMap((track) => track.tags)),
     title: `${playlist.name} Radio`,
     subtitle: `Based on ${playlist.name}`,
-    imageUrl: normalizeImageRef(playlist.coverArt),
+    imageUrl: normalizeImageRef(playlist.coverArtId),
     personalized: false,
   };
 }

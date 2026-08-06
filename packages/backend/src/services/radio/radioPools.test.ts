@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'bun:test';
 import { connect, clear, disconnect } from '../../test/mongo';
-import { buildRadioPage, RADIO_OVERSAMPLE, type RadioTrackDoc } from './radioPools';
+import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
+import type { PublicTrackRow } from '../../db/catalog/serialize';
+import { buildRadioPage, RADIO_OVERSAMPLE } from './radioPools';
 import { resolveRadioSeed, type RadioTasteSignal, type SeedResolution } from './radioSeed';
 import {
   createRadioStationState,
@@ -10,9 +12,22 @@ import {
 } from './radioStationStore';
 import { makeArtist, makeTrack, relate } from './radioFixtures';
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+/**
+ * BOTH databases: the candidate pools read Postgres, and pool 1's co-listen
+ * graph (`CatalogRelation`) is Task 15's vertical and still Mongoose.
+ */
+beforeAll(async () => {
+  await connect();
+  await connectDb();
+});
+afterEach(async () => {
+  await clear();
+  await clearDb();
+});
+afterAll(async () => {
+  await disconnect();
+  await disconnectDb();
+});
 
 const FLAT_TASTE: RadioTasteSignal = { artistAffinity: {}, genreAffinity: {} };
 
@@ -29,7 +44,7 @@ async function seedFor(seedType: RadioStationState['seedType'], seedId: string):
   return seed;
 }
 
-const idsOf = (tracks: RadioTrackDoc[]): string[] => tracks.map((track) => track._id.toString());
+const idsOf = (rows: PublicTrackRow[]): string[] => rows.map((row) => row.id);
 
 describe('buildRadioPage — playability is enforced in every pool', () => {
   it('never programmes a copyright-removed or unavailable track, from any pool', async () => {
@@ -56,11 +71,11 @@ describe('buildRadioPage — playability is enforced in every pool', () => {
     });
     await makeTrack({ artistId: relatedArtistId, genre: 'house', popularity: 40, title: 'Clean' });
 
-    await relate('track', seedTrack._id.toString(), struck._id.toString(), 0.9);
-    await relate('track', seedTrack._id.toString(), unavailable._id.toString(), 0.9);
+    await relate('track', seedTrack.id, struck.id, 0.9);
+    await relate('track', seedTrack.id, unavailable.id, 0.9);
     await relate('artist', artistId, relatedArtistId, 0.9);
 
-    const seedId = seedTrack._id.toString();
+    const seedId = seedTrack.id;
     const result = await buildRadioPage({
       seed: await seedFor('track', seedId),
       state: stationFor('track', seedId),
@@ -70,8 +85,8 @@ describe('buildRadioPage — playability is enforced in every pool', () => {
       allowExplicit: true,
     });
 
-    expect(idsOf(result.tracks)).not.toContain(struck._id.toString());
-    expect(idsOf(result.tracks)).not.toContain(unavailable._id.toString());
+    expect(idsOf(result.tracks)).not.toContain(struck.id);
+    expect(idsOf(result.tracks)).not.toContain(unavailable.id);
     expect(result.tracks.length).toBeGreaterThan(0);
   });
 });
@@ -161,7 +176,7 @@ describe('buildRadioPage — paging', () => {
       await makeTrack({ artistId: otherArtistId, genre: 'house', popularity: 90 - i, title: `Other ${i}` });
     }
 
-    const seedId = seedTrack._id.toString();
+    const seedId = seedTrack.id;
     const seed = await seedFor('track', seedId);
 
     const first = await buildRadioPage({
@@ -197,12 +212,12 @@ describe('buildRadioPage — the pools drain in priority order', () => {
 
     const neighbourArtist = await makeArtist({ name: 'Neighbour' });
     const neighbour = await makeTrack({ artistId: neighbourArtist, popularity: 1, title: 'Neighbour' });
-    await relate('track', seedTrack._id.toString(), neighbour._id.toString(), 0.95);
+    await relate('track', seedTrack.id, neighbour.id, 0.95);
 
     const popularArtist = await makeArtist({ name: 'Popular' });
     await makeTrack({ artistId: popularArtist, popularity: 100, title: 'Popular Stranger' });
 
-    const seedId = seedTrack._id.toString();
+    const seedId = seedTrack.id;
     const result = await buildRadioPage({
       seed: await seedFor('track', seedId),
       state: stationFor('track', seedId),
@@ -271,7 +286,7 @@ describe('buildRadioPage — wrap', () => {
         title: `Track ${i}`,
       }));
     }
-    const allIds = tracks.map((track) => track._id.toString());
+    const allIds = tracks.map((track) => track.id);
 
     // Every track in the catalogue has already been served to this station.
     const exhausted: RadioStationState = {
@@ -313,7 +328,7 @@ describe('buildRadioPage — wrap', () => {
       allowExplicit: true,
     });
 
-    expect(idsOf(result.tracks)).toEqual([only._id.toString()]);
+    expect(idsOf(result.tracks)).toEqual([only.id]);
     expect(result.wrapped).toBe(false);
     expect(result.state.wrappedAt).toBeUndefined();
   });

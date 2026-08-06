@@ -54,7 +54,8 @@ import {
   type NonCatalogModel,
 } from '../hybridServices';
 
-const SRC = join(import.meta.dir, '..', '..', '..');
+// `__dirname`, not `import.meta.dir`: this package builds to CommonJS.
+const SRC = join(__dirname, '..', '..', '..');
 
 /**
  * Model names imported from `models/<Name>` by one file.

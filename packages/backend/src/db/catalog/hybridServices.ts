@@ -145,11 +145,12 @@ export const HYBRID_SERVICES: readonly HybridService[] = [
   },
   {
     file: 'services/radio/radioSeed.ts',
-    models: ['Library', 'Playlist', 'PlaylistTrack', 'UserTasteProfile'],
+    models: ['Library', 'UserTasteProfile'],
     reason:
-      'A playlist seed reads the playlist document and its collaborators (Task 11), and the ' +
-      'user seed reads taste weights and liked tracks (Tasks 15 and 11). Both hand a list of ' +
-      'track ids to a Postgres query.',
+      'The user seed reads taste weights (Task 15) and liked tracks (Task 11), then hands a ' +
+      'list of track ids to a Postgres query. The PLAYLIST seed is already drizzle — Task 10a ' +
+      'put `playlists`/`playlist_tracks` on that side in `containers.ts`, and leaving this one ' +
+      'on Mongoose made two catalog services disagree about where a playlist lives.',
   },
   {
     file: 'services/radio/radioPools.ts',
