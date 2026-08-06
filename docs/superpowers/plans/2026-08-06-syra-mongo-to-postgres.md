@@ -37,7 +37,7 @@
 | `extensions.ts` | Syra's `REQUIRED_EXTENSIONS` registry — **empty**, Syra needs none |
 | `expiry.ts` | Syra's `EXPIRY_SWEEP_TARGETS` registry (4 entries) |
 | `schema/index.ts` | the barrel every gate traverses |
-| `schema/columns.ts` | Syra-specific column helpers only; shared ones come from the package |
+| ~~`schema/columns.ts`~~ | **Not created.** oxy-api and Mention each have one, but every helper Syra needs comes from the package, and an empty file created to match a file list is worse than an absent one. A later vertical creates it if and when it has a real first use. |
 | `schema/deferredForeignKeys.ts` | `DEFERRED_FOREIGN_KEYS` + `ID_COLUMNS_WITHOUT_FOREIGN_KEY` |
 | `schema/protectedColumns.ts` | `PROTECTED_COLUMNS_BY_TABLE` — the `stripExternalCatalogFields` replacement |
 | `schema/catalog.ts` | Track, Album, CatalogEntity, TrackKey, IsrcRegistry, TrackFingerprint, ImageAsset, Lyrics, MusicBrainzArtist, DiscogsRelease + child tables |
@@ -539,3 +539,29 @@ Only after every vertical except moderation has landed, and only with Task 8 res
 **Known gap.** Tasks 10–15 do not enumerate their call sites. There are roughly 160 files importing models, and enumerating them here would be a snapshot stale by the time Task 10 lands. Each task's first step is therefore to list its own vertical's call sites and report the count — which is also how a reviewer checks the vertical was covered rather than sampled.
 
 **Order dependency.** Task 9 cannot close before Tasks 2–7 land; Task 19 cannot start before Task 8 is resolved or parked.
+
+---
+
+## Amendments made during execution
+
+**`schema/columns.ts` is not created.** Task 1's implementer found the plan listed
+it with no defined content, and declined to invent any. Correct: every column
+helper Syra needs comes from `@oxyhq/db`, and a file created to satisfy a file
+list is worse than an absent one.
+
+**Task 1 exposed a defect in `@oxyhq/db`, fixed upstream rather than worked
+around.** `readJournal` refused a journal whose `entries` array was empty, which
+made a genuinely empty schema unmigratable. Its guard is justified — *"an empty
+read must never be mistaken for nothing to do"* — but it conflated two states: a
+journal **missing, unparseable or pointing at the wrong folder**, where applying
+nothing and reporting success is a silent lie, versus a journal that **parses
+successfully** and holds zero entries, which is the unambiguous state of a
+project that wired its migrator before writing its first schema.
+
+Syra is the package's third consumer and the first to stage its schema across
+tasks; oxy-api and Mention both landed theirs in a single commit, so neither
+could have found it. Fixed as `@oxyhq/db@0.1.2`.
+
+The rejected alternative was a permanent no-op bootstrap migration carrying the
+phase marker. It works, and it leaves in Syra's history forever a file whose only
+purpose is to appease a check that should not fire.
