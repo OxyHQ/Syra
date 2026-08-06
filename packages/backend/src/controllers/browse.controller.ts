@@ -7,6 +7,7 @@ import { withImageFirstSort } from '../utils/imageFirstSort';
 import { parseBoundedLimit, parseOffset } from '../utils/reqParams';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { getMadeForYou as getPersonalisedMadeForYou } from '../services/recommendations/recommendationService';
+import { toArtistDtos, toTrackDtos } from '../db/catalog/hydrate';
 import {
   getRequestUserId,
   playableTrackFilter,
@@ -129,8 +130,13 @@ export const getHomeBrowse = async (req: Request, res: Response, next: NextFunct
       madeForYou = {
         albums: formatAlbumsWithCoverArt(madeForYouAlbums),
         playlists: formatPlaylistsWithCoverArt(madeForYouPlaylists),
-        tracks: await formatTracksWithCoverArt(personalised.tracks),
-        artists: formatArtistsWithImage(personalised.artists),
+        // `personalised` comes from the recommendation engine, which is on
+        // drizzle — so it is serialized by the drizzle serializers, NOT by the
+        // Mongo formatters the rest of this handler still uses for its own
+        // `TrackModel` / container reads. Those two shapes are not
+        // interchangeable and the compiler cannot tell them apart here.
+        tracks: await toTrackDtos(personalised.tracks),
+        artists: await toArtistDtos(personalised.artists),
         personalized: personalised.personalized,
       };
     } else {
@@ -401,8 +407,9 @@ export const getMadeForYou = async (req: Request, res: Response, next: NextFunct
       res.json({
         albums: formatAlbumsWithCoverArt(albums),
         playlists: formatPlaylistsWithCoverArt(playlists),
-        tracks: await formatTracksWithCoverArt(personalised.tracks),
-        artists: formatArtistsWithImage(personalised.artists),
+        // Drizzle rows from the recommendation engine — see `getHomeBrowse`.
+        tracks: await toTrackDtos(personalised.tracks),
+        artists: await toArtistDtos(personalised.artists),
         personalized: personalised.personalized,
       });
       return;

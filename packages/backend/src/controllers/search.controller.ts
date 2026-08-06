@@ -29,6 +29,7 @@ import {
   findAlbumsWithPlayableTracks,
   findArtistsWithPlayableTracks,
   findPlaylistsWithPlayableTracks,
+  type CatalogAggregateDoc,
 } from '../utils/playableContainers';
 import { oxy } from '../oxyClient';
 
@@ -117,11 +118,16 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
     const searchRegex = new RegExp(escapeRegex(query.trim()), 'i');
 
     // Build search promises based on category
+    // The four catalog categories are `CatalogAggregateDoc` rather than `unknown`
+    // because they are handed straight to the Mongo formatters below, which now
+    // require `_id` — the one field that tells a Mongo document from a drizzle
+    // row. The podcast categories keep `unknown`: they go to the podcast
+    // serializers, which is Task 12's boundary, not this one.
     const searchPromises: {
-      tracks?: Promise<[unknown[], number]>;
-      albums?: Promise<[unknown[], number]>;
-      artists?: Promise<[unknown[], number]>;
-      playlists?: Promise<[unknown[], number]>;
+      tracks?: Promise<[CatalogAggregateDoc[], number]>;
+      albums?: Promise<[CatalogAggregateDoc[], number]>;
+      artists?: Promise<[CatalogAggregateDoc[], number]>;
+      playlists?: Promise<[CatalogAggregateDoc[], number]>;
       podcasts?: Promise<[unknown[], number]>;
       episodes?: Promise<[unknown[], number]>;
       people?: Promise<[unknown[], number]>;
@@ -324,10 +330,10 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
       peopleResult,
       usersResult,
     ] = await Promise.all([
-      searchPromises.tracks ?? Promise.resolve<[unknown[], number]>([[], 0]),
-      searchPromises.albums ?? Promise.resolve<[unknown[], number]>([[], 0]),
-      searchPromises.artists ?? Promise.resolve<[unknown[], number]>([[], 0]),
-      searchPromises.playlists ?? Promise.resolve<[unknown[], number]>([[], 0]),
+      searchPromises.tracks ?? Promise.resolve<[CatalogAggregateDoc[], number]>([[], 0]),
+      searchPromises.albums ?? Promise.resolve<[CatalogAggregateDoc[], number]>([[], 0]),
+      searchPromises.artists ?? Promise.resolve<[CatalogAggregateDoc[], number]>([[], 0]),
+      searchPromises.playlists ?? Promise.resolve<[CatalogAggregateDoc[], number]>([[], 0]),
       searchPromises.podcasts ?? Promise.resolve<[unknown[], number]>([[], 0]),
       searchPromises.episodes ?? Promise.resolve<[unknown[], number]>([[], 0]),
       searchPromises.people ?? Promise.resolve<[unknown[], number]>([[], 0]),

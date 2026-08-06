@@ -5,10 +5,7 @@ import {
   getSimilarTracks,
   getMadeForYou,
 } from '../services/recommendations/recommendationService';
-import {
-  formatTracksWithCoverArt,
-  formatArtistsWithImage,
-} from '../utils/musicHelpers';
+import { toArtistDtos, toTrackDtos } from '../db/catalog/hydrate';
 import { isDatabaseConnected } from '../utils/database';
 import { getParam, parseBoundedLimit } from '../utils/reqParams';
 
@@ -32,7 +29,7 @@ export const getRelatedArtistsHandler = async (req: AuthRequest, res: Response, 
     const limit = parseBoundedLimit(req.query.limit, 20, 50);
     const artists = await getRelatedArtists(id, limit);
     setPublicDiscoveryCache(res);
-    res.json({ artists: formatArtistsWithImage(artists), total: artists.length });
+    res.json({ artists: await toArtistDtos(artists), total: artists.length });
   } catch (error) {
     next(error);
   }
@@ -49,7 +46,7 @@ export const getSimilarTracksHandler = async (req: AuthRequest, res: Response, n
     const limit = parseBoundedLimit(req.query.limit, 20, 50);
     const tracks = await getSimilarTracks(id, limit);
     setPublicDiscoveryCache(res);
-    res.json({ tracks: await formatTracksWithCoverArt(tracks), total: tracks.length });
+    res.json({ tracks: await toTrackDtos(tracks), total: tracks.length });
   } catch (error) {
     next(error);
   }
@@ -72,8 +69,8 @@ export const getMadeForYouHandler = async (req: AuthRequest, res: Response, next
 
     setPrivateDiscoveryCache(res);
     res.json({
-      tracks: await formatTracksWithCoverArt(result.tracks),
-      artists: formatArtistsWithImage(result.artists),
+      tracks: await toTrackDtos(result.tracks),
+      artists: await toArtistDtos(result.artists),
       personalized: result.personalized,
     });
   } catch (error) {

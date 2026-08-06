@@ -177,6 +177,42 @@ function sourceFiles(directory: string): string[] {
  */
 const MINIMUM_SCANNED_FILES = 200;
 
+/**
+ * The files allowed to hold both sides, each with the task that ends it.
+ *
+ * The gate's own rule is "port the rest of the file or none of it", and that is
+ * right whenever the choice is free. It is not free when a file's SERVICE moved
+ * to drizzle in one task and the file itself is scheduled for another: leaving
+ * the call site on the Mongo formatter is not a deferral, it is a live defect —
+ * `formatTracksWithCoverArt(tracks: any[])` accepts a drizzle row and returns
+ * `{"id":"", …}`, which is what four endpoints answered until
+ * `__tests__/recommendationDtos.test.ts` was written. Between shipping a broken
+ * endpoint and holding both sides for one task, holding both sides wins.
+ *
+ * Registered BY IDENTITY on the path relative to `src/`, never by substring —
+ * this branch has shipped four containment bugs in matchers, one written inside
+ * the check built against the previous two.
+ *
+ * Held to BOTH directions, exactly like `hybridServices.ts`:
+ *
+ *   1. A registered file may hold both sides. Nothing else may.
+ *   2. A registered file MUST still hold both sides. When its port lands, the
+ *      entry fails as stale and has to be deleted — so this registry shrinks to
+ *      nothing as Task 10c-3 finishes, instead of quietly outliving its reason
+ *      the way an exemption list does.
+ */
+const HALF_PORTED_BY_NECESSITY: Readonly<Record<string, { owner: string; reason: string }>> = {
+  'controllers/browse.controller.ts': {
+    owner: 'Task 10c-3',
+    reason:
+      'The personalised shelf reads `recommendationService`, which is drizzle, so it serializes ' +
+      'through `db/catalog/hydrate`. Every other read in the handler — the container helpers, ' +
+      '`TrackModel.find` — is still Mongo and moves with the rest of the controller.',
+  },
+};
+
+const REGISTERED_HALF_PORTED = new Set(Object.keys(HALF_PORTED_BY_NECESSITY));
+
 describe('no file holds half of the catalog port', () => {
   // Named for what it walks. The scan covers `src/` only, so package-root files
   // (`server.ts`) are outside it — immaterial today, since `server.ts` imports
@@ -187,15 +223,40 @@ describe('no file holds half of the catalog port', () => {
     expect(files.length).toBeGreaterThanOrEqual(MINIMUM_SCANNED_FILES);
 
     const violations = files.flatMap((file) => {
+      const name = relative(SOURCE_DIR, file);
       const found = halfPortedImport(readImports(readFileSync(file, 'utf8')), dirname(file));
       if (!found) return [];
+      // Compared by identity through a Set of the registry's own keys — `name`
+      // is already the exact relative path the registry is written in. A `Set`
+      // rather than `in` or `includes`: `in` also answers true for inherited
+      // keys (`toString`), and `includes` on a joined string would be the
+      // containment match this branch has now shipped four times.
+      if (REGISTERED_HALF_PORTED.has(name)) return [];
       return [
-        `${relative(SOURCE_DIR, file)} imports ${found.name} from ${found.module} ` +
+        `${name} imports ${found.name} from ${found.module} ` +
           `while also reading through db/catalog — port the rest of the file or none of it.`,
       ];
     });
 
     expect(violations).toEqual([]);
+  });
+
+  /**
+   * The stale direction. A registered file that no longer holds both sides has
+   * been ported, and its entry is now a licence with nothing to license.
+   */
+  it('every registered exception still holds both sides', () => {
+    const stale = Object.entries(HALF_PORTED_BY_NECESSITY).flatMap(([name, entry]) => {
+      const file = resolve(SOURCE_DIR, name);
+      const found = halfPortedImport(readImports(readFileSync(file, 'utf8')), dirname(file));
+      if (found) return [];
+      return [
+        `${name} no longer holds both sides — ${entry.owner} has landed. ` +
+          `Delete its entry from HALF_PORTED_BY_NECESSITY.`,
+      ];
+    });
+
+    expect(stale).toEqual([]);
   });
 
   // ── The gate's own behaviour, against synthetic inputs ──────────────────

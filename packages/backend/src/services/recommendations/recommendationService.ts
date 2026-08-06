@@ -1,12 +1,15 @@
 import { and, arrayOverlaps, desc, eq, inArray, notInArray, or, type SQL } from 'drizzle-orm';
+import { publicColumns } from '@oxyhq/db/assert';
 import { CatalogRelationModel } from '../../models/CatalogRelation';
 import { UserTasteProfileModel } from '../../models/UserTasteProfile';
 import { UserLibraryModel } from '../../models/Library';
 import { ListeningEventModel } from '../../models/ListeningEvent';
 import { getDb } from '../../db/postgres';
 import { catalogEntities, tracks } from '../../db/schema/catalog';
+import { PROTECTED_COLUMNS_BY_TABLE } from '../../db/schema/protectedColumns';
 import { notTerminatedArtist, playableTrackFilter } from '../../db/catalog/visibility';
 import { findArtistsWithPlayableTracks, imageFirst } from '../../db/catalog/containers';
+import type { PublicCatalogEntityRow, PublicTrackRow } from '../../db/catalog/serialize';
 import { orderByIds, rankByTaste, topRelatedArtistIds } from './taste';
 
 /**
@@ -24,45 +27,29 @@ import { orderByIds, rankByTaste, topRelatedArtistIds } from './taste';
 
 const DEFAULT_RELATED_LIMIT = 20;
 
-/** The `tracks` columns every recommendation surface returns. */
-const CATALOG_TRACK_COLUMNS = {
-  id: tracks.id,
-  artistId: tracks.artistId,
-  albumId: tracks.albumId,
-  genre: tracks.genre,
-  metadataGenre: tracks.metadataGenre,
-  isAvailable: tracks.isAvailable,
-  popularity: tracks.popularity,
-  playCount: tracks.playCount,
-} as const;
-
-/** The `catalog_entities` columns every recommendation surface returns. */
-const CATALOG_ARTIST_COLUMNS = {
-  id: catalogEntities.id,
-  genres: catalogEntities.genres,
-  popularity: catalogEntities.popularity,
-  statsFollowers: catalogEntities.statsFollowers,
-  terminated: catalogEntities.terminated,
-} as const;
-
-export interface CatalogTrack {
-  id: string;
-  artistId: string;
-  albumId: string | null;
-  genre: string | null;
-  metadataGenre: string[] | null;
-  isAvailable: boolean;
-  popularity: number;
-  playCount: number;
-}
-
-export interface CatalogArtist {
-  id: string;
-  genres: string[] | null;
-  popularity: number;
-  statsFollowers: number | null;
-  terminated: boolean | null;
-}
+/**
+ * The columns every recommendation surface returns — the FULL public row, not a
+ * ranking projection.
+ *
+ * These were two hand-written column lists (`{ id, artistId, albumId, genre,
+ * metadataGenre, isAvailable, popularity, playCount }` and its artist twin),
+ * carrying exactly what {@link rankByTaste} and {@link orderByIds} read. That
+ * was enough for this file and not enough for its callers: both controllers
+ * serialize what comes back, and a row with no `title`, no `artistName` and no
+ * cover art cannot be serialized into a `Track`. `GET /api/artists/:id/related`,
+ * `/api/tracks/:id/similar`, `/api/recommendations/made-for-you` and
+ * `/api/browse/made-for-you` all answered `{"id":"", …}` for exactly that
+ * reason — see `db/catalog/__tests__/recommendationDtos.test.ts`.
+ *
+ * Selecting the public row instead means the result feeds `toTrackDtos` /
+ * `toArtistDtos` directly, with no second round trip to re-read the rows the
+ * ranking query already touched. `publicColumns()` keeps `tracks.sha256`,
+ * `tracks.images`, `catalog_entities.images` and
+ * `catalog_entities.imageSuggestions` off the row entirely, so widening the
+ * projection does not widen what can reach a client.
+ */
+const CATALOG_TRACK_COLUMNS = publicColumns(tracks, PROTECTED_COLUMNS_BY_TABLE);
+const CATALOG_ARTIST_COLUMNS = publicColumns(catalogEntities, PROTECTED_COLUMNS_BY_TABLE);
 
 // ── Related artists ─────────────────────────────────────────────────────────
 
@@ -80,7 +67,7 @@ export interface CatalogArtist {
  * The list can come back shorter than `limit`. That is the intended trade: a
  * short shelf is honest, a padded one sends listeners to dead ends.
  */
-async function withPlayableCatalog(artists: CatalogArtist[]): Promise<CatalogArtist[]> {
+async function withPlayableCatalog(artists: PublicCatalogEntityRow[]): Promise<PublicCatalogEntityRow[]> {
   if (artists.length === 0) return artists;
 
   const playable = await findArtistsWithPlayableTracks(
@@ -93,7 +80,7 @@ async function withPlayableCatalog(artists: CatalogArtist[]): Promise<CatalogArt
 }
 
 /** Artists by id, in the order the ids were ranked, excluding terminated accounts. */
-async function artistsByIds(ids: string[]): Promise<CatalogArtist[]> {
+async function artistsByIds(ids: string[]): Promise<PublicCatalogEntityRow[]> {
   if (ids.length === 0) return [];
 
   const rows = await getDb()
@@ -117,7 +104,7 @@ async function artistsByIds(ids: string[]): Promise<CatalogArtist[]> {
 export async function getRelatedArtists(
   artistId: string,
   limit = DEFAULT_RELATED_LIMIT
-): Promise<CatalogArtist[]> {
+): Promise<PublicCatalogEntityRow[]> {
   const edges = await CatalogRelationModel.find({ kind: 'artist', sourceId: artistId })
     .sort({ score: -1 })
     .limit(limit)
@@ -180,7 +167,7 @@ export async function getRelatedArtists(
 // ── Similar tracks ──────────────────────────────────────────────────────────
 
 /** Playable tracks by id, in the order the ids were ranked. */
-async function tracksByIds(ids: string[]): Promise<CatalogTrack[]> {
+async function tracksByIds(ids: string[]): Promise<PublicTrackRow[]> {
   if (ids.length === 0) return [];
 
   const rows = await getDb()
@@ -198,7 +185,7 @@ async function tracksByIds(ids: string[]): Promise<CatalogTrack[]> {
 export async function getSimilarTracks(
   trackId: string,
   limit = DEFAULT_RELATED_LIMIT,
-): Promise<CatalogTrack[]> {
+): Promise<PublicTrackRow[]> {
   const edges = await CatalogRelationModel.find({ kind: 'track', sourceId: trackId })
     .sort({ score: -1 })
     .limit(limit)
@@ -235,8 +222,8 @@ export async function getSimilarTracks(
 // ── Personalised "Made For You" ──────────────────────────────────────────────
 
 export interface MadeForYou {
-  tracks: CatalogTrack[];
-  artists: CatalogArtist[];
+  tracks: PublicTrackRow[];
+  artists: PublicCatalogEntityRow[];
   /** True when the result is personalised from a learned taste profile. */
   personalized: boolean;
 }

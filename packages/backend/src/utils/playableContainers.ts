@@ -5,6 +5,22 @@ import { PlaylistModel } from '../models/Playlist';
 import { PlaylistTrackModel } from '../models/PlaylistTrack';
 import { TrackModel } from '../models/Track';
 import { playableTrackFilter } from './catalogVisibility';
+import type { MongoCatalogDoc } from './musicHelpers';
+
+/**
+ * A document an aggregation returns: `_id` is guaranteed (every pipeline here
+ * matches on it and projects nothing away), the rest is whatever the collection
+ * holds.
+ *
+ * These were `unknown`, which let a caller hand the result to any formatter at
+ * all — including one expecting a drizzle row. Naming `_id` is what makes the
+ * Mongo and Postgres shapes distinguishable at a call site, and it is the whole
+ * constraint: deliberately NOT intersected with `Record<string, unknown>`,
+ * because a Mongoose model interface has no index signature and would stop being
+ * assignable — which would reject the real documents while still accepting
+ * nothing useful.
+ */
+export type CatalogAggregateDoc = MongoCatalogDoc;
 
 const PLAYABLE_TRACK_LOOKUP_FIELD = '_playableTracks';
 const PLAYABLE_PLAYLIST_TRACK_LOOKUP_FIELD = '_playablePlaylistTracks';
@@ -151,8 +167,8 @@ function availableAlbumFilter(filter: CatalogMatchFilter): CatalogMatchFilter {
 export async function findAlbumsWithPlayableTracks(
   filter: CatalogMatchFilter,
   page: CatalogPage,
-): Promise<unknown[]> {
-  return AlbumModel.aggregate<unknown>([
+): Promise<CatalogAggregateDoc[]> {
+  return AlbumModel.aggregate<CatalogAggregateDoc>([
     ...withPlayableTracksPipeline(availableAlbumFilter(filter), 'albumId'),
     ...paginatedStages(page),
   ]).exec();
@@ -171,8 +187,8 @@ export async function countAlbumsWithPlayableTracks(
 
 export async function findOneAlbumWithPlayableTracks(
   id: string,
-): Promise<unknown | null> {
-  const albums = await AlbumModel.aggregate<unknown>([
+): Promise<CatalogAggregateDoc | null> {
+  const albums = await AlbumModel.aggregate<CatalogAggregateDoc>([
     ...withPlayableTracksPipeline(
       availableAlbumFilter({ _id: toObjectId(id) }),
       'albumId',
@@ -186,9 +202,9 @@ export async function findOneAlbumWithPlayableTracks(
 export async function findArtistsWithPlayableTracks(
   filter: CatalogMatchFilter,
   page: CatalogPage,
-): Promise<unknown[]> {
+): Promise<CatalogAggregateDoc[]> {
   // aggregate() bypasses the discriminator's `type` scoping — match it explicitly.
-  return ArtistModel.aggregate<unknown>([
+  return ArtistModel.aggregate<CatalogAggregateDoc>([
     ...withPlayableTracksPipeline({ ...filter, type: 'artist' }, 'artistId'),
     ...paginatedStages(page),
   ]).exec();
@@ -208,9 +224,9 @@ export async function countArtistsWithPlayableTracks(
 
 export async function findOneArtistWithPlayableTracks(
   id: string,
-): Promise<unknown | null> {
+): Promise<CatalogAggregateDoc | null> {
   // aggregate() bypasses the discriminator's `type` scoping — match it explicitly.
-  const artists = await ArtistModel.aggregate<unknown>([
+  const artists = await ArtistModel.aggregate<CatalogAggregateDoc>([
     ...withPlayableTracksPipeline(
       { _id: toObjectId(id), type: 'artist' },
       'artistId',
@@ -224,8 +240,8 @@ export async function findOneArtistWithPlayableTracks(
 export async function findPlaylistsWithPlayableTracks(
   filter: CatalogMatchFilter,
   page: CatalogPage,
-): Promise<unknown[]> {
-  return PlaylistModel.aggregate<unknown>([
+): Promise<CatalogAggregateDoc[]> {
+  return PlaylistModel.aggregate<CatalogAggregateDoc>([
     ...withPlayablePlaylistTracksPipeline(filter),
     ...paginatedStages(page),
   ]).exec();

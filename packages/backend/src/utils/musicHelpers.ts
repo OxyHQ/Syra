@@ -83,6 +83,49 @@ function stripExternalCatalogFields(formatted: Record<string, unknown>): void {
  */
 export type ApiFormat<T> = Omit<T, '_id'> & { id: string };
 
+/**
+ * What these formatters can actually serialize: a Mongoose document, or a
+ * `.lean()` projection of one, carrying `_id`.
+ *
+ * The parameter was `any[]`, and that is what let this whole family accept a
+ * drizzle row and return `{"id":"", …}` from four live endpoints — every field
+ * absent, `id` an empty string, `tsc` clean, no test red. `_id` is REQUIRED
+ * here precisely because a drizzle row does not have one, so the same mistake
+ * is now a compile error rather than an empty response.
+ *
+ * This is a guard on a module with a death date, not a type worth growing: the
+ * Postgres side of every one of these functions is `db/catalog/serialize.ts` +
+ * `db/catalog/hydrate.ts`, which name every field they return. New code goes
+ * there. See `db/catalog/__tests__/recommendationDtos.test.ts`.
+ */
+export interface MongoCatalogDoc {
+  _id: mongoose.Types.ObjectId | string;
+}
+
+/**
+ * Reads off a serialized document, which is an open record once `_id` is the
+ * only field its type guarantees.
+ *
+ * A value of the wrong type reads as absent rather than being coerced: these
+ * feed `isPreviewEligibleTrack`, where a truthy non-boolean is exactly the shape
+ * that made the Mongo and playback predicates disagree (`db/catalog/visibility.ts`
+ * records the measurement). Failing closed is the same answer the Postgres side
+ * gives, where the columns are `NOT NULL` booleans.
+ */
+function asBoolean(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined;
+}
+
+function asString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+/** The album fields the track cover-art fallback reads. */
+interface AlbumCoverSource extends MongoCatalogDoc {
+  coverArt?: unknown;
+  coverArtSizes?: unknown;
+}
+
 /** Narrow to a Mongoose document that exposes `toObject()`. */
 function isMongooseDoc(value: object): value is { toObject: () => Record<string, unknown> } {
   return typeof (value as { toObject?: unknown }).toObject === 'function';
@@ -146,11 +189,11 @@ export function toApiFormatArray<T extends { _id?: mongoose.Types.ObjectId | str
  * If track doesn't have coverArt but has albumId, use album's coverArt
  * Converts coverArt ObjectId to /api/images/:id URL
  */
-export async function formatTrackWithCoverArt(
-  track: any,
-  albumCache?: Map<string, any>
+export async function formatTrackWithCoverArt<T extends MongoCatalogDoc>(
+  track: T,
+  albumCache?: Map<string, AlbumCoverSource | null>
 ): Promise<any> {
-  const formatted = toApiFormat(track);
+  const formatted: Record<string, unknown> | null = toApiFormat<MongoCatalogDoc>(track);
   if (!formatted) return null;
 
   stripExternalCatalogFields(formatted);
@@ -160,11 +203,11 @@ export async function formatTrackWithCoverArt(
   // regenerable (retained `audioSource` OR the track's own ready HLS). The SDK
   // derives the preview URL from this flag — we never persist or expose a raw one.
   formatted.previewAvailable = isPreviewEligibleTrack({
-    isAvailable: formatted.isAvailable,
-    copyrightRemoved: formatted.copyrightRemoved,
-    status: formatted.status,
-    hlsMasterKey: formatted.hlsMasterKey,
-    hls: formatted.hls,
+    isAvailable: asBoolean(formatted.isAvailable),
+    copyrightRemoved: asBoolean(formatted.copyrightRemoved),
+    status: asString(formatted.status),
+    hlsMasterKey: asString(formatted.hlsMasterKey),
+    hls: Array.isArray(formatted.hls) ? formatted.hls : undefined,
     audioSource: formatted.audioSource,
   });
 
@@ -174,18 +217,19 @@ export async function formatTrackWithCoverArt(
   }
 
   // If track has albumId but no coverArt, fetch album and use its coverArt
-  if (formatted.albumId) {
-    let album;
-    
+  const albumId = asString(formatted.albumId);
+  if (albumId) {
+    let album: AlbumCoverSource | null | undefined;
+
     // Check cache first
-    if (albumCache && albumCache.has(formatted.albumId)) {
-      album = albumCache.get(formatted.albumId);
+    if (albumCache && albumCache.has(albumId)) {
+      album = albumCache.get(albumId);
     } else {
       // Fetch album from database
       try {
-        album = await AlbumModel.findById(formatted.albumId).lean();
+        album = await AlbumModel.findById(albumId).lean();
         if (albumCache) {
-          albumCache.set(formatted.albumId, album);
+          albumCache.set(albumId, album);
         }
       } catch (error) {
         // If album fetch fails, return track without coverArt
@@ -210,8 +254,8 @@ export async function formatTrackWithCoverArt(
  * Format array of tracks with album cover fallback
  * Uses caching to avoid fetching the same album multiple times
  */
-export async function formatTracksWithCoverArt(tracks: any[]): Promise<any[]> {
-  const albumCache = new Map<string, any>();
+export async function formatTracksWithCoverArt<T extends MongoCatalogDoc>(tracks: T[]): Promise<any[]> {
+  const albumCache = new Map<string, AlbumCoverSource | null>();
   const formattedTracks = await Promise.all(
     tracks.map(track => formatTrackWithCoverArt(track, albumCache))
   );
@@ -222,8 +266,8 @@ export async function formatTracksWithCoverArt(tracks: any[]): Promise<any[]> {
  * Format album with coverArt URL conversion
  * Converts coverArt ObjectId to /api/images/:id URL
  */
-export function formatAlbumWithCoverArt(album: any): any {
-  const formatted = toApiFormat(album);
+export function formatAlbumWithCoverArt<T extends MongoCatalogDoc>(album: T): any {
+  const formatted: Record<string, unknown> | null = toApiFormat<MongoCatalogDoc>(album);
   if (!formatted) return null;
 
   stripExternalCatalogFields(formatted);
@@ -238,7 +282,7 @@ export function formatAlbumWithCoverArt(album: any): any {
 /**
  * Format array of albums with coverArt URL conversion
  */
-export function formatAlbumsWithCoverArt(albums: any[]): any[] {
+export function formatAlbumsWithCoverArt<T extends MongoCatalogDoc>(albums: T[]): any[] {
   return albums.map(album => formatAlbumWithCoverArt(album)).filter(Boolean);
 }
 
@@ -246,8 +290,8 @@ export function formatAlbumsWithCoverArt(albums: any[]): any[] {
  * Format playlist with coverArt URL conversion
  * Converts coverArt ObjectId to /api/images/:id URL
  */
-export function formatPlaylistWithCoverArt(playlist: any): any {
-  const formatted = toApiFormat(playlist);
+export function formatPlaylistWithCoverArt<T extends MongoCatalogDoc>(playlist: T): any {
+  const formatted: Record<string, unknown> | null = toApiFormat<MongoCatalogDoc>(playlist);
   if (!formatted) return null;
 
   stripExternalCatalogFields(formatted);
@@ -262,7 +306,7 @@ export function formatPlaylistWithCoverArt(playlist: any): any {
 /**
  * Format array of playlists with coverArt URL conversion
  */
-export function formatPlaylistsWithCoverArt(playlists: any[]): any[] {
+export function formatPlaylistsWithCoverArt<T extends MongoCatalogDoc>(playlists: T[]): any[] {
   return playlists.map(playlist => formatPlaylistWithCoverArt(playlist)).filter(Boolean);
 }
 
@@ -270,8 +314,8 @@ export function formatPlaylistsWithCoverArt(playlists: any[]): any[] {
  * Format artist with image URL conversion
  * Converts image ObjectId to /api/images/:id URL
  */
-export function formatArtistWithImage(artist: any): any {
-  const formatted = toApiFormat(artist);
+export function formatArtistWithImage<T extends MongoCatalogDoc>(artist: T): any {
+  const formatted: Record<string, unknown> | null = toApiFormat<MongoCatalogDoc>(artist);
   if (!formatted) return null;
 
   stripExternalCatalogFields(formatted);
@@ -286,6 +330,6 @@ export function formatArtistWithImage(artist: any): any {
 /**
  * Format array of artists with image URL conversion
  */
-export function formatArtistsWithImage(artists: any[]): any[] {
+export function formatArtistsWithImage<T extends MongoCatalogDoc>(artists: T[]): any[] {
   return artists.map(artist => formatArtistWithImage(artist)).filter(Boolean);
 }

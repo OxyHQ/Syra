@@ -23,17 +23,19 @@
  */
 
 import { count, inArray } from 'drizzle-orm';
-import type { Album, CatalogImageSizes, Track } from '@syra/shared-types';
+import type { Album, Artist, CatalogImageSizes, Track } from '@syra/shared-types';
 import { getDb } from '../postgres';
 import { albums, imageAssets, trackHlsRenditions } from '../schema/catalog';
 import {
   imageVariantLookup,
   normalizeImageRef,
   toAlbumDto,
+  toArtistDto,
   toTrackDto,
   type AlbumRow,
   type ImageAssetRow,
   type ImageVariantLookup,
+  type PublicCatalogEntityRow,
   type PublicTrackRow,
 } from './serialize';
 
@@ -179,4 +181,37 @@ export async function toAlbumDtos(rows: readonly AlbumRow[]): Promise<Album[]> {
 
   const lookup = await loadImageVariants(rows.flatMap(albumImageIds));
   return rows.map((row) => toAlbumDto(row, lookup));
+}
+
+/** Every `image_assets` id a `catalog_entities` row can reference. */
+function artistImageIds(row: PublicCatalogEntityRow): (string | null)[] {
+  return [
+    row.imageId,
+    row.imageSizesSmallId,
+    row.imageSizesMediumId,
+    row.imageSizesLargeId,
+    row.imageSizesXlargeId,
+    row.imageSizesXxlargeId,
+    row.imageSizesOriginalId,
+  ];
+}
+
+/**
+ * Serialize a page of artists — ONE `image_assets` query for the whole page.
+ *
+ * The third sibling of {@link toTrackDtos} and {@link toAlbumDtos}, added when
+ * the recommendation surfaces needed it: they were the only artist-returning
+ * endpoints with no batch serializer, and what filled the gap was
+ * `formatArtistsWithImage(artists: any[])`, which accepted the drizzle rows and
+ * returned `{"id":"", …}`. `strikes` and `sources` stay opt-in on
+ * `ArtistDtoContext`: no listing surface renders either, and a shelf that
+ * loaded them would pay two joins per page for fields nothing shows.
+ */
+export async function toArtistDtos(
+  rows: readonly PublicCatalogEntityRow[]
+): Promise<Artist[]> {
+  if (rows.length === 0) return [];
+
+  const lookup = await loadImageVariants(rows.flatMap(artistImageIds));
+  return rows.map((row) => toArtistDto(row, lookup));
 }

@@ -241,6 +241,12 @@ describe('server-only fields never reach a catalog response', () => {
     const artistDoc = await ArtistModel.findById(artistId).select('+imageSuggestions').lean();
     const trackDoc = await TrackModel.findOne({ artistId }).lean();
 
+    // Vacuity floor, before the assertions: both documents must exist, or every
+    // `not.toContain` below passes against `undefined` and proves nothing.
+    if (!artistDoc || !trackDoc) {
+      throw new Error('fixture produced no artist/track — the leak assertions would be vacuous');
+    }
+
     // An aggregation ignores `select: false`, so the fields are simply THERE.
     const asAggregated = {
       ...trackDoc,
