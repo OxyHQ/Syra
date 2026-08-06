@@ -235,7 +235,26 @@ implementation detail:
    migration and the worst long-term: it makes permanent exactly the duplication
    the shared package exists to end, on a copy already two minors behind.
 
-Until that is decided, phase 6 is blocked. Every other phase is unaffected.
+**Decided 2026-08-06: route 2.** `@oxyhq/crowdsource-app` gains a PostgreSQL
+implementation, and Syra's moderation ports onto it like every other vertical.
+
+That makes phase 6 dependent on an upstream project rather than blocked by an
+open question, and it is the only route that lets the rest of the ecosystem
+follow — CrowdSource is multi-tenant infrastructure, so a Mongo-only adopter
+half pins every backend that adopts it. The cost is real and belongs to that
+project, not this one: the transactional outbox, the cross-instance dedupe store
+and the enforcement claim all carry guarantees that a second storage backend has
+to reproduce rather than approximate, and its suite runs against a real
+`mongodb-memory-server` replica set precisely because transactions and unique
+indexes are load-bearing in it.
+
+One fact changed since this was written: `@oxyhq/crowdsource-app` **is** now
+published, at 0.4.0. It was not when the three routes were drafted, which
+removes "publish it first" from route 1's cost and does not otherwise affect
+the choice.
+
+Phase 6 therefore runs last, after the upstream port lands. Every other phase is
+unaffected and does not wait for it.
 
 **`CopyrightReport` is NOT part of this and ports normally.** The universal
 taxonomy has forty codes across eleven families and none is copyright — a
@@ -260,7 +279,7 @@ updating frontend/studio/SDK in the same PR:
 | 3 | Library and playlists | Library (→ junctions), Playlist, PlaylistTrack, RecentlyPlayed, PlaybackState, Device |
 | 4 | Podcasts | Podcast, Episode, EpisodeProgress |
 | 5 | Creators and uploads | UserUpload, ArtistClaim, ContributionAttestation, ContributorStanding, CopyrightReport |
-| 6 | Moderation — **BLOCKED**, see the section above | ModerationEnforcement, ModerationEvent, ModerationOutbox, Report |
+| 6 | Moderation — runs LAST, after `@oxyhq/crowdsource-app` gains Postgres (route 2, decided 2026-08-06) | ModerationEnforcement, ModerationEvent, ModerationOutbox, Report |
 | 7 | Rooms and live | House, Room, RoomUserPreference, Recording, Series |
 | 8 | User and recommendations | UserSettings, UserMusicPreferences, UserBehavior, UserTasteProfile, ListeningEvent, CatalogRelation, NotificationPreference, NotificationSuppression |
 
