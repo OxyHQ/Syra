@@ -2,15 +2,22 @@ import { describe, it, expect, beforeAll, afterAll, afterEach } from 'bun:test';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { connect, clear, disconnect } from '../../test/mongo';
-import { TrackKeyModel } from '../../models/TrackKey';
+import { eq } from 'drizzle-orm';
+import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
+import { getDb } from '../../db/postgres';
+import { trackKeys } from '../../db/schema/catalog';
 import { storePackagedHls } from './hlsStorage';
 import { getS3HlsKey, getS3LockerHlsKey } from '../../config/s3.config';
 import type { PackageResult } from './hlsPackager';
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+beforeAll(connectDb);
+afterEach(clearDb);
+afterAll(disconnectDb);
+
+/** Every `track_keys` row filed under one id. */
+function keysFor(trackId: string) {
+  return getDb().select().from(trackKeys).where(eq(trackKeys.trackId, trackId));
+}
 
 // ── Synthetic package dir ─────────────────────────────────────────────────
 
@@ -26,6 +33,7 @@ const BITRATES = [96, 160, 320] as const;
 /** Catalog target: keys under the artist, AES key filed under the track id. */
 function catalogTarget() {
   return {
+    kind: 'track' as const,
     recordId: TRACK_ID,
     buildKey: (relPath: string) => getS3HlsKey(ARTIST_ID, TRACK_ID, relPath),
   };
@@ -34,6 +42,7 @@ function catalogTarget() {
 /** Locker target: keys under `hls/uploads/{owner}/{uploadId}/`, no artist id. */
 function lockerTarget() {
   return {
+    kind: 'user_upload' as const,
     recordId: UPLOAD_ID,
     buildKey: (relPath: string) => getS3LockerHlsKey(OWNER_ID, UPLOAD_ID, relPath),
   };
@@ -145,10 +154,14 @@ describe('storePackagedHls', () => {
       { upload: async () => {} },
     );
 
-    const doc = await TrackKeyModel.findOne({ trackId: TRACK_ID });
-    expect(doc).not.toBeNull();
-    expect(doc?.keyHex).toBe(FAKE_KEY_HEX);
-    expect(doc?.keyUri).toBe('key');
+    const [row] = await keysFor(TRACK_ID);
+    expect(row).toBeDefined();
+    expect(row?.keyHex).toBe(FAKE_KEY_HEX);
+    expect(row?.keyUri).toBe('key');
+    // The discriminator Mongo had no column for. A locker key filed as a
+    // catalog track would still be found by id, so nothing else here can tell
+    // the two apart.
+    expect(row?.kind).toBe('track');
   });
 
   it('upserts TrackKey on re-import (idempotent)', async () => {
@@ -158,9 +171,9 @@ describe('storePackagedHls', () => {
     await storePackagedHls(result, catalogTarget(), { upload: async () => {} });
     await storePackagedHls(updatedResult, catalogTarget(), { upload: async () => {} });
 
-    const docs = await TrackKeyModel.find({ trackId: TRACK_ID });
-    expect(docs).toHaveLength(1);
-    expect(docs[0].keyHex).toBe('cafecafecafecafecafecafecafecafe');
+    const rows = await keysFor(TRACK_ID);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.keyHex).toBe('cafecafecafecafecafecafecafecafe');
   });
 
   it('a locker target writes under hls/uploads/, never into the catalog artist space', async () => {
@@ -185,8 +198,8 @@ describe('storePackagedHls', () => {
     const result = buildSyntheticPackage();
     await storePackagedHls(result, lockerTarget(), { upload: async () => {} });
 
-    expect(await TrackKeyModel.findOne({ trackId: UPLOAD_ID })).not.toBeNull();
-    expect(await TrackKeyModel.findOne({ trackId: TRACK_ID })).toBeNull();
+    expect(await keysFor(UPLOAD_ID)).toHaveLength(1);
+    expect(await keysFor(TRACK_ID)).toHaveLength(0);
   });
 
   it('every locker key keeps the upload id as a whole path segment above the manifest', async () => {

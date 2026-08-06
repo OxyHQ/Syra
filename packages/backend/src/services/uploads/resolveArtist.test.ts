@@ -1,55 +1,76 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll } from 'bun:test';
 import path from 'path';
-import { clear, connect, disconnect } from '../../test/mongo';
-import { ArtistModel } from '../../models/CatalogEntity';
-import { IsrcRegistryModel } from '../../models/IsrcRegistry';
-import { TrackModel } from '../../models/Track';
+import { count, eq } from 'drizzle-orm';
+import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
+import { getDb } from '../../db/postgres';
+import { catalogEntities, isrcRegistry, tracks } from '../../db/schema/catalog';
 import { extractMetadata } from './extractMetadata';
 import { ensureContributedArtist, resolveArtist } from './resolveArtist';
 import { setEnrichmentFetchForTests } from './enrichmentHttp';
 
-beforeAll(connect);
-beforeEach(async () => {
-  await ArtistModel.createIndexes();
-});
+beforeAll(connectDb);
 afterEach(async () => {
   setEnrichmentFetchForTests();
-  await clear();
+  await clearDb();
 });
-afterAll(disconnect);
+afterAll(disconnectDb);
 
-async function seedArtist(overrides: Record<string, unknown> = {}) {
-  return ArtistModel.create({
-    name: 'Nadia Ortiz',
-    nameKey: 'nadia ortiz',
-    source: 'upload',
-    ...overrides,
-  });
+/** The whole `catalog_entities` row, for the assertions that read many columns. */
+async function readArtist(id: string) {
+  const [artist] = await getDb()
+    .select()
+    .from(catalogEntities)
+    .where(eq(catalogEntities.id, id))
+    .limit(1);
+  return artist;
+}
+
+async function artistCount(): Promise<number> {
+  const [row] = await getDb().select({ total: count() }).from(catalogEntities);
+  return row?.total ?? 0;
+}
+
+async function seedArtist(
+  overrides: Partial<typeof catalogEntities.$inferInsert> = {}
+): Promise<{ id: string }> {
+  const [artist] = await getDb()
+    .insert(catalogEntities)
+    .values({
+      type: 'artist',
+      name: 'Nadia Ortiz',
+      nameKey: 'nadia ortiz',
+      source: 'upload',
+      ...overrides,
+    })
+    .returning({ id: catalogEntities.id });
+
+  if (!artist) throw new Error('seedArtist: insert returned no row');
+  return artist;
 }
 
 describe('resolveArtist — high confidence links an id', () => {
   it('tier 1: an ISRC on an existing catalog track', async () => {
     const artist = await seedArtist();
-    await TrackModel.create({
+    await getDb().insert(tracks).values({
       title: 'Midnight Ferry',
-      artistId: artist._id.toString(),
+      artistId: artist.id,
       artistName: 'Nadia Ortiz',
       duration: 180,
       source: 'upload',
-      externalIds: { isrc: 'ESA452300137' },
+      externalIsrc: 'ESA452300137',
     });
 
     const resolution = await resolveArtist({ isrc: 'esa452300137' });
 
     expect(resolution.confidence).toBe('high');
     expect(resolution.signal).toBe('isrc-catalog-track');
-    expect(resolution.linkedArtistId).toBe(artist._id.toString());
+    expect(resolution.linkedArtistId).toBe(artist.id);
     expect(resolution.name).toBe('Nadia Ortiz');
   });
 
   it('tier 2: an ISRC resolving in the registry, linked by name key', async () => {
     const artist = await seedArtist();
-    await IsrcRegistryModel.create({
+    await getDb().insert(isrcRegistry).values({
       isrc: 'ESA452300137',
       recordingMbid: '5f0a1b2c-3d4e-4f50-8a61-72b3c4d5e6f7',
       title: 'Midnight Ferry',
@@ -62,11 +83,11 @@ describe('resolveArtist — high confidence links an id', () => {
 
     expect(resolution.confidence).toBe('high');
     expect(resolution.signal).toBe('isrc-registry');
-    expect(resolution.linkedArtistId).toBe(artist._id.toString());
+    expect(resolution.linkedArtistId).toBe(artist.id);
   });
 
   it('tier 2 stays high confidence with no artist in the catalog yet', async () => {
-    await IsrcRegistryModel.create({
+    await getDb().insert(isrcRegistry).values({
       isrc: 'ESA452300137',
       recordingMbid: '5f0a1b2c-3d4e-4f50-8a61-72b3c4d5e6f7',
       title: 'Midnight Ferry',
@@ -88,12 +109,12 @@ describe('resolveArtist — high confidence links an id', () => {
     const artist = await seedArtist({ name: 'Kestrel Lane', nameKey: 'kestrel lane' });
     const resolution = await resolveArtist({
       artistName: 'Whoever The Uploader Typed',
-      fingerprintMatch: { artistId: artist._id.toString(), artistName: 'Kestrel Lane' },
+      fingerprintMatch: { artistId: artist.id, artistName: 'Kestrel Lane' },
     });
 
     expect(resolution.confidence).toBe('high');
     expect(resolution.signal).toBe('fingerprint-catalog-track');
-    expect(resolution.linkedArtistId).toBe(artist._id.toString());
+    expect(resolution.linkedArtistId).toBe(artist.id);
     expect(resolution.name).toBe('Kestrel Lane');
   });
 
@@ -101,7 +122,7 @@ describe('resolveArtist — high confidence links an id', () => {
     const artist = await seedArtist({
       name: 'Kestrel Lane',
       nameKey: 'kestrel lane',
-      externalIds: { musicbrainzArtistId: '0b6c9f77-2e5a-4d6c-83a1-91b2f4c7d5e8' },
+      externalMusicbrainzArtistId: '0b6c9f77-2e5a-4d6c-83a1-91b2f4c7d5e8',
     });
 
     const resolution = await resolveArtist({
@@ -111,7 +132,7 @@ describe('resolveArtist — high confidence links an id', () => {
 
     expect(resolution.confidence).toBe('high');
     expect(resolution.signal).toBe('musicbrainz-artist-id');
-    expect(resolution.linkedArtistId).toBe(artist._id.toString());
+    expect(resolution.linkedArtistId).toBe(artist.id);
   });
 
   it('tier 4 upgrades the file\'s own name when nobody carries the id yet', async () => {
@@ -135,7 +156,7 @@ describe('resolveArtist — medium confidence never links', () => {
     expect(resolution.signal).toBe('artist-tag');
     expect(resolution.name).toBe('Nadia Ortiz');
     // The contribution policy needs to know WHOSE page this would land on…
-    expect(resolution.matchedArtistId).toBe(artist._id.toString());
+    expect(resolution.matchedArtistId).toBe(artist.id);
     // …but two different people genuinely share a name, so nothing is written.
     expect(resolution.linkedArtistId).toBeUndefined();
   });
@@ -207,7 +228,7 @@ describe('resolveArtist — the denylist', () => {
   }
 
   it('a registry credit that is a placeholder does not become an artist either', async () => {
-    await IsrcRegistryModel.create({
+    await getDb().insert(isrcRegistry).values({
       isrc: 'ESA452300137',
       recordingMbid: '5f0a1b2c-3d4e-4f50-8a61-72b3c4d5e6f7',
       title: 'Untitled',
@@ -237,7 +258,7 @@ describe('resolveArtist — a file with no artist at all', () => {
     });
 
     expect(resolution).toEqual({ confidence: 'none', signal: 'none', featured: [] });
-    expect(await ArtistModel.countDocuments()).toBe(0);
+    expect(await artistCount()).toBe(0);
   });
 });
 
@@ -251,20 +272,26 @@ describe('ensureContributedArtist', () => {
 
     if (!artist) throw new Error('expected an artist');
     expect(artist.name).toBe('Nobody In Our Catalog');
-    expect(artist.nameKey).toBe('nobody in our catalog');
-    expect(artist.claimable).toBe(true);
-    expect(artist.origin).toBe('contributed');
-    expect(artist.acceptsContributions).toBe(false);
-    expect(artist.ownerOxyUserId).toBeUndefined();
-    expect(artist.externalIds?.musicbrainzArtistId).toBe('0b6c9f77-2e5a-4d6c-83a1-91b2f4c7d5e8');
+
+    // Read back rather than asserting on the return value: `ensureContributedArtist`
+    // now returns an IDENTITY, not the row, so the stored columns are the only
+    // place the claim flags can be checked at all.
+    const stored = await readArtist(artist.id);
+    expect(stored?.nameKey).toBe('nobody in our catalog');
+    expect(stored?.claimable).toBe(true);
+    expect(stored?.origin).toBe('contributed');
+    expect(stored?.acceptsContributions).toBe(false);
+    expect(stored?.ownerOxyUserId).toBeNull();
+    expect(stored?.externalMusicbrainzArtistId).toBe('0b6c9f77-2e5a-4d6c-83a1-91b2f4c7d5e8');
+    expect(stored?.genres).toEqual(['Indie Pop']);
   });
 
   it('reuses an existing artist rather than creating a second one', async () => {
     const existing = await seedArtist();
     const artist = await ensureContributedArtist({ name: 'Nadia  Ortíz' });
 
-    expect(artist?._id.toString()).toBe(existing._id.toString());
-    expect(await ArtistModel.countDocuments()).toBe(1);
+    expect(artist?.id).toBe(existing.id);
+    expect(await artistCount()).toBe(1);
   });
 
   it('two concurrent contributions of the same new artist produce ONE row', async () => {
@@ -275,8 +302,8 @@ describe('ensureContributedArtist', () => {
       ensureContributedArtist({ name: 'Simultaneous Band' }),
     ]);
 
-    expect(await ArtistModel.countDocuments()).toBe(1);
-    expect(a?._id.toString()).toBe(b?._id.toString() ?? '');
+    expect(await artistCount()).toBe(1);
+    expect(a?.id).toBe(b?.id ?? '');
   });
 
   /**
@@ -318,7 +345,7 @@ describe('ensureContributedArtist', () => {
     let enriched: string | undefined;
     for (let attempt = 0; attempt < 40 && enriched === undefined; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 25));
-      enriched = (await ArtistModel.findById(artist._id))?.bio;
+      enriched = (await readArtist(artist.id))?.bio ?? undefined;
     }
 
     expect(enriched).toBe('English pop rock band');
@@ -341,7 +368,7 @@ describe('ensureContributedArtist', () => {
   it('refuses a denylisted name', async () => {
     expect(await ensureContributedArtist({ name: 'Various Artists' })).toBeNull();
     expect(await ensureContributedArtist({ name: '' })).toBeNull();
-    expect(await ArtistModel.countDocuments()).toBe(0);
+    expect(await artistCount()).toBe(0);
   });
 
   it('stores only the primary artist, not the whole feature credit', async () => {

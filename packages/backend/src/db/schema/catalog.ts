@@ -67,6 +67,11 @@
  * their own models — see the report), so both stay `jsonb`, unlike
  * `Track.credits[]`.
  *
+ * `members` was nonetheless MISSING from `catalog_entities` until Task 10b —
+ * the decision above was made and the column was never written. See its own
+ * comment on the column for how that survived, and for the reader and test it
+ * would have broken.
+ *
  * `Track.hls[]` was the one array this file got wrong in the first pass —
  * corrected in Task 4 as `track_hls_renditions`, not here, because Task 4 is
  * where the evidence surfaced (`Episode.hls[]` needed the identical
@@ -110,6 +115,7 @@ import {
 } from '@oxyhq/db';
 import type {
   ArtistImageSuggestion,
+  ArtistMember,
   TrackCredit,
   TrackImage,
 } from '@syra/shared-types';
@@ -389,6 +395,36 @@ export const catalogEntities = pgTable(
      * ever wrote one has zero callers in production.
      */
     imageSuggestions: jsonb().$type<ArtistImageSuggestion[]>(),
+
+    /**
+     * A group's line-up (`ArtistMember`) — RESTORED in Task 10b, having been
+     * lost in this file's first pass.
+     *
+     * This file's own doc comment said `CatalogEntity.members[]` "stays jsonb",
+     * and `db/catalog/serialize.ts` said it "stayed a jsonb column with no
+     * reader anywhere". No column was ever declared, and both halves of the
+     * second claim were false: `controllers/entityProfile.controller.ts:110`
+     * puts it on the entity-profile response, `@syra/shared-types`
+     * `entityProfileSchema` declares it, and
+     * `entityProfile.artistSections.test.ts` asserts a group's first member by
+     * name. `services/uploads/enrichCatalogEntity.ts` writes it from Wikidata's
+     * `has part`.
+     *
+     * So the port would have dropped a field that is written, read and tested —
+     * silently, because nothing gates "every Mongoose path has a column" (the
+     * gates check `*_id` columns, protected columns and identifier length, and
+     * `zodPathsExistInMongoose.test.ts` checks the zod<->MONGOOSE direction).
+     * It surfaced only because drizzle refuses an unknown column key at compile
+     * time where Mongoose dropped the `$set` in silence.
+     *
+     * `jsonb` rather than a child table, which is what the original decision
+     * got right: unlike `Track.credits[]`, nothing queries a member by element
+     * — `members.nameKey` had zero readers outside the model — so the
+     * query-by-element test that justified `track_credits` does not apply.
+     * `catalogEntityId` inside each entry is dropped, as it is everywhere else
+     * it was declared and never written.
+     */
+    members: jsonb().$type<ArtistMember[]>(),
 
     // ── Person-only (nullable) ────────────────────────────────────────────
     /** Links a person to a `type:'artist'` row — see the discriminator CHECK below. */

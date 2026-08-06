@@ -1,29 +1,79 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll } from 'bun:test';
-import mongoose from 'mongoose';
-import { clear, connect, disconnect } from '../../test/mongo';
-import { AlbumModel } from '../../models/Album';
+import { count, eq } from 'drizzle-orm';
+import { uuidv7 } from '@oxyhq/db';
+import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
+import { getDb } from '../../db/postgres';
+import { albums, albumSources, catalogEntities, imageAssets } from '../../db/schema/catalog';
+import { albumGenreNames } from '../../db/catalog/genres';
 import { classifyAlbumType, ensureContributedAlbum, resolveAlbum } from './resolveAlbum';
 
-beforeAll(connect);
+/**
+ * `albums.artist_id` and `albums.cover_art_id` are real foreign keys now (the
+ * second is NOT NULL), so both parents are created per test rather than being
+ * free-floating ObjectIds as they were under Mongo.
+ */
+let ARTIST_ID = '';
+let COVER_ART = '';
+
+beforeAll(connectDb);
 beforeEach(async () => {
-  await AlbumModel.createIndexes();
+  const suffix = uuidv7();
+  const [artist] = await getDb()
+    .insert(catalogEntities)
+    .values({
+      type: 'artist',
+      name: 'Nadia Ortiz',
+      nameKey: `nadia-ortiz-${suffix}`,
+      source: 'upload',
+    })
+    .returning({ id: catalogEntities.id });
+  ARTIST_ID = artist?.id ?? '';
+
+  const [asset] = await getDb()
+    .insert(imageAssets)
+    .values({
+      s3Key: `fixtures/${suffix}.jpg`,
+      filename: 'cover.jpg',
+      contentType: 'image/jpeg',
+      byteSize: 1024,
+      width: 640,
+      height: 640,
+      ownerType: 'album',
+    })
+    .returning({ id: imageAssets.id });
+  COVER_ART = asset?.id ?? '';
 });
-afterEach(clear);
-afterAll(disconnect);
+afterEach(clearDb);
+afterAll(disconnectDb);
 
-const ARTIST_ID = new mongoose.Types.ObjectId().toString();
-const COVER_ART = new mongoose.Types.ObjectId().toString();
+async function albumCount(): Promise<number> {
+  const [row] = await getDb().select({ total: count() }).from(albums);
+  return row?.total ?? 0;
+}
 
-async function seedAlbum(overrides: Record<string, unknown> = {}) {
-  return AlbumModel.create({
-    title: 'Harbour Lights',
-    artistId: ARTIST_ID,
-    artistName: 'Nadia Ortiz',
-    releaseDate: '2023-04-18',
-    coverArt: COVER_ART,
-    source: 'upload',
-    ...overrides,
-  });
+async function readAlbum(id: string) {
+  const [album] = await getDb().select().from(albums).where(eq(albums.id, id)).limit(1);
+  return album;
+}
+
+async function seedAlbum(
+  overrides: Partial<typeof albums.$inferInsert> = {}
+): Promise<{ id: string }> {
+  const [album] = await getDb()
+    .insert(albums)
+    .values({
+      title: 'Harbour Lights',
+      artistId: ARTIST_ID,
+      artistName: 'Nadia Ortiz',
+      releaseDate: '2023-04-18',
+      coverArtId: COVER_ART,
+      source: 'upload',
+      ...overrides,
+    })
+    .returning({ id: albums.id });
+
+  if (!album) throw new Error('seedAlbum: insert returned no row');
+  return album;
 }
 
 describe('resolveAlbum — tier order', () => {
@@ -36,12 +86,12 @@ describe('resolveAlbum — tier order', () => {
 
     expect(resolution.confidence).toBe('high');
     expect(resolution.signal).toBe('upc');
-    expect(resolution.linkedAlbumId).toBe(album._id.toString());
+    expect(resolution.linkedAlbumId).toBe(album.id);
   });
 
   it('tier 2: a MusicBrainz release id links the release', async () => {
     const album = await seedAlbum({
-      externalIds: { musicbrainzReleaseId: '4f2a1d3b-8ec6-4a35-9d21-7f0c5b6e2a90' },
+      externalMusicbrainzReleaseId: '4f2a1d3b-8ec6-4a35-9d21-7f0c5b6e2a90',
     });
     const resolution = await resolveAlbum({
       albumName: 'Harbour Lights',
@@ -50,14 +100,14 @@ describe('resolveAlbum — tier order', () => {
 
     expect(resolution.confidence).toBe('high');
     expect(resolution.signal).toBe('musicbrainz-release-id');
-    expect(resolution.linkedAlbumId).toBe(album._id.toString());
+    expect(resolution.linkedAlbumId).toBe(album.id);
   });
 
   it('tier 1 wins over tier 2', async () => {
     const byUpc = await seedAlbum({ upc: '8437011234567' });
     await seedAlbum({
       title: 'Different Album',
-      externalIds: { musicbrainzReleaseId: '4f2a1d3b-8ec6-4a35-9d21-7f0c5b6e2a90' },
+      externalMusicbrainzReleaseId: '4f2a1d3b-8ec6-4a35-9d21-7f0c5b6e2a90',
     });
 
     const resolution = await resolveAlbum({
@@ -65,7 +115,7 @@ describe('resolveAlbum — tier order', () => {
       upc: '8437011234567',
       musicbrainzReleaseId: '4f2a1d3b-8ec6-4a35-9d21-7f0c5b6e2a90',
     });
-    expect(resolution.linkedAlbumId).toBe(byUpc._id.toString());
+    expect(resolution.linkedAlbumId).toBe(byUpc.id);
     expect(resolution.signal).toBe('upc');
   });
 
@@ -80,7 +130,7 @@ describe('resolveAlbum — tier order', () => {
 
     expect(resolution.confidence).toBe('medium');
     expect(resolution.signal).toBe('album-key');
-    expect(resolution.matchedAlbumId).toBe(album._id.toString());
+    expect(resolution.matchedAlbumId).toBe(album.id);
     expect(resolution.linkedAlbumId).toBeUndefined();
   });
 
@@ -172,9 +222,16 @@ describe('ensureContributedAlbum — no cover art means no album', () => {
 
     if (!album) throw new Error('expected an album');
     expect(album.title).toBe('Harbour Lights');
-    expect(album.coverArt).toBe(COVER_ART);
-    expect(album.upc).toBe('8437011234567');
-    expect(album.totalTracks).toBe(12);
+
+    // Read back rather than asserting on the return value: `ensureContributedAlbum`
+    // returns an IDENTITY now, so the stored columns are the only place the rest
+    // of the release can be checked at all.
+    const stored = await readAlbum(album.id);
+    expect(stored?.coverArtId).toBe(COVER_ART);
+    expect(stored?.upc).toBe('8437011234567');
+    expect(stored?.totalTracks).toBe(12);
+    // `genre[]` is `album_genres` + `genres` now, not a column on the album.
+    expect(await albumGenreNames(album.id)).toEqual(['Indie Pop']);
   });
 
   it('DECLINES rather than inventing a placeholder cover', async () => {
@@ -190,7 +247,7 @@ describe('ensureContributedAlbum — no cover art means no album', () => {
     });
 
     expect(album).toBeNull();
-    expect(await AlbumModel.countDocuments()).toBe(0);
+    expect(await albumCount()).toBe(0);
   });
 
   it('declines without a release date too', async () => {
@@ -202,7 +259,7 @@ describe('ensureContributedAlbum — no cover art means no album', () => {
     });
 
     expect(album).toBeNull();
-    expect(await AlbumModel.countDocuments()).toBe(0);
+    expect(await albumCount()).toBe(0);
   });
 
   it('two concurrent contributions of the same UPC produce ONE album', async () => {
@@ -225,7 +282,7 @@ describe('ensureContributedAlbum — no cover art means no album', () => {
       }),
     ]);
 
-    expect(await AlbumModel.countDocuments()).toBe(1);
-    expect(a?._id.toString()).toBe(b?._id.toString() ?? '');
+    expect(await albumCount()).toBe(1);
+    expect(a?.id).toBe(b?.id ?? '');
   });
 });

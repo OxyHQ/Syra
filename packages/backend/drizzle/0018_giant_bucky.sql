@@ -1,0 +1,24 @@
+-- oxy:deploy-phase=pre
+-- Purely additive: one new nullable column, no drop, no narrowing.
+--
+-- RESTORES a field the port lost. `schema/catalog.ts`'s file-level comment said
+-- `CatalogEntity.members[]` "stays jsonb" and `db/catalog/serialize.ts` said it
+-- "stayed a jsonb column with no reader anywhere" -- the decision was recorded
+-- and the column was never declared, and both halves of the second claim were
+-- false:
+--
+--   writer  services/uploads/enrichCatalogEntity.ts  (Wikidata `has part`)
+--   reader  controllers/entityProfile.controller.ts:110 -> the API response
+--   type    @syra/shared-types entityProfileSchema declares `members`
+--   test    controllers/entityProfile.artistSections.test.ts asserts a member
+--           by name on a live response
+--
+-- Nothing gated it: the schema gates check `*_id`-shaped columns, protected
+-- columns and identifier length, and `zodPathsExistInMongoose.test.ts` checks
+-- the zod <-> MONGOOSE direction, not zod <-> drizzle. It surfaced only when a
+-- service port hit the write, because drizzle refuses an unknown column key at
+-- compile time where Mongoose dropped the `$set` in silence.
+--
+-- `jsonb`, not a child table: unlike `Track.credits[]`, nothing queries a member
+-- by element, so the evidence that justified `track_credits` does not apply.
+ALTER TABLE "catalog_entities" ADD COLUMN "members" jsonb;

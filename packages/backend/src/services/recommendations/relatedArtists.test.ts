@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
+import { uuidv7 } from '@oxyhq/db';
 import { connect, clear, disconnect } from '../../test/mongo';
-import { ArtistModel } from '../../models/CatalogEntity';
-import { TrackModel } from '../../models/Track';
+import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
+import { getDb } from '../../db/postgres';
+import { catalogEntities, tracks } from '../../db/schema/catalog';
 import { CatalogRelationModel } from '../../models/CatalogRelation';
 import { getRelatedArtists } from './recommendationService';
 
@@ -16,21 +18,51 @@ import { getRelatedArtists } from './recommendationService';
  * to be offered as somewhere to go next — a shelf entry opening on an empty page.
  */
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+/**
+ * BOTH databases: the catalogue is Postgres, and `CatalogRelation` — the
+ * co-listen graph this suite is about — belongs to Task 15's vertical and is
+ * still Mongoose. That is the split, stated where a reader will hit it.
+ */
+beforeAll(async () => {
+  await connect();
+  await connectDb();
+});
+afterEach(async () => {
+  await clear();
+  await clearDb();
+});
+afterAll(async () => {
+  await disconnect();
+  await disconnectDb();
+});
 
-async function makeArtist(overrides: Record<string, unknown> = {}) {
-  return ArtistModel.create({
-    name: `Artist ${Math.random().toString(36).slice(2)}`,
-    source: 'upload',
-    ...overrides,
-  });
+async function makeArtist(
+  overrides: Partial<typeof catalogEntities.$inferInsert> = {}
+): Promise<{ id: string }> {
+  const suffix = uuidv7();
+  const [artist] = await getDb()
+    .insert(catalogEntities)
+    .values({
+      type: 'artist',
+      name: `Artist ${suffix}`,
+      // Unique per fixture: `catalog_entities_artist_name_key_key` is a unique
+      // partial index over artists.
+      nameKey: `artist-${suffix}`,
+      source: 'upload',
+      ...overrides,
+    })
+    .returning({ id: catalogEntities.id });
+
+  if (!artist) throw new Error('makeArtist: insert returned no row');
+  return artist;
 }
 
-async function makeTrack(artistId: string, overrides: Record<string, unknown> = {}) {
-  return TrackModel.create({
-    title: `Track ${Math.random().toString(36).slice(2)}`,
+async function makeTrack(
+  artistId: string,
+  overrides: Partial<typeof tracks.$inferInsert> = {}
+): Promise<void> {
+  await getDb().insert(tracks).values({
+    title: `Track ${uuidv7()}`,
     artistId,
     artistName: 'Someone',
     duration: 200,
@@ -46,28 +78,28 @@ async function relate(sourceId: string, targetId: string, score: number) {
   });
 }
 
-function ids(artists: { _id: { toString(): string } }[]): string[] {
-  return artists.map((artist) => artist._id.toString());
+function ids(artists: { id: string }[]): string[] {
+  return artists.map((artist) => artist.id);
 }
 
 describe('getRelatedArtists — only artists you can actually play', () => {
   it('returns a graph neighbour that has playable music', async () => {
     const seed = await makeArtist();
     const neighbour = await makeArtist();
-    await makeTrack(neighbour._id.toString());
-    await relate(seed._id.toString(), neighbour._id.toString(), 0.9);
+    await makeTrack(neighbour.id);
+    await relate(seed.id, neighbour.id, 0.9);
 
-    const related = await getRelatedArtists(seed._id.toString(), 5);
-    expect(ids(related)).toContain(neighbour._id.toString());
+    const related = await getRelatedArtists(seed.id, 5);
+    expect(ids(related)).toContain(neighbour.id);
   });
 
   it('drops a graph neighbour whose every track was taken down', async () => {
     const seed = await makeArtist();
     const silenced = await makeArtist();
-    await makeTrack(silenced._id.toString(), { copyrightRemoved: true, isAvailable: false });
-    await relate(seed._id.toString(), silenced._id.toString(), 0.9);
+    await makeTrack(silenced.id, { copyrightRemoved: true, isAvailable: false });
+    await relate(seed.id, silenced.id, 0.9);
 
-    expect(await getRelatedArtists(seed._id.toString(), 5)).toEqual([]);
+    expect(await getRelatedArtists(seed.id, 5)).toEqual([]);
   });
 
   /**
@@ -78,35 +110,35 @@ describe('getRelatedArtists — only artists you can actually play', () => {
   it('drops an artist with no tracks at all, including a claimable stub', async () => {
     const seed = await makeArtist();
     const stub = await makeArtist({ origin: 'contributed', claimable: true });
-    await relate(seed._id.toString(), stub._id.toString(), 0.9);
+    await relate(seed.id, stub.id, 0.9);
 
-    expect(await getRelatedArtists(seed._id.toString(), 5)).toEqual([]);
+    expect(await getRelatedArtists(seed.id, 5)).toEqual([]);
   });
 
   it('filters the GENRE fallback too, not just the graph', async () => {
     const seed = await makeArtist({ genres: ['shoegaze'] });
-    await makeTrack(seed._id.toString());
+    await makeTrack(seed.id);
     const emptyPeer = await makeArtist({ genres: ['shoegaze'] });
     const playablePeer = await makeArtist({ genres: ['shoegaze'] });
-    await makeTrack(playablePeer._id.toString());
+    await makeTrack(playablePeer.id);
 
-    const related = await getRelatedArtists(seed._id.toString(), 10);
+    const related = await getRelatedArtists(seed.id, 10);
 
-    expect(ids(related)).toContain(playablePeer._id.toString());
-    expect(ids(related)).not.toContain(emptyPeer._id.toString());
+    expect(ids(related)).toContain(playablePeer.id);
+    expect(ids(related)).not.toContain(emptyPeer.id);
   });
 
   it('filters the POPULARITY fallback too', async () => {
     const seed = await makeArtist();
-    await makeTrack(seed._id.toString());
+    await makeTrack(seed.id);
     const emptyButPopular = await makeArtist({ popularity: 99 });
     const playable = await makeArtist({ popularity: 1 });
-    await makeTrack(playable._id.toString());
+    await makeTrack(playable.id);
 
-    const related = await getRelatedArtists(seed._id.toString(), 10);
+    const related = await getRelatedArtists(seed.id, 10);
 
-    expect(ids(related)).toContain(playable._id.toString());
-    expect(ids(related)).not.toContain(emptyButPopular._id.toString());
+    expect(ids(related)).toContain(playable.id);
+    expect(ids(related)).not.toContain(emptyButPopular.id);
   });
 
   /**
@@ -116,17 +148,23 @@ describe('getRelatedArtists — only artists you can actually play', () => {
    */
   it('still returns results — the filter narrows, it does not empty', async () => {
     const seed = await makeArtist({ genres: ['jazz'] });
-    await makeTrack(seed._id.toString());
+    await makeTrack(seed.id);
     for (let i = 0; i < 3; i += 1) {
       const peer = await makeArtist({ genres: ['jazz'] });
-      await makeTrack(peer._id.toString());
+      await makeTrack(peer.id);
     }
 
-    const related = await getRelatedArtists(seed._id.toString(), 10);
+    const related = await getRelatedArtists(seed.id, 10);
     expect(related.length).toBeGreaterThanOrEqual(3);
   });
 
-  it('returns nothing for an id that is not an ObjectId', async () => {
+  /**
+   * The Mongo version rejected this with an `ObjectId.isValid` pre-check.
+   * `catalog_entities.id` is `text`, so no guard is needed and none exists: the
+   * query itself answers, which is why the assertion is unchanged even though
+   * the mechanism behind it is gone.
+   */
+  it('returns nothing for an id no row carries', async () => {
     expect(await getRelatedArtists('not-an-id')).toEqual([]);
   });
 });
