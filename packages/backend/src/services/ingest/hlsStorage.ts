@@ -18,7 +18,8 @@ import fs from 'fs';
 import path from 'path';
 import type { HlsRendition } from '@syra/shared-types';
 import { uploadToS3 } from '../s3Service';
-import { TrackKeyModel } from '../../models/TrackKey';
+import { getDb } from '../../db/postgres';
+import { trackKeys, type TrackKeyKind } from '../../db/schema/catalog';
 import type { PackageResult } from './hlsPackager';
 
 // ── Content-type map ─────────────────────────────────────────────────────────
@@ -43,9 +44,20 @@ export interface StoredHls {
 /** What the packaged output belongs to, and where its objects go. */
 export interface StoreHlsTarget {
   /**
-   * The id of the owning document — a `Track._id` or a `UserUpload._id`. It is
-   * what the AES key is filed under in `TrackKey`, which is how the stream and
-   * locker-stream endpoints find it.
+   * Which id space {@link StoreHlsTarget.recordId} belongs to.
+   *
+   * Mongo stored the key row with no discriminator at all, so "these three id
+   * spaces never collide" lived only in a comment. `track_keys.kind` is a real
+   * column with a CHECK constraint, and a caller now has to say which of the
+   * three it is holding — `'track'` here, `'user_upload'` from
+   * `ingestUserUpload`, `'episode'` from `ingestEpisode`.
+   */
+  kind: TrackKeyKind;
+  /**
+   * The id of the owning row — a `tracks.id`, a `user_uploads.id` or an
+   * `episodes.id`, as {@link StoreHlsTarget.kind} says. It is what the AES key
+   * is filed under in `track_keys`, which is how the stream and locker-stream
+   * endpoints find it.
    */
   recordId: string;
   /**
@@ -90,7 +102,7 @@ export async function storePackagedHls(
   target: StoreHlsTarget,
   deps?: StoreHlsDeps,
 ): Promise<StoredHls> {
-  const { recordId, buildKey } = target;
+  const { kind, recordId, buildKey } = target;
   const doUpload = deps?.upload ?? ((key, body, opts) => uploadToS3(key, body, opts));
 
   // Upload every file in outputDir to S3
@@ -106,13 +118,22 @@ export async function storePackagedHls(
   );
 
   // Persist the AES-128 key server-side (upsert so re-imports are idempotent).
-  // `TrackKey.trackId` holds a Track id for catalog jobs and a UserUpload id for
-  // locker jobs; the two id spaces are distinct ObjectIds, so they cannot collide.
-  await TrackKeyModel.findOneAndUpdate(
-    { trackId: recordId },
-    { keyHex: result.keyHex, keyUri: result.keyUri },
-    { upsert: true, new: true },
-  );
+  // The conflict target is `track_id` ALONE, matching the unique constraint the
+  // schema declares — a re-ingest of the same record must rotate its key in
+  // place, and including `kind` in the target would instead try to insert a
+  // second row for the same id and fail the constraint.
+  await getDb()
+    .insert(trackKeys)
+    .values({ kind, trackId: recordId, keyHex: result.keyHex, keyUri: result.keyUri })
+    .onConflictDoUpdate({
+      target: trackKeys.trackId,
+      // `updated_at` is absent on purpose: drizzle's `onConflictDoUpdate` runs
+      // the same `buildUpdateSet` a `db.update()` does (`pg-core/dialect`), so
+      // the column's `$onUpdate` fires here too. `created_at` has no
+      // `$onUpdate` and is likewise untouched, which is what keeps the original
+      // insertion time across a re-ingest.
+      set: { kind, keyHex: result.keyHex, keyUri: result.keyUri },
+    });
 
   // Build typed HlsRendition[] referencing S3 keys
   const hls: HlsRendition[] = result.renditions.map((r) => ({

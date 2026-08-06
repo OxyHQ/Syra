@@ -192,8 +192,21 @@ export const IMAGE_ASSET_OWNER_TYPES = [
   'episode',
 ] as const;
 
+/**
+ * The three `image_assets` unions as TYPES, derived from the arrays above.
+ *
+ * `models/ImageAsset.ts` declared each one twice — a hand-written union for
+ * TypeScript and a separate `enum:` array for Mongoose — so the two could
+ * disagree and nothing would say so. Deriving them here means the CHECK
+ * constraint and the type a service annotates with are the same list by
+ * construction, and adding a member is one edit.
+ */
+export type ImageAssetOwnerType = (typeof IMAGE_ASSET_OWNER_TYPES)[number];
+
 /** `models/ImageAsset.ts` `CatalogImageProvider` (`CatalogSource | 'rss' | 'syra'`). */
 export const CATALOG_IMAGE_PROVIDERS = ['upload', 'cc', 'rss', 'syra'] as const;
+
+export type CatalogImageProvider = (typeof CATALOG_IMAGE_PROVIDERS)[number];
 
 /** `models/ImageAsset.ts` `CatalogImageEntity`. */
 export const CATALOG_IMAGE_ENTITY_TYPES = [
@@ -205,6 +218,8 @@ export const CATALOG_IMAGE_ENTITY_TYPES = [
   'episode',
 ] as const;
 
+export type CatalogImageEntityType = (typeof CATALOG_IMAGE_ENTITY_TYPES)[number];
+
 /**
  * `TrackKey.trackId` is polymorphic across three id spaces
  * (`tracks`/`user_uploads`/`episodes`) with NO discriminator column in Mongo —
@@ -215,6 +230,8 @@ export const CATALOG_IMAGE_ENTITY_TYPES = [
  * see `deferredForeignKeys.ts`).
  */
 export const TRACK_KEY_KINDS = ['track', 'user_upload', 'episode'] as const;
+
+export type TrackKeyKind = (typeof TRACK_KEY_KINDS)[number];
 
 // ── image_assets ─────────────────────────────────────────────────────────
 

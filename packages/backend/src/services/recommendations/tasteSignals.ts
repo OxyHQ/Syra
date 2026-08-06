@@ -1,7 +1,14 @@
+import { and, eq } from 'drizzle-orm';
 import { UserTasteProfileModel } from '../../models/UserTasteProfile';
-import { TrackModel } from '../../models/Track';
-import { ArtistModel } from '../../models/CatalogEntity';
+import { getDb } from '../../db/postgres';
+import { catalogEntities, tracks } from '../../db/schema/catalog';
 import { logger } from '../../utils/logger';
+
+/**
+ * `UserTasteProfile` belongs to the user vertical (Task 15) and is still
+ * Mongoose. The two catalog reads below are Postgres; neither is joined to the
+ * profile, so the split is two round trips rather than a broken query.
+ */
 
 /**
  * Explicit taste signals (likes, follows) are strong, intentional declarations
@@ -60,11 +67,17 @@ async function applyToProfile(
  */
 export async function applyLikeSignal(oxyUserId: string, trackId: string): Promise<void> {
   try {
-    const track = await TrackModel.findById(trackId)
-      .select({ artistId: 1, genre: 1, 'metadata.genre': 1 })
-      .lean();
+    const [track] = await getDb()
+      .select({
+        artistId: tracks.artistId,
+        genre: tracks.genre,
+        metadataGenre: tracks.metadataGenre,
+      })
+      .from(tracks)
+      .where(eq(tracks.id, trackId))
+      .limit(1);
     if (!track) return;
-    const genre = (track.genre ?? track.metadata?.genre?.[0])?.trim().toLowerCase();
+    const genre = (track.genre ?? track.metadataGenre?.[0])?.trim().toLowerCase();
 
     await applyToProfile(oxyUserId, (profile) => {
       bump(profile.artists, track.artistId, LIKE_TRACK_WEIGHT, MAX_TASTE_ARTISTS);
@@ -82,10 +95,14 @@ export async function applyLikeSignal(oxyUserId: string, trackId: string): Promi
  */
 export async function applyFollowSignal(oxyUserId: string, artistId: string): Promise<void> {
   try {
-    const artist = await ArtistModel.findById(artistId).select({ genres: 1 }).lean();
+    const [artist] = await getDb()
+      .select({ genres: catalogEntities.genres })
+      .from(catalogEntities)
+      .where(and(eq(catalogEntities.id, artistId), eq(catalogEntities.type, 'artist')))
+      .limit(1);
     if (!artist) return;
     const genres = (artist.genres ?? [])
-      .map((g) => (typeof g === 'string' ? g.trim().toLowerCase() : ''))
+      .map((g) => g.trim().toLowerCase())
       .filter((g) => g.length > 0);
 
     await applyToProfile(oxyUserId, (profile) => {

@@ -1,39 +1,26 @@
-import mongoose from 'mongoose';
 import { CatalogRelationModel } from '../../models/CatalogRelation';
-import type { ITrack } from '../../models/Track';
 
 /**
  * Taste and relatedness primitives shared by every personalised read.
  *
- * These four helpers are the common vocabulary of the recommendation layer and
- * the radio candidate pools: how filters compose, how the collaborative graph is
- * folded across several seeds, how a candidate set is re-ranked by taste, and
- * how `$in` results are put back into the order that was asked for. They live
+ * These three helpers are the common vocabulary of the recommendation layer and
+ * the radio candidate pools: how the collaborative graph is folded across
+ * several seeds, how a candidate set is re-ranked by taste, and how an
+ * `IN (…)` result is put back into the order that was asked for. They live
  * here — not duplicated per consumer — because a divergence between two copies
  * would silently change what a listener is recommended depending on which
  * surface they came from.
- */
-
-/**
- * Compose filters under `$and` rather than by spreading them together.
  *
- * Spreading is what silently drops an `$or`: a later key of the same name wins,
- * so a playability `$or` merged with a content `$or` yields only the second.
- * Empty filters are dropped so the result stays as flat as possible and the
- * planner can still use a leading indexed field.
+ * `andMongoFilters` is GONE, not ported. It existed because spreading two Mongo
+ * filter objects together silently dropped an `$or` — a later key of the same
+ * name won. Drizzle composes with `and()`, which cannot lose a term, so there is
+ * nothing for a counterpart to do.
+ *
+ * `CatalogRelation` belongs to the user/recommendations vertical (Task 15) and
+ * is still Mongoose here. That is the one thing in this file not yet on
+ * Postgres, and it is deliberate: the collaborative graph is another task's
+ * table, and the edges it returns are plain string ids either way.
  */
-export function andMongoFilters(
-  ...filters: Array<mongoose.QueryFilter<ITrack>>
-): mongoose.QueryFilter<ITrack> {
-  const nonEmptyFilters = filters.filter((filter) => Object.keys(filter).length > 0);
-  if (nonEmptyFilters.length === 0) {
-    return {};
-  }
-  if (nonEmptyFilters.length === 1) {
-    return nonEmptyFilters[0];
-  }
-  return { $and: nonEmptyFilters };
-}
 
 /** Resolve the union of related-artist edges for a set of seed artists. */
 export async function topRelatedArtistIds(
@@ -60,17 +47,19 @@ export async function topRelatedArtistIds(
     scoreById.set(edge.targetId, (scoreById.get(edge.targetId) ?? 0) + edge.score);
   }
 
+  // No id-shape filter: `catalog_entities.id` is `text`, so an edge pointing at
+  // an id that does not exist simply matches no row when the caller looks it up.
+  // The Mongo version had to drop non-ObjectId ids here or the `$in` would throw.
   return Array.from(scoreById.entries())
     .sort((a, b) => b[1] - a[1])
     .slice(0, limit)
-    .map(([id]) => id)
-    .filter((id) => mongoose.Types.ObjectId.isValid(id));
+    .map(([id]) => id);
 }
 
 /** The track fields {@link rankByTaste} reads. */
 export interface TasteRankableTrack {
   artistId: string;
-  genre?: string;
+  genre?: string | null;
   popularity?: number;
 }
 
@@ -100,10 +89,17 @@ export function rankByTaste<T extends TasteRankableTrack>(
   }
 }
 
-/** Re-order documents to match a list of ids (Mongo `$in` ignores order). */
-export function orderByIds<T extends { _id: mongoose.Types.ObjectId }>(docs: T[], ids: string[]): T[] {
+/**
+ * Re-order rows to match a list of ids.
+ *
+ * `WHERE id IN (…)` has no more defined order than Mongo's `$in` did, and the
+ * ids arrive ranked — by collaborative score, by radio pool weight — so
+ * returning them in whatever order the planner produced would discard the whole
+ * ranking the caller just computed.
+ */
+export function orderByIds<T extends { id: string }>(rows: T[], ids: string[]): T[] {
   const index = new Map(ids.map((id, i) => [id, i]));
-  return docs
-    .filter((doc) => index.has(doc._id.toString()))
-    .sort((a, b) => (index.get(a._id.toString()) ?? 0) - (index.get(b._id.toString()) ?? 0));
+  return rows
+    .filter((row) => index.has(row.id))
+    .sort((a, b) => (index.get(a.id) ?? 0) - (index.get(b.id) ?? 0));
 }

@@ -1,9 +1,9 @@
 import type mongoose from 'mongoose';
-import { TrackModel, type ITrack } from '../../models/Track';
+import { and, eq, inArray } from 'drizzle-orm';
 import { UserUploadModel, type IUserUpload } from '../../models/UserUpload';
 import { ContributionAttestationModel } from '../../models/ContributionAttestation';
-import { TrackFingerprintModel } from '../../models/TrackFingerprint';
-import { ArtistModel } from '../../models/CatalogEntity';
+import { getDb } from '../../db/postgres';
+import { catalogEntities, trackFingerprints, tracks } from '../../db/schema/catalog';
 import { deleteFromS3, deleteS3Prefix } from '../s3Service';
 import { addStrike } from '../strikeService';
 import { recordContributorStrike } from './contributorStrikes';
@@ -292,11 +292,16 @@ async function acousticMatches(
   trackId: string,
   alreadyDoomed: mongoose.Types.ObjectId[],
 ): Promise<{ matches: PurgeCandidate[]; available: boolean }> {
-  const catalog = await TrackFingerprintModel.findOne({ trackId })
-    .select('fingerprint fingerprintDurationSec')
-    .lean();
+  const [catalog] = await getDb()
+    .select({
+      fingerprint: trackFingerprints.fingerprint,
+      fingerprintDurationSec: trackFingerprints.fingerprintDurationSec,
+    })
+    .from(trackFingerprints)
+    .where(eq(trackFingerprints.trackId, trackId))
+    .limit(1);
 
-  if (!catalog?.fingerprint?.length) {
+  if (!catalog?.fingerprint.length) {
     /**
      * LOUD, not silent. Returning an empty list here is indistinguishable from
      * "no re-encode exists", and a takedown that could only compare hashes has
@@ -439,11 +444,8 @@ type Responsible =
   | { kind: 'artist'; artistId: string }
   | { kind: 'contributor'; oxyUserId: string };
 
-async function resolveResponsible(
-  track: Pick<ITrack, 'artistId'> & { _id: unknown },
-): Promise<Responsible> {
-  const trackId = String(track._id);
-  const attestation = await ContributionAttestationModel.findOne({ trackId })
+async function resolveResponsible(track: { id: string; artistId: string }): Promise<Responsible> {
+  const attestation = await ContributionAttestationModel.findOne({ trackId: track.id })
     .select('uploaderOxyUserId')
     .lean();
 
@@ -451,17 +453,25 @@ async function resolveResponsible(
     return { kind: 'artist', artistId: track.artistId };
   }
 
-  const uploaderArtist = await ArtistModel.findOne({
-    ownerOxyUserId: attestation.uploaderOxyUserId,
-  })
-    .select('_id')
-    .lean();
+  // `type = 'artist'` is written out: `catalog_entities` holds persons in the
+  // same table and they carry no `owner_oxy_user_id`, but the condition is what
+  // makes that a property of the query rather than of the data.
+  const [uploaderArtist] = await getDb()
+    .select({ id: catalogEntities.id })
+    .from(catalogEntities)
+    .where(
+      and(
+        eq(catalogEntities.ownerOxyUserId, attestation.uploaderOxyUserId),
+        eq(catalogEntities.type, 'artist')
+      )
+    )
+    .limit(1);
 
   if (!uploaderArtist) {
     return { kind: 'contributor', oxyUserId: attestation.uploaderOxyUserId };
   }
 
-  return { kind: 'artist', artistId: uploaderArtist._id.toString() };
+  return { kind: 'artist', artistId: uploaderArtist.id };
 }
 
 /**
@@ -494,15 +504,15 @@ async function applyContributorTermination(
   const contributedTrackIds = attestations.map((attestation) => attestation.trackId);
 
   if (contributedTrackIds.length > 0) {
-    await TrackModel.updateMany(
-      { _id: { $in: contributedTrackIds }, copyrightRemoved: { $ne: true } },
-      {
+    await getDb()
+      .update(tracks)
+      .set({
         copyrightRemoved: true,
         isAvailable: false,
         removedAt: new Date(),
         removedReason: reason,
-      },
-    );
+      })
+      .where(and(inArray(tracks.id, contributedTrackIds), eq(tracks.copyrightRemoved, false)));
   }
 
   // Their whole locker, not only the copies of the reported work.
@@ -554,18 +564,30 @@ export async function takeDownTrack(
 ): Promise<TakeDownTrackResult | null> {
   const { trackId, reason, actorOxyUserId, copyrightReportId } = input;
 
-  const track = await TrackModel.findById(trackId).exec();
+  const [track] = await getDb()
+    .select({
+      id: tracks.id,
+      artistId: tracks.artistId,
+      copyrightRemoved: tracks.copyrightRemoved,
+    })
+    .from(tracks)
+    .where(eq(tracks.id, trackId))
+    .limit(1);
   if (!track) return null;
 
-  const alreadyRemoved = track.copyrightRemoved === true;
+  const alreadyRemoved = track.copyrightRemoved;
 
-  track.copyrightRemoved = true;
-  track.isAvailable = false;
-  track.removedAt = new Date();
-  track.removedReason = reason;
-  track.removedBy = actorOxyUserId;
-  if (copyrightReportId) track.copyrightReportId = copyrightReportId;
-  await track.save();
+  await getDb()
+    .update(tracks)
+    .set({
+      copyrightRemoved: true,
+      isAvailable: false,
+      removedAt: new Date(),
+      removedReason: reason,
+      removedBy: actorOxyUserId,
+      ...(copyrightReportId ? { copyrightReportId } : {}),
+    })
+    .where(eq(tracks.id, trackId));
 
   const purge = await purgeLockerCopiesOfTrack(trackId, deps);
 
@@ -630,15 +652,13 @@ export async function takeDownTrack(
    * one reported track and quietly skipped for the rest.
    */
   if (terminated) {
-    const removed = await TrackModel.find({
-      artistId: responsible.artistId,
-      copyrightRemoved: true,
-    })
-      .select('_id')
-      .lean();
+    const removed = await getDb()
+      .select({ id: tracks.id })
+      .from(tracks)
+      .where(and(eq(tracks.artistId, responsible.artistId), eq(tracks.copyrightRemoved, true)));
 
     for (const removedTrack of removed) {
-      const id = removedTrack._id.toString();
+      const id = removedTrack.id;
       if (id === trackId) continue; // already purged above
       const extra = await purgeLockerCopiesOfTrack(id, deps);
       purge.uploadsDeleted += extra.uploadsDeleted;
@@ -656,7 +676,7 @@ export async function takeDownTrack(
       applied: true,
       against: 'artist',
       artistId: responsible.artistId,
-      strikeCount: struck.strikeCount ?? 0,
+      strikeCount: struck.strikeCount,
       terminated,
     },
     purge,

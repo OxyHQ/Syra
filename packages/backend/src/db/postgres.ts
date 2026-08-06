@@ -80,6 +80,30 @@ export function getDb(): OxyDatabase<typeof schema> {
   return handle.db;
 }
 
+/** The handle `getDb()` returns. */
+export type Db = OxyDatabase<typeof schema>;
+
+/**
+ * The handle a `db.transaction(async (tx) => …)` callback receives.
+ *
+ * Derived from `Db` rather than written out as `PgTransaction<…>` with its four
+ * type arguments: those arguments are drizzle's, and spelling them here would
+ * be a second declaration of the same thing that a drizzle upgrade could put
+ * out of step with the first.
+ */
+export type DbTransaction = Parameters<Parameters<Db['transaction']>[0]>[0];
+
+/**
+ * Either handle, for a function that must be usable inside a caller's
+ * transaction AND on its own.
+ *
+ * The distinction matters: a write that has to commit together with the
+ * caller's other writes takes this and is passed the `tx`, while one that calls
+ * `getDb()` itself would silently run OUTSIDE the transaction and survive its
+ * rollback.
+ */
+export type DbOrTransaction = Db | DbTransaction;
+
 /** Close the pool (for shutdown hooks). Safe to call when never connected. */
 export async function closePostgres(): Promise<void> {
   if (!handle) return;

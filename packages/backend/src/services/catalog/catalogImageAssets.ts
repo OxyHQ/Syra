@@ -13,7 +13,7 @@ import { extractPredominantColorsFromBuffer } from '../colorExtractionService';
 import { logger } from '../../utils/logger';
 import { validateUrlSecurity } from '../../utils/urlSecurity';
 import { getImageAssetSourceContentHash, storeImageAsset } from '../imageAssetService';
-import type { CatalogImageProvider } from '../../models/ImageAsset';
+import type { CatalogImageEntityType, CatalogImageProvider } from '../../db/schema/catalog';
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 10000;
@@ -27,8 +27,6 @@ const IMAGE_SIZES = [
   ['xlarge', 960],
   ['xxlarge', 1280],
 ] as const;
-
-export type CatalogImageEntityType = 'artist' | 'track' | 'album' | 'playlist' | 'podcast' | 'episode';
 
 export interface CatalogImageContext {
   provider: CatalogImageProvider;

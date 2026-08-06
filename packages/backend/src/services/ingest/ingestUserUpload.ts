@@ -115,6 +115,7 @@ export async function ingestUserUpload(
     // audit written against `hls/{artistId}/` silently including listener files
     // with no way to tell them apart from the key.
     const stored = await doStoreHls(result, {
+      kind: 'user_upload',
       recordId: uploadId,
       buildKey: (relPath) => getS3LockerHlsKey(upload.ownerOxyUserId, uploadId, relPath),
     });

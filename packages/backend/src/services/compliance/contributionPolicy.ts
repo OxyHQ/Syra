@@ -1,4 +1,6 @@
-import { ArtistModel } from '../../models/CatalogEntity';
+import { and, eq } from 'drizzle-orm';
+import { getDb } from '../../db/postgres';
+import { catalogEntities } from '../../db/schema/catalog';
 import { checkUploadPermission } from '../strikeService';
 import { canContributePublicly } from './contributorStrikes';
 
@@ -131,9 +133,18 @@ export async function evaluatePublicContribution(
     };
   }
 
-  const artist = await ArtistModel.findById(artistId)
-    .select('ownerOxyUserId claimedByOxyUserId acceptsContributions')
-    .lean();
+  // `type = 'artist'` is written out: `catalog_entities` holds persons in the
+  // same table, and a person id supplied as `artistId` must be "no such artist"
+  // rather than a row whose ownership columns happen to be readable.
+  const [artist] = await getDb()
+    .select({
+      ownerOxyUserId: catalogEntities.ownerOxyUserId,
+      claimedByOxyUserId: catalogEntities.claimedByOxyUserId,
+      acceptsContributions: catalogEntities.acceptsContributions,
+    })
+    .from(catalogEntities)
+    .where(and(eq(catalogEntities.id, artistId), eq(catalogEntities.type, 'artist')))
+    .limit(1);
 
   if (!artist) {
     return {

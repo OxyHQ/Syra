@@ -46,9 +46,9 @@
  * rows rather than asserting it in this comment.
  */
 
-import { and, eq, type SQL } from 'drizzle-orm';
+import { and, eq, sql, type SQL } from 'drizzle-orm';
 import { PlaylistVisibility } from '@syra/shared-types';
-import { tracks } from '../schema/catalog';
+import { catalogEntities, tracks } from '../schema/catalog';
 
 /**
  * The condition every catalog read of `tracks` composes first.
@@ -72,6 +72,29 @@ export function playableTrackFilter(): SQL {
   // conditions it always returns one, and the cast keeps every call site from
   // having to narrow a value that cannot be undefined.
   return and(eq(tracks.isAvailable, true), eq(tracks.copyrightRemoved, false)) as SQL;
+}
+
+/**
+ * "This `catalog_entities` row is an artist whose account is not terminated."
+ *
+ * `is not true`, NOT `!= true`, and the difference is not stylistic.
+ * `terminated` is an artist-only column on a table shared with persons, so it is
+ * NULLABLE — and in SQL `null != true` evaluates to NULL, which a `WHERE` treats
+ * as false. Written with `!=`, every artist whose `terminated` was never set
+ * either way would silently vanish from every related-artists shelf, every
+ * genre fallback and every radio artist seed. `is not true` is the three-valued
+ * spelling that means what Mongo's `{ terminated: { $ne: true } }` meant:
+ * false, null and absent all pass; only an explicit true is excluded.
+ *
+ * One spelling, because there are four call sites across the recommendation and
+ * radio services and a fifth in Task 10c's controllers — and the failure mode is
+ * invisible in a test whose fixtures all set the column.
+ */
+export function notTerminatedArtist(): SQL {
+  return and(
+    eq(catalogEntities.type, 'artist'),
+    sql`${catalogEntities.terminated} is not true`
+  ) as SQL;
 }
 
 /** The columns {@link isPlayableTrack} reads. Both are `NOT NULL` in Postgres. */

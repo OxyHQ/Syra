@@ -23,11 +23,13 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { Readable } from 'stream';
+import { eq } from 'drizzle-orm';
 import type { AudioSource, HlsRendition } from '@syra/shared-types';
 import { getS3PreviewKey } from '../../config/s3.config';
 import { uploadToS3, streamFromS3, objectExists } from '../s3Service';
 import { getTrackS3Key, type TrackAudioRef } from '../audioStorageService';
-import { TrackKeyModel } from '../../models/TrackKey';
+import { getDb } from '../../db/postgres';
+import { trackKeys } from '../../db/schema/catalog';
 import {
   generatePreviewClip,
   generatePreviewClipFromHls,
@@ -232,8 +234,22 @@ export function buildWindowedHlsPlaylist(
   };
 }
 
+/**
+ * The AES-128 key a preview clip has to decrypt with.
+ *
+ * Looked up by `track_id` alone and NOT by `kind`, deliberately: the unique
+ * constraint is on `track_id`, so one id resolves to at most one key row
+ * whatever id space it came from — which is what lets this one function serve
+ * catalog tracks, locker uploads and episodes without the caller telling it
+ * which it holds.
+ */
 async function defaultGetKeyHex(trackId: string): Promise<string | null> {
-  const trackKey = await TrackKeyModel.findOne({ trackId }).select('keyHex').lean<{ keyHex: string }>();
+  const [trackKey] = await getDb()
+    .select({ keyHex: trackKeys.keyHex })
+    .from(trackKeys)
+    .where(eq(trackKeys.trackId, trackId))
+    .limit(1);
+
   return trackKey?.keyHex ?? null;
 }
 

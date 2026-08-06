@@ -27,11 +27,11 @@
  * recordings underneath can never be told apart again.
  */
 
+import { and, eq } from 'drizzle-orm';
 import { isDenylistedArtistName, normalizeNameKey } from '@syra/shared-types';
-import type { IArtist } from '../../models/CatalogEntity';
-import { ArtistModel } from '../../models/CatalogEntity';
-import { IsrcRegistryModel } from '../../models/IsrcRegistry';
-import { TrackModel } from '../../models/Track';
+import { isUniqueViolation } from '@oxyhq/db';
+import { getDb } from '../../db/postgres';
+import { catalogEntities, isrcRegistry, tracks } from '../../db/schema/catalog';
 import { enqueueArtistEnrichment } from '../ingest/ingestQueue';
 import { splitArtistCredit } from './artistNames';
 
@@ -127,12 +127,64 @@ function artistFromRelativePath(relativePath: string): string | undefined {
 
 // ── Lookups ─────────────────────────────────────────────────────────────────
 
-async function findArtistByNameKey(nameKey: string): Promise<IArtist | null> {
-  return ArtistModel.findOne({ nameKey });
+/**
+ * The identity of an artist row — the only two columns this module ever reads
+ * off one, and the whole of what {@link ensureContributedArtist} returns.
+ *
+ * Deliberately not the row: a caller that receives the row can pass any column
+ * onward, including the two `publicColumns()` protects, and every consumer here
+ * wants the id.
+ */
+export interface ArtistIdentity {
+  id: string;
+  name: string;
 }
 
-async function findArtistByMusicBrainzId(musicbrainzArtistId: string): Promise<IArtist | null> {
-  return ArtistModel.findOne({ 'externalIds.musicbrainzArtistId': musicbrainzArtistId });
+/**
+ * Every lookup here restricts to `type = 'artist'`.
+ *
+ * Mongoose's discriminator injected that condition into `find()` invisibly, and
+ * `catalog_entities` holds persons in the same table with the same `nameKey`
+ * space (`services/podcasts/resolvePersons.ts` writes them) — so without it a
+ * podcast guest sharing an artist's normalised name would resolve as the artist
+ * an upload gets attributed to.
+ */
+async function findArtistByNameKey(nameKey: string): Promise<ArtistIdentity | null> {
+  const [artist] = await getDb()
+    .select({ id: catalogEntities.id, name: catalogEntities.name })
+    .from(catalogEntities)
+    .where(and(eq(catalogEntities.nameKey, nameKey), eq(catalogEntities.type, 'artist')))
+    .limit(1);
+
+  return artist ?? null;
+}
+
+async function findArtistByMusicBrainzId(
+  musicbrainzArtistId: string
+): Promise<ArtistIdentity | null> {
+  const [artist] = await getDb()
+    .select({ id: catalogEntities.id, name: catalogEntities.name })
+    .from(catalogEntities)
+    .where(
+      and(
+        eq(catalogEntities.externalMusicbrainzArtistId, musicbrainzArtistId),
+        eq(catalogEntities.type, 'artist')
+      )
+    )
+    .limit(1);
+
+  return artist ?? null;
+}
+
+/** The artist behind a catalog track, by track id. */
+async function findArtistById(artistId: string): Promise<ArtistIdentity | null> {
+  const [artist] = await getDb()
+    .select({ id: catalogEntities.id, name: catalogEntities.name })
+    .from(catalogEntities)
+    .where(and(eq(catalogEntities.id, artistId), eq(catalogEntities.type, 'artist')))
+    .limit(1);
+
+  return artist ?? null;
 }
 
 /**
@@ -165,24 +217,23 @@ async function resolveFromName(
     name: primary,
     nameKey,
     featured: allFeatured,
-    ...(existing && { matchedArtistId: existing._id.toString() }),
-    ...(existing && confidence === 'high' && { linkedArtistId: existing._id.toString() }),
+    ...(existing && { matchedArtistId: existing.id }),
+    ...(existing && confidence === 'high' && { linkedArtistId: existing.id }),
   };
 }
 
 function resolutionFromArtist(
-  artist: Pick<IArtist, 'name'> & { _id: { toString(): string } },
+  artist: ArtistIdentity,
   signal: ArtistSignal,
   featured: string[],
 ): ArtistResolution {
-  const id = artist._id.toString();
   return {
     confidence: 'high',
     signal,
     name: artist.name,
     nameKey: normalizeNameKey(artist.name),
-    matchedArtistId: id,
-    linkedArtistId: id,
+    matchedArtistId: artist.id,
+    linkedArtistId: artist.id,
     featured,
   };
 }
@@ -208,20 +259,24 @@ export async function resolveArtist(input: ArtistResolutionInput): Promise<Artis
   // considers PLAYABLE tracks, so a recording taken down for copyright does not
   // dedup the upload but does still tell us, authoritatively, who it is by.
   if (input.isrc) {
-    const track = await TrackModel.findOne({ 'externalIds.isrc': input.isrc.toUpperCase() })
-      .select('artistId artistName')
-      .lean();
-    if (track?.artistId) {
-      const artist = await ArtistModel.findById(track.artistId).select('name').lean();
+    const [track] = await getDb()
+      .select({ artistId: tracks.artistId })
+      .from(tracks)
+      .where(eq(tracks.externalIsrc, input.isrc.toUpperCase()))
+      .limit(1);
+    if (track) {
+      const artist = await findArtistById(track.artistId);
       if (artist) return resolutionFromArtist(artist, 'isrc-catalog-track', featured);
     }
   }
 
   // ── 2: ISRC → IsrcRegistry → the credited artist ──
   if (input.isrc) {
-    const row = await IsrcRegistryModel.findOne({ isrc: input.isrc.toUpperCase() })
-      .select('artistCredit')
-      .lean();
+    const [row] = await getDb()
+      .select({ artistCredit: isrcRegistry.artistCredit })
+      .from(isrcRegistry)
+      .where(eq(isrcRegistry.isrc, input.isrc.toUpperCase()))
+      .limit(1);
     if (row?.artistCredit) {
       const resolved = await resolveFromName(row.artistCredit, 'high', 'isrc-registry', featured);
       if (resolved.confidence !== 'none') return resolved;
@@ -230,7 +285,7 @@ export async function resolveArtist(input: ArtistResolutionInput): Promise<Artis
 
   // ── 3: the audio matched a catalog recording ──
   if (input.fingerprintMatch) {
-    const artist = await ArtistModel.findById(input.fingerprintMatch.artistId).select('name').lean();
+    const artist = await findArtistById(input.fingerprintMatch.artistId);
     if (artist) return resolutionFromArtist(artist, 'fingerprint-catalog-track', featured);
   }
 
@@ -312,7 +367,7 @@ export interface ContributedArtistInput {
  */
 export async function ensureContributedArtist(
   input: ContributedArtistInput,
-): Promise<IArtist | null> {
+): Promise<ArtistIdentity | null> {
   const primary = splitArtistCredit(input.name).primary;
   if (!primary || isDenylistedArtistName(primary)) return null;
 
@@ -321,19 +376,23 @@ export async function ensureContributedArtist(
   if (existing) return existing;
 
   try {
-    const created = await ArtistModel.create({
-      name: primary,
-      ...(input.image ? { image: input.image } : {}),
-      nameKey,
-      source: 'upload',
-      origin: 'contributed',
-      claimable: true,
-      acceptsContributions: false,
-      ...(input.genres?.length && { genres: input.genres }),
-      ...(input.musicbrainzArtistId && {
-        externalIds: { musicbrainzArtistId: input.musicbrainzArtistId },
-      }),
-    });
+    const [created] = await getDb()
+      .insert(catalogEntities)
+      .values({
+        type: 'artist',
+        name: primary,
+        nameKey,
+        imageId: input.image,
+        source: 'upload',
+        origin: 'contributed',
+        claimable: true,
+        acceptsContributions: false,
+        ...(input.genres?.length ? { genres: input.genres } : {}),
+        externalMusicbrainzArtistId: input.musicbrainzArtistId,
+      })
+      .returning({ id: catalogEntities.id, name: catalogEntities.name });
+
+    if (!created) throw new Error(`Failed to create contributed artist "${primary}"`);
 
     /**
      * A profile born from an MP3's tags has a name and nothing else. This is
@@ -350,14 +409,23 @@ export async function ensureContributedArtist(
     // any artist without one, so queueing a name-only profile schedules work that
     // is guaranteed to do nothing.
     if (input.musicbrainzArtistId) {
-      void enqueueArtistEnrichment(created._id.toString());
+      void enqueueArtistEnrichment(created.id);
     }
     return created;
   } catch (err) {
-    // The unique partial index on `nameKey` is the arbiter when two uploads name
-    // the same new artist at once. The loser reads the winner's row rather than
-    // leaving a duplicate that no later write could ever merge.
-    if ((err as { code?: number }).code === 11000) {
+    /**
+     * The unique partial index on `nameKey` is the arbiter when two uploads name
+     * the same new artist at once. The loser reads the winner's row rather than
+     * leaving a duplicate that no later write could ever merge.
+     *
+     * Narrowed to that ONE constraint by name. The Mongo version keyed on
+     * `code === 11000`, which is "some unique index rejected this" — and this
+     * table carries four others (`linked_oxy_user_id`, `href`,
+     * `external_musicbrainz_artist_id`, and the artist name key), so a
+     * collision on the MBID would have been swallowed and answered with an
+     * unrelated artist that merely shares a name.
+     */
+    if (isUniqueViolation(err, 'catalog_entities_artist_name_key_key')) {
       const winner = await findArtistByNameKey(nameKey);
       if (winner) return winner;
     }

@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { and, inArray } from 'drizzle-orm';
+import { publicColumns } from '@oxyhq/db/assert';
 import mongoose from 'mongoose';
 import type { Response, NextFunction } from 'express';
 import { z } from 'zod';
@@ -10,11 +12,10 @@ import {
   type RadioSeedType,
   type RadioStation,
 } from '@syra/shared-types';
-import { TrackModel } from '../models/Track';
 import { UserMusicPreferencesModel } from '../models/UserMusicPreferences';
 import { PREVIEW_DURATION_SEC } from '../services/ingest/previewClip';
 import { decodeRadioCursor, encodeRadioCursor, RADIO_CURSOR_VERSION } from '../services/radio/radioCursor';
-import { buildRadioPage, type RadioTrackDoc } from '../services/radio/radioPools';
+import { buildRadioPage } from '../services/radio/radioPools';
 import { loadRadioTaste, resolveRadioSeed, type SeedResolution } from '../services/radio/radioSeed';
 import {
   clearRadioStation,
@@ -26,9 +27,14 @@ import {
   type RadioStationState,
 } from '../services/radio/radioStationStore';
 import { orderByIds } from '../services/recommendations/taste';
-import { getRequestUserId, playableTrackFilter } from '../utils/catalogVisibility';
+import { getDb } from '../db/postgres';
+import { tracks } from '../db/schema/catalog';
+import { PROTECTED_COLUMNS_BY_TABLE } from '../db/schema/protectedColumns';
+import { playableTrackFilter } from '../db/catalog/visibility';
+import { toTrackDtos } from '../db/catalog/hydrate';
+import type { PublicTrackRow } from '../db/catalog/serialize';
+import { getRequestUserId } from '../utils/catalogVisibility';
 import { isDatabaseConnected } from '../utils/database';
-import { formatTracksWithCoverArt } from '../utils/musicHelpers';
 
 /**
  * The HTTP surface of the radio engine.
@@ -180,14 +186,17 @@ function nextCursor(identity: RadioStationIdentity, page: number): string {
  * Re-read a memoised page. Playability is re-checked rather than trusted: a
  * track struck since it was served must not come back on a retry.
  */
-async function loadServedTracks(trackIds: string[]): Promise<RadioTrackDoc[]> {
-  const ids = trackIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
-  if (ids.length === 0) {
+async function loadServedTracks(trackIds: string[]): Promise<PublicTrackRow[]> {
+  if (trackIds.length === 0) {
     return [];
   }
 
-  const docs = await TrackModel.find(playableTrackFilter({ _id: { $in: ids } })).lean();
-  return orderByIds(docs, ids);
+  const rows = await getDb()
+    .select(publicColumns(tracks, PROTECTED_COLUMNS_BY_TABLE))
+    .from(tracks)
+    .where(and(inArray(tracks.id, trackIds), playableTrackFilter()));
+
+  return orderByIds(rows, trackIds);
 }
 
 /**
@@ -266,8 +275,8 @@ export const getRadioPage = async (req: AuthRequest, res: Response, next: NextFu
     // catalog it never showed anyone.
     const memoised = findServedPage(state, requested.page);
     if (memoised) {
-      const docs = await loadServedTracks(memoised.trackIds);
-      const tracks: RadioPage['tracks'] = await formatTracksWithCoverArt(docs);
+      const rows = await loadServedTracks(memoised.trackIds);
+      const tracks: RadioPage['tracks'] = await toTrackDtos(rows);
       return res.json({
         station,
         tracks,
@@ -296,7 +305,7 @@ export const getRadioPage = async (req: AuthRequest, res: Response, next: NextFu
       allowExplicit: preferences?.explicitContent !== false,
     });
 
-    const servedTrackIds = result.tracks.map((doc) => doc._id.toString());
+    const servedTrackIds = result.tracks.map((row) => row.id);
     const served = recordServedPage(result.state, requested.page, servedTrackIds, {
       guest,
       wrapped: result.wrapped,
@@ -304,7 +313,7 @@ export const getRadioPage = async (req: AuthRequest, res: Response, next: NextFu
     await writeRadioStation(served);
 
     const exhausted = guest && served.guestServedCount >= GUEST_PREVIEW_TRACK_LIMIT;
-    const tracks: RadioPage['tracks'] = await formatTracksWithCoverArt(result.tracks);
+    const tracks: RadioPage['tracks'] = await toTrackDtos(result.tracks);
 
     return res.json({
       station: toStation(seed, identity, served),

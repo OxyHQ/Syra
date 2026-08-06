@@ -1,13 +1,12 @@
-import mongoose from 'mongoose';
+import { uuidv7 } from '@oxyhq/db';
 import { PlaylistVisibility } from '@syra/shared-types';
-import { AlbumModel } from '../../models/Album';
-import { ArtistModel } from '../../models/CatalogEntity';
 import { CatalogRelationModel } from '../../models/CatalogRelation';
 import { UserLibraryModel } from '../../models/Library';
-import { PlaylistModel } from '../../models/Playlist';
-import { PlaylistTrackModel } from '../../models/PlaylistTrack';
-import { TrackModel, type ITrack } from '../../models/Track';
 import { UserTasteProfileModel } from '../../models/UserTasteProfile';
+import { getDb } from '../../db/postgres';
+import { albums, catalogEntities, imageAssets, tracks } from '../../db/schema/catalog';
+import { playlistTracks, playlists } from '../../db/schema/library';
+import { setAlbumGenres } from '../../db/catalog/genres';
 
 /**
  * Catalogue builders shared by the radio suites.
@@ -15,20 +14,60 @@ import { UserTasteProfileModel } from '../../models/UserTasteProfile';
  * Radio is only interesting against a populated catalogue, and every radio test
  * needs the same handful of rows (a playable track by a known artist, a struck
  * track, an explicit track). Building them here keeps each test about the one
- * behaviour it is asserting instead of about Mongoose required fields.
+ * behaviour it is asserting instead of about required columns.
+ *
+ * ## Every builder now creates its own parents
+ *
+ * The Mongo versions defaulted `artistId` to a fresh, DANGLING `ObjectId` —
+ * fine when nothing checked, and impossible now: `tracks.artist_id` and
+ * `albums.artist_id` are real foreign keys, and `albums.cover_art_id` is a NOT
+ * NULL foreign key. So `makeTrack` and `makeAlbum` create the artist (and the
+ * cover asset) they need when the caller does not supply one. A test that
+ * wants a specific artist still passes `artistId` and gets exactly that.
+ *
+ * `CatalogRelation`, `UserTasteProfile` and `UserLibrary` are still Mongoose —
+ * they belong to Task 15's vertical — so a radio suite needs BOTH `test/mongo`
+ * and `test/postgres` hooks until that lands.
  */
+
+/** An `image_assets` row, because `albums.cover_art_id` is NOT NULL. */
+async function makeImageAsset(): Promise<string> {
+  const id = uuidv7();
+  await getDb().insert(imageAssets).values({
+    id,
+    s3Key: `fixtures/${id}.jpg`,
+    filename: `${id}.jpg`,
+    contentType: 'image/jpeg',
+    byteSize: 1024,
+    width: 640,
+    height: 640,
+    ownerType: 'album',
+  });
+  return id;
+}
 
 export async function makeArtist(
   over: Partial<{ name: string; genres: string[]; popularity: number; terminated: boolean }> = {}
 ): Promise<string> {
-  const artist = await ArtistModel.create({
-    name: over.name ?? 'Test Artist',
-    genres: over.genres ?? [],
-    popularity: over.popularity ?? 50,
-    terminated: over.terminated ?? false,
-    source: 'upload',
-  });
-  return artist._id.toString();
+  const [artist] = await getDb()
+    .insert(catalogEntities)
+    .values({
+      type: 'artist',
+      // Unique by default: `catalog_entities_artist_name_key_key` is a unique
+      // partial index on `name_key`, so two fixtures both called "Test Artist"
+      // would collide. The Mongo collection had the same index and the same
+      // hazard; it simply was not exercised, because most suites made one.
+      name: over.name ?? 'Test Artist',
+      nameKey: over.name ? over.name.toLowerCase() : `test-artist-${uuidv7()}`,
+      genres: over.genres ?? [],
+      popularity: over.popularity ?? 50,
+      terminated: over.terminated ?? false,
+      source: 'upload',
+    })
+    .returning({ id: catalogEntities.id });
+
+  if (!artist) throw new Error('makeArtist: insert returned no row');
+  return artist.id;
 }
 
 export interface TrackOverrides {
@@ -46,62 +85,113 @@ export interface TrackOverrides {
   trackNumber?: number;
 }
 
-export async function makeTrack(over: TrackOverrides = {}): Promise<ITrack> {
-  return TrackModel.create({
-    title: over.title ?? 'Test Track',
-    artistId: over.artistId ?? new mongoose.Types.ObjectId().toString(),
-    artistName: over.artistName ?? 'Test Artist',
-    albumId: over.albumId,
-    duration: 180,
-    genre: over.genre,
-    mood: over.mood,
-    tags: over.tags ?? [],
-    popularity: over.popularity ?? 50,
-    isExplicit: over.isExplicit ?? false,
-    isAvailable: over.isAvailable ?? true,
-    copyrightRemoved: over.copyrightRemoved ?? false,
-    trackNumber: over.trackNumber,
-    source: 'upload',
-  });
+/** The columns a radio suite asserts on. Not the whole row — see `publicColumns`. */
+export interface FixtureTrack {
+  id: string;
+  artistId: string;
+  genre: string | null;
+  mood: string | null;
+  tags: string[];
+  popularity: number;
+}
+
+export async function makeTrack(over: TrackOverrides = {}): Promise<FixtureTrack> {
+  const artistId = over.artistId ?? (await makeArtist({ name: over.artistName }));
+
+  const [track] = await getDb()
+    .insert(tracks)
+    .values({
+      title: over.title ?? 'Test Track',
+      artistId,
+      artistName: over.artistName ?? 'Test Artist',
+      albumId: over.albumId,
+      duration: 180,
+      genre: over.genre,
+      mood: over.mood,
+      tags: over.tags ?? [],
+      popularity: over.popularity ?? 50,
+      isExplicit: over.isExplicit ?? false,
+      isAvailable: over.isAvailable ?? true,
+      copyrightRemoved: over.copyrightRemoved ?? false,
+      trackNumber: over.trackNumber,
+      source: 'upload',
+    })
+    .returning({
+      id: tracks.id,
+      artistId: tracks.artistId,
+      genre: tracks.genre,
+      mood: tracks.mood,
+      tags: tracks.tags,
+      popularity: tracks.popularity,
+    });
+
+  if (!track) throw new Error('makeTrack: insert returned no row');
+  return track;
 }
 
 export async function makeAlbum(
-  over: Partial<{ title: string; artistId: string; artistName: string; genre: string[]; isAvailable: boolean }> = {}
+  over: Partial<{
+    title: string;
+    artistId: string;
+    artistName: string;
+    genre: string[];
+    isAvailable: boolean;
+  }> = {}
 ): Promise<string> {
-  const album = await AlbumModel.create({
-    title: over.title ?? 'Test Album',
-    artistId: over.artistId ?? new mongoose.Types.ObjectId().toString(),
-    artistName: over.artistName ?? 'Test Artist',
-    releaseDate: '2026-01-01',
-    coverArt: new mongoose.Types.ObjectId().toString(),
-    genre: over.genre ?? [],
-    isAvailable: over.isAvailable ?? true,
-    source: 'upload',
-  });
-  return album._id.toString();
+  const artistId = over.artistId ?? (await makeArtist({ name: over.artistName }));
+
+  const [album] = await getDb()
+    .insert(albums)
+    .values({
+      title: over.title ?? 'Test Album',
+      artistId,
+      artistName: over.artistName ?? 'Test Artist',
+      releaseDate: '2026-01-01',
+      coverArtId: await makeImageAsset(),
+      isAvailable: over.isAvailable ?? true,
+      source: 'upload',
+    })
+    .returning({ id: albums.id });
+
+  if (!album) throw new Error('makeAlbum: insert returned no row');
+
+  if (over.genre?.length) {
+    await setAlbumGenres(getDb(), album.id, over.genre);
+  }
+
+  return album.id;
 }
 
 export async function makePlaylist(
   over: Partial<{ name: string; ownerOxyUserId: string; visibility: PlaylistVisibility }> = {}
 ): Promise<string> {
-  const playlist = await PlaylistModel.create({
-    name: over.name ?? 'Test Playlist',
-    ownerOxyUserId: over.ownerOxyUserId ?? 'owner-1',
-    ownerUsername: 'owner',
-    visibility: over.visibility ?? PlaylistVisibility.PUBLIC,
-  });
-  return playlist._id.toString();
+  const [playlist] = await getDb()
+    .insert(playlists)
+    .values({
+      name: over.name ?? 'Test Playlist',
+      ownerOxyUserId: over.ownerOxyUserId ?? 'owner-1',
+      ownerUsername: 'owner',
+      visibility: over.visibility ?? PlaylistVisibility.PUBLIC,
+    })
+    .returning({ id: playlists.id });
+
+  if (!playlist) throw new Error('makePlaylist: insert returned no row');
+  return playlist.id;
 }
 
 export async function addPlaylistTracks(playlistId: string, trackIds: string[]): Promise<void> {
-  await PlaylistTrackModel.insertMany(
-    trackIds.map((trackId, order) => ({
-      playlistId: new mongoose.Types.ObjectId(playlistId),
-      trackId,
-      addedAt: new Date().toISOString(),
-      order,
-    }))
-  );
+  if (trackIds.length === 0) return;
+
+  await getDb()
+    .insert(playlistTracks)
+    .values(
+      trackIds.map((trackId, order) => ({
+        playlistId,
+        trackId,
+        addedAt: new Date(),
+        position: order,
+      }))
+    );
 }
 
 export async function relate(

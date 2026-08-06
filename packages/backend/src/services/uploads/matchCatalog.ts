@@ -27,11 +27,11 @@
  * paths disagree about whether two tracks are the same track.
  */
 
-import type { ITrack } from '../../models/Track';
-import { TrackModel } from '../../models/Track';
-import { TrackFingerprintModel } from '../../models/TrackFingerprint';
+import { and, between, eq } from 'drizzle-orm';
+import { getDb } from '../../db/postgres';
+import { trackFingerprints, tracks } from '../../db/schema/catalog';
+import { isPlayableTrack, playableTrackFilter } from '../../db/catalog/visibility';
 import { UserUploadModel } from '../../models/UserUpload';
-import { isPlayableTrack, playableTrackFilter } from '../../utils/catalogVisibility';
 import { compareFingerprints, FINGERPRINT_MIN_OVERLAP_ITEMS } from './fingerprint';
 
 /**
@@ -135,28 +135,46 @@ const FUZZY_DURATION_WINDOW_SEC = 2;
  */
 const MAX_FINGERPRINT_CANDIDATES = 500;
 
+// ── The columns every tier reads off a matched track ────────────────────────
+
+/**
+ * A catalog track, as this module needs it: an identity and its credited
+ * artist, and nothing else.
+ *
+ * Named columns rather than the row. `tracks.sha256` is one of the two columns
+ * `PROTECTED_COLUMNS_BY_TABLE` protects, and a whole-row read would carry it
+ * into a `MatchResult` a controller hands onward. Matching ON it is unaffected
+ * — a `WHERE` clause is not a projection.
+ */
+const MATCHED_TRACK_COLUMNS = {
+  id: tracks.id,
+  artistId: tracks.artistId,
+  artistName: tracks.artistName,
+} as const;
+
+interface MatchedTrack {
+  id: string;
+  artistId: string;
+  artistName: string;
+}
+
 // ── Tier 1: identical bytes ─────────────────────────────────────────────────
 
 /**
  * The catalog half of tier 1: the same bytes already ingested publicly.
  *
- * `Track.sha256` is `select: false`, so it is absent from a default `find`
- * result. That does NOT affect matching on it — a filter still uses the index —
- * so nothing here has to opt back in.
- *
- * Do NOT read that flag as access control, which an earlier version of this
- * comment did. `select: false` is a query PROJECTION and `aggregate()` ignores
- * it entirely, and Syra's catalog reads are aggregation pipelines
- * (`utils/playableContainers.ts`). What actually keeps a server-only field out of
- * a response is `stripExternalCatalogFields` in `utils/musicHelpers.ts`, the one
- * funnel every catalog serializer passes through.
- *
- * Sparse index, and sparse for a reason: every track that predates the field has
- * no hash, so this tier simply cannot answer for the back catalog. Tiers 2–4
- * cover those, which is why the chain continues rather than concluding.
+ * Every track that predates the `sha256` field has no hash, so this tier simply
+ * cannot answer for the back catalog. Tiers 2–4 cover those, which is why the
+ * chain continues rather than concluding.
  */
-async function findCatalogTrackByHash(sha256: string): Promise<ITrack | null> {
-  return TrackModel.findOne(playableTrackFilter({ sha256 }));
+async function findCatalogTrackByHash(sha256: string): Promise<MatchedTrack | null> {
+  const [track] = await getDb()
+    .select(MATCHED_TRACK_COLUMNS)
+    .from(tracks)
+    .where(and(eq(tracks.sha256, sha256), playableTrackFilter()))
+    .limit(1);
+
+  return track ?? null;
 }
 
 /** The uploader's own locker — the only locker any match may look inside. */
@@ -176,15 +194,21 @@ async function findOwnUploadByHash(
 
 // ── Tier 2: ISRC ────────────────────────────────────────────────────────────
 
-async function findCatalogTrackByIsrc(isrc: string): Promise<ITrack | null> {
-  return TrackModel.findOne(playableTrackFilter({ 'externalIds.isrc': isrc.toUpperCase() }));
+async function findCatalogTrackByIsrc(isrc: string): Promise<MatchedTrack | null> {
+  const [track] = await getDb()
+    .select(MATCHED_TRACK_COLUMNS)
+    .from(tracks)
+    .where(and(eq(tracks.externalIsrc, isrc.toUpperCase()), playableTrackFilter()))
+    .limit(1);
+
+  return track ?? null;
 }
 
 // ── Tier 3: Chromaprint ─────────────────────────────────────────────────────
 
 interface FingerprintOutcome {
   /** A playable catalog recording — a real dedup hit. */
-  match?: { track: ITrack; bitErrorRate: number };
+  match?: { track: MatchedTrack; bitErrorRate: number };
   /** The same audio, in a recording nobody can play. Evidence, not a match. */
   neighbour?: AcousticNeighbour;
 }
@@ -210,14 +234,20 @@ async function findCatalogTrackByFingerprint(
   const { fingerprint } = candidate;
   if (!fingerprint || fingerprint.length < FINGERPRINT_MIN_OVERLAP_ITEMS) return {};
 
-  const bucket = await TrackFingerprintModel.find({
-    fingerprintDurationSec: {
-      $gte: candidate.durationSec - FINGERPRINT_DURATION_WINDOW_SEC,
-      $lte: candidate.durationSec + FINGERPRINT_DURATION_WINDOW_SEC,
-    },
-  })
-    .limit(MAX_FINGERPRINT_CANDIDATES)
-    .lean();
+  const bucket = await getDb()
+    .select({
+      trackId: trackFingerprints.trackId,
+      fingerprint: trackFingerprints.fingerprint,
+    })
+    .from(trackFingerprints)
+    .where(
+      between(
+        trackFingerprints.fingerprintDurationSec,
+        candidate.durationSec - FINGERPRINT_DURATION_WINDOW_SEC,
+        candidate.durationSec + FINGERPRINT_DURATION_WINDOW_SEC
+      )
+    )
+    .limit(MAX_FINGERPRINT_CANDIDATES);
 
   let best: { trackId: string; bitErrorRate: number } | undefined;
   for (const entry of bucket) {
@@ -233,21 +263,37 @@ async function findCatalogTrackByFingerprint(
   // `copyrightRemoved` on the track and leaves its fingerprint row in place,
   // because that row is how the same recording gets caught next time. So the
   // track is read WITHOUT the catalog predicate — the state is the answer, not a
-  // reason to skip the read.
-  const track = await TrackModel.findById(best.trackId);
+  // reason to skip the read. That is also why the two playability columns are
+  // selected here and nowhere else in this module: this is the one tier that
+  // has to look at a track it may not match.
+  const [track] = await getDb()
+    .select({
+      ...MATCHED_TRACK_COLUMNS,
+      isAvailable: tracks.isAvailable,
+      copyrightRemoved: tracks.copyrightRemoved,
+    })
+    .from(tracks)
+    .where(eq(tracks.id, best.trackId))
+    .limit(1);
+
   if (!track) return {};
 
   if (isPlayableTrack(track)) {
-    return { match: { track, bitErrorRate: best.bitErrorRate } };
+    return {
+      match: {
+        track: { id: track.id, artistId: track.artistId, artistName: track.artistName },
+        bitErrorRate: best.bitErrorRate,
+      },
+    };
   }
 
   return {
     neighbour: {
-      trackId: track._id.toString(),
+      trackId: track.id,
       artistId: track.artistId,
       artistName: track.artistName,
       bitErrorRate: best.bitErrorRate,
-      copyrightRemoved: track.copyrightRemoved === true,
+      copyrightRemoved: track.copyrightRemoved,
     },
   };
 }
@@ -266,26 +312,36 @@ async function findCatalogTrackByFuzzy(
   title: string,
   artistName: string,
   durationSec: number,
-): Promise<ITrack | null> {
+): Promise<MatchedTrack | null> {
   const normTitle = normalizeForFuzzy(title);
   const normArtist = normalizeForFuzzy(artistName);
   if (!normTitle || !normArtist) return null;
 
   // Pull candidates within the ±2s window; normalize and compare in-process.
   // The duration window keeps the candidate set small.
-  const candidates = await TrackModel.find(
-    playableTrackFilter({
-      duration: { $gte: durationSec - FUZZY_DURATION_WINDOW_SEC, $lte: durationSec + FUZZY_DURATION_WINDOW_SEC },
-    }),
-  ).lean();
+  const candidates = await getDb()
+    .select({ ...MATCHED_TRACK_COLUMNS, title: tracks.title })
+    .from(tracks)
+    .where(
+      and(
+        between(
+          tracks.duration,
+          durationSec - FUZZY_DURATION_WINDOW_SEC,
+          durationSec + FUZZY_DURATION_WINDOW_SEC
+        ),
+        playableTrackFilter()
+      )
+    );
 
   for (const c of candidates) {
     if (
       normalizeForFuzzy(c.title) === normTitle &&
       normalizeForFuzzy(c.artistName) === normArtist
     ) {
-      // Return the live (non-lean) doc so callers can mutate and save.
-      return TrackModel.findById(c._id);
+      // The row already carries everything a match needs. The Mongo version
+      // re-read the document here "so callers can mutate and save" — no caller
+      // ever did; `matchCatalog` hands the result straight to `asTrackMatch`.
+      return { id: c.id, artistId: c.artistId, artistName: c.artistName };
     }
   }
   return null;
@@ -293,10 +349,14 @@ async function findCatalogTrackByFuzzy(
 
 // ── The chain ───────────────────────────────────────────────────────────────
 
-function asTrackMatch(track: ITrack, tier: MatchTier, bitErrorRate?: number): CatalogTrackMatch {
+function asTrackMatch(
+  track: MatchedTrack,
+  tier: MatchTier,
+  bitErrorRate?: number
+): CatalogTrackMatch {
   return {
     kind: 'track',
-    trackId: track._id.toString(),
+    trackId: track.id,
     tier,
     artistId: track.artistId,
     artistName: track.artistName,

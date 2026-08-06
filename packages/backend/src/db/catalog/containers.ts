@@ -69,6 +69,25 @@ export interface CatalogPage {
 export { asc, desc };
 
 /**
+ * "Rows that have an image first" — the replacement for `utils/imageFirstSort.ts`.
+ *
+ * The Mongo helper prepended `{ coverArt: -1 }` (or `{ image: -1 }`) to a sort
+ * document. That expressed the intent only incidentally: descending on a string
+ * field puts non-null values ahead of missing ones, but it ALSO orders the rows
+ * that do have an image by the lexical value of their image id — an arbitrary
+ * tie-break nobody asked for, which then took precedence over the popularity or
+ * date the caller actually sorted by, since it came first in the document.
+ *
+ * This sorts on the PREDICATE instead, so it separates "has an image" from "has
+ * none" and leaves every subsequent ordering term to do the rest. It is the
+ * intent the old helper was reaching for, and the difference is visible on any
+ * shelf where two artists both have photographs.
+ */
+export function imageFirst(column: PgColumn): SQL {
+  return sql`(${column} is not null) desc`;
+}
+
+/**
  * "This album has at least one playable track", as a correlated `EXISTS`.
  *
  * `exists()` rather than a join: a join would multiply the container row by its

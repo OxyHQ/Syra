@@ -1064,7 +1064,7 @@ async function screenPublicContribution(params: {
             'screen, or keep the file in your private library.',
         );
       }
-      artistId = contributed._id.toString();
+      artistId = contributed.id;
     }
   }
 
@@ -1328,7 +1328,7 @@ async function resolveContributedAlbum(
     return undefined;
   }
 
-  return { id: created._id.toString(), title: created.title };
+  return { id: created.id, title: created.title };
 }
 
 /**

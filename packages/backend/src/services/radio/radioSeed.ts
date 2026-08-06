@@ -1,14 +1,18 @@
-import mongoose from 'mongoose';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import type { RadioSeed } from '@syra/shared-types';
-import { AlbumModel } from '../../models/Album';
-import { ArtistModel } from '../../models/CatalogEntity';
 import { UserLibraryModel } from '../../models/Library';
 import { PlaylistModel } from '../../models/Playlist';
 import { PlaylistTrackModel } from '../../models/PlaylistTrack';
-import { TrackModel } from '../../models/Track';
 import { UserTasteProfileModel } from '../../models/UserTasteProfile';
-import { canViewPlaylist, playableTrackFilter } from '../../utils/catalogVisibility';
-import { normalizeImageRef } from '../../utils/musicHelpers';
+import { getDb } from '../../db/postgres';
+import { albums, catalogEntities, tracks } from '../../db/schema/catalog';
+import {
+  canViewPlaylist,
+  notTerminatedArtist,
+  playableTrackFilter,
+} from '../../db/catalog/visibility';
+import { normalizeImageRef } from '../../db/catalog/serialize';
+import { albumGenreNames } from '../../db/catalog/genres';
 import { orderByIds } from '../recommendations/taste';
 
 /**
@@ -22,6 +26,11 @@ import { orderByIds } from '../recommendations/taste';
  * programmed. Resolution is also where a seed is validated: `null` means the
  * caller asked for something that does not exist or that they may not read, and
  * the route turns that into a 404.
+ *
+ * `Playlist`, `PlaylistTrack`, `UserLibrary` and `UserTasteProfile` belong to the
+ * library and user verticals (Tasks 11 and 15) and are still Mongoose. Each is
+ * read for a list of ids or a set of weights that is then looked up in Postgres,
+ * never joined to a catalog collection in one pipeline.
  */
 export interface SeedResolution {
   /** Collaborative-filtering sources of `kind: 'track'`. */
@@ -61,12 +70,24 @@ const USER_SEED_GENRE_LIMIT = 8;
 /** Liked tracks sampled as collaborative-filtering sources for a personalised station. */
 const USER_SEED_LIKED_TRACK_LIMIT = 20;
 
-function isObjectId(value: string): boolean {
-  return mongoose.Types.ObjectId.isValid(value);
-}
+/**
+ * The seed columns every track-derived station reads.
+ *
+ * There is no `isObjectId` filter anywhere in this file any more, and its
+ * absence is the point: every id column here is `text`, so an id of any shape
+ * simply matches no row. The Mongo version had to pre-check because `$in` with a
+ * non-ObjectId string THROWS rather than returning nothing.
+ */
+const SEED_TRACK_COLUMNS = {
+  id: tracks.id,
+  artistId: tracks.artistId,
+  genre: tracks.genre,
+  mood: tracks.mood,
+  tags: tracks.tags,
+} as const;
 
 /** Distinct, non-empty values in first-seen order. */
-function distinct(values: (string | undefined)[]): string[] {
+function distinct(values: (string | null | undefined)[]): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
   for (const value of values) {
@@ -92,6 +113,17 @@ function topTasteKeys(weights: { key: string; weight: number }[], limit: number)
     .sort((a, b) => b.weight - a.weight)
     .slice(0, limit)
     .map((entry) => entry.key);
+}
+
+/** Does any playable track carry this value in the given column? */
+async function anyPlayableTrackWith(condition: ReturnType<typeof eq>): Promise<boolean> {
+  const [row] = await getDb()
+    .select({ id: tracks.id })
+    .from(tracks)
+    .where(and(condition, playableTrackFilter()))
+    .limit(1);
+
+  return row !== undefined;
 }
 
 /**
@@ -121,34 +153,52 @@ export async function resolveRadioSeed(
 }
 
 async function resolveTrackSeed(seedId: string): Promise<SeedResolution | null> {
-  if (!isObjectId(seedId)) return null;
+  const [track] = await getDb()
+    .select({
+      ...SEED_TRACK_COLUMNS,
+      title: tracks.title,
+      artistName: tracks.artistName,
+      coverArtId: tracks.coverArtId,
+    })
+    .from(tracks)
+    .where(and(eq(tracks.id, seedId), playableTrackFilter()))
+    .limit(1);
 
-  const track = await TrackModel.findOne(playableTrackFilter({ _id: seedId })).lean();
   if (!track) return null;
 
   return {
-    seedTrackIds: [track._id.toString()],
+    seedTrackIds: [track.id],
     seedArtistIds: [track.artistId],
     genres: distinct([track.genre]),
     moods: distinct([track.mood]),
-    tags: distinct(track.tags ?? []),
+    tags: distinct(track.tags),
     title: `${track.title} Radio`,
     subtitle: `Based on ${track.title} by ${track.artistName}`,
-    imageUrl: normalizeImageRef(track.coverArt),
+    imageUrl: normalizeImageRef(track.coverArtId),
     personalized: false,
   };
 }
 
 async function resolveArtistSeed(seedId: string): Promise<SeedResolution | null> {
-  if (!isObjectId(seedId)) return null;
+  const [artist] = await getDb()
+    .select({
+      id: catalogEntities.id,
+      name: catalogEntities.name,
+      genres: catalogEntities.genres,
+      imageId: catalogEntities.imageId,
+    })
+    .from(catalogEntities)
+    .where(and(eq(catalogEntities.id, seedId), notTerminatedArtist()))
+    .limit(1);
 
-  const artist = await ArtistModel.findOne({ _id: seedId, terminated: { $ne: true } }).lean();
   if (!artist) return null;
 
-  const tracks = await TrackModel.find(playableTrackFilter({ artistId: seedId }))
-    .sort({ popularity: -1 })
-    .limit(ARTIST_SEED_TRACK_LIMIT)
-    .lean();
+  const seedTracks = await getDb()
+    .select(SEED_TRACK_COLUMNS)
+    .from(tracks)
+    .where(and(eq(tracks.artistId, seedId), playableTrackFilter()))
+    .orderBy(desc(tracks.popularity))
+    .limit(ARTIST_SEED_TRACK_LIMIT);
 
   // An artist row carries `genres` only once it has been enriched. Falling back
   // to the genres of its own top tracks keeps a fresh artist's station from
@@ -156,41 +206,57 @@ async function resolveArtistSeed(seedId: string): Promise<SeedResolution | null>
   // backstop alone.
   const genres = artist.genres?.length
     ? distinct(artist.genres)
-    : distinct(tracks.map((track) => track.genre));
+    : distinct(seedTracks.map((track) => track.genre));
 
   return {
-    seedTrackIds: tracks.map((track) => track._id.toString()),
-    seedArtistIds: [artist._id.toString()],
+    seedTrackIds: seedTracks.map((track) => track.id),
+    seedArtistIds: [artist.id],
     genres,
     moods: [],
     tags: [],
     title: `${artist.name} Radio`,
     subtitle: `Based on ${artist.name}`,
-    imageUrl: normalizeImageRef(artist.image),
+    imageUrl: normalizeImageRef(artist.imageId),
     personalized: false,
   };
 }
 
 async function resolveAlbumSeed(seedId: string): Promise<SeedResolution | null> {
-  if (!isObjectId(seedId)) return null;
+  const [album] = await getDb()
+    .select({
+      id: albums.id,
+      title: albums.title,
+      artistId: albums.artistId,
+      artistName: albums.artistName,
+      coverArtId: albums.coverArtId,
+    })
+    .from(albums)
+    .where(and(eq(albums.id, seedId), eq(albums.isAvailable, true)))
+    .limit(1);
 
-  const album = await AlbumModel.findOne({ _id: seedId, isAvailable: { $ne: false } }).lean();
   if (!album) return null;
 
-  const tracks = await TrackModel.find(playableTrackFilter({ albumId: seedId }))
-    .sort({ trackNumber: 1 })
-    .limit(ALBUM_SEED_TRACK_LIMIT)
-    .lean();
+  const [seedTracks, albumGenres] = await Promise.all([
+    getDb()
+      .select(SEED_TRACK_COLUMNS)
+      .from(tracks)
+      .where(and(eq(tracks.albumId, seedId), playableTrackFilter()))
+      .orderBy(asc(tracks.trackNumber))
+      .limit(ALBUM_SEED_TRACK_LIMIT),
+    albumGenreNames(seedId),
+  ]);
 
   return {
-    seedTrackIds: tracks.map((track) => track._id.toString()),
-    seedArtistIds: distinct([album.artistId, ...tracks.map((track) => track.artistId)]),
-    genres: album.genre?.length ? distinct(album.genre) : distinct(tracks.map((track) => track.genre)),
-    moods: distinct(tracks.map((track) => track.mood)),
-    tags: distinct(tracks.flatMap((track) => track.tags ?? [])),
+    seedTrackIds: seedTracks.map((track) => track.id),
+    seedArtistIds: distinct([album.artistId, ...seedTracks.map((track) => track.artistId)]),
+    genres: albumGenres.length
+      ? distinct(albumGenres)
+      : distinct(seedTracks.map((track) => track.genre)),
+    moods: distinct(seedTracks.map((track) => track.mood)),
+    tags: distinct(seedTracks.flatMap((track) => track.tags)),
     title: `${album.title} Radio`,
     subtitle: `Based on ${album.title} by ${album.artistName}`,
-    imageUrl: normalizeImageRef(album.coverArt),
+    imageUrl: normalizeImageRef(album.coverArtId),
     personalized: false,
   };
 }
@@ -199,34 +265,45 @@ async function resolvePlaylistSeed(
   seedId: string,
   oxyUserId: string | undefined
 ): Promise<SeedResolution | null> {
-  if (!isObjectId(seedId)) return null;
-
   const playlist = await PlaylistModel.findById(seedId).lean();
   if (!playlist) return null;
 
   // A private playlist is not a public station: the same rule the playlists API
-  // enforces decides whether this caller may seed from it.
-  if (!canViewPlaylist(playlist, oxyUserId)) return null;
+  // enforces decides whether this caller may seed from it. The collaborators are
+  // projected to the id list the predicate takes — the embedded array is still
+  // Mongo's shape here, and `playlist_collaborators` lands in Task 11.
+  const viewable = canViewPlaylist(
+    {
+      visibility: playlist.visibility,
+      ownerOxyUserId: playlist.ownerOxyUserId,
+      collaboratorOxyUserIds: (playlist.collaborators ?? []).map((entry) => entry.oxyUserId),
+    },
+    oxyUserId
+  );
+  if (!viewable) return null;
 
   const entries = await PlaylistTrackModel.find({ playlistId: seedId })
     .sort({ order: 1 })
     .limit(PLAYLIST_SEED_TRACK_LIMIT)
     .lean();
 
-  const orderedIds = entries.map((entry) => entry.trackId).filter(isObjectId);
-  const tracks = orderedIds.length
+  const orderedIds = entries.map((entry) => entry.trackId);
+  const seedTracks = orderedIds.length
     ? orderByIds(
-        await TrackModel.find(playableTrackFilter({ _id: { $in: orderedIds } })).lean(),
+        await getDb()
+          .select(SEED_TRACK_COLUMNS)
+          .from(tracks)
+          .where(and(inArray(tracks.id, orderedIds), playableTrackFilter())),
         orderedIds
       )
     : [];
 
   return {
-    seedTrackIds: tracks.map((track) => track._id.toString()),
-    seedArtistIds: distinct(tracks.map((track) => track.artistId)),
-    genres: distinct(tracks.map((track) => track.genre)),
-    moods: distinct(tracks.map((track) => track.mood)),
-    tags: distinct(tracks.flatMap((track) => track.tags ?? [])),
+    seedTrackIds: seedTracks.map((track) => track.id),
+    seedArtistIds: distinct(seedTracks.map((track) => track.artistId)),
+    genres: distinct(seedTracks.map((track) => track.genre)),
+    moods: distinct(seedTracks.map((track) => track.mood)),
+    tags: distinct(seedTracks.flatMap((track) => track.tags)),
     title: `${playlist.name} Radio`,
     subtitle: `Based on ${playlist.name}`,
     imageUrl: normalizeImageRef(playlist.coverArt),
@@ -241,8 +318,7 @@ async function resolveGenreSeed(seedId: string): Promise<SeedResolution | null> 
   // Refuse to mint a station for a genre nothing playable carries — otherwise a
   // typo yields a plausible-looking station filled entirely by the popularity
   // backstop.
-  const exists = await TrackModel.exists(playableTrackFilter({ genre }));
-  if (!exists) return null;
+  if (!(await anyPlayableTrackWith(eq(tracks.genre, genre)))) return null;
 
   return {
     seedTrackIds: [],
@@ -260,8 +336,7 @@ async function resolveMoodSeed(seedId: string): Promise<SeedResolution | null> {
   const mood = seedId.trim().toLowerCase();
   if (!mood) return null;
 
-  const exists = await TrackModel.exists(playableTrackFilter({ mood }));
-  if (!exists) return null;
+  if (!(await anyPlayableTrackWith(eq(tracks.mood, mood)))) return null;
 
   return {
     seedTrackIds: [],
@@ -289,12 +364,12 @@ async function resolveUserSeed(oxyUserId: string | undefined): Promise<SeedResol
       ])
     : [null, null];
 
-  const topArtists = topTasteKeys(profile?.artists ?? [], USER_SEED_ARTIST_LIMIT).filter(isObjectId);
+  const topArtists = topTasteKeys(profile?.artists ?? [], USER_SEED_ARTIST_LIMIT);
   const topGenres = topTasteKeys(profile?.genres ?? [], USER_SEED_GENRE_LIMIT);
 
   // Most recently liked rather than a random draw: liked tracks are appended, so
   // the tail is the freshest signal — and it keeps the station reproducible.
-  const likedTrackIds = (library?.likedTracks ?? []).filter(isObjectId).slice(-USER_SEED_LIKED_TRACK_LIMIT);
+  const likedTrackIds = (library?.likedTracks ?? []).slice(-USER_SEED_LIKED_TRACK_LIMIT);
 
   const personalized = topGenres.length > 0 || topArtists.length > 0;
 

@@ -157,6 +157,27 @@ async function loadArtistSections(
 }
 
 /**
+ * Adapt the still-Mongoose entity document to the id-shaped source the profile
+ * sections take.
+ *
+ * `_id` → `id` at exactly one place rather than at each of the two call sites, so
+ * when Task 10c reads `catalog_entities` through drizzle this function is what
+ * disappears, not two spread expressions.
+ */
+function toArtistProfileSource(entity: CatalogEntityLean): ArtistProfileSource {
+  return {
+    id: entity._id.toString(),
+    nameKey: entity.nameKey,
+    origin: entity.origin,
+    claimable: entity.claimable,
+    claimedByOxyUserId: entity.claimedByOxyUserId,
+    ownerOxyUserId: entity.ownerOxyUserId,
+    acceptsContributions: entity.acceptsContributions,
+    sources: entity.sources,
+  };
+}
+
+/**
  * Podcast appearances for a person — shows + episodes crediting them, matched by
  * STRONG key (`linkedOxyUserId` → `href` → exact name). Episodes honour the same
  * public playability gate as search (`status:'ready'` AND Syra-hosted OR has an
@@ -286,7 +307,7 @@ export const getEntityProfile = async (req: Request, res: Response, next: NextFu
         linkedOxyUserId: linkedPerson?.linkedOxyUserId,
         music,
         appearsIn: linkedPerson ? await loadAppearsIn(toPersonLike(linkedPerson)) : undefined,
-        ...await loadArtistSections(entity, music, viewerOxyUserId),
+        ...await loadArtistSections(toArtistProfileSource(entity), music, viewerOxyUserId),
       };
       return res.json({ data: profile });
     }
@@ -311,7 +332,11 @@ export const getEntityProfile = async (req: Request, res: Response, next: NextFu
       const formattedLinked = formatArtistWithImage(linkedArtist) as FormattedArtistProfile | null;
       music = await loadArtistMusic(linkedArtist._id.toString());
       linkedArtistFields = artistDisplayFields(formattedLinked);
-      artistSections = await loadArtistSections(linkedArtist, music, viewerOxyUserId);
+      artistSections = await loadArtistSections(
+        toArtistProfileSource(linkedArtist),
+        music,
+        viewerOxyUserId,
+      );
     }
 
     const profile: EntityProfile = {

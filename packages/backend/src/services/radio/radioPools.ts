@@ -1,9 +1,23 @@
-import mongoose from 'mongoose';
+import {
+  and,
+  arrayOverlaps,
+  desc,
+  eq,
+  inArray,
+  notInArray,
+  or,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
+import { publicColumns } from '@oxyhq/db/assert';
 import { CatalogRelationModel } from '../../models/CatalogRelation';
-import { TrackModel, type ITrack } from '../../models/Track';
-import { playableTrackFilter } from '../../utils/catalogVisibility';
-import { withImageFirstSort } from '../../utils/imageFirstSort';
-import { andMongoFilters, topRelatedArtistIds } from '../recommendations/taste';
+import { getDb } from '../../db/postgres';
+import { tracks } from '../../db/schema/catalog';
+import { PROTECTED_COLUMNS_BY_TABLE } from '../../db/schema/protectedColumns';
+import { playableTrackFilter } from '../../db/catalog/visibility';
+import { imageFirst } from '../../db/catalog/containers';
+import type { PublicTrackRow } from '../../db/catalog/serialize';
+import { topRelatedArtistIds } from '../recommendations/taste';
 import {
   applyRadioDiversity,
   scoreCandidate,
@@ -15,7 +29,7 @@ import type { RadioTasteSignal, SeedResolution } from './radioSeed';
 import { FRONTIER_SIZE, type RadioStationState } from './radioStationStore';
 
 /**
- * The Mongo-backed half of the station generator: where candidates come from.
+ * The database-backed half of the station generator: where candidates come from.
  *
  * `radioEngine` stays pure — it decides how candidates are ordered. This module
  * decides which candidates exist, by querying five pools in priority order and
@@ -25,6 +39,10 @@ import { FRONTIER_SIZE, type RadioStationState } from './radioStationStore';
  * The last one has no content constraint on purpose — it is the endlessness
  * guarantee, and it can always produce something while the catalogue holds a
  * single playable track.
+ *
+ * `CatalogRelation` (the co-listen graph) belongs to Task 15's vertical and is
+ * still Mongoose. It is read for a ranked list of track ids that is then looked
+ * up in Postgres — never joined to `tracks` in one pipeline.
  */
 
 /** Candidates gathered per page, as a multiple of the page size, before scoring. */
@@ -33,14 +51,15 @@ export const RADIO_OVERSAMPLE = 3;
 /** Relation edges read per page, as a multiple of the oversampled target. */
 const CF_EDGE_FANOUT = 5;
 
-/** Sort applied to every pool that orders by reach rather than by relation score. */
-const POPULARITY_SORT = withImageFirstSort('track', { popularity: -1, playCount: -1 });
-
 /**
- * A playable track as the pools return it — the full lean document, so the
- * caller can serialise a page without a second round trip to Mongo.
+ * Ordering applied to every pool that ranks by reach rather than by relation
+ * score — the replacement for `withImageFirstSort('track', …)`.
  */
-export type RadioTrackDoc = mongoose.Require_id<ITrack>;
+const POPULARITY_ORDER = [
+  imageFirst(tracks.coverArtId),
+  desc(tracks.popularity),
+  desc(tracks.playCount),
+];
 
 export interface BuildRadioPageInput {
   seed: SeedResolution;
@@ -57,7 +76,13 @@ export interface BuildRadioPageInput {
 }
 
 export interface RadioPageResult {
-  tracks: RadioTrackDoc[];
+  /**
+   * Public track rows, so the caller can serialise a page without a second
+   * round trip. `publicColumns()` is what makes that safe: the two protected
+   * `tracks` columns are not on the row at all, rather than being selected and
+   * then deleted late.
+   */
+  tracks: PublicTrackRow[];
   /** True when the pool was exhausted and the served history had to be reset. */
   wrapped: boolean;
   /**
@@ -66,10 +91,6 @@ export interface RadioPageResult {
    * THIS state, not into the one it passed in, or the wrap is lost.
    */
   state: RadioStationState;
-}
-
-function isObjectId(value: string): boolean {
-  return mongoose.Types.ObjectId.isValid(value);
 }
 
 function distinct(values: string[]): string[] {
@@ -83,40 +104,46 @@ interface PoolQueryContext {
 }
 
 /**
- * The ONE way a pool reaches Mongo.
+ * The ONE way a pool reaches the database.
  *
  * Every pool goes through here, so playability, the listener's explicit
  * preference and the served-history exclusion are applied structurally — a pool
  * added later cannot forget them, because it never builds a query itself. The
- * pool's own filter is composed under `$and` (never spread), so a pool that
- * passes an `$or` keeps it.
+ * pool's own condition is composed with `and()`, so a pool that passes an
+ * `or(...)` keeps it; the Mongo version needed `andMongoFilters` for that,
+ * because spreading two filter objects dropped the earlier `$or`.
  */
 async function findPoolTracks(
   ctx: PoolQueryContext,
-  filter: mongoose.QueryFilter<ITrack>,
-  sort: Record<string, 1 | -1>,
+  condition: SQL | undefined,
   limit: number
-): Promise<RadioTrackDoc[]> {
+): Promise<PublicTrackRow[]> {
   if (limit <= 0) {
     return [];
   }
 
-  const excluded = Array.from(ctx.exclude).filter(isObjectId);
-  const constraints: mongoose.QueryFilter<ITrack>[] = [playableTrackFilter<ITrack>({})];
+  const excluded = [...ctx.exclude];
 
-  if (excluded.length > 0) {
-    constraints.push({ _id: { $nin: excluded } });
-  }
-  if (!ctx.allowExplicit) {
-    constraints.push({ isExplicit: { $ne: true } });
-  }
-  constraints.push(filter);
-
-  return TrackModel.find(andMongoFilters(...constraints)).sort(sort).limit(limit).lean();
+  return getDb()
+    .select(publicColumns(tracks, PROTECTED_COLUMNS_BY_TABLE))
+    .from(tracks)
+    .where(
+      and(
+        playableTrackFilter(),
+        excluded.length > 0 ? notInArray(tracks.id, excluded) : undefined,
+        // `is not true` rather than `!= true`: `is_explicit` is NOT NULL here so
+        // the two agree, but the spelling is the one that stays correct if the
+        // column ever becomes nullable, and it matches Mongo's `{ $ne: true }`.
+        ctx.allowExplicit ? undefined : sql`${tracks.isExplicit} is not true`,
+        condition
+      )
+    )
+    .orderBy(...POPULARITY_ORDER)
+    .limit(limit);
 }
 
 interface GatheredCandidates {
-  docs: Map<string, RadioTrackDoc>;
+  rows: Map<string, PublicTrackRow>;
   /** Summed relation score per track, for the candidates that came from the CF pool. */
   cfScores: Map<string, number>;
 }
@@ -127,28 +154,27 @@ async function gatherCandidates(
   target: number,
   allowExplicit: boolean
 ): Promise<GatheredCandidates> {
-  const docs = new Map<string, RadioTrackDoc>();
+  const rows = new Map<string, PublicTrackRow>();
   const cfScores = new Map<string, number>();
   const ctx: PoolQueryContext = { exclude: new Set(state.servedTrackIds), allowExplicit };
 
-  const collect = (found: RadioTrackDoc[]): void => {
-    for (const doc of found) {
-      const id = doc._id.toString();
-      if (docs.has(id)) continue;
-      docs.set(id, doc);
+  const collect = (found: PublicTrackRow[]): void => {
+    for (const row of found) {
+      if (rows.has(row.id)) continue;
+      rows.set(row.id, row);
       // Later pools must not re-offer what an earlier one already found.
-      ctx.exclude.add(id);
+      ctx.exclude.add(row.id);
     }
   };
 
-  const remaining = (): number => target - docs.size;
+  const remaining = (): number => target - rows.size;
 
   // ── Pool 1: collaborative neighbours ──────────────────────────────────────
   // Sources are the seed's tracks PLUS the station's frontier. The frontier is
   // what makes a station drift: once page 1 has played, the tracks just heard
   // become CF sources too, so the station wanders outward instead of orbiting
   // its seed forever.
-  const cfSources = distinct([...seed.seedTrackIds, ...state.frontierTrackIds]).filter(isObjectId);
+  const cfSources = distinct([...seed.seedTrackIds, ...state.frontierTrackIds]);
   if (cfSources.length > 0) {
     const edges = await CatalogRelationModel.find({ kind: 'track', sourceId: { $in: cfSources } })
       .sort({ score: -1 })
@@ -166,18 +192,12 @@ async function gatherCandidates(
     const neighbourIds = Array.from(scoreById.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, remaining())
-      .map(([id]) => id)
-      .filter(isObjectId);
+      .map(([id]) => id);
 
     if (neighbourIds.length > 0) {
-      const found = await findPoolTracks(
-        ctx,
-        { _id: { $in: neighbourIds } },
-        POPULARITY_SORT,
-        remaining()
-      );
-      for (const doc of found) {
-        cfScores.set(doc._id.toString(), scoreById.get(doc._id.toString()) ?? 0);
+      const found = await findPoolTracks(ctx, inArray(tracks.id, neighbourIds), remaining());
+      for (const row of found) {
+        cfScores.set(row.id, scoreById.get(row.id) ?? 0);
       }
       collect(found);
     }
@@ -186,62 +206,68 @@ async function gatherCandidates(
   // ── Pool 2: related-artist deep cuts ──────────────────────────────────────
   if (remaining() > 0 && seed.seedArtistIds.length > 0) {
     const relatedArtistIds = await topRelatedArtistIds(
-      seed.seedArtistIds.filter(isObjectId),
+      seed.seedArtistIds,
       new Set<string>(),
       remaining()
     );
     if (relatedArtistIds.length > 0) {
-      collect(
-        await findPoolTracks(ctx, { artistId: { $in: relatedArtistIds } }, POPULARITY_SORT, remaining())
-      );
+      collect(await findPoolTracks(ctx, inArray(tracks.artistId, relatedArtistIds), remaining()));
     }
   }
 
   // ── Pool 3: content similarity ────────────────────────────────────────────
   if (remaining() > 0) {
-    const contentOr: mongoose.QueryFilter<ITrack>[] = [];
-    if (seed.genres.length > 0) contentOr.push({ genre: { $in: seed.genres } });
-    if (seed.moods.length > 0) contentOr.push({ mood: { $in: seed.moods } });
-    if (seed.tags.length > 0) contentOr.push({ tags: { $in: seed.tags } });
+    const contentTerms: SQL[] = [];
+    if (seed.genres.length > 0) contentTerms.push(inArray(tracks.genre, seed.genres));
+    if (seed.moods.length > 0) contentTerms.push(inArray(tracks.mood, seed.moods));
+    // `&&` — array overlap. The Mongo `{ tags: { $in: [...] } }` matched a
+    // document whose tags array shared ANY element with the list, which is
+    // overlap, not containment.
+    if (seed.tags.length > 0) contentTerms.push(arrayOverlaps(tracks.tags, seed.tags));
 
-    if (contentOr.length > 0) {
-      collect(await findPoolTracks(ctx, { $or: contentOr }, POPULARITY_SORT, remaining()));
+    if (contentTerms.length > 0) {
+      const condition =
+        contentTerms.length === 1 ? contentTerms[0] : (or(...contentTerms) as SQL);
+      collect(await findPoolTracks(ctx, condition, remaining()));
     }
   }
 
   // ── Pool 4: genre popularity ──────────────────────────────────────────────
   if (remaining() > 0 && seed.genres.length > 0) {
-    collect(await findPoolTracks(ctx, { genre: { $in: seed.genres } }, POPULARITY_SORT, remaining()));
+    collect(await findPoolTracks(ctx, inArray(tracks.genre, seed.genres), remaining()));
   }
 
   // ── Pool 5: global popularity backstop ────────────────────────────────────
   if (remaining() > 0) {
-    collect(await findPoolTracks(ctx, {}, POPULARITY_SORT, remaining()));
+    collect(await findPoolTracks(ctx, undefined, remaining()));
   }
 
-  return { docs, cfScores };
+  return { rows, cfScores };
 }
 
 /** Artists of the tracks just heard — they take the repeat penalty alongside the seed artist. */
 async function frontierArtistIds(frontierTrackIds: string[]): Promise<string[]> {
-  const ids = frontierTrackIds.filter(isObjectId);
-  if (ids.length === 0) {
+  if (frontierTrackIds.length === 0) {
     return [];
   }
 
-  const docs = await TrackModel.find({ _id: { $in: ids } }).select({ artistId: 1 }).lean();
-  return distinct(docs.map((doc) => doc.artistId));
+  const rows = await getDb()
+    .select({ artistId: tracks.artistId })
+    .from(tracks)
+    .where(inArray(tracks.id, frontierTrackIds));
+
+  return distinct(rows.map((row) => row.artistId));
 }
 
-function toCandidate(doc: RadioTrackDoc, cfScore: number | undefined): RadioCandidate {
+function toCandidate(row: PublicTrackRow, cfScore: number | undefined): RadioCandidate {
   return {
-    trackId: doc._id.toString(),
-    artistId: doc.artistId,
-    genre: doc.genre,
-    mood: doc.mood,
-    tags: doc.tags,
-    popularity: doc.popularity,
-    isExplicit: doc.isExplicit,
+    trackId: row.id,
+    artistId: row.artistId,
+    genre: row.genre ?? undefined,
+    mood: row.mood ?? undefined,
+    tags: row.tags,
+    popularity: row.popularity,
+    isExplicit: row.isExplicit,
     cfScore,
   };
 }
@@ -250,10 +276,10 @@ function toCandidate(doc: RadioTrackDoc, cfScore: number | undefined): RadioCand
 async function programmePage(
   input: BuildRadioPageInput,
   state: RadioStationState
-): Promise<RadioTrackDoc[]> {
+): Promise<PublicTrackRow[]> {
   const { seed, page, limit, taste, allowExplicit } = input;
 
-  const [{ docs, cfScores }, recentArtistIds] = await Promise.all([
+  const [{ rows, cfScores }, recentArtistIds] = await Promise.all([
     gatherCandidates(seed, state, limit * RADIO_OVERSAMPLE, allowExplicit),
     frontierArtistIds(state.frontierTrackIds),
   ]);
@@ -261,15 +287,19 @@ async function programmePage(
   // The seed track opens its own station, so it must be in the pool at page 0
   // even though the pools never return a CF source as a CF target.
   const seedTrackId = state.seedType === 'track' ? state.seedId : undefined;
-  if (page === 0 && seedTrackId !== undefined && !docs.has(seedTrackId) && isObjectId(seedTrackId)) {
-    const seedDoc = await TrackModel.findOne(playableTrackFilter({ _id: seedTrackId })).lean();
-    if (seedDoc) {
-      docs.set(seedDoc._id.toString(), seedDoc);
+  if (page === 0 && seedTrackId !== undefined && !rows.has(seedTrackId)) {
+    const [seedRow] = await getDb()
+      .select(publicColumns(tracks, PROTECTED_COLUMNS_BY_TABLE))
+      .from(tracks)
+      .where(and(eq(tracks.id, seedTrackId), playableTrackFilter()))
+      .limit(1);
+    if (seedRow) {
+      rows.set(seedRow.id, seedRow);
     }
   }
 
-  const candidates = Array.from(docs.values()).map((doc) =>
-    toCandidate(doc, cfScores.get(doc._id.toString()))
+  const candidates = Array.from(rows.values()).map((row) =>
+    toCandidate(row, cfScores.get(row.id))
   );
 
   const ranked: RankedRadioCandidate[] = candidates
@@ -302,8 +332,8 @@ async function programmePage(
   });
 
   return selected
-    .map((candidate) => docs.get(candidate.trackId))
-    .filter((doc): doc is RadioTrackDoc => doc !== undefined);
+    .map((candidate) => rows.get(candidate.trackId))
+    .filter((row): row is PublicTrackRow => row !== undefined);
 }
 
 /**
@@ -318,9 +348,9 @@ async function programmePage(
  * promise. The retry runs at most once, so an empty catalogue terminates.
  */
 export async function buildRadioPage(input: BuildRadioPageInput): Promise<RadioPageResult> {
-  const tracks = await programmePage(input, input.state);
-  if (tracks.length >= input.limit) {
-    return { tracks, wrapped: false, state: input.state };
+  const page = await programmePage(input, input.state);
+  if (page.length >= input.limit) {
+    return { tracks: page, wrapped: false, state: input.state };
   }
 
   const wrappedState: RadioStationState = {
@@ -330,17 +360,17 @@ export async function buildRadioPage(input: BuildRadioPageInput): Promise<RadioP
     // subset of the served history — and the frontier is a subset of that, so
     // retaining it would leave the pool just as empty and the wrap would be a
     // no-op. Endlessness outranks not-repeating-yet: clear the history outright.
-    servedTrackIds: tracks.length === 0 ? [] : input.state.servedTrackIds.slice(-FRONTIER_SIZE),
+    servedTrackIds: page.length === 0 ? [] : input.state.servedTrackIds.slice(-FRONTIER_SIZE),
     wrappedAt: input.state.wrappedAt ?? Date.now(),
   };
 
-  const wrappedTracks = await programmePage(input, wrappedState);
+  const wrappedPage = await programmePage(input, wrappedState);
 
   // Wrapping bought nothing — the catalogue itself is that small. Keep the
   // original state rather than flagging a wrap that changed no outcome.
-  if (wrappedTracks.length <= tracks.length) {
-    return { tracks, wrapped: false, state: input.state };
+  if (wrappedPage.length <= page.length) {
+    return { tracks: page, wrapped: false, state: input.state };
   }
 
-  return { tracks: wrappedTracks, wrapped: true, state: wrappedState };
+  return { tracks: wrappedPage, wrapped: true, state: wrappedState };
 }

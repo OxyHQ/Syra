@@ -107,6 +107,7 @@ export async function ingestEpisode(episodeId: string, deps?: IngestEpisodeDeps)
     // Episodes keep their existing `hls/{podcastId}/{episodeId}/…` layout — the
     // key builder is now supplied per caller, so this is the same output as before.
     const stored = await doStoreHls(result, {
+      kind: 'episode',
       recordId: episodeId,
       buildKey: (relPath) => getS3HlsKey(episode.podcastId.toString(), episodeId, relPath),
     });
