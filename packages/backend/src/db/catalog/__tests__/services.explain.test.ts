@@ -63,7 +63,23 @@ const plans = new Map<string, string>();
 /** Rows actually visible in `tracks` inside the seeding transaction. */
 let seededTrackCount = 0;
 
-/** The SHIPPED SQL of each service query measured here. */
+/**
+ * The queries measured here, as hand-written SQL.
+ *
+ * NOT "the shipped SQL", which is what this said and could not support. These
+ * are TRANSCRIPTIONS of what the services build with drizzle, and nothing binds
+ * the two: a service query can drift out from under a green planner gate, which
+ * is precisely the "a declaration is not a measurement" failure this file's own
+ * doc comment is about. Stated plainly rather than fixed, because the fix is not
+ * free — `containers.explain.test.ts` EXPLAINs the module's real exported
+ * conditions and that is the better shape, but the queries below are assembled
+ * inside service functions with no exported condition to reach for.
+ *
+ * What each transcription is worth: it proves an INDEX EXISTS AND IS REACHABLE
+ * for a predicate of that shape. It does not prove the service still issues it.
+ * When a service in this list changes its WHERE clause, change the probe with
+ * it — there is no gate that will tell you.
+ */
 const PROBES: readonly { readonly name: string; readonly sql: string }[] = [
   {
     // `services/strikeService.ts` — `takeDownArtistTracks`.

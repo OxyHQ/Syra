@@ -99,96 +99,177 @@ function tables(): PgTable[] {
   return (Object.values(schema) as unknown[]).filter((v): v is PgTable => isTable(v));
 }
 
-/** Every drizzle column across the whole schema, as camelCase, with its table. */
-function allColumns(): Map<string, string[]> {
-  const byName = new Map<string, string[]>();
-  for (const table of tables()) {
-    const config = getTableConfig(table);
-    for (const column of config.columns) {
-      const key = camel(column.name);
-      byName.set(key, [...(byName.get(key) ?? []), config.name]);
-    }
-  }
-  return byName;
-}
-
 const MODEL_FILES = readdirSync(MODELS).filter(
   (f) => f.endsWith('.ts') && !f.endsWith('.test.ts')
 );
-
-const columns = allColumns();
-const flat = new Set(columns.keys());
-
-/**
- * Paths that are legitimately absent, by reason, so the output is a list of
- * SUSPECTS rather than a wall of known-good noise.
- */
-function explained(model: string, path: string): string | undefined {
-  const Capital = path.charAt(0).toUpperCase() + path.slice(1);
-  for (const candidate of flat) {
-    // `coverArt` -> `coverArtId`
-    if (candidate === `${path}Id`) return `flattened to ${path}Id`;
-    // PREFIX flattening: `links` -> `linksWebsite`, `metadata` -> `metadataBpm`
-    if (candidate.startsWith(path) && /^[A-Z]/.test(candidate.slice(path.length))) {
-      return `flattened to ${candidate}`;
-    }
-    // SUFFIX flattening: the sub-key of a flattened subdocument.
-    // `small` -> `coverArtSizesSmallId`, `licence` -> `imageLicenceLicence`,
-    // `monthlyListeners` -> `statsMonthlyListeners`, `x` -> `linksX`.
-    if (candidate.endsWith(Capital) || candidate.endsWith(`${Capital}Id`)) {
-      return `sub-key of flattened ${candidate}`;
-    }
-    // INFIX: `sourceUrl` -> `imageLicenceSourceUrl` handled above; `entityType`
-    // -> `catalogEntityType` is a capitalised segment in the middle.
-    if (candidate.includes(Capital)) return `segment of flattened ${candidate}`;
-  }
-  /**
-   * Child tables — but ONLY ones belonging to THIS model.
-   *
-   * The first version matched any table whose NAME CONTAINED the path, across
-   * the whole schema. That made the sweep vacuous on the exact instance it was
-   * written for: `CatalogEntity.members[]` was suppressed by `house_members`,
-   * which belongs to a different model entirely, so removing the `members`
-   * column changed the output not at all. Same substring bug as the two loose
-   * matchers already recorded on this branch, committed here by the person
-   * writing the check against them.
-   *
-   * The parent table is derived from the model file name and the child must be
-   * PREFIXED by it, so `catalog_entity_strikes` explains
-   * `CatalogEntity.strikes[]` and `house_members` explains nothing outside
-   * `House.ts`.
-   */
-  // A child table is named `<parent>_<thing>` using the parent's SINGULAR form
-  // (`catalog_entities` -> `catalog_entity_sources`), so both spellings are
-  // accepted as prefixes — but only this model's own.
-  const prefixes = parentTablesFor(model).flatMap((parent) => [
-    parent,
-    parent.replace(/ies$/, 'y').replace(/s$/, ''),
-  ]);
-  const suffix = path.toLowerCase();
-  for (const table of tables()) {
-    const name = getTableConfig(table).name;
-    for (const prefix of prefixes) {
-      if (name.startsWith(`${prefix}_`) && name.endsWith(suffix)) {
-        return `child table ${name}`;
-      }
-    }
-  }
-  return undefined;
-}
 
 /**
  * The table(s) a model file owns, matched by singular/plural on the file name.
  * `CatalogEntity.ts` -> `catalog_entities`, `Track.ts` -> `tracks`.
  */
 function parentTablesFor(model: string): string[] {
-  const base = model.replace(/\.ts$/, '').replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
-  const names = tables().map((t) => getTableConfig(t).name);
-  return names.filter((name) => {
-    const singular = name.replace(/ies$/, 'y').replace(/s$/, '');
-    return name === base || singular === base || name === `${base}s` || singular === base.replace(/y$/, 'y');
-  });
+  // Underscores stripped on BOTH sides before comparing. The model file name and
+  // the table name do not agree on word boundaries — `MusicBrainzArtist.ts`
+  // camel-splits to `music_brainz_artist` while the table is
+  // `musicbrainz_artists` — and without this the model resolves to NO parent
+  // table, which makes `columnsForModel` empty and every one of its paths a
+  // false candidate. Seventeen of them, enough to bury a real finding.
+  const squash = (value: string): string => value.replace(/_/g, '');
+  const base = squash(model.replace(/\.ts$/, '').toLowerCase());
+
+  return tables()
+    .map((t) => getTableConfig(t).name)
+    .filter((name) => {
+      const flatName = squash(name);
+      const singular = flatName.replace(/ies$/, 'y').replace(/s$/, '');
+      return flatName === base || singular === base;
+    });
 }
+
+/** The tables one model owns: its parent table, plus every child prefixed by it. */
+function ownTablesFor(model: string): string[] {
+  const parents = parentTablesFor(model);
+  const prefixes = parents.flatMap((parent) => [
+    `${parent}_`,
+    `${parent.replace(/ies$/, 'y').replace(/s$/, '')}_`,
+  ]);
+  return tables()
+    .map((table) => getTableConfig(table).name)
+    .filter((name) => parents.includes(name) || prefixes.some((p) => name.startsWith(p)));
+}
+
+/**
+ * The camelCase column names of THIS MODEL's own tables.
+ *
+ * Scoped, and that scoping is the whole fix. The first version ran the
+ * containment rules below against every column in every table, so a real gap on
+ * model A was explained away by an unrelated column on model B — 77 cross-table
+ * suppressions, the sharpest being `Track.hls`, genuinely absent from `tracks`
+ * and suppressed as a "segment of flattened `cacheHlsMasterKey`", a column on
+ * `episodes`, in a different vertical, BEFORE the correct child-table
+ * explanation was ever reached. If the child-table scoping ever regressed, that
+ * would have silently covered for it.
+ *
+ * That is the same defect the child-table loop already had and had already been
+ * fixed for. Fixing one of two sibling loops and leaving the other is worth
+ * naming as its own failure mode: the correction was applied where the bug was
+ * FOUND rather than everywhere it LIVED.
+ */
+function columnsForModel(model: string): Set<string> {
+  const own = new Set(ownTablesFor(model));
+  const names = new Set<string>();
+  for (const table of tables()) {
+    const config = getTableConfig(table);
+    if (!own.has(config.name)) continue;
+    for (const column of config.columns) names.add(camel(column.name));
+  }
+  return names;
+}
+
+/**
+ * Paths that are legitimately absent, by reason, so the output is a list of
+ * SUSPECTS rather than a wall of known-good noise.
+ */
+function explained(model: string, path: string): string | undefined {
+  /**
+   * CHILD TABLES FIRST, and the ordering is the rule rather than a preference.
+   *
+   * A child table named `<parent>_<path>` is an EXACT structural match; the
+   * column rules below are heuristics over capitalisation. Running the
+   * heuristics first let `Track.hls` — which became `track_hls_renditions` —
+   * be explained as "flattened to `hlsMasterKey`", a real column on `tracks`
+   * that means something else entirely (the master playlist's S3 key). Scoping
+   * both loops to the model's own tables did not fix that, because both
+   * candidates were on the right model; only ordering does.
+   *
+   * So: identity before containment, here as everywhere else in this file.
+   * The self-check at the bottom pins exactly this case.
+   */
+  const prefixes = parentTablesFor(model).flatMap((parent) => [
+    parent,
+    parent.replace(/ies$/, 'y').replace(/s$/, ''),
+  ]);
+  /**
+   * `<parent>_<path>` exactly, or `<parent>_<path>_<noun>`.
+   *
+   * The second form is why `endsWith` alone was not enough: the ladder table is
+   * `track_hls_renditions`, not `track_hls`, so `Track.hls` went unexplained by
+   * this loop and fell through to the heuristics — which is how it came to be
+   * "flattened to hlsMasterKey".
+   *
+   * The trailing boundary is required rather than a bare prefix match, or a
+   * one-letter path `h` would be explained by `track_hls_renditions`. That is
+   * the same containment mistake this file exists to record, and it is cheap to
+   * exclude here rather than discover later.
+   */
+  const wanted = path.toLowerCase();
+  for (const table of tables()) {
+    const name = getTableConfig(table).name;
+    for (const prefix of prefixes) {
+      const stem = `${prefix}_${wanted}`;
+      if (name === stem || name.startsWith(`${stem}_`)) {
+        return `child table ${name}`;
+      }
+    }
+  }
+
+  /**
+   * Then the flattening heuristics, over THIS MODEL's own columns only — see
+   * `columnsForModel` for the 77 cross-table suppressions the unscoped version
+   * produced.
+   *
+   * These are containment matches and they stay containment matches: a
+   * subdocument really is flattened by concatenation (`links` -> `linksWebsite`,
+   * `coverArtSizes.small` -> `coverArtSizesSmallId`), so there is no identity to
+   * compare. What the rule requires of them is the second clause — that the
+   * report they produce is proven against a case that motivated it — which is
+   * what the self-check does.
+   */
+  const Capital = path.charAt(0).toUpperCase() + path.slice(1);
+  for (const candidate of columnsForModel(model)) {
+    // `coverArt` -> `coverArtId`
+    if (candidate === `${path}Id`) return `flattened to ${path}Id`;
+    // PREFIX: `links` -> `linksWebsite`, `metadata` -> `metadataBpm`
+    if (candidate.startsWith(path) && /^[A-Z]/.test(candidate.slice(path.length))) {
+      return `flattened to ${candidate}`;
+    }
+    // SUFFIX: the sub-key of a flattened subdocument.
+    // `small` -> `coverArtSizesSmallId`, `monthlyListeners` -> `statsMonthlyListeners`.
+    if (candidate.endsWith(Capital) || candidate.endsWith(`${Capital}Id`)) {
+      return `sub-key of flattened ${candidate}`;
+    }
+    // INFIX: `entityType` -> `catalogEntityType`.
+    if (candidate.includes(Capital)) return `segment of flattened ${candidate}`;
+  }
+
+  return undefined;
+}
+
+/**
+ * Paths the schema DELIBERATELY dropped, with the decision that dropped them.
+ *
+ * Not a suppression heuristic — an exemption list, compared BY IDENTITY per
+ * model, exactly like `hybridServices.ts`'s registry and for the same reason.
+ * Each entry names a documented decision so a reader can check it rather than
+ * trust it.
+ */
+const DELIBERATELY_DROPPED: Readonly<Record<string, readonly string[]>> = {
+  // `schema/catalog.ts`: "Image FK columns hold ONLY the id — url/width/height
+  // are dropped", because all three are pure functions of the `image_assets`
+  // row the id already points at.
+  'Track.ts': ['url', 'width', 'height', 'catalogEntityId'],
+  'Album.ts': ['url', 'width', 'height'],
+  'Playlist.ts': ['url', 'width', 'height'],
+  'Podcast.ts': ['url', 'width', 'height'],
+  'Episode.ts': ['url', 'width', 'height'],
+  'CatalogEntity.ts': ['url', 'width', 'height'],
+  'UserUpload.ts': ['url', 'width', 'height', 'catalogEntityId'],
+  'DiscogsRelease.ts': ['catalogEntityId'],
+  // `schema/rooms.ts`: `Room.topicId` referenced a `Topic` model that does not
+  // exist in the repo — dropped in Task 6 on a grep-first decision the lead
+  // re-ran independently.
+  'Room.ts': ['topicId'],
+} as const;
 
 const report: string[] = [];
 let checked = 0;
@@ -199,7 +280,9 @@ for (const file of MODEL_FILES) {
   const missing: string[] = [];
   for (const path of paths) {
     checked += 1;
-    if (flat.has(path)) continue;
+    // Exact hit in the model's OWN tables — the only identity match here.
+    if (columnsForModel(file).has(path)) continue;
+    if (DELIBERATELY_DROPPED[file]?.includes(path)) continue;
     const why = explained(file, path);
     if (why) continue;
     missing.push(path);
@@ -209,8 +292,61 @@ for (const file of MODEL_FILES) {
   }
 }
 
+/**
+ * SELF-CHECK — the rule's second clause, executed rather than asserted.
+ *
+ * "Proves it by FAILING against the case that motivated it." Both scoping bugs
+ * this script has had are pinned here, so a regression in either is a non-zero
+ * exit rather than a quietly shorter report:
+ *
+ *   `CatalogEntity.members` — the case the sweep was commissioned for. Suppressed
+ *   by `house_members`, a table on a DIFFERENT model, until the child-table loop
+ *   was scoped. It must be explained by `catalog_entities.members` (the column
+ *   migration 0018 restored) and by nothing else.
+ *
+ *   `Track.hls` — the case the review found. Genuinely absent from `tracks`
+ *   (Task 4 moved the ladder to `track_hls_renditions`) and suppressed as a
+ *   "segment of flattened cacheHlsMasterKey", a column on `episodes`, until the
+ *   COLUMN loop was scoped too. It must be explained by the child table.
+ *
+ * The second exists because fixing one of two sibling loops and leaving the
+ * other is its own failure mode: the correction was applied where the bug was
+ * found rather than everywhere it lived.
+ */
+const SELF_CHECKS: readonly { model: string; path: string; mustMention: string }[] = [
+  { model: 'CatalogEntity.ts', path: 'members', mustMention: 'members' },
+  { model: 'Track.ts', path: 'hls', mustMention: 'track_hls_renditions' },
+];
+
+const selfCheckFailures: string[] = [];
+for (const probe of SELF_CHECKS) {
+  const own = columnsForModel(probe.model);
+  const verdict = own.has(probe.path)
+    ? `own column ${probe.path}`
+    : explained(probe.model, probe.path);
+
+  if (!verdict || !verdict.includes(probe.mustMention)) {
+    selfCheckFailures.push(
+      `${probe.model} :: ${probe.path} -> ${verdict ?? 'UNEXPLAINED'} ` +
+      `(expected an explanation mentioning "${probe.mustMention}")`
+    );
+  }
+}
+
 console.log(`\nScanned ${MODEL_FILES.length} model files, ${checked} declared paths, ` +
-  `${flat.size} distinct drizzle columns across ${tables().length} tables.\n`);
+  `${tables().reduce((n, t) => n + getTableConfig(t).columns.length, 0)} columns ` +
+  `across ${tables().length} tables.\n`);
 console.log('CANDIDATES — a declared Mongoose path with no obvious drizzle column:\n');
 for (const line of report) console.log('  ' + line);
 console.log(`\n${report.length} model files carry at least one candidate.\n`);
+
+if (selfCheckFailures.length > 0) {
+  console.error('SELF-CHECK FAILED — this report cannot be trusted:\n');
+  for (const failure of selfCheckFailures) console.error('  ' + failure);
+  console.error(
+    '\nA suppression rule is matching outside the model it belongs to. Scope it,\n' +
+    'then re-run. See this file\'s doc comment for the two prior instances.\n'
+  );
+  process.exit(1);
+}
+console.log('Self-check: both scoping regressions pinned, neither present.\n');

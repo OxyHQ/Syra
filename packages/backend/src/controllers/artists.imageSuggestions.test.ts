@@ -1,8 +1,13 @@
-import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll } from 'bun:test';
 import type { Response, NextFunction } from 'express';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import type { ArtistImageSuggestionsResponse } from '@syra/shared-types';
 import { connect, clear, disconnect } from '../test/mongo';
+import { clearDb, connectDb, disconnectDb } from '../test/postgres';
+import {
+  installCatalogImageMirrorMockForTests,
+  resetCatalogImageMirror,
+} from '../test/catalogImageMirror';
 import { ArtistModel } from '../models/CatalogEntity';
 import { TrackModel } from '../models/Track';
 import { ContributionAttestationModel } from '../models/ContributionAttestation';
@@ -32,9 +37,33 @@ import {
  * the handler, which is why the fixture below gives the artist a playable track.
  */
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+/**
+ * This suite reaches `mirrorCatalogImage` through the accept endpoint, and used
+ * to get its double as a SIDE EFFECT of `connect()`. That install is gone — it
+ * was the trap `test/catalogImageMirror.ts` was extracted to close — so the
+ * double is requested here, explicitly, and Postgres is opened because the
+ * double writes real `image_assets` rows for the seven FK columns that now
+ * reference them.
+ *
+ * Removing the side effect is what surfaced this suite: a `grep` for
+ * `mirrorCatalogImage` in test files found three podcast suites and missed this
+ * one, which reaches it through a controller. The full run found it. That is the
+ * cost of an implicit install being paid once, visibly, instead of indefinitely.
+ */
+beforeAll(async () => {
+  await connect();
+  await connectDb();
+});
+beforeEach(installCatalogImageMirrorMockForTests);
+afterEach(async () => {
+  resetCatalogImageMirror();
+  await clear();
+  await clearDb();
+});
+afterAll(async () => {
+  await disconnect();
+  await disconnectDb();
+});
 
 interface CapturedRes {
   _status: number;

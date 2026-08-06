@@ -249,7 +249,70 @@ describe('enrichArtistProfile — filling gaps', () => {
    * The idempotency test above is the one that still earns its place: it is a
    * property (`second run writes nothing, provenance stays at one entry`)
    * rather than an assertion about a mechanism.
+   *
+   * ONE THING IT DID COVER SURVIVES, and the review was right that idempotency
+   * does not reach it: a MISNAMED provenance field. `fieldsWritten` is
+   * `string[]`, so a recorded name that matches no column compiles, persists,
+   * and is idempotent — the enrichment simply records provenance for a field it
+   * did not write. The replacement below resolves every recorded name against
+   * the stored row instead of against the compiler.
    */
+
+  /**
+   * Every name in `sources[].fields` must resolve to a value on the stored row.
+   *
+   * The narrow half of the deleted test, kept because drizzle does not cover it:
+   * `fieldsWritten` is `string[]`, and the enrichment records DOTTED names
+   * (`links.website`) while writing FLAT columns (`linksWebsite`). Nothing ties
+   * the two, so a rename on one side leaves the other recording provenance for
+   * a field that was never written — an audit trail that points at nothing.
+   */
+  it('records provenance only for fields that actually landed', async () => {
+    const artist = await seedArtist();
+    const result = await enrichArtistProfile(artist.id);
+    expect(result.status).toBe('enriched');
+
+    const [entry] = await sourcesFor(artist.id);
+    const stored = await readArtist(artist.id);
+    if (!entry || !stored) throw new Error('expected provenance and an artist');
+
+    /**
+     * The provenance vocabulary is the DTO's field names, not the column names,
+     * and most of them camel-concatenate (`links.website` -> `linksWebsite`,
+     * `externalIds.isni` -> `externalIsni`). Two do not, and writing this test
+     * is what surfaced them: `image` is stored as `imageId` (a FK) and
+     * `imageLicence` as four flattened columns of which `imageLicenceLicence`
+     * is the one that is always set when a licence was written.
+     *
+     * They are listed EXPLICITLY rather than pattern-matched. A new provenance
+     * field with no entry here fails this test, which is the point — that is the
+     * drift the deleted Mongoose-era check used to catch by resolving each
+     * recorded path against the stored document.
+     */
+    const IRREGULAR: Readonly<Record<string, string>> = {
+      image: 'imageId',
+      imageLicence: 'imageLicenceLicence',
+    };
+
+    const toColumn = (field: string): string =>
+      IRREGULAR[field] ??
+      field
+        .split('.')
+        .map((part, index) => (index === 0 ? part : part.charAt(0).toUpperCase() + part.slice(1)))
+        .join('')
+        .replace(/^externalIds/, 'external');
+
+    const unresolved = entry.fields.filter((field) => {
+      const value = (stored as unknown as Record<string, unknown>)[toColumn(field)];
+      return value === undefined || value === null;
+    });
+
+    expect(`recorded but not stored: ${unresolved.join(', ') || 'none'}`).toBe(
+      'recorded but not stored: none'
+    );
+    // Vacuity floor: an empty provenance entry satisfies the above trivially.
+    expect(entry.fields.length).toBeGreaterThan(0);
+  });
 
   it('records every imported field in sources[] with provider and date', async () => {
     const artist = await seedArtist();

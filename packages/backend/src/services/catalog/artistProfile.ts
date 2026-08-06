@@ -161,8 +161,21 @@ export async function loadCreditedOn(artist: ArtistProfileSource): Promise<Credi
   const nameKey = artist.nameKey;
   if (!nameKey) return [];
 
-  const rows = await getDb()
-    .select({ track: tracks, role: trackCredits.role })
+  /**
+   * The LIMIT bounds tracks, not credit rows — and that needs two queries.
+   *
+   * `credits.nameKey` is one-to-many: an artist credited as producer AND
+   * composer on the same track yields two joined rows. `LIMIT 50` over the join
+   * therefore returns fewer than 50 TRACKS, and how many fewer depends on how
+   * many roles each one happens to carry. Mongo bounded 50 documents and folded
+   * roles afterwards, so a single query with a limit is a silent behaviour
+   * change: the shelf shrinks for exactly the artists with the richest credits.
+   *
+   * `selectDistinct` over the joined shape is not the fix either — distinct
+   * applies to the whole projected row, and the rows differ by `role`.
+   */
+  const trackIdRows = await getDb()
+    .selectDistinct({ id: tracks.id, popularity: tracks.popularity, createdAt: tracks.createdAt })
     .from(tracks)
     .innerJoin(trackCredits, eq(trackCredits.trackId, tracks.id))
     .where(
@@ -175,6 +188,20 @@ export async function loadCreditedOn(artist: ArtistProfileSource): Promise<Credi
     )
     .orderBy(desc(tracks.popularity), desc(tracks.createdAt))
     .limit(CREDITED_ON_LIMIT);
+
+  if (trackIdRows.length === 0) return [];
+
+  const rows = await getDb()
+    .select({ track: tracks, role: trackCredits.role })
+    .from(tracks)
+    .innerJoin(trackCredits, eq(trackCredits.trackId, tracks.id))
+    .where(
+      and(
+        inArray(tracks.id, trackIdRows.map((row) => row.id)),
+        eq(trackCredits.nameKey, nameKey)
+      )
+    )
+    .orderBy(desc(tracks.popularity), desc(tracks.createdAt));
 
   // One track can carry several credits for one person (producer AND composer),
   // so the join multiplies rows and the roles are folded back per track.

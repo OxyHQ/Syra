@@ -331,6 +331,38 @@ describe('loadCreditedOn — secondary participation', () => {
 
 // ── Playlists ─────────────────────────────────────────────────────────────────
 
+describe('loadCreditedOn — the cap counts TRACKS, not credit rows', () => {
+  /**
+   * The review's finding: `credits.nameKey` is one-to-many, so a `LIMIT` over
+   * the joined shape bounds credit ROWS. Mongo bounded 50 documents and folded
+   * roles afterwards. Without the two-query form, an artist credited twice on
+   * every track gets half a shelf — and the shortfall scales with how rich
+   * their credits are, which is the opposite of the intent.
+   *
+   * Two roles per track, so a row-bounded implementation returns half as many.
+   */
+  it('returns a full page of tracks even when each carries several roles', async () => {
+    const guest = await makeArtist({ name: 'Busy Guest', nameKey: 'busy guest' });
+    const host = await makeArtist({ name: 'Prolific Host', nameKey: 'prolific host' });
+
+    const wanted = 8;
+    for (let i = 0; i < wanted; i += 1) {
+      await makeTrack(host.id, {
+        credits: [
+          { name: 'Busy Guest', role: 'producer', nameKey: 'busy guest' },
+          { name: 'Busy Guest', role: 'composer', nameKey: 'busy guest' },
+        ],
+      });
+    }
+
+    const credited = await loadCreditedOn(guest);
+
+    expect(credited).toHaveLength(wanted);
+    // …and the roles still fold, so this is not passing by dropping the join.
+    expect(credited[0]?.roles.sort()).toEqual(['composer', 'producer']);
+  });
+});
+
 describe('loadPlaylistsFeaturing — readability is canViewPlaylist\'s decision', () => {
   it('includes a public playlist that contains one of the artist\'s tracks', async () => {
     const artist = await makeArtist();

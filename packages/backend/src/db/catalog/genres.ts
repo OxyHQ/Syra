@@ -18,7 +18,7 @@
  * right question.
  */
 
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { getDb, type DbOrTransaction } from '../postgres';
 import { albumGenres } from '../schema/catalog';
 import { genres } from '../schema/genres';
@@ -27,9 +27,16 @@ import { genres } from '../schema/genres';
  * Trim, drop blanks and de-duplicate case-insensitively, keeping the FIRST
  * spelling seen.
  *
- * Tag blocks routinely carry `Rock`, `rock` and ` Rock ` for one album. Storing
- * them as three rows would give the browse surface three cards for one genre,
- * which is precisely the enumeration this table exists to make correct.
+ * Tag blocks routinely carry `Rock`, `rock` and ` Rock ` for one album. This
+ * collapses them WITHIN one call; `genres_lower_name_kind_key` — a unique index
+ * on `(lower(name), kind)` — is what collapses them ACROSS calls.
+ *
+ * Both halves are needed and the first version of this module shipped only this
+ * one, which is why the pair is spelled out. With a case-SENSITIVE constraint,
+ * `['Rock']` then `['rock']` created two rows and the second call returned only
+ * the new one, so the album linked to a duplicate: the exact "three cards for
+ * one genre" outcome this comment used to claim was prevented. See
+ * `schema/genres.ts` and migration `0019`.
  */
 function normalizeGenreNames(names: readonly string[]): string[] {
   const byLowercase = new Map<string, string>();
@@ -56,19 +63,29 @@ export async function resolveMusicGenreIds(
   const wanted = normalizeGenreNames(names);
   if (wanted.length === 0) return [];
 
+  // No conflict TARGET: the index is functional (`lower(name)`), and an
+  // untargeted `onConflictDoNothing` covers it without this module having to
+  // restate the expression the schema already owns.
   await db
     .insert(genres)
     .values(wanted.map((name) => ({ name, kind: 'music' as const })))
     .onConflictDoNothing();
 
-  // Read back rather than trusting `returning()`: `onConflictDoNothing` returns
-  // nothing for the rows that already existed, so a caller relying on it would
-  // silently drop every genre the catalogue already knew about — which is most
-  // of them.
+  /**
+   * Read back through `lower()`, matching the index.
+   *
+   * Two reasons, and the second is the one that bit. Trusting `returning()` is
+   * wrong because `onConflictDoNothing` returns nothing for rows that already
+   * existed — which is most of them. And matching on the EXACT name is wrong
+   * because the row that already exists may carry a different spelling: an
+   * exact `inArray(genres.name, ['rock'])` misses a stored `"Rock"`, which is
+   * how the duplicate got created in the first place.
+   */
+  const lowered = wanted.map((name) => name.toLowerCase());
   const rows = await db
     .select({ id: genres.id })
     .from(genres)
-    .where(and(inArray(genres.name, wanted), eq(genres.kind, 'music')));
+    .where(and(inArray(sql`lower(${genres.name})`, lowered), eq(genres.kind, 'music')));
 
   return rows.map((row) => row.id);
 }

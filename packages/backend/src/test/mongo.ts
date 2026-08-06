@@ -15,7 +15,6 @@
 
 import mongoose from 'mongoose';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
-import { setCatalogImageMirrorImplementationForTests } from '../services/catalog/catalogImageAssets';
 
 /**
  * A single-member REPLICA SET, not a standalone.
@@ -34,34 +33,21 @@ import { setCatalogImageMirrorImplementationForTests } from '../services/catalog
 let server: MongoMemoryReplSet | undefined;
 let connecting: Promise<void> | undefined;
 
-export function installCatalogImageMirrorMockForTests(): void {
-  setCatalogImageMirrorImplementationForTests(async (images, context) => {
-    if (!images?.length) return undefined;
-    const largeId = context.existingImageId ?? new mongoose.Types.ObjectId().toString();
-    const makeVariant = (id: string, width: number) => ({
-      id,
-      url: `/api/images/${id}`,
-      width,
-      height: width,
-    });
-    const existingLarge = context.existingImageSizes?.large;
-    return {
-      imageId: largeId,
-      imageSizes: context.existingImageSizes ?? {
-        small: makeVariant(new mongoose.Types.ObjectId().toString(), 160),
-        medium: makeVariant(new mongoose.Types.ObjectId().toString(), 320),
-        large: existingLarge ?? makeVariant(largeId, 640),
-        xlarge: makeVariant(new mongoose.Types.ObjectId().toString(), 960),
-        xxlarge: makeVariant(new mongoose.Types.ObjectId().toString(), 1280),
-        original: makeVariant(new mongoose.Types.ObjectId().toString(), 1000),
-      },
-      primaryColor: '#336699',
-      secondaryColor: '#224466',
-      sourceUrlHash: `test-url-${context.provider}-${context.entityType}-${context.externalId}`,
-      sourceContentHash: `test-content-${context.provider}-${context.entityType}-${context.externalId}`,
-    };
-  });
-}
+/**
+ * The catalog image-mirror double MOVED to `test/catalogImageMirror.ts`.
+ *
+ * This module used to define its own, export it under the same name, AND
+ * install it as a side effect of `connect()`. That is what made the double
+ * invisible: a suite moving to Postgres dropped the Mongo hooks and silently
+ * lost its mock, which is exactly what happened to `enrichCatalogEntity`. Worse,
+ * the two definitions had DIFFERENT semantics — this one minted `ObjectId`
+ * strings, and those ids now land in seven foreign-key columns, where a minted
+ * id is a constraint violation rather than a harmless fake.
+ *
+ * So there is one definition, it writes real `image_assets` rows, and every
+ * suite that needs it installs it explicitly. `connect()` no longer installs
+ * anything: a database helper's job is the database.
+ */
 
 /**
  * Connect once per test process; subsequent calls from other test files reuse
@@ -69,7 +55,6 @@ export function installCatalogImageMirrorMockForTests(): void {
  * (race guard) don't spawn two servers.
  */
 export async function connect(): Promise<void> {
-  installCatalogImageMirrorMockForTests();
   if (mongoose.connection.readyState === 1) return; // already connected
   if (connecting) return connecting;                // in-flight — share the promise
 

@@ -197,8 +197,18 @@ const MIGRATIONS_SEARCH_DEPTH = 6;
  *
  * Exported so that gate can read the SAME boundary this file documents,
  * rather than a second copy of the tag string that could drift from it.
+ *
+ * AT CUTOVER, DO NOT ADVANCE THIS. `gates.test.ts`'s
+ * "LAST_GENESIS_MIGRATION_TAG is the newest migration" assertion must be
+ * DELETED instead, and this constant frozen at whatever it holds when the first
+ * production deploy happens. Advancing it past that point leaves
+ * `findPostGenesisPhaseOrderingViolations` — which inspects only
+ * `entries.slice(boundaryIndex + 1)` — with a permanently empty tail, so the
+ * `pre`-behind-`post` invariant checks nothing, forever, with every test green.
+ * Said here as well as in the test because this is the file somebody opens when
+ * they go to bump it.
  */
-export const LAST_GENESIS_MIGRATION_TAG = '0018_giant_bucky';
+export const LAST_GENESIS_MIGRATION_TAG = '0019_tough_avengers';
 
 /**
  * `packages/backend/drizzle`, found by walking UP from this module rather than

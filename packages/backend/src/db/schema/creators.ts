@@ -61,13 +61,16 @@
  * landed — and the one this file uses — is **whether live code writes the
  * array at all**:
  *
- *  - `DiscogsRelease.credits[]` / `CatalogEntity.members[]` / `CatalogEntity
- *    .imageSuggestions[]`: no writer anywhere. Normalising a structure the
- *    product never grew into buys nothing, and `jsonb` keeps whatever shape a
- *    future writer chooses.
+ *  - ~~`DiscogsRelease.credits[]` / `CatalogEntity.members[]` / `CatalogEntity
+ *    .imageSuggestions[]`: no writer anywhere.~~ **FALSE — see below. Do not
+ *    read this bullet as an assertion; it is kept only so the correction has
+ *    something to point at.**
+ *  - `Track.hls[]` / `Episode.hls[]` / every `sources[]`: written by live
+ *    code. Child tables.
  *
- * **THE SECOND BULLET IS FALSE, and Task 10b measured it.** All three have
- * writers:
+ * ## The second bullet is false, and Task 10b measured it
+ *
+ * All three have writers:
  *
  *  - `CatalogEntity.members[]` — `services/uploads/enrichCatalogEntity.ts`
  *    (`gapFilling`, from Wikidata's `has part`), reachable in production from
@@ -92,8 +95,13 @@
  * needs restating (query-by-element, which DOES produce the schema as landed
  * and is what `catalog.ts` actually argues), or two columns are wrong. Do not
  * cite this paragraph as settled reasoning until that is decided.
- *  - `Track.hls[]` / `Episode.hls[]` / every `sources[]`: written by live
- *    code. Child tables.
+ *
+ * **RULED (Task 10b review):** they SHOULD be child tables — the same reasoning
+ * that made `episode_hls_renditions` and then `track_hls_renditions` child
+ * tables, both of which also failed the queried-by-element test and passed the
+ * known-shape one. It lands as a dedicated schema task rather than inside a
+ * services port, so `members` and `imageSuggestions` stay `jsonb` for now as a
+ * known cost rather than a hidden one.
  *
  * So, in this file:
  *

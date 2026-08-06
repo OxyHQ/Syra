@@ -36,13 +36,30 @@
  * `podcasts.ts`'s `podcast_categories` for the composite FKs that reference
  * this pair.
  *
- * `genres_name_kind_key` replaces the old bare `unique(name)`: uniqueness is
- * now scoped PER KIND, not global. A global unique would resurrect the same
- * cross-vertical collision this whole change exists to close from the other
- * side — a podcast category and a music genre that happen to share a name
- * (an unremarkable coincidence: "Comedy" is a real Apple Music genre AND a
- * plausible podcast category) would fight over one row instead of each
+ * `genres_lower_name_kind_key` replaces the old bare `unique(name)`:
+ * uniqueness is scoped PER KIND, not global. A global unique would resurrect
+ * the same cross-vertical collision this whole change exists to close from the
+ * other side — a podcast category and a music genre that happen to share a
+ * name (an unremarkable coincidence: "Comedy" is a real Apple Music genre AND
+ * a plausible podcast category) would fight over one row instead of each
  * vertical owning its own.
+ *
+ * ## It is unique on `lower(name)`, and the plain version was a live defect
+ *
+ * Task 10b shipped `unique(name, kind)`, which is case-SENSITIVE, while
+ * `db/catalog/genres.ts` de-duplicated its INPUT case-insensitively and
+ * documented the pair as preventing duplicates. It prevented them only within a
+ * single call. Measured on a migrated database: `resolveMusicGenreIds(['Rock'])`
+ * then `resolveMusicGenreIds(['rock', ' Rock '])` left rows `["Rock", "rock"]`
+ * and returned only the second row's id, so the album linked to the duplicate —
+ * exactly the "three cards for one genre" outcome the function's own comment
+ * claimed it prevented, live on the upload path.
+ *
+ * A FUNCTIONAL unique index is the fix rather than canonicalising the stored
+ * case, because the stored case is what the browse surface renders: "Drum & Bass"
+ * must display that way whoever typed it, and lowercasing every genre to make a
+ * constraint work would push a display decision into the storage layer. The
+ * first spelling to arrive wins the row and later spellings resolve to it.
  *
  * Deliberately just a name and a kind: no colour, no icon, no sort order.
  * Every one of those was presentation state the Mongo browse controller
@@ -51,7 +68,7 @@
  */
 
 import { sql } from 'drizzle-orm';
-import { check, pgTable, text, unique } from 'drizzle-orm/pg-core';
+import { check, pgTable, text, unique, uniqueIndex } from 'drizzle-orm/pg-core';
 import { createdAt, generatedId, inList, updatedAt } from '@oxyhq/db';
 
 /** The two verticals sharing this table's vocabulary. */
@@ -74,7 +91,14 @@ export const genres = pgTable(
   },
   (t) => [
     check('genres_kind_check', sql`${t.kind} in (${sql.raw(inList(GENRE_KINDS))})`),
-    unique('genres_name_kind_key').on(t.name, t.kind),
+    /**
+     * `lower(name)`, not `name`. See the file-level doc comment: the plain
+     * version admitted `Rock` and `rock` as two rows, and every reader of this
+     * table is an enumeration ("what genres exist"), where a duplicate is the
+     * whole failure. `db/catalog/genres.ts` reads back through `lower()` to
+     * match, so the constraint and the query agree by construction.
+     */
+    uniqueIndex('genres_lower_name_kind_key').on(sql`lower(${t.name})`, t.kind),
     // FK-target-only — see the file-level doc comment.
     unique('genres_id_kind_key').on(t.id, t.kind),
   ]

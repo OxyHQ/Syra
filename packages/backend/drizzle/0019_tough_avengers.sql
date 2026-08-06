@@ -1,0 +1,26 @@
+-- oxy:deploy-phase=pre
+-- Fixes a LIVE defect on the upload path, found in the Task 10b review.
+--
+-- `unique(name, kind)` is case-SENSITIVE, while `db/catalog/genres.ts`
+-- de-duplicated its INPUT case-insensitively and its comment claimed the pair
+-- prevented duplicate genre rows. It prevented them only WITHIN one call.
+-- Measured on a migrated database:
+--
+--   resolveMusicGenreIds(['Rock'])            -> creates "Rock"
+--   resolveMusicGenreIds(['rock',' Rock '])   -> creates "rock", returns ONLY its id
+--   select name from genres                   -> ["Rock","rock"]
+--
+-- so the album linked to the duplicate and the browse surface got two cards for
+-- one genre -- the exact outcome the function's own doc comment said it
+-- prevented. Reproduced before the fix and re-run after.
+--
+-- The DROP is safe here and nowhere later: `genres` is empty on every database
+-- this has reached, and nothing is deployed (the migration is inside the genesis
+-- window). Were there rows, this would need a de-duplicating backfill FIRST,
+-- because the new index refuses a table that already holds "Rock" and "rock".
+--
+-- Functional rather than storing a canonical case: the stored case is what the
+-- browse surface renders, so lowercasing every genre to make a constraint work
+-- would push a display decision into the storage layer.
+ALTER TABLE "genres" DROP CONSTRAINT "genres_name_kind_key";--> statement-breakpoint
+CREATE UNIQUE INDEX "genres_lower_name_kind_key" ON "genres" USING btree (lower("name"),"kind");

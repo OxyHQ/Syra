@@ -3709,17 +3709,34 @@ describe('deploy-phase ordering (post-genesis)', () => {
    *
    * WHEN CUTOVER HAPPENS this test must be DELETED, not updated — the boundary
    * freezes and the newest migration moves past it permanently, which is the
-   * point. The failure message says so, because the person who hits it will be
-   * whoever writes migration `00NN` and they need to know which of the two
-   * remedies applies to them.
+   * point. That instruction is in the ASSERTION STRING below, not only here:
+   * an earlier version of this comment claimed "the failure message says so"
+   * while the message rendered a bare `boundary=X newest=Y`, from which the only
+   * available reading is "the boundary is behind" — the one thing this comment
+   * exists to forbid. A false claim about where a rule lives, in the commit
+   * whose thesis is that a rule belongs in the source rather than in anyone's
+   * head. Whoever hits this is writing migration `00NN`; they see the remedy.
    */
   it('LAST_GENESIS_MIGRATION_TAG is the newest migration in the journal', () => {
     const journal = readJournal(findMigrationsFolder());
-    const newest = journal[journal.length - 1]?.tag;
+    const newest = journal[journal.length - 1]?.tag ?? 'NO MIGRATIONS';
+
+    /**
+     * Carried in the compared VALUE so it reaches the failure output. Both
+     * remedies, because which one applies is not something the assertion can
+     * know — and picking the wrong one is silent: bumping the boundary after
+     * cutover leaves `findPostGenesisPhaseOrderingViolations` inspecting
+     * `entries.slice(boundaryIndex + 1)` of an empty tail, so the
+     * pre-behind-post invariant checks nothing, forever, with every test green.
+     */
+    const remedy =
+      'BEFORE CUTOVER: advance LAST_GENESIS_MIGRATION_TAG in db/migrate.ts. ' +
+      'AFTER CUTOVER: DELETE this test — do NOT advance the tag, or the ' +
+      'post-genesis ordering gate silently checks an empty set forever.';
 
     expect(
-      `boundary=${LAST_GENESIS_MIGRATION_TAG} newest=${newest ?? 'NO MIGRATIONS'}`
-    ).toBe(`boundary=${newest ?? 'NO MIGRATIONS'} newest=${newest ?? 'NO MIGRATIONS'}`);
+      `boundary=${LAST_GENESIS_MIGRATION_TAG} newest=${newest} | ${remedy}`
+    ).toBe(`boundary=${newest} newest=${newest} | ${remedy}`);
   });
 
   it('the boundary is a tag the journal actually contains', () => {
