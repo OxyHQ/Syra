@@ -249,6 +249,14 @@ export const playlistSources = pgTable(
       .notNull()
       .references(() => playlists.id, { onDelete: 'cascade' }),
     position: integer().notNull(),
+    /**
+     * The wide `PROVENANCE_PROVIDERS` set, matching `track_sources` /
+     * `album_sources` / `catalog_entity_sources` and the zod
+     * `sourceProvenanceSchema` contract — NOT `models/Playlist.ts:28`'s
+     * narrower inline `['upload', 'cc']`. That inline enum is wrong today: it
+     * disagrees with both the shared zod contract and its three sibling
+     * tables. This is declining to port a bug, not widening one.
+     */
     provider: text({ enum: PROVENANCE_PROVIDERS }).notNull(),
     externalId: text().notNull(),
     importedAt: timestamptz().notNull(),

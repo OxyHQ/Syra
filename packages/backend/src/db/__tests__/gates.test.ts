@@ -57,12 +57,7 @@ import * as catalogModule from '../schema/catalog';
 import { catalogEntities } from '../schema/catalog';
 import * as genresModule from '../schema/genres';
 import * as libraryModule from '../schema/library';
-import {
-  playbackStates,
-  playlistCollaborators,
-  playlists,
-  userSavedPlaylists,
-} from '../schema/library';
+import { playbackStates, playlists, userSavedPlaylists } from '../schema/library';
 import { DEFERRED_FOREIGN_KEYS, ID_COLUMNS_WITHOUT_FOREIGN_KEY } from '../schema/deferredForeignKeys';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../schema/protectedColumns';
 import { EXPIRY_SWEEP_TARGETS } from '../expiry';
