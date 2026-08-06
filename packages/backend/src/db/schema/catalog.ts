@@ -62,15 +62,26 @@
  *
  * `CatalogEntity.members[]` (`ArtistMember`) and `DiscogsRelease.credits[]`
  * are the same TYPE of subdocument — `{ name, nameKey, catalogEntityId, … }`
- * — as `Track.credits[]`, but neither has ANY reader querying by element
- * (`members.nameKey` and `DiscogsRelease.credits` are both zero hits outside
- * their own models — see the report), so both stay `jsonb`, unlike
- * `Track.credits[]`.
+ * — as `Track.credits[]`, but neither is queried BY ELEMENT, so both stay
+ * `jsonb`, unlike `Track.credits[]`. That conclusion still holds; the sentence
+ * that used to support it did not, and Task 10b rewrote it.
  *
- * `members` was nonetheless MISSING from `catalog_entities` until Task 10b —
- * the decision above was made and the column was never written. See its own
- * comment on the column for how that survived, and for the reader and test it
- * would have broken.
+ * **What was wrong.** It read "neither has ANY reader … zero hits outside their
+ * own models". `members.nameKey` really is zero hits outside `CatalogEntity.ts`
+ * (where it is an index declaration, not a query) — so the parenthetical was
+ * literally accurate, and "no reader QUERYING BY ELEMENT" is still true. But the
+ * shape of the sentence said "no reader", full stop, and that is false:
+ * `controllers/entityProfile.controller.ts:110` puts `members` on the entity
+ * profile response, `@syra/shared-types` `entityProfileSchema` declares it, and
+ * `entityProfile.artistSections.test.ts:237` asserts a member by name on a live
+ * response. Being read as a WHOLE ARRAY and being queried BY ELEMENT are
+ * different questions, and only the second one decides jsonb vs child table.
+ *
+ * **What it cost.** The column was never declared at all. The decision above was
+ * recorded, the `jsonb` was not written, and the comment asserting it existed is
+ * the only place anybody ever "verified" that it did. Task 10b's migration
+ * `0018` restores it; see the column's own comment for the writer, the reader
+ * and the test the port would otherwise have broken.
  *
  * `Track.hls[]` was the one array this file got wrong in the first pass —
  * corrected in Task 4 as `track_hls_renditions`, not here, because Task 4 is
@@ -83,11 +94,23 @@
  * ## `catalogEntityId` is dropped everywhere it was declared
  *
  * Four Mongoose paths declare it (`Track.credits[]`, `UserUpload.credits[]`,
- * `DiscogsRelease.credits[]`, `CatalogEntity.members[]`) and NONE of them is
- * ever written — confirmed in `RELATIONS.md`'s "columns I could not find a
- * reader for" table. `track_credits` (the one of these four that becomes a
- * real table in this task) has no `catalog_entity_id` column; the other three
- * stay `jsonb`, where there is no column to omit in the first place.
+ * `DiscogsRelease.credits[]`, `CatalogEntity.members[]`) and NONE of them ever
+ * has `catalogEntityId` written — confirmed in `RELATIONS.md`'s "columns I
+ * could not find a reader for" table, and re-confirmed in Task 10b:
+ * `enrichCatalogEntity.ts` builds each member as `{ name, nameKey }` and says
+ * in its own comment why it refuses to add the id (a name from Wikidata's
+ * `has part` is not a high-confidence identity claim).
+ *
+ * Read this as scoped to the `catalogEntityId` SUB-FIELD, which is what the
+ * heading says — NOT to the arrays that carry it. `Track.credits[]`,
+ * `UserUpload.credits[]` and `CatalogEntity.members[]` are all written by live
+ * code; only this one field inside them is not. The looser reading is what
+ * `creators.ts`'s "no writer anywhere" paragraph took from here, and it is
+ * false — see Task 10b's report.
+ *
+ * `track_credits` (the one of these four that becomes a real table in this
+ * task) has no `catalog_entity_id` column; the other three stay `jsonb`, where
+ * there is no column to omit in the first place.
  */
 
 import { sql } from 'drizzle-orm';

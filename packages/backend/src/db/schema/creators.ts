@@ -65,6 +65,33 @@
  *    .imageSuggestions[]`: no writer anywhere. Normalising a structure the
  *    product never grew into buys nothing, and `jsonb` keeps whatever shape a
  *    future writer chooses.
+ *
+ * **THE SECOND BULLET IS FALSE, and Task 10b measured it.** All three have
+ * writers:
+ *
+ *  - `CatalogEntity.members[]` — `services/uploads/enrichCatalogEntity.ts`
+ *    (`gapFilling`, from Wikidata's `has part`), reachable in production from
+ *    `ensureContributedArtist` → `enqueueArtistEnrichment`.
+ *  - `CatalogEntity.imageSuggestions[]` — the same file's
+ *    `suggestArtistPhotosFromUpload`, called by `uploads.controller`, and read
+ *    back by `artists.controller.ts:1086` (`.select('+imageSuggestions')`).
+ *  - `DiscogsRelease.credits[]` — `scripts/importDiscogsReleases.ts:201`
+ *    parses and writes them. That one is a manually-run script with no npm
+ *    script or caller wiring it, which is the weakest of the three, but it is
+ *    not "no writer".
+ *
+ * The claim came from `catalog.ts`'s `catalogEntityId` paragraph, which is
+ * correct about the `catalogEntityId` SUB-FIELD and was widened here into a
+ * claim about the arrays that carry it.
+ *
+ * The consequence is left OPEN rather than acted on, because it is a schema
+ * decision and Task 10b is a services port: **the discriminator this section
+ * states — "whether live code writes the array at all" — does not, on the
+ * corrected facts, produce the schema as landed.** Applied honestly it would
+ * make `members` and `imageSuggestions` child tables. Either the discriminator
+ * needs restating (query-by-element, which DOES produce the schema as landed
+ * and is what `catalog.ts` actually argues), or two columns are wrong. Do not
+ * cite this paragraph as settled reasoning until that is decided.
  *  - `Track.hls[]` / `Episode.hls[]` / every `sources[]`: written by live
  *    code. Child tables.
  *

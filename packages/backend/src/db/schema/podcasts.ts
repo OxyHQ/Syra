@@ -45,11 +45,16 @@
  * shelf on a person's profile (`entityProfile.controller.ts:169-179`) — so
  * `podcast_persons`/`episode_persons` both get real indexes on
  * `linked_oxy_user_id` and `href`. `Podcast.sources` has NO writer anywhere
- * in this codebase (confirmed by grep — the same "shipped read half of a
- * mechanism whose write half was never connected" shape catalog.ts's own
- * report found in `CatalogEntity.members[]`), but it is built as a real table
+ * in this codebase (confirmed by grep), but it is built as a real table
  * here regardless because the brief names `podcastSources` explicitly in its
  * `Produces` list — flagged, not resolved unilaterally.
+ *
+ * The comparison this sentence used to draw — "the same shape catalog.ts's own
+ * report found in `CatalogEntity.members[]`" — is REMOVED, not reworded:
+ * `members` is written by `services/uploads/enrichCatalogEntity.ts`, so it was
+ * never an example of a read half with no write half. Task 10b measured that;
+ * see its report. `Podcast.sources` having no writer stands on its own grep and
+ * did not need the analogy.
  *
  * `Episode.hls` becoming a child table was, in this file's first pass, a
  * departure from `catalog.ts`'s own THEN-precedent: `tracks.hls` stayed

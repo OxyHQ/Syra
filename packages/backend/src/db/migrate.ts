@@ -67,7 +67,15 @@
  * once. Task 5 moved it again, to `0010`, Task 6 to `0011` (then `0013` with
  * its review pair), and Task 7 to `0015` (`0014` plus its own review
  * follow-up), for the same reason and by the same rule — routine maintenance, not a judgment call, for as long as nothing is
- * deployed.
+ * deployed. Task 10b moves it to `0018`, catching up THREE at once — `0016`
+ * (Task 10a's `tracks_album_id_idx`), `0017` and `0018` — because 10a landed
+ * a migration without advancing the boundary and 10b landed two more. That
+ * is the same "the value was never advanced" lapse the `0006`-`0008` sentence
+ * above describes, recurring one task later, which is worth noting: this is
+ * routine maintenance that is routinely forgotten, and nothing fails when it
+ * is. The post-genesis ordering gate simply holds three migrations to an
+ * invariant that has nothing to protect, so the failure is silent in the safe
+ * direction — which is exactly why it keeps happening.
  *
  * `0011` is, notably, the FIRST migration in this window that would have been
  * correct outside it too: it is purely additive (eight new tables, their own
@@ -190,7 +198,7 @@ const MIGRATIONS_SEARCH_DEPTH = 6;
  * Exported so that gate can read the SAME boundary this file documents,
  * rather than a second copy of the tag string that could drift from it.
  */
-export const LAST_GENESIS_MIGRATION_TAG = '0015_thankful_stick';
+export const LAST_GENESIS_MIGRATION_TAG = '0018_giant_bucky';
 
 /**
  * `packages/backend/drizzle`, found by walking UP from this module rather than

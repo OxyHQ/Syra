@@ -56,9 +56,12 @@
  * `$or` in `getUserPlaylists`, the `.find()` in the internal edit-permission
  * helper) and `utils/catalogVisibility.ts`'s `canViewPlaylist` reads it too,
  * but nothing in this codebase ever writes to it — no route, no controller,
- * no script assigns `playlist.collaborators`. Same shape as `CatalogEntity
- * .members[]` in Task 2's report: a shipped read half of a mechanism whose
- * write half was never connected. RELATIONS.md still names it a real FK
+ * no script assigns `playlist.collaborators`: a shipped read half of a
+ * mechanism whose write half was never connected. (Task 2's report cited
+ * `CatalogEntity.members[]` as the same shape; it is NOT — `members` is written
+ * by `services/uploads/enrichCatalogEntity.ts`, measured in Task 10b. The
+ * comparison is dropped; the grep for `playlist.collaborators` stands on its
+ * own.) RELATIONS.md still names it a real FK
  * relation (`Playlist.collaborators[].oxyUserId`, CROSS-SERVICE) and the
  * brief names it explicitly as a child table, so it is built as one —
  * `playlist_collaborators`, indexed BOTH directions: `unique(playlist_id,
