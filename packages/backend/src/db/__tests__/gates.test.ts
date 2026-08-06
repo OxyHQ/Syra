@@ -224,10 +224,24 @@ const OVERLONG_IDENTIFIER_EXEMPTIONS: readonly { identifier: string; reason: str
  * Pure over `(file, text)` pairs so the checker itself can be exercised
  * against a synthetic statement — see the boundary test below, which is what
  * keeps this from being a check that cannot fail.
+ *
+ * Returns the identifier as its OWN FIELD rather than only a formatted
+ * message, and that is the fix for a real defect this gate shipped with: the
+ * first version matched exemptions with `violation.includes(name)` against the
+ * formatted string, so any identifier CONTAINING an exempt name was absorbed
+ * by it. A 74-byte `musicbrainz_artist_urls_..._id_fk_two` passed the gate,
+ * and a superstring also kept a paid-off exemption looking live. Structured
+ * output is what lets {@link findUnexemptedIdentifiers} compare by identity.
  */
+interface OverlongIdentifier {
+  readonly identifier: string;
+  readonly file: string;
+  readonly bytes: number;
+}
+
 function findOverlongIdentifiers(
   files: readonly { file: string; text: string }[]
-): { violations: string[]; scanned: number } {
+): { violations: OverlongIdentifier[]; scanned: number } {
   const seen = new Map<string, string>();
   for (const { file, text } of files) {
     // Identifiers are double-quoted in generated DDL; string literals are
@@ -238,13 +252,40 @@ function findOverlongIdentifiers(
     }
   }
 
-  const violations: string[] = [];
+  const violations: OverlongIdentifier[] = [];
   for (const [identifier, file] of seen) {
-    if (Buffer.byteLength(identifier, 'utf8') > MAX_IDENTIFIER_BYTES) {
-      violations.push(`${file}: "${identifier}" is ${Buffer.byteLength(identifier, 'utf8')} bytes`);
-    }
+    const bytes = Buffer.byteLength(identifier, 'utf8');
+    if (bytes > MAX_IDENTIFIER_BYTES) violations.push({ identifier, file, bytes });
   }
   return { violations, scanned: seen.size };
+}
+
+/**
+ * Split over-long identifiers into the ones no exemption covers and the
+ * exemptions no violation still justifies.
+ *
+ * Both halves compare by EXACT identity against a `Set`, never by substring.
+ * The substring version of this — `violation.includes(entry.identifier)` —
+ * failed in both directions at once: a superstring of an exempt name was
+ * silently absorbed (the gate kept passing while it stopped checking, exactly
+ * what the vacuity floors exist to prevent), and that same superstring kept a
+ * paid-off exemption looking live, so the staleness check could not report it
+ * either. Pure, so both directions are proven against synthetic input below
+ * rather than against a real schema that happens to hold one known violation
+ * forever.
+ */
+function findUnexemptedIdentifiers(
+  violations: readonly OverlongIdentifier[],
+  exemptions: readonly { identifier: string; reason: string }[]
+): { unexempted: OverlongIdentifier[]; stale: string[] } {
+  const exempt = new Set(exemptions.map((entry) => entry.identifier));
+  const found = new Set(violations.map((violation) => violation.identifier));
+  return {
+    unexempted: violations.filter((violation) => !exempt.has(violation.identifier)),
+    stale: exemptions
+      .filter((entry) => !found.has(entry.identifier))
+      .map((entry) => `stale_identifier_exemption: ${entry.identifier}`),
+  };
 }
 
 /**
@@ -396,15 +437,13 @@ describe('schema gates', () => {
     const { violations, scanned } = findOverlongIdentifiers(files);
     expect(scanned).toBeGreaterThanOrEqual(400);
 
-    const exempt = new Set(OVERLONG_IDENTIFIER_EXEMPTIONS.map((entry) => entry.identifier));
-    expect(violations.filter((violation) => ![...exempt].some((name) => violation.includes(name)))).toEqual([]);
-
-    // An exemption that no longer names an over-limit identifier is debt that
-    // was paid without anyone removing the note — the same staleness check
-    // `findIdColumnViolations` runs against its own two ledgers.
-    const stale = OVERLONG_IDENTIFIER_EXEMPTIONS.filter(
-      (entry) => !violations.some((violation) => violation.includes(entry.identifier))
-    ).map((entry) => `stale_identifier_exemption: ${entry.identifier}`);
+    // Exact identity, never substring — see `findUnexemptedIdentifiers`.
+    // The second half is the staleness check: an exemption that no longer
+    // names an over-limit identifier is debt paid without anyone removing the
+    // note, the same check `findIdColumnViolations` runs against its own two
+    // ledgers.
+    const { unexempted, stale } = findUnexemptedIdentifiers(violations, OVERLONG_IDENTIFIER_EXEMPTIONS);
+    expect(unexempted).toEqual([]);
     expect(stale).toEqual([]);
   });
 
@@ -422,8 +461,35 @@ describe('schema gates', () => {
         text: `ALTER TABLE "t" ADD CONSTRAINT "${tooLong}" CHECK ("${ok}" > 0);`,
       },
     ]);
-    expect(violations).toEqual([`synthetic.sql: "${tooLong}" is 64 bytes`]);
+    expect(violations).toEqual([{ identifier: tooLong, file: 'synthetic.sql', bytes: 64 }]);
     expect(scanned).toBe(3);
+  });
+
+  it('exempts an identifier by identity, never by substring', () => {
+    // The defect this replaced: `violation.includes(entry.identifier)` against
+    // the formatted message absorbed anything CONTAINING an exempt name, so a
+    // brand-new over-limit identifier that happened to extend one passed the
+    // gate — and kept the exemption looking live at the same time, defeating
+    // the staleness check too. Both directions are asserted here, on synthetic
+    // input, because the real scan holds one known violation forever and can
+    // never demonstrate either.
+    const exempt = 'x'.repeat(70);
+    const superstring = `${exempt}_two`;
+    const exemptions = [{ identifier: exempt, reason: 'synthetic' }];
+
+    // The exempt name itself still passes, and nothing is reported stale.
+    expect(
+      findUnexemptedIdentifiers([{ identifier: exempt, file: 'a.sql', bytes: 70 }], exemptions)
+    ).toEqual({ unexempted: [], stale: [] });
+
+    // A superstring is a DIFFERENT identifier: it must be reported, and it
+    // must not stand in for the exemption either.
+    expect(
+      findUnexemptedIdentifiers([{ identifier: superstring, file: 'b.sql', bytes: 74 }], exemptions)
+    ).toEqual({
+      unexempted: [{ identifier: superstring, file: 'b.sql', bytes: 74 }],
+      stale: [`stale_identifier_exemption: ${exempt}`],
+    });
   });
 });
 
