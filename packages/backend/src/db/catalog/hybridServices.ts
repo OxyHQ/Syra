@@ -47,6 +47,7 @@ export const OWNING_TASKS = {
   library: 'Task 11 — library and playlists',
   podcasts: 'Task 12 — podcasts',
   creators: 'Task 13 — creators and uploads',
+  rooms: 'Task 14 — rooms',
   user: 'Task 15 — user and recommendations',
 } as const;
 
@@ -63,6 +64,8 @@ export const NON_CATALOG_MODEL_OWNERS = {
   Library: 'library',
   Playlist: 'library',
   PlaylistTrack: 'library',
+  RecentlyPlayed: 'library',
+  Room: 'rooms',
   ArtistClaim: 'creators',
   ContributionAttestation: 'creators',
   UserUpload: 'creators',
@@ -234,6 +237,25 @@ export const HYBRID_MODULES: readonly HybridModule[] = [
       'locker\'s only serializer — lives in `uploads.controller` and moves with it.',
   },
   {
+    file: 'controllers/library.controller.ts',
+    models: ['Library', 'ListeningEvent', 'RecentlyPlayed'],
+    reason:
+      'Made hybrid by Task 10c-3, which took its two CATALOG reads (liked tracks, recently ' +
+      'played) to drizzle so they stopped feeding a drizzle row to a Mongo formatter. The ' +
+      'membership arrays, the play log and the listening events are Task 11\'s and Task 15\'s ' +
+      'tables; each read returns a list of track ids and the catalog lookup is a separate round ' +
+      'trip against Postgres.',
+  },
+  {
+    file: 'utils/syraMedia.ts',
+    models: ['Room'],
+    reason:
+      'Resolves a media reference across the catalogue and the live-rooms vertical. `rooms` is ' +
+      'Task 14\'s table; the catalog half reads Postgres. This file is also the reason ' +
+      '`halfPortedImports.test.ts` resolves import paths instead of matching specifier text — ' +
+      'it lives in `src/utils/`, so it reaches its neighbours as `./x`.',
+  },
+  {
     file: 'controllers/search.controller.ts',
     models: ['Episode', 'Podcast'],
     reason:
@@ -277,6 +299,18 @@ export const UNPORTED_CATALOG_MODULES: readonly {
       'A SCOPE constraint, not a capability one: `podcast_persons` and `episode_persons` exist ' +
       'today (`schema/podcasts.ts`), so `strongKeyCreditMatch` CAN be expressed in drizzle — ' +
       'doing it means writing podcast reads, which is Task 12\'s territory, not 10c\'s.',
+  },
+  {
+    file: 'controllers/uploads.controller.ts',
+    models: ['Album', 'CatalogEntity', 'ImageAsset', 'Track', 'TrackFingerprint', 'TrackKey'],
+    owner: 'Task 13',
+    reason:
+      'The creator upload path — 2,779 lines, and the 42 failures Task 10c inherited to Task 13 ' +
+      'all live behind it. It reads SIX catalog models AND `db/catalog/serialize`, which is why ' +
+      'it belongs here rather than in HYBRID_MODULES: that registry means "ported, with a licence ' +
+      'to read another vertical\'s models", and property 1 would correctly refuse a file holding ' +
+      'this many of its OWN vertical\'s models. Task 10c-3 swapped one import (`normalizeImageRef`) ' +
+      'and touched nothing else.',
   },
   // `services/uploads/{acoustid,isrcLookup,provenanceSignals}.ts` were listed
   // here — missed by the Task 10b brief's selector, which keyed on four model

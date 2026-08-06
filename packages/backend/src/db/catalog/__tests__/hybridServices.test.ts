@@ -10,8 +10,18 @@
  *
  *   1. no registered file imports a CATALOG model;
  *   2. a registered file imports exactly its registered models — an
- *      unregistered one fails as an oversight, a registered one that is gone
- *      fails as STALE.
+ *      unregistered MODEL fails as an oversight, a registered one that is gone
+ *      fails as STALE;
+ *   3. **every hybrid FILE in the tree is registered somewhere.**
+ *
+ * Property 3 was missing until the 10c review, and its absence is worth stating
+ * plainly rather than quietly fixing: properties 1 and 2 both ITERATE the
+ * registry, and `HYBRID_MODULES.length === 16` is a count floor, not discovery.
+ * So the registry was a hand-maintained list checked only against itself, and
+ * the one direction it could not fail in — a file that becomes hybrid and is
+ * never added — is precisely the direction the gate exists for. A sweep found
+ * three: `library.controller.ts` (made hybrid by Task 10c-3 itself),
+ * `uploads.controller.ts` and `utils/syraMedia.ts`.
  *
  * Property 2's second direction is the whole point. An exemption list that only
  * checks "everything here is allowed" is satisfied forever by an entry nobody
@@ -41,8 +51,8 @@
  * file known to have them.
  */
 
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readdirSync, readFileSync } from 'node:fs';
+import { dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { describe, expect, it } from 'bun:test';
 import {
   CATALOG_MODELS,
@@ -90,6 +100,100 @@ const KNOWN_NON_CATALOG = new Set<string>(Object.keys(NON_CATALOG_MODEL_OWNERS))
 function isCatalogModel(name: string): boolean {
   return CATALOG_MODEL_SET.has(name);
 }
+
+/**
+ * A file is HYBRID when it imports a Mongoose model AND reads Postgres — the
+ * two-store shape the registry exists to record.
+ *
+ * "Reads Postgres" is any relative import resolving under `src/db/`, not
+ * `db/catalog/` alone: `services/compliance/takedown.ts` and
+ * `services/recommendations/recordPlay.ts` reach `db/postgres` and `db/schema/`
+ * directly and are just as hybrid. Narrowing it to `db/catalog/` misses both.
+ *
+ * The converse is deliberately NOT required. `services/recommendations/taste.ts`
+ * is registered and imports only `CatalogRelationModel` with no Postgres import
+ * at all — it is residue rather than a split file, and property 2 already fails
+ * if its entry goes stale. Requiring every registered file to appear in this
+ * sweep would delete a true entry.
+ */
+const DB_DIR = resolve(SRC, 'db');
+
+/** Blank out comments, preserving line structure, so prose cannot trip the scan. */
+function withoutComments(source: string): string {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, ' '))
+    .replace(/\/\/[^\n]*/g, (line) => line.replace(/[^\n]/g, ' '));
+}
+
+/** Every `.ts` file under `src/`, tests excluded. */
+function sourceFiles(directory: string): string[] {
+  const found: string[] = [];
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === '__tests__' || entry.name === 'node_modules') continue;
+      found.push(...sourceFiles(path));
+      continue;
+    }
+    if (extname(entry.name) === '.ts' && !entry.name.endsWith('.test.ts')) found.push(path);
+  }
+  return found;
+}
+
+/**
+ * Does this file read Postgres? Matched by RESOLVED PATH, never by specifier
+ * text — `utils/syraMedia.ts` reaches its neighbours as `./x` and a file inside
+ * `src/db/` reaches them as `./y`, so a text match on `db/` sees neither.
+ */
+function readsPostgres(source: string, fromDir: string): boolean {
+  if (fromDir === DB_DIR || fromDir.startsWith(`${DB_DIR}${sep}`)) return true;
+  return [...source.matchAll(/from\s+['"](\.[^'"]+)['"]/g)].some((match) =>
+    resolve(fromDir, match[1]).replace(/\.(?:[mc]?[jt]s)$/, '').startsWith(`${DB_DIR}${sep}`)
+  );
+}
+
+/** Every file under `src/` that holds a Mongoose model AND a Postgres read. */
+function sweepHybridFiles(): string[] {
+  return sourceFiles(SRC)
+    .filter((file) => {
+      const source = withoutComments(readFileSync(file, 'utf8'));
+      return modelImportsIn(source).length > 0 && readsPostgres(source, dirname(file));
+    })
+    .map((file) => relative(SRC, file))
+    .sort();
+}
+
+/**
+ * A vacuity floor for the sweep itself. A traversal that found nothing, or a
+ * `readsPostgres` that answered false for everything, would report zero
+ * unregistered files and read exactly like a clean tree.
+ */
+const MINIMUM_HYBRID_FILES = 15;
+
+describe('property 3 — every hybrid file in the tree is registered', () => {
+  const REGISTERED = new Set([
+    ...HYBRID_MODULES.map((entry) => entry.file),
+    ...UNPORTED_CATALOG_MODULES.map((entry) => entry.file),
+  ]);
+
+  it('the sweep finds the hybrid files that are known to exist', () => {
+    const found = sweepHybridFiles();
+    expect(found.length).toBeGreaterThanOrEqual(MINIMUM_HYBRID_FILES);
+    // Named, so a broken `readsPostgres` reports which shape it lost rather
+    // than a bare count. `takedown.ts` reads `db/postgres` with no
+    // `db/catalog/` import at all; `syraMedia.ts` sits in `src/utils/` and
+    // reaches its neighbours as `./x`.
+    expect(found).toContain('services/compliance/takedown.ts');
+    expect(found).toContain('utils/syraMedia.ts');
+  });
+
+  it('registers every one of them, in one registry or the other', () => {
+    // Compared by identity through a Set of the registries' own keys — `name`
+    // is already the exact relative path they are written in.
+    const unregistered = sweepHybridFiles().filter((file) => !REGISTERED.has(file));
+    expect(unregistered).toEqual([]);
+  });
+});
 
 describe('the registry is well formed', () => {
   it('registers every hybrid file exactly once', () => {
@@ -235,15 +339,20 @@ describe('vacuity floor', () => {
   });
 
   it('the registry is not empty and covers the measured hybrids', () => {
-    // Sixteen: 10b's ten services, 10c-1's three playback controllers, 10c-2's
-    // two artist-surface controllers, and 10c-3's `search.controller` (its
-    // catalog half is drizzle; podcasts and episodes are Task 12's). A registry
+    // Eighteen: 10b's ten services, 10c-1's three playback controllers, 10c-2's
+    // two artist-surface controllers, 10c-3's `search.controller` and
+    // `library.controller`, and `utils/syraMedia.ts` — the last two added by
+    // property 3's sweep, which is the only reason anybody noticed them. A
+    // registry
     // that shrank to nothing without the owning tasks landing means the walk
     // broke, not that the work finished — Tasks 11/13/15 each remove entries and
     // this floor drops with them, deliberately, by being edited when that
     // happens. The unported list went 2 -> 1 when `manifestService`'s adapters
-    // were deleted; `resolvePersons` is the one left, and it needs Task 12.
-    expect(HYBRID_MODULES.length).toBe(16);
-    expect(UNPORTED_CATALOG_MODULES.length).toBe(1);
+    // were deleted, then 1 -> 2 when property 3's sweep found
+    // `uploads.controller` — which holds six of its OWN vertical's catalog
+    // models, so it belongs here and not in HYBRID_MODULES. `resolvePersons`
+    // is the other, and it needs Task 12.
+    expect(HYBRID_MODULES.length).toBe(18);
+    expect(UNPORTED_CATALOG_MODULES.length).toBe(2);
   });
 });

@@ -1,4 +1,5 @@
-import { and, count, desc, eq } from 'drizzle-orm';
+import { descNullsLast } from '../db/catalog/containers';
+import { and, count, eq } from 'drizzle-orm';
 import { getDb } from '../db/postgres';
 import { catalogEntities, catalogEntityStrikes, tracks } from '../db/schema/catalog';
 import { logger } from '../utils/logger';
@@ -100,7 +101,7 @@ async function latestStrikeAt(
     .select({ createdAt: catalogEntityStrikes.createdAt })
     .from(catalogEntityStrikes)
     .where(eq(catalogEntityStrikes.catalogEntityId, artistId))
-    .orderBy(desc(catalogEntityStrikes.createdAt))
+    .orderBy(descNullsLast(catalogEntityStrikes.createdAt))
     .limit(1);
 
   return row?.createdAt ?? null;

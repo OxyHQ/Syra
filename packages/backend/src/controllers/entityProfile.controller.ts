@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { isLiveEntityId } from '@oxyhq/db';
 import { publicColumns } from '@oxyhq/db/assert';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
@@ -14,7 +14,11 @@ import { getDb } from '../db/postgres';
 import { albums, catalogEntities, catalogEntitySources, tracks } from '../db/schema/catalog';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../db/schema/protectedColumns';
 import { playableTrackFilter } from '../db/catalog/visibility';
-import { findAlbumsWithPlayableTracks, imageFirst } from '../db/catalog/containers';
+import {
+  descNullsLast,
+  findAlbumsWithPlayableTracks,
+  imageFirst,
+} from '../db/catalog/containers';
 import { loadImageVariants, toAlbumDtos, toTrackDtos } from '../db/catalog/hydrate';
 import { toArtistDto, type PublicCatalogEntityRow } from '../db/catalog/serialize';
 import { PodcastModel } from '../models/Podcast';
@@ -103,14 +107,14 @@ async function loadArtistMusic(
 ): Promise<EntityMusic> {
   const [albumRows, trackRows] = await Promise.all([
     findAlbumsWithPlayableTracks(eq(albums.artistId, artistId), {
-      orderBy: [imageFirst(albums.coverArtId), desc(albums.releaseDate)],
+      orderBy: [imageFirst(albums.coverArtId), descNullsLast(albums.releaseDate)],
       limit: ARTIST_ALBUMS_LIMIT,
     }),
     getDb()
       .select(publicColumns(tracks, PROTECTED_COLUMNS_BY_TABLE))
       .from(tracks)
       .where(and(playableTrackFilter(), eq(tracks.artistId, artistId)))
-      .orderBy(imageFirst(tracks.coverArtId), desc(tracks.popularity), desc(tracks.createdAt))
+      .orderBy(imageFirst(tracks.coverArtId), descNullsLast(tracks.popularity), descNullsLast(tracks.createdAt))
       .limit(ARTIST_TRACKS_LIMIT),
   ]);
 

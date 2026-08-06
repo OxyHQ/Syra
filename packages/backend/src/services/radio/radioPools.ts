@@ -1,7 +1,6 @@
 import {
   and,
   arrayOverlaps,
-  desc,
   eq,
   inArray,
   notInArray,
@@ -15,7 +14,7 @@ import { getDb } from '../../db/postgres';
 import { tracks } from '../../db/schema/catalog';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../../db/schema/protectedColumns';
 import { playableTrackFilter } from '../../db/catalog/visibility';
-import { imageFirst } from '../../db/catalog/containers';
+import { descNullsLast, imageFirst } from '../../db/catalog/containers';
 import type { PublicTrackRow } from '../../db/catalog/serialize';
 import { topRelatedArtistIds } from '../recommendations/taste';
 import {
@@ -57,8 +56,8 @@ const CF_EDGE_FANOUT = 5;
  */
 const POPULARITY_ORDER = [
   imageFirst(tracks.coverArtId),
-  desc(tracks.popularity),
-  desc(tracks.playCount),
+  descNullsLast(tracks.popularity),
+  descNullsLast(tracks.playCount),
 ];
 
 export interface BuildRadioPageInput {

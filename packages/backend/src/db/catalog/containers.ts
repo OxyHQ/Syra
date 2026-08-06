@@ -85,10 +85,15 @@ export { asc, desc };
  * EXPLAIN seed, same transaction, same statistics:
  *
  *   desc()            cost 1087.00  — Index Scan + Sort of all 3,430 playable rows
- *   descNullsLast()   cost    7.04  — Index Scan using tracks_created_at_idx, stops at 20
+ *   descNullsLast()   cost    4.34  — Index Scan using tracks_created_at_idx, stops at 20
  *
- * 155x, and it scales with the catalogue rather than with the page. The index
+ * ~250x, and it scales with the catalogue rather than with the page. The index
  * was there the whole time; nothing could reach it.
+ *
+ * (An earlier revision of this comment quoted 7.04 for the second row, from a
+ * run before the EXPLAIN seed gave `created_at` varying values. Both runs show
+ * the same thing; the number here is the one the probe now reproduces, because
+ * this is the copy that gets quoted later.)
  *
  * ## It is also the FAITHFUL ordering
  *

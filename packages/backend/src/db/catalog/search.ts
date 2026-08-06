@@ -71,16 +71,48 @@ export const TEXT_SEARCH_CONFIG = 'english';
  * Everything the user typed has already been through `websearch_to_tsquery` by
  * then; only the four characters `:*` are ours.
  *
- * The empty case is explicit: a query of nothing but stopwords renders as `''`,
- * and `('' || ':*')::tsquery` is a syntax error rather than an empty result.
- * `null::tsquery` makes the `@@` NULL, which a `WHERE` treats as false — the
- * fail-closed answer, and the one a user typing "the" should get from a lexeme
- * search.
+ * ## Two renderings cannot take a `:*`, and both were reachable
+ *
+ * `:*` is a modifier on a LEXEME, so appending it is only valid when the
+ * rendering ENDS in one — which is exactly the case where its last character is
+ * a closing quote. Two shapes end otherwise and each was a 500 on two public
+ * endpoints until this guard existed:
+ *
+ *   `love -"glove compartment"` → `'love' & !( 'glove' <-> 'compart' )`
+ *   `rock -"n roll"`            → `'rock' & !( 'n' <-> 'roll' )`
+ *
+ * A negated multi-word phrase renders as a parenthesised group, and
+ * `( … ):*` is `syntax error in tsquery`. Both call sites end in
+ * `catch → next(error)`, so an ordinary search box entry — this module's own doc
+ * advertises `-negation` and `"quoted phrases"` — returned a 500.
+ *
+ * So the append is conditional on the final character being a quote. When it is
+ * not, the tsquery is used AS IT IS: the user still gets their negated phrase,
+ * they just get no prefix match on a term they were negating anyway. That is the
+ * narrowest repair — it changes nothing about the shapes that already worked.
+ *
+ * A NEGATED bare lexeme (`love -glove` → `'love' & !'glove'`) does end in a
+ * quote and does take the prefix, becoming `!'glove':*`. That is deliberate and
+ * left alone: it excludes "glove", "gloves" and "glover" rather than only the
+ * first, which is the same direction the English stemmer already takes the
+ * positive terms.
+ *
+ * The empty case is explicit for the same family of reasons: a query of nothing
+ * but stopwords renders as `''`, and `('' || ':*')::tsquery` is a syntax error
+ * rather than an empty result. `null::tsquery` makes the `@@` NULL, which a
+ * `WHERE` treats as false — the fail-closed answer, and the one a user typing
+ * "the" should get from a lexeme search.
+ *
+ * Every branch is exercised by `__tests__/search.test.ts`, including the
+ * trailing-negated-phrase shape: every other fixture in the suite ends in a
+ * bare lexeme, which is why 102 green tests did not see this.
  */
 export function prefixTsquery(query: string): SQL {
   return sql`
     case when websearch_to_tsquery('english', ${query})::text = '' then null::tsquery
-         else (websearch_to_tsquery('english', ${query})::text || ':*')::tsquery
+         when right(websearch_to_tsquery('english', ${query})::text, 1) = ''''
+           then (websearch_to_tsquery('english', ${query})::text || ':*')::tsquery
+         else websearch_to_tsquery('english', ${query})
     end
   `;
 }

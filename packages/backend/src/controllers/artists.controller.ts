@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
-import { and, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, count, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { isLiveEntityId, sqlStateOf } from '@oxyhq/db';
 import { publicColumns } from '@oxyhq/db/assert';
 import { z } from 'zod';
@@ -15,6 +15,7 @@ import {
   findArtistsWithPlayableTracks,
   findOneArtistWithPlayableTracks,
   imageFirst,
+  descNullsLast,
 } from '../db/catalog/containers';
 import { loadImageVariants, toAlbumDtos, toTrackDtos } from '../db/catalog/hydrate';
 import { normalizeImageRef, toArtistDto, type PublicCatalogEntityRow } from '../db/catalog/serialize';
@@ -49,8 +50,8 @@ const MAX_CLAIMS_PAGE = 50;
 /** The ordering every artist listing uses: has-a-photo, then popularity, then reach. */
 const ARTIST_LISTING_ORDER = [
   imageFirst(catalogEntities.imageId),
-  desc(catalogEntities.popularity),
-  desc(catalogEntities.statsFollowers),
+  descNullsLast(catalogEntities.popularity),
+  descNullsLast(catalogEntities.statsFollowers),
 ];
 
 /** Serialize one entity row, loading only the image assets it references. */
@@ -217,7 +218,7 @@ export const getArtistAlbums = async (req: Request, res: Response, next: NextFun
 
     // Fetch albums for this artist, sorted by release date
     const albumRows = await findAlbumsWithPlayableTracks(eq(albums.artistId, id), {
-      orderBy: [imageFirst(albums.coverArtId), desc(albums.releaseDate)],
+      orderBy: [imageFirst(albums.coverArtId), descNullsLast(albums.releaseDate)],
       limit: ARTIST_ALBUMS_LIMIT,
     });
 
@@ -263,7 +264,7 @@ export const getArtistTracks = async (req: Request, res: Response, next: NextFun
         .select(publicColumns(tracks, PROTECTED_COLUMNS_BY_TABLE))
         .from(tracks)
         .where(artistTracksWhere)
-        .orderBy(imageFirst(tracks.coverArtId), desc(tracks.popularity), desc(tracks.createdAt))
+        .orderBy(imageFirst(tracks.coverArtId), descNullsLast(tracks.popularity), descNullsLast(tracks.createdAt))
         .offset(offset)
         .limit(limit),
       getDb().select({ total: count() }).from(tracks).where(artistTracksWhere),
@@ -462,7 +463,7 @@ export const getArtistDashboard = async (req: AuthRequest, res: Response, next: 
           })
           .from(tracks)
           .where(eq(tracks.artistId, artistId))
-          .orderBy(desc(tracks.createdAt))
+          .orderBy(descNullsLast(tracks.createdAt))
           .limit(10),
         db
           .select({
@@ -471,7 +472,7 @@ export const getArtistDashboard = async (req: AuthRequest, res: Response, next: 
           })
           .from(albums)
           .where(eq(albums.artistId, artistId))
-          .orderBy(desc(albums.createdAt))
+          .orderBy(descNullsLast(albums.createdAt))
           .limit(10),
         db
           .select({
@@ -480,7 +481,7 @@ export const getArtistDashboard = async (req: AuthRequest, res: Response, next: 
           })
           .from(tracks)
           .where(and(eq(tracks.artistId, artistId), eq(tracks.copyrightRemoved, true)))
-          .orderBy(desc(tracks.removedAt))
+          .orderBy(descNullsLast(tracks.removedAt))
           .limit(20),
         db.select({ total: count() }).from(tracks).where(eq(tracks.artistId, artistId)),
         db.select({ total: count() }).from(albums).where(eq(albums.artistId, artistId)),
@@ -570,7 +571,7 @@ export const getArtistInsights = async (req: AuthRequest, res: Response, next: N
         .select({ id: tracks.id, title: tracks.title, playCount: tracks.playCount })
         .from(tracks)
         .where(eq(tracks.artistId, artistId))
-        .orderBy(desc(tracks.playCount))
+        .orderBy(descNullsLast(tracks.playCount))
         .limit(10),
     ]);
 
@@ -1080,7 +1081,7 @@ export const getMyContributions = async (req: AuthRequest, res: Response, next: 
           })
           .from(tracks)
           .where(inArray(tracks.id, contributedIds))
-          .orderBy(desc(tracks.createdAt))
+          .orderBy(descNullsLast(tracks.createdAt))
           .offset(offset)
           .limit(limit)
       : [];

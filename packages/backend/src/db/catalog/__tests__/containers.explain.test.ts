@@ -308,14 +308,18 @@ beforeAll(async () => {
           .orderBy(descNullsLast(albums.releaseDate), descNullsLast(albums.createdAt))
           .limit(20),
         /**
-         * `GET /api/tracks/search`, the FAITHFUL port of the Mongo regex.
+         * The search PREDICATE alone — no playability filter, no ORDER BY.
          *
-         * Asserted to be a Seq Scan, not an index scan — `ilike '%q%'` has a
-         * leading wildcard, no b-tree can serve it, and `pg_trgm` is not
-         * installed. Pinned here rather than left unmeasured so the cost is a
-         * recorded fact for whoever rules on the tsvector alternative, and so
-         * the day `pg_trgm` or a `search_vector` reader lands, this probe is
-         * what says the plan changed.
+         * This is where the GIN index is proved, because it is the only probe
+         * with no alternative for the planner to weigh; the composed queries
+         * below legitimately prefer a partial index at this seed size.
+         *
+         * This comment used to describe the `ilike` port and claim the probe
+         * asserted a Seq Scan — the body was rewritten to `textSearch` in the
+         * same commit that added the ruling, and the prose was left behind
+         * saying the opposite of the assertion beneath it. Corrected, and worth
+         * a line: it is the recurring class this suite exists to catch, in the
+         * file that is the ruling's own evidence.
          */
         searchPredicateOnly: tx
           .select({ total: sql`count(*)` })

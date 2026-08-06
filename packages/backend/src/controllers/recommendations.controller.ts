@@ -6,8 +6,25 @@ import {
   getMadeForYou,
 } from '../services/recommendations/recommendationService';
 import { toArtistDtos, toTrackDtos } from '../db/catalog/hydrate';
+import { isPostgresConnected } from '../db/postgres';
 import { isDatabaseConnected } from '../utils/database';
 import { getParam, parseBoundedLimit } from '../utils/reqParams';
+
+/**
+ * BOTH databases, because `recommendationService` reads both.
+ *
+ * `isDatabaseConnected()` reports MONGOOSE readiness. Every personalised read
+ * here starts from a taste profile, a library and a listening history — Tasks 11
+ * and 15, still Mongo — and ends in a Postgres catalog query keyed on the ids
+ * they return, so a guard naming one database passes while the other is down and
+ * then throws inside the handler.
+ *
+ * Unlike `preview` and `images`, which are pure Postgres and simply asked the
+ * wrong question, this one has to ask twice.
+ */
+function bothDatabasesConnected(): boolean {
+  return isDatabaseConnected() && isPostgresConnected();
+}
 
 /** Discovery responses are user-scoped where personalised, public otherwise. */
 function setPublicDiscoveryCache(res: Response): void {
@@ -24,7 +41,7 @@ function setPrivateDiscoveryCache(res: Response): void {
  */
 export const getRelatedArtistsHandler = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) return res.status(503).json({ error: 'Database not available' });
+    if (!bothDatabasesConnected()) return res.status(503).json({ error: 'Database not available' });
     const id = getParam(req, 'id');
     const limit = parseBoundedLimit(req.query.limit, 20, 50);
     const artists = await getRelatedArtists(id, limit);
@@ -41,7 +58,7 @@ export const getRelatedArtistsHandler = async (req: AuthRequest, res: Response, 
  */
 export const getSimilarTracksHandler = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) return res.status(503).json({ error: 'Database not available' });
+    if (!bothDatabasesConnected()) return res.status(503).json({ error: 'Database not available' });
     const id = getParam(req, 'id');
     const limit = parseBoundedLimit(req.query.limit, 20, 50);
     const tracks = await getSimilarTracks(id, limit);
@@ -60,7 +77,7 @@ export const getSimilarTracksHandler = async (req: AuthRequest, res: Response, n
  */
 export const getMadeForYouHandler = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) return res.status(503).json({ error: 'Database not available' });
+    if (!bothDatabasesConnected()) return res.status(503).json({ error: 'Database not available' });
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 

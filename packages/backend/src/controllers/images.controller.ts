@@ -1,6 +1,6 @@
+import { isPostgresConnected } from '../db/postgres';
 import { Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
-import { isDatabaseConnected } from '../utils/database';
 import { logger } from '../utils/logger';
 import { getErrorMessage } from '../utils/error';
 import { getParam } from '../utils/reqParams';
@@ -19,7 +19,7 @@ interface ImageUploadRequest extends AuthRequest {
  */
 export const uploadImage = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -74,7 +74,7 @@ export const uploadImage = async (req: AuthRequest, res: Response, next: NextFun
  */
 export const getImage = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 

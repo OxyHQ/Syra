@@ -1,4 +1,4 @@
-import { and, arrayOverlaps, desc, eq, inArray, notInArray, or, type SQL } from 'drizzle-orm';
+import { and, arrayOverlaps, eq, inArray, notInArray, or, type SQL } from 'drizzle-orm';
 import { publicColumns } from '@oxyhq/db/assert';
 import { CatalogRelationModel } from '../../models/CatalogRelation';
 import { UserTasteProfileModel } from '../../models/UserTasteProfile';
@@ -8,7 +8,11 @@ import { getDb } from '../../db/postgres';
 import { catalogEntities, tracks } from '../../db/schema/catalog';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../../db/schema/protectedColumns';
 import { notTerminatedArtist, playableTrackFilter } from '../../db/catalog/visibility';
-import { findArtistsWithPlayableTracks, imageFirst } from '../../db/catalog/containers';
+import {
+  descNullsLast,
+  findArtistsWithPlayableTracks,
+  imageFirst,
+} from '../../db/catalog/containers';
 import type { PublicCatalogEntityRow, PublicTrackRow } from '../../db/catalog/serialize';
 import { orderByIds, rankByTaste, topRelatedArtistIds } from './taste';
 
@@ -72,7 +76,7 @@ async function withPlayableCatalog(artists: PublicCatalogEntityRow[]): Promise<P
 
   const playable = await findArtistsWithPlayableTracks(
     inArray(catalogEntities.id, artists.map((artist) => artist.id)),
-    { orderBy: [desc(catalogEntities.popularity)], limit: artists.length }
+    { orderBy: [descNullsLast(catalogEntities.popularity)], limit: artists.length }
   );
   const keep = new Set(playable.map((artist) => artist.id));
 
@@ -139,8 +143,8 @@ export async function getRelatedArtists(
         )
         .orderBy(
           imageFirst(catalogEntities.imageId),
-          desc(catalogEntities.popularity),
-          desc(catalogEntities.statsFollowers)
+          descNullsLast(catalogEntities.popularity),
+          descNullsLast(catalogEntities.statsFollowers)
         )
         .limit(limit - collaborative.length)
     : [];
@@ -156,8 +160,8 @@ export async function getRelatedArtists(
     .where(and(notTerminatedArtist(), notInArray(catalogEntities.id, [...exclude])))
     .orderBy(
       imageFirst(catalogEntities.imageId),
-      desc(catalogEntities.popularity),
-      desc(catalogEntities.statsFollowers)
+      descNullsLast(catalogEntities.popularity),
+      descNullsLast(catalogEntities.statsFollowers)
     )
     .limit(limit - combined.length);
 
@@ -213,7 +217,7 @@ export async function getSimilarTracks(
     .select(CATALOG_TRACK_COLUMNS)
     .from(tracks)
     .where(and(playableTrackFilter(), notInArray(tracks.id, exclude), similarity))
-    .orderBy(imageFirst(tracks.coverArtId), desc(tracks.popularity), desc(tracks.playCount))
+    .orderBy(imageFirst(tracks.coverArtId), descNullsLast(tracks.popularity), descNullsLast(tracks.playCount))
     .limit(limit - collaborative.length);
 
   return [...collaborative, ...contentMatches].slice(0, limit);
@@ -265,9 +269,9 @@ export async function getMadeForYou(
         .where(playableTrackFilter())
         .orderBy(
           imageFirst(tracks.coverArtId),
-          desc(tracks.popularity),
-          desc(tracks.playCount),
-          desc(tracks.createdAt)
+          descNullsLast(tracks.popularity),
+          descNullsLast(tracks.playCount),
+          descNullsLast(tracks.createdAt)
         )
         .limit(limit),
       getDb()
@@ -276,8 +280,8 @@ export async function getMadeForYou(
         .where(notTerminatedArtist())
         .orderBy(
           imageFirst(catalogEntities.imageId),
-          desc(catalogEntities.popularity),
-          desc(catalogEntities.statsFollowers)
+          descNullsLast(catalogEntities.popularity),
+          descNullsLast(catalogEntities.statsFollowers)
         )
         .limit(limit),
     ]);
@@ -310,7 +314,7 @@ export async function getMadeForYou(
         affinity
       )
     )
-    .orderBy(imageFirst(tracks.coverArtId), desc(tracks.popularity), desc(tracks.playCount))
+    .orderBy(imageFirst(tracks.coverArtId), descNullsLast(tracks.popularity), descNullsLast(tracks.playCount))
     .limit(limit * 3);
 
   // Re-rank candidates by taste affinity so the user's strongest genres/artists
@@ -344,8 +348,8 @@ export async function getMadeForYou(
       )
       .orderBy(
         imageFirst(catalogEntities.imageId),
-        desc(catalogEntities.popularity),
-        desc(catalogEntities.statsFollowers)
+        descNullsLast(catalogEntities.popularity),
+        descNullsLast(catalogEntities.statsFollowers)
       )
       .limit(limit - artists.length);
     artists = [...artists, ...genreArtists];

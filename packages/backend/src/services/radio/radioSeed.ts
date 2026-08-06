@@ -1,4 +1,5 @@
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { descNullsLast } from '../../db/catalog/containers';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { RadioSeed } from '@syra/shared-types';
 import { UserLibraryModel } from '../../models/Library';
 import { UserTasteProfileModel } from '../../models/UserTasteProfile';
@@ -203,7 +204,7 @@ async function resolveArtistSeed(seedId: string): Promise<SeedResolution | null>
     .select(SEED_TRACK_COLUMNS)
     .from(tracks)
     .where(and(eq(tracks.artistId, seedId), playableTrackFilter()))
-    .orderBy(desc(tracks.popularity))
+    .orderBy(descNullsLast(tracks.popularity))
     .limit(ARTIST_SEED_TRACK_LIMIT);
 
   // An artist row carries `genres` only once it has been enriched. Falling back

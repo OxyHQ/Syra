@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, ne } from 'drizzle-orm';
+import { and, eq, inArray, ne } from 'drizzle-orm';
 import type { Album, ArtistOrigin, Playlist, SourceProvenance, Track } from '@syra/shared-types';
 import { ContributionAttestationModel } from '../../models/ContributionAttestation';
 import { getDb } from '../../db/postgres';
@@ -10,6 +10,7 @@ import {
   findAlbumsWithPlayableTracks,
   findPlaylistsWithPlayableTracks,
   imageFirst,
+  descNullsLast,
 } from '../../db/catalog/containers';
 import { loadImageVariants, toAlbumDtos, toTrackDtos } from '../../db/catalog/hydrate';
 import { toPlaylistDto } from '../../db/catalog/serialize';
@@ -186,7 +187,7 @@ export async function loadCreditedOn(artist: ArtistProfileSource): Promise<Credi
         playableTrackFilter()
       )
     )
-    .orderBy(desc(tracks.popularity), desc(tracks.createdAt))
+    .orderBy(descNullsLast(tracks.popularity), descNullsLast(tracks.createdAt))
     .limit(CREDITED_ON_LIMIT);
 
   if (trackIdRows.length === 0) return [];
@@ -201,7 +202,7 @@ export async function loadCreditedOn(artist: ArtistProfileSource): Promise<Credi
         eq(trackCredits.nameKey, nameKey)
       )
     )
-    .orderBy(desc(tracks.popularity), desc(tracks.createdAt));
+    .orderBy(descNullsLast(tracks.popularity), descNullsLast(tracks.createdAt));
 
   // One track can carry several credits for one person (producer AND composer),
   // so the join multiplies rows and the roles are folded back per track.

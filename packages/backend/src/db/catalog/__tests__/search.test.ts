@@ -27,6 +27,9 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+
+/** `src/`, the root every scan below walks. */
+const SOURCE_ROOT = join(__dirname, '..', '..', '..');
 import { and } from 'drizzle-orm';
 import { uuidv7 } from '@oxyhq/db';
 import { normalizeNameKey } from '@syra/shared-types';
@@ -147,6 +150,55 @@ describe('what the ruling gave up, deliberately', () => {
   });
 });
 
+describe('every rendering `websearch_to_tsquery` can produce is a valid query', () => {
+  /**
+   * A negated multi-word phrase renders as a PARENTHESISED GROUP, and `( … ):*`
+   * is `syntax error in tsquery`. Appending `:*` unconditionally therefore 500'd
+   * `/api/search` and `/api/tracks/search` on an ordinary search-box entry —
+   * both call sites end in `catch → next(error)`.
+   *
+   * Every other fixture in this file, and in `controllers/tracks.search.test.ts`,
+   * ends in a bare lexeme, which is the side of the distinction where appending
+   * is valid. That is why the whole suite was green over a reachable crash: no
+   * fixture sat on the other side of it. These do.
+   */
+  const TRAILING_PAREN_RENDERINGS = [
+    'love -"glove compartment"',
+    'rock -"n roll"',
+    '"a b" -"c d"',
+    'love or -"b c"',
+  ];
+
+  it('does not raise on a trailing negated PHRASE', async () => {
+    await seedTitles('Love Song', 'Glove Compartment');
+
+    for (const query of TRAILING_PAREN_RENDERINGS) {
+      // The assertion is that this RESOLVES. Before the guard each one threw
+      // `syntax error in tsquery` out of the driver.
+      expect(`${query}: ${Array.isArray(await titlesMatching(query))}`).toBe(`${query}: true`);
+    }
+  });
+
+  /**
+   * And the negation still MEANS something — a test that only proved "no throw"
+   * would pass against a helper that had started matching nothing at all.
+   */
+  it('still excludes the negated phrase it could not prefix', async () => {
+    await seedTitles('Love Song', 'Glove Compartment Love');
+
+    expect(await titlesMatching('love -"glove compartment"')).toEqual(['Love Song']);
+  });
+
+  /** The shapes that DO end in a lexeme keep their prefix — including phrases. */
+  it('still prefixes every rendering that ends in a lexeme', async () => {
+    await seedTitles('Lovers Rock', 'Something Else');
+
+    expect(await titlesMatching('lov')).toEqual(['Lovers Rock']);
+    expect(await titlesMatching('"lovers roc"')).toEqual(['Lovers Rock']);
+    expect(await titlesMatching('lovers -someth')).toEqual(['Lovers Rock']);
+  });
+});
+
 describe('the query and the stored columns use the same configuration', () => {
   /**
    * The stored vectors are built by `to_tsvector('english', …)` and the query
@@ -175,5 +227,66 @@ describe('the query and the stored columns use the same configuration', () => {
 
     expect(configs.length).toBeGreaterThanOrEqual(5);
     expect(configs.filter((entry) => !entry.endsWith(`: ${TEXT_SEARCH_CONFIG}`))).toEqual([]);
+  });
+});
+
+describe('no catalog read orders with drizzle\'s desc()', () => {
+  /**
+   * `desc(col)` emits `ORDER BY col DESC`, which means `NULLS FIRST`; every
+   * descending index in this schema is `DESC NULLS LAST`, because that is what
+   * drizzle's index DSL `.desc()` emits. Postgres matches an ordering to an
+   * index syntactically, nulls placement included, so the two never meet — the
+   * index is still chosen, as a predicate scan with a full sort on top
+   * (measured: `GET /api/tracks` cost 1087.00 vs 4.34).
+   *
+   * On a NULLABLE column it is also a behaviour inversion: `catalog_entities.
+   * stats_followers` and `tracks.removed_at` are nullable, and Mongo sorted a
+   * missing field LAST. `desc()` puts those rows at the FRONT of the shelf.
+   *
+   * The task that introduced `descNullsLast` converted its own three
+   * controllers and left eleven sites in files it had also touched — two of them
+   * the nullable ones, and one of them ordering the same artist list a second
+   * way. That is why this is a gate and not a convention: the two spellings are
+   * indistinguishable by eye and `tsc` accepts both.
+   *
+   * `asc()` is deliberately NOT forbidden. Postgres `ASC` already means
+   * `NULLS LAST` and drizzle's `.asc()` index is `ASC NULLS LAST`, so that pair
+   * matches and needs no replacement.
+   */
+  const APPLICATION_DIRS = ['controllers', 'services', 'utils', 'middleware', 'routes'];
+
+  it('every descending catalog ordering uses descNullsLast', () => {
+    const offenders: string[] = [];
+    let scanned = 0;
+
+    const walk = (directory: string) => {
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        const path = join(directory, entry.name);
+        if (entry.isDirectory()) {
+          if (entry.name === '__tests__' || entry.name === 'node_modules') continue;
+          walk(path);
+          continue;
+        }
+        if (!entry.name.endsWith('.ts') || entry.name.endsWith('.test.ts')) continue;
+        scanned += 1;
+        const source = readFileSync(path, 'utf8')
+          // Comments are blanked so prose naming `desc()` — this block included
+          // — cannot trip the scan.
+          .replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, ' '))
+          .replace(/\/\/[^\n]*/g, (line) => line.replace(/[^\n]/g, ' '));
+        // `(?<![.\w])` so the index DSL's `column.desc()` and the identifier
+        // `descNullsLast(` are both left alone — only the bare call matches.
+        for (const match of source.matchAll(/(?<![.\w])desc\([^)]*\)/g)) {
+          offenders.push(`${path.slice(SOURCE_ROOT.length + 1)}: ${match[0]}`);
+        }
+      }
+    };
+
+    for (const directory of APPLICATION_DIRS) walk(join(SOURCE_ROOT, directory));
+
+    // A vacuity floor: a traversal that found nothing would report no offenders
+    // and read exactly like a clean tree.
+    expect(scanned).toBeGreaterThanOrEqual(100);
+    expect(offenders).toEqual([]);
   });
 });

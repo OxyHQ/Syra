@@ -298,8 +298,20 @@ describe('no file holds half of the catalog port', () => {
   /**
    * The stale direction. A registered file that no longer holds both sides has
    * been ported, and its entry is now a licence with nothing to license.
+   *
+   * `HALF_PORTED_BY_NECESSITY` is EMPTY today — `browse.controller`'s entry
+   * failed here and was deleted, which is the mechanism working — so the loop
+   * below iterates nothing and this test on its own asserts nothing. The
+   * registry-empty assertion is what keeps it honest: it fails the moment
+   * somebody adds an entry without checking that it really holds both sides,
+   * and it fails LOUDLY rather than by silently passing over zero entries.
+   *
+   * The same vacuity was deleted outright for `UNPORTED_SYMBOLS` below, and the
+   * treatments differ on purpose: nothing is expected to re-enter that list,
+   * while a future task splitting a file across the two sides genuinely needs
+   * this one, so the loop is kept and its emptiness is asserted instead.
    */
-  it('every registered exception still holds both sides', () => {
+  it('every registered exception still holds both sides, and there are none', () => {
     const stale = Object.entries(HALF_PORTED_BY_NECESSITY).flatMap(([name, entry]) => {
       const file = resolve(SOURCE_DIR, name);
       const found = halfPortedImport(readImports(readFileSync(file, 'utf8')), dirname(file));
@@ -311,6 +323,9 @@ describe('no file holds half of the catalog port', () => {
     });
 
     expect(stale).toEqual([]);
+    // Delete this line when an entry is legitimately added; the loop above is
+    // then doing the work and this assertion has stopped describing the tree.
+    expect(Object.keys(HALF_PORTED_BY_NECESSITY)).toEqual([]);
   });
 
   // ── The gate's own behaviour, against synthetic inputs ──────────────────

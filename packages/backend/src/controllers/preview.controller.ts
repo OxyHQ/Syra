@@ -1,10 +1,9 @@
 import { and, asc, eq } from 'drizzle-orm';
 import { isLiveEntityId } from '@oxyhq/db';
 import type { Request, Response, NextFunction } from 'express';
-import { getDb } from '../db/postgres';
+import { getDb, isPostgresConnected } from '../db/postgres';
 import { trackHlsRenditions, tracks } from '../db/schema/catalog';
 import { playableTrackFilter } from '../db/catalog/visibility';
-import { isDatabaseConnected } from '../utils/database';
 import { getParam } from '../utils/reqParams';
 import { ensurePreviewClip } from '../services/preview/previewService';
 import type { PreviewSourceRef } from '../services/preview/previewService';
@@ -39,7 +38,7 @@ function clampStart(value: unknown, max: number): number {
  */
 export const getTrackPreview = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
