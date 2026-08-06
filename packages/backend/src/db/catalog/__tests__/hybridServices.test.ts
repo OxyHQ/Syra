@@ -226,6 +226,6 @@ describe('vacuity floor', () => {
     // finished — Tasks 11/13/15 each remove entries and this floor drops with
     // them, deliberately, by being edited when that happens.
     expect(HYBRID_SERVICES.length).toBe(10);
-    expect(UNPORTED_CATALOG_SERVICES.length).toBe(5);
+    expect(UNPORTED_CATALOG_SERVICES.length).toBe(2);
   });
 });

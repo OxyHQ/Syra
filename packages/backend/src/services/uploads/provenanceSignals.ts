@@ -27,7 +27,9 @@ import type {
 } from '@syra/shared-types';
 import { normalizeNameKey } from '@syra/shared-types';
 import type { ExtractedMetadata, NativeTag } from './extractMetadata';
-import { IsrcRegistryModel } from '../../models/IsrcRegistry';
+import { eq } from 'drizzle-orm';
+import { getDb } from '../../db/postgres';
+import { isrcRegistry } from '../../db/schema/catalog';
 import { splitArtistCredit } from './artistNames';
 
 // ── Vocabulary ──────────────────────────────────────────────────────────────
@@ -638,14 +640,26 @@ export async function collectProvenanceSignals(
   let isrcRegistryMatch: IsrcRegistryMatch | undefined;
 
   if (metadata.isrc) {
-    const row = await IsrcRegistryModel.findOne({ isrc: metadata.isrc.toUpperCase() }).lean();
+    const [row] = await getDb()
+      .select({
+        isrc: isrcRegistry.isrc,
+        recordingMbid: isrcRegistry.recordingMbid,
+        title: isrcRegistry.title,
+        artistCredit: isrcRegistry.artistCredit,
+        lengthMs: isrcRegistry.lengthMs,
+        releaseCount: isrcRegistry.releaseCount,
+      })
+      .from(isrcRegistry)
+      .where(eq(isrcRegistry.isrc, metadata.isrc.toUpperCase()))
+      .limit(1);
     if (row) {
       isrcRegistryMatch = {
         isrc: row.isrc,
         recordingMbid: row.recordingMbid,
         title: row.title,
         artistCredit: row.artistCredit,
-        lengthMs: row.lengthMs,
+        // `lengthMs` is nullable here; the DTO field is optional.
+        lengthMs: row.lengthMs ?? undefined,
         releaseCount: row.releaseCount,
       };
     }

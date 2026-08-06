@@ -221,24 +221,10 @@ export const UNPORTED_CATALOG_SERVICES: readonly {
       'today (`schema/podcasts.ts`), so `strongKeyCreditMatch` CAN be expressed in drizzle — ' +
       'doing it means writing podcast reads, which is Task 12\'s territory, not 10c\'s.',
   },
-  {
-    file: 'services/uploads/acoustid.ts',
-    models: ['IsrcRegistry'],
-    owner: 'Task 10b (follow-up)',
-    reason:
-      'Missed by the brief\'s selector, which named only Track/Album/CatalogEntity/ImageAsset. ' +
-      '`isrc_registry` is a catalog table and this is a catalog service.',
-  },
-  {
-    file: 'services/uploads/isrcLookup.ts',
-    models: ['IsrcRegistry'],
-    owner: 'Task 10b (follow-up)',
-    reason: 'Same selector gap as `acoustid.ts`.',
-  },
-  {
-    file: 'services/uploads/provenanceSignals.ts',
-    models: ['IsrcRegistry'],
-    owner: 'Task 10b (follow-up)',
-    reason: 'Same selector gap as `acoustid.ts`.',
-  },
+  // `services/uploads/{acoustid,isrcLookup,provenanceSignals}.ts` were listed
+  // here — missed by the Task 10b brief's selector, which keyed on four model
+  // names while `schema/catalog.ts` owns nineteen tables. They are ported now,
+  // and this gate is what said so: all three failed the "still imports what it
+  // is listed for" assertion the moment the imports went, which is the stale
+  // direction firing on real work rather than on a fixture.
 ] as const;

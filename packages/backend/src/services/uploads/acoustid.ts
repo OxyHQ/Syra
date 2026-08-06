@@ -39,7 +39,9 @@
 
 import { env } from '../../config/env';
 import { logger } from '../../utils/logger';
-import { IsrcRegistryModel } from '../../models/IsrcRegistry';
+import { eq } from 'drizzle-orm';
+import { getDb } from '../../db/postgres';
+import { isrcRegistry } from '../../db/schema/catalog';
 import { FINGERPRINT_MATCH_BER, type Fingerprint } from './fingerprint';
 
 /** The web service. A constant, never built from anything in an uploaded file. */
@@ -622,9 +624,11 @@ export async function resolveAcousticIdentity(
    * no ISRC is recoverable — the recording is still identified, and the markers
    * still fire, because those depend on the lookup rather than on the slice.
    */
-  const registryRow = await IsrcRegistryModel.findOne({ recordingMbid: recording.recordingMbid })
-    .select('isrc')
-    .lean();
+  const [registryRow] = await getDb()
+    .select({ isrc: isrcRegistry.isrc })
+    .from(isrcRegistry)
+    .where(eq(isrcRegistry.recordingMbid, recording.recordingMbid))
+    .limit(1);
 
   const primaryArtist = recording.artists[0];
   const releaseMbid = recording.releaseMbids[0];
