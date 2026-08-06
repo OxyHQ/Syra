@@ -28,14 +28,15 @@
  *
  * THE GENESIS BOOTSTRAP WINDOW — `LAST_GENESIS_MIGRATION_TAG`
  *
- * `0000` through `0005` build this schema's first shape against an EMPTY
- * database with no live predecessor to protect — Tasks 1 through 4 of the
- * Mongo→Postgres port, applied so far only with `--phase=all` against
- * `syra_dev` and CI's `syra_ci`. A `pre`/`post` review of that window (Task 4
- * code review, `task-4-review.md`, Critical #1) found it does NOT actually
- * satisfy `planMigrationRun`'s ordering invariant: `0003` (Task 3, `pre`) sits
- * behind `0001`/`0002` (Task 2, `post`), so `--phase=pre` and `--phase=post`
- * both BLOCK if run against this window — only `--phase=all` succeeds.
+ * `0000` through `0008` build this schema against an EMPTY database with no
+ * live predecessor to protect — Tasks 1 through 4 of the Mongo→Postgres port,
+ * plus the Task 4 review's `0007`/`0008` genres-`kind` follow-up, applied so
+ * far only with `--phase=all` against `syra_dev` and CI's `syra_ci`. A
+ * `pre`/`post` review of an earlier cut of this window (Task 4 code review,
+ * `task-4-review.md`, Critical #1) found it does NOT actually satisfy
+ * `planMigrationRun`'s ordering invariant: `0003` (Task 3, `pre`) sits behind
+ * `0001`/`0002` (Task 2, `post`), so `--phase=pre` and `--phase=post` both
+ * BLOCK if run against this window — only `--phase=all` succeeds.
  *
  * The ruling: do not re-order or re-mark history to force the invariant to
  * hold retroactively. There is nothing a phase split protects yet — no image
@@ -45,14 +46,41 @@
  * is the CORRECT and ONLY sanctioned way to apply it, and this is where that
  * gets written down rather than left as tribal knowledge.
  *
- * `LAST_GENESIS_MIGRATION_TAG`, below, draws the line: every migration up to
- * and including it is genesis (unordered, `--phase=all` only). Every
- * migration AFTER it is a REAL rollout against a database with a live
- * predecessor, and for those, `src/db/__tests__/gates.test.ts`'s "deploy-phase
- * ordering (post-genesis)" describe block enforces the invariant this window
- * itself does not satisfy: no `pre` migration may be ordered behind a `post`
- * one. That is what makes `--phase=pre`/`--phase=post` trustworthy the first
- * time a real rollout actually needs them.
+ * THE BOUNDARY IS NOT A FIXED RANGE — IT ADVANCES, THEN FREEZES. The honest
+ * definition of "genesis" is not "the migrations Task 1-4 happened to write"
+ * but "ran, and will only ever run, against an empty database": every
+ * migration that lands BEFORE Syra's first production Postgres deploy
+ * qualifies, because no image is live yet for a `pre`/`post` split to
+ * protect. So `LAST_GENESIS_MIGRATION_TAG` moves forward with each such
+ * migration — this is routine maintenance, not a per-migration judgment call
+ * — and FREEZES permanently the moment that first production deploy happens.
+ * From that point on a real image is serving against this schema, and every
+ * migration after the frozen boundary is a real rollout the `pre`/`post`
+ * invariant has to hold for. Concretely: the boundary was set at `0005` when
+ * this comment was first written and then left there while `0006`-`0008`
+ * landed against it the exact same way `0000`-`0005` did — against nothing
+ * yet deployed — which is the value never having been advanced, not evidence
+ * those three needed a `pre`/`post` split. The Task 4 review that added this
+ * paragraph is what actually moves it, to `0008`, catching all three up at
+ * once.
+ *
+ * `0008` is also why the boundary matters for more than ordering: its
+ * composite `(genre_id, kind) -> genres(id, kind)` FK is safe to add ONLY
+ * because `genres`, `album_genres`, and `podcast_categories` are empty going
+ * in — see `0008`'s own header. A migration with that property is exactly
+ * what "genesis" is for; it would not be safe to run the same way against a
+ * database a live image had already been writing to, which is precisely the
+ * case the boundary stops applying to once it freezes.
+ *
+ * `LAST_GENESIS_MIGRATION_TAG`, below, draws the (currently still moving)
+ * line: every migration up to and including it is genesis (unordered,
+ * `--phase=all` only). Every migration AFTER it is a REAL rollout against a
+ * database with a live predecessor, and for those,
+ * `src/db/__tests__/gates.test.ts`'s "deploy-phase ordering (post-genesis)"
+ * describe block enforces the invariant this window itself does not satisfy:
+ * no `pre` migration may be ordered behind a `post` one. That is what makes
+ * `--phase=pre`/`--phase=post` trustworthy the first time a real rollout
+ * actually needs them.
  *
  * A COROLLARY FOR EVERY MIGRATION AFTER THE BOUNDARY: keep additive DDL and
  * narrowing DDL in SEPARATE migration files. `drizzle-kit generate` will
@@ -119,16 +147,17 @@ const MIGRATIONS_SEARCH_DEPTH = 6;
 
 /**
  * The journal tag of the last GENESIS migration — see this file's own doc
- * comment, "THE GENESIS BOOTSTRAP WINDOW", for what that means and why the
- * line is drawn here. Every migration up to and including this one is exempt
- * from the pre-behind-post ordering invariant; every migration after it is
- * held to it by `gates.test.ts`'s "deploy-phase ordering (post-genesis)"
- * describe block.
+ * comment, "THE GENESIS BOOTSTRAP WINDOW", for what that means, why the line
+ * moves rather than sits fixed, and why it freezes for good at Syra's first
+ * production Postgres deploy (has not happened yet). Every migration up to
+ * and including this one is exempt from the pre-behind-post ordering
+ * invariant; every migration after it is held to it by `gates.test.ts`'s
+ * "deploy-phase ordering (post-genesis)" describe block.
  *
  * Exported so that gate can read the SAME boundary this file documents,
  * rather than a second copy of the tag string that could drift from it.
  */
-export const LAST_GENESIS_MIGRATION_TAG = '0005_public_pepper_potts';
+export const LAST_GENESIS_MIGRATION_TAG = '0008_stiff_the_liberteens';
 
 /**
  * `packages/backend/drizzle`, found by walking UP from this module rather than

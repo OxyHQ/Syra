@@ -593,6 +593,61 @@ describe('podcasts schema (Task 4)', () => {
     }
   });
 
+  it('rejects an album_genres row that points at a podcast-kind genre — the composite FK I7 exists for', async () => {
+    const db = getDb();
+
+    // The whole point of `genres.kind` + the composite `(genre_id, kind)`
+    // FK: a single-column `genreId` FK could not stop `album_genres` (fixed
+    // to `kind = 'music'` by its own CHECK) from referencing a genre row
+    // that actually belongs to the podcast vertical. Needs a real `albums`
+    // row to reference, which needs a real `catalog_entities` artist and a
+    // real `image_assets` cover — see `genres.ts`'s file-level doc comment.
+    const [genre] = await db
+      .insert(genres)
+      .values({ name: 'CHECK-fixture-cross-vertical-genre', kind: 'podcast' })
+      .returning({ id: genres.id });
+    const [artist] = await db
+      .insert(catalogEntities)
+      .values({ name: 'CHECK-fixture-cross-vertical-artist', type: 'artist', source: 'upload' })
+      .returning({ id: catalogEntities.id });
+    const [coverArt] = await db
+      .insert(imageAssets)
+      .values({
+        s3Key: 'CHECK-fixture-cross-vertical-cover-key',
+        filename: 'cover.jpg',
+        contentType: 'image/jpeg',
+        byteSize: 1,
+        ownerType: 'album',
+      })
+      .returning({ id: imageAssets.id });
+    const [album] = await db
+      .insert(albums)
+      .values({
+        title: 'CHECK-fixture-cross-vertical-album',
+        artistId: artist.id,
+        artistName: 'CHECK-fixture-cross-vertical-artist',
+        releaseDate: '2026',
+        coverArtId: coverArt.id,
+      })
+      .returning({ id: albums.id });
+
+    try {
+      // `kind` is omitted — `album_genres_kind_check` fixes it to `'music'`
+      // by default, so this is exactly the row a real write path would
+      // produce: an album genre insert that never mentions `kind` at all,
+      // pointed at a genre row that is `kind = 'podcast'`.
+      await expect(
+        Promise.resolve(db.insert(albumGenres).values({ albumId: album.id, genreId: genre.id }))
+      ).rejects.toThrow();
+    } finally {
+      await db.delete(albumGenres).where(eq(albumGenres.albumId, album.id));
+      await db.delete(albums).where(eq(albums.id, album.id));
+      await db.delete(imageAssets).where(eq(imageAssets.id, coverArt.id));
+      await db.delete(catalogEntities).where(eq(catalogEntities.id, artist.id));
+      await db.delete(genres).where(eq(genres.id, genre.id));
+    }
+  });
+
   it('requires one episode per (podcast_id, guid)', async () => {
     const db = getDb();
 

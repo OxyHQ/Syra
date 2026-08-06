@@ -360,12 +360,10 @@ export const podcasts = pgTable(
      * credit-listing and search request (called from
      * `entityProfile.controller.ts:167` and the search path); that function's
      * own doc comment says "the extra query uses the indexed `status` field".
-     * `entityProfile.controller.ts:169` separately runs
-     * `{ status: { $ne: 'removed' } }`, also served by this index since a
-     * `<> 'active'` result set already excludes 'removed'. Indexes `id`
-     * alone, not a sort key, because the reader is `.select('_id')` with no
-     * `ORDER BY` — smaller than Mongo's full `status` index and an exact
-     * match for the query, not a general-purpose one.
+     * Indexes `id` alone, not a sort key, because the reader is
+     * `.select('_id')` with no `ORDER BY` — smaller than Mongo's full
+     * `status` index and an exact match for the query, not a general-purpose
+     * one.
      */
     index('podcasts_inactive_idx').on(t.id).where(sql`${t.status} <> 'active'`),
     index('podcasts_search_gin').using('gin', t.searchVector),

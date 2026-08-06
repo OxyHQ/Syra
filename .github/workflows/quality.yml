@@ -98,11 +98,16 @@ jobs:
       # Schema-vs-migration drift gate (Task 4 review, Critical #2): every
       # DB-backed test below runs against the already-MIGRATED database,
       # which does not move when a `schema/*.ts` file changes. A committed
-      # schema edit with no matching migration (or a migration edited after
-      # the fact so it no longer matches its own snapshot) was invisible to
-      # every other step in this workflow — `db:generate` reporting "no
-      # schema changes" was a line in an implementer's report, not a gate,
-      # until this step. `drizzle-kit generate` never opens a database
+      # schema edit with no matching migration was invisible to every other
+      # step in this workflow — `db:generate` reporting "no schema changes"
+      # was a line in an implementer's report, not a gate, until this step.
+      # It catches THAT gap only: `drizzle-kit generate` diffs the current
+      # `schema/*.ts` against the latest recorded snapshot, so it reports
+      # nothing to do whenever they already agree — it does not re-read an
+      # already-generated migration's SQL and re-verify it against its own
+      # snapshot, so a migration file hand-edited after generation (schema
+      # and snapshot left untouched) produces no diff here and is not caught
+      # by this step. `drizzle-kit generate` never opens a database
       # connection (verified directly: it succeeds identically against an
       # unreachable `DATABASE_URL`) — only `drizzle.config.ts`'s own guard
       # requires the variable to be SET, so this can run before Postgres is
@@ -112,7 +117,7 @@ jobs:
         run: |
           bun run db:generate
           if [ -n "$(git status --porcelain -- drizzle)" ]; then
-            echo "::error::db:generate produced changes under drizzle/ that are not committed. A schema/*.ts edit landed without its matching migration (or a migration's snapshot has drifted from the schema). Run 'bun run db:generate' locally, inspect the SQL, and commit the result in the same change as the schema edit." >&2
+            echo "::error::db:generate produced changes under drizzle/ that are not committed. A schema/*.ts edit landed without its matching migration. Run 'bun run db:generate' locally, inspect the SQL, and commit the result in the same change as the schema edit." >&2
             git status --porcelain -- drizzle
             git --no-pager diff -- drizzle
             exit 1
