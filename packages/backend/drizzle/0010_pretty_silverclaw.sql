@@ -1,0 +1,24 @@
+-- oxy:deploy-phase=post
+-- NARROWING: adds a foreign key to a column on an already-existing table.
+-- `tracks.copyright_report_id` has existed (unconstrained) since 0000 and
+-- `copyright_reports` only exists as of 0009, so this is the constraint the
+-- deferred ledger has been holding since Task 2 — see schema/creators.ts's
+-- file-level doc comment and schema/deferredForeignKeys.ts, which is empty as
+-- of this migration.
+--
+-- `post`, not `pre`, because an ADD CONSTRAINT can reject a write the image
+-- still serving considers legal: the previous image sets this column from
+-- takedown code that knows nothing about a `copyright_reports` table, so any
+-- value it writes that has no matching row would start failing the moment
+-- this lands. Applied after the new image is live, that write path is already
+-- the one that creates the report row first.
+--
+-- DATA PRECONDITION, same shape as 0008's: this is safe to add without a
+-- backfill or a NOT VALID/VALIDATE split only because `tracks` is EMPTY —
+-- no production Postgres deploy exists yet (migrate.ts, "THE GENESIS
+-- BOOTSTRAP WINDOW", whose boundary this migration advances to). Against a
+-- populated table the same statement takes a lock while it verifies every
+-- existing row, and any pre-existing `copyright_report_id` pointing at a
+-- Mongo ObjectId would fail it outright. Re-derive both if this shape is
+-- ever replayed against a database that already holds tracks.
+ALTER TABLE "tracks" ADD CONSTRAINT "tracks_copyright_report_id_copyright_reports_id_fk" FOREIGN KEY ("copyright_report_id") REFERENCES "public"."copyright_reports"("id") ON DELETE set null ON UPDATE no action;

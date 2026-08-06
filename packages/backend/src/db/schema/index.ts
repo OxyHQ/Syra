@@ -21,6 +21,7 @@
  */
 
 export * from './catalog';
+export * from './creators';
 export * from './genres';
 export * from './library';
 export * from './podcasts';

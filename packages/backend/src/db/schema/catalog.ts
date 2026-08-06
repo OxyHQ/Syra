@@ -113,6 +113,15 @@ import type {
   TrackCredit,
   TrackImage,
 } from '@syra/shared-types';
+/**
+ * `creators.ts` imports this module too, so the two are MUTUALLY importing —
+ * deliberately, and only for `tracks.copyrightReportId`'s reference below.
+ * `.references()` takes a thunk drizzle does not call until it builds a
+ * table's config, long after both modules have finished evaluating, so a
+ * partially-initialised binding during the cycle is never dereferenced. See
+ * `creators.ts`'s file-level doc comment.
+ */
+import { copyrightReports } from './creators';
 import { genres, GENRE_KINDS } from './genres';
 
 // ── Closed value sets ────────────────────────────────────────────────────
@@ -603,10 +612,20 @@ export const tracks = pgTable(
     /** An Oxy account id — no foreign key. Not `*_id`-suffixed. */
     removedBy: text(),
     /**
-     * FK to `copyright_reports`, which has not landed yet (a moderation-
-     * vertical table, out of this task's scope) — see `deferredForeignKeys.ts`.
+     * The report that took this track down — optional, and set only at
+     * takedown time (`services/compliance/takedown.ts:567`).
+     *
+     * SET NULL, not CASCADE: `copyright_reports` is DMCA evidence that
+     * outlives the work, so its own removal (the one rollback-only
+     * `deleteOne` in the codebase, for a report describing a takedown that
+     * never happened) must leave the track standing. This was the deferred
+     * ledger's last entry until Task 5 landed `copyright_reports`
+     * (`schema/creators.ts`); the entry is deleted rather than edited, and
+     * `deferredForeignKeys.ts` is now empty.
      */
-    copyrightReportId: text(),
+    copyrightReportId: text().references((): AnyPgColumn => copyrightReports.id, {
+      onDelete: 'set null',
+    }),
     source: text({ enum: CATALOG_SOURCES }).notNull(),
     status: text({ enum: TRACK_STATUSES }).notNull().default('ready'),
     externalIsrc: text(),

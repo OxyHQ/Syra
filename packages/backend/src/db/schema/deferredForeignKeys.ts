@@ -23,7 +23,6 @@
  */
 
 import type { DeferredForeignKey } from '@oxyhq/db/assert';
-import { tracks } from './catalog';
 
 /**
  * A table added ahead of its parent goes here with its `ON DELETE` and reason
@@ -31,26 +30,22 @@ import { tracks } from './catalog';
  * gate turns this entry into a hard error naming every column that now owes a
  * real `.references()`.
  *
- * `userPodcastSubscriptions.podcastId` (Task 3) was the second entry this
- * ledger ever held. Task 4 (`schema/podcasts.ts`) landed `podcasts`, so
- * `library.ts`'s column is now a real `.references(() => podcasts.id, {
- * onDelete: 'cascade' })` and this entry is deleted, not merely edited — see
- * `podcasts.ts`'s own file-level doc comment for the full accounting,
- * including why `tracks.copyrightReportId` below survives Task 4 rather than
- * the ledger going empty.
+ * **EMPTY, which is the finish line.** Two entries ever existed and both are
+ * closed:
+ *
+ *  - `userPodcastSubscriptions.podcastId` (Task 3) — closed by Task 4, which
+ *    landed `podcasts`; `library.ts`'s column is a real `.references(() =>
+ *    podcasts.id, { onDelete: 'cascade' })`.
+ *  - `tracks.copyrightReportId` (Task 2) — closed by Task 5, which landed
+ *    `copyright_reports` (`schema/creators.ts`); `catalog.ts`'s column is a
+ *    real `.references(() => copyrightReports.id, { onDelete: 'set null' })`.
+ *
+ * Both were DELETED rather than edited, and `__tests__/gates.test.ts` asserts
+ * this array equals `[]` — so a later task that needs to defer a key again
+ * has to come here and say so deliberately rather than growing the list by
+ * accident.
  */
-export const DEFERRED_FOREIGN_KEYS: readonly DeferredForeignKey[] = [
-  {
-    table: tracks,
-    column: tracks.copyrightReportId,
-    parentTable: 'copyright_reports',
-    parentColumn: 'id',
-    onDelete: 'set null',
-    reason:
-      'copyright_reports is a moderation-vertical table that has not landed yet ' +
-      '(RELATIONS.md: Track.copyrightReportId -> copyright_reports, set only at takedown time).',
-  },
-];
+export const DEFERRED_FOREIGN_KEYS: readonly DeferredForeignKey[] = [];
 
 /**
  * `*_id`-shaped columns that will never carry a constraint, named by their SQL
@@ -158,8 +153,12 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
     reason:
       'Polymorphic across tracks/user_uploads/episodes with no discriminator in the source model ' +
       '(services/ingest/hlsStorage.ts). A `kind` column was added here to at least name which id space ' +
-      'applies, but only the track arm has a landed target table today — user_uploads and episodes ' +
-      'have not shipped yet, so no conditional per-kind FK can be declared (RELATIONS.md).',
+      'applies. All three target tables have now landed (episodes in Task 4, user_uploads in Task 5), ' +
+      'so the reason is no longer "the parents do not exist" — it is that Postgres has no conditional ' +
+      'foreign key: one column cannot reference a different table per `kind`. Splitting it into three ' +
+      'nullable columns with a CHECK would be expressible, and is a real option for whichever task ports ' +
+      'hlsStorage.ts, but it is a schema CHANGE rather than a port and is deliberately not made here ' +
+      '(RELATIONS.md).',
   },
   // ── CROSS-SERVICE: Oxy account ids, owned by oxy-api, never a Syra row ────
   {
@@ -201,6 +200,34 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
   {
     column: 'user_podcast_subscriptions.oxy_user_id',
     reason: 'The Oxy account that subscribed — the owning side of this junction (RELATIONS.md: Library.oxyUserId).',
+  },
+  {
+    column: 'user_uploads.owner_oxy_user_id',
+    reason: "The Oxy account whose private locker this file is in (RELATIONS.md: UserUpload.ownerOxyUserId).",
+  },
+  {
+    column: 'artist_claims.oxy_user_id',
+    reason:
+      'The claimant asking to be recognised as this artist (RELATIONS.md: ArtistClaim.oxyUserId). ' +
+      'Half of the partial unique key that allows one OPEN claim per claimant per artist.',
+  },
+  {
+    column: 'contribution_attestations.uploader_oxy_user_id',
+    reason:
+      'The Oxy account that signed the statement (RELATIONS.md: ContributionAttestation.uploaderOxyUserId). ' +
+      "Indexed: compliance's termination cascade reads every recording one account contributed.",
+  },
+  {
+    column: 'contributor_standings.oxy_user_id',
+    reason:
+      'The Oxy account this infringement record belongs to — one row per account ' +
+      '(RELATIONS.md: ContributorStanding.oxyUserId).',
+  },
+  {
+    column: 'copyright_reports.reporter_oxy_user_id',
+    reason:
+      'The Oxy account that filed the report, optional because the reporting endpoint is public ' +
+      '(RELATIONS.md: CopyrightReport.reporterOxyUserId — "public reports may not have user").',
   },
   // ── NOT-A-ROW-ID: identifies THIS row (or half of a composite key), not a reference to another ──
   {

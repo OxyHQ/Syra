@@ -64,6 +64,20 @@
       "when": 1786001992003,
       "tag": "0008_stiff_the_liberteens",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786024835786,
+      "tag": "0009_lying_stick",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786025045981,
+      "tag": "0010_pretty_silverclaw",
+      "breakpoints": true
     }
   ]
 }

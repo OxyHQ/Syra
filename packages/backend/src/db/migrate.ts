@@ -28,10 +28,11 @@
  *
  * THE GENESIS BOOTSTRAP WINDOW — `LAST_GENESIS_MIGRATION_TAG`
  *
- * `0000` through `0008` build this schema against an EMPTY database with no
- * live predecessor to protect — Tasks 1 through 4 of the Mongo→Postgres port,
- * plus the Task 4 review's `0007`/`0008` genres-`kind` follow-up, applied so
- * far only with `--phase=all` against `syra_dev` and CI's `syra_ci`. A
+ * `0000` through `0010` build this schema against an EMPTY database with no
+ * live predecessor to protect — Tasks 1 through 5 of the Mongo→Postgres port,
+ * including the Task 4 review's `0007`/`0008` genres-`kind` follow-up and
+ * Task 5's `0009`/`0010` creators-and-uploads pair, applied so far only with
+ * `--phase=all` against `syra_dev` and CI's `syra_ci`. A
  * `pre`/`post` review of an earlier cut of this window (Task 4 code review,
  * `task-4-review.md`, Critical #1) found it does NOT actually satisfy
  * `planMigrationRun`'s ordering invariant: `0003` (Task 3, `pre`) sits behind
@@ -62,15 +63,21 @@
  * yet deployed — which is the value never having been advanced, not evidence
  * those three needed a `pre`/`post` split. The Task 4 review that added this
  * paragraph is what actually moves it, to `0008`, catching all three up at
- * once.
+ * once. Task 5 moved it again, to `0010`, for the same reason and by the same
+ * rule — routine maintenance, not a judgment call, for as long as nothing is
+ * deployed.
  *
  * `0008` is also why the boundary matters for more than ordering: its
  * composite `(genre_id, kind) -> genres(id, kind)` FK is safe to add ONLY
  * because `genres`, `album_genres`, and `podcast_categories` are empty going
- * in — see `0008`'s own header. A migration with that property is exactly
- * what "genesis" is for; it would not be safe to run the same way against a
- * database a live image had already been writing to, which is precisely the
- * case the boundary stops applying to once it freezes.
+ * in — see `0008`'s own header. `0010` (the `tracks.copyright_report_id`
+ * foreign key the deferred ledger had been holding since Task 2) has exactly
+ * the same property for exactly the same reason: `ADD CONSTRAINT ... FOREIGN
+ * KEY` verifies every existing row, which is free on an empty table and a
+ * lock plus a possible outright failure on a populated one. A migration with
+ * that property is exactly what "genesis" is for; it would not be safe to run
+ * the same way against a database a live image had already been writing to,
+ * which is precisely the case the boundary stops applying to once it freezes.
  *
  * `LAST_GENESIS_MIGRATION_TAG`, below, draws the (currently still moving)
  * line: every migration up to and including it is genesis (unordered,
@@ -157,7 +164,7 @@ const MIGRATIONS_SEARCH_DEPTH = 6;
  * Exported so that gate can read the SAME boundary this file documents,
  * rather than a second copy of the tag string that could drift from it.
  */
-export const LAST_GENESIS_MIGRATION_TAG = '0008_stiff_the_liberteens';
+export const LAST_GENESIS_MIGRATION_TAG = '0010_pretty_silverclaw';
 
 /**
  * `packages/backend/drizzle`, found by walking UP from this module rather than

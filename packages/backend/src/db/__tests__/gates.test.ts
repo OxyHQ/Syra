@@ -44,7 +44,14 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { eq, isTable, sql } from 'drizzle-orm';
 import { getTableConfig, PgTable } from 'drizzle-orm/pg-core';
-import { executeRows, sqlColumnName } from '@oxyhq/db';
+import {
+  constraintNameOf,
+  executeRows,
+  isCheckViolation,
+  isForeignKeyViolation,
+  isUniqueViolation,
+  sqlColumnName,
+} from '@oxyhq/db';
 import {
   findIdColumnViolations,
   findImplicitWholeRowReads,
@@ -62,6 +69,18 @@ import * as libraryModule from '../schema/library';
 import { playbackStates, playlists, userPodcastSubscriptions, userSavedPlaylists } from '../schema/library';
 import * as podcastsModule from '../schema/podcasts';
 import { episodeHlsRenditions, episodeProgress, episodes, podcastCategories, podcasts } from '../schema/podcasts';
+import * as creatorsModule from '../schema/creators';
+import {
+  artistClaims,
+  contributionAttestationProvenanceMarkers,
+  contributionAttestations,
+  contributorStandings,
+  contributorStrikes,
+  copyrightReports,
+  userUploadHlsRenditions,
+  userUploadProvenanceMarkers,
+  userUploads,
+} from '../schema/creators';
 import { DEFERRED_FOREIGN_KEYS, ID_COLUMNS_WITHOUT_FOREIGN_KEY } from '../schema/deferredForeignKeys';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../schema/protectedColumns';
 import { EXPIRY_SWEEP_TARGETS } from '../expiry';
@@ -73,9 +92,9 @@ import { genres } from '../schema/genres';
  * 10 (Task 4: podcasts.ts) + 1 (Task 4 follow-up: catalog.ts's
  * `track_hls_renditions`, correcting `tracks.hls`'s jsonb-vs-child-table
  * inconsistency with `episode_hls_renditions` — see catalog.ts's own
- * comment) = 42.
+ * comment) + 9 (Task 5: creators.ts) = 51.
  */
-const MINIMUM_TABLES = 42;
+const MINIMUM_TABLES = 51;
 
 /**
  * Every drizzle table the schema barrel exports, walked rather than listed by
@@ -152,6 +171,44 @@ function findPostGenesisPhaseOrderingViolations(
     }
   }
   return violations;
+}
+
+/**
+ * Assert a write is refused BY THE CONSTRAINT NAMED — not merely that it
+ * throws.
+ *
+ * `.rejects.toThrow()` (the pattern the Task 2-4 blocks above use) passes on
+ * ANY failure: a not-null violation from a fixture field somebody forgot, a
+ * foreign key from a parent row that was not created, a value that happens to
+ * trip a DIFFERENT check on the same table. It cannot tell "the constraint
+ * under test fired" from "this test is broken", which is the shape of check
+ * this project has been bitten by before. Naming the constraint closes that:
+ * the assertion fails, and says which constraint DID fire, when the answer is
+ * the wrong one.
+ *
+ * The predicates come from `@oxyhq/db` because drizzle WRAPS the driver error
+ * — `code` and `constraint_name` live on `cause`, not on the error thrown, so
+ * a hand-rolled `error.code === '23505'` here would match nothing and pass
+ * vacuously.
+ */
+async function expectRefusedBy(
+  query: Promise<unknown>,
+  predicate: (error: unknown, constraintName?: string) => boolean,
+  constraintName: string
+): Promise<void> {
+  let caught: unknown;
+  let succeeded = false;
+  try {
+    await query;
+    succeeded = true;
+  } catch (error) {
+    caught = error;
+  }
+  if (succeeded) {
+    throw new Error(`expected "${constraintName}" to refuse this write, but it succeeded`);
+  }
+  expect(constraintNameOf(caught)).toBe(constraintName);
+  expect(predicate(caught, constraintName)).toBe(true);
 }
 
 beforeAll(async () => {
@@ -467,18 +524,23 @@ describe('podcasts schema (Task 4)', () => {
     expect(present).toEqual([...EXPECTED_TABLES].sort());
   });
 
-  it('closes the userPodcastSubscriptions.podcastId deferred entry, leaving only the unrelated tracks.copyrightReportId one', () => {
+  it('closes the userPodcastSubscriptions.podcastId deferred entry', () => {
     // Task 3 landed userPodcastSubscriptions.podcastId as a plain column with
     // a deferred-ledger entry naming podcasts as its parent. Task 4 lands
     // podcasts, so that entry must be gone from the ledger AND the column
     // must now be a real declared foreign key — both halves of the same
     // change, checked independently so neither can be forgotten.
+    //
+    // This test asserted `remainingParents` EQUALLED `['copyright_reports']`
+    // until Task 5, which landed that parent table and emptied the ledger.
+    // The exact-match half moved to Task 5's own describe block (where the
+    // emptiness is the thing being claimed); what belongs to Task 4 is that
+    // `podcasts` is gone from the ledger and its column carries a real key,
+    // which is what stays here. A per-task exact-match assertion against a
+    // CUMULATIVE registry is the same trap `tablesIn` exists to avoid for
+    // tables — recorded so the next task does not re-introduce it.
     const remainingParents = DEFERRED_FOREIGN_KEYS.map((fk) => fk.parentTable);
     expect(remainingParents).not.toContain('podcasts');
-    // tracks.copyrightReportId's parent (copyright_reports) is an unrelated,
-    // not-yet-built moderation table — the ledger is one entry shorter after
-    // this task, not empty. See schema/podcasts.ts's own doc comment.
-    expect(remainingParents).toEqual(['copyright_reports']);
 
     // "An FK exists on this column" is a weaker claim than "the FK points at
     // `podcasts` and cascades" — which is what closing the ledger entry
@@ -768,6 +830,459 @@ describe('podcasts schema (Task 4)', () => {
       await db.delete(episodes).where(eq(episodes.id, episode.id));
       await db.delete(podcasts).where(eq(podcasts.id, podcast.id));
     }
+  });
+});
+
+describe('creators and uploads schema (Task 5)', () => {
+  /** Every table `schema/creators.ts` promises, by SQL name. */
+  const EXPECTED_TABLES = [
+    'user_uploads',
+    'user_upload_hls_renditions',
+    'user_upload_provenance_markers',
+    'artist_claims',
+    'contribution_attestations',
+    'contribution_attestation_provenance_markers',
+    'contributor_standings',
+    'contributor_strikes',
+    'copyright_reports',
+  ];
+
+  it('lands exactly the tables this task promises', () => {
+    const present = tablesIn(creatorsModule).map((table) => getTableConfig(table).name).sort();
+    expect(present).toEqual([...EXPECTED_TABLES].sort());
+  });
+
+  it('closes the last deferred foreign key, leaving the ledger EMPTY', () => {
+    // `tracks.copyrightReportId` was the ledger's only remaining entry after
+    // Task 4. This task lands `copyright_reports`, so the entry must be
+    // deleted AND the column must carry a real declared foreign key — both
+    // halves checked independently so neither can be forgotten.
+    //
+    // The emptiness is asserted on the whole array rather than on the parent
+    // names, because "the ledger is empty" is the actual claim: a future task
+    // adding an entry has to come here and say so deliberately.
+    expect(DEFERRED_FOREIGN_KEYS).toEqual([]);
+
+    // Assert the TARGET and the ON DELETE, not merely that some foreign key
+    // involves a column of this name — the weaker form survived a mutation
+    // that repointed a podcast subscription at `albums` (Task 4 review).
+    // `sqlColumnName(column)`, never `column.name`: the latter is the
+    // TypeScript property (`copyrightReportId`), not the SQL name.
+    const fk = getTableConfig(tracks).foreignKeys.find((foreignKey) =>
+      foreignKey.reference().columns.some((column) => sqlColumnName(column) === 'copyright_report_id')
+    );
+    expect(fk).toBeDefined();
+    if (!fk) throw new Error('unreachable: asserted toBeDefined() above');
+    expect(getTableConfig(fk.reference().foreignTable).name).toBe('copyright_reports');
+    expect(fk.onDelete).toBe('set null');
+  });
+
+  it('restricts deleting a track a copyright report names — DMCA evidence outlives the work', async () => {
+    const db = getDb();
+
+    const [artist] = await db
+      .insert(catalogEntities)
+      .values({ name: 'CHECK-fixture-report-artist', type: 'artist', source: 'upload' })
+      .returning({ id: catalogEntities.id });
+    const [track] = await db
+      .insert(tracks)
+      .values({
+        title: 'CHECK-fixture-report-track',
+        artistId: artist.id,
+        artistName: 'CHECK-fixture-report-artist',
+        duration: 120,
+        source: 'upload',
+      })
+      .returning({ id: tracks.id });
+    const [report] = await db
+      .insert(copyrightReports)
+      .values({
+        trackId: track.id,
+        artistId: artist.id,
+        reason: 'CHECK-fixture-reason',
+      })
+      .returning({ id: copyrightReports.id });
+
+    try {
+      // RESTRICT, not CASCADE: losing the track must not silently take the
+      // report that explains why it went (RELATIONS.md).
+      await expectRefusedBy(
+        Promise.resolve(db.delete(tracks).where(eq(tracks.id, track.id))),
+        isForeignKeyViolation,
+        'copyright_reports_track_id_tracks_id_fk'
+      );
+
+      // And the report is what `tracks.copyright_report_id` points at, with
+      // the SET NULL that closed the deferred ledger entry above.
+      await db
+        .update(tracks)
+        .set({ copyrightReportId: report.id })
+        .where(eq(tracks.id, track.id));
+      await db.delete(copyrightReports).where(eq(copyrightReports.id, report.id));
+      const [after] = await db
+        .select({ copyrightReportId: tracks.copyrightReportId })
+        .from(tracks)
+        .where(eq(tracks.id, track.id));
+      expect(after.copyrightReportId).toBeNull();
+    } finally {
+      await db.delete(copyrightReports).where(eq(copyrightReports.id, report.id));
+      await db.delete(tracks).where(eq(tracks.id, track.id));
+      await db.delete(catalogEntities).where(eq(catalogEntities.id, artist.id));
+    }
+  });
+
+  it('restricts deleting a track a contribution attestation names', async () => {
+    const db = getDb();
+
+    const [artist] = await db
+      .insert(catalogEntities)
+      .values({ name: 'CHECK-fixture-attestation-artist', type: 'artist', source: 'upload' })
+      .returning({ id: catalogEntities.id });
+    const [track] = await db
+      .insert(tracks)
+      .values({
+        title: 'CHECK-fixture-attestation-track',
+        artistId: artist.id,
+        artistName: 'CHECK-fixture-attestation-artist',
+        duration: 120,
+        source: 'upload',
+      })
+      .returning({ id: tracks.id });
+    const [attestation] = await db
+      .insert(contributionAttestations)
+      .values({
+        trackId: track.id,
+        uploaderOxyUserId: 'CHECK-fixture-uploader',
+        statement: 'CHECK-fixture-statement',
+        acceptedAt: new Date(),
+      })
+      .returning({ id: contributionAttestations.id });
+
+    try {
+      await expectRefusedBy(
+        Promise.resolve(db.delete(tracks).where(eq(tracks.id, track.id))),
+        isForeignKeyViolation,
+        'contribution_attestations_track_id_tracks_id_fk'
+      );
+
+      // The markers child table cascades from the attestation, so the
+      // evidence stays whole or goes whole — never half.
+      await db.insert(contributionAttestationProvenanceMarkers).values({
+        contributionAttestationId: attestation.id,
+        position: 0,
+        code: 'CHECK-fixture-marker',
+        weight: 'blocking',
+      });
+      await db.delete(contributionAttestations).where(eq(contributionAttestations.id, attestation.id));
+      const remaining = await db
+        .select()
+        .from(contributionAttestationProvenanceMarkers)
+        .where(eq(contributionAttestationProvenanceMarkers.contributionAttestationId, attestation.id));
+      expect(remaining).toEqual([]);
+    } finally {
+      await db
+        .delete(contributionAttestationProvenanceMarkers)
+        .where(eq(contributionAttestationProvenanceMarkers.contributionAttestationId, attestation.id));
+      await db.delete(contributionAttestations).where(eq(contributionAttestations.id, attestation.id));
+      await db.delete(tracks).where(eq(tracks.id, track.id));
+      await db.delete(catalogEntities).where(eq(catalogEntities.id, artist.id));
+    }
+  });
+
+  it('cascades a deleted standing into contributor_strikes, but a deleted TRACK only nulls the strike', async () => {
+    const db = getDb();
+
+    const [artist] = await db
+      .insert(catalogEntities)
+      .values({ name: 'CHECK-fixture-strike-artist', type: 'artist', source: 'upload' })
+      .returning({ id: catalogEntities.id });
+    const [track] = await db
+      .insert(tracks)
+      .values({
+        title: 'CHECK-fixture-strike-track',
+        artistId: artist.id,
+        artistName: 'CHECK-fixture-strike-artist',
+        duration: 120,
+        source: 'upload',
+      })
+      .returning({ id: tracks.id });
+    const [standing] = await db
+      .insert(contributorStandings)
+      .values({ oxyUserId: 'CHECK-fixture-contributor' })
+      .returning({ id: contributorStandings.id });
+
+    try {
+      const [strike] = await db
+        .insert(contributorStrikes)
+        .values({
+          contributorStandingId: standing.id,
+          reason: 'CHECK-fixture-strike-reason',
+          trackId: track.id,
+        })
+        .returning({ id: contributorStrikes.id });
+
+      // SET NULL: an infringement record must survive the work it is about,
+      // or the repeat-infringer count silently drops (RELATIONS.md).
+      await db.delete(tracks).where(eq(tracks.id, track.id));
+      const [afterTrack] = await db
+        .select({ trackId: contributorStrikes.trackId })
+        .from(contributorStrikes)
+        .where(eq(contributorStrikes.id, strike.id));
+      expect(afterTrack.trackId).toBeNull();
+
+      // CASCADE from the standing itself — the strike belongs to it.
+      await db.delete(contributorStandings).where(eq(contributorStandings.id, standing.id));
+      const remaining = await db
+        .select()
+        .from(contributorStrikes)
+        .where(eq(contributorStrikes.id, strike.id));
+      expect(remaining).toEqual([]);
+    } finally {
+      await db.delete(contributorStrikes).where(eq(contributorStrikes.contributorStandingId, standing.id));
+      await db.delete(contributorStandings).where(eq(contributorStandings.id, standing.id));
+      await db.delete(tracks).where(eq(tracks.id, track.id));
+      await db.delete(catalogEntities).where(eq(catalogEntities.id, artist.id));
+    }
+  });
+
+  it('cascades a deleted artist into artist_claims, and allows one PENDING claim per claimant', async () => {
+    const db = getDb();
+
+    const [artist] = await db
+      .insert(catalogEntities)
+      .values({ name: 'CHECK-fixture-claim-artist', type: 'artist', source: 'upload' })
+      .returning({ id: catalogEntities.id });
+
+    try {
+      await db.insert(artistClaims).values({
+        artistId: artist.id,
+        oxyUserId: 'CHECK-fixture-claimant',
+        evidence: 'CHECK-fixture-evidence',
+      });
+
+      // Two OPEN claims by the same claimant on the same artist is the same
+      // request reviewed twice — refused by the partial unique index.
+      await expectRefusedBy(
+        Promise.resolve(
+          db.insert(artistClaims).values({
+            artistId: artist.id,
+            oxyUserId: 'CHECK-fixture-claimant',
+            evidence: 'CHECK-fixture-evidence-again',
+          })
+        ),
+        isUniqueViolation,
+        'artist_claims_artist_id_oxy_user_id_pending_key'
+      );
+
+      // Resolved rows are OUTSIDE the index, so a claimant who was rejected
+      // may come back with better evidence. This is the half a plain
+      // `unique(artist_id, oxy_user_id)` would have silently forbidden, and
+      // the reason the index is partial.
+      await db.update(artistClaims).set({ status: 'rejected' }).where(eq(artistClaims.artistId, artist.id));
+      const [reopened] = await db
+        .insert(artistClaims)
+        .values({
+          artistId: artist.id,
+          oxyUserId: 'CHECK-fixture-claimant',
+          evidence: 'CHECK-fixture-evidence-appeal',
+        })
+        .returning({ id: artistClaims.id });
+      expect(reopened.id).toBeTruthy();
+
+      // A claim has no meaning without the artist it claims — CASCADE.
+      await db.delete(catalogEntities).where(eq(catalogEntities.id, artist.id));
+      const remaining = await db.select().from(artistClaims).where(eq(artistClaims.artistId, artist.id));
+      expect(remaining).toEqual([]);
+    } finally {
+      await db.delete(artistClaims).where(eq(artistClaims.artistId, artist.id));
+      await db.delete(catalogEntities).where(eq(catalogEntities.id, artist.id));
+    }
+  });
+
+  it('rejects claim evidence past the 4000-character limit Mongoose declared', async () => {
+    const db = getDb();
+
+    const [artist] = await db
+      .insert(catalogEntities)
+      .values({ name: 'CHECK-fixture-evidence-artist', type: 'artist', source: 'upload' })
+      .returning({ id: catalogEntities.id });
+
+    try {
+      await expectRefusedBy(
+        Promise.resolve(
+          db.insert(artistClaims).values({
+            artistId: artist.id,
+            oxyUserId: 'CHECK-fixture-long-claimant',
+            evidence: 'x'.repeat(4001),
+          })
+        ),
+        isCheckViolation,
+        'artist_claims_evidence_length_check'
+      );
+
+      // 4000 exactly is accepted — the boundary is `<=`, not `<`, so a CHECK
+      // written one character tight would pass the rejection half above and
+      // still be wrong.
+      const [accepted] = await db
+        .insert(artistClaims)
+        .values({
+          artistId: artist.id,
+          oxyUserId: 'CHECK-fixture-long-claimant',
+          evidence: 'x'.repeat(4000),
+        })
+        .returning({ id: artistClaims.id });
+      expect(accepted.id).toBeTruthy();
+    } finally {
+      await db.delete(artistClaims).where(eq(artistClaims.artistId, artist.id));
+      await db.delete(catalogEntities).where(eq(catalogEntities.id, artist.id));
+    }
+  });
+
+  it('keeps one copy of the same bytes per owner, and cascades an upload into its child tables', async () => {
+    const db = getDb();
+
+    const [upload] = await db
+      .insert(userUploads)
+      .values({
+        ownerOxyUserId: 'CHECK-fixture-locker-owner',
+        title: 'CHECK-fixture-locker-file',
+        duration: 200,
+        sizeBytes: 1024,
+        sha256: 'CHECK-fixture-sha256',
+      })
+      .returning({ id: userUploads.id });
+
+    try {
+      // The unique index IS the duplicate detector — two concurrent uploads
+      // of the same file are the ordinary case, and the E11000 (here, the
+      // 23505) is what answers `{ outcome: 'duplicate' }`.
+      await expectRefusedBy(
+        Promise.resolve(
+          db.insert(userUploads).values({
+            ownerOxyUserId: 'CHECK-fixture-locker-owner',
+            title: 'CHECK-fixture-locker-file-again',
+            duration: 200,
+            sizeBytes: 1024,
+            sha256: 'CHECK-fixture-sha256',
+          })
+        ),
+        isUniqueViolation,
+        'user_uploads_owner_oxy_user_id_sha256_key'
+      );
+
+      // Another owner's copy of the same bytes is a different row — the
+      // constraint is per-owner, and a plain `unique(sha256)` would have
+      // rejected this one.
+      const [other] = await db
+        .insert(userUploads)
+        .values({
+          ownerOxyUserId: 'CHECK-fixture-other-owner',
+          title: 'CHECK-fixture-locker-file-other',
+          duration: 200,
+          sizeBytes: 1024,
+          sha256: 'CHECK-fixture-sha256',
+        })
+        .returning({ id: userUploads.id });
+      await db.delete(userUploads).where(eq(userUploads.id, other.id));
+
+      await db.insert(userUploadHlsRenditions).values({
+        userUploadId: upload.id,
+        position: 0,
+        manifestKey: 'CHECK-fixture-manifest-key',
+        bitrateKbps: 128,
+        encrypted: true,
+      });
+      await db.insert(userUploadProvenanceMarkers).values({
+        userUploadId: upload.id,
+        position: 0,
+        code: 'CHECK-fixture-marker',
+        weight: 'high',
+      });
+
+      await db.delete(userUploads).where(eq(userUploads.id, upload.id));
+
+      expect(
+        await db
+          .select()
+          .from(userUploadHlsRenditions)
+          .where(eq(userUploadHlsRenditions.userUploadId, upload.id))
+      ).toEqual([]);
+      expect(
+        await db
+          .select()
+          .from(userUploadProvenanceMarkers)
+          .where(eq(userUploadProvenanceMarkers.userUploadId, upload.id))
+      ).toEqual([]);
+    } finally {
+      await db.delete(userUploadHlsRenditions).where(eq(userUploadHlsRenditions.userUploadId, upload.id));
+      await db.delete(userUploadProvenanceMarkers).where(eq(userUploadProvenanceMarkers.userUploadId, upload.id));
+      await db.delete(userUploads).where(eq(userUploads.id, upload.id));
+    }
+  });
+
+  it('nulls a locker file\'s matched_track_id when the catalog track goes, keeping the file', async () => {
+    const db = getDb();
+
+    const [artist] = await db
+      .insert(catalogEntities)
+      .values({ name: 'CHECK-fixture-matched-artist', type: 'artist', source: 'upload' })
+      .returning({ id: catalogEntities.id });
+    const [track] = await db
+      .insert(tracks)
+      .values({
+        title: 'CHECK-fixture-matched-track',
+        artistId: artist.id,
+        artistName: 'CHECK-fixture-matched-artist',
+        duration: 120,
+        source: 'upload',
+      })
+      .returning({ id: tracks.id });
+    const [upload] = await db
+      .insert(userUploads)
+      .values({
+        ownerOxyUserId: 'CHECK-fixture-matched-owner',
+        title: 'CHECK-fixture-matched-file',
+        duration: 120,
+        sizeBytes: 2048,
+        sha256: 'CHECK-fixture-matched-sha256',
+        matchedTrackId: track.id,
+        resolvedArtistId: artist.id,
+      })
+      .returning({ id: userUploads.id });
+
+    try {
+      // "The locker copy is KEPT and pointed at the new track" — so losing
+      // the track must not take the owner's own file with it.
+      await db.delete(tracks).where(eq(tracks.id, track.id));
+      const [after] = await db
+        .select({ matchedTrackId: userUploads.matchedTrackId, resolvedArtistId: userUploads.resolvedArtistId })
+        .from(userUploads)
+        .where(eq(userUploads.id, upload.id));
+      expect(after.matchedTrackId).toBeNull();
+      expect(after.resolvedArtistId).toBe(artist.id);
+    } finally {
+      await db.delete(userUploads).where(eq(userUploads.id, upload.id));
+      await db.delete(tracks).where(eq(tracks.id, track.id));
+      await db.delete(catalogEntities).where(eq(catalogEntities.id, artist.id));
+    }
+  });
+
+  it('indexes the two sweeps and the purge that Mongo left to scan', async () => {
+    const db = getDb();
+    // Verified against the MIGRATED catalogue, not the drizzle declaration.
+    // `deleted_at` and `matched_track_id` had NO Mongo index at all: the
+    // expiry sweeper's phase-3 query (`deletedAt <= graceCutoff`) and the
+    // takedown purge's `find({ matchedTrackId })` both scan the one
+    // collection this design expects to reach millions of rows.
+    const rows = await executeRows<{ indexname: string }>(
+      db,
+      sql`select indexname from pg_indexes where tablename = 'user_uploads'`
+    );
+    const names = rows.map((row) => row.indexname);
+    expect(names).toContain('user_uploads_deleted_at_idx');
+    expect(names).toContain('user_uploads_matched_track_id_idx');
+    expect(names).toContain('user_uploads_expires_at_idx');
+    expect(names).toContain('user_uploads_owner_oxy_user_id_sha256_key');
   });
 });
 
