@@ -397,7 +397,7 @@ Do not invent a `topics` table to satisfy the reference. One `tsvector` column: 
 **Reference:** `models/{UserSettings,UserMusicPreferences,UserBehavior,UserTasteProfile,ListeningEvent,CatalogRelation,NotificationPreference,NotificationSuppression}.ts`.
 **Produces:** `userSettings`, `userMusicPreferences`, `userBehavior`, `userTasteProfiles`, `listeningEvents`, `catalogRelations`, `notificationPreferences`, `notificationSuppressions`.
 
-**This task lands three of the four expiry registry entries.** Mongo's TTL indexes have no Postgres counterpart, so each becomes an `EXPIRY_SWEEP_TARGET` plus a supporting btree index — the sweep's predicate is a range scan and Mongo's TTL index carried the same obligation:
+**This task lands two of the four expiry registry entries.** Mongo's TTL indexes have no Postgres counterpart, so each becomes an `EXPIRY_SWEEP_TARGET` plus a supporting btree index — the sweep's predicate is a range scan and Mongo's TTL index carried the same obligation:
 
 | Mongo | entry |
 |---|---|
