@@ -2,7 +2,14 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'bun:test';
 import express from 'express';
 import type { Server } from 'http';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
+import mongoose from 'mongoose';
+import { eq } from 'drizzle-orm';
+import { uuidv7 } from '@oxyhq/db';
+import { normalizeNameKey } from '@syra/shared-types';
 import { clear, connect, disconnect } from '../test/mongo';
+import { clearDb, connectDb, disconnectDb } from '../test/postgres';
+import { getDb } from '../db/postgres';
+import { catalogEntities } from '../db/schema/catalog';
 import { TrackModel } from '../models/Track';
 import { AlbumModel } from '../models/Album';
 import { ArtistModel } from '../models/CatalogEntity';
@@ -30,9 +37,36 @@ import searchRoutes from './search';
 const OWNER_ID = 'oxy-owner-1';
 const INTRUDER_ID = 'oxy-intruder-2';
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+/**
+ * BOTH databases, because this file spans a HALF-PORTED route surface: the
+ * artist profile is Postgres (Task 10c-2) while tracks, albums, podcasts and
+ * episodes are still Mongoose here — tracks and albums move in 10c-3, podcasts
+ * in Task 12. The artist is therefore seeded on the Postgres side and the rest
+ * on the Mongo side, which is the split as it actually is rather than a
+ * uniform fixture that would match neither.
+ */
+beforeAll(async () => {
+  await connect();
+  await connectDb();
+});
+afterEach(async () => {
+  await clear();
+  await clearDb();
+});
+afterAll(async () => {
+  await disconnect();
+  await disconnectDb();
+});
+
+/** The owner's artist row, read back for the assertions. */
+async function readOwnedArtist(ownerOxyUserId: string) {
+  const [row] = await getDb()
+    .select()
+    .from(catalogEntities)
+    .where(eq(catalogEntities.ownerOxyUserId, ownerOxyUserId))
+    .limit(1);
+  return row;
+}
 
 /** Serve `router` on an ephemeral port authenticated as `userId`. */
 async function withRouter(
@@ -74,12 +108,40 @@ function patch(url: string, body: Record<string, unknown>): Promise<globalThis.R
 
 /** An artist profile owned by OWNER_ID, plus a track and album hanging off it. */
 async function seedOwnedCatalog() {
-  const artist = await ArtistModel.create({
-    name: 'The Owner',
+  /**
+   * ONE artist, seeded into BOTH stores under the SAME id — and the id is an
+   * ObjectId hex on purpose.
+   *
+   * `PATCH /api/artists/me` resolves the profile through drizzle (10c-2), while
+   * `PATCH /api/tracks/:id` and the album routes still resolve ownership through
+   * `utils/catalogOwnership.ts`, which is Mongoose until 10c-3. One fixture has
+   * to satisfy both, and only one id SHAPE can: `catalog_entities.id` is `text`
+   * and accepts anything, `_id` must cast to an ObjectId, and `isLiveEntityId`
+   * accepts both spellings. So the ObjectId hex is the intersection.
+   *
+   * This is temporary by construction. When 10c-3 ports the track and album
+   * ownership check, the Mongoose half of this fixture goes and the id becomes a
+   * plain `generatedId()` like every other fixture on the branch.
+   */
+  const objectId = new mongoose.Types.ObjectId();
+  const artistId = objectId.toString();
+  const name = `The Owner ${uuidv7()}`;
+
+  await ArtistModel.create({
+    _id: objectId,
+    name,
     source: 'upload',
     ownerOxyUserId: OWNER_ID,
   });
-  const artistId = artist._id.toString();
+
+  await getDb().insert(catalogEntities).values({
+    id: artistId,
+    type: 'artist',
+    name,
+    nameKey: normalizeNameKey(name),
+    source: 'upload',
+    ownerOxyUserId: OWNER_ID,
+  });
 
   const track = await TrackModel.create({
     title: 'Original Title',
@@ -97,7 +159,7 @@ async function seedOwnedCatalog() {
     coverArt: 'cover-id',
   });
 
-  return { artist, artistId, track, album };
+  return { artistId, track, album };
 }
 
 describe('PATCH /api/tracks/:id', () => {
@@ -271,7 +333,7 @@ describe('PATCH /api/artists/me', () => {
       const response = await patch(`${baseUrl}/api/artists/me`, { bio: 'A new bio.' });
 
       expect(response.status).toBe(200);
-      const stored = await ArtistModel.findOne({ ownerOxyUserId: OWNER_ID }).lean();
+      const stored = await readOwnedArtist(OWNER_ID);
       expect(stored?.bio).toBe('A new bio.');
     });
   });
@@ -286,7 +348,7 @@ describe('PATCH /api/artists/me', () => {
       });
 
       expect(response.status).toBe(200);
-      const stored = await ArtistModel.findOne({ ownerOxyUserId: OWNER_ID }).lean();
+      const stored = await readOwnedArtist(OWNER_ID);
       expect(stored?.bio).toBe('A new bio.');
       // `verified` is a platform-granted badge and is stripped from the payload.
       expect(stored?.verified).not.toBe(true);
@@ -300,8 +362,8 @@ describe('PATCH /api/artists/me', () => {
       const response = await patch(`${baseUrl}/api/artists/me`, { bio: 'Hijacked bio.' });
 
       expect(response.status).toBe(404);
-      const stored = await ArtistModel.findOne({ ownerOxyUserId: OWNER_ID }).lean();
-      expect(stored?.bio).toBeUndefined();
+      const stored = await readOwnedArtist(OWNER_ID);
+      expect(stored?.bio).toBeNull();
     });
   });
 });

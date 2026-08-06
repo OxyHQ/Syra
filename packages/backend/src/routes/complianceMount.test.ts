@@ -2,8 +2,20 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'bun:test';
 import express from 'express';
 import type { Server } from 'http';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
+import { eq } from 'drizzle-orm';
+import { uuidv7 } from '@oxyhq/db';
+import { normalizeNameKey } from '@syra/shared-types';
 import { clear, connect, disconnect } from '../test/mongo';
-import { ArtistModel } from '../models/CatalogEntity';
+import { clearDb, connectDb, disconnectDb } from '../test/postgres';
+import { getDb } from '../db/postgres';
+import { catalogEntities, tracks } from '../db/schema/catalog';
+/**
+ * Still Mongoose, and only for the two copyright-report cases below.
+ * `copyright.controller`'s public REPORT endpoint reads the track through
+ * `TrackModel`; it is 10c-3's file. It never reads the artist, so a Postgres
+ * artist and a Mongo track coexist here without either handler noticing —
+ * which is precisely what "half-ported route surface" means in practice.
+ */
 import { TrackModel } from '../models/Track';
 import { ArtistClaimModel } from '../models/ArtistClaim';
 import { CopyrightReportModel } from '../models/CopyrightReport';
@@ -29,9 +41,24 @@ import copyrightRoutes from './copyright.routes';
  * handler it is supposed to.
  */
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+/**
+ * BOTH databases: the artist a claim targets is Postgres, the claim and the
+ * copyright report are Task 13's tables and still Mongoose. This file is about
+ * ROUTE MOUNTING, so it exercises the real handlers end to end and therefore
+ * needs whatever they read.
+ */
+beforeAll(async () => {
+  await connect();
+  await connectDb();
+});
+afterEach(async () => {
+  await clear();
+  await clearDb();
+});
+afterAll(async () => {
+  await disconnect();
+  await disconnectDb();
+});
 
 /** The `server.ts` mount shape: public first, authenticated second, both at /api. */
 async function withApi(
@@ -93,13 +120,30 @@ function withReviewers<T>(value: string | undefined, run: () => Promise<T>): Pro
 }
 
 async function makeClaimableArtist(): Promise<string> {
-  const artist = await ArtistModel.create({
-    name: `Contributed ${Math.random().toString(36).slice(2)}`,
-    source: 'upload',
-    origin: 'contributed',
-    claimable: true,
-  });
-  return artist._id.toString();
+  const name = `Contributed ${uuidv7()}`;
+  const [artist] = await getDb()
+    .insert(catalogEntities)
+    .values({
+      type: 'artist',
+      name,
+      nameKey: normalizeNameKey(name),
+      source: 'upload',
+      origin: 'contributed',
+      claimable: true,
+    })
+    .returning({ id: catalogEntities.id });
+
+  if (!artist) throw new Error('makeClaimableArtist: insert returned no row');
+  return artist.id;
+}
+
+async function readArtist(id: string) {
+  const [row] = await getDb()
+    .select()
+    .from(catalogEntities)
+    .where(eq(catalogEntities.id, id))
+    .limit(1);
+  return row;
 }
 
 describe('claim submission routing', () => {
@@ -116,14 +160,14 @@ describe('claim submission routing', () => {
     // Reached the handler, and the handler did what it promises: a pending row,
     // and no ownership written.
     expect(await ArtistClaimModel.countDocuments({ artistId, status: 'pending' })).toBe(1);
-    const artist = await ArtistModel.findById(artistId).lean();
-    expect(artist?.ownerOxyUserId).toBeUndefined();
+    const artist = await readArtist(artistId);
+    expect(artist?.ownerOxyUserId).toBeNull();
     expect(artist?.claimable).toBe(true);
   });
 
   it('GET /api/artists/:id still reaches the PUBLIC handler, unauthenticated', async () => {
     const artistId = await makeClaimableArtist();
-    await TrackModel.create({
+    await getDb().insert(tracks).values({
       title: 'Something Playable', artistId, artistName: 'X',
       duration: 100, source: 'upload', status: 'ready', isAvailable: true,
     });

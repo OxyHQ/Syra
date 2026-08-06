@@ -63,8 +63,11 @@ export const NON_CATALOG_MODEL_OWNERS = {
   Library: 'library',
   Playlist: 'library',
   PlaylistTrack: 'library',
+  ArtistClaim: 'creators',
   ContributionAttestation: 'creators',
   UserUpload: 'creators',
+  Episode: 'podcasts',
+  Podcast: 'podcasts',
   CatalogRelation: 'user',
   ListeningEvent: 'user',
   UserMusicPreferences: 'user',
@@ -199,6 +202,27 @@ export const HYBRID_MODULES: readonly HybridModule[] = [
       'but `musicPreferences.controller` still WRITES the Mongo document, and a reader on ' +
       'Postgres against a writer on Mongo is a split brain, not a split read. It moves when its ' +
       'writer does, in Task 15.',
+  },
+  {
+    file: 'controllers/artists.controller.ts',
+    models: ['ArtistClaim', 'ContributionAttestation'],
+    reason:
+      'Two of Task 13\'s tables, for two different reasons. `artist_claims` is a queue this ' +
+      'controller reads and writes but never joins to the catalogue — the GRANT is a Postgres ' +
+      'update, and it is atomic there. `contribution_attestations` is what makes a track a ' +
+      'contribution, and it was ONE `$lookup` from `tracks`; the split turns it into three ' +
+      'bounded round trips (see `loadContributedTrackIds`). `copyright_reports` was in this ' +
+      'list and is NOT any more: `tracks.copyright_report_id` is a real foreign key, so a ' +
+      'Mongo id in that column fails the constraint — a hybrid split survives a cross-vertical ' +
+      'READ and cannot survive a cross-vertical FOREIGN KEY.',
+  },
+  {
+    file: 'controllers/entityProfile.controller.ts',
+    models: ['Episode', 'Podcast'],
+    reason:
+      'The `appearsIn` shelf is entirely podcasts — shows and episodes crediting a person, ' +
+      'matched by `strongKeyCreditMatch`. Task 12\'s vertical end to end; the catalogue half ' +
+      'of the same handler is drizzle, and the two never meet in one query.',
   },
   {
     file: 'controllers/queue.controller.ts',

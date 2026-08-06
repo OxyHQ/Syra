@@ -1,17 +1,35 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import mongoose from 'mongoose';
+import { uuidv7 } from '@oxyhq/db';
 import type { Request, Response, NextFunction } from 'express';
+import { normalizeNameKey } from '@syra/shared-types';
 import { connect, clear, disconnect } from '../test/mongo';
-import { ArtistModel, PersonModel } from '../models/CatalogEntity';
+import { clearDb, connectDb, disconnectDb } from '../test/postgres';
+import { getDb } from '../db/postgres';
+import { catalogEntities, tracks } from '../db/schema/catalog';
 import { PodcastModel } from '../models/Podcast';
 import { EpisodeModel } from '../models/Episode';
-import { TrackModel } from '../models/Track';
 import { getEntityProfile } from './entityProfile.controller';
 import type { EntityProfile } from '@syra/shared-types';
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+/**
+ * BOTH databases: `catalog_entities` and `tracks` are Postgres; `Podcast` and
+ * `Episode` — which is what `appearsIn` is built from — are Task 12's and still
+ * Mongoose. This handler spanning the two is the whole reason it is worth
+ * testing at the controller level rather than only in the services.
+ */
+beforeAll(async () => {
+  await connect();
+  await connectDb();
+});
+afterEach(async () => {
+  await clear();
+  await clearDb();
+});
+afterAll(async () => {
+  await disconnect();
+  await disconnectDb();
+});
 
 interface CapturedRes {
   _status: number;
@@ -36,7 +54,7 @@ function makeReq(id: string): Request {
 const failNext: NextFunction = (err) => { throw err; };
 
 async function seedPlayableTrack(artistId: string, title: string): Promise<void> {
-  await TrackModel.create({
+  await getDb().insert(tracks).values({
     title,
     artistName: 'X',
     artistId,
@@ -47,21 +65,47 @@ async function seedPlayableTrack(artistId: string, title: string): Promise<void>
   });
 }
 
+/** An artist row; returns its id. */
+async function makeArtist(
+  name: string,
+  overrides: Partial<typeof catalogEntities.$inferInsert> = {}
+): Promise<string> {
+  const [artist] = await getDb()
+    .insert(catalogEntities)
+    .values({
+      type: 'artist', name, nameKey: normalizeNameKey(name), source: 'cc', ...overrides,
+    })
+    .returning({ id: catalogEntities.id });
+
+  if (!artist) throw new Error('makeArtist: insert returned no row');
+  return artist.id;
+}
+
+/** A person row, optionally linked to an artist; returns its id. */
+async function makePerson(name: string, linkedArtistId?: string): Promise<string> {
+  const [person] = await getDb()
+    .insert(catalogEntities)
+    .values({ type: 'person', name, ...(linkedArtistId ? { linkedArtistId } : {}) })
+    .returning({ id: catalogEntities.id });
+
+  if (!person) throw new Error('makePerson: insert returned no row');
+  return person.id;
+}
+
 function bodyData(res: CapturedRes): EntityProfile {
   return (res._body as { data: EntityProfile }).data;
 }
 
 describe('GET /api/p/:id — unified entity profile', () => {
   it('artist id → kind:artist with music + linked-person appearsIn', async () => {
-    const artist = await ArtistModel.create({
-      name: 'Jane Music', source: 'cc',
+    const artistId = await makeArtist('Jane Music', {
       genres: ['rock', 'indie'], primaryColor: '#111', secondaryColor: '#222', verified: true,
-      stats: { followers: 123, monthlyListeners: 456 },
+      // The embedded `stats` subdocument is flat columns now.
+      statsFollowers: 123, statsMonthlyListeners: 456,
     });
-    const artistId = artist._id.toString();
     await seedPlayableTrack(artistId, 'Jane Track');
     // A Person linked to this artist drives the podcast appearances.
-    await PersonModel.create({ name: 'Jane Music', linkedArtistId: artist._id });
+    await makePerson('Jane Music', artistId);
     await PodcastModel.create({
       title: 'Jane Talks', source: 'rss', feedUrl: 'https://f/jane.xml', status: 'active',
       persons: [{ name: 'Jane Music', role: 'host' }],
@@ -91,17 +135,16 @@ describe('GET /api/p/:id — unified entity profile', () => {
   });
 
   it('person id → kind:person with appearsIn + linked-artist music', async () => {
-    const artist = await ArtistModel.create({ name: 'Linked Band', source: 'cc' });
-    const artistId = artist._id.toString();
+    const artistId = await makeArtist('Linked Band');
     await seedPlayableTrack(artistId, 'Band Track');
-    const person = await PersonModel.create({ name: 'Guest Joe', linkedArtistId: artist._id });
+    const personId = await makePerson('Guest Joe', artistId);
     await PodcastModel.create({
       title: 'Joe Show', source: 'rss', feedUrl: 'https://f/joe.xml', status: 'active',
       persons: [{ name: 'Guest Joe', role: 'guest' }],
     });
 
     const res = makeRes();
-    await getEntityProfile(makeReq(person._id.toString()), res as unknown as Response, failNext);
+    await getEntityProfile(makeReq(personId), res as unknown as Response, failNext);
 
     expect(res._status).toBe(200);
     const data = bodyData(res);
@@ -113,14 +156,14 @@ describe('GET /api/p/:id — unified entity profile', () => {
   });
 
   it('person with no linked artist → appearsIn only, no music', async () => {
-    const person = await PersonModel.create({ name: 'Solo Host' });
+    const personId = await makePerson('Solo Host');
     await PodcastModel.create({
       title: 'Solo Show', source: 'rss', feedUrl: 'https://f/solo.xml', status: 'active',
       persons: [{ name: 'Solo Host', role: 'host' }],
     });
 
     const res = makeRes();
-    await getEntityProfile(makeReq(person._id.toString()), res as unknown as Response, failNext);
+    await getEntityProfile(makeReq(personId), res as unknown as Response, failNext);
 
     const data = bodyData(res);
     expect(data.kind).toBe('person');
@@ -130,13 +173,16 @@ describe('GET /api/p/:id — unified entity profile', () => {
 
   it('unknown id → 404', async () => {
     const res = makeRes();
-    await getEntityProfile(makeReq(new mongoose.Types.ObjectId().toString()), res as unknown as Response, failNext);
+    // A uuid v7, the shape `generatedId()` mints — an ObjectId hex here would
+    // 404 for the right reason while proving nothing about the id space every
+    // new entity is actually written in.
+    await getEntityProfile(makeReq(uuidv7()), res as unknown as Response, failNext);
     expect(res._status).toBe(404);
   });
 
   it('invalid id → 404', async () => {
     const res = makeRes();
-    await getEntityProfile(makeReq('not-an-objectid'), res as unknown as Response, failNext);
+    await getEntityProfile(makeReq('not-an-id-in-either-shape'), res as unknown as Response, failNext);
     expect(res._status).toBe(404);
   });
 });

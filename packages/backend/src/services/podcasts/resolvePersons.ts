@@ -213,13 +213,27 @@ export async function buildCreatorPersons(
 }
 
 /** Data-only `Person` shape (hydrated doc or `.lean()` result both satisfy it). */
+/**
+ * The shape {@link enrichPersons} and {@link strongKeyCreditMatch} need.
+ *
+ * `_id` and `linkedArtistId` accept a plain string as well as an `ObjectId`,
+ * because `catalog_entities` ids are `text` now and this interface is the only
+ * thing that stopped a Postgres row reaching either function. Widening rather
+ * than porting the file: `strongKeyCreditMatch` reads NEITHER field (it keys on
+ * `linkedOxyUserId`, `href` and `name`), and `enrichPersons` only ever calls
+ * `.toString()` on them, which is identity for a string. Both callers —
+ * `entityProfile.controller` on drizzle rows and `search.controller` still on
+ * Mongoose documents — satisfy the union, so this reads both sides during the
+ * port and neither branch is a special case. The `ObjectId` arm goes when Task
+ * 12 ports the podcast reads and `search.controller`'s people query with them.
+ */
 export interface PersonLike {
-  _id: mongoose.Types.ObjectId;
+  _id: mongoose.Types.ObjectId | string;
   name: string;
   img?: string;
   href?: string;
   linkedOxyUserId?: string;
-  linkedArtistId?: mongoose.Types.ObjectId;
+  linkedArtistId?: mongoose.Types.ObjectId | string;
 }
 
 /**

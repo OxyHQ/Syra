@@ -1,31 +1,28 @@
 import { Request, Response, NextFunction } from 'express';
-import mongoose from 'mongoose';
+import { and, asc, desc, eq } from 'drizzle-orm';
+import { isLiveEntityId } from '@oxyhq/db';
+import { publicColumns } from '@oxyhq/db/assert';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import type {
+  Artist,
   EntityProfile,
   EntityMusic,
   EntityAppearsIn,
-  ArtistOrigin,
   SourceProvenance,
 } from '@syra/shared-types';
-import { CatalogEntityModel, PersonModel, type CatalogEntityType } from '../models/CatalogEntity';
+import { getDb } from '../db/postgres';
+import { albums, catalogEntities, catalogEntitySources, tracks } from '../db/schema/catalog';
+import { PROTECTED_COLUMNS_BY_TABLE } from '../db/schema/protectedColumns';
+import { playableTrackFilter } from '../db/catalog/visibility';
+import { findAlbumsWithPlayableTracks, imageFirst } from '../db/catalog/containers';
+import { loadImageVariants, toAlbumDtos, toTrackDtos } from '../db/catalog/hydrate';
+import { toArtistDto, type PublicCatalogEntityRow } from '../db/catalog/serialize';
 import { PodcastModel } from '../models/Podcast';
 import { hiddenShowEpisodeFilter } from '../utils/podcastDiscovery';
 import { EpisodeModel } from '../models/Episode';
-import { TrackModel } from '../models/Track';
-import {
-  formatArtistWithImage,
-  formatAlbumWithCoverArt,
-  formatTracksWithCoverArt,
-} from '../utils/musicHelpers';
-import { withImageFirstSort } from '../utils/imageFirstSort';
 import { isDatabaseConnected } from '../utils/database';
 import { getParam } from '../utils/reqParams';
-import {
-  getRequestUserId,
-  playableTrackFilter,
-} from '../utils/catalogVisibility';
-import { findAlbumsWithPlayableTracks } from '../utils/playableContainers';
+import { getRequestUserId } from '../utils/catalogVisibility';
 import {
   loadArtistProfileSections,
   type ArtistProfileSource,
@@ -45,35 +42,20 @@ const ARTIST_TRACKS_LIMIT = 50;
 const APPEARS_IN_CAP = 50;
 
 /**
- * The data-only shape `formatArtistWithImage` returns (the artist doc with
- * `_id`→`id` and `image` normalised to an `/api/images/:id` ref). Typed
- * structurally so we read only the profile fields the unified DTO needs.
+ * `FormattedArtistProfile` lived here — a hand-written structural type
+ * re-declaring what `formatArtistWithImage` returned, which was `any`, so
+ * nothing ever checked the declaration against the thing it described. It is
+ * deleted: `toArtistDto` returns an `Artist`, and every field read below is now
+ * checked against the DTO it comes from.
+ *
+ * `members` in particular reached the wire only because the Mongo formatter
+ * SPREAD the document. `toArtistDto` is an allowlist, and it did not name
+ * `members` — on a comment claiming the column had no reader anywhere, which
+ * `schema/catalog.ts` had already corrected in two places without the claim
+ * being grepped out of `serialize.ts`. This controller is the reader.
  */
-type FormattedArtistProfile = {
-  id: string;
-  name: string;
-  image?: string;
-  imageSizes?: EntityProfile['imageSizes'];
-  primaryColor?: string;
-  secondaryColor?: string;
-  bio?: string;
-  genres?: string[];
-  verified?: boolean;
-  stats?: EntityProfile['stats'];
-  links?: EntityProfile['links'];
-  country?: string;
-  imageLicence?: EntityProfile['imageLicence'];
-  sortName?: string;
-  disambiguation?: string;
-  artistType?: EntityProfile['artistType'];
-  activeFrom?: string;
-  activeUntil?: string;
-  aliases?: string[];
-  labels?: string[];
-  members?: EntityProfile['members'];
-};
 
-/** The display fields shared by the old artist screen — pulled from the (formatted) Artist doc. */
+/** The display fields shared by the old artist screen — pulled from the artist DTO. */
 type ArtistDisplayFields = Pick<
   EntityProfile,
   | 'image' | 'imageSizes' | 'primaryColor' | 'secondaryColor' | 'bio' | 'genres'
@@ -82,7 +64,7 @@ type ArtistDisplayFields = Pick<
   | 'labels' | 'members'
 >;
 
-function artistDisplayFields(formatted: FormattedArtistProfile | null): ArtistDisplayFields {
+function artistDisplayFields(formatted: Artist | null): ArtistDisplayFields {
   return {
     image: formatted?.image,
     imageSizes: formatted?.imageSizes,
@@ -119,19 +101,23 @@ function artistDisplayFields(formatted: FormattedArtistProfile | null): ArtistDi
 async function loadArtistMusic(
   artistId: string,
 ): Promise<EntityMusic> {
-  const [albums, tracks] = await Promise.all([
-    findAlbumsWithPlayableTracks({ artistId }, {
-      sort: withImageFirstSort('album', { releaseDate: -1 }),
+  const [albumRows, trackRows] = await Promise.all([
+    findAlbumsWithPlayableTracks(eq(albums.artistId, artistId), {
+      orderBy: [imageFirst(albums.coverArtId), desc(albums.releaseDate)],
       limit: ARTIST_ALBUMS_LIMIT,
     }),
-    TrackModel.find(playableTrackFilter({ artistId }))
-      .sort(withImageFirstSort('track', { popularity: -1, createdAt: -1 }))
-      .limit(ARTIST_TRACKS_LIMIT)
-      .lean(),
+    getDb()
+      .select(publicColumns(tracks, PROTECTED_COLUMNS_BY_TABLE))
+      .from(tracks)
+      .where(and(playableTrackFilter(), eq(tracks.artistId, artistId)))
+      .orderBy(imageFirst(tracks.coverArtId), desc(tracks.popularity), desc(tracks.createdAt))
+      .limit(ARTIST_TRACKS_LIMIT),
   ]);
 
-  const formattedAlbums = albums.map((album) => formatAlbumWithCoverArt(album)).filter(Boolean);
-  const formattedTracks = await formatTracksWithCoverArt(tracks);
+  const [formattedAlbums, formattedTracks] = await Promise.all([
+    toAlbumDtos(albumRows),
+    toTrackDtos(trackRows),
+  ]);
   return { tracks: formattedTracks, albums: formattedAlbums };
 }
 
@@ -157,24 +143,83 @@ async function loadArtistSections(
 }
 
 /**
- * Adapt the still-Mongoose entity document to the id-shaped source the profile
- * sections take.
+ * Adapt an entity row to the id-shaped source the profile sections take.
  *
- * `_id` → `id` at exactly one place rather than at each of the two call sites, so
- * when Task 10c reads `catalog_entities` through drizzle this function is what
- * disappears, not two spread expressions.
+ * 10b added this to move `_id` → `id` at one place instead of two, and predicted
+ * it would disappear once 10c read `catalog_entities` through drizzle. It has
+ * not, and the reason is `sources`: Mongo carried it as an embedded array on the
+ * document, Postgres keeps it in `catalog_entity_sources`, so the caller loads
+ * it and hands it in. `null` → `undefined` on every optional field for the same
+ * reason `PreviewSourceRef` needs it — `ArtistProfileSource` declares them
+ * `?:`, not nullable, and `loadProfileState` distinguishes `undefined` from a
+ * value on three of them.
  */
-function toArtistProfileSource(entity: CatalogEntityLean): ArtistProfileSource {
+function toArtistProfileSource(
+  entity: PublicCatalogEntityRow,
+  sources: SourceProvenance[],
+): ArtistProfileSource {
   return {
-    id: entity._id.toString(),
-    nameKey: entity.nameKey,
-    origin: entity.origin,
-    claimable: entity.claimable,
-    claimedByOxyUserId: entity.claimedByOxyUserId,
-    ownerOxyUserId: entity.ownerOxyUserId,
-    acceptsContributions: entity.acceptsContributions,
-    sources: entity.sources,
+    id: entity.id,
+    nameKey: entity.nameKey ?? undefined,
+    origin: entity.origin ?? undefined,
+    claimable: entity.claimable ?? undefined,
+    claimedByOxyUserId: entity.claimedByOxyUserId ?? undefined,
+    ownerOxyUserId: entity.ownerOxyUserId ?? undefined,
+    acceptsContributions: entity.acceptsContributions ?? undefined,
+    sources,
   };
+}
+
+/**
+ * `catalog_entity_sources` for one entity, in stored order.
+ *
+ * A child table since the port, so the provenance the profile shows is a second
+ * read rather than a field on the document. Ordered by `position`, which is the
+ * only thing that preserves the array order Mongo had.
+ */
+async function loadEntitySources(entityId: string): Promise<SourceProvenance[]> {
+  const rows = await getDb()
+    .select({
+      provider: catalogEntitySources.provider,
+      externalId: catalogEntitySources.externalId,
+      importedAt: catalogEntitySources.importedAt,
+      fields: catalogEntitySources.fields,
+    })
+    .from(catalogEntitySources)
+    .where(eq(catalogEntitySources.catalogEntityId, entityId))
+    .orderBy(asc(catalogEntitySources.position));
+
+  return rows.map((row) => ({
+    provider: row.provider,
+    externalId: row.externalId,
+    importedAt: row.importedAt.toISOString(),
+    fields: row.fields,
+  }));
+}
+
+/** Serialize one entity row, loading only the image assets it references. */
+async function toArtistProfile(row: PublicCatalogEntityRow): Promise<Artist> {
+  const lookup = await loadImageVariants([
+    row.imageId,
+    row.imageSizesSmallId,
+    row.imageSizesMediumId,
+    row.imageSizesLargeId,
+    row.imageSizesXlargeId,
+    row.imageSizesXxlargeId,
+    row.imageSizesOriginalId,
+  ]);
+  return toArtistDto(row, lookup);
+}
+
+/** One entity by id, whatever its type — the unified resolver's single read. */
+async function findEntity(id: string): Promise<PublicCatalogEntityRow | undefined> {
+  const [row] = await getDb()
+    .select(publicColumns(catalogEntities, PROTECTED_COLUMNS_BY_TABLE))
+    .from(catalogEntities)
+    .where(eq(catalogEntities.id, id))
+    .limit(1);
+
+  return row;
 }
 
 /**
@@ -215,57 +260,27 @@ async function loadAppearsIn(person: PersonLike): Promise<EntityAppearsIn> {
   };
 }
 
-/** Build a `PersonLike` (the strong-key + enrichment shape) from a Person doc. */
-function toPersonLike(person: {
-  _id: mongoose.Types.ObjectId;
-  name: string;
-  img?: string;
-  href?: string;
-  linkedOxyUserId?: string;
-  linkedArtistId?: mongoose.Types.ObjectId;
-}): PersonLike {
+/** Build a `PersonLike` (the strong-key + enrichment shape) from an entity row. */
+function toPersonLike(person: PublicCatalogEntityRow): PersonLike {
   return {
-    _id: person._id,
+    _id: person.id,
     name: person.name,
-    img: person.img,
-    href: person.href,
-    linkedOxyUserId: person.linkedOxyUserId,
-    linkedArtistId: person.linkedArtistId,
+    img: person.img ?? undefined,
+    href: person.href ?? undefined,
+    linkedOxyUserId: person.linkedOxyUserId ?? undefined,
+    linkedArtistId: person.linkedArtistId ?? undefined,
   };
 }
 
 /**
- * The lean shape of a base CatalogEntity read — the fields the unified resolver
- * needs across both discriminator types. Artist-only fields (genres/stats/…) are
- * read at runtime by `formatArtistWithImage`, which is untyped, so they are not
- * listed here.
+ * `CatalogEntityLean` lived here: a hand-written lean shape whose doc comment
+ * said artist-only fields were "read at runtime by `formatArtistWithImage`,
+ * which is untyped, so they are not listed here". That is exactly the hole the
+ * port closes — `publicColumns(catalogEntities, …)` yields
+ * {@link PublicCatalogEntityRow}, which names every column the row really has
+ * and omits the two that must never ship, so nothing is read at runtime that the
+ * type does not carry.
  */
-type CatalogEntityLean = {
-  _id: mongoose.Types.ObjectId;
-  type: CatalogEntityType;
-  name: string;
-  img?: string;
-  href?: string;
-  linkedOxyUserId?: string;
-  linkedArtistId?: mongoose.Types.ObjectId;
-  /**
-   * Artist-side fields the profile sections read.
-   *
-   * Listed even though the query has no projection and loads them anyway,
-   * because `ArtistProfileSource` makes every one of them optional — so a caller
-   * that failed to load `nameKey` would still typecheck and would silently return
-   * an empty "credited on" section. Naming them here is what makes the
-   * requirement visible at the read.
-   */
-  country?: string;
-  nameKey?: string;
-  origin?: ArtistOrigin;
-  claimable?: boolean;
-  claimedByOxyUserId?: string;
-  ownerOxyUserId?: string;
-  acceptsContributions?: boolean;
-  sources?: SourceProvenance[];
-};
 
 /**
  * GET /api/p/:id — unified entity profile. ONE `catalogentities` lookup resolves
@@ -279,12 +294,11 @@ export const getEntityProfile = async (req: Request, res: Response, next: NextFu
     }
 
     const id = getParam(req, 'id');
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!isLiveEntityId(id)) {
       return res.status(404).json({ error: 'Not found' });
     }
 
-
-    const entity = await CatalogEntityModel.findById(id).lean<CatalogEntityLean>();
+    const entity = await findEntity(id);
     if (!entity) {
       return res.status(404).json({ error: 'Not found' });
     }
@@ -293,21 +307,31 @@ export const getEntityProfile = async (req: Request, res: Response, next: NextFu
     const viewerOxyUserId = getRequestUserId(req as AuthRequest);
 
     if (entity.type === 'artist') {
-      const formatted = formatArtistWithImage(entity) as FormattedArtistProfile | null;
-      const [music, linkedPerson] = await Promise.all([
+      const [formatted, music, linkedPerson, sources] = await Promise.all([
+        toArtistProfile(entity),
         loadArtistMusic(id),
-        PersonModel.findOne({ linkedArtistId: entity._id }).lean<CatalogEntityLean>(),
+        // `type = 'person'` is stated, not implied. Mongoose's discriminator
+        // injected it into `PersonModel.findOne`; one table with a `type`
+        // column does not, and the column is nullable for artists — so an
+        // unscoped read here could resolve a person link to a non-person row.
+        getDb()
+          .select(publicColumns(catalogEntities, PROTECTED_COLUMNS_BY_TABLE))
+          .from(catalogEntities)
+          .where(and(eq(catalogEntities.type, 'person'), eq(catalogEntities.linkedArtistId, id)))
+          .limit(1),
+        loadEntitySources(id),
       ]);
 
+      const person = linkedPerson[0];
       const profile: EntityProfile = {
         id,
         kind: 'artist',
-        name: formatted?.name ?? entity.name,
+        name: formatted.name,
         ...artistDisplayFields(formatted),
-        linkedOxyUserId: linkedPerson?.linkedOxyUserId,
+        linkedOxyUserId: person?.linkedOxyUserId ?? undefined,
         music,
-        appearsIn: linkedPerson ? await loadAppearsIn(toPersonLike(linkedPerson)) : undefined,
-        ...await loadArtistSections(toArtistProfileSource(entity), music, viewerOxyUserId),
+        appearsIn: person ? await loadAppearsIn(toPersonLike(person)) : undefined,
+        ...await loadArtistSections(toArtistProfileSource(entity, sources), music, viewerOxyUserId),
       };
       return res.json({ data: profile });
     }
@@ -317,9 +341,7 @@ export const getEntityProfile = async (req: Request, res: Response, next: NextFu
     const [appearsIn, enriched, linkedArtist] = await Promise.all([
       loadAppearsIn(personLike),
       enrichPersons([personLike], makeOxyUsersFetcher(oxy)),
-      entity.linkedArtistId
-        ? CatalogEntityModel.findById(entity.linkedArtistId).lean<CatalogEntityLean>()
-        : Promise.resolve(null),
+      entity.linkedArtistId ? findEntity(entity.linkedArtistId) : Promise.resolve(undefined),
     ]);
     const identity = enriched[0];
 
@@ -329,11 +351,14 @@ export const getEntityProfile = async (req: Request, res: Response, next: NextFu
     // artist's own page — the profile is the artist's however it was addressed.
     let artistSections: Awaited<ReturnType<typeof loadArtistSections>> | undefined;
     if (linkedArtist) {
-      const formattedLinked = formatArtistWithImage(linkedArtist) as FormattedArtistProfile | null;
-      music = await loadArtistMusic(linkedArtist._id.toString());
+      const [formattedLinked, linkedSources] = await Promise.all([
+        toArtistProfile(linkedArtist),
+        loadEntitySources(linkedArtist.id),
+      ]);
+      music = await loadArtistMusic(linkedArtist.id);
       linkedArtistFields = artistDisplayFields(formattedLinked);
       artistSections = await loadArtistSections(
-        toArtistProfileSource(linkedArtist),
+        toArtistProfileSource(linkedArtist, linkedSources),
         music,
         viewerOxyUserId,
       );
@@ -347,8 +372,8 @@ export const getEntityProfile = async (req: Request, res: Response, next: NextFu
       username: identity?.username,
       avatar: identity?.oxyAvatar,
       ...linkedArtistFields,
-      linkedArtistId: entity.linkedArtistId ? entity.linkedArtistId.toString() : undefined,
-      linkedOxyUserId: entity.linkedOxyUserId,
+      linkedArtistId: entity.linkedArtistId ?? undefined,
+      linkedOxyUserId: entity.linkedOxyUserId ?? undefined,
       music,
       appearsIn,
       ...artistSections,

@@ -433,11 +433,28 @@ export interface ArtistDtoContext {
 /**
  * `catalog_entities` rows of `type: 'artist'`.
  *
- * `members` is deliberately absent: it stayed a `jsonb` column with no reader
- * anywhere (`schema/catalog.ts`'s file-level comment), so naming it here would
- * put a field on the wire that nothing produces and nothing consumes.
  * `imageSuggestions` and `images` cannot be named at all — `publicColumns()`
  * removes them from {@link PublicCatalogEntityRow}, which is the whole point.
+ *
+ * ## `members` was absent here, on a claim that was already known to be false
+ *
+ * This comment used to read: "`members` is deliberately absent: it stayed a
+ * `jsonb` column with no reader anywhere, so naming it here would put a field on
+ * the wire that nothing produces and nothing consumes."
+ *
+ * Every clause of that is wrong. `services/uploads/enrichCatalogEntity.ts`
+ * WRITES it from Wikidata's `has part`; `controllers/entityProfile.controller.ts`
+ * puts it on `GET /api/p/:id`; `@syra/shared-types`'s `entityProfileSchema` and
+ * `artistSchema` both declare it; `entityProfile.artistSections.test.ts` asserts
+ * a group's first member by name on a live response.
+ *
+ * Task 10b established all of that and corrected `schema/catalog.ts` in both
+ * places — its file header and the column's own doc comment — and the claim
+ * survived HERE, in the one file where it decided what reaches a client. That is
+ * the "grep the claim" rule failing across files rather than within one, and the
+ * cost is specific: an allowlist DTO drops silently, so porting the entity
+ * profile through this function would have removed `members` from a live
+ * response with nothing to catch it but the one test that happens to assert it.
  */
 export function toArtistDto(
   row: PublicCatalogEntityRow,
@@ -476,6 +493,7 @@ export function toArtistDto(
       row.imageLicenceSourceUrl
     ),
     genres: optional(row.genres),
+    members: optional(row.members),
     verified: optional(row.verified),
     sortName: optional(row.sortName),
     disambiguation: optional(row.disambiguation),

@@ -235,13 +235,14 @@ describe('vacuity floor', () => {
   });
 
   it('the registry is not empty and covers the measured hybrids', () => {
-    // Thirteen: 10b's ten services plus 10c-1's three playback controllers. A registry
+    // Fifteen: 10b's ten services, 10c-1's three playback controllers, and
+    // 10c-2's two artist-surface controllers. A registry
     // that shrank to nothing without the owning tasks landing means the walk
     // broke, not that the work finished — Tasks 11/13/15 each remove entries and
     // this floor drops with them, deliberately, by being edited when that
     // happens. The unported list went 2 -> 1 when `manifestService`'s adapters
     // were deleted; `resolvePersons` is the one left, and it needs Task 12.
-    expect(HYBRID_MODULES.length).toBe(13);
+    expect(HYBRID_MODULES.length).toBe(15);
     expect(UNPORTED_CATALOG_MODULES.length).toBe(1);
   });
 });

@@ -209,6 +209,56 @@ const PROBES: readonly { readonly name: string; readonly sql: string }[] = [
           limit 20`,
   },
   {
+    // `controllers/artists.controller.ts` — `getArtistTracks`, the public page.
+    name: 'artistTracksPage',
+    sql: `select id, title from tracks
+          where is_available = true and copyright_removed = false
+            and artist_id = '${MARKER}-art-5'
+          order by (cover_art_id is not null) desc, popularity desc, created_at desc
+          limit 20 offset 0`,
+  },
+  {
+    // Same handler — the total beside the page.
+    name: 'artistTracksCount',
+    sql: `select count(*) from tracks
+          where is_available = true and copyright_removed = false
+            and artist_id = '${MARKER}-art-5'`,
+  },
+  {
+    // `controllers/artists.controller.ts` — `getArtistDashboard`'s recent list.
+    // NOT playability-filtered: the artist's own view must show taken-down work.
+    name: 'artistDashboardRecent',
+    sql: `select id, title from tracks
+          where artist_id = '${MARKER}-art-5' order by created_at desc limit 10`,
+  },
+  {
+    // Same handler — the removed-for-copyright shelf, the complement predicate
+    // that no partial index on this table can serve.
+    name: 'artistDashboardRemoved',
+    sql: `select id, title from tracks
+          where artist_id = '${MARKER}-art-5' and copyright_removed = true
+          order by removed_at desc limit 20`,
+  },
+  {
+    // `controllers/artists.controller.ts` — `getArtistInsights`, which replaced
+    // "load the whole catalogue into memory and sum it in JS".
+    name: 'artistInsightsSum',
+    sql: `select coalesce(sum(play_count), 0)::int from tracks
+          where artist_id = '${MARKER}-art-5'`,
+  },
+  {
+    // `controllers/artists.controller.ts` — `loadContributedTrackIds` step 1,
+    // the artist's own track ids feeding the Mongo attestation lookup.
+    name: 'contributedTrackIds',
+    sql: `select id from tracks where artist_id = '${MARKER}-art-5'`,
+  },
+  {
+    // `controllers/entityProfile.controller.ts` — `loadEntitySources`.
+    name: 'entitySources',
+    sql: `select provider, external_id from catalog_entity_sources
+          where catalog_entity_id = '${MARKER}-art-5' order by position asc`,
+  },
+  {
     /**
      * The control. `tracks.comment` carries no index, so this MUST still report
      * a Seq Scan under `enable_seqscan = off`. Without it, every "no Seq Scan"
@@ -280,13 +330,19 @@ async function seed(tx: Tx): Promise<void> {
     from generate_series(1, 20000) g`));
 
   await executeRows(tx, sql.raw(`
+    insert into catalog_entity_sources (id, catalog_entity_id, position, provider, external_id, imported_at, fields)
+    select '${MARKER}-src-' || g, '${MARKER}-art-' || (1 + (g % 300)), g / 300, 'cc', 'ext-' || g,
+           now(), array['bio']
+    from generate_series(0, 899) g`));
+
+  await executeRows(tx, sql.raw(`
     insert into track_keys (id, kind, track_id, key_hex, key_uri)
     select '${MARKER}-k-' || g, 'track', '${MARKER}-t-' || g, repeat('ab', 16), 'key'
     from generate_series(1, 20000) g`));
 
   await executeRows(tx, sql.raw(
     'analyze image_assets, catalog_entities, albums, tracks, track_credits, track_fingerprints, ' +
-    'track_hls_renditions, track_keys'
+    'track_hls_renditions, track_keys, catalog_entity_sources'
   ));
 
   const [counted] = await executeRows<{ total: number }>(
@@ -433,6 +489,55 @@ describe('the playback read paths reach an index', () => {
 
   it('the queue ref resolution does not scan the table', () => {
     expect(plans.get('queueRefs')).not.toContain('Seq Scan on tracks');
+  });
+});
+
+describe('the artist surface reads reach an index', () => {
+  /**
+   * Every one of these is keyed on `artist_id`, and two of them deliberately
+   * OMIT the playability predicate — the dashboard is the artist's own view and
+   * has to show taken-down work. That is the exact shape migration `0017`'s
+   * plain `tracks_artist_id_idx` exists for: the partial indexes cannot serve a
+   * query whose predicate does not imply theirs, which is how the two
+   * moderation queries were Seq Scans at 3,865 buffers before it.
+   */
+  it('the public artist track page reads through an index', () => {
+    expect(plans.get('artistTracksPage')).not.toContain('Seq Scan on tracks');
+    expect(`artist tracks: ${indexesIn('artistTracksPage')}`).toContain('tracks_');
+  });
+
+  it('its count does not scan the table', () => {
+    expect(plans.get('artistTracksCount')).not.toContain('Seq Scan on tracks');
+  });
+
+  it('the dashboard recent list reaches the plain artist index', () => {
+    expect(plans.get('artistDashboardRecent')).not.toContain('Seq Scan on tracks');
+    expect(`dashboard recent: ${indexesIn('artistDashboardRecent')}`).toBe(
+      'dashboard recent: tracks_artist_id_idx'
+    );
+  });
+
+  it('the removed-for-copyright shelf reaches it too', () => {
+    // `copyright_removed = true` is the complement of every partial index here.
+    expect(plans.get('artistDashboardRemoved')).not.toContain('Seq Scan on tracks');
+    expect(`dashboard removed: ${indexesIn('artistDashboardRemoved')}`).toBe(
+      'dashboard removed: tracks_artist_id_idx'
+    );
+  });
+
+  it('the insights sum aggregates through the index rather than scanning', () => {
+    expect(plans.get('artistInsightsSum')).not.toContain('Seq Scan on tracks');
+  });
+
+  it('the contributed-ids read does not scan the table', () => {
+    // Step 1 of the three that replaced the cross-database `$lookup`. It reads
+    // the artist's whole catalogue, so an index here is what keeps the split
+    // bounded rather than proportional to `tracks`.
+    expect(plans.get('contributedTrackIds')).not.toContain('Seq Scan on tracks');
+  });
+
+  it('the entity provenance read does not scan its child table', () => {
+    expect(plans.get('entitySources')).not.toContain('Seq Scan on catalog_entity_sources');
   });
 });
 
