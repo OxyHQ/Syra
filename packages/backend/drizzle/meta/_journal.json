@@ -113,6 +113,13 @@
       "when": 1786033484653,
       "tag": "0015_thankful_stick",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1786036275021,
+      "tag": "0016_rapid_wrecker",
+      "breakpoints": true
     }
   ]
 }

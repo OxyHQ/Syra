@@ -693,9 +693,26 @@ export const tracks = pgTable(
      * boolean filter over that already-small set costs nothing extra to scan.
      * A dedicated `is_explicit` index would only pay for itself if something
      * queried explicitness WITHOUT playability first, and nothing does.
+     *
+     * `album_id` DOES get its own index, and the first pass was wrong to fold
+     * it into the compound below. Postgres 17 has no index skip scan, so a
+     * query keyed on `album_id` alone cannot use `(artist_id, album_id)` as
+     * anything better than a full scan of that index — measured under
+     * `EXPLAIN (ANALYZE, BUFFERS)` against 60,000 tracks: `GET /albums/:id/tracks`
+     * read 190 buffers, of which 187 were the index scan itself, and the cost
+     * scaled with the size of `tracks` rather than with the album. With the
+     * standalone index it is 9. Mongo had this index
+     * (`models/Track.ts:134`, `albumId: { type: String, index: true }`), so
+     * dropping it was a port regression rather than a considered trade.
+     * `db/catalog/__tests__/containers.explain.test.ts` asserts the planner
+     * REACHES it — a definition assertion would have certified the defect,
+     * since the compound index satisfies "an index on album_id exists" too.
      */
     index('tracks_artist_id_album_id_idx')
       .on(t.artistId, t.albumId)
+      .where(sql`${t.isAvailable} = true and ${t.copyrightRemoved} = false`),
+    index('tracks_album_id_idx')
+      .on(t.albumId)
       .where(sql`${t.isAvailable} = true and ${t.copyrightRemoved} = false`),
     index('tracks_popularity_idx')
       .on(t.popularity.desc())

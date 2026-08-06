@@ -1,0 +1,19 @@
+-- oxy:deploy-phase=pre
+-- Purely additive: one new partial index, no drop, no narrowing. Safe while the
+-- previous image is still serving, and the new image wants it from its first
+-- request.
+--
+-- Restores an index Mongo had and the port dropped. `models/Track.ts:134`
+-- declares `albumId: { type: String, index: true }`; `schema/catalog.ts`'s first
+-- pass folded it into `tracks_artist_id_album_id_idx` on the reasoning that
+-- every real query carries the playability predicate — true, but those queries
+-- also carry `album_id` WITHOUT `artist_id`, and Postgres 17 has no index skip
+-- scan, so `(artist_id, album_id)` could serve them only as a full scan of the
+-- index.
+--
+-- Measured with EXPLAIN (ANALYZE, BUFFERS) on 60,000 seeded tracks:
+-- `GET /albums/:id/tracks` read 190 buffers before this index and 9 after, and
+-- the "does this album have a playable track" probe for an album with none —
+-- the worst case, which has to prove absence — went from 183 buffers to 5.
+-- Before, the cost scaled with the size of `tracks`; after, with the album.
+CREATE INDEX "tracks_album_id_idx" ON "tracks" USING btree ("album_id") WHERE "tracks"."is_available" = true and "tracks"."copyright_removed" = false;
