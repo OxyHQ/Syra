@@ -49,16 +49,17 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, sql, type SQLWrapper } from 'drizzle-orm';
 import { executeRows } from '@oxyhq/db';
 import { closePostgres, connectPostgres, getDb } from '../../postgres';
 import { albums, catalogEntities, tracks } from '../../schema/catalog';
 import { playlistTracks, playlists } from '../../schema/library';
 import {
-  albumHasPlayableTracks,
-  artistHasPlayableTracks,
+  ALBUM_TRACK_ORDER,
   playableAlbumTracksWhere,
-  playlistHasPlayableTracks,
+  playableAlbumsWhere,
+  playableArtistsWhere,
+  playablePlaylistsWhere,
 } from '../containers';
 
 /** Thrown to roll the seeding transaction back once every plan is collected. */
@@ -71,6 +72,12 @@ const PROBE_ALBUM = `${MARKER}-alb-7`;
 
 /** Plan text by probe name, collected once in `beforeAll`. */
 const plans = new Map<string, string>();
+
+/** Rows actually visible in `tracks` inside the seeding transaction. */
+let seededRowCount = 0;
+
+/** Columns of `tracks` that `pg_stats` knew about after the seed's `ANALYZE`. */
+let analyzedColumnCount = 0;
 
 /**
  * A catalogue with enough cardinality for the planner to have a real preference:
@@ -150,22 +157,45 @@ beforeAll(async () => {
       expect(setting.enable_seqscan).toBe('off');
 
       await seed(tx);
+      const [seeded] = await executeRows<{ total: number }>(
+        tx,
+        sql`select count(*)::int as total from tracks`
+      );
+      seededRowCount = seeded.total;
+      const [analyzed] = await executeRows<{ total: number }>(
+        tx,
+        sql`select count(*)::int as total from pg_stats where tablename = 'tracks'`
+      );
+      analyzedColumnCount = analyzed.total;
 
-      const probes: Record<string, { getSQL: () => unknown }> = {
+      const probes: Record<string, SQLWrapper> = {
+        // Each probe is the query the module actually issues: the module's own
+        // exported condition, plus the ORDER BY and LIMIT the finders apply.
+        // Measuring the bare WHERE would measure a plan nothing runs — a LIMIT
+        // in particular can change which plan the planner picks.
         albumTracks: tx
           .select({ id: tracks.id })
           .from(tracks)
           .where(playableAlbumTracksWhere(PROBE_ALBUM))
-          .orderBy(asc(tracks.discNumber), asc(tracks.trackNumber)),
-        albumHasPlayable: tx.select({ id: albums.id }).from(albums).where(albumHasPlayableTracks()),
+          .orderBy(...ALBUM_TRACK_ORDER),
+        albumHasPlayable: tx
+          .select({ id: albums.id })
+          .from(albums)
+          .where(playableAlbumsWhere())
+          .orderBy(desc(albums.popularity))
+          .limit(20),
         artistHasPlayable: tx
           .select({ id: catalogEntities.id })
           .from(catalogEntities)
-          .where(and(eq(catalogEntities.type, 'artist'), artistHasPlayableTracks())),
+          .where(playableArtistsWhere())
+          .orderBy(desc(catalogEntities.popularity))
+          .limit(20),
         playlistHasPlayable: tx
           .select({ id: playlists.id })
           .from(playlists)
-          .where(playlistHasPlayableTracks()),
+          .where(playablePlaylistsWhere())
+          .orderBy(desc(playlists.followers))
+          .limit(20),
         // The control: `tracks.comment` carries no index, so the planner has
         // nothing to choose even with sequential scans discouraged.
         unindexedControl: tx
@@ -177,7 +207,7 @@ beforeAll(async () => {
       for (const [name, query] of Object.entries(probes)) {
         const rows = await executeRows<{ 'QUERY PLAN': string }>(
           tx,
-          sql`explain ${query.getSQL() as never}`
+          sql`explain ${query}`
         );
         plans.set(name, rows.map((row) => row['QUERY PLAN']).join('\n'));
       }
@@ -275,13 +305,33 @@ describe('the probe can tell an index from a scan', () => {
   });
 
   it('the seeded catalogue actually reached the planner', () => {
-    // A seed that silently inserted nothing would leave every plan costed
-    // against an empty table, which is the condition that made the first
-    // version of this file flip between indexes.
+    // The two vacuity risks are a seed that inserted nothing and an `ANALYZE`
+    // that never ran: either leaves the planner costing against an empty table,
+    // the condition that made the first version of this file flip between
+    // indexes. `plans.size` and non-empty plan text see NEITHER — both hold for
+    // a plan over an empty table.
+    //
+    // Both assertions below are read INSIDE the seeding transaction, and both
+    // were mutation-tested — reporting what each actually caught, not what it
+    // was hoped to:
+    //
+    //  - Removing the `ANALYZE` leaves `pg_stats` empty for `tracks`, failing
+    //    the second assertion (and, separately, changing the playlist plan).
+    //  - Emptying the track seed does not reach these assertions at all: the
+    //    `playlist_tracks` foreign key refuses the dependent insert and the
+    //    whole run fails loudly in `beforeAll`. The row count still earns its
+    //    place for the case that fails quietly — a seed that shrinks rather
+    //    than disappears.
+    //
+    // A planner row-estimate floor was written here first and REMOVED: it does
+    // not discriminate. With the `ANALYZE` gone the estimate stayed well above
+    // any useful threshold, because Postgres falls back to estimating from the
+    // relation's physical size.
     expect(plans.size).toBe(5);
-    for (const [name, plan] of plans) {
-      expect(`${name}: ${plan.length > 0}`).toBe(`${name}: true`);
-    }
+    expect(`tracks seeded: ${seededRowCount}`).toBe('tracks seeded: 4000');
+    expect(`tracks columns in pg_stats: ${analyzedColumnCount > 0}`).toBe(
+      'tracks columns in pg_stats: true'
+    );
   });
 });
 

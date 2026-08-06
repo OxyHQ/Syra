@@ -231,13 +231,22 @@ describe('the shapes the Mongo pair disagreed on are unrepresentable', () => {
   });
 });
 
-describe('the catalog and playback authorities cannot drift apart on a real row', () => {
+describe("visibility.ts's own two artefacts cannot drift apart on a real row", () => {
   /**
-   * The rule this pair exists to hold: a row the query returns must be one
-   * playback accepts, or a takedown stays listed and searchable and then fails
-   * at play. Checked in the failing DIRECTION specifically, so a future change
-   * that makes the query LOOSER than the predicate is caught even if exact
-   * equality is relaxed for some other reason.
+   * NOT "the catalog and playback authorities", which is what this block was
+   * called first and is more than it checks. The playback authority is
+   * `controllers/stream.controller.ts:68` — a THIRD predicate, spelled
+   * `isAvailable !== false && !copyrightRemoved`, still on Mongoose, untouched
+   * and untested by anything here. Folding it into this agreement is Task 10c's
+   * job, when controllers are in scope; until then a test name asserting the
+   * two authorities agree would be the same shape of defect as a comment
+   * claiming a guard that does not exist.
+   *
+   * What IS checked: the rule this file's own pair exists to hold — a row the
+   * query returns must be one the predicate accepts, or a takedown stays listed
+   * and searchable and then fails at play. Checked in the failing DIRECTION
+   * specifically, so a change making the query LOOSER than the predicate is
+   * caught even if exact equality is relaxed for some other reason.
    */
   it('never lists a row the predicate would refuse', async () => {
     const db = getDb();

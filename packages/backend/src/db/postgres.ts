@@ -9,9 +9,11 @@
  * columns the migrations never created.
  *
  * Connect once at boot, then read the handle synchronously from anywhere via
- * `getDb()`. Nothing calls `connectPostgres()` yet — Mongoose is still this
- * backend's only wired-up store — so this module has no caller until a later
- * task adds one.
+ * `getDb()`. `server.ts`'s `bootServer` opens it alongside the Mongo
+ * connection, with the same log-and-continue failure semantics: a service whose
+ * routes are still mostly on Mongoose must not fail to boot because
+ * `DATABASE_URL` is unset. Routes that have been ported fail on their own until
+ * it is reachable, which is the narrower blast radius.
  */
 
 import { createDatabase, type OxyDatabase } from '@oxyhq/db';

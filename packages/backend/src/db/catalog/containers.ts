@@ -85,24 +85,6 @@ function hasPlayableTrack(containerColumn: PgColumn, containerId: PgColumn): SQL
 }
 
 /**
- * "This album has at least one playable track."
- *
- * Exported as a bare condition, not just used internally, for two reasons: a
- * caller in Task 10b composing its own album query needs the same predicate
- * rather than a second spelling of it, and `__tests__/containers.explain.test.ts`
- * EXPLAINs exactly this condition instead of a hand-written lookalike that could
- * drift from what the module emits.
- */
-export function albumHasPlayableTracks(): SQL {
-  return hasPlayableTrack(tracks.albumId, albums.id);
-}
-
-/** "This artist has at least one playable track." */
-export function artistHasPlayableTracks(): SQL {
-  return hasPlayableTrack(tracks.artistId, catalogEntities.id);
-}
-
-/**
  * Album visibility: an album is hidden when its creator unpublishes the
  * CONTAINER, independently of whether its tracks are still individually
  * playable.
@@ -127,6 +109,45 @@ function artistEntity(): SQL {
   return eq(catalogEntities.type, 'artist');
 }
 
+/**
+ * The COMPLETE predicate each container listing runs under, exported as one
+ * condition each.
+ *
+ * One spelling, three consumers: the finders and counters below, a Task 10b
+ * caller composing its own query, and `__tests__/containers.explain.test.ts`,
+ * which EXPLAINs these rather than a hand-written lookalike. The lookalike is
+ * the trap — a probe that reconstructs "roughly the shipped query" measures a
+ * plan nothing runs, and drifts silently the moment this file changes.
+ */
+export function playableAlbumsWhere(): SQL {
+  return and(availableAlbum(), hasPlayableTrack(tracks.albumId, albums.id)) as SQL;
+}
+
+export function playableArtistsWhere(): SQL {
+  return and(artistEntity(), hasPlayableTrack(tracks.artistId, catalogEntities.id)) as SQL;
+}
+
+/**
+ * One level deeper than the album and artist predicates, because playlist
+ * membership lives in `playlist_tracks`.
+ *
+ * Under Mongo this was the nested `$lookup` that made playlist-bearing endpoints
+ * take 20 s: `PlaylistTrack.trackId` was a string and `Track._id` an ObjectId, so
+ * the correlation could not use an index unless the conversion was applied on
+ * exactly the right side. `playlist_tracks.track_id` is a real foreign key to
+ * `tracks.id` now, so the inner probe is a primary-key lookup and there is no
+ * conversion to place.
+ */
+export function playablePlaylistsWhere(): SQL {
+  return exists(
+    getDb()
+      .select({ present: sql`1` })
+      .from(playlistTracks)
+      .innerJoin(tracks, eq(tracks.id, playlistTracks.trackId))
+      .where(and(eq(playlistTracks.playlistId, playlists.id), playableTrackFilter()))
+  );
+}
+
 /** `where` composed with an optional caller-supplied condition. */
 function narrowed(base: SQL, extra?: SQL): SQL {
   return extra ? (and(base, extra) as SQL) : base;
@@ -141,12 +162,7 @@ export async function findAlbumsWithPlayableTracks(
   const query = getDb()
     .select(publicColumns(albums, PROTECTED_COLUMNS_BY_TABLE))
     .from(albums)
-    .where(
-      narrowed(
-        and(availableAlbum(), albumHasPlayableTracks()) as SQL,
-        where
-      )
-    )
+    .where(narrowed(playableAlbumsWhere(), where))
     .orderBy(...page.orderBy)
     .limit(page.limit);
 
@@ -157,12 +173,7 @@ export async function countAlbumsWithPlayableTracks(where?: SQL): Promise<number
   const [row] = await getDb()
     .select({ total: count() })
     .from(albums)
-    .where(
-      narrowed(
-        and(availableAlbum(), albumHasPlayableTracks()) as SQL,
-        where
-      )
-    );
+    .where(narrowed(playableAlbumsWhere(), where));
 
   return row?.total ?? 0;
 }
@@ -172,7 +183,7 @@ export async function findOneAlbumWithPlayableTracks(id: string): Promise<AlbumR
     .select(publicColumns(albums, PROTECTED_COLUMNS_BY_TABLE))
     .from(albums)
     .where(
-      and(eq(albums.id, id), availableAlbum(), albumHasPlayableTracks())
+      and(eq(albums.id, id), playableAlbumsWhere())
     )
     .limit(1);
 
@@ -188,12 +199,7 @@ export async function findArtistsWithPlayableTracks(
   const query = getDb()
     .select(publicColumns(catalogEntities, PROTECTED_COLUMNS_BY_TABLE))
     .from(catalogEntities)
-    .where(
-      narrowed(
-        and(artistEntity(), artistHasPlayableTracks()) as SQL,
-        where
-      )
-    )
+    .where(narrowed(playableArtistsWhere(), where))
     .orderBy(...page.orderBy)
     .limit(page.limit);
 
@@ -204,12 +210,7 @@ export async function countArtistsWithPlayableTracks(where?: SQL): Promise<numbe
   const [row] = await getDb()
     .select({ total: count() })
     .from(catalogEntities)
-    .where(
-      narrowed(
-        and(artistEntity(), artistHasPlayableTracks()) as SQL,
-        where
-      )
-    );
+    .where(narrowed(playableArtistsWhere(), where));
 
   return row?.total ?? 0;
 }
@@ -221,11 +222,7 @@ export async function findOneArtistWithPlayableTracks(
     .select(publicColumns(catalogEntities, PROTECTED_COLUMNS_BY_TABLE))
     .from(catalogEntities)
     .where(
-      and(
-        eq(catalogEntities.id, id),
-        artistEntity(),
-        artistHasPlayableTracks()
-      )
+      and(eq(catalogEntities.id, id), playableArtistsWhere())
     )
     .limit(1);
 
@@ -234,27 +231,6 @@ export async function findOneArtistWithPlayableTracks(
 
 // ── Playlists ─────────────────────────────────────────────────────────────
 
-/**
- * "This playlist holds at least one playable track" — one level deeper than the
- * album and artist probes, because membership lives in `playlist_tracks`.
- *
- * Under Mongo this was the nested `$lookup` that made playlist-bearing endpoints
- * take 20 s: `PlaylistTrack.trackId` was a string and `Track._id` an ObjectId,
- * so the correlation could not use an index unless the conversion was applied on
- * exactly the right side. `playlist_tracks.track_id` is now a real foreign key to
- * `tracks.id`, so the inner probe is a primary-key lookup and there is no
- * conversion to place.
- */
-export function playlistHasPlayableTracks(): SQL {
-  return exists(
-    getDb()
-      .select({ present: sql`1` })
-      .from(playlistTracks)
-      .innerJoin(tracks, eq(tracks.id, playlistTracks.trackId))
-      .where(and(eq(playlistTracks.playlistId, playlists.id), playableTrackFilter()))
-  );
-}
-
 export async function findPlaylistsWithPlayableTracks(
   where: SQL | undefined,
   page: CatalogPage
@@ -262,7 +238,7 @@ export async function findPlaylistsWithPlayableTracks(
   const query = getDb()
     .select(publicColumns(playlists, PROTECTED_COLUMNS_BY_TABLE))
     .from(playlists)
-    .where(narrowed(playlistHasPlayableTracks(), where))
+    .where(narrowed(playablePlaylistsWhere(), where))
     .orderBy(...page.orderBy)
     .limit(page.limit);
 
@@ -273,7 +249,7 @@ export async function countPlaylistsWithPlayableTracks(where?: SQL): Promise<num
   const [row] = await getDb()
     .select({ total: count() })
     .from(playlists)
-    .where(narrowed(playlistHasPlayableTracks(), where));
+    .where(narrowed(playablePlaylistsWhere(), where));
 
   return row?.total ?? 0;
 }

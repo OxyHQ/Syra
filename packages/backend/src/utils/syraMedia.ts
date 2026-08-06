@@ -175,7 +175,12 @@ export type ResolveTrackResult =
  *    token mint) — a transient failure to retry, not a missing track.
  *  - `ok` — the resolved, playable track.
  *
- * Never throws.
+ * THROWS if the database is unreachable — `getDb()` when the pool was never
+ * opened, or the driver on a failed query. The Mongoose version's doc claimed
+ * "never throws", which this deliberately does not repeat: the three outcomes
+ * above are all answers about a TRACK, and "cannot ask" is not one of them.
+ * Mapping an outage onto `not_found` would hide it behind a normal-looking 404,
+ * so it propagates and the caller answers 500.
  */
 export async function resolveTrack(trackId: string): Promise<ResolveTrackResult> {
   const [track] = await getDb()

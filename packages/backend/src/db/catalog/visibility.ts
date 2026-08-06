@@ -61,8 +61,11 @@ import { tracks } from '../schema/catalog';
  *     db.select().from(tracks).where(and(playableTrackFilter(), eq(tracks.albumId, id)))
  *
  * Both columns are `NOT NULL`, so these are plain equality tests, and
- * `schema/catalog.ts` folds this exact predicate into five partial indexes —
- * every one of them is usable only by a query that carries it.
+ * `schema/catalog.ts` folds this exact predicate into seven partial indexes
+ * (`schema/catalog.ts:711-731`, counted rather than remembered — this task added
+ * the seventh). Postgres will not use any of them for a query that omits the
+ * predicate, so composing this condition is what makes those indexes reachable
+ * at all.
  */
 export function playableTrackFilter(): SQL {
   // `and()` is typed as possibly-undefined for the zero-argument case; with two

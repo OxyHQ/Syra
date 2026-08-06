@@ -10,6 +10,7 @@ import { createOptionalOxyAuth, createOxyRateLimit } from '@oxyhq/core/server';
 import { oxy } from './src/oxyClient';
 
 import { connectToDatabase, isDatabaseConnected, getDatabaseStats } from './src/utils/database';
+import { connectPostgres } from './src/db/postgres';
 import { createRedisPubSub, isRedisConnected, getRedisStats } from './src/utils/redis';
 import { ensureRedisConnected, isRedisConnectionError } from './src/utils/redisHelpers';
 import { createAdapter } from '@socket.io/redis-adapter';
@@ -438,6 +439,27 @@ const bootServer = async () => {
     await connectToDatabase();
   } catch {
     logger.warn('MongoDB connection unavailable - server will start but database operations will fail');
+  }
+
+  /**
+   * PostgreSQL, opened with exactly the failure semantics the Mongo connection
+   * above has: log and continue. A boot that fails closed on an unset
+   * `DATABASE_URL` would take the whole service down for the routes that are
+   * still entirely on Mongo, which is strictly worse than the ported routes
+   * failing on their own.
+   *
+   * Opened here rather than in Task 20 because the Mongo->Postgres port has
+   * reached a request path: `utils/syraMedia.ts` (the live-room track/album/
+   * playlist ingress resolver) reads through drizzle now. Every remaining port
+   * task needs this connection too, and until it exists each one inherits a
+   * broken baseline and cannot tell its own breakage from this.
+   */
+  try {
+    await connectPostgres();
+  } catch (error) {
+    logger.warn('PostgreSQL connection unavailable - ported routes will fail until it is reachable', {
+      reason: error instanceof Error ? error.message : 'unknown',
+    });
   }
 
   server.listen(env.PORT, '0.0.0.0', () => {
