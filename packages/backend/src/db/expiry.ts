@@ -20,14 +20,25 @@
  *
  * So porting a collection is not done when its schema and migration exist. If
  * its Mongoose model declares `expireAfterSeconds`, it is done only once a
- * matching entry exists here — and this registry should eventually be gated
- * by a test that WALKS the Mongoose models for `expireAfterSeconds`
- * declarations, rather than one that names tables by hand and can only fall
- * as far behind as the last time someone remembered to update it. That gate
- * is still worth writing: `grep -rn "expireAfterSeconds"
- * packages/backend/src` returns FOUR declarations today, two of which are
- * below and two of which (`ModerationOutbox`, `ModerationEvent`) belong to a
- * vertical that has not landed yet.
+ * matching entry exists here.
+ *
+ * THAT IS GATED, and no longer by a hand grep. `__tests__/gates.test.ts`
+ * ("accounts for every Mongoose TTL index") WALKS `src/models/*.ts` for
+ * `<Model>Schema.index({ field: 1 }, { … expireAfterSeconds … })` and compares
+ * what it finds against a model→port map, in both directions, then compares
+ * the covered half of that map against the targets below. A vertical that
+ * ports a TTL-bearing model without adding an entry here fails there, naming
+ * the model. Only the model→column correspondence is hand-maintained — a
+ * human has to say which Postgres column a Mongo field became — while the SET
+ * of declarations comes from the files, which is the half that used to be a
+ * grep in somebody's report. Four TTL indexes exist today: the two below, and
+ * `ModerationOutbox`/`ModerationEvent`, mapped to a deferred sentinel that is
+ * deliberately NOT counted as covered.
+ *
+ * The gate reads one spelling of a TTL declaration — the only one this repo
+ * uses, not the only one Mongoose accepts. See its own comment for the four
+ * shapes it would miss and why a miss is SILENT; adding a target in an
+ * unusual shape means checking that comment first.
  *
  * `findUnsupportedExpiryColumns` (`@oxyhq/db/assert`) reads the real Postgres
  * catalogue against whatever lands here, so an entry added without its
@@ -111,7 +122,8 @@ export const EXPIRY_SWEEP_TARGETS: readonly ExpirySweepTarget[] = [
     // cannot drift.
     retentionSeconds: LISTENING_EVENT_RETENTION_SECONDS,
     reason:
-      'A raw play older than 90 days, already folded into the taste profile and relation graph and ' +
-      "already outside every reader's lookback window.",
+      'A raw play older than 90 days, already folded into the taste profile and relation graph. ' +
+      "Outside the co-occurrence job's 60-day window; the other reader does not filter by time at " +
+      'all and can read an unswept row, harmlessly — see schema/user.ts.',
   },
 ];

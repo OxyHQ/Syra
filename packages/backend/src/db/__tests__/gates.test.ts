@@ -2572,8 +2572,30 @@ describe('user, taste and listening schema (Task 7)', () => {
       { model: 'ModerationEvent', field: 'expiresAt', port: DEFERRED_TO_TASK_8 },
     ];
 
-    // `ModelSchema.index({ field: 1 }, { … expireAfterSeconds … })` — the only
-    // spelling Mongoose accepts for a TTL index, and the only one in this repo.
+    /**
+     * `<Name>Schema.index({ field: 1 }, { … expireAfterSeconds … })` — THE ONLY
+     * SPELLING THIS REPO USES, which is not the same claim as the only spelling
+     * Mongoose accepts, and the difference is the whole risk in this gate.
+     *
+     * Verified, not assumed: every `.index(` call in `src/models/*.ts` has a
+     * `<Name>Schema` receiver (28 distinct ones, zero exceptions), and there is
+     * no `expires:` path shorthand and no `.expires(` anywhere in that
+     * directory.
+     *
+     * Four shapes it would MISS, all legal Mongoose:
+     *  - `{ partialFilterExpression: {…}, expireAfterSeconds: 0 }` — the inner
+     *    `{…}` closes the `[^}]*` before `expireAfterSeconds` is reached.
+     *  - a quoted or dotted field key (`{ 'meta.expiresAt': 1 }`).
+     *  - a receiver not named `*Schema`.
+     *  - `expires:` on the path itself, Mongoose's own TTL shorthand.
+     *
+     * AND A MISS IS SILENT, which is why it is spelled out here rather than
+     * left to whoever hits it: an unseen declaration keeps `declared` short,
+     * and the author who wrote it in that shape is the same person who would
+     * have added the mapping — so BOTH sides of the set equality below go short
+     * together and it passes. Task 8 adds the two moderation TTLs; if either is
+     * written with a partial filter, widen this pattern in the same change.
+     */
     const TTL_INDEX = /(\w+)Schema\.index\(\s*\{\s*(\w+):\s*-?1\s*\}\s*,\s*\{[^}]*expireAfterSeconds/g;
     const modelsDir = join(__dirname, '..', '..', 'models');
     const modelFiles = readdirSync(modelsDir).filter(
@@ -2585,11 +2607,24 @@ describe('user, taste and listening schema (Task 7)', () => {
       for (const match of text.matchAll(TTL_INDEX)) declared.push(`${match[1]}.${match[2]}`);
     }
 
-    // Vacuity floor FIRST: a renamed directory or a regex that stopped
-    // matching reports "nothing undeclared" exactly like a clean scan does.
-    // 40+ model files is well under the real count and well over zero.
-    expect(modelFiles.length).toBeGreaterThanOrEqual(40);
-    expect(declared.length).toBeGreaterThanOrEqual(4);
+    /**
+     * TWO VACUITY FLOORS, NOT INVENTORY ASSERTIONS — and the distinction is
+     * worth stating because the numbers look like inventory and are not.
+     * Model files are DELETED as verticals finish porting off Mongoose, so a
+     * floor pinned near the real count (41 files, 4 declarations today) would
+     * fire at the exact moment the migration succeeds, and a gate that cries
+     * wolf gets deleted by whoever hits it next. 20 is far enough below to
+     * catch only a traversal that broke outright — a renamed directory, a
+     * `readdir` that returned nothing.
+     *
+     * The second floor is on the MAP, not on what the walk found: `declared`
+     * being short is already caught by the set equality below, but only while
+     * something is left to compare it against. An emptied map paired with a
+     * broken walk is the one shape where both sides go to zero and the
+     * equality passes.
+     */
+    expect(modelFiles.length).toBeGreaterThanOrEqual(20);
+    expect(MONGO_TTL_INDEXES.length).toBeGreaterThanOrEqual(1);
 
     const mapped = MONGO_TTL_INDEXES.map((entry) => `${entry.model}.${entry.field}`);
     // Both directions: a TTL nobody mapped, and a mapping whose TTL is gone.

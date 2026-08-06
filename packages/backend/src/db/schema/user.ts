@@ -114,11 +114,14 @@
  *
  * Neither child gets a `position`. `position` exists on this schema's other
  * child tables to preserve a Mongo array's ORDER; these two arrays have none
- * worth preserving — every reader sorts by `weight` and the writers re-sort in
- * place when trimming to `MAX_TASTE_GENRES`/`MAX_TASTE_ARTISTS`. What IS an
- * invariant is one row per key, which `applyWeight` (`recordPlay.ts:208`) held
- * in memory with a `list.find(...)` and a `unique(taste_profile_id, <key>)`
- * now holds for real.
+ * worth preserving, and NO READER DEPENDS ON POSITION — which is the precise
+ * claim, not "every reader sorts by weight": `recommendationService.ts:211-221`
+ * re-sorts by weight before slicing, while `rankByTaste` (`taste.ts:87-90`)
+ * builds a `Map` keyed by `key` and normalises against the maximum weight, and
+ * neither reads an index. The writers re-sort in place anyway when trimming to
+ * `MAX_TASTE_GENRES`/`MAX_TASTE_ARTISTS`. What IS an invariant is one row per
+ * key, which `applyWeight` (`recordPlay.ts:208`) held in memory with a
+ * `list.find(...)` and a `unique(taste_profile_id, <key>)` now holds for real.
  *
  * Everything else stays an array of scalars, read whole and never queried by
  * element — `UserSettings.privacy.{hiddenWords,restrictedUsers}`,
