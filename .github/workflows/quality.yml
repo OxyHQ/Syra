@@ -36,7 +36,10 @@ jobs:
     # `REQUIRED_EXTENSIONS` is deliberately empty, Syra has no `2dsphere`
     # index and no geospatial query to port, and `docker-compose.postgres.yml`
     # pins the SAME image so a developer's database and CI's cannot disagree
-    # about what is installed.
+    # about what is installed. Keep this bare: nothing in Syra should acquire
+    # an extension dependency by accident, and this image is the thing that
+    # would let it — a schema task that starts needing PostGIS or any other
+    # extension adds it to `REQUIRED_EXTENSIONS` first, and only then here.
     services:
       postgres:
         image: postgres:17
@@ -92,15 +95,22 @@ jobs:
       - name: Install audio toolchain
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg libchromaprint-tools
 
-      # No `db:migrate` step yet: `src/db/__tests__/gates.test.ts`'s
-      # schema-invariant and expiry-index gates only need a live, reachable
-      # Postgres — their floors (`minimumTables`/`minimumColumns` at 0,
-      # `EXPIRY_SWEEP_TARGETS` empty) hold against the service container
-      # whether or not anything has ever been migrated onto it, verified
-      # directly against a Postgres with no `drizzle` schema at all. A real
-      # `bun run db:migrate` run against this service is added once
-      # `@oxyhq/db@0.1.2` ships the `readJournal` fix tracked in
-      # task-1-report.md — running it against 0.1.1 would fail today for a
-      # reason that has nothing to do with this schema.
+      # `src/db/__tests__/gates.test.ts`'s schema-invariant and expiry-index
+      # gates only need a live, reachable Postgres to pass Task 1's floors
+      # (`minimumTables`/`minimumColumns` at 0, `EXPIRY_SWEEP_TARGETS` empty)
+      # — migrating first is not required for THEM. This step exists anyway
+      # because it is the thing Step 10 of the plan actually asks to be
+      # proven: that the real migrator, pointed at a fresh service database
+      # with a genuinely empty journal, succeeds and applies nothing.
+      # `DATABASE_URL` here (not `TEST_DATABASE_URL`): the migrator always
+      # reads `DATABASE_URL`, the same variable it reads in every other
+      # environment; `TEST_DATABASE_URL` is only the job-level name the test
+      # suite falls back to (see gates.test.ts's `beforeAll`).
+      - name: Migrate Postgres (CI service)
+        working-directory: packages/backend
+        run: bun run db:migrate --phase=all --target-database=syra_ci
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+
       - name: Backend tests
         run: bun run --filter @syra/backend test
