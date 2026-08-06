@@ -1,6 +1,7 @@
 {
   "name": "syra",
   "version": "2.0.0",
+  "license": "SEE LICENSE IN LICENSE",
   "description": "Syra Monorepo - Music Streaming App Frontend and Backend",
   "private": true,
   "workspaces": [
