@@ -17,11 +17,16 @@
  * ## `Podcast.categories` joins `genres` through a junction
  *
  * Same reasoning as `Album.genre` (`catalog.ts`): a Postgres `text[]` can
- * answer "does this row contain X" but not "what categories EXIST across the
- * whole catalog", which `browsePodcasts`' category filter needs to be able to
- * enumerate. `podcast_categories` is the junction, against the same `genres`
- * table Task 2 built — `genres.ts`'s own doc comment already named this as
- * the reason `genres` carries no podcast-specific vocabulary.
+ * answer "does this row contain X" but not "what categories EXIST", which
+ * `browsePodcasts`' category filter needs to be able to enumerate.
+ * `podcast_categories` is the junction, against the same `genres` table
+ * Task 2 built. **Update, Task 4 review (I7):** `genres.ts`'s doc comment
+ * originally said this table would carry no podcast-specific vocabulary —
+ * that turned out wrong the moment this junction landed against it, and
+ * `genres` now carries a `kind` discriminator (`'music' | 'podcast'`)
+ * precisely because it serves both. See `genres.ts`'s file-level doc comment
+ * for the full reasoning and `podcast_categories`, below, for the composite
+ * FK that enforces it.
  *
  * ## Which subdocument arrays became child tables
  *
@@ -181,8 +186,10 @@
  * literal ledger entry — `deferredForeignKeys.ts` never held a column for it,
  * because the junction TABLE itself (not just one of its two FKs) did not
  * exist until this task creates it. `podcast_categories` is built directly
- * below with both `.references()` live from the start, against `podcasts`
- * and the `genres` table Task 2 built.
+ * below, live from the start, against `podcasts` and the `genres` table
+ * Task 2 built — `podcastId` a plain single-column `.references()`, `genreId`
+ * a COMPOSITE one (`(genre_id, kind) -> genres(id, kind)`) since a Task 4
+ * review follow-up (I7). See `genres.ts`'s file-level doc comment for why.
  *
  * `tracks.copyrightReportId` (`catalog.ts`, Task 2) is NOT closed by this
  * task and is not touched here — its parent, `copyright_reports`, is a
@@ -193,10 +200,21 @@
  */
 
 import { sql } from 'drizzle-orm';
-import { boolean, check, doublePrecision, index, integer, jsonb, pgTable, text, unique } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  check,
+  doublePrecision,
+  foreignKey,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  unique,
+} from 'drizzle-orm/pg-core';
 import { createdAt, generatedId, inList, timestamptz, tsvector, updatedAt } from '@oxyhq/db';
 import { AUDIO_FORMATS, catalogEntities, imageAssets } from './catalog';
-import { genres } from './genres';
+import { genres, GENRE_KINDS } from './genres';
 
 // ── Closed value sets ────────────────────────────────────────────────────
 // Same convention as catalog.ts/library.ts: one `as const` tuple per closed
@@ -441,13 +459,26 @@ export const podcastCategories = pgTable(
     podcastId: text()
       .notNull()
       .references(() => podcasts.id, { onDelete: 'cascade' }),
-    genreId: text()
-      .notNull()
-      .references(() => genres.id, { onDelete: 'restrict' }),
+    /**
+     * No inline `.references()` — the FK is the COMPOSITE
+     * `(genre_id, kind) -> genres(id, kind)` declared below, not a plain
+     * single-column one (Task 4 review, I7). See `genres.ts`'s file-level
+     * doc comment: `genres` now serves two verticals, and a single-column FK
+     * on `genreId` alone could not stop this row from pointing at a
+     * `kind = 'music'` row.
+     */
+    genreId: text().notNull(),
+    /** Always `'podcast'` on this table — see the CHECK below and `genres.ts`. */
+    kind: text({ enum: GENRE_KINDS }).notNull().default('podcast'),
   },
   (t) => [
+    check('podcast_categories_kind_check', sql`${t.kind} = 'podcast'`),
     unique('podcast_categories_podcast_id_genre_id_key').on(t.podcastId, t.genreId),
     index('podcast_categories_genre_id_idx').on(t.genreId),
+    foreignKey({
+      columns: [t.genreId, t.kind],
+      foreignColumns: [genres.id, genres.kind],
+    }).onDelete('restrict'),
   ]
 );
 

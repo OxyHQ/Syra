@@ -1,0 +1,6686 @@
+{
+  "id": "67f3a8df-3f84-45c9-a3df-3f78751d8fa1",
+  "prevId": "c080a4d5-0f47-4ce5-9ee5-cbca6f7f34ad",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.album_genres": {
+      "name": "album_genres",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "album_id": {
+          "name": "album_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "genre_id": {
+          "name": "genre_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'music'"
+        }
+      },
+      "indexes": {
+        "album_genres_genre_id_idx": {
+          "name": "album_genres_genre_id_idx",
+          "columns": [
+            {
+              "expression": "genre_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "album_genres_album_id_albums_id_fk": {
+          "name": "album_genres_album_id_albums_id_fk",
+          "tableFrom": "album_genres",
+          "tableTo": "albums",
+          "columnsFrom": [
+            "album_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "album_genres_genre_id_kind_genres_id_kind_fk": {
+          "name": "album_genres_genre_id_kind_genres_id_kind_fk",
+          "tableFrom": "album_genres",
+          "tableTo": "genres",
+          "columnsFrom": [
+            "genre_id",
+            "kind"
+          ],
+          "columnsTo": [
+            "id",
+            "kind"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "album_genres_album_id_genre_id_key": {
+          "name": "album_genres_album_id_genre_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "album_id",
+            "genre_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "album_genres_kind_check": {
+          "name": "album_genres_kind_check",
+          "value": "\"album_genres\".\"kind\" = 'music'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.album_sources": {
+      "name": "album_sources",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "album_id": {
+          "name": "album_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "external_id": {
+          "name": "external_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "imported_at": {
+          "name": "imported_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fields": {
+          "name": "fields",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "array[]::text[]"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "album_sources_album_id_albums_id_fk": {
+          "name": "album_sources_album_id_albums_id_fk",
+          "tableFrom": "album_sources",
+          "tableTo": "albums",
+          "columnsFrom": [
+            "album_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "album_sources_album_id_position_key": {
+          "name": "album_sources_album_id_position_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "album_id",
+            "position"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "album_sources_provider_check": {
+          "name": "album_sources_provider_check",
+          "value": "\"album_sources\".\"provider\" in ('upload', 'cc', 'musicbrainz', 'wikidata', 'wikimedia-commons', 'cover-art-archive', 'discogs')"
+        },
+        "album_sources_position_check": {
+          "name": "album_sources_position_check",
+          "value": "\"album_sources\".\"position\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.albums": {
+      "name": "albums",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "artist_id": {
+          "name": "artist_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "artist_name": {
+          "name": "artist_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "release_date": {
+          "name": "release_date",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cover_art_id": {
+          "name": "cover_art_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cover_art_sizes_small_id": {
+          "name": "cover_art_sizes_small_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cover_art_sizes_medium_id": {
+          "name": "cover_art_sizes_medium_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cover_art_sizes_large_id": {
+          "name": "cover_art_sizes_large_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cover_art_sizes_xlarge_id": {
+          "name": "cover_art_sizes_xlarge_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cover_art_sizes_xxlarge_id": {
+          "name": "cover_art_sizes_xxlarge_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cover_art_sizes_original_id": {
+          "name": "cover_art_sizes_original_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cover_art_licence_licence": {
+          "name": "cover_art_licence_licence",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cover_art_licence_licence_url": {
+          "name": "cover_art_licence_licence_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cover_art_licence_attribution": {
+          "name": "cover_art_licence_attribution",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cover_art_licence_source_url": {
+          "name": "cover_art_licence_source_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "total_tracks": {
+          "name": "total_tracks",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "total_discs": {
+          "name": "total_discs",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "total_duration": {
+          "name": "total_duration",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'album'"
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "catalog_number": {
+          "name": "catalog_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "media": {
+          "name": "media",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "release_country": {
+          "name": "release_country",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "original_release_date": {
+          "name": "original_release_date",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "copyright": {
+          "name": "copyright",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "upc": {
+          "name": "upc",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "popularity": {
+          "name": "popularity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "play_count": {
+          "name": "play_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "favorite_count": {
+          "name": "favorite_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "repost_count": {
+          "name": "repost_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "is_explicit": {
+          "name": "is_explicit",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "is_available": {
+          "name": "is_available",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "primary_color": {
+          "name": "primary_color",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "secondary_color": {
+          "name": "secondary_color",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "external_isrc": {
+          "name": "external_isrc",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "external_musicbrainz_release_id": {
+          "name": "external_musicbrainz_release_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "search_vector": {
+          "name": "search_vector",
+          "type": "tsvector",
+          "primaryKey": false,
+          "notNull": false,
+          "generated": {
+            "as": "to_tsvector('english', title || ' ' || artist_name)",
+            "type": "stored"
+          }
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        }
+      },
+      "indexes": {
+        "albums_artist_id_release_date_idx": {
+          "name": "albums_artist_id_release_date_idx",
+          "columns": [
+            {
+              "expression": "artist_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "release_date",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "albums_popularity_idx": {
+          "name": "albums_popularity_idx",
+          "columns": [
+            {
+              "expression": "popularity",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "albums_release_date_idx": {
+          "name": "albums_release_date_idx",
+          "columns": [
+            {
+              "expression": "release_date",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "albums_external_isrc_idx": {
+          "name": "albums_external_isrc_idx",
+          "columns": [
+            {
+              "expression": "external_isrc",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "albums_search_gin": {
+          "name": "albums_search_gin",
+          "columns": [
+            {
+              "expression": "search_vector",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gin",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "albums_artist_id_catalog_entities_id_fk": {
+          "name": "albums_artist_id_catalog_entities_id_fk",
+          "tableFrom": "albums",
+          "tableTo": "catalog_entities",
+          "columnsFrom": [
+            "artist_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "albums_cover_art_id_image_assets_id_fk": {
+          "name": "albums_cover_art_id_image_assets_id_fk",
+          "tableFrom": "albums",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "cover_art_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "albums_cover_art_sizes_small_id_image_assets_id_fk": {
+          "name": "albums_cover_art_sizes_small_id_image_assets_id_fk",
+          "tableFrom": "albums",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "cover_art_sizes_small_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "albums_cover_art_sizes_medium_id_image_assets_id_fk": {
+          "name": "albums_cover_art_sizes_medium_id_image_assets_id_fk",
+          "tableFrom": "albums",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "cover_art_sizes_medium_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "albums_cover_art_sizes_large_id_image_assets_id_fk": {
+          "name": "albums_cover_art_sizes_large_id_image_assets_id_fk",
+          "tableFrom": "albums",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "cover_art_sizes_large_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "albums_cover_art_sizes_xlarge_id_image_assets_id_fk": {
+          "name": "albums_cover_art_sizes_xlarge_id_image_assets_id_fk",
+          "tableFrom": "albums",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "cover_art_sizes_xlarge_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "albums_cover_art_sizes_xxlarge_id_image_assets_id_fk": {
+          "name": "albums_cover_art_sizes_xxlarge_id_image_assets_id_fk",
+          "tableFrom": "albums",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "cover_art_sizes_xxlarge_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "albums_cover_art_sizes_original_id_image_assets_id_fk": {
+          "name": "albums_cover_art_sizes_original_id_image_assets_id_fk",
+          "tableFrom": "albums",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "cover_art_sizes_original_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "albums_upc_key": {
+          "name": "albums_upc_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "upc"
+          ]
+        },
+        "albums_external_musicbrainz_release_id_key": {
+          "name": "albums_external_musicbrainz_release_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "external_musicbrainz_release_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "albums_type_check": {
+          "name": "albums_type_check",
+          "value": "\"albums\".\"type\" in ('album', 'single', 'ep', 'compilation')"
+        },
+        "albums_source_check": {
+          "name": "albums_source_check",
+          "value": "\"albums\".\"source\" is null or \"albums\".\"source\" in ('upload', 'cc')"
+        },
+        "albums_popularity_check": {
+          "name": "albums_popularity_check",
+          "value": "\"albums\".\"popularity\" between 0 and 100"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.catalog_entities": {
+      "name": "catalog_entities",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name_key": {
+          "name": "name_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "image_id": {
+          "name": "image_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "image_sizes_small_id": {
+          "name": "image_sizes_small_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "image_sizes_medium_id": {
+          "name": "image_sizes_medium_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "image_sizes_large_id": {
+          "name": "image_sizes_large_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "image_sizes_xlarge_id": {
+          "name": "image_sizes_xlarge_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "image_sizes_xxlarge_id": {
+          "name": "image_sizes_xxlarge_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "image_sizes_original_id": {
+          "name": "image_sizes_original_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "image_licence_licence": {
+          "name": "image_licence_licence",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "image_licence_licence_url": {
+          "name": "image_licence_licence_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "image_licence_attribution": {
+          "name": "image_licence_attribution",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "image_licence_source_url": {
+          "name": "image_licence_source_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "primary_color": {
+          "name": "primary_color",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "secondary_color": {
+          "name": "secondary_color",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bio": {
+          "name": "bio",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "links_website": {
+          "name": "links_website",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "links_instagram": {
+          "name": "links_instagram",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "links_x": {
+          "name": "links_x",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "links_youtube": {
+          "name": "links_youtube",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "links_discogs": {
+          "name": "links_discogs",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "links_wikidata": {
+          "name": "links_wikidata",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "links_wikipedia": {
+          "name": "links_wikipedia",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "links_bandcamp": {
+          "name": "links_bandcamp",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "links_soundcloud": {
+          "name": "links_soundcloud",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "popularity": {
+          "name": "popularity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "owner_oxy_user_id": {
+          "name": "owner_oxy_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "claimable": {
+          "name": "claimable",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "claimed_by_oxy_user_id": {
+          "name": "claimed_by_oxy_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "linked_oxy_user_id": {
+          "name": "linked_oxy_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "href": {
+          "name": "href",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "images": {
+          "name": "images",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "genres": {
+          "name": "genres",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "array[]::text[]"
+        },
+        "verified": {
+          "name": "verified",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "stats_followers": {
+          "name": "stats_followers",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "stats_albums": {
+          "name": "stats_albums",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "stats_tracks": {
+          "name": "stats_tracks",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "stats_total_plays": {
+          "name": "stats_total_plays",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "stats_monthly_listeners": {
+          "name": "stats_monthly_listeners",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "strike_count": {
+          "name": "strike_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "uploads_disabled": {
+          "name": "uploads_disabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "last_strike_at": {
+          "name": "last_strike_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "terminated": {
+          "name": "terminated",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "terminated_at": {
+          "name": "terminated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "termination_reason": {
+          "name": "termination_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "external_isrc": {
+          "name": "external_isrc",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "external_musicbrainz_artist_id": {
+          "name": "external_musicbrainz_artist_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "external_isni": {
+          "name": "external_isni",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "external_ipi": {
+          "name": "external_ipi",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "external_wikidata_id": {
+          "name": "external_wikidata_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "external_discogs_artist_id": {
+          "name": "external_discogs_artist_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "country": {
+          "name": "country",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sort_name": {
+          "name": "sort_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "disambiguation": {
+          "name": "disambiguation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "artist_type": {
+          "name": "artist_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "active_from": {
+          "name": "active_from",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "active_until": {
+          "name": "active_until",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "aliases": {
+          "name": "aliases",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "array[]::text[]"
+        },
+        "labels": {
+          "name": "labels",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "array[]::text[]"
+        },
+        "origin": {
+          "name": "origin",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'registered'"
+        },
+        "accepts_contributions": {
+          "name": "accepts_contributions",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "image_suggestions": {
+          "name": "image_suggestions",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "linked_artist_id": {
+          "name": "linked_artist_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "img": {
+          "name": "img",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "search_vector": {
+          "name": "search_vector",
+          "type": "tsvector",
+          "primaryKey": false,
+          "notNull": false,
+          "generated": {
+            "as": "to_tsvector('english', name)",
+            "type": "stored"
+          }
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        }
+      },
+      "indexes": {
+        "catalog_entities_artist_name_key_key": {
+          "name": "catalog_entities_artist_name_key_key",
+          "columns": [
+            {
+              "expression": "name_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"catalog_entities\".\"type\" = 'artist'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "catalog_entities_type_name_key_idx": {
+          "name": "catalog_entities_type_name_key_idx",
+          "columns": [
+            {
+              "expression": "type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "name_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "catalog_entities_popularity_idx": {
+          "name": "catalog_entities_popularity_idx",
+          "columns": [
+            {
+              "expression": "popularity",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "catalog_entities_owner_oxy_user_id_idx": {
+          "name": "catalog_entities_owner_oxy_user_id_idx",
+          "columns": [
+            {
+              "expression": "owner_oxy_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "catalog_entities_stats_followers_idx": {
+          "name": "catalog_entities_stats_followers_idx",
+          "columns": [
+            {
+              "expression": "stats_followers",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "catalog_entities_verified_popularity_idx": {
+          "name": "catalog_entities_verified_popularity_idx",
+          "columns": [
+            {
+              "expression": "verified",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "popularity",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "catalog_entities_linked_artist_id_idx": {
+          "name": "catalog_entities_linked_artist_id_idx",
+          "columns": [
+            {
+              "expression": "linked_artist_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "catalog_entities_search_gin": {
+          "name": "catalog_entities_search_gin",
+          "columns": [
+            {
+              "expression": "search_vector",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gin",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "catalog_entities_image_id_image_assets_id_fk": {
+          "name": "catalog_entities_image_id_image_assets_id_fk",
+          "tableFrom": "catalog_entities",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "image_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "catalog_entities_image_sizes_small_id_image_assets_id_fk": {
+          "name": "catalog_entities_image_sizes_small_id_image_assets_id_fk",
+          "tableFrom": "catalog_entities",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "image_sizes_small_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "catalog_entities_image_sizes_medium_id_image_assets_id_fk": {
+          "name": "catalog_entities_image_sizes_medium_id_image_assets_id_fk",
+          "tableFrom": "catalog_entities",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "image_sizes_medium_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "catalog_entities_image_sizes_large_id_image_assets_id_fk": {
+          "name": "catalog_entities_image_sizes_large_id_image_assets_id_fk",
+          "tableFrom": "catalog_entities",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "image_sizes_large_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "catalog_entities_image_sizes_xlarge_id_image_assets_id_fk": {
+          "name": "catalog_entities_image_sizes_xlarge_id_image_assets_id_fk",
+          "tableFrom": "catalog_entities",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "image_sizes_xlarge_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "catalog_entities_image_sizes_xxlarge_id_image_assets_id_fk": {
+          "name": "catalog_entities_image_sizes_xxlarge_id_image_assets_id_fk",
+          "tableFrom": "catalog_entities",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "image_sizes_xxlarge_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "catalog_entities_image_sizes_original_id_image_assets_id_fk": {
+          "name": "catalog_entities_image_sizes_original_id_image_assets_id_fk",
+          "tableFrom": "catalog_entities",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "image_sizes_original_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "catalog_entities_linked_artist_id_catalog_entities_id_fk": {
+          "name": "catalog_entities_linked_artist_id_catalog_entities_id_fk",
+          "tableFrom": "catalog_entities",
+          "tableTo": "catalog_entities",
+          "columnsFrom": [
+            "linked_artist_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "catalog_entities_linked_oxy_user_id_key": {
+          "name": "catalog_entities_linked_oxy_user_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "linked_oxy_user_id"
+          ]
+        },
+        "catalog_entities_href_key": {
+          "name": "catalog_entities_href_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "href"
+          ]
+        },
+        "catalog_entities_external_musicbrainz_artist_id_key": {
+          "name": "catalog_entities_external_musicbrainz_artist_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "external_musicbrainz_artist_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "catalog_entities_type_check": {
+          "name": "catalog_entities_type_check",
+          "value": "\"catalog_entities\".\"type\" in ('artist', 'person')"
+        },
+        "catalog_entities_linked_artist_id_check": {
+          "name": "catalog_entities_linked_artist_id_check",
+          "value": "\"catalog_entities\".\"linked_artist_id\" is null or \"catalog_entities\".\"type\" = 'person'"
+        },
+        "catalog_entities_source_check": {
+          "name": "catalog_entities_source_check",
+          "value": "\"catalog_entities\".\"source\" is null or \"catalog_entities\".\"source\" in ('upload', 'cc')"
+        },
+        "catalog_entities_source_required_for_artist_check": {
+          "name": "catalog_entities_source_required_for_artist_check",
+          "value": "\"catalog_entities\".\"type\" != 'artist' or \"catalog_entities\".\"source\" is not null"
+        },
+        "catalog_entities_artist_type_check": {
+          "name": "catalog_entities_artist_type_check",
+          "value": "\"catalog_entities\".\"artist_type\" is null or \"catalog_entities\".\"artist_type\" in ('person', 'group', 'orchestra', 'choir', 'character', 'other')"
+        },
+        "catalog_entities_origin_check": {
+          "name": "catalog_entities_origin_check",
+          "value": "\"catalog_entities\".\"origin\" is null or \"catalog_entities\".\"origin\" in ('registered', 'contributed')"
+        },
+        "catalog_entities_strike_count_check": {
+          "name": "catalog_entities_strike_count_check",
+          "value": "\"catalog_entities\".\"strike_count\" is null or \"catalog_entities\".\"strike_count\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.catalog_entity_sources": {
+      "name": "catalog_entity_sources",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "catalog_entity_id": {
+          "name": "catalog_entity_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "external_id": {
+          "name": "external_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "imported_at": {
+          "name": "imported_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fields": {
+          "name": "fields",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "array[]::text[]"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "catalog_entity_sources_catalog_entity_id_catalog_entities_id_fk": {
+          "name": "catalog_entity_sources_catalog_entity_id_catalog_entities_id_fk",
+          "tableFrom": "catalog_entity_sources",
+          "tableTo": "catalog_entities",
+          "columnsFrom": [
+            "catalog_entity_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "catalog_entity_sources_catalog_entity_id_position_key": {
+          "name": "catalog_entity_sources_catalog_entity_id_position_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "catalog_entity_id",
+            "position"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "catalog_entity_sources_provider_check": {
+          "name": "catalog_entity_sources_provider_check",
+          "value": "\"catalog_entity_sources\".\"provider\" in ('upload', 'cc', 'musicbrainz', 'wikidata', 'wikimedia-commons', 'cover-art-archive', 'discogs')"
+        },
+        "catalog_entity_sources_position_check": {
+          "name": "catalog_entity_sources_position_check",
+          "value": "\"catalog_entity_sources\".\"position\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.catalog_entity_strikes": {
+      "name": "catalog_entity_strikes",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "catalog_entity_id": {
+          "name": "catalog_entity_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        },
+        "track_id": {
+          "name": "track_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "catalog_entity_strikes_catalog_entity_id_idx": {
+          "name": "catalog_entity_strikes_catalog_entity_id_idx",
+          "columns": [
+            {
+              "expression": "catalog_entity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "catalog_entity_strikes_catalog_entity_id_catalog_entities_id_fk": {
+          "name": "catalog_entity_strikes_catalog_entity_id_catalog_entities_id_fk",
+          "tableFrom": "catalog_entity_strikes",
+          "tableTo": "catalog_entities",
+          "columnsFrom": [
+            "catalog_entity_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "catalog_entity_strikes_track_id_tracks_id_fk": {
+          "name": "catalog_entity_strikes_track_id_tracks_id_fk",
+          "tableFrom": "catalog_entity_strikes",
+          "tableTo": "tracks",
+          "columnsFrom": [
+            "track_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.discogs_releases": {
+      "name": "discogs_releases",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "discogs_release_id": {
+          "name": "discogs_release_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "barcodes": {
+          "name": "barcodes",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "array[]::text[]"
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "artist_names": {
+          "name": "artist_names",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "array[]::text[]"
+        },
+        "labels": {
+          "name": "labels",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "array[]::text[]"
+        },
+        "catalog_numbers": {
+          "name": "catalog_numbers",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "array[]::text[]"
+        },
+        "formats": {
+          "name": "formats",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "array[]::text[]"
+        },
+        "country_code": {
+          "name": "country_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "released": {
+          "name": "released",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "credits": {
+          "name": "credits",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        }
+      },
+      "indexes": {
+        "discogs_releases_barcodes_gin": {
+          "name": "discogs_releases_barcodes_gin",
+          "columns": [
+            {
+              "expression": "barcodes",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gin",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "discogs_releases_discogs_release_id_key": {
+          "name": "discogs_releases_discogs_release_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "discogs_release_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.image_assets": {
+      "name": "image_assets",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "s3_key": {
+          "name": "s3_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "filename": {
+          "name": "filename",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content_type": {
+          "name": "content_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "byte_size": {
+          "name": "byte_size",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "width": {
+          "name": "width",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "height": {
+          "name": "height",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "owner_type": {
+          "name": "owner_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "uploaded_by": {
+          "name": "uploaded_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "primary_color": {
+          "name": "primary_color",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "secondary_color": {
+          "name": "secondary_color",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "catalog_provider": {
+          "name": "catalog_provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "catalog_entity_type": {
+          "name": "catalog_entity_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "catalog_external_id": {
+          "name": "catalog_external_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "catalog_size": {
+          "name": "catalog_size",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "catalog_source_url_hash": {
+          "name": "catalog_source_url_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "catalog_source_content_hash": {
+          "name": "catalog_source_content_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        }
+      },
+      "indexes": {
+        "image_assets_uploaded_by_idx": {
+          "name": "image_assets_uploaded_by_idx",
+          "columns": [
+            {
+              "expression": "uploaded_by",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "image_assets_catalog_lookup_idx": {
+          "name": "image_assets_catalog_lookup_idx",
+          "columns": [
+            {
+              "expression": "catalog_provider",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "catalog_entity_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "catalog_external_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "catalog_size",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "image_assets_catalog_source_content_hash_idx": {
+          "name": "image_assets_catalog_source_content_hash_idx",
+          "columns": [
+            {
+              "expression": "catalog_source_content_hash",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "image_assets_s3_key_key": {
+          "name": "image_assets_s3_key_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "s3_key"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "image_assets_owner_type_check": {
+          "name": "image_assets_owner_type_check",
+          "value": "\"image_assets\".\"owner_type\" in ('upload', 'artist', 'track', 'album', 'playlist', 'link', 'podcast', 'episode')"
+        },
+        "image_assets_catalog_provider_check": {
+          "name": "image_assets_catalog_provider_check",
+          "value": "\"image_assets\".\"catalog_provider\" is null or \"image_assets\".\"catalog_provider\" in ('upload', 'cc', 'rss', 'syra')"
+        },
+        "image_assets_catalog_entity_type_check": {
+          "name": "image_assets_catalog_entity_type_check",
+          "value": "\"image_assets\".\"catalog_entity_type\" is null or \"image_assets\".\"catalog_entity_type\" in ('artist', 'track', 'album', 'playlist', 'podcast', 'episode')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.isrc_registry": {
+      "name": "isrc_registry",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "isrc": {
+          "name": "isrc",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recording_mbid": {
+          "name": "recording_mbid",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "artist_credit": {
+          "name": "artist_credit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "artist_credit_name_key": {
+          "name": "artist_credit_name_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "length_ms": {
+          "name": "length_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "release_count": {
+          "name": "release_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        }
+      },
+      "indexes": {
+        "isrc_registry_recording_mbid_idx": {
+          "name": "isrc_registry_recording_mbid_idx",
+          "columns": [
+            {
+              "expression": "recording_mbid",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "isrc_registry_artist_credit_name_key_idx": {
+          "name": "isrc_registry_artist_credit_name_key_idx",
+          "columns": [
+            {
+              "expression": "artist_credit_name_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "isrc_registry_isrc_key": {
+          "name": "isrc_registry_isrc_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "isrc"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.lyrics": {
+      "name": "lyrics",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "track_id": {
+          "name": "track_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "synced": {
+          "name": "synced",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "plain": {
+          "name": "plain",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "lyrics_track_id_tracks_id_fk": {
+          "name": "lyrics_track_id_tracks_id_fk",
+          "tableFrom": "lyrics",
+          "tableTo": "tracks",
+          "columnsFrom": [
+            "track_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "lyrics_track_id_key": {
+          "name": "lyrics_track_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "track_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.lyrics_lines": {
+      "name": "lyrics_lines",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "lyrics_id": {
+          "name": "lyrics_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "time_ms": {
+          "name": "time_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "text": {
+          "name": "text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "lyrics_lines_lyrics_id_lyrics_id_fk": {
+          "name": "lyrics_lines_lyrics_id_lyrics_id_fk",
+          "tableFrom": "lyrics_lines",
+          "tableTo": "lyrics",
+          "columnsFrom": [
+            "lyrics_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "lyrics_lines_lyrics_id_position_key": {
+          "name": "lyrics_lines_lyrics_id_position_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "lyrics_id",
+            "position"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "lyrics_lines_position_check": {
+          "name": "lyrics_lines_position_check",
+          "value": "\"lyrics_lines\".\"position\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.musicbrainz_artist_urls": {
+      "name": "musicbrainz_artist_urls",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "musicbrainz_artist_id": {
+          "name": "musicbrainz_artist_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "url": {
+          "name": "url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "musicbrainz_artist_urls_musicbrainz_artist_id_musicbrainz_artists_id_fk": {
+          "name": "musicbrainz_artist_urls_musicbrainz_artist_id_musicbrainz_artists_id_fk",
+          "tableFrom": "musicbrainz_artist_urls",
+          "tableTo": "musicbrainz_artists",
+          "columnsFrom": [
+            "musicbrainz_artist_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "musicbrainz_artist_urls_musicbrainz_artist_id_position_key": {
+          "name": "musicbrainz_artist_urls_musicbrainz_artist_id_position_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "musicbrainz_artist_id",
+            "position"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "musicbrainz_artist_urls_position_check": {
+          "name": "musicbrainz_artist_urls_position_check",
+          "value": "\"musicbrainz_artist_urls\".\"position\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.musicbrainz_artists": {
+      "name": "musicbrainz_artists",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "mbid": {
+          "name": "mbid",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sort_name": {
+          "name": "sort_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name_key": {
+          "name": "name_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "disambiguation": {
+          "name": "disambiguation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "artist_type": {
+          "name": "artist_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "area_name": {
+          "name": "area_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "country_code": {
+          "name": "country_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "begin_date": {
+          "name": "begin_date",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "end_date": {
+          "name": "end_date",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ended": {
+          "name": "ended",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "aliases": {
+          "name": "aliases",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "array[]::text[]"
+        },
+        "isni": {
+          "name": "isni",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ipi": {
+          "name": "ipi",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        }
+      },
+      "indexes": {
+        "musicbrainz_artists_name_key_idx": {
+          "name": "musicbrainz_artists_name_key_idx",
+          "columns": [
+            {
+              "expression": "name_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "musicbrainz_artists_mbid_key": {
+          "name": "musicbrainz_artists_mbid_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "mbid"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "musicbrainz_artists_artist_type_check": {
+          "name": "musicbrainz_artists_artist_type_check",
+          "value": "\"musicbrainz_artists\".\"artist_type\" is null or \"musicbrainz_artists\".\"artist_type\" in ('person', 'group', 'orchestra', 'choir', 'character', 'other')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.track_credits": {
+      "name": "track_credits",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "track_id": {
+          "name": "track_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name_key": {
+          "name": "name_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "track_credits_name_key_idx": {
+          "name": "track_credits_name_key_idx",
+          "columns": [
+            {
+              "expression": "name_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "track_credits_track_id_tracks_id_fk": {
+          "name": "track_credits_track_id_tracks_id_fk",
+          "tableFrom": "track_credits",
+          "tableTo": "tracks",
+          "columnsFrom": [
+            "track_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "track_credits_track_id_position_key": {
+          "name": "track_credits_track_id_position_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "track_id",
+            "position"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "track_credits_position_check": {
+          "name": "track_credits_position_check",
+          "value": "\"track_credits\".\"position\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.track_fingerprints": {
+      "name": "track_fingerprints",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "track_id": {
+          "name": "track_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fingerprint": {
+          "name": "fingerprint",
+          "type": "integer[]",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fingerprint_duration_sec": {
+          "name": "fingerprint_duration_sec",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        }
+      },
+      "indexes": {
+        "track_fingerprints_duration_idx": {
+          "name": "track_fingerprints_duration_idx",
+          "columns": [
+            {
+              "expression": "fingerprint_duration_sec",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "track_fingerprints_track_id_tracks_id_fk": {
+          "name": "track_fingerprints_track_id_tracks_id_fk",
+          "tableFrom": "track_fingerprints",
+          "tableTo": "tracks",
+          "columnsFrom": [
+            "track_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "track_fingerprints_track_id_key": {
+          "name": "track_fingerprints_track_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "track_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.track_hls_renditions": {
+      "name": "track_hls_renditions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "track_id": {
+          "name": "track_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "manifest_key": {
+          "name": "manifest_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bitrate_kbps": {
+          "name": "bitrate_kbps",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "encrypted": {
+          "name": "encrypted",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "track_hls_renditions_track_id_tracks_id_fk": {
+          "name": "track_hls_renditions_track_id_tracks_id_fk",
+          "tableFrom": "track_hls_renditions",
+          "tableTo": "tracks",
+          "columnsFrom": [
+            "track_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "track_hls_renditions_track_id_position_key": {
+          "name": "track_hls_renditions_track_id_position_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "track_id",
+            "position"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "track_hls_renditions_position_check": {
+          "name": "track_hls_renditions_position_check",
+          "value": "\"track_hls_renditions\".\"position\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.track_keys": {
+      "name": "track_keys",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "track_id": {
+          "name": "track_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "key_hex": {
+          "name": "key_hex",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "key_uri": {
+          "name": "key_uri",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "track_keys_track_id_key": {
+          "name": "track_keys_track_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "track_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "track_keys_kind_check": {
+          "name": "track_keys_kind_check",
+          "value": "\"track_keys\".\"kind\" in ('track', 'user_upload', 'episode')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.track_sources": {
+      "name": "track_sources",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "track_id": {
+          "name": "track_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "external_id": {
+          "name": "external_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "imported_at": {
+          "name": "imported_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fields": {
+          "name": "fields",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "array[]::text[]"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "track_sources_track_id_tracks_id_fk": {
+          "name": "track_sources_track_id_tracks_id_fk",
+          "tableFrom": "track_sources",
+          "tableTo": "tracks",
+          "columnsFrom": [
+            "track_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "track_sources_track_id_position_key": {
+          "name": "track_sources_track_id_position_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "track_id",
+            "position"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "track_sources_provider_check": {
+          "name": "track_sources_provider_check",
+          "value": "\"track_sources\".\"provider\" in ('upload', 'cc', 'musicbrainz', 'wikidata', 'wikimedia-commons', 'cover-art-archive', 'discogs')"
+        },
+        "track_sources_position_check": {
+          "name": "track_sources_position_check",
+          "value": "\"track_sources\".\"position\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.tracks": {
+      "name": "tracks",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "artist_id": {
+          "name": "artist_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "artist_name": {
+          "name": "artist_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "album_id": {
+          "name": "album_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "album_name": {
+          "name": "album_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "duration": {
+          "name": "duration",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "track_number": {
+          "name": "track_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "disc_number": {
+          "name": "disc_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "total_tracks": {
+          "name": "total_tracks",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "total_discs": {
+          "name": "total_discs",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "original_release_date": {
+          "name": "original_release_date",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "catalog_number": {
+          "name": "catalog_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "media": {
+          "name": "media",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "release_country": {
+          "name": "release_country",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "replay_gain_track_db": {
+          "name": "replay_gain_track_db",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "replay_gain_album_db": {
+          "name": "replay_gain_album_db",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "replay_gain_track_peak": {
+          "name": "replay_gain_track_peak",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "comment": {
+          "name": "comment",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "audio_source_url": {
+          "name": "audio_source_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "audio_source_format": {
+          "name": "audio_source_format",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "audio_source_bitrate": {
+          "name": "audio_source_bitrate",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "audio_source_duration": {
+          "name": "audio_source_duration",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cover_art_id": {
+          "name": "cover_art_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cover_art_sizes_small_id": {
+          "name": "cover_art_sizes_small_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cover_art_sizes_medium_id": {
+          "name": "cover_art_sizes_medium_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cover_art_sizes_large_id": {
+          "name": "cover_art_sizes_large_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cover_art_sizes_xlarge_id": {
+          "name": "cover_art_sizes_xlarge_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cover_art_sizes_xxlarge_id": {
+          "name": "cover_art_sizes_xxlarge_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cover_art_sizes_original_id": {
+          "name": "cover_art_sizes_original_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadata_bpm": {
+          "name": "metadata_bpm",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadata_key": {
+          "name": "metadata_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadata_explicit": {
+          "name": "metadata_explicit",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadata_language": {
+          "name": "metadata_language",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadata_copyright": {
+          "name": "metadata_copyright",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadata_publisher": {
+          "name": "metadata_publisher",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadata_genre": {
+          "name": "metadata_genre",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "genre": {
+          "name": "genre",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mood": {
+          "name": "mood",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tags": {
+          "name": "tags",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "array[]::text[]"
+        },
+        "release_date": {
+          "name": "release_date",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_explicit": {
+          "name": "is_explicit",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "popularity": {
+          "name": "popularity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "play_count": {
+          "name": "play_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "favorite_count": {
+          "name": "favorite_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "repost_count": {
+          "name": "repost_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "primary_color": {
+          "name": "primary_color",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "secondary_color": {
+          "name": "secondary_color",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_available": {
+          "name": "is_available",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "copyright_removed": {
+          "name": "copyright_removed",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "removed_at": {
+          "name": "removed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "removed_reason": {
+          "name": "removed_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "removed_by": {
+          "name": "removed_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "copyright_report_id": {
+          "name": "copyright_report_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'ready'"
+        },
+        "external_isrc": {
+          "name": "external_isrc",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "images": {
+          "name": "images",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "loudness_lufs": {
+          "name": "loudness_lufs",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hls_master_key": {
+          "name": "hls_master_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sha256": {
+          "name": "sha256",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "search_vector": {
+          "name": "search_vector",
+          "type": "tsvector",
+          "primaryKey": false,
+          "notNull": false,
+          "generated": {
+            "as": "to_tsvector('english', title || ' ' || artist_name)",
+            "type": "stored"
+          }
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        }
+      },
+      "indexes": {
+        "tracks_artist_id_album_id_idx": {
+          "name": "tracks_artist_id_album_id_idx",
+          "columns": [
+            {
+              "expression": "artist_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "album_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"tracks\".\"is_available\" = true and \"tracks\".\"copyright_removed\" = false",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tracks_popularity_idx": {
+          "name": "tracks_popularity_idx",
+          "columns": [
+            {
+              "expression": "popularity",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"tracks\".\"is_available\" = true and \"tracks\".\"copyright_removed\" = false",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tracks_play_count_idx": {
+          "name": "tracks_play_count_idx",
+          "columns": [
+            {
+              "expression": "play_count",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"tracks\".\"is_available\" = true and \"tracks\".\"copyright_removed\" = false",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tracks_created_at_idx": {
+          "name": "tracks_created_at_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"tracks\".\"is_available\" = true and \"tracks\".\"copyright_removed\" = false",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tracks_genre_idx": {
+          "name": "tracks_genre_idx",
+          "columns": [
+            {
+              "expression": "genre",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"tracks\".\"is_available\" = true and \"tracks\".\"copyright_removed\" = false",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tracks_mood_idx": {
+          "name": "tracks_mood_idx",
+          "columns": [
+            {
+              "expression": "mood",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"tracks\".\"is_available\" = true and \"tracks\".\"copyright_removed\" = false",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tracks_sha256_idx": {
+          "name": "tracks_sha256_idx",
+          "columns": [
+            {
+              "expression": "sha256",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tracks_tags_gin": {
+          "name": "tracks_tags_gin",
+          "columns": [
+            {
+              "expression": "tags",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gin",
+          "with": {}
+        },
+        "tracks_search_gin": {
+          "name": "tracks_search_gin",
+          "columns": [
+            {
+              "expression": "search_vector",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gin",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "tracks_artist_id_catalog_entities_id_fk": {
+          "name": "tracks_artist_id_catalog_entities_id_fk",
+          "tableFrom": "tracks",
+          "tableTo": "catalog_entities",
+          "columnsFrom": [
+            "artist_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "tracks_album_id_albums_id_fk": {
+          "name": "tracks_album_id_albums_id_fk",
+          "tableFrom": "tracks",
+          "tableTo": "albums",
+          "columnsFrom": [
+            "album_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "tracks_cover_art_id_image_assets_id_fk": {
+          "name": "tracks_cover_art_id_image_assets_id_fk",
+          "tableFrom": "tracks",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "cover_art_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "tracks_cover_art_sizes_small_id_image_assets_id_fk": {
+          "name": "tracks_cover_art_sizes_small_id_image_assets_id_fk",
+          "tableFrom": "tracks",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "cover_art_sizes_small_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "tracks_cover_art_sizes_medium_id_image_assets_id_fk": {
+          "name": "tracks_cover_art_sizes_medium_id_image_assets_id_fk",
+          "tableFrom": "tracks",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "cover_art_sizes_medium_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "tracks_cover_art_sizes_large_id_image_assets_id_fk": {
+          "name": "tracks_cover_art_sizes_large_id_image_assets_id_fk",
+          "tableFrom": "tracks",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "cover_art_sizes_large_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "tracks_cover_art_sizes_xlarge_id_image_assets_id_fk": {
+          "name": "tracks_cover_art_sizes_xlarge_id_image_assets_id_fk",
+          "tableFrom": "tracks",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "cover_art_sizes_xlarge_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "tracks_cover_art_sizes_xxlarge_id_image_assets_id_fk": {
+          "name": "tracks_cover_art_sizes_xxlarge_id_image_assets_id_fk",
+          "tableFrom": "tracks",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "cover_art_sizes_xxlarge_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "tracks_cover_art_sizes_original_id_image_assets_id_fk": {
+          "name": "tracks_cover_art_sizes_original_id_image_assets_id_fk",
+          "tableFrom": "tracks",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "cover_art_sizes_original_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "tracks_external_isrc_key": {
+          "name": "tracks_external_isrc_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "external_isrc"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "tracks_source_check": {
+          "name": "tracks_source_check",
+          "value": "\"tracks\".\"source\" in ('upload', 'cc')"
+        },
+        "tracks_status_check": {
+          "name": "tracks_status_check",
+          "value": "\"tracks\".\"status\" in ('processing', 'ready', 'failed')"
+        },
+        "tracks_audio_source_format_check": {
+          "name": "tracks_audio_source_format_check",
+          "value": "\"tracks\".\"audio_source_format\" is null or \"tracks\".\"audio_source_format\" in ('mp3', 'flac', 'ogg', 'm4a', 'wav')"
+        },
+        "tracks_popularity_check": {
+          "name": "tracks_popularity_check",
+          "value": "\"tracks\".\"popularity\" between 0 and 100"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.genres": {
+      "name": "genres",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'music'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "genres_name_kind_key": {
+          "name": "genres_name_kind_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "name",
+            "kind"
+          ]
+        },
+        "genres_id_kind_key": {
+          "name": "genres_id_kind_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "kind"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "genres_kind_check": {
+          "name": "genres_kind_check",
+          "value": "\"genres\".\"kind\" in ('music', 'podcast')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.devices": {
+      "name": "devices",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "oxy_user_id": {
+          "name": "oxy_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "device_id": {
+          "name": "device_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "capabilities": {
+          "name": "capabilities",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "array[]::text[]"
+        },
+        "last_seen": {
+          "name": "last_seen",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "devices_oxy_user_id_device_id_key": {
+          "name": "devices_oxy_user_id_device_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "oxy_user_id",
+            "device_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "devices_type_check": {
+          "name": "devices_type_check",
+          "value": "\"devices\".\"type\" in ('web', 'mobile', 'desktop', 'speaker')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.playback_states": {
+      "name": "playback_states",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "oxy_user_id": {
+          "name": "oxy_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "track_id": {
+          "name": "track_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "position_ms": {
+          "name": "position_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "is_playing": {
+          "name": "is_playing",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "queue": {
+          "name": "queue",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "array[]::text[]"
+        },
+        "context_type": {
+          "name": "context_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "context_id": {
+          "name": "context_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "repeat": {
+          "name": "repeat",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'off'"
+        },
+        "shuffle": {
+          "name": "shuffle",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "volume": {
+          "name": "volume",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "active_device_id": {
+          "name": "active_device_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "playback_states_track_id_tracks_id_fk": {
+          "name": "playback_states_track_id_tracks_id_fk",
+          "tableFrom": "playback_states",
+          "tableTo": "tracks",
+          "columnsFrom": [
+            "track_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "playback_states_oxy_user_id_key": {
+          "name": "playback_states_oxy_user_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "oxy_user_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "playback_states_source_check": {
+          "name": "playback_states_source_check",
+          "value": "\"playback_states\".\"source\" is null or \"playback_states\".\"source\" in ('upload', 'cc')"
+        },
+        "playback_states_repeat_check": {
+          "name": "playback_states_repeat_check",
+          "value": "\"playback_states\".\"repeat\" in ('off', 'all', 'one')"
+        },
+        "playback_states_position_ms_check": {
+          "name": "playback_states_position_ms_check",
+          "value": "\"playback_states\".\"position_ms\" >= 0"
+        },
+        "playback_states_volume_check": {
+          "name": "playback_states_volume_check",
+          "value": "\"playback_states\".\"volume\" between 0 and 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.playlist_collaborators": {
+      "name": "playlist_collaborators",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "playlist_id": {
+          "name": "playlist_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "oxy_user_id": {
+          "name": "oxy_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "username": {
+          "name": "username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'viewer'"
+        },
+        "added_at": {
+          "name": "added_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "playlist_collaborators_oxy_user_id_idx": {
+          "name": "playlist_collaborators_oxy_user_id_idx",
+          "columns": [
+            {
+              "expression": "oxy_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "playlist_collaborators_playlist_id_playlists_id_fk": {
+          "name": "playlist_collaborators_playlist_id_playlists_id_fk",
+          "tableFrom": "playlist_collaborators",
+          "tableTo": "playlists",
+          "columnsFrom": [
+            "playlist_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "playlist_collaborators_playlist_id_oxy_user_id_key": {
+          "name": "playlist_collaborators_playlist_id_oxy_user_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "playlist_id",
+            "oxy_user_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "playlist_collaborators_role_check": {
+          "name": "playlist_collaborators_role_check",
+          "value": "\"playlist_collaborators\".\"role\" in ('owner', 'editor', 'viewer')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.playlist_sources": {
+      "name": "playlist_sources",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "playlist_id": {
+          "name": "playlist_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "external_id": {
+          "name": "external_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "imported_at": {
+          "name": "imported_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fields": {
+          "name": "fields",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "array[]::text[]"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "playlist_sources_playlist_id_playlists_id_fk": {
+          "name": "playlist_sources_playlist_id_playlists_id_fk",
+          "tableFrom": "playlist_sources",
+          "tableTo": "playlists",
+          "columnsFrom": [
+            "playlist_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "playlist_sources_playlist_id_position_key": {
+          "name": "playlist_sources_playlist_id_position_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "playlist_id",
+            "position"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "playlist_sources_provider_check": {
+          "name": "playlist_sources_provider_check",
+          "value": "\"playlist_sources\".\"provider\" in ('upload', 'cc', 'musicbrainz', 'wikidata', 'wikimedia-commons', 'cover-art-archive', 'discogs')"
+        },
+        "playlist_sources_position_check": {
+          "name": "playlist_sources_position_check",
+          "value": "\"playlist_sources\".\"position\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.playlist_tracks": {
+      "name": "playlist_tracks",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "playlist_id": {
+          "name": "playlist_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "track_id": {
+          "name": "track_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "added_at": {
+          "name": "added_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "added_by": {
+          "name": "added_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "playlist_tracks_playlist_id_track_id_idx": {
+          "name": "playlist_tracks_playlist_id_track_id_idx",
+          "columns": [
+            {
+              "expression": "playlist_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "track_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "playlist_tracks_playlist_id_playlists_id_fk": {
+          "name": "playlist_tracks_playlist_id_playlists_id_fk",
+          "tableFrom": "playlist_tracks",
+          "tableTo": "playlists",
+          "columnsFrom": [
+            "playlist_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "playlist_tracks_track_id_tracks_id_fk": {
+          "name": "playlist_tracks_track_id_tracks_id_fk",
+          "tableFrom": "playlist_tracks",
+          "tableTo": "tracks",
+          "columnsFrom": [
+            "track_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "playlist_tracks_playlist_id_position_key": {
+          "name": "playlist_tracks_playlist_id_position_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "playlist_id",
+            "position"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "playlist_tracks_position_check": {
+          "name": "playlist_tracks_position_check",
+          "value": "\"playlist_tracks\".\"position\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.playlists": {
+      "name": "playlists",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "owner_oxy_user_id": {
+          "name": "owner_oxy_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner_username": {
+          "name": "owner_username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cover_art_id": {
+          "name": "cover_art_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cover_art_sizes_small_id": {
+          "name": "cover_art_sizes_small_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cover_art_sizes_medium_id": {
+          "name": "cover_art_sizes_medium_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cover_art_sizes_large_id": {
+          "name": "cover_art_sizes_large_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cover_art_sizes_xlarge_id": {
+          "name": "cover_art_sizes_xlarge_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cover_art_sizes_xxlarge_id": {
+          "name": "cover_art_sizes_xxlarge_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cover_art_sizes_original_id": {
+          "name": "cover_art_sizes_original_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "visibility": {
+          "name": "visibility",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'private'"
+        },
+        "track_count": {
+          "name": "track_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "total_duration": {
+          "name": "total_duration",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "followers": {
+          "name": "followers",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "primary_color": {
+          "name": "primary_color",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "secondary_color": {
+          "name": "secondary_color",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "external_isrc": {
+          "name": "external_isrc",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "search_vector": {
+          "name": "search_vector",
+          "type": "tsvector",
+          "primaryKey": false,
+          "notNull": false,
+          "generated": {
+            "as": "to_tsvector('english', name || ' ' || coalesce(description, ''))",
+            "type": "stored"
+          }
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        }
+      },
+      "indexes": {
+        "playlists_owner_oxy_user_id_created_at_idx": {
+          "name": "playlists_owner_oxy_user_id_created_at_idx",
+          "columns": [
+            {
+              "expression": "owner_oxy_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "playlists_public_followers_idx": {
+          "name": "playlists_public_followers_idx",
+          "columns": [
+            {
+              "expression": "followers",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"playlists\".\"visibility\" = 'public'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "playlists_search_gin": {
+          "name": "playlists_search_gin",
+          "columns": [
+            {
+              "expression": "search_vector",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gin",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "playlists_cover_art_id_image_assets_id_fk": {
+          "name": "playlists_cover_art_id_image_assets_id_fk",
+          "tableFrom": "playlists",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "cover_art_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "playlists_cover_art_sizes_small_id_image_assets_id_fk": {
+          "name": "playlists_cover_art_sizes_small_id_image_assets_id_fk",
+          "tableFrom": "playlists",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "cover_art_sizes_small_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "playlists_cover_art_sizes_medium_id_image_assets_id_fk": {
+          "name": "playlists_cover_art_sizes_medium_id_image_assets_id_fk",
+          "tableFrom": "playlists",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "cover_art_sizes_medium_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "playlists_cover_art_sizes_large_id_image_assets_id_fk": {
+          "name": "playlists_cover_art_sizes_large_id_image_assets_id_fk",
+          "tableFrom": "playlists",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "cover_art_sizes_large_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "playlists_cover_art_sizes_xlarge_id_image_assets_id_fk": {
+          "name": "playlists_cover_art_sizes_xlarge_id_image_assets_id_fk",
+          "tableFrom": "playlists",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "cover_art_sizes_xlarge_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "playlists_cover_art_sizes_xxlarge_id_image_assets_id_fk": {
+          "name": "playlists_cover_art_sizes_xxlarge_id_image_assets_id_fk",
+          "tableFrom": "playlists",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "cover_art_sizes_xxlarge_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "playlists_cover_art_sizes_original_id_image_assets_id_fk": {
+          "name": "playlists_cover_art_sizes_original_id_image_assets_id_fk",
+          "tableFrom": "playlists",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "cover_art_sizes_original_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "playlists_visibility_check": {
+          "name": "playlists_visibility_check",
+          "value": "\"playlists\".\"visibility\" in ('public', 'private', 'unlisted')"
+        },
+        "playlists_source_check": {
+          "name": "playlists_source_check",
+          "value": "\"playlists\".\"source\" is null or \"playlists\".\"source\" in ('upload', 'cc')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.recently_played": {
+      "name": "recently_played",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "oxy_user_id": {
+          "name": "oxy_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "track_id": {
+          "name": "track_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "played_at": {
+          "name": "played_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        }
+      },
+      "indexes": {
+        "recently_played_oxy_user_id_played_at_idx": {
+          "name": "recently_played_oxy_user_id_played_at_idx",
+          "columns": [
+            {
+              "expression": "oxy_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "played_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "recently_played_track_id_tracks_id_fk": {
+          "name": "recently_played_track_id_tracks_id_fk",
+          "tableFrom": "recently_played",
+          "tableTo": "tracks",
+          "columnsFrom": [
+            "track_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.user_followed_artists": {
+      "name": "user_followed_artists",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "oxy_user_id": {
+          "name": "oxy_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "artist_id": {
+          "name": "artist_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "user_followed_artists_artist_id_catalog_entities_id_fk": {
+          "name": "user_followed_artists_artist_id_catalog_entities_id_fk",
+          "tableFrom": "user_followed_artists",
+          "tableTo": "catalog_entities",
+          "columnsFrom": [
+            "artist_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "user_followed_artists_oxy_user_id_artist_id_key": {
+          "name": "user_followed_artists_oxy_user_id_artist_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "oxy_user_id",
+            "artist_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.user_liked_tracks": {
+      "name": "user_liked_tracks",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "oxy_user_id": {
+          "name": "oxy_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "track_id": {
+          "name": "track_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "user_liked_tracks_track_id_tracks_id_fk": {
+          "name": "user_liked_tracks_track_id_tracks_id_fk",
+          "tableFrom": "user_liked_tracks",
+          "tableTo": "tracks",
+          "columnsFrom": [
+            "track_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "user_liked_tracks_oxy_user_id_track_id_key": {
+          "name": "user_liked_tracks_oxy_user_id_track_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "oxy_user_id",
+            "track_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.user_podcast_subscriptions": {
+      "name": "user_podcast_subscriptions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "oxy_user_id": {
+          "name": "oxy_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "podcast_id": {
+          "name": "podcast_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "user_podcast_subscriptions_podcast_id_idx": {
+          "name": "user_podcast_subscriptions_podcast_id_idx",
+          "columns": [
+            {
+              "expression": "podcast_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "user_podcast_subscriptions_podcast_id_podcasts_id_fk": {
+          "name": "user_podcast_subscriptions_podcast_id_podcasts_id_fk",
+          "tableFrom": "user_podcast_subscriptions",
+          "tableTo": "podcasts",
+          "columnsFrom": [
+            "podcast_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "user_podcast_subscriptions_oxy_user_id_podcast_id_key": {
+          "name": "user_podcast_subscriptions_oxy_user_id_podcast_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "oxy_user_id",
+            "podcast_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.user_saved_albums": {
+      "name": "user_saved_albums",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "oxy_user_id": {
+          "name": "oxy_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "album_id": {
+          "name": "album_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "user_saved_albums_album_id_albums_id_fk": {
+          "name": "user_saved_albums_album_id_albums_id_fk",
+          "tableFrom": "user_saved_albums",
+          "tableTo": "albums",
+          "columnsFrom": [
+            "album_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "user_saved_albums_oxy_user_id_album_id_key": {
+          "name": "user_saved_albums_oxy_user_id_album_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "oxy_user_id",
+            "album_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.user_saved_playlists": {
+      "name": "user_saved_playlists",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "oxy_user_id": {
+          "name": "oxy_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "playlist_id": {
+          "name": "playlist_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "user_saved_playlists_playlist_id_playlists_id_fk": {
+          "name": "user_saved_playlists_playlist_id_playlists_id_fk",
+          "tableFrom": "user_saved_playlists",
+          "tableTo": "playlists",
+          "columnsFrom": [
+            "playlist_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "user_saved_playlists_oxy_user_id_playlist_id_key": {
+          "name": "user_saved_playlists_oxy_user_id_playlist_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "oxy_user_id",
+            "playlist_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.episode_hls_renditions": {
+      "name": "episode_hls_renditions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "episode_id": {
+          "name": "episode_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "manifest_key": {
+          "name": "manifest_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bitrate_kbps": {
+          "name": "bitrate_kbps",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "encrypted": {
+          "name": "encrypted",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "episode_hls_renditions_episode_id_episodes_id_fk": {
+          "name": "episode_hls_renditions_episode_id_episodes_id_fk",
+          "tableFrom": "episode_hls_renditions",
+          "tableTo": "episodes",
+          "columnsFrom": [
+            "episode_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "episode_hls_renditions_episode_id_position_key": {
+          "name": "episode_hls_renditions_episode_id_position_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "episode_id",
+            "position"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "episode_hls_renditions_position_check": {
+          "name": "episode_hls_renditions_position_check",
+          "value": "\"episode_hls_renditions\".\"position\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.episode_persons": {
+      "name": "episode_persons",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "episode_id": {
+          "name": "episode_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "group": {
+          "name": "group",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "img": {
+          "name": "img",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "href": {
+          "name": "href",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "linked_oxy_user_id": {
+          "name": "linked_oxy_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "episode_persons_linked_oxy_user_id_idx": {
+          "name": "episode_persons_linked_oxy_user_id_idx",
+          "columns": [
+            {
+              "expression": "linked_oxy_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "episode_persons_href_idx": {
+          "name": "episode_persons_href_idx",
+          "columns": [
+            {
+              "expression": "href",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "episode_persons_episode_id_episodes_id_fk": {
+          "name": "episode_persons_episode_id_episodes_id_fk",
+          "tableFrom": "episode_persons",
+          "tableTo": "episodes",
+          "columnsFrom": [
+            "episode_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "episode_persons_episode_id_position_key": {
+          "name": "episode_persons_episode_id_position_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "episode_id",
+            "position"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "episode_persons_position_check": {
+          "name": "episode_persons_position_check",
+          "value": "\"episode_persons\".\"position\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.episode_progress": {
+      "name": "episode_progress",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "oxy_user_id": {
+          "name": "oxy_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "episode_id": {
+          "name": "episode_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position_sec": {
+          "name": "position_sec",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "duration_sec": {
+          "name": "duration_sec",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "completed": {
+          "name": "completed",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        }
+      },
+      "indexes": {
+        "episode_progress_episode_id_idx": {
+          "name": "episode_progress_episode_id_idx",
+          "columns": [
+            {
+              "expression": "episode_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "episode_progress_oxy_user_id_updated_at_idx": {
+          "name": "episode_progress_oxy_user_id_updated_at_idx",
+          "columns": [
+            {
+              "expression": "oxy_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "updated_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"episode_progress\".\"completed\" = false",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "episode_progress_episode_id_episodes_id_fk": {
+          "name": "episode_progress_episode_id_episodes_id_fk",
+          "tableFrom": "episode_progress",
+          "tableTo": "episodes",
+          "columnsFrom": [
+            "episode_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "episode_progress_oxy_user_id_episode_id_key": {
+          "name": "episode_progress_oxy_user_id_episode_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "oxy_user_id",
+            "episode_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.episode_transcripts": {
+      "name": "episode_transcripts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "episode_id": {
+          "name": "episode_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "url": {
+          "name": "url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "language": {
+          "name": "language",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "episode_transcripts_episode_id_episodes_id_fk": {
+          "name": "episode_transcripts_episode_id_episodes_id_fk",
+          "tableFrom": "episode_transcripts",
+          "tableTo": "episodes",
+          "columnsFrom": [
+            "episode_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "episode_transcripts_episode_id_position_key": {
+          "name": "episode_transcripts_episode_id_position_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "episode_id",
+            "position"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "episode_transcripts_position_check": {
+          "name": "episode_transcripts_position_check",
+          "value": "\"episode_transcripts\".\"position\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.episodes": {
+      "name": "episodes",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "podcast_id": {
+          "name": "podcast_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "podcast_title": {
+          "name": "podcast_title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "summary": {
+          "name": "summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "guid": {
+          "name": "guid",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "enclosure_url": {
+          "name": "enclosure_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "enclosure_type": {
+          "name": "enclosure_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "enclosure_length": {
+          "name": "enclosure_length",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "duration": {
+          "name": "duration",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "pub_date": {
+          "name": "pub_date",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "season": {
+          "name": "season",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "episode_number": {
+          "name": "episode_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "episode_type": {
+          "name": "episode_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'full'"
+        },
+        "image_id": {
+          "name": "image_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "image_sizes_small_id": {
+          "name": "image_sizes_small_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "image_sizes_medium_id": {
+          "name": "image_sizes_medium_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "image_sizes_large_id": {
+          "name": "image_sizes_large_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "image_sizes_xlarge_id": {
+          "name": "image_sizes_xlarge_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "image_sizes_xxlarge_id": {
+          "name": "image_sizes_xxlarge_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "image_sizes_original_id": {
+          "name": "image_sizes_original_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "primary_color": {
+          "name": "primary_color",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "secondary_color": {
+          "name": "secondary_color",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "image_source_url": {
+          "name": "image_source_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "explicit": {
+          "name": "explicit",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "chapters_url": {
+          "name": "chapters_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "chapters_type": {
+          "name": "chapters_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cache_status": {
+          "name": "cache_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cache_object_key": {
+          "name": "cache_object_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cache_hls_master_key": {
+          "name": "cache_hls_master_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cache_cached_at": {
+          "name": "cache_cached_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "audio_source_url": {
+          "name": "audio_source_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "audio_source_format": {
+          "name": "audio_source_format",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "audio_source_bitrate": {
+          "name": "audio_source_bitrate",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "audio_source_duration": {
+          "name": "audio_source_duration",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hls_master_key": {
+          "name": "hls_master_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "play_count": {
+          "name": "play_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "popularity": {
+          "name": "popularity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'ready'"
+        },
+        "search_vector": {
+          "name": "search_vector",
+          "type": "tsvector",
+          "primaryKey": false,
+          "notNull": false,
+          "generated": {
+            "as": "to_tsvector('english', title)",
+            "type": "stored"
+          }
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        }
+      },
+      "indexes": {
+        "episodes_podcast_id_pub_date_idx": {
+          "name": "episodes_podcast_id_pub_date_idx",
+          "columns": [
+            {
+              "expression": "podcast_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "pub_date",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "episodes_ready_popularity_idx": {
+          "name": "episodes_ready_popularity_idx",
+          "columns": [
+            {
+              "expression": "popularity",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            },
+            {
+              "expression": "pub_date",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"episodes\".\"status\" = 'ready'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "episodes_search_gin": {
+          "name": "episodes_search_gin",
+          "columns": [
+            {
+              "expression": "search_vector",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gin",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "episodes_podcast_id_podcasts_id_fk": {
+          "name": "episodes_podcast_id_podcasts_id_fk",
+          "tableFrom": "episodes",
+          "tableTo": "podcasts",
+          "columnsFrom": [
+            "podcast_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "episodes_image_id_image_assets_id_fk": {
+          "name": "episodes_image_id_image_assets_id_fk",
+          "tableFrom": "episodes",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "image_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "episodes_image_sizes_small_id_image_assets_id_fk": {
+          "name": "episodes_image_sizes_small_id_image_assets_id_fk",
+          "tableFrom": "episodes",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "image_sizes_small_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "episodes_image_sizes_medium_id_image_assets_id_fk": {
+          "name": "episodes_image_sizes_medium_id_image_assets_id_fk",
+          "tableFrom": "episodes",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "image_sizes_medium_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "episodes_image_sizes_large_id_image_assets_id_fk": {
+          "name": "episodes_image_sizes_large_id_image_assets_id_fk",
+          "tableFrom": "episodes",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "image_sizes_large_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "episodes_image_sizes_xlarge_id_image_assets_id_fk": {
+          "name": "episodes_image_sizes_xlarge_id_image_assets_id_fk",
+          "tableFrom": "episodes",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "image_sizes_xlarge_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "episodes_image_sizes_xxlarge_id_image_assets_id_fk": {
+          "name": "episodes_image_sizes_xxlarge_id_image_assets_id_fk",
+          "tableFrom": "episodes",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "image_sizes_xxlarge_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "episodes_image_sizes_original_id_image_assets_id_fk": {
+          "name": "episodes_image_sizes_original_id_image_assets_id_fk",
+          "tableFrom": "episodes",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "image_sizes_original_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "episodes_podcast_id_guid_key": {
+          "name": "episodes_podcast_id_guid_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "podcast_id",
+            "guid"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "episodes_episode_type_check": {
+          "name": "episodes_episode_type_check",
+          "value": "\"episodes\".\"episode_type\" in ('full', 'trailer', 'bonus')"
+        },
+        "episodes_source_check": {
+          "name": "episodes_source_check",
+          "value": "\"episodes\".\"source\" in ('rss', 'syra')"
+        },
+        "episodes_status_check": {
+          "name": "episodes_status_check",
+          "value": "\"episodes\".\"status\" in ('ready', 'processing', 'failed', 'unavailable')"
+        },
+        "episodes_cache_status_check": {
+          "name": "episodes_cache_status_check",
+          "value": "\"episodes\".\"cache_status\" is null or \"episodes\".\"cache_status\" in ('none', 'cached', 'hls')"
+        },
+        "episodes_audio_source_format_check": {
+          "name": "episodes_audio_source_format_check",
+          "value": "\"episodes\".\"audio_source_format\" is null or \"episodes\".\"audio_source_format\" in ('mp3', 'flac', 'ogg', 'm4a', 'wav')"
+        },
+        "episodes_popularity_check": {
+          "name": "episodes_popularity_check",
+          "value": "\"episodes\".\"popularity\" between 0 and 100"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.podcast_categories": {
+      "name": "podcast_categories",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "podcast_id": {
+          "name": "podcast_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "genre_id": {
+          "name": "genre_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'podcast'"
+        }
+      },
+      "indexes": {
+        "podcast_categories_genre_id_idx": {
+          "name": "podcast_categories_genre_id_idx",
+          "columns": [
+            {
+              "expression": "genre_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "podcast_categories_podcast_id_podcasts_id_fk": {
+          "name": "podcast_categories_podcast_id_podcasts_id_fk",
+          "tableFrom": "podcast_categories",
+          "tableTo": "podcasts",
+          "columnsFrom": [
+            "podcast_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "podcast_categories_genre_id_kind_genres_id_kind_fk": {
+          "name": "podcast_categories_genre_id_kind_genres_id_kind_fk",
+          "tableFrom": "podcast_categories",
+          "tableTo": "genres",
+          "columnsFrom": [
+            "genre_id",
+            "kind"
+          ],
+          "columnsTo": [
+            "id",
+            "kind"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "podcast_categories_podcast_id_genre_id_key": {
+          "name": "podcast_categories_podcast_id_genre_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "podcast_id",
+            "genre_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "podcast_categories_kind_check": {
+          "name": "podcast_categories_kind_check",
+          "value": "\"podcast_categories\".\"kind\" = 'podcast'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.podcast_funding": {
+      "name": "podcast_funding",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "podcast_id": {
+          "name": "podcast_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "url": {
+          "name": "url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "message": {
+          "name": "message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "podcast_funding_podcast_id_podcasts_id_fk": {
+          "name": "podcast_funding_podcast_id_podcasts_id_fk",
+          "tableFrom": "podcast_funding",
+          "tableTo": "podcasts",
+          "columnsFrom": [
+            "podcast_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "podcast_funding_podcast_id_position_key": {
+          "name": "podcast_funding_podcast_id_position_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "podcast_id",
+            "position"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "podcast_funding_position_check": {
+          "name": "podcast_funding_position_check",
+          "value": "\"podcast_funding\".\"position\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.podcast_persons": {
+      "name": "podcast_persons",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "podcast_id": {
+          "name": "podcast_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "group": {
+          "name": "group",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "img": {
+          "name": "img",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "href": {
+          "name": "href",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "linked_oxy_user_id": {
+          "name": "linked_oxy_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "podcast_persons_linked_oxy_user_id_idx": {
+          "name": "podcast_persons_linked_oxy_user_id_idx",
+          "columns": [
+            {
+              "expression": "linked_oxy_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "podcast_persons_href_idx": {
+          "name": "podcast_persons_href_idx",
+          "columns": [
+            {
+              "expression": "href",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "podcast_persons_podcast_id_podcasts_id_fk": {
+          "name": "podcast_persons_podcast_id_podcasts_id_fk",
+          "tableFrom": "podcast_persons",
+          "tableTo": "podcasts",
+          "columnsFrom": [
+            "podcast_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "podcast_persons_podcast_id_position_key": {
+          "name": "podcast_persons_podcast_id_position_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "podcast_id",
+            "position"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "podcast_persons_position_check": {
+          "name": "podcast_persons_position_check",
+          "value": "\"podcast_persons\".\"position\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.podcast_sources": {
+      "name": "podcast_sources",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "podcast_id": {
+          "name": "podcast_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "external_id": {
+          "name": "external_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "imported_at": {
+          "name": "imported_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fields": {
+          "name": "fields",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "array[]::text[]"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "podcast_sources_podcast_id_podcasts_id_fk": {
+          "name": "podcast_sources_podcast_id_podcasts_id_fk",
+          "tableFrom": "podcast_sources",
+          "tableTo": "podcasts",
+          "columnsFrom": [
+            "podcast_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "podcast_sources_podcast_id_position_key": {
+          "name": "podcast_sources_podcast_id_position_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "podcast_id",
+            "position"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "podcast_sources_provider_check": {
+          "name": "podcast_sources_provider_check",
+          "value": "\"podcast_sources\".\"provider\" in ('rss', 'syra', 'podcastindex', 'apple')"
+        },
+        "podcast_sources_position_check": {
+          "name": "podcast_sources_position_check",
+          "value": "\"podcast_sources\".\"position\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.podcasts": {
+      "name": "podcasts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "author": {
+          "name": "author",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "image_id": {
+          "name": "image_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "image_sizes_small_id": {
+          "name": "image_sizes_small_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "image_sizes_medium_id": {
+          "name": "image_sizes_medium_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "image_sizes_large_id": {
+          "name": "image_sizes_large_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "image_sizes_xlarge_id": {
+          "name": "image_sizes_xlarge_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "image_sizes_xxlarge_id": {
+          "name": "image_sizes_xxlarge_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "image_sizes_original_id": {
+          "name": "image_sizes_original_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "primary_color": {
+          "name": "primary_color",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "secondary_color": {
+          "name": "secondary_color",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "image_source_url": {
+          "name": "image_source_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "language": {
+          "name": "language",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "explicit": {
+          "name": "explicit",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "link": {
+          "name": "link",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'episodic'"
+        },
+        "feed_url": {
+          "name": "feed_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "podcast_guid": {
+          "name": "podcast_guid",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "podcast_index_id": {
+          "name": "podcast_index_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "apple_collection_id": {
+          "name": "apple_collection_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner_oxy_user_id": {
+          "name": "owner_oxy_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "claimable": {
+          "name": "claimable",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "claimed_by_oxy_user_id": {
+          "name": "claimed_by_oxy_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "linked_artist_id": {
+          "name": "linked_artist_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_refreshed_at": {
+          "name": "last_refreshed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "refresh_interval_min": {
+          "name": "refresh_interval_min",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 60
+        },
+        "etag": {
+          "name": "etag",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_modified": {
+          "name": "last_modified",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "episode_count": {
+          "name": "episode_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "last_episode_at": {
+          "name": "last_episode_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "needs_deep_import": {
+          "name": "needs_deep_import",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "popularity": {
+          "name": "popularity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "subscriber_count": {
+          "name": "subscriber_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "value": {
+          "name": "value",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "search_vector": {
+          "name": "search_vector",
+          "type": "tsvector",
+          "primaryKey": false,
+          "notNull": false,
+          "generated": {
+            "as": "to_tsvector('english', title || ' ' || coalesce(author, ''))",
+            "type": "stored"
+          }
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', now())"
+        }
+      },
+      "indexes": {
+        "podcasts_linked_artist_id_idx": {
+          "name": "podcasts_linked_artist_id_idx",
+          "columns": [
+            {
+              "expression": "linked_artist_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "podcasts_owner_oxy_user_id_created_at_idx": {
+          "name": "podcasts_owner_oxy_user_id_created_at_idx",
+          "columns": [
+            {
+              "expression": "owner_oxy_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "podcasts_active_popularity_idx": {
+          "name": "podcasts_active_popularity_idx",
+          "columns": [
+            {
+              "expression": "popularity",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            },
+            {
+              "expression": "subscriber_count",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            },
+            {
+              "expression": "last_episode_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"podcasts\".\"status\" = 'active'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "podcasts_active_last_episode_at_idx": {
+          "name": "podcasts_active_last_episode_at_idx",
+          "columns": [
+            {
+              "expression": "last_episode_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"podcasts\".\"status\" = 'active'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "podcasts_rss_active_subscriber_count_idx": {
+          "name": "podcasts_rss_active_subscriber_count_idx",
+          "columns": [
+            {
+              "expression": "subscriber_count",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            },
+            {
+              "expression": "popularity",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"podcasts\".\"status\" = 'active' and \"podcasts\".\"source\" = 'rss'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "podcasts_inactive_idx": {
+          "name": "podcasts_inactive_idx",
+          "columns": [
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"podcasts\".\"status\" <> 'active'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "podcasts_search_gin": {
+          "name": "podcasts_search_gin",
+          "columns": [
+            {
+              "expression": "search_vector",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gin",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "podcasts_image_id_image_assets_id_fk": {
+          "name": "podcasts_image_id_image_assets_id_fk",
+          "tableFrom": "podcasts",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "image_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "podcasts_image_sizes_small_id_image_assets_id_fk": {
+          "name": "podcasts_image_sizes_small_id_image_assets_id_fk",
+          "tableFrom": "podcasts",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "image_sizes_small_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "podcasts_image_sizes_medium_id_image_assets_id_fk": {
+          "name": "podcasts_image_sizes_medium_id_image_assets_id_fk",
+          "tableFrom": "podcasts",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "image_sizes_medium_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "podcasts_image_sizes_large_id_image_assets_id_fk": {
+          "name": "podcasts_image_sizes_large_id_image_assets_id_fk",
+          "tableFrom": "podcasts",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "image_sizes_large_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "podcasts_image_sizes_xlarge_id_image_assets_id_fk": {
+          "name": "podcasts_image_sizes_xlarge_id_image_assets_id_fk",
+          "tableFrom": "podcasts",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "image_sizes_xlarge_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "podcasts_image_sizes_xxlarge_id_image_assets_id_fk": {
+          "name": "podcasts_image_sizes_xxlarge_id_image_assets_id_fk",
+          "tableFrom": "podcasts",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "image_sizes_xxlarge_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "podcasts_image_sizes_original_id_image_assets_id_fk": {
+          "name": "podcasts_image_sizes_original_id_image_assets_id_fk",
+          "tableFrom": "podcasts",
+          "tableTo": "image_assets",
+          "columnsFrom": [
+            "image_sizes_original_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "podcasts_linked_artist_id_catalog_entities_id_fk": {
+          "name": "podcasts_linked_artist_id_catalog_entities_id_fk",
+          "tableFrom": "podcasts",
+          "tableTo": "catalog_entities",
+          "columnsFrom": [
+            "linked_artist_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "podcasts_feed_url_key": {
+          "name": "podcasts_feed_url_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "feed_url"
+          ]
+        },
+        "podcasts_podcast_guid_key": {
+          "name": "podcasts_podcast_guid_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "podcast_guid"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "podcasts_type_check": {
+          "name": "podcasts_type_check",
+          "value": "\"podcasts\".\"type\" in ('episodic', 'serial')"
+        },
+        "podcasts_source_check": {
+          "name": "podcasts_source_check",
+          "value": "\"podcasts\".\"source\" in ('rss', 'syra')"
+        },
+        "podcasts_status_check": {
+          "name": "podcasts_status_check",
+          "value": "\"podcasts\".\"status\" in ('active', 'unavailable', 'removed')"
+        },
+        "podcasts_popularity_check": {
+          "name": "podcasts_popularity_check",
+          "value": "\"podcasts\".\"popularity\" between 0 and 100"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

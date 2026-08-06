@@ -56,7 +56,7 @@ import { closePostgres, connectPostgres, getDb } from '../postgres';
 import { findMigrationsFolder, LAST_GENESIS_MIGRATION_TAG } from '../migrate';
 import * as schema from '../schema';
 import * as catalogModule from '../schema/catalog';
-import { catalogEntities, trackHlsRenditions, tracks } from '../schema/catalog';
+import { albumGenres, albums, catalogEntities, imageAssets, trackHlsRenditions, tracks } from '../schema/catalog';
 import * as genresModule from '../schema/genres';
 import * as libraryModule from '../schema/library';
 import { playbackStates, playlists, userPodcastSubscriptions, userSavedPlaylists } from '../schema/library';
@@ -573,7 +573,7 @@ describe('podcasts schema (Task 4)', () => {
 
     const [genre] = await db
       .insert(genres)
-      .values({ name: 'CHECK-fixture-podcast-genre' })
+      .values({ name: 'CHECK-fixture-podcast-genre', kind: 'podcast' })
       .returning({ id: genres.id });
     const [podcast] = await db
       .insert(podcasts)

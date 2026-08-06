@@ -91,6 +91,7 @@ import {
   boolean,
   check,
   doublePrecision,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -112,7 +113,7 @@ import type {
   TrackCredit,
   TrackImage,
 } from '@syra/shared-types';
-import { genres } from './genres';
+import { genres, GENRE_KINDS } from './genres';
 
 // ── Closed value sets ────────────────────────────────────────────────────
 // `@syra/shared-types` exports `PROVENANCE_PROVIDERS` as a runtime array
@@ -791,13 +792,26 @@ export const albumGenres = pgTable(
     albumId: text()
       .notNull()
       .references(() => albums.id, { onDelete: 'cascade' }),
-    genreId: text()
-      .notNull()
-      .references(() => genres.id, { onDelete: 'restrict' }),
+    /**
+     * No inline `.references()` — the FK is the COMPOSITE
+     * `(genre_id, kind) -> genres(id, kind)` declared below, not a plain
+     * single-column one. See `genres.ts`'s file-level doc comment for why:
+     * `genres` now serves two verticals, and a single-column FK on `genreId`
+     * alone could not stop this row from pointing at a `kind = 'podcast'`
+     * row.
+     */
+    genreId: text().notNull(),
+    /** Always `'music'` on this table — see the CHECK below and `genres.ts`. */
+    kind: text({ enum: GENRE_KINDS }).notNull().default('music'),
   },
   (t) => [
+    check('album_genres_kind_check', sql`${t.kind} = 'music'`),
     unique('album_genres_album_id_genre_id_key').on(t.albumId, t.genreId),
     index('album_genres_genre_id_idx').on(t.genreId),
+    foreignKey({
+      columns: [t.genreId, t.kind],
+      foreignColumns: [genres.id, genres.kind],
+    }).onDelete('restrict'),
   ]
 );
 
