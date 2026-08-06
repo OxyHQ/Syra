@@ -3687,4 +3687,47 @@ describe('deploy-phase ordering (post-genesis)', () => {
 
     expect(findPostGenesisPhaseOrderingViolations(entries, LAST_GENESIS_MIGRATION_TAG)).toEqual([]);
   });
+
+  /**
+   * THE BOUNDARY MUST BE THE NEWEST MIGRATION, until cutover.
+   *
+   * `migrate.ts` states the rule — every migration landing before Syra's first
+   * production Postgres deploy is genesis, because no image is serving for a
+   * `pre`/`post` split to protect, so the boundary advances with each one and
+   * FREEZES at that deploy. It calls this "routine maintenance, not a
+   * per-migration judgment call".
+   *
+   * It is routine maintenance that is routinely NOT done. Measured on this
+   * branch: the tag sat at `0015` while `0016` (Task 10a), `0017` and `0018`
+   * (Task 10b) landed — three behind, across two tasks. The `0006`-`0008`
+   * paragraph in `migrate.ts` records the identical lapse one task run earlier.
+   *
+   * Nothing failed, and that is exactly why it kept happening: the ordering gate
+   * above simply holds the drifted migrations to an invariant that has nothing
+   * to protect yet, so the drift is silent AND in the safe direction. A comment
+   * explaining that does not stop the fourth occurrence; this does.
+   *
+   * WHEN CUTOVER HAPPENS this test must be DELETED, not updated — the boundary
+   * freezes and the newest migration moves past it permanently, which is the
+   * point. The failure message says so, because the person who hits it will be
+   * whoever writes migration `00NN` and they need to know which of the two
+   * remedies applies to them.
+   */
+  it('LAST_GENESIS_MIGRATION_TAG is the newest migration in the journal', () => {
+    const journal = readJournal(findMigrationsFolder());
+    const newest = journal[journal.length - 1]?.tag;
+
+    expect(
+      `boundary=${LAST_GENESIS_MIGRATION_TAG} newest=${newest ?? 'NO MIGRATIONS'}`
+    ).toBe(`boundary=${newest ?? 'NO MIGRATIONS'} newest=${newest ?? 'NO MIGRATIONS'}`);
+  });
+
+  it('the boundary is a tag the journal actually contains', () => {
+    // A typo in the constant would otherwise satisfy nothing and be caught only
+    // by `findPostGenesisPhaseOrderingViolations`'s own not-in-journal branch,
+    // which reports it as an ordering problem rather than as a bad constant.
+    const tags = readJournal(findMigrationsFolder()).map((entry) => entry.tag);
+    expect(`${LAST_GENESIS_MIGRATION_TAG} in journal: ${tags.includes(LAST_GENESIS_MIGRATION_TAG)}`)
+      .toBe(`${LAST_GENESIS_MIGRATION_TAG} in journal: true`);
+  });
 });

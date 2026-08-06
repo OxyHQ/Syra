@@ -31,6 +31,28 @@
  * delete `catalog_entities.members` and confirm it appears. It does now, and it
  * did not before the child-table match was scoped to the model's own tables.
  *
+ * ## THE RULE, stated because knowing it was demonstrably not enough
+ *
+ * This was the THIRD substring-matching bug on this branch — after the
+ * identifier exemption's `includes()`, which absorbed a 74-byte superstring of
+ * an exempt name, and `halfPortedImports`'s `endsWith()`, which missed a whole
+ * specifier spelling. It was written by someone who had just been warned about
+ * both, into the check being written against them. Knowing the failure mode and
+ * having been told about it did not prevent writing it again, so the rule goes
+ * in the file rather than in anybody's head:
+ *
+ *   **Any matcher compares by IDENTITY or by RESOLVED PATH, never by
+ *   containment — and proves it by FAILING against the case that motivated it.**
+ *
+ * The second clause is the operative one. A matcher built for a known case has
+ * an obvious oracle, which makes it strictly easier to verify than a matcher in
+ * general: break the specific thing the check exists to find, and watch it be
+ * found. `halfPortedImports.test.ts` resolves specifiers against the importing
+ * file's directory and compares absolute paths; `hybridServices.test.ts` uses
+ * exact-equality `Set` membership and keeps a mutation showing an `includes()`
+ * rewrite flagging `PlaylistTrack` as a catalog model BECAUSE IT CONTAINS
+ * `Track`. Both are the rule applied; neither is optional.
+ *
  * ## Result of the run this was written for (2026-08-06)
  *
  * 706 declared paths across 41 model files, against 411 columns in 69 tables.
