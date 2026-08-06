@@ -565,3 +565,26 @@ could have found it. Fixed as `@oxyhq/db@0.1.2`.
 The rejected alternative was a permanent no-op bootstrap migration carrying the
 phase marker. It works, and it leaves in Syra's history forever a file whose only
 purpose is to appease a check that should not fire.
+
+**Each task's tests are not proven until the next task arrives.** Twice in a row
+now, a schema task found a defect in the previous task's tests that only its own
+input could expose:
+
+- Task 2 found two bugs in Task 1's `gates.test.ts` — `is(value, PgTable)`
+  throwing TS2677 once the barrel holds heterogeneous exports, and `.rejects`
+  against a non-Promise drizzle builder. Both survived Task 1's own thorough
+  independent review, because the barrel was empty: the gate worked while there
+  was nothing to check.
+- Task 3 found that Task 2's "lands exactly the tables this task promises" test
+  compared against the whole cumulative barrel, so it would have broken the
+  instant any later task added a table.
+
+This is a property of staging a schema across tasks, not bad luck, and it has a
+consequence for the four verticals that remain: **a green gate on an empty or
+single-vertical barrel is weaker evidence than it looks.** Raising the vacuity
+floor at every task and mutation-checking it is what converts that green into
+something, and it is why the floor rises rather than being set once.
+
+Each schema task should also expect to fix something in its predecessor's tests,
+and should say so in its report rather than fixing it silently — the pattern is
+more useful than any individual fix.
