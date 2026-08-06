@@ -746,9 +746,14 @@ export const rooms = pgTable(
      */
     index('rooms_series_id_idx').on(t.seriesId),
     /**
-     * Support for `houses`' `ON DELETE SET NULL` on `house_id`, and the third
-     * of the four indexes in this schema that exist for a CONSTRAINT rather
-     * than a query — so, MUST STAY NON-PARTIAL.
+     * Support for `houses`' `ON DELETE SET NULL` on `house_id`, and one of the
+     * FIVE indexes in this schema that exist for a CONSTRAINT rather than a
+     * query — so, MUST STAY NON-PARTIAL. The other four are
+     * `series_house_id_idx`, `rooms_series_id_idx`,
+     * `series_episodes_room_id_idx` and
+     * `recordings_room_id_status_created_at_idx`: one per `ON DELETE SET NULL`
+     * in this file, which is the set `gates.test.ts` enumerates rather than
+     * counts, so the two cannot drift apart.
      *
      * It looks redundant beside `rooms_house_id_status_created_at_idx` and is
      * not, which is exactly the trap it exists to close: that index is partial

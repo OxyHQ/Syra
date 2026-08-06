@@ -1721,6 +1721,26 @@ describe('rooms and live schema (Task 6)', () => {
     'room_user_preferences',
   ];
 
+  /**
+   * Every `ON DELETE SET NULL` in `schema/rooms.ts`, as `[child table, fk
+   * column]` — the set that needs a non-partial supporting index, since the
+   * referential-integrity query Postgres runs for a SET NULL carries none of
+   * the predicates the listing indexes are partial on.
+   *
+   * Declared once at describe scope and read by BOTH checks below — the
+   * definition assertion and the planner probe — so the two can never disagree
+   * about which relations they cover. The re-review caught exactly that drift
+   * in its earlier form, where the definition loop named four of these five
+   * while the schema's prose named a different four.
+   */
+  const SET_NULL_CHILDREN: readonly (readonly [string, string])[] = [
+    ['rooms', 'house_id'],
+    ['series', 'house_id'],
+    ['rooms', 'series_id'],
+    ['recordings', 'room_id'],
+    ['series_episodes', 'room_id'],
+  ];
+
   it('lands exactly the tables this task promises', () => {
     const present = tablesIn(roomsModule).map((table) => getTableConfig(table).name).sort();
     expect(present).toEqual([...EXPECTED_TABLES].sort());
@@ -2233,10 +2253,14 @@ describe('rooms and live schema (Task 6)', () => {
       'rooms_broadcast_speaker_permission_check'
     );
 
-    // Both ACCEPTED shapes, so the CHECKs cannot be passing by forbidding
-    // everything: a broadcast room with a kind and 'invited', and a talk room
-    // with no kind at all.
-    const [broadcast] = await db
+    // Two ACCEPTED shapes, so the CHECKs cannot be passing by forbidding
+    // everything: a fully-specified broadcast room, and a broadcast room with
+    // no kind at all. BOTH are broadcasts — an earlier version of this block
+    // called the second one a "talk room" in its comment, its variable name and
+    // its fixture title, none of which matched the row it actually inserted.
+    // The talk-room shape is covered by check (1) above, which inserts
+    // `type: 'talk'`.
+    const [broadcastWithKind] = await db
       .insert(rooms)
       .values({
         title: 'CHECK-fixture-broadcast-ok',
@@ -2250,21 +2274,25 @@ describe('rooms and live schema (Task 6)', () => {
     // Mongoose defaults it to 'user' rather than rejecting, and Postgres has no
     // per-row conditional default, so the converse CHECK would reject a write
     // the application makes legal. See the `broadcastKind` column comment.
-    const [talk] = await db
+    const [broadcastWithoutKind] = await db
       .insert(rooms)
-      .values({ title: 'CHECK-fixture-talk-ok', host: 'CHECK-fixture-host', type: 'broadcast' })
+      .values({
+        title: 'CHECK-fixture-broadcast-no-kind-ok',
+        host: 'CHECK-fixture-host',
+        type: 'broadcast',
+      })
       .returning({ id: rooms.id });
 
     try {
-      expect(broadcast.id).toBeTruthy();
-      expect(talk.id).toBeTruthy();
+      expect(broadcastWithKind.id).toBeTruthy();
+      expect(broadcastWithoutKind.id).toBeTruthy();
     } finally {
-      await db.delete(rooms).where(eq(rooms.id, broadcast.id));
-      await db.delete(rooms).where(eq(rooms.id, talk.id));
+      await db.delete(rooms).where(eq(rooms.id, broadcastWithKind.id));
+      await db.delete(rooms).where(eq(rooms.id, broadcastWithoutKind.id));
     }
   });
 
-  it('keeps all four constraint-support indexes NON-partial and the five listing indexes partial', async () => {
+  it('keeps all five constraint-support indexes NON-partial and the five listing indexes partial', async () => {
     const db = getDb();
     // `schema/rooms.ts` states both properties in writing; a test asserting
     // only index NAMES cannot catch either, because the name is identical
@@ -2272,13 +2300,17 @@ describe('rooms and live schema (Task 6)', () => {
     // against the MIGRATED catalogue rather than the drizzle declaration.
     const rows = await executeRows<{ indexname: string; indexdef: string }>(
       db,
-      sql`select indexname, indexdef from pg_indexes where tablename in ('rooms', 'recordings', 'series')`
+      sql`select indexname, indexdef from pg_indexes
+          where tablename in ('rooms', 'recordings', 'series', 'series_episodes')`
     );
     const definitions = new Map(rows.map((row) => [row.indexname, row.indexdef]));
 
     /**
-     * The four that exist for an ON DELETE SET NULL, not for a query: a
-     * predicate here would hide rows the constraint still has to find.
+     * The five that exist for an ON DELETE SET NULL, not for a query: a
+     * predicate here would hide rows the constraint still has to find. One per
+     * `ON DELETE SET NULL` in `schema/rooms.ts` — the list is ENUMERATED here
+     * rather than counted in prose, so it cannot drift out of sync with a
+     * number written somewhere else.
      *
      * This loop covered only the first TWO until the Task 6 review (I1), and
      * that gap is the reason the review exists. `rooms.house_id` and
@@ -2288,17 +2320,28 @@ describe('rooms and live schema (Task 6)', () => {
      * tables. Worse, the test asserted those two partial indexes CONTAINED
      * their predicate (below), so a reader trusting the gate read the defect
      * as verified. A gate that confirms the wrong property is worse than none.
+     *
+     * `series_episodes_room_id_idx` was the last one missing (re-review): it
+     * was correctly built non-partial and correctly covered by the planner
+     * probe below, but naming only four here left the definition check and the
+     * schema's own prose disagreeing about the size of the set.
      */
-    for (const name of [
+    const constraintSupportIndexes = [
       'rooms_series_id_idx',
       'recordings_room_id_status_created_at_idx',
       'rooms_house_id_idx',
       'series_house_id_idx',
-    ]) {
+      'series_episodes_room_id_idx',
+    ];
+    for (const name of constraintSupportIndexes) {
       const definition = definitions.get(name);
       expect(definition).toBeDefined();
       expect(definition).not.toContain('WHERE');
     }
+    // One index per SET NULL path — the planner probe walks the same relations
+    // from the SAME list, so a new SET NULL that nobody indexed fails there
+    // while this keeps the two honest about being the same size.
+    expect(constraintSupportIndexes.length).toBe(SET_NULL_CHILDREN.length);
 
     // The five listing indexes, every one of which serves a query that opens
     // with `archived: { $ne: true }` unconditionally.
@@ -2356,14 +2399,6 @@ describe('rooms and live schema (Task 6)', () => {
      * this into a test that always fails rather than one that always passes —
      * but asserting it makes the reason unambiguous either way.
      */
-    const setNullChildren: readonly [string, string][] = [
-      ['rooms', 'house_id'],
-      ['series', 'house_id'],
-      ['rooms', 'series_id'],
-      ['recordings', 'room_id'],
-      ['series_episodes', 'room_id'],
-    ];
-
     await db.transaction(async (tx) => {
       await executeRows(tx, sql`set local enable_seqscan = off`);
       const [setting] = await executeRows<{ enable_seqscan: string }>(
@@ -2372,7 +2407,7 @@ describe('rooms and live schema (Task 6)', () => {
       );
       expect(setting.enable_seqscan).toBe('off');
 
-      for (const [table, column] of setNullChildren) {
+      for (const [table, column] of SET_NULL_CHILDREN) {
         const plan = await executeRows<{ 'QUERY PLAN': string }>(
           tx,
           sql`explain select 1 from only ${sql.identifier(table)} x
