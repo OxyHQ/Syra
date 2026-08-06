@@ -316,7 +316,7 @@ export const catalogEntities = pgTable(
     // never sets these stays exactly as absent as it is in Mongo today; an
     // artist row that omits them at insert time gets the identical default
     // Mongoose would have applied.
-    genres: text().array(),
+    genres: text().array().default(sql`array[]::text[]`),
     verified: boolean().default(false),
     statsFollowers: integer().default(0),
     statsAlbums: integer().default(0),
@@ -342,8 +342,8 @@ export const catalogEntities = pgTable(
     artistType: text({ enum: ARTIST_TYPES }),
     activeFrom: text(),
     activeUntil: text(),
-    aliases: text().array(),
-    labels: text().array(),
+    aliases: text().array().default(sql`array[]::text[]`),
+    labels: text().array().default(sql`array[]::text[]`),
     origin: text({ enum: ARTIST_ORIGINS }).default('registered'),
     acceptsContributions: boolean().default(false),
     /**
@@ -372,7 +372,7 @@ export const catalogEntities = pgTable(
   (t) => [
     check('catalog_entities_type_check', sql`${t.type} in (${sql.raw(inList(CATALOG_ENTITY_TYPES))})`),
     /**
-     * The ONE discriminator CHECK the brief names explicitly: `linked_artist_id`
+     * The discriminator CHECK the brief names explicitly: `linked_artist_id`
      * is meaningless — and forbidden — on anything but a `person` row.
      */
     check(
@@ -382,6 +382,19 @@ export const catalogEntities = pgTable(
     check(
       'catalog_entities_source_check',
       sql`${t.source} is null or ${t.source} in (${sql.raw(inList(CATALOG_SOURCES))})`
+    ),
+    /**
+     * The SECOND discriminator CHECK, missed in the first pass: `source` is
+     * `required: true` on `ArtistDiscriminatorSchema` (`models/CatalogEntity.ts:349`)
+     * — required for artists, absent by construction for persons (the field
+     * does not exist on `PersonDiscriminatorSchema` at all). Same shape as
+     * `linked_artist_id` above (a per-type requirement a plain `NOT NULL`
+     * cannot express on a shared column), and it needed the identical CHECK
+     * pattern applied to it too.
+     */
+    check(
+      'catalog_entities_source_required_for_artist_check',
+      sql`${t.type} != 'artist' or ${t.source} is not null`
     ),
     check(
       'catalog_entities_artist_type_check',
@@ -551,11 +564,13 @@ export const tracks = pgTable(
      * decision, not resolved unilaterally here.
      */
     genre: text(),
+    /** Queried by element in production (`radioPools.ts:204`, `mood: { $in: seed.moods }`) — see the index decision below. */
     mood: text(),
     /** Mongoose gives every track an implicit `[]` default; matched here. */
     tags: text().array().notNull().default(sql`array[]::text[]`),
     /** A real Date in Mongo (unlike `Album.releaseDate`, which is a string). */
     releaseDate: timestamptz(),
+    /** Queried in production (`radioPools.ts:111`, `isExplicit: { $ne: true }`) — see the index decision below. */
     isExplicit: boolean().notNull().default(false),
     popularity: integer().notNull().default(0),
     playCount: integer().notNull().default(0),
@@ -563,6 +578,16 @@ export const tracks = pgTable(
     repostCount: integer().notNull().default(0),
     primaryColor: text(),
     secondaryColor: text(),
+    /**
+     * `isAvailable` + `copyrightRemoved` together ARE `playableTrackFilter()`
+     * (`utils/catalogVisibility.ts:28-33`) — the predicate every catalog read
+     * of `tracks` composes first: `playableContainers.ts`, `browse.controller.ts`,
+     * and `radio/radioPools.ts`'s `findPoolTracks` (which puts it FIRST in
+     * `constraints`, before its own `mood`/`isExplicit`/`genre` filters) all
+     * confirmed by grep. Mongo indexed each singly; neither gets a standalone
+     * Postgres index here, and that is a decision, not an omission — see the
+     * index list below.
+     */
     isAvailable: boolean().notNull().default(true),
     copyrightRemoved: boolean().notNull().default(false),
     removedAt: timestamptz(),
@@ -611,12 +636,54 @@ export const tracks = pgTable(
     ),
     check('tracks_popularity_check', sql`${t.popularity} between 0 and 100`),
     unique('tracks_external_isrc_key').on(t.externalIsrc),
-    index('tracks_artist_id_album_id_idx').on(t.artistId, t.albumId),
-    index('tracks_popularity_idx').on(t.popularity.desc()),
-    index('tracks_play_count_idx').on(t.playCount.desc()),
-    index('tracks_created_at_idx').on(t.createdAt.desc()),
+    /**
+     * The index decision for `mood` / `isExplicit` / `isAvailable` /
+     * `copyrightRemoved`, all four of which carried `index: true` in Mongo
+     * and none of which gets a like-for-like Postgres index:
+     *
+     * `isAvailable` and `copyrightRemoved` are near-constant (almost every
+     * track is available and not copyright-removed), so a standalone index on
+     * either has poor selectivity on its own — Postgres would rarely choose
+     * it over a sequential scan. What they ARE is the WHERE clause every real
+     * query below actually runs under, because `playableTrackFilter()` gates
+     * every one of them first. Folding the predicate into these five indexes
+     * (rather than adding two near-useless singleton booleans) is "add the
+     * index Mongo needed and lacked": each becomes an index-only scan over
+     * PLAYABLE rows for exactly the sort/filter order it already serves.
+     *
+     * `mood` and `genre` get the same partial treatment for the identical
+     * reason — `radioPools.ts`'s `findPoolTracks` composes `{ mood: { $in } }`
+     * /`{ genre: … }` with `playableTrackFilter()` in the same query, never
+     * standalone.
+     *
+     * `isExplicit` does NOT get its own index. Its one production filter
+     * (`radioPools.ts:111`, `{ isExplicit: { $ne: true } }`) always runs
+     * inside `findPoolTracks`, which already applies `playableTrackFilter()`
+     * first — so by the time `isExplicit` is evaluated, the partial indexes
+     * above have already cut the candidate set down to playable rows, and a
+     * boolean filter over that already-small set costs nothing extra to scan.
+     * A dedicated `is_explicit` index would only pay for itself if something
+     * queried explicitness WITHOUT playability first, and nothing does.
+     */
+    index('tracks_artist_id_album_id_idx')
+      .on(t.artistId, t.albumId)
+      .where(sql`${t.isAvailable} = true and ${t.copyrightRemoved} = false`),
+    index('tracks_popularity_idx')
+      .on(t.popularity.desc())
+      .where(sql`${t.isAvailable} = true and ${t.copyrightRemoved} = false`),
+    index('tracks_play_count_idx')
+      .on(t.playCount.desc())
+      .where(sql`${t.isAvailable} = true and ${t.copyrightRemoved} = false`),
+    index('tracks_created_at_idx')
+      .on(t.createdAt.desc())
+      .where(sql`${t.isAvailable} = true and ${t.copyrightRemoved} = false`),
+    index('tracks_genre_idx')
+      .on(t.genre)
+      .where(sql`${t.isAvailable} = true and ${t.copyrightRemoved} = false`),
+    index('tracks_mood_idx')
+      .on(t.mood)
+      .where(sql`${t.isAvailable} = true and ${t.copyrightRemoved} = false`),
     index('tracks_sha256_idx').on(t.sha256),
-    index('tracks_genre_idx').on(t.genre),
     index('tracks_tags_gin').using('gin', t.tags),
     index('tracks_search_gin').using('gin', t.searchVector),
   ]

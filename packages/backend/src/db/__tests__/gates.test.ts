@@ -165,10 +165,12 @@ describe('catalog schema (Task 2)', () => {
     const db = getDb();
 
     // A real `type: 'artist'` row is required first — the CHECK is what has
-    // to reject the INSERT below, not a dangling foreign key.
+    // to reject the INSERT below, not a dangling foreign key. `source` is
+    // required for a valid artist row (see the next test) — set it here so
+    // this test only ever exercises the ONE constraint it names.
     const [artist] = await db
       .insert(catalogEntities)
-      .values({ name: 'CHECK-fixture-artist', type: 'artist' })
+      .values({ name: 'CHECK-fixture-artist', type: 'artist', source: 'upload' })
       .returning({ id: catalogEntities.id });
 
     try {
@@ -182,6 +184,7 @@ describe('catalog schema (Task 2)', () => {
           db.insert(catalogEntities).values({
             name: 'CHECK-fixture-invalid',
             type: 'artist',
+            source: 'upload',
             linkedArtistId: artist.id,
           })
         )
@@ -191,6 +194,30 @@ describe('catalog schema (Task 2)', () => {
       // and tests against — the fixture row must not survive the test, in
       // either the pass or the fail case.
       await db.delete(catalogEntities).where(eq(catalogEntities.id, artist.id));
+    }
+  });
+
+  it('requires source on an artist catalog entity, but not on a person', async () => {
+    const db = getDb();
+
+    // Artist, no source: rejected.
+    await expect(
+      Promise.resolve(
+        db.insert(catalogEntities).values({ name: 'CHECK-fixture-artist-no-source', type: 'artist' })
+      )
+    ).rejects.toThrow();
+
+    // Person, no source: accepted — the CHECK must not tighten anything
+    // Mongoose left open (persons never had a `source` field at all).
+    const [person] = await db
+      .insert(catalogEntities)
+      .values({ name: 'CHECK-fixture-person-no-source', type: 'person' })
+      .returning({ id: catalogEntities.id });
+
+    try {
+      expect(person.id).toBeTruthy();
+    } finally {
+      await db.delete(catalogEntities).where(eq(catalogEntities.id, person.id));
     }
   });
 });

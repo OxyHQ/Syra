@@ -15,6 +15,13 @@
       "when": 1785992587121,
       "tag": "0001_yielding_black_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785993881893,
+      "tag": "0002_wealthy_stepford_cuckoos",
+      "breakpoints": true
     }
   ]
 }
