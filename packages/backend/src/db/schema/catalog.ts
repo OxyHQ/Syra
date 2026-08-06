@@ -728,6 +728,36 @@ export const tracks = pgTable(
     index('tracks_artist_id_album_id_idx')
       .on(t.artistId, t.albumId)
       .where(sql`${t.isAvailable} = true and ${t.copyrightRemoved} = false`),
+    /**
+     * `artist_id` ALONE and NOT partial — the second instance of the index the
+     * port dropped, found the same way as `tracks_album_id_idx` above: by
+     * running the planner over the shipped queries rather than reading the
+     * index list.
+     *
+     * Every other index on this table is partial on
+     * `is_available = true and copyright_removed = false`, and Postgres will
+     * only use a partial index when the query's predicate IMPLIES the index's.
+     * The two artist-wide moderation queries do not, in opposite directions:
+     *
+     *   `strikeService.takeDownArtistTracks` — `artist_id = $1 and
+     *   copyright_removed = false`, with no `is_available` clause, because
+     *   terminating an artist must also mark their UNPUBLISHED tracks
+     *   copyright-removed (Mongo's filter was `{ artistId, copyrightRemoved:
+     *   { $ne: true } }`, which included them). Narrowing the query to satisfy
+     *   the partial index would silently leave those tracks playable-eligible.
+     *
+     *   `takedown.takeDownTrack`'s termination cascade — `artist_id = $1 and
+     *   copyright_removed = true`, the exact complement, which no partial index
+     *   on the playable rows can ever serve.
+     *
+     * Measured under `EXPLAIN (ANALYZE, BUFFERS)` with `enable_seqscan = off`
+     * on 40,000 seeded tracks: both were Seq Scans at 3,865 buffers and ~48-70 ms
+     * — cost scaling with the whole table, on a write path that runs per strike.
+     * `models/Track.ts:132` declares `artistId: { type: String, index: true }`,
+     * so Mongo had this index and the port folded it into a compound partial one
+     * that cannot answer either question.
+     */
+    index('tracks_artist_id_idx').on(t.artistId),
     index('tracks_album_id_idx')
       .on(t.albumId)
       .where(sql`${t.isAvailable} = true and ${t.copyrightRemoved} = false`),

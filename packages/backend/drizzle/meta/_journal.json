@@ -120,6 +120,13 @@
       "when": 1786036275021,
       "tag": "0016_rapid_wrecker",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1786041784611,
+      "tag": "0017_true_thunderbolt",
+      "breakpoints": true
     }
   ]
 }
