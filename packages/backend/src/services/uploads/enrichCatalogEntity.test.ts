@@ -1,11 +1,21 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll } from 'bun:test';
-import mongoose from 'mongoose';
-import { clear, connect, disconnect } from '../../test/mongo';
-import { AlbumModel } from '../../models/Album';
-import { ArtistModel } from '../../models/CatalogEntity';
+import { count, eq } from 'drizzle-orm';
+import { isLiveEntityId, uuidv7 } from '@oxyhq/db';
+import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
+import {
+  installCatalogImageMirrorMockForTests,
+  resetCatalogImageMirror,
+} from '../../test/catalogImageMirror';
+import { getDb } from '../../db/postgres';
+import {
+  albumSources,
+  albums,
+  catalogEntities,
+  catalogEntitySources,
+  imageAssets,
+} from '../../db/schema/catalog';
 import { setEnrichmentFetchForTests } from './enrichmentHttp';
 import {
-  enrichAlbumCoverArt,
   enrichArtistProfile,
   recoverCoverArt,
   suggestArtistPhotosFromUpload,
@@ -31,8 +41,11 @@ function routeToPayload(url: string): unknown | undefined {
   return undefined;
 }
 
-beforeAll(connect);
+beforeAll(connectDb);
 beforeEach(() => {
+  // Installed HERE rather than as a side effect of a database connect, which is
+  // how it silently went missing when this suite moved to Postgres.
+  installCatalogImageMirrorMockForTests();
   requestedUrls = [];
   setEnrichmentFetchForTests(async (url) => {
     requestedUrls.push(url);
@@ -41,19 +54,84 @@ beforeEach(() => {
 });
 afterEach(async () => {
   setEnrichmentFetchForTests();
-  await clear();
+  resetCatalogImageMirror();
+  await clearDb();
 });
-afterAll(disconnect);
+afterAll(disconnectDb);
 
-async function seedArtist(overrides: Record<string, unknown> = {}) {
-  return ArtistModel.create({
-    name: 'The Beatles',
-    source: 'upload',
-    origin: 'contributed',
-    claimable: true,
-    externalIds: { musicbrainzArtistId: BEATLES_MBID },
-    ...overrides,
+/** A real `image_assets` row — the six variant columns are foreign keys. */
+async function makeImageAsset(): Promise<string> {
+  const id = uuidv7();
+  await getDb().insert(imageAssets).values({
+    id,
+    s3Key: `fixtures/${id}.jpg`,
+    filename: `${id}.jpg`,
+    contentType: 'image/jpeg',
+    byteSize: 1,
+    width: 640,
+    height: 640,
+    ownerType: 'artist',
   });
+  return id;
+}
+
+/** A real artist row, because `albums.artist_id` is a foreign key now. */
+async function makeArtistRow(): Promise<string> {
+  const suffix = uuidv7();
+  const [artist] = await getDb()
+    .insert(catalogEntities)
+    .values({
+      type: 'artist',
+      name: `Album Artist ${suffix}`,
+      nameKey: `album-artist-${suffix}`,
+      source: 'upload',
+    })
+    .returning({ id: catalogEntities.id });
+  if (!artist) throw new Error('makeArtistRow: insert returned no row');
+  return artist.id;
+}
+
+async function readArtist(id: string) {
+  const [artist] = await getDb()
+    .select()
+    .from(catalogEntities)
+    .where(eq(catalogEntities.id, id))
+    .limit(1);
+  return artist;
+}
+
+/** Provenance is a child table now, ordered by `position`. */
+async function sourcesFor(catalogEntityId: string) {
+  return getDb()
+    .select()
+    .from(catalogEntitySources)
+    .where(eq(catalogEntitySources.catalogEntityId, catalogEntityId));
+}
+
+async function albumCount(): Promise<number> {
+  const [row] = await getDb().select({ total: count() }).from(albums);
+  return row?.total ?? 0;
+}
+
+async function seedArtist(
+  overrides: Partial<typeof catalogEntities.$inferInsert> = {}
+): Promise<{ id: string }> {
+  const suffix = uuidv7();
+  const [artist] = await getDb()
+    .insert(catalogEntities)
+    .values({
+      type: 'artist',
+      name: 'The Beatles',
+      nameKey: `the-beatles-${suffix}`,
+      source: 'upload',
+      origin: 'contributed',
+      claimable: true,
+      externalMusicbrainzArtistId: BEATLES_MBID,
+      ...overrides,
+    })
+    .returning({ id: catalogEntities.id });
+  if (!artist) throw new Error('seedArtist: insert returned no row');
+  return artist;
 }
 
 describe('enrichArtistProfile — the high-confidence gate', () => {
@@ -67,21 +145,21 @@ describe('enrichArtistProfile — the high-confidence gate', () => {
    * no name-based path to bypass it.
    */
   it('REFUSES to enrich an artist with no MusicBrainz id, and makes no request', async () => {
-    const artist = await ArtistModel.create({ name: 'Nirvana', source: 'upload' });
-    const result = await enrichArtistProfile(artist._id.toString());
+    const artist = await seedArtist({ name: 'Nirvana', externalMusicbrainzArtistId: null });
+    const result = await enrichArtistProfile(artist.id);
 
     expect(result.status).toBe('skipped');
     expect(result.reason).toContain('MusicBrainz');
     expect(result.fieldsWritten).toEqual([]);
     expect(requestedUrls).toEqual([]);
 
-    const after = await ArtistModel.findById(artist._id);
-    expect(after?.bio).toBeUndefined();
-    expect(after?.image).toBeUndefined();
+    const after = await readArtist(artist.id);
+    expect(after?.bio).toBeNull();
+    expect(after?.imageId).toBeNull();
   });
 
   it('skips an artist that does not exist', async () => {
-    const result = await enrichArtistProfile(new mongoose.Types.ObjectId().toString());
+    const result = await enrichArtistProfile(await makeArtistRow());
     expect(result.status).toBe('skipped');
     expect(requestedUrls).toEqual([]);
   });
@@ -89,7 +167,7 @@ describe('enrichArtistProfile — the high-confidence gate', () => {
   it('reports nothing-found when no Wikidata item claims the MBID', async () => {
     setEnrichmentFetchForTests(async () => ({ query: { search: [] } }));
     const artist = await seedArtist();
-    const result = await enrichArtistProfile(artist._id.toString());
+    const result = await enrichArtistProfile(artist.id);
 
     expect(result.status).toBe('nothing-found');
     expect(result.fieldsWritten).toEqual([]);
@@ -99,13 +177,13 @@ describe('enrichArtistProfile — the high-confidence gate', () => {
 describe('enrichArtistProfile — filling gaps', () => {
   it('fills the empty fields of a contributed stub', async () => {
     const artist = await seedArtist();
-    const result = await enrichArtistProfile(artist._id.toString());
+    const result = await enrichArtistProfile(artist.id);
 
     expect(result.status).toBe('enriched');
-    const after = await ArtistModel.findById(artist._id);
+    const after = await readArtist(artist.id);
     expect(after?.bio).toBe('English pop rock band (1960–1970)');
     expect(after?.country).toBe('United Kingdom');
-    expect(after?.links?.website).toBe('https://thebeatles.com');
+    expect(after?.linksWebsite).toBe('https://thebeatles.com');
     expect(result.fieldsWritten).toContain('bio');
     expect(result.fieldsWritten).toContain('country');
   });
@@ -115,83 +193,79 @@ describe('enrichArtistProfile — filling gaps', () => {
     const artist = await seedArtist({
       bio: 'Words the artist wrote themselves.',
       country: 'Spain',
-      links: { website: 'https://my-own-site.example' },
+      linksWebsite: 'https://my-own-site.example',
     });
-    await enrichArtistProfile(artist._id.toString());
+    await enrichArtistProfile(artist.id);
 
-    const after = await ArtistModel.findById(artist._id);
+    const after = await readArtist(artist.id);
     expect(after?.bio).toBe('Words the artist wrote themselves.');
     expect(after?.country).toBe('Spain');
-    expect(after?.links?.website).toBe('https://my-own-site.example');
+    expect(after?.linksWebsite).toBe('https://my-own-site.example');
   });
 
   /**
    * Idempotency, asserted as a PROPERTY rather than as a status label.
    *
-   * The second run may legitimately answer `nothing-found` (the sources had
-   * nothing left to give) or `skipped` (a field it wanted to write is not
-   * declared on the Mongoose schema, so the write would be discarded). What must
-   * hold either way is that it writes no fields and adds no provenance entry —
-   * asserting the exact string would make this test fail on a correct behaviour
-   * change and, worse, pass while `sources[]` grew on every background pass.
+   * The second run answers `nothing-found` — the sources had nothing left to
+   * give. (It could once also answer `skipped`, for a field the Mongoose schema
+   * did not declare; that arm is gone with the database that needed it.) What
+   * must hold is that it writes no fields and adds no provenance ROW —
+   * asserting the exact status string would make this fail on a correct
+   * behaviour change and, worse, pass while `catalog_entity_sources` grew on
+   * every background pass.
    */
   it('is idempotent — a second run writes nothing and adds no provenance', async () => {
     const artist = await seedArtist();
-    const first = await enrichArtistProfile(artist._id.toString());
-    const second = await enrichArtistProfile(artist._id.toString());
+    const first = await enrichArtistProfile(artist.id);
+    const second = await enrichArtistProfile(artist.id);
 
     expect(first.status).toBe('enriched');
     expect(second.status).not.toBe('enriched');
     expect(second.fieldsWritten).toEqual([]);
 
-    const after = await ArtistModel.findById(artist._id);
+    const after = await readArtist(artist.id);
     // ONE entry, not two. Enrichment is a background job that may be re-queued
     // after a failure and scheduled over the whole catalogue; an entry per run
     // is an audit log that grows without bound and explains nothing.
-    expect(after?.sources).toHaveLength(1);
+    expect(await sourcesFor(artist.id)).toHaveLength(1);
   });
 
   /**
-   * The smoke alarm for a field that exists in the zod type and not in the
-   * Mongoose schema. Mongoose discards such a `$set` silently, so without this
-   * the function would report success, log the field list, and persist nothing.
+   * A TEST WAS DELETED HERE, because the failure it guarded is unrepresentable.
+   *
+   * It re-read the artist after enrichment and asserted every field named in
+   * `sources[].fields` had actually persisted — the smoke alarm for Mongoose
+   * strict mode DISCARDING a `$set` on a path the schema does not declare,
+   * silently. Left unchecked that meant a scheduled job appending a provenance
+   * entry per run forever while storing nothing.
+   *
+   * With drizzle an unknown column key is a COMPILE error and an unknown column
+   * in SQL is a runtime one, so a write that returns is a write that landed.
+   * The service's verification read, `readPath`, and its "nothing persisted"
+   * result arm were deleted with it — they were compensating for a database
+   * behaviour this one does not have, and a test asserting the compensation
+   * would now be asserting nothing.
+   *
+   * The idempotency test above is the one that still earns its place: it is a
+   * property (`second run writes nothing, provenance stays at one entry`)
+   * rather than an assertion about a mechanism.
    */
-  it('never records provenance for a field that did not actually persist', async () => {
-    const artist = await seedArtist();
-    const result = await enrichArtistProfile(artist._id.toString());
-
-    const after = await ArtistModel.findById(artist._id);
-    const recorded = after?.sources?.[0]?.fields ?? [];
-    const stored = after?.toObject() as Record<string, unknown> | undefined;
-
-    for (const field of recorded) {
-      const value = field
-        .split('.')
-        .reduce<unknown>(
-          (current, segment) =>
-            typeof current === 'object' && current !== null
-              ? (current as Record<string, unknown>)[segment]
-              : undefined,
-          stored,
-        );
-      expect(value).toBeDefined();
-    }
-    expect(recorded).toEqual(result.fieldsWritten);
-  });
 
   it('records every imported field in sources[] with provider and date', async () => {
     const artist = await seedArtist();
-    const result = await enrichArtistProfile(artist._id.toString());
+    const result = await enrichArtistProfile(artist.id);
 
-    const after = await ArtistModel.findById(artist._id);
-    const entry = after?.sources?.[0];
+    const [entry] = await sourcesFor(artist.id);
     if (!entry) throw new Error('expected a provenance entry');
 
     // This is what lets a claiming artist see what came from outside and replace
     // all of it — without it the enrichment is unattributable and unrevertable.
     expect(entry.provider).toBe('wikidata');
     expect(entry.externalId).toBe('Q1299');
-    expect(new Date(entry.importedAt).toISOString()).toBe(entry.importedAt);
+    // `imported_at` is a real `timestamptz` now, not an ISO string in a
+    // subdocument, so the assertion is that it IS an instant rather than that
+    // it round-trips as text.
+    expect(entry.importedAt).toBeInstanceOf(Date);
     expect([...entry.fields].sort()).toEqual([...result.fieldsWritten].sort());
   });
 });
@@ -199,31 +273,34 @@ describe('enrichArtistProfile — filling gaps', () => {
 describe('enrichArtistProfile — the photograph', () => {
   it('stores the Commons photo WITH its licence and attribution', async () => {
     const artist = await seedArtist();
-    const result = await enrichArtistProfile(artist._id.toString());
+    const result = await enrichArtistProfile(artist.id);
 
     expect(result.imageWritten).toBe(true);
-    const after = await ArtistModel.findById(artist._id);
-    expect(after?.image).toMatch(/^[a-f\d]{24}$/i);
-    expect(after?.imageSizes?.large?.url).toBeDefined();
+    const after = await readArtist(artist.id);
+    // Each variant is its own FK column now, not a nested `imageSizes` object.
+    expect(after?.imageId).toBeTruthy();
+    expect(after?.imageSizesLargeId).toBeTruthy();
 
     // The licence travels WITH the image, because that is what CC BY-SA actually
     // requires — attribution held somewhere nobody renders discharges nothing.
-    expect(after?.imageLicence?.licence).toBe('Public domain');
-    expect(after?.imageLicence?.attribution).toBe('Bo Trenter');
-    expect(after?.imageLicence?.sourceUrl).toBe(
+    expect(after?.imageLicenceLicence).toBe('Public domain');
+    expect(after?.imageLicenceAttribution).toBe('Bo Trenter');
+    expect(after?.imageLicenceSourceUrl).toBe(
       'https://commons.wikimedia.org/wiki/File:Beatles_Trenter_1963.jpg',
     );
   });
 
   it('does not touch an artist that already has a photo', async () => {
-    const existing = new mongoose.Types.ObjectId().toString();
-    const artist = await seedArtist({ image: existing });
-    const result = await enrichArtistProfile(artist._id.toString());
+    // A real `image_assets` row: `catalog_entities.image_id` is a foreign key,
+    // so a minted id is a constraint violation rather than a harmless fake.
+    const existing = await makeImageAsset();
+    const artist = await seedArtist({ imageId: existing });
+    const result = await enrichArtistProfile(artist.id);
 
     expect(result.imageWritten).toBe(false);
-    const after = await ArtistModel.findById(artist._id);
-    expect(after?.image).toBe(existing);
-    expect(after?.imageLicence).toBeUndefined();
+    const after = await readArtist(artist.id);
+    expect(after?.imageId).toBe(existing);
+    expect(after?.imageLicenceLicence).toBeNull();
     // The download is the expensive part of this job, so a profile that already
     // has a photo must not pay for one.
     expect(requestedUrls.some((url) => url.includes('commons.wikimedia.org'))).toBe(false);
@@ -252,14 +329,14 @@ describe('enrichArtistProfile — the photograph', () => {
     });
 
     const artist = await seedArtist();
-    const result = await enrichArtistProfile(artist._id.toString());
+    const result = await enrichArtistProfile(artist.id);
 
     // The rest of the profile is still enriched; only the image is refused.
     expect(result.status).toBe('enriched');
     expect(result.imageWritten).toBe(false);
-    const after = await ArtistModel.findById(artist._id);
-    expect(after?.image).toBeUndefined();
-    expect(after?.imageLicence).toBeUndefined();
+    const after = await readArtist(artist.id);
+    expect(after?.imageId).toBeNull();
+    expect(after?.imageLicenceLicence).toBeNull();
     expect(after?.bio).toBeDefined();
   });
 });
@@ -283,7 +360,7 @@ describe('artist photo suggestions from an uploaded file', () => {
    * test file in the run.
    */
   const fakeStore: ArtistPhotoSuggestionDeps = {
-    storeImage: async () => ({ id: new mongoose.Types.ObjectId().toString(), s3Key: 'k' }),
+    storeImage: async () => ({ id: await makeArtistRow(), s3Key: 'k' }),
   };
 
   it('classifies picture types, which is what keeps a cover off an artist profile', () => {
@@ -302,16 +379,22 @@ describe('artist photo suggestions from an uploaded file', () => {
   it('stores an artist-type picture as a SUGGESTION, never as the profile photo', async () => {
     const artist = await seedArtist();
     const stored = await suggestArtistPhotosFromUpload({
-      artistId: artist._id.toString(),
+      artistId: artist.id,
       pictures: [await fixturePicture('Artist/performer')],
       proposedByOxyUserId: 'oxy-uploader',
-      sourceUploadId: new mongoose.Types.ObjectId().toString(),
+      sourceUploadId: uuidv7(),
     }, fakeStore);
 
     expect(stored).toBe(1);
-    // `imageSuggestions` is `select: false`, so it has to be asked for — which is
-    // the enforcement that keeps it out of every ordinary profile read.
-    const after = await ArtistModel.findById(artist._id).select('+imageSuggestions');
+    /**
+     * `imageSuggestions` is asked for EXPLICITLY here, and the reason changed
+     * with the database. Under Mongo it was `select: false`, which Task 10a
+     * measured as no protection at all — `aggregate()` ignores it. What keeps it
+     * off the wire now is `PROTECTED_COLUMNS_BY_TABLE`: it is absent from
+     * `PublicCatalogEntityRow`, so a serializer cannot even NAME it. A test
+     * still has to read it directly, and this is the read.
+     */
+    const after = await readArtist(artist.id);
     expect(after?.imageSuggestions).toHaveLength(1);
     const suggestion = after?.imageSuggestions?.[0];
     expect(suggestion?.image.origin).toBe('upload');
@@ -319,13 +402,13 @@ describe('artist photo suggestions from an uploaded file', () => {
 
     // The profile photo itself is untouched: publishing a picture out of a
     // stranger's MP3 site-wide is a different act from showing a disc's cover.
-    expect(after?.image).toBeUndefined();
+    expect(after?.imageId).toBeNull();
   });
 
   it('ignores cover art — that is the release, not the artist', async () => {
     const artist = await seedArtist();
     const stored = await suggestArtistPhotosFromUpload({
-      artistId: artist._id.toString(),
+      artistId: artist.id,
       pictures: [
         await fixturePicture('Cover (front)'),
         await fixturePicture('Cover (back)'),
@@ -334,7 +417,7 @@ describe('artist photo suggestions from an uploaded file', () => {
     }, fakeStore);
 
     expect(stored).toBe(0);
-    const after = await ArtistModel.findById(artist._id).select('+imageSuggestions');
+    const after = await readArtist(artist.id);
     expect(after?.imageSuggestions ?? []).toHaveLength(0);
   });
 
@@ -342,7 +425,7 @@ describe('artist photo suggestions from an uploaded file', () => {
     const artist = await seedArtist();
     expect(
       await suggestArtistPhotosFromUpload(
-        { artistId: artist._id.toString(), pictures: [] },
+        { artistId: artist.id, pictures: [] },
         fakeStore,
       ),
     ).toBe(0);
@@ -351,7 +434,7 @@ describe('artist photo suggestions from an uploaded file', () => {
   it('survives a malformed picture frame rather than failing the upload', async () => {
     const artist = await seedArtist();
     const stored = await suggestArtistPhotosFromUpload({
-      artistId: artist._id.toString(),
+      artistId: artist.id,
       pictures: [
         { type: 'Artist/performer', mimeType: 'image/jpeg', data: Buffer.from('not an image') },
       ],
@@ -367,7 +450,12 @@ describe('cover art recovery — the blocker it clears', () => {
     const recovered = await recoverCoverArt({ releaseMbid: RELEASE_MBID, externalId: RELEASE_MBID });
     if (!recovered) throw new Error('expected cover art');
 
-    expect(recovered.coverArt).toMatch(/^[a-f\d]{24}$/i);
+    // An `image_assets` id — a uuid v7 for anything minted since the cutover,
+    // a 24-char ObjectId hex for a row carried over from Mongo. Asserting the
+    // ObjectId shape, as this did, would fail for every image created from now
+    // on; `isLiveEntityId` is the predicate that accepts both, and it is the
+    // same one `normalizeImageRef` uses to decide the served URL.
+    expect(isLiveEntityId(recovered.coverArt)).toBe(true);
     expect(recovered.licence.attribution).toBe('Cover Art Archive');
     expect(recovered.licence.sourceUrl).toContain('musicbrainz.org/release/');
   });
@@ -385,7 +473,7 @@ describe('cover art recovery — the blocker it clears', () => {
   it('lets ensureContributedAlbum create an album for a file with NO embedded art', async () => {
     const album = await ensureContributedAlbum({
       title: 'Abbey Road',
-      artistId: new mongoose.Types.ObjectId().toString(),
+      artistId: await makeArtistRow(),
       artistName: 'The Beatles',
       releaseDate: '1969-09-26',
       musicbrainzReleaseId: RELEASE_MBID,
@@ -393,16 +481,25 @@ describe('cover art recovery — the blocker it clears', () => {
     });
 
     if (!album) throw new Error('expected an album');
-    expect(album.coverArt).toMatch(/^[a-f\d]{24}$/i);
-    expect(album.sources?.[0]?.provider).toBe('cover-art-archive');
-    expect(album.sources?.[0]?.fields).toEqual(['coverArt']);
+
+    // `ensureContributedAlbum` returns an identity, not the row, so the cover
+    // and its provenance are read back from the columns and the child table.
+    const [stored] = await getDb().select().from(albums).where(eq(albums.id, album.id)).limit(1);
+    expect(stored?.coverArtId).toBeTruthy();
+
+    const [provenance] = await getDb()
+      .select()
+      .from(albumSources)
+      .where(eq(albumSources.albumId, album.id));
+    expect(provenance?.provider).toBe('cover-art-archive');
+    expect(provenance?.fields).toEqual(['coverArt']);
   });
 
   it('still declines when there is no embedded art AND the archive has none', async () => {
     setEnrichmentFetchForTests(async () => undefined);
     const album = await ensureContributedAlbum({
       title: 'Nowhere Album',
-      artistId: new mongoose.Types.ObjectId().toString(),
+      artistId: await makeArtistRow(),
       artistName: 'Nobody',
       releaseDate: '2024-01-01',
       musicbrainzReleaseId: RELEASE_MBID,
@@ -411,74 +508,47 @@ describe('cover art recovery — the blocker it clears', () => {
     // Loose tracks under the artist is the correct outcome. A generated
     // placeholder becomes the release's real cover the moment it is written.
     expect(album).toBeNull();
-    expect(await AlbumModel.countDocuments()).toBe(0);
+    expect(await albumCount()).toBe(0);
   });
 
   it('prefers the embedded cover the caller supplies over the archive', async () => {
-    const embedded = new mongoose.Types.ObjectId().toString();
+    // A real `image_assets` row: `albums.cover_art_id` is a NOT NULL FK.
+    const embedded = await makeImageAsset();
     const album = await ensureContributedAlbum({
       title: 'Abbey Road',
-      artistId: new mongoose.Types.ObjectId().toString(),
+      artistId: await makeArtistRow(),
       artistName: 'The Beatles',
       releaseDate: '1969-09-26',
       coverArt: embedded,
       musicbrainzReleaseId: RELEASE_MBID,
     });
 
-    expect(album?.coverArt).toBe(embedded);
+    const [stored] = await getDb()
+      .select({ coverArtId: albums.coverArtId })
+      .from(albums)
+      .where(eq(albums.id, album?.id ?? ''))
+      .limit(1);
+    expect(stored?.coverArtId).toBe(embedded);
     expect(requestedUrls.some((url) => url.includes('coverartarchive.org'))).toBe(false);
   });
 
-  it('repairs an existing album that has no cover art', async () => {
-    const album = await AlbumModel.create({
-      title: 'Abbey Road',
-      artistId: new mongoose.Types.ObjectId().toString(),
-      artistName: 'The Beatles',
-      releaseDate: '1969-09-26',
-      coverArt: 'placeholder-to-be-cleared',
-      source: 'upload',
-      externalIds: { musicbrainzReleaseId: RELEASE_MBID },
-    });
-    await AlbumModel.updateOne({ _id: album._id }, { $unset: { coverArt: 1 } });
-
-    const result = await enrichAlbumCoverArt(album._id.toString());
-    expect(result.status).toBe('enriched');
-
-    const after = await AlbumModel.findById(album._id);
-    expect(after?.coverArt).toMatch(/^[a-f\d]{24}$/i);
-    expect(after?.sources?.[0]?.provider).toBe('cover-art-archive');
-  });
-
-  it('leaves an album that already has art alone', async () => {
-    const existing = new mongoose.Types.ObjectId().toString();
-    const album = await AlbumModel.create({
-      title: 'Abbey Road',
-      artistId: new mongoose.Types.ObjectId().toString(),
-      artistName: 'The Beatles',
-      releaseDate: '1969-09-26',
-      coverArt: existing,
-      source: 'upload',
-      externalIds: { musicbrainzReleaseId: RELEASE_MBID },
-    });
-
-    const result = await enrichAlbumCoverArt(album._id.toString());
-    expect(result.status).toBe('skipped');
-    expect((await AlbumModel.findById(album._id))?.coverArt).toBe(existing);
-  });
-
-  it('skips an album with no release id to look art up by', async () => {
-    const album = await AlbumModel.create({
-      title: 'Untagged',
-      artistId: new mongoose.Types.ObjectId().toString(),
-      artistName: 'Nobody',
-      releaseDate: '2024-01-01',
-      coverArt: 'x',
-      source: 'upload',
-    });
-    await AlbumModel.updateOne({ _id: album._id }, { $unset: { coverArt: 1 } });
-
-    const result = await enrichAlbumCoverArt(album._id.toString());
-    expect(result.status).toBe('skipped');
-    expect(result.reason).toContain('MusicBrainz release id');
-  });
+  /**
+   * THREE TESTS WERE DELETED HERE with `enrichAlbumCoverArt` itself.
+   *
+   * It repaired "an existing album's missing cover art" — a state that cannot
+   * exist: `albums.cover_art_id` is NOT NULL, and `models/Album.ts:69` declared
+   * `coverArt: { type: String, required: true }` for the same reason, so the
+   * function was already dead under Mongo too. Its guard
+   * (`if (album.coverArt) return skipped`) was unconditionally true, and it had
+   * no production caller anywhere in the repo.
+   *
+   * These tests reached its working arm only by `$unset`-ing `coverArt` AFTER
+   * creation — i.e. by building a document Mongoose would have refused to save.
+   * Under a NOT NULL column that fixture is unrepresentable, so there is nothing
+   * left to test and nothing left to test it against.
+   *
+   * `recoverCoverArt` is the live half of the pair — it runs BEFORE an album
+   * exists and decides whether the container can be created at all — and it is
+   * covered by the three tests above.
+   */
 });

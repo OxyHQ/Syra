@@ -1,23 +1,53 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import mongoose from 'mongoose';
+import { and, eq } from 'drizzle-orm';
+import { uuidv7 } from '@oxyhq/db';
 import { connect, clear, disconnect } from '../../test/mongo';
-import { ArtistModel } from '../../models/CatalogEntity';
-import { TrackModel } from '../../models/Track';
+import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
+import { getDb } from '../../db/postgres';
+import { catalogEntities, trackFingerprints, tracks } from '../../db/schema/catalog';
 import { UserUploadModel } from '../../models/UserUpload';
 import { ContributionAttestationModel } from '../../models/ContributionAttestation';
 import { ContributorStandingModel } from '../../models/ContributorStanding';
-import { TrackFingerprintModel } from '../../models/TrackFingerprint';
 import {
   takeDownTrack,
   purgeLockerCopiesOfTrack,
   type LockerPurgeDeps,
   type LockerRemovalNotice,
 } from './takedown';
-import { playableTrackFilter } from '../../utils/catalogVisibility';
+import { playableTrackFilter } from '../../db/catalog/visibility';
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+/**
+ * BOTH databases. The catalogue side (track, artist, fingerprint) is Postgres;
+ * the safe-harbour locker purge is entirely `user_uploads`, `contribution_
+ * attestations` and `contributor_standings` — Task 13's vertical, still Mongoose.
+ */
+beforeAll(async () => {
+  await connect();
+  await connectDb();
+});
+afterEach(async () => {
+  await clear();
+  await clearDb();
+});
+afterAll(async () => {
+  await disconnect();
+  await disconnectDb();
+});
+
+async function readArtist(artistId: string) {
+  const [artist] = await getDb()
+    .select()
+    .from(catalogEntities)
+    .where(eq(catalogEntities.id, artistId))
+    .limit(1);
+  return artist;
+}
+
+async function readTrack(trackId: string) {
+  const [track] = await getDb().select().from(tracks).where(eq(tracks.id, trackId)).limit(1);
+  return track;
+}
 
 // ── Storage spy ───────────────────────────────────────────────────────────────
 
@@ -53,25 +83,40 @@ function makeStorageSpy(objectsPerPrefix = 3): StorageSpy {
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
-async function makeArtist(overrides: Record<string, unknown> = {}): Promise<string> {
-  const artist = await ArtistModel.create({
-    name: `Artist ${Math.random().toString(36).slice(2)}`,
-    source: 'upload',
-    ...overrides,
-  });
-  return artist._id.toString();
+async function makeArtist(
+  overrides: Partial<typeof catalogEntities.$inferInsert> = {}
+): Promise<string> {
+  const suffix = uuidv7();
+  const [artist] = await getDb()
+    .insert(catalogEntities)
+    .values({
+      type: 'artist',
+      name: `Artist ${suffix}`,
+      nameKey: `artist-${suffix}`,
+      source: 'upload',
+      ...overrides,
+    })
+    .returning({ id: catalogEntities.id });
+
+  if (!artist) throw new Error('makeArtist: insert returned no row');
+  return artist.id;
 }
 
 async function makeTrack(artistId: string, title = 'Contributed Song'): Promise<string> {
-  const track = await TrackModel.create({
-    title,
-    artistId,
-    artistName: 'Whoever',
-    duration: 210,
-    source: 'upload',
-    status: 'ready',
-  });
-  return track._id.toString();
+  const [track] = await getDb()
+    .insert(tracks)
+    .values({
+      title,
+      artistId,
+      artistName: 'Whoever',
+      duration: 210,
+      source: 'upload',
+      status: 'ready',
+    })
+    .returning({ id: tracks.id });
+
+  if (!track) throw new Error('makeTrack: insert returned no row');
+  return track.id;
 }
 
 /**
@@ -281,7 +326,7 @@ describe('purgeLockerCopiesOfTrack — safe-harbour purge', () => {
     const artistId = await makeArtist();
     const trackId = await makeTrack(artistId);
     const fingerprint = makeFingerprint();
-    await TrackFingerprintModel.create({
+    await getDb().insert(trackFingerprints).values({
       trackId,
       fingerprint,
       fingerprintDurationSec: 210,
@@ -344,7 +389,7 @@ describe('purgeLockerCopiesOfTrack — safe-harbour purge', () => {
   it('reports it as AVAILABLE once the track is acoustically indexed', async () => {
     const artistId = await makeArtist();
     const trackId = await makeTrack(artistId);
-    await TrackFingerprintModel.create({
+    await getDb().insert(trackFingerprints).values({
       trackId, fingerprint: makeFingerprint(), fingerprintDurationSec: 210,
     });
     await makeLockerFile({ owner: 'user-a', sha256: 'sha-abc', matchedTrackId: trackId });
@@ -387,11 +432,16 @@ describe('takeDownTrack', () => {
     );
 
     expect(result).not.toBeNull();
-    const track = await TrackModel.findById(trackId).lean();
+    const track = await readTrack(trackId);
     expect(track?.copyrightRemoved).toBe(true);
     expect(track?.isAvailable).toBe(false);
     expect(track?.removedBy).toBe('reviewer-1');
-    expect(await TrackModel.find(playableTrackFilter({ artistId })).lean()).toHaveLength(0);
+    expect(
+      await getDb()
+        .select({ id: tracks.id })
+        .from(tracks)
+        .where(and(eq(tracks.artistId, artistId), playableTrackFilter()))
+    ).toHaveLength(0);
 
     expect(result?.purge.uploadsDeleted).toBe(1);
     expect(await UserUploadModel.countDocuments({})).toBe(0);
@@ -455,7 +505,7 @@ describe('takeDownTrack', () => {
       terminated: false,
     });
 
-    const victim = await ArtistModel.findById(victimArtistId).lean();
+    const victim = await readArtist(victimArtistId);
     expect(victim?.strikeCount ?? 0).toBe(0);
     expect(victim?.uploadsDisabled ?? false).toBe(false);
   });
@@ -497,7 +547,7 @@ describe('takeDownTrack', () => {
     expect(standing?.terminated).toBe(false);
 
     // And still not the artist whose page the recording hung from.
-    const artist = await ArtistModel.findById(artistId).lean();
+    const artist = await readArtist(artistId);
     expect(artist?.strikeCount ?? 0).toBe(0);
   });
 
@@ -523,7 +573,7 @@ describe('takeDownTrack', () => {
     expect(replay?.alreadyRemoved).toBe(true);
     expect(replay?.strike).toEqual({ applied: false, code: 'already_removed' });
 
-    const artist = await ArtistModel.findById(artistId).lean();
+    const artist = await readArtist(artistId);
     expect(artist?.strikeCount).toBe(1);
     expect(artist?.terminated).toBe(false);
   });
@@ -568,7 +618,7 @@ describe('takeDownTrack', () => {
     await takeDownTrack({ trackId: first, reason: 'notice 1', actorOxyUserId: 'reviewer-1' }, spy);
     await takeDownTrack({ trackId: second, reason: 'notice 2', actorOxyUserId: 'reviewer-1' }, spy);
 
-    const notYet = await ArtistModel.findById(artistId).lean();
+    const notYet = await readArtist(artistId);
     expect(notYet?.terminated).toBe(false);
 
     const result = await takeDownTrack(
@@ -584,13 +634,13 @@ describe('takeDownTrack', () => {
       terminated: true,
     });
 
-    const artist = await ArtistModel.findById(artistId).lean();
+    const artist = await readArtist(artistId);
     expect(artist?.terminated).toBe(true);
     expect(artist?.uploadsDisabled).toBe(true);
 
-    const tracks = await TrackModel.find({ artistId }).lean();
-    expect(tracks).toHaveLength(4);
-    for (const track of tracks) {
+    const artistTracks = await getDb().select().from(tracks).where(eq(tracks.artistId, artistId));
+    expect(artistTracks).toHaveLength(4);
+    for (const track of artistTracks) {
       expect(track.copyrightRemoved).toBe(true);
       expect(track.isAvailable).toBe(false);
     }
@@ -699,7 +749,7 @@ describe('contributor termination', () => {
     await takeDownTrack({ trackId: reported, reason: 'notice 3', actorOxyUserId: 'reviewer-1' }, spy);
 
     for (const id of [reported, alsoTheirs, second]) {
-      const track = await TrackModel.findById(id).lean();
+      const track = await readTrack(id);
       expect(track?.copyrightRemoved).toBe(true);
       expect(track?.isAvailable).toBe(false);
     }
@@ -733,11 +783,11 @@ describe('contributor termination', () => {
   it('does not touch the artist profile the recordings hung from', async () => {
     const spy = makeStorageSpy();
     const trackId = await contributeTrack('serial-uploader');
-    const track = await TrackModel.findById(trackId).lean();
+    const track = await readTrack(trackId);
 
     await takeDownTrack({ trackId, reason: 'notice', actorOxyUserId: 'reviewer-1' }, spy);
 
-    const victim = await ArtistModel.findById(track?.artistId).lean();
+    const victim = await readArtist(track?.artistId ?? '');
     expect(victim?.strikeCount ?? 0).toBe(0);
     expect(victim?.terminated ?? false).toBe(false);
   });

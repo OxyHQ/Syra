@@ -22,7 +22,9 @@ import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll } from
 import fs from 'fs';
 import path from 'path';
 import { clear, connect, disconnect } from '../../test/mongo';
-import { IsrcRegistryModel } from '../../models/IsrcRegistry';
+import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
+import { getDb } from '../../db/postgres';
+import { isrcRegistry } from '../../db/schema/catalog';
 import {
   ISRC_DURATION_TOLERANCE_SEC,
   parseDeezerAlbumTrackCount,
@@ -47,13 +49,22 @@ const payloads: DeezerPayloads = JSON.parse(
 const ISRC = 'ESA092607944';
 const FILE_DURATION_SEC = 191.92;
 
-beforeAll(connect);
+// BOTH databases: `isrc_registry` is Postgres, and this suite's other fixtures
+// (upload screening state) are still Mongoose.
+beforeAll(async () => {
+  await connect();
+  await connectDb();
+});
 beforeEach(() => setDeezerFetchForTests());
 afterEach(async () => {
   setDeezerFetchForTests();
   await clear();
+  await clearDb();
 });
-afterAll(disconnect);
+afterAll(async () => {
+  await disconnect();
+  await disconnectDb();
+});
 
 /** Answers the track URL from the captured payload and nothing else. */
 function serveCapturedDeezer(overrides?: Record<string, unknown>): string[] {
@@ -126,7 +137,7 @@ describe('parseDeezerTrack', () => {
 
 describe('resolveIsrc', () => {
   it('answers from the local registry without spending a request', async () => {
-    await IsrcRegistryModel.create({
+    await getDb().insert(isrcRegistry).values({
       isrc: ISRC,
       recordingMbid: 'e0a1b2c3-d4e5-4f60-8a71-92b3c4d5e6f7',
       title: 'Por interés',
@@ -151,7 +162,7 @@ describe('resolveIsrc', () => {
     // recording, and identifying it is not the same as being able to CHECK it.
     // The duration is the only comparison against something measured from the
     // audio, so a source that has none ends nothing.
-    await IsrcRegistryModel.create({
+    await getDb().insert(isrcRegistry).values({
       isrc: ISRC,
       recordingMbid: 'e0a1b2c3-d4e5-4f60-8a71-92b3c4d5e6f7',
       title: 'Por interés',
@@ -168,7 +179,7 @@ describe('resolveIsrc', () => {
   });
 
   it('keeps the lengthless registry row when Deezer has nothing either', async () => {
-    await IsrcRegistryModel.create({
+    await getDb().insert(isrcRegistry).values({
       isrc: ISRC,
       recordingMbid: 'e0a1b2c3-d4e5-4f60-8a71-92b3c4d5e6f7',
       title: 'Por interés',
@@ -427,7 +438,7 @@ describe('verifyIsrcClaim', () => {
   });
 
   it('reports a source that knows the code but not its length as unverifiable', async () => {
-    await IsrcRegistryModel.create({
+    await getDb().insert(isrcRegistry).values({
       isrc: ISRC,
       recordingMbid: 'e0a1b2c3-d4e5-4f60-8a71-92b3c4d5e6f7',
       title: 'Por interés',

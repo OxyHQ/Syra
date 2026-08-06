@@ -151,7 +151,7 @@ describe('GET /api/radio — catalog availability', () => {
     const res = await callRadio({ seedType: 'genre', seedId: GENRE, limit: '20' }, { userId: 'user-1' });
 
     expect(res.statusCode).toBe(200);
-    expect(trackIdsOf(res)).not.toContain(struck._id.toString());
+    expect(trackIdsOf(res)).not.toContain(struck.id);
     expect(pageOf(res).tracks.length).toBeGreaterThan(0);
   });
 
@@ -184,7 +184,7 @@ describe('GET /api/radio — explicit content preference', () => {
     );
 
     expect(res.statusCode).toBe(200);
-    expect(trackIdsOf(res)).not.toContain(explicit._id.toString());
+    expect(trackIdsOf(res)).not.toContain(explicit.id);
   });
 
   it('programmes explicit tracks for a listener who left them on', async () => {
@@ -202,7 +202,7 @@ describe('GET /api/radio — explicit content preference', () => {
       { userId: 'user-explicit-ok' }
     );
 
-    expect(trackIdsOf(res)).toContain(explicit._id.toString());
+    expect(trackIdsOf(res)).toContain(explicit.id);
   });
 });
 
