@@ -30,8 +30,20 @@ mis-typed during the port.
    `Series.episodes[].roomId` are left dangling), `House`
    (`routes/houses.routes.ts:354`, **no cascade** — `Room.houseId`,
    `Series.houseId` left dangling), `Series` (`routes/series.routes.ts:328`, **no
-   cascade** — `Room.seriesId` left dangling), `UserUpload` (deletion + expiry
-   sweeper, WITH cascade of its own `TrackKey` row), `CopyrightReport` (one
+   cascade** — `Room.seriesId` left dangling), `UserUpload` — **two different
+   deletion paths, only ONE of which cascades its `TrackKey` row, and I
+   originally reported this fact wrong.** The manual, user-triggered path
+   (`controllers/uploads.controller.ts:2287-2288`) DOES clean up:
+   `TrackKeyModel.deleteOne({ trackId: upload._id.toString() })` runs right
+   after `UserUploadModel.deleteOne`. The automated T+14-day expiry sweeper
+   (`services/uploads/expirySweeper.ts:320-352`) does **not** — its loop calls
+   `deleteObjects(upload)` (S3 cleanup only) then `UserUploadModel.deleteOne({ _id: upload._id })`
+   with no `TrackKeyModel` call anywhere in the file (`grep -n "TrackKey"
+   services/uploads/expirySweeper.ts` → zero hits). **This is a live orphan in
+   production, not just a documentation gap**: the sweeper is the path that runs
+   continuously and unattended, so most expired uploads' AES keys are left
+   behind in `TrackKey` forever, keyed by an `upload._id` that no longer
+   resolves to anything once the upload is gone. `CopyrightReport` (one
    rollback-only `deleteOne`, not a real deletion path — see its row below),
    `ModerationEvent`/`ModerationOutbox`/`ModerationEnforcement` (retention
    sweeps). Where the app silently orphans a reference today, a real `SET NULL`
@@ -52,6 +64,33 @@ mis-typed during the port.
    every CrowdSource id below shares its defining property (never an FK, not a
    catalog-provider id either), so I classify them EXTERNAL with a note rather
    than inventing a fifth bucket.
+5. **For every table, both directions were checked: what it points at, and what
+   points at it.** The first pass of this document only asked the first
+   question, which missed an entire class of real FKs: `ImageAsset` was given
+   its own section as a *source* (`catalog.externalId`, `uploadedBy`) but never
+   checked as a *target*. Seven models — `Album`, `Track`, `CatalogEntity`,
+   `Playlist`, `Episode`, `Podcast`, `UserUpload` — carry a scalar image field
+   (`coverArt`/`image`) plus a `coverArtSizes`/`imageSizes.{small,medium,large,
+   xlarge,xxlarge,original}.id` sub-object whose values are genuine
+   `ImageAsset._id` references, confirmed end to end: `POST /api/images/upload`
+   → `storeImageAsset()` creates the `ImageAsset` doc and returns its `_id`;
+   `services/catalog/catalogImageAssets.ts`'s `writeCatalogImage` →
+   `storeImageAsset` returns that id as each size variant's `.id`, and
+   `mirrorCatalogImage`'s `imageId` (picked from the `large`/`xlarge`/`medium`/
+   `original` variant) is assigned straight onto the scalar field —
+   `models/CatalogEntity.ts:263` even says so in a comment: `image: { type:
+   String }, // own S3 MongoDB ObjectId; converted to /api/images/:id in API
+   responses`. Full proof per model is in each model's own section below. This
+   is a **precise seven-model finding, not "every image-ish field"** —
+   `Series.coverImage`, `House.avatar`/`coverImage`, and
+   `UserSettings.profileCustomization.coverImage` go through a *different*,
+   non-`ImageAsset` path: a raw S3 CDN URL string (`routes/series.routes.ts:478-487`
+   — `cdnUrlToKey`/`series.coverImage = cdnUrl`; `routes/houses.routes.ts:761-770`
+   — same `cdnUrl` pattern for `house.avatar`; `routes/profileSettings.ts:97-100`
+   — stored verbatim with no `ObjectId` validation at all, unlike every
+   `coverArt`/`image` field above, which the write path explicitly validates as
+   `mongoose.Types.ObjectId.isValid(...)` before accepting). Those three are
+   correctly left out of the `ImageAsset` FK rows.
 
 ## Was the 79 figure right?
 
@@ -114,6 +153,8 @@ EXTERNAL / NOT-A-ROW-ID) · **target** (FK only) · **ON DELETE** · **proof**
 | source | class | target | ON DELETE | proof | note |
 |---|---|---|---|---|---|
 | `Album.artistId` | FK | `catalog_entities` (artist) | RESTRICT | `controllers/albums.controller.ts:261,308` (`findOwnedArtist(album.artistId, userId)`); `utils/playableContainers.ts:41-49,156` (`$lookup` join for playable-album filtering) | Required, indexed. No code ever deletes an artist row (fact 1) — RESTRICT documents that assumption rather than changing behaviour. |
+| `Album.coverArt` | FK | `image_assets` | RESTRICT | `services/uploads/resolveAlbum.ts:270` (`recoverCoverArt`); `services/uploads/enrichCatalogEntity.ts:548-556` (`mirrored.imageId` returned as `coverArt`) | Required (`models/Album.ts:69` — "an album is not created at all unless real cover art was found"), so unlike the other 6 image-bearing models below this one cannot be `SET NULL`; RESTRICT is the only option that doesn't leave a NOT NULL column with nothing to write. See fact 5. |
+| `Album.coverArtSizes.{small,medium,large,xlarge,xxlarge,original}.id` | FK (6 sub-fields) | `image_assets` | RESTRICT | `services/catalog/catalogImageAssets.ts:149-229` (`writeCatalogImage`/`createImageSizes`, one `ImageAsset` row per size variant) | Same target/reasoning as `Album.coverArt` — these are the per-resolution siblings of the same mirrored image. |
 | `Album.externalIds.musicbrainzReleaseId` | EXTERNAL | — | — | `models/Album.ts:126` (sparse-unique dedup index); `services/uploads/resolveAlbum.ts:158,329` | MusicBrainz release MBID — dedup tier 2, behind `upc`. |
 | `Album.externalIds.isrc` | EXTERNAL | — | — | `models/Album.ts:117` (sparse index) | Present on the album model for symmetry with Track; not the primary ISRC field (that's `Track.externalIds.isrc`). |
 | `Album.sources[].externalId` | EXTERNAL | — | — | `services/uploads/resolveAlbum.ts:294-299` (`sources: [{ provider: 'cover-art-archive', externalId: input.musicbrainzReleaseId ?? … }]`) | Provenance log: which external provider supplied which field, keyed by that provider's own id. |
@@ -123,7 +164,7 @@ EXTERNAL / NOT-A-ROW-ID) · **target** (FK only) · **ON DELETE** · **proof**
 | source | class | target | ON DELETE | proof | note |
 |---|---|---|---|---|---|
 | `ArtistClaim.artistId` | FK | `catalog_entities` (artist) | CASCADE | `controllers/artists.controller.ts:517,729,765` (`ArtistModel.findOne/findById` by claim.artistId; duplicate-pending-claim check scoped to it) | A claim has no meaning without the artist it claims. |
-| `ArtistClaim.oxyUserId` | CROSS-SERVICE | — | — | `models/ArtistClaim.ts:32` (unique-with-artistId-while-pending index); `controllers/artists.controller.ts` claim creation | The claimant's Oxy account id. |
+| `ArtistClaim.oxyUserId` | CROSS-SERVICE | — | — | `models/ArtistClaim.ts:56-58` (unique-with-artistId-while-pending index); `controllers/artists.controller.ts` claim creation | The claimant's Oxy account id. |
 | `ArtistClaim.resolvedBy` | CROSS-SERVICE | — | — | `controllers/artists.controller.ts:753` (`claim.resolvedBy = reviewerId`) | Not `*Id`-suffixed — found only by reading the controller, not by the naming-pattern grep. The admin/reviewer's Oxy account id. |
 
 ### CatalogEntity (`artist` + `person` discriminators, collection `catalogentities`)
@@ -131,6 +172,8 @@ EXTERNAL / NOT-A-ROW-ID) · **target** (FK only) · **ON DELETE** · **proof**
 | source | class | target | ON DELETE | proof | note |
 |---|---|---|---|---|---|
 | `CatalogEntity(person).linkedArtistId` | FK (declared `ref`) | `catalog_entities` (self, artist) | SET NULL | `models/CatalogEntity.ts:464,468` (sparse index); doc comment "Links this person to a `type:'artist'` entity (claimed/owned artist)" | Absent already means "not yet linked" — the natural default state, so SET NULL promotes an orphan into the same state a never-linked person already has. |
+| `CatalogEntity.image` | FK | `image_assets` | SET NULL | `controllers/artists.controller.ts:1155-1176` (`mirrored = await mirrorCatalogImage(...); artist.image = mirrored.imageId`); `services/uploads/enrichCatalogEntity.ts:212-221` (same assignment, enrichment path); `models/CatalogEntity.ts:263` comment: "own S3 MongoDB ObjectId; converted to /api/images/:id in API responses" | Optional. See fact 5. |
+| `CatalogEntity.imageSizes.{small,medium,large,xlarge,xxlarge,original}.id` | FK (6 sub-fields) | `image_assets` | SET NULL | Same `writeCatalogImage`/`createImageSizes` pipeline as `Album.coverArtSizes` | |
 | `CatalogEntity.ownerOxyUserId` | CROSS-SERVICE | — | — | `models/CatalogEntity.ts:287` (index); `controllers/artists.controller.ts:1133,1220` (`ArtistModel.findOne({ ownerOxyUserId: userId })`) | The Oxy account that registered/owns this artist profile. |
 | `CatalogEntity.claimedByOxyUserId` | CROSS-SERVICE | — | — | `services/uploads/enrichCatalogEntity.ts:454` (`.select('_id claimedByOxyUserId')`) | Set when an `ArtistClaim` is approved. |
 | `CatalogEntity.linkedOxyUserId` | CROSS-SERVICE | — | — | `scripts/reseedPersons.ts:5,9,78`; `services/podcasts/resolvePersons.ts:61-65,87,143-164` (strong dedup key, `PersonModel.deleteMany({ linkedOxyUserId: null })`) | Strong dedup key for `type:'person'` rows — links a podcast host/guest credit to a real Oxy account. |
@@ -195,6 +238,8 @@ EXTERNAL / NOT-A-ROW-ID) · **target** (FK only) · **ON DELETE** · **proof**
 | source | class | target | ON DELETE | proof | note |
 |---|---|---|---|---|---|
 | `Episode.podcastId` | FK (declared `ref`) | `podcasts` | CASCADE | `models/Episode.ts:92,134,136` (required, compound unique with `guid`) | An episode with no show is meaningless. Podcasts are never hard-deleted today (fact 1), so this is untested but the semantically correct choice. |
+| `Episode.image` | FK | `image_assets` | SET NULL | `services/podcasts/podcastMedia.ts:29-63` (`rehostPodcastImage`, `entityType: 'podcast' \| 'episode'` — thin wrapper over `mirrorCatalogImage`, `return { image: asset.imageId, ... }`) | Optional. Same shared re-hosting pipeline as `Podcast.image` below. See fact 5. |
+| `Episode.imageSizes.{small,medium,large,xlarge,xxlarge,original}.id` | FK (6 sub-fields) | `image_assets` | SET NULL | Same `writeCatalogImage`/`createImageSizes` pipeline as `Album.coverArtSizes` | |
 | `Episode.persons[].linkedOxyUserId` | CROSS-SERVICE | — | — | `services/podcasts/resolvePersons.ts:61-65,143-164` | Per-episode `<podcast:person>` credit linked to an Oxy account. |
 
 ### EpisodeProgress
@@ -212,6 +257,16 @@ EXTERNAL / NOT-A-ROW-ID) · **target** (FK only) · **ON DELETE** · **proof**
 | `House.members[].userId` | CROSS-SERVICE | — | — | `routes/houses.routes.ts:191,463,535,554` (`house.members.find/filter` by `userId`) | Multi-line schema declaration — one of the 10 columns a single-line grep misses. |
 
 ### ImageAsset
+
+`ImageAsset` is also a heavily-referenced FK **target** — see fact 5 and the
+`coverArt`/`image`/`coverArtSizes`/`imageSizes.*.id` rows under `Album`,
+`Track`, `CatalogEntity`, `Playlist`, `Episode`, `Podcast`, and `UserUpload`
+above/below. Not repeated here to avoid a 20-row duplicate table; this section
+covers only `ImageAsset`'s own outbound columns. `ImageAsset` rows are, like
+every other model in fact 1, never hard-deleted anywhere in the codebase
+(`grep -rn "ImageAssetModel\.\(deleteOne\|deleteMany\|findByIdAndDelete\|findOneAndDelete\)"` →
+zero hits) — so every `SET NULL`/`RESTRICT` choice on the inbound rows is,
+like the rest of this document, a decision for an untested case.
 
 | source | class | target | ON DELETE | proof | note |
 |---|---|---|---|---|---|
@@ -261,6 +316,21 @@ have nothing to report.
 | `ModerationOutbox.leaseOwner` | NOT-A-ROW-ID | — | — | `moderation/outbox.ts:183-232` (claim/renew/release-lease calls) | An ephemeral worker/process lock tag, not a reference to any row. |
 | `ModerationOutbox.payload.{reportId,eventId,caseId}` | (not a schema column) | — | — | `models/ModerationOutbox.ts:35-52` | These live inside `Schema.Types.Mixed` — real relations (`reportId` → `Report._id`) but stored as opaque JSON, not an indexable/typed column. Flagging for awareness; not given a full row since there is nothing to type-migrate — the payload should stay JSONB. |
 
+### NotificationPreference / NotificationSuppression
+
+Both live models, both imported and written by `services/notifications/notifier.ts`
+(`grep -n "NotificationPreference\|NotificationSuppression" services/notifications/notifier.ts`
+→ imports at lines 4/7, reads/writes at 119/139) — omitted from the first pass of
+this document by oversight, not because either is dead. Same shape as
+`RoomUserPreference.userId`: a required/unique `oxyUserId`, no other relation
+columns.
+
+| source | class | target | ON DELETE | proof | note |
+|---|---|---|---|---|---|
+| `NotificationPreference.oxyUserId` | CROSS-SERVICE | — | — | `models/NotificationPreference.ts:57` (unique — one row per account); `services/notifications/notifier.ts:119` (`NotificationPreferenceModel.findOne({ oxyUserId })`) | `disabledEvents[]` is an enum-of-strings array (`SYRA_NOTIFICATION_EVENTS`), not id-shaped — no relation there. |
+| `NotificationSuppression.oxyUserId` | CROSS-SERVICE | — | — | `models/NotificationSuppression.ts:29,36` (compound unique with `key`); `services/notifications/notifier.ts:139` (`NotificationSuppressionModel.create(...)`) | |
+| `NotificationSuppression.key` | NOT-A-ROW-ID | — | — | `models/NotificationSuppression.ts:5,16,18` (doc comment: composite key, either `<event>:<entityId>` (EXACT, line 16) or `<event>:group:<groupId>` (COALESCE, line 18)) | A formatted/composite string embedding an id, not a clean id itself — the notifier parses no structure back out of it, it only compares for equality on insert. |
+
 ### PlaybackState (one row per user — ephemeral "now playing" state)
 
 | source | class | target | ON DELETE | proof | note |
@@ -284,6 +354,8 @@ have nothing to report.
 |---|---|---|---|---|---|
 | `Playlist.ownerOxyUserId` | CROSS-SERVICE | — | — | `utils/catalogVisibility.ts:85,101` (`canViewPlaylist`); `models/Playlist.ts:71` (index) | |
 | `Playlist.collaborators[].oxyUserId` | CROSS-SERVICE | — | — | `utils/catalogVisibility.ts:86,102` (`collaborators?.some(entry => entry.oxyUserId === userId)`) | |
+| `Playlist.coverArt` | FK | `image_assets` | SET NULL | `controllers/playlists.controller.ts:219-246,298-323` (`coverArt` accepted only as a validated `mongoose.Types.ObjectId`, error message: "coverArt must be a valid image ID... Images must be uploaded first using /api/images/upload"; `getStoredImageColors(coverArt)` reads it back) | Optional. See fact 5. |
+| `Playlist.coverArtSizes.{small,medium,large,xlarge,xxlarge,original}.id` | FK (6 sub-fields) | `image_assets` | SET NULL | Same `writeCatalogImage`/`createImageSizes` pipeline as `Album.coverArtSizes` | |
 | `Playlist.externalIds.isrc` | EXTERNAL | — | — | `models/Playlist.ts:24` | |
 | `Playlist.sources[].externalId` | EXTERNAL | — | — | Same provenance-log pattern as `Album`/`CatalogEntity`/`Track` | |
 
@@ -292,6 +364,8 @@ have nothing to report.
 | source | class | target | ON DELETE | proof | note |
 |---|---|---|---|---|---|
 | `Podcast.linkedArtistId` | FK (declared `ref`) | `catalog_entities` (artist) | SET NULL | `models/Podcast.ts:100,138` (sparse index) | Absent = "not yet linked to an artist profile", already the default state — SET NULL matches it exactly, same reasoning as `CatalogEntity(person).linkedArtistId`. |
+| `Podcast.image` | FK | `image_assets` | SET NULL | `services/podcasts/podcastMedia.ts:29-63` (`rehostPodcastImage`, `entityType: 'podcast'`) | Optional. See fact 5. |
+| `Podcast.imageSizes.{small,medium,large,xlarge,xxlarge,original}.id` | FK (6 sub-fields) | `image_assets` | SET NULL | Same `writeCatalogImage`/`createImageSizes` pipeline as `Album.coverArtSizes` | |
 | `Podcast.ownerOxyUserId` | CROSS-SERVICE | — | — | `models/Podcast.ts:97,136` (sparse index) | |
 | `Podcast.claimedByOxyUserId` | CROSS-SERVICE | — | — | `models/Podcast.ts:99,137` (sparse index) | |
 | `Podcast.persons[].linkedOxyUserId` | CROSS-SERVICE | — | — | `services/podcasts/resolvePersons.ts:61-65,208,244-265` | Channel-level `<podcast:person>` credit. |
@@ -364,6 +438,8 @@ have nothing to report.
 |---|---|---|---|---|---|
 | `Track.artistId` | FK | `catalog_entities` (artist) | RESTRICT | `controllers/tracks.controller.ts:442-460`; `utils/playableContainers.ts:41-52,192`; dozens of read sites across `services/recommendations/*`, `services/radio/*`, `services/uploads/*` | The single densest relation in the codebase (~90+ call sites read/write it). Artists are never hard-deleted (fact 1) — RESTRICT. |
 | `Track.albumId` | FK | `albums` | SET NULL | `controllers/tracks.controller.ts:459-460` (`AlbumModel.findById(updates.albumId).select('artistId')`, cross-checked against `track.artistId`); `utils/playableContainers.ts:41-52,156` | Optional (`index: true`, no `required`) — a track can exist with no album. |
+| `Track.coverArt` | FK | `image_assets` | SET NULL | `controllers/tracks.controller.ts:279-299` (`coverArt` accepted only as a validated `mongoose.Types.ObjectId`, error message: "coverArt must be a valid image ID... Images must be uploaded first using /api/images/upload"; `getStoredImageColors(coverArt)` reads it back) | Optional (`models/Track.ts:158`, no `required`) — unlike `Album.coverArt`. See fact 5. |
+| `Track.coverArtSizes.{small,medium,large,xlarge,xxlarge,original}.id` | FK (6 sub-fields) | `image_assets` | SET NULL | Same `writeCatalogImage`/`createImageSizes` pipeline as `Album.coverArtSizes` | |
 | `Track.credits[].catalogEntityId` | FK (dead) | `catalog_entities` | SET NULL | See "dead readers" table above; read (never written) at `services/catalog/artistProfile.ts:172` | |
 | `Track.copyrightReportId` | FK | `copyright_reports` | SET NULL | `services/compliance/takedown.ts:567` (`track.copyrightReportId = copyrightReportId`); set from `controllers/copyright.controller.ts:204` and `controllers/artists.controller.ts:986` | Optional, set only on takedown. |
 | `Track.removedBy` | CROSS-SERVICE | — | — | `services/compliance/takedown.ts:566` (`track.removedBy = actorOxyUserId`) | Not `*Id`-suffixed. The Oxy account that performed the removal. |
@@ -395,6 +471,8 @@ have nothing to report.
 | source | class | target | ON DELETE | proof | note |
 |---|---|---|---|---|---|
 | `UserUpload.ownerOxyUserId` | CROSS-SERVICE | — | — | `models/UserUpload.ts:155,245,256,269,284` (indexed throughout) | |
+| `UserUpload.coverArt` | FK | `image_assets` | SET NULL | `controllers/uploads.controller.ts:1717,1999` (`coverArt: request.coverArt ?? embeddedCover?.imageId`) | Optional. See fact 5. |
+| `UserUpload.coverArtSizes.{small,medium,large,xlarge,xxlarge,original}.id` | FK (6 sub-fields) | `image_assets` | SET NULL | Same `writeCatalogImage`/`createImageSizes` pipeline as `Album.coverArtSizes` | |
 | `UserUpload.credits[].catalogEntityId` | FK (dead) | `catalog_entities` | SET NULL | See "dead readers" table above | |
 | `UserUpload.matchedTrackId` | FK | `tracks` | SET NULL | `controllers/uploads.controller.ts:2338,2403,2516-2517` (set at promote time; guards re-promotion) | Set once the locker copy is matched/promoted to a public `Track`; the upload row is deliberately **kept**, pointed at the new track (model doc comment: "The locker copy is KEPT and pointed at the new track through `matchedTrackId`"). |
 | `UserUpload.resolvedArtistId` | FK | `catalog_entities` (artist) | SET NULL | `controllers/uploads.controller.ts:194,1749,2517` | Set alongside `matchedTrackId` at promotion. |
@@ -407,23 +485,35 @@ table, tally the `class` column; excludes the two explicit non-rows —
 `CatalogEntity(artist).strikes[]._id` and `ModerationOutbox.payload.{…}`, both
 marked above as "not a real row" the moment they're introduced).
 
-| classification | count |
-|---|---|
-| **FK** (including polymorphic, out-of-process-resolved, and dead-write-path cases) | 52 |
-| **CROSS-SERVICE** | 40 |
-| **EXTERNAL** | 29 |
-| **NOT-A-ROW-ID** | 3 |
-| **Total relation rows in this document** | **124** |
+**Revised after review** (review added: the `NotificationPreference` /
+`NotificationSuppression` section that was missing entirely, 14 `ImageAsset`
+inbound-FK rows across 7 models found by checking inbound as well as outbound
+edges — see fact 5 — and 3 field-level corrections that don't change row
+counts). Before → after:
 
-This is larger than the raw "89 loose `*Id` columns" figure because it also
-counts: the 6 declared `ref:` columns, the 5 `Library` array relations (not
-`*Id`-named at all), `Podcast.podcastIndexId`/`appleCollectionId` (`Number`-typed,
-outside the String-only scan), `Podcast.feedUrl`/`podcastGuid` (external join
-keys with no `Id` in the name), and roughly two dozen relation columns
-(`resolvedBy`, `removedBy`, `createdBy`, `host`, `createdByAdmin`, `reporter`,
-`uploadedBy`, `userId`, `participants`, `speakers`, `participantIds`,
-`restrictedUsers`, `queue`, …) that only reading the controllers surfaced,
-because none of them end in `Id`.
+| classification | before | after |
+|---|---|---|
+| **FK** (including polymorphic, out-of-process-resolved, and dead-write-path cases) | 52 | 66 |
+| **CROSS-SERVICE** | 40 | 42 |
+| **EXTERNAL** | 29 | 29 |
+| **NOT-A-ROW-ID** | 3 | 4 |
+| **Total relation rows in this document** | **124** | **141** |
+
+The +14 FK rows are the `coverArt`/`image` scalar and `coverArtSizes`/
+`imageSizes.*.id` sub-object on `Album`, `Track`, `CatalogEntity`, `Playlist`,
+`Episode`, `Podcast`, `UserUpload` (2 rows × 7 models). The +2 CROSS-SERVICE
+and +1 NOT-A-ROW-ID rows are `NotificationPreference.oxyUserId`,
+`NotificationSuppression.oxyUserId`, and `NotificationSuppression.key`.
+
+The pre-review 124 was already larger than the raw "89 loose `*Id` columns"
+figure because it also counted: the 6 declared `ref:` columns, the 5 `Library`
+array relations (not `*Id`-named at all), `Podcast.podcastIndexId`/
+`appleCollectionId` (`Number`-typed, outside the String-only scan),
+`Podcast.feedUrl`/`podcastGuid` (external join keys with no `Id` in the name),
+and roughly two dozen relation columns (`resolvedBy`, `removedBy`, `createdBy`,
+`host`, `createdByAdmin`, `reporter`, `uploadedBy`, `userId`, `participants`,
+`speakers`, `participantIds`, `restrictedUsers`, `queue`, …) that only reading
+the controllers surfaced, because none of them end in `Id`.
 
 ## Summary for the six schema tasks
 
