@@ -92,19 +92,15 @@ jobs:
       - name: Install audio toolchain
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg libchromaprint-tools
 
-      # `src/db/__tests__/gates.test.ts`'s schema-invariant and expiry-index
-      # gates query the real Postgres catalogue, so the CI service has to be
-      # migrated before the suite runs — the same `db:migrate` a developer
-      # runs locally, pointed at the service container instead of a developer
-      # database. `DATABASE_URL` here (not `TEST_DATABASE_URL`): the migrator
-      # always reads `DATABASE_URL`, the same variable it reads in every other
-      # environment; `TEST_DATABASE_URL` is only the job-level name the test
-      # suite itself falls back to (see gates.test.ts's `beforeAll`).
-      - name: Migrate Postgres (CI service)
-        working-directory: packages/backend
-        run: bun run db:migrate --phase=all --target-database=syra_ci
-        env:
-          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
-
+      # No `db:migrate` step yet: `src/db/__tests__/gates.test.ts`'s
+      # schema-invariant and expiry-index gates only need a live, reachable
+      # Postgres — their floors (`minimumTables`/`minimumColumns` at 0,
+      # `EXPIRY_SWEEP_TARGETS` empty) hold against the service container
+      # whether or not anything has ever been migrated onto it, verified
+      # directly against a Postgres with no `drizzle` schema at all. A real
+      # `bun run db:migrate` run against this service is added once
+      # `@oxyhq/db@0.1.2` ships the `readJournal` fix tracked in
+      # task-1-report.md — running it against 0.1.1 would fail today for a
+      # reason that has nothing to do with this schema.
       - name: Backend tests
         run: bun run --filter @syra/backend test
