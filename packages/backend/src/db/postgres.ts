@@ -31,9 +31,13 @@ let handle: { db: OxyDatabase<typeof schema>; client: ReturnType<typeof createDa
  * Idempotent: a second call returns the existing handle rather than opening a
  * second pool.
  *
- * @throws {Error} When `DATABASE_URL` is unset — a startup misconfiguration;
- *   fail fast and loudly rather than degrade, the same contract
- *   `utils/database.ts` already holds for `MONGODB_URI`.
+ * @throws {Error} When `DATABASE_URL` is unset, or the opening round trip
+ *   fails. This is a REPORTING contract, not a fail-fast one: the throw names
+ *   the misconfiguration precisely, and the caller decides what it costs.
+ *   `server.ts`'s `bootServer` catches it, logs, and continues — deliberately,
+ *   because most routes are still on Mongoose and a service that refuses to
+ *   boot without `DATABASE_URL` would take them down too. A script or a test
+ *   that needs the connection lets it propagate instead.
  */
 export async function connectPostgres(): Promise<OxyDatabase<typeof schema>> {
   if (handle) return handle.db;

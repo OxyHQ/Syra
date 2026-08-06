@@ -66,10 +66,18 @@ const NEW_MODULE_DIR = resolve(SOURCE_DIR, 'db', 'catalog');
 /**
  * Resolve one import specifier to an absolute path, or null for a package
  * import (`drizzle-orm`, `@oxyhq/db`) that can never be either side of this.
+ *
+ * The extension is stripped for EVERY spelling TypeScript accepts here, not
+ * just `.ts`. Under `module: Node16` with `"type": "commonjs"`, TS resolves
+ * `'./catalogVisibility.js'` to `catalogVisibility.ts` — and production runs the
+ * compiled `dist`, where that specifier resolves for real. A `.ts`-only strip
+ * left `'./catalogVisibility.js'` matching nothing and the gate green. Zero
+ * occurrences in `src/` today, so this was latent rather than live, but a gate
+ * with a known hole is what the last two rounds were spent closing.
  */
 function resolveSpecifier(specifier: string, fromDir: string): string | null {
   if (!specifier.startsWith('.')) return null;
-  return resolve(fromDir, specifier).replace(/\.ts$/, '');
+  return resolve(fromDir, specifier).replace(/\.(?:[mc]?[jt]s)$/, '');
 }
 
 /**
@@ -170,7 +178,11 @@ function sourceFiles(directory: string): string[] {
 const MINIMUM_SCANNED_FILES = 200;
 
 describe('no file holds half of the catalog port', () => {
-  it('every source file reads from one side or the other', () => {
+  // Named for what it walks. The scan covers `src/` only, so package-root files
+  // (`server.ts`) are outside it — immaterial today, since `server.ts` imports
+  // `db/postgres` and never `db/catalog`, but the earlier name promised every
+  // source file in the package and delivered every file under `src/`.
+  it('every file under src/ reads from one side or the other', () => {
     const files = sourceFiles(SOURCE_DIR);
     expect(files.length).toBeGreaterThanOrEqual(MINIMUM_SCANNED_FILES);
 
@@ -322,6 +334,21 @@ describe('no file holds half of the catalog port', () => {
     expect(halfPortedImport(readImports(source), FROM_CONTROLLER)?.name).toBe(
       'getRequestUserIdAndMore'
     );
+  });
+
+  it('flags an explicit-extension specifier, in every spelling TS accepts', () => {
+    // `'./catalogVisibility.js'` is legal under `module: Node16` — TS resolves it
+    // to the `.ts` source, and the compiled `dist` this ships as resolves it
+    // literally. A `.ts`-only strip let this one through with the gate green.
+    for (const extension of ['.js', '.ts', '.mjs', '.cjs', '.mts', '.cts']) {
+      const source = `
+        import { isPlayableTrack } from './catalogVisibility${extension}';
+        import { playableTrackFilter } from '../db/catalog/visibility';
+      `;
+      expect(`${extension}: ${halfPortedImport(readImports(source), FROM_UTILS)?.name}`).toBe(
+        `${extension}: isPlayableTrack`
+      );
+    }
   });
 
   it('ignores a package import that merely looks like a path', () => {
