@@ -16,6 +16,7 @@ export * from './entityProfile';
 export * from './library';
 export * from './radio';
 export * from './player';
+export * from './mtn/lexicons';
 export * from './search';
 export * from './integrations';
 export * from './connect';
