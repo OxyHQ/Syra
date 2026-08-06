@@ -1,7 +1,7 @@
 {
   "name": "@syra/backend",
   "version": "1.0.0",
-  "license": "ISC",
+  "private": true,
   "author": "",
   "type": "commonjs",
   "main": "server.ts",
