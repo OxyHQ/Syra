@@ -53,20 +53,27 @@
  * rewrite flagging `PlaylistTrack` as a catalog model BECAUSE IT CONTAINS
  * `Track`. Both are the rule applied; neither is optional.
  *
- * ## Result of the run this was written for (2026-08-06)
+ * ## Result of the run this was written for (2026-08-06, post-review)
  *
- * 706 declared paths across 41 model files, against 411 columns in 69 tables.
- * 20 candidates in 11 files; ALL TWENTY adjudicated as false positives —
- * renamed (`PlaylistTrack.order` -> `position`), flattened with a different
- * prefix (`externalIds` -> `external_isrc`, `feedSettings` -> `feed_*`),
- * promoted to a differently-named table (`Room.podcastQueue` ->
- * `room_media_queue_items`, `Library.likedTracks` -> `user_liked_tracks`), a
- * sub-key of a jsonb column (`UserUpload.lines`), or deliberately dropped with
- * a ruling (`Room.topicId`, Task 6).
+ * 706 declared paths across 41 model files, against 878 columns in 69 tables.
+ * **31 candidates in 13 files, all 31 adjudicated as false positives** —
+ * renamed (`PlaylistTrack.order` -> `position`, `Episode.cache.s3Key` ->
+ * `cache_object_key`), flattened under a different prefix (`externalIds` ->
+ * `external_isrc`, `feedSettings` -> `feed_*`), promoted to a
+ * differently-named table (`Room.podcastQueue` -> `room_media_queue_items`,
+ * `Library.likedTracks` -> `user_liked_tracks`), a sub-key of a jsonb column
+ * (`UserUpload.lines` inside `user_uploads.lyrics`), or deliberately dropped
+ * with a ruling (`Room.topicId`, Task 6).
  *
- * So `catalog_entities.members` appears to have been the ONLY live instance of
- * the class. That is the useful finding: the class is real, it was worth one
- * sweep, and it is not a systemic hole.
+ * So `catalog_entities.members` was the ONLY live instance of the class. That is
+ * the useful finding: the class is real, it was worth one sweep, and it is not a
+ * systemic hole.
+ *
+ * THE FIRST VERSION OF THIS PARAGRAPH RECORDED THE PRE-FIX RUN — 411 columns, 20
+ * candidates in 11 files — and survived the fix that changed all three numbers.
+ * A header is the one place a wrong statement persists with nothing to trip over
+ * it, which is the whole argument for the self-check below over a comment. When
+ * you change this script, re-run it and paste the real numbers.
  */
 
 import { readFileSync, readdirSync } from 'node:fs';
@@ -295,40 +302,96 @@ for (const file of MODEL_FILES) {
 /**
  * SELF-CHECK — the rule's second clause, executed rather than asserted.
  *
- * "Proves it by FAILING against the case that motivated it." Both scoping bugs
- * this script has had are pinned here, so a regression in either is a non-zero
- * exit rather than a quietly shorter report:
+ * "Proves it by FAILING against the case that motivated it." Each probe below
+ * pins one failure mode with a case the OTHER probes cannot answer, which is
+ * the property the first version lacked: it had two probes that both happened
+ * to be answered by the ordering fix, so removing the column scope — restoring
+ * the exact schema-wide behaviour that produced 77 cross-table suppressions —
+ * exited 0 and silently dropped the report from 31 candidates to 18.
  *
- *   `CatalogEntity.members` — the case the sweep was commissioned for. Suppressed
- *   by `house_members`, a table on a DIFFERENT model, until the child-table loop
- *   was scoped. It must be explained by `catalog_entities.members` (the column
- *   migration 0018 restored) and by nothing else.
+ * Verified by mutation, each failing alone and naming the mechanism:
  *
- *   `Track.hls` — the case the review found. Genuinely absent from `tracks`
- *   (Task 4 moved the ladder to `track_hls_renditions`) and suppressed as a
- *   "segment of flattened cacheHlsMasterKey", a column on `episodes`, until the
- *   COLUMN loop was scoped too. It must be explained by the child table.
- *
- * The second exists because fixing one of two sibling loops and leaving the
- * other is its own failure mode: the correction was applied where the bug was
- * found rather than everywhere it lived.
+ *   remove the column scope   -> `ContributorStanding.trackId` claimed by
+ *                                `user_uploads.matched_track_id`
+ *   heuristics before children -> `Track.hls` claimed by `hlsMasterKey`
+ *   loosen a matcher           -> `CatalogEntity.members` claimed at all
  */
-const SELF_CHECKS: readonly { model: string; path: string; mustMention: string }[] = [
-  { model: 'CatalogEntity.ts', path: 'members', mustMention: 'members' },
-  { model: 'Track.ts', path: 'hls', mustMention: 'track_hls_renditions' },
+/**
+ * Two kinds of probe, because the two bugs this script has had fail in opposite
+ * directions and a single shape cannot pin both.
+ *
+ *   `explainedBy` — the path MUST be explained, by a named mechanism. Pins
+ *   ORDERING: `Track.hls` is genuinely absent from `tracks` and must be answered
+ *   by its child table, not by `hlsMasterKey`, a real column on the right table
+ *   meaning the master playlist's S3 key.
+ *
+ *   `unexplained` — the path must be claimed by NO suppression rule. Pins
+ *   SCOPING and TIGHTNESS, which `explainedBy` cannot: a rule that fires too
+ *   widely still produces an explanation, so a probe asking "is it explained"
+ *   passes precisely when the rule is too loose.
+ *
+ * The first version of this block had only the first kind, and asserted
+ * `members` through a short-circuit on "is it an own column" — so what it
+ * actually checked was that migration 0018's column exists, not that any matcher
+ * is tight. Removing the scope from `columnsForModel`, restoring the exact
+ * schema-wide behaviour that produced 77 cross-table suppressions, exited 0.
+ */
+interface SelfCheck {
+  readonly model: string;
+  readonly path: string;
+  /** The mechanism that must explain it, or `null` for "nothing may claim it". */
+  readonly explainedBy: string | null;
+  readonly why: string;
+}
+
+const SELF_CHECKS: readonly SelfCheck[] = [
+  {
+    model: 'Track.ts',
+    path: 'hls',
+    explainedBy: 'track_hls_renditions',
+    why:
+      'ORDERING. Absent from `tracks`; must be answered by the child table, not ' +
+      'by `hlsMasterKey`, which is a different field on the same table.',
+  },
+  {
+    model: 'ContributorStanding.ts',
+    path: 'trackId',
+    explainedBy: null,
+    why:
+      'SCOPING. No child table can answer this, so the ordering fix cannot cover ' +
+      'for it. Unscoped, `user_uploads.matched_track_id` — a column on a ' +
+      'different model in a different vertical — claims it via the `endsWith` ' +
+      'rule, and the path silently leaves the report.',
+  },
+  {
+    model: 'CatalogEntity.ts',
+    path: 'members',
+    explainedBy: null,
+    why:
+      'TIGHTNESS, and the case this script was commissioned for. It is an own ' +
+      'column (migration 0018), so NO suppression rule should have anything to ' +
+      'say about it. Deliberately not asserted as "the column exists": the lead ' +
+      'has ruled `members` becomes a child table, and when that lands this probe ' +
+      'must keep passing while the report correctly lists it.',
+  },
 ];
 
 const selfCheckFailures: string[] = [];
 for (const probe of SELF_CHECKS) {
-  const own = columnsForModel(probe.model);
-  const verdict = own.has(probe.path)
-    ? `own column ${probe.path}`
-    : explained(probe.model, probe.path);
+  // NOT short-circuited on "is it an own column" — that is what made the first
+  // version assert the column's existence instead of a matcher's tightness.
+  const verdict = explained(probe.model, probe.path);
 
-  if (!verdict || !verdict.includes(probe.mustMention)) {
+  if (probe.explainedBy === null) {
+    if (verdict !== undefined) {
+      selfCheckFailures.push(
+        `${probe.model} :: ${probe.path} -> "${verdict}" but NOTHING should claim it. ${probe.why}`
+      );
+    }
+  } else if (!verdict?.includes(probe.explainedBy)) {
     selfCheckFailures.push(
       `${probe.model} :: ${probe.path} -> ${verdict ?? 'UNEXPLAINED'} ` +
-      `(expected an explanation mentioning "${probe.mustMention}")`
+      `(expected an explanation mentioning "${probe.explainedBy}"). ${probe.why}`
     );
   }
 }
@@ -349,4 +412,7 @@ if (selfCheckFailures.length > 0) {
   );
   process.exit(1);
 }
-console.log('Self-check: both scoping regressions pinned, neither present.\n');
+console.log(
+  `Self-check: ${SELF_CHECKS.length} probes, all passed — ordering, scoping and ` +
+  'tightness each pinned by a case the others cannot answer.\n'
+);
