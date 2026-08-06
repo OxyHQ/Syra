@@ -203,7 +203,7 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
   },
   {
     column: 'user_uploads.owner_oxy_user_id',
-    reason: "The Oxy account whose private locker this file is in (RELATIONS.md: UserUpload.ownerOxyUserId).",
+    reason: 'The Oxy account whose private locker this file is in (RELATIONS.md: UserUpload.ownerOxyUserId).',
   },
   {
     column: 'artist_claims.oxy_user_id',

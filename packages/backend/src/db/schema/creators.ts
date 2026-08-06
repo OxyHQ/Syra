@@ -24,6 +24,15 @@
  * finished evaluating. Verified end to end rather than assumed — `db:generate`
  * emits the constraint and the migrated database carries it.
  *
+ * The property that makes the cycle SAFE, rather than merely working, is that
+ * NEITHER module reads a value from the other at module-evaluation time — see
+ * {@link UPLOAD_STATUSES}. Every cross-module reference in both directions is
+ * inside a callback drizzle invokes lazily, so which module a process loads
+ * first cannot matter. Keep it that way: an eager read added here or there
+ * (`text({ enum: SOMETHING_FROM_CATALOG })` is one) reintroduces a
+ * `Cannot access '...' before initialization` that only fires for one of the
+ * two load orders.
+ *
  * ## `UserUpload` is a separate table from `tracks`, and that is the point
  *
  * `playableTrackFilter()` has no owner dimension and is declared invariant, so
@@ -172,7 +181,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { createdAt, generatedId, inList, timestamptz, updatedAt } from '@oxyhq/db';
 import type { TrackCredit, UploadLyrics } from '@syra/shared-types';
-import { AUDIO_FORMATS, catalogEntities, imageAssets, TRACK_STATUSES, tracks } from './catalog';
+import { catalogEntities, imageAssets, tracks } from './catalog';
 
 // ── Closed value sets ────────────────────────────────────────────────────
 // Same convention as catalog.ts: one `as const` tuple per closed value set,
@@ -199,6 +208,35 @@ export const ARTIST_CLAIM_STATUSES = ['pending', 'approved', 'rejected'] as cons
  * value added to one silently legal in the other.
  */
 export const COPYRIGHT_REPORT_STATUSES = ['pending', 'approved', 'rejected'] as const;
+
+/**
+ * `models/UserUpload.ts`'s own `status` enum, and `UploadAudioSourceSchema`'s
+ * own `format` enum — declared HERE rather than imported from `catalog.ts`,
+ * for exactly the reason `COPYRIGHT_REPORT_STATUSES` above is its own tuple.
+ *
+ * These carry the same values as `tracks`' `TRACK_STATUSES`/`AUDIO_FORMATS`
+ * today, and the first pass of this file shared those. That was inconsistent
+ * with the rule the file itself states one paragraph up: `UserUpload`
+ * declares its OWN Mongoose enums (`models/UserUpload.ts:93,215`), so a value
+ * added to the catalog's ingest states would have become silently legal for a
+ * locker file too. The coupling that does exist — a locker file becomes a
+ * `Track` at promote time — is a MAPPING, and if it needs enforcing it needs
+ * a test asserting the mapping, not a shared tuple that hides whether anyone
+ * ever checked.
+ *
+ * It also removes the cycle hazard the first pass had to work around:
+ * `catalog.ts` imports this module back (for `tracks.copyrightReportId`), and
+ * reading a value from it at module-EVALUATION time — which
+ * `text({ enum: AUDIO_FORMATS })` in a columns object is — threw
+ * `Cannot access 'AUDIO_FORMATS' before initialization` whenever `catalog.ts`
+ * was reached first. With no eager read left in either direction, every
+ * remaining cross-module reference is inside a callback drizzle invokes
+ * lazily, and the load order stops mattering at all.
+ */
+export const UPLOAD_STATUSES = ['processing', 'ready', 'failed'] as const;
+
+/** See {@link UPLOAD_STATUSES} — `models/UserUpload.ts:93`'s own format enum. */
+export const UPLOAD_AUDIO_FORMATS = ['mp3', 'flac', 'ogg', 'm4a', 'wav'] as const;
 
 /** `models/ArtistClaim.ts`'s `maxlength` on `evidence`. */
 const CLAIM_EVIDENCE_MAX_LENGTH = 4000;
@@ -300,28 +338,12 @@ export const userUploads = pgTable(
      * ownership check, so there is no playable address to hand out.
      */
     audioSourceKey: text(),
-    /**
-     * `$type<>` rather than `text({ enum: AUDIO_FORMATS })`, and this is the
-     * cycle's one visible cost. `catalog.ts` imports THIS module back (for
-     * `tracks.copyrightReportId`), so a value read from it at
-     * module-EVALUATION time would depend on which of the two modules the
-     * process happens to load first — `text({ enum: AUDIO_FORMATS })` in the
-     * columns object is exactly such a read, and it throws
-     * `Cannot access 'AUDIO_FORMATS' before initialization` when the barrel
-     * (or anything else) reaches `catalog.ts` first. Every OTHER reference
-     * across the cycle is inside a callback drizzle invokes lazily — the
-     * `.references()` thunks, and the `(t) => [...]` table config below,
-     * which is where the CHECK reads the same tuple. So the type comes from
-     * the tuple at compile time and the enforcement comes from the tuple at
-     * DDL time; only the eager runtime read is avoided.
-     */
-    audioSourceFormat: text().$type<(typeof AUDIO_FORMATS)[number]>(),
+    audioSourceFormat: text({ enum: UPLOAD_AUDIO_FORMATS }),
     // The HLS rendition LADDER is `user_upload_hls_renditions`, below.
     hlsMasterKey: text(),
     loudnessLufs: doublePrecision(),
 
-    /** `$type<>` for the same cycle reason as `audioSourceFormat` above. */
-    status: text().$type<(typeof TRACK_STATUSES)[number]>().notNull().default('processing'),
+    status: text({ enum: UPLOAD_STATUSES }).notNull().default('processing'),
 
     /**
      * Set at promote time. The locker copy is deliberately KEPT and pointed
@@ -358,10 +380,10 @@ export const userUploads = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [
-    check('user_uploads_status_check', sql`${t.status} in (${sql.raw(inList(TRACK_STATUSES))})`),
+    check('user_uploads_status_check', sql`${t.status} in (${sql.raw(inList(UPLOAD_STATUSES))})`),
     check(
       'user_uploads_audio_source_format_check',
-      sql`${t.audioSourceFormat} is null or ${t.audioSourceFormat} in (${sql.raw(inList(AUDIO_FORMATS))})`
+      sql`${t.audioSourceFormat} is null or ${t.audioSourceFormat} in (${sql.raw(inList(UPLOAD_AUDIO_FORMATS))})`
     ),
     check(
       'user_uploads_provenance_verdict_check',
@@ -439,6 +461,13 @@ export const userUploads = pgTable(
     // Mongo's standalone `{ albumKey: 1 }` is dropped in writing: every
     // reader of it is scoped to one owner first, and the compound index
     // above leads with `owner_oxy_user_id`.
+    //
+    // Mongo's standalone `{ ownerOxyUserId: 1 }` is dropped for the other
+    // reason an index goes away in writing: it is the LEADING COLUMN of the
+    // three compound indexes above (and of the unique constraint), and a
+    // btree prefix serves an owner-only lookup on its own. Same convention
+    // `library.ts` used for `devices.oxy_user_id` — recorded here because a
+    // drop nobody wrote down is indistinguishable from a drop nobody noticed.
   ]
 );
 
@@ -568,6 +597,12 @@ export const artistClaims = pgTable(
     // queries claims by artist across all statuses — the one artist-scoped
     // query is `status: 'pending'`, which the partial unique index above
     // serves on its leading column.
+    //
+    // Mongo's standalone `{ oxyUserId: 1 }` and `{ status: 1 }` are dropped
+    // as leading-column prefixes of the two compound indexes above:
+    // `listMyArtistClaims` filters `oxyUserId` and sorts `createdAt`, and
+    // `listArtistClaims` filters `status` and sorts `createdAt`, so each
+    // compound index already serves its own column alone.
   ]
 );
 
@@ -707,6 +742,10 @@ export const contributorStandings = pgTable(
     // read the two booleans off the loaded row. Neither is ever a query
     // filter — same shape as `podcasts.claimable`, dropped for the same
     // reason in Task 4.
+    //
+    // Mongo's standalone `{ oxyUserId: 1 }` is dropped as redundant with the
+    // unique constraint above, which Postgres backs with its own btree —
+    // every lookup in this file's three call sites is by that column.
   ]
 );
 
@@ -796,5 +835,9 @@ export const copyrightReports = pgTable(
     // by artist or by reporter. The `artist_id` FK's RESTRICT check does a
     // sequential scan here on an artist delete, which no code path performs
     // (RELATIONS.md fact 1).
+    //
+    // Mongo's standalone `{ trackId: 1 }` and `{ status: 1 }` are dropped as
+    // leading-column prefixes of the two compound indexes above, which serve
+    // `{ trackId }` and `{ status }` alone as well as the pairs.
   ]
 );

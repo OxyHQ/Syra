@@ -40,9 +40,10 @@
  * trusted once and left alone.
  */
 
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
-import { eq, isTable, sql } from 'drizzle-orm';
+import { eq, getTableColumns, isTable, sql } from 'drizzle-orm';
 import { getTableConfig, PgTable } from 'drizzle-orm/pg-core';
 import {
   constraintNameOf,
@@ -174,6 +175,117 @@ function findPostGenesisPhaseOrderingViolations(
 }
 
 /**
+ * Postgres truncates any identifier past `NAMEDATALEN - 1` = 63 bytes, with a
+ * NOTICE nobody reads and no error. The constraint is created under a
+ * DIFFERENT name than the one declared, drizzle's snapshot keeps the declared
+ * one, and a future `DROP CONSTRAINT`/`ALTER ... RENAME` by that name fails
+ * against a database that has never held it.
+ *
+ * This is not hypothetical: `0000` (Task 2) declares a 71-byte foreign-key
+ * name on `musicbrainz_artist_urls`, and the database holds its 63-byte
+ * truncation. Nothing in the repo would have caught it, which is what
+ * {@link findOverlongIdentifiers} exists to change.
+ */
+const MAX_IDENTIFIER_BYTES = 63;
+
+/**
+ * Identifiers already over the limit when this gate landed.
+ *
+ * Same contract as `deferredForeignKeys.ts`'s two ledgers: an entry is a
+ * NAMED, reasoned debt rather than a silently-lowered bar, and an entry that
+ * stops being over-limit (or stops existing) fails as
+ * `stale_identifier_exemption` rather than lingering.
+ */
+const OVERLONG_IDENTIFIER_EXEMPTIONS: readonly { identifier: string; reason: string }[] = [
+  {
+    identifier: 'musicbrainz_artist_urls_musicbrainz_artist_id_musicbrainz_artists_id_fk',
+    reason:
+      "Pre-existing: declared by 0000 (Task 2) at 71 bytes, so `syra_dev` holds it as " +
+      '`musicbrainz_artist_urls_musicbrainz_artist_id_musicbrainz_artis`. Verified against ' +
+      'pg_constraint — it is the ONLY declared identifier in eleven migrations that does not exist ' +
+      'in the database under its declared name. Fixing it needs a hand-written migration (DROP by ' +
+      "the truncated name, ADD with an explicit short one) on Task 2's table, so it is tracked here " +
+      'rather than fixed inside Task 5.',
+  },
+];
+
+/**
+ * Every over-long identifier in a migration's SQL, by byte length.
+ *
+ * Reads the SQL FILES rather than the drizzle objects, and that is the load-
+ * bearing choice: `ForeignKey#getName()` builds its name from the TypeScript
+ * PROPERTY names (`musicbrainz_artist_urls_musicbrainzArtistId_...`, 69
+ * bytes), while the DDL drizzle-kit emits uses the SQL column names
+ * (`..._musicbrainz_artist_id_...`, 71 bytes). A gate reading `getName()`
+ * would measure a string the database never sees, and snake_case is the
+ * LONGER of the two — so it would under-count and miss violations. The `.sql`
+ * files are what Postgres actually executes.
+ *
+ * Pure over `(file, text)` pairs so the checker itself can be exercised
+ * against a synthetic statement — see the boundary test below, which is what
+ * keeps this from being a check that cannot fail.
+ */
+function findOverlongIdentifiers(
+  files: readonly { file: string; text: string }[]
+): { violations: string[]; scanned: number } {
+  const seen = new Map<string, string>();
+  for (const { file, text } of files) {
+    // Identifiers are double-quoted in generated DDL; string literals are
+    // single-quoted, so this cannot pick up a value by mistake.
+    for (const match of text.matchAll(/"([^"]+)"/g)) {
+      const identifier = match[1];
+      if (!seen.has(identifier)) seen.set(identifier, file);
+    }
+  }
+
+  const violations: string[] = [];
+  for (const [identifier, file] of seen) {
+    if (Buffer.byteLength(identifier, 'utf8') > MAX_IDENTIFIER_BYTES) {
+      violations.push(`${file}: "${identifier}" is ${Buffer.byteLength(identifier, 'utf8')} bytes`);
+    }
+  }
+  return { violations, scanned: seen.size };
+}
+
+/**
+ * Every protected-column name that does not resolve to a real drizzle
+ * property, plus how many names were checked.
+ *
+ * `publicColumns` (`@oxyhq/db/assert`) filters by SET MEMBERSHIP —
+ * `new Set(registry[table])` — so a name matching no property is silently
+ * ignored: it protects nothing, `tsc` is clean (the registry is a plain
+ * `as const` string tuple), and no existing gate looks at it. A single typo
+ * (`rawTagsOriginalBytelength`) therefore un-protects a server-only column
+ * with no failure anywhere. Task 5 tripled this registry, which is what makes
+ * binding it to real columns worth a gate.
+ *
+ * The `scanned` count is the vacuity floor: a traversal that silently checks
+ * nothing (a renamed registry, a broken `Object.entries`) reports zero
+ * violations exactly like a clean one.
+ */
+function findUnboundProtectedColumns(): { violations: string[]; scanned: number } {
+  const byName = new Map(tables().map((table) => [getTableConfig(table).name, table]));
+  const violations: string[] = [];
+  let scanned = 0;
+
+  for (const [tableName, properties] of Object.entries(PROTECTED_COLUMNS_BY_TABLE)) {
+    const table = byName.get(tableName);
+    if (!table) {
+      violations.push(`${tableName}: no table of that name is exported from the schema barrel`);
+      continue;
+    }
+    const declared = new Set(Object.keys(getTableColumns(table)));
+    for (const property of properties) {
+      scanned += 1;
+      if (!declared.has(property)) {
+        violations.push(`${tableName}.${property}: no such drizzle property — protects nothing`);
+      }
+    }
+  }
+  return { violations, scanned };
+}
+
+/**
  * Assert a write is refused BY THE CONSTRAINT NAMED — not merely that it
  * throws.
  *
@@ -257,6 +369,61 @@ describe('schema gates', () => {
   it('keeps every expiry sweep target indexed', async () => {
     const violations = await findUnsupportedExpiryColumns(getDb(), EXPIRY_SWEEP_TARGETS);
     expect(violations).toEqual([]);
+  });
+
+  it('binds every protected-column name to a real drizzle property', () => {
+    const { violations, scanned } = findUnboundProtectedColumns();
+    expect(violations).toEqual([]);
+    // Vacuity floor: the walk must have examined every name the registry
+    // holds, not merely "found nothing wrong".
+    const declared = Object.values(PROTECTED_COLUMNS_BY_TABLE).reduce(
+      (total, properties) => total + properties.length,
+      0
+    );
+    expect(scanned).toBe(declared);
+    expect(scanned).toBeGreaterThanOrEqual(14);
+  });
+
+  it('declares no identifier Postgres would silently truncate', () => {
+    const folder = findMigrationsFolder();
+    const files = readdirSync(folder)
+      .filter((entry) => entry.endsWith('.sql'))
+      .map((entry) => ({ file: entry, text: readFileSync(join(folder, entry), 'utf8') }));
+
+    // Vacuity floors: a broken glob or regex reports "no violations" exactly
+    // like a clean schema does.
+    expect(files.length).toBeGreaterThanOrEqual(11);
+    const { violations, scanned } = findOverlongIdentifiers(files);
+    expect(scanned).toBeGreaterThanOrEqual(400);
+
+    const exempt = new Set(OVERLONG_IDENTIFIER_EXEMPTIONS.map((entry) => entry.identifier));
+    expect(violations.filter((violation) => ![...exempt].some((name) => violation.includes(name)))).toEqual([]);
+
+    // An exemption that no longer names an over-limit identifier is debt that
+    // was paid without anyone removing the note — the same staleness check
+    // `findIdColumnViolations` runs against its own two ledgers.
+    const stale = OVERLONG_IDENTIFIER_EXEMPTIONS.filter(
+      (entry) => !violations.some((violation) => violation.includes(entry.identifier))
+    ).map((entry) => `stale_identifier_exemption: ${entry.identifier}`);
+    expect(stale).toEqual([]);
+  });
+
+  it('flags a 64-byte identifier and passes a 63-byte one', () => {
+    // The checker's own proof, kept synthetic on purpose: the real scan above
+    // reports one known violation forever, so it can never demonstrate that
+    // the checker would catch a NEW one, nor that it stops at exactly the
+    // right boundary. `a`.repeat(63) is the longest identifier Postgres
+    // stores intact; 64 is the first it truncates.
+    const ok = 'a'.repeat(MAX_IDENTIFIER_BYTES);
+    const tooLong = 'b'.repeat(MAX_IDENTIFIER_BYTES + 1);
+    const { violations, scanned } = findOverlongIdentifiers([
+      {
+        file: 'synthetic.sql',
+        text: `ALTER TABLE "t" ADD CONSTRAINT "${tooLong}" CHECK ("${ok}" > 0);`,
+      },
+    ]);
+    expect(violations).toEqual([`synthetic.sql: "${tooLong}" is 64 bytes`]);
+    expect(scanned).toBe(3);
   });
 });
 
@@ -989,6 +1156,113 @@ describe('creators and uploads schema (Task 5)', () => {
     }
   });
 
+  it('allows ONE attestation per contributed track, and one marker per position on each parent', async () => {
+    const db = getDb();
+
+    // RELATIONS.md: "one row per contributed track — the attestation belongs
+    // to the publication, and a second publication of the same recording is a
+    // second decision to defend". Both of these uniques could be dropped with
+    // the rest of the suite still green, which is why they get their own test.
+    const [artist] = await db
+      .insert(catalogEntities)
+      .values({ name: 'CHECK-fixture-unique-artist', type: 'artist', source: 'upload' })
+      .returning({ id: catalogEntities.id });
+    const [track] = await db
+      .insert(tracks)
+      .values({
+        title: 'CHECK-fixture-unique-track',
+        artistId: artist.id,
+        artistName: 'CHECK-fixture-unique-artist',
+        duration: 120,
+        source: 'upload',
+      })
+      .returning({ id: tracks.id });
+    const [attestation] = await db
+      .insert(contributionAttestations)
+      .values({
+        trackId: track.id,
+        uploaderOxyUserId: 'CHECK-fixture-unique-uploader',
+        statement: 'CHECK-fixture-unique-statement',
+        acceptedAt: new Date(),
+      })
+      .returning({ id: contributionAttestations.id });
+    const [upload] = await db
+      .insert(userUploads)
+      .values({
+        ownerOxyUserId: 'CHECK-fixture-unique-owner',
+        title: 'CHECK-fixture-unique-file',
+        duration: 120,
+        sizeBytes: 512,
+        sha256: 'CHECK-fixture-unique-sha256',
+      })
+      .returning({ id: userUploads.id });
+
+    try {
+      await expectRefusedBy(
+        Promise.resolve(
+          db.insert(contributionAttestations).values({
+            trackId: track.id,
+            uploaderOxyUserId: 'CHECK-fixture-unique-uploader-2',
+            statement: 'CHECK-fixture-unique-statement-2',
+            acceptedAt: new Date(),
+          })
+        ),
+        isUniqueViolation,
+        'contribution_attestations_track_id_key'
+      );
+
+      // `position` is what preserves the Mongo array's ORDER in both markers
+      // tables; two rows sharing one position on the same parent is an order
+      // nobody can reconstruct.
+      await db.insert(contributionAttestationProvenanceMarkers).values({
+        contributionAttestationId: attestation.id,
+        position: 0,
+        code: 'CHECK-fixture-marker',
+        weight: 'high',
+      });
+      await expectRefusedBy(
+        Promise.resolve(
+          db.insert(contributionAttestationProvenanceMarkers).values({
+            contributionAttestationId: attestation.id,
+            position: 0,
+            code: 'CHECK-fixture-marker-again',
+            weight: 'low',
+          })
+        ),
+        isUniqueViolation,
+        'contribution_attestation_provenance_markers_position_key'
+      );
+
+      await db.insert(userUploadProvenanceMarkers).values({
+        userUploadId: upload.id,
+        position: 0,
+        code: 'CHECK-fixture-marker',
+        weight: 'high',
+      });
+      await expectRefusedBy(
+        Promise.resolve(
+          db.insert(userUploadProvenanceMarkers).values({
+            userUploadId: upload.id,
+            position: 0,
+            code: 'CHECK-fixture-marker-again',
+            weight: 'low',
+          })
+        ),
+        isUniqueViolation,
+        'user_upload_provenance_markers_user_upload_id_position_key'
+      );
+    } finally {
+      await db.delete(userUploadProvenanceMarkers).where(eq(userUploadProvenanceMarkers.userUploadId, upload.id));
+      await db.delete(userUploads).where(eq(userUploads.id, upload.id));
+      await db
+        .delete(contributionAttestationProvenanceMarkers)
+        .where(eq(contributionAttestationProvenanceMarkers.contributionAttestationId, attestation.id));
+      await db.delete(contributionAttestations).where(eq(contributionAttestations.trackId, track.id));
+      await db.delete(tracks).where(eq(tracks.id, track.id));
+      await db.delete(catalogEntities).where(eq(catalogEntities.id, artist.id));
+    }
+  });
+
   it('cascades a deleted standing into contributor_strikes, but a deleted TRACK only nulls the strike', async () => {
     const db = getDb();
 
@@ -1283,6 +1557,36 @@ describe('creators and uploads schema (Task 5)', () => {
     expect(names).toContain('user_uploads_matched_track_id_idx');
     expect(names).toContain('user_uploads_expires_at_idx');
     expect(names).toContain('user_uploads_owner_oxy_user_id_sha256_key');
+  });
+
+  it('keeps the locker-listing index NON-partial and the expiry index partial — the predicate, not just the name', async () => {
+    const db = getDb();
+    // `creators.ts` states that `user_uploads_owner_oxy_user_id_created_at_idx`
+    // must stay NON-partial, because compliance's whole-locker purge
+    // (`takedown.ts:509`, `find({ ownerOxyUserId })`) has to see soft-deleted
+    // rows too — a `WHERE deleted_at is null` added here would "silently stop
+    // serving" it. A test asserting only index NAMES cannot catch that: the
+    // name is identical either way. So this asserts the DEFINITION, which is
+    // the thing the comment actually promises.
+    //
+    // Both directions, because the two indexes on this table disagree on
+    // purpose and an assertion that only forbids predicates would be equally
+    // wrong: the expiry index IS partial, deliberately, since both sweeper
+    // phases that read it filter `deletedAt: null`.
+    const rows = await executeRows<{ indexname: string; indexdef: string }>(
+      db,
+      sql`select indexname, indexdef from pg_indexes where tablename = 'user_uploads'`
+    );
+    const definitions = new Map(rows.map((row) => [row.indexname, row.indexdef]));
+
+    const listing = definitions.get('user_uploads_owner_oxy_user_id_created_at_idx');
+    expect(listing).toBeDefined();
+    expect(listing).toContain('(owner_oxy_user_id, created_at DESC NULLS LAST)');
+    expect(listing).not.toContain('WHERE');
+
+    const expiry = definitions.get('user_uploads_expires_at_idx');
+    expect(expiry).toBeDefined();
+    expect(expiry).toContain('WHERE (deleted_at IS NULL)');
   });
 });
 
