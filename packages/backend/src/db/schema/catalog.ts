@@ -32,21 +32,27 @@
  *
  * ## Subdocument arrays: which became child tables, and which did not
  *
- * The spec names three: `Lyrics.lines`, `MusicBrainzArtist.urls`, and the
- * `SourceProvenance` arrays on `Album` and `CatalogEntity` (NOT `Track` — its
- * `sources[]` is the same shape but is deliberately left out of that list, so
- * it stays `jsonb` here; see the doc comment on `tracks.sources` below for the
- * inconsistency that leaves and why it was not resolved unilaterally).
+ * The spec named three — `Lyrics.lines`, `MusicBrainzArtist.urls`, and the
+ * `SourceProvenance` arrays on `Album` and `CatalogEntity` — and left `Track`
+ * off that list even though `Track.sources[]` is the identical
+ * `SourceProvenanceSchema`. Flagged in the first pass of this file rather than
+ * resolved unilaterally; on review this was confirmed as a brief gap, not a
+ * deliberate exclusion — `models/Playlist.ts` carries the same shape too, at
+ * `sources: [{ type: SourceProvenanceSchema }]`, and belongs to a later task.
+ * So `Track` gets `track_sources`, the third sibling of `album_sources` and
+ * `catalog_entity_sources`, same shape, no `jsonb` special case.
  *
- * Two more turned out to need the same treatment on the evidence in this
+ * Two more turned out to need child-table treatment on the evidence in this
  * model set, beyond what the spec enumerated:
  *
  *  - `Track.credits[]` — genuinely queried by element in production:
  *    `services/catalog/artistProfile.ts:154` runs
  *    `TrackModel.find({ 'credits.nameKey': nameKey, … })` for "everything this
- *    artist is credited on" (test: `artistProfile.test.ts:219`). A `jsonb`
- *    column cannot serve that with an index the way `track_credits.name_key`
- *    can, so it is a real child table: `track_credits`.
+ *    artist is credited on" (test: `artistProfile.test.ts:219`), and the same
+ *    file's doc comment at :31 says the field is indexed *"precisely so this
+ *    is a lookup rather than a scan"*. A `jsonb` column cannot serve that with
+ *    an index the way `track_credits.name_key` can, so it is a real child
+ *    table.
  *  - `CatalogEntity.strikes[]` — not queried by element, but
  *    `RELATIONS.md` requires `strikes[].trackId` to become a real
  *    `.references()` constraint (`SET NULL`, so a track's removal never
@@ -96,7 +102,6 @@ import {
 import type {
   ArtistImageSuggestion,
   HlsRendition,
-  SourceProvenance,
   TrackCredit,
   TrackImage,
 } from '@syra/shared-types';
@@ -581,17 +586,9 @@ export const tracks = pgTable(
     hls: jsonb().$type<HlsRendition[]>().notNull().default([]),
     loudnessLufs: doublePrecision(),
     hlsMasterKey: text(),
-    /**
-     * The provenance LOG — deliberately NOT decomposed into a child table
-     * here, unlike `Album.sources[]` and `CatalogEntity.sources[]`. The brief
-     * names only those two for the `SourceProvenance` conversion; `Track` has
-     * the identical shape and no query-by-element evidence was found for any
-     * of the three (Album's and CatalogEntity's included) — the two DID
-     * become child tables anyway, by an explicit, carried decision this
-     * implementer does not have the standing to extend to a third table on
-     * its own judgement. Left as jsonb and flagged in the report.
-     */
-    sources: jsonb().$type<SourceProvenance[]>().notNull().default([]),
+    // The provenance LOG is `track_sources` (child table, below) — the third
+    // sibling of `album_sources` and `catalog_entity_sources`. See the
+    // file-level doc comment for why this wasn't in the first pass.
     /**
      * Content hash of the ingested audio — server-only (Mongoose `select:
      * false`). See `PROTECTED_COLUMNS_BY_TABLE`. Deliberately NOT unique —
@@ -690,7 +687,27 @@ export const albumGenres = pgTable(
   ]
 );
 
-// ── album_sources / catalog_entity_sources (SourceProvenance child tables) ──
+// ── track_sources / album_sources / catalog_entity_sources (SourceProvenance child tables) ──
+
+export const trackSources = pgTable(
+  'track_sources',
+  {
+    id: generatedId(),
+    trackId: text()
+      .notNull()
+      .references(() => tracks.id, { onDelete: 'cascade' }),
+    position: integer().notNull(),
+    provider: text({ enum: PROVENANCE_PROVIDERS }).notNull(),
+    externalId: text().notNull(),
+    importedAt: timestamptz().notNull(),
+    fields: text().array().notNull().default(sql`array[]::text[]`),
+  },
+  (t) => [
+    check('track_sources_provider_check', sql`${t.provider} in (${sql.raw(inList(PROVENANCE_PROVIDERS))})`),
+    check('track_sources_position_check', sql`${t.position} >= 0`),
+    unique('track_sources_track_id_position_key').on(t.trackId, t.position),
+  ]
+);
 
 export const albumSources = pgTable(
   'album_sources',

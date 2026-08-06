@@ -89,12 +89,16 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
     reason: "A mirrored catalog image's id at its origin provider, e.g. Cover Art Archive (RELATIONS.md).",
   },
   {
-    column: 'album_sources.external_id',
+    column: 'track_sources.external_id',
     reason: 'The provenance log records which EXTERNAL provider supplied a field, keyed by that provider\'s own id.',
   },
   {
+    column: 'album_sources.external_id',
+    reason: 'Same provenance-log pattern as track_sources.external_id.',
+  },
+  {
     column: 'catalog_entity_sources.external_id',
-    reason: 'Same provenance-log pattern as album_sources.external_id.',
+    reason: 'Same provenance-log pattern as track_sources.external_id.',
   },
   {
     column: 'discogs_releases.discogs_release_id',

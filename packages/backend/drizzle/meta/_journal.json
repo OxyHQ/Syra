@@ -8,6 +8,13 @@
       "when": 1785991884923,
       "tag": "0000_cynical_pet_avengers",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1785992587121,
+      "tag": "0001_yielding_black_queen",
+      "breakpoints": true
     }
   ]
 }

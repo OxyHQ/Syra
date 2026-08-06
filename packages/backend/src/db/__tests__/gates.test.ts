@@ -21,10 +21,23 @@
  * `MINIMUM_TABLES` is a vacuity floor, not a target: fewer tables than this
  * means the traversal itself is broken (a wrong `sourceDir`, an empty
  * `schema` barrel import) rather than a clean schema. It was `0` when the
- * schema was empty; Task 2 (the catalog vertical) raised it to 18 — the
- * eighteen tables `schema/catalog.ts` and `schema/genres.ts` export — and
+ * schema was empty; Task 2 (the catalog vertical) raised it to 19 — the
+ * nineteen tables `schema/catalog.ts` and `schema/genres.ts` export — and
  * every later schema task raises it again. A floor that never moves is a
  * vacuity check that stopped checking.
+ *
+ * THIS FLOOR IS A VACUITY CHECK, AND VACUITY CHECKS HAVE A BLIND SPOT WORTH
+ * NAMING: Task 1's `tables()` helper below (`is(value, PgTable)` against
+ * `Object.values(schema)`) and its `.rejects` usage in the CHECK-constraint
+ * test pattern both carried real defects (see the two fixes in this file's
+ * history) that a thorough review of Task 1 did not catch, for the same
+ * reason `minimumTables: 0` did not catch anything either: the schema was
+ * EMPTY, so `Object.values(schema)` was never heterogeneous and nothing was
+ * ever inserted — the exact inputs that expose both bugs. A gate that has
+ * never been exercised against real data is unproven, not passing; it only
+ * broke the moment Task 2 gave it its first real input. That is why the
+ * floor is raised, and mutation-checked, at every schema task rather than
+ * trusted once and left alone.
  */
 
 import { join } from 'node:path';
@@ -45,7 +58,7 @@ import { PROTECTED_COLUMNS_BY_TABLE } from '../schema/protectedColumns';
 import { EXPIRY_SWEEP_TARGETS } from '../expiry';
 
 /** Traversal floor for every gate below. See this file's own doc comment. */
-const MINIMUM_TABLES = 18;
+const MINIMUM_TABLES = 19;
 
 /**
  * Every drizzle table the schema barrel exports, walked rather than listed by
@@ -128,6 +141,7 @@ describe('catalog schema (Task 2)', () => {
     'albums',
     'tracks',
     'track_credits',
+    'track_sources',
     'catalog_entity_strikes',
     'album_genres',
     'album_sources',
