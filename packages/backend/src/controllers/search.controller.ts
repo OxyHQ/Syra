@@ -18,10 +18,8 @@ import { syncPodcastSearch } from '../services/podcasts/podcastBackgroundImport'
 import { withImageFirstSort } from '../utils/imageFirstSort';
 import { parseBoundedLimit, parseOffset } from '../utils/reqParams';
 import { logger } from '../utils/logger';
-import {
-  getRequestUserId,
-  playableTrackFilter,
-} from '../utils/catalogVisibility';
+import { getRequestUserId } from '../utils/requestUser';
+import { playableTrackFilter } from '../utils/catalogVisibility';
 import {
   countAlbumsWithPlayableTracks,
   countArtistsWithPlayableTracks,

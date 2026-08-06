@@ -1,5 +1,4 @@
 import type { QueryFilter } from 'mongoose';
-import type { OxyAuthRequest } from '@oxyhq/core/server';
 import { PlaylistVisibility } from '@syra/shared-types';
 
 function andFilter<T>(filter: QueryFilter<T>, condition: QueryFilter<T>): QueryFilter<T> {
@@ -100,9 +99,4 @@ export function canViewPlaylist(playlist: ViewablePlaylistShape, userId?: string
   if (!userId) return false;
   if (playlist.ownerOxyUserId === userId) return true;
   return playlist.collaborators?.some((entry) => entry.oxyUserId === userId) === true;
-}
-
-export function getRequestUserId(req: Pick<OxyAuthRequest, 'user'>): string | undefined {
-  const id = req.user?.id || req.user?._id;
-  return typeof id === 'string' && id.trim() ? id : undefined;
 }

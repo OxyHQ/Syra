@@ -23,7 +23,7 @@
  */
 
 import { count, inArray } from 'drizzle-orm';
-import type { Album, Artist, CatalogImageSizes, Track } from '@syra/shared-types';
+import type { Album, Artist, CatalogImageSizes, Playlist, Track } from '@syra/shared-types';
 import { getDb } from '../postgres';
 import { albums, imageAssets, trackHlsRenditions } from '../schema/catalog';
 import {
@@ -31,10 +31,12 @@ import {
   normalizeImageRef,
   toAlbumDto,
   toArtistDto,
+  toPlaylistDto,
   toTrackDto,
   type AlbumRow,
   type ImageAssetRow,
   type ImageVariantLookup,
+  type PlaylistRow,
   type PublicCatalogEntityRow,
   type PublicTrackRow,
 } from './serialize';
@@ -181,6 +183,35 @@ export async function toAlbumDtos(rows: readonly AlbumRow[]): Promise<Album[]> {
 
   const lookup = await loadImageVariants(rows.flatMap(albumImageIds));
   return rows.map((row) => toAlbumDto(row, lookup));
+}
+
+/** Every `image_assets` id a `playlists` row can reference. */
+function playlistImageIds(row: PlaylistRow): (string | null)[] {
+  return [
+    row.coverArtId,
+    row.coverArtSizesSmallId,
+    row.coverArtSizesMediumId,
+    row.coverArtSizesLargeId,
+    row.coverArtSizesXlargeId,
+    row.coverArtSizesXxlargeId,
+    row.coverArtSizesOriginalId,
+  ];
+}
+
+/**
+ * Serialize a page of playlists — ONE `image_assets` query for the whole page.
+ *
+ * `collaborators` and `sources` stay opt-in on `PlaylistDtoContext` for the same
+ * reason `strikes` does on the artist one: every discovery shelf renders a name
+ * and a cover, and a shelf that loaded the collaborator list would pay a join
+ * per page for a field nothing on it shows. The playlists API, which does render
+ * them, loads them itself.
+ */
+export async function toPlaylistDtos(rows: readonly PlaylistRow[]): Promise<Playlist[]> {
+  if (rows.length === 0) return [];
+
+  const lookup = await loadImageVariants(rows.flatMap(playlistImageIds));
+  return rows.map((row) => toPlaylistDto(row, lookup));
 }
 
 /** Every `image_assets` id a `catalog_entities` row can reference. */

@@ -1,15 +1,34 @@
 import { Response, NextFunction } from 'express';
-import mongoose from 'mongoose';
+import { and, inArray } from 'drizzle-orm';
+import { isLiveEntityId } from '@oxyhq/db';
+import { publicColumns } from '@oxyhq/db/assert';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { UserLibraryModel } from '../models/Library';
 import { RecentlyPlayedModel } from '../models/RecentlyPlayed';
-import { TrackModel } from '../models/Track';
-import { formatTracksWithCoverArt } from '../utils/musicHelpers';
+import { getDb } from '../db/postgres';
+import { tracks } from '../db/schema/catalog';
+import { PROTECTED_COLUMNS_BY_TABLE } from '../db/schema/protectedColumns';
+import { toTrackDtos } from '../db/catalog/hydrate';
+import { playableTrackFilter } from '../db/catalog/visibility';
 import { getParam, parseBoundedLimit } from '../utils/reqParams';
 import { recordPlay } from '../services/recommendations/recordPlay';
 import { applyLikeSignal, applyFollowSignal } from '../services/recommendations/tasteSignals';
 import { LISTENING_SOURCES, type ListeningSource } from '../models/ListeningEvent';
-import { playableTrackFilter } from '../utils/catalogVisibility';
+
+/**
+ * The playable tracks behind a list of ids, in no particular order.
+ *
+ * `inArray(column, [])` generates `in ()`, which is a SYNTAX ERROR in Postgres
+ * rather than an empty result — so the empty case is answered without a query,
+ * the same guard `db/catalog/hydrate.ts`'s `loadImageVariants` carries.
+ */
+async function findPlayableTracksByIds(ids: readonly string[]) {
+  if (ids.length === 0) return [];
+  return getDb()
+    .select(publicColumns(tracks, PROTECTED_COLUMNS_BY_TABLE))
+    .from(tracks)
+    .where(and(playableTrackFilter(), inArray(tracks.id, [...ids])));
+}
 
 /** Validate a client-supplied listening source against the known set. */
 function parseListeningSource(value: unknown): ListeningSource {
@@ -130,14 +149,12 @@ export const getLikedTracks = async (req: AuthRequest, res: Response, next: Next
       return res.json({ tracks: [], total: 0, oxyUserId: userId });
     }
 
-    // Only valid ObjectIds can match a Track _id; ignore any stale/invalid ids.
-    const validTrackIds = likedTrackIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
+    // Ignore stale/invalid ids. BOTH live id shapes, not the 24-hex one alone:
+    // `tracks.id` is a uuid v7 for anything created since the cutover, and an
+    // ObjectId-only filter would drop every one of them from the user's likes.
+    const validTrackIds = likedTrackIds.filter((id) => isLiveEntityId(id));
 
-    const tracks = await TrackModel.find(playableTrackFilter({
-      _id: { $in: validTrackIds },
-    })).lean();
-
-    const formattedTracks = await formatTracksWithCoverArt(tracks);
+    const formattedTracks = await toTrackDtos(await findPlayableTracksByIds(validTrackIds));
 
     res.json({
       tracks: formattedTracks,
@@ -346,22 +363,16 @@ export const getRecentlyPlayed = async (req: AuthRequest, res: Response, next: N
       return res.json({ tracks: [] });
     }
 
-    // Preserve recency order from the aggregation when resolving Track docs.
-    const orderedTrackIds = recent
-      .map((entry) => entry._id)
-      .filter((id) => mongoose.Types.ObjectId.isValid(id));
+    // Preserve recency order from the aggregation when resolving track rows.
+    const orderedTrackIds = recent.map((entry) => entry._id).filter((id) => isLiveEntityId(id));
 
     if (orderedTrackIds.length === 0) {
       return res.json({ tracks: [] });
     }
 
-    const tracks = await TrackModel.find(playableTrackFilter({
-      _id: { $in: orderedTrackIds },
-    })).lean();
+    const formattedTracks = await toTrackDtos(await findPlayableTracksByIds(orderedTrackIds));
 
-    const formattedTracks = await formatTracksWithCoverArt(tracks);
-
-    // TrackModel.find does not honour the $in order; re-sort to match recency
+    // An `in (…)` does not honour the list's order; re-sort to match recency
     // and drop any ids that resolved to no available track.
     const orderIndex = new Map(orderedTrackIds.map((id, index) => [id, index]));
     const sortedTracks = formattedTracks
@@ -395,7 +406,7 @@ export const recordRecentlyPlayed = async (req: AuthRequest, res: Response, next
     if (!trackId) {
       return res.status(400).json({ error: 'trackId is required' });
     }
-    if (!mongoose.Types.ObjectId.isValid(trackId)) {
+    if (!isLiveEntityId(trackId)) {
       return res.status(400).json({ error: 'Invalid trackId' });
     }
 

@@ -16,7 +16,6 @@ import { catalogEntities, tracks } from '../db/schema/catalog';
 import { ContributionAttestationModel } from '../models/ContributionAttestation';
 import { UserUploadModel } from '../models/UserUpload';
 import { toUploadTrackDto } from './uploads.controller';
-import { formatTracksWithCoverArt, formatArtistWithImage } from '../utils/musicHelpers';
 import { getEntityProfile } from './entityProfile.controller';
 import {
   getMyImageSuggestions,
@@ -31,13 +30,20 @@ import {
  * They must be readable ONLY by the artist whose profile they sit on, and
  * publishable only once that artist has said yes.
  *
- * THREE mechanisms guard that, and only the third holds on the catalog read
- * path: `select: false` on the Mongoose path (inert under `aggregate()`, which
- * every container helper uses), the absent `artistSchema` field (inert against
- * `formatArtistWithImage`, which is untyped and spreads the whole document), and
- * the explicit `delete` in `stripExternalCatalogFields`. `GET /api/artists/:id`
- * really did return suggestions before that third one existed — verified against
- * the handler, which is why the fixture below gives the artist a playable track.
+ * Under Mongo, THREE mechanisms claimed to guard that and only the third
+ * actually did: `select: false` on the Mongoose path (inert under `aggregate()`,
+ * which every container helper used), the absent `artistSchema` field (inert
+ * against `formatArtistWithImage`, which was untyped and spread the whole
+ * document), and the explicit `delete` in `stripExternalCatalogFields`.
+ * `GET /api/artists/:id` really did return suggestions before that third one
+ * existed — verified against the handler, which is why the fixture below gives
+ * the artist a playable track.
+ *
+ * On Postgres the guard is an ALLOWLIST and there is only one: `image_suggestions`
+ * is in `PROTECTED_COLUMNS_BY_TABLE`, so `publicColumns()` removes it from the
+ * row TYPE and `toArtistDto` cannot name it without failing `tsc`. The two
+ * Mongo formatters this file imported to make the old point were still imported
+ * here and never called; the import is deleted with the claim.
  */
 
 /**

@@ -103,7 +103,7 @@ import { logger } from '../utils/logger';
 import { getErrorMessage, getErrorStack } from '../utils/error';
 import { getParam, parseBoundedLimit, parseOffset } from '../utils/reqParams';
 import { isDuplicateKeyOn } from '../utils/duplicateKey';
-import { normalizeImageRef } from '../utils/musicHelpers';
+import { normalizeImageRef } from '../db/catalog/serialize';
 import { getStoredImageColors } from '../utils/imageColors';
 import { storeImageAsset } from '../services/imageAssetService';
 

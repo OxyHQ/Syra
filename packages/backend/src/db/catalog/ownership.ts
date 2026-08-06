@@ -13,9 +13,19 @@ import { and, eq } from 'drizzle-orm';
 import { catalogEntities } from '../schema/catalog';
 import { getDb } from '../postgres';
 
-/** The owner columns a write needs — named, not a whole-row read. */
+/**
+ * The owner columns a write needs — named, not a whole-row read.
+ *
+ * `name` is here because the two CREATE paths (`createAlbum`, `uploadTrack`)
+ * denormalise it onto the row they write: `albums.artist_name` and
+ * `tracks.artist_name` are both `NOT NULL`. The Mongo helper projected
+ * `_id ownerOxyUserId uploadsDisabled` and both controllers therefore issued a
+ * SECOND `findOne` for the same document to get the name. One read answers both
+ * questions.
+ */
 export interface OwnedArtist {
   readonly id: string;
+  readonly name: string;
   readonly ownerOxyUserId: string | null;
   readonly uploadsDisabled: boolean | null;
 }
@@ -38,6 +48,7 @@ export async function findOwnedArtist(
   const [row] = await getDb()
     .select({
       id: catalogEntities.id,
+      name: catalogEntities.name,
       ownerOxyUserId: catalogEntities.ownerOxyUserId,
       uploadsDisabled: catalogEntities.uploadsDisabled,
     })

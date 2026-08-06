@@ -2,24 +2,20 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'bun:test';
 import express from 'express';
 import type { Server } from 'http';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
-import mongoose from 'mongoose';
-import { eq } from 'drizzle-orm';
+import { and, count, eq } from 'drizzle-orm';
 import { uuidv7 } from '@oxyhq/db';
 import { normalizeNameKey } from '@syra/shared-types';
 import { clear, connect, disconnect } from '../test/mongo';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
-import { catalogEntities } from '../db/schema/catalog';
-import { TrackModel } from '../models/Track';
-import { AlbumModel } from '../models/Album';
-import { ArtistModel } from '../models/CatalogEntity';
+import { albums, catalogEntities, imageAssets, tracks } from '../db/schema/catalog';
 import { PodcastModel } from '../models/Podcast';
 import { EpisodeModel } from '../models/Episode';
 import {
   countAlbumsWithPlayableTracks,
   findOneAlbumWithPlayableTracks,
-} from '../utils/playableContainers';
-import { playableTrackFilter } from '../utils/catalogVisibility';
+} from '../db/catalog/containers';
+import { playableTrackFilter } from '../db/catalog/visibility';
 import tracksRoutes from './tracks.routes';
 import albumsRoutes from './albums.routes';
 import artistsAuthRoutes from './artists.auth.routes';
@@ -38,12 +34,15 @@ const OWNER_ID = 'oxy-owner-1';
 const INTRUDER_ID = 'oxy-intruder-2';
 
 /**
- * BOTH databases, because this file spans a HALF-PORTED route surface: the
- * artist profile is Postgres (Task 10c-2) while tracks, albums, podcasts and
- * episodes are still Mongoose here — tracks and albums move in 10c-3, podcasts
- * in Task 12. The artist is therefore seeded on the Postgres side and the rest
- * on the Mongo side, which is the split as it actually is rather than a
- * uniform fixture that would match neither.
+ * BOTH databases, because this file spans TWO verticals: the whole music
+ * surface — artist, tracks, albums — is Postgres (Tasks 10c-2 and 10c-3), while
+ * podcasts and episodes are Mongoose until Task 12.
+ *
+ * The two-store artist fixture 10c-2 needed is gone with 10c-3: track and album
+ * ownership resolved through `utils/catalogOwnership.ts` (Mongoose) then, which
+ * forced ONE artist to exist in both stores under an ObjectId hex — the only id
+ * shape both accepted. Ownership is `db/catalog/ownership.ts` now, so the ids
+ * here are plain `generatedId()`s like every other fixture on the branch.
  */
 beforeAll(async () => {
   await connect();
@@ -106,58 +105,81 @@ function patch(url: string, body: Record<string, unknown>): Promise<globalThis.R
   });
 }
 
+/** A stored image asset, because `albums.cover_art_id` is a NOT NULL foreign key. */
+async function seedCoverArt(): Promise<string> {
+  const id = uuidv7();
+  await getDb().insert(imageAssets).values({
+    id,
+    s3Key: `covers/${id}.jpg`,
+    filename: 'cover.jpg',
+    contentType: 'image/jpeg',
+    byteSize: 1000,
+    ownerType: 'album',
+  });
+  return id;
+}
+
+/** Read a track back, by id. */
+async function readTrack(trackId: string) {
+  const [row] = await getDb().select().from(tracks).where(eq(tracks.id, trackId)).limit(1);
+  return row;
+}
+
+/** How many of an artist's tracks the catalog would list. */
+async function countPlayableTracksOf(artistId: string): Promise<number> {
+  const [row] = await getDb()
+    .select({ total: count() })
+    .from(tracks)
+    .where(and(playableTrackFilter(), eq(tracks.artistId, artistId)));
+  return row?.total ?? 0;
+}
+
+/** Read an album back, by id. */
+async function readAlbum(albumId: string) {
+  const [row] = await getDb().select().from(albums).where(eq(albums.id, albumId)).limit(1);
+  return row;
+}
+
 /** An artist profile owned by OWNER_ID, plus a track and album hanging off it. */
 async function seedOwnedCatalog() {
-  /**
-   * ONE artist, seeded into BOTH stores under the SAME id — and the id is an
-   * ObjectId hex on purpose.
-   *
-   * `PATCH /api/artists/me` resolves the profile through drizzle (10c-2), while
-   * `PATCH /api/tracks/:id` and the album routes still resolve ownership through
-   * `utils/catalogOwnership.ts`, which is Mongoose until 10c-3. One fixture has
-   * to satisfy both, and only one id SHAPE can: `catalog_entities.id` is `text`
-   * and accepts anything, `_id` must cast to an ObjectId, and `isLiveEntityId`
-   * accepts both spellings. So the ObjectId hex is the intersection.
-   *
-   * This is temporary by construction. When 10c-3 ports the track and album
-   * ownership check, the Mongoose half of this fixture goes and the id becomes a
-   * plain `generatedId()` like every other fixture on the branch.
-   */
-  const objectId = new mongoose.Types.ObjectId();
-  const artistId = objectId.toString();
   const name = `The Owner ${uuidv7()}`;
 
-  await ArtistModel.create({
-    _id: objectId,
-    name,
-    source: 'upload',
-    ownerOxyUserId: OWNER_ID,
-  });
+  const [artist] = await getDb()
+    .insert(catalogEntities)
+    .values({
+      type: 'artist',
+      name,
+      nameKey: normalizeNameKey(name),
+      source: 'upload',
+      ownerOxyUserId: OWNER_ID,
+    })
+    .returning({ id: catalogEntities.id });
+  if (!artist) throw new Error('seedOwnedCatalog: artist insert returned no row');
+  const artistId = artist.id;
 
-  await getDb().insert(catalogEntities).values({
-    id: artistId,
-    type: 'artist',
-    name,
-    nameKey: normalizeNameKey(name),
-    source: 'upload',
-    ownerOxyUserId: OWNER_ID,
-  });
+  const [track] = await getDb()
+    .insert(tracks)
+    .values({
+      title: 'Original Title',
+      artistId,
+      artistName: 'The Owner',
+      duration: 180,
+      source: 'upload',
+    })
+    .returning({ id: tracks.id });
+  if (!track) throw new Error('seedOwnedCatalog: track insert returned no row');
 
-  const track = await TrackModel.create({
-    title: 'Original Title',
-    artistId,
-    artistName: 'The Owner',
-    duration: 180,
-    source: 'upload',
-  });
-
-  const album = await AlbumModel.create({
-    title: 'Original Album',
-    artistId,
-    artistName: 'The Owner',
-    releaseDate: '2026-01-01',
-    coverArt: 'cover-id',
-  });
+  const [album] = await getDb()
+    .insert(albums)
+    .values({
+      title: 'Original Album',
+      artistId,
+      artistName: 'The Owner',
+      releaseDate: '2026-01-01',
+      coverArtId: await seedCoverArt(),
+    })
+    .returning({ id: albums.id });
+  if (!album) throw new Error('seedOwnedCatalog: album insert returned no row');
 
   return { artistId, track, album };
 }
@@ -167,12 +189,12 @@ describe('PATCH /api/tracks/:id', () => {
     const { track } = await seedOwnedCatalog();
 
     await withRouter('/api/tracks', tracksRoutes, OWNER_ID, async (baseUrl) => {
-      const response = await patch(`${baseUrl}/api/tracks/${track._id.toString()}`, {
+      const response = await patch(`${baseUrl}/api/tracks/${track.id}`, {
         title: 'Corrected Title',
       });
 
       expect(response.status).toBe(200);
-      const stored = await TrackModel.findById(track._id).lean();
+      const stored = await readTrack(track.id);
       expect(stored?.title).toBe('Corrected Title');
     });
   });
@@ -181,12 +203,12 @@ describe('PATCH /api/tracks/:id', () => {
     const { track } = await seedOwnedCatalog();
 
     await withRouter('/api/tracks', tracksRoutes, INTRUDER_ID, async (baseUrl) => {
-      const response = await patch(`${baseUrl}/api/tracks/${track._id.toString()}`, {
+      const response = await patch(`${baseUrl}/api/tracks/${track.id}`, {
         title: 'Hijacked Title',
       });
 
       expect(response.status).toBe(403);
-      const stored = await TrackModel.findById(track._id).lean();
+      const stored = await readTrack(track.id);
       expect(stored?.title).toBe('Original Title');
     });
   });
@@ -195,7 +217,7 @@ describe('PATCH /api/tracks/:id', () => {
     const { track, artistId } = await seedOwnedCatalog();
 
     await withRouter('/api/tracks', tracksRoutes, OWNER_ID, async (baseUrl) => {
-      const response = await patch(`${baseUrl}/api/tracks/${track._id.toString()}`, {
+      const response = await patch(`${baseUrl}/api/tracks/${track.id}`, {
         title: 'Corrected Title',
         artistId: 'some-other-artist',
         playCount: 999999,
@@ -203,7 +225,7 @@ describe('PATCH /api/tracks/:id', () => {
       });
 
       expect(response.status).toBe(200);
-      const stored = await TrackModel.findById(track._id).lean();
+      const stored = await readTrack(track.id);
       expect(stored?.title).toBe('Corrected Title');
       // Reassigning ownership, inflating stats, or clearing a takedown must not be
       // reachable through the edit endpoint.
@@ -217,16 +239,16 @@ describe('PATCH /api/tracks/:id', () => {
     const { track } = await seedOwnedCatalog();
 
     await withRouter('/api/tracks', tracksRoutes, OWNER_ID, async (baseUrl) => {
-      const response = await patch(`${baseUrl}/api/tracks/${track._id.toString()}`, {
+      const response = await patch(`${baseUrl}/api/tracks/${track.id}`, {
         isAvailable: false,
       });
 
       expect(response.status).toBe(200);
-      const stored = await TrackModel.findById(track._id).lean();
+      const stored = await readTrack(track.id);
       expect(stored?.isAvailable).toBe(false);
       // Unpublishing is NOT a takedown: the copyright fields stay untouched.
       expect(stored?.copyrightRemoved).not.toBe(true);
-      expect(stored?.removedAt).toBeUndefined();
+      expect(stored?.removedAt).toBeNull();
     });
   });
 });
@@ -236,12 +258,12 @@ describe('PATCH /api/albums/:id', () => {
     const { album } = await seedOwnedCatalog();
 
     await withRouter('/api/albums', albumsRoutes, OWNER_ID, async (baseUrl) => {
-      const response = await patch(`${baseUrl}/api/albums/${album._id.toString()}`, {
+      const response = await patch(`${baseUrl}/api/albums/${album.id}`, {
         title: 'Corrected Album',
       });
 
       expect(response.status).toBe(200);
-      const stored = await AlbumModel.findById(album._id).lean();
+      const stored = await readAlbum(album.id);
       expect(stored?.title).toBe('Corrected Album');
     });
   });
@@ -250,12 +272,12 @@ describe('PATCH /api/albums/:id', () => {
     const { album } = await seedOwnedCatalog();
 
     await withRouter('/api/albums', albumsRoutes, INTRUDER_ID, async (baseUrl) => {
-      const response = await patch(`${baseUrl}/api/albums/${album._id.toString()}`, {
+      const response = await patch(`${baseUrl}/api/albums/${album.id}`, {
         title: 'Hijacked Album',
       });
 
       expect(response.status).toBe(403);
-      const stored = await AlbumModel.findById(album._id).lean();
+      const stored = await readAlbum(album.id);
       expect(stored?.title).toBe('Original Album');
     });
   });
@@ -264,41 +286,41 @@ describe('PATCH /api/albums/:id', () => {
 describe('album unpublish (container-only)', () => {
   it('hides the album from listings while its tracks stay individually discoverable', async () => {
     const { album, artistId, track } = await seedOwnedCatalog();
-    await TrackModel.updateOne({ _id: track._id }, { albumId: album._id.toString() });
+    await getDb().update(tracks).set({ albumId: album.id }).where(eq(tracks.id, track.id));
 
-    expect(await countAlbumsWithPlayableTracks({ artistId })).toBe(1);
+    expect(await countAlbumsWithPlayableTracks(eq(albums.artistId, artistId))).toBe(1);
 
     await withRouter('/api/albums', albumsRoutes, OWNER_ID, async (baseUrl) => {
       const response = await fetch(
-        `${baseUrl}/api/albums/${album._id.toString()}/unpublish`,
+        `${baseUrl}/api/albums/${album.id}/unpublish`,
         { method: 'POST' },
       );
       expect(response.status).toBe(200);
     });
 
     // The container is gone from listings...
-    expect(await countAlbumsWithPlayableTracks({ artistId })).toBe(0);
-    expect(await findOneAlbumWithPlayableTracks(album._id.toString())).toBeNull();
+    expect(await countAlbumsWithPlayableTracks(eq(albums.artistId, artistId))).toBe(0);
+    expect(await findOneAlbumWithPlayableTracks(album.id)).toBeNull();
 
     // ...but the track itself is untouched and still individually playable. This is the
     // whole point of option B: retiring an album must not silently retire its songs.
-    const storedTrack = await TrackModel.findById(track._id).lean();
+    const storedTrack = await readTrack(track.id);
     expect(storedTrack?.isAvailable).not.toBe(false);
-    expect(await TrackModel.countDocuments(playableTrackFilter({ artistId }))).toBe(1);
+    expect(await countPlayableTracksOf(artistId)).toBe(1);
   });
 
   it('republishes losslessly', async () => {
     const { album, artistId, track } = await seedOwnedCatalog();
-    await TrackModel.updateOne({ _id: track._id }, { albumId: album._id.toString() });
+    await getDb().update(tracks).set({ albumId: album.id }).where(eq(tracks.id, track.id));
 
     await withRouter('/api/albums', albumsRoutes, OWNER_ID, async (baseUrl) => {
-      const albumUrl = `${baseUrl}/api/albums/${album._id.toString()}`;
+      const albumUrl = `${baseUrl}/api/albums/${album.id}`;
       await fetch(`${albumUrl}/unpublish`, { method: 'POST' });
       expect((await fetch(`${albumUrl}/publish`, { method: 'POST' })).status).toBe(200);
     });
 
-    expect(await countAlbumsWithPlayableTracks({ artistId })).toBe(1);
-    expect((await AlbumModel.findById(album._id).lean())?.title).toBe('Original Album');
+    expect(await countAlbumsWithPlayableTracks(eq(albums.artistId, artistId))).toBe(1);
+    expect((await readAlbum(album.id))?.title).toBe('Original Album');
   });
 
   it('rejects a non-owner unpublishing an album', async () => {
@@ -306,22 +328,33 @@ describe('album unpublish (container-only)', () => {
 
     await withRouter('/api/albums', albumsRoutes, INTRUDER_ID, async (baseUrl) => {
       const response = await fetch(
-        `${baseUrl}/api/albums/${album._id.toString()}/unpublish`,
+        `${baseUrl}/api/albums/${album.id}/unpublish`,
         { method: 'POST' },
       );
 
       expect(response.status).toBe(403);
-      expect((await AlbumModel.findById(album._id).lean())?.isAvailable).not.toBe(false);
+      expect((await readAlbum(album.id))?.isAvailable).not.toBe(false);
     });
   });
 
-  it('treats a pre-existing album with no isAvailable field as available', async () => {
+  /**
+   * Was: "treats a pre-existing album with no isAvailable field as available",
+   * which `$unset` the field to simulate a document written before it existed.
+   *
+   * That shape is UNREPRESENTABLE now — `albums.is_available` is
+   * `NOT NULL DEFAULT true` — so the Mongo test cannot be translated, and a test
+   * that cannot fail is worse than none. What it was really asserting is that an
+   * album written WITHOUT the field counts as available and needs no backfill,
+   * and that property still holds and is still worth pinning: the column default
+   * is what supplies it, and dropping the default would fail this.
+   */
+  it('an album inserted without isAvailable is available, no backfill needed', async () => {
     const { album, artistId, track } = await seedOwnedCatalog();
-    await TrackModel.updateOne({ _id: track._id }, { albumId: album._id.toString() });
-    // Simulate a document written before the field existed — no backfill should be needed.
-    await AlbumModel.collection.updateOne({ _id: album._id }, { $unset: { isAvailable: '' } });
+    await getDb().update(tracks).set({ albumId: album.id }).where(eq(tracks.id, track.id));
 
-    expect(await countAlbumsWithPlayableTracks({ artistId })).toBe(1);
+    // The seed never names `isAvailable`; the stored row carries the default.
+    expect((await readAlbum(album.id))?.isAvailable).toBe(true);
+    expect(await countAlbumsWithPlayableTracks(eq(albums.artistId, artistId))).toBe(1);
   });
 });
 

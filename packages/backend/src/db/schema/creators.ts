@@ -236,11 +236,14 @@ export const PROVENANCE_VERDICTS = ['clean', 'suspect', 'commercial'] as const;
 export const ARTIST_CLAIM_STATUSES = ['pending', 'approved', 'rejected'] as const;
 
 /**
- * `models/CopyrightReport.ts`'s own `status` enum. Deliberately a SECOND
- * tuple with the same three values as `ARTIST_CLAIM_STATUSES` rather than a
- * shared one: they are two independent review workflows (a claim on an
- * identity, a DMCA notice against a work), and merging them would make a
- * value added to one silently legal in the other.
+ * The DMCA review workflow's own `status` enum — carried over from
+ * `models/CopyrightReport.ts`, which Task 10c-3 deleted once
+ * `copyright.controller` moved to drizzle and nothing imported the model.
+ *
+ * Deliberately a SECOND tuple with the same three values as
+ * `ARTIST_CLAIM_STATUSES` rather than a shared one: they are two independent
+ * review workflows (a claim on an identity, a DMCA notice against a work), and
+ * merging them would make a value added to one silently legal in the other.
  */
 export const COPYRIGHT_REPORT_STATUSES = ['pending', 'approved', 'rejected'] as const;
 

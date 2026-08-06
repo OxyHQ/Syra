@@ -9,16 +9,8 @@ import { clear, connect, disconnect } from '../test/mongo';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
 import { catalogEntities, tracks } from '../db/schema/catalog';
-/**
- * Still Mongoose, and only for the two copyright-report cases below.
- * `copyright.controller`'s public REPORT endpoint reads the track through
- * `TrackModel`; it is 10c-3's file. It never reads the artist, so a Postgres
- * artist and a Mongo track coexist here without either handler noticing —
- * which is precisely what "half-ported route surface" means in practice.
- */
-import { TrackModel } from '../models/Track';
 import { ArtistClaimModel } from '../models/ArtistClaim';
-import { CopyrightReportModel } from '../models/CopyrightReport';
+import { copyrightReports } from '../db/schema/creators';
 import { COMPLIANCE_REVIEWERS_ENV } from '../services/compliance/reviewers';
 import artistsRoutes from './artists.routes';
 import artistsAuthRoutes from './artists.auth.routes';
@@ -137,6 +129,19 @@ async function makeClaimableArtist(): Promise<string> {
   return artist.id;
 }
 
+/** A ready track for `artistId`, on the Postgres side. */
+async function makeTrack(artistId: string): Promise<string> {
+  const [track] = await getDb()
+    .insert(tracks)
+    .values({
+      title: 'Reported', artistId, artistName: 'X',
+      duration: 100, source: 'upload', status: 'ready',
+    })
+    .returning({ id: tracks.id });
+  if (!track) throw new Error('makeTrack: insert returned no row');
+  return track.id;
+}
+
 async function readArtist(id: string) {
   const [row] = await getDb()
     .select()
@@ -217,20 +222,21 @@ describe('review routing and gating', () => {
 describe('copyright routing', () => {
   it('reporting stays open to an unauthenticated rightsholder', async () => {
     const artistId = await makeClaimableArtist();
-    const track = await TrackModel.create({
-      title: 'Reported', artistId, artistName: 'X',
-      duration: 100, source: 'upload', status: 'ready',
-    });
+    const trackId = await makeTrack(artistId);
 
     await withApi(undefined, async (baseUrl) => {
       const response = await post(`${baseUrl}/api/copyright/report`, {
-        trackId: track._id.toString(),
+        trackId,
         reason: 'That is my recording',
       });
       expect(response.status).toBe(201);
     });
 
-    expect(await CopyrightReportModel.countDocuments({ status: 'pending' })).toBe(1);
+    const pending = await getDb()
+      .select({ id: copyrightReports.id })
+      .from(copyrightReports)
+      .where(eq(copyrightReports.status, 'pending'));
+    expect(pending).toHaveLength(1);
   });
 
   /**
@@ -240,20 +246,17 @@ describe('copyright routing', () => {
    */
   it('records the reporter when the caller IS signed in', async () => {
     const artistId = await makeClaimableArtist();
-    const track = await TrackModel.create({
-      title: 'Reported', artistId, artistName: 'X',
-      duration: 100, source: 'upload', status: 'ready',
-    });
+    const trackId = await makeTrack(artistId);
 
     await withApi('signed-in-reporter', async (baseUrl) => {
       const response = await post(`${baseUrl}/api/copyright/report`, {
-        trackId: track._id.toString(),
+        trackId,
         reason: 'That is my recording',
       });
       expect(response.status).toBe(201);
     });
 
-    const report = await CopyrightReportModel.findOne({}).lean();
+    const [report] = await getDb().select().from(copyrightReports).limit(1);
     expect(report?.reporterOxyUserId).toBe('signed-in-reporter');
   });
 

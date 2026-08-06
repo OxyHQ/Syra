@@ -49,7 +49,19 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
-import { and, asc, desc, eq, sql, type SQLWrapper } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  ilike,
+  inArray,
+  isNotNull,
+  ne,
+  or,
+  sql,
+  type SQLWrapper,
+} from 'drizzle-orm';
 import { executeRows } from '@oxyhq/db';
 import { closePostgres, connectPostgres, getDb } from '../../postgres';
 import { albums, catalogEntities, tracks } from '../../schema/catalog';
@@ -60,7 +72,10 @@ import {
   playableAlbumsWhere,
   playableArtistsWhere,
   playablePlaylistsWhere,
+  descNullsLast,
+  imageFirst,
 } from '../containers';
+import { playableTrackFilter } from '../visibility';
 
 /** Thrown to roll the seeding transaction back once every plan is collected. */
 class Rollback extends Error {}
@@ -84,6 +99,21 @@ let analyzedColumnCount = 0;
  * 200 artists, 400 albums, 4,000 tracks, 200 playlists, 4,000 playlist entries.
  * Every seventh album is given only unplayable tracks so the container
  * predicates have work to do rather than matching everything.
+ *
+ * ## `created_at` and `play_count` VARY, and that is load-bearing
+ *
+ * They were left to their column defaults, which meant `now()` and `0` — and
+ * `now()` is the TRANSACTION's timestamp, so all 4,000 rows shared one instant
+ * and `play_count` was constant across the whole table. A column with one
+ * distinct value makes its ordered index worth nothing to the planner, so
+ * `tracks_created_at_idx` and `tracks_play_count_idx` cost the same as each
+ * other for a `order by created_at desc limit 20` — no sort avoided either way.
+ *
+ * The symptom was a probe that passed, then chose the other index on the next
+ * run with no relevant change. That reads as planner flakiness and is not: it is
+ * a fixture sitting on the wrong side of the distinction the probe exists to
+ * make. Same shape as the tidy-fixture rule for narrowing conditions — ask what
+ * input makes the two candidates disagree, and put a fixture there.
  */
 async function seed(tx: Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0]): Promise<void> {
   await executeRows(
@@ -110,14 +140,17 @@ async function seed(tx: Parameters<Parameters<ReturnType<typeof getDb>['transact
   await executeRows(
     tx,
     sql`insert into tracks (id, title, artist_id, artist_name, album_id, duration, source, status,
-                            popularity, is_available, copyright_removed, genre, mood)
+                            popularity, is_available, copyright_removed, genre, mood,
+                            play_count, created_at)
         select ${MARKER} || '-t-' || g, 'Track ' || g,
                ${MARKER} || '-art-' || (1 + (g % 200)), 'Artist',
                ${MARKER} || '-alb-' || (1 + (g % 400)), 200, 'upload', 'ready', g % 101,
                case when (1 + (g % 400)) % 7 = 0 then false else true end,
                false,
                (array['rock','pop','jazz','ambient','hiphop'])[1 + (g % 5)],
-               (array['chill','energetic','sad','happy'])[1 + (g % 4)]
+               (array['chill','energetic','sad','happy'])[1 + (g % 4)],
+               g,
+               now() - (g || ' minutes')::interval
         from generate_series(1, 4000) g`
   );
   await executeRows(
@@ -195,6 +228,103 @@ beforeAll(async () => {
           .from(playlists)
           .where(playablePlaylistsWhere())
           .orderBy(desc(playlists.followers))
+          .limit(20),
+        // ── Task 10c-3's controller queries ──────────────────────────────
+        //
+        // Each is the query the handler actually issues, ORDER BY and LIMIT
+        // included, for the reason stated above: the limit changes which plan
+        // the planner picks, so measuring a bare WHERE measures a plan nothing
+        // runs.
+        //
+        // `GET /api/browse/popular/tracks` and `/charts`.
+        browsePopularTracks: tx
+          .select({ id: tracks.id })
+          .from(tracks)
+          .where(playableTrackFilter())
+          .orderBy(
+            imageFirst(tracks.coverArtId),
+            descNullsLast(tracks.popularity),
+            descNullsLast(tracks.playCount),
+            descNullsLast(tracks.createdAt)
+          )
+          .limit(20),
+        // `GET /api/browse/genres/:genre/tracks`.
+        browseGenreTracks: tx
+          .select({ id: tracks.id })
+          .from(tracks)
+          .where(and(playableTrackFilter(), eq(tracks.genre, 'rock')))
+          .orderBy(
+            imageFirst(tracks.coverArtId),
+            descNullsLast(tracks.popularity),
+            descNullsLast(tracks.playCount),
+            descNullsLast(tracks.createdAt)
+          )
+          .limit(50),
+        // `GET /api/browse/genres` — the genre cards. `distinct on` plus the
+        // matching leading `order by` is what turns Mongo's 1 + N round trips
+        // (a `distinct`, then a sorted `find().limit(1)` per genre) into one.
+        browseGenreCards: tx
+          .selectDistinctOn([tracks.genre], { genre: tracks.genre, coverArtId: tracks.coverArtId })
+          .from(tracks)
+          .where(and(playableTrackFilter(), isNotNull(tracks.genre), ne(tracks.genre, '')))
+          .orderBy(
+            tracks.genre,
+            imageFirst(tracks.coverArtId),
+            descNullsLast(tracks.popularity),
+            descNullsLast(tracks.playCount)
+          )
+          .limit(20),
+        // `GET /api/tracks` — newest first.
+        tracksListing: tx
+          .select({ id: tracks.id })
+          .from(tracks)
+          .where(playableTrackFilter())
+          .orderBy(descNullsLast(tracks.createdAt))
+          .limit(20),
+        // `GET /api/tracks/:id`.
+        trackById: tx
+          .select({ id: tracks.id })
+          .from(tracks)
+          .where(and(eq(tracks.id, `${MARKER}-t-7`), playableTrackFilter()))
+          .limit(1),
+        // `GET /api/library/tracks` and `/recently-played` — the liked/recent
+        // ids resolved in one `in (…)`.
+        libraryTracksByIds: tx
+          .select({ id: tracks.id })
+          .from(tracks)
+          .where(
+            and(
+              playableTrackFilter(),
+              inArray(tracks.id, [`${MARKER}-t-1`, `${MARKER}-t-2`, `${MARKER}-t-3`])
+            )
+          ),
+        // `GET /api/albums` — the public album listing.
+        albumsListing: tx
+          .select({ id: albums.id })
+          .from(albums)
+          .where(playableAlbumsWhere())
+          .orderBy(descNullsLast(albums.releaseDate), descNullsLast(albums.createdAt))
+          .limit(20),
+        /**
+         * `GET /api/tracks/search`, the FAITHFUL port of the Mongo regex.
+         *
+         * Asserted to be a Seq Scan, not an index scan — `ilike '%q%'` has a
+         * leading wildcard, no b-tree can serve it, and `pg_trgm` is not
+         * installed. Pinned here rather than left unmeasured so the cost is a
+         * recorded fact for whoever rules on the tsvector alternative, and so
+         * the day `pg_trgm` or a `search_vector` reader lands, this probe is
+         * what says the plan changed.
+         */
+        trackSearchIlike: tx
+          .select({ id: tracks.id })
+          .from(tracks)
+          .where(
+            and(
+              playableTrackFilter(),
+              or(ilike(tracks.title, '%probe%'), ilike(tracks.artistName, '%probe%'))
+            )
+          )
+          .orderBy(descNullsLast(tracks.popularity), descNullsLast(tracks.createdAt))
           .limit(20),
         // The control: `tracks.comment` carries no index, so the planner has
         // nothing to choose even with sequential scans discouraged.
@@ -313,6 +443,132 @@ describe('the artist and playlist paths reach their indexes', () => {
   });
 });
 
+describe('Task 10c-3: the controller list queries reach an index', () => {
+  /**
+   * Each names the index in the assertion so a regression reports WHICH plan the
+   * planner chose. Where several partial indexes are equally good the assertion
+   * names the COLUMN prefix instead, for the reason the album probe above gives:
+   * asserting an arbitrary tie-break is how a test starts failing for no reason
+   * anybody can act on.
+   */
+  const INDEXED: Readonly<Record<string, string>> = {
+    // The newest-first `/api/tracks` listing: `tracks_created_at_idx` is partial
+    // on the playability predicate AND ordered by exactly its sort, so the
+    // planner walks it and never sorts.
+    tracksListing: 'tracks_created_at_idx',
+    // `genre = $1` is a real equality under the playability predicate, so the
+    // partial genre index is selective and wins on its own merits.
+    browseGenreTracks: 'tracks_genre_idx',
+    // Point and set lookups by primary key.
+    trackById: 'tracks_pkey',
+    libraryTracksByIds: 'tracks_pkey',
+  };
+
+  for (const [probe, index] of Object.entries(INDEXED)) {
+    it(`${probe} scans ${index}`, () => {
+      expect(`${probe}: ${indexesIn(probe)}`).toContain(index);
+      expect(plans.get(probe)).not.toContain('Seq Scan on tracks');
+    });
+  }
+
+  /**
+   * The popularity-ordered discovery shelves, asserted WEAKLY — and the reason
+   * is a measurement worth recording rather than a convenience.
+   *
+   * Their ordering is `(cover_art_id is not null) desc, popularity desc,
+   * play_count desc, created_at desc`. NO index can produce that, so the planner
+   * reads the playable rows through whichever partial index is cheapest and then
+   * sorts. Measured on the 4,000-row seed it chose `tracks_created_at_idx` for
+   * both, not `tracks_popularity_idx` — the partial indexes all cover the same
+   * rows, so the choice among them is a cost estimate, and naming one would be
+   * asserting an arbitrary tie-break exactly as `albumHasPlayable` above says.
+   *
+   * The consequence is real and is NOT a port regression: Mongo sorted on the
+   * same four keys with no compound index either, so both stores sort every
+   * playable track to return a page of twenty. What changed is that it is now
+   * measured. Recorded for whoever sizes the catalogue: the fix is a compound
+   * index matching the shelf's own ordering, which is a schema decision and not
+   * this task's to take.
+   */
+  for (const probe of ['browsePopularTracks', 'browseGenreCards']) {
+    it(`${probe} reads through an index and sorts, never scanning the table`, () => {
+      expect(`${probe}: ${indexesIn(probe)}`).toContain('tracks_');
+      expect(plans.get(probe)).not.toContain('Seq Scan on tracks');
+      // The sort is the point of the weakening — assert it is really there, so
+      // this test stops being weak the day an index makes it unnecessary.
+      expect(`${probe} sorts: ${plans.get(probe)?.includes('Sort')}`).toBe(`${probe} sorts: true`);
+    });
+  }
+
+  /**
+   * `GET /api/tracks` sorts NOTHING, and that is the whole point of
+   * `descNullsLast`.
+   *
+   * A plain `desc()` emits `ORDER BY created_at DESC`, which means NULLS FIRST,
+   * while every descending index in this schema is `DESC NULLS LAST` — so
+   * Postgres cannot match them and puts a full sort of every playable row on top
+   * of the index scan. Measured on this seed: cost 1087.00 with `desc()`, 4.34
+   * with `descNullsLast()`, and the gap scales with the catalogue rather than
+   * with the page.
+   *
+   * Asserting the absence of the Sort, not just the index name, is what makes
+   * this catch a regression: the index is reached in BOTH spellings, so a probe
+   * that only named it passed while the ordering was unusable.
+   */
+  it('the tracks listing walks the ordered index without sorting', () => {
+    expect(`tracks listing sorts: ${plans.get('tracksListing')?.includes('Sort')}`).toBe(
+      'tracks listing sorts: false'
+    );
+  });
+
+  /**
+   * Weak on purpose, and the reason is a measurement rather than a shrug.
+   *
+   * With `descNullsLast` this probe was observed reaching
+   * `albums_release_date_idx` as a `Presorted Key` under an Incremental Sort —
+   * only the `created_at` tie-break sorted, and the `EXISTS` half became a
+   * Nested Loop Semi Join through `tracks_album_id_idx`. That is a real
+   * improvement over the Hash Join plus full sort a bare `desc()` produced.
+   *
+   * It is NOT asserted, because it did not hold: the same probe chose the join
+   * plan again during a full-suite run, and this database is shared with other
+   * agents' suites, so `albums`' statistics and physical size move underneath
+   * it. Asserting a plan that concurrent load can flip is the coin flip this
+   * file's header warns about — the property that survives is that the listing
+   * reaches an index on `albums` and never reads the table.
+   */
+  it('the album listing reaches an index and never scans the table', () => {
+    expect(plans.get('albumsListing')).not.toContain('Seq Scan on albums');
+    expect(`albums listing: ${indexesIn('albumsListing')}`).toContain('albums_');
+  });
+
+  /**
+   * `GET /api/tracks/search` examines every playable row, and that is asserted
+   * rather than left unmeasured.
+   *
+   * `ilike '%q%'` is the faithful port of `new RegExp(q, 'i')` — same rows, same
+   * order — and the Mongo original was a collection scan too, so this is not a
+   * regression. The alternative, `websearch_to_tsquery` over the GIN-indexed
+   * `search_vector`, changes what MATCHES ("love" stops matching "Glove"), which
+   * is a product decision and not a port decision.
+   *
+   * The assertion is on the SHAPE, not on the absence of an index scan: with
+   * `enable_seqscan = off` the planner still enters through a partial index and
+   * applies the pattern as a `Filter`, so "no index scan" would simply be false.
+   * What says "this is a scan" is that the search columns never appear in an
+   * `Index Cond` and `tracks_search_gin` is untouched — and the day a ruling
+   * lands, both of those flip.
+   */
+  it('the track search filters every playable row and reaches no text index', () => {
+    const plan = plans.get('trackSearchIlike') ?? '';
+    expect(`ilike is a filter: ${/Filter:.*~~\*/.test(plan)}`).toBe('ilike is a filter: true');
+    expect(`ilike is an index cond: ${/Index Cond:.*~~\*/.test(plan)}`).toBe(
+      'ilike is an index cond: false'
+    );
+    expect(`search gin used: ${plan.includes('tracks_search_gin')}`).toBe('search gin used: false');
+  });
+});
+
 describe('the probe can tell an index from a scan', () => {
   /**
    * If this ever stops reporting a seq scan, every assertion above has become
@@ -347,7 +603,7 @@ describe('the probe can tell an index from a scan', () => {
     // not discriminate. With the `ANALYZE` gone the estimate stayed well above
     // any useful threshold, because Postgres falls back to estimating from the
     // relation's physical size.
-    expect(plans.size).toBe(5);
+    expect(plans.size).toBe(13);
     expect(`tracks seeded: ${seededRowCount}`).toBe('tracks seeded: 4000');
     expect(`tracks columns in pg_stats: ${analyzedColumnCount > 0}`).toBe(
       'tracks columns in pg_stats: true'

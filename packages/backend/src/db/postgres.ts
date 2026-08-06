@@ -80,6 +80,29 @@ export function getDb(): OxyDatabase<typeof schema> {
   return handle.db;
 }
 
+/**
+ * Whether the pool is open — the Postgres counterpart of
+ * `utils/database.ts`'s `isDatabaseConnected()`.
+ *
+ * Every controller guards its handlers with `if (!isDatabaseConnected()) 503`,
+ * and that function reports MONGOOSE readiness. On a controller whose reads are
+ * all drizzle it is the wrong database in both directions: Mongo down and
+ * Postgres up answers 503 for an endpoint that would have worked, and Postgres
+ * down with Mongo up sails past the guard and throws inside the handler.
+ *
+ * `tsc` cannot see it and neither can a test suite that opens both databases —
+ * which is how it survived: the ported controllers' suites all call `connect()`
+ * as well as `connectDb()`. `browse.controller.test.ts` is the first to open
+ * Postgres ALONE, and every one of its handlers answered 503.
+ *
+ * Only for a controller that has NO Mongoose reads left. A hybrid one still
+ * needs Mongo and must keep asking about it — the two questions are different,
+ * and a controller reading both stores has to answer both.
+ */
+export function isPostgresConnected(): boolean {
+  return handle !== null;
+}
+
 /** The handle `getDb()` returns. */
 export type Db = OxyDatabase<typeof schema>;
 

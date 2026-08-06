@@ -40,7 +40,7 @@ import {
   normalizeNameKey,
 } from '@syra/shared-types';
 import { getStoredImageColors } from '../utils/imageColors';
-import { getRequestUserId } from '../utils/catalogVisibility';
+import { getRequestUserId } from '../utils/requestUser';
 
 const ARTIST_ALBUMS_LIMIT = 100;
 /** A claimant's own history — bounded, and far above the number anyone accumulates. */

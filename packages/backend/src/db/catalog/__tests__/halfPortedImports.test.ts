@@ -19,14 +19,19 @@
  * from `db/catalog/`. Ported means "has a drizzle counterpart with the same
  * name", which is what makes holding both a half-port rather than a coincidence.
  *
- * `getRequestUserId` is the one exception and it is listed by identity, not by
+ * `getRequestUserId` WAS the one exception, listed by identity rather than by
  * pattern: it reads an id off an Express request and has nothing to do with
- * either database, so a controller that has moved its queries but still calls it
- * is not half-ported. It has no drizzle counterpart because it does not belong
- * in `db/` at all. Task 10c gives it a home of its own when
- * `utils/catalogVisibility.ts` is deleted, at which point
- * {@link UNPORTED_SYMBOLS} must be empty — asserted below, so the exception
- * cannot outlive its reason.
+ * either database, so a controller that had moved its queries but still called
+ * it was not half-ported. Task 10c-3 gave it a home of its own —
+ * `utils/requestUser.ts` — so {@link UNPORTED_SYMBOLS} is now EMPTY, and it did
+ * not wait for `utils/catalogVisibility.ts` to be deleted: that module survives
+ * for `playlists.controller` (Task 11) and `search.controller`, and an exemption
+ * that outlives the work it describes is what these registries exist to prevent.
+ *
+ * The exemption MECHANISM stays, because emptying the list must not silently
+ * retire the tests that prove it matches by identity. {@link halfPortedImport}
+ * therefore takes the map as a parameter, and the behavioural cases below pass a
+ * synthetic one.
  */
 
 import { readdirSync, readFileSync } from 'node:fs';
@@ -80,16 +85,16 @@ function resolveSpecifier(specifier: string, fromDir: string): string | null {
   return resolve(fromDir, specifier).replace(/\.(?:[mc]?[jt]s)$/, '');
 }
 
+/** Symbols an old module exports that have NO drizzle counterpart. */
+type ExemptSymbols = Readonly<Record<string, readonly string[]>>;
+
 /**
- * Symbols an old module exports that have NO drizzle counterpart, so importing
- * one alongside the new modules is not a half-port. Keyed by module suffix.
+ * Importing one of these alongside the new modules is not a half-port. Keyed by
+ * module path relative to `src/`.
  *
- * MUST be empty by the end of Task 10c — see this file's doc comment and the
- * final test below.
+ * EMPTY since Task 10c-3 — see this file's doc comment and the final test below.
  */
-const UNPORTED_SYMBOLS: Readonly<Record<string, readonly string[]>> = {
-  'utils/catalogVisibility': ['getRequestUserId'],
-};
+const UNPORTED_SYMBOLS: ExemptSymbols = {};
 
 /** Blank out comments, preserving line structure, so prose cannot trip the scan. */
 function withoutComments(source: string): string {
@@ -129,7 +134,8 @@ function readImports(source: string): ImportRecord[] {
  */
 function halfPortedImport(
   imports: readonly ImportRecord[],
-  fromDir: string
+  fromDir: string,
+  exemptions: ExemptSymbols = UNPORTED_SYMBOLS
 ): { module: string; name: string } | null {
   const resolved = imports.map((entry) => ({
     ...entry,
@@ -145,7 +151,7 @@ function halfPortedImport(
   for (const entry of resolved) {
     const module = entry.path === null ? undefined : OLD_MODULE_PATHS.get(entry.path);
     if (!module) continue;
-    const exempt = UNPORTED_SYMBOLS[module] ?? [];
+    const exempt = exemptions[module] ?? [];
     const offending = entry.names.find((name) => !exempt.includes(name));
     // A bare or default import of an old module names nothing to exempt, so it
     // counts on its own — it can only have been taken for a ported symbol.
@@ -202,16 +208,81 @@ const MINIMUM_SCANNED_FILES = 200;
  *      the way an exemption list does.
  */
 const HALF_PORTED_BY_NECESSITY: Readonly<Record<string, { owner: string; reason: string }>> = {
-  'controllers/browse.controller.ts': {
-    owner: 'Task 10c-3',
-    reason:
-      'The personalised shelf reads `recommendationService`, which is drizzle, so it serializes ' +
-      'through `db/catalog/hydrate`. Every other read in the handler — the container helpers, ' +
-      '`TrackModel.find` — is still Mongo and moves with the rest of the controller.',
-  },
+  // `controllers/browse.controller.ts` was the only entry, registered by 10c-1
+  // when its personalised shelf moved to drizzle ahead of the rest of the
+  // handler. 10c-3 ported the rest, so the entry failed as stale — the shrink
+  // direction firing on real work — and is deleted rather than edited.
 };
 
 const REGISTERED_HALF_PORTED = new Set(Object.keys(HALF_PORTED_BY_NECESSITY));
+
+/**
+ * The Mongoose modules Task 10 replaces that are STILL HERE, each with the task
+ * that deletes it and the exact set of files still importing it.
+ *
+ * `utils/playableContainers.ts` was Task 10c's stated finish line and did not
+ * make it, for exactly one reason, named here rather than left in a report: the
+ * only file still importing it is `search.controller.ts`, whose port is blocked
+ * on a product ruling about text-search semantics (`ilike '%q%'` is faithful and
+ * unindexed; `websearch_to_tsquery` over the existing GIN-indexed
+ * `search_vector` is indexed and changes what matches). The moment that ruling
+ * lands, this entry goes with it.
+ *
+ * Held to THREE directions, so it cannot rot in any of them:
+ *
+ *   1. A module listed here must still EXIST. Deleting the file without deleting
+ *      the entry fails.
+ *   2. A module listed here must still have importers — the exact set recorded.
+ *      An importer that ports fails the gate as stale; a NEW importer of a dying
+ *      module fails it as a regression, which is the direction prose can never
+ *      catch.
+ *   3. A Task 10 module NOT listed here must be GONE. `utils/catalogOwnership.ts`
+ *      is the first to satisfy that, deleted in 10c-3 once `albums.controller`
+ *      and `tracks.controller` — its only two importers — moved to
+ *      `db/catalog/ownership.ts`.
+ */
+const SURVIVING_MONGOOSE_MODULES: Readonly<
+  Record<string, { owner: string; importers: readonly string[]; reason: string }>
+> = {
+  'utils/playableContainers': {
+    owner: 'Task 10c-3, the moment the text-search ruling lands',
+    importers: ['controllers/search.controller.ts'],
+    reason:
+      'Its album/artist/playlist container reads have drizzle twins in `db/catalog/containers.ts` ' +
+      'and every other caller uses them. `search.controller` cannot be ported piecemeal — a ' +
+      'half-ported controller is the one state this branch cannot hold — so its container reads ' +
+      'move with its six regex search sites.',
+  },
+  'utils/musicHelpers': {
+    owner: 'Task 11 — library and playlists',
+    importers: [
+      'controllers/playlists.controller.ts',
+      'controllers/search.controller.ts',
+      // `MongoCatalogDoc`, the type that makes handing a drizzle row to these
+      // formatters a compile error. The gate found this one; the first draft of
+      // this registry listed the two controllers and missed it.
+      'utils/playableContainers.ts',
+    ],
+    reason:
+      '`formatPlaylistWithCoverArt` / `formatPlaylistsWithCoverArt` / `toApiFormat` operate on ' +
+      'Mongoose Playlist DOCUMENTS. `playlists` and `playlist_tracks` are ported tables, but ' +
+      '`playlists.controller` still reads them through `PlaylistModel`, so killing these ' +
+      'formatters IS Task 11. `db/catalog/serialize.ts` + `hydrate.ts` are the drizzle side and ' +
+      'already carry `toPlaylistDto`/`toPlaylistDtos`.',
+  },
+  'utils/catalogVisibility': {
+    owner: 'Task 11 — library and playlists',
+    importers: [
+      'controllers/playlists.controller.ts',
+      'controllers/search.controller.ts',
+      'utils/musicHelpers.ts',
+      'utils/playableContainers.ts',
+    ],
+    reason:
+      'Necessarily dies LAST: both surviving modules above import it. `db/catalog/visibility.ts` ' +
+      'is the drizzle side and every ported caller already uses it.',
+  },
+};
 
 describe('no file holds half of the catalog port', () => {
   // Named for what it walks. The scan covers `src/` only, so package-root files
@@ -360,23 +431,53 @@ describe('no file holds half of the catalog port', () => {
     expect(halfPortedImport(readImports(source), FROM_DB_CATALOG)).toBeNull();
   });
 
-  it('allows the unported request helper alongside the new modules, in either spelling', () => {
+  /**
+   * The three cases below exercise the EXEMPTION mechanism, which no longer has
+   * a real entry to exercise it: `getRequestUserId` moved to
+   * `utils/requestUser.ts` in Task 10c-3 and {@link UNPORTED_SYMBOLS} is empty.
+   *
+   * They pass a synthetic map rather than being deleted with the last entry. An
+   * empty list would otherwise silently retire the proof that exemptions match
+   * by IDENTITY — the property whose absence let a 74-byte superstring through
+   * an `includes()` check elsewhere on this branch — and the next person to add
+   * an exemption would inherit an untested matcher.
+   */
+  const SYNTHETIC_EXEMPTIONS = { 'utils/catalogVisibility': ['getRequestUserId'] } as const;
+
+  it('allows an exempt symbol alongside the new modules, in either spelling', () => {
     for (const { source, fromDir } of bothSpellings(
       (oldModule, newModule) => `
         import { getRequestUserId } from '${oldModule}';
         import { playableTrackFilter } from '${newModule}';
       `
     )) {
-      expect(`${fromDir}: ${halfPortedImport(readImports(source), fromDir)}`).toBe(`${fromDir}: null`);
+      expect(
+        `${fromDir}: ${halfPortedImport(readImports(source), fromDir, SYNTHETIC_EXEMPTIONS)}`
+      ).toBe(`${fromDir}: null`);
     }
   });
 
-  it('does not exempt a ported symbol imported beside the unported one', () => {
+  it('does not exempt a ported symbol imported beside the exempt one', () => {
     const source = `
       import { getRequestUserId, canViewPlaylist } from '../utils/catalogVisibility';
       import { playableTrackFilter } from '../db/catalog/visibility';
     `;
-    expect(halfPortedImport(readImports(source), FROM_CONTROLLER)?.name).toBe('canViewPlaylist');
+    expect(
+      halfPortedImport(readImports(source), FROM_CONTROLLER, SYNTHETIC_EXEMPTIONS)?.name
+    ).toBe('canViewPlaylist');
+  });
+
+  /**
+   * With the real list empty, an exempt-looking import is NOT exempt — which is
+   * the live behaviour now and the thing that would break if somebody re-added
+   * `getRequestUserId` to an old module.
+   */
+  it('exempts nothing under the real, empty list', () => {
+    const source = `
+      import { getRequestUserId } from '../utils/catalogVisibility';
+      import { playableTrackFilter } from '../db/catalog/visibility';
+    `;
+    expect(halfPortedImport(readImports(source), FROM_CONTROLLER)?.name).toBe('getRequestUserId');
   });
 
   it('is not fooled by the offending shapes appearing in a comment', () => {
@@ -392,9 +493,9 @@ describe('no file holds half of the catalog port', () => {
       import { getRequestUserIdAndMore } from '../utils/catalogVisibility';
       import { playableTrackFilter } from '../db/catalog/visibility';
     `;
-    expect(halfPortedImport(readImports(source), FROM_CONTROLLER)?.name).toBe(
-      'getRequestUserIdAndMore'
-    );
+    expect(
+      halfPortedImport(readImports(source), FROM_CONTROLLER, SYNTHETIC_EXEMPTIONS)?.name
+    ).toBe('getRequestUserIdAndMore');
   });
 
   it('flags an explicit-extension specifier, in every spelling TS accepts', () => {
@@ -421,39 +522,118 @@ describe('no file holds half of the catalog port', () => {
   });
 });
 
+describe('the Mongoose modules still standing', () => {
+  /** Does `module` still exist on disk? */
+  function moduleExists(module: string): boolean {
+    try {
+      readFileSync(join(SOURCE_DIR, `${module}.ts`));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Every file under `src/` (tests excluded) that really imports `module`,
+   * matched by RESOLVED PATH rather than by specifier text — the same rule the
+   * detector above is written under, and for the same reason: `'./musicHelpers'`
+   * and `'../utils/musicHelpers'` are the same module and a text match sees one
+   * of them.
+   *
+   * Tests are out of scope on purpose. A dying module's own unit test dies with
+   * it, and this file's synthetic fixtures are template literals containing the
+   * exact import lines it is looking for — scanning tests would count the gate
+   * itself as an importer of every module it guards.
+   */
+  function importersOf(module: string): string[] {
+    const target = resolve(SOURCE_DIR, module);
+    return sourceFiles(SOURCE_DIR)
+      .filter((file) =>
+        readImports(readFileSync(file, 'utf8')).some(
+          (entry) => resolveSpecifier(entry.specifier, dirname(file)) === target
+        )
+      )
+      .map((file) => relative(SOURCE_DIR, file))
+      .sort();
+  }
+
+  it('every registered survivor still exists', () => {
+    const vanished = Object.keys(SURVIVING_MONGOOSE_MODULES).filter(
+      (module) => !moduleExists(module)
+    );
+    expect(vanished).toEqual([]);
+  });
+
+  /**
+   * The exact importer set, in both directions at once. An importer that ports
+   * shrinks the real set and fails; a new importer of a dying module grows it
+   * and fails. The second direction is the one nothing else on this branch
+   * catches — `tsc` is happy either way.
+   */
+  it('every registered survivor is imported by exactly the files recorded', () => {
+    for (const [module, entry] of Object.entries(SURVIVING_MONGOOSE_MODULES)) {
+      expect(`${module}: ${importersOf(module).join(', ')}`).toBe(
+        `${module}: ${[...entry.importers].sort().join(', ')}`
+      );
+    }
+  });
+
+  /**
+   * The deletion gate. A Task 10 module absent from the registry must be gone —
+   * so a module cannot be quietly kept alive by removing its entry, and the
+   * finish line is a red test rather than a paragraph in a report.
+   */
+  it('every unregistered Task 10 module has been deleted', () => {
+    // A `Set` rather than `in`, for this file's own reason: `in` also answers
+    // true for inherited keys, so a module literally named `toString` would
+    // register itself.
+    const registered = new Set(Object.keys(SURVIVING_MONGOOSE_MODULES));
+    const shouldBeGone = OLD_MODULES.filter(
+      (module) => !registered.has(module) && moduleExists(module)
+    );
+    expect(shouldBeGone).toEqual([]);
+  });
+
+  /**
+   * A vacuity floor for {@link importersOf}. A traversal that found nothing
+   * would make the exact-set assertion pass for any registry whose entries all
+   * listed zero importers — and "zero importers" is precisely the state that is
+   * supposed to fail.
+   */
+  it('the importer scan finds something', () => {
+    expect(importersOf('utils/catalogVisibility').length).toBeGreaterThan(0);
+  });
+});
+
 describe('the exemption list', () => {
   /**
-   * `utils/catalogVisibility.ts` and its three siblings must be GONE by the end
-   * of Task 10c — not deprecated, not re-exported. When they are, nothing can
-   * import an unported symbol from them, so the list has to be empty. This
-   * fails the moment the modules are deleted while an exemption survives, which
-   * is the only way the exemption could quietly become permanent.
+   * It is empty TODAY, and the empty case is now the one that runs: Task 10c-3
+   * moved `getRequestUserId` to `utils/requestUser.ts` rather than waiting for
+   * `utils/catalogVisibility.ts` to be deleted, so the exemption stopped
+   * outliving its reason before the module did.
+   *
+   * The non-empty branch is kept rather than deleted with the last entry,
+   * because it is what holds a FUTURE exemption honest — it must name a module
+   * that still exists and a symbol that module actually exports. Note this is a
+   * weaker check than {@link SURVIVING_MONGOOSE_MODULES}'s: an exemption is
+   * about a symbol, a survivor about a whole module, and only the second is a
+   * deletion gate.
    */
-  it('is empty once the Mongoose modules are gone', () => {
-    const remaining = OLD_MODULES.filter((module) => {
-      const path = join(SOURCE_DIR, `${module}.ts`);
-      try {
-        readFileSync(path);
-        return true;
-      } catch {
-        return false;
-      }
-    });
-
-    if (remaining.length === 0) {
-      expect(Object.keys(UNPORTED_SYMBOLS)).toEqual([]);
-      return;
-    }
-
-    // While they exist, every exemption must name a module that still exists
-    // and a symbol that module actually exports — an exemption for a symbol
-    // nobody exports is an exemption that has stopped protecting anything.
-    for (const [module, symbols] of Object.entries(UNPORTED_SYMBOLS)) {
-      expect(remaining).toContain(module as (typeof OLD_MODULES)[number]);
-      const source = readFileSync(join(SOURCE_DIR, `${module}.ts`), 'utf8');
-      for (const symbol of symbols) {
-        expect(source).toContain(`export function ${symbol}`);
-      }
-    }
+  /**
+   * The conditional half of this test — "while the old modules exist, every
+   * exemption must name a module that still exists and a symbol it really
+   * exports" — is DELETED rather than kept for a future entry.
+   *
+   * With the list empty it iterated over nothing, so the test asserted nothing
+   * and passed: the branch carrying the real assertion was gated on every old
+   * module already being gone, and they are not. A loop over an empty map is a
+   * line that can never fire — the same class as a `delete` on a serializer that
+   * never names the field. Re-adding an exemption means re-adding its check.
+   *
+   * What remains covered either way: the identity matching that makes an
+   * exemption safe, exercised against a synthetic map in the first describe.
+   */
+  it('is empty', () => {
+    expect(Object.keys(UNPORTED_SYMBOLS)).toEqual([]);
   });
 });

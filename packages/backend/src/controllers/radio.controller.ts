@@ -33,7 +33,7 @@ import { PROTECTED_COLUMNS_BY_TABLE } from '../db/schema/protectedColumns';
 import { playableTrackFilter } from '../db/catalog/visibility';
 import { toTrackDtos } from '../db/catalog/hydrate';
 import type { PublicTrackRow } from '../db/catalog/serialize';
-import { getRequestUserId } from '../utils/catalogVisibility';
+import { getRequestUserId } from '../utils/requestUser';
 import { isDatabaseConnected } from '../utils/database';
 
 /**

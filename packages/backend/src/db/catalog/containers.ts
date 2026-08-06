@@ -69,6 +69,39 @@ export interface CatalogPage {
 export { asc, desc };
 
 /**
+ * "Biggest first, and absent values last" — the ordering term every descending
+ * catalog listing must use instead of drizzle's `desc()`.
+ *
+ * ## The mismatch, measured
+ *
+ * Every descending index in this schema is declared `DESC NULLS LAST`, because
+ * that is what drizzle's `.desc()` emits. A bare SQL `ORDER BY col DESC` means
+ * `DESC NULLS FIRST`. Postgres matches an index to an ordering SYNTACTICALLY,
+ * including nulls placement, so the two never match — and the consequence is
+ * not subtle: the index is still chosen, but only as a predicate scan, with a
+ * full sort on top.
+ *
+ * `GET /api/tracks` (`order by created_at desc limit 20`) on the 4,000-row
+ * EXPLAIN seed, same transaction, same statistics:
+ *
+ *   desc()            cost 1087.00  — Index Scan + Sort of all 3,430 playable rows
+ *   descNullsLast()   cost    7.04  — Index Scan using tracks_created_at_idx, stops at 20
+ *
+ * 155x, and it scales with the catalogue rather than with the page. The index
+ * was there the whole time; nothing could reach it.
+ *
+ * ## It is also the FAITHFUL ordering
+ *
+ * This is not a performance hack traded against behaviour. Mongo sorts a missing
+ * field as the lowest value, so `{ 'stats.followers': -1 }` put artists with no
+ * follower count LAST — which is `NULLS LAST`. `desc()` would have moved them to
+ * the front of every shelf.
+ */
+export function descNullsLast(column: PgColumn): SQL {
+  return sql`${column} desc nulls last`;
+}
+
+/**
  * "Rows that have an image first" — the replacement for `utils/imageFirstSort.ts`.
  *
  * The Mongo helper prepended `{ coverArt: -1 }` (or `{ image: -1 }`) to a sort

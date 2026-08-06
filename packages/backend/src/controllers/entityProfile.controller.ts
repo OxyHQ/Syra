@@ -22,7 +22,7 @@ import { hiddenShowEpisodeFilter } from '../utils/podcastDiscovery';
 import { EpisodeModel } from '../models/Episode';
 import { isDatabaseConnected } from '../utils/database';
 import { getParam } from '../utils/reqParams';
-import { getRequestUserId } from '../utils/catalogVisibility';
+import { getRequestUserId } from '../utils/requestUser';
 import {
   loadArtistProfileSections,
   type ArtistProfileSource,
