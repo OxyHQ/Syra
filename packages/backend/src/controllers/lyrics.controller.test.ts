@@ -1,13 +1,49 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
-import mongoose from 'mongoose';
-import { connect, clear, disconnect } from '../test/mongo';
-import { LyricsModel } from '../models/Lyrics';
+import { uuidv7 } from '@oxyhq/db';
+import { clearDb, connectDb, disconnectDb } from '../test/postgres';
+import { getDb } from '../db/postgres';
+import { catalogEntities, lyrics, lyricsLines, tracks } from '../db/schema/catalog';
 import { getLyrics } from './lyrics.controller';
 import type { Request, Response } from 'express';
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+/**
+ * Postgres only. `lyricsService` moved to drizzle in Task 10b while this suite
+ * still seeded Mongo, which is why it was red: the handler reached `getDb()`
+ * before anything had connected. Nothing in this path touches Mongoose now.
+ */
+beforeAll(connectDb);
+afterEach(clearDb);
+afterAll(disconnectDb);
+
+/** `lyrics.track_id` is a real foreign key, so a track has to exist first. */
+async function seedTrack(): Promise<string> {
+  const suffix = uuidv7();
+  const [artist] = await getDb()
+    .insert(catalogEntities)
+    .values({
+      type: 'artist',
+      name: `Artist ${suffix}`,
+      nameKey: `artist-${suffix}`,
+      source: 'upload',
+    })
+    .returning({ id: catalogEntities.id });
+  if (!artist) throw new Error('seedTrack: artist insert returned no row');
+
+  const [track] = await getDb()
+    .insert(tracks)
+    .values({
+      title: 'A Track',
+      artistId: artist.id,
+      artistName: 'Artist',
+      duration: 180,
+      source: 'upload',
+      status: 'ready',
+    })
+    .returning({ id: tracks.id });
+  if (!track) throw new Error('seedTrack: track insert returned no row');
+
+  return track.id;
+}
 
 // ── Fake req/res helpers ──────────────────────────────────────────────────────
 
@@ -39,8 +75,8 @@ function makeReq(trackId: string): Request {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('GET /api/lyrics/:trackId', () => {
-  it('returns 400 for an invalid ObjectId', async () => {
-    const req = makeReq('not-an-objectid');
+  it('returns 400 for an id in neither live shape', async () => {
+    const req = makeReq('not-an-id-in-either-shape');
     const res = makeRes();
 
     await getLyrics(req, res as unknown as Response);
@@ -49,14 +85,16 @@ describe('GET /api/lyrics/:trackId', () => {
     expect((res._body as Record<string, string>).error).toContain('Invalid');
   });
 
-  it('returns 200 with lyrics when a cached doc exists', async () => {
-    const trackId = new mongoose.Types.ObjectId().toString();
-    await LyricsModel.create({
-      trackId,
-      synced: true,
-      lines: [{ timeMs: 1000, text: 'hello' }],
-      source: 'lrclib',
-    });
+  it('returns 200 with lyrics when a cached row exists', async () => {
+    const trackId = await seedTrack();
+    const [cached] = await getDb()
+      .insert(lyrics)
+      .values({ trackId, synced: true, source: 'lrclib' })
+      .returning({ id: lyrics.id });
+    if (!cached) throw new Error('lyrics insert returned no row');
+    await getDb()
+      .insert(lyricsLines)
+      .values({ lyricsId: cached.id, position: 0, timeMs: 1000, text: 'hello' });
 
     const req = makeReq(trackId);
     const res = makeRes();
@@ -71,7 +109,7 @@ describe('GET /api/lyrics/:trackId', () => {
   });
 
   it('returns 404 when no lyrics and no track exist', async () => {
-    const trackId = new mongoose.Types.ObjectId().toString();
+    const trackId = uuidv7();
     const req = makeReq(trackId);
     const res = makeRes();
 

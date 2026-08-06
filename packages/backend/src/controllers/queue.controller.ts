@@ -1,5 +1,6 @@
 import { Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
+import { isLiveEntityId } from '@oxyhq/db';
 import {
   addToQueueRequestSchema,
   removeFromQueueRequestSchema,
@@ -15,10 +16,14 @@ import {
 import { z } from 'zod';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { isDatabaseConnected } from '../utils/database';
-import { TrackModel } from '../models/Track';
+import { and, inArray } from 'drizzle-orm';
+import { publicColumns } from '@oxyhq/db/assert';
+import { getDb } from '../db/postgres';
+import { tracks as tracksTable } from '../db/schema/catalog';
+import { PROTECTED_COLUMNS_BY_TABLE } from '../db/schema/protectedColumns';
+import { toTrackDtos } from '../db/catalog/hydrate';
 import { UserUploadModel } from '../models/UserUpload';
 import { toUploadTrackDto } from './uploads.controller';
-import { formatTracksWithCoverArt } from '../utils/musicHelpers';
 import {
   getQueue,
   setQueue,
@@ -28,7 +33,7 @@ import {
   clearQueue as clearUserQueue,
   setCurrentIndex,
 } from '../services/queueService';
-import { playableTrackFilter } from '../utils/catalogVisibility';
+import { playableTrackFilter } from '../db/catalog/visibility';
 
 /**
  * The queue is addressed by (kind, id), because two collections back it.
@@ -56,12 +61,18 @@ async function resolvePlayableRefs(
   const trackIds = [...new Set(refs.filter((ref) => ref.kind === 'track').map((ref) => ref.id))];
   const uploadIds = [...new Set(refs.filter((ref) => ref.kind === 'upload').map((ref) => ref.id))];
 
-  const validTrackIds = trackIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
+  const validTrackIds = trackIds.filter(isLiveEntityId);
   const validUploadIds = uploadIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
 
-  const [tracks, uploads] = await Promise.all([
+  const [trackRows, uploads] = await Promise.all([
+    // `inArray` with an empty list generates `in ()`, a Postgres syntax error
+    // rather than an empty result — so the length guard is load-bearing here in
+    // a way the Mongo `$in` did not need.
     validTrackIds.length
-      ? TrackModel.find(playableTrackFilter({ _id: { $in: validTrackIds } })).lean()
+      ? getDb()
+          .select(publicColumns(tracksTable, PROTECTED_COLUMNS_BY_TABLE))
+          .from(tracksTable)
+          .where(and(playableTrackFilter(), inArray(tracksTable.id, validTrackIds)))
       : Promise.resolve([]),
     validUploadIds.length
       ? UserUploadModel.find({
@@ -77,7 +88,7 @@ async function resolvePlayableRefs(
 
   const byKey = new Map<string, PlayableItem>();
 
-  const formattedTracks: PlayableTrack[] = (await formatTracksWithCoverArt(tracks)).map(
+  const formattedTracks: PlayableTrack[] = (await toTrackDtos(trackRows)).map(
     (track: Track): PlayableTrack => ({ ...track, kind: 'track' }),
   );
   for (const track of formattedTracks) {
@@ -245,7 +256,11 @@ export const replaceQueue = async (req: AuthRequest, res: Response, next: NextFu
       return res.status(400).json({ error: 'Current index out of bounds' });
     }
 
-    const invalidRefs = refs.filter((ref) => !mongoose.Types.ObjectId.isValid(ref.id));
+    // Both kinds pass through here — catalog tracks (uuid v7 or a carried-over
+    // ObjectId) and locker uploads (still Mongo). `isLiveEntityId` accepts both
+    // shapes; `ObjectId.isValid` alone would 400 every track minted since the
+    // cutover.
+    const invalidRefs = refs.filter((ref) => !isLiveEntityId(ref.id));
     if (invalidRefs.length > 0) {
       return res.status(400).json({ error: 'Some refs are invalid', invalidRefs });
     }

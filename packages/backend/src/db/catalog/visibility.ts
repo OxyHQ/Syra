@@ -20,17 +20,20 @@
  * takedowns set only `copyrightRemoved`, which once left those tracks listed and
  * searchable but unplayable.
  *
- * ## Two artefacts, and why their agreement is now structural
+ * ## Three artefacts, and why their agreement is now structural
  *
- * {@link playableTrackFilter} is a reusable SQL condition; {@link isPlayableTrack}
- * is an in-memory row predicate. They stay two artefacts because listing and
- * playback are still two authorities — but under Mongo they did not actually
- * agree, and the port is what fixes that.
+ * {@link playableTrackFilter} is a reusable SQL condition and
+ * {@link isPlayableTrack} is its in-memory twin; the THIRD is `isTrackPlayable`
+ * in `controllers/stream.controller.ts`, which is the playback authority and
+ * lives there because deciding whether to issue a stream is that controller's
+ * job. Three artefacts, because listing and playback are genuinely two
+ * authorities and the catalog needs both a query and a row predicate — but
+ * under Mongo they did not actually agree, and the port is what fixes that.
  *
  * Measured on the Mongo pair before the port: the filter required
  * `isAvailable: true`, which a document with the key ABSENT does not match,
  * while the in-memory predicate accepted `isAvailable !== false`, which it does.
- * Two of the nine `{true, false, absent}²` shapes disagreed. The second
+ * Two of the nine `{true, false, absent}²` shapes disagreed. The third
  * predicate, `isTrackPlayable` in `stream.controller.ts`, used
  * `!copyrightRemoved` against this file's `copyrightRemoved !== true`, which
  * diverge on a truthy non-boolean.

@@ -1,6 +1,10 @@
 /**
- * The HYBRID SERVICE REGISTRY — which catalog services may still import a
+ * The HYBRID MODULE REGISTRY — which catalog modules may still import a
  * Mongoose model, which models, and who owns each.
+ *
+ * Services when Task 10b wrote it; controllers joined in 10c, which is why the
+ * names say MODULE. Nothing else about the shape changed: a controller reading
+ * another vertical's model is the same split as a service doing it.
  *
  * ## Why this exists
  *
@@ -63,6 +67,7 @@ export const NON_CATALOG_MODEL_OWNERS = {
   UserUpload: 'creators',
   CatalogRelation: 'user',
   ListeningEvent: 'user',
+  UserMusicPreferences: 'user',
   UserTasteProfile: 'user',
 } as const satisfies Record<string, OwningTask>;
 
@@ -92,7 +97,7 @@ export const CATALOG_MODELS = [
 
 export type CatalogModel = (typeof CATALOG_MODELS)[number];
 
-export interface HybridService {
+export interface HybridModule {
   /** Path relative to `src/`, exactly as the walk reports it. */
   readonly file: string;
   /**
@@ -112,7 +117,7 @@ export interface HybridService {
  * it is compiled application source, it writes both databases, and a registry
  * that exempted it would be exempting the one file most likely to drift.
  */
-export const HYBRID_SERVICES: readonly HybridService[] = [
+export const HYBRID_MODULES: readonly HybridModule[] = [
   {
     file: 'services/catalog/artistProfile.ts',
     models: ['ContributionAttestation'],
@@ -185,6 +190,32 @@ export const HYBRID_SERVICES: readonly HybridService[] = [
       'Folds a like or a follow into the taste profile (Task 15). The two catalog reads behind ' +
       'the signal are ported.',
   },
+  {
+    file: 'controllers/stream.controller.ts',
+    models: ['UserMusicPreferences'],
+    reason:
+      'Reads the listener\'s audio-quality and data-saver settings to compute a bitrate cap. ' +
+      '`user_music_preferences` EXISTS in `schema/user.ts`, so this is not a capability gap — ' +
+      'but `musicPreferences.controller` still WRITES the Mongo document, and a reader on ' +
+      'Postgres against a writer on Mongo is a split brain, not a split read. It moves when its ' +
+      'writer does, in Task 15.',
+  },
+  {
+    file: 'controllers/queue.controller.ts',
+    models: ['UserUpload'],
+    reason:
+      'The queue is addressed by `(kind, id)` across TWO stores: the catalogue (Postgres) and ' +
+      'the private locker (`user_uploads`, Task 13). The catalog half is drizzle; the locker ' +
+      'half keeps its Mongoose read because `toUploadTrackDto` — the allowlist DTO that is the ' +
+      'locker\'s only serializer — lives in `uploads.controller` and moves with it.',
+  },
+  {
+    file: 'controllers/radio.controller.ts',
+    models: ['UserMusicPreferences'],
+    reason:
+      'Reads the explicit-content preference to decide what the station may programme. Same ' +
+      'writer, same task, same reason as `stream.controller` above.',
+  },
 ] as const;
 
 /**
@@ -193,26 +224,15 @@ export const HYBRID_SERVICES: readonly HybridService[] = [
  *
  * These are held to a DIFFERENT property by the gate: each must still import the
  * catalog model named, so an entry cannot outlive the work it describes. They
- * are deliberately not in {@link HYBRID_SERVICES}, because that registry means
+ * are deliberately not in {@link HYBRID_MODULES}, because that registry means
  * "ported, with a licence to read another vertical" and these are unported.
  */
-export const UNPORTED_CATALOG_SERVICES: readonly {
+export const UNPORTED_CATALOG_MODULES: readonly {
   readonly file: string;
   readonly models: readonly CatalogModel[];
   readonly owner: string;
   readonly reason: string;
 }[] = [
-  {
-    file: 'services/stream/manifestService.ts',
-    models: ['Track'],
-    owner: 'Task 10c',
-    reason:
-      'Its two `ITrack` adapters read `track.hls`, and that column NO LONGER EXISTS — Task 4 ' +
-      'moved the ladder to `track_hls_renditions`. They are broken by construction against a ' +
-      'Postgres row, so the fix is deletion plus two call-site edits in `stream.controller`, ' +
-      'with `buildMasterPlaylistFor` already proven by `podcastAudio.controller.ts:315` and ' +
-      '`uploads.controller.ts`.',
-  },
   {
     file: 'services/podcasts/resolvePersons.ts',
     models: ['CatalogEntity'],

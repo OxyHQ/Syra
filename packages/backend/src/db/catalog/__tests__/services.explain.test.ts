@@ -57,6 +57,17 @@ const MARKER = 'svc-explain';
 
 const SEEDED_TRACKS = 40000;
 
+/**
+ * `beforeAll` seeds 40,000 tracks and their children, `ANALYZE`s, and runs an
+ * `EXPLAIN (ANALYZE, BUFFERS)` per probe — all inside one transaction. That is
+ * comfortably past bun's 5s default, and it got there gradually: the suite ran
+ * at ~5.2s and failed intermittently with `a beforeEach/afterEach hook timed
+ * out`, which names the wrong hook and says nothing about seeding, so the next
+ * person would have spent the debugging on the wrong thing. Stated as an
+ * explicit budget rather than left one probe away from flaking again.
+ */
+const SEED_AND_EXPLAIN_TIMEOUT_MS = 120_000;
+
 /** Plan text by probe name, collected once in `beforeAll`. */
 const plans = new Map<string, string>();
 
@@ -137,6 +148,67 @@ const PROBES: readonly { readonly name: string; readonly sql: string }[] = [
           where track_id in ('${MARKER}-t-1','${MARKER}-t-2') group by track_id`,
   },
   {
+    // `controllers/stream.controller.ts` — `findPlaybackTrack`, on every
+    // resolve/key/master/variant request.
+    name: 'playbackTrackById',
+    sql: `select is_available, copyright_removed, status, hls_master_key from tracks
+          where id = '${MARKER}-t-7' limit 1`,
+  },
+  {
+    // `controllers/stream.controller.ts` — `findHlsRenditions`, and the same
+    // read `preview.controller` falls back to.
+    name: 'playbackRenditions',
+    sql: `select manifest_key, bitrate_kbps, encrypted from track_hls_renditions
+          where track_id = '${MARKER}-t-7' order by position asc`,
+  },
+  {
+    // `controllers/stream.controller.ts` — `getStreamKey`. By `track_id` alone,
+    // not by `kind`: the unique constraint is on the id.
+    name: 'playbackTrackKey',
+    sql: `select key_hex from track_keys where track_id = '${MARKER}-t-7' limit 1`,
+  },
+  {
+    // `controllers/preview.controller.ts` — the playable single-track read.
+    // The playability predicate is composed FIRST, so this can reach a partial
+    // index rather than only the primary key.
+    name: 'previewTrack',
+    sql: `select id, artist_id, album_id, title, duration, audio_source_url from tracks
+          where is_available = true and copyright_removed = false and id = '${MARKER}-t-7'
+          limit 1`,
+  },
+  {
+    // `controllers/queue.controller.ts` — `resolvePlayableRefs`, the catalog half.
+    name: 'queueRefs',
+    sql: `select id, title from tracks
+          where is_available = true and copyright_removed = false
+            and id in ('${MARKER}-t-1','${MARKER}-t-2','${MARKER}-t-3')`,
+  },
+  {
+    /**
+     * `services/recommendations/recommendationService.ts` — the genre fallback
+     * for related artists, with the projection this task WIDENED from five
+     * columns to the public row. `select *` here is one column wider than
+     * `publicColumns` (which drops `images` and `image_suggestions`); the point
+     * is whether the planner still enters through an index rather than what the
+     * exact column list costs.
+     */
+    name: 'relatedArtistsGenre',
+    sql: `select * from catalog_entities
+          where type = 'artist' and terminated is not true
+            and id <> '${MARKER}-art-5' and genres && array['rock','pop']
+          order by (image_id is not null) desc, popularity desc, stats_followers desc
+          limit 20`,
+  },
+  {
+    // Same file — the content fallback for similar tracks, same widening.
+    name: 'similarTracksContent',
+    sql: `select * from tracks
+          where is_available = true and copyright_removed = false
+            and id <> '${MARKER}-t-7' and (genre = 'rock' or artist_id = '${MARKER}-art-5')
+          order by (cover_art_id is not null) desc, popularity desc, play_count desc
+          limit 20`,
+  },
+  {
     /**
      * The control. `tracks.comment` carries no index, so this MUST still report
      * a Seq Scan under `enable_seqscan = off`. Without it, every "no Seq Scan"
@@ -207,8 +279,14 @@ async function seed(tx: Tx): Promise<void> {
     select '${MARKER}-r-' || g, '${MARKER}-t-' || (1 + (g % 20000)), g % 3, 'k', 96, true
     from generate_series(1, 20000) g`));
 
+  await executeRows(tx, sql.raw(`
+    insert into track_keys (id, kind, track_id, key_hex, key_uri)
+    select '${MARKER}-k-' || g, 'track', '${MARKER}-t-' || g, repeat('ab', 16), 'key'
+    from generate_series(1, 20000) g`));
+
   await executeRows(tx, sql.raw(
-    'analyze image_assets, catalog_entities, albums, tracks, track_credits, track_fingerprints, track_hls_renditions'
+    'analyze image_assets, catalog_entities, albums, tracks, track_credits, track_fingerprints, ' +
+    'track_hls_renditions, track_keys'
   ));
 
   const [counted] = await executeRows<{ total: number }>(
@@ -239,7 +317,7 @@ beforeAll(async () => {
   } catch (error) {
     if (!(error instanceof Rollback)) throw error;
   }
-});
+}, SEED_AND_EXPLAIN_TIMEOUT_MS);
 
 afterAll(closePostgres);
 
@@ -323,5 +401,78 @@ describe('the service read paths reach an index', () => {
 
   it('the per-page rendition count does not scan the ladder table', () => {
     expect(plans.get('hlsCounts')).not.toContain('Seq Scan on track_hls_renditions');
+  });
+});
+
+describe('the playback read paths reach an index', () => {
+  /**
+   * These run on EVERY playback request — the resolve, the key fetch, the
+   * master manifest and each variant — so a scan here is not a slow page, it is
+   * a slow every-track-anyone-plays. Measured rather than assumed for the
+   * reason the file's header gives: the previous instance of "surely a lookup
+   * by id uses the index" was two artist-wide queries at 3,865 buffers.
+   */
+  it('the playback track read is a primary-key lookup', () => {
+    expect(plans.get('playbackTrackById')).not.toContain('Seq Scan on tracks');
+    expect(`playback track: ${indexesIn('playbackTrackById')}`).toBe('playback track: tracks_pkey');
+  });
+
+  it('the HLS ladder read enters through the ladder unique constraint', () => {
+    expect(plans.get('playbackRenditions')).not.toContain('Seq Scan on track_hls_renditions');
+    expect(`renditions: ${indexesIn('playbackRenditions')}`).toContain('track_hls_renditions_');
+  });
+
+  it('the content key read does not scan track_keys', () => {
+    expect(plans.get('playbackTrackKey')).not.toContain('Seq Scan on track_keys');
+    expect(`track key: ${indexesIn('playbackTrackKey')}`).toContain('track_keys_');
+  });
+
+  it('the preview single-track read does not scan the table', () => {
+    expect(plans.get('previewTrack')).not.toContain('Seq Scan on tracks');
+  });
+
+  it('the queue ref resolution does not scan the table', () => {
+    expect(plans.get('queueRefs')).not.toContain('Seq Scan on tracks');
+  });
+});
+
+describe('widening the recommendation projections did not cost an index', () => {
+  /**
+   * Task 10c replaced two hand-written five-column projections with
+   * `publicColumns(...)`, because the narrow rows could not be serialized into
+   * DTOs and four endpoints answered `{"id":""}`. A wider projection can flip an
+   * Index Only Scan into an index scan plus a heap fetch, so this was A/B'd
+   * against the exact narrow column lists it replaced rather than assumed
+   * harmless — both twins EXPLAINed in the same transaction, on the same seed:
+   *
+   *   similarTracksContent   narrow 1,300 buffers / 5.9 ms   wide 1,300 / 9.9 ms
+   *   relatedArtistsGenre    narrow    17 buffers / 0.23 ms   wide   366 / 0.30 ms
+   *
+   * Same index entries in both, in both queries. The tracks query costs no extra
+   * I/O at all — the time is tuple deforming and a wider sort. The artists query
+   * reads 349 more buffers, which is the heap fetch for rows it is about to
+   * RETURN: unavoidable for any query that answers with those columns, and the
+   * alternative measured 1,300 buffers cheaper while returning `{"id":""}`.
+   *
+   * The twins are not kept. They asserted nothing on their own, and a probe that
+   * exists to have been run once is the kind of machinery that reads as
+   * load-bearing to whoever touches this file next. What IS kept is the
+   * property they establish: the planner enters through the SAME index, named,
+   * so a regression says which index was lost rather than "no Seq Scan".
+   */
+  it('the related-artists genre fallback still enters through an index', () => {
+    expect(plans.get('relatedArtistsGenre')).not.toContain('Seq Scan on catalog_entities');
+    expect(`related artists: ${indexesIn('relatedArtistsGenre')}`).toBe(
+      'related artists: catalog_entities_artist_name_key_key'
+    );
+  });
+
+  it('the similar-tracks content fallback still enters through an index', () => {
+    expect(plans.get('similarTracksContent')).not.toContain('Seq Scan on tracks');
+    // Both arms of the `genre = … OR artist_id = …` are indexed; a plan that
+    // lost either would fall back to scanning for that half.
+    expect(`similar tracks: ${indexesIn('similarTracksContent')}`).toBe(
+      'similar tracks: tracks_genre_idx, tracks_artist_id_album_id_idx'
+    );
   });
 });

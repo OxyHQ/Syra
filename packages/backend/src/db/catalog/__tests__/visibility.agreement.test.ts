@@ -1,12 +1,25 @@
 /**
- * `playableTrackFilter()` and `isPlayableTrack()` agree on every row that can
- * exist — proved against real rows, not maintained by discipline.
+ * All THREE playability predicates agree on every row that can exist — proved
+ * against real rows, not maintained by discipline.
+ *
+ * The three, and there are exactly three:
+ *
+ *  1. `playableTrackFilter()` — the SQL condition every catalog listing composes.
+ *  2. `isPlayableTrack()` — its in-memory twin, for a row already loaded.
+ *  3. `controllers/stream.controller.ts`'s `isTrackPlayable()` — the PLAYBACK
+ *     authority, which decides whether a stream is issued at all.
+ *
+ * The third one is what makes this worth a test rather than a comment. Listing
+ * and playback are separate authorities on purpose, so nothing structurally
+ * forces them to agree — and when they disagree in the direction where listing
+ * is looser, a taken-down track stays visible and searchable and then fails
+ * under the listener's thumb.
  *
  * ## Why this test moved to the Postgres side
  *
- * Under Mongo the two artefacts did NOT agree, and the same test written there
- * fails: `playableTrackFilter` matched `isAvailable: true`, which a document
- * with the key ABSENT does not satisfy, while `isPlayableTrack` accepted
+ * Under Mongo the three did NOT agree, and the same test written there fails:
+ * `playableTrackFilter` matched `isAvailable: true`, which a document with the
+ * key ABSENT does not satisfy, while `isPlayableTrack` accepted
  * `isAvailable !== false`, which it does. Two of the nine
  * `{true, false, absent}²` shapes disagreed. `stream.controller`'s
  * `isTrackPlayable` was a third spelling (`!copyrightRemoved`) that diverges
@@ -40,6 +53,7 @@ import { and, eq, inArray, like, sql, type SQL } from 'drizzle-orm';
 import { executeRows, sqlStateOf } from '@oxyhq/db';
 import { closePostgres, connectPostgres, getDb } from '../../postgres';
 import { albums, catalogEntities, imageAssets, tracks } from '../../schema/catalog';
+import { isTrackPlayable } from '../../../controllers/stream.controller';
 import { isPlayableTrack, playableTrackFilter } from '../visibility';
 
 /**
@@ -231,24 +245,22 @@ describe('the shapes the Mongo pair disagreed on are unrepresentable', () => {
   });
 });
 
-describe("visibility.ts's own two artefacts cannot drift apart on a real row", () => {
+describe('the catalog and playback authorities cannot drift apart on a real row', () => {
   /**
-   * NOT "the catalog and playback authorities", which is what this block was
-   * called first and is more than it checks. The playback authority is
-   * `controllers/stream.controller.ts:68` — a THIRD predicate, spelled
-   * `isAvailable !== false && !copyrightRemoved`, still on Mongoose, untouched
-   * and untested by anything here. Folding it into this agreement is Task 10c's
-   * job, when controllers are in scope; until then a test name asserting the
-   * two authorities agree would be the same shape of defect as a comment
-   * claiming a guard that does not exist.
+   * The block name is now accurate, and Task 10c is why: `isTrackPlayable` is
+   * imported from `controllers/stream.controller` and asserted here alongside
+   * the catalog pair. Before that it was called "visibility.ts's own two
+   * artefacts", deliberately, because the playback authority was still on
+   * Mongoose and untested — a name claiming both authorities would have been the
+   * same shape of defect as a comment claiming a guard that does not exist.
    *
-   * What IS checked: the rule this file's own pair exists to hold — a row the
-   * query returns must be one the predicate accepts, or a takedown stays listed
-   * and searchable and then fails at play. Checked in the failing DIRECTION
-   * specifically, so a change making the query LOOSER than the predicate is
-   * caught even if exact equality is relaxed for some other reason.
+   * What is checked: a row the query returns must be one BOTH predicates accept,
+   * or a takedown stays listed and searchable and then fails at play. Checked in
+   * the failing DIRECTION specifically, so a change making the query LOOSER than
+   * either predicate is caught even if exact equality is relaxed for some other
+   * reason.
    */
-  it('never lists a row the predicate would refuse', async () => {
+  it('never lists a row either predicate would refuse', async () => {
     const db = getDb();
 
     const listed = await db
@@ -257,8 +269,49 @@ describe("visibility.ts's own two artefacts cannot drift apart on a real row", (
       .where(and(playableTrackFilter(), like(tracks.id, `${MARKER}%`)));
 
     expect(listed.filter((row) => !isPlayableTrack(row))).toEqual([]);
-    // And it did list something, so the assertion above is not trivially true.
+    expect(listed.filter((row) => !isTrackPlayable(row))).toEqual([]);
+    // And it did list something, so the assertions above are not trivially true.
     expect(listed.length).toBeGreaterThan(0);
+  });
+
+  /**
+   * The stronger property, and the one the three-way split actually needs: on
+   * EVERY representable row, all three answer the same thing. The assertion
+   * above only covers rows the query returned, so a playback predicate that
+   * refuses something extra — the direction that silently breaks play on a
+   * listed track — passes it.
+   */
+  it('all three agree on every representable row', async () => {
+    const stored = await getDb()
+      .select({ id: tracks.id, isAvailable: tracks.isAvailable, copyrightRemoved: tracks.copyrightRemoved })
+      .from(tracks)
+      .where(like(tracks.id, `${MARKER}%`));
+
+    const listed = new Set(
+      (
+        await getDb()
+          .select({ id: tracks.id })
+          .from(tracks)
+          .where(and(playableTrackFilter(), like(tracks.id, `${MARKER}%`)))
+      ).map((row) => row.id)
+    );
+
+    // One line per row naming all three answers, so a failure says WHICH row and
+    // WHICH authority dissented rather than "expected [] to equal [X]".
+    const verdicts = stored
+      .map((row) =>
+        `${row.id}: sql=${listed.has(row.id)} memory=${isPlayableTrack(row)} playback=${isTrackPlayable(row)}`
+      )
+      .sort();
+
+    expect(verdicts).toEqual(
+      stored
+        .map((row) => {
+          const expected = row.isAvailable && !row.copyrightRemoved;
+          return `${row.id}: sql=${expected} memory=${expected} playback=${expected}`;
+        })
+        .sort()
+    );
   });
 
   it('the removal of a track from the catalog is visible to both', async () => {
@@ -278,6 +331,9 @@ describe("visibility.ts's own two artefacts cannot drift apart on a real row", (
 
       expect(listed).toEqual([]);
       expect(isPlayableTrack(row)).toBe(false);
+      // The takedown must reach playback too — this is the exact failure the
+      // three-way agreement exists for.
+      expect(isTrackPlayable(row)).toBe(false);
     } finally {
       await db.update(tracks).set({ copyrightRemoved: false }).where(eq(tracks.id, playable));
     }

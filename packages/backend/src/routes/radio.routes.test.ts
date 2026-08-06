@@ -3,6 +3,7 @@ import type { NextFunction, Response } from 'express';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import type { RadioPage } from '@syra/shared-types';
 import { connect, clear, disconnect } from '../test/mongo';
+import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { UserMusicPreferencesModel } from '../models/UserMusicPreferences';
 import { makeArtist, makeTrack } from '../services/radio/radioFixtures';
 import { readRadioStation } from '../services/radio/radioStationStore';
@@ -38,9 +39,23 @@ const fakeRedis = {
 // here — after the static imports above — still takes effect.
 mock.module('../utils/redis', () => ({ getRedisClient: () => fakeRedis }));
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+/**
+ * BOTH databases, matching `radioFixtures` — the catalogue it seeds is Postgres,
+ * while the co-listen graph, taste weights and the listener's music preferences
+ * belong to Tasks 11/15 and are still Mongoose.
+ */
+beforeAll(async () => {
+  await connect();
+  await connectDb();
+});
+afterEach(async () => {
+  await clear();
+  await clearDb();
+});
+afterAll(async () => {
+  await disconnect();
+  await disconnectDb();
+});
 
 beforeEach(() => {
   fakeRedis.isReady = true;

@@ -10,9 +10,12 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll, mock } from 'bun:test';
 import type { Response } from 'express';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
+import { uuidv7 } from '@oxyhq/db';
 import { connect, clear, disconnect } from '../test/mongo';
+import { clearDb, connectDb, disconnectDb } from '../test/postgres';
+import { getDb } from '../db/postgres';
+import { catalogEntities, tracks } from '../db/schema/catalog';
 import { UserUploadModel } from '../models/UserUpload';
-import { TrackModel } from '../models/Track';
 import { replaceQueue, getQueueHandler } from './queue.controller';
 
 // The queue lives in Redis. A fake keyed by user id keeps this about REF
@@ -27,12 +30,26 @@ const fakeRedis = {
 mock.module('../utils/redis', () => ({ getRedisClient: () => fakeRedis }));
 
 
-beforeAll(connect);
+/**
+ * BOTH databases, which is exactly the split this suite is about: the catalogue
+ * is Postgres and the locker (`UserUpload`) is still Mongo until Task 13. The
+ * two-collection ambiguity the queue's `(kind, id)` addressing exists to remove
+ * is now a two-DATABASE ambiguity, and resolving a ref by trying one and
+ * falling back to the other would be even worse than before.
+ */
+beforeAll(async () => {
+  await connect();
+  await connectDb();
+});
 afterEach(async () => {
   await clear();
+  await clearDb();
   queues.clear();
 });
-afterAll(disconnect);
+afterAll(async () => {
+  await disconnect();
+  await disconnectDb();
+});
 
 const OWNER = 'oxy-owner';
 const STRANGER = 'oxy-stranger';
@@ -83,29 +100,48 @@ async function seedUpload(ownerOxyUserId = OWNER) {
   });
 }
 
-async function seedTrack() {
-  return TrackModel.create({
-    title: 'A Catalogue Track',
-    artistId: 'artist-1',
-    artistName: 'Someone',
-    duration: 180,
-    source: 'upload',
-    status: 'ready',
-    isAvailable: true,
-    isExplicit: false,
-  });
+/** Seeds the artist and the catalogue track; returns the track id. */
+async function seedTrack(): Promise<string> {
+  const suffix = uuidv7();
+  const [artist] = await getDb()
+    .insert(catalogEntities)
+    .values({
+      type: 'artist',
+      name: `Someone ${suffix}`,
+      nameKey: `someone-${suffix}`,
+      source: 'upload',
+    })
+    .returning({ id: catalogEntities.id });
+  if (!artist) throw new Error('seedTrack: artist insert returned no row');
+
+  const [track] = await getDb()
+    .insert(tracks)
+    .values({
+      title: 'A Catalogue Track',
+      artistId: artist.id,
+      artistName: 'Someone',
+      duration: 180,
+      source: 'upload',
+      status: 'ready',
+      isAvailable: true,
+      isExplicit: false,
+    })
+    .returning({ id: tracks.id });
+  if (!track) throw new Error('seedTrack: track insert returned no row');
+
+  return track.id;
 }
 
 describe('PUT /api/queue — resolving refs', () => {
   it('queues a catalogue track and a locker file side by side, tagged', async () => {
-    const track = await seedTrack();
+    const trackId = await seedTrack();
     const upload = await seedUpload();
     const res = makeRes();
 
     await replaceQueue(
       makeReq(OWNER, {
         refs: [
-          { kind: 'track', id: track._id.toString() },
+          { kind: 'track', id: trackId },
           { kind: 'upload', id: upload._id.toString() },
         ],
         current: 0,
@@ -118,7 +154,7 @@ describe('PUT /api/queue — resolving refs', () => {
     const queue = (res._body as { queue: { tracks: Array<{ id: string; kind: string }> } }).queue;
     expect(queue.tracks.map((item) => item.kind)).toEqual(['track', 'upload']);
     expect(queue.tracks.map((item) => item.id)).toEqual([
-      track._id.toString(),
+      trackId,
       upload._id.toString(),
     ]);
   });
@@ -184,14 +220,14 @@ describe('PUT /api/queue — resolving refs', () => {
   });
 
   it('replaces all or nothing', async () => {
-    const track = await seedTrack();
+    const trackId = await seedTrack();
     const foreign = await seedUpload(STRANGER);
     const res = makeRes();
 
     await replaceQueue(
       makeReq(OWNER, {
         refs: [
-          { kind: 'track', id: track._id.toString() },
+          { kind: 'track', id: trackId },
           { kind: 'upload', id: foreign._id.toString() },
         ],
         current: 0,
@@ -207,11 +243,11 @@ describe('PUT /api/queue — resolving refs', () => {
 
   it('rejects a payload still using the old `trackIds` shape', async () => {
     // Clean cut, no dual-read: the old field is not accepted anywhere.
-    const track = await seedTrack();
+    const trackId = await seedTrack();
     const res = makeRes();
 
     await replaceQueue(
-      makeReq(OWNER, { trackIds: [track._id.toString()], current: 0 }),
+      makeReq(OWNER, { trackIds: [trackId], current: 0 }),
       res as unknown as Response,
       rethrow,
     );

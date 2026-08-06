@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
-import mongoose from 'mongoose';
+import { uuidv7 } from '@oxyhq/db';
+import type { HlsRendition } from '@syra/shared-types';
 import { connect, clear, disconnect } from '../test/mongo';
-import { TrackModel } from '../models/Track';
-import { TrackKeyModel } from '../models/TrackKey';
+import { clearDb, connectDb, disconnectDb } from '../test/postgres';
+import { getDb } from '../db/postgres';
+import { catalogEntities, trackHlsRenditions, trackKeys, tracks } from '../db/schema/catalog';
 import { UserMusicPreferencesModel } from '../models/UserMusicPreferences';
 import { getStream, getStreamKey, getVariantPlaylist } from './stream.controller';
 import { verifyStreamToken, mintStreamToken } from '../services/stream/streamToken';
@@ -12,9 +14,24 @@ import type { Response } from 'express';
 // Ensure STREAM_TOKEN_SECRET is set before module load
 process.env.STREAM_TOKEN_SECRET = 'test-secret-stream-controller';
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+/**
+ * BOTH databases. The catalogue, the HLS ladder and the content key are
+ * Postgres; `UserMusicPreferences` is still Mongoose and stays that way until
+ * Task 15 moves its WRITER (`musicPreferences.controller`) — registered in
+ * `db/catalog/hybridServices.ts`, so this split cannot be forgotten.
+ */
+beforeAll(async () => {
+  await connect();
+  await connectDb();
+});
+afterEach(async () => {
+  await clear();
+  await clearDb();
+});
+afterAll(async () => {
+  await disconnect();
+  await disconnectDb();
+});
 
 // ── Fake req/res helpers ──────────────────────────────────────────────────────
 
@@ -62,27 +79,76 @@ function makeReq(
 
 const KEY_HEX = 'deadbeefdeadbeefdeadbeefdeadbeef';
 
-async function seedTrack(overrides: Record<string, unknown> = {}) {
-  return TrackModel.create({
-    title: 'Test',
-    artistId: new mongoose.Types.ObjectId().toString(),
-    artistName: 'Artist',
-    duration: 180,
-    source: 'upload',
-    status: 'ready',
-    isExplicit: false,
-    isAvailable: true,
-    ...overrides,
-  });
+/**
+ * An id in the shape `generatedId()` mints, for the "no such row" cases.
+ *
+ * These were `new mongoose.Types.ObjectId().toString()`. A 24-char hex still
+ * passes `isLiveEntityId` — both spellings are accepted, deliberately, because
+ * ids carried over from Mongo are real — so an ObjectId fixture would keep
+ * asserting 404 and never notice if the guard stopped accepting the id space
+ * every NEW row is written in.
+ */
+function absentId(): string {
+  return uuidv7();
+}
+
+interface SeedTrackOverrides {
+  isAvailable?: boolean;
+  copyrightRemoved?: boolean;
+  status?: 'processing' | 'ready' | 'failed';
+  hlsMasterKey?: string | null;
+  hls?: readonly HlsRendition[];
+}
+
+/** Seeds the artist, the track and its ladder; returns the track id. */
+async function seedTrack(overrides: SeedTrackOverrides = {}): Promise<string> {
+  const { hls = [], ...trackFields } = overrides;
+  const suffix = uuidv7();
+
+  const [artist] = await getDb()
+    .insert(catalogEntities)
+    .values({
+      type: 'artist',
+      name: `Artist ${suffix}`,
+      nameKey: `artist-${suffix}`,
+      source: 'upload',
+    })
+    .returning({ id: catalogEntities.id });
+  if (!artist) throw new Error('seedTrack: artist insert returned no row');
+
+  const [track] = await getDb()
+    .insert(tracks)
+    .values({
+      title: 'Test',
+      artistId: artist.id,
+      artistName: 'Artist',
+      duration: 180,
+      source: 'upload',
+      status: 'ready',
+      isExplicit: false,
+      isAvailable: true,
+      ...trackFields,
+    })
+    .returning({ id: tracks.id });
+  if (!track) throw new Error('seedTrack: track insert returned no row');
+
+  if (hls.length > 0) {
+    await getDb().insert(trackHlsRenditions).values(
+      hls.map((rendition, position) => ({ trackId: track.id, position, ...rendition }))
+    );
+  }
+
+  return track.id;
 }
 
 async function seedKey(trackId: string) {
-  return TrackKeyModel.create({ trackId, keyHex: KEY_HEX, keyUri: 'key' });
+  return getDb()
+    .insert(trackKeys)
+    .values({ kind: 'track', trackId, keyHex: KEY_HEX, keyUri: 'key' });
 }
 
-function hlsTrackFields() {
+function hlsTrackFields(): SeedTrackOverrides {
   return {
-    source: 'upload',
     status: 'ready',
     hlsMasterKey: 'hls/artist/track/master.m3u8',
     hls: [
@@ -100,14 +166,13 @@ describe('getStream', () => {
 
 
   it('200 hls: mints stream token and returns master.m3u8 url', async () => {
-    const track = await seedTrack({
-      source: 'upload',
+    const trackId = await seedTrack({
       status: 'ready',
       hlsMasterKey: 'hls/artist/track/master.m3u8',
       hls: [{ manifestKey: 'hls/artist/track/128k/index.m3u8', bitrateKbps: 128, encrypted: true }],
     });
 
-    const req = makeReq(track._id.toString());
+    const req = makeReq(trackId);
     const res = makeRes();
     await getStream(req, res as unknown as Response);
 
@@ -117,13 +182,13 @@ describe('getStream', () => {
     expect(typeof body.url).toBe('string');
 
     const url = body.url as string;
-    expect(url).toContain(`/api/stream/${track._id.toString()}/master.m3u8?t=`);
+    expect(url).toContain(`/api/stream/${trackId}/master.m3u8?t=`);
 
     const tParam = new URL(url, 'http://localhost').searchParams.get('t');
     expect(tParam).not.toBeNull();
     const claims = verifyStreamToken(tParam as string);
     expect(claims).not.toBeNull();
-    expect(claims?.trackId).toBe(track._id.toString());
+    expect(claims?.trackId).toBe(trackId);
     expect(claims?.userId).toBe('oxy-user-abc');
     expect(body.expiresAt).toBeDefined();
     expect(res._headers['Cache-Control']).toBe('private, max-age=300');
@@ -133,19 +198,18 @@ describe('getStream', () => {
 
 
   it('401: HLS track with no auth returns 401', async () => {
-    const track = await seedTrack({
-      source: 'upload',
+    const trackId = await seedTrack({
       status: 'ready',
       hlsMasterKey: 'hls/artist/track/master.m3u8',
       hls: [{ manifestKey: 'hls/artist/track/128k/index.m3u8', bitrateKbps: 128, encrypted: true }],
     });
-    const req = makeReq(track._id.toString(), { authed: false });
+    const req = makeReq(trackId, { authed: false });
     const res = makeRes();
     await getStream(req, res as unknown as Response);
     expect(res._status).toBe(401);
   });
 
-  it('400: invalid ObjectId', async () => {
+  it('400: an id in neither live shape', async () => {
     const req = makeReq('not-an-id');
     const res = makeRes();
     await getStream(req, res as unknown as Response);
@@ -153,39 +217,39 @@ describe('getStream', () => {
   });
 
   it('404: track not found', async () => {
-    const req = makeReq(new mongoose.Types.ObjectId().toString());
+    const req = makeReq(absentId());
     const res = makeRes();
     await getStream(req, res as unknown as Response);
     expect(res._status).toBe(404);
   });
 
   it('403: track is unavailable', async () => {
-    const track = await seedTrack({ isAvailable: false });
-    const req = makeReq(track._id.toString());
+    const trackId = await seedTrack({ isAvailable: false });
+    const req = makeReq(trackId);
     const res = makeRes();
     await getStream(req, res as unknown as Response);
     expect(res._status).toBe(403);
   });
 
   it('403: track is copyright-removed', async () => {
-    const track = await seedTrack({ copyrightRemoved: true });
-    const req = makeReq(track._id.toString());
+    const trackId = await seedTrack({ copyrightRemoved: true });
+    const req = makeReq(trackId);
     const res = makeRes();
     await getStream(req, res as unknown as Response);
     expect(res._status).toBe(403);
   });
 
   it('409: track is still processing', async () => {
-    const track = await seedTrack({ status: 'processing', source: 'upload' });
-    const req = makeReq(track._id.toString());
+    const trackId = await seedTrack({ status: 'processing' });
+    const req = makeReq(trackId);
     const res = makeRes();
     await getStream(req, res as unknown as Response);
     expect(res._status).toBe(409);
   });
 
   it('422: track is failed / not playable', async () => {
-    const track = await seedTrack({ status: 'failed', source: 'upload' });
-    const req = makeReq(track._id.toString());
+    const trackId = await seedTrack({ status: 'failed' });
+    const req = makeReq(trackId);
     const res = makeRes();
     await getStream(req, res as unknown as Response);
     expect(res._status).toBe(422);
@@ -197,8 +261,8 @@ describe('getStream', () => {
     const saved = process.env.PREMIUM_USER_IDS;
     delete process.env.PREMIUM_USER_IDS;
     try {
-      const track = await seedTrack(hlsTrackFields());
-      const req = makeReq(track._id.toString(), { userId: 'free-user' });
+      const trackId = await seedTrack(hlsTrackFields());
+      const req = makeReq(trackId, { userId: 'free-user' });
       const res = makeRes();
       await getStream(req, res as unknown as Response);
 
@@ -224,8 +288,8 @@ describe('getStream', () => {
         audioQuality: 'high',
       });
 
-      const track = await seedTrack(hlsTrackFields());
-      const req = makeReq(track._id.toString(), { userId });
+      const trackId = await seedTrack(hlsTrackFields());
+      const req = makeReq(trackId, { userId });
       const res = makeRes();
       await getStream(req, res as unknown as Response);
 
@@ -251,8 +315,8 @@ describe('getStream', () => {
         dataSaver: true,
       });
 
-      const track = await seedTrack(hlsTrackFields());
-      const req = makeReq(track._id.toString(), { userId });
+      const trackId = await seedTrack(hlsTrackFields());
+      const req = makeReq(trackId, { userId });
       const res = makeRes();
       await getStream(req, res as unknown as Response);
 
@@ -272,10 +336,10 @@ describe('getStream', () => {
 
 describe('getStreamKey', () => {
   it('200: returns 16-byte raw key buffer via bearer auth', async () => {
-    const track = await seedTrack();
-    await seedKey(track._id.toString());
+    const trackId = await seedTrack();
+    await seedKey(trackId);
 
-    const req = makeReq(track._id.toString());
+    const req = makeReq(trackId);
     const res = makeRes();
     await getStreamKey(req, res as unknown as Response);
 
@@ -288,16 +352,16 @@ describe('getStreamKey', () => {
   });
 
   it('200: returns key via valid ?t= stream token bound to this track', async () => {
-    const track = await seedTrack();
-    await seedKey(track._id.toString());
+    const trackId = await seedTrack();
+    await seedKey(trackId);
 
     const token = mintStreamToken({
-      trackId: track._id.toString(),
+      trackId: trackId,
       userId: 'oxy-user-abc',
       maxBitrateKbps: 160,
     });
 
-    const req = makeReq(track._id.toString(), { authed: false, query: { t: token } });
+    const req = makeReq(trackId, { authed: false, query: { t: token } });
     const res = makeRes();
     await getStreamKey(req, res as unknown as Response);
 
@@ -306,17 +370,17 @@ describe('getStreamKey', () => {
   });
 
   it('401: stream token bound to a DIFFERENT trackId is rejected', async () => {
-    const track = await seedTrack();
-    await seedKey(track._id.toString());
+    const trackId = await seedTrack();
+    await seedKey(trackId);
 
-    const otherTrackId = new mongoose.Types.ObjectId().toString();
+    const otherTrackId = absentId();
     const token = mintStreamToken({
       trackId: otherTrackId,
       userId: 'oxy-user-abc',
       maxBitrateKbps: 160,
     });
 
-    const req = makeReq(track._id.toString(), { authed: false, query: { t: token } });
+    const req = makeReq(trackId, { authed: false, query: { t: token } });
     const res = makeRes();
     await getStreamKey(req, res as unknown as Response);
 
@@ -324,54 +388,54 @@ describe('getStreamKey', () => {
   });
 
   it('401: no bearer and no token', async () => {
-    const track = await seedTrack();
-    await seedKey(track._id.toString());
+    const trackId = await seedTrack();
+    await seedKey(trackId);
 
-    const req = makeReq(track._id.toString(), { authed: false });
+    const req = makeReq(trackId, { authed: false });
     const res = makeRes();
     await getStreamKey(req, res as unknown as Response);
 
     expect(res._status).toBe(401);
   });
 
-  it('400: invalid ObjectId', async () => {
-    const req = makeReq('not-an-objectid');
+  it('400: an id in neither live shape', async () => {
+    const req = makeReq('not-an-id-in-either-shape');
     const res = makeRes();
     await getStreamKey(req, res as unknown as Response);
     expect(res._status).toBe(400);
   });
 
   it('404: track not found', async () => {
-    const absentId = new mongoose.Types.ObjectId().toString();
-    const req = makeReq(absentId);
+    const missingId = absentId();
+    const req = makeReq(missingId);
     const res = makeRes();
     await getStreamKey(req, res as unknown as Response);
     expect(res._status).toBe(404);
   });
 
   it('404: track exists but TrackKey missing', async () => {
-    const track = await seedTrack();
-    const req = makeReq(track._id.toString());
+    const trackId = await seedTrack();
+    const req = makeReq(trackId);
     const res = makeRes();
     await getStreamKey(req, res as unknown as Response);
     expect(res._status).toBe(404);
   });
 
   it('403: track is unavailable', async () => {
-    const track = await seedTrack({ isAvailable: false });
-    await seedKey(track._id.toString());
+    const trackId = await seedTrack({ isAvailable: false });
+    await seedKey(trackId);
 
-    const req = makeReq(track._id.toString());
+    const req = makeReq(trackId);
     const res = makeRes();
     await getStreamKey(req, res as unknown as Response);
     expect(res._status).toBe(403);
   });
 
   it('403: track is copyright-removed', async () => {
-    const track = await seedTrack({ copyrightRemoved: true });
-    await seedKey(track._id.toString());
+    const trackId = await seedTrack({ copyrightRemoved: true });
+    await seedKey(trackId);
 
-    const req = makeReq(track._id.toString());
+    const req = makeReq(trackId);
     const res = makeRes();
     await getStreamKey(req, res as unknown as Response);
     expect(res._status).toBe(403);
@@ -382,14 +446,14 @@ describe('getStreamKey', () => {
 
 describe('getVariantPlaylist — bitrate cap', () => {
   it('403: free token (cap=160) requesting 320 kbps variant', async () => {
-    const track = await seedTrack(hlsTrackFields());
+    const trackId = await seedTrack(hlsTrackFields());
     const token = mintStreamToken({
-      trackId: track._id.toString(),
+      trackId: trackId,
       userId: 'oxy-user-abc',
       maxBitrateKbps: 160,
     });
 
-    const req = makeReq(track._id.toString(), {
+    const req = makeReq(trackId, {
       authed: false,
       query: { t: token },
       variant: '320.m3u8',
@@ -408,14 +472,14 @@ describe('getVariantPlaylist — bitrate cap', () => {
     // and fail with a non-403 error (S3 error → 500 or unhandled) — not a 403.
     // A cleaner approach: verify the 403 guard fires before any S3 call.
     // This test confirms 160 is NOT blocked by the cap gate (status !== 403).
-    const track = await seedTrack(hlsTrackFields());
+    const trackId = await seedTrack(hlsTrackFields());
     const token = mintStreamToken({
-      trackId: track._id.toString(),
+      trackId: trackId,
       userId: 'oxy-user-abc',
       maxBitrateKbps: 160,
     });
 
-    const req = makeReq(track._id.toString(), {
+    const req = makeReq(trackId, {
       authed: false,
       query: { t: token },
       variant: '160.m3u8',

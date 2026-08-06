@@ -46,10 +46,10 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'bun:test';
 import {
   CATALOG_MODELS,
-  HYBRID_SERVICES,
+  HYBRID_MODULES,
   NON_CATALOG_MODEL_OWNERS,
   OWNING_TASKS,
-  UNPORTED_CATALOG_SERVICES,
+  UNPORTED_CATALOG_MODULES,
   type CatalogModel,
   type NonCatalogModel,
 } from '../hybridServices';
@@ -70,14 +70,17 @@ const SRC = join(__dirname, '..', '..', '..');
  * longer exists — so a parser that skipped type imports would call the one file
  * whose type import IS the problem clean.
  */
-function modelImportsOf(relativePath: string): string[] {
-  const source = readFileSync(join(SRC, relativePath), 'utf8');
+function modelImportsIn(source: string): string[] {
   const found = new Set<string>();
   for (const match of source.matchAll(/from\s+'(?:\.\.?\/)+models\/([A-Za-z0-9_]+)'/g)) {
     const name = match[1];
     if (name) found.add(name);
   }
   return [...found].sort();
+}
+
+function modelImportsOf(relativePath: string): string[] {
+  return modelImportsIn(readFileSync(join(SRC, relativePath), 'utf8'));
 }
 
 const CATALOG_MODEL_SET = new Set<string>(CATALOG_MODELS);
@@ -90,12 +93,12 @@ function isCatalogModel(name: string): boolean {
 
 describe('the registry is well formed', () => {
   it('registers every hybrid file exactly once', () => {
-    const files = HYBRID_SERVICES.map((entry) => entry.file);
+    const files = HYBRID_MODULES.map((entry) => entry.file);
     expect(new Set(files).size).toBe(files.length);
   });
 
   it('registers only models with a known owning task', () => {
-    for (const entry of HYBRID_SERVICES) {
+    for (const entry of HYBRID_MODULES) {
       for (const model of entry.models) {
         expect(`${entry.file} -> ${model}`).toBe(
           KNOWN_NON_CATALOG.has(model) ? `${entry.file} -> ${model}` : `${entry.file} -> UNKNOWN`
@@ -119,7 +122,7 @@ describe('the registry is well formed', () => {
 });
 
 describe('property 1 — no registered file imports a catalog model', () => {
-  for (const entry of HYBRID_SERVICES) {
+  for (const entry of HYBRID_MODULES) {
     it(`${entry.file} is off the catalog models`, () => {
       const offending = modelImportsOf(entry.file).filter(isCatalogModel);
       // Named in the message so a failure says WHICH model, not "expected [] to equal [X]".
@@ -129,7 +132,7 @@ describe('property 1 — no registered file imports a catalog model', () => {
 });
 
 describe('property 2 — a registered file imports exactly its registered models', () => {
-  for (const entry of HYBRID_SERVICES) {
+  for (const entry of HYBRID_MODULES) {
     it(`${entry.file} matches its registry entry`, () => {
       const actual = modelImportsOf(entry.file);
       const registered = [...entry.models].sort();
@@ -149,7 +152,7 @@ describe('property 2 — a registered file imports exactly its registered models
 });
 
 describe('the unported list cannot outlive its work', () => {
-  for (const entry of UNPORTED_CATALOG_SERVICES) {
+  for (const entry of UNPORTED_CATALOG_MODULES) {
     it(`${entry.file} still imports what it is listed for`, () => {
       const actual = new Set(modelImportsOf(entry.file));
       const missing = entry.models.filter((model) => !actual.has(model));
@@ -162,7 +165,7 @@ describe('the unported list cannot outlive its work', () => {
   }
 
   it('names an owner for every entry', () => {
-    for (const entry of UNPORTED_CATALOG_SERVICES) {
+    for (const entry of UNPORTED_CATALOG_MODULES) {
       expect(`${entry.file}: ${entry.owner}`).toContain('Task ');
     }
   });
@@ -215,18 +218,30 @@ describe('vacuity floor', () => {
   });
 
   it('the parser finds a TYPE-ONLY import', () => {
-    // `manifestService.ts` imports `type ITrack` and nothing else from models.
-    // A parser that skipped type imports would call the one file whose type
-    // import is the actual defect clean.
-    expect(modelImportsOf('services/stream/manifestService.ts')).toEqual(['Track']);
+    /**
+     * Asserted against a SOURCE STRING, not a file on disk.
+     *
+     * It used to read `services/stream/manifestService.ts`, whose sole model
+     * import was `type ITrack` — a good example right up to the moment Task 10c
+     * deleted the two adapters that needed it, at which point this floor failed
+     * for a reason that had nothing to do with the parser. A floor that a
+     * successful port breaks is a floor that gets weakened by whoever hits it.
+     * The property under test is about the REGEX, so the fixture is a string.
+     */
+    expect(modelImportsIn("import type { ITrack } from '../../models/Track';")).toEqual(['Track']);
+    expect(modelImportsIn("import { TrackModel } from '../models/Track';")).toEqual(['Track']);
+    // A path that merely CONTAINS `models/` is not a model import.
+    expect(modelImportsIn("import { x } from '../viewmodels/Track';")).toEqual([]);
   });
 
   it('the registry is not empty and covers the measured hybrids', () => {
-    // Ten, counted from the ported tree. A registry that shrank to nothing
-    // without the owning tasks landing means the walk broke, not that the work
-    // finished — Tasks 11/13/15 each remove entries and this floor drops with
-    // them, deliberately, by being edited when that happens.
-    expect(HYBRID_SERVICES.length).toBe(10);
-    expect(UNPORTED_CATALOG_SERVICES.length).toBe(2);
+    // Thirteen: 10b's ten services plus 10c-1's three playback controllers. A registry
+    // that shrank to nothing without the owning tasks landing means the walk
+    // broke, not that the work finished — Tasks 11/13/15 each remove entries and
+    // this floor drops with them, deliberately, by being edited when that
+    // happens. The unported list went 2 -> 1 when `manifestService`'s adapters
+    // were deleted; `resolvePersons` is the one left, and it needs Task 12.
+    expect(HYBRID_MODULES.length).toBe(13);
+    expect(UNPORTED_CATALOG_MODULES.length).toBe(1);
   });
 });
