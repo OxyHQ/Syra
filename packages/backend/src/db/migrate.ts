@@ -74,6 +74,17 @@
  * table), so it is legitimately `pre` on its own merits rather than by the
  * window's exemption. See its own header.
  *
+ * `0012`/`0013` (Task 6 review round 1) are the first pair to demonstrate the
+ * COROLLARY below rather than violate it. One `drizzle-kit generate` run
+ * emitted a single file mixing two `CREATE INDEX`es with two `ADD CONSTRAINT`
+ * CHECKs; because a file is phased as a whole, that would have dragged both
+ * additive statements onto the `post` side exactly as happened to `0004`. They
+ * were split by RE-GENERATING in two steps — indexes first, then constraints —
+ * so each file carries its own correct snapshot and journal entry instead of a
+ * hand-patched one, and they are ordered `pre` then `post`. That ordering
+ * satisfies `planMigrationRun`'s invariant on its own merits, which the
+ * `0000`-`0005` stretch of this window does not.
+ *
  * `0008` is also why the boundary matters for more than ordering: its
  * composite `(genre_id, kind) -> genres(id, kind)` FK is safe to add ONLY
  * because `genres`, `album_genres`, and `podcast_categories` are empty going
@@ -171,7 +182,7 @@ const MIGRATIONS_SEARCH_DEPTH = 6;
  * Exported so that gate can read the SAME boundary this file documents,
  * rather than a second copy of the tag string that could drift from it.
  */
-export const LAST_GENESIS_MIGRATION_TAG = '0011_lucky_human_fly';
+export const LAST_GENESIS_MIGRATION_TAG = '0013_faulty_ares';
 
 /**
  * `packages/backend/drizzle`, found by walking UP from this module rather than

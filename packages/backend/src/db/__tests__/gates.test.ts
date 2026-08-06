@@ -480,11 +480,12 @@ describe('schema gates', () => {
       .map((entry) => ({ file: entry, text: readFileSync(join(folder, entry), 'utf8') }));
 
     // Vacuity floors: a broken glob or regex reports "no violations" exactly
-    // like a clean schema does. Both raised by Task 6 (11 -> 12 files, 400 ->
+    // like a clean schema does. Both raised by Task 6 (11 -> 14 files, 400 ->
     // 700 identifiers, against 789 actual) for the same reason MINIMUM_TABLES
     // is raised at every schema task — a floor that never moves is a vacuity
-    // check that stopped checking.
-    expect(files.length).toBeGreaterThanOrEqual(12);
+    // check that stopped checking. 14, not 12: the review round added the
+    // hand-split `0012`/`0013` pair.
+    expect(files.length).toBeGreaterThanOrEqual(14);
     const { violations, scanned } = findOverlongIdentifiers(files);
     expect(scanned).toBeGreaterThanOrEqual(700);
 
@@ -1858,14 +1859,32 @@ describe('rooms and live schema (Task 6)', () => {
         await db.select().from(houseMembers).where(eq(houseMembers.houseId, house.id))
       ).toEqual([]);
 
-      // A room and a series both survive: `house_id: null` is already the
-      // meaningful "profile-owned" state, which is exactly why SET NULL is
-      // right where CASCADE would destroy content.
+      /**
+       * A room and a series both SURVIVE, which is the point of SET NULL over
+       * a CASCADE that would destroy content.
+       *
+       * An earlier version of this comment called the result "the already-
+       * meaningful profile-owned state". It is not, and the Task 6 review (I3)
+       * was right to call that out: `owner_type` is untouched, so the room
+       * lands at `owner_type = 'house'` with `house_id = null` — a combination
+       * `RoomSchema.pre('validate')` (`models/Room.ts:352-355`) would refuse to
+       * SAVE. That is asserted below rather than glossed, because it is the
+       * open question this task handed back to the team lead: what SHOULD
+       * happen to a house's rooms when the house is deleted.
+       *
+       * It fails closed in the meantime — `canManageRoom`
+       * (`routes/rooms.routes.ts:151-154`) returns false on a missing houseId —
+       * and the same state is already reachable today through a stale id.
+       */
       const [roomAfter] = await db
-        .select({ houseId: rooms.houseId })
+        .select({ houseId: rooms.houseId, ownerType: rooms.ownerType })
         .from(rooms)
         .where(eq(rooms.id, room.id));
       expect(roomAfter.houseId).toBeNull();
+      // The half that documents the open question: `owner_type` does NOT
+      // follow. If a later change makes the FK reassign or cascade instead,
+      // this line is what forces the decision to be made deliberately.
+      expect(roomAfter.ownerType).toBe('house');
       const [seriesAfter] = await db
         .select({ houseId: series.houseId })
         .from(series)
@@ -1928,11 +1947,21 @@ describe('rooms and live schema (Task 6)', () => {
   it('enforces the kind-to-id invariant models/Room.ts only asserted in a comment', async () => {
     const db = getDb();
 
-    // `models/Room.ts:39-51` says "the parse/seed paths guarantee the right
-    // fields are populated for each kind" — true of every writer, enforced by
-    // nothing. All four directions are exercised, because a CHECK written as
-    // only the positive half would accept a 'track' row carrying an
-    // episode_id and this test would still pass.
+    /**
+     * `models/Room.ts:39-51` says "the parse/seed paths guarantee the right
+     * fields are populated for each kind" — true of every writer, enforced by
+     * nothing.
+     *
+     * FIVE directions, not four. The first version of this test claimed four
+     * were enough and was wrong: dropping just `and ${t.trackId} is null` from
+     * the PODCAST branch survived the entire suite, because all four fixtures
+     * sat on the same side of the distinction that one conjunct makes (Task 6
+     * review, I2). The shape that separates the strict CHECK from the loose
+     * one is a `podcast` row smuggling a `track_id` — the exact mirror of the
+     * `track`-smuggling-an-`episode_id` case this comment already singled out
+     * as important, which is what makes the omission the classic "fixtures too
+     * tidy" failure rather than a missing test nobody thought of.
+     */
     const [room] = await db
       .insert(rooms)
       .values({ title: 'CHECK-fixture-queue-room', host: 'CHECK-fixture-host' })
@@ -1970,6 +1999,24 @@ describe('rooms and live schema (Task 6)', () => {
             kind: 'track',
             trackId: 'CHECK-fixture-track-2',
             episodeId: 'CHECK-fixture-smuggled-episode',
+          })
+        ),
+        isCheckViolation,
+        'room_media_queue_items_kind_ids_check'
+      );
+
+      // Refused: the MIRROR — a podcast row smuggling a track_id. This is the
+      // one case the first version of this test omitted, and the only fixture
+      // that tells `... and track_id is null` from its absence. Verified by
+      // mutation: without this insert, dropping that conjunct is green.
+      await expectRefusedBy(
+        Promise.resolve(
+          db.insert(roomMediaQueueItems).values({
+            roomId: room.id,
+            position: 4,
+            kind: 'podcast',
+            episodeId: 'CHECK-fixture-episode-2',
+            trackId: 'CHECK-fixture-smuggled-track',
           })
         ),
         isCheckViolation,
@@ -2104,6 +2151,25 @@ describe('rooms and live schema (Task 6)', () => {
     try {
       expect(accepted.id).toBeTruthy();
 
+      // `series.room_template_max_participants` carries the IDENTICAL bounds
+      // from the same Mongoose declaration (`models/Series.ts:111-116`) and had
+      // no test at all (Task 6 review, Minor 2) — two constraints from one
+      // source, only one of them held.
+      await expectRefusedBy(
+        Promise.resolve(
+          db.insert(series).values({
+            title: 'CHECK-fixture-template-bounds',
+            createdBy: 'CHECK-fixture-creator',
+            recurrenceType: 'weekly',
+            recurrenceTime: '09:30',
+            roomTemplateTitlePattern: 'CHECK-fixture {n}',
+            roomTemplateMaxParticipants: 10001,
+          })
+        ),
+        isCheckViolation,
+        'series_room_template_max_participants_check'
+      );
+
       // `models/Series.ts:84`'s own `match: /^\d{2}:\d{2}$/`. Mongoose enforces
       // it on every save today, so a port that dropped it would silently
       // loosen validation the scheduling code still assumes.
@@ -2125,7 +2191,80 @@ describe('rooms and live schema (Task 6)', () => {
     }
   });
 
-  it('keeps the two constraint-support indexes NON-partial and the five listing indexes partial', async () => {
+  it("enforces the two pre('validate') broadcast invariants Mongoose ran on every save", async () => {
+    const db = getDb();
+    /**
+     * `RoomSchema.pre('validate')` (`models/Room.ts:344-360`) enforces three
+     * invariants in application code. Task 6 ported 11 `maxlength`/`match`
+     * declarations as CHECKs on the grounds that Mongoose enforces them on
+     * every save — and then silently dropped these, which the review caught
+     * (I3). Two are expressible without conflict and are now real constraints;
+     * the third is not, for the reason recorded in the `houseId` column
+     * comment and in this task's report.
+     */
+    // (1) A non-broadcast room may not carry a broadcastKind — the hook clears
+    // it on every save (`models/Room.ts:349-351`).
+    await expectRefusedBy(
+      Promise.resolve(
+        db.insert(rooms).values({
+          title: 'CHECK-fixture-kind',
+          host: 'CHECK-fixture-host',
+          type: 'talk',
+          broadcastKind: 'user',
+        })
+      ),
+      isCheckViolation,
+      'rooms_broadcast_kind_requires_type_check'
+    );
+
+    // (2) A broadcast room's speaker permission is forced to 'invited'
+    // (`models/Room.ts:357-359`) — a broadcast is not a room anyone may speak in.
+    await expectRefusedBy(
+      Promise.resolve(
+        db.insert(rooms).values({
+          title: 'CHECK-fixture-permission',
+          host: 'CHECK-fixture-host',
+          type: 'broadcast',
+          broadcastKind: 'user',
+          speakerPermission: 'everyone',
+        })
+      ),
+      isCheckViolation,
+      'rooms_broadcast_speaker_permission_check'
+    );
+
+    // Both ACCEPTED shapes, so the CHECKs cannot be passing by forbidding
+    // everything: a broadcast room with a kind and 'invited', and a talk room
+    // with no kind at all.
+    const [broadcast] = await db
+      .insert(rooms)
+      .values({
+        title: 'CHECK-fixture-broadcast-ok',
+        host: 'CHECK-fixture-host',
+        type: 'broadcast',
+        broadcastKind: 'agora',
+        speakerPermission: 'invited',
+      })
+      .returning({ id: rooms.id });
+    // A broadcast room with NO broadcastKind is deliberately still accepted:
+    // Mongoose defaults it to 'user' rather than rejecting, and Postgres has no
+    // per-row conditional default, so the converse CHECK would reject a write
+    // the application makes legal. See the `broadcastKind` column comment.
+    const [talk] = await db
+      .insert(rooms)
+      .values({ title: 'CHECK-fixture-talk-ok', host: 'CHECK-fixture-host', type: 'broadcast' })
+      .returning({ id: rooms.id });
+
+    try {
+      expect(broadcast.id).toBeTruthy();
+      expect(talk.id).toBeTruthy();
+    } finally {
+      await db.delete(rooms).where(eq(rooms.id, broadcast.id));
+      await db.delete(rooms).where(eq(rooms.id, talk.id));
+    }
+  });
+
+  it('keeps all four constraint-support indexes NON-partial and the five listing indexes partial', async () => {
     const db = getDb();
     // `schema/rooms.ts` states both properties in writing; a test asserting
     // only index NAMES cannot catch either, because the name is identical
@@ -2137,9 +2276,25 @@ describe('rooms and live schema (Task 6)', () => {
     );
     const definitions = new Map(rows.map((row) => [row.indexname, row.indexdef]));
 
-    // The two that exist for an ON DELETE SET NULL, not for a query: a
-    // predicate here would hide rows the constraint still has to find.
-    for (const name of ['rooms_series_id_idx', 'recordings_room_id_status_created_at_idx']) {
+    /**
+     * The four that exist for an ON DELETE SET NULL, not for a query: a
+     * predicate here would hide rows the constraint still has to find.
+     *
+     * This loop covered only the first TWO until the Task 6 review (I1), and
+     * that gap is the reason the review exists. `rooms.house_id` and
+     * `series.house_id` had no non-partial index at all — the schema claimed
+     * the partial listing indexes doubled as constraint support, which a
+     * partial index cannot do — so deleting a house sequential-scanned both
+     * tables. Worse, the test asserted those two partial indexes CONTAINED
+     * their predicate (below), so a reader trusting the gate read the defect
+     * as verified. A gate that confirms the wrong property is worse than none.
+     */
+    for (const name of [
+      'rooms_series_id_idx',
+      'recordings_room_id_status_created_at_idx',
+      'rooms_house_id_idx',
+      'series_house_id_idx',
+    ]) {
       const definition = definitions.get(name);
       expect(definition).toBeDefined();
       expect(definition).not.toContain('WHERE');
@@ -2169,6 +2324,68 @@ describe('rooms and live schema (Task 6)', () => {
     // unindexed column today.
     expect(definitions.get('rooms_active_ingress_id_idx')).toContain('WHERE (active_ingress_id IS NOT NULL)');
     expect(definitions.get('series_house_id_active_created_at_idx')).toContain('WHERE (is_active = true)');
+  });
+
+  it('lets every ON DELETE SET NULL find its rows by index, not by scanning', async () => {
+    const db = getDb();
+    /**
+     * The direct test of the property I1 was about, and a strictly stronger one
+     * than "the index carries no WHERE": it asks the PLANNER the same question
+     * Postgres asks when a parent row is deleted. An index can be non-partial
+     * and still not serve the query (wrong leading column), and a future
+     * refactor could drop the index while leaving the definition assertion
+     * above passing on the remaining ones.
+     *
+     * The query is the real referential-integrity probe Postgres runs for a
+     * SET NULL — `select 1 from only <child> x where <fk> = $1 for key share
+     * of x`. `enable_seqscan = off` makes this a question about USABILITY
+     * rather than about cost estimates: these tables are empty, so a seq scan
+     * is genuinely the cheapest plan and the planner picks it even when a
+     * perfectly good index exists. With the setting off, any usable index
+     * wins, so a remaining `Seq Scan` means no index could serve the query at
+     * all. That is exactly how the review measured it.
+     *
+     * Run inside ONE transaction with `set local`, which is load-bearing twice
+     * over. The setting must reach the same connection as the `explain` —
+     * `getDb()` is a POOL, and a bare `set` could land on a different
+     * connection, making this flaky. And `set local` unwinds at commit, so no
+     * planner setting can leak onto a shared dev database even if the test
+     * throws. The `show` assertion below refuses to let the whole thing pass
+     * vacuously: without the setting every one of these probes returns a seq
+     * scan (verified directly), so a silently-ineffective `set` would turn
+     * this into a test that always fails rather than one that always passes —
+     * but asserting it makes the reason unambiguous either way.
+     */
+    const setNullChildren: readonly [string, string][] = [
+      ['rooms', 'house_id'],
+      ['series', 'house_id'],
+      ['rooms', 'series_id'],
+      ['recordings', 'room_id'],
+      ['series_episodes', 'room_id'],
+    ];
+
+    await db.transaction(async (tx) => {
+      await executeRows(tx, sql`set local enable_seqscan = off`);
+      const [setting] = await executeRows<{ enable_seqscan: string }>(
+        tx,
+        sql`show enable_seqscan`
+      );
+      expect(setting.enable_seqscan).toBe('off');
+
+      for (const [table, column] of setNullChildren) {
+        const plan = await executeRows<{ 'QUERY PLAN': string }>(
+          tx,
+          sql`explain select 1 from only ${sql.identifier(table)} x
+              where ${sql.identifier(column)} = 'probe' for key share of x`
+        );
+        const text = plan.map((row) => row['QUERY PLAN']).join('\n');
+        // Named in the failure message, so a regression says WHICH deletion
+        // path started scanning rather than just "expected false to be true".
+        expect(`${table}.${column}: ${text.includes('Seq Scan') ? 'SEQ SCAN' : 'index'}`).toBe(
+          `${table}.${column}: index`
+        );
+      }
+    });
   });
 
   it('indexes the two arrays and the text search that have real readers', async () => {

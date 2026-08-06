@@ -154,8 +154,15 @@
  *    ever a query filter. Both are read off an already-loaded document for
  *    permission checks, the same shape `podcasts.ts` dropped
  *    `podcasts.claimable` for.
- *  - `Recording.roomId` / `Recording.status` / `Recording.host` standalone —
- *    each is the leading column of a compound index below.
+ *  - `Recording.roomId` standalone — the leading column of
+ *    `recordings_room_id_status_created_at_idx` below, so a second index buys
+ *    nothing. `Recording.status` and `Recording.host` standalone are dropped
+ *    for a DIFFERENT reason, and an earlier version of this list wrongly gave
+ *    all three the same one: no `recordings` index leads with `status` at all
+ *    (it appears only inside two partial predicates), and `host` leads only a
+ *    partial index. They are dropped because every query that exists is
+ *    already covered by the two partial indexes built for it — not because a
+ *    compound index subsumes them.
  *
  * ## The four columns `PROTECTED_COLUMNS_BY_TABLE` gains
  *
@@ -455,12 +462,23 @@ export const series = pgTable(
      * `GET /api/houses/:id/series` — the only listing there is
      * (`routes/houses.routes.ts:716`), which filters `{ houseId, isActive:
      * true }` and sorts `createdAt` desc. Partial on the predicate the real
-     * query always carries, the same convention Task 2/3/4 used. Also the
-     * `ON DELETE SET NULL` support index for `series.house_id`.
+     * query always carries, the same convention Task 2/3/4 used.
+     *
+     * A LISTING index only. An earlier version of this comment also claimed it
+     * was the `ON DELETE SET NULL` support index for `series.house_id`; it
+     * cannot be, because it is partial on `is_active` and the RI query carries
+     * no such clause — that is `series_house_id_idx`, below.
      */
     index('series_house_id_active_created_at_idx')
       .on(t.houseId, t.createdAt.desc())
       .where(sql`${t.isActive} = true`),
+    /**
+     * Support for `houses`' `ON DELETE SET NULL` on `series.house_id` — the
+     * fourth constraint-support index, and MUST STAY NON-PARTIAL for the same
+     * reason as `rooms_house_id_idx`. Deleting a house sequential-scanned
+     * `series` before this existed.
+     */
+    index('series_house_id_idx').on(t.houseId),
   ]
 );
 
@@ -477,17 +495,54 @@ export const rooms = pgTable(
     /** The creator/primary host's Oxy account id — no foreign key. */
     host: text().notNull(),
     /**
-     * Set when `ownerType = 'house'`; absent for a profile-owned room, which
-     * is already a meaningful state — so `SET NULL` on a house deletion
-     * promotes today's silent dangling reference (`routes/houses.routes.ts:354`
-     * deletes a house with no cleanup at all) into exactly that state.
+     * Set when `ownerType = 'house'`; `null` for a profile-owned room.
+     *
+     * `SET NULL` on a house deletion, which replaces today's silent dangling
+     * reference (`routes/houses.routes.ts:354` deletes a house with no cleanup
+     * at all) with an explicit null. **It does NOT produce a profile-owned
+     * room, and an earlier version of this comment wrongly said it did:**
+     * `owner_type` is untouched, so the surviving row sits at
+     * `owner_type = 'house'`, `house_id = null` — a combination
+     * `RoomSchema.pre('validate')` (`models/Room.ts:352-355`) would refuse to
+     * SAVE, and which no CHECK here forbids.
+     *
+     * That is deliberate, and it is why the third `pre('validate')` invariant
+     * is NOT ported as a CHECK (the other two are — see the two `broadcast`
+     * CHECKs below). `owner_type <> 'house' or house_id is not null` would be
+     * broken by this very constraint unless the FK could null `owner_type` in
+     * the same action, which Postgres cannot express through drizzle. Choosing
+     * between them means deciding what should happen to a house's rooms when
+     * the house is deleted — cascade, restrict, or reassign to the creator —
+     * and that is a product question, recorded in this task's report rather
+     * than settled here.
+     *
+     * Not a security hole: the one reader that dereferences the pair,
+     * `canManageRoom` (`routes/rooms.routes.ts:151-154`), returns `false` on a
+     * missing `houseId`, so it fails closed. The state is also already
+     * reachable today through a stale id (`House.findById` → null). This is a
+     * dropped validation, not a vulnerability.
      */
     houseId: text().references(() => houses.id, { onDelete: 'set null' }),
     /** An Oxy account id — no foreign key. Audit trail for agora-owned rooms. */
     createdByAdmin: text(),
     // ── Classification ────────────────────────────────────────────────────
     type: text({ enum: ROOM_TYPES }).notNull().default('talk'),
-    /** Only set when `type = 'broadcast'` (`models/Room.ts:344-351`). */
+    /**
+     * Only set when `type = 'broadcast'` — enforced by
+     * `rooms_broadcast_kind_check` below, not merely asserted here.
+     * `models/Room.ts:349-351` clears it on every save of a non-broadcast
+     * room, and this comment previously cited that hook while nothing in the
+     * schema held the line.
+     *
+     * Only the ONE direction is a CHECK. The hook's other half (a broadcast
+     * room with no `broadcastKind` gets defaulted to `'user'`,
+     * `models/Room.ts:345-347`) is deliberately NOT expressed as
+     * `type <> 'broadcast' or broadcast_kind is not null`: Postgres has no
+     * per-row conditional default, so that CHECK would REJECT an insert
+     * Mongoose accepts and silently fills in. Enforcing it would tighten the
+     * contract past what the application does, which is a different thing from
+     * porting it.
+     */
     broadcastKind: text({ enum: ROOM_BROADCAST_KINDS }),
     // ── Lifecycle ─────────────────────────────────────────────────────────
     status: text({ enum: ROOM_STATUSES }).notNull().default('scheduled'),
@@ -561,6 +616,32 @@ export const rooms = pgTable(
       'rooms_speaker_permission_check',
       sql`${t.speakerPermission} in (${sql.raw(inList(ROOM_SPEAKER_PERMISSIONS))})`
     ),
+    /**
+     * `RoomSchema.pre('validate')` (`models/Room.ts:349-351`) clears
+     * `broadcastKind` on every save of a non-broadcast room. Ported on the same
+     * grounds as the 11 `maxlength`/`match` CHECKs below — Mongoose enforces it
+     * on every save today, so leaving it out would quietly loosen validation.
+     * See the `broadcastKind` column for why only this direction is a CHECK.
+     */
+    // Named `..._requires_type_check`, not `rooms_broadcast_kind_check` —
+    // that name is already taken by the enum-membership CHECK above, and
+    // `drizzle-kit generate` refuses a duplicate constraint name within a
+    // schema rather than silently emitting one that shadows the other.
+    check(
+      'rooms_broadcast_kind_requires_type_check',
+      sql`${t.type} = 'broadcast' or ${t.broadcastKind} is null`
+    ),
+    /**
+     * The other half of the same hook (`models/Room.ts:357-359`): a broadcast
+     * room's speaker permission is forced to `'invited'`, because a broadcast
+     * is not a room anyone may speak in. Expressible with no conflict — the
+     * column already defaults to `'invited'`, so this rejects only an explicit
+     * widening that Mongoose would have silently overwritten.
+     */
+    check(
+      'rooms_broadcast_speaker_permission_check',
+      sql`${t.type} <> 'broadcast' or ${t.speakerPermission} = 'invited'`
+    ),
     check('rooms_max_participants_check', sql`${t.maxParticipants} between 1 and 10000`),
     check('rooms_stats_peak_listeners_check', sql`${t.statsPeakListeners} >= 0`),
     check('rooms_stats_total_joined_check', sql`${t.statsTotalJoined} >= 0`),
@@ -597,16 +678,35 @@ export const rooms = pgTable(
      * can ever return.
      *
      * The default listing: status (one value or the live/scheduled pair),
-     * newest first. Its leading column also serves
-     * `Room.find({ status: 'live' })` (the live-users badge feed,
-     * `routes/rooms.routes.ts:1213`) as a prefix, so that query gets no index
-     * of its own.
+     * newest first.
+     *
+     * IT DOES NOT SERVE `Room.find({ status: 'live' })` — the live-users badge
+     * feed (`routes/rooms.routes.ts:1213`) — and an earlier version of this
+     * comment claimed it did "as a prefix". A partial index is unusable unless
+     * the query's predicate IMPLIES the index predicate, and that query carries
+     * no `archived` clause at all, so it sequential-scans `rooms` on every
+     * request (measured with `enable_seqscan = off`; adding
+     * `and archived = false` to the same query flips it to an index scan, which
+     * is the proof that the predicate and not the column list is what excluded
+     * it). **The ported live-users query MUST carry `archived = false`.**
+     *
+     * That requirement is not merely a performance fix, which is why it is
+     * stated as a requirement rather than solved with a second index:
+     * `archived` is the MODERATION restriction lever for a room — per
+     * `moderation/enforcement-service.ts:98`, "the only lever a room has that
+     * does not end a live session out from under the people in it" — so an
+     * archived room is routinely `status = 'live'` at the same time. Today's
+     * unfiltered query therefore still emits a live badge for a room a
+     * moderator has restricted. Flagged in this task's report as a pre-existing
+     * moderation gap the port should close, not carry.
      */
     index('rooms_status_created_at_idx')
       .on(t.status, t.createdAt.desc())
       .where(sql`${t.archived} = false`),
     // `GET /api/houses/:id/rooms`, and the global listing's own `?houseId=`
-    // filter. Also the `ON DELETE SET NULL` support index for `house_id`.
+    // filter. A LISTING index only — the `ON DELETE SET NULL` support index for
+    // `house_id` is the separate non-partial one below, for the reason given
+    // there.
     index('rooms_house_id_status_created_at_idx')
       .on(t.houseId, t.status, t.createdAt.desc())
       .where(sql`${t.archived} = false`),
@@ -645,6 +745,23 @@ export const rooms = pgTable(
      * definition in `__tests__/gates.test.ts`.
      */
     index('rooms_series_id_idx').on(t.seriesId),
+    /**
+     * Support for `houses`' `ON DELETE SET NULL` on `house_id`, and the third
+     * of the four indexes in this schema that exist for a CONSTRAINT rather
+     * than a query — so, MUST STAY NON-PARTIAL.
+     *
+     * It looks redundant beside `rooms_house_id_status_created_at_idx` and is
+     * not, which is exactly the trap it exists to close: that index is partial
+     * on `archived = false`, and the referential-integrity query Postgres runs
+     * for the SET NULL is `select 1 from only rooms x where house_id = $1 for
+     * key share of x` — no `archived` clause, and it MUST find archived rows
+     * too. A partial index cannot serve it, so before this index existed,
+     * deleting a house sequential-scanned the whole `rooms` table. Measured
+     * with `enable_seqscan = off`, against working controls; the review that
+     * caught it is `task-6-review.md` I1. `gates.test.ts` now asserts the plan
+     * for this exact query, not just the index definition.
+     */
+    index('rooms_house_id_idx').on(t.houseId),
   ]
 );
 
@@ -765,7 +882,16 @@ export const recordings = pgTable(
      * this matches `tracks.audioSourceKey`'s existing treatment.
      */
     objectKey: text().notNull(),
+    /**
+     * `integer`, where Mongo stored a `Number` (a double) — a deliberate
+     * narrowing to the house convention, matching `user_uploads.sizeBytes`
+     * (`creators.ts:311`) and `image_assets.byteSize` (`catalog.ts:228`). The
+     * ceiling is 2.1 GB, which a single room's recorded audio does not
+     * approach (24 h of Opus at 64 kbps is roughly 700 MB). Recorded as a
+     * choice rather than left to look like an oversight.
+     */
     fileSize: integer(),
+    /** `integer` for the same reason; 24 h is 86.4 M ms, well inside the range. */
     durationMs: integer(),
     startedAt: timestamptz().notNull(),
     stoppedAt: timestamptz(),
