@@ -54,11 +54,11 @@ import {
   asc,
   desc,
   eq,
-  ilike,
+
   inArray,
   isNotNull,
   ne,
-  or,
+
   sql,
   type SQLWrapper,
 } from 'drizzle-orm';
@@ -75,6 +75,7 @@ import {
   descNullsLast,
   imageFirst,
 } from '../containers';
+import { textSearch } from '../search';
 import { playableTrackFilter } from '../visibility';
 
 /** Thrown to roll the seeding transaction back once every plan is collected. */
@@ -142,7 +143,8 @@ async function seed(tx: Parameters<Parameters<ReturnType<typeof getDb>['transact
     sql`insert into tracks (id, title, artist_id, artist_name, album_id, duration, source, status,
                             popularity, is_available, copyright_removed, genre, mood,
                             play_count, created_at)
-        select ${MARKER} || '-t-' || g, 'Track ' || g,
+        select ${MARKER} || '-t-' || g,
+               'Track ' || g || case when g % 100 = 0 then ' zqxwv' else '' end,
                ${MARKER} || '-art-' || (1 + (g % 200)), 'Artist',
                ${MARKER} || '-alb-' || (1 + (g % 400)), 200, 'upload', 'ready', g % 101,
                case when (1 + (g % 400)) % 7 = 0 then false else true end,
@@ -315,16 +317,37 @@ beforeAll(async () => {
          * the day `pg_trgm` or a `search_vector` reader lands, this probe is
          * what says the plan changed.
          */
-        trackSearchIlike: tx
+        searchPredicateOnly: tx
+          .select({ total: sql`count(*)` })
+          .from(tracks)
+          .where(textSearch(tracks.searchVector, 'zqxwv')),
+        // `countTracks` — the second query every non-preview search issues, and
+        // the one where the index choice is unambiguous: no ORDER BY and no
+        // LIMIT, so the planner has no ordered-scan alternative to weigh.
+        trackSearchCount: tx
+          .select({ total: sql`count(*)` })
+          .from(tracks)
+          .where(and(playableTrackFilter(), textSearch(tracks.searchVector, 'zqxwv'))),
+        // The paged listing, which DOES have an ordered alternative.
+        trackSearch: tx
+          .select({ id: tracks.id })
+          .from(tracks)
+          .where(and(playableTrackFilter(), textSearch(tracks.searchVector, 'zqxwv')))
+          .orderBy(descNullsLast(tracks.popularity), descNullsLast(tracks.createdAt))
+          .limit(20),
+        // The same query with the vector RECOMPUTED instead of read from the
+        // stored column — the mistake that silently costs the index. Kept as a
+        // control beside the real probe so "the GIN index was used" is measured
+        // against a case where it cannot be.
+        trackSearchRecomputed: tx
           .select({ id: tracks.id })
           .from(tracks)
           .where(
             and(
               playableTrackFilter(),
-              or(ilike(tracks.title, '%probe%'), ilike(tracks.artistName, '%probe%'))
+              sql`to_tsvector('english', ${tracks.title}) @@ websearch_to_tsquery('english', 'zqxwv')`
             )
           )
-          .orderBy(descNullsLast(tracks.popularity), descNullsLast(tracks.createdAt))
           .limit(20),
         // The control: `tracks.comment` carries no index, so the planner has
         // nothing to choose even with sequential scans discouraged.
@@ -543,30 +566,69 @@ describe('Task 10c-3: the controller list queries reach an index', () => {
   });
 
   /**
-   * `GET /api/tracks/search` examines every playable row, and that is asserted
-   * rather than left unmeasured.
+   * `GET /api/tracks/search` reaches `tracks_search_gin`.
    *
-   * `ilike '%q%'` is the faithful port of `new RegExp(q, 'i')` — same rows, same
-   * order — and the Mongo original was a collection scan too, so this is not a
-   * regression. The alternative, `websearch_to_tsquery` over the GIN-indexed
-   * `search_vector`, changes what MATCHES ("love" stops matching "Glove"), which
-   * is a product decision and not a port decision.
-   *
-   * The assertion is on the SHAPE, not on the absence of an index scan: with
-   * `enable_seqscan = off` the planner still enters through a partial index and
-   * applies the pattern as a `Filter`, so "no index scan" would simply be false.
-   * What says "this is a scan" is that the search columns never appear in an
-   * `Index Cond` and `tracks_search_gin` is untouched — and the day a ruling
-   * lands, both of those flip.
+   * The seed gives one track in a hundred a distinctive word and the probe asks
+   * for THAT. Selectivity is load-bearing, not decoration: the first version
+   * searched for `'track'`, which every seeded title carries, and the planner
+   * correctly preferred an ordered b-tree scan over a GIN bitmap matching 100%
+   * of rows. The probe read as "the index is not used" while the query was
+   * exactly right — a fixture sitting on the wrong side of the distinction, the
+   * same shape as the constant `created_at` above.
    */
-  it('the track search filters every playable row and reaches no text index', () => {
-    const plan = plans.get('trackSearchIlike') ?? '';
-    expect(`ilike is a filter: ${/Filter:.*~~\*/.test(plan)}`).toBe('ilike is a filter: true');
-    expect(`ilike is an index cond: ${/Index Cond:.*~~\*/.test(plan)}`).toBe(
-      'ilike is an index cond: false'
-    );
-    expect(`search gin used: ${plan.includes('tracks_search_gin')}`).toBe('search gin used: false');
+  /**
+   * THE proof the ruling needed: the search predicate is served by
+   * `tracks_search_gin` as an INDEX CONDITION, not evaluated as a filter over
+   * rows some other index produced.
+   *
+   * `Index Cond` is the assertion, not merely the index's name in the plan: a
+   * GIN index can appear in a plan for an unrelated reason, and a predicate
+   * pushed into `Filter` is exactly the silent scan this whole change exists to
+   * avoid.
+   *
+   * The probe is the predicate ALONE — no playability filter, no ORDER BY —
+   * because that is what "is this query shape index-usable" means. What the
+   * SHIPPED queries do with it is a cost decision, measured below.
+   */
+  it('the search predicate is an Index Cond on tracks_search_gin', () => {
+    const plan = plans.get('searchPredicateOnly') ?? '';
+    expect(`predicate: ${indexesIn('searchPredicateOnly')}`).toContain('tracks_search_gin');
+    expect(`index cond: ${/Index Cond: \(search_vector @@/.test(plan)}`).toBe('index cond: true');
   });
+
+  /**
+   * The control, and the reason the assertion above is not vacuous: the SAME
+   * predicate with the vector RECOMPUTED in the query instead of read from the
+   * stored generated column cannot use the GIN index at all. That is the
+   * mistake that costs nothing to make and nothing to notice — no error, no
+   * warning, just a scan.
+   */
+  it('a recomputed to_tsvector reaches no text index at all', () => {
+    expect(`recomputed: ${indexesIn('trackSearchRecomputed')}`).not.toContain('tracks_search_gin');
+  });
+
+  /**
+   * The two SHIPPED search queries — the page and its count — reach an index
+   * and never read the table, and that is all that is asserted about WHICH.
+   *
+   * Measured, and worth recording because it is counter-intuitive: at the 4,000
+   * rows this file seeds, the planner does NOT choose the GIN index for either.
+   * Both compose the search with `playableTrackFilter()`, and a bitmap over a
+   * partial index covering the playable rows costs 73 against the GIN scan's
+   * 153, so it takes the cheaper one and applies the tsquery as a recheck.
+   *
+   * That is Postgres being right, not the index being useless. The partial-index
+   * cost grows with the size of the PLAYABLE CATALOGUE while the GIN cost grows
+   * with the number of MATCHES, so the choice flips as the catalogue grows —
+   * which is the entire reason for the ruling. Pinning the winner at this seed
+   * size would pin the wrong end of that curve.
+   */
+  for (const probe of ['trackSearchCount', 'trackSearch']) {
+    it(`${probe} reaches an index and never scans the table`, () => {
+      expect(`${probe}: ${indexesIn(probe)}`).toContain('tracks_');
+      expect(plans.get(probe)).not.toContain('Seq Scan on tracks');
+    });
+  }
 });
 
 describe('the probe can tell an index from a scan', () => {
@@ -603,7 +665,7 @@ describe('the probe can tell an index from a scan', () => {
     // not discriminate. With the `ANALYZE` gone the estimate stayed well above
     // any useful threshold, because Postgres falls back to estimating from the
     // relation's physical size.
-    expect(plans.size).toBe(13);
+    expect(plans.size).toBe(16);
     expect(`tracks seeded: ${seededRowCount}`).toBe('tracks seeded: 4000');
     expect(`tracks columns in pg_stats: ${analyzedColumnCount > 0}`).toBe(
       'tracks columns in pg_stats: true'

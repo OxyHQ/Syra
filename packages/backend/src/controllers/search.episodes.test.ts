@@ -2,12 +2,27 @@ import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import mongoose from 'mongoose';
 import type { Request, Response, NextFunction } from 'express';
 import { connect, clear, disconnect } from '../test/mongo';
+import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { EpisodeModel } from '../models/Episode';
 import { search } from './search.controller';
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+/**
+ * BOTH databases. Episodes are Mongoose until Task 12 and that is what this
+ * file is about — but `search` is a hybrid handler now, and its Postgres half
+ * runs on every request whatever category was asked for.
+ */
+beforeAll(async () => {
+  await connect();
+  await connectDb();
+});
+afterEach(async () => {
+  await clear();
+  await clearDb();
+});
+afterAll(async () => {
+  await disconnect();
+  await disconnectDb();
+});
 
 interface SearchBody {
   results: { episodes: Array<{ title: string }> };

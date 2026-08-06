@@ -260,8 +260,16 @@ async function loadAppearsIn(person: PersonLike): Promise<EntityAppearsIn> {
   };
 }
 
-/** Build a `PersonLike` (the strong-key + enrichment shape) from an entity row. */
-function toPersonLike(person: PublicCatalogEntityRow): PersonLike {
+/**
+ * Build a `PersonLike` (the strong-key + enrichment shape) from an entity row.
+ *
+ * Exported for `search.controller`, which needs the identical mapping for the
+ * people category. One adapter, not two: `PersonLike._id` is a Mongo-ism that
+ * `services/podcasts/resolvePersons.ts` (Task 12) still owns, and duplicating
+ * the bridge is how the two surfaces would start disagreeing about which
+ * columns a person carries.
+ */
+export function toPersonLike(person: PublicCatalogEntityRow): PersonLike {
   return {
     _id: person.id,
     name: person.name,

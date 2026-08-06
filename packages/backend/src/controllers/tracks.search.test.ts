@@ -17,12 +17,13 @@ import { getTrackById, searchTracks } from './tracks.controller';
  * `GET /api/tracks/search` and `GET /api/tracks/:id` — the two handlers whose
  * behaviour the port could change without failing anything else.
  *
- * SEARCH swapped engines: `new RegExp(q, 'i')` became `ilike '%q%'`. Same
- * intended semantics, a different metacharacter set, and a ReDoS removed. The
- * cases below are the input shapes that make a faithful port and a careless one
- * disagree — a raw `%`, a `_`, and a regex construct that is a literal to LIKE
- * and a quantifier to a regex engine. Without them the suite would pass against
- * an unescaped pattern.
+ * SEARCH swapped engines twice: `new RegExp(q, 'i')` → `ilike '%q%'` →
+ * `search_vector @@ websearch_to_tsquery('english', …)` with a prefix on the
+ * final term, which is the ruled destination. `db/catalog/__tests__/search.test.ts`
+ * owns the semantics of that change (prefix and stemming gained, infix lost);
+ * what is asserted HERE is the ENDPOINT — that the handler wires the predicate
+ * to the right column, still filters by playability, and cannot be made to
+ * evaluate the user's string as a program.
  *
  * DETAIL changed serializer: `toApiFormat` SPREAD the Mongo document, so
  * `credits`, `sources` and the HLS ladder rode along for free. They are child
@@ -101,68 +102,68 @@ async function search(q: string): Promise<{ tracks: Track[]; total: number }> {
 }
 
 describe('GET /api/tracks/search', () => {
-  it('matches a case-insensitive SUBSTRING of the title, as the regex did', async () => {
+  it('matches a word of the title, and counts what it matched', async () => {
     await seedTrack({ title: 'Lovers Rock' });
     await seedTrack({ title: 'Something Else' });
 
-    // Mid-word, lower case against a capitalised stored title: the exact pair
-    // that a `websearch_to_tsquery` port would stop matching.
-    const body = await search('over');
+    const body = await search('lovers');
     expect(body.tracks.map((track) => track.title)).toEqual(['Lovers Rock']);
+    // `total` is a SECOND query (`countTracks`) under the same predicate, so it
+    // is asserted rather than assumed: a count that lost the search condition
+    // would report the whole catalogue and the page would still look right.
     expect(body.total).toBe(1);
   });
 
-  it('matches the artist name as well as the title', async () => {
+  it('matches a PREFIX, so the endpoint answers while the user is still typing', async () => {
+    await seedTrack({ title: 'Lovers Rock' });
+    await seedTrack({ title: 'Something Else' });
+
+    expect((await search('lov')).tracks.map((track) => track.title)).toEqual(['Lovers Rock']);
+  });
+
+  it('matches the artist name, which shares the same stored vector', async () => {
     await seedTrack({ title: 'Untitled', artistName: 'Portishead' });
     await seedTrack({ title: 'Untitled Two', artistName: 'Someone' });
 
-    expect((await search('portis')).tracks.map((track) => track.title)).toEqual(['Untitled']);
+    expect((await search('portishead')).tracks.map((track) => track.title)).toEqual(['Untitled']);
   });
 
   /**
-   * `%` is LIKE's "match anything". Unescaped, this query returns the whole
-   * catalogue — the search equivalent of an open door, and the shape that
-   * distinguishes an escaped pattern from a raw one. Nothing else in this file
-   * can tell them apart.
+   * The ReDoS that was live on this endpoint — `new RegExp(req.query.q, 'i')`,
+   * public, unescaped, over a collection scan — cannot exist behind a tsquery:
+   * there is no backtracking engine, and `websearch_to_tsquery` never throws on
+   * malformed input either.
+   *
+   * Asserted as BEHAVIOUR rather than as the absence of a call: the operators
+   * go in as ordinary text, the query still ANSWERS, and nothing 500s. A test
+   * that only checked for no exception would pass against a handler that had
+   * quietly stopped matching anything.
    */
-  it('treats a bare % as a literal, not as "everything"', async () => {
-    await seedTrack({ title: 'Ordinary' });
-    await seedTrack({ title: '100% Silk' });
-
-    const body = await search('%');
-    expect(body.tracks.map((track) => track.title)).toEqual(['100% Silk']);
-  });
-
-  /** `_` is LIKE's single-character wildcard — the same class as `%`. */
-  it('treats _ as a literal underscore', async () => {
-    await seedTrack({ title: 'abc' });
-    await seedTrack({ title: 'a_c' });
-
-    expect((await search('a_c')).tracks.map((track) => track.title)).toEqual(['a_c']);
-  });
-
-  /**
-   * The ReDoS that was live on this endpoint (`new RegExp(req.query.q, 'i')`,
-   * public, unescaped) cannot exist behind `ilike`: there is no backtracking
-   * engine to exploit. Asserted as BEHAVIOUR — the pattern is matched literally
-   * — because that is what proves the regex engine is gone, rather than that it
-   * is merely escaped.
-   */
-  it('matches a regex construct literally instead of compiling it', async () => {
+  it('takes regex and tsquery operators as text instead of evaluating them', async () => {
     await seedTrack({ title: 'aaaaaaaaaaaaaaaaaaaa' });
-    await seedTrack({ title: 'literally (a+)+$ in the title' });
+    await seedTrack({ title: 'Parenthetical Aside' });
 
-    const body = await search('(a+)+$');
-    expect(body.tracks.map((track) => track.title)).toEqual(['literally (a+)+$ in the title']);
+    for (const hostile of ['(a+)+$', "') | 'x", '!!! & &', '\\']) {
+      const body = await search(hostile);
+      expect(`${hostile} → ${body.tracks.length} of ${body.total}`).toBe(`${hostile} → 0 of 0`);
+    }
+
+    // The endpoint is not simply broken: an ordinary query still answers.
+    expect((await search('parenthetical')).tracks.map((t) => t.title)).toEqual([
+      'Parenthetical Aside',
+    ]);
   });
 
   it('never returns an unplayable track', async () => {
-    await seedTrack({ title: 'Taken Down', copyrightRemoved: true, isAvailable: false });
-    await seedTrack({ title: 'Unpublished', isAvailable: false });
+    await seedTrack({ title: 'Removed Song', copyrightRemoved: true, isAvailable: false });
+    await seedTrack({ title: 'Unpublished Song', isAvailable: false });
+    await seedTrack({ title: 'Available Song' });
 
-    const body = await search('n');
-    expect(body.tracks).toEqual([]);
-    expect(body.total).toBe(0);
+    // Vacuity floor: the query matches all three titles, so the two absences
+    // are about playability and not about the search predicate.
+    const body = await search('song');
+    expect(body.tracks.map((track) => track.title)).toEqual(['Available Song']);
+    expect(body.total).toBe(1);
   });
 
   it('answers an empty query without touching the catalogue', async () => {

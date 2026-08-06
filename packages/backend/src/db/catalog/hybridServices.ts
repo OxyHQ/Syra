@@ -234,6 +234,18 @@ export const HYBRID_MODULES: readonly HybridModule[] = [
       'locker\'s only serializer — lives in `uploads.controller` and moves with it.',
   },
   {
+    file: 'controllers/search.controller.ts',
+    models: ['Episode', 'Podcast'],
+    reason:
+      'Eight categories, two verticals. The five CATALOG ones — tracks, albums, artists, ' +
+      'playlists, people — match through `search_vector` (`db/catalog/search.ts`); podcasts and ' +
+      'episodes are Task 12\'s tables and keep their Mongoose regex, which is why the ' +
+      '`escapeRegex` helper survives here and nowhere else. The two halves never meet in one ' +
+      'query: each category is an independent promise resolved into its own DTO list. ' +
+      '`podcasts.search_vector` and `episodes.search_vector` already exist, so Task 12 finishes ' +
+      'this file by deleting the regex rather than by building anything.',
+  },
+  {
     file: 'controllers/radio.controller.ts',
     models: ['UserMusicPreferences'],
     reason:

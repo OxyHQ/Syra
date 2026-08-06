@@ -244,25 +244,13 @@ const REGISTERED_HALF_PORTED = new Set(Object.keys(HALF_PORTED_BY_NECESSITY));
 const SURVIVING_MONGOOSE_MODULES: Readonly<
   Record<string, { owner: string; importers: readonly string[]; reason: string }>
 > = {
-  'utils/playableContainers': {
-    owner: 'Task 10c-3, the moment the text-search ruling lands',
-    importers: ['controllers/search.controller.ts'],
-    reason:
-      'Its album/artist/playlist container reads have drizzle twins in `db/catalog/containers.ts` ' +
-      'and every other caller uses them. `search.controller` cannot be ported piecemeal — a ' +
-      'half-ported controller is the one state this branch cannot hold — so its container reads ' +
-      'move with its six regex search sites.',
-  },
+  // `utils/playableContainers` is GONE — Task 10c's stated finish line, reached
+  // once the text-search ruling unblocked `search.controller`, its last
+  // importer. Its entry is deleted rather than kept, and the third test below
+  // is what would fail if the file came back.
   'utils/musicHelpers': {
     owner: 'Task 11 — library and playlists',
-    importers: [
-      'controllers/playlists.controller.ts',
-      'controllers/search.controller.ts',
-      // `MongoCatalogDoc`, the type that makes handing a drizzle row to these
-      // formatters a compile error. The gate found this one; the first draft of
-      // this registry listed the two controllers and missed it.
-      'utils/playableContainers.ts',
-    ],
+    importers: ['controllers/playlists.controller.ts'],
     reason:
       '`formatPlaylistWithCoverArt` / `formatPlaylistsWithCoverArt` / `toApiFormat` operate on ' +
       'Mongoose Playlist DOCUMENTS. `playlists` and `playlist_tracks` are ported tables, but ' +
@@ -272,15 +260,10 @@ const SURVIVING_MONGOOSE_MODULES: Readonly<
   },
   'utils/catalogVisibility': {
     owner: 'Task 11 — library and playlists',
-    importers: [
-      'controllers/playlists.controller.ts',
-      'controllers/search.controller.ts',
-      'utils/musicHelpers.ts',
-      'utils/playableContainers.ts',
-    ],
+    importers: ['controllers/playlists.controller.ts', 'utils/musicHelpers.ts'],
     reason:
-      'Necessarily dies LAST: both surviving modules above import it. `db/catalog/visibility.ts` ' +
-      'is the drizzle side and every ported caller already uses it.',
+      'Necessarily dies LAST: `musicHelpers` imports it. `db/catalog/visibility.ts` is the ' +
+      'drizzle side and every ported caller already uses it.',
   },
 };
 

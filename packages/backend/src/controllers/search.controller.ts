@@ -1,34 +1,47 @@
 import { Request, Response, NextFunction } from 'express';
-import { PlaylistVisibility, SearchCategory, SearchResult, SearchUser } from '@syra/shared-types';
+import { and, asc, count, eq } from 'drizzle-orm';
+import { publicColumns } from '@oxyhq/db/assert';
+import {
+  PlaylistVisibility,
+  SearchCategory,
+  SearchResult,
+  SearchUser,
+  type Album,
+  type Artist,
+  type Playlist,
+  type SearchPerson,
+  type Track,
+} from '@syra/shared-types';
 import { getAccountDisplayName } from '@oxyhq/core';
 import type { User } from '@oxyhq/core';
-import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { env } from '../config/env';
-import { TrackModel } from '../models/Track';
-import { PodcastModel } from '../models/Podcast';
-import { hiddenShowEpisodeFilter } from '../utils/podcastDiscovery';
-import { EpisodeModel } from '../models/Episode';
-import { PersonModel } from '../models/CatalogEntity';
-import { formatTracksWithCoverArt, formatAlbumsWithCoverArt, formatArtistsWithImage, formatPlaylistsWithCoverArt } from '../utils/musicHelpers';
-import { serializePodcast, serializeEpisode, type PodcastDocument, type EpisodeDocument } from '../services/podcasts/podcastSerializers';
-import { loadShowArtworkByPodcastId } from '../services/podcasts/episodeShowArtwork';
-import { enrichPersons, makeOxyUsersFetcher, type PersonLike } from '../services/podcasts/resolvePersons';
-import { isDatabaseConnected } from '../utils/database';
-import { syncPodcastSearch } from '../services/podcasts/podcastBackgroundImport';
-import { withImageFirstSort } from '../utils/imageFirstSort';
-import { parseBoundedLimit, parseOffset } from '../utils/reqParams';
-import { logger } from '../utils/logger';
-import { getRequestUserId } from '../utils/requestUser';
-import { playableTrackFilter } from '../utils/catalogVisibility';
+import { getDb, isPostgresConnected } from '../db/postgres';
+import { albums, catalogEntities, tracks } from '../db/schema/catalog';
+import { playlists } from '../db/schema/library';
+import { PROTECTED_COLUMNS_BY_TABLE } from '../db/schema/protectedColumns';
 import {
   countAlbumsWithPlayableTracks,
   countArtistsWithPlayableTracks,
   countPlaylistsWithPlayableTracks,
+  descNullsLast,
   findAlbumsWithPlayableTracks,
   findArtistsWithPlayableTracks,
   findPlaylistsWithPlayableTracks,
-  type CatalogAggregateDoc,
-} from '../utils/playableContainers';
+  imageFirst,
+} from '../db/catalog/containers';
+import { toAlbumDtos, toArtistDtos, toPlaylistDtos, toTrackDtos } from '../db/catalog/hydrate';
+import { textSearch } from '../db/catalog/search';
+import { playableTrackFilter } from '../db/catalog/visibility';
+import { PodcastModel } from '../models/Podcast';
+import { hiddenShowEpisodeFilter } from '../utils/podcastDiscovery';
+import { EpisodeModel } from '../models/Episode';
+import { serializePodcast, serializeEpisode, type PodcastDocument, type EpisodeDocument } from '../services/podcasts/podcastSerializers';
+import { loadShowArtworkByPodcastId } from '../services/podcasts/episodeShowArtwork';
+import { enrichPersons, makeOxyUsersFetcher } from '../services/podcasts/resolvePersons';
+import { toPersonLike } from './entityProfile.controller';
+import { syncPodcastSearch } from '../services/podcasts/podcastBackgroundImport';
+import { parseBoundedLimit, parseOffset } from '../utils/reqParams';
+import { logger } from '../utils/logger';
 import { oxy } from '../oxyClient';
 
 /** Shortest query worth triggering a background podcast directory import for. */
@@ -36,8 +49,84 @@ const MIN_IMPORT_QUERY_LENGTH = 3;
 const HEADER_PREVIEW_LIMIT = 5;
 const SEARCH_LIMIT_MAX = 50;
 
+/**
+ * A regex for the PODCAST half, which is still Mongoose.
+ *
+ * The catalog half no longer compiles one at all — it matches through
+ * `search_vector` (`db/catalog/search.ts`). Podcasts and episodes are Task 12's
+ * vertical and their own tables carry `search_vector` columns already, so this
+ * function and its two call sites disappear when that task lands. It is kept
+ * ESCAPED in the meantime: `/api/search` is public, and an unescaped
+ * `new RegExp(req.query.q)` over a collection scan is a ReDoS.
+ */
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** How each catalog category is ordered — the shelf orderings, in one place. */
+const TRACK_ORDER = [
+  imageFirst(tracks.coverArtId),
+  descNullsLast(tracks.popularity),
+  descNullsLast(tracks.createdAt),
+];
+const ALBUM_ORDER = [descNullsLast(albums.popularity), descNullsLast(albums.releaseDate)];
+const ARTIST_ORDER = [
+  imageFirst(catalogEntities.imageId),
+  descNullsLast(catalogEntities.popularity),
+  descNullsLast(catalogEntities.statsFollowers),
+];
+const PLAYLIST_ORDER = [
+  imageFirst(playlists.coverArtId),
+  descNullsLast(playlists.followers),
+  descNullsLast(playlists.createdAt),
+];
+
+/**
+ * `catalog_entities` rows of `type = 'person'` matching the query.
+ *
+ * Persons and artists share one table, so `type` is written out — Mongoose's
+ * discriminator injected it into `PersonModel.find()` and an aggregation would
+ * not have had it at all. Ordered by name, exactly as the Mongo read was.
+ */
+async function findPeople(query: string, offset: number, limit: number) {
+  return getDb()
+    .select(publicColumns(catalogEntities, PROTECTED_COLUMNS_BY_TABLE))
+    .from(catalogEntities)
+    .where(
+      and(eq(catalogEntities.type, 'person'), textSearch(catalogEntities.searchVector, query))
+    )
+    .orderBy(asc(catalogEntities.name))
+    .offset(offset)
+    .limit(limit);
+}
+
+async function countPeople(query: string): Promise<number> {
+  const [row] = await getDb()
+    .select({ total: count() })
+    .from(catalogEntities)
+    .where(
+      and(eq(catalogEntities.type, 'person'), textSearch(catalogEntities.searchVector, query))
+    );
+  return row?.total ?? 0;
+}
+
+/** Playable tracks matching the query, most relevant shelf order first. */
+async function findTracks(query: string, offset: number, limit: number) {
+  return getDb()
+    .select(publicColumns(tracks, PROTECTED_COLUMNS_BY_TABLE))
+    .from(tracks)
+    .where(and(playableTrackFilter(), textSearch(tracks.searchVector, query)))
+    .orderBy(...TRACK_ORDER)
+    .offset(offset)
+    .limit(limit);
+}
+
+async function countTracks(query: string): Promise<number> {
+  const [row] = await getDb()
+    .select({ total: count() })
+    .from(tracks)
+    .where(and(playableTrackFilter(), textSearch(tracks.searchVector, query)));
+  return row?.total ?? 0;
 }
 
 function formatOxyUser(profile: User): SearchUser {
@@ -70,7 +159,7 @@ async function searchOxyUsers(query: string, limit: number, offset: number): Pro
  */
 export const search = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -112,23 +201,31 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
       return res.json(emptyResults);
     }
 
-    // Create regex for case-insensitive search
-    const searchRegex = new RegExp(escapeRegex(query.trim()), 'i');
+    const trimmed = query.trim();
+    // The PODCAST half only — the catalog half matches through `search_vector`.
+    const searchRegex = new RegExp(escapeRegex(trimmed), 'i');
 
-    // Build search promises based on category
-    // The four catalog categories are `CatalogAggregateDoc` rather than `unknown`
-    // because they are handed straight to the Mongo formatters below, which now
-    // require `_id` — the one field that tells a Mongo document from a drizzle
-    // row. The podcast categories keep `unknown`: they go to the podcast
-    // serializers, which is Task 12's boundary, not this one.
+    /**
+     * Every category is a DTO promise now, not a document promise.
+     *
+     * The four catalog categories used to be `CatalogAggregateDoc` so the Mongo
+     * formatters could be typed against `_id`; they are serialized by
+     * `db/catalog/hydrate` here, which names its own input and output. `people`
+     * is `SearchPerson[]` for the same reason — it goes through `enrichPersons`,
+     * whose input `PersonLike` a drizzle row does not satisfy, so the mapping is
+     * explicit (`toPersonLike`) rather than implicit and silent.
+     *
+     * `podcasts`/`episodes` keep `unknown`: they go to the podcast serializers,
+     * which is Task 12's boundary, not this one.
+     */
     const searchPromises: {
-      tracks?: Promise<[CatalogAggregateDoc[], number]>;
-      albums?: Promise<[CatalogAggregateDoc[], number]>;
-      artists?: Promise<[CatalogAggregateDoc[], number]>;
-      playlists?: Promise<[CatalogAggregateDoc[], number]>;
+      tracks?: Promise<[Track[], number]>;
+      albums?: Promise<[Album[], number]>;
+      artists?: Promise<[Artist[], number]>;
+      playlists?: Promise<[Playlist[], number]>;
       podcasts?: Promise<[unknown[], number]>;
       episodes?: Promise<[unknown[], number]>;
-      people?: Promise<[unknown[], number]>;
+      people?: Promise<[SearchPerson[], number]>;
       users?: Promise<[SearchUser[], number]>;
     } = {};
 
@@ -142,84 +239,58 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
 
     // Search tracks
     if (categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.TRACKS) {
-      const trackFilter = playableTrackFilter({
-          $or: [
-            { title: searchRegex },
-            { artistName: searchRegex },
-          ],
-        });
-      const trackFind = TrackModel.find(trackFilter)
-          .sort(withImageFirstSort('track', { popularity: -1, createdAt: -1 }))
-          .skip(searchOffset)
-          .limit(searchLimit)
-          .lean();
+      const trackFind = findTracks(trimmed, searchOffset, searchLimit).then(toTrackDtos);
       searchPromises.tracks = isPreviewSearch
-        ? trackFind.then((docs) => [docs, docs.length])
-        : Promise.all([
-            trackFind,
-            TrackModel.countDocuments(trackFilter),
-          ]);
+        ? trackFind.then((found) => [found, found.length])
+        : Promise.all([trackFind, countTracks(trimmed)]);
     }
 
     // Search albums
     if (categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.ALBUMS) {
-      const albumFilter = {
-          $or: [
-            { title: searchRegex },
-            { artistName: searchRegex },
-          ],
-        };
-      const albumFind = findAlbumsWithPlayableTracks(albumFilter, {
-        sort: withImageFirstSort('album', { popularity: -1, releaseDate: -1 }),
+      const albumMatches = textSearch(albums.searchVector, trimmed);
+      const albumFind = findAlbumsWithPlayableTracks(albumMatches, {
+        orderBy: ALBUM_ORDER,
         offset: searchOffset,
         limit: searchLimit,
-      });
+      }).then(toAlbumDtos);
       searchPromises.albums = isPreviewSearch
-        ? albumFind.then((docs) => [docs, docs.length])
-        : Promise.all([
-            albumFind,
-            countAlbumsWithPlayableTracks(albumFilter),
-          ]);
+        ? albumFind.then((found) => [found, found.length])
+        : Promise.all([albumFind, countAlbumsWithPlayableTracks(albumMatches)]);
     }
 
     // Search artists
     if (categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.ARTISTS) {
-      const artistFilter = {
-          name: searchRegex,
-        };
-      const artistFind = findArtistsWithPlayableTracks(artistFilter, {
-        sort: withImageFirstSort('artist', { popularity: -1, 'stats.followers': -1 }),
+      const artistMatches = textSearch(catalogEntities.searchVector, trimmed);
+      const artistFind = findArtistsWithPlayableTracks(artistMatches, {
+        orderBy: ARTIST_ORDER,
         offset: searchOffset,
         limit: searchLimit,
-      });
+      }).then(toArtistDtos);
       searchPromises.artists = isPreviewSearch
-        ? artistFind.then((docs) => [docs, docs.length])
-        : Promise.all([
-            artistFind,
-            countArtistsWithPlayableTracks(artistFilter),
-          ]);
+        ? artistFind.then((found) => [found, found.length])
+        : Promise.all([artistFind, countArtistsWithPlayableTracks(artistMatches)]);
     }
 
     // Search playlists (only public playlists for now)
     if (categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.PLAYLISTS) {
-      const playlistFilter = {
-        visibility: PlaylistVisibility.PUBLIC,
-        $or: [
-          { name: searchRegex },
-          { description: searchRegex },
-        ],
-      };
-      const playlistFind = findPlaylistsWithPlayableTracks(playlistFilter, {
-        sort: withImageFirstSort('playlist', { followers: -1, createdAt: -1 }),
+      /**
+       * `description` is in the stored vector already —
+       * `to_tsvector('english', name || ' ' || coalesce(description, ''))` — so
+       * the Mongo `$or` over two fields is ONE match here, and the `coalesce`
+       * is what stops a null description erasing the whole vector.
+       */
+      const playlistMatches = and(
+        eq(playlists.visibility, PlaylistVisibility.PUBLIC),
+        textSearch(playlists.searchVector, trimmed)
+      );
+      const playlistFind = findPlaylistsWithPlayableTracks(playlistMatches, {
+        orderBy: PLAYLIST_ORDER,
         offset: searchOffset,
         limit: searchLimit,
-      });
+      }).then(toPlaylistDtos);
       searchPromises.playlists = isPreviewSearch
-        ? playlistFind.then((docs) => [docs, docs.length])
-        : Promise.all([
-            playlistFind,
-            countPlaylistsWithPlayableTracks(playlistFilter),
-          ]);
+        ? playlistFind.then((found) => [found, found.length])
+        : Promise.all([playlistFind, countPlaylistsWithPlayableTracks(playlistMatches)]);
     }
 
     // Podcast enrichment. For an explicit podcasts search we AWAIT the shallow
@@ -296,18 +367,12 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
     // (Oxy-linked persons store the denormalised displayName) — enriched with the
     // live Oxy identity below.
     if (categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.PEOPLE) {
-      const personFilter = { name: searchRegex };
-      const personFind = PersonModel.find(personFilter)
-        .sort({ name: 1 })
-        .skip(searchOffset)
-        .limit(searchLimit)
-        .lean();
+      const personFind = findPeople(trimmed, searchOffset, searchLimit).then((rows) =>
+        enrichPersons(rows.map(toPersonLike), makeOxyUsersFetcher(oxy))
+      );
       searchPromises.people = isPreviewSearch
-        ? personFind.then((docs) => [docs, docs.length])
-        : Promise.all([
-            personFind,
-            PersonModel.countDocuments(personFilter),
-          ]);
+        ? personFind.then((found) => [found, found.length])
+        : Promise.all([personFind, countPeople(trimmed)]);
     }
 
     const includeUsers =
@@ -328,29 +393,28 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
       peopleResult,
       usersResult,
     ] = await Promise.all([
-      searchPromises.tracks ?? Promise.resolve<[CatalogAggregateDoc[], number]>([[], 0]),
-      searchPromises.albums ?? Promise.resolve<[CatalogAggregateDoc[], number]>([[], 0]),
-      searchPromises.artists ?? Promise.resolve<[CatalogAggregateDoc[], number]>([[], 0]),
-      searchPromises.playlists ?? Promise.resolve<[CatalogAggregateDoc[], number]>([[], 0]),
+      searchPromises.tracks ?? Promise.resolve<[Track[], number]>([[], 0]),
+      searchPromises.albums ?? Promise.resolve<[Album[], number]>([[], 0]),
+      searchPromises.artists ?? Promise.resolve<[Artist[], number]>([[], 0]),
+      searchPromises.playlists ?? Promise.resolve<[Playlist[], number]>([[], 0]),
       searchPromises.podcasts ?? Promise.resolve<[unknown[], number]>([[], 0]),
       searchPromises.episodes ?? Promise.resolve<[unknown[], number]>([[], 0]),
-      searchPromises.people ?? Promise.resolve<[unknown[], number]>([[], 0]),
+      searchPromises.people ?? Promise.resolve<[SearchPerson[], number]>([[], 0]),
       searchPromises.users ?? Promise.resolve<[SearchUser[], number]>([[], 0]),
     ]);
 
-    // Format results
-    const formattedTracks = categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.TRACKS
-      ? await formatTracksWithCoverArt(tracksResult[0])
-      : [];
-    const formattedAlbums = categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.ALBUMS
-      ? formatAlbumsWithCoverArt(albumsResult[0])
-      : [];
-    const formattedArtists = categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.ARTISTS
-      ? formatArtistsWithImage(artistsResult[0])
-      : [];
-    const formattedPlaylists = categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.PLAYLISTS
-      ? formatPlaylistsWithCoverArt(playlistsResult[0])
-      : [];
+    /**
+     * Each catalog category is ALREADY a DTO list — serialized inside its own
+     * promise, so the page's `image_assets` lookup happens once per category
+     * instead of once per request for a category that was not asked for. The
+     * category guards that used to sit here are gone with the formatters: a
+     * category nobody asked for resolved to `[[], 0]` above, and mapping an
+     * empty list is the same answer with one fewer way to disagree.
+     */
+    const formattedTracks = tracksResult[0];
+    const formattedAlbums = albumsResult[0];
+    const formattedArtists = artistsResult[0];
+    const formattedPlaylists = playlistsResult[0];
     const formattedPodcasts = categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.PODCASTS
       ? (podcastsResult[0] as PodcastDocument[]).map(serializePodcast)
       : [];
@@ -363,9 +427,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
     const formattedEpisodes = episodeDocs.map((episode) =>
       serializeEpisode(episode, episodeShowArtwork.get(episode.podcastId.toString())),
     );
-    const formattedPeople = categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.PEOPLE
-      ? await enrichPersons(peopleResult[0] as PersonLike[], makeOxyUsersFetcher(oxy))
-      : [];
+    const formattedPeople = peopleResult[0];
     const formattedUsers = includeUsers
       ? usersResult[0]
       : [];

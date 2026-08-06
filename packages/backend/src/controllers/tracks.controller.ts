@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import fs from 'fs';
 import os from 'os';
 import multer from 'multer';
-import { and, asc, count, eq, ilike, or, sql } from 'drizzle-orm';
+import { and, asc, count, eq, sql } from 'drizzle-orm';
 import { isLiveEntityId, uuidv7 } from '@oxyhq/db';
 import { publicColumns } from '@oxyhq/db/assert';
 import type { HlsRendition, SourceProvenance, Track, TrackCredit } from '@syra/shared-types';
@@ -18,6 +18,7 @@ import {
 } from '../db/schema/catalog';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../db/schema/protectedColumns';
 import { descNullsLast } from '../db/catalog/containers';
+import { textSearch } from '../db/catalog/search';
 import { toTrackDtos } from '../db/catalog/hydrate';
 import { findOwnedArtist } from '../db/catalog/ownership';
 import type { PublicTrackRow } from '../db/catalog/serialize';
@@ -195,37 +196,20 @@ export const getTrackById = async (req: Request, res: Response, next: NextFuncti
 };
 
 /**
- * A user's search string as a case-insensitive SUBSTRING pattern.
- *
- * This replaces `new RegExp(query, 'i')`. That line compiled a raw query-string
- * parameter into a regular expression on a PUBLIC endpoint and ran it against
- * every track — a ReDoS behind an unindexed scan (`(a+)+$` and friends), fixed
- * on `main` in PR #84 by escaping the pattern. The port removes the regex ENGINE
- * instead of escaping its input: `ilike` has no backtracking to exploit, so
- * there is nothing left for an `escapeRegex` to protect.
- *
- * What still needs escaping is LIKE's own metacharacters — `%` and `_` — or a
- * query of `%` matches every track and a query of `a_c` matches `abc`. The
- * backslash is escaped first and is LIKE's default escape character, so no
- * `ESCAPE` clause is needed.
- */
-function likeContains(query: string): string {
-  return `%${query.replace(/[\\%_]/g, (character) => `\\${character}`)}%`;
-}
-
-/**
  * GET /api/tracks/search
  * Search tracks
  *
- * `ilike '%q%'` is the FAITHFUL port of the Mongo regex: same case-insensitive
- * substring semantics, same rows, same order. It is deliberately not
- * `websearch_to_tsquery` over `tracks.search_vector`, which is indexed but
- * matches by word/prefix — "love" would stop matching "Glove" — because that is
- * a visible product change and belongs to whoever owns the product decision.
- * A leading wildcard cannot use a b-tree and `pg_trgm` is not installed, so this
- * scans; so did the Mongo regex, over the same collection, so it is not a
- * regression. `search.controller` holds the other five sites and moves with the
- * same ruling.
+ * `search_vector @@ websearch_to_tsquery(…)` with a prefix on the final term —
+ * see `db/catalog/search.ts` for the ruling, what it gains (a GIN index, and
+ * stemming) and what it deliberately loses (infix: "love" no longer finds
+ * "Glove"). This site and `search.controller`'s five moved together.
+ *
+ * It also ends the ReDoS this endpoint shipped with. `new RegExp(req.query.q,
+ * 'i')` compiled a raw query-string parameter on a PUBLIC route and ran it
+ * against every track; `main`'s PR #84 fixed it by escaping the pattern. There
+ * is no regex ENGINE here any more, so there is nothing left to escape and no
+ * backtracking to exploit — see the report on retiring #84's source assertions
+ * with the code they guard.
  */
 export const searchTracks = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -245,11 +229,7 @@ export const searchTracks = async (req: Request, res: Response, next: NextFuncti
       });
     }
 
-    const pattern = likeContains(query);
-    const matches = and(
-      playableTrackFilter(),
-      or(ilike(tracks.title, pattern), ilike(tracks.artistName, pattern))
-    );
+    const matches = and(playableTrackFilter(), textSearch(tracks.searchVector, query));
 
     const [rows, [totals]] = await Promise.all([
       getDb()
