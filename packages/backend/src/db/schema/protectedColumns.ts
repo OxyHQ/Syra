@@ -90,4 +90,26 @@ export const PROTECTED_COLUMNS_BY_TABLE = {
    * none should be.
    */
   contribution_attestations: ['rawTagsFormat', 'rawTagsJson', 'rawTagsTruncated', 'rawTagsOriginalByteLength', 'ip', 'userAgent'],
+  /**
+   * The four internal stream credentials `PUBLIC_ROOM_FIELDS`
+   * (`routes/rooms.routes.ts:70-104`) exists to withhold. Mongoose never
+   * marked any of them `select: false` — the guard has always been that
+   * hand-written allowlist, and `routes/streamCredentialExposure.test.ts`
+   * exists because an earlier implementation of it silently failed to strip
+   * them from a hydrated document.
+   *
+   * `rtmpStreamKey` in particular is a live RTMP PUBLISHING key: leaking it
+   * hands a stranger the ability to broadcast into someone else's room, so
+   * this is a write capability, not merely a private field. Registering all
+   * four gives the Postgres port a second, independent guard —
+   * `findImplicitWholeRowReads` refuses a bare `db.select().from(rooms)`
+   * outright, before any serializer gets the chance to forget.
+   *
+   * `recordings.objectKey` is deliberately absent: `catalog.ts` does not
+   * protect the identical `tracks.audioSourceKey`/`hlsMasterKey`, and a
+   * storage key is guarded by hand-written DTO allowlists in both verticals
+   * (see this file's note on `user_uploads`). See `schema/rooms.ts`'s
+   * file-level doc comment.
+   */
+  rooms: ['rtmpStreamKey', 'rtmpUrl', 'activeStreamUrl', 'activeIngressId'],
 } as const;

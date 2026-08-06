@@ -25,3 +25,4 @@ export * from './creators';
 export * from './genres';
 export * from './library';
 export * from './podcasts';
+export * from './rooms';

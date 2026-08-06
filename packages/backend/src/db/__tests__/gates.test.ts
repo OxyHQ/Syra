@@ -44,7 +44,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { eq, getTableColumns, isTable, sql } from 'drizzle-orm';
-import { getTableConfig, PgTable } from 'drizzle-orm/pg-core';
+import { getTableConfig, PgTable, type UpdateDeleteAction } from 'drizzle-orm/pg-core';
 import {
   constraintNameOf,
   executeRows,
@@ -82,6 +82,17 @@ import {
   userUploadProvenanceMarkers,
   userUploads,
 } from '../schema/creators';
+import * as roomsModule from '../schema/rooms';
+import {
+  houseMembers,
+  houses,
+  recordings,
+  roomMediaQueueItems,
+  roomUserPreferences,
+  rooms,
+  series,
+  seriesEpisodes,
+} from '../schema/rooms';
 import { DEFERRED_FOREIGN_KEYS, ID_COLUMNS_WITHOUT_FOREIGN_KEY } from '../schema/deferredForeignKeys';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../schema/protectedColumns';
 import { EXPIRY_SWEEP_TARGETS } from '../expiry';
@@ -93,9 +104,9 @@ import { genres } from '../schema/genres';
  * 10 (Task 4: podcasts.ts) + 1 (Task 4 follow-up: catalog.ts's
  * `track_hls_renditions`, correcting `tracks.hls`'s jsonb-vs-child-table
  * inconsistency with `episode_hls_renditions` — see catalog.ts's own
- * comment) + 9 (Task 5: creators.ts) = 51.
+ * comment) + 9 (Task 5: creators.ts) + 8 (Task 6: rooms.ts) = 59.
  */
-const MINIMUM_TABLES = 51;
+const MINIMUM_TABLES = 59;
 
 /**
  * Every drizzle table the schema barrel exports, walked rather than listed by
@@ -364,6 +375,40 @@ async function expectRefusedBy(
   expect(predicate(caught, constraintName)).toBe(true);
 }
 
+/**
+ * Assert a column carries a foreign key pointing at a NAMED parent with a
+ * NAMED `ON DELETE` — not merely that some key involves a column of that name.
+ *
+ * The weaker form is not hypothetical: Task 4's review mutation-tested it by
+ * repointing a podcast subscription at `albums`, and the test stayed green.
+ * Both halves are checked here, and the lookup reads `sqlColumnName(column)`
+ * rather than `column.name` — the latter is the TypeScript property
+ * (`houseId`), not the SQL name (`house_id`), so a comparison against it
+ * matches nothing and passes vacuously.
+ *
+ * Task 5 asserted this shape inline twice; Task 6 needs it seven times, which
+ * is where one named helper stops being an abstraction and starts being the
+ * thing every caller would otherwise copy slightly differently.
+ */
+function expectForeignKey(
+  table: PgTable,
+  sqlColumn: string,
+  parentTable: string,
+  // `UpdateDeleteAction`, not `string`: drizzle's closed union is what makes a
+  // typo'd `'set-null'` a compile error here rather than a test that can never
+  // pass and is only discovered at runtime.
+  onDelete: UpdateDeleteAction
+): void {
+  const fk = getTableConfig(table).foreignKeys.find((foreignKey) =>
+    foreignKey.reference().columns.some((column) => sqlColumnName(column) === sqlColumn)
+  );
+  expect(fk).toBeDefined();
+  // `toBeDefined()` does not narrow for TypeScript, and this repo bans `!`.
+  if (!fk) throw new Error(`unreachable: no foreign key on ${sqlColumn}`);
+  expect(getTableConfig(fk.reference().foreignTable).name).toBe(parentTable);
+  expect(fk.onDelete).toBe(onDelete);
+}
+
 beforeAll(async () => {
   // `TEST_DATABASE_URL` is what CI's `postgres:17` service publishes; a local
   // run falls back to whatever `DATABASE_URL` a developer already has pointed
@@ -422,7 +467,10 @@ describe('schema gates', () => {
       0
     );
     expect(scanned).toBe(declared);
-    expect(scanned).toBeGreaterThanOrEqual(14);
+    // Raised from 14 by Task 6, which registered `rooms`' four internal
+    // stream credentials. Same rule as MINIMUM_TABLES: a floor that never
+    // moves is a vacuity check that stopped checking.
+    expect(scanned).toBeGreaterThanOrEqual(20);
   });
 
   it('declares no identifier Postgres would silently truncate', () => {
@@ -432,10 +480,13 @@ describe('schema gates', () => {
       .map((entry) => ({ file: entry, text: readFileSync(join(folder, entry), 'utf8') }));
 
     // Vacuity floors: a broken glob or regex reports "no violations" exactly
-    // like a clean schema does.
-    expect(files.length).toBeGreaterThanOrEqual(11);
+    // like a clean schema does. Both raised by Task 6 (11 -> 12 files, 400 ->
+    // 700 identifiers, against 789 actual) for the same reason MINIMUM_TABLES
+    // is raised at every schema task — a floor that never moves is a vacuity
+    // check that stopped checking.
+    expect(files.length).toBeGreaterThanOrEqual(12);
     const { violations, scanned } = findOverlongIdentifiers(files);
-    expect(scanned).toBeGreaterThanOrEqual(400);
+    expect(scanned).toBeGreaterThanOrEqual(700);
 
     // Exact identity, never substring — see `findUnexemptedIdentifiers`.
     // The second half is the staleness check: an exemption that no longer
@@ -1653,6 +1704,518 @@ describe('creators and uploads schema (Task 5)', () => {
     const expiry = definitions.get('user_uploads_expires_at_idx');
     expect(expiry).toBeDefined();
     expect(expiry).toContain('WHERE (deleted_at IS NULL)');
+  });
+});
+
+describe('rooms and live schema (Task 6)', () => {
+  /** Every table `schema/rooms.ts` promises, by SQL name. */
+  const EXPECTED_TABLES = [
+    'houses',
+    'house_members',
+    'series',
+    'series_episodes',
+    'rooms',
+    'room_media_queue_items',
+    'recordings',
+    'room_user_preferences',
+  ];
+
+  it('lands exactly the tables this task promises', () => {
+    const present = tablesIn(roomsModule).map((table) => getTableConfig(table).name).sort();
+    expect(present).toEqual([...EXPECTED_TABLES].sort());
+  });
+
+  it('drops Room.topicId rather than carrying a column pointing at no table', () => {
+    // The decision this task existed to make: `models/Room.ts:224` declares
+    // `ref: 'Topic'` and no `Topic` model exists anywhere in the repo. Both
+    // halves are asserted, because either alone would pass while the other
+    // was wrong: no `topic_id` column survived the port, AND no `topics`
+    // table was invented to give it something to point at.
+    const roomColumns = Object.values(getTableColumns(rooms)).map((column) => sqlColumnName(column));
+    expect(roomColumns).not.toContain('topic_id');
+    // `topic`, the free-text field, is a DIFFERENT and genuinely-used column
+    // and must survive — without this the test would also pass against a port
+    // that dropped both.
+    expect(roomColumns).toContain('topic');
+
+    const everyTable = tables().map((table) => getTableConfig(table).name);
+    expect(everyTable).not.toContain('topics');
+
+    // And no OTHER table smuggled the reference back in under a different
+    // parent, which a rooms-only check could not see.
+    const everyColumn = tables().flatMap((table) =>
+      Object.values(getTableColumns(table)).map(
+        (column) => `${getTableConfig(table).name}.${sqlColumnName(column)}`
+      )
+    );
+    expect(everyColumn.filter((name) => name.endsWith('.topic_id'))).toEqual([]);
+  });
+
+  it('points every new foreign key at the parent and ON DELETE RELATIONS.md names', () => {
+    // Target AND onDelete for all seven, not "a key exists" — see
+    // `expectForeignKey`'s own doc comment for the mutation that motivated it.
+    expectForeignKey(houseMembers, 'house_id', 'houses', 'cascade');
+    expectForeignKey(series, 'house_id', 'houses', 'set null');
+    expectForeignKey(rooms, 'house_id', 'houses', 'set null');
+    expectForeignKey(rooms, 'series_id', 'series', 'set null');
+    expectForeignKey(seriesEpisodes, 'series_id', 'series', 'cascade');
+    expectForeignKey(seriesEpisodes, 'room_id', 'rooms', 'set null');
+    expectForeignKey(roomMediaQueueItems, 'room_id', 'rooms', 'cascade');
+    // The deliberate schema improvement: Mongoose says `required: true`, but
+    // rooms are hard-deleted with no cleanup, so the column is relaxed to
+    // nullable with SET NULL. See `schema/rooms.ts`'s file-level doc comment.
+    expectForeignKey(recordings, 'room_id', 'rooms', 'set null');
+    expect(getTableColumns(recordings).roomId.notNull).toBe(false);
+  });
+
+  it('keeps a recording when its room is deleted, and cascades the rest of the room away', async () => {
+    const db = getDb();
+
+    const [room] = await db
+      .insert(rooms)
+      .values({ title: 'CHECK-fixture-room', host: 'CHECK-fixture-host' })
+      .returning({ id: rooms.id });
+    const [recording] = await db
+      .insert(recordings)
+      .values({
+        roomId: room.id,
+        roomTitle: 'CHECK-fixture-room',
+        host: 'CHECK-fixture-host',
+        egressId: 'CHECK-fixture-egress',
+        objectKey: 'CHECK-fixture-object-key',
+        startedAt: new Date(),
+        expiresAt: new Date(Date.now() + 1000),
+      })
+      .returning({ id: recordings.id });
+
+    try {
+      await db
+        .insert(roomMediaQueueItems)
+        .values({ roomId: room.id, position: 0, kind: 'track', trackId: 'CHECK-fixture-track' });
+
+      await db.delete(rooms).where(eq(rooms.id, room.id));
+
+      // The recording OUTLIVES its room — this is the whole point of relaxing
+      // the column to nullable. CASCADE would have deleted recorded audio
+      // because somebody tidied up a room.
+      const [after] = await db
+        .select({ roomId: recordings.roomId })
+        .from(recordings)
+        .where(eq(recordings.id, recording.id));
+      expect(after.roomId).toBeNull();
+
+      // The queue does NOT outlive it — an up-next list for a room that no
+      // longer exists is nothing.
+      const queue = await db
+        .select()
+        .from(roomMediaQueueItems)
+        .where(eq(roomMediaQueueItems.roomId, room.id));
+      expect(queue).toEqual([]);
+    } finally {
+      await db.delete(recordings).where(eq(recordings.id, recording.id));
+      await db.delete(roomMediaQueueItems).where(eq(roomMediaQueueItems.roomId, room.id));
+      await db.delete(rooms).where(eq(rooms.id, room.id));
+    }
+  });
+
+  it('cascades a deleted house into its member roster, and only nulls its rooms and series', async () => {
+    const db = getDb();
+
+    const [house] = await db
+      .insert(houses)
+      .values({ name: 'CHECK-fixture-house', createdBy: 'CHECK-fixture-creator' })
+      .returning({ id: houses.id });
+    const [room] = await db
+      .insert(rooms)
+      .values({
+        title: 'CHECK-fixture-house-room',
+        host: 'CHECK-fixture-host',
+        ownerType: 'house',
+        houseId: house.id,
+      })
+      .returning({ id: rooms.id });
+    const [show] = await db
+      .insert(series)
+      .values({
+        title: 'CHECK-fixture-series',
+        createdBy: 'CHECK-fixture-creator',
+        houseId: house.id,
+        recurrenceType: 'weekly',
+        recurrenceTime: '09:30',
+        roomTemplateTitlePattern: 'CHECK-fixture {n}',
+      })
+      .returning({ id: series.id });
+
+    try {
+      await db
+        .insert(houseMembers)
+        .values({ houseId: house.id, oxyUserId: 'CHECK-fixture-member', role: 'owner' });
+
+      await db.delete(houses).where(eq(houses.id, house.id));
+
+      // A membership in a house that no longer exists is nothing — CASCADE.
+      expect(
+        await db.select().from(houseMembers).where(eq(houseMembers.houseId, house.id))
+      ).toEqual([]);
+
+      // A room and a series both survive: `house_id: null` is already the
+      // meaningful "profile-owned" state, which is exactly why SET NULL is
+      // right where CASCADE would destroy content.
+      const [roomAfter] = await db
+        .select({ houseId: rooms.houseId })
+        .from(rooms)
+        .where(eq(rooms.id, room.id));
+      expect(roomAfter.houseId).toBeNull();
+      const [seriesAfter] = await db
+        .select({ houseId: series.houseId })
+        .from(series)
+        .where(eq(series.id, show.id));
+      expect(seriesAfter.houseId).toBeNull();
+    } finally {
+      await db.delete(houseMembers).where(eq(houseMembers.houseId, house.id));
+      await db.delete(rooms).where(eq(rooms.id, room.id));
+      await db.delete(series).where(eq(series.id, show.id));
+      await db.delete(houses).where(eq(houses.id, house.id));
+    }
+  });
+
+  it('keeps a series episode when its generated room goes, but not when the series does', async () => {
+    const db = getDb();
+
+    const [show] = await db
+      .insert(series)
+      .values({
+        title: 'CHECK-fixture-episode-series',
+        createdBy: 'CHECK-fixture-creator',
+        recurrenceType: 'daily',
+        recurrenceTime: '07:00',
+        roomTemplateTitlePattern: 'CHECK-fixture episode {n}',
+      })
+      .returning({ id: series.id });
+    const [room] = await db
+      .insert(rooms)
+      .values({ title: 'CHECK-fixture-generated-room', host: 'CHECK-fixture-host', seriesId: show.id })
+      .returning({ id: rooms.id });
+
+    try {
+      const [episode] = await db
+        .insert(seriesEpisodes)
+        .values({ seriesId: show.id, position: 0, roomId: room.id, scheduledStart: new Date(), episodeNumber: 1 })
+        .returning({ id: seriesEpisodes.id });
+
+      // RELATIONS.md: an append-only history of what the series scheduled.
+      // Deleting one generated room must not erase the record that an episode
+      // was ever scheduled — SET NULL, never CASCADE.
+      await db.delete(rooms).where(eq(rooms.id, room.id));
+      const [after] = await db
+        .select({ roomId: seriesEpisodes.roomId })
+        .from(seriesEpisodes)
+        .where(eq(seriesEpisodes.id, episode.id));
+      expect(after.roomId).toBeNull();
+
+      // The series itself owns the log, though — CASCADE from that side.
+      await db.delete(series).where(eq(series.id, show.id));
+      expect(
+        await db.select().from(seriesEpisodes).where(eq(seriesEpisodes.id, episode.id))
+      ).toEqual([]);
+    } finally {
+      await db.delete(seriesEpisodes).where(eq(seriesEpisodes.seriesId, show.id));
+      await db.delete(rooms).where(eq(rooms.id, room.id));
+      await db.delete(series).where(eq(series.id, show.id));
+    }
+  });
+
+  it('enforces the kind-to-id invariant models/Room.ts only asserted in a comment', async () => {
+    const db = getDb();
+
+    // `models/Room.ts:39-51` says "the parse/seed paths guarantee the right
+    // fields are populated for each kind" — true of every writer, enforced by
+    // nothing. All four directions are exercised, because a CHECK written as
+    // only the positive half would accept a 'track' row carrying an
+    // episode_id and this test would still pass.
+    const [room] = await db
+      .insert(rooms)
+      .values({ title: 'CHECK-fixture-queue-room', host: 'CHECK-fixture-host' })
+      .returning({ id: rooms.id });
+
+    try {
+      // Accepted: the two shapes the parsers actually emit.
+      await db.insert(roomMediaQueueItems).values({
+        roomId: room.id,
+        position: 0,
+        kind: 'podcast',
+        episodeId: 'CHECK-fixture-episode',
+        syraPodcastId: 'CHECK-fixture-podcast',
+      });
+      await db
+        .insert(roomMediaQueueItems)
+        .values({ roomId: room.id, position: 1, kind: 'track', trackId: 'CHECK-fixture-track' });
+
+      // Refused: a podcast row with no episode to play.
+      await expectRefusedBy(
+        Promise.resolve(
+          db.insert(roomMediaQueueItems).values({ roomId: room.id, position: 2, kind: 'podcast' })
+        ),
+        isCheckViolation,
+        'room_media_queue_items_kind_ids_check'
+      );
+
+      // Refused: a track row carrying podcast fields. This is the half a
+      // positive-only CHECK would let through.
+      await expectRefusedBy(
+        Promise.resolve(
+          db.insert(roomMediaQueueItems).values({
+            roomId: room.id,
+            position: 3,
+            kind: 'track',
+            trackId: 'CHECK-fixture-track-2',
+            episodeId: 'CHECK-fixture-smuggled-episode',
+          })
+        ),
+        isCheckViolation,
+        'room_media_queue_items_kind_ids_check'
+      );
+
+      // And the queue order is a real constraint, not a convention: two rows
+      // at one position is an order nobody can reconstruct, and this queue is
+      // popped head-first.
+      await expectRefusedBy(
+        Promise.resolve(
+          db
+            .insert(roomMediaQueueItems)
+            .values({ roomId: room.id, position: 0, kind: 'track', trackId: 'CHECK-fixture-dup' })
+        ),
+        isUniqueViolation,
+        'room_media_queue_items_room_id_position_key'
+      );
+    } finally {
+      await db.delete(roomMediaQueueItems).where(eq(roomMediaQueueItems.roomId, room.id));
+      await db.delete(rooms).where(eq(rooms.id, room.id));
+    }
+  });
+
+  it('allows one membership per user per house, and one preference row per user', async () => {
+    const db = getDb();
+
+    const [house] = await db
+      .insert(houses)
+      .values({ name: 'CHECK-fixture-unique-house', createdBy: 'CHECK-fixture-creator' })
+      .returning({ id: houses.id });
+
+    try {
+      await db
+        .insert(houseMembers)
+        .values({ houseId: house.id, oxyUserId: 'CHECK-fixture-dup-member' });
+      await expectRefusedBy(
+        Promise.resolve(
+          db
+            .insert(houseMembers)
+            .values({ houseId: house.id, oxyUserId: 'CHECK-fixture-dup-member', role: 'admin' })
+        ),
+        isUniqueViolation,
+        'house_members_house_id_oxy_user_id_key'
+      );
+
+      await db.insert(roomUserPreferences).values({ oxyUserId: 'CHECK-fixture-pref-user' });
+      await expectRefusedBy(
+        Promise.resolve(
+          db
+            .insert(roomUserPreferences)
+            .values({ oxyUserId: 'CHECK-fixture-pref-user', liveVisibility: 'speaking' })
+        ),
+        isUniqueViolation,
+        'room_user_preferences_oxy_user_id_key'
+      );
+    } finally {
+      await db.delete(houseMembers).where(eq(houseMembers.houseId, house.id));
+      await db
+        .delete(roomUserPreferences)
+        .where(eq(roomUserPreferences.oxyUserId, 'CHECK-fixture-pref-user'));
+      await db.delete(houses).where(eq(houses.id, house.id));
+    }
+  });
+
+  it('refuses a second recording for one LiveKit egress job', async () => {
+    const db = getDb();
+
+    const [recording] = await db
+      .insert(recordings)
+      .values({
+        roomTitle: 'CHECK-fixture-egress-room',
+        host: 'CHECK-fixture-host',
+        egressId: 'CHECK-fixture-egress-unique',
+        objectKey: 'CHECK-fixture-object-key',
+        startedAt: new Date(),
+        expiresAt: new Date(Date.now() + 1000),
+      })
+      .returning({ id: recordings.id });
+
+    try {
+      // `Recording.findOne({ egressId })` is how the LiveKit egress webhook
+      // finds the row it must update — two rows would make that lookup
+      // nondeterministic.
+      await expectRefusedBy(
+        Promise.resolve(
+          db.insert(recordings).values({
+            roomTitle: 'CHECK-fixture-egress-room-2',
+            host: 'CHECK-fixture-host',
+            egressId: 'CHECK-fixture-egress-unique',
+            objectKey: 'CHECK-fixture-object-key-2',
+            startedAt: new Date(),
+            expiresAt: new Date(Date.now() + 1000),
+          })
+        ),
+        isUniqueViolation,
+        'recordings_egress_id_key'
+      );
+    } finally {
+      await db.delete(recordings).where(eq(recordings.id, recording.id));
+    }
+  });
+
+  it('holds the participant bounds and the HH:mm recurrence shape Mongoose declared', async () => {
+    const db = getDb();
+
+    // Both boundaries, because a CHECK written one off (`< 10000` rather than
+    // `<= 10000`) would pass a rejection-only test and still be wrong.
+    await expectRefusedBy(
+      Promise.resolve(
+        db
+          .insert(rooms)
+          .values({ title: 'CHECK-fixture-bounds', host: 'CHECK-fixture-host', maxParticipants: 10001 })
+      ),
+      isCheckViolation,
+      'rooms_max_participants_check'
+    );
+    await expectRefusedBy(
+      Promise.resolve(
+        db
+          .insert(rooms)
+          .values({ title: 'CHECK-fixture-bounds', host: 'CHECK-fixture-host', maxParticipants: 0 })
+      ),
+      isCheckViolation,
+      'rooms_max_participants_check'
+    );
+    const [accepted] = await db
+      .insert(rooms)
+      .values({ title: 'CHECK-fixture-bounds-ok', host: 'CHECK-fixture-host', maxParticipants: 10000 })
+      .returning({ id: rooms.id });
+
+    try {
+      expect(accepted.id).toBeTruthy();
+
+      // `models/Series.ts:84`'s own `match: /^\d{2}:\d{2}$/`. Mongoose enforces
+      // it on every save today, so a port that dropped it would silently
+      // loosen validation the scheduling code still assumes.
+      await expectRefusedBy(
+        Promise.resolve(
+          db.insert(series).values({
+            title: 'CHECK-fixture-time',
+            createdBy: 'CHECK-fixture-creator',
+            recurrenceType: 'weekly',
+            recurrenceTime: '9:30',
+            roomTemplateTitlePattern: 'CHECK-fixture {n}',
+          })
+        ),
+        isCheckViolation,
+        'series_recurrence_time_check'
+      );
+    } finally {
+      await db.delete(rooms).where(eq(rooms.id, accepted.id));
+    }
+  });
+
+  it('keeps the two constraint-support indexes NON-partial and the five listing indexes partial', async () => {
+    const db = getDb();
+    // `schema/rooms.ts` states both properties in writing; a test asserting
+    // only index NAMES cannot catch either, because the name is identical
+    // whether or not a predicate is attached. So this asserts the DEFINITION,
+    // against the MIGRATED catalogue rather than the drizzle declaration.
+    const rows = await executeRows<{ indexname: string; indexdef: string }>(
+      db,
+      sql`select indexname, indexdef from pg_indexes where tablename in ('rooms', 'recordings', 'series')`
+    );
+    const definitions = new Map(rows.map((row) => [row.indexname, row.indexdef]));
+
+    // The two that exist for an ON DELETE SET NULL, not for a query: a
+    // predicate here would hide rows the constraint still has to find.
+    for (const name of ['rooms_series_id_idx', 'recordings_room_id_status_created_at_idx']) {
+      const definition = definitions.get(name);
+      expect(definition).toBeDefined();
+      expect(definition).not.toContain('WHERE');
+    }
+
+    // The five listing indexes, every one of which serves a query that opens
+    // with `archived: { $ne: true }` unconditionally.
+    const listingIndexes = [
+      'rooms_status_created_at_idx',
+      'rooms_house_id_status_created_at_idx',
+      'rooms_host_status_created_at_idx',
+      'rooms_type_status_created_at_idx',
+      'rooms_owner_type_type_status_created_at_idx',
+    ];
+    for (const name of listingIndexes) {
+      const definition = definitions.get(name);
+      expect(definition).toBeDefined();
+      expect(definition).toContain('WHERE (archived = false)');
+    }
+    // Vacuity floor: a typo'd table name in the query above would leave the
+    // map empty and every `toBeDefined()` would be the only thing failing —
+    // this makes a silently-narrowed scan fail by name instead.
+    expect(definitions.size).toBeGreaterThanOrEqual(listingIndexes.length + 2);
+
+    // The one partial index Mongo had no counterpart for at all: every LiveKit
+    // webhook delivery does `findOne({ activeIngressId })` against an
+    // unindexed column today.
+    expect(definitions.get('rooms_active_ingress_id_idx')).toContain('WHERE (active_ingress_id IS NOT NULL)');
+    expect(definitions.get('series_house_id_active_created_at_idx')).toContain('WHERE (is_active = true)');
+  });
+
+  it('indexes the two arrays and the text search that have real readers', async () => {
+    const db = getDb();
+    // `recordings.participant_ids` is the ONE string array in this file with a
+    // containment reader (`{ access: 'participants', participantIds: userId }`,
+    // routes/rooms.routes.ts:2718); `rooms.participants`/`speakers`/`tags` have
+    // none and deliberately get no GIN. Asserted against the migrated
+    // catalogue so a dropped index fails here too.
+    const rows = await executeRows<{ tablename: string; indexname: string }>(
+      db,
+      sql`select tablename, indexname from pg_indexes where tablename in ('rooms', 'recordings', 'houses')`
+    );
+    const names = rows.map((row) => row.indexname);
+    expect(names).toContain('recordings_participant_ids_gin');
+    expect(names).toContain('houses_search_gin');
+    // The negative half: three arrays that were examined and deliberately left
+    // unindexed. Without this the test would pass against a port that GIN'd
+    // every array it saw, which is the opposite of the decision recorded.
+    expect(names).not.toContain('rooms_participants_gin');
+    expect(names).not.toContain('rooms_speakers_gin');
+    expect(names).not.toContain('rooms_tags_gin');
+  });
+
+  it('protects the four room stream credentials, and only those', () => {
+    // A leaked `rtmp_stream_key` is a WRITE capability — it lets a stranger
+    // broadcast into someone else's room. The registry is the second guard
+    // behind `PUBLIC_ROOM_FIELDS`; `findImplicitWholeRowReads` (asserted in
+    // the gates block above) is what makes it bite.
+    expect(PROTECTED_COLUMNS_BY_TABLE.rooms).toEqual([
+      'rtmpStreamKey',
+      'rtmpUrl',
+      'activeStreamUrl',
+      'activeIngressId',
+    ]);
+    // Every name resolves to a real column — `findUnboundProtectedColumns`
+    // proves this schema-wide, but a typo here would un-protect a credential
+    // silently, so the four are checked against the table by name too.
+    const declared = new Set(Object.keys(getTableColumns(rooms)));
+    for (const property of PROTECTED_COLUMNS_BY_TABLE.rooms) {
+      expect(declared.has(property)).toBe(true);
+    }
+    // `recordings` is deliberately absent: `object_key` is a storage key, and
+    // `catalog.ts` does not protect the identical `tracks.audio_source_key`.
+    // Recorded as an assertion so a later task changing its mind has to change
+    // this line and say why.
+    expect(Object.keys(PROTECTED_COLUMNS_BY_TABLE)).not.toContain('recordings');
   });
 });
 

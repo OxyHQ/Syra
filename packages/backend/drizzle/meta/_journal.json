@@ -78,6 +78,13 @@
       "when": 1786025045981,
       "tag": "0010_pretty_silverclaw",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1786028263727,
+      "tag": "0011_lucky_human_fly",
+      "breakpoints": true
     }
   ]
 }

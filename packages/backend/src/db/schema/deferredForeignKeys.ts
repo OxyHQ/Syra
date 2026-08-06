@@ -245,6 +245,61 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
       '"entirely client-supplied and never validated server-side against any table" — a stale value ' +
       'has zero functional consequence beyond a UI label (RELATIONS.md: PlaybackState.contextId).',
   },
+  // ── CROSS-SERVICE: Oxy account ids, owned by oxy-api, never a Syra row ────
+  {
+    column: 'house_members.oxy_user_id',
+    reason:
+      "A house member's Oxy account id (RELATIONS.md: House.members[].userId). Renamed from Mongo's " +
+      '`userId` to match every other Oxy account id in this schema — see the column\'s own comment.',
+  },
+  {
+    column: 'room_user_preferences.oxy_user_id',
+    reason:
+      'The Oxy account whose live-presence preference this row holds — one row per account ' +
+      "(RELATIONS.md: RoomUserPreference.userId). Same rename as house_members.oxy_user_id.",
+  },
+  // ── EXTERNAL: LiveKit's own ids, not a Syra row ───────────────────────────
+  {
+    column: 'rooms.active_ingress_id',
+    reason:
+      "LiveKit's own ingress id for the room's current live stream — an internal stream credential, " +
+      'not a reference to a Syra row (RELATIONS.md: Room.activeIngressId).',
+  },
+  {
+    column: 'rooms.recording_egress_id',
+    reason:
+      "LiveKit's own egress job id, mirroring recordings.egress_id while a recording is in flight " +
+      '(RELATIONS.md: Room.recordingEgressId).',
+  },
+  {
+    column: 'recordings.egress_id',
+    reason:
+      "LiveKit's own egress job id, set from the egress webhook payload — this recording's identity " +
+      "at LiveKit, not a reference to a Syra row (RELATIONS.md: Recording.egressId).",
+  },
+  // ── Polymorphic AND resolved out-of-process over HTTP ─────────────────────
+  {
+    column: 'room_media_queue_items.episode_id',
+    reason:
+      "Meaningful only when kind = 'podcast'. Logically an FK to episodes, but the join happens " +
+      'through Syra\'s own SDK client over HTTP (routes/rooms.routes.ts:538-565 → syraClient.getEpisode), ' +
+      'never in SQL — RELATIONS.md recommends a plain unconstrained column for exactly that ' +
+      'indirection. A real key IS expressible now that episodes exists; declining it follows ' +
+      'RELATIONS.md rather than the table being unavailable.',
+  },
+  {
+    column: 'room_media_queue_items.track_id',
+    reason:
+      "Meaningful only when kind = 'track'. Same out-of-process resolution as episode_id, through " +
+      'utils/syraMedia.ts:159 rather than a database join (RELATIONS.md: Room.podcastQueue[].trackId).',
+  },
+  {
+    column: 'room_media_queue_items.syra_podcast_id',
+    reason:
+      "Optional show-level pairing check for a kind = 'podcast' row, cross-checked against the " +
+      'resolved episode\'s own show rather than looked up directly — never resolved to a row at all ' +
+      '(RELATIONS.md: Room.podcastQueue[].syraPodcastId).',
+  },
   {
     column: 'playback_states.active_device_id',
     reason:
