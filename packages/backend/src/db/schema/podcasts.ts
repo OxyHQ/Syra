@@ -1,0 +1,609 @@
+/**
+ * Podcasts schema — `podcasts` and `episodes`, and everything that belongs to
+ * either of them.
+ *
+ * Ported from `packages/backend/src/models/{Podcast,Episode,
+ * EpisodeProgress}.ts`, field by field, against
+ * `packages/backend/docs/db/RELATIONS.md` for every foreign key.
+ *
+ * ## `Podcast.value` stays `jsonb`
+ *
+ * It is the Podcasting 2.0 `<podcast:value>` block (value-for-value payment
+ * splits). `services/podcasts/podcastSerializers.ts:102` passes `doc.value`
+ * straight through to the API response with no code reading a field inside
+ * it — the moment something reads into it, it earns real columns. Recorded
+ * here so a later reader does not mistake this for a dumping ground.
+ *
+ * ## `Podcast.categories` joins `genres` through a junction
+ *
+ * Same reasoning as `Album.genre` (`catalog.ts`): a Postgres `text[]` can
+ * answer "does this row contain X" but not "what categories EXIST across the
+ * whole catalog", which `browsePodcasts`' category filter needs to be able to
+ * enumerate. `podcast_categories` is the junction, against the same `genres`
+ * table Task 2 built — `genres.ts`'s own doc comment already named this as
+ * the reason `genres` carries no podcast-specific vocabulary.
+ *
+ * ## Which subdocument arrays became child tables
+ *
+ * The brief names six: `Episode.transcripts`, `Episode.persons`,
+ * `Episode.hls` (`models/Episode.ts:117-123`), and `Podcast.funding`,
+ * `Podcast.persons`, `Podcast.sources`. All six land here as real child
+ * tables — `podcast_funding`, `podcast_persons`, `podcast_sources`,
+ * `episode_transcripts`, `episode_persons`, `episode_hls_renditions` — each
+ * with an ordinal `position` column, matching every other array-turned-table
+ * in this schema (`track_credits.position`, `track_sources.position`, …).
+ *
+ * Two of the six have real query-by-element evidence beyond the brief's own
+ * instruction: `services/podcasts/resolvePersons.ts`'s `strongKeyCreditMatch`
+ * runs `persons: { $elemMatch: { linkedOxyUserId } }` (falling back to
+ * `href`, then a case-insensitive exact `name`) to power the "appears in"
+ * shelf on a person's profile (`entityProfile.controller.ts:169-179`) — so
+ * `podcast_persons`/`episode_persons` both get real indexes on
+ * `linked_oxy_user_id` and `href`. `Podcast.sources` has NO writer anywhere
+ * in this codebase (confirmed by grep — the same "shipped read half of a
+ * mechanism whose write half was never connected" shape catalog.ts's own
+ * report found in `CatalogEntity.members[]`), but it is built as a real table
+ * here regardless because the brief names `podcastSources` explicitly in its
+ * `Produces` list — flagged, not resolved unilaterally.
+ *
+ * `Episode.hls` becoming a child table is a deliberate departure from
+ * `catalog.ts`'s own precedent: `tracks.hls` stayed `jsonb` there (no
+ * query-by-element evidence). The brief is explicit that
+ * `episode_hls_renditions` is one of the three Episode child tables, so it is
+ * built as one here too — noted as an inconsistency with Task 2's own
+ * reasoning, not silently reconciled either way.
+ *
+ * `Episode.chapters` and `Episode.cache` and both models' `audioSource` are
+ * NOT in that list — each is a single subdocument (not an array), so each
+ * stays flattened onto the parent row, the same treatment `catalog.ts` gives
+ * `Track.metadata`/`Track.audioSource`. Every flattened column from an
+ * optional-as-a-whole subdocument is nullable with NO default, even when the
+ * Mongoose sub-schema declares one on an inner field (`cache.status` defaults
+ * to `'none'` in Mongo, but `cache` itself may be entirely absent) — this
+ * mirrors `tracks.audioSourceUrl`/`audioSourceFormat`/… in `catalog.ts`
+ * exactly, which are bare nullable columns despite `AudioSourceSchema`
+ * declaring some of its own fields `required: true`.
+ *
+ * `Episode.hlsMasterKey` (top-level, the primary/Syra-hosted stream) and
+ * `Episode.cache.hlsMasterKey` (the hybrid-cache pipeline's own key) are two
+ * DIFFERENT fields in Mongo — flattened here as `hlsMasterKey` and
+ * `cacheHlsMasterKey` so neither collides with or shadows the other.
+ *
+ * ## Two `tsvector` GENERATED columns
+ *
+ * `podcasts(title, author)` and `episodes(title)`, both `to_tsvector('english',
+ * …)` with a literal configuration (the one-argument form is STABLE, which a
+ * generated column rejects) — the same GIN-search treatment `catalog.ts` and
+ * `library.ts` give every browsable table. `author` is nullable, so its
+ * expression is `title || ' ' || coalesce(author, '')`, the same `coalesce`
+ * `playlists.searchVector` (`library.ts`) uses for its own nullable
+ * `description`. `searchPodcasts` reads via a Mongo case-insensitive regex
+ * today, not `$text` (its own comment: production `autoIndex` is off) — this
+ * table still gets the GIN, matching `catalog.ts`'s systematic policy of one
+ * per browsable table regardless of whether the current read path uses it
+ * yet.
+ *
+ * ## Indexes dropped, and why
+ *
+ * Every drop below replaces a Mongo `index: true` (or a Mongo `'text'`
+ * index) with NOTHING, because tracing the real call sites found no reader
+ * that benefits from it standing alone:
+ *
+ *  - `podcasts.title` / `podcasts.author` standalone ascending indexes, and
+ *    `episodes.title`'s — superseded by the two `tsvector` GIN indexes above.
+ *  - `podcasts.source` standalone — every real query filters it alongside
+ *    `status` (`podcastRefreshScheduler.ts`'s `{ source: 'rss', status:
+ *    'active' }`), covered by the compound partial index built for that
+ *    query below; same reasoning `catalog.ts` used to drop `tracks.isExplicit`.
+ *  - `podcasts.podcastIndexId` / `podcasts.appleCollectionId` standalone —
+ *    grepped across backend, frontend, and studio: neither is ever the
+ *    subject of a `find`/`findOne`. `PodcastDirectory.ts`'s own comment says
+ *    dedup is keyed by `feedUrl`, then `podcastGuid` — never these two.
+ *  - `podcasts.claimable` standalone — read only off an already-loaded single
+ *    document (`podcasts.controller.ts:618`), never a query filter.
+ *  - `podcasts.needsDeepImport` standalone — the one place it is queried
+ *    (`podcastBackgroundImport.ts:191-197`) is already bounded by `feedUrl:
+ *    { $in: feedUrls }` against the unique `feed_url` index, over a small,
+ *    caller-supplied candidate list; a second index buys nothing there.
+ *  - `podcasts.claimedByOxyUserId` standalone — same shape as `claimable`,
+ *    read only off an already-loaded document. Matches `catalog_entities`'
+ *    own silent precedent for the identical field on that table.
+ *  - `episodes.status` / `episodes.popularity` / `episodes.pubDate`
+ *    standalone — every cross-show listing that sorts by popularity filters
+ *    `status: 'ready'` first (`search.controller.ts`, `entityProfile
+ *    .controller.ts`), covered by the partial `(popularity desc, pub_date
+ *    desc) WHERE status = 'ready'` index below. The one un-gated `pubDate`
+ *    reader (`podcastImportService.ts:301`) is scoped to a single
+ *    `podcastId` and already served by the `(podcast_id, pub_date desc)`
+ *    compound index, which stays NON-partial deliberately — see below.
+ *  - `episode_progress`'s standalone `oxy_user_id` — already the leading
+ *    column of both `unique(oxy_user_id, episode_id)` and the partial
+ *    `(oxy_user_id, updated_at desc)` index, so a third index would be
+ *    redundant. Same "an index dropped in writing" convention `library.ts`
+ *    used for `devices.oxy_user_id`.
+ *
+ * ## `(podcast_id, pub_date desc)` on `episodes` stays NON-partial
+ *
+ * Unlike the `status = 'ready'` partial index built for the cross-show
+ * listing case, this one serves `getPodcast`/`getPodcastEpisodes`
+ * (`podcasts.controller.ts`), whose `episodeVisibilityFilter` returns `{}`
+ * (every status) for the show's OWNER and `{ status: 'ready' }` for everyone
+ * else. A partial index on `status = 'ready'` would silently stop serving the
+ * owner's own unpublished-episode view; kept general, matching the original
+ * Mongo index exactly.
+ *
+ * ## `podcast_sources.importedAt` stays `text`, unlike its three siblings
+ *
+ * `track_sources`/`album_sources`/`catalog_entity_sources`/`playlist_sources`
+ * (`catalog.ts`, `library.ts`) all promoted this field to `timestamptz` on
+ * real evidence: every one of their call sites writes `new
+ * Date().toISOString()`. `Podcast.sources` has no call site at all (see
+ * above) — there is no evidence to promote past what Mongoose actually
+ * declares (`type: String`), so it stays `text`, matching the declared type
+ * rather than assuming the sibling tables' real-instant semantics.
+ *
+ * ## The deferred ledger
+ *
+ * `userPodcastSubscriptions.podcastId` (`library.ts`, Task 3) is no longer
+ * deferred: `podcasts` exists now, so `library.ts`'s column becomes a real
+ * `.references(() => podcasts.id, { onDelete: 'cascade' })` and its
+ * `DEFERRED_FOREIGN_KEYS` entry is deleted in the same change.
+ *
+ * The "podcast-genre junction" the team-lead's brief also named was never a
+ * literal ledger entry — `deferredForeignKeys.ts` never held a column for it,
+ * because the junction TABLE itself (not just one of its two FKs) did not
+ * exist until this task creates it. `podcast_categories` is built directly
+ * below with both `.references()` live from the start, against `podcasts`
+ * and the `genres` table Task 2 built.
+ *
+ * `tracks.copyrightReportId` (`catalog.ts`, Task 2) is NOT closed by this
+ * task and is not touched here — its parent, `copyright_reports`, is a
+ * moderation-vertical table out of this task's scope. The ledger is one
+ * entry shorter after this task, not empty; see this task's own report for
+ * the full explanation of why the brief's "an empty ledger is the finish
+ * line" does not hold here.
+ */
+
+import { sql } from 'drizzle-orm';
+import { boolean, check, doublePrecision, index, integer, jsonb, pgTable, text, unique } from 'drizzle-orm/pg-core';
+import { createdAt, generatedId, inList, timestamptz, tsvector, updatedAt } from '@oxyhq/db';
+import { AUDIO_FORMATS, catalogEntities, imageAssets } from './catalog';
+import { genres } from './genres';
+
+// ── Closed value sets ────────────────────────────────────────────────────
+// Same convention as catalog.ts/library.ts: one `as const` tuple per closed
+// value set, used both to type the column and to derive its CHECK.
+
+/**
+ * `models/Podcast.ts` / `models/Episode.ts` `source` — shared verbatim
+ * between the two models (`@syra/shared-types`' `podcastSourceSchema` is
+ * imported by BOTH `podcast.ts` and `episode.ts`), so it is declared once
+ * here rather than duplicated per table.
+ */
+export const PODCAST_SOURCES = ['rss', 'syra'] as const;
+
+/**
+ * `@syra/shared-types` `podcastProvenanceProviderSchema` — a WIDER, DIFFERENT
+ * value set than `catalog.ts`'s `PROVENANCE_PROVIDERS`. Do not conflate the
+ * two: a podcast's provenance provider is the feed/directory it came from,
+ * not a music-metadata enrichment source.
+ */
+export const PODCAST_PROVENANCE_PROVIDERS = ['rss', 'syra', 'podcastindex', 'apple'] as const;
+
+/** `@syra/shared-types` `podcastTypeSchema`. */
+export const PODCAST_TYPES = ['episodic', 'serial'] as const;
+
+/** `@syra/shared-types` `podcastStatusSchema`. */
+export const PODCAST_STATUSES = ['active', 'unavailable', 'removed'] as const;
+
+/** `@syra/shared-types` `episodeTypeSchema`. */
+export const EPISODE_TYPES = ['full', 'trailer', 'bonus'] as const;
+
+/** `@syra/shared-types` `episodeStatusSchema`. */
+export const EPISODE_STATUSES = ['ready', 'processing', 'failed', 'unavailable'] as const;
+
+/** `@syra/shared-types` `episodeCacheStatusSchema`. */
+export const EPISODE_CACHE_STATUSES = ['none', 'cached', 'hls'] as const;
+
+// ── podcasts ──────────────────────────────────────────────────────────────
+
+export const podcasts = pgTable(
+  'podcasts',
+  {
+    id: generatedId(),
+    title: text().notNull(),
+    description: text(),
+    author: text(),
+    imageId: text().references(() => imageAssets.id, { onDelete: 'set null' }),
+    imageSizesSmallId: text().references(() => imageAssets.id, { onDelete: 'set null' }),
+    imageSizesMediumId: text().references(() => imageAssets.id, { onDelete: 'set null' }),
+    imageSizesLargeId: text().references(() => imageAssets.id, { onDelete: 'set null' }),
+    imageSizesXlargeId: text().references(() => imageAssets.id, { onDelete: 'set null' }),
+    imageSizesXxlargeId: text().references(() => imageAssets.id, { onDelete: 'set null' }),
+    imageSizesOriginalId: text().references(() => imageAssets.id, { onDelete: 'set null' }),
+    primaryColor: text(),
+    secondaryColor: text(),
+    /** Original external artwork URL, kept as a fallback when re-hosting fails. */
+    imageSourceUrl: text(),
+    language: text(),
+    // The category LIST is `podcast_categories` (junction, below) — see the
+    // file-level doc comment.
+    explicit: boolean().notNull().default(false),
+    link: text(),
+    type: text({ enum: PODCAST_TYPES }).notNull().default('episodic'),
+    // ── Feed identity ─────────────────────────────────────────────────────
+    feedUrl: text(),
+    podcastGuid: text(),
+    /** PodcastIndex.org's own directory id — EXTERNAL, not a Syra row. */
+    podcastIndexId: integer(),
+    /** Apple Podcasts' own directory id — EXTERNAL, not a Syra row. */
+    appleCollectionId: integer(),
+    // ── Origin ────────────────────────────────────────────────────────────
+    source: text({ enum: PODCAST_SOURCES }).notNull(),
+    // ── Linking ───────────────────────────────────────────────────────────
+    /** An Oxy account id — no foreign key. */
+    ownerOxyUserId: text(),
+    claimable: boolean(),
+    /** An Oxy account id — no foreign key. Set when the claim is approved. */
+    claimedByOxyUserId: text(),
+    /** One of the six real `ref:` in the Mongoose model set (RELATIONS.md). */
+    linkedArtistId: text().references(() => catalogEntities.id, { onDelete: 'set null' }),
+    // ── Refresh / HTTP conditional-GET cache ─────────────────────────────
+    lastRefreshedAt: timestamptz(),
+    refreshIntervalMin: integer().notNull().default(60),
+    etag: text(),
+    lastModified: text(),
+    episodeCount: integer().notNull().default(0),
+    lastEpisodeAt: timestamptz(),
+    /**
+     * True for a shallow directory-candidate doc awaiting its background deep
+     * feed import (episodes + re-hosted cover). See the file-level doc
+     * comment for why this has no standalone index here.
+     */
+    needsDeepImport: boolean().notNull().default(false),
+    // ── Signals ───────────────────────────────────────────────────────────
+    popularity: integer().notNull().default(0),
+    subscriberCount: integer().notNull().default(0),
+    status: text({ enum: PODCAST_STATUSES }).notNull().default('active'),
+    // Optional Podcasting 2.0: `funding`/`persons` are child tables below.
+    // `value` stays jsonb — see the file-level doc comment.
+    value: jsonb().$type<Record<string, unknown>>(),
+    // The provenance LOG is `podcast_sources` (child table, below) — see the
+    // file-level doc comment for why it is built despite having no writer.
+    searchVector: tsvector().generatedAlwaysAs(
+      sql`to_tsvector('english', title || ' ' || coalesce(author, ''))`
+    ),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    check('podcasts_type_check', sql`${t.type} in (${sql.raw(inList(PODCAST_TYPES))})`),
+    check('podcasts_source_check', sql`${t.source} in (${sql.raw(inList(PODCAST_SOURCES))})`),
+    check('podcasts_status_check', sql`${t.status} in (${sql.raw(inList(PODCAST_STATUSES))})`),
+    check('podcasts_popularity_check', sql`${t.popularity} between 0 and 100`),
+    // Sparse-unique in Mongo — a plain Postgres `unique()` already tolerates
+    // any number of NULLs, the identical semantics.
+    unique('podcasts_feed_url_key').on(t.feedUrl),
+    unique('podcasts_podcast_guid_key').on(t.podcastGuid),
+    index('podcasts_linked_artist_id_idx').on(t.linkedArtistId),
+    // "My podcasts" (podcasts.controller.ts:425) — owner sees every status.
+    index('podcasts_owner_oxy_user_id_created_at_idx').on(t.ownerOxyUserId, t.createdAt.desc()),
+    /**
+     * Serves BOTH `searchPodcasts`/the aggregate search's 3-key sort
+     * (popularity desc, subscriberCount desc, lastEpisodeAt desc) AND
+     * `browsePodcasts`' 2-key "popular" sort (popularity desc, subscriberCount
+     * desc) as a leading-column prefix of the same index — both real queries
+     * filter `status: 'active'` first.
+     */
+    index('podcasts_active_popularity_idx')
+      .on(t.popularity.desc(), t.subscriberCount.desc(), t.lastEpisodeAt.desc())
+      .where(sql`${t.status} = 'active'`),
+    // browsePodcasts' "recent" sort (podcasts.controller.ts:213).
+    index('podcasts_active_last_episode_at_idx')
+      .on(t.lastEpisodeAt.desc())
+      .where(sql`${t.status} = 'active'`),
+    // podcastRefreshScheduler.ts's own compound predicate + sort — a distinct
+    // real query from the two above, not covered by either.
+    index('podcasts_rss_active_subscriber_count_idx')
+      .on(t.subscriberCount.desc(), t.popularity.desc())
+      .where(sql`${t.status} = 'active' and ${t.source} = 'rss'`),
+    index('podcasts_search_gin').using('gin', t.searchVector),
+  ]
+);
+
+// ── podcast_funding (child of podcasts) ─────────────────────────────────────
+
+export const podcastFunding = pgTable(
+  'podcast_funding',
+  {
+    id: generatedId(),
+    podcastId: text()
+      .notNull()
+      .references(() => podcasts.id, { onDelete: 'cascade' }),
+    position: integer().notNull(),
+    url: text().notNull(),
+    message: text(),
+  },
+  (t) => [
+    check('podcast_funding_position_check', sql`${t.position} >= 0`),
+    unique('podcast_funding_podcast_id_position_key').on(t.podcastId, t.position),
+  ]
+);
+
+// ── podcast_persons (child of podcasts — channel-level Hosts & Guests) ──────
+
+export const podcastPersons = pgTable(
+  'podcast_persons',
+  {
+    id: generatedId(),
+    podcastId: text()
+      .notNull()
+      .references(() => podcasts.id, { onDelete: 'cascade' }),
+    position: integer().notNull(),
+    name: text().notNull(),
+    role: text(),
+    group: text(),
+    /** External avatar URL (RSS persons) — distinct from the `image_assets` pipeline. */
+    img: text(),
+    href: text(),
+    /** An Oxy account id — no foreign key. */
+    linkedOxyUserId: text(),
+  },
+  (t) => [
+    check('podcast_persons_position_check', sql`${t.position} >= 0`),
+    unique('podcast_persons_podcast_id_position_key').on(t.podcastId, t.position),
+    // strongKeyCreditMatch (resolvePersons.ts) — the "appears in" query,
+    // strong-key tier. See the file-level doc comment.
+    index('podcast_persons_linked_oxy_user_id_idx').on(t.linkedOxyUserId),
+    index('podcast_persons_href_idx').on(t.href),
+  ]
+);
+
+// ── podcast_sources (SourceProvenance child table — see the file-level doc comment) ──
+
+export const podcastSources = pgTable(
+  'podcast_sources',
+  {
+    id: generatedId(),
+    podcastId: text()
+      .notNull()
+      .references(() => podcasts.id, { onDelete: 'cascade' }),
+    position: integer().notNull(),
+    provider: text({ enum: PODCAST_PROVENANCE_PROVIDERS }).notNull(),
+    externalId: text().notNull(),
+    /**
+     * `text`, not `timestamptz` — this table has no writer at all, unlike its
+     * three siblings in `catalog.ts`/`library.ts`. See the file-level doc
+     * comment for why this stays exactly what Mongoose declares.
+     */
+    importedAt: text().notNull(),
+    fields: text().array().notNull().default(sql`array[]::text[]`),
+  },
+  (t) => [
+    check(
+      'podcast_sources_provider_check',
+      sql`${t.provider} in (${sql.raw(inList(PODCAST_PROVENANCE_PROVIDERS))})`
+    ),
+    check('podcast_sources_position_check', sql`${t.position} >= 0`),
+    unique('podcast_sources_podcast_id_position_key').on(t.podcastId, t.position),
+  ]
+);
+
+// ── podcast_categories (junction, Podcast ↔ genres — see the file-level doc comment) ──
+
+export const podcastCategories = pgTable(
+  'podcast_categories',
+  {
+    id: generatedId(),
+    podcastId: text()
+      .notNull()
+      .references(() => podcasts.id, { onDelete: 'cascade' }),
+    genreId: text()
+      .notNull()
+      .references(() => genres.id, { onDelete: 'restrict' }),
+  },
+  (t) => [
+    unique('podcast_categories_podcast_id_genre_id_key').on(t.podcastId, t.genreId),
+    index('podcast_categories_genre_id_idx').on(t.genreId),
+  ]
+);
+
+// ── episodes ──────────────────────────────────────────────────────────────
+
+export const episodes = pgTable(
+  'episodes',
+  {
+    id: generatedId(),
+    podcastId: text()
+      .notNull()
+      .references(() => podcasts.id, { onDelete: 'cascade' }),
+    /** Denormalized copy of the parent show's title at write time — not itself a reference. */
+    podcastTitle: text().notNull(),
+    title: text().notNull(),
+    description: text(),
+    summary: text(),
+    guid: text().notNull(),
+    // Origin enclosure (RSS); absent for Syra-hosted episodes.
+    enclosureUrl: text(),
+    enclosureType: text(),
+    enclosureLength: integer(),
+    duration: doublePrecision().notNull().default(0),
+    pubDate: timestamptz().notNull(),
+    season: integer(),
+    episodeNumber: integer(),
+    episodeType: text({ enum: EPISODE_TYPES }).notNull().default('full'),
+    imageId: text().references(() => imageAssets.id, { onDelete: 'set null' }),
+    imageSizesSmallId: text().references(() => imageAssets.id, { onDelete: 'set null' }),
+    imageSizesMediumId: text().references(() => imageAssets.id, { onDelete: 'set null' }),
+    imageSizesLargeId: text().references(() => imageAssets.id, { onDelete: 'set null' }),
+    imageSizesXlargeId: text().references(() => imageAssets.id, { onDelete: 'set null' }),
+    imageSizesXxlargeId: text().references(() => imageAssets.id, { onDelete: 'set null' }),
+    imageSizesOriginalId: text().references(() => imageAssets.id, { onDelete: 'set null' }),
+    primaryColor: text(),
+    secondaryColor: text(),
+    imageSourceUrl: text(),
+    explicit: boolean().notNull().default(false),
+    // ── Podcasting 2.0: `chapters` is a single optional subdocument, flattened
+    // (see the file-level doc comment); `transcripts`/`persons` are child
+    // tables below.
+    chaptersUrl: text(),
+    chaptersType: text(),
+    // ── Hybrid audio ──────────────────────────────────────────────────────
+    source: text({ enum: PODCAST_SOURCES }).notNull(),
+    // `cache` is a single optional subdocument, flattened (see the
+    // file-level doc comment). `cacheHlsMasterKey` is DISTINCT from the
+    // top-level `hlsMasterKey` below — two different keys in Mongo.
+    cacheStatus: text({ enum: EPISODE_CACHE_STATUSES }),
+    // Named `cacheObjectKey`, not `cacheS3Key` — the latter tokenizes as
+    // `cache_s_3_key` under drizzle's own snake_case casing (`toSnakeCase`,
+    // `drizzle-orm/casing.js`): a capital letter immediately followed by a
+    // digit splits into its own token, unlike `image_assets.s3Key` (starts
+    // the identifier, so it stays fused as `s3_key`). Verified directly
+    // against the casing function before choosing this spelling.
+    cacheObjectKey: text(),
+    cacheHlsMasterKey: text(),
+    cacheCachedAt: timestamptz(),
+    // `audioSource` is a single optional subdocument, flattened — same
+    // treatment (and the same reused `AUDIO_FORMATS` enum) as
+    // `tracks.audioSource*` in catalog.ts.
+    audioSourceUrl: text(),
+    audioSourceFormat: text({ enum: AUDIO_FORMATS }),
+    audioSourceBitrate: integer(),
+    audioSourceDuration: doublePrecision(),
+    // `hls` is a child table (episode_hls_renditions, below).
+    hlsMasterKey: text(),
+    // ── Signals ───────────────────────────────────────────────────────────
+    playCount: integer().notNull().default(0),
+    popularity: integer().notNull().default(0),
+    status: text({ enum: EPISODE_STATUSES }).notNull().default('ready'),
+    searchVector: tsvector().generatedAlwaysAs(sql`to_tsvector('english', title)`),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    check('episodes_episode_type_check', sql`${t.episodeType} in (${sql.raw(inList(EPISODE_TYPES))})`),
+    check('episodes_source_check', sql`${t.source} in (${sql.raw(inList(PODCAST_SOURCES))})`),
+    check('episodes_status_check', sql`${t.status} in (${sql.raw(inList(EPISODE_STATUSES))})`),
+    check(
+      'episodes_cache_status_check',
+      sql`${t.cacheStatus} is null or ${t.cacheStatus} in (${sql.raw(inList(EPISODE_CACHE_STATUSES))})`
+    ),
+    check(
+      'episodes_audio_source_format_check',
+      sql`${t.audioSourceFormat} is null or ${t.audioSourceFormat} in (${sql.raw(inList(AUDIO_FORMATS))})`
+    ),
+    check('episodes_popularity_check', sql`${t.popularity} between 0 and 100`),
+    // One episode per feed guid, direct port of the Mongo compound unique.
+    unique('episodes_podcast_id_guid_key').on(t.podcastId, t.guid),
+    // Reverse-chronological listing within a show — NON-partial; see the
+    // file-level doc comment for why (the show owner sees every status).
+    index('episodes_podcast_id_pub_date_idx').on(t.podcastId, t.pubDate.desc()),
+    // Cross-show listings (search, "appears in") — public playability gate.
+    index('episodes_ready_popularity_idx')
+      .on(t.popularity.desc(), t.pubDate.desc())
+      .where(sql`${t.status} = 'ready'`),
+    index('episodes_search_gin').using('gin', t.searchVector),
+  ]
+);
+
+// ── episode_transcripts (child of episodes) ─────────────────────────────────
+
+export const episodeTranscripts = pgTable(
+  'episode_transcripts',
+  {
+    id: generatedId(),
+    episodeId: text()
+      .notNull()
+      .references(() => episodes.id, { onDelete: 'cascade' }),
+    position: integer().notNull(),
+    url: text().notNull(),
+    type: text().notNull(),
+    language: text(),
+  },
+  (t) => [
+    check('episode_transcripts_position_check', sql`${t.position} >= 0`),
+    unique('episode_transcripts_episode_id_position_key').on(t.episodeId, t.position),
+  ]
+);
+
+// ── episode_persons (child of episodes — per-episode Hosts & Guests) ────────
+
+export const episodePersons = pgTable(
+  'episode_persons',
+  {
+    id: generatedId(),
+    episodeId: text()
+      .notNull()
+      .references(() => episodes.id, { onDelete: 'cascade' }),
+    position: integer().notNull(),
+    name: text().notNull(),
+    role: text(),
+    group: text(),
+    img: text(),
+    href: text(),
+    /** An Oxy account id — no foreign key. */
+    linkedOxyUserId: text(),
+  },
+  (t) => [
+    check('episode_persons_position_check', sql`${t.position} >= 0`),
+    unique('episode_persons_episode_id_position_key').on(t.episodeId, t.position),
+    // strongKeyCreditMatch (resolvePersons.ts) — same evidence as podcast_persons.
+    index('episode_persons_linked_oxy_user_id_idx').on(t.linkedOxyUserId),
+    index('episode_persons_href_idx').on(t.href),
+  ]
+);
+
+// ── episode_hls_renditions (child of episodes) ──────────────────────────────
+
+export const episodeHlsRenditions = pgTable(
+  'episode_hls_renditions',
+  {
+    id: generatedId(),
+    episodeId: text()
+      .notNull()
+      .references(() => episodes.id, { onDelete: 'cascade' }),
+    position: integer().notNull(),
+    manifestKey: text().notNull(),
+    bitrateKbps: integer().notNull(),
+    encrypted: boolean().notNull(),
+  },
+  (t) => [
+    check('episode_hls_renditions_position_check', sql`${t.position} >= 0`),
+    unique('episode_hls_renditions_episode_id_position_key').on(t.episodeId, t.position),
+  ]
+);
+
+// ── episode_progress (per-user playback position — "continue listening") ───
+
+export const episodeProgress = pgTable(
+  'episode_progress',
+  {
+    id: generatedId(),
+    /** An Oxy account id — no foreign key. */
+    oxyUserId: text().notNull(),
+    episodeId: text()
+      .notNull()
+      .references(() => episodes.id, { onDelete: 'cascade' }),
+    positionSec: doublePrecision().notNull().default(0),
+    durationSec: doublePrecision().notNull().default(0),
+    completed: boolean().notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    // One progress record per user per episode — direct port of the Mongo
+    // compound unique; also the leading-column index for "this user's
+    // progress list", so no separate standalone oxy_user_id index is added
+    // (dropped in writing — see the file-level doc comment).
+    unique('episode_progress_oxy_user_id_episode_id_key').on(t.oxyUserId, t.episodeId),
+    // FK support — cascade-delete lookup by episode_id, not covered by the
+    // unique index above (which leads with oxy_user_id).
+    index('episode_progress_episode_id_idx').on(t.episodeId),
+    // getContinueListening's own filter + sort — a purpose-fit upgrade over
+    // Mongo's non-partial (oxyUserId, updatedAt desc) index, same convention
+    // Task 2/3 used for playableTrackFilter()/canViewPlaylist().
+    index('episode_progress_oxy_user_id_updated_at_idx')
+      .on(t.oxyUserId, t.updatedAt.desc())
+      .where(sql`${t.completed} = false`),
+  ]
+);

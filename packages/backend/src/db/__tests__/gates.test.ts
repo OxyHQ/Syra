@@ -57,16 +57,20 @@ import * as catalogModule from '../schema/catalog';
 import { catalogEntities } from '../schema/catalog';
 import * as genresModule from '../schema/genres';
 import * as libraryModule from '../schema/library';
-import { playbackStates, playlists, userSavedPlaylists } from '../schema/library';
+import { playbackStates, playlists, userPodcastSubscriptions, userSavedPlaylists } from '../schema/library';
+import * as podcastsModule from '../schema/podcasts';
+import { episodeProgress, episodes, podcastCategories, podcasts } from '../schema/podcasts';
 import { DEFERRED_FOREIGN_KEYS, ID_COLUMNS_WITHOUT_FOREIGN_KEY } from '../schema/deferredForeignKeys';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../schema/protectedColumns';
 import { EXPIRY_SWEEP_TARGETS } from '../expiry';
+import { genres } from '../schema/genres';
 
 /**
  * Traversal floor for every gate below. See this file's own doc comment.
- * 19 (Task 2: catalog.ts + genres.ts) + 12 (Task 3: library.ts) = 31.
+ * 19 (Task 2: catalog.ts + genres.ts) + 12 (Task 3: library.ts) +
+ * 10 (Task 4: podcasts.ts) = 41.
  */
-const MINIMUM_TABLES = 31;
+const MINIMUM_TABLES = 41;
 
 /**
  * Every drizzle table the schema barrel exports, walked rather than listed by
@@ -350,5 +354,181 @@ describe('library and playlist schema (Task 3)', () => {
     const names = rows.map((row) => row.indexname);
     expect(names).toContain('playlist_collaborators_oxy_user_id_idx');
     expect(names).toContain('playlist_collaborators_playlist_id_oxy_user_id_key');
+  });
+});
+
+describe('podcasts schema (Task 4)', () => {
+  /** Every table `schema/podcasts.ts` promises, by SQL name. */
+  const EXPECTED_TABLES = [
+    'podcasts',
+    'podcast_funding',
+    'podcast_persons',
+    'podcast_sources',
+    'podcast_categories',
+    'episodes',
+    'episode_transcripts',
+    'episode_persons',
+    'episode_hls_renditions',
+    'episode_progress',
+  ];
+
+  it('lands exactly the tables this task promises', () => {
+    const present = tablesIn(podcastsModule).map((table) => getTableConfig(table).name).sort();
+    expect(present).toEqual([...EXPECTED_TABLES].sort());
+  });
+
+  it('closes the userPodcastSubscriptions.podcastId deferred entry, leaving only the unrelated tracks.copyrightReportId one', () => {
+    // Task 3 landed userPodcastSubscriptions.podcastId as a plain column with
+    // a deferred-ledger entry naming podcasts as its parent. Task 4 lands
+    // podcasts, so that entry must be gone from the ledger AND the column
+    // must now be a real declared foreign key — both halves of the same
+    // change, checked independently so neither can be forgotten.
+    const remainingParents = DEFERRED_FOREIGN_KEYS.map((fk) => fk.parentTable);
+    expect(remainingParents).not.toContain('podcasts');
+    // tracks.copyrightReportId's parent (copyright_reports) is an unrelated,
+    // not-yet-built moderation table — the ledger is one entry shorter after
+    // this task, not empty. See schema/podcasts.ts's own doc comment.
+    expect(remainingParents).toEqual(['copyright_reports']);
+
+    const declaredOnLibrary = new Set<string>();
+    for (const foreignKey of getTableConfig(userPodcastSubscriptions).foreignKeys) {
+      for (const column of foreignKey.reference().columns) {
+        declaredOnLibrary.add(column.name);
+      }
+    }
+    expect(declaredOnLibrary.has('podcastId')).toBe(true);
+  });
+
+  it('rejects a popularity outside 0..100 on podcasts and episodes', async () => {
+    const db = getDb();
+    await expect(
+      Promise.resolve(
+        db.insert(podcasts).values({
+          title: 'CHECK-fixture-podcast',
+          type: 'episodic',
+          source: 'syra',
+          status: 'active',
+          popularity: 101,
+        })
+      )
+    ).rejects.toThrow();
+  });
+
+  it('cascades a deleted podcast into user_podcast_subscriptions', async () => {
+    const db = getDb();
+
+    const [podcast] = await db
+      .insert(podcasts)
+      .values({ title: 'CHECK-fixture-cascade-podcast', type: 'episodic', source: 'syra', status: 'active' })
+      .returning({ id: podcasts.id });
+
+    await db
+      .insert(userPodcastSubscriptions)
+      .values({ oxyUserId: 'CHECK-fixture-subscriber', podcastId: podcast.id });
+
+    await db.delete(podcasts).where(eq(podcasts.id, podcast.id));
+
+    const remaining = await db
+      .select()
+      .from(userPodcastSubscriptions)
+      .where(eq(userPodcastSubscriptions.podcastId, podcast.id));
+    expect(remaining).toEqual([]);
+  });
+
+  it('joins podcasts to genres through podcast_categories, restricting genre deletion', async () => {
+    const db = getDb();
+
+    const [genre] = await db
+      .insert(genres)
+      .values({ name: 'CHECK-fixture-podcast-genre' })
+      .returning({ id: genres.id });
+    const [podcast] = await db
+      .insert(podcasts)
+      .values({ title: 'CHECK-fixture-genre-podcast', type: 'episodic', source: 'syra', status: 'active' })
+      .returning({ id: podcasts.id });
+
+    try {
+      await db.insert(podcastCategories).values({ podcastId: podcast.id, genreId: genre.id });
+
+      // RESTRICT — the genre cannot be deleted while a podcast still
+      // references it, matching album_genres' own treatment in catalog.ts.
+      await expect(Promise.resolve(db.delete(genres).where(eq(genres.id, genre.id)))).rejects.toThrow();
+    } finally {
+      await db.delete(podcastCategories).where(eq(podcastCategories.podcastId, podcast.id));
+      await db.delete(podcasts).where(eq(podcasts.id, podcast.id));
+      await db.delete(genres).where(eq(genres.id, genre.id));
+    }
+  });
+
+  it('requires one episode per (podcast_id, guid)', async () => {
+    const db = getDb();
+
+    const [podcast] = await db
+      .insert(podcasts)
+      .values({ title: 'CHECK-fixture-guid-podcast', type: 'episodic', source: 'syra', status: 'active' })
+      .returning({ id: podcasts.id });
+
+    try {
+      await db.insert(episodes).values({
+        podcastId: podcast.id,
+        podcastTitle: 'CHECK-fixture-guid-podcast',
+        title: 'CHECK-fixture-episode',
+        guid: 'CHECK-fixture-guid',
+        pubDate: new Date(),
+        episodeType: 'full',
+        source: 'syra',
+        status: 'ready',
+      });
+
+      await expect(
+        Promise.resolve(
+          db.insert(episodes).values({
+            podcastId: podcast.id,
+            podcastTitle: 'CHECK-fixture-guid-podcast',
+            title: 'CHECK-fixture-episode-2',
+            guid: 'CHECK-fixture-guid',
+            pubDate: new Date(),
+            episodeType: 'full',
+            source: 'syra',
+            status: 'ready',
+          })
+        )
+      ).rejects.toThrow();
+    } finally {
+      await db.delete(episodes).where(eq(episodes.podcastId, podcast.id));
+      await db.delete(podcasts).where(eq(podcasts.id, podcast.id));
+    }
+  });
+
+  it('cascades a deleted episode into episode_progress', async () => {
+    const db = getDb();
+
+    const [podcast] = await db
+      .insert(podcasts)
+      .values({ title: 'CHECK-fixture-progress-podcast', type: 'episodic', source: 'syra', status: 'active' })
+      .returning({ id: podcasts.id });
+    const [episode] = await db
+      .insert(episodes)
+      .values({
+        podcastId: podcast.id,
+        podcastTitle: 'CHECK-fixture-progress-podcast',
+        title: 'CHECK-fixture-progress-episode',
+        guid: 'CHECK-fixture-progress-guid',
+        pubDate: new Date(),
+        episodeType: 'full',
+        source: 'syra',
+        status: 'ready',
+      })
+      .returning({ id: episodes.id });
+
+    await db.insert(episodeProgress).values({ oxyUserId: 'CHECK-fixture-listener', episodeId: episode.id });
+
+    await db.delete(podcasts).where(eq(podcasts.id, podcast.id));
+
+    const remaining = await db
+      .select()
+      .from(episodeProgress)
+      .where(eq(episodeProgress.episodeId, episode.id));
+    expect(remaining).toEqual([]);
   });
 });

@@ -24,13 +24,20 @@
 
 import type { DeferredForeignKey } from '@oxyhq/db/assert';
 import { tracks } from './catalog';
-import { userPodcastSubscriptions } from './library';
 
 /**
  * A table added ahead of its parent goes here with its `ON DELETE` and reason
  * already decided. The moment that parent table appears in the barrel, the
  * gate turns this entry into a hard error naming every column that now owes a
  * real `.references()`.
+ *
+ * `userPodcastSubscriptions.podcastId` (Task 3) was the second entry this
+ * ledger ever held. Task 4 (`schema/podcasts.ts`) landed `podcasts`, so
+ * `library.ts`'s column is now a real `.references(() => podcasts.id, {
+ * onDelete: 'cascade' })` and this entry is deleted, not merely edited — see
+ * `podcasts.ts`'s own file-level doc comment for the full accounting,
+ * including why `tracks.copyrightReportId` below survives Task 4 rather than
+ * the ledger going empty.
  */
 export const DEFERRED_FOREIGN_KEYS: readonly DeferredForeignKey[] = [
   {
@@ -42,19 +49,6 @@ export const DEFERRED_FOREIGN_KEYS: readonly DeferredForeignKey[] = [
     reason:
       'copyright_reports is a moderation-vertical table that has not landed yet ' +
       '(RELATIONS.md: Track.copyrightReportId -> copyright_reports, set only at takedown time).',
-  },
-  {
-    table: userPodcastSubscriptions,
-    column: userPodcastSubscriptions.podcastId,
-    parentTable: 'podcasts',
-    parentColumn: 'id',
-    onDelete: 'cascade',
-    reason:
-      'podcasts is a Task 4 table that has not landed yet (RELATIONS.md: ' +
-      'Library.subscribedPodcasts[] -> podcasts, CASCADE target-side — ' +
-      'services/notifications/triggers/episodePublished.ts:50 reverse-joins this ' +
-      'column for new-episode fan-out, which is why it keeps its own index even ' +
-      'while the FK itself is deferred).',
   },
 ];
 
@@ -80,6 +74,30 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
   {
     column: 'catalog_entities.linked_oxy_user_id',
     reason: 'Strong dedup key for type:person rows — links a podcast credit to an Oxy account (RELATIONS.md).',
+  },
+  {
+    column: 'podcasts.owner_oxy_user_id',
+    reason: 'The Oxy account that registered/owns this show (RELATIONS.md: Podcast.ownerOxyUserId).',
+  },
+  {
+    column: 'podcasts.claimed_by_oxy_user_id',
+    reason: 'Set when a podcast claim is approved (RELATIONS.md: Podcast.claimedByOxyUserId).',
+  },
+  {
+    column: 'podcast_persons.linked_oxy_user_id',
+    reason:
+      "Channel-level <podcast:person> credit linked to an Oxy account (RELATIONS.md: " +
+      'Podcast.persons[].linkedOxyUserId).',
+  },
+  {
+    column: 'episode_persons.linked_oxy_user_id',
+    reason:
+      "Per-episode <podcast:person> credit linked to an Oxy account (RELATIONS.md: " +
+      'Episode.persons[].linkedOxyUserId).',
+  },
+  {
+    column: 'episode_progress.oxy_user_id',
+    reason: 'The Oxy account whose resume position this row tracks (RELATIONS.md: EpisodeProgress.oxyUserId).',
   },
   // ── EXTERNAL: another provider's own id, not a Syra row ───────────────────
   {
@@ -121,6 +139,18 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
   {
     column: 'discogs_releases.discogs_release_id',
     reason: "This row's own external identity (Discogs' id for the release) — not a reference to a Syra row (RELATIONS.md).",
+  },
+  {
+    column: 'podcasts.podcast_index_id',
+    reason: "PodcastIndex.org's own directory id for this show — not a reference to a Syra row (RELATIONS.md).",
+  },
+  {
+    column: 'podcasts.apple_collection_id',
+    reason: "Apple Podcasts' own directory id for this show — not a reference to a Syra row (RELATIONS.md).",
+  },
+  {
+    column: 'podcast_sources.external_id',
+    reason: 'Same provenance-log pattern as track_sources.external_id — records which EXTERNAL provider supplied a field.',
   },
   // ── Polymorphic, no single-table FK is expressible ────────────────────────
   {

@@ -32,16 +32,15 @@
  * table's `.references(() => playlists.id, { onDelete: 'cascade' })` fixes at
  * the database level with no application change.
  *
- * `userPodcastSubscriptions.podcastId` cannot reference `podcasts` yet — that
- * table is Task 4 — so it stays a plain column here and the FK is recorded in
- * `deferredForeignKeys.ts`'s `DEFERRED_FOREIGN_KEYS`, same pattern as
- * `tracks.copyrightReportId` in `catalog.ts`. It keeps its own standalone
- * index regardless, because `services/notifications/triggers/
- * episodePublished.ts:50` reverse-joins it (`find({ subscribedPodcasts:
- * episode.podcastId })`, fan-out to every subscriber on a new episode) — the
- * one junction of the five with a real reverse-read, not just the forward
- * "this user's list" one every `unique(oxy_user_id, *_id)` already serves as
- * a leading-column index.
+ * `userPodcastSubscriptions.podcastId` references `podcasts` (Task 4,
+ * `schema/podcasts.ts`) — CASCADE, matching `RELATIONS.md`'s
+ * `Library.subscribedPodcasts[] -> podcasts` entry. It also keeps its own
+ * standalone index regardless of the FK, because `services/notifications/
+ * triggers/episodePublished.ts:50` reverse-joins it (`find({
+ * subscribedPodcasts: episode.podcastId })`, fan-out to every subscriber on a
+ * new episode) — the one junction of the five with a real reverse-read, not
+ * just the forward "this user's list" one every `unique(oxy_user_id, *_id)`
+ * already serves as a leading-column index.
  *
  * ## `Playlist.sources[]` — the fourth sibling
  *
@@ -105,6 +104,7 @@ import { sql } from 'drizzle-orm';
 import { boolean, check, doublePrecision, index, integer, pgTable, text, unique } from 'drizzle-orm/pg-core';
 import { createdAt, generatedId, inList, timestamptz, tsvector, updatedAt } from '@oxyhq/db';
 import { albums, CATALOG_SOURCES, catalogEntities, imageAssets, PROVENANCE_PROVIDERS, tracks } from './catalog';
+import { podcasts } from './podcasts';
 
 // ── Closed value sets ────────────────────────────────────────────────────
 // Same convention as catalog.ts: one `as const` tuple per closed value set,
@@ -439,11 +439,9 @@ export const userPodcastSubscriptions = pgTable(
     id: generatedId(),
     /** An Oxy account id — no foreign key. */
     oxyUserId: text().notNull(),
-    /**
-     * FK to `podcasts`, a Task 4 table that has not landed yet — see
-     * `deferredForeignKeys.ts`'s `DEFERRED_FOREIGN_KEYS`.
-     */
-    podcastId: text().notNull(),
+    podcastId: text()
+      .notNull()
+      .references(() => podcasts.id, { onDelete: 'cascade' }),
   },
   (t) => [
     unique('user_podcast_subscriptions_oxy_user_id_podcast_id_key').on(t.oxyUserId, t.podcastId),
