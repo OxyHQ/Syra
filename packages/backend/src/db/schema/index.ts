@@ -12,11 +12,13 @@
  * that needs them; the shared column builders every table uses (`createdAt`,
  * `generatedId`, `timestamptz`, ...) live in `@oxyhq/db`, not in a local copy.
  *
- * Empty today — no Mongoose model has been ported yet. `__tests__/gates.test.ts`
- * derives its own `tables` list from `Object.values(schema)`, the same way
- * every gate in this barrel's two sibling ports (oxy-api, Mention) does,
- * rather than this file exporting a hand-maintained array: a table added via
- * `export * from './vertical'` and left out of a separately-maintained list
- * is exactly the "convention nothing checks" failure this schema's own gates
- * exist to close.
+ * `__tests__/gates.test.ts` derives its own `tables` list from
+ * `Object.values(schema)`, the same way every gate in this barrel's two
+ * sibling ports (oxy-api, Mention) does, rather than this file exporting a
+ * hand-maintained array: a table added via `export * from './vertical'` and
+ * left out of a separately-maintained list is exactly the "convention nothing
+ * checks" failure this schema's own gates exist to close.
  */
+
+export * from './catalog';
+export * from './genres';

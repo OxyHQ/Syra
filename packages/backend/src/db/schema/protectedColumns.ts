@@ -35,10 +35,9 @@
  *    `publicColumns` exists — a bare `.select()` and the relational
  *    `db.query.<table>` API — against any table in this registry.
  *
- * Empty today: there is no schema yet. Each schema task that ports a model
- * with a Mongoose `select: false` field (or any column that must not reach a
- * client even though Mongoose never marked it) adds an entry here in the same
- * change.
+ * Each schema task that ports a model with a Mongoose `select: false` field
+ * (or any column that must not reach a client even though Mongoose never
+ * marked it) adds an entry here in the same change.
  *
  * `PROTECTED_COLUMNS_BY_TABLE` must stay declared `as const` and be passed
  * straight through to `publicColumns` at every call site — see that
@@ -46,6 +45,25 @@
  * it (an explicit `: ProtectedColumnRegistry` annotation, or passing it
  * through an intermediate parameter typed that way) would cost: the runtime
  * filter stays correct either way, but the compile-time guarantee collapses.
+ *
+ * Keyed here by SQL table name (`publicColumns`'s own contract — see its doc
+ * comment in `@oxyhq/db/assert`), and each entry lists TypeScript PROPERTY
+ * names, not SQL column names (`publicColumns` reads the registry against
+ * `Object.entries(getTableColumns(table))`, whose keys are the drizzle
+ * property names).
+ *
+ * `catalog_entities.images` / `catalog_entities.imageSuggestions` and
+ * `tracks.images` / `tracks.sha256` are every field
+ * `stripExternalCatalogFields` (`utils/musicHelpers.ts`) deletes today — see
+ * that function's own doc comment for why each one is server-only. Thirteen
+ * modules format tracks and catalog entities through it, so a field this
+ * registry misses is exposed by all of them at once the moment a route stops
+ * being a Mongoose `find()` (which honoured `select: false`) and becomes an
+ * aggregation (which does not) — exactly what already happened once
+ * (`imageSuggestions`, per that function's own doc comment).
  */
 
-export const PROTECTED_COLUMNS_BY_TABLE = {} as const;
+export const PROTECTED_COLUMNS_BY_TABLE = {
+  catalog_entities: ['images', 'imageSuggestions'],
+  tracks: ['images', 'sha256'],
+} as const;

@@ -20,16 +20,17 @@
  *
  * `MINIMUM_TABLES` is a vacuity floor, not a target: fewer tables than this
  * means the traversal itself is broken (a wrong `sourceDir`, an empty
- * `schema` barrel import) rather than a clean schema. It is `0` only here,
- * because the schema really is empty — the first table this repo lands must
- * raise it in the same change, and every later schema task raises it again.
- * A floor that never moves is a vacuity check that stopped checking.
+ * `schema` barrel import) rather than a clean schema. It was `0` when the
+ * schema was empty; Task 2 (the catalog vertical) raised it to 18 — the
+ * eighteen tables `schema/catalog.ts` and `schema/genres.ts` export — and
+ * every later schema task raises it again. A floor that never moves is a
+ * vacuity check that stopped checking.
  */
 
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
-import { is } from 'drizzle-orm';
-import { PgTable } from 'drizzle-orm/pg-core';
+import { eq, isTable } from 'drizzle-orm';
+import { getTableConfig, PgTable } from 'drizzle-orm/pg-core';
 import {
   findIdColumnViolations,
   findImplicitWholeRowReads,
@@ -38,16 +39,35 @@ import {
 } from '@oxyhq/db/assert';
 import { closePostgres, connectPostgres, getDb } from '../postgres';
 import * as schema from '../schema';
+import { catalogEntities } from '../schema/catalog';
 import { DEFERRED_FOREIGN_KEYS, ID_COLUMNS_WITHOUT_FOREIGN_KEY } from '../schema/deferredForeignKeys';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../schema/protectedColumns';
 import { EXPIRY_SWEEP_TARGETS } from '../expiry';
 
 /** Traversal floor for every gate below. See this file's own doc comment. */
-const MINIMUM_TABLES = 0;
+const MINIMUM_TABLES = 18;
 
-/** Every drizzle table the schema barrel exports, walked rather than listed by hand. */
+/**
+ * Every drizzle table the schema barrel exports, walked rather than listed by
+ * hand.
+ *
+ * `Object.values(schema)` is cast to `unknown[]` FIRST, and that is load-
+ * bearing, not decoration. The barrel also exports plain `as const` value-set
+ * tuples (`CATALOG_SOURCES` and friends) — once the union of everything
+ * `schema` exports is large and heterogeneous enough, TypeScript's own
+ * literal type for `Object.values(schema)` includes branded types like
+ * `PgTableWithColumns<{ name: "discogs_releases"; … }>`, and a predicate of
+ * `value is PgTable` against THAT union fails `TS2677` ("a type predicate's
+ * type must be assignable to its parameter's type") — `PgTable<TableConfig>`
+ * is a strict supertype of the specific branded table type, not a match in
+ * the direction the check wants, for every union member simultaneously.
+ * Widening the callback's own parameter type to `unknown` sidesteps the
+ * union entirely: any predicate is trivially assignable to `unknown`. The
+ * runtime check (`isTable`, `drizzle-orm/table.js`'s `IsDrizzleTable` brand)
+ * is unaffected either way.
+ */
 function tables(): PgTable[] {
-  return Object.values(schema).filter((value): value is PgTable => is(value, PgTable));
+  return (Object.values(schema) as unknown[]).filter((value): value is PgTable => isTable(value));
 }
 
 beforeAll(async () => {
@@ -96,5 +116,67 @@ describe('schema gates', () => {
   it('keeps every expiry sweep target indexed', async () => {
     const violations = await findUnsupportedExpiryColumns(getDb(), EXPIRY_SWEEP_TARGETS);
     expect(violations).toEqual([]);
+  });
+});
+
+describe('catalog schema (Task 2)', () => {
+  /** Every table `schema/catalog.ts` and `schema/genres.ts` promise, by SQL name. */
+  const EXPECTED_TABLES = [
+    'genres',
+    'image_assets',
+    'catalog_entities',
+    'albums',
+    'tracks',
+    'track_credits',
+    'catalog_entity_strikes',
+    'album_genres',
+    'album_sources',
+    'catalog_entity_sources',
+    'track_keys',
+    'isrc_registry',
+    'track_fingerprints',
+    'lyrics',
+    'lyrics_lines',
+    'musicbrainz_artists',
+    'musicbrainz_artist_urls',
+    'discogs_releases',
+  ];
+
+  it('lands exactly the tables this task promises', () => {
+    const present = tables().map((table) => getTableConfig(table).name).sort();
+    expect(present).toEqual([...EXPECTED_TABLES].sort());
+  });
+
+  it('forbids linked_artist_id on a non-person catalog entity', async () => {
+    const db = getDb();
+
+    // A real `type: 'artist'` row is required first — the CHECK is what has
+    // to reject the INSERT below, not a dangling foreign key.
+    const [artist] = await db
+      .insert(catalogEntities)
+      .values({ name: 'CHECK-fixture-artist', type: 'artist' })
+      .returning({ id: catalogEntities.id });
+
+    try {
+      // `Promise.resolve(...)`, not the bare query builder: a drizzle insert
+      // builder is thenable but not an `instanceof Promise`, and bun:test's
+      // `.rejects` matcher requires the latter — passed the bare builder it
+      // reports "Expected promise, Received: PgInsertBase {...}" instead of
+      // ever awaiting the query.
+      await expect(
+        Promise.resolve(
+          db.insert(catalogEntities).values({
+            name: 'CHECK-fixture-invalid',
+            type: 'artist',
+            linkedArtistId: artist.id,
+          })
+        )
+      ).rejects.toThrow();
+    } finally {
+      // `syra_dev` is a shared dev database other tasks also run migrations
+      // and tests against — the fixture row must not survive the test, in
+      // either the pass or the fail case.
+      await db.delete(catalogEntities).where(eq(catalogEntities.id, artist.id));
+    }
   });
 });
