@@ -44,11 +44,23 @@
  * monitor lags ~60s while a sweep lags one scheduled call. The two tables here
  * answer that question differently, and the difference matters:
  *
- *  - `listening_events` is safe. Every reader filters time itself —
- *    `coOccurrenceJob.ts:73-74` (`playedAt: { $gte: since }`, a 60-day lookback)
- *    and `recommendationService.ts:239` (`sort({ playedAt: -1 }).limit(200)`,
- *    a rolling view). A row the sweep has not reached yet is older than the
- *    lookback and is already excluded; nothing reads it.
+ *  - `listening_events` is safe, but its TWO readers are safe for DIFFERENT
+ *    reasons, and only one of them filters time. `coOccurrenceJob.ts:73-74`
+ *    filters (`playedAt: { $gte: since }`, `LOOKBACK_DAYS = 60`), so a row past
+ *    the 90-day deadline is already outside its window whether or not the sweep
+ *    has reached it. `recommendationService.ts:239` does NOT
+ *    (`find({ oxyUserId }).sort({ playedAt: -1 }).limit(200)` ORDERS by time and
+ *    never filters by it) — a listener with fewer than 200 events really does
+ *    read an unswept 91-day-old row. It is harmless because of what that read
+ *    is FOR: the rows become a recently-played exclusion set, so the only
+ *    effect is one track staying out of recommendations for up to one sweep
+ *    interval. A bounded rolling window where lateness costs nothing, not a
+ *    filter.
+ *
+ *    THE DISTINCTION IS THE POINT, not pedantry: whoever ports
+ *    `recommendationService` must not read "every reader filters time" as
+ *    permission to drop a filter that was never there. The sweep is what bounds
+ *    that table's size; nothing in this reader bounds its age.
  *  - `notification_suppressions` is NOT, and this is a real (small) behaviour
  *    change the port must carry deliberately. `claimSuppression`
  *    (`services/notifications/notifier.ts:133`) INSERTS and treats the
@@ -147,8 +159,12 @@
  *
  * ## `catalog_relations` carries no `created_at`/`updated_at`
  *
- * Alone in this schema, because `models/CatalogRelation.ts:41` sets
- * `timestamps: false`. The table is a fully regenerable cache — the
+ * The only TOP-LEVEL table in this file without them, because
+ * `models/CatalogRelation.ts:41` sets `timestamps: false`. (`user_taste_genres`
+ * and `user_taste_artists` carry neither either, along with 31 other tables in
+ * this schema — child tables of a timestamped parent generally do not, so
+ * "alone in this schema", which an earlier draft of this comment said, was
+ * simply wrong.) The table is a fully regenerable cache — the
  * co-occurrence job `deleteMany({ kind })`s and rewrites the whole graph each
  * pass (`coOccurrenceJob.ts:205`) — and `computed_at` already records the only
  * instant anything cares about. Its two id columns get no foreign key at all,
@@ -303,9 +319,17 @@ export const userSettings = pgTable(
       'user_settings_feed_diversity_same_topic_penalty_check',
       sql`${t.feedDiversitySameTopicPenalty} between 0.5 and 1.0`
     ),
+    /**
+     * No `is null or …` guard on either of the two NULLABLE bounded columns
+     * here: a Postgres CHECK passes when its expression evaluates to NULL, so
+     * `x between 1 and 10` already admits an absent value. An explicit null
+     * branch would read as a guard doing work it is not doing — the Task 7
+     * review (M3) named exactly that, and `0015` removed it. Proved by the
+     * accepted-NULL fixtures in `__tests__/gates.test.ts`, not by this comment.
+     */
     check(
       'user_settings_feed_diversity_max_consecutive_check',
-      sql`${t.feedDiversityMaxConsecutiveSameAuthor} is null or ${t.feedDiversityMaxConsecutiveSameAuthor} between 1 and 10`
+      sql`${t.feedDiversityMaxConsecutiveSameAuthor} between 1 and 10`
     ),
     check(
       'user_settings_feed_recency_half_life_hours_check',
@@ -317,7 +341,7 @@ export const userSettings = pgTable(
     ),
     check(
       'user_settings_feed_quality_min_engagement_rate_check',
-      sql`${t.feedQualityMinEngagementRate} is null or ${t.feedQualityMinEngagementRate} between 0 and 1`
+      sql`${t.feedQualityMinEngagementRate} between 0 and 1`
     ),
     // One row per account: every reader is a `findOne({ oxyUserId })`
     // (`utils/userSettings.ts:21`), and the unique index is what makes that

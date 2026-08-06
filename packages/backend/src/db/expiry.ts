@@ -85,8 +85,12 @@ import {
  *    folded into the durable aggregates (`user_taste_profiles`,
  *    `catalog_relations`) — the model's own doc comment says so, and the
  *    co-occurrence job's 60-day lookback means a 90-day-old event is already
- *    invisible to every reader. Neither table holds unprocessed work, so
- *    neither can lose a backlog to a stalled consumer plus this sweep.
+ *    outside the window it reads. The OTHER reader
+ *    (`recommendationService.ts:239`) does not filter by time at all and can
+ *    read an unswept row; that is harmless for what it does with it, and
+ *    `schema/user.ts`'s file-level doc comment spells out why rather than
+ *    claiming a filter that is not there. Neither table holds unprocessed
+ *    work, so neither can lose a backlog to a stalled consumer plus this sweep.
  */
 export const EXPIRY_SWEEP_TARGETS: readonly ExpirySweepTarget[] = [
   {

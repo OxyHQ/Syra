@@ -500,8 +500,11 @@ describe('schema gates', () => {
     // 907 actual) for the same reason MINIMUM_TABLES is raised at every schema
     // task — a floor that never moves is a vacuity check that stopped
     // checking. 14, not 12, was Task 6's count because its review round added
-    // the hand-split `0012`/`0013` pair.
-    expect(files.length).toBeGreaterThanOrEqual(15);
+    // the hand-split `0012`/`0013` pair, and 16, not 15, is Task 7's for the
+    // same reason: its review round added `0015`. The identifier floor did NOT
+    // move with it — `0015` only re-states two constraint names `0014` already
+    // declared, so the distinct-identifier count is unchanged at 907.
+    expect(files.length).toBeGreaterThanOrEqual(16);
     const { violations, scanned } = findOverlongIdentifiers(files);
     expect(scanned).toBeGreaterThanOrEqual(850);
 
@@ -2487,6 +2490,14 @@ describe('rooms and live schema (Task 6)', () => {
   });
 });
 
+/**
+ * Sentinel `port` value for a Mongoose TTL index whose Postgres table has not
+ * landed yet. A plain string rather than a `null` so the intent reads at the
+ * call site, and compared by identity below — an entry carrying it is NOT
+ * counted as covered by the registry.
+ */
+const DEFERRED_TO_TASK_8 = 'DEFERRED: Task 8, the moderation vertical';
+
 describe('user, taste and listening schema (Task 7)', () => {
   /** Every table `schema/user.ts` promises, by SQL name. */
   const EXPECTED_TABLES = [
@@ -2529,6 +2540,73 @@ describe('user, taste and listening schema (Task 7)', () => {
     expect(present).toEqual([...EXPECTED_TABLES].sort());
   });
 
+  it('accounts for every Mongoose TTL index — the gate expiry.ts asked for and did not have', () => {
+    /**
+     * `db/expiry.ts` says a registry that names tables by hand "can only fall
+     * as far behind as the last time someone remembered to update it", and
+     * asks for a gate that WALKS the models instead. This is it, and it exists
+     * because the alternative was a hand `grep` in a report — the Task 7 review
+     * (M5) had to re-run that grep itself to confirm nothing was missed, which
+     * is the definition of a claim nothing checks.
+     *
+     * The failure it closes is the one `expiry.ts` calls structurally
+     * invisible: a later vertical ports a model carrying `expireAfterSeconds`,
+     * adds no registry entry, and NOTHING breaks — no error, no failing test,
+     * no symptom until disk. After this, that port fails here instead, naming
+     * the model.
+     *
+     * The map below is the one hand-maintained part, and deliberately so: only
+     * a human can say which Postgres column a Mongo field became. What is NOT
+     * hand-maintained is the SET of declarations — that comes from the model
+     * files — so a new TTL nobody mapped fails as `undeclared`, and a mapping
+     * whose model lost its TTL fails as `stale`.
+     */
+    const MONGO_TTL_INDEXES: readonly { model: string; field: string; port: string }[] = [
+      { model: 'ListeningEvent', field: 'playedAt', port: 'listening_events.played_at' },
+      { model: 'NotificationSuppression', field: 'expiresAt', port: 'notification_suppressions.expires_at' },
+      // Task 8's moderation vertical. `port` is deliberately NOT a
+      // `table.column` — an entry that names no column is not counted as
+      // covered, so landing those tables without registry entries fails the
+      // `covered` check below rather than passing on a promise.
+      { model: 'ModerationOutbox', field: 'expiresAt', port: DEFERRED_TO_TASK_8 },
+      { model: 'ModerationEvent', field: 'expiresAt', port: DEFERRED_TO_TASK_8 },
+    ];
+
+    // `ModelSchema.index({ field: 1 }, { … expireAfterSeconds … })` — the only
+    // spelling Mongoose accepts for a TTL index, and the only one in this repo.
+    const TTL_INDEX = /(\w+)Schema\.index\(\s*\{\s*(\w+):\s*-?1\s*\}\s*,\s*\{[^}]*expireAfterSeconds/g;
+    const modelsDir = join(__dirname, '..', '..', 'models');
+    const modelFiles = readdirSync(modelsDir).filter(
+      (entry) => entry.endsWith('.ts') && !entry.endsWith('.test.ts')
+    );
+    const declared: string[] = [];
+    for (const file of modelFiles) {
+      const text = readFileSync(join(modelsDir, file), 'utf8');
+      for (const match of text.matchAll(TTL_INDEX)) declared.push(`${match[1]}.${match[2]}`);
+    }
+
+    // Vacuity floor FIRST: a renamed directory or a regex that stopped
+    // matching reports "nothing undeclared" exactly like a clean scan does.
+    // 40+ model files is well under the real count and well over zero.
+    expect(modelFiles.length).toBeGreaterThanOrEqual(40);
+    expect(declared.length).toBeGreaterThanOrEqual(4);
+
+    const mapped = MONGO_TTL_INDEXES.map((entry) => `${entry.model}.${entry.field}`);
+    // Both directions: a TTL nobody mapped, and a mapping whose TTL is gone.
+    expect([...declared].sort()).toEqual([...mapped].sort());
+
+    // Every mapping that claims a real column must actually be registered, and
+    // every registered target must be claimed by one — so a registry entry
+    // cannot exist for a table whose model never had a TTL either.
+    const registered = EXPIRY_SWEEP_TARGETS.map(
+      (target) => `${getTableConfig(target.table).name}.${sqlColumnName(target.column)}`
+    );
+    const covered = MONGO_TTL_INDEXES.filter((entry) => entry.port !== DEFERRED_TO_TASK_8).map(
+      (entry) => entry.port
+    );
+    expect([...registered].sort()).toEqual([...covered].sort());
+  });
+
   it('registers exactly the two Mongo TTL indexes this vertical had, with their own retention', () => {
     // `grep -rn "expireAfterSeconds" packages/backend/src` returns FOUR
     // declarations: these two, plus `ModerationOutbox` and `ModerationEvent`,
@@ -2541,6 +2619,15 @@ describe('user, taste and listening schema (Task 7)', () => {
     // carrying the wrong retention, is exactly the mistake that leaves rows
     // either immortal or deleted 90 days early, and neither shows up as a
     // count.
+    //
+    // FOR TASK 8, SO A RED LINE HERE IS NOT MISREAD AS A REGRESSION: this
+    // assertion is over the WHOLE registry, not this task's share of it, so
+    // landing the two moderation entries turns it red on purpose. Add them to
+    // the expected list (and move their rows in the walk above off
+    // `DEFERRED_TO_TASK_8`) — that is the review this shape exists to force,
+    // and it is deliberately not scoped away, because "a sweep target appeared
+    // and nobody looked at its retention" is the failure the whole registry is
+    // about.
     const registered = EXPIRY_SWEEP_TARGETS.map(
       (target) =>
         `${getTableConfig(target.table).name}.${sqlColumnName(target.column)}:${target.retentionSeconds}`
@@ -3091,56 +3178,342 @@ describe('user, taste and listening schema (Task 7)', () => {
     }
   });
 
-  it('holds the bounded settings Mongoose enforced on every save, at both ends', async () => {
+  it('holds every bounded setting at BOTH ends — all eight, not the two that were easy', async () => {
     const db = getDb();
-    const owner = { oxyUserId: 'CHECK-fixture-bounds-user' };
+    const settingsUser = 'CHECK-fixture-bounds-user';
+    const playerUser = 'CHECK-fixture-player';
+
+    /**
+     * Every numeric bound Mongoose declared across `UserSettings` and
+     * `UserMusicPreferences`, each with a value BELOW and a value ABOVE the
+     * range plus both boundary values, driven from one table so a new bounded
+     * column cannot be added with only the half of the test that was easy to
+     * write.
+     *
+     * That is not a hypothetical: the first version of this block tested
+     * `default_volume` and `crossfade` from ABOVE only, and the Task 7 review
+     * (I1) mutation-proved it — rewriting both CHECKs as `<= 1` and `<= 12`
+     * left every assertion here green while `default_volume = -1` became
+     * storable. Two `it` blocks above, this same file already stated the rule
+     * ("a CHECK written `completion <= 1` alone passes an over-one-only
+     * test"). Stating a rule and then not applying it to the next pair of
+     * columns is exactly what a table-driven fixture list prevents: the shape
+     * of the data makes the omission visible.
+     *
+     * `build` closures rather than computed keys, so each row stays fully
+     * typed against the table's own insert type instead of widening to an
+     * index signature.
+     */
+    type SettingsPatch = Omit<typeof userSettings.$inferInsert, 'oxyUserId'>;
+    type PlayerPatch = Omit<typeof userMusicPreferences.$inferInsert, 'oxyUserId'>;
+
+    const SETTINGS_BOUNDS: readonly {
+      readonly constraint: string;
+      readonly source: string;
+      readonly refuse: readonly number[];
+      readonly accept: readonly number[];
+      readonly build: (value: number) => SettingsPatch;
+    }[] = [
+      {
+        constraint: 'user_settings_feed_diversity_same_author_penalty_check',
+        source: 'models/UserSettings.ts:97 (min 0.5, max 1.0)',
+        refuse: [0.4, 1.1],
+        accept: [0.5, 1],
+        build: (value) => ({ feedDiversitySameAuthorPenalty: value }),
+      },
+      {
+        constraint: 'user_settings_feed_diversity_same_topic_penalty_check',
+        source: 'models/UserSettings.ts:98 (min 0.5, max 1.0)',
+        refuse: [0.49, 1.01],
+        accept: [0.5, 1],
+        build: (value) => ({ feedDiversitySameTopicPenalty: value }),
+      },
+      {
+        constraint: 'user_settings_feed_diversity_max_consecutive_check',
+        source: 'models/UserSettings.ts:99 (min 1, max 10)',
+        refuse: [0, 11],
+        accept: [1, 10],
+        build: (value) => ({ feedDiversityMaxConsecutiveSameAuthor: value }),
+      },
+      {
+        constraint: 'user_settings_feed_recency_half_life_hours_check',
+        source: 'models/UserSettings.ts:102 (min 6, max 72)',
+        refuse: [5, 73],
+        accept: [6, 72],
+        build: (value) => ({ feedRecencyHalfLifeHours: value }),
+      },
+      {
+        constraint: 'user_settings_feed_recency_max_age_hours_check',
+        source: 'models/UserSettings.ts:103 (min 24, max 336)',
+        refuse: [23, 337],
+        accept: [24, 336],
+        build: (value) => ({ feedRecencyMaxAgeHours: value }),
+      },
+      {
+        constraint: 'user_settings_feed_quality_min_engagement_rate_check',
+        source: 'models/UserSettings.ts:106 (min 0, max 1)',
+        refuse: [-0.1, 1.1],
+        accept: [0, 1],
+        build: (value) => ({ feedQualityMinEngagementRate: value }),
+      },
+    ];
+
+    const PLAYER_BOUNDS: readonly {
+      readonly constraint: string;
+      readonly source: string;
+      readonly refuse: readonly number[];
+      readonly accept: readonly number[];
+      readonly build: (value: number) => PlayerPatch;
+    }[] = [
+      {
+        constraint: 'user_music_preferences_default_volume_check',
+        source: 'models/UserMusicPreferences.ts:36 (min 0, max 1)',
+        // `-0.1` is the fixture I1 was about: without it a `default_volume <= 1`
+        // CHECK passes this whole block.
+        refuse: [-0.1, 1.5],
+        accept: [0, 1],
+        build: (value) => ({ defaultVolume: value }),
+      },
+      {
+        constraint: 'user_music_preferences_crossfade_check',
+        source: 'models/UserMusicPreferences.ts:38 (min 0, max 12)',
+        refuse: [-1, 13],
+        accept: [0, 12],
+        build: (value) => ({ crossfade: value }),
+      },
+    ];
 
     try {
-      // `models/UserSettings.ts:97` — `min: 0.5, max: 1.0`. The route clamps
-      // (`routes/profileSettings.ts:152`) but the model is what makes it true
-      // of every writer, including the ones that do not go through that route.
-      await expectRefusedBy(
-        Promise.resolve(db.insert(userSettings).values({ ...owner, feedDiversitySameAuthorPenalty: 1.1 })),
-        isCheckViolation,
-        'user_settings_feed_diversity_same_author_penalty_check'
-      );
-      await expectRefusedBy(
-        Promise.resolve(db.insert(userSettings).values({ ...owner, feedDiversitySameAuthorPenalty: 0.4 })),
-        isCheckViolation,
-        'user_settings_feed_diversity_same_author_penalty_check'
-      );
-      // Both boundaries are legal values — 0.5 and 1.0 are exactly what the
-      // route's own clamp produces at its extremes.
-      const [accepted] = await db
-        .insert(userSettings)
-        .values({ ...owner, feedDiversitySameAuthorPenalty: 0.5, feedDiversitySameTopicPenalty: 1 })
-        .returning({ id: userSettings.id });
-      expect(accepted.id).toBeTruthy();
+      // One base row per table; the ACCEPTED values are applied as UPDATEs
+      // against it, because `oxy_user_id` is unique and a second accepted
+      // INSERT would fail for a reason that has nothing to do with the bound
+      // under test.
+      await db.insert(userSettings).values({ oxyUserId: settingsUser });
+      await db.insert(userMusicPreferences).values({ oxyUserId: playerUser });
 
-      // `models/UserMusicPreferences.ts:36,38` — the two bounded player
-      // settings, same treatment.
+      for (const bound of SETTINGS_BOUNDS) {
+        for (const value of bound.refuse) {
+          await expectRefusedBy(
+            Promise.resolve(
+              db.update(userSettings).set(bound.build(value)).where(eq(userSettings.oxyUserId, settingsUser))
+            ),
+            isCheckViolation,
+            bound.constraint
+          );
+        }
+        for (const value of bound.accept) {
+          await db
+            .update(userSettings)
+            .set(bound.build(value))
+            .where(eq(userSettings.oxyUserId, settingsUser));
+        }
+      }
+
+      for (const bound of PLAYER_BOUNDS) {
+        for (const value of bound.refuse) {
+          await expectRefusedBy(
+            Promise.resolve(
+              db
+                .update(userMusicPreferences)
+                .set(bound.build(value))
+                .where(eq(userMusicPreferences.oxyUserId, playerUser))
+            ),
+            isCheckViolation,
+            bound.constraint
+          );
+        }
+        for (const value of bound.accept) {
+          await db
+            .update(userMusicPreferences)
+            .set(bound.build(value))
+            .where(eq(userMusicPreferences.oxyUserId, playerUser));
+        }
+      }
+
+      // Both boundary values of every bound survived as real stored values —
+      // an accepted UPDATE that silently matched no row would make the whole
+      // `accept` half vacuous.
+      const [stored] = await db
+        .select({
+          maxConsecutive: userSettings.feedDiversityMaxConsecutiveSameAuthor,
+          minEngagement: userSettings.feedQualityMinEngagementRate,
+        })
+        .from(userSettings)
+        .where(eq(userSettings.oxyUserId, settingsUser));
+      expect(stored.maxConsecutive).toBe(10);
+      expect(stored.minEngagement).toBe(1);
+
+      // THE NULL FIXTURE, and the reason `0015` could drop the `is null or …`
+      // branch from these two CHECKs: a Postgres CHECK passes when its
+      // expression evaluates to NULL, so both nullable columns still accept an
+      // absent value. Without this, the simplification rests on knowing that
+      // rule rather than on the database demonstrating it.
+      await db
+        .update(userSettings)
+        .set({ feedDiversityMaxConsecutiveSameAuthor: null, feedQualityMinEngagementRate: null })
+        .where(eq(userSettings.oxyUserId, settingsUser));
+      const [cleared] = await db
+        .select({
+          maxConsecutive: userSettings.feedDiversityMaxConsecutiveSameAuthor,
+          minEngagement: userSettings.feedQualityMinEngagementRate,
+        })
+        .from(userSettings)
+        .where(eq(userSettings.oxyUserId, settingsUser));
+      expect(cleared.maxConsecutive).toBeNull();
+      expect(cleared.minEngagement).toBeNull();
+
+      // Vacuity floor: eight bounded columns, sixteen refusals, sixteen
+      // accepted boundary values. A truncated table would pass every loop above
+      // by iterating over less.
+      expect(SETTINGS_BOUNDS.length + PLAYER_BOUNDS.length).toBe(8);
+      expect(
+        [...SETTINGS_BOUNDS, ...PLAYER_BOUNDS].every(
+          (bound) => bound.refuse.length === 2 && bound.accept.length === 2
+        )
+      ).toBe(true);
+    } finally {
+      await db.delete(userSettings).where(eq(userSettings.oxyUserId, settingsUser));
+      await db.delete(userMusicPreferences).where(eq(userMusicPreferences.oxyUserId, playerUser));
+    }
+  });
+
+  it('refuses every out-of-set enum value, on all five text enums and the co-occurrence count', async () => {
+    const db = getDb();
+    /**
+     * The five `text`-column enum CHECKs and `catalog_relations_co_count_check`
+     * had no rejection fixture at all (Task 7 review, M1) — dropping any of
+     * them would have left the suite green.
+     *
+     * Raw SQL for the five enums, for the reason spelled out on the two that
+     * were already covered: drizzle's `{ enum: … }` refuses these values at
+     * COMPILE time, which is a second and independent guard, but the column is
+     * `text` and Postgres accepts any string from a backfill, a `sql` write or
+     * a psql session. Only a write that bypasses TypeScript can prove the
+     * database itself refuses them.
+     */
+    const [artist] = await db
+      .insert(catalogEntities)
+      .values({ name: 'CHECK-fixture-enum-artist', type: 'artist', source: 'upload' })
+      .returning({ id: catalogEntities.id });
+    const [track] = await db
+      .insert(tracks)
+      .values({
+        title: 'CHECK-fixture-enum-track',
+        artistId: artist.id,
+        artistName: 'CHECK-fixture-enum-artist',
+        duration: 120,
+        source: 'upload',
+      })
+      .returning({ id: tracks.id });
+
+    try {
       await expectRefusedBy(
-        Promise.resolve(
-          db.insert(userMusicPreferences).values({ oxyUserId: 'CHECK-fixture-player', defaultVolume: 1.5 })
+        executeRows(
+          db,
+          sql`insert into user_settings (id, oxy_user_id, appearance_theme_mode)
+              values ('CHECK-fixture-theme', 'CHECK-fixture-enum-user', 'neon')`
         ),
         isCheckViolation,
-        'user_music_preferences_default_volume_check'
+        'user_settings_theme_mode_check'
+      );
+      await expectRefusedBy(
+        executeRows(
+          db,
+          sql`insert into user_settings (id, oxy_user_id, privacy_profile_visibility)
+              values ('CHECK-fixture-visibility', 'CHECK-fixture-enum-user', 'secret')`
+        ),
+        isCheckViolation,
+        'user_settings_profile_visibility_check'
+      );
+      await expectRefusedBy(
+        executeRows(
+          db,
+          sql`insert into user_music_preferences (id, oxy_user_id, audio_quality)
+              values ('CHECK-fixture-audio', 'CHECK-fixture-enum-user', 'lossless')`
+        ),
+        isCheckViolation,
+        'user_music_preferences_audio_quality_check'
+      );
+      // `download_quality` is a SEPARATE constraint over the same value set —
+      // one CHECK covering both columns is a plausible mistake that a fixture
+      // on only one of them cannot see.
+      await expectRefusedBy(
+        executeRows(
+          db,
+          sql`insert into user_music_preferences (id, oxy_user_id, download_quality)
+              values ('CHECK-fixture-download', 'CHECK-fixture-enum-user', 'lossless')`
+        ),
+        isCheckViolation,
+        'user_music_preferences_download_quality_check'
+      );
+      await expectRefusedBy(
+        executeRows(
+          db,
+          sql`insert into listening_events (id, oxy_user_id, track_id, artist_id, source)
+              values ('CHECK-fixture-source', 'CHECK-fixture-enum-user', ${track.id}, ${artist.id}, 'telepathy')`
+        ),
+        isCheckViolation,
+        'listening_events_source_check'
       );
       await expectRefusedBy(
         Promise.resolve(
-          db.insert(userMusicPreferences).values({ oxyUserId: 'CHECK-fixture-player', crossfade: 13 })
+          db.insert(catalogRelations).values({
+            kind: 'artist',
+            sourceId: 'CHECK-fixture-co-count-source',
+            targetId: 'CHECK-fixture-co-count-target',
+            score: 0.5,
+            coCount: -1,
+          })
         ),
         isCheckViolation,
-        'user_music_preferences_crossfade_check'
+        'catalog_relations_co_count_check'
       );
+
+      // One accepted row per enum, so none of the six CHECKs can be passing by
+      // forbidding everything.
+      const [settings] = await db
+        .insert(userSettings)
+        .values({
+          oxyUserId: 'CHECK-fixture-enum-user',
+          appearanceThemeMode: 'dark',
+          privacyProfileVisibility: 'followers_only',
+        })
+        .returning({ id: userSettings.id });
       const [player] = await db
         .insert(userMusicPreferences)
-        .values({ oxyUserId: 'CHECK-fixture-player', defaultVolume: 0, crossfade: 12 })
+        .values({ oxyUserId: 'CHECK-fixture-enum-user', audioQuality: 'very_high', downloadQuality: 'low' })
         .returning({ id: userMusicPreferences.id });
-      expect(player.id).toBeTruthy();
+      const [event] = await db
+        .insert(listeningEvents)
+        .values({
+          oxyUserId: 'CHECK-fixture-enum-user',
+          trackId: track.id,
+          artistId: artist.id,
+          source: 'radio',
+        })
+        .returning({ id: listeningEvents.id });
+      const [relation] = await db
+        .insert(catalogRelations)
+        .values({
+          kind: 'artist',
+          sourceId: 'CHECK-fixture-co-count-source',
+          targetId: 'CHECK-fixture-co-count-target',
+          score: 0.5,
+          coCount: 0,
+        })
+        .returning({ id: catalogRelations.id });
+      expect([settings.id, player.id, event.id, relation.id].every(Boolean)).toBe(true);
     } finally {
-      await db.delete(userSettings).where(eq(userSettings.oxyUserId, owner.oxyUserId));
-      await db.delete(userMusicPreferences).where(eq(userMusicPreferences.oxyUserId, 'CHECK-fixture-player'));
+      await db.delete(userSettings).where(eq(userSettings.oxyUserId, 'CHECK-fixture-enum-user'));
+      await db
+        .delete(userMusicPreferences)
+        .where(eq(userMusicPreferences.oxyUserId, 'CHECK-fixture-enum-user'));
+      await db
+        .delete(catalogRelations)
+        .where(eq(catalogRelations.sourceId, 'CHECK-fixture-co-count-source'));
+      await db.delete(listeningEvents).where(eq(listeningEvents.trackId, track.id));
+      await db.delete(tracks).where(eq(tracks.id, track.id));
+      await db.delete(catalogEntities).where(eq(catalogEntities.id, artist.id));
     }
   });
 
