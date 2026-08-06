@@ -26,6 +26,50 @@
  * to guess, and guessing "pre" silently strands a drop while guessing "all"
  * silently runs one against a live previous image.
  *
+ * THE GENESIS BOOTSTRAP WINDOW — `LAST_GENESIS_MIGRATION_TAG`
+ *
+ * `0000` through `0005` build this schema's first shape against an EMPTY
+ * database with no live predecessor to protect — Tasks 1 through 4 of the
+ * Mongo→Postgres port, applied so far only with `--phase=all` against
+ * `syra_dev` and CI's `syra_ci`. A `pre`/`post` review of that window (Task 4
+ * code review, `task-4-review.md`, Critical #1) found it does NOT actually
+ * satisfy `planMigrationRun`'s ordering invariant: `0003` (Task 3, `pre`) sits
+ * behind `0001`/`0002` (Task 2, `post`), so `--phase=pre` and `--phase=post`
+ * both BLOCK if run against this window — only `--phase=all` succeeds.
+ *
+ * The ruling: do not re-order or re-mark history to force the invariant to
+ * hold retroactively. There is nothing a phase split protects yet — no image
+ * is currently serving against this schema, so `pre` sequenced ahead of
+ * `post` buys a real image nothing it does not already have by applying
+ * everything at once. `--phase=all` is not a workaround for this window, it
+ * is the CORRECT and ONLY sanctioned way to apply it, and this is where that
+ * gets written down rather than left as tribal knowledge.
+ *
+ * `LAST_GENESIS_MIGRATION_TAG`, below, draws the line: every migration up to
+ * and including it is genesis (unordered, `--phase=all` only). Every
+ * migration AFTER it is a REAL rollout against a database with a live
+ * predecessor, and for those, `src/db/__tests__/gates.test.ts`'s "deploy-phase
+ * ordering (post-genesis)" describe block enforces the invariant this window
+ * itself does not satisfy: no `pre` migration may be ordered behind a `post`
+ * one. That is what makes `--phase=pre`/`--phase=post` trustworthy the first
+ * time a real rollout actually needs them.
+ *
+ * A COROLLARY FOR EVERY MIGRATION AFTER THE BOUNDARY: keep additive DDL and
+ * narrowing DDL in SEPARATE migration files. `drizzle-kit generate` will
+ * happily emit one file mixing both — and because ONE narrowing statement
+ * forces the whole file `post` (`@oxyhq/db/migrate`'s own per-file rule, and
+ * the correct one), a single trailing `ADD CONSTRAINT`/`DROP COLUMN` in an
+ * otherwise-additive generated file drags every purely-additive statement in
+ * it onto the `post` side too — exactly what happened to Task 4's own `0004`
+ * (ten additive `CREATE TABLE`s, `post`-tagged solely because of one trailing
+ * `ADD CONSTRAINT`). That is safe only inside the genesis window; after the
+ * boundary it means tables a rollout needs get created AFTER the image that
+ * needs them is already live. `drizzle-kit` will not split a generated file
+ * for you — if a schema change needs both an additive and a narrowing
+ * statement, generate it once, then hand-split the SQL into two files with
+ * their own tags and their own correct phase markers before either is
+ * applied.
+ *
  * `--target-database=<name>` IS ALSO REQUIRED, checked against
  * `current_database()` before any other statement on the connection. Unlike
  * oxy-api — which omits `runMigrations`'s `expectedDatabase` option because it
@@ -74,6 +118,19 @@ import { REQUIRED_EXTENSIONS } from './extensions';
 const MIGRATIONS_SEARCH_DEPTH = 6;
 
 /**
+ * The journal tag of the last GENESIS migration — see this file's own doc
+ * comment, "THE GENESIS BOOTSTRAP WINDOW", for what that means and why the
+ * line is drawn here. Every migration up to and including this one is exempt
+ * from the pre-behind-post ordering invariant; every migration after it is
+ * held to it by `gates.test.ts`'s "deploy-phase ordering (post-genesis)"
+ * describe block.
+ *
+ * Exported so that gate can read the SAME boundary this file documents,
+ * rather than a second copy of the tag string that could drift from it.
+ */
+export const LAST_GENESIS_MIGRATION_TAG = '0005_public_pepper_potts';
+
+/**
  * `packages/backend/drizzle`, found by walking UP from this module rather than
  * by a fixed relative path or the working directory.
  *
@@ -90,7 +147,7 @@ const MIGRATIONS_SEARCH_DEPTH = 6;
  * search targets the journal itself and throws, naming every directory it
  * looked in, when it cannot find one.
  */
-function findMigrationsFolder(): string {
+export function findMigrationsFolder(): string {
   const attempted: string[] = [];
   let directory = __dirname;
   for (let depth = 0; depth < MIGRATIONS_SEARCH_DEPTH; depth += 1) {
@@ -163,10 +220,27 @@ async function main(): Promise<void> {
   });
 }
 
-main().catch((error: unknown) => {
-  logger.error('Postgres migration failed', error);
-  // Not `process.exit`: the pino transport used in development writes from a
-  // worker thread, and exiting here would truncate the very message that says
-  // what went wrong. The event loop is already free once the pool is closed.
-  process.exitCode = 1;
-});
+// `require.main === module`, not a bare top-level call: this module is now
+// also IMPORTED (`findMigrationsFolder`, `LAST_GENESIS_MIGRATION_TAG` — see
+// `gates.test.ts`'s "deploy-phase ordering (post-genesis)" describe block),
+// and a bare `main().catch(...)` at module scope ran on every such import,
+// including under `bun test`, where there is no `--phase` argument to read.
+// It failed loudly (logged as an ERROR) and, worse, silently set
+// `process.exitCode = 1` on an otherwise fully green test run — a passing
+// suite reporting failure to CI. Guard so the script only runs when this
+// file is the entry point, i.e. `bun run src/db/migrate.ts` / `bun run
+// db:migrate`, never when it is imported. `import.meta.main` (Bun's own
+// entry-point flag) is not usable here — `package.json`'s `"type":
+// "commonjs"` makes tsc reject `import.meta` in this file outright
+// (`TS1470`) — so this uses the CommonJS-native equivalent instead, which
+// this file's compiled output actually is.
+if (require.main === module) {
+  main().catch((error: unknown) => {
+    logger.error('Postgres migration failed', error);
+    // Not `process.exit`: the pino transport used in development writes from
+    // a worker thread, and exiting here would truncate the very message that
+    // says what went wrong. The event loop is already free once the pool is
+    // closed.
+    process.exitCode = 1;
+  });
+}

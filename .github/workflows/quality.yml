@@ -95,6 +95,31 @@ jobs:
       - name: Install audio toolchain
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg libchromaprint-tools
 
+      # Schema-vs-migration drift gate (Task 4 review, Critical #2): every
+      # DB-backed test below runs against the already-MIGRATED database,
+      # which does not move when a `schema/*.ts` file changes. A committed
+      # schema edit with no matching migration (or a migration edited after
+      # the fact so it no longer matches its own snapshot) was invisible to
+      # every other step in this workflow — `db:generate` reporting "no
+      # schema changes" was a line in an implementer's report, not a gate,
+      # until this step. `drizzle-kit generate` never opens a database
+      # connection (verified directly: it succeeds identically against an
+      # unreachable `DATABASE_URL`) — only `drizzle.config.ts`'s own guard
+      # requires the variable to be SET, so this can run before Postgres is
+      # migrated, or even before it is reachable.
+      - name: Check schema/migration drift
+        working-directory: packages/backend
+        run: |
+          bun run db:generate
+          if [ -n "$(git status --porcelain -- drizzle)" ]; then
+            echo "::error::db:generate produced changes under drizzle/ that are not committed. A schema/*.ts edit landed without its matching migration (or a migration's snapshot has drifted from the schema). Run 'bun run db:generate' locally, inspect the SQL, and commit the result in the same change as the schema edit." >&2
+            git status --porcelain -- drizzle
+            git --no-pager diff -- drizzle
+            exit 1
+          fi
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+
       # `src/db/__tests__/gates.test.ts`'s schema-invariant and expiry-index
       # gates only need a live, reachable Postgres to pass Task 1's floors
       # (`minimumTables`/`minimumColumns` at 0, `EXPIRY_SWEEP_TARGETS` empty)

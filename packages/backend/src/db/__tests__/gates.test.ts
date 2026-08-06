@@ -44,14 +44,16 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { eq, isTable, sql } from 'drizzle-orm';
 import { getTableConfig, PgTable } from 'drizzle-orm/pg-core';
-import { executeRows } from '@oxyhq/db';
+import { executeRows, sqlColumnName } from '@oxyhq/db';
 import {
   findIdColumnViolations,
   findImplicitWholeRowReads,
   findSchemaInvariantViolations,
   findUnsupportedExpiryColumns,
 } from '@oxyhq/db/assert';
+import { readJournal, readMigrationPhases, type DeployPhase } from '@oxyhq/db/migrate';
 import { closePostgres, connectPostgres, getDb } from '../postgres';
+import { findMigrationsFolder, LAST_GENESIS_MIGRATION_TAG } from '../migrate';
 import * as schema from '../schema';
 import * as catalogModule from '../schema/catalog';
 import { catalogEntities, trackHlsRenditions, tracks } from '../schema/catalog';
@@ -59,7 +61,7 @@ import * as genresModule from '../schema/genres';
 import * as libraryModule from '../schema/library';
 import { playbackStates, playlists, userPodcastSubscriptions, userSavedPlaylists } from '../schema/library';
 import * as podcastsModule from '../schema/podcasts';
-import { episodeProgress, episodes, podcastCategories, podcasts } from '../schema/podcasts';
+import { episodeHlsRenditions, episodeProgress, episodes, podcastCategories, podcasts } from '../schema/podcasts';
 import { DEFERRED_FOREIGN_KEYS, ID_COLUMNS_WITHOUT_FOREIGN_KEY } from '../schema/deferredForeignKeys';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../schema/protectedColumns';
 import { EXPIRY_SWEEP_TARGETS } from '../expiry';
@@ -111,6 +113,45 @@ function tablesIn(...modules: readonly Record<string, unknown>[]): PgTable[] {
   return modules.flatMap((module) =>
     (Object.values(module) as unknown[]).filter((value): value is PgTable => isTable(value))
   );
+}
+
+/**
+ * The C1 fix (Task 4 review): every migration AFTER `boundaryTag` is a REAL
+ * rollout with a live predecessor to protect, so `planMigrationRun`'s
+ * ordering invariant — no `pre` migration ordered behind a `post` one — must
+ * actually hold for that window, unlike the genesis window before it (see
+ * `migrate.ts`'s own "THE GENESIS BOOTSTRAP WINDOW" doc comment for why that
+ * window is exempt). Pure: takes an already-ordered tag/phase list rather
+ * than reading the journal itself, so it can be exercised against a
+ * synthetic sequence in a unit test as well as the real one.
+ *
+ * Returns one message per violation — a `pre` tag positioned at or after the
+ * first `post` tag strictly after the boundary — empty when the invariant
+ * holds. Also reports if `boundaryTag` itself is not in `entries` at all
+ * (a stale boundary constant), since every other check here is meaningless
+ * against a boundary that does not exist in the journal it is being checked
+ * against.
+ */
+function findPostGenesisPhaseOrderingViolations(
+  entries: readonly { tag: string; phase: DeployPhase }[],
+  boundaryTag: string
+): string[] {
+  const boundaryIndex = entries.findIndex((entry) => entry.tag === boundaryTag);
+  if (boundaryIndex === -1) {
+    return [`boundary tag "${boundaryTag}" is not present in the migration journal at all.`];
+  }
+
+  const postGenesis = entries.slice(boundaryIndex + 1);
+  const violations: string[] = [];
+  let firstPostTag: string | null = null;
+  for (const entry of postGenesis) {
+    if (entry.phase === 'post' && firstPostTag === null) {
+      firstPostTag = entry.tag;
+    } else if (entry.phase === 'pre' && firstPostTag !== null) {
+      violations.push(`${entry.tag} is "pre" but is ordered behind "${firstPostTag}" ("post").`);
+    }
+  }
+  return violations;
 }
 
 beforeAll(async () => {
@@ -275,23 +316,31 @@ describe('catalog schema (Task 2)', () => {
       })
       .returning({ id: tracks.id });
 
-    await db.insert(trackHlsRenditions).values({
-      trackId: track.id,
-      position: 0,
-      manifestKey: 'CHECK-fixture-manifest-key',
-      bitrateKbps: 128,
-      encrypted: true,
-    });
+    try {
+      await db.insert(trackHlsRenditions).values({
+        trackId: track.id,
+        position: 0,
+        manifestKey: 'CHECK-fixture-manifest-key',
+        bitrateKbps: 128,
+        encrypted: true,
+      });
 
-    await db.delete(tracks).where(eq(tracks.id, track.id));
+      await db.delete(tracks).where(eq(tracks.id, track.id));
 
-    const remaining = await db
-      .select()
-      .from(trackHlsRenditions)
-      .where(eq(trackHlsRenditions.trackId, track.id));
-    expect(remaining).toEqual([]);
-
-    await db.delete(catalogEntities).where(eq(catalogEntities.id, artist.id));
+      const remaining = await db
+        .select()
+        .from(trackHlsRenditions)
+        .where(eq(trackHlsRenditions.trackId, track.id));
+      expect(remaining).toEqual([]);
+    } finally {
+      // `tracks` is already gone by the time this runs on the pass path
+      // (deleted above), so this is a no-op there — but on a FAILED
+      // assertion `tracks`/`track_hls_renditions` rows would otherwise leak
+      // into `syra_dev`, same as every other fixture in this describe block.
+      await db.delete(trackHlsRenditions).where(eq(trackHlsRenditions.trackId, track.id));
+      await db.delete(tracks).where(eq(tracks.id, track.id));
+      await db.delete(catalogEntities).where(eq(catalogEntities.id, artist.id));
+    }
   });
 });
 
@@ -431,13 +480,26 @@ describe('podcasts schema (Task 4)', () => {
     // this task, not empty. See schema/podcasts.ts's own doc comment.
     expect(remainingParents).toEqual(['copyright_reports']);
 
-    const declaredOnLibrary = new Set<string>();
-    for (const foreignKey of getTableConfig(userPodcastSubscriptions).foreignKeys) {
-      for (const column of foreignKey.reference().columns) {
-        declaredOnLibrary.add(column.name);
-      }
-    }
-    expect(declaredOnLibrary.has('podcastId')).toBe(true);
+    // "An FK exists on this column" is a weaker claim than "the FK points at
+    // `podcasts` and cascades" — which is what closing the ledger entry
+    // actually means. Mutation-proven in review: repointing this FK at
+    // `albums` left the previous version of this test green. Reads
+    // `sqlColumnName(column)`, not `column.name` — the latter is the
+    // TypeScript property (`podcastId`), not the SQL name (`podcast_id`);
+    // `@oxyhq/db/src/casing.ts`'s own doc comment names this exact trap, and
+    // it passed here only because no column in this schema is explicitly
+    // named (`sqlColumnName` and `column.name` agree by coincidence, not by
+    // correctness).
+    const fk = getTableConfig(userPodcastSubscriptions).foreignKeys.find((foreignKey) =>
+      foreignKey.reference().columns.some((column) => sqlColumnName(column) === 'podcast_id')
+    );
+    expect(fk).toBeDefined();
+    // Non-null assertion would violate this repo's own ban on `!` — narrow
+    // via the `toBeDefined()` above instead, which bun:test does not use to
+    // narrow the type, so an explicit guard is still needed here.
+    if (!fk) throw new Error('unreachable: asserted toBeDefined() above');
+    expect(getTableConfig(fk.reference().foreignTable).name).toBe('podcasts');
+    expect(fk.onDelete).toBe('cascade');
   });
 
   it('rejects a popularity outside 0..100 on podcasts and episodes', async () => {
@@ -453,6 +515,36 @@ describe('podcasts schema (Task 4)', () => {
         })
       )
     ).rejects.toThrow();
+
+    // The episodes half of this test's own name: a schema that never
+    // declared `episodes_popularity_check` would have passed this test
+    // unchanged before this fix — the name promised coverage the body
+    // didn't have. Needs a real parent podcast (episodes.podcast_id is
+    // NOT NULL), so wrap in try/finally like this block's other tests.
+    const [podcast] = await db
+      .insert(podcasts)
+      .values({ title: 'CHECK-fixture-popularity-podcast', type: 'episodic', source: 'syra', status: 'active' })
+      .returning({ id: podcasts.id });
+
+    try {
+      await expect(
+        Promise.resolve(
+          db.insert(episodes).values({
+            podcastId: podcast.id,
+            podcastTitle: 'CHECK-fixture-popularity-podcast',
+            title: 'CHECK-fixture-popularity-episode',
+            guid: 'CHECK-fixture-popularity-guid',
+            pubDate: new Date(),
+            episodeType: 'full',
+            source: 'syra',
+            status: 'ready',
+            popularity: 101,
+          })
+        )
+      ).rejects.toThrow();
+    } finally {
+      await db.delete(podcasts).where(eq(podcasts.id, podcast.id));
+    }
   });
 
   it('cascades a deleted podcast into user_podcast_subscriptions', async () => {
@@ -571,5 +663,112 @@ describe('podcasts schema (Task 4)', () => {
       .from(episodeProgress)
       .where(eq(episodeProgress.episodeId, episode.id));
     expect(remaining).toEqual([]);
+  });
+
+  it('cascades a deleted episode into episode_hls_renditions — the table the commit-2 correction was about', async () => {
+    // episode_hls_renditions had no behavioural test at all before this fix —
+    // only a string in EXPECTED_TABLES — despite being one of the brief's
+    // three explicitly-named Episode child tables and the shape that drove
+    // catalog.ts's track_hls_renditions correction. This is its counterpart
+    // to the Task 2 describe block's 'cascades a deleted track into
+    // track_hls_renditions' test.
+    const db = getDb();
+
+    const [podcast] = await db
+      .insert(podcasts)
+      .values({ title: 'CHECK-fixture-hls-podcast', type: 'episodic', source: 'syra', status: 'active' })
+      .returning({ id: podcasts.id });
+    const [episode] = await db
+      .insert(episodes)
+      .values({
+        podcastId: podcast.id,
+        podcastTitle: 'CHECK-fixture-hls-podcast',
+        title: 'CHECK-fixture-hls-episode',
+        guid: 'CHECK-fixture-hls-guid',
+        pubDate: new Date(),
+        episodeType: 'full',
+        source: 'syra',
+        status: 'ready',
+      })
+      .returning({ id: episodes.id });
+
+    try {
+      await db.insert(episodeHlsRenditions).values({
+        episodeId: episode.id,
+        position: 0,
+        manifestKey: 'CHECK-fixture-manifest-key',
+        bitrateKbps: 128,
+        encrypted: true,
+      });
+
+      await db.delete(episodes).where(eq(episodes.id, episode.id));
+
+      const remaining = await db
+        .select()
+        .from(episodeHlsRenditions)
+        .where(eq(episodeHlsRenditions.episodeId, episode.id));
+      expect(remaining).toEqual([]);
+    } finally {
+      await db.delete(episodeHlsRenditions).where(eq(episodeHlsRenditions.episodeId, episode.id));
+      await db.delete(episodes).where(eq(episodes.id, episode.id));
+      await db.delete(podcasts).where(eq(podcasts.id, podcast.id));
+    }
+  });
+});
+
+describe('deploy-phase ordering (post-genesis)', () => {
+  it('flags a pre migration ordered behind a post one, past the boundary', () => {
+    // Pure/synthetic — proves the CHECKING LOGIC itself catches the exact
+    // shape review Critical #1 found live on this branch (0003 "pre" behind
+    // 0001/0002 "post"), without depending on the real journal ever
+    // containing a violation to exercise it.
+    const entries: { tag: string; phase: DeployPhase }[] = [
+      { tag: 'boundary', phase: 'post' },
+      { tag: 'after-1', phase: 'pre' },
+      { tag: 'after-2', phase: 'post' },
+      { tag: 'after-3', phase: 'pre' },
+    ];
+    const violations = findPostGenesisPhaseOrderingViolations(entries, 'boundary');
+    expect(violations).toEqual(['after-3 is "pre" but is ordered behind "after-2" ("post").']);
+  });
+
+  it('reports no violations for a clean post-genesis sequence', () => {
+    const entries: { tag: string; phase: DeployPhase }[] = [
+      { tag: 'boundary', phase: 'post' },
+      { tag: 'after-1', phase: 'pre' },
+      { tag: 'after-2', phase: 'pre' },
+      { tag: 'after-3', phase: 'post' },
+    ];
+    expect(findPostGenesisPhaseOrderingViolations(entries, 'boundary')).toEqual([]);
+  });
+
+  it('flags a boundary tag that is not in the journal at all', () => {
+    const entries: { tag: string; phase: DeployPhase }[] = [{ tag: 'only-entry', phase: 'pre' }];
+    expect(findPostGenesisPhaseOrderingViolations(entries, 'nonexistent-boundary')).toEqual([
+      'boundary tag "nonexistent-boundary" is not present in the migration journal at all.',
+    ]);
+  });
+
+  it('holds for the real journal, past LAST_GENESIS_MIGRATION_TAG', () => {
+    // The live counterpart to the three synthetic tests above — reads the
+    // REAL journal and the REAL migration files, exactly what
+    // `bun run db:migrate` reads. Genesis (0000-0005) is exempt by
+    // construction (see migrate.ts); this only holds every migration that
+    // lands AFTER it to the invariant a real staged rollout needs.
+    const folder = findMigrationsFolder();
+    const journal = readJournal(folder);
+    const { phases, problems } = readMigrationPhases(
+      journal.map((entry) => entry.tag),
+      folder
+    );
+    expect(problems).toEqual([]);
+
+    const entries = journal.map((entry) => {
+      const phase = phases.get(entry.tag);
+      if (!phase) throw new Error(`unreachable: readMigrationPhases reported no problems for ${entry.tag}`);
+      return { tag: entry.tag, phase };
+    });
+
+    expect(findPostGenesisPhaseOrderingViolations(entries, LAST_GENESIS_MIGRATION_TAG)).toEqual([]);
   });
 });

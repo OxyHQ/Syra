@@ -46,12 +46,20 @@
  * here regardless because the brief names `podcastSources` explicitly in its
  * `Produces` list — flagged, not resolved unilaterally.
  *
- * `Episode.hls` becoming a child table is a deliberate departure from
- * `catalog.ts`'s own precedent: `tracks.hls` stayed `jsonb` there (no
- * query-by-element evidence). The brief is explicit that
- * `episode_hls_renditions` is one of the three Episode child tables, so it is
- * built as one here too — noted as an inconsistency with Task 2's own
- * reasoning, not silently reconciled either way.
+ * `Episode.hls` becoming a child table was, in this file's first pass, a
+ * departure from `catalog.ts`'s own THEN-precedent: `tracks.hls` stayed
+ * `jsonb` there (no query-by-element evidence). That inconsistency is
+ * RESOLVED, not merely noted — a Task 4 follow-up found that neither array is
+ * actually queried by element in the database (every reader loads the parent
+ * document and filters in JavaScript), so the real justification for a child
+ * table here is `catalog.ts`'s OTHER rule: an array of objects with a known,
+ * shared shape (`HlsRenditionSchema`, identical on both `models/Track.ts:185`
+ * and `models/Episode.ts:123`) becomes a child table regardless of
+ * query-by-element evidence. `catalog.ts` was corrected to match:
+ * `tracks.hls` is gone, replaced by `track_hls_renditions` (see that table's
+ * own comment in `catalog.ts` for the full reasoning). `episode_hls_renditions`
+ * and `track_hls_renditions` are now genuinely symmetric siblings, not one
+ * considered choice and one exception.
  *
  * `Episode.chapters` and `Episode.cache` and both models' `audioSource` are
  * NOT in that list — each is a single subdocument (not an array), so each
@@ -83,6 +91,19 @@
  * per browsable table regardless of whether the current read path uses it
  * yet.
  *
+ * ## `podcasts.status` is NOT dropped — it got the index its NEGATION needs
+ *
+ * Reviewed and corrected: the first pass through this file left
+ * `podcasts.status` off the drop list below AND gave it no Postgres index,
+ * which was simply wrong, not a considered drop — all three `status`-bearing
+ * indexes on `podcasts` are partial `WHERE status = 'active'`, and none can
+ * serve `status <> 'active'`. That negation is a real, per-request reader:
+ * `utils/podcastDiscovery.ts`'s `hiddenShowEpisodeFilter()` runs `find({
+ * status: { $ne: 'active' } })` on every credit-listing and search request
+ * (its own doc comment names the Mongo `status` index it depends on).
+ * `podcasts_inactive_idx`, on the table below, is the fix — see that index's
+ * own comment for why it indexes `id` alone rather than a sort key.
+ *
  * ## Indexes dropped, and why
  *
  * Every drop below replaces a Mongo `index: true` (or a Mongo `'text'`
@@ -108,6 +129,10 @@
  *  - `podcasts.claimedByOxyUserId` standalone — same shape as `claimable`,
  *    read only off an already-loaded document. Matches `catalog_entities`'
  *    own silent precedent for the identical field on that table.
+ *  - `podcasts.popularity` / `podcasts.lastEpisodeAt` standalone — both
+ *    superseded by `podcasts_active_popularity_idx` /
+ *    `podcasts_active_last_episode_at_idx` above (grepped: every reader
+ *    sorting by either always filters `status: 'active'` first).
  *  - `episodes.status` / `episodes.popularity` / `episodes.pubDate`
  *    standalone — every cross-show listing that sorts by popularity filters
  *    `status: 'ready'` first (`search.controller.ts`, `entityProfile
@@ -116,6 +141,9 @@
  *    reader (`podcastImportService.ts:301`) is scoped to a single
  *    `podcastId` and already served by the `(podcast_id, pub_date desc)`
  *    compound index, which stays NON-partial deliberately — see below.
+ *  - `episodes.source` standalone — grepped every reader; it is never a
+ *    query filter, only read off an already-loaded document
+ *    (`services/podcasts/podcastCache.ts:74`).
  *  - `episode_progress`'s standalone `oxy_user_id` — already the leading
  *    column of both `unique(oxy_user_id, episode_id)` and the partial
  *    `(oxy_user_id, updated_at desc)` index, so a third index would be
@@ -307,6 +335,21 @@ export const podcasts = pgTable(
     index('podcasts_rss_active_subscriber_count_idx')
       .on(t.subscriberCount.desc(), t.popularity.desc())
       .where(sql`${t.status} = 'active' and ${t.source} = 'rss'`),
+    /**
+     * The NEGATION of the three indexes above — `status <> 'active'`, not
+     * `= 'active'`. `utils/podcastDiscovery.ts`'s `hiddenShowEpisodeFilter()`
+     * runs `find({ status: { $ne: 'active' } }).select('_id')` on every
+     * credit-listing and search request (called from
+     * `entityProfile.controller.ts:167` and the search path); that function's
+     * own doc comment says "the extra query uses the indexed `status` field".
+     * `entityProfile.controller.ts:169` separately runs
+     * `{ status: { $ne: 'removed' } }`, also served by this index since a
+     * `<> 'active'` result set already excludes 'removed'. Indexes `id`
+     * alone, not a sort key, because the reader is `.select('_id')` with no
+     * `ORDER BY` — smaller than Mongo's full `status` index and an exact
+     * match for the query, not a general-purpose one.
+     */
+    index('podcasts_inactive_idx').on(t.id).where(sql`${t.status} <> 'active'`),
     index('podcasts_search_gin').using('gin', t.searchVector),
   ]
 );
