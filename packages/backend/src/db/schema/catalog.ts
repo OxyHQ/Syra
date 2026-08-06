@@ -67,6 +67,14 @@
  * their own models — see the report), so both stay `jsonb`, unlike
  * `Track.credits[]`.
  *
+ * `Track.hls[]` was the one array this file got wrong in the first pass —
+ * corrected in Task 4 as `track_hls_renditions`, not here, because Task 4 is
+ * where the evidence surfaced (`Episode.hls[]` needed the identical
+ * decision). See that table's own comment for the full reasoning: neither
+ * `Track.hls[]` nor `Episode.hls[]` is queried by element, but both are an
+ * array of a known, shared shape (`HlsRenditionSchema`), which is this file's
+ * OTHER rule for a child table, independent of query-by-element evidence.
+ *
  * ## `catalogEntityId` is dropped everywhere it was declared
  *
  * Four Mongoose paths declare it (`Track.credits[]`, `UserUpload.credits[]`,
@@ -101,7 +109,6 @@ import {
 } from '@oxyhq/db';
 import type {
   ArtistImageSuggestion,
-  HlsRendition,
   TrackCredit,
   TrackImage,
 } from '@syra/shared-types';
@@ -608,7 +615,9 @@ export const tracks = pgTable(
      * `PROTECTED_COLUMNS_BY_TABLE`.
      */
     images: jsonb().$type<TrackImage[]>().notNull().default([]),
-    hls: jsonb().$type<HlsRendition[]>().notNull().default([]),
+    // The HLS rendition LADDER is `track_hls_renditions` (child table, below)
+    // — corrected in Task 4; see that table's own comment for why this was
+    // jsonb in the first pass and is not anymore.
     loudnessLufs: doublePrecision(),
     hlsMasterKey: text(),
     // The provenance LOG is `track_sources` (child table, below) — the third
@@ -711,6 +720,44 @@ export const trackCredits = pgTable(
     check('track_credits_position_check', sql`${t.position} >= 0`),
     unique('track_credits_track_id_position_key').on(t.trackId, t.position),
     index('track_credits_name_key_idx').on(t.nameKey),
+  ]
+);
+
+// ── track_hls_renditions (child of tracks) ──────────────────────────────────
+//
+// Corrected in Task 4, not part of this file's original pass: `tracks.hls`
+// shipped as a bare `jsonb` column with no discussion in this file's own doc
+// comment — an undocumented silent decision, not a considered one. Task 4
+// needed the identical `HlsRenditionSchema` shape for `Episode.hls`
+// (`models/Episode.ts:123`) and found that NEITHER array is actually queried
+// by element in the database — every reader loads the parent document and
+// filters in JavaScript (`stream.controller.ts`'s `track.hls.find(...)`,
+// `podcastAudio.controller.ts`'s `episode.hls.some(...)`,
+// `catalogVisibility.ts`'s `.length > 0`, `uploads.controller.ts`'s
+// `.some(...)`) — so the "queried by element" test that justified
+// `track_credits` above does not apply to either. What DOES apply is this
+// file's OTHER rule: an array of objects with a known, shared shape becomes a
+// child table (the same reasoning `track_sources`/`album_sources`/
+// `catalog_entity_sources` already follow). `models/Track.ts:185` and
+// `models/Episode.ts:123` declare the SAME `HlsRenditionSchema` — identical
+// shape must get identical treatment, so this table replaces the old
+// `tracks.hls` jsonb column rather than leaving one of the two siblings an
+// outlier nobody could tell was a considered choice.
+export const trackHlsRenditions = pgTable(
+  'track_hls_renditions',
+  {
+    id: generatedId(),
+    trackId: text()
+      .notNull()
+      .references(() => tracks.id, { onDelete: 'cascade' }),
+    position: integer().notNull(),
+    manifestKey: text().notNull(),
+    bitrateKbps: integer().notNull(),
+    encrypted: boolean().notNull(),
+  },
+  (t) => [
+    check('track_hls_renditions_position_check', sql`${t.position} >= 0`),
+    unique('track_hls_renditions_track_id_position_key').on(t.trackId, t.position),
   ]
 );
 

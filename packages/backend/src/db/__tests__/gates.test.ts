@@ -54,7 +54,7 @@ import {
 import { closePostgres, connectPostgres, getDb } from '../postgres';
 import * as schema from '../schema';
 import * as catalogModule from '../schema/catalog';
-import { catalogEntities } from '../schema/catalog';
+import { catalogEntities, trackHlsRenditions, tracks } from '../schema/catalog';
 import * as genresModule from '../schema/genres';
 import * as libraryModule from '../schema/library';
 import { playbackStates, playlists, userPodcastSubscriptions, userSavedPlaylists } from '../schema/library';
@@ -68,9 +68,12 @@ import { genres } from '../schema/genres';
 /**
  * Traversal floor for every gate below. See this file's own doc comment.
  * 19 (Task 2: catalog.ts + genres.ts) + 12 (Task 3: library.ts) +
- * 10 (Task 4: podcasts.ts) = 41.
+ * 10 (Task 4: podcasts.ts) + 1 (Task 4 follow-up: catalog.ts's
+ * `track_hls_renditions`, correcting `tracks.hls`'s jsonb-vs-child-table
+ * inconsistency with `episode_hls_renditions` — see catalog.ts's own
+ * comment) = 42.
  */
-const MINIMUM_TABLES = 41;
+const MINIMUM_TABLES = 42;
 
 /**
  * Every drizzle table the schema barrel exports, walked rather than listed by
@@ -169,6 +172,7 @@ describe('catalog schema (Task 2)', () => {
     'tracks',
     'track_credits',
     'track_sources',
+    'track_hls_renditions',
     'catalog_entity_strikes',
     'album_genres',
     'album_sources',
@@ -251,6 +255,43 @@ describe('catalog schema (Task 2)', () => {
     } finally {
       await db.delete(catalogEntities).where(eq(catalogEntities.id, person.id));
     }
+  });
+
+  it('cascades a deleted track into track_hls_renditions — the corrected sibling of episode_hls_renditions', async () => {
+    const db = getDb();
+
+    const [artist] = await db
+      .insert(catalogEntities)
+      .values({ name: 'CHECK-fixture-hls-artist', type: 'artist', source: 'upload' })
+      .returning({ id: catalogEntities.id });
+    const [track] = await db
+      .insert(tracks)
+      .values({
+        title: 'CHECK-fixture-hls-track',
+        artistId: artist.id,
+        artistName: 'CHECK-fixture-hls-artist',
+        duration: 180,
+        source: 'upload',
+      })
+      .returning({ id: tracks.id });
+
+    await db.insert(trackHlsRenditions).values({
+      trackId: track.id,
+      position: 0,
+      manifestKey: 'CHECK-fixture-manifest-key',
+      bitrateKbps: 128,
+      encrypted: true,
+    });
+
+    await db.delete(tracks).where(eq(tracks.id, track.id));
+
+    const remaining = await db
+      .select()
+      .from(trackHlsRenditions)
+      .where(eq(trackHlsRenditions.trackId, track.id));
+    expect(remaining).toEqual([]);
+
+    await db.delete(catalogEntities).where(eq(catalogEntities.id, artist.id));
   });
 });
 
