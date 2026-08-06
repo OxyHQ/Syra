@@ -22,3 +22,4 @@
 
 export * from './catalog';
 export * from './genres';
+export * from './library';

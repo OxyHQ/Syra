@@ -42,8 +42,9 @@
 
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
-import { eq, isTable } from 'drizzle-orm';
+import { eq, isTable, sql } from 'drizzle-orm';
 import { getTableConfig, PgTable } from 'drizzle-orm/pg-core';
+import { executeRows } from '@oxyhq/db';
 import {
   findIdColumnViolations,
   findImplicitWholeRowReads,
@@ -52,13 +53,25 @@ import {
 } from '@oxyhq/db/assert';
 import { closePostgres, connectPostgres, getDb } from '../postgres';
 import * as schema from '../schema';
+import * as catalogModule from '../schema/catalog';
 import { catalogEntities } from '../schema/catalog';
+import * as genresModule from '../schema/genres';
+import * as libraryModule from '../schema/library';
+import {
+  playbackStates,
+  playlistCollaborators,
+  playlists,
+  userSavedPlaylists,
+} from '../schema/library';
 import { DEFERRED_FOREIGN_KEYS, ID_COLUMNS_WITHOUT_FOREIGN_KEY } from '../schema/deferredForeignKeys';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../schema/protectedColumns';
 import { EXPIRY_SWEEP_TARGETS } from '../expiry';
 
-/** Traversal floor for every gate below. See this file's own doc comment. */
-const MINIMUM_TABLES = 19;
+/**
+ * Traversal floor for every gate below. See this file's own doc comment.
+ * 19 (Task 2: catalog.ts + genres.ts) + 12 (Task 3: library.ts) = 31.
+ */
+const MINIMUM_TABLES = 31;
 
 /**
  * Every drizzle table the schema barrel exports, walked rather than listed by
@@ -81,6 +94,21 @@ const MINIMUM_TABLES = 19;
  */
 function tables(): PgTable[] {
   return (Object.values(schema) as unknown[]).filter((value): value is PgTable => isTable(value));
+}
+
+/**
+ * The same walk as {@link tables}, scoped to one or more schema MODULES
+ * rather than the whole barrel — what a per-task "lands exactly the tables
+ * this task promises" test needs. Using the barrel-wide {@link tables} for
+ * that assertion would break the moment any LATER task's module lands a new
+ * table, since the barrel is cumulative and a per-task list is not; scoping
+ * to the owning module(s) keeps each task's own test self-contained forever,
+ * with nothing for a later task to come back and edit.
+ */
+function tablesIn(...modules: readonly Record<string, unknown>[]): PgTable[] {
+  return modules.flatMap((module) =>
+    (Object.values(module) as unknown[]).filter((value): value is PgTable => isTable(value))
+  );
 }
 
 beforeAll(async () => {
@@ -157,7 +185,12 @@ describe('catalog schema (Task 2)', () => {
   ];
 
   it('lands exactly the tables this task promises', () => {
-    const present = tables().map((table) => getTableConfig(table).name).sort();
+    // Scoped to catalog.ts + genres.ts, not the barrel-wide `tables()` — see
+    // `tablesIn`'s own doc comment for why a per-task exact-match check must
+    // never read the cumulative barrel.
+    const present = tablesIn(catalogModule, genresModule)
+      .map((table) => getTableConfig(table).name)
+      .sort();
     expect(present).toEqual([...EXPECTED_TABLES].sort());
   });
 
@@ -219,5 +252,108 @@ describe('catalog schema (Task 2)', () => {
     } finally {
       await db.delete(catalogEntities).where(eq(catalogEntities.id, person.id));
     }
+  });
+});
+
+describe('library and playlist schema (Task 3)', () => {
+  /** Every table `schema/library.ts` promises, by SQL name. */
+  const EXPECTED_TABLES = [
+    'playlists',
+    'playlist_tracks',
+    'playlist_collaborators',
+    'playlist_sources',
+    'recently_played',
+    'playback_states',
+    'devices',
+    'user_liked_tracks',
+    'user_saved_albums',
+    'user_followed_artists',
+    'user_saved_playlists',
+    'user_podcast_subscriptions',
+  ];
+
+  it('lands exactly the tables this task promises', () => {
+    const present = tablesIn(libraryModule).map((table) => getTableConfig(table).name).sort();
+    expect(present).toEqual([...EXPECTED_TABLES].sort());
+  });
+
+  it('has no Library table — five junctions carry its arrays instead', () => {
+    const present = tablesIn(libraryModule).map((table) => getTableConfig(table).name);
+    // `UserLibrary` (Mongo collection `userlibraries`) is gone entirely — not
+    // renamed, not left as an empty shell.
+    expect(present).not.toContain('libraries');
+    expect(present).not.toContain('user_libraries');
+    expect(present).not.toContain('user_library');
+    // Its five arrays (`models/Library.ts:20-24`) each landed as their own
+    // junction, one row per membership.
+    expect(present).toEqual(
+      expect.arrayContaining([
+        'user_liked_tracks',
+        'user_saved_albums',
+        'user_followed_artists',
+        'user_saved_playlists',
+        'user_podcast_subscriptions',
+      ])
+    );
+  });
+
+  it('rejects a playback position below zero', async () => {
+    const db = getDb();
+    await expect(
+      Promise.resolve(
+        db.insert(playbackStates).values({ oxyUserId: 'CHECK-fixture-position-user', positionMs: -1 })
+      )
+    ).rejects.toThrow();
+  });
+
+  it('rejects a volume outside 0..1', async () => {
+    const db = getDb();
+    await expect(
+      Promise.resolve(
+        db.insert(playbackStates).values({ oxyUserId: 'CHECK-fixture-volume-user', volume: 1.5 })
+      )
+    ).rejects.toThrow();
+  });
+
+  it('cascades a deleted playlist into user_saved_playlists — the orphan RELATIONS.md found live in production', async () => {
+    const db = getDb();
+
+    // RELATIONS.md: playlists ARE hard-deleted today
+    // (controllers/playlists.controller.ts:383), and the app cleans up
+    // PlaylistTrack but never Library.savedPlaylists — a real orphan a
+    // DB-level CASCADE fixes without any application change.
+    const [playlist] = await db
+      .insert(playlists)
+      .values({
+        name: 'CHECK-fixture-playlist',
+        ownerOxyUserId: 'CHECK-fixture-owner',
+        ownerUsername: 'CHECK-fixture-owner-name',
+      })
+      .returning({ id: playlists.id });
+
+    await db
+      .insert(userSavedPlaylists)
+      .values({ oxyUserId: 'CHECK-fixture-saver', playlistId: playlist.id });
+
+    await db.delete(playlists).where(eq(playlists.id, playlist.id));
+
+    const remaining = await db
+      .select()
+      .from(userSavedPlaylists)
+      .where(eq(userSavedPlaylists.playlistId, playlist.id));
+    expect(remaining).toEqual([]);
+  });
+
+  it('indexes playlist_collaborators.oxy_user_id — the reverse direction getUserPlaylists\' $or needs', async () => {
+    const db = getDb();
+    // Verified against the MIGRATED catalogue, not the drizzle declaration —
+    // a migration that dropped the index would fail this too.
+    const rows = await executeRows<{ indexname: string }>(
+      db,
+      sql`select indexname from pg_indexes where tablename = 'playlist_collaborators'`
+    );
+    const names = rows.map((row) => row.indexname);
+    expect(names).toContain('playlist_collaborators_oxy_user_id_idx');
+    expect(names).toContain('playlist_collaborators_playlist_id_oxy_user_id_key');
   });
 });

@@ -24,6 +24,7 @@
 
 import type { DeferredForeignKey } from '@oxyhq/db/assert';
 import { tracks } from './catalog';
+import { userPodcastSubscriptions } from './library';
 
 /**
  * A table added ahead of its parent goes here with its `ON DELETE` and reason
@@ -41,6 +42,19 @@ export const DEFERRED_FOREIGN_KEYS: readonly DeferredForeignKey[] = [
     reason:
       'copyright_reports is a moderation-vertical table that has not landed yet ' +
       '(RELATIONS.md: Track.copyrightReportId -> copyright_reports, set only at takedown time).',
+  },
+  {
+    table: userPodcastSubscriptions,
+    column: userPodcastSubscriptions.podcastId,
+    parentTable: 'podcasts',
+    parentColumn: 'id',
+    onDelete: 'cascade',
+    reason:
+      'podcasts is a Task 4 table that has not landed yet (RELATIONS.md: ' +
+      'Library.subscribedPodcasts[] -> podcasts, CASCADE target-side — ' +
+      'services/notifications/triggers/episodePublished.ts:50 reverse-joins this ' +
+      'column for new-episode fan-out, which is why it keeps its own index even ' +
+      'while the FK itself is deferred).',
   },
 ];
 
@@ -101,6 +115,10 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
     reason: 'Same provenance-log pattern as track_sources.external_id.',
   },
   {
+    column: 'playlist_sources.external_id',
+    reason: 'Same provenance-log pattern as track_sources.external_id — the fourth SourceProvenance sibling (RELATIONS.md).',
+  },
+  {
     column: 'discogs_releases.discogs_release_id',
     reason: "This row's own external identity (Discogs' id for the release) — not a reference to a Syra row (RELATIONS.md).",
   },
@@ -112,5 +130,73 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
       '(services/ingest/hlsStorage.ts). A `kind` column was added here to at least name which id space ' +
       'applies, but only the track arm has a landed target table today — user_uploads and episodes ' +
       'have not shipped yet, so no conditional per-kind FK can be declared (RELATIONS.md).',
+  },
+  // ── CROSS-SERVICE: Oxy account ids, owned by oxy-api, never a Syra row ────
+  {
+    column: 'playlists.owner_oxy_user_id',
+    reason: "The playlist owner's Oxy account id (RELATIONS.md: Playlist.ownerOxyUserId).",
+  },
+  {
+    column: 'playlist_collaborators.oxy_user_id',
+    reason: "A collaborator's Oxy account id (RELATIONS.md: Playlist.collaborators[].oxyUserId).",
+  },
+  {
+    column: 'recently_played.oxy_user_id',
+    reason: 'The Oxy account whose play history this row belongs to (RELATIONS.md: RecentlyPlayed.oxyUserId).',
+  },
+  {
+    column: 'playback_states.oxy_user_id',
+    reason: 'The Oxy account this now-playing state belongs to — one row per account (RELATIONS.md: PlaybackState.oxyUserId).',
+  },
+  {
+    column: 'devices.oxy_user_id',
+    reason: 'The Oxy account this registered device belongs to (RELATIONS.md: Device.oxyUserId).',
+  },
+  {
+    column: 'user_liked_tracks.oxy_user_id',
+    reason: 'The Oxy account that liked the track — the owning side of this junction (RELATIONS.md: Library.oxyUserId).',
+  },
+  {
+    column: 'user_saved_albums.oxy_user_id',
+    reason: 'The Oxy account that saved the album — the owning side of this junction (RELATIONS.md: Library.oxyUserId).',
+  },
+  {
+    column: 'user_followed_artists.oxy_user_id',
+    reason: 'The Oxy account that followed the artist — the owning side of this junction (RELATIONS.md: Library.oxyUserId).',
+  },
+  {
+    column: 'user_saved_playlists.oxy_user_id',
+    reason: 'The Oxy account that saved the playlist — the owning side of this junction (RELATIONS.md: Library.oxyUserId).',
+  },
+  {
+    column: 'user_podcast_subscriptions.oxy_user_id',
+    reason: 'The Oxy account that subscribed — the owning side of this junction (RELATIONS.md: Library.oxyUserId).',
+  },
+  // ── NOT-A-ROW-ID: identifies THIS row (or half of a composite key), not a reference to another ──
+  {
+    column: 'devices.device_id',
+    reason:
+      'Client-generated identifier for the physical/app device — identifies THIS row (half of its ' +
+      'own composite unique key with oxy_user_id), not a reference to another row (RELATIONS.md: ' +
+      'Device.deviceId).',
+  },
+  // ── Polymorphic / advisory, unenforced by the source app itself ───────────
+  {
+    column: 'playback_states.context_id',
+    reason:
+      'Polymorphic by the sibling context_type (playlist/album/artist/…) and, per RELATIONS.md, ' +
+      '"entirely client-supplied and never validated server-side against any table" — a stale value ' +
+      'has zero functional consequence beyond a UI label (RELATIONS.md: PlaybackState.contextId).',
+  },
+  {
+    column: 'playback_states.active_device_id',
+    reason:
+      "Not a single-column FK — RELATIONS.md's own note is that the real target is the compound " +
+      '(oxy_user_id, device_id) key on devices, not devices.id. A composite `.references()` here would ' +
+      'have to ON DELETE SET NULL both referencing columns together (drizzle-orm 0.45.2 has no typed ' +
+      'API for the per-column SET NULL(column_list) form Postgres 15 added), which would try to null ' +
+      'out oxy_user_id too — a NOT NULL, unique column on this very table. Left as a plain, ' +
+      'unconstrained column rather than declaring a composite FK that cannot express the correct ' +
+      'ON DELETE behaviour (RELATIONS.md: PlaybackState.activeDeviceId).',
   },
 ];
