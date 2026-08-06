@@ -43,7 +43,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
-import { eq, getTableColumns, isTable, sql } from 'drizzle-orm';
+import { eq, getTableColumns, inArray, isTable, sql } from 'drizzle-orm';
 import { getTableConfig, PgTable, type UpdateDeleteAction } from 'drizzle-orm/pg-core';
 import {
   constraintNameOf,
@@ -93,6 +93,19 @@ import {
   series,
   seriesEpisodes,
 } from '../schema/rooms';
+import * as userModule from '../schema/user';
+import {
+  catalogRelations,
+  listeningEvents,
+  notificationPreferences,
+  notificationSuppressions,
+  userBehavior,
+  userMusicPreferences,
+  userSettings,
+  userTasteArtists,
+  userTasteGenres,
+  userTasteProfiles,
+} from '../schema/user';
 import { DEFERRED_FOREIGN_KEYS, ID_COLUMNS_WITHOUT_FOREIGN_KEY } from '../schema/deferredForeignKeys';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../schema/protectedColumns';
 import { EXPIRY_SWEEP_TARGETS } from '../expiry';
@@ -104,9 +117,10 @@ import { genres } from '../schema/genres';
  * 10 (Task 4: podcasts.ts) + 1 (Task 4 follow-up: catalog.ts's
  * `track_hls_renditions`, correcting `tracks.hls`'s jsonb-vs-child-table
  * inconsistency with `episode_hls_renditions` — see catalog.ts's own
- * comment) + 9 (Task 5: creators.ts) + 8 (Task 6: rooms.ts) = 59.
+ * comment) + 9 (Task 5: creators.ts) + 8 (Task 6: rooms.ts) +
+ * 10 (Task 7: user.ts) = 69.
  */
-const MINIMUM_TABLES = 59;
+const MINIMUM_TABLES = 69;
 
 /**
  * Every drizzle table the schema barrel exports, walked rather than listed by
@@ -468,9 +482,10 @@ describe('schema gates', () => {
     );
     expect(scanned).toBe(declared);
     // Raised from 14 by Task 6, which registered `rooms`' four internal
-    // stream credentials. Same rule as MINIMUM_TABLES: a floor that never
-    // moves is a vacuity check that stopped checking.
-    expect(scanned).toBeGreaterThanOrEqual(20);
+    // stream credentials, and from 20 by Task 7, which registered
+    // `user_settings`' two privacy lists. Same rule as MINIMUM_TABLES: a floor
+    // that never moves is a vacuity check that stopped checking.
+    expect(scanned).toBeGreaterThanOrEqual(22);
   });
 
   it('declares no identifier Postgres would silently truncate', () => {
@@ -480,14 +495,15 @@ describe('schema gates', () => {
       .map((entry) => ({ file: entry, text: readFileSync(join(folder, entry), 'utf8') }));
 
     // Vacuity floors: a broken glob or regex reports "no violations" exactly
-    // like a clean schema does. Both raised by Task 6 (11 -> 14 files, 400 ->
-    // 700 identifiers, against 789 actual) for the same reason MINIMUM_TABLES
-    // is raised at every schema task — a floor that never moves is a vacuity
-    // check that stopped checking. 14, not 12: the review round added the
-    // hand-split `0012`/`0013` pair.
-    expect(files.length).toBeGreaterThanOrEqual(14);
+    // like a clean schema does. Raised by Task 6 (11 -> 14 files, 400 -> 700
+    // identifiers) and again by Task 7 (14 -> 15 files, 700 -> 850, against
+    // 907 actual) for the same reason MINIMUM_TABLES is raised at every schema
+    // task — a floor that never moves is a vacuity check that stopped
+    // checking. 14, not 12, was Task 6's count because its review round added
+    // the hand-split `0012`/`0013` pair.
+    expect(files.length).toBeGreaterThanOrEqual(15);
     const { violations, scanned } = findOverlongIdentifiers(files);
-    expect(scanned).toBeGreaterThanOrEqual(700);
+    expect(scanned).toBeGreaterThanOrEqual(850);
 
     // Exact identity, never substring — see `findUnexemptedIdentifiers`.
     // The second half is the staleness check: an exemption that no longer
@@ -2468,6 +2484,743 @@ describe('rooms and live schema (Task 6)', () => {
     // Recorded as an assertion so a later task changing its mind has to change
     // this line and say why.
     expect(Object.keys(PROTECTED_COLUMNS_BY_TABLE)).not.toContain('recordings');
+  });
+});
+
+describe('user, taste and listening schema (Task 7)', () => {
+  /** Every table `schema/user.ts` promises, by SQL name. */
+  const EXPECTED_TABLES = [
+    'user_settings',
+    'user_music_preferences',
+    'user_behavior',
+    'user_taste_profiles',
+    'user_taste_genres',
+    'user_taste_artists',
+    'listening_events',
+    'catalog_relations',
+    'notification_preferences',
+    'notification_suppressions',
+  ];
+
+  /**
+   * Every foreign key this task declares, as `[child table, fk column, parent
+   * table, ON DELETE]`.
+   *
+   * Declared once at describe scope and read by BOTH checks below — the
+   * declaration assertion and the planner probe — for the same reason Task 6's
+   * `SET_NULL_CHILDREN` is: two lists of the same relations drift, and the one
+   * that drifts is always the one nobody re-reads. Every entry here is a
+   * CASCADE, so the probe covers a different Postgres path than Task 6's did
+   * (`RI_FKey_cascade_del` rather than `RI_FKey_setnull_del`) — the referential
+   * lookup it makes on the child is the same shape, and an unindexed child
+   * column costs a full scan of `listening_events`, the one table in this
+   * schema designed to hold millions of rows.
+   */
+  const NEW_FOREIGN_KEYS: readonly (readonly [PgTable, string, string, UpdateDeleteAction])[] = [
+    [listeningEvents, 'track_id', 'tracks', 'cascade'],
+    [listeningEvents, 'artist_id', 'catalog_entities', 'cascade'],
+    [userTasteGenres, 'taste_profile_id', 'user_taste_profiles', 'cascade'],
+    [userTasteArtists, 'taste_profile_id', 'user_taste_profiles', 'cascade'],
+    [userTasteArtists, 'artist_id', 'catalog_entities', 'cascade'],
+  ];
+
+  it('lands exactly the tables this task promises', () => {
+    const present = tablesIn(userModule).map((table) => getTableConfig(table).name).sort();
+    expect(present).toEqual([...EXPECTED_TABLES].sort());
+  });
+
+  it('registers exactly the two Mongo TTL indexes this vertical had, with their own retention', () => {
+    // `grep -rn "expireAfterSeconds" packages/backend/src` returns FOUR
+    // declarations: these two, plus `ModerationOutbox` and `ModerationEvent`,
+    // which are Task 8's. So this task lands two of the four — the brief's
+    // prose says three, and its own table says two; the grep is what settles
+    // it (see this task's report).
+    //
+    // Asserted as an exact, ordered list of `table.column:retentionSeconds`
+    // rather than a length: a registry entry pointed at the wrong column, or
+    // carrying the wrong retention, is exactly the mistake that leaves rows
+    // either immortal or deleted 90 days early, and neither shows up as a
+    // count.
+    const registered = EXPIRY_SWEEP_TARGETS.map(
+      (target) =>
+        `${getTableConfig(target.table).name}.${sqlColumnName(target.column)}:${target.retentionSeconds}`
+    );
+    expect(registered).toEqual([
+      // `expireAfterSeconds: 0` on a column that already holds the deadline.
+      'notification_suppressions.expires_at:0',
+      // `expireAfterSeconds: LISTENING_EVENT_TTL_SEC` — 90 days, measured from
+      // a birth column.
+      `listening_events.played_at:${90 * 24 * 60 * 60}`,
+    ]);
+  });
+
+  it('gives each swept column its own supporting index, by name', async () => {
+    const db = getDb();
+    // `findUnsupportedExpiryColumns` (asserted in the schema-gates block above,
+    // against this same migrated catalogue) is the general form of this check
+    // and the one that will catch a FUTURE target added without an index. This
+    // names the two indexes so a migration that dropped one fails HERE, saying
+    // which — and so the general gate is not the only thing standing between
+    // the sweep and a full scan of a table this design expects to reach
+    // millions of rows.
+    const rows = await executeRows<{ indexname: string }>(
+      db,
+      sql`select indexname from pg_indexes
+          where tablename in ('listening_events', 'notification_suppressions')`
+    );
+    const names = rows.map((row) => row.indexname);
+    expect(names).toContain('listening_events_played_at_idx');
+    expect(names).toContain('notification_suppressions_expires_at_idx');
+  });
+
+  it('points every new foreign key at the parent and ON DELETE RELATIONS.md names', () => {
+    // Target AND onDelete, never "a key exists on a column of this name" — see
+    // `expectForeignKey`'s own doc comment for the mutation that motivated it.
+    for (const [table, column, parent, onDelete] of NEW_FOREIGN_KEYS) {
+      expectForeignKey(table, column, parent, onDelete);
+    }
+    // Vacuity floor: an empty or silently-truncated list would pass the loop
+    // above by checking nothing.
+    expect(NEW_FOREIGN_KEYS.length).toBe(5);
+  });
+
+  it('lets every new cascade and both expiry sweeps find rows by a LEADING-key index', async () => {
+    const db = getDb();
+    /**
+     * The planner probe Task 6's I1 review introduced, applied to this task's
+     * two index obligations at once — and strengthened, because Task 6's
+     * spelling of it CANNOT CATCH THIS TASK'S DEFECTS. Mutation-tested both
+     * ways before this version was written:
+     *
+     *   Dropping `user_taste_artists_artist_id_idx` from the real database
+     *   left "the plan contains no `Seq Scan`" GREEN. With
+     *   `enable_seqscan = off` the planner falls back to scanning the WHOLE of
+     *   `user_taste_artists_taste_profile_id_artist_id_key` — a btree whose
+     *   leading key is the other column — and pushes `artist_id = …` down as
+     *   an `Index Cond` anyway (Postgres does this for non-leading keys). The
+     *   plan says "Bitmap Index Scan", the cost triples, and a `Seq Scan` text
+     *   test reads it as a pass. That is the same shape as the defect I1 was
+     *   about: a check that certifies the thing it was supposed to refuse.
+     *
+     * So this asks the sharper question: does the planner use an index whose
+     * LEADING key is the probed column — the property a Mongo index had by
+     * construction and `findUnsupportedExpiryColumns` checks from `indkey[0]`?
+     * The expected set comes from the catalogue, the actual index comes from
+     * the plan, and both halves have to agree. An empty expected set fails on
+     * its own, so a dropped index cannot pass by leaving nothing to compare.
+     *
+     * Two query shapes, because this task has two:
+     *
+     *  - The referential-integrity lookup Postgres runs on the CHILD when a
+     *    parent row is deleted (`select 1 from only <child> x where <fk> = $1
+     *    for key share of x`). Every new key here is `ON DELETE CASCADE`.
+     *  - `sweepExpiredRows`' own inner statement (`select ctid from <table>
+     *    where <column> <= now() - make_interval(...) limit <batch>`), walked
+     *    from `EXPIRY_SWEEP_TARGETS` itself so a target added later without a
+     *    usable index fails here too.
+     *
+     * `set local enable_seqscan = off` inside ONE transaction: these tables are
+     * empty, so a seq scan genuinely is the cheapest plan and the planner would
+     * pick it over a perfect index. `set local` also unwinds at commit, so no
+     * planner setting can leak onto a shared dev database even if this throws.
+     */
+    const usedIndexes = (plan: readonly { 'QUERY PLAN': string }[]): string[] =>
+      [...plan.map((row) => row['QUERY PLAN']).join('\n').matchAll(/Index (?:Only )?Scan (?:using|on) (\w+)/g)].map(
+        (match) => match[1]
+      );
+
+    /** Every btree index whose FIRST key is `table.column` — `indkey[0]`, the same test the expiry gate makes. */
+    const leadingKeyIndexes = async (
+      executor: Parameters<typeof executeRows>[0],
+      table: string,
+      column: string
+    ): Promise<string[]> => {
+      const rows = await executeRows<{ indexname: string }>(
+        executor,
+        sql`select i.relname as indexname
+            from pg_index x
+            join pg_class i on i.oid = x.indexrelid
+            join pg_class t on t.oid = x.indrelid
+            join pg_am am on am.oid = i.relam
+            join pg_attribute a on a.attrelid = t.oid and a.attnum = x.indkey[0]
+            where am.amname = 'btree' and t.relname = ${table} and a.attname = ${column}`
+      );
+      return rows.map((row) => row.indexname);
+    };
+
+    await db.transaction(async (tx) => {
+      await executeRows(tx, sql`set local enable_seqscan = off`);
+      const [setting] = await executeRows<{ enable_seqscan: string }>(tx, sql`show enable_seqscan`);
+      expect(setting.enable_seqscan).toBe('off');
+
+      for (const [table, column] of NEW_FOREIGN_KEYS) {
+        const name = getTableConfig(table).name;
+        const expected = await leadingKeyIndexes(tx, name, column);
+        const plan = await executeRows<{ 'QUERY PLAN': string }>(
+          tx,
+          sql`explain select 1 from only ${sql.identifier(name)} x
+              where ${sql.identifier(column)} = 'probe' for key share of x`
+        );
+        const used = usedIndexes(plan).filter((index) => expected.includes(index));
+        // Named in the message, so a regression says WHICH deletion path
+        // started scanning rather than "expected [] to have length 1".
+        expect(`${name}.${column} served by: ${used.join(', ') || 'NO LEADING-KEY INDEX'}`).not.toContain(
+          'NO LEADING-KEY INDEX'
+        );
+      }
+
+      for (const target of EXPIRY_SWEEP_TARGETS) {
+        const name = getTableConfig(target.table).name;
+        const column = sqlColumnName(target.column);
+        const expected = await leadingKeyIndexes(tx, name, column);
+        const plan = await executeRows<{ 'QUERY PLAN': string }>(
+          tx,
+          sql`explain select ctid from ${sql.identifier(name)}
+              where ${sql.identifier(column)} <= now() - make_interval(secs => ${sql.raw(
+                String(target.retentionSeconds)
+              )})
+              limit 1000`
+        );
+        const used = usedIndexes(plan).filter((index) => expected.includes(index));
+        expect(`sweep ${name}.${column} served by: ${used.join(', ') || 'NO LEADING-KEY INDEX'}`).not.toContain(
+          'NO LEADING-KEY INDEX'
+        );
+      }
+    });
+  });
+
+  it('cascades a listening event away with its track, and independently with its artist', async () => {
+    const db = getDb();
+
+    const [artist] = await db
+      .insert(catalogEntities)
+      .values({ name: 'CHECK-fixture-event-artist', type: 'artist', source: 'upload' })
+      .returning({ id: catalogEntities.id });
+    // A SECOND artist that owns no track. `tracks.artist_id` is RESTRICT
+    // (RELATIONS.md: nothing ever deletes an artist), so deleting the track's
+    // own artist is refused while the track exists — and deleting the track
+    // first would take the event with it through the OTHER cascade, leaving
+    // the artist key untested. Pointing the event's `artist_id` at an artist
+    // that owns nothing is what isolates the two keys from each other.
+    const [otherArtist] = await db
+      .insert(catalogEntities)
+      .values({ name: 'CHECK-fixture-event-other-artist', type: 'artist', source: 'upload' })
+      .returning({ id: catalogEntities.id });
+    const [track] = await db
+      .insert(tracks)
+      .values({
+        title: 'CHECK-fixture-event-track',
+        artistId: artist.id,
+        artistName: 'CHECK-fixture-event-artist',
+        duration: 180,
+        source: 'upload',
+      })
+      .returning({ id: tracks.id });
+
+    try {
+      const [viaArtist] = await db
+        .insert(listeningEvents)
+        .values({ oxyUserId: 'CHECK-fixture-listener', trackId: track.id, artistId: otherArtist.id })
+        .returning({ id: listeningEvents.id });
+
+      await db.delete(catalogEntities).where(eq(catalogEntities.id, otherArtist.id));
+      expect(
+        await db.select().from(listeningEvents).where(eq(listeningEvents.id, viaArtist.id))
+      ).toEqual([]);
+
+      const [viaTrack] = await db
+        .insert(listeningEvents)
+        .values({ oxyUserId: 'CHECK-fixture-listener', trackId: track.id, artistId: artist.id })
+        .returning({ id: listeningEvents.id });
+
+      await db.delete(tracks).where(eq(tracks.id, track.id));
+      expect(
+        await db.select().from(listeningEvents).where(eq(listeningEvents.id, viaTrack.id))
+      ).toEqual([]);
+    } finally {
+      await db.delete(listeningEvents).where(eq(listeningEvents.trackId, track.id));
+      await db.delete(tracks).where(eq(tracks.id, track.id));
+      await db.delete(catalogEntities).where(eq(catalogEntities.id, otherArtist.id));
+      await db.delete(catalogEntities).where(eq(catalogEntities.id, artist.id));
+    }
+  });
+
+  it('holds the completion bounds at BOTH ends, and refuses a negative listened time', async () => {
+    const db = getDb();
+
+    const [artist] = await db
+      .insert(catalogEntities)
+      .values({ name: 'CHECK-fixture-completion-artist', type: 'artist', source: 'upload' })
+      .returning({ id: catalogEntities.id });
+    const [track] = await db
+      .insert(tracks)
+      .values({
+        title: 'CHECK-fixture-completion-track',
+        artistId: artist.id,
+        artistName: 'CHECK-fixture-completion-artist',
+        duration: 180,
+        source: 'upload',
+      })
+      .returning({ id: tracks.id });
+    const event = { oxyUserId: 'CHECK-fixture-listener', trackId: track.id, artistId: artist.id };
+
+    try {
+      // `models/ListeningEvent.ts:82` declares `min: 0, max: 1`. BOTH ends,
+      // because a CHECK written `completion <= 1` alone passes an
+      // over-one-only test and still admits the negative that
+      // `deriveCompletion` clamps against.
+      await expectRefusedBy(
+        Promise.resolve(db.insert(listeningEvents).values({ ...event, completion: 1.5 })),
+        isCheckViolation,
+        'listening_events_completion_check'
+      );
+      await expectRefusedBy(
+        Promise.resolve(db.insert(listeningEvents).values({ ...event, completion: -0.1 })),
+        isCheckViolation,
+        'listening_events_completion_check'
+      );
+      await expectRefusedBy(
+        Promise.resolve(db.insert(listeningEvents).values({ ...event, listenedSec: -1 })),
+        isCheckViolation,
+        'listening_events_listened_sec_check'
+      );
+
+      // The two boundary values are LEGAL — a full play and a zero-completion
+      // skip are both ordinary rows, and a CHECK written one notch tight
+      // (`< 1`) would pass every rejection above and still be wrong.
+      const accepted = await db
+        .insert(listeningEvents)
+        .values([
+          { ...event, completion: 1, listenedSec: 180 },
+          { ...event, completion: 0, listenedSec: 0, skipped: true },
+        ])
+        .returning({ id: listeningEvents.id });
+      expect(accepted).toHaveLength(2);
+    } finally {
+      await db.delete(listeningEvents).where(eq(listeningEvents.trackId, track.id));
+      await db.delete(tracks).where(eq(tracks.id, track.id));
+      await db.delete(catalogEntities).where(eq(catalogEntities.id, artist.id));
+    }
+  });
+
+  it('keeps one taste weight per key per profile — and the SAME key under another profile', async () => {
+    const db = getDb();
+
+    const [artist] = await db
+      .insert(catalogEntities)
+      .values({ name: 'CHECK-fixture-taste-artist', type: 'artist', source: 'upload' })
+      .returning({ id: catalogEntities.id });
+    const [profile] = await db
+      .insert(userTasteProfiles)
+      .values({ oxyUserId: 'CHECK-fixture-taste-user' })
+      .returning({ id: userTasteProfiles.id });
+    const [otherProfile] = await db
+      .insert(userTasteProfiles)
+      .values({ oxyUserId: 'CHECK-fixture-taste-user-2' })
+      .returning({ id: userTasteProfiles.id });
+
+    try {
+      await db.insert(userTasteGenres).values({ tasteProfileId: profile.id, genre: 'jazz', weight: 2 });
+      await db
+        .insert(userTasteArtists)
+        .values({ tasteProfileId: profile.id, artistId: artist.id, weight: 3 });
+
+      // `applyWeight` (`services/recommendations/recordPlay.ts:208`) finds the
+      // existing entry by key and ADDS to it — one row per key is the
+      // invariant the in-memory array held by construction and the child
+      // tables have to hold for real.
+      await expectRefusedBy(
+        Promise.resolve(
+          db.insert(userTasteGenres).values({ tasteProfileId: profile.id, genre: 'jazz', weight: 1 })
+        ),
+        isUniqueViolation,
+        'user_taste_genres_taste_profile_id_genre_key'
+      );
+      await expectRefusedBy(
+        Promise.resolve(
+          db.insert(userTasteArtists).values({ tasteProfileId: profile.id, artistId: artist.id, weight: 1 })
+        ),
+        isUniqueViolation,
+        'user_taste_artists_taste_profile_id_artist_id_key'
+      );
+
+      // The fixture that tells the composite key from a unique on the KEY
+      // alone: two users are expected to like the same genre and the same
+      // artist, and a `unique(genre)` / `unique(artist_id)` would pass every
+      // rejection above while making the second listener's taste unwritable.
+      const [sharedGenre] = await db
+        .insert(userTasteGenres)
+        .values({ tasteProfileId: otherProfile.id, genre: 'jazz', weight: 5 })
+        .returning({ id: userTasteGenres.id });
+      const [sharedArtist] = await db
+        .insert(userTasteArtists)
+        .values({ tasteProfileId: otherProfile.id, artistId: artist.id, weight: 5 })
+        .returning({ id: userTasteArtists.id });
+      expect(sharedGenre.id).toBeTruthy();
+      expect(sharedArtist.id).toBeTruthy();
+
+      // Losing the artist loses the learned weight — same disposable-aggregate
+      // reasoning as `listening_events.artist_id` (RELATIONS.md), and the
+      // genre row beside it is untouched because it references no catalog row
+      // at all.
+      await db.delete(catalogEntities).where(eq(catalogEntities.id, artist.id));
+      expect(
+        await db.select().from(userTasteArtists).where(eq(userTasteArtists.artistId, artist.id))
+      ).toEqual([]);
+      expect(
+        await db.select().from(userTasteGenres).where(eq(userTasteGenres.tasteProfileId, profile.id))
+      ).toHaveLength(1);
+
+      // And the profile owns both children.
+      await db.delete(userTasteProfiles).where(eq(userTasteProfiles.id, profile.id));
+      expect(
+        await db.select().from(userTasteGenres).where(eq(userTasteGenres.tasteProfileId, profile.id))
+      ).toEqual([]);
+    } finally {
+      await db.delete(userTasteGenres).where(eq(userTasteGenres.tasteProfileId, profile.id));
+      await db.delete(userTasteGenres).where(eq(userTasteGenres.tasteProfileId, otherProfile.id));
+      await db.delete(userTasteArtists).where(eq(userTasteArtists.tasteProfileId, profile.id));
+      await db.delete(userTasteArtists).where(eq(userTasteArtists.tasteProfileId, otherProfile.id));
+      await db.delete(userTasteProfiles).where(eq(userTasteProfiles.id, profile.id));
+      await db.delete(userTasteProfiles).where(eq(userTasteProfiles.id, otherProfile.id));
+      await db.delete(catalogEntities).where(eq(catalogEntities.id, artist.id));
+    }
+  });
+
+  it('refuses a negative taste weight on either child and on the profile total', async () => {
+    const db = getDb();
+
+    // A REAL artist, not a made-up id: `user_taste_artists.artist_id` carries a
+    // foreign key, and relying on the CHECK firing before the FK trigger would
+    // make this test depend on Postgres's constraint evaluation order rather
+    // than on the constraint it names.
+    const [artist] = await db
+      .insert(catalogEntities)
+      .values({ name: 'CHECK-fixture-weight-artist', type: 'artist', source: 'upload' })
+      .returning({ id: catalogEntities.id });
+    const [profile] = await db
+      .insert(userTasteProfiles)
+      .values({ oxyUserId: 'CHECK-fixture-weight-user' })
+      .returning({ id: userTasteProfiles.id });
+
+    try {
+      // `models/UserTasteProfile.ts:42,52` declare `min: 0` on both the weight
+      // and the total; `applyWeight` clamps at 0 on every path, so a negative
+      // is a bug in a writer rather than a value anything should store.
+      await expectRefusedBy(
+        Promise.resolve(
+          db.insert(userTasteGenres).values({ tasteProfileId: profile.id, genre: 'jazz', weight: -1 })
+        ),
+        isCheckViolation,
+        'user_taste_genres_weight_check'
+      );
+      await expectRefusedBy(
+        Promise.resolve(
+          db
+            .insert(userTasteArtists)
+            .values({ tasteProfileId: profile.id, artistId: artist.id, weight: -1 })
+        ),
+        isCheckViolation,
+        'user_taste_artists_weight_check'
+      );
+      await expectRefusedBy(
+        Promise.resolve(
+          db.insert(userTasteProfiles).values({ oxyUserId: 'CHECK-fixture-total', totalSignal: -1 })
+        ),
+        isCheckViolation,
+        'user_taste_profiles_total_signal_check'
+      );
+    } finally {
+      await db.delete(userTasteProfiles).where(eq(userTasteProfiles.id, profile.id));
+      await db.delete(catalogEntities).where(eq(catalogEntities.id, artist.id));
+    }
+  });
+
+  it('allows one relation edge per (kind, source, target) — and the kind is part of that key', async () => {
+    const db = getDb();
+    const edge = { sourceId: 'CHECK-fixture-source', targetId: 'CHECK-fixture-target', score: 0.5 };
+
+    try {
+      await db.insert(catalogRelations).values({ ...edge, kind: 'artist' });
+      await expectRefusedBy(
+        Promise.resolve(db.insert(catalogRelations).values({ ...edge, kind: 'artist', score: 0.9 })),
+        isUniqueViolation,
+        'catalog_relations_kind_source_id_target_id_key'
+      );
+
+      // The fixture that distinguishes the three-column key from a
+      // `unique(source_id, target_id)`: the same pair of ids means two
+      // DIFFERENT edges under the two kinds, because `kind` decides which
+      // table the ids even belong to (RELATIONS.md: polymorphic by `kind`).
+      // Without this row, dropping `kind` from the key passes the whole suite.
+      const [trackEdge] = await db
+        .insert(catalogRelations)
+        .values({ ...edge, kind: 'track' })
+        .returning({ id: catalogRelations.id });
+      expect(trackEdge.id).toBeTruthy();
+
+      // Raw SQL, deliberately: drizzle's `{ enum: … }` type refuses `'podcast'`
+      // at COMPILE time, which is a second and independent guard — but the
+      // column is `text`, so Postgres accepts any string from a backfill, a
+      // `sql` write, or a psql session. The CHECK is what makes the value set
+      // true of the DATABASE rather than of this repo's TypeScript, and only a
+      // write that bypasses the type can prove it exists.
+      await expectRefusedBy(
+        executeRows(
+          db,
+          sql`insert into catalog_relations (id, kind, source_id, target_id, score)
+              values ('CHECK-fixture-bad-kind', 'podcast', ${edge.sourceId}, ${edge.targetId}, 0.5)`
+        ),
+        isCheckViolation,
+        'catalog_relations_kind_check'
+      );
+      await expectRefusedBy(
+        Promise.resolve(db.insert(catalogRelations).values({ ...edge, kind: 'artist', score: -1 })),
+        isCheckViolation,
+        'catalog_relations_score_check'
+      );
+    } finally {
+      await db.delete(catalogRelations).where(eq(catalogRelations.sourceId, edge.sourceId));
+    }
+  });
+
+  it('refuses a second suppression of one key for one user, but not the same key for another', async () => {
+    const db = getDb();
+    const expiresAt = new Date(Date.now() + 60_000);
+
+    try {
+      // `claimSuppression` (`services/notifications/notifier.ts:133`) INSERTS
+      // and reads the duplicate-key error as "already notified" — the unique
+      // index IS the decision, so this constraint is load-bearing logic rather
+      // than hygiene.
+      await db
+        .insert(notificationSuppressions)
+        .values({ oxyUserId: 'CHECK-fixture-recipient', key: 'episode.published:abc', expiresAt });
+      await expectRefusedBy(
+        Promise.resolve(
+          db
+            .insert(notificationSuppressions)
+            .values({ oxyUserId: 'CHECK-fixture-recipient', key: 'episode.published:abc', expiresAt })
+        ),
+        isUniqueViolation,
+        'notification_suppressions_oxy_user_id_key_key'
+      );
+
+      // Every subscriber of a show is suppressed under the SAME key — a
+      // `unique(key)` would silence all but the first person notified, and
+      // would pass the rejection above unchanged.
+      const [other] = await db
+        .insert(notificationSuppressions)
+        .values({ oxyUserId: 'CHECK-fixture-recipient-2', key: 'episode.published:abc', expiresAt })
+        .returning({ id: notificationSuppressions.id });
+      expect(other.id).toBeTruthy();
+    } finally {
+      await db
+        .delete(notificationSuppressions)
+        .where(eq(notificationSuppressions.key, 'episode.published:abc'));
+    }
+  });
+
+  it('refuses a disabled-events list naming an event that does not exist', async () => {
+    const db = getDb();
+
+    try {
+      // Mongoose enforces the enum per element (`models/NotificationPreference
+      // .ts:58`); an array column keeps that only if the CHECK does. Raw SQL
+      // for the same reason as the `catalog_relations` kind above — the
+      // TypeScript enum refuses this at compile time, the database is what has
+      // to refuse it at run time.
+      await expectRefusedBy(
+        executeRows(
+          db,
+          sql`insert into notification_preferences (id, oxy_user_id, disabled_events)
+              values ('CHECK-fixture-bad-event', 'CHECK-fixture-prefs',
+                      array['episode.published', 'not.an.event']::text[])`
+        ),
+        isCheckViolation,
+        'notification_preferences_disabled_events_check'
+      );
+
+      // Two accepted shapes, so the CHECK cannot be passing by forbidding
+      // everything: a real event, and the empty list every user starts with
+      // (`<@` is trivially true for an empty array — see `textArrayLiteral`).
+      const accepted = await db
+        .insert(notificationPreferences)
+        .values([
+          { oxyUserId: 'CHECK-fixture-prefs', disabledEvents: ['upload.expiring'] },
+          { oxyUserId: 'CHECK-fixture-prefs-2' },
+        ])
+        .returning({ id: notificationPreferences.id });
+      expect(accepted).toHaveLength(2);
+    } finally {
+      await db
+        .delete(notificationPreferences)
+        .where(inArray(notificationPreferences.oxyUserId, ['CHECK-fixture-prefs', 'CHECK-fixture-prefs-2']));
+    }
+  });
+
+  it('refuses an active hour outside 0..23, at both ends', async () => {
+    const db = getDb();
+
+    try {
+      // `models/UserBehavior.ts:38` declares `min: 0, max: 23` per element.
+      // Both ends again: a CHECK containing only `0..23`'s upper half would
+      // pass a 24-only test.
+      await expectRefusedBy(
+        Promise.resolve(
+          db.insert(userBehavior).values({ oxyUserId: 'CHECK-fixture-behavior', activeHours: [24] })
+        ),
+        isCheckViolation,
+        'user_behavior_active_hours_check'
+      );
+      await expectRefusedBy(
+        Promise.resolve(
+          db.insert(userBehavior).values({ oxyUserId: 'CHECK-fixture-behavior', activeHours: [-1] })
+        ),
+        isCheckViolation,
+        'user_behavior_active_hours_check'
+      );
+
+      const [accepted] = await db
+        .insert(userBehavior)
+        .values({ oxyUserId: 'CHECK-fixture-behavior', activeHours: [0, 23] })
+        .returning({ id: userBehavior.id });
+      expect(accepted.id).toBeTruthy();
+    } finally {
+      await db.delete(userBehavior).where(eq(userBehavior.oxyUserId, 'CHECK-fixture-behavior'));
+    }
+  });
+
+  it('holds the bounded settings Mongoose enforced on every save, at both ends', async () => {
+    const db = getDb();
+    const owner = { oxyUserId: 'CHECK-fixture-bounds-user' };
+
+    try {
+      // `models/UserSettings.ts:97` — `min: 0.5, max: 1.0`. The route clamps
+      // (`routes/profileSettings.ts:152`) but the model is what makes it true
+      // of every writer, including the ones that do not go through that route.
+      await expectRefusedBy(
+        Promise.resolve(db.insert(userSettings).values({ ...owner, feedDiversitySameAuthorPenalty: 1.1 })),
+        isCheckViolation,
+        'user_settings_feed_diversity_same_author_penalty_check'
+      );
+      await expectRefusedBy(
+        Promise.resolve(db.insert(userSettings).values({ ...owner, feedDiversitySameAuthorPenalty: 0.4 })),
+        isCheckViolation,
+        'user_settings_feed_diversity_same_author_penalty_check'
+      );
+      // Both boundaries are legal values — 0.5 and 1.0 are exactly what the
+      // route's own clamp produces at its extremes.
+      const [accepted] = await db
+        .insert(userSettings)
+        .values({ ...owner, feedDiversitySameAuthorPenalty: 0.5, feedDiversitySameTopicPenalty: 1 })
+        .returning({ id: userSettings.id });
+      expect(accepted.id).toBeTruthy();
+
+      // `models/UserMusicPreferences.ts:36,38` — the two bounded player
+      // settings, same treatment.
+      await expectRefusedBy(
+        Promise.resolve(
+          db.insert(userMusicPreferences).values({ oxyUserId: 'CHECK-fixture-player', defaultVolume: 1.5 })
+        ),
+        isCheckViolation,
+        'user_music_preferences_default_volume_check'
+      );
+      await expectRefusedBy(
+        Promise.resolve(
+          db.insert(userMusicPreferences).values({ oxyUserId: 'CHECK-fixture-player', crossfade: 13 })
+        ),
+        isCheckViolation,
+        'user_music_preferences_crossfade_check'
+      );
+      const [player] = await db
+        .insert(userMusicPreferences)
+        .values({ oxyUserId: 'CHECK-fixture-player', defaultVolume: 0, crossfade: 12 })
+        .returning({ id: userMusicPreferences.id });
+      expect(player.id).toBeTruthy();
+    } finally {
+      await db.delete(userSettings).where(eq(userSettings.oxyUserId, owner.oxyUserId));
+      await db.delete(userMusicPreferences).where(eq(userMusicPreferences.oxyUserId, 'CHECK-fixture-player'));
+    }
+  });
+
+  it('allows exactly one row per account on all five per-user tables', async () => {
+    const db = getDb();
+    const oxyUserId = 'CHECK-fixture-one-row-user';
+
+    try {
+      // Five separate Mongoose `unique: true` declarations on `oxyUserId`
+      // (`UserSettings:112`, `UserMusicPreferences:35`, `UserBehavior:29`,
+      // `UserTasteProfile:49`, `NotificationPreference:57`). Every reader of
+      // all five is a `findOne({ oxyUserId })`, so a second row is a value
+      // nobody can predict rather than a duplicate nobody notices.
+      await db.insert(userSettings).values({ oxyUserId });
+      await expectRefusedBy(
+        Promise.resolve(db.insert(userSettings).values({ oxyUserId })),
+        isUniqueViolation,
+        'user_settings_oxy_user_id_key'
+      );
+
+      await db.insert(userMusicPreferences).values({ oxyUserId });
+      await expectRefusedBy(
+        Promise.resolve(db.insert(userMusicPreferences).values({ oxyUserId })),
+        isUniqueViolation,
+        'user_music_preferences_oxy_user_id_key'
+      );
+
+      await db.insert(userBehavior).values({ oxyUserId });
+      await expectRefusedBy(
+        Promise.resolve(db.insert(userBehavior).values({ oxyUserId })),
+        isUniqueViolation,
+        'user_behavior_oxy_user_id_key'
+      );
+
+      await db.insert(userTasteProfiles).values({ oxyUserId });
+      await expectRefusedBy(
+        Promise.resolve(db.insert(userTasteProfiles).values({ oxyUserId })),
+        isUniqueViolation,
+        'user_taste_profiles_oxy_user_id_key'
+      );
+
+      await db.insert(notificationPreferences).values({ oxyUserId });
+      await expectRefusedBy(
+        Promise.resolve(db.insert(notificationPreferences).values({ oxyUserId })),
+        isUniqueViolation,
+        'notification_preferences_oxy_user_id_key'
+      );
+    } finally {
+      await db.delete(userSettings).where(eq(userSettings.oxyUserId, oxyUserId));
+      await db.delete(userMusicPreferences).where(eq(userMusicPreferences.oxyUserId, oxyUserId));
+      await db.delete(userBehavior).where(eq(userBehavior.oxyUserId, oxyUserId));
+      await db.delete(userTasteProfiles).where(eq(userTasteProfiles.oxyUserId, oxyUserId));
+      await db.delete(notificationPreferences).where(eq(notificationPreferences.oxyUserId, oxyUserId));
+    }
+  });
+
+  it('protects the two privacy lists on user_settings, and only those', () => {
+    // `GET /api/profile/settings/:userId` (`routes/profileSettings.ts:41`)
+    // serves ANY user's whole settings document to any authenticated caller:
+    // `ensureUserSettings` narrows the TYPE with `.lean<UserSettingsLean>()`
+    // but never projects, so `privacy.hiddenWords` and `privacy.restrictedUsers`
+    // — one person's muted words and the accounts they have restricted — are
+    // already on the wire today. Registering them gives the Postgres port a
+    // structural guard (`findImplicitWholeRowReads` refuses a bare
+    // `db.select().from(userSettings)`) rather than leaving it to whoever ports
+    // that route to remember. The route itself is Mongo-path code and is
+    // raised in this task's report, not changed here.
+    expect(PROTECTED_COLUMNS_BY_TABLE.user_settings).toEqual([
+      'privacyHiddenWords',
+      'privacyRestrictedUsers',
+    ]);
+    const declared = new Set(Object.keys(getTableColumns(userSettings)));
+    for (const property of PROTECTED_COLUMNS_BY_TABLE.user_settings) {
+      expect(declared.has(property)).toBe(true);
+    }
+    // The rest of `privacy` is deliberately NOT registered: the booleans and
+    // `profileVisibility` describe how a profile renders to others, which is
+    // the one part of this document a viewer is meant to see. Recorded as an
+    // assertion so a later task changing its mind has to change this line.
+    expect(PROTECTED_COLUMNS_BY_TABLE.user_settings).not.toContain('privacyProfileVisibility');
   });
 });
 

@@ -112,4 +112,21 @@ export const PROTECTED_COLUMNS_BY_TABLE = {
    * file-level doc comment.
    */
   rooms: ['rtmpStreamKey', 'rtmpUrl', 'activeStreamUrl', 'activeIngressId'],
+  /**
+   * One person's muted words and the accounts they have restricted. Mongoose
+   * never marked either `select: false`, and they are on the wire TODAY:
+   * `GET /api/profile/settings/:userId` (`routes/profileSettings.ts:41`) serves
+   * any account's whole settings document to any authenticated caller, because
+   * `ensureUserSettings` narrows the TypeScript type with
+   * `.lean<UserSettingsLean>()` but never projects — the type says four fields,
+   * the object carries all of them.
+   *
+   * Registering the two lists gives the Postgres port a structural guard
+   * (`findImplicitWholeRowReads` refuses a bare `db.select().from(userSettings)`)
+   * rather than leaving it to whoever ports that route to notice. The rest of
+   * `privacy` is deliberately absent: the booleans and `profileVisibility`
+   * describe how a profile renders to other people, which is the part of this
+   * document a viewer is meant to see.
+   */
+  user_settings: ['privacyHiddenWords', 'privacyRestrictedUsers'],
 } as const;

@@ -64,15 +64,18 @@
  * yet deployed — which is the value never having been advanced, not evidence
  * those three needed a `pre`/`post` split. The Task 4 review that added this
  * paragraph is what actually moves it, to `0008`, catching all three up at
- * once. Task 5 moved it again, to `0010`, and Task 6 to `0011`, for the same
- * reason and by the same rule — routine maintenance, not a judgment call, for
- * as long as nothing is deployed.
+ * once. Task 5 moved it again, to `0010`, Task 6 to `0011` (then `0013` with
+ * its review pair), and Task 7 to `0014`, for the same reason and by the same
+ * rule — routine maintenance, not a judgment call, for as long as nothing is
+ * deployed.
  *
  * `0011` is, notably, the FIRST migration in this window that would have been
  * correct outside it too: it is purely additive (eight new tables, their own
  * foreign keys, their own indexes — no statement touches a pre-existing
  * table), so it is legitimately `pre` on its own merits rather than by the
- * window's exemption. See its own header.
+ * window's exemption. See its own header. `0014` (Task 7) is the second: ten
+ * new tables plus five foreign keys, all of them declared BY those new tables,
+ * so nothing a live image writes could be rejected by any statement in it.
  *
  * `0012`/`0013` (Task 6 review round 1) are the first pair to demonstrate the
  * COROLLARY below rather than violate it. One `drizzle-kit generate` run
@@ -182,7 +185,7 @@ const MIGRATIONS_SEARCH_DEPTH = 6;
  * Exported so that gate can read the SAME boundary this file documents,
  * rather than a second copy of the tag string that could drift from it.
  */
-export const LAST_GENESIS_MIGRATION_TAG = '0013_faulty_ares';
+export const LAST_GENESIS_MIGRATION_TAG = '0014_thankful_talos';
 
 /**
  * `packages/backend/drizzle`, found by walking UP from this module rather than

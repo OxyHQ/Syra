@@ -300,6 +300,55 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
       'resolved episode\'s own show rather than looked up directly — never resolved to a row at all ' +
       '(RELATIONS.md: Room.podcastQueue[].syraPodcastId).',
   },
+  // ── CROSS-SERVICE: Oxy account ids, owned by oxy-api, never a Syra row ────
+  {
+    column: 'user_settings.oxy_user_id',
+    reason: 'The Oxy account these profile settings belong to — one row per account (RELATIONS.md).',
+  },
+  {
+    column: 'user_music_preferences.oxy_user_id',
+    reason: 'The Oxy account these player preferences belong to — one row per account (RELATIONS.md).',
+  },
+  {
+    column: 'user_behavior.oxy_user_id',
+    reason:
+      'The Oxy account this personalisation row would belong to — one row per account. Nothing has ' +
+      'ever written one; see schema/user.ts\'s file-level doc comment (RELATIONS.md).',
+  },
+  {
+    column: 'user_taste_profiles.oxy_user_id',
+    reason: 'The Oxy account whose learned taste this row holds — one row per account (RELATIONS.md).',
+  },
+  {
+    column: 'listening_events.oxy_user_id',
+    reason:
+      'The Oxy account that played the track (RELATIONS.md: ListeningEvent.oxyUserId). Indexed with ' +
+      "played_at: the co-occurrence miner walks one user's events in time order.",
+  },
+  {
+    column: 'notification_preferences.oxy_user_id',
+    reason: 'The Oxy account whose event opt-outs this row holds — one row per account (RELATIONS.md).',
+  },
+  {
+    column: 'notification_suppressions.oxy_user_id',
+    reason:
+      'The Oxy account a notification was already emitted to — half of the unique claim key with ' +
+      '`key` (RELATIONS.md: NotificationSuppression.oxyUserId).',
+  },
+  // ── Polymorphic, no single-table FK is expressible ────────────────────────
+  {
+    column: 'catalog_relations.source_id',
+    reason:
+      "Polymorphic by the sibling `kind`: a tracks id when kind = 'track', a catalog_entities id " +
+      "when kind = 'artist'. Postgres has no conditional foreign key, and RELATIONS.md recommends " +
+      'not enforcing a constraint at all — the co-occurrence job overwrites the whole graph each ' +
+      'pass, so this table is a fully disposable cache rather than a record of anything ' +
+      '(RELATIONS.md: CatalogRelation.sourceId).',
+  },
+  {
+    column: 'catalog_relations.target_id',
+    reason: 'Same polymorphism and same reasoning as catalog_relations.source_id (RELATIONS.md).',
+  },
   {
     column: 'playback_states.active_device_id',
     reason:
