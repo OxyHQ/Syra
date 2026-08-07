@@ -20,13 +20,19 @@
  *
  * ## Why this script moved in Task 12 rather than in Task 10
  *
- * `db/catalog/hybridServices.ts` registers it against Task 10, alongside five
+ * `db/catalog/hybridServices.ts` registered it against Task 10, alongside five
  * other operational scripts that read catalog collections whose tables had
  * moved. It is ported here because it is the only one of the six whose OTHER
  * half was this vertical: it replayed `Podcast.persons[]`/`Episode.persons[]`,
  * and those became `podcast_persons`/`episode_persons`. Deleting the Mongoose
  * models left it unable to compile at all, so "leave it for its owner" was not
- * available. Its registry entry is cleared with it; the other five are untouched.
+ * an available option.
+ *
+ * That ownership was also STALE — Task 10 had closed, so the entry named a task
+ * that could not act on it. Its registry entry is cleared with this port; the
+ * other five are untouched and still name the closed task, which is recorded in
+ * this task's report rather than fixed here, because reassigning work is not a
+ * decision a port gets to make on its own.
  */
 import dotenv from 'dotenv';
 import { and, asc, eq, gt, isNull } from 'drizzle-orm';
