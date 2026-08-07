@@ -673,8 +673,8 @@ export const tracks = pgTable(
     secondaryColor: text(),
     /**
      * `isAvailable` + `copyrightRemoved` together ARE `playableTrackFilter()`
-     * (`utils/catalogVisibility.ts:28-33`) — the predicate every catalog read
-     * of `tracks` composes first: `playableContainers.ts`, `browse.controller.ts`,
+     * (`db/catalog/visibility.ts`) — the predicate every catalog read of
+     * `tracks` composes first: the container helpers, `browse.controller.ts`,
      * and `radio/radioPools.ts`'s `findPoolTracks` (which puts it FIRST in
      * `constraints`, before its own `mood`/`isExplicit`/`genre` filters) all
      * confirmed by grep. Mongo indexed each singly; neither gets a standalone

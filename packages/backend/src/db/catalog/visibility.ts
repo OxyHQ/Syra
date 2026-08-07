@@ -1,12 +1,12 @@
 /**
  * Catalog playability and playlist readability, on drizzle.
  *
- * The Postgres half of the port. `utils/catalogVisibility.ts` still holds the
- * Mongoose half and still serves every call site that has not moved yet; it is
- * DELETED — not deprecated, not re-exported — when its last caller is ported in
- * Task 10c. These are two implementations against two different databases with
- * an explicit death date, which is what makes this a migration rather than a
- * compatibility shim.
+ * The only half there is. `utils/catalogVisibility.ts` held the Mongoose one
+ * while call sites moved across, and Task 11 DELETED it — not deprecated it,
+ * not re-exported it — when `playlists.controller` and `musicHelpers`, its last
+ * two importers, were ported. Two implementations against two databases with an
+ * explicit death date is what made that a migration rather than a compatibility
+ * shim, and the death date has passed.
  *
  * ## The predicate
  *

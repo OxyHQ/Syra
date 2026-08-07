@@ -6,11 +6,11 @@
  * to carry it as a named exemption: a controller that had moved its queries to
  * drizzle but still called this one function looked half-ported and was not.
  *
- * Giving it a home of its own removes the exemption rather than re-homing it,
- * and it does not wait for `utils/catalogVisibility.ts` to die: that module
- * survives Task 10c-3 for `playlists.controller` (Task 11) and
- * `search.controller`, and an exemption that outlives the work it describes is
- * the shape the registries on this branch exist to prevent.
+ * Giving it a home of its own removed the exemption rather than re-homing it,
+ * and it did not wait for `utils/catalogVisibility.ts` to die — which it since
+ * has, in Task 11. An exemption that outlives the work it describes is the
+ * shape the registries on this branch exist to prevent, so retiring it first
+ * was the point.
  *
  * Distinct from `getRequiredOxyUserId` (`@oxyhq/core/server`), which THROWS on
  * an unauthenticated request. This one answers `undefined`, because its callers

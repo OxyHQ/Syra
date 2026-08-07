@@ -1,7 +1,6 @@
 import { descNullsLast } from '../../db/catalog/containers';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { RadioSeed } from '@syra/shared-types';
-import { UserLibraryModel } from '../../models/Library';
 import { UserTasteProfileModel } from '../../models/UserTasteProfile';
 import { getDb } from '../../db/postgres';
 import { albums, catalogEntities, tracks } from '../../db/schema/catalog';
@@ -13,6 +12,7 @@ import {
 } from '../../db/catalog/visibility';
 import { normalizeImageRef } from '../../db/catalog/serialize';
 import { albumGenreNames } from '../../db/catalog/genres';
+import { listMembership } from '../../db/library/membership';
 import { orderByIds } from '../recommendations/taste';
 
 /**
@@ -382,19 +382,22 @@ async function resolveMoodSeed(seedId: string): Promise<SeedResolution | null> {
  * question here, not an error.
  */
 async function resolveUserSeed(oxyUserId: string | undefined): Promise<SeedResolution> {
-  const [profile, library] = oxyUserId
+  const [profile, likedTracks] = oxyUserId
     ? await Promise.all([
         UserTasteProfileModel.findOne({ oxyUserId }).lean(),
-        UserLibraryModel.findOne({ oxyUserId }).select({ likedTracks: 1 }).lean(),
+        listMembership('likedTracks', oxyUserId),
       ])
-    : [null, null];
+    : [null, []];
 
   const topArtists = topTasteKeys(profile?.artists ?? [], USER_SEED_ARTIST_LIMIT);
   const topGenres = topTasteKeys(profile?.genres ?? [], USER_SEED_GENRE_LIMIT);
 
-  // Most recently liked rather than a random draw: liked tracks are appended, so
-  // the tail is the freshest signal — and it keeps the station reproducible.
-  const likedTrackIds = (library?.likedTracks ?? []).slice(-USER_SEED_LIKED_TRACK_LIMIT);
+  // Most recently liked rather than a random draw: the tail is the freshest
+  // signal — and it keeps the station reproducible. `listMembership` returns
+  // oldest first, ordered by `user_liked_tracks.created_at`, which is the
+  // column Task 11 added precisely because the Mongo array's append order was
+  // what this line read and a junction table has none of its own.
+  const likedTrackIds = likedTracks.slice(-USER_SEED_LIKED_TRACK_LIMIT);
 
   const personalized = topGenres.length > 0 || topArtists.length > 0;
 

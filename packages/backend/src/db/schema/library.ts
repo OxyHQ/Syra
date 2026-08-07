@@ -25,7 +25,7 @@
  *
  * `userSavedPlaylists.playlistId` is the one relation of the five whose
  * CASCADE actually fires in production: playlists ARE hard-deleted
- * (`controllers/playlists.controller.ts:383`), and RELATIONS.md documents
+ * (`controllers/playlists.controller.ts`), and RELATIONS.md documents
  * that the app cleans up `PlaylistTrack` on delete but never
  * `Library.savedPlaylists` — a real orphan today (verified live: see
  * `__tests__/gates.test.ts`'s "cascades a deleted playlist" test) that this
@@ -36,11 +36,31 @@
  * `schema/podcasts.ts`) — CASCADE, matching `RELATIONS.md`'s
  * `Library.subscribedPodcasts[] -> podcasts` entry. It also keeps its own
  * standalone index regardless of the FK, because `services/notifications/
- * triggers/episodePublished.ts:50` reverse-joins it (`find({
- * subscribedPodcasts: episode.podcastId })`, fan-out to every subscriber on a
- * new episode) — the one junction of the five with a real reverse-read, not
+ * triggers/episodePublished.ts` reverse-joins it (`find({ subscribedPodcasts:
+ * episode.podcastId })`, fan-out to every subscriber on a new episode — still
+ * a Mongoose read, since this is the one junction Task 11 could not port) —
+ * the one junction of the five with a real reverse-read, not
  * just the forward "this user's list" one every `unique(oxy_user_id, *_id)`
  * already serves as a leading-column index.
+ *
+ * ## The five junctions carry `created_at`, and it is not decoration
+ *
+ * A Mongo array is ORDERED, and `$addToSet` appends, so the document recorded
+ * when each membership was added simply by where it sat. Two surfaces read
+ * that ordering: `services/radio/radioSeed.ts` seeds a station from the
+ * freshest likes (`likedTracks.slice(-N)` — "the tail is the freshest
+ * signal"), and `controllers/library.controller.ts` hands each array back in
+ * the order it stored it. A junction table has no intrinsic order, so without
+ * this column both become arbitrary — and the only thing that would have
+ * looked like an answer is ordering by the uuid v7 primary key, which is
+ * time-sortable by an accident of how `generatedId` mints ids rather than by
+ * anything this schema promises. Task 11 added the column rather than lean on
+ * that.
+ *
+ * `user_podcast_subscriptions` gets it too, though its writer
+ * (`controllers/podcasts.controller.ts`) is still Mongoose and Task 12 owns
+ * that port: five sibling tables that differ in shape for no reason a reader
+ * can see is how a schema starts drifting.
  *
  * ## `Playlist.sources[]` — the fourth sibling
  *
@@ -52,12 +72,15 @@
  *
  * ## `Playlist.collaborators[]` — a child table with no observed writer
  *
- * `controllers/playlists.controller.ts` reads `playlist.collaborators` (the
- * `$or` in `getUserPlaylists`, the `.find()` in the internal edit-permission
- * helper) and `utils/catalogVisibility.ts`'s `canViewPlaylist` reads it too,
- * but nothing in this codebase ever writes to it — no route, no controller,
- * no script assigns `playlist.collaborators`: a shipped read half of a
- * mechanism whose write half was never connected. (Task 2's report cited
+ * Four modules read it — `db/library/playlists.ts` (the `getUserPlaylists`
+ * union, the edit-permission role lookup, the id list `canViewPlaylist` asks
+ * about, the DTO's collaborator array), `services/catalog/artistProfile.ts`
+ * and `services/radio/radioSeed.ts` — and nothing in this codebase ever writes
+ * to it: no route, no controller, no script inserts a `playlist_collaborators`
+ * row. Re-measured in Task 11 after the port, since the reads changed shape and
+ * a claim about writers has to be re-checked against the code that exists now,
+ * not the code it was made about. A shipped read half of a mechanism whose
+ * write half was never connected. (Task 2's report cited
  * `CatalogEntity.members[]` as the same shape; it is NOT — `members` is written
  * by `services/uploads/enrichCatalogEntity.ts`, measured in Task 10b. The
  * comparison is dropped; the grep for `playlist.collaborators` stands on its
@@ -388,6 +411,8 @@ export const userLikedTracks = pgTable(
     trackId: text()
       .notNull()
       .references(() => tracks.id, { onDelete: 'cascade' }),
+    /** When this like was added — see the file-level doc comment. */
+    createdAt: createdAt(),
   },
   (t) => [unique('user_liked_tracks_oxy_user_id_track_id_key').on(t.oxyUserId, t.trackId)]
 );
@@ -401,6 +426,8 @@ export const userSavedAlbums = pgTable(
     albumId: text()
       .notNull()
       .references(() => albums.id, { onDelete: 'cascade' }),
+    /** When this album was saved — see the file-level doc comment. */
+    createdAt: createdAt(),
   },
   (t) => [unique('user_saved_albums_oxy_user_id_album_id_key').on(t.oxyUserId, t.albumId)]
 );
@@ -414,6 +441,8 @@ export const userFollowedArtists = pgTable(
     artistId: text()
       .notNull()
       .references(() => catalogEntities.id, { onDelete: 'cascade' }),
+    /** When this follow was added — see the file-level doc comment. */
+    createdAt: createdAt(),
   },
   (t) => [unique('user_followed_artists_oxy_user_id_artist_id_key').on(t.oxyUserId, t.artistId)]
 );
@@ -432,6 +461,8 @@ export const userSavedPlaylists = pgTable(
     playlistId: text()
       .notNull()
       .references(() => playlists.id, { onDelete: 'cascade' }),
+    /** When this playlist was saved — see the file-level doc comment. */
+    createdAt: createdAt(),
   },
   (t) => [unique('user_saved_playlists_oxy_user_id_playlist_id_key').on(t.oxyUserId, t.playlistId)]
 );
@@ -445,11 +476,13 @@ export const userPodcastSubscriptions = pgTable(
     podcastId: text()
       .notNull()
       .references(() => podcasts.id, { onDelete: 'cascade' }),
+    /** When this subscription was added — see the file-level doc comment. */
+    createdAt: createdAt(),
   },
   (t) => [
     unique('user_podcast_subscriptions_oxy_user_id_podcast_id_key').on(t.oxyUserId, t.podcastId),
     // The REVERSE direction — "every subscriber of this podcast" —
-    // services/notifications/triggers/episodePublished.ts:50's fan-out join.
+    // services/notifications/triggers/episodePublished.ts's fan-out join.
     // Not served by the unique index above, which leads with oxy_user_id.
     index('user_podcast_subscriptions_podcast_id_idx').on(t.podcastId),
   ]

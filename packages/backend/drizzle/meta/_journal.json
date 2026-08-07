@@ -141,6 +141,13 @@
       "when": 1786046235785,
       "tag": "0019_tough_avengers",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1786060973935,
+      "tag": "0020_chilly_vector",
+      "breakpoints": true
     }
   ]
 }

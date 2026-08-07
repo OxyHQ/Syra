@@ -248,23 +248,12 @@ const SURVIVING_MONGOOSE_MODULES: Readonly<
   // once the text-search ruling unblocked `search.controller`, its last
   // importer. Its entry is deleted rather than kept, and the third test below
   // is what would fail if the file came back.
-  'utils/musicHelpers': {
-    owner: 'Task 11 — library and playlists',
-    importers: ['controllers/playlists.controller.ts'],
-    reason:
-      '`formatPlaylistWithCoverArt` / `formatPlaylistsWithCoverArt` / `toApiFormat` operate on ' +
-      'Mongoose Playlist DOCUMENTS. `playlists` and `playlist_tracks` are ported tables, but ' +
-      '`playlists.controller` still reads them through `PlaylistModel`, so killing these ' +
-      'formatters IS Task 11. `db/catalog/serialize.ts` + `hydrate.ts` are the drizzle side and ' +
-      'already carry `toPlaylistDto`/`toPlaylistDtos`.',
-  },
-  'utils/catalogVisibility': {
-    owner: 'Task 11 — library and playlists',
-    importers: ['controllers/playlists.controller.ts', 'utils/musicHelpers.ts'],
-    reason:
-      'Necessarily dies LAST: `musicHelpers` imports it. `db/catalog/visibility.ts` is the ' +
-      'drizzle side and every ported caller already uses it.',
-  },
+  // EMPTY, and that is the finish line rather than an oversight: Task 11 ported
+  // `playlists.controller`, the last importer of both survivors, so
+  // `utils/musicHelpers.ts` and `utils/catalogVisibility.ts` are deleted along
+  // with `utils/imageFirstSort.ts`, whose only importer was the same file. The
+  // deletion gate below is what now holds all four of `OLD_MODULES` down: an
+  // unregistered Task 10 module that comes back fails it.
 };
 
 describe('no file holds half of the catalog port', () => {
@@ -567,6 +556,13 @@ describe('the Mongoose modules still standing', () => {
    * shrinks the real set and fails; a new importer of a dying module grows it
    * and fails. The second direction is the one nothing else on this branch
    * catches — `tsc` is happy either way.
+   *
+   * The registry is empty today, so this loop runs zero times. It is kept
+   * rather than deleted BECAUSE it is the check a future entry needs, and
+   * unlike the two assertions Task 11 removed alongside it, an empty loop here
+   * is not a check that has stopped being able to fail — it is a check with
+   * nothing registered to check. The vacuity floor below is what makes that
+   * distinction hold.
    */
   it('every registered survivor is imported by exactly the files recorded', () => {
     for (const [module, entry] of Object.entries(SURVIVING_MONGOOSE_MODULES)) {
@@ -593,13 +589,21 @@ describe('the Mongoose modules still standing', () => {
   });
 
   /**
-   * A vacuity floor for {@link importersOf}. A traversal that found nothing
-   * would make the exact-set assertion pass for any registry whose entries all
-   * listed zero importers — and "zero importers" is precisely the state that is
-   * supposed to fail.
+   * A vacuity floor for {@link importersOf}.
+   *
+   * It used to point at `utils/catalogVisibility`, which no longer exists — and
+   * a floor asserting that a DELETED module still has importers is a floor that
+   * can only fail. It points at a module that does exist instead, so it goes on
+   * proving the traversal actually resolves specifiers to files. Without it, a
+   * broken `importersOf` would report zero importers for every entry and make
+   * the exact-set assertion above pass for a registry full of live modules.
+   *
+   * `db/catalog/visibility` rather than one of `OLD_MODULES`: all four of those
+   * are gone now, which is the point of the deletion gate above, so nothing on
+   * that list can carry this floor any more.
    */
   it('the importer scan finds something', () => {
-    expect(importersOf('utils/catalogVisibility').length).toBeGreaterThan(0);
+    expect(importersOf('db/catalog/visibility').length).toBeGreaterThan(0);
   });
 });
 

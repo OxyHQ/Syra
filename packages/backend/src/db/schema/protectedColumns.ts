@@ -53,14 +53,14 @@
  * property names).
  *
  * `catalog_entities.images` / `catalog_entities.imageSuggestions` and
- * `tracks.images` / `tracks.sha256` are every field
- * `stripExternalCatalogFields` (`utils/musicHelpers.ts`) deletes today — see
- * that function's own doc comment for why each one is server-only. Thirteen
- * modules format tracks and catalog entities through it, so a field this
- * registry misses is exposed by all of them at once the moment a route stops
- * being a Mongoose `find()` (which honoured `select: false`) and becomes an
- * aggregation (which does not) — exactly what already happened once
- * (`imageSuggestions`, per that function's own doc comment).
+ * `tracks.images` / `tracks.sha256` are every field the Mongoose serializer's
+ * `stripExternalCatalogFields` deleted before Task 11 removed it with
+ * `utils/musicHelpers.ts`. That guard was one hand-maintained `delete` list
+ * behind thirteen formatters, so a field it missed was exposed by all of them
+ * at once the moment a route stopped being a Mongoose `find()` (which honoured
+ * `select: false`) and became an aggregation (which does not) — which happened
+ * once, to `imageSuggestions`. This registry replaces it by removing the column
+ * from the ROW TYPE, so naming one fails `tsc` rather than shipping.
  */
 
 export const PROTECTED_COLUMNS_BY_TABLE = {

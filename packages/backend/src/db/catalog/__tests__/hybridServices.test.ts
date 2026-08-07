@@ -27,8 +27,9 @@
  * checks "everything here is allowed" is satisfied forever by an entry nobody
  * needs any more, which is how `LAST_GENESIS_MIGRATION_TAG` sat three
  * migrations behind and how the identifier exemption outlived its offender.
- * This one fails the moment Task 11 removes `PlaylistModel` from `radioSeed.ts`
- * and nobody updates the registry.
+ * It fired for real in Task 11: porting the library vertical left `Library`
+ * registered against four files that no longer imported it, and every one of
+ * them failed as stale rather than passing quietly.
  *
  * ## Matching is BY IDENTITY, and the fixtures prove it
  *
@@ -170,6 +171,14 @@ function sweepHybridFiles(): string[] {
  */
 const MINIMUM_HYBRID_FILES = 15;
 
+/**
+ * The same floor for property 4's sweep. Ten today (the nine Task 11 found plus
+ * `uploads.controller`, which property 3's sweep had already caught); it drops
+ * as those files port, and a sweep that suddenly finds none is a broken walk,
+ * not a finished migration.
+ */
+const MINIMUM_CATALOG_MODEL_IMPORTERS = 10;
+
 describe('property 3 — every hybrid file in the tree is registered', () => {
   const REGISTERED = new Set([
     ...HYBRID_MODULES.map((entry) => entry.file),
@@ -191,6 +200,58 @@ describe('property 3 — every hybrid file in the tree is registered', () => {
     // Compared by identity through a Set of the registries' own keys — `name`
     // is already the exact relative path they are written in.
     const unregistered = sweepHybridFiles().filter((file) => !REGISTERED.has(file));
+    expect(unregistered).toEqual([]);
+  });
+});
+
+/**
+ * The blind spot properties 1-3 share, and what closes it.
+ *
+ * Property 3 finds a file holding a Mongoose model AND a Postgres read, and
+ * `halfPortedImports.test.ts` finds a file importing a dying module AND
+ * `db/catalog`. Both require the file to be on BOTH sides. A file that is
+ * entirely Mongoose while reading a table that has already MOVED satisfies
+ * neither, so nothing looked at it — and such a file is not merely unported, it
+ * is broken: a `find()` against a collection the application stopped writing
+ * returns nothing, with no error anywhere and `tsc` perfectly happy.
+ *
+ * Task 11 measured it: nine files were in that state, including the two
+ * `moderation/` ones whose TRACK and ARTIST reads had been dead since Task 10.
+ * They were found by writing this sweep, not by reading the code, which is the
+ * whole argument for having it.
+ *
+ * The finish line this draws is the real one — not "no file holds both sides"
+ * but "no file imports a catalog model at all". {@link UNPORTED_CATALOG_MODULES}
+ * shrinks to nothing when that happens, and the "still imports what it is
+ * listed for" assertion below makes each entry fail the moment its file ports.
+ */
+describe('property 4 — every catalog-model importer in the tree is registered', () => {
+  /** Every file under `src/` importing a model `schema/catalog.ts` owns. */
+  function sweepCatalogModelImporters(): string[] {
+    return sourceFiles(SRC)
+      .filter((file) => modelImportsIn(withoutComments(readFileSync(file, 'utf8'))).some(isCatalogModel))
+      .map((file) => relative(SRC, file))
+      .sort();
+  }
+
+  it('the sweep finds the catalog-model importers that are known to exist', () => {
+    const found = sweepCatalogModelImporters();
+    // A floor AND two names, so a broken traversal says which shape it lost
+    // rather than reporting a clean tree. `uploads.controller` holds six
+    // catalog models; `seedMusicData` is a script, i.e. outside every directory
+    // the other sweeps in this file happen to walk.
+    expect(found.length).toBeGreaterThanOrEqual(MINIMUM_CATALOG_MODEL_IMPORTERS);
+    expect(found).toContain('controllers/uploads.controller.ts');
+    expect(found).toContain('scripts/seedMusicData.ts');
+  });
+
+  it('registers every one of them as unported', () => {
+    // NOT `REGISTERED`: property 1 already forbids a HYBRID_MODULES entry from
+    // importing a catalog model, so the only registry that can license one is
+    // the unported list. Checking against both would let a file satisfy this
+    // sweep from an entry property 1 is simultaneously failing.
+    const unported = new Set(UNPORTED_CATALOG_MODULES.map((entry) => entry.file));
+    const unregistered = sweepCatalogModelImporters().filter((file) => !unported.has(file));
     expect(unregistered).toEqual([]);
   });
 });
@@ -318,7 +379,7 @@ describe('vacuity floor', () => {
    */
   it('the parser finds the imports a known hybrid file actually has', () => {
     const found = modelImportsOf('services/recommendations/recommendationService.ts');
-    expect(found).toEqual(['CatalogRelation', 'Library', 'ListeningEvent', 'UserTasteProfile']);
+    expect(found).toEqual(['CatalogRelation', 'ListeningEvent', 'UserTasteProfile']);
   });
 
   it('the parser finds a TYPE-ONLY import', () => {
@@ -339,20 +400,24 @@ describe('vacuity floor', () => {
   });
 
   it('the registry is not empty and covers the measured hybrids', () => {
-    // Eighteen: 10b's ten services, 10c-1's three playback controllers, 10c-2's
+    // Twenty: 10b's ten services, 10c-1's three playback controllers, 10c-2's
     // two artist-surface controllers, 10c-3's `search.controller` and
-    // `library.controller`, and `utils/syraMedia.ts` — the last two added by
-    // property 3's sweep, which is the only reason anybody noticed them. A
-    // registry
-    // that shrank to nothing without the owning tasks landing means the walk
-    // broke, not that the work finished — Tasks 11/13/15 each remove entries and
-    // this floor drops with them, deliberately, by being edited when that
-    // happens. The unported list went 2 -> 1 when `manifestService`'s adapters
-    // were deleted, then 1 -> 2 when property 3's sweep found
-    // `uploads.controller` — which holds six of its OWN vertical's catalog
-    // models, so it belongs here and not in HYBRID_MODULES. `resolvePersons`
-    // is the other, and it needs Task 12.
-    expect(HYBRID_MODULES.length).toBe(18);
-    expect(UNPORTED_CATALOG_MODULES.length).toBe(2);
+    // `library.controller`, `utils/syraMedia.ts`, and Task 11's two moderation
+    // files — the last three all added by property 3's sweep, which is the only
+    // reason anybody noticed any of them. A registry that shrank to nothing
+    // without the owning tasks landing means the walk broke, not that the work
+    // finished — Tasks 8/12/13/15 each remove entries and this floor drops with
+    // them, deliberately, by being edited when that happens. It went UP in Task
+    // 11 rather than down, because porting a file's catalog half is what makes
+    // it hybrid and therefore registrable in the first place. The unported list
+    // went 2 -> 1 when `manifestService`'s adapters were deleted, then 1 -> 2
+    // when property 3's sweep found `uploads.controller` — which holds six of
+    // its OWN vertical's catalog models, so it belongs here and not in
+    // HYBRID_MODULES. `resolvePersons` is the other, and it needs Task 12.
+    expect(HYBRID_MODULES.length).toBe(20);
+    // 2 -> 10 in Task 11: property 4's sweep found eight files importing a
+    // catalog model with no Postgres read anywhere in them, which is the one
+    // shape properties 1-3 cannot see.
+    expect(UNPORTED_CATALOG_MODULES.length).toBe(10);
   });
 });

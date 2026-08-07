@@ -44,11 +44,20 @@
 
 /** The verticals a still-Mongoose model can belong to, and the task that owns it. */
 export const OWNING_TASKS = {
-  library: 'Task 11 — library and playlists',
+  // `library` is GONE, and its absence is the record that Task 11 landed: no
+  // still-Mongoose model belongs to that vertical any more. `Playlist`,
+  // `PlaylistTrack` and `RecentlyPlayed` were deleted with it, and `Library`
+  // was re-owned to `podcasts` — see the note on it below.
   podcasts: 'Task 12 — podcasts',
   creators: 'Task 13 — creators and uploads',
   rooms: 'Task 14 — rooms',
   user: 'Task 15 — user and recommendations',
+  // Task 8 is BLOCKED on an owner decision, so its models have no port in
+  // sight. Registered anyway, because two files hold Postgres reads beside
+  // them and property 3's sweep finds those files whether or not the task is
+  // startable — an unregistered hybrid is not made acceptable by its owning
+  // task being blocked.
+  moderation: 'Task 8 — moderation (blocked on an owner decision)',
 } as const;
 
 export type OwningTask = keyof typeof OWNING_TASKS;
@@ -61,11 +70,21 @@ export type OwningTask = keyof typeof OWNING_TASKS;
  * stops the registry becoming a general-purpose "this import is fine" list.
  */
 export const NON_CATALOG_MODEL_OWNERS = {
-  Library: 'library',
-  Playlist: 'library',
-  PlaylistTrack: 'library',
-  RecentlyPlayed: 'library',
+  /**
+   * Narrowed to `subscribedPodcasts` by Task 11 and re-owned with it.
+   *
+   * `user_podcast_subscriptions.podcast_id` references `podcasts`, whose rows
+   * are still written on Mongoose, so this one array cannot move until Task 12
+   * moves its writer — while the other four became junction tables. The model
+   * file itself was narrowed to match, so a stray `$addToSet: { likedTracks }`
+   * is a compile error rather than a silent write Mongoose drops.
+   */
+  Library: 'podcasts',
   Room: 'rooms',
+  House: 'rooms',
+  Recording: 'rooms',
+  Report: 'moderation',
+  ModerationEnforcement: 'moderation',
   ArtistClaim: 'creators',
   ContributionAttestation: 'creators',
   UserUpload: 'creators',
@@ -149,19 +168,19 @@ export const HYBRID_MODULES: readonly HybridModule[] = [
   },
   {
     file: 'services/radio/radioFixtures.ts',
-    models: ['CatalogRelation', 'Library', 'UserTasteProfile'],
+    models: ['CatalogRelation', 'UserTasteProfile'],
     reason:
       'Builds fixtures for both databases. The catalogue half is drizzle; the co-listen graph ' +
-      'and taste weights belong to Task 15 and the library to Task 11.',
+      'and taste weights belong to Task 15. `makeLibrary` writes `user_liked_tracks` since ' +
+      'Task 11.',
   },
   {
     file: 'services/radio/radioSeed.ts',
-    models: ['Library', 'UserTasteProfile'],
+    models: ['UserTasteProfile'],
     reason:
-      'The user seed reads taste weights (Task 15) and liked tracks (Task 11), then hands a ' +
-      'list of track ids to a Postgres query. The PLAYLIST seed is already drizzle — Task 10a ' +
-      'put `playlists`/`playlist_tracks` on that side in `containers.ts`, and leaving this one ' +
-      'on Mongoose made two catalog services disagree about where a playlist lives.',
+      'The user seed reads taste weights — Task 15\'s table — then hands a list of track ids to ' +
+      'a Postgres query. The liked tracks beside them moved in Task 11, and so did the freshness ' +
+      'ordering the seed reads off the tail of that list.',
   },
   {
     file: 'services/radio/radioPools.ts',
@@ -177,10 +196,11 @@ export const HYBRID_MODULES: readonly HybridModule[] = [
   },
   {
     file: 'services/recommendations/recommendationService.ts',
-    models: ['CatalogRelation', 'Library', 'ListeningEvent', 'UserTasteProfile'],
+    models: ['CatalogRelation', 'ListeningEvent', 'UserTasteProfile'],
     reason:
-      'Every personalised read starts from a taste profile, a library and a listening history ' +
-      '(Tasks 11 and 15) and ends in a Postgres catalog query keyed on the ids they return.',
+      'Every personalised read starts from a taste profile and a listening history (Task 15) ' +
+      'and ends in a Postgres catalog query keyed on the ids they return. The library half is ' +
+      'drizzle since Task 11.',
   },
   {
     file: 'services/recommendations/recordPlay.ts',
@@ -238,13 +258,30 @@ export const HYBRID_MODULES: readonly HybridModule[] = [
   },
   {
     file: 'controllers/library.controller.ts',
-    models: ['Library', 'ListeningEvent', 'RecentlyPlayed'],
+    models: ['ListeningEvent'],
     reason:
-      'Made hybrid by Task 10c-3, which took its two CATALOG reads (liked tracks, recently ' +
-      'played) to drizzle so they stopped feeding a drizzle row to a Mongo formatter. The ' +
-      'membership arrays, the play log and the listening events are Task 11\'s and Task 15\'s ' +
-      'tables; each read returns a list of track ids and the catalog lookup is a separate round ' +
-      'trip against Postgres.',
+      'Task 11 took the memberships and the play log to drizzle, which is most of this file; ' +
+      'what survives is the `LISTENING_SOURCES` union it validates a client-supplied source ' +
+      'against before handing it to `recordPlay`, and that constant lives on Task 15\'s model.',
+  },
+  {
+    file: 'moderation/enforcement-service.ts',
+    models: ['House', 'ModerationEnforcement', 'Report', 'Room'],
+    reason:
+      'Carrying out a decision reaches four different nouns, and they now live in two stores. ' +
+      'The TRACK and PLAYLIST restrictions are drizzle (Task 11 ported both, having found them ' +
+      'reading Mongo collections whose rows had already moved — see the note on the sweep ' +
+      'below); houses and rooms are Task 14\'s, and the enforcement ledger and report taxonomy ' +
+      'are Task 8\'s, which is blocked. No branch joins the two stores: each is a switch case ' +
+      'that reads and writes one noun.',
+  },
+  {
+    file: 'moderation/subjects/providers.ts',
+    models: ['House', 'Recording', 'Report', 'Room'],
+    reason:
+      'Five subject providers, same split and same reason as `enforcement-service` above: the ' +
+      'playlist, track and artist snapshots are drizzle, houses and rooms are Task 14\'s. ' +
+      '`ReportedType` is an enum on Task 8\'s model rather than a query.',
   },
   {
     file: 'utils/syraMedia.ts',
@@ -292,6 +329,22 @@ export const UNPORTED_CATALOG_MODULES: readonly {
   readonly reason: string;
 }[] = [
   {
+    file: 'controllers/podcastAudio.controller.ts',
+    models: ['TrackKey'],
+    owner: 'Task 12',
+    reason:
+      'Reads the episode\'s decryption key out of `track_keys` to serve podcast audio. A catalog ' +
+      'table read from the podcasts vertical, so it moves with the rest of that controller.',
+  },
+  {
+    file: 'controllers/podcasts.controller.ts',
+    models: ['CatalogEntity'],
+    owner: 'Task 12',
+    reason:
+      'Resolves the artist a show is linked to. The rest of the file is Task 12\'s own vertical, ' +
+      'and `UserLibrary`\'s surviving `subscribedPodcasts` array is here too.',
+  },
+  {
     file: 'services/podcasts/resolvePersons.ts',
     models: ['CatalogEntity'],
     owner: 'Task 12',
@@ -311,6 +364,53 @@ export const UNPORTED_CATALOG_MODULES: readonly {
       'to read another vertical\'s models", and property 1 would correctly refuse a file holding ' +
       'this many of its OWN vertical\'s models. Task 10c-3 swapped one import (`normalizeImageRef`) ' +
       'and touched nothing else.',
+  },
+  // ── Operational scripts ────────────────────────────────────────────────
+  //
+  // Five scripts that read or write catalog collections whose tables moved in
+  // Task 10, found by property 4's sweep in Task 11 and registered rather than
+  // ported: none of them is on any vertical's file list, and they are not this
+  // task's to rewrite. They are all BROKEN today in the same way — a Mongoose
+  // read against a collection the application no longer writes returns nothing,
+  // and a Mongoose write lands where nothing looks. Named individually so
+  // whoever picks them up gets a list rather than a category.
+  {
+    file: 'scripts/seedMusicData.ts',
+    models: ['Album', 'CatalogEntity', 'Track'],
+    owner: 'Task 10 — catalog (missed by its file selector; surfaced in Task 11)',
+    reason: 'Seeds a development catalogue into Mongo. Nothing reads that catalogue any more.',
+  },
+  {
+    file: 'scripts/reseedPersons.ts',
+    models: ['CatalogEntity'],
+    owner: 'Task 10 — catalog (missed by its file selector; surfaced in Task 11)',
+    reason: 'Deletes and re-creates unlinked `person` rows through the Mongoose discriminator.',
+  },
+  {
+    file: 'scripts/backfillTrackFingerprints.ts',
+    models: ['Track', 'TrackFingerprint'],
+    owner: 'Task 10 — catalog (missed by its file selector; surfaced in Task 11)',
+    reason: 'Walks every track to index it acoustically; both collections are ported tables.',
+  },
+  {
+    file: 'scripts/importIsrcRegistry.ts',
+    models: ['IsrcRegistry'],
+    owner: 'Task 10 — catalog (missed by its file selector; surfaced in Task 11)',
+    reason:
+      'Bulk-loads the ISRC registry. The three SERVICES that read it were ported in Task 10b ' +
+      '(they were missed by the same selector); the importer that fills it was not.',
+  },
+  {
+    file: 'scripts/importMusicBrainzArtists.ts',
+    models: ['MusicBrainzArtist'],
+    owner: 'Task 10 — catalog (missed by its file selector; surfaced in Task 11)',
+    reason: 'Bulk-loads the MusicBrainz artist mirror `enrichCatalogEntity` reads from Postgres.',
+  },
+  {
+    file: 'scripts/importDiscogsReleases.ts',
+    models: ['DiscogsRelease'],
+    owner: 'Task 10 — catalog (missed by its file selector; surfaced in Task 11)',
+    reason: 'Bulk-loads the Discogs release mirror.',
   },
   // `services/uploads/{acoustid,isrcLookup,provenanceSignals}.ts` were listed
   // here — missed by the Task 10b brief's selector, which keyed on four model

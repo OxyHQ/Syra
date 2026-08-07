@@ -15,11 +15,12 @@
  *
  * ## Why this is not in `utils/musicHelpers.ts`'s shape
  *
- * `formatTracksWithCoverArt(tracks: any[]): Promise<any[]>` is typed `any` on
- * both ends. Handing it a drizzle row instead of a Mongoose document therefore
- * type-checks perfectly and returns objects with `undefined` in every field —
- * the failure this whole port has to avoid, in the one place tsc cannot help.
- * Every function here names its input and output types.
+ * That module is gone (Task 11), and this is what it was replaced with rather
+ * than ported into. `formatTracksWithCoverArt(tracks: any[]): Promise<any[]>`
+ * was typed `any` on both ends, so handing it a drizzle row instead of a
+ * Mongoose document type-checked perfectly and returned objects with
+ * `undefined` in every field — which four live endpoints did. Every function
+ * here names its input and output types.
  */
 
 import { count, inArray } from 'drizzle-orm';

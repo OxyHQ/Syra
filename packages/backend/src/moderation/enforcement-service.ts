@@ -1,11 +1,13 @@
 import mongoose from 'mongoose';
+import { eq } from 'drizzle-orm';
 import type { Decision } from '@oxyhq/crowdsource-contracts';
-import { PlaylistVisibility } from '@syra/shared-types';
-import { PlaylistModel } from '../models/Playlist';
+import { PlaylistVisibility, playlistVisibilitySchema } from '@syra/shared-types';
 import HouseModel from '../models/House';
 import RoomModel from '../models/Room';
-import { TrackModel } from '../models/Track';
 import { ReportedType } from '../models/Report';
+import { getDb } from '../db/postgres';
+import { tracks } from '../db/schema/catalog';
+import { playlists } from '../db/schema/library';
 import {
   ModerationEnforcementModel,
   type IModerationEnforcement,
@@ -106,42 +108,52 @@ async function lastApplied(
  * recorded and handed to a human.
  */
 async function restrict(subject: EnforcementSubject): Promise<EffectResult> {
-  if (!mongoose.isValidObjectId(subject.id)) {
-    return { changed: false, reason: 'The reported object no longer exists' };
-  }
-
   switch (subject.type) {
     case ReportedType.TRACK: {
-      const track = await TrackModel.findById(subject.id)
-        .select('isAvailable')
-        .lean<{ isAvailable?: boolean } | null>();
+      // No id-shape guard on the Postgres branches. `tracks.id` and
+      // `playlists.id` are `text`, so a malformed id matches no row and the
+      // query gives the same answer the guard did — while an ObjectId-only
+      // guard, which is what this function used to open with, rejected every
+      // uuid v7 id the catalogue has minted since the cutover. The Mongo
+      // branches below keep theirs, because a wrong-shaped id reaches Mongoose
+      // as a CastError rather than a miss.
+      const [track] = await getDb()
+        .select({ isAvailable: tracks.isAvailable })
+        .from(tracks)
+        .where(eq(tracks.id, subject.id))
+        .limit(1);
       if (!track) return { changed: false, reason: 'The reported track no longer exists' };
       if (track.isAvailable === false) {
         return { changed: false, reason: 'The track was already out of the catalog' };
       }
       // `copyrightRemoved` is deliberately untouched — see the file header.
-      await TrackModel.updateOne({ _id: subject.id }, { $set: { isAvailable: false } });
+      await getDb().update(tracks).set({ isAvailable: false }).where(eq(tracks.id, subject.id));
       return { changed: true, previousState: { isAvailable: true } };
     }
 
     case ReportedType.PLAYLIST: {
-      const playlist = await PlaylistModel.findById(subject.id)
-        .select('visibility')
-        .lean<{ visibility?: string } | null>();
+      const [playlist] = await getDb()
+        .select({ visibility: playlists.visibility })
+        .from(playlists)
+        .where(eq(playlists.id, subject.id))
+        .limit(1);
       if (!playlist) {
         return { changed: false, reason: 'The reported playlist no longer exists' };
       }
       if (playlist.visibility !== PlaylistVisibility.PUBLIC) {
         return { changed: false, reason: 'The playlist was already not public' };
       }
-      await PlaylistModel.updateOne(
-        { _id: subject.id },
-        { $set: { visibility: PlaylistVisibility.PRIVATE } },
-      );
+      await getDb()
+        .update(playlists)
+        .set({ visibility: PlaylistVisibility.PRIVATE })
+        .where(eq(playlists.id, subject.id));
       return { changed: true, previousState: { visibility: PlaylistVisibility.PUBLIC } };
     }
 
     case ReportedType.HOUSE: {
+      if (!mongoose.isValidObjectId(subject.id)) {
+        return { changed: false, reason: 'The reported house no longer exists' };
+      }
       const house = await HouseModel.findById(subject.id)
         .select('visibility')
         .lean<{ visibility?: { discovery?: string } } | null>();
@@ -161,6 +173,9 @@ async function restrict(subject: EnforcementSubject): Promise<EffectResult> {
     }
 
     case ReportedType.ROOM: {
+      if (!mongoose.isValidObjectId(subject.id)) {
+        return { changed: false, reason: 'The reported room no longer exists' };
+      }
       const room = await RoomModel.findById(subject.id)
         .select('archived')
         .lean<{ archived?: boolean } | null>();
@@ -192,9 +207,6 @@ async function restore(subject: EnforcementSubject): Promise<EffectResult> {
   if (!restriction?.previousState) {
     return { changed: false, reason: 'There was no earlier restriction to undo' };
   }
-  if (!mongoose.isValidObjectId(subject.id)) {
-    return { changed: false, reason: 'The reported object no longer exists' };
-  }
   const previous = restriction.previousState;
 
   switch (subject.type) {
@@ -202,11 +214,14 @@ async function restore(subject: EnforcementSubject): Promise<EffectResult> {
       if (previous.isAvailable !== true) {
         return { changed: false, reason: 'The track was not available before the restriction' };
       }
-      const result = await TrackModel.updateOne(
-        { _id: subject.id },
-        { $set: { isAvailable: true } },
-      );
-      if (result.matchedCount === 0) {
+      // `returning()` rather than a row count: it is how drizzle answers
+      // "did this match anything", the question `matchedCount` answered.
+      const restored = await getDb()
+        .update(tracks)
+        .set({ isAvailable: true })
+        .where(eq(tracks.id, subject.id))
+        .returning({ id: tracks.id });
+      if (restored.length === 0) {
         return { changed: false, reason: 'The reported track no longer exists' };
       }
       return { changed: true, previousState: { isAvailable: false } };
@@ -216,11 +231,21 @@ async function restore(subject: EnforcementSubject): Promise<EffectResult> {
       if (previous.visibility === undefined) {
         return { changed: false, reason: 'No previous playlist visibility was recorded' };
       }
-      const result = await PlaylistModel.updateOne(
-        { _id: subject.id },
-        { $set: { visibility: previous.visibility } },
-      );
-      if (result.matchedCount === 0) {
+      // `playlists.visibility` carries a CHECK constraint, where the Mongoose
+      // enum was inert under `updateOne` — so a recorded value that is not a
+      // real visibility used to be written back verbatim and is now refused.
+      // Parsed rather than trusted, at the boundary of a row this process wrote
+      // in an earlier revision and may not have written at all.
+      const recorded = playlistVisibilitySchema.safeParse(previous.visibility);
+      if (!recorded.success) {
+        return { changed: false, reason: 'The recorded playlist visibility is not a real one' };
+      }
+      const restored = await getDb()
+        .update(playlists)
+        .set({ visibility: recorded.data })
+        .where(eq(playlists.id, subject.id))
+        .returning({ id: playlists.id });
+      if (restored.length === 0) {
         return { changed: false, reason: 'The reported playlist no longer exists' };
       }
       return { changed: true, previousState: { visibility: PlaylistVisibility.PRIVATE } };
@@ -229,6 +254,9 @@ async function restore(subject: EnforcementSubject): Promise<EffectResult> {
     case ReportedType.HOUSE: {
       if (previous.visibility === undefined) {
         return { changed: false, reason: 'No previous house visibility was recorded' };
+      }
+      if (!mongoose.isValidObjectId(subject.id)) {
+        return { changed: false, reason: 'The reported house no longer exists' };
       }
       const result = await HouseModel.updateOne(
         { _id: subject.id },
@@ -241,6 +269,9 @@ async function restore(subject: EnforcementSubject): Promise<EffectResult> {
     }
 
     case ReportedType.ROOM: {
+      if (!mongoose.isValidObjectId(subject.id)) {
+        return { changed: false, reason: 'The reported room no longer exists' };
+      }
       const result = await RoomModel.updateOne(
         { _id: subject.id },
         { $set: { archived: false } },

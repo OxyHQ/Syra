@@ -2,7 +2,6 @@ import { and, arrayOverlaps, eq, inArray, notInArray, or, type SQL } from 'drizz
 import { publicColumns } from '@oxyhq/db/assert';
 import { CatalogRelationModel } from '../../models/CatalogRelation';
 import { UserTasteProfileModel } from '../../models/UserTasteProfile';
-import { UserLibraryModel } from '../../models/Library';
 import { ListeningEventModel } from '../../models/ListeningEvent';
 import { getDb } from '../../db/postgres';
 import { catalogEntities, tracks } from '../../db/schema/catalog';
@@ -14,6 +13,7 @@ import {
   imageFirst,
 } from '../../db/catalog/containers';
 import type { PublicCatalogEntityRow, PublicTrackRow } from '../../db/catalog/serialize';
+import { listMembership } from '../../db/library/membership';
 import { orderByIds, rankByTaste, topRelatedArtistIds } from './taste';
 
 /**
@@ -22,11 +22,12 @@ import { orderByIds, rankByTaste, topRelatedArtistIds } from './taste';
  * entity (cold start / sparse catalog), it falls back to content similarity
  * (shared genre) and global popularity, so a result is always returned.
  *
- * `CatalogRelation`, `UserTasteProfile`, `UserLibrary` and `ListeningEvent`
- * belong to the library and user verticals (Tasks 11 and 15) and are still
- * Mongoose. Every one of them is read for a LIST OF IDS that is then looked up
- * in Postgres, never joined to a catalog collection in one pipeline, so the
- * split is a second round trip rather than a broken query.
+ * `CatalogRelation`, `UserTasteProfile` and `ListeningEvent` belong to the user
+ * vertical (Task 15) and are still Mongoose. Every one of them is read for a
+ * LIST OF IDS that is then looked up in Postgres, never joined to a catalog
+ * collection in one pipeline, so the split is a second round trip rather than a
+ * broken query. `UserLibrary` was in that list and is not any more — Task 11
+ * put the memberships on `db/library/membership.ts`.
  */
 
 const DEFAULT_RELATED_LIMIT = 20;
@@ -243,9 +244,10 @@ export async function getMadeForYou(
   oxyUserId: string,
   limit = 20,
 ): Promise<MadeForYou> {
-  const [profile, library] = await Promise.all([
+  const [profile, likedTracks, followedArtists] = await Promise.all([
     UserTasteProfileModel.findOne({ oxyUserId }).lean(),
-    UserLibraryModel.findOne({ oxyUserId }).select({ likedTracks: 1, followedArtists: 1 }).lean(),
+    listMembership('likedTracks', oxyUserId),
+    listMembership('followedArtists', oxyUserId),
   ]);
 
   const topGenres = (profile?.genres ?? [])
@@ -297,7 +299,7 @@ export async function getMadeForYou(
   const excludeTrackIds = [
     ...new Set<string>([
       ...recentEvents.map((e) => e.trackId),
-      ...(library?.likedTracks ?? []),
+      ...likedTracks,
     ]),
   ];
 
@@ -326,7 +328,7 @@ export async function getMadeForYou(
 
   // Artists: related to the user's top artists (collaborative graph), excluding
   // ones they already follow, blended with their genre affinity.
-  const followed = new Set<string>(library?.followedArtists ?? []);
+  const followed = new Set<string>(followedArtists);
   followed.add('');
   const relatedArtistIds = await topRelatedArtistIds(topArtists, followed, limit * 2);
 

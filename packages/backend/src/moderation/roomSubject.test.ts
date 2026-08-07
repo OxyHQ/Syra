@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import mongoose from 'mongoose';
 import { connect, clear, disconnect } from '../test/mongo';
+import { connectDb, clearDb, disconnectDb } from '../test/postgres';
 import RoomModel, { RoomStatus, RoomType, OwnerType } from '../models/Room';
 import RecordingModel, { RecordingStatus, RecordingAccess } from '../models/Recording';
-import { PlaylistModel } from '../models/Playlist';
+import { getDb } from '../db/postgres';
+import { playlists } from '../db/schema/library';
 import { subjectProviderFor } from './subjects/registry';
 import { ReportedType } from '../models/Report';
 import type { ModerationResource } from './subjects/types';
@@ -18,9 +20,20 @@ import type { ModerationResource } from './subjects/types';
  * change would quietly add.
  */
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+// Both stores: rooms and recordings are still Mongoose (Task 14), playlists are
+// on Postgres since Task 11, and this file exercises providers for all three.
+beforeAll(async () => {
+  await connect();
+  await connectDb();
+});
+afterEach(async () => {
+  await clear();
+  await clearDb();
+});
+afterAll(async () => {
+  await disconnect();
+  await disconnectDb();
+});
 
 const HOST = 'oxy-host-1';
 
@@ -170,25 +183,39 @@ describe('playlist subject provider', () => {
    * Handing it to a jury of strangers would disclose more than the report ever
    * justified.
    */
+  async function makePlaylist(over: Partial<typeof playlists.$inferInsert>) {
+    const [row] = await getDb()
+      .insert(playlists)
+      .values({ name: 'Mix', ownerOxyUserId: 'oxy-user-9', ownerUsername: 'owner9', ...over })
+      .returning({ id: playlists.id });
+    return row.id;
+  }
+
   it('declines a private playlist', async () => {
-    const playlist = await PlaylistModel.create({
-      name: 'Private mix',
-      ownerOxyUserId: 'oxy-user-9',
-      ownerUsername: 'owner9',
-      visibility: 'private',
-    });
-    expect(await playlistProvider?.snapshot(String(playlist._id))).toBeNull();
+    const id = await makePlaylist({ name: 'Private mix', visibility: 'private' });
+    expect(await playlistProvider?.snapshot(id)).toBeNull();
+  });
+
+  it('declines an unlisted playlist, which is not public either', async () => {
+    const id = await makePlaylist({ name: 'Unlisted mix', visibility: 'unlisted' });
+    expect(await playlistProvider?.snapshot(id)).toBeNull();
+  });
+
+  it('declines an id that names no playlist, without an id-shape guard', async () => {
+    // The Mongo provider opened with `mongoose.isValidObjectId`, which rejected
+    // every uuid v7 the catalogue mints today. `playlists.id` is `text`, so the
+    // query answers both cases: a malformed id and a well-formed unknown one.
+    expect(await playlistProvider?.snapshot('not-an-object-id')).toBeNull();
+    expect(await playlistProvider?.snapshot('01936f00-0000-7000-8000-000000000000')).toBeNull();
   });
 
   it('describes a public playlist and names its owner', async () => {
-    const playlist = await PlaylistModel.create({
+    const id = await makePlaylist({
       name: 'Public mix',
       description: 'Words the owner wrote',
-      ownerOxyUserId: 'oxy-user-9',
-      ownerUsername: 'owner9',
       visibility: 'public',
     });
-    const snapshot = await playlistProvider?.snapshot(String(playlist._id));
+    const snapshot = await playlistProvider?.snapshot(id);
     expect(snapshot?.subject.author?.oxyUserId).toBe('oxy-user-9');
     expect(snapshot?.content).toMatchObject({
       type: 'listing',

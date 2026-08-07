@@ -768,10 +768,11 @@ describe('library and playlist schema (Task 3)', () => {
   it('cascades a deleted playlist into user_saved_playlists — the orphan RELATIONS.md found live in production', async () => {
     const db = getDb();
 
-    // RELATIONS.md: playlists ARE hard-deleted today
-    // (controllers/playlists.controller.ts:383), and the app cleans up
-    // PlaylistTrack but never Library.savedPlaylists — a real orphan a
-    // DB-level CASCADE fixes without any application change.
+    // RELATIONS.md: playlists ARE hard-deleted (`deletePlaylist`), and the
+    // Mongo path cleaned up `PlaylistTrack` but never `Library.savedPlaylists`
+    // — a real orphan this CASCADE fixes without any application change. Task
+    // 11 deleted the explicit cleanup along with the model, so the cascade
+    // below is now the only thing doing it.
     const [playlist] = await db
       .insert(playlists)
       .values({

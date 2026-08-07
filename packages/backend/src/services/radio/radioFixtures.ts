@@ -1,11 +1,10 @@
 import { uuidv7 } from '@oxyhq/db';
 import { PlaylistVisibility } from '@syra/shared-types';
 import { CatalogRelationModel } from '../../models/CatalogRelation';
-import { UserLibraryModel } from '../../models/Library';
 import { UserTasteProfileModel } from '../../models/UserTasteProfile';
 import { getDb } from '../../db/postgres';
 import { albums, catalogEntities, imageAssets, tracks } from '../../db/schema/catalog';
-import { playlistTracks, playlists } from '../../db/schema/library';
+import { playlistTracks, playlists, userLikedTracks } from '../../db/schema/library';
 import { setAlbumGenres } from '../../db/catalog/genres';
 
 /**
@@ -25,9 +24,10 @@ import { setAlbumGenres } from '../../db/catalog/genres';
  * cover asset) they need when the caller does not supply one. A test that
  * wants a specific artist still passes `artistId` and gets exactly that.
  *
- * `CatalogRelation`, `UserTasteProfile` and `UserLibrary` are still Mongoose —
- * they belong to Task 15's vertical — so a radio suite needs BOTH `test/mongo`
- * and `test/postgres` hooks until that lands.
+ * `CatalogRelation` and `UserTasteProfile` are still Mongoose — they belong to
+ * Task 15's vertical — so a radio suite needs BOTH `test/mongo` and
+ * `test/postgres` hooks until that lands. `UserLibrary` was in that sentence
+ * until Task 11; {@link makeLibrary} writes `user_liked_tracks` now.
  */
 
 /** An `image_assets` row, because `albums.cover_art_id` is NOT NULL. */
@@ -211,6 +211,19 @@ export async function makeTasteProfile(
   await UserTasteProfileModel.create({ oxyUserId, genres, artists, totalSignal: 100 });
 }
 
+/**
+ * Liked tracks for one listener, in the order given.
+ *
+ * Inserted one at a time rather than in one `values([...])` batch: the order is
+ * load-bearing (`radioSeed`'s user seed reads the FRESHEST likes off the tail
+ * of `created_at`), and a batch insert would give every row the same
+ * `default now()` — which orders them arbitrarily and is exactly the kind of
+ * fixture that cannot tell a correct ordering from a broken one.
+ */
 export async function makeLibrary(oxyUserId: string, likedTracks: string[]): Promise<void> {
-  await UserLibraryModel.create({ oxyUserId, likedTracks });
+  for (const [index, trackId] of likedTracks.entries()) {
+    await getDb()
+      .insert(userLikedTracks)
+      .values({ oxyUserId, trackId, createdAt: new Date(Date.now() + index) });
+  }
 }
