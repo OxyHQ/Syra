@@ -14,7 +14,10 @@
  *
  * PARTIAL FAILURE: RESUME, not redo — same as the ISRC slice. The checkpoint is
  * written only after the transaction commits, and re-running the batch in flight
- * is harmless because every write in it is idempotent.
+ * is harmless because every write in it is idempotent. The same separation
+ * applies: the UPSERT makes a replay safe, the CHECKPOINT makes it cheap, and
+ * the checkpoint must be deleted between dumps because a new export carries a
+ * new TIMESTAMP. See the ISRC importer's header for the full statement.
  *
  * THE DUMP IS AUTHORITATIVE. An artist whose disambiguation, country or ISNI
  * disappears upstream has it CLEARED here, and an artist who loses a URL loses

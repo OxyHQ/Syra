@@ -206,8 +206,14 @@ describe('importIsrcRegistry', () => {
     await importIsrcRegistry(options);
     const first = await readAll();
 
-    // The checkpoint would otherwise resume past everything, so this run starts
-    // clean the way a re-import of the same dump does after a completed pass.
+    /**
+     * Deleting the checkpoint is what makes this test about the UPSERT.
+     *
+     * Left in place it sits at the total and the second run skips every row
+     * before reaching a write, so the table would be unchanged no matter what
+     * the conflict clause did — green, and measuring nothing. The two mechanisms
+     * are separable and only one of them is under test here.
+     */
     fs.rmSync(dump.checkpointPath);
     await importIsrcRegistry(options);
     const second = await readAll();

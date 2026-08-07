@@ -24,6 +24,7 @@ import { getDb } from '../db/postgres';
 import { catalogEntities, trackFingerprints, tracks } from '../db/schema/catalog';
 import { indexTrackAcoustically } from '../db/catalog/fingerprints';
 import { UserUploadModel } from '../models/UserUpload';
+import { logger } from '../utils/logger';
 import {
   purgeLockerCopiesOfTrack,
   type LockerPurgeDeps,
@@ -288,6 +289,60 @@ describe('backfillTrackFingerprints — writing', () => {
    * the window the real race occupies: the row was read, the audio is being
    * processed, and a takedown lands.
    */
+  /**
+   * A driver error must not be logged whole.
+   *
+   * postgres.js attaches the failing statement and its bound parameters, so
+   * `logger.warn(…, { err })` publishes the entire fingerprint — measured at
+   * FIVE copies of every value across `message`, `stack` and a structured
+   * `params` array. At ~1600 int32s per track on a catalogue-wide run that is a
+   * log-volume problem and a data-in-logs problem at once, and nothing like it
+   * existed before the port: a Mongoose error carried no statement.
+   *
+   * The trigger is a real bug rather than a contrived one. `fpcalc` prints
+   * UNSIGNED uint32 and `fingerprint.ts` folds with `| 0`; without that fold the
+   * value below is exactly what arrives, and `integer[]` refuses it with
+   * `22003`. So this pins the redaction on the error a plausible regression
+   * would actually produce.
+   */
+  it('never logs the bound parameters when the driver refuses the write', async () => {
+    const artistId = await makeArtist();
+    await makeTrack(artistId, playable());
+
+    const captured: string[] = [];
+    const originalWarn = logger.warn;
+    logger.warn = ((message: string, meta?: unknown) => {
+      captured.push(`${message} ${JSON.stringify(meta)}`);
+    }) as typeof logger.warn;
+
+    try {
+      const stats = await backfillTrackFingerprints(
+        {},
+        deps({
+          fingerprint: async () => ({
+            status: 'ok' as const,
+            // Above 2^31-1: what fpcalc emits when the `| 0` fold is skipped.
+            values: [3849189879, 222222],
+            durationSec: 210,
+          }),
+        }),
+      );
+      expect(stats.failed).toBe(1);
+    } finally {
+      logger.warn = originalWarn;
+    }
+
+    const logged = captured.join('\n');
+    // The check is not vacuous: something WAS logged, and it names the track.
+    expect(logged).toContain('the database refused the fingerprint');
+    // The two structural facts worth reading survive.
+    expect(logged).toContain('22003');
+    // Neither the parameters nor the statement do.
+    expect(logged).not.toContain('3849189879');
+    expect(logged).not.toContain('222222');
+    expect(logged).not.toContain('insert into');
+  });
+
   it('counts a track deleted mid-run as vanished, not as a failure', async () => {
     const artistId = await makeArtist();
     const doomed = await makeTrack(artistId, playable());

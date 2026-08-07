@@ -44,14 +44,27 @@
  * `admin/sql/CreateTables.sql`, which is what {@link ISRC_COLUMNS} and friends
  * below encode. Verified against the 2026-08-01 export.
  *
- * IDEMPOTENT AND RESUMABLE
- * Every write is an `ON CONFLICT DO UPDATE` against `isrc_registry_isrc_key`, so
- * a second run over the same dump changes nothing and a run over a newer dump
- * updates in place — the real unique constraint decides, never a read-then-write
- * race. A checkpoint file records how many `isrc` rows have been committed
- * together with the dump's own TIMESTAMP, so an interrupted import resumes where
- * it stopped — and REFUSES to resume against a different dump, where a row
- * offset would point somewhere else entirely.
+ * IDEMPOTENT AND RESUMABLE — by two SEPARATE mechanisms, worth not conflating.
+ *
+ * The WRITE is idempotent: every one is an `ON CONFLICT DO UPDATE` against
+ * `isrc_registry_isrc_key`, so replaying any row is a no-op or an update in
+ * place, decided by the real unique constraint rather than a read-then-write
+ * race. That is what makes redoing an interrupted batch safe.
+ *
+ * The CHECKPOINT is what makes a re-run cheap, and it is the mechanism actually
+ * responsible for "a second run over the same dump changes nothing": after a
+ * completed pass the checkpoint sits at the total, so every row is skipped
+ * before the upsert is reached at all. The upsert would give the same outcome,
+ * but it is not what delivers it.
+ *
+ * Two consequences of the checkpoint that its own name does not advertise:
+ *
+ *  - It records the dump's TIMESTAMP and REFUSES to resume against a different
+ *    dump, because a row offset means something else there.
+ *  - So the MONTHLY workflow above needs the checkpoint deleted between dumps.
+ *    A new export has a new TIMESTAMP, `loadCheckpoint` throws, and the remedy
+ *    is stated only in that exception's text. Delete
+ *    `.isrc-import-checkpoint.json` when you start a new dump.
  *
  * PARTIAL FAILURE: RESUME, not redo. Each flush is one transaction and the
  * checkpoint is written only after it commits, so a crash costs at most the

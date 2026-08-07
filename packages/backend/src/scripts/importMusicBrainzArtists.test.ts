@@ -150,6 +150,28 @@ afterAll(() => {
   for (const root of created) fs.rmSync(root, { recursive: true, force: true });
 });
 
+/**
+ * A dump where the Beatles carry TWO `official homepage` relationships.
+ *
+ * The fixture that makes `position` load-bearing rather than decorative. Every
+ * other fixture here has one relationship per type, so `urlFor` — which takes
+ * the FIRST of a type — returns the same URL whatever the order, and a wrong
+ * ordering is invisible. Link `900` is `official homepage`, so dump rows 1 and 3
+ * are both homepages with the Discogs link between them.
+ */
+const TWO_HOMEPAGES = {
+  url: [
+    '500\tgid-url-1\thttps://thebeatles.com\t0\t2026-01-01',
+    '501\tgid-url-2\thttps://www.discogs.com/artist/82730\t0\t2026-01-01',
+    '502\tgid-url-3\thttps://the-beatles.example/legacy\t0\t2026-01-01',
+  ],
+  l_artist_url: [
+    '1\t900\t1\t500\t0\t2026-01-01\t0\t\\N\t\\N',
+    '2\t901\t1\t501\t0\t2026-01-01\t0\t\\N\t\\N',
+    '3\t900\t1\t502\t0\t2026-01-01\t0\t\\N\t\\N',
+  ],
+};
+
 function importOptions(dump: { dumpDir: string; checkpointPath: string }, overrides = {}) {
   return {
     dumpDir: dump.dumpDir,
@@ -237,14 +259,24 @@ describe('importMusicBrainzArtists', () => {
   /**
    * `position` is what the embedded array's index used to be, and it is
    * load-bearing: `enrichCatalogEntity` orders by it and takes the FIRST
-   * relationship of a type. An implementation that wrote positions in an
-   * arbitrary order would put a Discogs page where the homepage belongs.
+   * relationship of a type.
+   *
+   * Asserting the positions alone would be VACUOUS — `readUrls` orders by
+   * position and would then assert what it just ordered, so it cannot fail.
+   * What can fail is the position↔url PAIRING, and only against a fixture with
+   * two relationships of the same type: with one each, `urlFor` returns the same
+   * URL whatever order they were written in. The reader-level consequence is
+   * pinned in `the starvation it closes` below.
    */
-  it('numbers URL positions from zero in the order the dump joined them', async () => {
-    const dump = makeDump();
+  it('pairs each URL with the position the dump joined it at', async () => {
+    const dump = makeDump(TWO_HOMEPAGES);
     await importMusicBrainzArtists(importOptions(dump));
 
-    expect((await readUrls(BEATLES_MBID)).map((row) => row.position)).toEqual([0, 1]);
+    expect(await readUrls(BEATLES_MBID)).toEqual([
+      { position: 0, type: 'official homepage', url: 'https://thebeatles.com' },
+      { position: 1, type: 'discogs', url: 'https://www.discogs.com/artist/82730' },
+      { position: 2, type: 'official homepage', url: 'https://the-beatles.example/legacy' },
+    ]);
   });
 
   it('writes no URL rows for an artist who has none', async () => {
@@ -357,6 +389,16 @@ describe('importMusicBrainzArtists — the starvation it closes', () => {
     setEnrichmentFetchForTests(async () => undefined);
   }
 
+  /** The column `links.website` lands in — the child table's only enriched output. */
+  async function readEnrichedWebsite(artistId: string): Promise<string | null | undefined> {
+    const [row] = await getDb()
+      .select({ linksWebsite: catalogEntities.linksWebsite })
+      .from(catalogEntities)
+      .where(eq(catalogEntities.id, artistId))
+      .limit(1);
+    return row?.linksWebsite;
+  }
+
   async function makeArtistWithMbid(mbid: string): Promise<string> {
     const [artist] = await getDb()
       .insert(catalogEntities)
@@ -389,7 +431,35 @@ describe('importMusicBrainzArtists — the starvation it closes', () => {
 
     const after = await enrichArtistProfile(artistId);
     expect(after.status).toBe('enriched');
-    expect(after.fieldsWritten.length).toBeGreaterThan(0);
+
+    // Fields sourced from the PARENT row.
+    expect(after.fieldsWritten).toContain('sortName');
+    expect(after.fieldsWritten).toContain('country');
+    /**
+     * And one sourced from the CHILD table — the assertion this block was
+     * missing. `links.website` is the only enriched field that comes from
+     * `musicbrainz_artist_urls`, so without it a no-op child insert leaves this
+     * test green and the riskiest part of the port has no reader-level cover.
+     * Verified by mutation: making the child insert a no-op fails here.
+     */
+    expect(after.fieldsWritten).toContain('links.website');
+    expect(await readEnrichedWebsite(artistId)).toBe('https://thebeatles.com');
+  });
+
+  /**
+   * `position` reaching the reader, which is the only reason it exists.
+   *
+   * `urlFor` takes the FIRST `official homepage`, so with two of them the stored
+   * website is decided by the order the child rows were written in. Verified by
+   * mutation: reversing that order stores the legacy URL and fails here.
+   */
+  it('stores the FIRST homepage when MusicBrainz records two', async () => {
+    silenceTheNetwork();
+    const artistId = await makeArtistWithMbid(BEATLES_MBID);
+    await importMusicBrainzArtists(importOptions(makeDump(TWO_HOMEPAGES)));
+
+    expect((await enrichArtistProfile(artistId)).fieldsWritten).toContain('links.website');
+    expect(await readEnrichedWebsite(artistId)).toBe('https://thebeatles.com');
   });
 
   it('still finds nothing for an MBID the dump never mentioned', async () => {

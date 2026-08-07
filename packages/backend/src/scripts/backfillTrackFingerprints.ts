@@ -36,7 +36,7 @@ import path from 'path';
 import { pipeline } from 'stream/promises';
 import { and, asc, gt, inArray, isNotNull } from 'drizzle-orm';
 import dotenv from 'dotenv';
-import { isForeignKeyViolation } from '@oxyhq/db';
+import { describeDriverError, isForeignKeyViolation, sqlStateOf } from '@oxyhq/db';
 import { closePostgres, connectPostgres, getDb } from '../db/postgres';
 import { indexTrackAcoustically } from '../db/catalog/fingerprints';
 import { trackFingerprints, tracks } from '../db/schema/catalog';
@@ -54,6 +54,17 @@ dotenv.config();
  * importers, and it stays where Mongo had it.
  */
 const BATCH_SIZE = 50;
+
+/**
+ * Named, not inferred from the SQLSTATE alone.
+ *
+ * `23503` on this table means one thing TODAY because `track_id` is the only
+ * foreign key on it. A second one added later would raise the same SQLSTATE and
+ * be silently recovered as "the track vanished" — so the constraint name is what
+ * the recovery is actually keyed on. Taken from a real driver error, not guessed:
+ * the generated name is truncated at 63 bytes and this one is 44.
+ */
+const TRACK_FK = 'track_fingerprints_track_id_tracks_id_fk';
 
 export interface BackfillStats {
   scanned: number;
@@ -174,15 +185,43 @@ async function fingerprintOne(
       logger.warn(`[backfill-fingerprints] refused an empty fingerprint for ${track.id}`);
     }
   } catch (err) {
-    if (isForeignKeyViolation(err)) {
+    if (isForeignKeyViolation(err, TRACK_FK)) {
       stats.vanished += 1;
       logger.info(
         `[backfill-fingerprints] track ${track.id} was deleted while this run was reading it — nothing to index`,
       );
       return 'continue';
     }
+
     stats.failed += 1;
-    logger.warn(`[backfill-fingerprints] could not read audio for ${track.id}`, { err });
+
+    /**
+     * A DRIVER error must never be logged whole, and this is the first place in
+     * Syra that has to care.
+     *
+     * postgres.js attaches the failing statement AND its bound parameters, so
+     * `logger.warn(…, { err })` publishes the entire fingerprint — measured
+     * here as THREE copies of every value: inline in `message`, again in
+     * `stack`, and a third time as a structured `params` array. At ~1600 int32s
+     * per track, on a catalogue-wide run, that is a log volume problem and a
+     * data-in-logs problem at once. Nothing like it existed before the port: a
+     * Mongoose error carried no statement.
+     *
+     * `describeDriverError` reduces it to SQLSTATE, constraint name and error
+     * kind — the two things worth reading when a write is refused, neither of
+     * which is data.
+     *
+     * Anything else here is an S3 or `fpcalc` failure, which carries no query
+     * and whose detail is the whole point of the log line, so it is unchanged.
+     */
+    if (sqlStateOf(err) !== undefined) {
+      logger.warn(
+        `[backfill-fingerprints] the database refused the fingerprint for ${track.id}`,
+        { driver: describeDriverError(err) },
+      );
+    } else {
+      logger.warn(`[backfill-fingerprints] could not read audio for ${track.id}`, { err });
+    }
   } finally {
     await fs.promises.rm(stagedPath, { force: true }).catch(() => undefined);
   }
