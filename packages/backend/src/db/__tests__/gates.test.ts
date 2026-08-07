@@ -424,12 +424,21 @@ function expectForeignKey(
 }
 
 beforeAll(async () => {
-  // `TEST_DATABASE_URL` is what CI's `postgres:17` service publishes; a local
-  // run falls back to whatever `DATABASE_URL` a developer already has pointed
-  // at their own `docker-compose.postgres.yml` instance. Neither overwrites
-  // an already-set `DATABASE_URL` — a developer who exported one explicitly
-  // keeps control of which database the suite touches.
-  process.env.DATABASE_URL = process.env.DATABASE_URL ?? process.env.TEST_DATABASE_URL;
+  // `TEST_DATABASE_URL` WINS, falling back to `DATABASE_URL` for a local run
+  // against a developer's own `docker-compose.postgres.yml` instance. It is the
+  // same precedence `test/postgres.ts`'s `connectDb` uses, and matching it is
+  // not tidiness.
+  //
+  // This file used to prefer `DATABASE_URL`. `connectDb` OVERWRITES
+  // `process.env.DATABASE_URL` with the test url, and `bun test` runs every
+  // file in one process — so which database this suite read depended on whether
+  // a `test/postgres` suite happened to run before it. Same command, same tree,
+  // different answer by file ordering: measured at 30 pass / 48 fail when this
+  // file went first against a stale `DATABASE_URL`, with failures that name the
+  // schema under test rather than the configuration that actually caused them.
+  // A developer who wants a specific database sets `TEST_DATABASE_URL`, which
+  // is the variable every other suite here already honours.
+  process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
   await connectPostgres();
 });
 

@@ -355,9 +355,30 @@ describe('the playlist reads reach an index', () => {
     );
   });
 
-  it('a playlist\'s tracks are read in order without sorting the table', () => {
-    expect(plans.get('playlistTracks')).not.toContain('Seq Scan on playlist_tracks');
-    expect(`playlist tracks: ${indexesIn('playlistTracks')}`).toContain('playlist_tracks_');
+  /**
+   * The title used to say "without sorting the table" and the assertion was
+   * `toContain('playlist_tracks_')`, which BOTH indexes on the table satisfy —
+   * so it could not have caught the planner switching between them, and the
+   * title claimed something the plan does not do. Measured: a Bitmap Index Scan
+   * on `playlist_tracks_playlist_id_track_id_idx` feeding a quicksort of the
+   * one playlist's 20 rows.
+   *
+   * That IS the right plan, and the Sort is asserted rather than denied.
+   * `playlist_tracks_playlist_id_position_key` leads with the same column and
+   * could return them already ordered, but the planner prefers the narrower
+   * index plus an in-memory sort of a handful of rows; what matters is that
+   * neither path scans the table.
+   */
+  it('a playlist\'s tracks come from an index, then a sort of that playlist alone', () => {
+    const plan = plans.get('playlistTracks') ?? '';
+    expect(plan).not.toContain('Seq Scan on playlist_tracks');
+    expect(`playlist tracks: ${indexesIn('playlistTracks')}`).toBe(
+      'playlist tracks: playlist_tracks_playlist_id_track_id_idx'
+    );
+    // Named so a future plan that DOES read the ordered index reports here
+    // rather than passing silently — the change would be an improvement, and
+    // it should still be noticed.
+    expect(plan).toContain('Sort Key: "position"');
   });
 
   it('the stats recount joins through indexes on both sides', () => {

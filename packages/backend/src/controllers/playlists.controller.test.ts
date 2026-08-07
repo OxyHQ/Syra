@@ -562,6 +562,42 @@ describe('GET /api/playlists', () => {
     expect(body.playlists.map((playlist) => playlist.id).sort()).toEqual([owned, theirs].sort());
   });
 
+  /**
+   * The list surface carries `collaborators`, and the review is why.
+   *
+   * The Mongo serializer spread the whole document, so it always did; the first
+   * drizzle port dropped it because the batch serializer omits it for discovery
+   * shelves. Inert while nothing writes that table — but `PlaylistActionsSheet`
+   * and `app/playlist/[id].tsx` both derive "can this user edit" from it, so
+   * the first writer would have silently cost editors their rights on this
+   * surface and nowhere else.
+   *
+   * The fixture puts a collaborator on ONE of two playlists, so a serializer
+   * that attached the same list to every row — the shape a batch loader gets
+   * wrong — fails here rather than passing on a single-row page.
+   */
+  it('carries collaborators, attached to the right playlist', async () => {
+    const withCollaborator = bodyId(await createThrough({ name: 'Shared' }));
+    const withoutCollaborator = bodyId(await createThrough({ name: 'Solo' }));
+    await getDb().insert(playlistCollaborators).values({
+      playlistId: withCollaborator,
+      oxyUserId: STRANGER,
+      username: 'guest',
+      role: 'editor',
+      addedAt: new Date(),
+    });
+
+    const res = makeRes();
+    await getUserPlaylists(makeReq({ userId: OWNER }), res as unknown as Response, next);
+
+    const body = res._body as { playlists: { id: string; collaborators?: unknown[] }[] };
+    const byId = new Map(body.playlists.map((playlist) => [playlist.id, playlist]));
+    expect(byId.get(withCollaborator)?.collaborators).toEqual([
+      { oxyUserId: STRANGER, username: 'guest', role: 'editor', addedAt: expect.any(String) },
+    ]);
+    expect(byId.get(withoutCollaborator)?.collaborators).toBeUndefined();
+  });
+
   it('requires auth', async () => {
     const res = makeRes();
     await getUserPlaylists(makeReq(), res as unknown as Response, next);

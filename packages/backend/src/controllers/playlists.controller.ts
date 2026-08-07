@@ -15,6 +15,7 @@ import {
   assignPlaylistTrackPositions,
   findCollaboratorOxyUserIds,
   findCollaboratorRole,
+  findCollaboratorsForPlaylists,
   findExistingPlaylistTrackIds,
   findPlayableTrackIds,
   findPlaylistById,
@@ -157,7 +158,14 @@ export const getUserPlaylists = async (req: AuthRequest, res: Response, next: Ne
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const formattedPlaylists = await toPlaylistDtos(await findPlaylistsForUser(userId));
+    // Collaborators ARE rendered on this surface — the frontend derives "can
+    // this user edit" from them — so they are loaded, as ONE query for the page
+    // rather than per row. See `toPlaylistDtos`.
+    const rows = await findPlaylistsForUser(userId);
+    const formattedPlaylists = await toPlaylistDtos(
+      rows,
+      await findCollaboratorsForPlaylists(rows.map((row) => row.id))
+    );
 
     res.json({
       playlists: formattedPlaylists,
@@ -472,7 +480,6 @@ export const addTracksToPlaylist = async (req: AuthRequest, res: Response, next:
       return res.status(404).json({ error: 'No valid tracks found' });
     }
 
-    const existing = await findPlaylistTracks(id);
     const alreadyPresent = new Set(await findExistingPlaylistTrackIds(id, [...playable]));
     // Deduped against the request as well as against the playlist: the same id
     // twice in one body would otherwise be two rows fighting for one position.
@@ -486,38 +493,52 @@ export const addTracksToPlaylist = async (req: AuthRequest, res: Response, next:
       return res.status(400).json({ error: 'All tracks are already in the playlist' });
     }
 
-    // Clamped into the playlist rather than used raw. The Mongo version shifted
-    // by `$inc` from `position` verbatim, so a position past the end left a GAP
-    // in the ordering and a non-numeric one wrote `NaN`; positions are
-    // `0…n-1` here, which is what `removeTracksFromPlaylist` already assumed.
-    const requested = Number(position);
-    const insertAt =
-      position === undefined || !Number.isFinite(requested)
-        ? existing.length
-        : Math.max(0, Math.min(Math.trunc(requested), existing.length));
-
-    // The whole playlist in its new order: `assignPlaylistTrackPositions` takes
-    // a full order rather than a delta because a unique constraint on
-    // `(playlist_id, position)` cannot be shifted in place. Its own doc comment
-    // carries the measurement.
-    const ordered = [
-      ...existing.slice(0, insertAt).map((entry) => entry.trackId),
-      ...newTrackIds,
-      ...existing.slice(insertAt).map((entry) => entry.trackId),
-    ];
-
     const addedAt = new Date();
     await getDb().transaction(async (tx) => {
+      // Read INSIDE the transaction, like `removeTracksFromPlaylist` does. The
+      // membership and the positions derived from it have to come from the same
+      // snapshot the write lands on; reading first and writing later leaves a
+      // window in which a concurrent add reorders against a stale picture.
+      const existing = await tx
+        .select({ trackId: playlistTracks.trackId, position: playlistTracks.position })
+        .from(playlistTracks)
+        .where(eq(playlistTracks.playlistId, id))
+        .orderBy(playlistTracks.position);
+
+      // Clamped into the playlist rather than used raw. The Mongo version
+      // shifted by `$inc` from `position` verbatim, so a position past the end
+      // left a GAP in the ordering and a non-numeric one wrote `NaN`.
+      const requested = Number(position);
+      const insertAt =
+        position === undefined || !Number.isFinite(requested)
+          ? existing.length
+          : Math.max(0, Math.min(Math.trunc(requested), existing.length));
+
+      // The whole playlist in its new order: `assignPlaylistTrackPositions`
+      // takes a full order rather than a delta because a unique constraint on
+      // `(playlist_id, position)` cannot be shifted in place. Its own doc
+      // comment carries the measurement.
+      const ordered = [
+        ...existing.slice(0, insertAt).map((entry) => entry.trackId),
+        ...newTrackIds,
+        ...existing.slice(insertAt).map((entry) => entry.trackId),
+      ];
+
+      // Provisional, and rewritten by the next statement — but they still have
+      // to clear every existing row for the INSERT itself to pass. Derived from
+      // the highest position rather than from the ROW COUNT: positions are
+      // contiguous on every path here, but nothing in the schema says so
+      // (`playlist_tracks_position_check` only requires `>= 0`), and against a
+      // gapped playlist a count-based offset lands on an occupied slot.
+      const nextFree = existing.reduce((highest, entry) => Math.max(highest, entry.position), -1) + 1;
+
       await tx.insert(playlistTracks).values(
         newTrackIds.map((trackId, index) => ({
           playlistId: id,
           trackId,
           addedAt,
           addedBy: userId,
-          // Provisional, and rewritten by the next statement. They still have
-          // to be distinct from each other and from every existing row for the
-          // INSERT itself to pass, which appending past the end guarantees.
-          position: existing.length + index,
+          position: nextFree + index,
         }))
       );
 

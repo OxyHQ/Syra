@@ -24,7 +24,14 @@
  */
 
 import { count, inArray } from 'drizzle-orm';
-import type { Album, Artist, CatalogImageSizes, Playlist, Track } from '@syra/shared-types';
+import type {
+  Album,
+  Artist,
+  CatalogImageSizes,
+  Playlist,
+  PlaylistCollaborator,
+  Track,
+} from '@syra/shared-types';
 import { getDb } from '../postgres';
 import { albums, imageAssets, trackHlsRenditions } from '../schema/catalog';
 import {
@@ -202,17 +209,31 @@ function playlistImageIds(row: PlaylistRow): (string | null)[] {
 /**
  * Serialize a page of playlists — ONE `image_assets` query for the whole page.
  *
- * `collaborators` and `sources` stay opt-in on `PlaylistDtoContext` for the same
- * reason `strikes` does on the artist one: every discovery shelf renders a name
- * and a cover, and a shelf that loaded the collaborator list would pay a join
- * per page for a field nothing on it shows. The playlists API, which does render
- * them, loads them itself.
+ * `sources` stays opt-in on `PlaylistDtoContext` for the same reason `strikes`
+ * does on the artist one: every discovery shelf renders a name and a cover, and
+ * a shelf that loaded them would pay a join per page for a field nothing on it
+ * shows.
+ *
+ * `collaborators` is OPTIONAL rather than absent, and the difference is a
+ * behaviour regression the Task 11 review caught. Discovery shelves genuinely
+ * do not want it — but `GET /api/playlists` does, because two frontend surfaces
+ * (`PlaylistActionsSheet.tsx`, `app/playlist/[id].tsx`) derive "can this user
+ * edit" from `playlist.collaborators`, and the Mongo serializer spread the
+ * whole document so the list surface had always carried it. Dropping it would
+ * have cost editors their rights on that surface the moment anything started
+ * writing that table. A caller that wants them passes ONE batch-loaded map for
+ * the whole page; a caller that does not passes nothing and pays nothing.
  */
-export async function toPlaylistDtos(rows: readonly PlaylistRow[]): Promise<Playlist[]> {
+export async function toPlaylistDtos(
+  rows: readonly PlaylistRow[],
+  collaboratorsByPlaylistId?: ReadonlyMap<string, readonly PlaylistCollaborator[]>
+): Promise<Playlist[]> {
   if (rows.length === 0) return [];
 
   const lookup = await loadImageVariants(rows.flatMap(playlistImageIds));
-  return rows.map((row) => toPlaylistDto(row, lookup));
+  return rows.map((row) =>
+    toPlaylistDto(row, lookup, { collaborators: collaboratorsByPlaylistId?.get(row.id) })
+  );
 }
 
 /** Every `image_assets` id a `catalog_entities` row can reference. */

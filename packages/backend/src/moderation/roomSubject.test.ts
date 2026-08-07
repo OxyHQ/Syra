@@ -4,7 +4,9 @@ import { connect, clear, disconnect } from '../test/mongo';
 import { connectDb, clearDb, disconnectDb } from '../test/postgres';
 import RoomModel, { RoomStatus, RoomType, OwnerType } from '../models/Room';
 import RecordingModel, { RecordingStatus, RecordingAccess } from '../models/Recording';
+import { uuidv7 } from '@oxyhq/db';
 import { getDb } from '../db/postgres';
+import { catalogEntities, tracks } from '../db/schema/catalog';
 import { playlists } from '../db/schema/library';
 import { subjectProviderFor } from './subjects/registry';
 import { ReportedType } from '../models/Report';
@@ -177,12 +179,6 @@ describe('room subject provider', () => {
 describe('playlist subject provider', () => {
   const playlistProvider = subjectProviderFor(ReportedType.PLAYLIST);
 
-  /**
-   * A private playlist has no audience, so a report about one either came from its
-   * owner — who can simply edit it — or from somebody who should not have seen it.
-   * Handing it to a jury of strangers would disclose more than the report ever
-   * justified.
-   */
   async function makePlaylist(over: Partial<typeof playlists.$inferInsert>) {
     const [row] = await getDb()
       .insert(playlists)
@@ -191,6 +187,12 @@ describe('playlist subject provider', () => {
     return row.id;
   }
 
+  /**
+   * A private playlist has no audience, so a report about one either came from its
+   * owner — who can simply edit it — or from somebody who should not have seen it.
+   * Handing it to a jury of strangers would disclose more than the report ever
+   * justified.
+   */
   it('declines a private playlist', async () => {
     const id = await makePlaylist({ name: 'Private mix', visibility: 'private' });
     expect(await playlistProvider?.snapshot(id)).toBeNull();
@@ -221,5 +223,73 @@ describe('playlist subject provider', () => {
       type: 'listing',
       data: { title: 'Public mix', description: 'Words the owner wrote' },
     });
+  });
+});
+
+describe('the catalog providers scope the discriminator', () => {
+  /**
+   * `catalog_entities` holds artists AND persons in one table. `ArtistModel` is
+   * a Mongoose discriminator, so every query through it carried `type: 'artist'`
+   * implicitly; drizzle adds nothing, so both providers that read it have to
+   * write the filter out.
+   *
+   * EVERY fixture here is a `person` behind an id an artist would be expected
+   * at, because that is the only shape that tells the scoped query from the
+   * unscoped one — a fixture set containing only artists passes either way.
+   * The Task 11 review found `trackProvider` missing the filter while
+   * `artistProvider`, 85 lines above it, had it.
+   */
+  const artistProvider = subjectProviderFor(ReportedType.ARTIST);
+  const trackProvider = subjectProviderFor(ReportedType.TRACK);
+
+  async function makeEntity(type: 'artist' | 'person', over: Partial<typeof catalogEntities.$inferInsert> = {}) {
+    const id = uuidv7();
+    await getDb().insert(catalogEntities).values({
+      id,
+      type,
+      name: `${type} name`,
+      nameKey: id,
+      source: 'upload',
+      claimedByOxyUserId: `oxy-${type}-claimant`,
+      ...over,
+    });
+    return id;
+  }
+
+  async function makeTrack(artistId: string) {
+    const id = uuidv7();
+    await getDb()
+      .insert(tracks)
+      .values({ id, title: 'A track', artistId, artistName: 'whoever', duration: 100, source: 'upload' });
+    return id;
+  }
+
+  it('artistProvider declines a person reported as an artist profile', async () => {
+    expect(await artistProvider?.snapshot(await makeEntity('person'))).toBeNull();
+  });
+
+  it('artistProvider still describes a real artist', async () => {
+    const snapshot = await artistProvider?.snapshot(await makeEntity('artist'));
+    expect(snapshot?.subject.author?.oxyUserId).toBe('oxy-artist-claimant');
+  });
+
+  /**
+   * The one the review caught. A track whose `artist_id` names a person must
+   * NOT name that person as the report's author — the whole point of an author
+   * on a moderation subject is that it is who published the thing.
+   */
+  it('trackProvider names no author when the track points at a person', async () => {
+    const snapshot = await trackProvider?.snapshot(await makeTrack(await makeEntity('person')));
+
+    expect(snapshot?.subject.author).toBeUndefined();
+    // And the person's name is not handed to the jury as context either.
+    expect(JSON.stringify(snapshot?.context ?? [])).not.toContain('person name');
+  });
+
+  it('trackProvider still names the artist when the track points at one', async () => {
+    const snapshot = await trackProvider?.snapshot(await makeTrack(await makeEntity('artist')));
+
+    expect(snapshot?.subject.author?.oxyUserId).toBe('oxy-artist-claimant');
+    expect(JSON.stringify(snapshot?.context ?? [])).toContain('artist name');
   });
 });

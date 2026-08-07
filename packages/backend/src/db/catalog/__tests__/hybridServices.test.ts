@@ -172,10 +172,20 @@ function sweepHybridFiles(): string[] {
 const MINIMUM_HYBRID_FILES = 15;
 
 /**
- * The same floor for property 4's sweep. Ten today (the nine Task 11 found plus
- * `uploads.controller`, which property 3's sweep had already caught); it drops
- * as those files port, and a sweep that suddenly finds none is a broken walk,
- * not a finished migration.
+ * The same floor for property 4's sweep. **Ten** today, and the number is worth
+ * pinning against the two other counts it gets confused with, because all three
+ * are correct about different populations:
+ *
+ *  - **10** files import a catalog model at all — what THIS sweep finds, and
+ *    what `UNPORTED_CATALOG_MODULES` must therefore hold.
+ *  - **9** of those are entirely Mongoose, which is the blind spot properties
+ *    1-3 cannot see. The tenth, `uploads.controller.ts`, also reads Postgres,
+ *    so property 3's sweep had already caught it.
+ *  - **8** were newly registered by Task 11 — the 9 minus `resolvePersons.ts`,
+ *    which Task 10c had already listed.
+ *
+ * It drops as those files port, and a sweep that suddenly finds none is a
+ * broken walk, not a finished migration.
  */
 const MINIMUM_CATALOG_MODEL_IMPORTERS = 10;
 
@@ -415,9 +425,10 @@ describe('vacuity floor', () => {
     // its OWN vertical's catalog models, so it belongs here and not in
     // HYBRID_MODULES. `resolvePersons` is the other, and it needs Task 12.
     expect(HYBRID_MODULES.length).toBe(20);
-    // 2 -> 10 in Task 11: property 4's sweep found eight files importing a
-    // catalog model with no Postgres read anywhere in them, which is the one
-    // shape properties 1-3 cannot see.
+    // 2 -> 10 in Task 11: property 4's sweep found EIGHT new files importing a
+    // catalog model, all of them entirely Mongoose — the one shape properties
+    // 1-3 cannot see. See `MINIMUM_CATALOG_MODEL_IMPORTERS` for why 10, 9 and 8
+    // are three correct counts of three different populations.
     expect(UNPORTED_CATALOG_MODULES.length).toBe(10);
   });
 });

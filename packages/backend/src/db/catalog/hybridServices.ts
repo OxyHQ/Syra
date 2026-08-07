@@ -367,10 +367,11 @@ export const UNPORTED_CATALOG_MODULES: readonly {
   },
   // ── Operational scripts ────────────────────────────────────────────────
   //
-  // Five scripts that read or write catalog collections whose tables moved in
+  // SIX scripts that read or write catalog collections whose tables moved in
   // Task 10, found by property 4's sweep in Task 11 and registered rather than
   // ported: none of them is on any vertical's file list, and they are not this
-  // task's to rewrite. They are all BROKEN today in the same way — a Mongoose
+  // task's to rewrite. (Counted, not remembered — the first version of this
+  // comment said five above a list of six.) They are all BROKEN today in the same way — a Mongoose
   // read against a collection the application no longer writes returns nothing,
   // and a Mongoose write lands where nothing looks. Named individually so
   // whoever picks them up gets a list rather than a category.

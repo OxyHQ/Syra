@@ -266,7 +266,8 @@ const DELIBERATELY_DROPPED: Readonly<Record<string, readonly string[]>> = {
   // row the id already points at.
   'Track.ts': ['url', 'width', 'height', 'catalogEntityId'],
   'Album.ts': ['url', 'width', 'height'],
-  'Playlist.ts': ['url', 'width', 'height'],
+  // `Playlist.ts` was here until Task 11 deleted the model. The entry outlived
+  // its file with nothing to notice — which is what the check below is for.
   'Podcast.ts': ['url', 'width', 'height'],
   'Episode.ts': ['url', 'width', 'height'],
   'CatalogEntity.ts': ['url', 'width', 'height'],
@@ -277,6 +278,27 @@ const DELIBERATELY_DROPPED: Readonly<Record<string, readonly string[]>> = {
   // re-ran independently.
   'Room.ts': ['topicId'],
 } as const;
+
+/**
+ * A registry entry that outlived its model file is a licence with nothing to
+ * license, and until Task 11 nothing here would have said so —
+ * `DELIBERATELY_DROPPED['Playlist.ts']` survived the deletion of
+ * `models/Playlist.ts` silently, found in review rather than by this script.
+ *
+ * Checked against the same `MODEL_FILES` listing the sweep itself walks, so the
+ * two cannot disagree, and it THROWS rather than reporting: an exemption for a
+ * file that is gone means every other entry is worth re-reading too.
+ */
+const MODEL_FILE_SET = new Set(MODEL_FILES);
+const staleExemptions = Object.keys(DELIBERATELY_DROPPED).filter(
+  (file) => !MODEL_FILE_SET.has(file)
+);
+if (staleExemptions.length > 0) {
+  throw new Error(
+    `DELIBERATELY_DROPPED names ${staleExemptions.length} model file(s) that no longer exist: ` +
+    `${staleExemptions.join(', ')}. Delete the entry with the model.`
+  );
+}
 
 const report: string[] = [];
 let checked = 0;

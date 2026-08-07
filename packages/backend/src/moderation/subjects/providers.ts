@@ -276,7 +276,15 @@ function trackProvider(): ModerationSubjectProvider {
             claimedByOxyUserId: catalogEntities.claimedByOxyUserId,
           })
           .from(catalogEntities)
-          .where(eq(catalogEntities.id, track.artistId))
+          // `type = 'artist'` for the same reason `artistProvider` above needs
+          // it, and missing it here is worse: `tracks.artist_id` references
+          // `catalog_entities`, which holds PERSONS in the same table, so a
+          // track pointing at a person row would contribute that person's name
+          // as context and their `claimed_by_oxy_user_id` as the moderation
+          // subject's AUTHOR — a report attributed to somebody who did not
+          // publish it. `ArtistModel.findById` scoped this implicitly; drizzle
+          // adds nothing.
+          .where(and(eq(catalogEntities.id, track.artistId), eq(catalogEntities.type, 'artist')))
           .limit(1);
         ownerId = artist?.claimedByOxyUserId ?? undefined;
         const artistName = bounded(artist?.name, CONTRACT_LIMITS.TEXT_RESOURCE_MAX_LENGTH);

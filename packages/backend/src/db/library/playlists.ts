@@ -104,6 +104,47 @@ export async function findCollaboratorRole(
   return row?.role;
 }
 
+/**
+ * Collaborators for a PAGE of playlists, as one query.
+ *
+ * The batch counterpart of {@link findPlaylistCollaborators}, for
+ * `GET /api/playlists` — a per-row read there would be an N+1 of exactly the
+ * kind `db/catalog/hydrate.ts` exists to avoid. `inArray(column, [])` generates
+ * `in ()`, a Postgres syntax error rather than an empty result, so the empty
+ * case is answered without a query.
+ */
+export async function findCollaboratorsForPlaylists(
+  playlistIds: readonly string[]
+): Promise<Map<string, PlaylistCollaborator[]>> {
+  const byPlaylist = new Map<string, PlaylistCollaborator[]>();
+  if (playlistIds.length === 0) return byPlaylist;
+
+  const rows = await getDb()
+    .select({
+      playlistId: playlistCollaborators.playlistId,
+      oxyUserId: playlistCollaborators.oxyUserId,
+      username: playlistCollaborators.username,
+      role: playlistCollaborators.role,
+      addedAt: playlistCollaborators.addedAt,
+    })
+    .from(playlistCollaborators)
+    .where(inArray(playlistCollaborators.playlistId, [...playlistIds]))
+    .orderBy(asc(playlistCollaborators.addedAt));
+
+  for (const row of rows) {
+    const list = byPlaylist.get(row.playlistId) ?? [];
+    list.push({
+      oxyUserId: row.oxyUserId,
+      username: row.username,
+      role: row.role,
+      addedAt: row.addedAt.toISOString(),
+    });
+    byPlaylist.set(row.playlistId, list);
+  }
+
+  return byPlaylist;
+}
+
 /** Every collaborator's account id — what `canViewPlaylist` asks about. */
 export async function findCollaboratorOxyUserIds(playlistId: string): Promise<string[]> {
   const rows = await getDb()
@@ -209,21 +250,38 @@ export async function refreshPlaylistStats(
 }
 
 /**
- * Write a new position for each named track, collision-free.
+ * Renumber a playlist's tracks into the given order, collision-free.
  *
- * `ordered` is the track ids in their final order; every track of the playlist
- * that is not named keeps a position too, so this takes the WHOLE playlist and
- * assigns `0…n-1`. Callers that only move part of a playlist compute the full
- * order first — which is what both of them were already doing.
+ * `ordered` names the track ids in their final order. Anything in it that the
+ * playlist does not hold is skipped, and a repeat of an id already placed is
+ * ignored; what remains is numbered `0…k-1` with no gaps. Callers that only
+ * move part of a playlist compute the full order first, which is what all
+ * three do.
  *
  * Two statements inside the caller's transaction:
  *
- *  1. Lift every row of the playlist by `max(position) + 1`. Every new value
- *     is strictly greater than every old one, so no row can land on another.
- *  2. Write the finals, all of which are `< max + 1` and therefore below every
- *     value now in the table.
+ *  1. Lift every row of the playlist by `max(position) + 1`, so every value in
+ *     the table is now at or above that lift and no row can land on another.
+ *  2. Write the finals, which are strictly below it.
  *
- * See this file's doc comment for why a single `UPDATE` cannot do this.
+ * ## Why step 2 counts matched rows instead of using the array index
+ *
+ * The obvious spelling — `for (const [position, trackId] of ordered.entries())`
+ * — is collision-free only while `ordered` is no longer than the playlist, and
+ * that precondition was never stated or asserted. Found in review, and
+ * reproduced before fixing: rows `A(0), B(1)` with `ordered = [X, Y, B, A]`
+ * where X and Y belong to no playlist lifts by 2, then assigns B the position
+ * 2 that A is sitting on — `duplicate key … (playlist_id, "position")=(…, 2)`.
+ *
+ * Advancing the counter only when an `UPDATE` actually matched makes the
+ * argument unconditional rather than merely true today: at most one final is
+ * issued per row of the playlist, so the highest final is `count - 1`; positions
+ * are distinct non-negative integers, so `max >= count - 1`; therefore every
+ * final is `<= max < lift`. It also means a gapped playlist — representable,
+ * since `playlist_tracks_position_check` only requires `>= 0` — comes out
+ * contiguous instead of inheriting the gap.
+ *
+ * See this file's doc comment for why a single `UPDATE` cannot do any of this.
  */
 export async function assignPlaylistTrackPositions(
   tx: DbTransaction,
@@ -248,12 +306,21 @@ export async function assignPlaylistTrackPositions(
   // playlist has already been lifted clear, so these cannot collide with each
   // other either, and a VALUES list would have to bind the ids as `text` and
   // cast them back — a seam worth more than the round trips it saves on lists
-  // this size.
-  for (const [position, trackId] of ordered.entries()) {
-    await tx
+  // this size. `returning()` is what says whether a row was actually there.
+  const placed = new Set<string>();
+  let position = 0;
+  for (const trackId of ordered) {
+    if (placed.has(trackId)) continue;
+
+    const moved = await tx
       .update(playlistTracks)
       .set({ position })
-      .where(and(eq(playlistTracks.playlistId, playlistId), eq(playlistTracks.trackId, trackId)));
+      .where(and(eq(playlistTracks.playlistId, playlistId), eq(playlistTracks.trackId, trackId)))
+      .returning({ id: playlistTracks.id });
+
+    if (moved.length === 0) continue;
+    placed.add(trackId);
+    position += 1;
   }
 }
 

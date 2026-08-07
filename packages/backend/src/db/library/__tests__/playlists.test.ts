@@ -159,6 +159,65 @@ describe('assignPlaylistTrackPositions survives a permutation', () => {
     expect(await orderOf(b)).toEqual(theirs);
   });
 
+  /**
+   * The precondition the arithmetic quietly depended on, found in review.
+   *
+   * The lift was `max(position) + 1` and the finals were `0…ordered.length-1`,
+   * so an `ordered` LONGER than the playlist put a final at or above the lift
+   * and collided with a row that had just been lifted out of the way. Two rows
+   * `A(0), B(1)` with `ordered = [X, Y, B, A]` lifts by 2 and then fails
+   * `23505` on `(playlist, 2)`.
+   *
+   * Every caller passes the playlist's own ids, so this was latent — but a
+   * function whose entire purpose is collision-freedom should not have an
+   * unasserted precondition, and the fix costs a `Set` and a counter.
+   */
+  it('tolerates an order naming tracks the playlist does not hold', async () => {
+    const [a, b] = [await makeTrack(), await makeTrack()];
+    const [absentX, absentY] = [await makeTrack(), await makeTrack()];
+    const playlistId = await makePlaylist();
+    await fill(playlistId, [a, b]);
+
+    await getDb().transaction((tx) =>
+      assignPlaylistTrackPositions(tx, playlistId, [absentX, absentY, b, a])
+    );
+
+    // The absent ids are skipped rather than consuming a position, so what
+    // remains is still contiguous from zero.
+    expect(await orderOf(playlistId)).toEqual([b, a]);
+    expect((await findPlaylistTracks(playlistId)).map((entry) => entry.position)).toEqual([0, 1]);
+  });
+
+  it('ignores a track named twice in one order', async () => {
+    const [a, b] = [await makeTrack(), await makeTrack()];
+    const playlistId = await makePlaylist();
+    await fill(playlistId, [a, b]);
+
+    await getDb().transaction((tx) => assignPlaylistTrackPositions(tx, playlistId, [b, b, a]));
+
+    expect(await orderOf(playlistId)).toEqual([b, a]);
+    expect((await findPlaylistTracks(playlistId)).map((entry) => entry.position)).toEqual([0, 1]);
+  });
+
+  /**
+   * Positions are contiguous everywhere in this codebase, but nothing in the
+   * SCHEMA says so — `playlist_tracks_position_check` only requires `>= 0`. A
+   * gapped playlist is representable, so the lift has to survive one.
+   */
+  it('survives a playlist whose positions are gapped', async () => {
+    const [a, b] = [await makeTrack(), await makeTrack()];
+    const playlistId = await makePlaylist();
+    await getDb().insert(playlistTracks).values([
+      { playlistId, trackId: a, addedAt: new Date(), addedBy: OWNER, position: 0 },
+      { playlistId, trackId: b, addedAt: new Date(), addedBy: OWNER, position: 7 },
+    ]);
+
+    await getDb().transaction((tx) => assignPlaylistTrackPositions(tx, playlistId, [b, a]));
+
+    expect(await orderOf(playlistId)).toEqual([b, a]);
+    expect((await findPlaylistTracks(playlistId)).map((entry) => entry.position)).toEqual([0, 1]);
+  });
+
   it('an empty order changes nothing', async () => {
     const ids = [await makeTrack(), await makeTrack()];
     const playlistId = await makePlaylist();
