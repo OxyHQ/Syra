@@ -139,11 +139,13 @@ function authedListingSql(): string {
     .limit(21)
     .toSQL();
 
-  return query.sql.replace(/\$(\d+)/g, (_match, index) => {
-    const value = query.params[Number(index) - 1];
-    if (Array.isArray(value)) return `array[${value.map((v) => `'${String(v)}'`).join(',')}]`;
-    return `'${String(value)}'`;
-  });
+  // One replacement per `$n`, and every parameter is a scalar: drizzle renders
+  // `inArray` as `id in ($2, $3, … $N)`, never `= ANY($2::text[])`, so there is
+  // no array case to handle. An earlier version carried a branch for one; it was
+  // dead, and a dead branch here reads as evidence that the other form occurs.
+  return query.sql.replace(/\$(\d+)/g, (_match, index) =>
+    `'${String(query.params[Number(index) - 1])}'`
+  );
 }
 
 /** Plan text by probe name, collected once in `beforeAll`. */

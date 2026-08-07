@@ -94,16 +94,25 @@ async function streamingRoom() {
 
   if (streaming === undefined) throw new Error('fixture room vanished');
 
-  // Every assertion below measures a CLEAR, so a field the fixture never set
-  // would make the test pass without the code doing anything. All NINE are
-  // checked, not a sample: a sample leaves the unchecked ones able to pass
-  // vacuously, which is the exact shape this guard exists to refuse.
-  for (const [field, value] of Object.entries(streaming)) {
-    if (!STREAM_FIELDS.includes(field)) continue;
+  /**
+   * Every assertion below measures a CLEAR, so a field the fixture never set
+   * would make the test pass without the code doing anything.
+   *
+   * Iterating {@link STREAM_FIELDS} and indexing INTO the row, not the reverse.
+   * The reverse — walking `Object.entries(row)` and skipping names not in the
+   * list — silently checks fewer fields when a name in the list matches no
+   * column: renaming one entry to `rtmpStreamKeyTYPO` left this green while
+   * guarding eight of nine, under a comment claiming all nine.
+   */
+  const row = streaming as unknown as Record<string, unknown>;
+  for (const field of STREAM_FIELDS) {
+    const value = row[field];
     expect(`${field} was set: ${value !== null && value !== undefined}`).toBe(
       `${field} was set: true`
     );
   }
+  // Vacuity floor: the loop above proves nothing if the list is short or empty.
+  expect(STREAM_FIELDS.length).toBe(9);
   return streaming;
 }
 

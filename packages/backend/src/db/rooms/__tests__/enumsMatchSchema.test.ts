@@ -114,14 +114,20 @@ describe('db/rooms/types enums match db/schema/rooms tuples', () => {
     // Vacuity floor: a filter that matched nothing would report full coverage.
     expect(tupleExports.length).toBeGreaterThanOrEqual(14);
 
-    const covered = new Set([
-      ...EXPECTED_PAIRS.map(([, , tuple]) => tuple),
-    ].map((tuple) => tuple.join('|')));
+    /**
+     * Keyed on the array's IDENTITY, not on its values.
+     *
+     * Keying on `tuple.join('|')` looked equivalent and was not: this schema has
+     * five two-value axes, so a NEW export duplicating an existing one's values
+     * — `['active','speaking']` again, say — hashed to a key already in the set
+     * and read as covered while having no enum at all. Identity cannot collide,
+     * because each `as const` tuple is its own module-level array.
+     */
+    const covered = new Set<readonly string[]>(EXPECTED_PAIRS.map(([, , tuple]) => tuple));
 
     const uncovered = tupleExports.filter((name) => {
       if (name === 'MEDIA_QUEUE_KINDS') return false;
-      const tuple = roomsSchema[name as keyof typeof roomsSchema] as readonly string[];
-      return !covered.has(tuple.join('|'));
+      return !covered.has(roomsSchema[name as keyof typeof roomsSchema] as readonly string[]);
     });
 
     expect(uncovered).toEqual([]);

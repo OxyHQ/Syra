@@ -346,31 +346,52 @@ export function houseListingConditions(options: {
  * ## Why membership is TWO queries and not a correlated `EXISTS`
  *
  * `exists (select 1 from house_members where house_id = houses.id and …)` reads
- * naturally and is the direct transcription of Mongo's `'members.userId': userId`
- * — and it is a **Seq Scan**, because an `OR` between a column predicate and a
- * correlated subquery gives the planner no index it can combine. That is not a
- * rare path: this route is mounted behind required auth, so it is the ONLY path.
+ * naturally and is the direct transcription of Mongo's `'members.userId': userId`.
+ * Resolving the member's house ids first instead turns the second arm into an
+ * `id in (…)` list. Measured on 30,000 houses (20,000 of them `listed`) with the
+ * member in 2,869, `EXPLAIN ANALYZE` of the statement the builder below actually
+ * emits:
  *
- * Resolving the member's house ids first turns the second arm into `id = ANY(…)`,
- * which the planner combines with the discovery index as a `BitmapOr`. Measured
- * on 30,000 houses with the probed member in 2,869 of them:
+ * | shape | planner settings | plan | time |
+ * |---|---|---|---|
+ * | `EXISTS` (before) | **default** | Seq Scan + per-row subplan | 16.5 ms |
+ * | `id in (…)` (now) | **default** | Seq Scan | **4.2 ms** |
+ * | `EXISTS` (before) | `enable_seqscan=off` | Seq Scan + per-row subplan | 79.9 ms |
+ * | `id in (…)` (now) | `enable_seqscan=off` | BitmapOr | 9.9 ms |
  *
- * | shape | plan | time |
- * |---|---|---|
- * | `EXISTS` (this, before) | **Seq Scan** + top-N sort | 88.7 ms |
- * | `id = ANY` (this, now) | BitmapOr of two indexes | 8.9 ms |
- * | `UNION` with a per-arm `LIMIT` | Index Scan, stops at 21 | 5.9 ms |
+ * **Read the first two rows, not the last two.** Production runs at default
+ * settings, and there BOTH shapes sequential-scan `houses` — the win is removing
+ * the correlated subplan Postgres was re-executing per row, not reaching an
+ * index. The `BitmapOr` this comment once claimed as the fix appears only with
+ * seq scans disabled, which is the EXPLAIN suite's setting and nothing else's;
+ * it is also SLOWER there (9.9 ms) than the plan production actually picks
+ * (4.2 ms). The planner is right to scan: the discovery arm alone matches ~68%
+ * of the table, so no index is selective enough to be worth the heap fetches.
  *
- * The `UNION` is faster still because each arm's own `LIMIT` lets the ordered
- * index short-circuit, and it is deliberately NOT taken: it has to duplicate the
- * cursor and search predicates into both arms and carries `UNION`'s dedupe, for
- * 3 ms on a synthetic table far larger than Syra's. Recorded so the number is
- * here if that ever stops being true.
+ * ## What would beat it, and why it is not here
  *
- * The extra round trip is one indexed read of `house_members` (0.24 ms at that
- * size) and is the same "resolve ids, then filter" shape
- * {@link houseIdsWithRoomsHiddenFrom} and `listRooms`' `excludeHouseIds` already
- * use in this vertical.
+ * A `UNION` of the two arms, each with its own `LIMIT 21`, lets the discovery
+ * arm walk `houses_visibility_discovery_created_at_idx` in order and stop at 21
+ * rows — a plan that does not grow with the table where this one does
+ * (re-review measurement, member roster fixed: 30k → 5.6 ms vs 6.9 ms; 120k →
+ * 15.9 vs 8.2; 480k → 36.2 vs 17.7). It is deliberately NOT taken: it must
+ * duplicate the cursor and search predicates into both arms and carries `UNION`'s
+ * dedupe, and Syra's `houses` is nowhere near the size where the curves cross.
+ * Recorded so the trade is a decision on the record rather than an oversight —
+ * if `houses` ever reaches six figures, this is the change to make.
+ *
+ * The extra round trip is one indexed read of `house_members` and is the same
+ * "resolve ids, then filter" shape {@link houseIdsWithRoomsHiddenFrom} and
+ * `listRooms`' `excludeHouseIds` already use in this vertical.
+ *
+ * ## The id list is bind parameters, and it is unbounded
+ *
+ * drizzle renders `inArray` as `id in ($2, $3, … $N)` — one bind parameter per
+ * id, NOT `= ANY($2::text[])` — and {@link houseIdsForMember} applies no cap. A
+ * member of 65,534+ houses would exceed the wire protocol's parameter limit and
+ * the query would fail rather than degrade. Not reachable for Syra, and left
+ * uncapped rather than silently truncated: a cap here would drop houses from a
+ * member's own listing, which is worse than an error nobody will see.
  */
 export async function listHouses(
   options: ListHousesOptions,
