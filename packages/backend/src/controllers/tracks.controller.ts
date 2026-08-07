@@ -101,6 +101,17 @@ export const getTrackById = async (req: Request, res: Response, next: NextFuncti
 };
 
 /**
+ * `GET /api/tracks/search` is public and unauthenticated, so `q` is
+ * attacker-controlled and must never reach the regex compiler unescaped: a
+ * crafted pattern is a ReDoS against a collection scan. `search.controller.ts`
+ * and `podcasts.controller.ts` each carry this same helper and use it; this
+ * file was the one that did not.
+ */
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
  * GET /api/tracks/search
  * Search tracks
  */
@@ -122,7 +133,7 @@ export const searchTracks = async (req: Request, res: Response, next: NextFuncti
       });
     }
 
-    const searchRegex = new RegExp(query, 'i');
+    const searchRegex = new RegExp(escapeRegex(query.trim()), 'i');
     const [tracks, total] = await Promise.all([
       TrackModel.find(
         playableTrackFilter({
