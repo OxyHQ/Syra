@@ -12,9 +12,22 @@ export const DEFAULT_PROFILE_CUSTOMIZATION = {
  * Ensures a UserSettings document exists for a user
  * Creates with defaults if missing, updates if missing profileCustomization
  */
+/**
+ * `.lean<T>()` CASTS; it does not project. So this type names a subset while the
+ * query returns the whole document — `privacy`, `notifications` and the rest are
+ * all present at runtime whatever this says.
+ *
+ * That gap is not theoretical: `GET /api/profile/settings/:userId` returned this
+ * value wholesale and therefore served every account's mute list and block list
+ * to any authenticated caller, because the type said those fields were not there.
+ *
+ * `privacy` is listed so the route that must strip it can see it. **A route
+ * returning this document is responsible for its own projection** — narrowing
+ * here protects nothing.
+ */
 type UserSettingsLean = Pick<
   IUserSettings,
-  'oxyUserId' | 'appearance' | 'profileHeaderImage' | 'profileCustomization'
+  'oxyUserId' | 'appearance' | 'profileHeaderImage' | 'profileCustomization' | 'privacy'
 >;
 
 export async function ensureUserSettings(oxyUserId: string) {
