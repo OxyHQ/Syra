@@ -84,20 +84,27 @@ export function getDb(): OxyDatabase<typeof schema> {
  * Whether the pool is open — the Postgres counterpart of
  * `utils/database.ts`'s `isDatabaseConnected()`.
  *
- * Every controller guards its handlers with `if (!isDatabaseConnected()) 503`,
- * and that function reports MONGOOSE readiness. On a controller whose reads are
- * all drizzle it is the wrong database in both directions: Mongo down and
- * Postgres up answers 503 for an endpoint that would have worked, and Postgres
- * down with Mongo up sails past the guard and throws inside the handler.
+ * **Every connectivity gate in the tree now calls THIS**, and none calls
+ * `isDatabaseConnected()`. That sentence used to read the other way round:
+ * controllers guarded on Mongoose readiness while their reads were all drizzle,
+ * which is the wrong database in both directions — Mongo down and Postgres up
+ * answered 503 for an endpoint that would have worked, and Postgres down with
+ * Mongo up sailed past the guard and threw inside the handler.
  *
- * `tsc` cannot see it and neither can a test suite that opens both databases —
- * which is how it survived: the ported controllers' suites all call `connect()`
- * as well as `connectDb()`. `browse.controller.test.ts` is the first to open
- * Postgres ALONE, and every one of its handlers answered 503.
+ * It is also the quietest thing that can break at Task 19: `readyState` never
+ * reaches 1 once Mongo is removed, so a surviving Mongo gate would 503 its
+ * routes permanently, with no error anywhere.
  *
- * Only for a controller that has NO Mongoose reads left. A hybrid one still
- * needs Mongo and must keep asking about it — the two questions are different,
- * and a controller reading both stores has to answer both.
+ * `tsc` cannot see any of this, and neither can a suite that opens both
+ * databases — which is how it survived six verticals: the ported controllers'
+ * suites all called `connect()` as well as `connectDb()`.
+ * `db/__tests__/connectivityGates.test.ts` is the standing check now. It walks
+ * each gated entry point's whole import graph and fails if anything it reaches
+ * opens a Mongoose model, so a gate cannot become wrong again without saying so.
+ *
+ * The rule it encodes is unchanged: this function is right only where there are
+ * NO Mongoose reads left. A genuinely hybrid handler has to ask both questions,
+ * because they are different questions.
  */
 export function isPostgresConnected(): boolean {
   return handle !== null;

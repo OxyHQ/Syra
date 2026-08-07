@@ -2,7 +2,6 @@ import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import { uuidv7 } from '@oxyhq/db';
 import type { Request, Response, NextFunction } from 'express';
 import { normalizeNameKey } from '@syra/shared-types';
-import { clear, connect, disconnect } from '../test/mongo';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
 import { catalogEntities, tracks } from '../db/schema/catalog';
@@ -11,29 +10,26 @@ import { getEntityProfile } from './entityProfile.controller';
 import type { EntityProfile } from '@syra/shared-types';
 
 /**
- * STILL both databases, though for a different reason than before.
+ * POSTGRES ONLY.
  *
- * Nothing this file reaches reads a Mongoose model any more. The reason given
- * here was `services/catalog/artistProfile.ts`'s `ContributionAttestationModel`
- * — Task 13's, and Postgres since that task landed.
+ * This block used to say the opposite, and the reason it was wrong is worth
+ * keeping: nothing here reads a Mongoose model, but `entityProfile.controller`
+ * still GATED every handler on `isDatabaseConnected()` — Mongoose readiness —
+ * so without a Mongo connection every request answered 503 and these suites had
+ * to open one. The guard was the whole dependency.
  *
- * What keeps Mongo now is the GUARD, not a read: `entityProfile.controller`
- * still opens every handler with `isDatabaseConnected() || !isPostgresConnected()`,
- * and the first of those reports MONGOOSE readiness. Without a Mongo connection
- * every request answers 503 rather than hanging. See `db/postgres.ts`'s
- * `isPostgresConnected` for the guard this controller owes; that is a one-word
- * change in a file no live task owns.
+ * Task 15 switched that gate to `isPostgresConnected()`, and the Mongo hooks
+ * went with it. `db/__tests__/connectivityGates.test.ts` is what keeps this
+ * true: it walks this controller's whole import graph and fails if anything it
+ * reaches opens a model again.
  */
 beforeAll(async () => {
-  await connect();
   await connectDb();
 });
 afterEach(async () => {
-  await clear();
   await clearDb();
 });
 afterAll(async () => {
-  await disconnect();
   await disconnectDb();
 });
 

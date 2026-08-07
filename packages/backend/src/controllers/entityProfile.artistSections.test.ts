@@ -4,7 +4,6 @@ import { uuidv7 } from '@oxyhq/db';
 import type { Request, Response, NextFunction } from 'express';
 import type { EntityProfile } from '@syra/shared-types';
 import { normalizeNameKey, PlaylistVisibility } from '@syra/shared-types';
-import { connect, clear, disconnect } from '../test/mongo';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
 import {
@@ -29,26 +28,26 @@ import { getEntityProfile } from './entityProfile.controller';
  */
 
 /**
- * Postgres AND Mongo, and the Mongo half is not this vertical's residue.
+ * POSTGRES ONLY.
  *
- * Nothing here reads a Mongoose model. `entityProfile.controller` — which these
- * tests drive — still guards every handler with `utils/database.ts`'s
- * `isDatabaseConnected()`, which reports MONGOOSE readiness, even though it has
- * no Mongoose read left. Without a Mongo connection every request answers 503.
- * See `db/postgres.ts`'s `isPostgresConnected` for the guard it owes; the two
- * controllers Task 13 owns (`artists`, `queue`) were switched, and this one is
- * another task's file.
+ * This block used to say the opposite, and the reason it was wrong is worth
+ * keeping: nothing here reads a Mongoose model, but `entityProfile.controller`
+ * still GATED every handler on `isDatabaseConnected()` — Mongoose readiness —
+ * so without a Mongo connection every request answered 503 and these suites had
+ * to open one. The guard was the whole dependency.
+ *
+ * Task 15 switched that gate to `isPostgresConnected()`, and the Mongo hooks
+ * went with it. `db/__tests__/connectivityGates.test.ts` is what keeps this
+ * true: it walks this controller's whole import graph and fails if anything it
+ * reaches opens a model again.
  */
 beforeAll(async () => {
-  await connect();
   await connectDb();
 });
 afterEach(async () => {
-  await clear();
   await clearDb();
 });
 afterAll(async () => {
-  await disconnect();
   await disconnectDb();
 });
 

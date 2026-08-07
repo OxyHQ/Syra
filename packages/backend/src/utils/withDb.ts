@@ -16,10 +16,13 @@ type AsyncHandler<R extends Request = Request> = (
  *
  * ## The gate asks POSTGRES, and used to ask Mongo
  *
- * `isDatabaseConnected()` is `mongoose.connection.readyState`. Its only consumer
- * is `routes/playlists.routes.ts`, whose handlers Task 11 moved to Postgres —
- * verified transitively, not by grepping the routes file: walking all 27 files
- * it reaches finds no `models/` import.
+ * This wrapper's only consumer is `routes/playlists.routes.ts`, whose handlers
+ * Task 11 moved to Postgres — verified transitively, not by grepping the routes
+ * file: walking all 27 files it reaches finds no `models/` import, and
+ * `db/__tests__/connectivityGates.test.ts` keeps checking that.
+ *
+ * The gate it used to make was `isDatabaseConnected()`, which is
+ * `mongoose.connection.readyState`.
  *
  * So the gate was asking about a database these routes do not use. That cost two
  * things, and the second is the one worth stating: Mongo down with Postgres up
