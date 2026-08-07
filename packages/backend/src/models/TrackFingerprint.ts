@@ -49,11 +49,16 @@ export const TrackFingerprintModel: mongoose.Model<ITrackFingerprint> =
 /**
  * The ONE way a fingerprint row is written.
  *
- * Two producers fill this collection — the publish path as a track is created,
- * and the backfill script for the catalogue that predates it — and a subtle
- * disagreement between them is exactly the kind of thing that shows up months
- * later as "matching works for new tracks and not old ones". So the write lives
- * here, in the file that owns the collection, and both call it.
+ * ONE producer is left: the publish path in `controllers/uploads.controller.ts`.
+ * The backfill script moved to Postgres in Task 19a and now calls
+ * `db/catalog/fingerprints.ts`, as `services/ingest/ingestTrack.ts` already did.
+ *
+ * That split is a live defect, not a tidy handover. Every READER of a
+ * fingerprint — the takedown purge and the upload matcher — is on Postgres, so
+ * a track published through this path writes to a collection nothing reads.
+ * Task 13 owns the controller; this comment exists so the next person to open
+ * the file does not read "the publish path writes fingerprints" and conclude
+ * that acoustic matching works for new tracks.
  *
  * An upsert keyed on `trackId`, because re-fingerprinting an already-indexed
  * track must replace its row rather than fail on the unique index — that is what

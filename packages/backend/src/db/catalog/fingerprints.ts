@@ -11,10 +11,19 @@
  * (`track_fingerprints_duration_idx`) and only then compares bit error rates.
  *
  * This module exists because the write used to live in `models/TrackFingerprint.ts`
- * beside the Mongoose model. Three producers call it — the publish path, ingest,
- * and the backfill script — and a subtle disagreement between them is exactly
- * what shows up months later as "matching works for new tracks and not old
- * ones", so the write stays in ONE place as it was.
+ * beside the Mongoose model. A subtle disagreement between the producers is
+ * exactly what shows up months later as "matching works for new tracks and not
+ * old ones", so the write stays in ONE place as it was.
+ *
+ * TWO of the three producers are here: `services/ingest/ingestTrack.ts` and
+ * `scripts/backfillTrackFingerprints.ts` (Task 19a). The third, the publish path
+ * in `controllers/uploads.controller.ts`, still calls the MONGOOSE
+ * `indexTrackAcoustically` in `models/TrackFingerprint.ts` — so a track
+ * published today writes its fingerprint to a collection nothing reads, while
+ * the takedown purge and the upload matcher both read this table. Task 13 owns
+ * that controller; until it moves, "the write lives in one place" describes the
+ * intent and not the tree, which is why this paragraph says so rather than
+ * claiming three callers.
  */
 
 import { eq } from 'drizzle-orm';

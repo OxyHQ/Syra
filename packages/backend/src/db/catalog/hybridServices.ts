@@ -82,17 +82,9 @@ export type OwningTask = keyof typeof OWNING_TASKS;
  */
 export const CROSS_CUTTING_TASKS = {
   'Task 19': 'Remove MongoDB',
-  /**
-   * Split out of Task 19 by the Task 12 review (I4).
-   *
-   * Task 19 is gated on Task 8, which is blocked, so anything parked behind it
-   * waits indefinitely. Three of the five bulk loaders fill tables whose READ
-   * side is already on Postgres, so those readers query an empty table until
-   * their loader moves — that is a half-connected mechanism rather than a
-   * dormant script, and one of the three is a compliance path. They get an
-   * owner that is not blocked.
-   */
-  'Task 19a': 'The bulk loaders (unblocked, split from Task 19)',
+  // `Task 19a` — the three half-connected bulk loaders split out by the Task 12
+  // review — is CLOSED and therefore gone from this map, which is what makes any
+  // surviving `owner: 'Task 19a'` fail rather than read as green.
 } as const;
 
 /**
@@ -149,9 +141,12 @@ export type NonCatalogModel = keyof typeof NON_CATALOG_MODEL_OWNERS;
  * these has not been ported, whatever else it does — this is the list property
  * 1 is checked against.
  *
- * Nineteen tables, ten model files: the four the Task 10b brief named plus the
+ * Nineteen tables, nine model files: the four the Task 10b brief named plus the
  * six its selector missed (`IsrcRegistry` alone is imported by three services
- * that were never in the brief's list — see the report).
+ * that were never in the brief's list — see the report), less `MusicBrainzArtist`,
+ * whose model file Task 19a deleted once its importer was the last one left.
+ * A name leaves this list when its model file leaves the tree — the convention
+ * Task 12 set with `Podcast`, `Episode`, `EpisodeProgress` and `Library`.
  */
 export const CATALOG_MODELS = [
   'Track',
@@ -161,7 +156,6 @@ export const CATALOG_MODELS = [
   'TrackKey',
   'TrackFingerprint',
   'Lyrics',
-  'MusicBrainzArtist',
   'IsrcRegistry',
   'DiscogsRelease',
 ] as const;
@@ -397,38 +391,6 @@ export const UNPORTED_CATALOG_MODULES: readonly {
       'DORMANT. Seeds a development catalogue into Mongo; nothing reads that catalogue any ' +
       'more, and the Postgres tables it would fill are written by the real upload path. No ' +
       'reader is starved by leaving it, so it can wait for the MongoDB removal itself.',
-  },
-  {
-    file: 'scripts/backfillTrackFingerprints.ts',
-    models: ['Track', 'TrackFingerprint'],
-    owner: 'Task 19a',
-    reownedFrom: 'Task 10 (closed)',
-    reason:
-      'HALF-CONNECTED, and the most serious of the three: `services/compliance/takedown.ts:300` ' +
-      'matches fingerprints out of Postgres while the only thing that fills them still writes ' +
-      'Mongo, so takedown fingerprint matching runs against an empty table. A COMPLIANCE path ' +
-      'silently matching nothing is not a dormant script, and it must not wait behind Task 8.',
-  },
-  {
-    file: 'scripts/importIsrcRegistry.ts',
-    models: ['IsrcRegistry'],
-    owner: 'Task 19a',
-    reownedFrom: 'Task 10 (closed)',
-    reason:
-      'HALF-CONNECTED. The three SERVICES that read the ISRC registry were ported in Task 10b ' +
-      '(missed by the same selector that missed this); the importer that fills it was not, so ' +
-      '`services/uploads/isrcLookup.ts:384` matches an uploader-supplied ISRC against an empty ' +
-      'table.',
-  },
-  {
-    file: 'scripts/importMusicBrainzArtists.ts',
-    models: ['MusicBrainzArtist'],
-    owner: 'Task 19a',
-    reownedFrom: 'Task 10 (closed)',
-    reason:
-      'HALF-CONNECTED. `services/uploads/enrichCatalogEntity.ts:43` reads the MusicBrainz artist ' +
-      'mirror from Postgres and this is the only thing that fills it, so artist enrichment ' +
-      'silently finds nothing on every upload.',
   },
   {
     file: 'scripts/importDiscogsReleases.ts',

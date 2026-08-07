@@ -167,6 +167,64 @@ export function writeCheckpoint(checkpointPath: string, checkpoint: Checkpoint):
   fs.writeFileSync(checkpointPath, `${JSON.stringify(checkpoint)}\n`, 'utf8');
 }
 
+// ── Write sizing ────────────────────────────────────────────────────────────
+
+/**
+ * The most bind parameters one Postgres statement can carry.
+ *
+ * The wire protocol's Bind message counts parameters in an Int16, so 65535 is a
+ * hard protocol ceiling — not a tunable, and not something a bigger server or a
+ * different driver relaxes.
+ *
+ * This matters here and nowhere else in the codebase because these importers are
+ * the only writers that build a multi-row `INSERT` whose row count comes from a
+ * CLI flag. Everything else inserts a bounded handful of rows.
+ */
+const MAX_BIND_PARAMS = 65535;
+
+/**
+ * Split `rows` into statement-sized chunks that cannot exceed {@link MAX_BIND_PARAMS}.
+ *
+ * `--batch-size` is the CHECKPOINT granularity — how many dump rows are covered
+ * by one committed advance — and its default of 5000 predates Postgres. It is
+ * not a safe statement size, and the difference is not academic: `drizzle` sends
+ * one parameter per column per row PLUS one for the client-minted `id`
+ * (`generatedId` is `$defaultFn(() => uuidv7())`, so the id is a bind parameter,
+ * not a server default), so a 5000-row `musicbrainz_artists` upsert asks for
+ * 75001 parameters and the statement is rejected outright. `isrc_registry` at
+ * 8 per row survives 5000 by accident, not by design.
+ *
+ * So the two sizes are separated: the caller keeps its checkpoint cadence, and
+ * this decides how many rows may ride in a single statement. Callers pass the
+ * WORST-CASE parameter count per row — a row that omits an optional column emits
+ * a literal `default` rather than a parameter, so counting every column is the
+ * safe direction to be wrong in.
+ */
+export function chunkForBindParams<T>(rows: readonly T[], paramsPerRow: number): T[][] {
+  if (!Number.isInteger(paramsPerRow) || paramsPerRow <= 0) {
+    throw new Error(`paramsPerRow must be a positive integer, got ${paramsPerRow}`);
+  }
+
+  /**
+   * One parameter is reserved because drizzle appends the `updated_at`
+   * `$onUpdate` value to the conflict `SET` clause — once per STATEMENT, not per
+   * row. Reserving it keeps the arithmetic honest at the boundary instead of
+   * putting the ceiling one parameter out of reach.
+   */
+  const rowsPerStatement = Math.floor((MAX_BIND_PARAMS - 1) / paramsPerRow);
+  if (rowsPerStatement === 0) {
+    throw new Error(
+      `A single row needs ${paramsPerRow} bind parameters, which exceeds the ${MAX_BIND_PARAMS} ceiling.`,
+    );
+  }
+
+  const chunks: T[][] = [];
+  for (let index = 0; index < rows.length; index += rowsPerStatement) {
+    chunks.push(rows.slice(index, index + rowsPerStatement));
+  }
+  return chunks;
+}
+
 // ── CLI ─────────────────────────────────────────────────────────────────────
 
 export interface DumpImportOptions {

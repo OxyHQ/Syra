@@ -1,12 +1,20 @@
 /**
- * Import the ISRC slice of the MusicBrainz database into `IsrcRegistry`.
+ * Import the ISRC slice of the MusicBrainz database into `isrc_registry`.
  *
  * WHAT THIS IS FOR
  * An ISRC on an uploaded file proves nothing on its own — indie distributors
  * assign them, so every independent artist arrives carrying one. What tells us a
  * file is a known commercial release is the ISRC RESOLVING to a catalogued
- * recording with releases behind it. This collection is that resolution, held
- * locally so screening is a point query rather than a paid web-service call.
+ * recording with releases behind it. This table is that resolution, held locally
+ * so screening is a point query rather than a paid web-service call.
+ *
+ * WHAT READS IT — and why an empty table is not a quiet failure.
+ * `services/uploads/isrcLookup.ts` resolves an uploader-supplied ISRC here,
+ * `provenanceSignals.ts` scores it, `acoustid.ts` runs the join in reverse
+ * (recording MBID → ISRC) and `resolveArtist.ts` takes the credited artist from
+ * it. All four answer "not a known commercial release" when the table is empty,
+ * which is indistinguishable from a real negative. Until this has run, they are
+ * confidently wrong rather than visibly broken.
  *
  * WHERE THE DATA COMES FROM
  * MusicBrainz's full data export, which is CC0 and free to redistribute:
@@ -37,12 +45,25 @@
  * below encode. Verified against the 2026-08-01 export.
  *
  * IDEMPOTENT AND RESUMABLE
- * Every write is an `updateOne` upsert keyed on `isrc`, so a second run over the
- * same dump changes nothing and a run over a newer dump updates in place. A
- * checkpoint file records how many `isrc` rows have been committed together with
- * the dump's own TIMESTAMP, so an interrupted import resumes where it stopped —
- * and REFUSES to resume against a different dump, where a row offset would point
- * somewhere else entirely.
+ * Every write is an `ON CONFLICT DO UPDATE` against `isrc_registry_isrc_key`, so
+ * a second run over the same dump changes nothing and a run over a newer dump
+ * updates in place — the real unique constraint decides, never a read-then-write
+ * race. A checkpoint file records how many `isrc` rows have been committed
+ * together with the dump's own TIMESTAMP, so an interrupted import resumes where
+ * it stopped — and REFUSES to resume against a different dump, where a row
+ * offset would point somewhere else entirely.
+ *
+ * PARTIAL FAILURE: RESUME, not redo. Each flush is one transaction and the
+ * checkpoint is written only after it commits, so a crash costs at most the
+ * batch in flight. Re-running that batch is harmless because the upsert is
+ * idempotent, which is what makes "resume" safe rather than merely cheap.
+ *
+ * THE DUMP IS AUTHORITATIVE — a deliberate change from Mongo. `lengthMs` is
+ * absent from a row whose recording has no length, and the conflict `SET` writes
+ * `excluded.length_ms`, so re-importing a dump that dropped a length CLEARS the
+ * stored one. Mongo's `$set` omitted the key and the stale value survived
+ * forever. This is a mirror of somebody else's dataset: when the source stops
+ * asserting a fact, the mirror must stop asserting it too.
  *
  * MEMORY
  * The join is held in memory: ~3.5M recordings that carry an ISRC, plus the
@@ -52,12 +73,13 @@
  * from blocking to high — see `provenanceSignals.ts`).
  */
 
-import mongoose from 'mongoose';
+import { sql } from 'drizzle-orm';
 import { normalizeNameKey } from '@syra/shared-types';
-import { IsrcRegistryModel } from '../models/IsrcRegistry';
-import { connectToDatabase } from '../utils/database';
+import { closePostgres, connectPostgres, getDb } from '../db/postgres';
+import { isrcRegistry } from '../db/schema/catalog';
 import { logger } from '../utils/logger';
 import {
+  chunkForBindParams,
   IdBitmap,
   IdCounter,
   loadCheckpoint,
@@ -89,6 +111,14 @@ interface RecordingRow {
   artistCreditId: number;
   lengthMs?: number;
 }
+
+/**
+ * Worst-case bind parameters per `isrc_registry` row: the seven columns this
+ * importer writes, plus the client-minted `id`. `created_at`/`updated_at` cost
+ * nothing — they carry SQL defaults, so drizzle emits the `default` keyword
+ * rather than a parameter.
+ */
+const ISRC_BIND_PARAMS_PER_ROW = 8;
 
 // ── Passes ──────────────────────────────────────────────────────────────────
 
@@ -176,7 +206,7 @@ export interface ImportOptions extends DumpImportOptions {
 
 export interface ImportSummary {
   isrcRowsRead: number;
-  documentsWritten: number;
+  rowsWritten: number;
   skippedResumed: number;
   skippedUnresolved: number;
 }
@@ -197,19 +227,56 @@ export async function importIsrcRegistry(options: ImportOptions): Promise<Import
 
   const summary: ImportSummary = {
     isrcRowsRead: 0,
-    documentsWritten: 0,
+    rowsWritten: 0,
     skippedResumed: 0,
     skippedUnresolved: 0,
   };
 
-  type RegistryUpsert = Parameters<typeof IsrcRegistryModel.bulkWrite>[0][number];
-  let batch: RegistryUpsert[] = [];
+  type RegistryRow = typeof isrcRegistry.$inferInsert;
+
+  /**
+   * Keyed by `isrc`, NOT an array — and that is load-bearing rather than tidy.
+   *
+   * MusicBrainz's `isrc` table maps recordings to identifiers many-to-many, so
+   * the same ISRC legitimately appears on more than one recording and reaches
+   * this batch twice. Mongo's `bulkWrite` applied those as two sequential
+   * `updateOne`s and the last one won. Postgres refuses outright: two rows with
+   * the same conflict key in ONE `INSERT … ON CONFLICT DO UPDATE` is
+   * `21000 — ON CONFLICT DO UPDATE command cannot affect row a second time`,
+   * which fails the whole statement and therefore the whole import.
+   *
+   * A `Map` keeps last-write-wins, matching what Mongo did, and guarantees the
+   * conflict key is unique within every statement this builds.
+   */
+  let batch = new Map<string, RegistryRow>();
 
   const flush = async (rowsCoveredByBatch: number): Promise<void> => {
-    if (batch.length > 0) {
-      await IsrcRegistryModel.bulkWrite(batch, { ordered: false });
-      summary.documentsWritten += batch.length;
-      batch = [];
+    if (batch.size > 0) {
+      const rows = [...batch.values()];
+      /**
+       * One transaction per flush, so the checkpoint written below can never
+       * claim rows that a crash left half-applied.
+       */
+      await getDb().transaction(async (tx) => {
+        for (const chunk of chunkForBindParams(rows, ISRC_BIND_PARAMS_PER_ROW)) {
+          await tx
+            .insert(isrcRegistry)
+            .values(chunk)
+            .onConflictDoUpdate({
+              target: isrcRegistry.isrc,
+              set: {
+                recordingMbid: sql`excluded.recording_mbid`,
+                title: sql`excluded.title`,
+                artistCredit: sql`excluded.artist_credit`,
+                artistCreditNameKey: sql`excluded.artist_credit_name_key`,
+                lengthMs: sql`excluded.length_ms`,
+                releaseCount: sql`excluded.release_count`,
+              },
+            });
+        }
+      });
+      summary.rowsWritten += rows.length;
+      batch = new Map();
     }
     writeCheckpoint(options.checkpointPath, { dumpTimestamp, committedRows: rowsCoveredByBatch });
   };
@@ -235,26 +302,19 @@ export async function importIsrcRegistry(options: ImportOptions): Promise<Import
       continue;
     }
 
-    batch.push({
-      updateOne: {
-        filter: { isrc },
-        update: {
-          $set: {
-            recordingMbid: recording.gid,
-            title: recording.title,
-            artistCredit,
-            artistCreditNameKey: normalizeNameKey(artistCredit),
-            releaseCount: releaseCounts?.get(recordingId) ?? 0,
-            ...(recording.lengthMs !== undefined && { lengthMs: recording.lengthMs }),
-          },
-        },
-        upsert: true,
-      },
+    batch.set(isrc, {
+      isrc,
+      recordingMbid: recording.gid,
+      title: recording.title,
+      artistCredit,
+      artistCreditNameKey: normalizeNameKey(artistCredit),
+      releaseCount: releaseCounts?.get(recordingId) ?? 0,
+      ...(recording.lengthMs !== undefined && { lengthMs: recording.lengthMs }),
     });
 
-    if (batch.length >= options.batchSize) {
+    if (batch.size >= options.batchSize) {
       await flush(summary.isrcRowsRead);
-      logger.info(`isrc: ${summary.documentsWritten} documents written`);
+      logger.info(`isrc: ${summary.rowsWritten} rows written`);
     }
   }
 
@@ -273,15 +333,15 @@ async function main(): Promise<void> {
     ...parsed,
     skipReleaseCounts: parsed.flags.has('skip-release-counts'),
   };
-  await connectToDatabase();
+  await connectPostgres();
   try {
     const summary = await importIsrcRegistry(options);
     logger.info(
-      `ISRC registry import complete: read ${summary.isrcRowsRead} rows, wrote ${summary.documentsWritten}, ` +
+      `ISRC registry import complete: read ${summary.isrcRowsRead} rows, wrote ${summary.rowsWritten}, ` +
         `resumed past ${summary.skippedResumed}, dropped ${summary.skippedUnresolved} unresolved`,
     );
   } finally {
-    await mongoose.disconnect();
+    await closePostgres();
   }
 }
 

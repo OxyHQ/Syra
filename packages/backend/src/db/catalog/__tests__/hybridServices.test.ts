@@ -180,15 +180,21 @@ const MINIMUM_HYBRID_FILES = 15;
  * `scripts/reseedPersons.ts` (`CatalogEntity`) all stopped importing a catalog
  * model when Task 12 ported them.
  *
+ * Three, down from six: Task 19a ported the three bulk loaders whose target
+ * tables already had live readers (`backfillTrackFingerprints`,
+ * `importIsrcRegistry`, `importMusicBrainzArtists`).
+ *
  * What is left is `uploads.controller.ts` (six catalog models, Task 13) and the
- * five bulk-load scripts Task 10's file selector missed. The three-population
- * split Task 11 recorded here has collapsed with the drop — all six survivors
- * bar `uploads.controller` are entirely Mongoose — so it is not restated.
+ * two bulk-load scripts that are genuinely dormant — `importDiscogsReleases`
+ * and `seedMusicData`, both filling tables nothing reads, both Task 19's. The
+ * three-population split Task 11 recorded here has collapsed with the drop — the
+ * two survivors bar `uploads.controller` are entirely Mongoose — so it is not
+ * restated.
  *
  * It drops further as those files port, and a sweep that suddenly finds none is
  * a broken walk, not a finished migration.
  */
-const MINIMUM_CATALOG_MODEL_IMPORTERS = 6;
+const MINIMUM_CATALOG_MODEL_IMPORTERS = 3;
 
 describe('property 3 — every hybrid file in the tree is registered', () => {
   const REGISTERED = new Set([
@@ -480,12 +486,18 @@ describe('vacuity floor', () => {
      */
     expect(HYBRID_MODULES.length).toBe(18);
     /**
-     * Six, down from ten. Task 12 cleared four: `podcastAudio.controller`,
-     * `podcasts.controller` and `services/podcasts/resolvePersons.ts` were its
-     * own, and `scripts/reseedPersons.ts` was Task 10's — ported here anyway
-     * because deleting the podcast models left it unable to compile at all.
+     * Three, down from six. Task 19a cleared the three half-connected bulk
+     * loaders — `backfillTrackFingerprints`, `importIsrcRegistry` and
+     * `importMusicBrainzArtists` — which were never dormant: each was the write
+     * half of a mechanism whose read half was already on Postgres, so its reader
+     * queried an empty table and returned a confident negative.
+     *
+     * The three that remain are genuinely dormant. `importDiscogsReleases` and
+     * `seedMusicData` fill tables nothing reads, and stay with Task 19; the
+     * third is Task 13's `uploads.controller`.
+     *
      * See `MINIMUM_CATALOG_MODEL_IMPORTERS`, which counts the same population.
      */
-    expect(UNPORTED_CATALOG_MODULES.length).toBe(6);
+    expect(UNPORTED_CATALOG_MODULES.length).toBe(3);
   });
 });
