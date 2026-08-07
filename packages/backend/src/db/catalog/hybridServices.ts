@@ -68,6 +68,59 @@ export const OWNING_TASKS = {
 export type OwningTask = keyof typeof OWNING_TASKS;
 
 /**
+ * Tasks that own registry entries WITHOUT owning a vertical.
+ *
+ * {@link OWNING_TASKS} is keyed by vertical, which is right for
+ * {@link NON_CATALOG_MODEL_OWNERS} — every still-Mongoose model belongs to one.
+ * It cannot express an owner that is cross-cutting, and
+ * {@link UNPORTED_CATALOG_MODULES} has two: the MongoDB removal itself, and the
+ * bulk loaders split out of it.
+ *
+ * Listed here so {@link LIVE_TASK_IDS} can be complete. Like `OWNING_TASKS`,
+ * an entry is DELETED when its task closes — that deletion is what turns a
+ * surviving `owner` into a failing gate rather than a green lie.
+ */
+export const CROSS_CUTTING_TASKS = {
+  'Task 19': 'Remove MongoDB',
+  /**
+   * Split out of Task 19 by the Task 12 review (I4).
+   *
+   * Task 19 is gated on Task 8, which is blocked, so anything parked behind it
+   * waits indefinitely. Three of the five bulk loaders fill tables whose READ
+   * side is already on Postgres, so those readers query an empty table until
+   * their loader moves — that is a half-connected mechanism rather than a
+   * dormant script, and one of the three is a compliance path. They get an
+   * owner that is not blocked.
+   */
+  'Task 19a': 'The bulk loaders (unblocked, split from Task 19)',
+} as const;
+
+/**
+ * Every task id that may appear in an `owner` field — the LIVE set.
+ *
+ * This is the gate `hybridServices.test.ts` checks membership against, and it
+ * exists because the previous check was `toContain('Task ')`: a substring test
+ * that passes for `Task 10`, a CLOSED task, and equally for `Task 999`. Five
+ * entries named a finished task for three tasks running, on the one field that
+ * could have caught it — the fifth instance of substring-where-identity-was-
+ * meant on this branch, and the first sitting on the check that would have
+ * found the others.
+ *
+ * The discovering property is the deletion: an owner leaves this set when its
+ * task closes (its `OWNING_TASKS` or `CROSS_CUTTING_TASKS` entry is removed,
+ * which is already the convention — see `library` and `podcasts`), and every
+ * registry entry still naming it goes red on the next run. Nobody has to
+ * remember to audit; the audit is what closing a task already does.
+ */
+export const LIVE_TASK_IDS: readonly string[] = [
+  // `'Task 13 — creators and uploads'` → `'Task 13'`. The vertical values carry
+  // a description; the `owner` field is the bare id, so the id is taken from
+  // the front rather than the two being maintained separately.
+  ...Object.values(OWNING_TASKS).map((value) => value.split(' — ')[0] ?? value),
+  ...Object.keys(CROSS_CUTTING_TASKS),
+];
+
+/**
  * Every Mongoose model a hybrid catalog service is still allowed to import,
  * mapped to the task that will remove it.
  *
@@ -298,7 +351,19 @@ export const HYBRID_MODULES: readonly HybridModule[] = [
 export const UNPORTED_CATALOG_MODULES: readonly {
   readonly file: string;
   readonly models: readonly CatalogModel[];
+  /**
+   * The task that will port or delete this file — a BARE id, exactly as it
+   * appears in {@link LIVE_TASK_IDS}, and compared by identity.
+   *
+   * Nothing else goes in here. Task 12 first recorded a re-ownership as
+   * `'Task 19 — MongoDB removal (re-owned from the closed Task 10)'`, which is
+   * accurate prose and defeats the only check that matters: an exact
+   * comparison against the live set becomes impossible the moment the field
+   * carries anything but the id. Provenance goes in {@link reownedFrom}.
+   */
   readonly owner: string;
+  /** The task this entry was moved AWAY from, when it was moved. */
+  readonly reownedFrom?: string;
   readonly reason: string;
 }[] = [
   {
@@ -326,34 +391,54 @@ export const UNPORTED_CATALOG_MODULES: readonly {
   {
     file: 'scripts/seedMusicData.ts',
     models: ['Album', 'CatalogEntity', 'Track'],
-    owner: 'Task 19 — MongoDB removal (re-owned from the closed Task 10)',
-    reason: 'Seeds a development catalogue into Mongo. Nothing reads that catalogue any more.',
+    owner: 'Task 19',
+    reownedFrom: 'Task 10 (closed)',
+    reason:
+      'DORMANT. Seeds a development catalogue into Mongo; nothing reads that catalogue any ' +
+      'more, and the Postgres tables it would fill are written by the real upload path. No ' +
+      'reader is starved by leaving it, so it can wait for the MongoDB removal itself.',
   },
   {
     file: 'scripts/backfillTrackFingerprints.ts',
     models: ['Track', 'TrackFingerprint'],
-    owner: 'Task 19 — MongoDB removal (re-owned from the closed Task 10)',
-    reason: 'Walks every track to index it acoustically; both collections are ported tables.',
+    owner: 'Task 19a',
+    reownedFrom: 'Task 10 (closed)',
+    reason:
+      'HALF-CONNECTED, and the most serious of the three: `services/compliance/takedown.ts:300` ' +
+      'matches fingerprints out of Postgres while the only thing that fills them still writes ' +
+      'Mongo, so takedown fingerprint matching runs against an empty table. A COMPLIANCE path ' +
+      'silently matching nothing is not a dormant script, and it must not wait behind Task 8.',
   },
   {
     file: 'scripts/importIsrcRegistry.ts',
     models: ['IsrcRegistry'],
-    owner: 'Task 19 — MongoDB removal (re-owned from the closed Task 10)',
+    owner: 'Task 19a',
+    reownedFrom: 'Task 10 (closed)',
     reason:
-      'Bulk-loads the ISRC registry. The three SERVICES that read it were ported in Task 10b ' +
-      '(they were missed by the same selector); the importer that fills it was not.',
+      'HALF-CONNECTED. The three SERVICES that read the ISRC registry were ported in Task 10b ' +
+      '(missed by the same selector that missed this); the importer that fills it was not, so ' +
+      '`services/uploads/isrcLookup.ts:384` matches an uploader-supplied ISRC against an empty ' +
+      'table.',
   },
   {
     file: 'scripts/importMusicBrainzArtists.ts',
     models: ['MusicBrainzArtist'],
-    owner: 'Task 19 — MongoDB removal (re-owned from the closed Task 10)',
-    reason: 'Bulk-loads the MusicBrainz artist mirror `enrichCatalogEntity` reads from Postgres.',
+    owner: 'Task 19a',
+    reownedFrom: 'Task 10 (closed)',
+    reason:
+      'HALF-CONNECTED. `services/uploads/enrichCatalogEntity.ts:43` reads the MusicBrainz artist ' +
+      'mirror from Postgres and this is the only thing that fills it, so artist enrichment ' +
+      'silently finds nothing on every upload.',
   },
   {
     file: 'scripts/importDiscogsReleases.ts',
     models: ['DiscogsRelease'],
-    owner: 'Task 19 — MongoDB removal (re-owned from the closed Task 10)',
-    reason: 'Bulk-loads the Discogs release mirror.',
+    owner: 'Task 19',
+    reownedFrom: 'Task 10 (closed)',
+    reason:
+      'DORMANT. Bulk-loads the Discogs release mirror, and `discogs_releases` has NO reader at ' +
+      'all — neither database. Nothing is starved by leaving it, which is what separates it ' +
+      'from the three above rather than the fact that it is a script.',
   },
   // `services/uploads/{acoustid,isrcLookup,provenanceSignals}.ts` were listed
   // here — missed by the Task 10b brief's selector, which keyed on four model

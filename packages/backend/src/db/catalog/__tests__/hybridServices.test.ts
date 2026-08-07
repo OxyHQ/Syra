@@ -57,6 +57,7 @@ import { dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { describe, expect, it } from 'bun:test';
 import {
   CATALOG_MODELS,
+  LIVE_TASK_IDS,
   HYBRID_MODULES,
   NON_CATALOG_MODEL_OWNERS,
   OWNING_TASKS,
@@ -339,9 +340,60 @@ describe('the unported list cannot outlive its work', () => {
     });
   }
 
-  it('names an owner for every entry', () => {
+  /**
+   * IDENTITY against the live set, not `toContain('Task ')`.
+   *
+   * The old check passed for `Task 10` — a CLOSED task — and equally for
+   * `Task 999`, and five entries named a finished task for three tasks running
+   * underneath it. That is the fifth instance of substring-where-identity-was-
+   * meant on this branch, and the first one sitting on the check that would
+   * have caught the others.
+   *
+   * What makes this DISCOVER rather than merely assert: an owner leaves
+   * `LIVE_TASK_IDS` when its task closes, because closing a task already means
+   * deleting its `OWNING_TASKS` / `CROSS_CUTTING_TASKS` entry (the convention
+   * `library` and `podcasts` already follow). Every registry entry still naming
+   * it goes red on the next run, with no separate audit to remember.
+   */
+  it('every owner is a LIVE task, compared by identity', () => {
     for (const entry of UNPORTED_CATALOG_MODULES) {
-      expect(`${entry.file}: ${entry.owner}`).toContain('Task ');
+      expect(`${entry.file} owner: ${entry.owner}`).toBe(
+        `${entry.file} owner: ${LIVE_TASK_IDS.includes(entry.owner) ? entry.owner : `${entry.owner} (NOT a live task)`}`
+      );
+    }
+  });
+
+  /**
+   * The mutation guard for the assertion above.
+   *
+   * Without it, `LIVE_TASK_IDS.includes(...)` is a check whose failure mode is
+   * untested — and this whole finding exists because a check that could not
+   * fail was trusted for three tasks. A closed task's id must be REJECTED, and
+   * a bare `Task ` prefix must not be enough to pass.
+   */
+  it('rejects a closed task, and a prefix match is not enough', () => {
+    expect(LIVE_TASK_IDS).not.toContain('Task 10');
+    expect(LIVE_TASK_IDS).not.toContain('Task 999');
+    // The exact strings the old substring gate accepted.
+    expect(LIVE_TASK_IDS.some((id) => 'Task 10'.includes(id))).toBe(false);
+    // And a superstring of a live id is not a live id either — the shape the
+    // first re-ownership shipped, `'Task 19 — MongoDB removal (…)'`.
+    expect(LIVE_TASK_IDS).not.toContain('Task 19 — MongoDB removal (re-owned from the closed Task 10)');
+    expect(LIVE_TASK_IDS).toContain('Task 19');
+  });
+
+  /**
+   * Provenance lives in `reownedFrom`, and it must not leak back into `owner`.
+   *
+   * The container is the whole finding: accurate prose in `owner` is exactly
+   * what made the closed-task comparison impossible.
+   */
+  it('owner carries the bare id and nothing else', () => {
+    for (const entry of UNPORTED_CATALOG_MODULES) {
+      expect(`${entry.file}: ${entry.owner}`).toBe(`${entry.file}: ${entry.owner.trim()}`);
+      expect(`${entry.file} owner has no prose: ${/^Task [0-9]+[a-z]?$/.test(entry.owner)}`).toBe(
+        `${entry.file} owner has no prose: true`
+      );
     }
   });
 });

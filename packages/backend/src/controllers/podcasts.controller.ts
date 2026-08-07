@@ -42,7 +42,6 @@ import {
   findPodcastsByIds,
   findPodcastsByOwner,
   insertPodcast,
-  recordNewEpisode,
   searchPodcastRows,
   updatePodcast as updatePodcastRow,
 } from '../db/podcasts/podcasts';
@@ -625,10 +624,11 @@ export async function uploadEpisode(req: AuthRequest, res: Response): Promise<vo
           audioSourceFormat: format,
           status: 'processing',
         },
-        { persons: episodePersons }
+        { persons: episodePersons },
+        // The show's `episode_count`/`last_episode_at` move in the SAME
+        // transaction as the row they describe — see `insertEpisode`.
+        { recordOnShow: true }
       );
-
-      await recordNewEpisode(podcast.id, pubDate);
 
       enqueueEpisodeIngest(episodeId);
 

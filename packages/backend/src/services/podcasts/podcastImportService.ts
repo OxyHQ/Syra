@@ -416,12 +416,23 @@ export async function importFeed(
 }
 
 /**
- * The seven artwork columns, all null — an episode that has its own external art
- * we could not re-host keeps only `image_source_url`.
+ * The seven artwork columns, all null — a NEW episode that has its own external
+ * art we could not re-host keeps only `image_source_url`.
  *
- * Spelled out rather than `{}` because these columns must be WRITTEN as null on
- * a refresh: leaving them out would preserve whatever a previous crawl stored,
- * which for a cover that has since been removed from the feed is a stale image.
+ * Spelled out rather than `{}` for explicitness only. An earlier version of this
+ * comment claimed the nulls "must be WRITTEN as null on a refresh", which the
+ * Task 12 review (M1) showed the code cannot do: artwork is computed only when
+ * `!alreadyExists`, so a refresh of an existing episode passes `undefined` and
+ * writes none of these columns at all. On the path this constant IS reached —
+ * an insert — the columns would default to null anyway.
+ *
+ * The consequence the false comment was papering over is real and is PARITY,
+ * not a defect introduced here: an episode whose own artwork is later removed
+ * from the feed keeps the cover a previous crawl re-hosted, because the refresh
+ * never revisits it. Mongo behaved identically and said so — "Existing episode →
+ * leave its cover as-is (idempotent)". Recorded rather than fixed, because
+ * re-hosting every episode's art on every crawl is what the `!alreadyExists`
+ * guard and `MAX_EPISODE_IMAGE_REHOST` exist to prevent.
  */
 const NO_ARTWORK: ArtworkColumns = {
   imageId: null,

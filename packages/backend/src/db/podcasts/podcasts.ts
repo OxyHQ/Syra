@@ -520,17 +520,6 @@ export async function setPodcastRefreshState(
   await getDb().update(podcasts).set(set).where(eq(podcasts.id, id));
 }
 
-/** Bump a show's episode counters after an episode lands. */
-export async function recordNewEpisode(id: string, pubDate: Date): Promise<void> {
-  await getDb()
-    .update(podcasts)
-    .set({
-      episodeCount: sql`${podcasts.episodeCount} + 1`,
-      lastEpisodeAt: pubDate,
-    })
-    .where(eq(podcasts.id, id));
-}
-
 /** The category names of one show, in the feed's own order — the single-show read. */
 export async function podcastCategoryNames(podcastId: string): Promise<string[]> {
   const rows = await getDb()

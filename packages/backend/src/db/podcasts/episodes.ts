@@ -23,7 +23,7 @@
 import { and, count, eq, getTableColumns, inArray, ne, sql, type SQL } from 'drizzle-orm';
 import type { EpisodePerson, EpisodeTranscript, HlsRendition } from '@syra/shared-types';
 import { getDb, type DbOrTransaction } from '../postgres';
-import { episodeProgress, episodes } from '../schema/podcasts';
+import { episodeProgress, episodes, podcasts } from '../schema/podcasts';
 import { descNullsLast } from '../catalog/containers';
 import { textSearch } from '../catalog/search';
 import { setEpisodeHlsRenditions, setEpisodePersons, setEpisodeTranscripts } from './children';
@@ -224,14 +224,39 @@ export async function findEpisodesCreditingPerson(
 
 // ── Writes ────────────────────────────────────────────────────────────────
 
+/**
+ * Insert an episode, its child collections, and — for a creator upload — the
+ * parent show's counters, in ONE transaction.
+ *
+ * `recordOnShow` exists because `podcasts.episode_count` and `last_episode_at`
+ * are DERIVED facts about the episode set, so "this episode exists" and "the
+ * show has one more episode" are one fact rather than two. The Task 12 review
+ * (M2) found the counter bump sitting outside this transaction as a separate
+ * call: a failure between them drifted a Syra-hosted show's counters
+ * permanently, because only the RSS import path recomputes them from the rows
+ * (`episodeStats`). That was parity with Mongo, which had no transaction to put
+ * it in; here there is one, so it goes in it.
+ */
 export async function insertEpisode(
   values: typeof episodes.$inferInsert,
-  children: EpisodeChildValues = {}
+  children: EpisodeChildValues = {},
+  options: { readonly recordOnShow?: boolean } = {}
 ): Promise<EpisodeRow> {
   return getDb().transaction(async (tx) => {
     const [row] = await tx.insert(episodes).values(values).returning();
     if (!row) throw new Error('insertEpisode: insert returned no row');
     await writeChildren(tx, row.id, children);
+
+    if (options.recordOnShow) {
+      await tx
+        .update(podcasts)
+        .set({
+          episodeCount: sql`${podcasts.episodeCount} + 1`,
+          lastEpisodeAt: row.pubDate,
+        })
+        .where(eq(podcasts.id, row.podcastId));
+    }
+
     return row;
   });
 }

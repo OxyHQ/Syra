@@ -29,10 +29,11 @@
  * an available option.
  *
  * That ownership was also STALE — Task 10 had closed, so the entry named a task
- * that could not act on it. Its registry entry is cleared with this port; the
- * other five are untouched and still name the closed task, which is recorded in
- * this task's report rather than fixed here, because reassigning work is not a
- * decision a port gets to make on its own.
+ * that could not act on it. Its registry entry is cleared with this port. The
+ * other five named the same closed task; they were re-owned on the lead's
+ * ruling in the next commit, and split again by the Task 12 review into the two
+ * that are genuinely dormant and the three whose Postgres readers are starved
+ * until their loader moves. See `db/catalog/hybridServices.ts`.
  */
 import dotenv from 'dotenv';
 import { and, asc, eq, gt, isNull } from 'drizzle-orm';
