@@ -13,16 +13,16 @@ import type { EntityProfile } from '@syra/shared-types';
 /**
  * STILL both databases, though for a different reason than before.
  *
- * `catalog_entities` and `tracks` were already Postgres, and Task 12 took
- * `podcasts`/`episodes` and their credit tables with them — so the `appearsIn`
- * shelf this file mostly exercises is single-store now. What keeps Mongo here is
- * indirect and does not appear anywhere in the controller's own imports:
- * `loadArtistSections` reaches `services/catalog/artistProfile.ts`, which reads
- * `ContributionAttestationModel` (Task 13's, a registered hybrid).
+ * Nothing this file reaches reads a Mongoose model any more. The reason given
+ * here was `services/catalog/artistProfile.ts`'s `ContributionAttestationModel`
+ * — Task 13's, and Postgres since that task landed.
  *
- * Dropping `connect()` does not fail loudly — Mongoose BUFFERS a query with no
- * connection — so the two artist-branch cases below simply hang until the 5s
- * test timeout. Verified by removing it.
+ * What keeps Mongo now is the GUARD, not a read: `entityProfile.controller`
+ * still opens every handler with `isDatabaseConnected() || !isPostgresConnected()`,
+ * and the first of those reports MONGOOSE readiness. Without a Mongo connection
+ * every request answers 503 rather than hanging. See `db/postgres.ts`'s
+ * `isPostgresConnected` for the guard this controller owes; that is a one-word
+ * change in a file no live task owns.
  */
 beforeAll(async () => {
   await connect();

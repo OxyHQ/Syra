@@ -17,11 +17,10 @@ import {
 } from './artists.controller';
 
 /**
- * BOTH databases, and this suite is the sharpest instance of why: a
- * "contribution" is a Postgres `tracks` row PLUS a Mongo
- * `ContributionAttestation`, and neither alone means anything. It was one
- * `$lookup`; it is three round trips now, and these tests are what say the
- * answer did not change.
+ * A "contribution" is a `tracks` row PLUS a `contribution_attestations` row, and
+ * neither alone means anything — both Postgres since Task 13. It was one
+ * `$lookup` under Mongo and it is three round trips now, and these tests are
+ * what say the answer did not change across both moves.
  */
 beforeAll(connectDb);
 afterEach(clearDb);

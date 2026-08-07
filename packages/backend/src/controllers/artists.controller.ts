@@ -1010,16 +1010,14 @@ const contributionSettingsSchema = z.object({
  * the port, and each trip is already bounded (see below). Whoever collapses it
  * should delete this paragraph with the code.
  *
- * The three round trips, and why each is bounded:
+ * The three round trips, all Postgres now, and why each is bounded:
  *
- *   1. Postgres — the artist's own track ids. Indexed on `artist_id`, and this
- *      is the SAME set the old pipeline's leading `$match: { artistId }` scanned,
- *      so nothing got wider.
- *   2. Mongo — attestations for those ids. The unique index on `trackId` serves
- *      the `$in`, as it served the `$lookup` before.
- *   3. Postgres — the page itself, over the contributed ids only.
- *
- * The whole function disappears into one query when Task 13 lands.
+ *   1. The artist's own track ids. Indexed on `artist_id`, and this is the SAME
+ *      set the old pipeline's leading `$match: { artistId }` scanned, so
+ *      nothing got wider.
+ *   2. Attestations for those ids. `contribution_attestations_track_id_key`
+ *      serves the `IN`, as the unique index served the `$lookup` before.
+ *   3. The page itself, over the contributed ids only.
  */
 async function loadContributedTrackIds(artistId: string): Promise<Map<string, {
   uploaderOxyUserId: string;
@@ -1191,10 +1189,12 @@ export const resolveMyContribution = async (req: AuthRequest, res: Response, nex
        * `23503 tracks_copyright_report_id_copyright_reports_id_fk`. Measured,
        * not predicted: that is exactly what this test suite reported.
        *
-       * The difference from `UserUpload` and `UserMusicPreferences`, which DO
-       * stay Mongoose here, is that neither is referenced by a catalog column. A
-       * hybrid split survives a cross-vertical READ and cannot survive a
-       * cross-vertical FOREIGN KEY.
+       * The difference from `UserUpload` and `UserMusicPreferences`, which
+       * stayed Mongoose while that was written, is that neither is referenced
+       * by a catalog column. A hybrid split survives a cross-vertical READ and
+       * cannot survive a cross-vertical FOREIGN KEY. (`user_uploads` has since
+       * moved with Task 13; `user_music_preferences` is Task 15's and is still
+       * the live example.)
        */
       const [report] = await getDb()
         .insert(copyrightReports)
@@ -1292,13 +1292,18 @@ export const updateMyContributionSettings = async (req: AuthRequest, res: Respon
  * artist has said yes.
  *
  * Two independent mechanisms already make that structural, and these handlers
- * are written to work WITH them rather than around them: the Mongoose path is
- * `select: false`, so a serializer cannot spread a field the query never
- * fetched, and `artistSchema` has no name for it, so it cannot be emitted
- * deliberately either. Reading suggestions therefore takes an explicit
- * `+imageSuggestions`, and the response is typed as
+ * are written to work WITH them rather than around them: `imageSuggestions` is
+ * in `PROTECTED_COLUMNS_BY_TABLE`, so `publicColumns()` leaves it off the row
+ * type entirely and a serializer cannot name it, and `artistSchema` has no name
+ * for it either, so it cannot be emitted deliberately. Reading suggestions
+ * therefore takes an explicit projection, and the response is typed as
  * `ArtistImageSuggestionsResponse` — its own contract, reachable only from an
  * endpoint scoped to the caller's own profile.
+ *
+ * (Under Mongo the first mechanism was `select: false`, which was a QUERY
+ * PROJECTION and inert against `aggregate()`. The protected-column registry is
+ * the stronger replacement: it removes the column from the TYPE, so naming it
+ * fails `tsc` rather than depending on which read shape was used.)
  */
 
 const imageSuggestionActionSchema = z.object({

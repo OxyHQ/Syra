@@ -776,8 +776,27 @@ export async function updatePodcast(req: AuthRequest, res: Response): Promise<vo
       return;
     }
     values.imageId = updates.image;
-    values.primaryColor = cover.primaryColor;
-    values.secondaryColor = cover.secondaryColor;
+    /**
+     * `?? null`, and this is the same ORM difference Task 13 fixed on the
+     * locker's own PATCH (`uploads.controller.ts`'s `updateUpload`).
+     *
+     * `resolveCover` answers `{ ok: true }` with NO palette for an asset that
+     * carries none, and `secondaryColor: undefined` for one that has a primary
+     * and no secondary. `definedOnly` then strips those keys, and drizzle would
+     * strip them anyway — so `undefined` means "leave this column alone", where
+     * Mongoose's `$set` builder + `save()` cleared it.
+     *
+     * "Leave alone" is right for the FEED REFRESH `definedOnly` exists for — a
+     * crawl that carries no `<podcast:funding>` must not erase creator-added
+     * links — and wrong here. This is a creator explicitly changing the cover,
+     * and the new cover decides both accents INCLUDING deciding they are
+     * absent. Without the coalesce the show keeps the previous cover's colours
+     * forever, and the client renders a palette belonging to artwork that is no
+     * longer there. Fixed at the call site rather than in `definedOnly`,
+     * because that helper's other callers want exactly the semantics it has.
+     */
+    values.primaryColor = cover.primaryColor ?? null;
+    values.secondaryColor = cover.secondaryColor ?? null;
   }
 
   const updated = await updatePodcastRow(
