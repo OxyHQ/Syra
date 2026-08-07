@@ -31,7 +31,8 @@
  */
 
 import { and, eq, isNull, sql } from 'drizzle-orm';
-import { getDb, getPostgresClient } from '../../db/postgres';
+import { describeDriverError } from '@oxyhq/db';
+import { getDb, getPostgresClient, isDriverError } from '../../db/postgres';
 import { userUploads } from '../../db/schema/creators';
 import {
   deleteUploads,
@@ -429,7 +430,19 @@ async function tick(): Promise<void> {
       logger.info('[uploads] expiry sweep', result);
     }
   } catch (err) {
-    logger.error('[uploads] expiry sweep failed', { err });
+    /**
+     * The tick's only catch, and the sweep it wraps deletes rows, takes an
+     * advisory lock and reaches S3 — so this is the same classifier question
+     * the ingest path answers. A failing DELETE carries its `WHERE` and every
+     * bound id; a lock or storage failure carries the reason.
+     */
+    if (isDriverError(err)) {
+      logger.error('[uploads] expiry sweep failed: the database refused a statement', {
+        driver: describeDriverError(err),
+      });
+    } else {
+      logger.error('[uploads] expiry sweep failed', { err });
+    }
   } finally {
     running = false;
   }

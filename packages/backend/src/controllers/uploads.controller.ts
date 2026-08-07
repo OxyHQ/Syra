@@ -37,7 +37,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { and, eq, sql } from 'drizzle-orm';
-import { isLiveEntityId, isUniqueViolation, uuidv7 } from '@oxyhq/db';
+import { describeDriverError, isLiveEntityId, isUniqueViolation, uuidv7 } from '@oxyhq/db';
 import multer from 'multer';
 import sharp from 'sharp';
 import type { Response, NextFunction } from 'express';
@@ -57,7 +57,7 @@ import {
 
 import { env } from '../config/env';
 import { getS3LockerAudioKey } from '../config/s3.config';
-import { getDb, isPostgresConnected } from '../db/postgres';
+import { getDb, isDriverError, isPostgresConnected } from '../db/postgres';
 import { albums, catalogEntities, imageAssets, tracks } from '../db/schema/catalog';
 import { trackKeys } from '../db/schema/catalog';
 import { userUploads } from '../db/schema/creators';
@@ -68,7 +68,7 @@ import {
   findOwnedUpload,
   findOwnedUploadForPromotion,
   findOwnedUploadIncludingDeleted,
-  findUploadBySha256,
+  findUploadHoldingHashSlot,
   listLockerAlbums,
   listOwnedUploads,
   loadUploadHls,
@@ -591,9 +591,18 @@ async function storeEmbeddedCoverArt(
         height >= MIN_CATALOG_COVER_ART_PX,
     };
   } catch (err) {
-    logger.warn('[uploads] could not store embedded cover art', {
-      message: getErrorMessage(err),
-    });
+    // `sharp` on one side, an `image_assets` INSERT on the other — the branch
+    // is what keeps a malformed APIC frame's real reason readable while
+    // withholding the statement when it was the write that failed.
+    if (isDriverError(err)) {
+      logger.warn('[uploads] could not store embedded cover art', {
+        driver: describeDriverError(err),
+      });
+    } else {
+      logger.warn('[uploads] could not store embedded cover art', {
+        message: getErrorMessage(err),
+      });
+    }
     return undefined;
   }
 }
@@ -806,7 +815,11 @@ async function storeLockerUpload(
      * file" would answer with somebody else's row or silently drop the write.
      */
     if (!isUniqueViolation(err, 'user_uploads_owner_oxy_user_id_sha256_key')) throw err;
-    const existing = await findUploadBySha256(ownerOxyUserId, metadata.sha256);
+    // The row holding the SLOT, soft-deleted ones included — see that
+    // function's doc comment for why this is deliberately not the same lookup
+    // dedup tier 1 uses. The constraint is not partial on `deleted_at`, so a
+    // filtered read would answer "nothing" to a collision that just happened.
+    const existing = await findUploadHoldingHashSlot(ownerOxyUserId, metadata.sha256);
     if (!existing) throw err;
     return { duplicateUploadId: existing.id };
   }
@@ -819,10 +832,18 @@ async function storeLockerUpload(
     });
   } catch (err) {
     await deleteUploads([uploadId]).catch((cleanupErr: unknown) =>
-      logger.error('[uploads] failed to roll back locker row after S3 failure', {
-        uploadId,
-        err: cleanupErr,
-      }),
+      // A delete, so any failure here IS the database — but the branch stays,
+      // because `err` on the else side would print a statement if this ever
+      // grew a non-database step.
+      isDriverError(cleanupErr)
+        ? logger.error('[uploads] failed to roll back locker row after S3 failure', {
+            uploadId,
+            driver: describeDriverError(cleanupErr),
+          })
+        : logger.error('[uploads] failed to roll back locker row after S3 failure', {
+            uploadId,
+            err: cleanupErr,
+          }),
     );
     throw err;
   }
@@ -1537,10 +1558,18 @@ async function publishContribution(params: PublishParams): Promise<string> {
    */
   if (params.fingerprint) {
     await indexTrackAcoustically(trackId, params.fingerprint).catch((err: unknown) =>
-      logger.error('[uploads] failed to index the published track acoustically', {
-        trackId,
-        message: getErrorMessage(err),
-      }),
+      // The bound parameters here are thousands of raw Chromaprint integers —
+      // the acoustic index `schema/creators.ts` protects as a column, arriving
+      // in a log by the back door.
+      isDriverError(err)
+        ? logger.error('[uploads] failed to index the published track acoustically', {
+            trackId,
+            driver: describeDriverError(err),
+          })
+        : logger.error('[uploads] failed to index the published track acoustically', {
+            trackId,
+            message: getErrorMessage(err),
+          }),
     );
   }
 
@@ -2036,14 +2065,43 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
       const outcome: UploadOutcome = { outcome: 'published', trackId };
       res.status(201).json(outcome);
     } catch (error: unknown) {
-      logger.error('[uploads] upload failed', {
-        message: getErrorMessage(error),
-        stack: getErrorStack(error),
-      });
+      /**
+       * The one catch on this path, and it spans multer, `ffprobe`, `fpcalc`,
+       * three network lookups, S3 and every database write — so which branch it
+       * takes decides which subsystem an operator is sent to.
+       *
+       * A driver error's MESSAGE is the failing statement and its bound
+       * parameters. On this route those parameters are the upload itself: the
+       * whole raw ID3 block, lyrics, comments, publisher. Under Mongoose the
+       * error carried no statement, so this exposure is new under Postgres and
+       * this is the worst route on the branch to have it — see Task 19a and
+       * `describeDriverError`.
+       *
+       * The CLASSIFIER is the load-bearing half, not the formatter.
+       * `sqlStateOf(err) !== undefined` is true of any error carrying a string
+       * `code`, so it would send an `ENOENT` on the multer temp file or an
+       * `ENOSPC` staging the bytes down the redacted branch and discard the one
+       * message worth having. `isDriverError` tests for the statement payload
+       * instead.
+       */
+      if (isDriverError(error)) {
+        logger.error('[uploads] upload failed: the database refused the write', {
+          driver: describeDriverError(error),
+        });
+      } else {
+        logger.error('[uploads] upload failed', {
+          message: getErrorMessage(error),
+          stack: getErrorStack(error),
+        });
+      }
       if (!res.headersSent) {
         res.status(500).json({
           error: 'Upload failed',
-          ...(env.NODE_ENV === 'development' && { details: getErrorMessage(error) }),
+          // Same reasoning as the log above, and it matters more here: this
+          // reaches a CLIENT. `details` is development-only, but a developer's
+          // console is still the wrong place for another user's tag block.
+          ...(env.NODE_ENV === 'development' &&
+            !isDriverError(error) && { details: getErrorMessage(error) }),
         });
       }
     } finally {

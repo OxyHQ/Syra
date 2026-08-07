@@ -306,7 +306,15 @@ export async function findOwnedUploadForPromotion(
 }
 
 /**
- * The uploader's own copy of these exact bytes — dedup tier 1's locker half.
+ * The uploader's own LIVE copy of these exact bytes — dedup tier 1's locker half.
+ *
+ * Soft-deleted rows are excluded, and that is right for a MATCH: answering
+ * `{ kind: 'upload' }` for a file the owner can no longer play or see would
+ * point them at nothing.
+ *
+ * It is NOT right for recovering from the unique constraint — see
+ * {@link findUploadHoldingHashSlot}, which is the same two columns and a
+ * different predicate on purpose.
  *
  * `sha256` is a PROTECTED column, and this names it deliberately: matching ON a
  * protected value is not exposing it, and the function returns an id rather
@@ -326,6 +334,37 @@ export async function findUploadBySha256(
         isNull(userUploads.deletedAt)
       )
     )
+    .limit(1);
+
+  return existing;
+}
+
+/**
+ * Whichever row HOLDS the `(owner_oxy_user_id, sha256)` unique slot — the one a
+ * `23505` on that constraint just collided with.
+ *
+ * Soft-deleted rows included, and the predicate must match the CONSTRAINT
+ * rather than match {@link findUploadBySha256}. `user_uploads_owner_oxy_user_id
+ * _sha256_key` is not partial on `deleted_at`, so a soft-deleted row keeps
+ * occupying the slot for the whole 30-day grace window the sweeper leaves
+ * between hiding a file and deleting it. A lookup that filtered `deleted_at`
+ * would find nothing after a collision that definitely happened, and
+ * `storeLockerUpload` would rethrow a constraint violation as a 500.
+ *
+ * That is not hypothetical and it is not test-only: it was live for every
+ * re-upload of bytes whose earlier copy was inside its grace window — a
+ * reproducible 500 where the answer is `{ outcome: 'duplicate' }`. Reusing
+ * `findUploadBySha256` here is what caused it, because the two questions read
+ * identically and are not the same question.
+ */
+export async function findUploadHoldingHashSlot(
+  ownerOxyUserId: string,
+  sha256: string
+): Promise<{ id: string } | undefined> {
+  const [existing] = await getDb()
+    .select({ id: userUploads.id })
+    .from(userUploads)
+    .where(and(eq(userUploads.ownerOxyUserId, ownerOxyUserId), eq(userUploads.sha256, sha256)))
     .limit(1);
 
   return existing;

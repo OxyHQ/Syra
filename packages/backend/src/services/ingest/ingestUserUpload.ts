@@ -23,7 +23,8 @@ import os from 'os';
 import path from 'path';
 import { Readable } from 'stream';
 import { eq } from 'drizzle-orm';
-import { getDb } from '../../db/postgres';
+import { describeDriverError } from '@oxyhq/db';
+import { getDb, isDriverError } from '../../db/postgres';
 import { userUploads } from '../../db/schema/creators';
 import { setUploadHls } from '../../db/creators/uploads';
 import { logger } from '../../utils/logger';
@@ -80,7 +81,14 @@ async function markFailed(uploadId: string): Promise<void> {
     .set({ status: 'failed' })
     .where(eq(userUploads.id, uploadId))
     .catch((saveErr: unknown) =>
-      logger.error('[locker-ingest] failed to persist failed status', { uploadId, err: saveErr }),
+      // An UPDATE, so this is the database — and its bound parameters are the
+      // row. Redacted rather than logged whole.
+      logger.error('[locker-ingest] failed to persist failed status', {
+        uploadId,
+        ...(isDriverError(saveErr)
+          ? { driver: describeDriverError(saveErr) }
+          : { err: saveErr }),
+      }),
     );
 }
 
@@ -176,7 +184,21 @@ export async function ingestUserUpload(
     });
   } catch (err) {
     await markFailed(uploadId);
-    logger.error('[locker-ingest] ingest failed', { uploadId, err });
+    /**
+     * This try spans an S3 read, `ffmpeg`, an S3 write and the final
+     * transaction, so the branch decides which subsystem an operator reads
+     * about. On the database side the bound parameters include this file's
+     * whole HLS ladder and its measured loudness; on the other side the message
+     * IS the diagnosis and must survive.
+     */
+    if (isDriverError(err)) {
+      logger.error('[locker-ingest] ingest failed: the database refused the write', {
+        uploadId,
+        driver: describeDriverError(err),
+      });
+    } else {
+      logger.error('[locker-ingest] ingest failed', { uploadId, err });
+    }
     throw err;
   } finally {
     cleanup?.();

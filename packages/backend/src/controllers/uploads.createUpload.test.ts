@@ -19,6 +19,7 @@ import fs from 'fs';
 import path from 'path';
 import type { AddressInfo } from 'net';
 import { eq, sql } from 'drizzle-orm';
+import { uuidv7 } from '@oxyhq/db';
 import { connect, clear, disconnect } from '../test/mongo';
 import { connectDb, clearDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
@@ -39,6 +40,7 @@ import {
 } from '../db/schema/catalog';
 import { contributionAttestations, userUploads } from '../db/schema/creators';
 import { fingerprintFile } from '../services/uploads/fingerprint';
+import { logger } from '../utils/logger';
 import uploadsRoutes from '../routes/uploads.routes';
 import { search } from './search.controller';
 import { getPopularTracks, getCharts, getHomeBrowse } from './browse.controller';
@@ -235,6 +237,30 @@ afterAll(async () => {
   await disconnectDb();
 });
 
+/**
+ * Capture `logger.error` for the duration of `run`, keeping the meta OBJECT.
+ *
+ * The object, not a rendered string: what has to be asserted is that the
+ * statement and its bound parameters are ABSENT, and a formatter that dropped
+ * them on the way to the string would make the assertion pass for the wrong
+ * reason.
+ */
+async function captureErrors(
+  run: () => Promise<void>
+): Promise<Array<{ message: string; meta: unknown }>> {
+  const captured: Array<{ message: string; meta: unknown }> = [];
+  const originalError = logger.error;
+  logger.error = ((message: string, meta?: unknown) => {
+    captured.push({ message, meta });
+  }) as typeof logger.error;
+  try {
+    await run();
+  } finally {
+    logger.error = originalError;
+  }
+  return captured;
+}
+
 // ── Reading the database back ────────────────────────────────────────────────
 //
 // These read the tables DIRECTLY rather than through the modules under test:
@@ -404,6 +430,99 @@ describe('POST /api/uploads — private destination', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].status).toBe('processing');
     expect(ingestedUploadIds).toEqual([String(upload.id)]);
+  });
+
+  /**
+   * A re-upload of bytes whose earlier copy is inside the sweeper's grace
+   * window answers `duplicate`, not 500.
+   *
+   * `user_uploads_owner_oxy_user_id_sha256_key` is NOT partial on `deleted_at`,
+   * so a soft-deleted row keeps occupying the slot for the whole 30 days
+   * between the sweeper hiding a file and deleting it. The port briefly
+   * recovered from that collision with the same lookup dedup tier 1 uses, which
+   * filters `deleted_at` — so it found nothing after a collision that had just
+   * happened and rethrew the constraint violation as a 500, for every such
+   * re-upload. The predicate has to match the CONSTRAINT, not its sibling read.
+   *
+   * The soft-delete is written directly rather than by running the sweeper: what
+   * is under test is the collision, and driving thirty days of retention to
+   * reach it would make the fixture about something else.
+   */
+  it('answers duplicate for bytes whose earlier copy is soft-deleted, not 500', async () => {
+    const first = await postUpload('untagged.wav', { destination: 'private' });
+    expect(first.status).toBe(201);
+    const firstId = String((first.body.upload as { id: string }).id);
+
+    await getDb()
+      .update(userUploads)
+      .set({ deletedAt: new Date() })
+      .where(eq(userUploads.id, firstId));
+
+    const { status, body } = await postUpload('untagged.wav', { destination: 'private' });
+
+    expect(status).toBe(200);
+    expect(body.outcome).toBe('duplicate');
+    // It names the row that actually holds the slot, which is the soft-deleted
+    // one — the same answer Mongo gave, whose lookup had no `deletedAt` filter.
+    expect(body.uploadId).toBe(firstId);
+  });
+
+  /**
+   * A failed write never publishes the upload it was carrying.
+   *
+   * Under Mongoose an error carried no statement, so this exposure is new under
+   * Postgres — and this is the worst route on the branch to have it: the bound
+   * parameters of an `insert into user_uploads` are the upload, raw ID3 block
+   * included. Task 19a found the same class in the fingerprint backfill and
+   * shipped `isDriverError`/`describeDriverError` for it.
+   *
+   * The failure is provoked by an over-long `title`: `user_uploads.title` is
+   * `text` and unbounded, so the CHECK on `artist_claims` cannot be borrowed —
+   * instead the row is made to collide with a `sha256` slot held by a row of a
+   * DIFFERENT owner… which is legal. So the provocation used here is the one
+   * shape that always fails and is not a duplicate: a `resolved_artist_id`
+   * pointing at no artist, which trips the foreign key.
+   */
+  it('never logs the failing statement or its bound parameters', async () => {
+    const MARKER = 'RAWTAGLEAKMARKER';
+
+    const captured = await captureErrors(async () => {
+      // A cover-art id that is well-formed but names no `image_assets` row:
+      // `user_uploads.cover_art_id` is a real foreign key, so the INSERT fails
+      // with the whole row bound to it — including the raw tag block.
+      const { status } = await postUpload('indie-id3v2.mp3', {
+        destination: 'private',
+        title: MARKER,
+        coverArt: uuidv7(),
+      });
+      expect(status).toBe(500);
+    });
+
+    expect(captured.length).toBeGreaterThan(0);
+    const serialised = JSON.stringify(captured);
+
+    // The vacuity floor: the log has to be ABOUT the failure, or the absences
+    // below are satisfied by a log that never happened.
+    expect(serialised).toContain('upload failed');
+    // The classifier took the driver branch, so the redacted shape is present…
+    expect(serialised).toContain('driver');
+    // …carrying the constraint NAME, which is the whole diagnosis and no part
+    // of the payload. Asserted positively, because a redactor that discarded
+    // this too would pass every absence below while telling an operator
+    // nothing.
+    expect(serialised).toContain('user_uploads_cover_art_id_image_assets_id_fk');
+
+    /**
+     * …and none of the payload is.
+     *
+     * NOT a bare `'user_uploads'` check, which was the first version of this
+     * list and failed: that string is a substring of the constraint name above,
+     * so it cannot tell a leaked statement from a correct diagnosis. Each entry
+     * here is something only the STATEMENT or its BOUND VALUES can produce.
+     */
+    for (const leak of [MARKER, 'insert into', 'values (', 'params', 'Nadia Ortiz']) {
+      expect(`${leak}: ${serialised.includes(leak)}`).toBe(`${leak}: false`);
+    }
   });
 
   it('never returns a storage key to the client', async () => {
