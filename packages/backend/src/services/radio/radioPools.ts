@@ -9,7 +9,7 @@ import {
   type SQL,
 } from 'drizzle-orm';
 import { publicColumns } from '@oxyhq/db/assert';
-import { CatalogRelationModel } from '../../models/CatalogRelation';
+import { findRelatedEdges } from '../../db/user/relations';
 import { getDb } from '../../db/postgres';
 import { tracks } from '../../db/schema/catalog';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../../db/schema/protectedColumns';
@@ -39,9 +39,10 @@ import { FRONTIER_SIZE, type RadioStationState } from './radioStationStore';
  * guarantee, and it can always produce something while the catalogue holds a
  * single playable track.
  *
- * `CatalogRelation` (the co-listen graph) belongs to Task 15's vertical and is
- * still Mongoose. It is read for a ranked list of track ids that is then looked
- * up in Postgres — never joined to `tracks` in one pipeline.
+ * The co-listen graph (`catalog_relations`, via `db/user/relations.ts`) is read
+ * for a ranked list of track ids that is then looked up against `tracks` — never
+ * joined to it in one statement, because the pool sums a target's score across
+ * every source that reaches it and that arithmetic decides the ranking.
  */
 
 /** Candidates gathered per page, as a multiple of the page size, before scoring. */
@@ -175,10 +176,7 @@ async function gatherCandidates(
   // its seed forever.
   const cfSources = distinct([...seed.seedTrackIds, ...state.frontierTrackIds]);
   if (cfSources.length > 0) {
-    const edges = await CatalogRelationModel.find({ kind: 'track', sourceId: { $in: cfSources } })
-      .sort({ score: -1 })
-      .limit(target * CF_EDGE_FANOUT)
-      .lean();
+    const edges = await findRelatedEdges('track', cfSources, target * CF_EDGE_FANOUT);
 
     // Sum across sources so a track related to several of them outranks one
     // related to a single source.

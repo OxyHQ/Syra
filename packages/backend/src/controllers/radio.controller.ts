@@ -12,7 +12,7 @@ import {
   type RadioSeedType,
   type RadioStation,
 } from '@syra/shared-types';
-import { UserMusicPreferencesModel } from '../models/UserMusicPreferences';
+import { findMusicPreferences } from '../db/user/musicPreferences';
 import { PREVIEW_DURATION_SEC } from '../services/ingest/previewClip';
 import { decodeRadioCursor, encodeRadioCursor, RADIO_CURSOR_VERSION } from '../services/radio/radioCursor';
 import { buildRadioPage } from '../services/radio/radioPools';
@@ -288,8 +288,8 @@ export const getRadioPage = async (req: AuthRequest, res: Response, next: NextFu
     const [taste, preferences] = await Promise.all([
       loadRadioTaste(listener.oxyUserId),
       listener.oxyUserId
-        ? UserMusicPreferencesModel.findOne({ oxyUserId: listener.oxyUserId }).lean()
-        : Promise.resolve(null),
+        ? findMusicPreferences(listener.oxyUserId)
+        : Promise.resolve(undefined),
     ]);
 
     const result = await buildRadioPage({

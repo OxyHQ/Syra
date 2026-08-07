@@ -169,8 +169,19 @@ function sweepHybridFiles(): string[] {
  * A vacuity floor for the sweep itself. A traversal that found nothing, or a
  * `readsPostgres` that answered false for everything, would report zero
  * unregistered files and read exactly like a clean tree.
+ *
+ * TWO, down from 11 — measured after Task 15, not guessed. Both are Task 8's
+ * moderation files, which is why the number can sit exactly on the real count
+ * rather than well below it: Task 8 is BLOCKED on an owner decision, so nothing
+ * is expected to remove them, and if something does, this failing is the correct
+ * outcome — it means the last hybrid left the tree and the whole registry, this
+ * floor included, should be deleted rather than lowered.
+ *
+ * That is the one thing not to do here: with a floor of two and two files left,
+ * the next person to see this red has a one-character "fix" available that
+ * silently turns the gate off. Delete the registry instead.
  */
-const MINIMUM_HYBRID_FILES = 11;
+const MINIMUM_HYBRID_FILES = 2;
 
 /**
  * The same floor for property 4's sweep. **Six** today, down from ten in Task
@@ -204,19 +215,27 @@ describe('property 3 — every hybrid file in the tree is registered', () => {
   it('the sweep finds the hybrid files that are known to exist', () => {
     const found = sweepHybridFiles();
     expect(found.length).toBeGreaterThanOrEqual(MINIMUM_HYBRID_FILES);
-    // Named, so a broken `readsPostgres` reports which shape it lost rather
-    // than a bare count. Both files that motivated the two resolution shapes
-    // are ported now — `takedown.ts` by Task 13, `syraMedia.ts` by Task 14 —
-    // so the shapes are exercised by `halfPortedImports.test.ts`'s own
-    // fixtures rather than by a live registry entry.
-    // `takedown.ts` was named here as the file that reads `db/postgres` with no
-    // `db/catalog/` import at all; Task 13 finished it, so the shape is now
-    // carried by `library.controller.ts`. The second named shape was
-    // `syraMedia.ts` — a file in `src/utils/` reaching its neighbours as `./x`
-    // — and Task 14 ported it, so `moderation/subjects/providers.ts` carries
-    // that shape instead: it sits outside `src/db/`, reaches the db layer by a
-    // relative path, and still imports a Mongoose model.
-    expect(found).toContain('controllers/library.controller.ts');
+    // Named, so a broken `readsPostgres` reports WHICH file it lost rather than
+    // a bare count.
+    //
+    // These two names have been repointed at every vertical that landed —
+    // `takedown.ts` (ported by Task 13) became `library.controller.ts` (ported
+    // by Task 15), and `syraMedia.ts` (ported by Task 14) became
+    // `providers.ts` — which is the trap the type-only floor below already
+    // names: a check a successful port breaks gets weakened by whoever hits it.
+    // It is left as a live-file check anyway, because after Task 15 there are
+    // exactly two hybrid files and both are BLOCKED Task 8's, so there is no
+    // port left that can break it. When Task 8 does land, delete this gate
+    // rather than repointing a fifth time.
+    //
+    // The two used to stand for DIFFERENT resolution shapes. They no longer do:
+    // `readsPostgres` has one branch for a file already under `src/db/` and one
+    // for a relative import resolving there, and both survivors take the second
+    // — each sits outside `src/db/` and reaches `db/postgres`, `db/rooms/` and
+    // `db/schema/` by relative path. Nothing exercises the first branch, and
+    // nothing ever did: no hybrid file has been inside `src/db/`. Naming both is
+    // now redundancy against a broken walk, not coverage of two shapes.
+    expect(found).toContain('moderation/enforcement-service.ts');
     expect(found).toContain('moderation/subjects/providers.ts');
   });
 
@@ -437,13 +456,15 @@ describe('the matcher is exact — a substring or superstring never matches', ()
   });
 
   it('a name CONTAINING a registrable model is not treated as that model', () => {
-    // `CatalogRelationArchive` contains `CatalogRelation`, which IS registrable
-    // — so a loose registry lookup would let a file import it unregistered.
-    // The pair was `UserUploadArchive`/`UserUpload` until Task 13 deleted that
-    // model; the fixture has to name a model the registry still holds, or the
-    // second assertion goes false and the test stops distinguishing anything.
-    expect(KNOWN_NON_CATALOG.has('CatalogRelationArchive')).toBe(false);
-    expect(KNOWN_NON_CATALOG.has('CatalogRelation')).toBe(true);
+    // `ReportArchive` contains `Report`, which IS registrable — so a loose
+    // registry lookup would let a file import it unregistered. The pair was
+    // `UserUploadArchive`/`UserUpload` until Task 13 deleted that model, and
+    // `CatalogRelationArchive`/`CatalogRelation` until Task 15 deleted that one;
+    // the fixture has to name a model the registry still holds, or the second
+    // assertion goes false and the test stops distinguishing anything. `Report`
+    // is Task 8's, and Task 8 is blocked, so this pair should outlive the rest.
+    expect(KNOWN_NON_CATALOG.has('ReportArchive')).toBe(false);
+    expect(KNOWN_NON_CATALOG.has('Report')).toBe(true);
   });
 
   it('the two sets are disjoint by identity', () => {
@@ -458,8 +479,12 @@ describe('vacuity floor', () => {
    * satisfies all of them. These fail if the walk stops finding imports.
    */
   it('the parser finds the imports a known hybrid file actually has', () => {
-    const found = modelImportsOf('services/recommendations/recommendationService.ts');
-    expect(found).toEqual(['CatalogRelation', 'ListeningEvent', 'UserTasteProfile']);
+    // Was `services/recommendations/recommendationService.ts` until Task 15
+    // ported it — the same trap the type-only floor below already documents, so
+    // this one now names a file whose models belong to BLOCKED Task 8 and will
+    // therefore outlive the remaining ports.
+    const found = modelImportsOf('moderation/enforcement-service.ts');
+    expect(found).toEqual(['ModerationEnforcement', 'Report']);
   });
 
   it('the parser finds a TYPE-ONLY import', () => {
@@ -503,8 +528,21 @@ describe('vacuity floor', () => {
      * A registry that shrank to nothing WITHOUT the owning tasks landing means
      * the walk broke, not that the work finished. Tasks 8/15 each remove entries
      * and this floor drops with them, deliberately, by being edited.
+     *
+     * TWO. Task 15 removed ten — nine service and controller entries plus
+     * `radio.controller` — and deleted all four of the models
+     * `NON_CATALOG_MODEL_OWNERS` held for the `user` vertical, so the count and
+     * the models shrank together for the first time since Task 11. What is left
+     * is `moderation/enforcement-service.ts` and `moderation/subjects/providers.ts`,
+     * both against BLOCKED Task 8, and they are the whole registry now: the
+     * `user` key is gone from `OWNING_TASKS`, so `moderation` is the only
+     * vertical still owning a Mongoose model at all.
+     *
+     * When Task 8 lands, this reaches zero and the right change is to DELETE the
+     * registry and its gate, not to write `toBe(0)` — an exemption list with no
+     * exemptions is a file that can only rot.
      */
-    expect(HYBRID_MODULES.length).toBe(12);
+    expect(HYBRID_MODULES.length).toBe(2);
     /**
      * Three, down from six. Task 19a cleared the three half-connected bulk
      * loaders — `backfillTrackFingerprints`, `importIsrcRegistry` and

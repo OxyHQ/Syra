@@ -1,4 +1,4 @@
-import type { ListeningSource } from '../../models/ListeningEvent';
+import type { ListeningSource } from '../../db/user/listening';
 
 /**
  * A play is counted as a "real" play (incrementing global play counts) only once

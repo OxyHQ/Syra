@@ -1,65 +1,30 @@
 import { and, eq } from 'drizzle-orm';
-import { UserTasteProfileModel } from '../../models/UserTasteProfile';
 import { getDb } from '../../db/postgres';
 import { catalogEntities, tracks } from '../../db/schema/catalog';
+import { applyTasteSignal, type TasteDelta } from '../../db/user/taste';
+import { describeErrorSafely } from '../../utils/error';
 import { logger } from '../../utils/logger';
-
-/**
- * `UserTasteProfile` belongs to the user vertical (Task 15) and is still
- * Mongoose. The two catalog reads below are Postgres; neither is joined to the
- * profile, so the split is two round trips rather than a broken query.
- */
 
 /**
  * Explicit taste signals (likes, follows) are strong, intentional declarations
  * of taste and carry more weight than a single play.
+ *
+ * ## The bucket arithmetic moved to `db/user/taste.ts`
+ *
+ * `bump` and its `MAX_TASTE_GENRES`/`MAX_TASTE_ARTISTS` copies are gone: adding
+ * a delta to a keyed bucket and trimming to a cap are now one `on conflict do
+ * update` and one bounded delete, in the module that owns the tables. What is
+ * left here is the part that is actually about signals — which catalog row a
+ * like or a follow implicates, and how much it is worth.
+ *
+ * `applyToProfile`'s find-or-create went with it. It read the profile, built a
+ * fresh object when there was none, and wrote back: three round trips, and a
+ * race between the read and the create that a unique constraint plus an upsert
+ * closes.
  */
+
 const LIKE_TRACK_WEIGHT = 2.5;
 const FOLLOW_ARTIST_WEIGHT = 4;
-
-const MAX_TASTE_GENRES = 40;
-const MAX_TASTE_ARTISTS = 200;
-
-/** Add a positive weight to a keyed bucket, capping list length. */
-function bump(
-  list: { key: string; weight: number }[],
-  key: string,
-  delta: number,
-  max: number,
-): void {
-  const existing = list.find((entry) => entry.key === key);
-  if (existing) {
-    existing.weight = Math.max(0, existing.weight + delta);
-  } else {
-    list.push({ key, weight: Math.max(0, delta) });
-  }
-  if (list.length > max) {
-    list.sort((a, b) => b.weight - a.weight);
-    list.length = max;
-  }
-}
-
-async function applyToProfile(
-  oxyUserId: string,
-  apply: (profile: { genres: { key: string; weight: number }[]; artists: { key: string; weight: number }[]; totalSignal: number }) => number,
-): Promise<void> {
-  const profile = await UserTasteProfileModel.findOne({ oxyUserId });
-  if (!profile) {
-    const fresh = { genres: [] as { key: string; weight: number }[], artists: [] as { key: string; weight: number }[], totalSignal: 0 };
-    const added = apply(fresh);
-    await UserTasteProfileModel.create({
-      oxyUserId,
-      genres: fresh.genres,
-      artists: fresh.artists,
-      totalSignal: Math.max(0, added),
-      lastDecayAt: new Date(),
-    });
-    return;
-  }
-  const added = apply(profile);
-  profile.totalSignal = Math.max(0, profile.totalSignal + Math.max(0, added));
-  await profile.save();
-}
 
 /**
  * Fold a track-like into the user's taste profile: boosts the track's artist
@@ -79,13 +44,17 @@ export async function applyLikeSignal(oxyUserId: string, trackId: string): Promi
     if (!track) return;
     const genre = (track.genre ?? track.metadataGenre?.[0])?.trim().toLowerCase();
 
-    await applyToProfile(oxyUserId, (profile) => {
-      bump(profile.artists, track.artistId, LIKE_TRACK_WEIGHT, MAX_TASTE_ARTISTS);
-      if (genre) bump(profile.genres, genre, LIKE_TRACK_WEIGHT, MAX_TASTE_GENRES);
-      return LIKE_TRACK_WEIGHT;
+    await applyTasteSignal(oxyUserId, {
+      genres: genre ? [{ key: genre, delta: LIKE_TRACK_WEIGHT }] : [],
+      artists: [{ key: track.artistId, delta: LIKE_TRACK_WEIGHT }],
+      totalSignalDelta: LIKE_TRACK_WEIGHT,
     });
   } catch (err) {
-    logger.warn('[recommendations] applyLikeSignal failed', { oxyUserId, trackId, err });
+    logger.warn('[recommendations] applyLikeSignal failed', {
+      oxyUserId,
+      trackId,
+      error: describeErrorSafely(err),
+    });
   }
 }
 
@@ -105,14 +74,23 @@ export async function applyFollowSignal(oxyUserId: string, artistId: string): Pr
       .map((g) => g.trim().toLowerCase())
       .filter((g) => g.length > 0);
 
-    await applyToProfile(oxyUserId, (profile) => {
-      bump(profile.artists, artistId, FOLLOW_ARTIST_WEIGHT, MAX_TASTE_ARTISTS);
-      for (const genre of genres) {
-        bump(profile.genres, genre, FOLLOW_ARTIST_WEIGHT / Math.max(1, genres.length), MAX_TASTE_GENRES);
-      }
-      return FOLLOW_ARTIST_WEIGHT;
+    // The follow's weight is SPLIT across the artist's genres, so following a
+    // five-genre artist does not boost each of them as hard as following a
+    // single-genre one. Unchanged from the Mongo version; a list rather than a
+    // loop because the deltas now land in one statement.
+    const perGenre = FOLLOW_ARTIST_WEIGHT / Math.max(1, genres.length);
+    const genreDeltas: TasteDelta[] = genres.map((genre) => ({ key: genre, delta: perGenre }));
+
+    await applyTasteSignal(oxyUserId, {
+      genres: genreDeltas,
+      artists: [{ key: artistId, delta: FOLLOW_ARTIST_WEIGHT }],
+      totalSignalDelta: FOLLOW_ARTIST_WEIGHT,
     });
   } catch (err) {
-    logger.warn('[recommendations] applyFollowSignal failed', { oxyUserId, artistId, err });
+    logger.warn('[recommendations] applyFollowSignal failed', {
+      oxyUserId,
+      artistId,
+      error: describeErrorSafely(err),
+    });
   }
 }

@@ -23,7 +23,8 @@ import {
 import { getParam, parseBoundedLimit } from '../utils/reqParams';
 import { recordPlay } from '../services/recommendations/recordPlay';
 import { applyLikeSignal, applyFollowSignal } from '../services/recommendations/tasteSignals';
-import { LISTENING_SOURCES, type ListeningSource } from '../models/ListeningEvent';
+import { LISTENING_SOURCES } from '../db/schema/user';
+import type { ListeningSource } from '../db/user/listening';
 
 /**
  * The playable tracks behind a list of ids, in no particular order.

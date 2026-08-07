@@ -2,9 +2,9 @@ import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll, mock 
 import type { NextFunction, Response } from 'express';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import type { RadioPage } from '@syra/shared-types';
-import { connect, clear, disconnect } from '../test/mongo';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
-import { UserMusicPreferencesModel } from '../models/UserMusicPreferences';
+import { getDb } from '../db/postgres';
+import { userMusicPreferences } from '../db/schema/user';
 import { makeArtist, makeTrack } from '../services/radio/radioFixtures';
 import { readRadioStation } from '../services/radio/radioStationStore';
 import { PREVIEW_DURATION_SEC } from '../services/ingest/previewClip';
@@ -40,22 +40,14 @@ const fakeRedis = {
 mock.module('../utils/redis', () => ({ getRedisClient: () => fakeRedis }));
 
 /**
- * BOTH databases, matching `radioFixtures` — the catalogue it seeds is Postgres,
- * while the co-listen graph, taste weights and the listener's music preferences
- * belong to Tasks 11/15 and are still Mongoose.
+ * One database, matching `radioFixtures`. The catalogue it seeds was already
+ * Postgres; Task 15 moved the last three things this suite touched on Mongoose
+ * — the co-listen graph, the taste weights and the listener's music preferences
+ * — so the Mongo hooks are gone.
  */
-beforeAll(async () => {
-  await connect();
-  await connectDb();
-});
-afterEach(async () => {
-  await clear();
-  await clearDb();
-});
-afterAll(async () => {
-  await disconnect();
-  await disconnectDb();
-});
+beforeAll(connectDb);
+afterEach(clearDb);
+afterAll(disconnectDb);
 
 beforeEach(() => {
   fakeRedis.isReady = true;
@@ -191,7 +183,9 @@ describe('GET /api/radio — explicit content preference', () => {
       popularity: MAX_POPULARITY,
       isExplicit: true,
     });
-    await UserMusicPreferencesModel.create({ oxyUserId: 'user-clean', explicitContent: false });
+    await getDb()
+      .insert(userMusicPreferences)
+      .values({ oxyUserId: 'user-clean', explicitContent: false });
 
     const res = await callRadio(
       { seedType: 'genre', seedId: GENRE, limit: '20' },

@@ -1,15 +1,12 @@
 import { eq, sql } from 'drizzle-orm';
-import { ListeningEventModel, type ListeningSource } from '../../models/ListeningEvent';
-import { UserTasteProfileModel } from '../../models/UserTasteProfile';
 import { getDb } from '../../db/postgres';
 import { albums, catalogEntities, tracks } from '../../db/schema/catalog';
+import { insertListeningEvent, type ListeningSource } from '../../db/user/listening';
+import { applyTasteSignal } from '../../db/user/taste';
 import { playCountToPopularity } from '../catalog/popularity';
 import { countsAsGlobalPlay, deriveCompletion, playTasteWeight } from './engagement';
+import { describeErrorSafely } from '../../utils/error';
 import { logger } from '../../utils/logger';
-
-/** Cap on how many genre/artist weights we retain per user taste profile. */
-const MAX_TASTE_GENRES = 40;
-const MAX_TASTE_ARTISTS = 200;
 
 export interface RecordPlayInput {
   oxyUserId: string;
@@ -84,7 +81,7 @@ export async function recordPlay(input: RecordPlayInput): Promise<RecordPlayResu
 
   const playedAt = new Date();
 
-  await ListeningEventModel.create({
+  await insertListeningEvent({
     oxyUserId,
     trackId,
     artistId,
@@ -170,7 +167,11 @@ async function incrementGlobalCounters(
 
     await Promise.all(ops);
   } catch (err) {
-    logger.warn('[recommendations] failed to increment global counters', { trackId, artistId, err });
+    logger.warn('[recommendations] failed to increment global counters', {
+      trackId,
+      artistId,
+      error: describeErrorSafely(err),
+    });
   }
 }
 
@@ -183,9 +184,19 @@ interface TasteSignal {
 }
 
 /**
- * Fold a single play into the user's taste profile. Adds the play's weight to
- * the matching genre and artist buckets, trims each list to its cap (dropping
- * the lowest-weight tails), and bumps `totalSignal`.
+ * Fold a single play into the user's taste profile.
+ *
+ * `applyWeight` and the profile find-or-create are gone into
+ * `db/user/taste.ts`: adding a delta to a keyed bucket, refusing to create one
+ * for a non-positive delta, and trimming to the cap are that module's `on
+ * conflict do update` and bounded delete, expressed once for all three signal
+ * sources rather than near-duplicated here and in `tasteSignals.ts`.
+ *
+ * A skip's weight is NEGATIVE, and passing it through unchanged is the point:
+ * it cools the buckets the play touched without ever creating one, which is
+ * exactly what `applyWeight` did with a non-positive delta. `totalSignalDelta`
+ * is clamped at zero separately, so churning past a track never reduces the
+ * maturity signal that decides cold start.
  */
 async function updateTasteProfile(oxyUserId: string, signal: TasteSignal): Promise<void> {
   try {
@@ -195,58 +206,17 @@ async function updateTasteProfile(oxyUserId: string, signal: TasteSignal): Promi
       source: signal.source,
     });
 
-    // A pure skip with no positive weight isn't worth a profile write.
-    if (weight <= 0 && signal.skipped) {
-      // Still apply a gentle cooling to the artist so heavy skipping registers.
-      if (!signal.artistId) return;
-    }
+    if (!signal.artistId) return;
 
-    const profile = await UserTasteProfileModel.findOne({ oxyUserId });
-
-    if (!profile) {
-      const genres = signal.genre && weight > 0 ? [{ key: signal.genre, weight }] : [];
-      const artists = weight > 0 ? [{ key: signal.artistId, weight }] : [];
-      await UserTasteProfileModel.create({
-        oxyUserId,
-        genres,
-        artists,
-        totalSignal: Math.max(0, weight),
-        lastDecayAt: new Date(),
-      });
-      return;
-    }
-
-    applyWeight(profile.genres, signal.genre, weight, MAX_TASTE_GENRES);
-    applyWeight(profile.artists, signal.artistId, weight, MAX_TASTE_ARTISTS);
-    profile.totalSignal = Math.max(0, profile.totalSignal + Math.max(0, weight));
-    await profile.save();
+    await applyTasteSignal(oxyUserId, {
+      genres: signal.genre ? [{ key: signal.genre, delta: weight }] : [],
+      artists: [{ key: signal.artistId, delta: weight }],
+      totalSignalDelta: Math.max(0, weight),
+    });
   } catch (err) {
-    logger.warn('[recommendations] failed to update taste profile', { oxyUserId, err });
-  }
-}
-
-/**
- * Add `delta` to the weight bucket keyed by `key`, clamping at 0, and trim the
- * list to `max` entries by dropping the lowest weights. Mutates `list` in place.
- */
-function applyWeight(
-  list: { key: string; weight: number }[],
-  key: string | undefined,
-  delta: number,
-  max: number,
-): void {
-  if (!key) return;
-  const existing = list.find((entry) => entry.key === key);
-  if (existing) {
-    existing.weight = Math.max(0, existing.weight + delta);
-  } else if (delta > 0) {
-    list.push({ key, weight: delta });
-  } else {
-    return;
-  }
-
-  if (list.length > max) {
-    list.sort((a, b) => b.weight - a.weight);
-    list.length = max;
+    logger.warn('[recommendations] failed to update taste profile', {
+      oxyUserId,
+      error: describeErrorSafely(err),
+    });
   }
 }

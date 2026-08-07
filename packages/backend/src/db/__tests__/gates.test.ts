@@ -40,7 +40,7 @@
  * trusted once and left alone.
  */
 
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { eq, getTableColumns, inArray, isTable, sql } from 'drizzle-orm';
@@ -2592,8 +2592,32 @@ describe('user, taste and listening schema (Task 7)', () => {
      * hand-maintained is the SET of declarations — that comes from the model
      * files — so a new TTL nobody mapped fails as `undeclared`, and a mapping
      * whose model lost its TTL fails as `stale`.
+     *
+     * ## A ported model's file is GONE, and the walk must expect that
+     *
+     * Task 15 deletes `ListeningEvent.ts` and `NotificationSuppression.ts`: the
+     * tables are on drizzle, so the Mongoose declarations they were compared
+     * against no longer exist to be found. A plain set equality between the walk
+     * and the map goes red at exactly that moment — the migration succeeding
+     * looks identical to somebody deleting a TTL by accident.
+     *
+     * So the expectation is DERIVED from whether each mapped model's file still
+     * exists, rather than the map carrying a hand-kept "ported" flag that could
+     * disagree with the tree. That is strictly stronger than the equality it
+     * replaces, because it now catches a third case the old shape could not: a
+     * mapping whose model was deleted while something still declares its TTL.
+     *
+     * It also does the work the file-count floor used to. `existsSync` does not
+     * go through `readdirSync`, so a traversal that returns nothing leaves every
+     * still-present model expecting a declaration the walk did not find, and the
+     * gate fails naming it — which is why the floor below could be lowered to a
+     * number this migration will not overtake instead of deleted outright.
      */
     const MONGO_TTL_INDEXES: readonly { model: string; field: string; port: string }[] = [
+      // Ported by Task 15; both model files are deleted, so neither is expected
+      // in `declared` any more — the `existsSync` split below is what says so.
+      // Their `port` still names a real column, so both remain COVERED and the
+      // registry must still carry them.
       { model: 'ListeningEvent', field: 'playedAt', port: 'listening_events.played_at' },
       { model: 'NotificationSuppression', field: 'expiresAt', port: 'notification_suppressions.expires_at' },
       // Task 8's moderation vertical. `port` is deliberately NOT a
@@ -2643,24 +2667,35 @@ describe('user, taste and listening schema (Task 7)', () => {
      * TWO VACUITY FLOORS, NOT INVENTORY ASSERTIONS — and the distinction is
      * worth stating because the numbers look like inventory and are not.
      * Model files are DELETED as verticals finish porting off Mongoose, so a
-     * floor pinned near the real count (41 files, 4 declarations today) would
-     * fire at the exact moment the migration succeeds, and a gate that cries
-     * wolf gets deleted by whoever hits it next. 20 is far enough below to
-     * catch only a traversal that broke outright — a renamed directory, a
-     * `readdir` that returned nothing.
+     * floor pinned near the real count would fire at the exact moment the
+     * migration succeeds, and a gate that cries wolf gets deleted by whoever
+     * hits it next. That is not hypothetical: the floor was 20 against 41 files
+     * when it was written, and Task 15's eight deletions took the directory to
+     * 14 — the wolf arrived one vertical sooner than the comment expected.
      *
-     * The second floor is on the MAP, not on what the walk found: `declared`
-     * being short is already caught by the set equality below, but only while
-     * something is left to compare it against. An emptied map paired with a
-     * broken walk is the one shape where both sides go to zero and the
-     * equality passes.
+     * 5 is the replacement, and it is a BACKSTOP rather than the primary check
+     * now: the `existsSync` split above fails on a broken traversal by itself,
+     * for as long as any mapped model file survives. When the last one goes,
+     * this floor and the map floor are what is left, and at that point the
+     * `registered`/`covered` equality below is carrying the gate.
+     *
+     * The second floor is on the MAP, not on what the walk found: an emptied map
+     * paired with a broken walk is the one shape where both sides go to zero and
+     * an equality passes.
      */
-    expect(modelFiles.length).toBeGreaterThanOrEqual(20);
+    expect(modelFiles.length).toBeGreaterThanOrEqual(5);
     expect(MONGO_TTL_INDEXES.length).toBeGreaterThanOrEqual(1);
 
-    const mapped = MONGO_TTL_INDEXES.map((entry) => `${entry.model}.${entry.field}`);
-    // Both directions: a TTL nobody mapped, and a mapping whose TTL is gone.
-    expect([...declared].sort()).toEqual([...mapped].sort());
+    // Only a model whose FILE still exists can still declare its TTL. A mapped
+    // model that has been ported off Mongoose must declare nothing, and one that
+    // has not must declare exactly what the map says.
+    const expectedDeclared = MONGO_TTL_INDEXES.filter((entry) =>
+      existsSync(join(modelsDir, `${entry.model}.ts`))
+    ).map((entry) => `${entry.model}.${entry.field}`);
+
+    // Both directions: a TTL nobody mapped, and a mapping whose TTL is gone —
+    // plus, now, a declaration surviving a model the map calls deleted.
+    expect([...declared].sort()).toEqual([...expectedDeclared].sort());
 
     // Every mapping that claims a real column must actually be registered, and
     // every registered target must be claimed by one — so a registry entry

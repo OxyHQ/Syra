@@ -1,10 +1,9 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import { uuidv7 } from '@oxyhq/db';
-import { connect, clear, disconnect } from '../../test/mongo';
 import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
 import { getDb } from '../../db/postgres';
 import { catalogEntities, tracks } from '../../db/schema/catalog';
-import { CatalogRelationModel } from '../../models/CatalogRelation';
+import { catalogRelations } from '../../db/schema/user';
 import { getRelatedArtists } from './recommendationService';
 
 /**
@@ -19,22 +18,13 @@ import { getRelatedArtists } from './recommendationService';
  */
 
 /**
- * BOTH databases: the catalogue is Postgres, and `CatalogRelation` — the
- * co-listen graph this suite is about — belongs to Task 15's vertical and is
- * still Mongoose. That is the split, stated where a reader will hit it.
+ * One database. The catalogue and the co-listen graph this suite is about are
+ * both Postgres since Task 15 moved `catalog_relations`; the Mongo hooks this
+ * file used to carry alongside them are gone.
  */
-beforeAll(async () => {
-  await connect();
-  await connectDb();
-});
-afterEach(async () => {
-  await clear();
-  await clearDb();
-});
-afterAll(async () => {
-  await disconnect();
-  await disconnectDb();
-});
+beforeAll(connectDb);
+afterEach(clearDb);
+afterAll(disconnectDb);
 
 async function makeArtist(
   overrides: Partial<typeof catalogEntities.$inferInsert> = {}
@@ -73,7 +63,7 @@ async function makeTrack(
 }
 
 async function relate(sourceId: string, targetId: string, score: number) {
-  await CatalogRelationModel.create({
+  await getDb().insert(catalogRelations).values({
     kind: 'artist', sourceId, targetId, score, coCount: 10, computedAt: new Date(),
   });
 }

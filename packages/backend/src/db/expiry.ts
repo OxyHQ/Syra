@@ -25,15 +25,23 @@
  * THAT IS GATED, and no longer by a hand grep. `__tests__/gates.test.ts`
  * ("accounts for every Mongoose TTL index") WALKS `src/models/*.ts` for
  * `<Model>Schema.index({ field: 1 }, { … expireAfterSeconds … })` and compares
- * what it finds against a model→port map, in both directions, then compares
- * the covered half of that map against the targets below. A vertical that
- * ports a TTL-bearing model without adding an entry here fails there, naming
- * the model. Only the model→column correspondence is hand-maintained — a
- * human has to say which Postgres column a Mongo field became — while the SET
- * of declarations comes from the files, which is the half that used to be a
- * grep in somebody's report. Four TTL indexes exist today: the two below, and
- * `ModerationOutbox`/`ModerationEvent`, mapped to a deferred sentinel that is
- * deliberately NOT counted as covered.
+ * what it finds against a model→port map, then compares the covered half of
+ * that map against the targets below. A vertical that ports a TTL-bearing
+ * model without adding an entry here fails there, naming the model. Only the
+ * model→column correspondence is hand-maintained — a human has to say which
+ * Postgres column a Mongo field became — while the SET of declarations comes
+ * from the files, which is the half that used to be a grep in somebody's
+ * report.
+ *
+ * The map holds FOUR entries and only TWO are still declared in `src/models/`,
+ * because a ported model's file is deleted: Task 15 removed
+ * `ListeningEvent.ts` and `NotificationSuppression.ts`. The gate derives which
+ * side an entry belongs on from whether its model file still EXISTS rather
+ * than from a hand-kept flag, so the migration succeeding cannot be mistaken
+ * for a TTL deleted by accident — and a declaration surviving a model the map
+ * calls deleted fails too. `ModerationOutbox`/`ModerationEvent` are the two
+ * still declared, mapped to a deferred sentinel that is deliberately NOT
+ * counted as covered.
  *
  * The gate reads one spelling of a TTL declaration — the only one this repo
  * uses, not the only one Mongoose accepts. See its own comment for the four
@@ -48,15 +56,20 @@
  * query, and its Task 7 block adds a planner probe on the sweep's own
  * statement — an index can exist and still not be usable.
  *
- * ## NOTHING SCHEDULES THIS YET, and here is what the scheduler owes
+ * ## THE SWEEP IS WIRED, and Task 15 is what made it load-bearing
  *
- * `sweepAllExpiredRows` has no caller in this repo. That is correct for now —
- * these tables are empty, no image writes to Postgres, and the Mongo TTL
- * monitor is still doing the work on the live store — but it means the
- * registry is inert until someone wires it. The natural home is
- * `services/recommendations/scheduler.ts`, which already runs a 30-minute
- * Redis-locked maintenance tick for the two recommendation jobs that read
- * these same tables.
+ * `sweepAllExpiredRows` is called from `services/recommendations/scheduler.ts`,
+ * on the same 30-minute Redis-locked maintenance tick as the two recommendation
+ * jobs that read these tables.
+ *
+ * It was deliberately unwired before that, and the reason it could no longer
+ * stay so is the point: while both tables were empty and Mongo's TTL monitor was
+ * still reaping the live store, an inert registry cost nothing. Task 15 ported
+ * both writers, so these tables ARE the live store — and an unwired registry
+ * from that moment means both grow FOREVER, with no error, no failing test and
+ * no symptom of any kind until disk. That is the failure this file's own rule
+ * calls structurally invisible, and porting the writer is exactly when it
+ * becomes real.
  *
  * **`listening_events` sets the batch size.** It is the only table here with a
  * high arrival rate (one row per play), and `sweepExpiredRows`' per-call
@@ -66,7 +79,7 @@
  * `truncated: true`: at the 30-minute tick that default is 48 × 50,000 = 2.4M
  * rows/day of headroom, which is the number to re-check — not the defaults to
  * copy — if play volume ever approaches it. `truncated` is returned per table
- * for exactly this reason and the caller should log it.
+ * for exactly this reason, and the scheduler logs it at WARN.
  */
 
 import type { ExpirySweepTarget } from '@oxyhq/db/expiry';
@@ -87,18 +100,20 @@ import {
  *  - Deleting a `notification_suppressions` row is what RE-ARMS a notification.
  *    The row is a claim ticket, not history; the only cost of deleting one is
  *    that the same notification may be sent again, which is exactly what
- *    `expiresAt` passing is supposed to permit. **The one caveat is the
- *    opposite direction** — `claimSuppression` never reads `expires_at`, so an
- *    unswept row keeps suppressing past its deadline. See `schema/user.ts`'s
- *    file-level doc comment for the bound that puts on lateness and the
- *    `on conflict` the write path owes.
+ *    `expiresAt` passing is supposed to permit. This entry no longer carries the
+ *    caveat it used to: `claimSuppression` read no deadline at all under
+ *    Mongoose, so an unswept row kept suppressing past its own, and the sweep's
+ *    lag was therefore load-bearing. Task 15's `on conflict … where expires_at
+ *    <= now()` (`db/user/notifications.ts`) CLAIMS an expired row rather than
+ *    colliding with it, so this sweep is now pure housekeeping — it reclaims
+ *    space and decides nothing.
  *  - Deleting a `listening_events` row costs raw signal that has already been
  *    folded into the durable aggregates (`user_taste_profiles`,
  *    `catalog_relations`) — the model's own doc comment says so, and the
  *    co-occurrence job's 60-day lookback means a 90-day-old event is already
  *    outside the window it reads. The OTHER reader
- *    (`recommendationService.ts:239`) does not filter by time at all and can
- *    read an unswept row; that is harmless for what it does with it, and
+ *    (`getMadeForYou`, via `findRecentTrackIds`) does not filter by time at all
+ *    and can read an unswept row; that is harmless for what it does with it, and
  *    `schema/user.ts`'s file-level doc comment spells out why rather than
  *    claiming a filter that is not there. Neither table holds unprocessed
  *    work, so neither can lose a backlog to a stalled consumer plus this sweep.

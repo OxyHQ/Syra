@@ -66,7 +66,17 @@ export const OWNING_TASKS = {
   // left the tree with it — `House`, `Room`, `Series`, `Recording` and
   // `RoomUserPreference`. `Series` and `RoomUserPreference` never appeared in
   // `NON_CATALOG_MODEL_OWNERS` below because no catalog module ever read them.
-  user: 'Task 15 — user and recommendations',
+  //
+  // `user` is GONE, and it is the LAST vertical to go: Task 15 ported settings,
+  // music preferences, behavior, taste profiles, listening events, the co-listen
+  // graph and both notification tables, and EIGHT models left the tree with it —
+  // `UserSettings`, `UserMusicPreferences`, `UserBehavior`, `UserTasteProfile`,
+  // `ListeningEvent`, `CatalogRelation`, `NotificationPreference` and
+  // `NotificationSuppression`. The last four of those were in
+  // `NON_CATALOG_MODEL_OWNERS` below and are gone from it; the other four never
+  // were, because no catalog module read them.
+  //
+  // Only `moderation` is left, which is why this map is one entry long.
   // Task 8 is BLOCKED on an owner decision, so its models have no port in
   // sight. Registered anyway, because two files hold Postgres reads beside
   // them and property 3's sweep finds those files whether or not the task is
@@ -135,10 +145,6 @@ export const LIVE_TASK_IDS: readonly string[] = [
 export const NON_CATALOG_MODEL_OWNERS = {
   Report: 'moderation',
   ModerationEnforcement: 'moderation',
-  CatalogRelation: 'user',
-  ListeningEvent: 'user',
-  UserMusicPreferences: 'user',
-  UserTasteProfile: 'user',
 } as const satisfies Record<string, OwningTask>;
 
 export type NonCatalogModel = keyof typeof NON_CATALOG_MODEL_OWNERS;
@@ -192,74 +198,6 @@ export interface HybridModule {
  */
 export const HYBRID_MODULES: readonly HybridModule[] = [
   {
-    file: 'services/radio/radioFixtures.ts',
-    models: ['CatalogRelation', 'UserTasteProfile'],
-    reason:
-      'Builds fixtures for both databases. The catalogue half is drizzle; the co-listen graph ' +
-      'and taste weights belong to Task 15. `makeLibrary` writes `user_liked_tracks` since ' +
-      'Task 11.',
-  },
-  {
-    file: 'services/radio/radioSeed.ts',
-    models: ['UserTasteProfile'],
-    reason:
-      'The user seed reads taste weights — Task 15\'s table — then hands a list of track ids to ' +
-      'a Postgres query. The liked tracks beside them moved in Task 11, and so did the freshness ' +
-      'ordering the seed reads off the tail of that list.',
-  },
-  {
-    file: 'services/radio/radioPools.ts',
-    models: ['CatalogRelation'],
-    reason:
-      'Pool 1 reads the co-listen graph — Task 15\'s `catalog_relations` — for a ranked list of ' +
-      'track ids, then looks them up in Postgres.',
-  },
-  {
-    file: 'services/recommendations/taste.ts',
-    models: ['CatalogRelation'],
-    reason: '`topRelatedArtistIds` folds the co-listen graph across seeds. Task 15\'s table.',
-  },
-  {
-    file: 'services/recommendations/recommendationService.ts',
-    models: ['CatalogRelation', 'ListeningEvent', 'UserTasteProfile'],
-    reason:
-      'Every personalised read starts from a taste profile and a listening history (Task 15) ' +
-      'and ends in a Postgres catalog query keyed on the ids they return. The library half is ' +
-      'drizzle since Task 11.',
-  },
-  {
-    file: 'services/recommendations/recordPlay.ts',
-    models: ['ListeningEvent', 'UserTasteProfile'],
-    reason:
-      'Writes the immutable listening event and folds the play into the taste profile — both ' +
-      'Task 15 — while the play counters it increments are catalog columns.',
-  },
-  {
-    file: 'services/recommendations/tasteSignals.ts',
-    models: ['UserTasteProfile'],
-    reason:
-      'Folds a like or a follow into the taste profile (Task 15). The two catalog reads behind ' +
-      'the signal are ported.',
-  },
-  {
-    file: 'controllers/stream.controller.ts',
-    models: ['UserMusicPreferences'],
-    reason:
-      'Reads the listener\'s audio-quality and data-saver settings to compute a bitrate cap. ' +
-      '`user_music_preferences` EXISTS in `schema/user.ts`, so this is not a capability gap — ' +
-      'but `musicPreferences.controller` still WRITES the Mongo document, and a reader on ' +
-      'Postgres against a writer on Mongo is a split brain, not a split read. It moves when its ' +
-      'writer does, in Task 15.',
-  },
-  {
-    file: 'controllers/library.controller.ts',
-    models: ['ListeningEvent'],
-    reason:
-      'Task 11 took the memberships and the play log to drizzle, which is most of this file; ' +
-      'what survives is the `LISTENING_SOURCES` union it validates a client-supplied source ' +
-      'against before handing it to `recordPlay`, and that constant lives on Task 15\'s model.',
-  },
-  {
     file: 'moderation/enforcement-service.ts',
     models: ['ModerationEnforcement', 'Report'],
     reason:
@@ -278,13 +216,6 @@ export const HYBRID_MODULES: readonly HybridModule[] = [
       'Task 14. The single remaining import is `ReportedType`, an enum on Task 8\'s model rather ' +
       'than a query: this file issues no Mongo read at all, and is registered only because that ' +
       'enum still lives on a Mongoose model.',
-  },
-  {
-    file: 'controllers/radio.controller.ts',
-    models: ['UserMusicPreferences'],
-    reason:
-      'Reads the explicit-content preference to decide what the station may programme. Same ' +
-      'writer, same task, same reason as `stream.controller` above.',
   },
 ] as const;
 

@@ -1,11 +1,10 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import { uuidv7 } from '@oxyhq/db';
 import type { HlsRendition } from '@syra/shared-types';
-import { connect, clear, disconnect } from '../test/mongo';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
 import { catalogEntities, trackHlsRenditions, trackKeys, tracks } from '../db/schema/catalog';
-import { UserMusicPreferencesModel } from '../models/UserMusicPreferences';
+import { userMusicPreferences } from '../db/schema/user';
 import { getStream, getStreamKey, getVariantPlaylist } from './stream.controller';
 import { verifyStreamToken, mintStreamToken } from '../services/stream/streamToken';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
@@ -15,23 +14,13 @@ import type { Response } from 'express';
 process.env.STREAM_TOKEN_SECRET = 'test-secret-stream-controller';
 
 /**
- * BOTH databases. The catalogue, the HLS ladder and the content key are
- * Postgres; `UserMusicPreferences` is still Mongoose and stays that way until
- * Task 15 moves its WRITER (`musicPreferences.controller`) — registered in
- * `db/catalog/hybridServices.ts`, so this split cannot be forgotten.
+ * One database. The catalogue, the HLS ladder, the content key and — since Task
+ * 15 — the listener's music preferences are all Postgres, so the Mongo hooks
+ * this file carried alongside them are gone.
  */
-beforeAll(async () => {
-  await connect();
-  await connectDb();
-});
-afterEach(async () => {
-  await clear();
-  await clearDb();
-});
-afterAll(async () => {
-  await disconnect();
-  await disconnectDb();
-});
+beforeAll(connectDb);
+afterEach(clearDb);
+afterAll(disconnectDb);
 
 // ── Fake req/res helpers ──────────────────────────────────────────────────────
 
@@ -283,10 +272,9 @@ describe('getStream', () => {
     try {
       const userId = 'premium-user';
       // Premium user with high quality preference — should reach 320
-      await UserMusicPreferencesModel.create({
-        oxyUserId: userId,
-        audioQuality: 'high',
-      });
+      await getDb()
+        .insert(userMusicPreferences)
+        .values({ oxyUserId: userId, audioQuality: 'high' });
 
       const trackId = await seedTrack(hlsTrackFields());
       const req = makeReq(trackId, { userId });
@@ -310,10 +298,7 @@ describe('getStream', () => {
     try {
       const userId = 'datasaver-user';
       // Seed the prefs with dataSaver=true
-      await UserMusicPreferencesModel.create({
-        oxyUserId: userId,
-        dataSaver: true,
-      });
+      await getDb().insert(userMusicPreferences).values({ oxyUserId: userId, dataSaver: true });
 
       const trackId = await seedTrack(hlsTrackFields());
       const req = makeReq(trackId, { userId });

@@ -1,14 +1,13 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'bun:test';
 import { Readable } from 'node:stream';
 import type { IncomingMessage } from 'node:http';
-import { eq } from 'drizzle-orm';
+import { count, eq } from 'drizzle-orm';
 import type { SafeFetchResult } from '@oxyhq/core/server';
-import { clear, connect, disconnect } from '../../test/mongo';
 import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
 import { getDb } from '../../db/postgres';
 import { userPodcastSubscriptions } from '../../db/schema/library';
 import { episodes } from '../../db/schema/podcasts';
-import { NotificationSuppressionModel } from '../../models/NotificationSuppression';
+import { notificationSuppressions } from '../../db/schema/user';
 import { setCatalogImageMirrorImplementationForTests } from '../catalog/catalogImageAssets';
 import { importFeed } from './podcastImportService';
 
@@ -28,13 +27,12 @@ import { importFeed } from './podcastImportService';
  * Oxy service credentials are configured in tests — which is exactly what makes the
  * second test meaningful.
  *
- * ## This suite spans BOTH databases, deliberately
+ * ## One database again
  *
- * Subscriptions and episodes are Postgres since Task 12; the notifier's suppression
- * ledger is still Mongoose, because `notification_suppressions` exists in
- * `schema/user.ts` but nothing writes it yet. That split is the production reality
- * today, so the test connects to both rather than stubbing one out — a stub here would
- * assert against the seam instead of across it.
+ * This suite used to connect to BOTH, because subscriptions and episodes were Postgres
+ * from Task 12 while the suppression ledger was still Mongoose. Task 15 moved the
+ * ledger, so the whole path — feed, episodes, subscriptions, notifier — is Postgres and
+ * the Mongo hooks are gone.
  */
 
 const SUBSCRIBER = 'oxy-subscriber-1';
@@ -65,19 +63,21 @@ function fakeFetchFor(feed: string) {
   });
 }
 
-beforeAll(async () => {
-  await connect();
-  await connectDb();
-});
+beforeAll(connectDb);
 afterEach(async () => {
-  await clear();
   await clearDb();
   setCatalogImageMirrorImplementationForTests();
 });
-afterAll(async () => {
-  await disconnect();
-  await disconnectDb();
-});
+afterAll(disconnectDb);
+
+/** How many suppression claims one subscriber holds — the "did the trigger run" read. */
+async function claimCount(oxyUserId: string): Promise<number> {
+  const [row] = await getDb()
+    .select({ value: count() })
+    .from(notificationSuppressions)
+    .where(eq(notificationSuppressions.oxyUserId, oxyUserId));
+  return row.value;
+}
 
 /** How many episode rows a show has — the "did the row really land" read. */
 async function episodeCount(podcastId: string): Promise<number> {
@@ -102,13 +102,12 @@ describe('episode notifications are driven by the INSERT signal', () => {
       .insert(userPodcastSubscriptions)
       .values({ oxyUserId: SUBSCRIBER, podcastId: first.podcast.id });
     await getDb().delete(episodes).where(eq(episodes.podcastId, first.podcast.id));
-    await NotificationSuppressionModel.deleteMany({});
+    await getDb().delete(notificationSuppressions);
 
     // This run genuinely INSERTS the episode → the trigger must run.
     const inserting = await importFeed(feedUrl, { fetch, force: true });
     expect(inserting.importedEpisodes).toBe(1);
-    expect(await NotificationSuppressionModel.countDocuments({ oxyUserId: SUBSCRIBER }))
-      .toBeGreaterThan(0);
+    expect(await claimCount(SUBSCRIBER)).toBeGreaterThan(0);
 
     // CRITICAL: wipe the suppression records before the re-import. Without this the test
     // has no teeth — the notifier's own exact-entity dedupe would swallow a wrong signal
@@ -116,13 +115,12 @@ describe('episode notifications are driven by the INSERT signal', () => {
     // keep the count at zero below is the import correctly deciding not to call the
     // trigger at all. (Verified by mutation: notifying on every processed episode fails
     // this assertion.)
-    await NotificationSuppressionModel.deleteMany({});
+    await getDb().delete(notificationSuppressions);
 
     // This run processes the SAME episode again — an update, not an insert.
     const reimport = await importFeed(feedUrl, { fetch, force: true });
     expect(reimport.importedEpisodes).toBe(1); // still PROCESSED one episode...
-    expect(await NotificationSuppressionModel.countDocuments({ oxyUserId: SUBSCRIBER }))
-      .toBe(0); // ...but the trigger never ran, so nothing was claimed.
+    expect(await claimCount(SUBSCRIBER)).toBe(0); // ...but the trigger never ran.
   });
 
   it('completes the import even though notification delivery fails', async () => {

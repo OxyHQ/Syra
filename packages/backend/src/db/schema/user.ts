@@ -45,10 +45,10 @@
  * answer that question differently, and the difference matters:
  *
  *  - `listening_events` is safe, but its TWO readers are safe for DIFFERENT
- *    reasons, and only one of them filters time. `coOccurrenceJob.ts:73-74`
- *    filters (`playedAt: { $gte: since }`, `LOOKBACK_DAYS = 60`), so a row past
+ *    reasons, and only one of them filters time. `coOccurrenceJob.ts`
+ *    filters (a 60-day `LOOKBACK_DAYS` window), so a row past
  *    the 90-day deadline is already outside its window whether or not the sweep
- *    has reached it. `recommendationService.ts:239` does NOT
+ *    has reached it. `getMadeForYou`'s recently-played read does NOT
  *    (`find({ oxyUserId }).sort({ playedAt: -1 }).limit(200)` ORDERS by time and
  *    never filters by it) — a listener with fewer than 200 events really does
  *    read an unswept 91-day-old row. It is harmless because of what that read
@@ -61,34 +61,39 @@
  *    `recommendationService` must not read "every reader filters time" as
  *    permission to drop a filter that was never there. The sweep is what bounds
  *    that table's size; nothing in this reader bounds its age.
- *  - `notification_suppressions` is NOT, and this is a real (small) behaviour
- *    change the port must carry deliberately. `claimSuppression`
- *    (`services/notifications/notifier.ts:133`) INSERTS and treats the
- *    duplicate-key error as "already notified" — it never reads `expiresAt` at
- *    all, so a row that has expired but has not been swept keeps suppressing.
- *    Under Mongo that overshoot was bounded by the TTL monitor's ~60s;
- *    under a sweep on the 30-minute tick `services/recommendations/
- *    scheduler.ts` already uses, it is bounded by 30 minutes — against a
- *    6-hour default coalescing window (`notifier.ts:31`), up to ~8% late
- *    rather than ~0.3%. THE FIX BELONGS IN THE PORT OF THAT WRITE PATH, not
- *    here: `insert ... on conflict (oxy_user_id, key) do update set expires_at
- *    = excluded.expires_at where notification_suppressions.expires_at <=
- *    now()` claims an expired row instead of colliding with it, which makes
- *    the sweep pure housekeeping and the window exact. The unique constraint
- *    below is what makes that `on conflict` expressible; whoever ports
- *    `notifier.ts` owes the rest.
+ *  - `notification_suppressions` WAS not, and the fix this block asked for has
+ *    landed. Mongo's `claimSuppression` INSERTED and treated the duplicate-key
+ *    error as "already notified" — it never read `expiresAt` at all, so a row
+ *    that had expired but had not been swept kept suppressing. Under Mongo that
+ *    overshoot was bounded by the TTL monitor's ~60s; under a sweep on the
+ *    30-minute tick `services/recommendations/scheduler.ts` uses, it would have
+ *    been bounded by 30 minutes — against a 6-hour default coalescing window
+ *    (`notifier.ts`), up to ~8% late rather than ~0.3%.
+ *
+ *    Task 15 put the fix in the write path, where this block said it belonged:
+ *    `db/user/notifications.ts` claims with `on conflict (oxy_user_id, key) do
+ *    update set expires_at = excluded.expires_at where
+ *    notification_suppressions.expires_at <= now()`, so an expired claim is
+ *    taken over rather than collided with. The window is exact and the sweep is
+ *    pure housekeeping. The unique constraint below is what makes that
+ *    `on conflict` expressible.
  *
  * ## `UserBehavior` is built, and nothing has ever written to it
  *
- * `grep -rln "UserBehavior" packages/backend/src` returns exactly two files:
- * its own model, and `routes/profileSettings.ts:213`, where the only use is
- * `UserBehavior.findOneAndDelete({ oxyUserId })` in the account-deletion
- * cleanup. No route, service or script ever creates or updates one. RELATIONS.md
- * reaches the same conclusion independently and RECOMMENDS DROPPING THE WHOLE
- * MODEL; the brief's `Produces` list names it, so it is built here and the
- * disagreement is raised in this task's report rather than settled quietly in
- * either direction. It is the cheapest thing in this schema to drop later —
- * one table, no foreign keys pointing at it, and no rows.
+ * RE-VERIFIED AT PORT TIME rather than inherited: `grep -rn "userBehavior"
+ * packages/backend/src` outside this schema and `db/user/behavior.ts` returns
+ * exactly one call site — `deleteUserBehavior` in `routes/profileSettings.ts`'s
+ * account-deletion cleanup, which was `UserBehavior.findOneAndDelete` before the
+ * port. No route, service, script or job creates or updates one, so the delete
+ * has never had anything to delete.
+ *
+ * RELATIONS.md reached the same conclusion independently and RECOMMENDS DROPPING
+ * THE WHOLE MODEL; the brief's `Produces` list names it, so it is built here and
+ * the disagreement is raised in the task report rather than settled quietly in
+ * either direction. It is the cheapest thing in this schema to drop later — one
+ * table, no foreign keys pointing at it, and no rows. Task 15 deliberately did
+ * NOT drop it, because deleting a table on the strength of "nothing writes it
+ * today" is an owner's call, not a porter's.
  *
  * ## Which arrays became child tables, and which stayed arrays
  *
@@ -550,9 +555,9 @@ export const listeningEvents = pgTable(
     check('listening_events_source_check', sql`${t.source} in (${sql.raw(inList(LISTENING_SOURCES))})`),
     // Co-occurrence mining walks each user's events in time order
     // (`coOccurrenceJob.ts:79`, `sort({ oxyUserId: 1, playedAt: 1 })`). Its
-    // leading column also serves `recommendationService.ts:239`'s
-    // per-user newest-first read, so Mongo's standalone `{ oxyUserId: 1 }` is
-    // dropped rather than ported.
+    // leading column also serves `findRecentTrackIds`' per-user newest-first
+    // read, so Mongo's standalone `{ oxyUserId: 1 }` is dropped rather than
+    // ported.
     index('listening_events_oxy_user_id_played_at_idx').on(t.oxyUserId, t.playedAt),
     /**
      * THE SWEEP'S INDEX. `db/expiry.ts` registers `played_at` with a 90-day

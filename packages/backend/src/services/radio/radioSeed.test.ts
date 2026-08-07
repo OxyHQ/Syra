@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'bun:test';
 import { uuidv7 } from '@oxyhq/db';
 import { PlaylistVisibility } from '@syra/shared-types';
-import { connect, clear, disconnect } from '../../test/mongo';
 import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
 import { loadRadioTaste, resolveRadioSeed } from './radioSeed';
 import {
@@ -15,21 +14,12 @@ import {
 } from './radioFixtures';
 
 /**
- * BOTH databases: the catalogue and the playlists are Postgres, while the taste
- * profile and the library are Task 15's and Task 11's Mongoose models.
+ * One database. The catalogue and the playlists were already Postgres; Task 15
+ * moved the taste profile and Task 11 the library, so the Mongo hooks are gone.
  */
-beforeAll(async () => {
-  await connect();
-  await connectDb();
-});
-afterEach(async () => {
-  await clear();
-  await clearDb();
-});
-afterAll(async () => {
-  await disconnect();
-  await disconnectDb();
-});
+beforeAll(connectDb);
+afterEach(clearDb);
+afterAll(disconnectDb);
 
 /** An id shaped like a real one that no row carries. */
 const MISSING_ID = uuidv7();
@@ -220,19 +210,24 @@ describe('resolveRadioSeed — user', () => {
 
 describe('loadRadioTaste', () => {
   it('normalises affinities against the listener\'s own strongest weight', async () => {
+    // A REAL artist id, not the string `'artist-a'` this fixture used to pass:
+    // `user_taste_artists.artist_id` is a foreign key into `catalog_entities`
+    // now, so an invented id is a `23503` where Mongo stored it verbatim.
+    const artistId = await makeArtist({ name: `Affinity ${uuidv7()}` });
+
     await makeTasteProfile(
       'user-1',
       [
         { key: 'house', weight: 10 },
         { key: 'techno', weight: 5 },
       ],
-      [{ key: 'artist-a', weight: 4 }]
+      [{ key: artistId, weight: 4 }]
     );
 
     const taste = await loadRadioTaste('user-1');
 
     expect(taste.genreAffinity).toEqual({ house: 1, techno: 0.5 });
-    expect(taste.artistAffinity).toEqual({ 'artist-a': 1 });
+    expect(taste.artistAffinity).toEqual({ [artistId]: 1 });
   });
 
   it('scores a guest and an unknown user flat', async () => {

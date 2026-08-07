@@ -6,7 +6,7 @@ import type { HlsRendition } from '@syra/shared-types';
 import { env } from '../config/env';
 import { getDb } from '../db/postgres';
 import { trackHlsRenditions, trackKeys, tracks } from '../db/schema/catalog';
-import { UserMusicPreferencesModel } from '../models/UserMusicPreferences';
+import { findMusicPreferences } from '../db/user/musicPreferences';
 import { mintStreamToken, verifyStreamToken } from '../services/stream/streamToken';
 import { buildMasterPlaylistFor, buildVariantPlaylistFor } from '../services/stream/manifestService';
 import { getUserEntitlement } from '../services/premium/entitlement';
@@ -53,7 +53,7 @@ export async function resolveStreamAccess(
   if (req.user?.id) {
     const [entitlement, prefs] = await Promise.all([
       getUserEntitlement(req.user.id),
-      UserMusicPreferencesModel.findOne({ oxyUserId: req.user.id }).lean(),
+      findMusicPreferences(req.user.id),
     ]);
     const maxBitrateKbps = computeMaxBitrateKbps(
       { audioQuality: prefs?.audioQuality, dataSaver: prefs?.dataSaver },
@@ -214,7 +214,7 @@ export async function getStream(req: AuthRequest, res: Response): Promise<void> 
 
   const [entitlement, prefs] = await Promise.all([
     getUserEntitlement(req.user.id),
-    UserMusicPreferencesModel.findOne({ oxyUserId: req.user.id }).lean(),
+    findMusicPreferences(req.user.id),
   ]);
   const maxBitrateKbps = computeMaxBitrateKbps(
     { audioQuality: prefs?.audioQuality, dataSaver: prefs?.dataSaver },

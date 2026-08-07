@@ -1,7 +1,7 @@
 import { descNullsLast } from '../../db/catalog/containers';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { RadioSeed } from '@syra/shared-types';
-import { UserTasteProfileModel } from '../../models/UserTasteProfile';
+import { findTasteWeights } from '../../db/user/taste';
 import { getDb } from '../../db/postgres';
 import { albums, catalogEntities, tracks } from '../../db/schema/catalog';
 import { playlistCollaborators, playlistTracks, playlists } from '../../db/schema/library';
@@ -27,17 +27,10 @@ import { orderByIds } from '../recommendations/taste';
  * caller asked for something that does not exist or that they may not read, and
  * the route turns that into a 404.
  *
- * `UserLibrary` and `UserTasteProfile` belong to the library and user verticals
- * (Tasks 11 and 15) and are still Mongoose. Each is read for a list of ids or a
- * set of weights that is then looked up in Postgres, never joined to a catalog
- * collection in one pipeline.
- *
- * The PLAYLIST read is Postgres, unlike those two, and deliberately so: Task 10a
- * already put `playlists` and `playlist_tracks` on the drizzle side inside
- * `db/catalog/containers.ts`, and `services/catalog/artistProfile.ts` reads them
- * there. Leaving this one on Mongoose would have meant two catalog services
- * disagreeing about which database holds a playlist — which is worse than either
- * choice, and is what the radio suite caught the moment the fixtures moved.
+ * Every read here is Postgres. The listener's library (Task 11) and their taste
+ * weights (`db/user/taste.ts`) are each read for a list of ids or a set of
+ * weights that is then looked up against the catalog, never joined to it in one
+ * statement — the seed sets are small and the lookup is by primary key.
  */
 export interface SeedResolution {
   /** Collaborative-filtering sources of `kind: 'track'`. */
@@ -383,11 +376,8 @@ async function resolveMoodSeed(seedId: string): Promise<SeedResolution | null> {
  */
 async function resolveUserSeed(oxyUserId: string | undefined): Promise<SeedResolution> {
   const [profile, likedTracks] = oxyUserId
-    ? await Promise.all([
-        UserTasteProfileModel.findOne({ oxyUserId }).lean(),
-        listMembership('likedTracks', oxyUserId),
-      ])
-    : [null, []];
+    ? await Promise.all([findTasteWeights(oxyUserId), listMembership('likedTracks', oxyUserId)])
+    : [undefined, []];
 
   const topArtists = topTasteKeys(profile?.artists ?? [], USER_SEED_ARTIST_LIMIT);
   const topGenres = topTasteKeys(profile?.genres ?? [], USER_SEED_GENRE_LIMIT);
@@ -442,7 +432,7 @@ function normaliseWeights(weights: { key: string; weight: number }[]): Record<st
 export async function loadRadioTaste(oxyUserId: string | undefined): Promise<RadioTasteSignal> {
   if (!oxyUserId) return EMPTY_TASTE;
 
-  const profile = await UserTasteProfileModel.findOne({ oxyUserId }).lean();
+  const profile = await findTasteWeights(oxyUserId);
   if (!profile) return EMPTY_TASTE;
 
   return {

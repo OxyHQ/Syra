@@ -1,8 +1,8 @@
 import { and, arrayOverlaps, eq, inArray, notInArray, or, type SQL } from 'drizzle-orm';
 import { publicColumns } from '@oxyhq/db/assert';
-import { CatalogRelationModel } from '../../models/CatalogRelation';
-import { UserTasteProfileModel } from '../../models/UserTasteProfile';
-import { ListeningEventModel } from '../../models/ListeningEvent';
+import { findRelatedEdges } from '../../db/user/relations';
+import { findTasteWeights } from '../../db/user/taste';
+import { findRecentTrackIds } from '../../db/user/listening';
 import { getDb } from '../../db/postgres';
 import { catalogEntities, tracks } from '../../db/schema/catalog';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../../db/schema/protectedColumns';
@@ -18,19 +18,36 @@ import { orderByIds, rankByTaste, topRelatedArtistIds } from './taste';
 
 /**
  * Read side of the recommendation engine. Every function degrades gracefully:
- * when the collaborative graph (`CatalogRelation`) has no edges yet for an
+ * when the collaborative graph (`catalog_relations`) has no edges yet for an
  * entity (cold start / sparse catalog), it falls back to content similarity
  * (shared genre) and global popularity, so a result is always returned.
  *
- * `CatalogRelation`, `UserTasteProfile` and `ListeningEvent` belong to the user
- * vertical (Task 15) and are still Mongoose. Every one of them is read for a
- * LIST OF IDS that is then looked up in Postgres, never joined to a catalog
- * collection in one pipeline, so the split is a second round trip rather than a
- * broken query. `UserLibrary` was in that list and is not any more — Task 11
- * put the memberships on `db/library/membership.ts`.
+ * The three recommendation tables are read through `db/user/{relations,taste,
+ * listening}.ts`, each for a LIST OF IDS that is then looked up against the
+ * catalog. They are deliberately not joined to `tracks`/`catalog_entities` in
+ * one statement: the ranking is computed in memory across several sources
+ * (summed relation scores, taste affinity, a popularity prior), and a join
+ * would have to reproduce that arithmetic in SQL to gain a round trip.
+ *
+ * ## `getMadeForYou`'s recently-played read does NOT filter by time
+ *
+ * `findRecentTrackIds` orders by `played_at` and never filters it, which is what
+ * the Mongo read did. That is deliberate and `db/user/listening.ts` records why
+ * at length: the ids become an EXCLUSION set, so reading a row the expiry sweep
+ * has not yet reached costs one track staying out of recommendations for at most
+ * one sweep interval. Do not "tighten" this into a time filter — the sweep is
+ * what bounds that table's size, and nothing here bounds its age.
  */
 
 const DEFAULT_RELATED_LIMIT = 20;
+
+/**
+ * How many of a listener's most recent plays are excluded from "Made For You".
+ *
+ * A bounded rolling window, not a retention policy — see this file's doc comment
+ * on why it is deliberately not a time filter.
+ */
+const RECENTLY_PLAYED_EXCLUSION = 200;
 
 /**
  * The columns every recommendation surface returns — the FULL public row, not a
@@ -110,10 +127,7 @@ export async function getRelatedArtists(
   artistId: string,
   limit = DEFAULT_RELATED_LIMIT
 ): Promise<PublicCatalogEntityRow[]> {
-  const edges = await CatalogRelationModel.find({ kind: 'artist', sourceId: artistId })
-    .sort({ score: -1 })
-    .limit(limit)
-    .lean();
+  const edges = await findRelatedEdges('artist', [artistId], limit);
 
   const relatedIds = edges.map((edge) => edge.targetId);
   const collaborative = await artistsByIds(relatedIds);
@@ -191,10 +205,7 @@ export async function getSimilarTracks(
   trackId: string,
   limit = DEFAULT_RELATED_LIMIT,
 ): Promise<PublicTrackRow[]> {
-  const edges = await CatalogRelationModel.find({ kind: 'track', sourceId: trackId })
-    .sort({ score: -1 })
-    .limit(limit)
-    .lean();
+  const edges = await findRelatedEdges('track', [trackId], limit);
 
   const collaborative = await tracksByIds(edges.map((edge) => edge.targetId));
   if (collaborative.length >= limit) return collaborative.slice(0, limit);
@@ -245,11 +256,15 @@ export async function getMadeForYou(
   limit = 20,
 ): Promise<MadeForYou> {
   const [profile, likedTracks, followedArtists] = await Promise.all([
-    UserTasteProfileModel.findOne({ oxyUserId }).lean(),
+    findTasteWeights(oxyUserId),
     listMembership('likedTracks', oxyUserId),
     listMembership('followedArtists', oxyUserId),
   ]);
 
+  // `findTasteWeights` already returns each list weight-descending, but the
+  // re-sort stays: it is what makes this slice independent of the read's
+  // ordering, and dropping it would make a change to that ordering silently
+  // change which genres a listener is recommended.
   const topGenres = (profile?.genres ?? [])
     .filter((g) => g.weight > 0)
     .sort((a, b) => b.weight - a.weight)
@@ -291,17 +306,8 @@ export async function getMadeForYou(
   }
 
   // Exclude recently-played and already-liked tracks from track recs.
-  const recentEvents = await ListeningEventModel.find({ oxyUserId })
-    .sort({ playedAt: -1 })
-    .limit(200)
-    .select({ trackId: 1 })
-    .lean();
-  const excludeTrackIds = [
-    ...new Set<string>([
-      ...recentEvents.map((e) => e.trackId),
-      ...likedTracks,
-    ]),
-  ];
+  const recentTrackIds = await findRecentTrackIds(oxyUserId, RECENTLY_PLAYED_EXCLUSION);
+  const excludeTrackIds = [...new Set<string>([...recentTrackIds, ...likedTracks])];
 
   // Discover NEW tracks: by the user's favourite artists (deep cuts they may not
   // have heard) and by their favourite genres, ranked by global popularity.

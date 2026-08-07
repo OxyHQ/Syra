@@ -1,10 +1,14 @@
 import { uuidv7 } from '@oxyhq/db';
 import { PlaylistVisibility } from '@syra/shared-types';
-import { CatalogRelationModel } from '../../models/CatalogRelation';
-import { UserTasteProfileModel } from '../../models/UserTasteProfile';
 import { getDb } from '../../db/postgres';
 import { albums, catalogEntities, imageAssets, tracks } from '../../db/schema/catalog';
 import { playlistTracks, playlists, userLikedTracks } from '../../db/schema/library';
+import {
+  catalogRelations,
+  userTasteArtists,
+  userTasteGenres,
+  userTasteProfiles,
+} from '../../db/schema/user';
 import { setAlbumGenres } from '../../db/catalog/genres';
 
 /**
@@ -24,10 +28,15 @@ import { setAlbumGenres } from '../../db/catalog/genres';
  * cover asset) they need when the caller does not supply one. A test that
  * wants a specific artist still passes `artistId` and gets exactly that.
  *
- * `CatalogRelation` and `UserTasteProfile` are still Mongoose — they belong to
- * Task 15's vertical — so a radio suite needs BOTH `test/mongo` and
- * `test/postgres` hooks until that lands. `UserLibrary` was in that sentence
- * until Task 11; {@link makeLibrary} writes `user_liked_tracks` now.
+ * Every builder writes Postgres. `CatalogRelation` and `UserTasteProfile` were
+ * the last two on Mongoose and moved with Task 15, so a radio suite needs only
+ * the `test/postgres` hooks — {@link relate} writes `catalog_relations` and
+ * {@link makeTasteProfile} writes `user_taste_profiles` and its two children.
+ *
+ * {@link makeTasteProfile} takes ARTIST IDS, not arbitrary strings.
+ * `user_taste_artists.artist_id` is a real foreign key into `catalog_entities`,
+ * so a fixture weight for an invented id is a `23503` rather than a stored
+ * string — pass ids from {@link makeArtist}.
  */
 
 /** An `image_assets` row, because `albums.cover_art_id` is NOT NULL. */
@@ -200,15 +209,35 @@ export async function relate(
   targetId: string,
   score: number
 ): Promise<void> {
-  await CatalogRelationModel.create({ kind, sourceId, targetId, score, coCount: 10 });
+  await getDb().insert(catalogRelations).values({ kind, sourceId, targetId, score, coCount: 10 });
 }
 
+/**
+ * A taste profile with the given genre and artist weights.
+ *
+ * `artists[].key` must be a real `catalog_entities` id — see this file's doc
+ * comment. `genres[].key` is a plain lowercase string with no such constraint.
+ */
 export async function makeTasteProfile(
   oxyUserId: string,
   genres: { key: string; weight: number }[],
   artists: { key: string; weight: number }[]
 ): Promise<void> {
-  await UserTasteProfileModel.create({ oxyUserId, genres, artists, totalSignal: 100 });
+  const [profile] = await getDb()
+    .insert(userTasteProfiles)
+    .values({ oxyUserId, totalSignal: 100 })
+    .returning({ id: userTasteProfiles.id });
+
+  if (genres.length > 0) {
+    await getDb()
+      .insert(userTasteGenres)
+      .values(genres.map((g) => ({ tasteProfileId: profile.id, genre: g.key, weight: g.weight })));
+  }
+  if (artists.length > 0) {
+    await getDb()
+      .insert(userTasteArtists)
+      .values(artists.map((a) => ({ tasteProfileId: profile.id, artistId: a.key, weight: a.weight })));
+  }
 }
 
 /**

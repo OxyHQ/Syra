@@ -1,11 +1,10 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import { uuidv7 } from '@oxyhq/db';
-import { clear, connect, disconnect } from '../test/mongo';
-import { UserTasteProfileModel } from '../models/UserTasteProfile';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
 import { albums, catalogEntities, imageAssets, tracks } from '../db/schema/catalog';
 import { playlists, recentlyPlayed } from '../db/schema/library';
+import { findTasteWeights } from '../db/user/taste';
 import {
   followArtist,
   getLikedTracks,
@@ -38,15 +37,12 @@ import type { NextFunction, Response } from 'express';
  */
 
 beforeAll(async () => {
-  await connect();
   await connectDb();
 });
 afterEach(async () => {
-  await clear();
   await clearDb();
 });
 afterAll(async () => {
-  await disconnect();
   await disconnectDb();
 });
 
@@ -231,12 +227,12 @@ describe('adding something that does not exist is a 404', () => {
     await call(likeTrack, { params: { id: uuidv7() }, userId: USER });
     await call(followArtist, { params: { id: uuidv7() }, userId: USER });
 
-    expect(await UserTasteProfileModel.findOne({ oxyUserId: USER }).lean()).toBeNull();
+    expect(await findTasteWeights(USER)).toBeUndefined();
 
     // The positive control: a real like DOES create one, so the assertion above
     // cannot pass merely because nothing ever writes a profile.
     await call(likeTrack, { params: { id: await makeTrack() }, userId: USER });
-    expect(await UserTasteProfileModel.findOne({ oxyUserId: USER }).lean()).not.toBeNull();
+    expect(await findTasteWeights(USER)).toBeDefined();
   });
 });
 

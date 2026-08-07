@@ -1,10 +1,10 @@
 import { env } from '../../config/env';
 import { logger } from '../../utils/logger';
 import {
-  NotificationPreferenceModel,
+  claimSuppression,
+  isEventDisabled,
   type SyraNotificationEvent,
-} from '../../models/NotificationPreference';
-import { NotificationSuppressionModel } from '../../models/NotificationSuppression';
+} from '../../db/user/notifications';
 import { getOxyServiceToken } from './oxyServiceToken';
 
 /**
@@ -22,6 +22,15 @@ import { getOxyServiceToken } from './oxyServiceToken';
  * Fire-and-forget by contract: a failure here is logged and swallowed. A notification that
  * cannot be delivered must never fail the action that triggered it — nobody should lose an
  * episode import because a push endpoint was down.
+ *
+ * ## The two suppression rules are one statement each, in `db/user/notifications.ts`
+ *
+ * `isEventDisabled` and `claimSuppression` moved there with their tables. The
+ * claim is still an INSERT rather than a read-then-write — that is what makes it
+ * race-free — but it no longer treats every duplicate key as "already notified":
+ * an EXPIRED claim is now taken over by the same statement. The Mongo version
+ * could not see `expiresAt` at all, so a row its TTL monitor had not yet reaped
+ * kept suppressing; that module's doc comment carries the full reasoning.
  */
 
 /** How long an exact-entity suppression record is kept. Long enough to outlive re-imports. */
@@ -109,49 +118,6 @@ export async function notifyUser(
     });
     return { emitted: false, reason: 'failed' };
   }
-}
-
-/** A user with no preference document has every event enabled. */
-async function isEventDisabled(
-  oxyUserId: string,
-  event: SyraNotificationEvent,
-): Promise<boolean> {
-  const preference = await NotificationPreferenceModel.findOne({ oxyUserId })
-    .select('disabledEvents')
-    .lean();
-
-  return preference?.disabledEvents?.includes(event) === true;
-}
-
-/**
- * Try to claim a suppression key. Returns true when THIS call won the claim (so the
- * caller may emit) and false when it was already held.
- *
- * The insert IS the decision — a read-then-write would race two concurrent feed refreshes
- * into both deciding to send. A duplicate-key error is the expected, non-exceptional path.
- */
-async function claimSuppression(
-  oxyUserId: string,
-  key: string,
-  ttlMs: number,
-): Promise<boolean> {
-  try {
-    await NotificationSuppressionModel.create({
-      oxyUserId,
-      key,
-      expiresAt: new Date(Date.now() + ttlMs),
-    });
-    return true;
-  } catch (error) {
-    if (isDuplicateKeyError(error)) {
-      return false;
-    }
-    throw error;
-  }
-}
-
-function isDuplicateKeyError(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && (error as { code?: number }).code === 11000;
 }
 
 /**

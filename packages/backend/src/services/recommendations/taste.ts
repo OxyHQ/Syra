@@ -1,4 +1,4 @@
-import { CatalogRelationModel } from '../../models/CatalogRelation';
+import { findRelatedEdges } from '../../db/user/relations';
 
 /**
  * Taste and relatedness primitives shared by every personalised read.
@@ -15,11 +15,6 @@ import { CatalogRelationModel } from '../../models/CatalogRelation';
  * filter objects together silently dropped an `$or` — a later key of the same
  * name won. Drizzle composes with `and()`, which cannot lose a term, so there is
  * nothing for a counterpart to do.
- *
- * `CatalogRelation` belongs to the user/recommendations vertical (Task 15) and
- * is still Mongoose here. That is the one thing in this file not yet on
- * Postgres, and it is deliberate: the collaborative graph is another task's
- * table, and the edges it returns are plain string ids either way.
  */
 
 /** Resolve the union of related-artist edges for a set of seed artists. */
@@ -30,13 +25,7 @@ export async function topRelatedArtistIds(
 ): Promise<string[]> {
   if (seedArtistIds.length === 0) return [];
 
-  const edges = await CatalogRelationModel.find({
-    kind: 'artist',
-    sourceId: { $in: seedArtistIds },
-  })
-    .sort({ score: -1 })
-    .limit(limit * 3)
-    .lean();
+  const edges = await findRelatedEdges('artist', seedArtistIds, limit * 3);
 
   // Sum scores across seeds so an artist related to several of the user's
   // favourites ranks higher than one related to a single favourite.

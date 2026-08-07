@@ -1,6 +1,6 @@
-import { ListeningEventModel } from '../../models/ListeningEvent';
-import { CatalogRelationModel, type RelationKind } from '../../models/CatalogRelation';
-import { isDatabaseConnected } from '../../utils/database';
+import { isPostgresConnected } from '../../db/postgres';
+import { forEachMinableEvent } from '../../db/user/listening';
+import { replaceRelationGraph, type RelationEdge, type RelationKind } from '../../db/user/relations';
 import { logger } from '../../utils/logger';
 import { PLAY_COMPLETION_THRESHOLD } from './engagement';
 
@@ -64,22 +64,11 @@ export interface CoOccurrenceResult {
  * directly (e.g. from a CLI or test); the scheduler wraps it in a lock.
  */
 export async function runCoOccurrencePass(): Promise<CoOccurrenceResult> {
-  if (!isDatabaseConnected()) {
+  if (!isPostgresConnected()) {
     return { artistEdges: 0, trackEdges: 0, sessions: 0, events: 0 };
   }
 
   const since = new Date(Date.now() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
-
-  const cursor = ListeningEventModel.find({
-    playedAt: { $gte: since },
-    completion: { $gte: PLAY_COMPLETION_THRESHOLD },
-    skipped: false,
-  })
-    .select({ oxyUserId: 1, trackId: 1, artistId: 1, playedAt: 1 })
-    .sort({ oxyUserId: 1, playedAt: 1 })
-    .limit(MAX_EVENTS)
-    .lean()
-    .cursor();
 
   const artistGraph: MinedGraph = { pairs: new Map(), counts: new Map() };
   const trackGraph: MinedGraph = { pairs: new Map(), counts: new Map() };
@@ -88,7 +77,6 @@ export async function runCoOccurrencePass(): Promise<CoOccurrenceResult> {
   let lastPlayedAt = 0;
   let session: SessionItem[] = [];
   let sessionCount = 0;
-  let eventCount = 0;
 
   const flush = () => {
     if (session.length > 1) {
@@ -98,20 +86,22 @@ export async function runCoOccurrencePass(): Promise<CoOccurrenceResult> {
     session = [];
   };
 
-  for await (const event of cursor) {
-    eventCount++;
-    const playedAt = event.playedAt instanceof Date ? event.playedAt.getTime() : 0;
+  const eventCount = await forEachMinableEvent(
+    { since, minCompletion: PLAY_COMPLETION_THRESHOLD, maxEvents: MAX_EVENTS },
+    (event) => {
+      const playedAt = event.playedAt.getTime();
 
-    if (event.oxyUserId !== currentUser) {
-      flush();
-      currentUser = event.oxyUserId;
-    } else if (playedAt - lastPlayedAt > SESSION_GAP_MS) {
-      flush();
+      if (event.oxyUserId !== currentUser) {
+        flush();
+        currentUser = event.oxyUserId;
+      } else if (playedAt - lastPlayedAt > SESSION_GAP_MS) {
+        flush();
+      }
+
+      session.push({ trackId: event.trackId, artistId: event.artistId });
+      lastPlayedAt = playedAt;
     }
-
-    session.push({ trackId: event.trackId, artistId: event.artistId });
-    lastPlayedAt = playedAt;
-  }
+  );
   flush();
 
   const artistEdges = await persistGraph('artist', artistGraph);
@@ -166,53 +156,29 @@ function addPair(pairs: Map<string, Map<string, number>>, a: string, b: string):
  * pass so stale edges never linger.
  */
 async function persistGraph(kind: RelationKind, graph: MinedGraph): Promise<number> {
-  const computedAt = new Date();
-  const operations: {
-    updateOne: {
-      filter: { kind: RelationKind; sourceId: string; targetId: string };
-      update: { $set: { kind: RelationKind; sourceId: string; targetId: string; score: number; coCount: number; computedAt: Date } };
-      upsert: true;
-    };
-  }[] = [];
+  const edges: RelationEdge[] = [];
 
   for (const [sourceId, targets] of graph.pairs) {
     const sourceCount = graph.counts.get(sourceId) ?? 0;
     if (sourceCount === 0) continue;
 
-    const scored: { targetId: string; score: number; coCount: number }[] = [];
+    const scored: RelationEdge[] = [];
     for (const [targetId, coCount] of targets) {
       if (coCount < MIN_CO_COUNT) continue;
       const targetCount = graph.counts.get(targetId) ?? 0;
       if (targetCount === 0) continue;
       const score = coCount / Math.sqrt(sourceCount * targetCount);
-      scored.push({ targetId, score, coCount });
+      scored.push({ sourceId, targetId, score, coCount });
     }
 
     scored.sort((a, b) => b.score - a.score);
-    for (const edge of scored.slice(0, MAX_TARGETS_PER_SOURCE)) {
-      operations.push({
-        updateOne: {
-          filter: { kind, sourceId, targetId: edge.targetId },
-          update: { $set: { kind, sourceId, targetId: edge.targetId, score: edge.score, coCount: edge.coCount, computedAt } },
-          upsert: true,
-        },
-      });
-    }
+    edges.push(...scored.slice(0, MAX_TARGETS_PER_SOURCE));
   }
 
-  // Drop the previous graph for this kind, then write the fresh one. Doing the
-  // delete first keeps the collection from accumulating stale edges across runs.
-  await CatalogRelationModel.deleteMany({ kind });
-
-  if (operations.length === 0) return 0;
-
-  // Write in batches to keep individual bulk ops bounded.
-  const BATCH = 1000;
-  let written = 0;
-  for (let i = 0; i < operations.length; i += BATCH) {
-    const batch = operations.slice(i, i + BATCH);
-    await CatalogRelationModel.bulkWrite(batch, { ordered: false });
-    written += batch.length;
-  }
-  return written;
+  // Drop the previous graph for this kind, then write the fresh one — now in ONE
+  // transaction (`replaceRelationGraph`), so readers see the old graph until the
+  // new one commits instead of an empty one in between. The Mongo version's
+  // `upsert: true` has nothing left to do once the two are atomic: after the
+  // delete there is no row to conflict with.
+  return replaceRelationGraph(kind, edges);
 }
