@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto';
 import { and, inArray } from 'drizzle-orm';
 import { publicColumns } from '@oxyhq/db/assert';
-import mongoose from 'mongoose';
 import type { Response, NextFunction } from 'express';
 import { z } from 'zod';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
@@ -27,14 +26,13 @@ import {
   type RadioStationState,
 } from '../services/radio/radioStationStore';
 import { orderByIds } from '../services/recommendations/taste';
-import { getDb } from '../db/postgres';
+import { getDb, isPostgresConnected } from '../db/postgres';
 import { tracks } from '../db/schema/catalog';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../db/schema/protectedColumns';
 import { playableTrackFilter } from '../db/catalog/visibility';
 import { toTrackDtos } from '../db/catalog/hydrate';
 import type { PublicTrackRow } from '../db/catalog/serialize';
 import { getRequestUserId } from '../utils/requestUser';
-import { isDatabaseConnected } from '../utils/database';
 
 /**
  * The HTTP surface of the radio engine.
@@ -210,7 +208,18 @@ export const getRadioPage = async (req: AuthRequest, res: Response, next: NextFu
   try {
     res.set('Cache-Control', RADIO_CACHE_CONTROL);
 
-    if (!isDatabaseConnected()) {
+    /**
+     * POSTGRES, not Mongo. This gate asked `isDatabaseConnected()` —
+     * `mongoose.connection.readyState` — with no Postgres check at all, which
+     * was right when the seed, the pools and the taste weights were Mongo and
+     * became wrong the moment Task 15 moved the last of them: a station is
+     * assembled entirely from `tracks`, `catalog_relations` and
+     * `user_taste_*` now (verified by walking all 32 files this controller
+     * reaches, none of which imports a model). Postgres down answered 200 and
+     * failed inside the handler; at Task 19 it would have 503'd for everyone,
+     * permanently.
+     */
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 

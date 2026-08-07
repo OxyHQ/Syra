@@ -7,24 +7,25 @@ import {
 } from '../services/recommendations/recommendationService';
 import { toArtistDtos, toTrackDtos } from '../db/catalog/hydrate';
 import { isPostgresConnected } from '../db/postgres';
-import { isDatabaseConnected } from '../utils/database';
 import { getParam, parseBoundedLimit } from '../utils/reqParams';
 
 /**
- * BOTH databases, because `recommendationService` reads both.
+ * POSTGRES ONLY, because that is now the only database this controller reads.
  *
- * `isDatabaseConnected()` reports MONGOOSE readiness. Every personalised read
- * here starts from a taste profile, a library and a listening history — Tasks 11
- * and 15, still Mongo — and ends in a Postgres catalog query keyed on the ids
- * they return, so a guard naming one database passes while the other is down and
- * then throws inside the handler.
+ * It asked twice — `isDatabaseConnected() && isPostgresConnected()` — and the
+ * Mongoose half was correct right up to Task 15: the taste profile, the library
+ * and the listening history every personalised read starts from were Mongo, so a
+ * guard naming one database passed while the other was down.
  *
- * Unlike `preview` and `images`, which are pure Postgres and simply asked the
- * wrong question, this one has to ask twice.
+ * Task 15 ported the last of them. Verified transitively rather than by grepping
+ * this file, because the identical guard in `entityProfile.controller` had its
+ * Mongo dependency two hops away: walking this controller's whole import graph
+ * (24 files) reaches no `models/` import at all.
+ *
+ * Leaving the Mongoose half would have cost twice over — Mongo down with
+ * Postgres up answers 503 for reads that would have succeeded, and at Task 19
+ * `readyState` never reaches 1 again, so every route here 503s permanently.
  */
-function bothDatabasesConnected(): boolean {
-  return isDatabaseConnected() && isPostgresConnected();
-}
 
 /** Discovery responses are user-scoped where personalised, public otherwise. */
 function setPublicDiscoveryCache(res: Response): void {
@@ -41,7 +42,7 @@ function setPrivateDiscoveryCache(res: Response): void {
  */
 export const getRelatedArtistsHandler = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!bothDatabasesConnected()) return res.status(503).json({ error: 'Database not available' });
+    if (!isPostgresConnected()) return res.status(503).json({ error: 'Database not available' });
     const id = getParam(req, 'id');
     const limit = parseBoundedLimit(req.query.limit, 20, 50);
     const artists = await getRelatedArtists(id, limit);
@@ -58,7 +59,7 @@ export const getRelatedArtistsHandler = async (req: AuthRequest, res: Response, 
  */
 export const getSimilarTracksHandler = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!bothDatabasesConnected()) return res.status(503).json({ error: 'Database not available' });
+    if (!isPostgresConnected()) return res.status(503).json({ error: 'Database not available' });
     const id = getParam(req, 'id');
     const limit = parseBoundedLimit(req.query.limit, 20, 50);
     const tracks = await getSimilarTracks(id, limit);
@@ -77,7 +78,7 @@ export const getSimilarTracksHandler = async (req: AuthRequest, res: Response, n
  */
 export const getMadeForYouHandler = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!bothDatabasesConnected()) return res.status(503).json({ error: 'Database not available' });
+    if (!isPostgresConnected()) return res.status(503).json({ error: 'Database not available' });
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 

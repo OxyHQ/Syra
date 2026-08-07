@@ -296,6 +296,28 @@ export async function ensureOwnUserSettings(oxyUserId: string): Promise<UserSett
 }
 
 /**
+ * What an account with no settings row presents as.
+ *
+ * A COPY of the nine columns' defaults, which is a second source of truth and
+ * would normally be the wrong trade. It is safe here only because
+ * `__tests__/settings.test.ts` pins it to the database: that test inserts a bare
+ * row, reads it back through the real projection, and asserts it equals this
+ * object. Change a default in `schema/user.ts` without changing this and the
+ * test fails naming the field.
+ */
+const VIEWER_PRIVACY_DEFAULTS: ViewerVisiblePrivacy = {
+  profileVisibility: 'public',
+  showContactInfo: true,
+  allowTags: true,
+  allowMentions: true,
+  showOnlineStatus: true,
+  hideLikeCounts: false,
+  hideShareCounts: false,
+  hideReplyCounts: false,
+  hideSaveCounts: false,
+};
+
+/**
  * Another account's VIEWER-VISIBLE privacy flags, and nothing else.
  *
  * Not "the document minus two fields" — the nine columns of
@@ -303,24 +325,24 @@ export async function ensureOwnUserSettings(oxyUserId: string): Promise<UserSett
  * why the allowlist is the shape that survives the next column added to this
  * table, and for the single caller that decided the field set.
  *
- * Creates the row for the same reason the Mongo version did: the route answers
- * for any account id, and a caller asking about someone with no row gets the
- * defaults rather than a 404. Those defaults come from the COLUMNS, so there is
- * no second copy of them here to drift.
+ * ## It does NOT create a row, and the Mongo version did
+ *
+ * This route answers for ANY account id an authenticated caller cares to name,
+ * so `ensureUserSettings`' find-or-create made a GET into an unbounded write
+ * that any caller could drive: one `user_settings` row per id anyone ever asked
+ * about, keyed by a string they chose. Faithful to Mongo, and not worth keeping
+ * once the read needs nothing the row provides.
+ *
+ * An absent row and a default row are indistinguishable through this projection
+ * — all nine columns are `notNull()` with defaults — so returning
+ * {@link VIEWER_PRIVACY_DEFAULTS} gives the caller the same answer the insert
+ * would have produced, without the write. `/settings/me` still creates, because
+ * there the caller IS the subject and the row is theirs to have.
  */
 export async function ensureViewerVisiblePrivacy(
   oxyUserId: string,
 ): Promise<ViewerVisiblePrivacy> {
-  const existing = await selectViewerPrivacy(oxyUserId);
-  if (existing) return existing;
-
-  await getDb().insert(userSettings).values({ oxyUserId }).onConflictDoNothing();
-
-  const created = await selectViewerPrivacy(oxyUserId);
-  if (!created) {
-    throw new Error(`user_settings row for ${oxyUserId} vanished between insert and read`);
-  }
-  return created;
+  return (await selectViewerPrivacy(oxyUserId)) ?? { ...VIEWER_PRIVACY_DEFAULTS };
 }
 
 async function selectOwnRow(

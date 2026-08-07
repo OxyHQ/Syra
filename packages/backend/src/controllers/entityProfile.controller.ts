@@ -25,7 +25,6 @@ import { findPodcastsCreditingPerson } from '../db/podcasts/podcasts';
 import { findEpisodesCreditingPerson } from '../db/podcasts/episodes';
 import { loadShowArtwork, toEpisodeDtos, toPodcastDtos } from '../db/podcasts/hydrate';
 import { getParam } from '../utils/reqParams';
-import { isDatabaseConnected } from '../utils/database';
 import { getRequestUserId } from '../utils/requestUser';
 import {
   loadArtistProfileSections,
@@ -310,15 +309,19 @@ export const getEntityProfile = async (req: Request, res: Response, next: NextFu
      * rather than a 503. Measured: two cases in this controller's own suite hung
      * for the full 5s timeout the moment the Mongo connection went away.
      *
-     * **That reason is now spent.** Task 13 ported `contribution_attestations`,
-     * and `artistProfile.ts` reads Postgres — this controller has no Mongoose
-     * read left, direct or transitive. The `isDatabaseConnected()` half is
-     * therefore asking about a database it does not use, and Mongo down with
-     * Postgres up answers 503 for a profile that would have rendered. Dropping
-     * it is a one-word change in a file Task 13 does not own; left for whoever
-     * does, alongside the same call in `recommendations.controller`.
+     * **That reason is now spent, and the Mongo half is gone.** Task 13 ported
+     * `contribution_attestations` and `artistProfile.ts` reads Postgres, so this
+     * controller has no Mongoose read left, direct or transitive — re-verified
+     * by walking all 31 files it reaches, none of which imports a model. Task 15
+     * took the change this block was waiting for, alongside the same call in
+     * `recommendations.controller`.
+     *
+     * Two things it was costing: Mongo down with Postgres up answered 503 for a
+     * profile that would have rendered, and at Task 19 `readyState` never
+     * reaches 1 again, so the route would have 503'd for everyone, permanently
+     * and silently.
      */
-    if (!isDatabaseConnected() || !isPostgresConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 

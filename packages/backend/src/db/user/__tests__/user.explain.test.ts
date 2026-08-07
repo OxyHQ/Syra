@@ -455,17 +455,23 @@ describe('the decay pass scans, and that is the right plan', () => {
    * `enable_seqscan = off`. Recorded as a deliberate verdict rather than left as
    * an omission, because the obvious reading of the probe is "add an index".
    *
-   * Two reasons not to. First, SELECTIVITY: the elapsed floor is ~93 minutes
-   * against a 30-minute scheduler tick, and every profile the pass touches has
-   * its `last_decay_at` set to `now()`, so in steady state roughly a quarter of
-   * all profiles are due on any given tick. Postgres would choose a sequential
-   * scan at that selectivity whether or not an index existed, so the index would
-   * be built, maintained, and never used.
+   * The reason is SELECTIVITY, and it stands on its own arithmetic:
+   * `MIN_DECAY_ELAPSED_SECONDS` is `45 days × ln(0.999)/ln(0.5)` = 5,612s ≈ 93.5
+   * minutes, against a 30-minute scheduler tick. A profile the pass touches has
+   * its `last_decay_at` set to `now()`, so it comes due 3.12 ticks later — i.e.
+   * on the 4th — and in steady state **~25% of all profiles are due on any given
+   * tick**. Postgres chooses a sequential scan at that selectivity whether or not
+   * an index exists, so the index would be built, maintained, and never used.
    *
-   * Second, COST ASYMMETRY: `last_decay_at` sits on the table every play, like
-   * and follow upserts (`applyTasteSignal` writes the parent row on every
-   * signal), so an index there is paid for on the hottest write path in this
-   * vertical to speed up a background job that reads most of the table anyway.
+   * **A second argument was made here and it was wrong**, recorded rather than
+   * quietly deleted because it is the more tempting of the two: that an index on
+   * `last_decay_at` would be paid for on the hottest write path, since
+   * `applyTasteSignal` writes the parent row on every play, like and follow. It
+   * does write the parent row — but its `on conflict do update` sets
+   * `total_signal` and `updated_at` and **never touches `last_decay_at`**
+   * (`taste.ts`). Only the decay pass and a profile's first insert write that
+   * column. So the write-amplification claim was false and the selectivity
+   * argument is the whole case.
    *
    * This is also not a regression: the Mongo pass was `find({})` with a cursor —
    * every profile read into the application and filtered in JS. The scan is the

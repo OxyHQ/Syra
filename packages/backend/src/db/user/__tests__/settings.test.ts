@@ -6,7 +6,10 @@
  */
 
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'bun:test';
+import { count } from 'drizzle-orm';
 import { clearDb, connectDb, disconnectDb } from '../../../test/postgres';
+import { getDb } from '../../postgres';
+import { userSettings } from '../../schema/user';
 import {
   VIEWER_VISIBLE_PRIVACY_FIELDS,
   ensureOwnUserSettings,
@@ -19,6 +22,12 @@ afterEach(clearDb);
 afterAll(disconnectDb);
 
 const OWNER = 'oxy-owner-1';
+
+/** How many `user_settings` rows exist — the "did a read write" check. */
+async function settingsRowCount(): Promise<number> {
+  const [row] = await getDb().select({ value: count() }).from(userSettings);
+  return row.value;
+}
 
 describe('the two reads', () => {
   /**
@@ -158,6 +167,42 @@ describe('null clears, undefined leaves alone', () => {
     expect(after.appearance.primaryColor).toBe('#00ff00');
     expect(after.profileCustomization.displayName).toBe('Nate');
     expect(after.privacy.hideLikeCounts).toBe(true);
+  });
+});
+
+describe('reading another account does not write one', () => {
+  /**
+   * The Mongo route find-or-created, so `GET /settings/:userId` — which answers
+   * for ANY id an authenticated caller names — was an unbounded write anybody
+   * could drive: one row per id anyone ever asked about, keyed by a string they
+   * chose. The viewer read needs nothing the row provides, so it no longer
+   * creates one.
+   */
+  it('leaves no row behind for an account that has none', async () => {
+    const before = await settingsRowCount();
+
+    const privacy = await ensureViewerVisiblePrivacy('oxy-never-had-settings');
+
+    expect(privacy.profileVisibility).toBe('public');
+    expect(await settingsRowCount()).toBe(before);
+  });
+
+  /**
+   * Pins {@link VIEWER_PRIVACY_DEFAULTS} to the DATABASE.
+   *
+   * That constant is a hand-written copy of nine column defaults — a second
+   * source of truth, which is only safe with something that fails when the two
+   * disagree. This inserts a bare row, reads it back through the real
+   * projection, and compares: change a default in `schema/user.ts` without
+   * changing the constant and this fails naming the field.
+   */
+  it('the no-row defaults equal what the database actually defaults to', async () => {
+    const fromDefaults = await ensureViewerVisiblePrivacy('oxy-no-row-at-all');
+
+    await getDb().insert(userSettings).values({ oxyUserId: 'oxy-real-row' });
+    const fromDatabase = await ensureViewerVisiblePrivacy('oxy-real-row');
+
+    expect(fromDefaults).toEqual(fromDatabase);
   });
 });
 
