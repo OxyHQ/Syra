@@ -35,20 +35,75 @@ router.get('/settings/me', async (req: AuthRequest, res: Response) => {
 });
 
 /**
+ * The privacy fields a VIEWER legitimately needs to render someone else's
+ * profile: visibility and the count-hiding flags. Everything else in the
+ * document — appearance, notifications, and in particular `hiddenWords` and
+ * `restrictedUsers` — belongs to its owner alone.
+ *
+ * `hiddenWords` is the user's mute list and `restrictedUsers` is their block
+ * list. Both are registered in `PROTECTED_COLUMNS_BY_TABLE`; this route is the
+ * one that has to agree with that registration, because `ensureUserSettings`
+ * narrows the TypeScript type and never projects.
+ */
+export const VIEWER_VISIBLE_PRIVACY_FIELDS = [
+  'profileVisibility',
+  'showContactInfo',
+  'allowTags',
+  'allowMentions',
+  'showOnlineStatus',
+  'hideLikeCounts',
+  'hideShareCounts',
+  'hideReplyCounts',
+  'hideSaveCounts',
+] as const;
+
+/**
+ * Projects a settings document down to {@link VIEWER_VISIBLE_PRIVACY_FIELDS}.
+ *
+ * Exported so it can be tested against a FULL document: the defect this replaces
+ * was a presence, not an absence, so the test that matters feeds a document
+ * carrying `hiddenWords` and `restrictedUsers` and asserts they do not come out.
+ * An allowlist tested only against a document that lacks them proves nothing.
+ */
+export function viewerVisiblePrivacy(
+  privacy: Record<string, unknown> | undefined | null,
+): Record<string, unknown> {
+  const projected: Record<string, unknown> = {};
+  for (const field of VIEWER_VISIBLE_PRIVACY_FIELDS) {
+    const value = privacy?.[field];
+    if (value !== undefined) {
+      projected[field] = value;
+    }
+  }
+  return projected;
+}
+
+/**
  * GET /api/profile/settings/:userId
- * Get settings by oxy user id
+ * Get another account's viewer-visible privacy settings.
+ *
+ * This route is mounted behind `requireAuth` and takes the id from the URL, so
+ * before this projection it served ANY account's full settings document to ANY
+ * authenticated caller — mute list and block list included. Its only caller
+ * (`usePrivacySettings`, via `useProfileData`) reads the profile being VIEWED,
+ * so restricting to the caller's own id would break profile rendering; the fix
+ * is to return the viewer-visible subset instead.
+ *
+ * Callers wanting their OWN full document use `/settings/me`.
  */
 router.get('/settings/:userId', async (req: AuthRequest, res: Response) => {
   try {
     const userId = getParam(req, 'userId');
-    
+
     const validationError = validateRequired(userId, 'userId');
     if (validationError) {
       return sendErrorResponse(res, 400, 'Bad Request', validationError);
     }
 
     const doc = await ensureUserSettings(userId);
-    return sendSuccessResponse(res, 200, doc);
+    return sendSuccessResponse(res, 200, {
+      privacy: viewerVisiblePrivacy(doc?.privacy as Record<string, unknown> | undefined),
+    });
   } catch (err) {
     logger.error('[ProfileSettings] Error fetching user settings:', err);
     return sendErrorResponse(res, 500, 'Internal Server Error', 'Failed to fetch settings');
