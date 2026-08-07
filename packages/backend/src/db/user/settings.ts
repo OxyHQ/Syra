@@ -8,31 +8,48 @@
  * the document shape the API has always returned, and {@link updateUserSettings}
  * takes a nested patch apart into columns.
  *
- * ## Two projections, because one route serves other people's rows
+ * ## Two reads, because one route serves other people's rows
  *
  * `privacy.hiddenWords` and `privacy.restrictedUsers` are one person's muted
  * words and the accounts they have restricted. Both are registered in
  * `schema/protectedColumns.ts`, so `findImplicitWholeRowReads` refuses a bare
  * `db.select().from(userSettings)` and every read here has to name its columns.
  *
- * They are named in exactly one of the two:
+ *  - {@link ensureOwnUserSettings} — `GET /api/profile/settings/me`, where the
+ *    caller IS the subject and reads back the whole document, both lists
+ *    included.
+ *  - {@link ensureViewerVisiblePrivacy} — `GET /api/profile/settings/:userId`,
+ *    which any authenticated caller may ask for ANY account, and which returns
+ *    NOTHING BUT the nine viewer-visible privacy flags.
  *
- *  - {@link OWN_SETTINGS_COLUMNS} — `GET /api/profile/settings/me`, where the
- *    caller IS the subject and reads back what they themselves muted.
- *  - {@link PUBLIC_SETTINGS_COLUMNS} — `GET /api/profile/settings/:userId`,
- *    which any authenticated caller may ask for ANY account.
- *
- * That second route served both lists to any caller under Mongoose, and not
- * through an oversight that a reviewer would spot: `ensureUserSettings` narrowed
+ * That second route served the whole document to any caller under Mongoose, and
+ * not through an oversight a reviewer would spot: `ensureUserSettings` narrowed
  * the TypeScript type with `.lean<UserSettingsLean>()` and never projected, so
  * the type said four fields while the object carried all of them. The type was
  * the guard and a type is not one. `utils/userSettings.ts` also held an
  * `extractPublicProfileData` that WOULD have projected them out; it had no
  * callers anywhere in `packages/`, and is deleted rather than ported.
  *
- * Splitting the projection is the whole fix, and it costs nothing on the wire:
- * the only schema that names either field is `frontend/hooks/usePrivacySettings.ts`,
- * where both are `.optional()`, and no component reads them.
+ * ## Why an ALLOWLIST of nine, rather than the document minus two
+ *
+ * This module first shipped the narrower-looking fix — the full document with
+ * the two protected columns withheld — and that is not tight enough. PR #85
+ * fixed the same defect on `main` in parallel with a nine-field allowlist, and
+ * reconciling the two settled it in that direction on the evidence rather than
+ * on which landed first:
+ *
+ * `GET /api/profile/settings/:userId` has exactly ONE caller in the whole
+ * repo — `frontend/hooks/usePrivacySettings.ts:75`, via `useProfileData` — and
+ * it parses `{ privacy }` and reads nothing else. Everything else in the
+ * document (`feedSettings`, `interests.tags`, `profileCustomization`,
+ * `profileHeaderImage`) was therefore being served to arbitrary authenticated
+ * callers for no consumer at all. The other two reads go to `/settings/me`,
+ * which is unaffected.
+ *
+ * An allowlist is also the shape that survives the next field: a denylist keyed
+ * on the protected-columns registry admits whatever is added to the table
+ * tomorrow, which is the same reasoning `AGENTS.md` gives for hand-written DTOs
+ * naming every key they return.
  *
  * ## Every group is now always present
  *
@@ -59,8 +76,58 @@ import {
 export type ThemeMode = (typeof THEME_MODES)[number];
 export type ProfileVisibility = (typeof PROFILE_VISIBILITIES)[number];
 
-/** Every `user_settings` column a caller who is not the subject may see. */
-export const PUBLIC_SETTINGS_COLUMNS = publicColumns(userSettings, PROTECTED_COLUMNS_BY_TABLE);
+/**
+ * Every column NOT registered as protected.
+ *
+ * No longer a route projection — it is one half of the owner read below. The
+ * viewer read is {@link VIEWER_PRIVACY_COLUMNS}, an allowlist of nine.
+ */
+const UNPROTECTED_SETTINGS_COLUMNS = publicColumns(userSettings, PROTECTED_COLUMNS_BY_TABLE);
+
+/**
+ * The privacy fields a VIEWER legitimately needs to render someone else's
+ * profile: visibility, and the flags describing how that profile presents to
+ * other people. Everything else in the row belongs to its owner alone.
+ *
+ * Exported so a test can assert the LIST rather than only the function — adding
+ * `hiddenWords` here would reintroduce the leak with every behavioural test
+ * still green.
+ */
+export const VIEWER_VISIBLE_PRIVACY_FIELDS = [
+  'profileVisibility',
+  'showContactInfo',
+  'allowTags',
+  'allowMentions',
+  'showOnlineStatus',
+  'hideLikeCounts',
+  'hideShareCounts',
+  'hideReplyCounts',
+  'hideSaveCounts',
+] as const;
+
+/** The nine columns behind {@link VIEWER_VISIBLE_PRIVACY_FIELDS}. */
+const VIEWER_PRIVACY_COLUMNS = {
+  profileVisibility: userSettings.privacyProfileVisibility,
+  showContactInfo: userSettings.privacyShowContactInfo,
+  allowTags: userSettings.privacyAllowTags,
+  allowMentions: userSettings.privacyAllowMentions,
+  showOnlineStatus: userSettings.privacyShowOnlineStatus,
+  hideLikeCounts: userSettings.privacyHideLikeCounts,
+  hideShareCounts: userSettings.privacyHideShareCounts,
+  hideReplyCounts: userSettings.privacyHideReplyCounts,
+  hideSaveCounts: userSettings.privacyHideSaveCounts,
+} as const;
+
+/**
+ * What `GET /api/profile/settings/:userId` returns under `privacy`.
+ *
+ * Derived from the allowlist rather than written out, so the type cannot name a
+ * field the query does not select — or fail to name one it does.
+ */
+export type ViewerVisiblePrivacy = Pick<
+  UserSettingsPrivacy,
+  (typeof VIEWER_VISIBLE_PRIVACY_FIELDS)[number]
+>;
 
 /**
  * The two server-only lists, named explicitly.
@@ -76,14 +143,11 @@ const PRIVATE_SETTINGS_COLUMNS = {
 
 /** Every column — the projection for a caller reading their OWN settings. */
 const OWN_SETTINGS_COLUMNS = {
-  ...PUBLIC_SETTINGS_COLUMNS,
+  ...UNPROTECTED_SETTINGS_COLUMNS,
   ...PRIVATE_SETTINGS_COLUMNS,
 } as const;
 
 type SettingsRow = typeof userSettings.$inferSelect;
-type PublicSettingsRow = {
-  -readonly [K in keyof typeof PUBLIC_SETTINGS_COLUMNS]: SettingsRow[K];
-};
 
 // ── The document shape the API returns ────────────────────────────────────
 
@@ -102,9 +166,12 @@ export interface UserSettingsPrivacy {
   hideShareCounts: boolean;
   hideReplyCounts: boolean;
   hideSaveCounts: boolean;
-  /** Present only when the caller is the subject — see this file's doc comment. */
+  /**
+   * The mute list and the restricted-account list. Present on the OWNER
+   * document only; the viewer route returns {@link ViewerVisiblePrivacy}, which
+   * cannot name them.
+   */
   hiddenWords?: string[];
-  /** Present only when the caller is the subject. */
   restrictedUsers?: string[];
 }
 
@@ -150,7 +217,7 @@ function optional<T>(value: T | null): T | undefined {
 }
 
 /** Re-nest a flat row into the document shape every caller of this API expects. */
-function toUserSettingsDto(row: PublicSettingsRow | SettingsRow): UserSettingsDto {
+function toUserSettingsDto(row: SettingsRow): UserSettingsDto {
   const privacy: UserSettingsPrivacy = {
     profileVisibility: row.privacyProfileVisibility,
     showContactInfo: row.privacyShowContactInfo,
@@ -163,12 +230,11 @@ function toUserSettingsDto(row: PublicSettingsRow | SettingsRow): UserSettingsDt
     hideSaveCounts: row.privacyHideSaveCounts,
   };
 
-  // Present only on the owner projection, which is the only one that selects
-  // them; `in` distinguishes that from a row that merely has them empty.
-  if ('privacyHiddenWords' in row) {
-    privacy.hiddenWords = row.privacyHiddenWords;
-    privacy.restrictedUsers = row.privacyRestrictedUsers;
-  }
+  // Only the OWNER projection reaches this function, so both lists are always
+  // present. The viewer path does not build a `UserSettingsDto` at all — it
+  // returns nine columns and never touches the rest of the row.
+  privacy.hiddenWords = row.privacyHiddenWords;
+  privacy.restrictedUsers = row.privacyRestrictedUsers;
 
   return {
     oxyUserId: row.oxyUserId,
@@ -230,23 +296,31 @@ export async function ensureOwnUserSettings(oxyUserId: string): Promise<UserSett
 }
 
 /**
- * Another account's settings, with the two server-only lists withheld.
+ * Another account's VIEWER-VISIBLE privacy flags, and nothing else.
+ *
+ * Not "the document minus two fields" — the nine columns of
+ * {@link VIEWER_VISIBLE_PRIVACY_FIELDS}, named. See this file's doc comment for
+ * why the allowlist is the shape that survives the next column added to this
+ * table, and for the single caller that decided the field set.
  *
  * Creates the row for the same reason the Mongo version did: the route answers
  * for any account id, and a caller asking about someone with no row gets the
- * defaults rather than a 404.
+ * defaults rather than a 404. Those defaults come from the COLUMNS, so there is
+ * no second copy of them here to drift.
  */
-export async function ensurePublicUserSettings(oxyUserId: string): Promise<UserSettingsDto> {
-  const existing = await selectPublicRow(oxyUserId);
-  if (existing) return toUserSettingsDto(existing);
+export async function ensureViewerVisiblePrivacy(
+  oxyUserId: string,
+): Promise<ViewerVisiblePrivacy> {
+  const existing = await selectViewerPrivacy(oxyUserId);
+  if (existing) return existing;
 
   await getDb().insert(userSettings).values({ oxyUserId }).onConflictDoNothing();
 
-  const created = await selectPublicRow(oxyUserId);
+  const created = await selectViewerPrivacy(oxyUserId);
   if (!created) {
     throw new Error(`user_settings row for ${oxyUserId} vanished between insert and read`);
   }
-  return toUserSettingsDto(created);
+  return created;
 }
 
 async function selectOwnRow(
@@ -261,12 +335,12 @@ async function selectOwnRow(
   return row;
 }
 
-async function selectPublicRow(
+async function selectViewerPrivacy(
   oxyUserId: string,
   db: DbOrTransaction = getDb(),
-): Promise<PublicSettingsRow | undefined> {
+): Promise<ViewerVisiblePrivacy | undefined> {
   const [row] = await db
-    .select(PUBLIC_SETTINGS_COLUMNS)
+    .select(VIEWER_PRIVACY_COLUMNS)
     .from(userSettings)
     .where(eq(userSettings.oxyUserId, oxyUserId))
     .limit(1);

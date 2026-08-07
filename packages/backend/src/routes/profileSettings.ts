@@ -4,7 +4,7 @@ import { getRequiredOxyUserId as getAuthenticatedUserId } from '@oxyhq/core/serv
 import { deleteUserBehavior } from '../db/user/behavior';
 import {
   ensureOwnUserSettings,
-  ensurePublicUserSettings,
+  ensureViewerVisiblePrivacy,
   updateUserSettings,
   type ProfileVisibility,
   type ThemeMode,
@@ -22,7 +22,7 @@ const router = Router();
  * Profile Settings API
  * All routes require authentication
  *
- * ## `GET /settings/:userId` no longer serves one person's mute list to another
+ * ## `GET /settings/:userId` no longer serves one person's settings to another
  *
  * Both GETs used to return the same document, and that document carried
  * `privacy.hiddenWords` and `privacy.restrictedUsers` — one account's muted words
@@ -30,9 +30,16 @@ const router = Router();
  * ANY user id. `ensureUserSettings` narrowed the TypeScript type and never
  * projected, so nothing on the read path made the fields absent.
  *
- * The two routes now take different projections: `/settings/me` reads the
- * caller's own row whole, `/settings/:userId` reads someone else's without those
- * two columns. `db/user/settings.ts` holds the column lists and
+ * `/settings/me` reads the caller's own row whole. `/settings/:userId` now
+ * returns `{ privacy }` and NOTHING ELSE — the nine viewer-visible flags of
+ * `VIEWER_VISIBLE_PRIVACY_FIELDS`, an allowlist rather than the document minus
+ * two fields. That route's only caller in the repo
+ * (`frontend/hooks/usePrivacySettings.ts`) parses `{ privacy }` and reads
+ * nothing else, so everything the wider shape returned had no consumer at all.
+ *
+ * The same defect was fixed in parallel on `main` (PR #85) with the same
+ * allowlist; this is the reconciled shape, so cutover does not silently widen
+ * what that PR narrowed. `db/user/settings.ts` holds the column lists and
  * `schema/protectedColumns.ts` is the structural guard behind them.
  *
  * ## `null` clears a field, and under Mongoose it did not
@@ -66,10 +73,10 @@ router.get('/settings/me', async (req: AuthRequest, res: Response) => {
  * GET /api/profile/settings/:userId
  * Get settings by oxy user id
  *
- * Answers for any account, so it withholds the two server-only privacy lists —
- * including when the id happens to be the caller's own. `/settings/me` is the
- * route that returns them, and having exactly one route that can is what keeps
- * the rule checkable.
+ * Answers for any account, so it returns the viewer-visible privacy flags and
+ * nothing else — including when the id happens to be the caller's own.
+ * `/settings/me` is the route that returns the full document, and having exactly
+ * one route that can is what keeps the rule checkable.
  */
 router.get('/settings/:userId', async (req: AuthRequest, res: Response) => {
   try {
@@ -80,8 +87,8 @@ router.get('/settings/:userId', async (req: AuthRequest, res: Response) => {
       return sendErrorResponse(res, 400, 'Bad Request', validationError);
     }
 
-    const doc = await ensurePublicUserSettings(userId);
-    return sendSuccessResponse(res, 200, doc);
+    const privacy = await ensureViewerVisiblePrivacy(userId);
+    return sendSuccessResponse(res, 200, { privacy });
   } catch (err) {
     logger.error('[ProfileSettings] Error fetching user settings:', describeErrorSafely(err));
     return sendErrorResponse(res, 500, 'Internal Server Error', 'Failed to fetch settings');

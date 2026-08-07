@@ -8,8 +8,9 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'bun:test';
 import { clearDb, connectDb, disconnectDb } from '../../../test/postgres';
 import {
+  VIEWER_VISIBLE_PRIVACY_FIELDS,
   ensureOwnUserSettings,
-  ensurePublicUserSettings,
+  ensureViewerVisiblePrivacy,
   updateUserSettings,
 } from '../settings';
 
@@ -19,35 +20,68 @@ afterAll(disconnectDb);
 
 const OWNER = 'oxy-owner-1';
 
-describe('the two projections', () => {
+describe('the two reads', () => {
   /**
    * `GET /api/profile/settings/:userId` answers for ANY account and used to
-   * return the subject's muted words and restricted accounts to whoever asked.
-   * `ensureUserSettings` narrowed the TypeScript type with
-   * `.lean<UserSettingsLean>()` and never projected — the type said four fields
-   * and the object carried all of them, which is why nothing caught it.
+   * return the subject's whole settings document to whoever asked — muted words
+   * and restricted accounts included. `ensureUserSettings` narrowed the
+   * TypeScript type with `.lean<UserSettingsLean>()` and never projected: the
+   * type said four fields and the object carried all of them, which is why
+   * nothing caught it.
+   *
+   * **The defect was a PRESENCE, not an absence**, so the fixture writes the
+   * sensitive fields first. An allowlist tested against a row that lacks them
+   * passes identically whether or not the allowlist works. (That framing is from
+   * PR #85, which fixed the same defect on `main` in parallel; the two were
+   * reconciled onto its nine-field allowlist.)
    */
-  it('withholds the two server-only lists from the public projection', async () => {
+  it('returns the nine viewer-visible flags and nothing else', async () => {
     await updateUserSettings(OWNER, {
       privacyHiddenWords: ['spoilers', 'politics'],
       privacyRestrictedUsers: ['oxy-someone-else'],
+      privacyProfileVisibility: 'followers_only',
+      privacyHideLikeCounts: true,
+      // Fields OUTSIDE `privacy` that the old shape also served to any caller.
+      profileCustomizationDisplayName: 'Nate',
+      interestsTags: ['jazz'],
+      feedRecencyHalfLifeHours: 48,
     });
 
-    const publicView = await ensurePublicUserSettings(OWNER);
+    const viewerView = await ensureViewerVisiblePrivacy(OWNER);
 
-    expect(publicView.privacy.hiddenWords).toBeUndefined();
-    expect(publicView.privacy.restrictedUsers).toBeUndefined();
-    // The rest of `privacy` describes how a profile renders to other people and
-    // is meant to be visible — so this is a projection, not a blanket refusal.
-    expect(publicView.privacy.profileVisibility).toBe('public');
-    expect(publicView.privacy.hideLikeCounts).toBe(false);
+    // Exactly the allowlist — no more keys, and the real values, since a
+    // projection returning the right keys with defaulted values would render
+    // another account's profile wrongly.
+    expect(Object.keys(viewerView).sort()).toEqual([...VIEWER_VISIBLE_PRIVACY_FIELDS].sort());
+    expect(viewerView.profileVisibility).toBe('followers_only');
+    expect(viewerView.hideLikeCounts).toBe(true);
+
+    // Belt and braces: no secret VALUE appears anywhere in the response, under
+    // any key — including the three fields outside `privacy` the wider shape
+    // used to carry and no caller ever read.
+    const serialised = JSON.stringify(viewerView);
+    for (const secret of ['spoilers', 'politics', 'oxy-someone-else', 'Nate', 'jazz', '48']) {
+      expect(serialised).not.toContain(secret);
+    }
   });
 
   /**
-   * The other half of the distinction, and the reason the fix is a split
-   * projection rather than a delete: a projection that dropped the lists
-   * everywhere would pass the assertion above while silently removing the
-   * owner's ability to read back what they themselves muted.
+   * Guards the LIST rather than the function: someone adding `hiddenWords` here
+   * would reintroduce the leak with every behavioural assertion above still
+   * green. Taken from PR #85, which had the same test for the same reason.
+   */
+  it('the allowlist itself excludes the two protected fields', () => {
+    const allowed: readonly string[] = VIEWER_VISIBLE_PRIVACY_FIELDS;
+    expect(allowed).not.toContain('hiddenWords');
+    expect(allowed).not.toContain('restrictedUsers');
+    expect(allowed).toHaveLength(9);
+  });
+
+  /**
+   * The other half of the distinction, and the reason the fix is two reads
+   * rather than one narrowed one: a projection that dropped the lists everywhere
+   * would pass the assertion above while silently removing the owner's ability
+   * to read back what they themselves muted.
    */
   it('returns them to the owner reading their own row', async () => {
     await updateUserSettings(OWNER, {
