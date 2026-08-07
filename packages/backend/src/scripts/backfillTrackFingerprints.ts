@@ -36,8 +36,8 @@ import path from 'path';
 import { pipeline } from 'stream/promises';
 import { and, asc, gt, inArray, isNotNull } from 'drizzle-orm';
 import dotenv from 'dotenv';
-import { describeDriverError, isForeignKeyViolation, sqlStateOf } from '@oxyhq/db';
-import { closePostgres, connectPostgres, getDb } from '../db/postgres';
+import { describeDriverError, isForeignKeyViolation } from '@oxyhq/db';
+import { closePostgres, connectPostgres, getDb, isDriverError } from '../db/postgres';
 import { indexTrackAcoustically } from '../db/catalog/fingerprints';
 import { trackFingerprints, tracks } from '../db/schema/catalog';
 import { logger } from '../utils/logger';
@@ -207,19 +207,22 @@ async function fingerprintOne(
      * data-in-logs problem at once. Nothing like it existed before the port: a
      * Mongoose error carried no statement.
      *
-     * `describeDriverError` reduces it to SQLSTATE, constraint name and error
-     * kind — the two things worth reading when a write is refused, neither of
-     * which is data.
-     *
-     * Anything else here is an S3 or `fpcalc` failure, which carries no query
-     * and whose detail is the whole point of the log line, so it is unchanged.
+     * The CLASSIFIER is the load-bearing half, not the formatter. This `try`
+     * spans an S3 read, a `pipeline()` into a temp file, `fpcalc`, and the
+     * write, so the branch decides which subsystem the operator is sent to. An
+     * earlier version asked `sqlStateOf(err) !== undefined`, which is true of
+     * any error carrying a string `code` — so an `ENOSPC` from the staging
+     * write would have been reported as "the database refused the fingerprint"
+     * with its real reason discarded. See {@link isDriverError}, which tests for
+     * the statement payload instead.
      */
-    if (sqlStateOf(err) !== undefined) {
+    if (isDriverError(err)) {
       logger.warn(
         `[backfill-fingerprints] the database refused the fingerprint for ${track.id}`,
         { driver: describeDriverError(err) },
       );
     } else {
+      // Staging or `fpcalc`: no statement, and the message IS the diagnosis.
       logger.warn(`[backfill-fingerprints] could not read audio for ${track.id}`, { err });
     }
   } finally {

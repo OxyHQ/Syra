@@ -103,6 +103,58 @@ export function isPostgresConnected(): boolean {
   return handle !== null;
 }
 
+/**
+ * Fields that make an error unloggable: the statement, its bound values, and
+ * Postgres's own `detail`, which reads `Failing row contains (…)`.
+ */
+const STATEMENT_PAYLOAD_FIELDS = ['query', 'params', 'detail'] as const;
+
+/** Bounded like `@oxyhq/db`'s own walk — a cyclic chain must not hang a `catch`. */
+const MAX_CAUSE_DEPTH = 8;
+
+/**
+ * Did this error come from the DATABASE, and does it therefore carry data?
+ *
+ * **Use this, not `sqlStateOf(err) !== undefined`, to decide whether to redact.**
+ * `sqlStateOf` is `error.code` walked through the cause chain, so it is true of
+ * anything carrying a string `code` — which is most of Node. Measured against
+ * the errors this codebase actually produces:
+ *
+ * ```
+ * fs pipeline ENOENT   code=ENOENT      no statement    <- NOT the database
+ * s3-style NoSuchKey   code=NoSuchKey   no statement    <- NOT the database
+ * EPIPE                code=EPIPE       no statement    <- NOT the database
+ * getDb() before connect   code=undefined   no statement
+ * drizzle 22003        code=22003       Error[query+params] -> PostgresError[query]
+ * drizzle 23503        code=23503       Error[query+params] -> PostgresError[query+detail]
+ * ```
+ *
+ * A `code`-presence test sends the first three down the redacting branch, where
+ * `describeDriverError` discards the message — so a full disk (`ENOSPC`) or a
+ * missing S3 object gets logged as a database failure with its actual reason
+ * thrown away. That is worse than logging nothing: it names the wrong subsystem
+ * confidently, and whoever reads it goes to Postgres while the disk is full.
+ *
+ * Nor is the code's SHAPE a safe test. A SQLSTATE is five characters of
+ * `[0-9A-Z]`, and `EPIPE` matches that exactly — a plausible failure of a
+ * `pipeline()` into a file, which is precisely where this is used.
+ *
+ * So the test is the PAYLOAD, which is also the reason redaction exists at all:
+ * an error carrying a statement, its bound parameters, or a failing row is one
+ * whose message must not be logged. Anything else keeps its message, because
+ * that message is the only thing worth having.
+ */
+export function isDriverError(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; current instanceof Error && depth < MAX_CAUSE_DEPTH; depth += 1) {
+    for (const field of STATEMENT_PAYLOAD_FIELDS) {
+      if (Reflect.get(current, field) !== undefined) return true;
+    }
+    current = Reflect.get(current, 'cause');
+  }
+  return false;
+}
+
 /** The handle `getDb()` returns. */
 export type Db = OxyDatabase<typeof schema>;
 

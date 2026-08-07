@@ -14,7 +14,9 @@
  */
 
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
+import fs from 'fs';
 import { Readable } from 'stream';
+import { pipeline } from 'stream/promises';
 import mongoose from 'mongoose';
 import { eq } from 'drizzle-orm';
 import { uuidv7 } from '@oxyhq/db';
@@ -145,6 +147,34 @@ async function readFingerprint(trackId: string) {
 }
 
 const ZERO_STATS = { scanned: 0, indexed: 0, skipped: 0, failed: 0, rejected: 0, vanished: 0 };
+
+/**
+ * Capture `logger.warn` for the duration of `run`, keeping the meta OBJECT.
+ *
+ * Deliberately not a JSON string. `message` and `stack` are non-enumerable on an
+ * `Error`, so `JSON.stringify({ err })` yields `{}` and an assertion that the
+ * reason survived would fail against code that is perfectly correct — the first
+ * draft of the staging test did exactly that. Pino serializes the error properly
+ * in production (verified: the emitted line carries `message`, `code`, `path`
+ * and `syscall`), so the object is the honest thing to assert against.
+ *
+ * Reassign-and-restore is the convention `crowdsourceWebhook.mount.test.ts` uses.
+ */
+async function captureWarnings(
+  run: () => Promise<void>,
+): Promise<Array<{ message: string; meta: unknown }>> {
+  const captured: Array<{ message: string; meta: unknown }> = [];
+  const originalWarn = logger.warn;
+  logger.warn = ((message: string, meta?: unknown) => {
+    captured.push({ message, meta });
+  }) as typeof logger.warn;
+  try {
+    await run();
+  } finally {
+    logger.warn = originalWarn;
+  }
+  return captured;
+}
 
 /**
  * The "nothing to do" paths, which is what a first production dry run actually
@@ -309,13 +339,7 @@ describe('backfillTrackFingerprints — writing', () => {
     const artistId = await makeArtist();
     await makeTrack(artistId, playable());
 
-    const captured: string[] = [];
-    const originalWarn = logger.warn;
-    logger.warn = ((message: string, meta?: unknown) => {
-      captured.push(`${message} ${JSON.stringify(meta)}`);
-    }) as typeof logger.warn;
-
-    try {
+    const captured = await captureWarnings(async () => {
       const stats = await backfillTrackFingerprints(
         {},
         deps({
@@ -328,19 +352,81 @@ describe('backfillTrackFingerprints — writing', () => {
         }),
       );
       expect(stats.failed).toBe(1);
-    } finally {
-      logger.warn = originalWarn;
-    }
+    });
 
-    const logged = captured.join('\n');
-    // The check is not vacuous: something WAS logged, and it names the track.
-    expect(logged).toContain('the database refused the fingerprint');
-    // The two structural facts worth reading survive.
-    expect(logged).toContain('22003');
-    // Neither the parameters nor the statement do.
-    expect(logged).not.toContain('3849189879');
-    expect(logged).not.toContain('222222');
-    expect(logged).not.toContain('insert into');
+    expect(captured).toHaveLength(1);
+    const [warning] = captured;
+    // Not vacuous: something WAS logged, and it names the right subsystem.
+    expect(warning?.message).toContain('the database refused the fingerprint');
+    // The structural facts worth reading survive.
+    expect(warning?.meta).toEqual({
+      driver: { code: '22003', constraint: undefined, kind: 'Error' },
+    });
+
+    /**
+     * And nothing else does. Asserted over the whole meta INCLUDING
+     * non-enumerable properties, because `query`/`params` are enumerable on
+     * drizzle's error while `message`/`stack` are not — a plain
+     * `JSON.stringify` would silently drop half of what it is meant to police.
+     */
+    const everything = JSON.stringify(warning?.meta, (_key, value: unknown) =>
+      value instanceof Error
+        ? Object.fromEntries(
+            Object.getOwnPropertyNames(value).map((k) => [k, Reflect.get(value, k)]),
+          )
+        : value,
+    );
+    expect(everything).not.toContain('3849189879');
+    expect(everything).not.toContain('222222');
+    expect(everything).not.toContain('insert into');
+  });
+
+  /**
+   * The other side of that branch, and the one that decides where an operator
+   * looks first.
+   *
+   * A STAGING failure must name the filesystem, keep its reason, and not be
+   * dressed up as a database failure. The archetype is `ENOSPC` on a
+   * catalogue-wide run — `/tmp` filling is a documented recurring condition
+   * here — and the earlier `sqlStateOf(err) !== undefined` predicate reported
+   * exactly this case as "the database refused the fingerprint" with the real
+   * reason discarded. A missing reason costs an hour; a wrong one costs a night.
+   *
+   * The error is a REAL `ENOENT` raised by the same `pipeline()` into a
+   * `createWriteStream` the script runs, not a synthesised object.
+   */
+  it('reports a staging failure as the filesystem, with its reason intact', async () => {
+    const artistId = await makeArtist();
+    await makeTrack(artistId, playable());
+
+    const captured = await captureWarnings(async () => {
+      const stats = await backfillTrackFingerprints(
+        {},
+        deps({
+          streamAudio: async () => {
+            await pipeline(
+              Readable.from([Buffer.from('x')]),
+              fs.createWriteStream('/nonexistent-dir-19a/staged.mp3'),
+            );
+            throw new Error('unreachable — the pipeline above always fails');
+          },
+        }),
+      );
+      expect(stats.failed).toBe(1);
+    });
+
+    expect(captured).toHaveLength(1);
+    const [warning] = captured;
+    // Named as the filesystem, NOT dressed up as a database failure.
+    expect(warning?.message).toContain('could not read audio');
+    expect(warning?.message).not.toContain('the database refused');
+
+    // And the reason survives — the whole diagnosis for a staging failure.
+    const err = (warning?.meta as { err?: unknown } | undefined)?.err;
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toContain('ENOENT');
+    // Not the redacted shape: `describeDriverError` would have discarded that.
+    expect(warning?.meta).not.toHaveProperty('driver');
   });
 
   it('counts a track deleted mid-run as vanished, not as a failure', async () => {
