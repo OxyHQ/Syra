@@ -1,7 +1,10 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it, mock } from 'bun:test';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'bun:test';
 import express from 'express';
 import type { Server } from 'http';
+import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { clear, connect, disconnect } from '../test/mongo';
+import UserSettings from '../models/UserSettings';
+import profileSettingsRoutes from './profileSettings';
 
 /**
  * Route-level guard against serving one account's mute and block list to another.
@@ -39,26 +42,6 @@ const OWNER_ID = 'oxy-owner-being-viewed';
 const MUTED_WORD = 'MUTEDWORDCANARY';
 const BLOCKED_USER = 'BLOCKEDUSERCANARY';
 
-// `requireOxyAuth` reaches the Oxy IdP; these tests are about what the handler
-// SERIALIZES, not about authentication, so it is replaced by a stub that marks the
-// caller as an ordinary authenticated user who is NOT the owner.
-mock.module('@oxyhq/core/server', () => ({
-  requireOxyAuth: (req: express.Request, _res: express.Response, next: express.NextFunction) => {
-    (req as express.Request & { user?: { id: string } }).user = { id: VIEWER_ID };
-    next();
-  },
-  getRequiredOxyUserId: (req: express.Request) =>
-    (req as express.Request & { user?: { id: string } }).user?.id ?? VIEWER_ID,
-}));
-
-// Loaded with `require` rather than a static import so the stub above is in place
-// first — a static import is hoisted above `mock.module` and would bind the real
-// middleware. This package is CommonJS, so top-level `await import` is not an option.
-/* eslint-disable @typescript-eslint/no-var-requires */
-const UserSettings = require('../models/UserSettings').default as typeof import('../models/UserSettings').default;
-const profileSettingsRoutes = require('./profileSettings').default as express.Router;
-/* eslint-enable @typescript-eslint/no-var-requires */
-
 beforeAll(connect);
 afterEach(clear);
 afterAll(disconnect);
@@ -83,6 +66,15 @@ async function seedOwnerSettings(): Promise<void> {
 async function withRouter(exercise: (baseUrl: string) => Promise<void>): Promise<void> {
   const app = express();
   app.use(express.json());
+  // Attach the caller before the router, exactly as `creatorEdit.test.ts` and
+  // `streamCredentialExposure.test.ts` do. NOT `mock.module` on
+  // `@oxyhq/core/server`: bun's module mocks are process-global, so stubbing auth
+  // here reaches every other suite in the run — it turned `creatorEdit.test.ts`
+  // into 403s in CI while passing when this file ran alone.
+  app.use((req, _res, next) => {
+    (req as AuthRequest).user = { id: VIEWER_ID };
+    next();
+  });
   app.use('/api/profile', profileSettingsRoutes);
 
   const server = await new Promise<Server>((resolve) => {
