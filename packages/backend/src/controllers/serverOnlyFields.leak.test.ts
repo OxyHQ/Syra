@@ -10,9 +10,9 @@ import { getDb } from '../db/postgres';
 import { catalogEntities, tracks } from '../db/schema/catalog';
 import { loadImageVariants } from '../db/catalog/hydrate';
 import { toArtistDto, toTrackDto } from '../db/catalog/serialize';
-import { UserUploadModel } from '../models/UserUpload';
-import { ContributionAttestationModel } from '../models/ContributionAttestation';
-import { toUploadTrackDto } from './uploads.controller';
+import { contributionAttestations, userUploadHlsRenditions, userUploads } from '../db/schema/creators';
+import { UPLOAD_COLUMNS } from '../db/creators/uploads';
+import { toUploadTrackDto, uploadImageIds } from '../db/creators/serialize';
 import { getEntityProfile } from './entityProfile.controller';
 import { getArtistById, getMyContributions, getMyImageSuggestions } from './artists.controller';
 
@@ -59,6 +59,17 @@ import { getArtistById, getMyContributions, getMyImageSuggestions } from './arti
  * attestation are Task 13's and still Mongoose — and this suite covers all
  * three serializers at once, which is exactly why it lives at the controller
  * level.
+ */
+/**
+ * Postgres AND Mongo, and the Mongo half is not this vertical's residue.
+ *
+ * Nothing here reads a Mongoose model. `entityProfile.controller` — which these
+ * tests drive — still guards every handler with `utils/database.ts`'s
+ * `isDatabaseConnected()`, which reports MONGOOSE readiness, even though it has
+ * no Mongoose read left. Without a Mongo connection every request answers 503.
+ * See `db/postgres.ts`'s `isPostgresConnected` for the guard it owes; the two
+ * controllers Task 13 owns (`artists`, `queue`) were switched, and this one is
+ * another task's file.
  */
 beforeAll(async () => {
   await connect();
@@ -342,28 +353,55 @@ describe('server-only fields never reach a catalog response', () => {
    * a denylist where the real guard is an allowlist.
    */
   it('the locker DTO names only public fields — no storage key, hash, tags or owner id', async () => {
-    const upload = await UserUploadModel.create({
-      ownerOxyUserId: 'OWNERIDLEAKMARKER',
-      title: 'Locker File',
-      duration: 200,
-      sizeBytes: 1,
-      sha256: 'SHA256LEAKMARKER',
-      status: 'ready',
-      audioSource: { key: 'uploads/OWNERIDLEAKMARKER/AUDIOKEYLEAKMARKER.mp3', format: 'mp3' },
-      hlsMasterKey: 'hls/uploads/OWNERIDLEAKMARKER/HLSLEAKMARKER/master.m3u8',
-      hls: [{ manifestKey: 'hls/uploads/OWNERIDLEAKMARKER/HLSLEAKMARKER/160/index.m3u8', bitrateKbps: 160, encrypted: true }],
-      fingerprint: [1, 2, 3],
-      fingerprintDurationSec: 200,
-      rawTags: { json: JSON.stringify({ apID: 'APIDLEAKMARKER' }), truncated: false, originalByteLength: 42 },
+    const [inserted] = await getDb()
+      .insert(userUploads)
+      .values({
+        ownerOxyUserId: 'OWNERIDLEAKMARKER',
+        title: 'Locker File',
+        duration: 200,
+        sizeBytes: 1,
+        sha256: 'SHA256LEAKMARKER',
+        status: 'ready',
+        audioSourceKey: 'uploads/OWNERIDLEAKMARKER/AUDIOKEYLEAKMARKER.mp3',
+        audioSourceFormat: 'mp3',
+        hlsMasterKey: 'hls/uploads/OWNERIDLEAKMARKER/HLSLEAKMARKER/master.m3u8',
+        fingerprint: [1, 2, 3],
+        fingerprintDurationSec: 200,
+        rawTagsJson: JSON.stringify({ apID: 'APIDLEAKMARKER' }),
+        rawTagsTruncated: false,
+        rawTagsOriginalByteLength: 42,
+      })
+      .returning({ id: userUploads.id });
+    await getDb().insert(userUploadHlsRenditions).values({
+      userUploadId: inserted.id,
+      position: 0,
+      manifestKey: 'hls/uploads/OWNERIDLEAKMARKER/HLSLEAKMARKER/160/index.m3u8',
+      bitrateKbps: 160,
+      encrypted: true,
     });
 
-    // Vacuity floor: every secret really is stored on the document.
-    const stored = await UserUploadModel.findById(upload._id).select('+rawTags').lean();
-    expect(stored?.rawTags?.json).toContain('APIDLEAKMARKER');
+    // Vacuity floor: every secret really is stored on the row. Read with an
+    // EXPLICIT projection naming the protected columns, because the sanctioned
+    // read (`UPLOAD_COLUMNS`) cannot see them — which is itself the point.
+    const [stored] = await getDb()
+      .select({
+        rawTagsJson: userUploads.rawTagsJson,
+        sha256: userUploads.sha256,
+        audioSourceKey: userUploads.audioSourceKey,
+      })
+      .from(userUploads)
+      .where(eq(userUploads.id, inserted.id));
+    expect(stored?.rawTagsJson).toContain('APIDLEAKMARKER');
     expect(stored?.sha256).toBe('SHA256LEAKMARKER');
-    expect(stored?.audioSource?.key).toContain('AUDIOKEYLEAKMARKER');
+    expect(stored?.audioSourceKey).toContain('AUDIOKEYLEAKMARKER');
 
-    const dto = JSON.stringify(toUploadTrackDto(upload));
+    // The row as the DTO actually receives it — through `UPLOAD_COLUMNS`, the
+    // same projection every production caller uses.
+    const [row] = await getDb()
+      .select(UPLOAD_COLUMNS)
+      .from(userUploads)
+      .where(eq(userUploads.id, inserted.id));
+    const dto = JSON.stringify(toUploadTrackDto(row, await loadImageVariants(uploadImageIds(row))));
 
     // The DTO answered with the real file — otherwise the absences prove nothing.
     expect(dto).toContain('Locker File');
@@ -390,14 +428,17 @@ describe('server-only fields never reach a catalog response', () => {
   it('never exposes an attestation\'s ip, user agent or raw tags', async () => {
     const artistId = await makeArtistWithSuggestions();
     const track = await readTrackOfArtist(artistId);
-    await ContributionAttestationModel.create({
-      trackId: track?.id,
+    if (!track) throw new Error('readTrackOfArtist returned no track');
+    await getDb().insert(contributionAttestations).values({
+      trackId: track.id,
       uploaderOxyUserId: 'a-stranger',
       statement: 'I may distribute this recording',
       acceptedAt: new Date(),
       ip: 'IPSERVERONLYMARKER',
       userAgent: 'UASERVERONLYMARKER',
-      rawTags: { json: JSON.stringify({ apID: 'APIDSERVERONLYMARKER' }), truncated: false, originalByteLength: 9 },
+      rawTagsJson: JSON.stringify({ apID: 'APIDSERVERONLYMARKER' }),
+      rawTagsTruncated: false,
+      rawTagsOriginalByteLength: 9,
     });
 
     const res = makeRes();

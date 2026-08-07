@@ -170,7 +170,7 @@ function sweepHybridFiles(): string[] {
  * `readsPostgres` that answered false for everything, would report zero
  * unregistered files and read exactly like a clean tree.
  */
-const MINIMUM_HYBRID_FILES = 15;
+const MINIMUM_HYBRID_FILES = 12;
 
 /**
  * The same floor for property 4's sweep. **Six** today, down from ten in Task
@@ -184,17 +184,16 @@ const MINIMUM_HYBRID_FILES = 15;
  * tables already had live readers (`backfillTrackFingerprints`,
  * `importIsrcRegistry`, `importMusicBrainzArtists`).
  *
- * What is left is `uploads.controller.ts` (six catalog models, Task 13) and the
- * two bulk-load scripts that are genuinely dormant — `importDiscogsReleases`
- * and `seedMusicData`, both filling tables nothing reads, both Task 19's. The
- * three-population split Task 11 recorded here has collapsed with the drop — the
- * two survivors bar `uploads.controller` are entirely Mongoose — so it is not
- * restated.
+ * What is left is the two bulk-load scripts that are genuinely dormant —
+ * `importDiscogsReleases` and `seedMusicData`, both filling tables nothing
+ * reads, both Task 19's. `uploads.controller.ts` was the third and is gone:
+ * Task 13 ported it, and `TrackKey` — one of the six catalog models it held —
+ * left the tree with it, since that controller was its last consumer.
  *
  * It drops further as those files port, and a sweep that suddenly finds none is
  * a broken walk, not a finished migration.
  */
-const MINIMUM_CATALOG_MODEL_IMPORTERS = 3;
+const MINIMUM_CATALOG_MODEL_IMPORTERS = 2;
 
 describe('property 3 — every hybrid file in the tree is registered', () => {
   const REGISTERED = new Set([
@@ -209,7 +208,11 @@ describe('property 3 — every hybrid file in the tree is registered', () => {
     // than a bare count. `takedown.ts` reads `db/postgres` with no
     // `db/catalog/` import at all; `syraMedia.ts` sits in `src/utils/` and
     // reaches its neighbours as `./x`.
-    expect(found).toContain('services/compliance/takedown.ts');
+    // `takedown.ts` was named here as the file that reads `db/postgres` with no
+    // `db/catalog/` import at all; Task 13 finished it, so the shape is now
+    // carried by `library.controller.ts`. `syraMedia.ts` sits in `src/utils/`
+    // and reaches its neighbours as `./x`.
+    expect(found).toContain('controllers/library.controller.ts');
     expect(found).toContain('utils/syraMedia.ts');
   });
 
@@ -254,11 +257,13 @@ describe('property 4 — every catalog-model importer in the tree is registered'
   it('the sweep finds the catalog-model importers that are known to exist', () => {
     const found = sweepCatalogModelImporters();
     // A floor AND two names, so a broken traversal says which shape it lost
-    // rather than reporting a clean tree. `uploads.controller` holds six
-    // catalog models; `seedMusicData` is a script, i.e. outside every directory
-    // the other sweeps in this file happen to walk.
+    // rather than reporting a clean tree. Both survivors are scripts — i.e.
+    // outside every directory the other sweeps in this file happen to walk —
+    // which is exactly the shape a `src/`-wide walk exists to catch.
+    // `uploads.controller` was the third and the only non-script; Task 13
+    // ported it.
     expect(found.length).toBeGreaterThanOrEqual(MINIMUM_CATALOG_MODEL_IMPORTERS);
-    expect(found).toContain('controllers/uploads.controller.ts');
+    expect(found).toContain('scripts/importDiscogsReleases.ts');
     expect(found).toContain('scripts/seedMusicData.ts');
   });
 
@@ -428,10 +433,13 @@ describe('the matcher is exact — a substring or superstring never matches', ()
   });
 
   it('a name CONTAINING a registrable model is not treated as that model', () => {
-    // `UserUploadArchive` contains `UserUpload`, which IS registrable — so a
-    // loose registry lookup would let a file import it unregistered.
-    expect(KNOWN_NON_CATALOG.has('UserUploadArchive')).toBe(false);
-    expect(KNOWN_NON_CATALOG.has('UserUpload')).toBe(true);
+    // `CatalogRelationArchive` contains `CatalogRelation`, which IS registrable
+    // — so a loose registry lookup would let a file import it unregistered.
+    // The pair was `UserUploadArchive`/`UserUpload` until Task 13 deleted that
+    // model; the fixture has to name a model the registry still holds, or the
+    // second assertion goes false and the test stops distinguishing anything.
+    expect(KNOWN_NON_CATALOG.has('CatalogRelationArchive')).toBe(false);
+    expect(KNOWN_NON_CATALOG.has('CatalogRelation')).toBe(true);
   });
 
   it('the two sets are disjoint by identity', () => {
@@ -469,22 +477,23 @@ describe('vacuity floor', () => {
 
   it('the registry is not empty and covers the measured hybrids', () => {
     /**
-     * Eighteen. It was twenty until Task 12, and this is the FIRST time this
-     * floor has gone down.
+     * Thirteen. Twenty until Task 12, eighteen until Task 13.
      *
-     * That direction matters, because Task 11's note here explains why it went
+     * The direction matters, because Task 11's note here explains why it went
      * UP: porting a file's catalog half is what makes it hybrid and therefore
      * registrable at all, so the registry grows while the migration is in its
      * middle. It shrinks only when a vertical's OWN models leave the tree —
-     * which is what Task 12 did, deleting `Podcast`, `Episode`,
-     * `EpisodeProgress` and `Library` and with them the licence
-     * `entityProfile.controller` and `search.controller` held to read them.
+     * Task 12 deleting `Podcast`, `Episode`, `EpisodeProgress` and `Library`,
+     * and now Task 13 deleting `UserUpload`, `ArtistClaim`,
+     * `ContributionAttestation` and `ContributorStanding`, taking with them the
+     * licences `artistProfile`, `takedown`, `matchCatalog`, `artists.controller`
+     * and `queue.controller` held to read them.
      *
      * A registry that shrank to nothing WITHOUT the owning tasks landing means
-     * the walk broke, not that the work finished. Tasks 8/13/15 each remove
-     * entries and this floor drops with them, deliberately, by being edited.
+     * the walk broke, not that the work finished. Tasks 8/15 each remove entries
+     * and this floor drops with them, deliberately, by being edited.
      */
-    expect(HYBRID_MODULES.length).toBe(18);
+    expect(HYBRID_MODULES.length).toBe(13);
     /**
      * Three, down from six. Task 19a cleared the three half-connected bulk
      * loaders — `backfillTrackFingerprints`, `importIsrcRegistry` and
@@ -492,12 +501,12 @@ describe('vacuity floor', () => {
      * half of a mechanism whose read half was already on Postgres, so its reader
      * queried an empty table and returned a confident negative.
      *
-     * The three that remain are genuinely dormant. `importDiscogsReleases` and
-     * `seedMusicData` fill tables nothing reads, and stay with Task 19; the
-     * third is Task 13's `uploads.controller`.
+     * The two that remain are genuinely dormant: `importDiscogsReleases` and
+     * `seedMusicData` fill tables nothing reads, and stay with Task 19. The
+     * third was Task 13's `uploads.controller`, ported.
      *
      * See `MINIMUM_CATALOG_MODEL_IMPORTERS`, which counts the same population.
      */
-    expect(UNPORTED_CATALOG_MODULES.length).toBe(3);
+    expect(UNPORTED_CATALOG_MODULES.length).toBe(2);
   });
 });

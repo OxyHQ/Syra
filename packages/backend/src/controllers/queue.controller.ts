@@ -1,5 +1,4 @@
 import { Response, NextFunction } from 'express';
-import mongoose from 'mongoose';
 import { isLiveEntityId } from '@oxyhq/db';
 import {
   addToQueueRequestSchema,
@@ -15,15 +14,14 @@ import {
 } from '@syra/shared-types';
 import { z } from 'zod';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
-import { isDatabaseConnected } from '../utils/database';
 import { and, inArray } from 'drizzle-orm';
 import { publicColumns } from '@oxyhq/db/assert';
-import { getDb } from '../db/postgres';
+import { getDb, isPostgresConnected } from '../db/postgres';
 import { tracks as tracksTable } from '../db/schema/catalog';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../db/schema/protectedColumns';
-import { toTrackDtos } from '../db/catalog/hydrate';
-import { UserUploadModel } from '../models/UserUpload';
-import { toUploadTrackDto } from './uploads.controller';
+import { loadImageVariants, toTrackDtos } from '../db/catalog/hydrate';
+import { findQueueableUploads } from '../db/creators/uploads';
+import { toUploadTrackDto, uploadImageIds } from '../db/creators/serialize';
 import {
   getQueue,
   setQueue,
@@ -61,8 +59,11 @@ async function resolvePlayableRefs(
   const trackIds = [...new Set(refs.filter((ref) => ref.kind === 'track').map((ref) => ref.id))];
   const uploadIds = [...new Set(refs.filter((ref) => ref.kind === 'upload').map((ref) => ref.id))];
 
+  // ONE id guard for both kinds now that both are Postgres rows. `uploadIds`
+  // used to be filtered by `ObjectId.isValid` because the locker was still
+  // Mongo; a locker id is a uuid v7 since the port, which that test rejects.
   const validTrackIds = trackIds.filter(isLiveEntityId);
-  const validUploadIds = uploadIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
+  const validUploadIds = uploadIds.filter(isLiveEntityId);
 
   const [trackRows, uploads] = await Promise.all([
     // `inArray` with an empty list generates `in ()`, a Postgres syntax error
@@ -74,16 +75,7 @@ async function resolvePlayableRefs(
           .from(tracksTable)
           .where(and(playableTrackFilter(), inArray(tracksTable.id, validTrackIds)))
       : Promise.resolve([]),
-    validUploadIds.length
-      ? UserUploadModel.find({
-          _id: { $in: validUploadIds },
-          ownerOxyUserId: userId,
-          deletedAt: { $exists: false },
-          // The locker's equivalent of `playableTrackFilter`: a file still being
-          // transcoded has no HLS ladder, so queueing it would queue silence.
-          status: 'ready',
-        }).exec()
-      : Promise.resolve([]),
+    findQueueableUploads(validUploadIds, userId),
   ]);
 
   const byKey = new Map<string, PlayableItem>();
@@ -95,8 +87,11 @@ async function resolvePlayableRefs(
     byKey.set(refKey(track), track);
   }
 
+  // One image lookup for the whole page, not one per row — the same batch shape
+  // `toTrackDtos` uses above.
+  const uploadImages = await loadImageVariants(uploads.flatMap(uploadImageIds));
   for (const upload of uploads) {
-    const item = toUploadTrackDto(upload);
+    const item = toUploadTrackDto(upload, uploadImages);
     byKey.set(refKey(item), item);
   }
 
@@ -184,7 +179,7 @@ export const getQueueHandler = async (req: AuthRequest, res: Response, next: Nex
  */
 export const addToQueue = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -233,7 +228,7 @@ export const addToQueue = async (req: AuthRequest, res: Response, next: NextFunc
  */
 export const replaceQueue = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -256,10 +251,10 @@ export const replaceQueue = async (req: AuthRequest, res: Response, next: NextFu
       return res.status(400).json({ error: 'Current index out of bounds' });
     }
 
-    // Both kinds pass through here — catalog tracks (uuid v7 or a carried-over
-    // ObjectId) and locker uploads (still Mongo). `isLiveEntityId` accepts both
-    // shapes; `ObjectId.isValid` alone would 400 every track minted since the
-    // cutover.
+    // Both kinds pass through here, and both are Postgres rows since Task 13.
+    // `isLiveEntityId` accepts a uuid v7 and a carried-over 24-char ObjectId
+    // hex; `ObjectId.isValid` alone would 400 every row minted since the
+    // cutover, of either kind.
     const invalidRefs = refs.filter((ref) => !isLiveEntityId(ref.id));
     if (invalidRefs.length > 0) {
       return res.status(400).json({ error: 'Some refs are invalid', invalidRefs });

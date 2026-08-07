@@ -16,7 +16,7 @@ import {
   tracks,
 } from '../db/schema/catalog';
 import { playlistTracks, playlists } from '../db/schema/library';
-import { ContributionAttestationModel } from '../models/ContributionAttestation';
+import { contributionAttestations } from '../db/schema/creators';
 import { getEntityProfile } from './entityProfile.controller';
 
 /**
@@ -32,6 +32,17 @@ import { getEntityProfile } from './entityProfile.controller';
  * BOTH databases: the catalogue, its playlists and its provenance are Postgres,
  * while `ContributionAttestation` — which is what makes a track "contributed"
  * rather than the artist's own — is Task 13's table and still Mongoose.
+ */
+/**
+ * Postgres AND Mongo, and the Mongo half is not this vertical's residue.
+ *
+ * Nothing here reads a Mongoose model. `entityProfile.controller` — which these
+ * tests drive — still guards every handler with `utils/database.ts`'s
+ * `isDatabaseConnected()`, which reports MONGOOSE readiness, even though it has
+ * no Mongoose read left. Without a Mongo connection every request answers 503.
+ * See `db/postgres.ts`'s `isPostgresConnected` for the guard it owes; the two
+ * controllers Task 13 owns (`artists`, `queue`) were switched, and this one is
+ * another task's file.
  */
 beforeAll(async () => {
   await connect();
@@ -166,7 +177,7 @@ async function seedRichArtist() {
     .returning({ id: tracks.id });
   if (!contributed) throw new Error('seedRichArtist: contributed track insert returned no row');
 
-  await ContributionAttestationModel.create({
+  await getDb().insert(contributionAttestations).values({
     trackId: contributed.id,
     uploaderOxyUserId: 'a-stranger',
     statement: 'I may distribute this recording',

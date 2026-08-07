@@ -18,7 +18,10 @@ import http from 'http';
 import fs from 'fs';
 import path from 'path';
 import type { AddressInfo } from 'net';
+import { eq, sql } from 'drizzle-orm';
 import { connect, clear, disconnect } from '../test/mongo';
+import { connectDb, clearDb, disconnectDb } from '../test/postgres';
+import { getDb } from '../db/postgres';
 import * as realS3 from '../services/s3Service';
 import { getS3AudioKey } from '../config/s3.config';
 import * as realIngestQueue from '../services/ingest/ingestQueue';
@@ -26,14 +29,15 @@ import * as realAcoustid from '../services/uploads/acoustid';
 import type { AcousticIdentity } from '../services/uploads/acoustid';
 import type { Fingerprint } from '../services/uploads/fingerprint';
 import { setDeezerFetchForTests } from '../services/uploads/isrcLookup';
-import { UserUploadModel } from '../models/UserUpload';
-import { IsrcRegistryModel } from '../models/IsrcRegistry';
-import { TrackModel } from '../models/Track';
-import { ArtistModel } from '../models/CatalogEntity';
-import { AlbumModel } from '../models/Album';
-import { ImageAssetModel } from '../models/ImageAsset';
-import { TrackFingerprintModel } from '../models/TrackFingerprint';
-import { ContributionAttestationModel } from '../models/ContributionAttestation';
+import {
+  albums,
+  catalogEntities,
+  imageAssets,
+  isrcRegistry,
+  trackFingerprints,
+  tracks,
+} from '../db/schema/catalog';
+import { contributionAttestations, userUploads } from '../db/schema/creators';
 import { fingerprintFile } from '../services/uploads/fingerprint';
 import uploadsRoutes from '../routes/uploads.routes';
 import { search } from './search.controller';
@@ -176,8 +180,20 @@ let baseUrl: string;
 /** Which user the next request is made as; the test app injects it as the session. */
 let currentUserId = OWNER;
 
+/**
+ * BOTH databases, and the Mongo half is NOT this vertical's residue.
+ *
+ * Everything the upload path itself touches is Postgres. The last test in this
+ * file drives `getHomeBrowse`, which goes through `recommendationService` —
+ * still a hybrid module reading `UserTasteProfile`, Task 15's table. Mongoose
+ * BUFFERS rather than throwing when its connection is absent, so without
+ * `connect()` that request never answers at all: an 11-second timeout inside
+ * the driver rather than a failure naming the missing store. It comes out when
+ * Task 15 lands, not before.
+ */
 beforeAll(async () => {
   await connect();
+  await connectDb();
   installDeezerStub();
 
   const app = express();
@@ -198,6 +214,7 @@ beforeAll(async () => {
 
 afterEach(async () => {
   await clear();
+  await clearDb();
   storedKeys.length = 0;
   deletedKeys.length = 0;
   deletedPrefixes.length = 0;
@@ -215,7 +232,103 @@ afterAll(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
   setDeezerFetchForTests();
   await disconnect();
+  await disconnectDb();
 });
+
+// ── Reading the database back ────────────────────────────────────────────────
+//
+// These read the tables DIRECTLY rather than through the modules under test:
+// `db/creators/uploads.ts`'s projections are part of what this suite exercises,
+// so an assertion routed through them would pass whenever the read and the
+// write agreed, including when both were wrong.
+
+type CountableTable =
+  | typeof userUploads
+  | typeof tracks
+  | typeof catalogEntities
+  | typeof albums
+  | typeof imageAssets
+  | typeof contributionAttestations;
+
+async function countRows(table: CountableTable): Promise<number> {
+  const [counted] = await getDb().select({ total: sql<number>`count(*)::int` }).from(table);
+  return counted.total;
+}
+
+/** Every column of the one locker row, protected ones included. */
+async function firstUpload() {
+  const [row] = await getDb().select().from(userUploads).limit(1);
+  return row;
+}
+
+async function readUpload(uploadId: string) {
+  const [row] = await getDb().select().from(userUploads).where(eq(userUploads.id, uploadId));
+  return row;
+}
+
+async function readTrack(trackId: string) {
+  const [row] = await getDb().select().from(tracks).where(eq(tracks.id, trackId));
+  return row;
+}
+
+async function readArtist(artistId: string | null | undefined) {
+  if (!artistId) return undefined;
+  const [row] = await getDb()
+    .select()
+    .from(catalogEntities)
+    .where(eq(catalogEntities.id, artistId));
+  return row;
+}
+
+async function firstAlbum() {
+  const [row] = await getDb().select().from(albums).limit(1);
+  return row;
+}
+
+async function firstAttestation(trackId: string) {
+  const [row] = await getDb()
+    .select()
+    .from(contributionAttestations)
+    .where(eq(contributionAttestations.trackId, trackId));
+  return row;
+}
+
+// ── Seeding the catalogue ────────────────────────────────────────────────────
+
+/**
+ * A real artist row, because `tracks.artist_id` and `albums.artist_id` are real
+ * foreign keys.
+ *
+ * The Mongo fixtures wrote the literal string `'artist-1'`, which was as good as
+ * a stored id there and is a `23503` here. Seeding one is not ceremony: a track
+ * filed under an artist that does not exist was never a state the catalogue
+ * could reach through any code path.
+ */
+async function seedArtist(name = 'Nadia Ortiz'): Promise<string> {
+  const [artist] = await getDb()
+    .insert(catalogEntities)
+    .values({ name, type: 'artist', source: 'upload' })
+    .returning({ id: catalogEntities.id });
+  return artist.id;
+}
+
+async function seedImageAsset(): Promise<string> {
+  const [asset] = await getDb()
+    .insert(imageAssets)
+    .values({
+      s3Key: `images/cover/large-${imageCounter++}.jpg`,
+      filename: 'large.jpg',
+      contentType: 'image/jpeg',
+      byteSize: 4096,
+      width: 1400,
+      height: 1400,
+      ownerType: 'album',
+    })
+    .returning({ id: imageAssets.id });
+  return asset.id;
+}
+
+let imageCounter = 0;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -287,7 +400,7 @@ describe('POST /api/uploads — private destination', () => {
     // ffprobe measured this, nobody typed it.
     expect(upload.duration).toBeGreaterThan(0);
 
-    const rows = await UserUploadModel.find({ ownerOxyUserId: OWNER }).lean();
+    const rows = await getDb().select().from(userUploads).where(eq(userUploads.ownerOxyUserId, OWNER));
     expect(rows).toHaveLength(1);
     expect(rows[0].status).toBe('processing');
     expect(ingestedUploadIds).toEqual([String(upload.id)]);
@@ -296,8 +409,8 @@ describe('POST /api/uploads — private destination', () => {
   it('never returns a storage key to the client', async () => {
     const { body } = await postUpload('indie-id3v2.mp3', { destination: 'private' });
 
-    const stored = await UserUploadModel.findOne({ ownerOxyUserId: OWNER }).lean();
-    const audioKey = stored?.audioSource?.key;
+    const stored = (await getDb().select().from(userUploads).where(eq(userUploads.ownerOxyUserId, OWNER)).limit(1))[0];
+    const audioKey = stored?.audioSourceKey;
     if (!audioKey) throw new Error('the stored locker row recorded no audio key');
 
     // The key exists in storage and in the document, and is absent from the wire.
@@ -311,14 +424,14 @@ describe('POST /api/uploads — private destination', () => {
     // `tracks`, this is what says so.
     await postUpload('indie-id3v2.mp3', { destination: 'private' });
 
-    expect(await TrackModel.countDocuments({})).toBe(0);
-    expect(await UserUploadModel.countDocuments({})).toBe(1);
+    expect(await countRows(tracks)).toBe(0);
+    expect(await countRows(userUploads)).toBe(1);
   });
 
   it('deletes the stored bytes when the owner deletes the file', async () => {
     const { body } = await postUpload('indie-id3v2.mp3', { destination: 'private' });
     const uploadId = String((body.upload as { id: string }).id);
-    const audioKey = (await UserUploadModel.findById(uploadId).lean())?.audioSource?.key;
+    const audioKey = (await readUpload(uploadId))?.audioSourceKey;
     if (!audioKey) throw new Error('the stored locker row recorded no audio key');
 
     const response = await fetch(`${baseUrl}/api/uploads/${uploadId}`, { method: 'DELETE' });
@@ -331,7 +444,7 @@ describe('POST /api/uploads — private destination', () => {
     // and so records no master manifest. The prefix guard refuses to empty a
     // directory it cannot name from the document itself.
     expect(deletedPrefixes).toEqual([]);
-    expect(await UserUploadModel.findById(uploadId).lean()).toBeNull();
+    expect(await readUpload(uploadId)).toBeUndefined();
   });
 
   it('takes the uploader’s metadata overrides over the file’s own tags', async () => {
@@ -343,7 +456,7 @@ describe('POST /api/uploads — private destination', () => {
 
     const upload = body.upload as Record<string, unknown>;
     expect(upload.title).toBe('What I Call It');
-    expect((await UserUploadModel.findOne({}).lean())?.year).toBe(1999);
+    expect((await firstUpload())?.year).toBe(1999);
   });
 
   it('titles an untagged file from the name the uploader gave it', async () => {
@@ -366,7 +479,7 @@ describe('POST /api/uploads — private destination', () => {
     // than having the value silently dropped.
     expect(status).toBe(400);
     expect(body.error).toBe('Invalid request body');
-    expect(await UserUploadModel.countDocuments({})).toBe(0);
+    expect(await countRows(userUploads)).toBe(0);
   });
 });
 
@@ -382,7 +495,7 @@ describe('POST /api/uploads — the same bytes twice', () => {
     expect(second.status).toBe(200);
     expect(second.body.outcome).toBe('duplicate');
     expect(second.body.uploadId).toBe(firstId);
-    expect(await UserUploadModel.countDocuments({})).toBe(1);
+    expect(await countRows(userUploads)).toBe(1);
   });
 
   it('lets a DIFFERENT owner keep their own copy of the same recording', async () => {
@@ -395,7 +508,7 @@ describe('POST /api/uploads — the same bytes twice', () => {
     // independent copies, not a duplicate.
     expect(status).toBe(201);
     expect(body.outcome).toBe('stored');
-    expect(await UserUploadModel.countDocuments({})).toBe(2);
+    expect(await countRows(userUploads)).toBe(2);
   });
 });
 
@@ -407,28 +520,31 @@ describe('POST /api/uploads — already in the public catalogue', () => {
     // frame. The sha256 tier would be the more direct route and is deliberately
     // NOT used here: `matchCatalog.findCatalogTrackByHash` is still a stub that
     // returns null, so a test written against it would assert nothing.
-    const existing = await TrackModel.create({
-      title: 'Already Here',
-      artistId: 'artist-1',
-      artistName: 'Nadia Ortiz',
-      duration: 210,
-      source: 'upload',
-      status: 'ready',
-      isAvailable: true,
-      isExplicit: false,
-      externalIds: { isrc: 'ESA452300137' },
-    });
+    const [existing] = await getDb()
+      .insert(tracks)
+      .values({
+        title: 'Already Here',
+        artistId: await seedArtist(),
+        artistName: 'Nadia Ortiz',
+        duration: 210,
+        source: 'upload',
+        status: 'ready',
+        isAvailable: true,
+        isExplicit: false,
+        externalIsrc: 'ESA452300137',
+      })
+      .returning({ id: tracks.id });
 
     const { status, body } = await postUpload('indie-id3v2.mp3', { destination: 'private' });
 
     expect(status).toBe(200);
     expect(body.outcome).toBe('matched');
-    expect(body.trackId).toBe(existing._id.toString());
+    expect(body.trackId).toBe(existing.id);
 
     // The point of the whole ordering: dedup runs before storage, so a recording
     // Syra already distributes is never transferred a second time.
     expect(storedKeys).toEqual([]);
-    expect(await UserUploadModel.countDocuments({})).toBe(0);
+    expect(await countRows(userUploads)).toBe(0);
     expect(ingestedUploadIds).toEqual([]);
   });
 });
@@ -455,8 +571,8 @@ describe('POST /api/uploads — public destination', () => {
     // The refusal is the point: a silent downgrade would leave the uploader
     // believing they had published, and leave a recording in the catalogue with
     // nobody to attribute it to or address a takedown to.
-    expect(await UserUploadModel.countDocuments({})).toBe(0);
-    expect(await TrackModel.countDocuments({})).toBe(0);
+    expect(await countRows(userUploads)).toBe(0);
+    expect(await countRows(tracks)).toBe(0);
   });
 
   it('blocks a purchased file, names the marker, and leaves no artist behind', async () => {
@@ -475,10 +591,10 @@ describe('POST /api/uploads — public destination', () => {
     expect(markers.some((marker) => marker.weight === 'blocking')).toBe(true);
     expect(markers.map((marker) => marker.code)).toContain('itunes.purchase-atoms');
 
-    expect(await TrackModel.countDocuments({})).toBe(0);
+    expect(await countRows(tracks)).toBe(0);
     // Screening runs before resolution precisely so a refused upload does not
     // seed the catalogue with a claimable artist profile.
-    expect(await ArtistModel.countDocuments({})).toBe(0);
+    expect(await countRows(catalogEntities)).toBe(0);
   });
 });
 
@@ -538,8 +654,8 @@ describe('POST /api/uploads — the recording the fingerprint resolves to', () =
 
     // Nothing was published and no claimable artist was left behind — the
     // refusal happens before resolution, so a blocked upload seeds nothing.
-    expect(await TrackModel.countDocuments({})).toBe(0);
-    expect(await ArtistModel.countDocuments({})).toBe(0);
+    expect(await countRows(tracks)).toBe(0);
+    expect(await countRows(catalogEntities)).toBe(0);
   });
 
   it('leaves the SAME file untouched on its private locker route', async () => {
@@ -557,7 +673,7 @@ describe('POST /api/uploads — the recording the fingerprint resolves to', () =
 
     expect(status).toBe(201);
     expect(body.outcome).toBe('stored');
-    expect(await UserUploadModel.countDocuments({})).toBe(1);
+    expect(await countRows(userUploads)).toBe(1);
   });
 
   it('asks about a PUBLIC upload, using the fingerprint already computed for it', async () => {
@@ -613,15 +729,15 @@ describe('POST /api/uploads — the recording the fingerprint resolves to', () =
     // Persisting the recovered identifier is the point of recovering it: it is
     // what dedup tier 2 and artist resolution tier 1 read, so without this the
     // next upload of the same recording arrives unidentifiable all over again.
-    const track = await TrackModel.findById(String(body.trackId)).lean();
-    expect(track?.externalIds?.isrc).toBe('ESA452300137');
+    const track = await readTrack(String(body.trackId));
+    expect(track?.externalIsrc).toBe('ESA452300137');
 
     // The artist MBID travels too, because it is what lets background enrichment
     // give the contributed profile a photograph — enrichment refuses any artist
     // without one, so a stub created without it stays a bare page forever.
-    const artist = await ArtistModel.findById(track?.artistId).lean();
+    const artist = await readArtist(track?.artistId);
     expect(artist?.name).toBe('Nadia Ortiz');
-    expect(artist?.externalIds?.musicbrainzArtistId).toBe(ARTIST_MBID);
+    expect(artist?.externalMusicbrainzArtistId).toBe(ARTIST_MBID);
   });
 
   it('the existing refusal stands unchanged when the lookup finds nothing', async () => {
@@ -637,7 +753,7 @@ describe('POST /api/uploads — the recording the fingerprint resolves to', () =
 
     expect(status).toBe(422);
     expect(body.code).toBe('isrc_required');
-    expect(await TrackModel.countDocuments({})).toBe(0);
+    expect(await countRows(tracks)).toBe(0);
   });
 });
 
@@ -665,16 +781,7 @@ describe('POST /api/uploads — the ISRC the uploader supplies', () => {
 
   /** The catalogue floor is 500 px and every fixture's embedded art is 96 px. */
   async function catalogCover(): Promise<string> {
-    const asset = await ImageAssetModel.create({
-      s3Key: 'images/cover/large.jpg',
-      filename: 'large.jpg',
-      contentType: 'image/jpeg',
-      byteSize: 4096,
-      width: 1400,
-      height: 1400,
-      ownerType: 'album',
-    });
-    return asset._id.toString();
+    return seedImageAsset();
   }
 
   /** A row in the local MusicBrainz slice — the first source the lookup asks. */
@@ -683,7 +790,7 @@ describe('POST /api/uploads — the ISRC the uploader supplies', () => {
     artistCredit: string;
     lengthMs?: number;
   }): Promise<void> {
-    await IsrcRegistryModel.create({
+    await getDb().insert(isrcRegistry).values({
       isrc: CLAIMED,
       recordingMbid: 'd9e8f7a6-5b4c-4d3e-9f10-2a3b4c5d6e7f',
       artistCreditNameKey: fields.artistCredit.toLowerCase(),
@@ -714,8 +821,8 @@ describe('POST /api/uploads — the ISRC the uploader supplies', () => {
     // Persisted, because persisting it is the point: dedup tier 2 and artist
     // resolution tier 1 both read it, so a track published without it meets the
     // next upload of the same recording as a fresh unidentifiable file.
-    const track = await TrackModel.findById(String(body.trackId)).lean();
-    expect(track?.externalIds?.isrc).toBe(CLAIMED);
+    const track = await readTrack(String(body.trackId));
+    expect(track?.externalIsrc).toBe(CLAIMED);
     expect(track?.artistName).toBe('Lucía Arenas');
   });
 
@@ -730,7 +837,7 @@ describe('POST /api/uploads — the ISRC the uploader supplies', () => {
 
     expect(status).toBe(422);
     expect(body.code).toBe('isrc_required');
-    expect(await TrackModel.countDocuments({})).toBe(0);
+    expect(await countRows(tracks)).toBe(0);
   });
 
   it('accepts the code in the hyphenated form it is PRINTED in', async () => {
@@ -750,7 +857,7 @@ describe('POST /api/uploads — the ISRC the uploader supplies', () => {
 
     expect(status).toBe(201);
     expect(
-      (await TrackModel.findById(String(body.trackId)).lean())?.externalIds?.isrc,
+      (await readTrack(String(body.trackId)))?.externalIsrc,
     ).toBe(CLAIMED);
   });
 
@@ -783,9 +890,9 @@ describe('POST /api/uploads — the ISRC the uploader supplies', () => {
 
     // Refused before anything is created: no track, and no claimable artist
     // stub left behind for a contribution that never happened.
-    expect(await TrackModel.countDocuments({})).toBe(0);
-    expect(await ArtistModel.countDocuments({})).toBe(0);
-    expect(await UserUploadModel.countDocuments({})).toBe(0);
+    expect(await countRows(tracks)).toBe(0);
+    expect(await countRows(catalogEntities)).toBe(0);
+    expect(await countRows(userUploads)).toBe(0);
   });
 
   it('REFUSES a well-formed code that resolves nowhere', async () => {
@@ -803,8 +910,8 @@ describe('POST /api/uploads — the ISRC the uploader supplies', () => {
     expect(status).toBe(422);
     expect(body.code).toBe('isrc_unverifiable');
     expect(body.message).toContain(CLAIMED);
-    expect(await TrackModel.countDocuments({})).toBe(0);
-    expect(await ArtistModel.countDocuments({})).toBe(0);
+    expect(await countRows(tracks)).toBe(0);
+    expect(await countRows(catalogEntities)).toBe(0);
   });
 
   it('rejects a malformed code at the schema, before any work is done', async () => {
@@ -819,7 +926,7 @@ describe('POST /api/uploads — the ISRC the uploader supplies', () => {
     // request rather than a refused contribution.
     expect(status).toBe(400);
     expect(body.error).toBe('Invalid request body');
-    expect(await UserUploadModel.countDocuments({})).toBe(0);
+    expect(await countRows(userUploads)).toBe(0);
   });
 
   it('lets the FILE’S OWN tag win over a code the uploader typed', async () => {
@@ -843,7 +950,7 @@ describe('POST /api/uploads — the ISRC the uploader supplies', () => {
     // `ESA452300137` is the fixture's `TSRC`. The typed code would have verified
     // against the slice row above — it is simply never consulted.
     expect(
-      (await TrackModel.findById(String(body.trackId)).lean())?.externalIds?.isrc,
+      (await readTrack(String(body.trackId)))?.externalIsrc,
     ).toBe('ESA452300137');
   });
 
@@ -875,7 +982,7 @@ describe('POST /api/uploads — the ISRC the uploader supplies', () => {
 
     expect(status).toBe(201);
 
-    const album = await AlbumModel.findOne({}).lean();
+    const album = await firstAlbum();
     // The recovered release title, because the file names no release — only a
     // placeholder. Nothing in the catalogue is ever called "Unknown Album".
     expect(album?.title).toBe('Cielo Partido');
@@ -886,8 +993,8 @@ describe('POST /api/uploads — the ISRC the uploader supplies', () => {
     // reads "under thirty minutes" as EP-shaped without it.
     expect(album?.totalTracks).toBe(9);
     expect(album?.type).toBe('album');
-    expect((await TrackModel.findById(String(body.trackId)).lean())?.albumId).toBe(
-      album?._id.toString(),
+    expect((await readTrack(String(body.trackId)))?.albumId).toBe(
+      album?.id,
     );
   });
 
@@ -927,16 +1034,16 @@ describe('POST /api/uploads — the ISRC the uploader supplies', () => {
     });
     expect(status).toBe(201);
 
-    const track = await TrackModel.findById(String(body.trackId)).lean();
+    const track = await readTrack(String(body.trackId));
     // The album has to have resolved, or this asserts the case that never broke.
     expect(track?.albumId).toBeTruthy();
 
     expect(storedKeys).toContain(
       getS3AudioKey(
-        String(track?._id),
+        String(track?.id),
         String(track?.artistId),
         track?.albumId ? String(track.albumId) : undefined,
-        track?.audioSource?.format ?? 'mp3',
+        track?.audioSourceFormat ?? 'mp3',
       ),
     );
   });
@@ -973,9 +1080,10 @@ describe('POST /api/uploads — the ISRC the uploader supplies', () => {
     expect(status).toBe(201);
     expect(body.outcome).toBe('published');
 
-    const track = await TrackModel.findById(String(body.trackId)).lean();
+    const track = await readTrack(String(body.trackId));
     // The code is NOT persisted: nothing may claim this audio is that recording.
-    expect(track?.externalIds?.isrc).toBeUndefined();
+    // `null`, not `undefined`: an absent value is a null column now.
+    expect(track?.externalIsrc).toBeNull();
     // The artist still resolved, which is the whole point of accepting it.
     expect(track?.artistId).toBeTruthy();
   });
@@ -1017,9 +1125,10 @@ describe('POST /api/uploads — the ISRC the uploader supplies', () => {
     expect(status).toBe(201);
     expect(body.outcome).toBe('published');
 
-    const track = await TrackModel.findById(String(body.trackId)).lean();
+    const track = await readTrack(String(body.trackId));
     // Attributed, not identified: nothing may claim this is that recording.
-    expect(track?.externalIds?.isrc).toBeUndefined();
+    // `null`, not `undefined`: an absent value is a null column now.
+    expect(track?.externalIsrc).toBeNull();
     expect(track?.artistId).toBeTruthy();
   });
 
@@ -1053,11 +1162,11 @@ describe('POST /api/uploads — the ISRC the uploader supplies', () => {
       attestation: 'I have the right to distribute this recording.',
     });
 
-    const track = await TrackModel.findById(String(body.trackId)).lean();
-    expect(track?.coverArt).toBe(coverArt);
+    const track = await readTrack(String(body.trackId));
+    expect(track?.coverArtId).toBe(coverArt);
     expect(JSON.stringify(track)).not.toContain('dzcdn.net');
 
-    const artist = await ArtistModel.findById(track?.artistId).lean();
+    const artist = await readArtist(track?.artistId);
     expect(JSON.stringify(artist)).not.toContain('dzcdn.net');
   });
 
@@ -1104,15 +1213,15 @@ describe('embedded cover art', () => {
     // act from attaching cover art, and it is not one an upload may perform.
     const { body } = await postUpload('indie-id3v2.mp3', { destination: 'private' });
 
-    const coverArt = (await UserUploadModel.findOne({}).lean())?.coverArt;
+    const coverArt = (await firstUpload())?.coverArtId;
     if (!coverArt) throw new Error('no cover art was stored for a file that carries one');
 
-    const asset = await ImageAssetModel.findById(coverArt).lean();
+    const asset = (await getDb().select().from(imageAssets).where(eq(imageAssets.id, coverArt ?? '')))[0];
     expect(asset?.ownerType).toBe('upload');
     expect(asset?.width).toBe(96);
     expect((body.upload as { coverArt?: string }).coverArt).toBe(`/api/images/${coverArt}`);
     // One image stored, not three.
-    expect(await ImageAssetModel.countDocuments({})).toBe(1);
+    expect(await countRows(imageAssets)).toBe(1);
   });
 
   it('refuses a thumbnail for the catalogue while keeping it in the locker', async () => {
@@ -1132,8 +1241,8 @@ describe('embedded cover art', () => {
 
     // Nothing is left behind: no track, no album, and — because the refusal
     // lands before the contribution matrix — no orphan artist stub either.
-    expect(await TrackModel.countDocuments({})).toBe(0);
-    expect(await AlbumModel.countDocuments({})).toBe(0);
+    expect(await countRows(tracks)).toBe(0);
+    expect(await countRows(albums)).toBe(0);
 
     // The same file is still a perfectly good PRIVATE upload, thumbnail and all.
     const priv = await postUpload('indie-id3v2.mp3', { destination: 'private' });
@@ -1146,25 +1255,17 @@ describe('album containers', () => {
   it('creates the release and links the track when the artwork is good enough', async () => {
     // The uploader named an image of their own, which is their explicit choice
     // and bypasses the embedded-thumbnail floor.
-    const cover = await ImageAssetModel.create({
-      s3Key: 'images/cover/large.jpg',
-      filename: 'large.jpg',
-      contentType: 'image/jpeg',
-      byteSize: 4096,
-      width: 1400,
-      height: 1400,
-      ownerType: 'album',
-    });
+    const coverId = await seedImageAsset();
 
     const { body } = await postUpload('indie-id3v2.mp3', {
       destination: 'public',
-      coverArt: cover._id.toString(),
+      coverArt: coverId,
       attestation: 'I have the right to distribute this recording.',
     });
 
     expect(body.outcome).toBe('published');
 
-    const album = await AlbumModel.findOne({}).lean();
+    const album = await firstAlbum();
     expect(album?.title).toBe('Harbour Lights');
     expect(album?.artistName).toBe('Nadia Ortiz');
     // The right-hand side of `TRCK` (`3/12`) — a property of the RELEASE, not a
@@ -1176,8 +1277,8 @@ describe('album containers', () => {
     expect(album?.type).toBe('album');
     expect(album?.upc).toBe('8437011234567');
 
-    const track = await TrackModel.findById(String(body.trackId)).lean();
-    expect(track?.albumId).toBe(album?._id.toString());
+    const track = await readTrack(String(body.trackId));
+    expect(track?.albumId).toBe(album?.id);
     expect(track?.albumName).toBe('Harbour Lights');
   });
 
@@ -1190,73 +1291,61 @@ describe('album containers', () => {
      * field nobody set and a collection nobody populated — mechanisms that
      * typecheck, pass their own unit tests, and never match anything.
      */
-    const cover = await ImageAssetModel.create({
-      s3Key: 'images/cover/large.jpg',
-      filename: 'large.jpg',
-      contentType: 'image/jpeg',
-      byteSize: 4096,
-      width: 1400,
-      height: 1400,
-      ownerType: 'album',
-    });
+    const coverId = await seedImageAsset();
 
     const { body } = await postUpload('indie-id3v2.mp3', {
       destination: 'public',
-      coverArt: cover._id.toString(),
+      coverArt: coverId,
       attestation: 'I have the right to distribute this recording.',
     });
     expect(body.outcome).toBe('published');
 
     const trackId = String(body.trackId);
-    // `sha256` is `select: false`, so it has to be asked for explicitly.
-    const track = await TrackModel.findById(trackId).select('+sha256').lean();
+    // `tracks.sha256` is a PROTECTED column, so it is absent from every read a
+    // production caller makes; this one reads the row whole on purpose.
+    const track = await readTrack(trackId);
     expect(track?.sha256).toMatch(/^[a-f0-9]{64}$/);
 
     // The fingerprint row only exists where `fpcalc` is installed; the assertion
     // adapts rather than pretending, so this test is honest on both machines.
-    const indexed = await TrackFingerprintModel.findOne({ trackId }).lean();
+    const indexed = (await getDb().select().from(trackFingerprints).where(eq(trackFingerprints.trackId, trackId)))[0];
     const acoustic = await fingerprintFile(path.join(FIXTURES, 'indie-id3v2.mp3'));
     if (acoustic.status === 'ok') {
       expect(indexed?.fingerprint.length).toBeGreaterThan(0);
       expect(indexed?.fingerprintDurationSec).toBeGreaterThan(0);
     } else {
-      expect(indexed).toBeNull();
+      expect(indexed).toBeUndefined();
     }
   });
 
   it('reuses the existing release instead of creating a second one', async () => {
-    const cover = await ImageAssetModel.create({
-      s3Key: 'images/cover/large.jpg',
-      filename: 'large.jpg',
-      contentType: 'image/jpeg',
-      byteSize: 4096,
-      width: 1400,
-      height: 1400,
-      ownerType: 'album',
-    });
+    const coverId = await seedImageAsset();
 
     // Same UPC — a barcode identifies a RELEASE, so this is the same album.
-    const existing = await AlbumModel.create({
-      title: 'Harbour Lights',
-      artistId: 'artist-1',
-      artistName: 'Nadia Ortiz',
-      releaseDate: '2023-04-18',
-      coverArt: cover._id.toString(),
-      type: 'album',
-      source: 'upload',
-      upc: '8437011234567',
-    });
+    const [existing] = await getDb()
+      .insert(albums)
+      .values({
+        title: 'Harbour Lights',
+        artistId: await seedArtist(),
+        artistName: 'Nadia Ortiz',
+        releaseDate: '2023-04-18',
+        coverArtId: coverId,
+        type: 'album',
+        source: 'upload',
+        upc: '8437011234567',
+      })
+      .returning({ id: albums.id });
 
     const { body } = await postUpload('indie-id3v2.mp3', {
       destination: 'public',
-      coverArt: cover._id.toString(),
+      coverArt: coverId,
       attestation: 'I have the right to distribute this recording.',
     });
 
     expect(body.outcome).toBe('published');
-    expect(await AlbumModel.countDocuments({})).toBe(1);
-    expect((await TrackModel.findById(String(body.trackId)).lean())?.albumId).toBe(
-      existing._id.toString(),
+    expect(await countRows(albums)).toBe(1);
+    expect((await readTrack(String(body.trackId)))?.albumId).toBe(
+      existing.id,
     );
   });
 });
@@ -1274,53 +1363,51 @@ describe('rawTags — the DMCA audit record', () => {
      */
     await postUpload('indie-id3v2.mp3', { destination: 'private' });
 
-    // `select: false`, so it has to be asked for — which is also what keeps it
-    // off every client read.
-    const stored = await UserUploadModel.findOne({}).select('+rawTags').lean();
-    expect(stored?.rawTags?.json).toBeTruthy();
-    expect(stored?.rawTags?.originalByteLength).toBeGreaterThan(0);
+    // PROTECTED columns, so no production read can see them — this one reads
+    // the row whole, which is also what keeps them off every client read.
+    const stored = await firstUpload();
+    expect(stored?.rawTagsJson).toBeTruthy();
+    expect(stored?.rawTagsOriginalByteLength ?? 0).toBeGreaterThan(0);
 
     // It is the real tag dump, not a placeholder.
-    const parsed = JSON.parse(stored?.rawTags?.json ?? '[]') as Array<{ id: string }>;
+    const parsed = JSON.parse(stored?.rawTagsJson ?? '[]') as Array<{ id: string }>;
     expect(parsed.length).toBeGreaterThan(0);
     expect(parsed.some((tag) => tag.id === 'TSRC')).toBe(true);
 
     /**
      * And it never reaches the client — on the DTO's own terms.
      *
-     * The guard that matters is `toUploadTrackDto` naming its fields, NOT the
-     * model's `select: false`: that projection has already been removed once
-     * while the comment asserting it survived, and it is inert against
-     * `aggregate()` regardless. This assertion fails if the serializer ever
-     * starts spreading the document, which is the failure mode worth catching.
+     * The guard that matters is `toUploadTrackDto` naming its fields. There is
+     * now a second, independent one — `rawTags*` is in
+     * `PROTECTED_COLUMNS_BY_TABLE`, so the row the serializer receives has no
+     * property for it at all — but this assertion is still the one that fails
+     * if the serializer ever starts spreading the row, which is the failure
+     * mode worth catching.
      */
-    for (const route of ['/api/uploads', `/api/uploads/${(await UserUploadModel.findOne({}).lean())?._id.toString()}`]) {
+    for (const route of ['/api/uploads', `/api/uploads/${(await firstUpload())?.id}`]) {
       const serialised = JSON.stringify(await (await fetch(`${baseUrl}${route}`)).json());
       expect(`${route}: ${serialised.includes('rawTags')}`).toBe(`${route}: false`);
     }
   });
 
   it('persists them on the attestation too, beside the signature', async () => {
-    const cover = await ImageAssetModel.create({
-      s3Key: 'images/cover/large.jpg', filename: 'large.jpg', contentType: 'image/jpeg',
-      byteSize: 4096, width: 1400, height: 1400, ownerType: 'album',
-    });
+    const coverId = await seedImageAsset();
 
     const { body } = await postUpload('indie-id3v2.mp3', {
       destination: 'public',
-      coverArt: cover._id.toString(),
+      coverArt: coverId,
       attestation: 'I have the right to distribute this recording.',
     });
     expect(body.outcome).toBe('published');
 
-    const attestation = await ContributionAttestationModel.findOne({ trackId: String(body.trackId) })
-      .select('+rawTags')
-      .lean();
+    // Read whole, protected columns included: `rawTagsJson` is exactly what a
+    // client must never see and exactly what this assertion needs.
+    const attestation = await firstAttestation(String(body.trackId));
     // The statement alone proves only that a box was ticked; the pair proves what
     // the uploader was looking at when they ticked it.
     expect(attestation?.statement).toContain('right to distribute');
-    expect(attestation?.rawTags?.json).toBeTruthy();
-    expect(attestation?.provenanceReport?.verdict).toBeTruthy();
+    expect(attestation?.rawTagsJson).toBeTruthy();
+    expect(attestation?.provenanceReportVerdict).toBeTruthy();
   });
 });
 
@@ -1349,7 +1436,7 @@ describe('GET /api/uploads/albums', () => {
     expect(harbour?.albumKey).toBeTruthy();
 
     // The whole point of the aggregation: no catalogue container is created.
-    expect(await AlbumModel.countDocuments({})).toBe(0);
+    expect(await countRows(albums)).toBe(0);
 
     /**
      * `aggregate()` IGNORES Mongoose `select: false`, so on this route that
@@ -1384,7 +1471,7 @@ describe('GET /api/uploads/albums', () => {
     const body = (await (await fetch(`${baseUrl}/api/uploads/albums`)).json()) as { total: number };
     expect(body.total).toBe(0);
     // The file itself is still in the locker; it just belongs to no release.
-    expect(await UserUploadModel.countDocuments({})).toBe(1);
+    expect(await countRows(userUploads)).toBe(1);
   });
 
   it('is not shadowed by the `/:id` route', async () => {
@@ -1410,7 +1497,7 @@ const INVISIBILITY_TIMEOUT_MS = 30_000;
 describe('a private upload is invisible to everybody else', () => {
   it('never appears in search, browse, charts or the home feed for another user', async () => {
     const { body } = await postUpload('indie-id3v2.mp3', { destination: 'private' });
-    const stored = await UserUploadModel.findOne({}).lean();
+    const stored = await firstUpload();
     const title = stored?.title ?? '';
     expect(title.length).toBeGreaterThan(0); // vacuity floor: there IS something to find
 
@@ -1418,7 +1505,7 @@ describe('a private upload is invisible to everybody else', () => {
     // has no owner dimension and must never gain one. The locker being a separate
     // collection is what makes that safe — so the assertion is not merely "the
     // stranger sees nothing", it is "the catalogue never held it".
-    expect(await TrackModel.countDocuments({})).toBe(0);
+    expect(await countRows(tracks)).toBe(0);
 
     const uploadId = String((body.upload as { id: string }).id);
     currentUserId = STRANGER;
@@ -1469,18 +1556,21 @@ describe('a private upload is invisible to everybody else', () => {
     // that is broken and returns nothing at all — which is the difference between
     // a guarantee and a check that cannot fail.
     const upload = await postUpload('indie-id3v2.mp3', { destination: 'private' });
-    const title = (await UserUploadModel.findOne({}).lean())?.title ?? '';
+    const title = (await firstUpload())?.title ?? '';
 
-    const track = await TrackModel.create({
-      title,
-      artistId: 'artist-1',
-      artistName: 'Nadia Ortiz',
-      duration: 210,
-      source: 'upload',
-      status: 'ready',
-      isAvailable: true,
-      isExplicit: false,
-    });
+    const [track] = await getDb()
+      .insert(tracks)
+      .values({
+        title,
+        artistId: await seedArtist(),
+        artistName: 'Nadia Ortiz',
+        duration: 210,
+        source: 'upload',
+        status: 'ready',
+        isAvailable: true,
+        isExplicit: false,
+      })
+      .returning({ id: tracks.id });
 
     currentUserId = STRANGER;
     const res = makeRes();
@@ -1492,7 +1582,7 @@ describe('a private upload is invisible to everybody else', () => {
 
     const body = res._body as { counts: { total: number }; results: { tracks: Array<{ id: string }> } };
     expect(body.counts.total).toBeGreaterThan(0);
-    expect(body.results.tracks.map((found) => found.id)).toEqual([track._id.toString()]);
+    expect(body.results.tracks.map((found) => found.id)).toEqual([track.id]);
     // Same title, same search, same viewer — the catalogue copy is found and the
     // locker copy is not.
     expect(body.results.tracks.map((found) => found.id)).not.toContain(

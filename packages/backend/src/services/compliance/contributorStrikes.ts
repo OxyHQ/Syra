@@ -1,4 +1,15 @@
-import { ContributorStandingModel, type IContributorStanding } from '../../models/ContributorStanding';
+import { getDb } from '../../db/postgres';
+import {
+  disableContributorUploads,
+  ensureContributorStanding,
+  findContributorStanding,
+  incrementStrikeCount,
+  insertContributorStrike,
+  listContributorStrikes,
+  terminateContributor,
+  type ContributorStandingRow,
+  type ContributorStrikeRow,
+} from '../../db/creators/standings';
 import { STRIKE_TERMINATION_THRESHOLD, isRepeatInfringer } from '../strikeService';
 import { logger } from '../../utils/logger';
 
@@ -28,56 +39,86 @@ export interface ContributorStrikeOutcome {
   alreadyTerminated: boolean;
 }
 
+/** A standing with its strikes attached — the shape `getContributorStanding` returns. */
+export interface ContributorStanding extends ContributorStandingRow {
+  strikes: ContributorStrikeRow[];
+}
+
 /**
  * Record one infringement against an Oxy account.
  *
  * Upserts, because the first strike is also the first time the account is heard
  * of — a contributor has no record until they need one, and pre-creating a
- * standing row for every uploader would be a collection of empty documents.
+ * standing row for every uploader would be a table of empty rows.
+ *
+ * ## One transaction, and the counter is incremented by the database
+ *
+ * `Contributor.strikes[]` became a child table, so what was one `document
+ * .save()` is now an insert plus an update plus, sometimes, a termination — and
+ * a failure between them would leave a strike nobody counted or a count with no
+ * strike behind it. They run together.
+ *
+ * The count itself is `strike_count + 1` in SQL rather than a read, an
+ * increment in JavaScript and a write back. The Mongo version did the latter,
+ * so two takedowns resolved concurrently could both read 2 and both write 3 —
+ * leaving a repeat infringer one strike short of the threshold with nothing to
+ * show that it had happened.
  */
 export async function recordContributorStrike(
   oxyUserId: string,
   reason: string,
   trackId?: string,
 ): Promise<ContributorStrikeOutcome> {
-  const standing = await ContributorStandingModel.findOneAndUpdate(
-    { oxyUserId },
-    { $setOnInsert: { oxyUserId } },
-    { upsert: true, returnDocument: 'after' },
-  );
+  const now = new Date();
 
-  const alreadyTerminated = standing.terminated === true;
+  const outcome = await getDb().transaction(async (tx) => {
+    const standing = await ensureContributorStanding(tx, oxyUserId);
+    const alreadyTerminated = standing.terminated;
 
-  standing.strikes = standing.strikes ?? [];
-  standing.strikes.push({ reason, createdAt: new Date(), trackId });
-  standing.strikeCount = (standing.strikeCount ?? 0) + 1;
-  standing.lastStrikeAt = new Date();
+    await insertContributorStrike(tx, {
+      contributorStandingId: standing.id,
+      reason,
+      trackId,
+      createdAt: now,
+    });
+    const strikeCount = await incrementStrikeCount(tx, standing.id, now);
 
-  let terminated = false;
-  if (isRepeatInfringer(standing.strikeCount)) {
-    standing.uploadsDisabled = true;
-    if (!alreadyTerminated) {
-      standing.terminated = true;
-      standing.terminatedAt = new Date();
-      standing.terminationReason =
-        `Repeat-infringer termination: ${STRIKE_TERMINATION_THRESHOLD} or more copyright strikes`;
-      terminated = true;
+    if (!isRepeatInfringer(strikeCount)) {
+      return { oxyUserId, strikeCount, terminated: false, alreadyTerminated };
     }
-  }
 
-  await standing.save();
+    if (alreadyTerminated) {
+      // Still disable uploads: the account is over the threshold, and the
+      // termination write below is the one thing that must not repeat.
+      await disableContributorUploads(tx, standing.id);
+      return { oxyUserId, strikeCount, terminated: false, alreadyTerminated };
+    }
+
+    /**
+     * `terminated` is reported from the WRITE, not from the count.
+     *
+     * It is the caller's signal to cascade — take the account's contributed
+     * recordings down and purge its locker — and cascading twice for one event
+     * would delete a locker twice and notify the owner twice. The update carries
+     * `terminated = false` in its WHERE, so exactly one concurrent call can win
+     * it however many arrive together.
+     */
+    const terminated = await terminateContributor(
+      tx,
+      standing.id,
+      `Repeat-infringer termination: ${STRIKE_TERMINATION_THRESHOLD} or more copyright strikes`,
+      now,
+    );
+
+    return { oxyUserId, strikeCount, terminated, alreadyTerminated };
+  });
 
   logger.info(
-    `[ContributorStrikes] Strike ${standing.strikeCount} recorded against ${oxyUserId}` +
-    (terminated ? ' — account TERMINATED as a repeat infringer' : ''),
+    `[ContributorStrikes] Strike ${outcome.strikeCount} recorded against ${oxyUserId}` +
+    (outcome.terminated ? ' — account TERMINATED as a repeat infringer' : ''),
   );
 
-  return {
-    oxyUserId,
-    strikeCount: standing.strikeCount,
-    terminated,
-    alreadyTerminated,
-  };
+  return outcome;
 }
 
 /**
@@ -89,18 +130,23 @@ export async function recordContributorStrike(
  * music, right up until termination.
  */
 export async function canContributePublicly(oxyUserId: string): Promise<boolean> {
-  const standing = await ContributorStandingModel.findOne({ oxyUserId })
-    .select('terminated uploadsDisabled')
-    .lean();
+  const standing = await findContributorStanding(oxyUserId);
 
   // No record at all is the ordinary case: nobody has ever had cause to open one.
   if (!standing) return true;
-  return standing.terminated !== true && standing.uploadsDisabled !== true;
+  return !standing.terminated && !standing.uploadsDisabled;
 }
 
 /** The account's current standing, or null when it has never been struck. */
 export async function getContributorStanding(
   oxyUserId: string,
-): Promise<IContributorStanding | null> {
-  return ContributorStandingModel.findOne({ oxyUserId });
+): Promise<ContributorStanding | null> {
+  const standing = await findContributorStanding(oxyUserId);
+  if (!standing) return null;
+
+  // The strikes were an embedded array and are a child table now, so the
+  // caller's `standing.strikes` needs a second read rather than arriving with
+  // the row. Both callers of this function render the list, so it is not
+  // optional here.
+  return { ...standing, strikes: await listContributorStrikes(standing.id) };
 }

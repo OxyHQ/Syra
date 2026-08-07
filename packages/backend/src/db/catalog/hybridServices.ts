@@ -54,7 +54,12 @@ export const OWNING_TASKS = {
   // `user_podcast_subscriptions` insertable and let `models/Library.ts` — the
   // one-field remnant Task 11 left behind — be deleted outright. Four models
   // (`Podcast`, `Episode`, `EpisodeProgress`, `Library`) left the tree with it.
-  creators: 'Task 13 — creators and uploads',
+  //
+  // `creators` is GONE for the same reason again: Task 13 ported the locker and
+  // the three moderation records, and five models left the tree with it —
+  // `UserUpload`, `ArtistClaim`, `ContributionAttestation`,
+  // `ContributorStanding`, and `TrackKey`, whose last consumer was
+  // `uploads.controller`.
   rooms: 'Task 14 — rooms',
   user: 'Task 15 — user and recommendations',
   // Task 8 is BLOCKED on an owner decision, so its models have no port in
@@ -105,9 +110,12 @@ export const CROSS_CUTTING_TASKS = {
  * remember to audit; the audit is what closing a task already does.
  */
 export const LIVE_TASK_IDS: readonly string[] = [
-  // `'Task 13 — creators and uploads'` → `'Task 13'`. The vertical values carry
-  // a description; the `owner` field is the bare id, so the id is taken from
-  // the front rather than the two being maintained separately.
+  // `'Task 14 — rooms'` → `'Task 14'`. The vertical values carry a description;
+  // the `owner` field is the bare id, so the id is taken from the front rather
+  // than the two being maintained separately. (The example was Task 13's until
+  // that task closed and its entry was deleted — a comment naming a value the
+  // map no longer holds is the same staleness the deletion convention exists
+  // to prevent.)
   ...Object.values(OWNING_TASKS).map((value) => value.split(' — ')[0] ?? value),
   ...Object.keys(CROSS_CUTTING_TASKS),
 ];
@@ -125,9 +133,6 @@ export const NON_CATALOG_MODEL_OWNERS = {
   Recording: 'rooms',
   Report: 'moderation',
   ModerationEnforcement: 'moderation',
-  ArtistClaim: 'creators',
-  ContributionAttestation: 'creators',
-  UserUpload: 'creators',
   CatalogRelation: 'user',
   ListeningEvent: 'user',
   UserMusicPreferences: 'user',
@@ -141,19 +146,20 @@ export type NonCatalogModel = keyof typeof NON_CATALOG_MODEL_OWNERS;
  * these has not been ported, whatever else it does — this is the list property
  * 1 is checked against.
  *
- * Nineteen tables, nine model files: the four the Task 10b brief named plus the
+ * Nineteen tables, eight model files: the four the Task 10b brief named plus the
  * six its selector missed (`IsrcRegistry` alone is imported by three services
- * that were never in the brief's list — see the report), less `MusicBrainzArtist`,
- * whose model file Task 19a deleted once its importer was the last one left.
- * A name leaves this list when its model file leaves the tree — the convention
- * Task 12 set with `Podcast`, `Episode`, `EpisodeProgress` and `Library`.
+ * that were never in the brief's list — see the report), less
+ * `MusicBrainzArtist`, whose model file Task 19a deleted once its importer was
+ * the last one left, and less `TrackKey`, deleted by Task 13 for the same
+ * reason: `uploads.controller` was its last consumer. A name leaves this list
+ * when its model file leaves the tree — the convention Task 12 set with
+ * `Podcast`, `Episode`, `EpisodeProgress` and `Library`.
  */
 export const CATALOG_MODELS = [
   'Track',
   'Album',
   'CatalogEntity',
   'ImageAsset',
-  'TrackKey',
   'TrackFingerprint',
   'Lyrics',
   'IsrcRegistry',
@@ -183,29 +189,6 @@ export interface HybridModule {
  * that exempted it would be exempting the one file most likely to drift.
  */
 export const HYBRID_MODULES: readonly HybridModule[] = [
-  {
-    file: 'services/catalog/artistProfile.ts',
-    models: ['ContributionAttestation'],
-    reason:
-      'Reads which of a profile\'s tracks a third party published. `contribution_attestations` ' +
-      'is Task 13\'s table; the read returns a list of track ids and is never joined to a ' +
-      'catalog table.',
-  },
-  {
-    file: 'services/compliance/takedown.ts',
-    models: ['ContributionAttestation', 'UserUpload'],
-    reason:
-      'The safe-harbour locker purge is entirely Task 13\'s vertical — it deletes `user_uploads` ' +
-      'rows and their S3 objects. Only the catalog half (the track, its fingerprint, the ' +
-      'responsible artist) is ported.',
-  },
-  {
-    file: 'services/uploads/matchCatalog.ts',
-    models: ['UserUpload'],
-    reason:
-      'Tier 1 also asks whether the uploader\'s OWN locker already holds these bytes. That half ' +
-      'is Task 13\'s; the three catalog tiers are ported.',
-  },
   {
     file: 'services/radio/radioFixtures.ts',
     models: ['CatalogRelation', 'UserTasteProfile'],
@@ -265,28 +248,6 @@ export const HYBRID_MODULES: readonly HybridModule[] = [
       'but `musicPreferences.controller` still WRITES the Mongo document, and a reader on ' +
       'Postgres against a writer on Mongo is a split brain, not a split read. It moves when its ' +
       'writer does, in Task 15.',
-  },
-  {
-    file: 'controllers/artists.controller.ts',
-    models: ['ArtistClaim', 'ContributionAttestation'],
-    reason:
-      'Two of Task 13\'s tables, for two different reasons. `artist_claims` is a queue this ' +
-      'controller reads and writes but never joins to the catalogue — the GRANT is a Postgres ' +
-      'update, and it is atomic there. `contribution_attestations` is what makes a track a ' +
-      'contribution, and it was ONE `$lookup` from `tracks`; the split turns it into three ' +
-      'bounded round trips (see `loadContributedTrackIds`). `copyright_reports` was in this ' +
-      'list and is NOT any more: `tracks.copyright_report_id` is a real foreign key, so a ' +
-      'Mongo id in that column fails the constraint — a hybrid split survives a cross-vertical ' +
-      'READ and cannot survive a cross-vertical FOREIGN KEY.',
-  },
-  {
-    file: 'controllers/queue.controller.ts',
-    models: ['UserUpload'],
-    reason:
-      'The queue is addressed by `(kind, id)` across TWO stores: the catalogue (Postgres) and ' +
-      'the private locker (`user_uploads`, Task 13). The catalog half is drizzle; the locker ' +
-      'half keeps its Mongoose read because `toUploadTrackDto` — the allowlist DTO that is the ' +
-      'locker\'s only serializer — lives in `uploads.controller` and moves with it.',
   },
   {
     file: 'controllers/library.controller.ts',
@@ -360,18 +321,9 @@ export const UNPORTED_CATALOG_MODULES: readonly {
   readonly reownedFrom?: string;
   readonly reason: string;
 }[] = [
-  {
-    file: 'controllers/uploads.controller.ts',
-    models: ['Album', 'CatalogEntity', 'ImageAsset', 'Track', 'TrackFingerprint', 'TrackKey'],
-    owner: 'Task 13',
-    reason:
-      'The creator upload path — 2,779 lines, and the 42 failures Task 10c inherited to Task 13 ' +
-      'all live behind it. It reads SIX catalog models AND `db/catalog/serialize`, which is why ' +
-      'it belongs here rather than in HYBRID_MODULES: that registry means "ported, with a licence ' +
-      'to read another vertical\'s models", and property 1 would correctly refuse a file holding ' +
-      'this many of its OWN vertical\'s models. Task 10c-3 swapped one import (`normalizeImageRef`) ' +
-      'and touched nothing else.',
-  },
+  // `controllers/uploads.controller.ts` was the only entry in this list that was
+  // not a script. It is GONE: Task 13 ported all 2,779 lines of it, and with it
+  // the last consumer of `TrackKey`.
   // ── Operational scripts ────────────────────────────────────────────────
   //
   // SIX scripts that read or write catalog collections whose tables moved in

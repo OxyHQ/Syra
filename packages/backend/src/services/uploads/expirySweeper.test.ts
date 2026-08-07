@@ -1,8 +1,11 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
-import mongoose from 'mongoose';
-import { connect, clear, disconnect } from '../../test/mongo';
-import { UserUploadModel } from '../../models/UserUpload';
-import { deleteUploadStoredObjects, type UploadStorageRef } from '../compliance/takedown';
+import { eq, isNotNull } from 'drizzle-orm';
+import { uuidv7 } from '@oxyhq/db';
+import { connectDb, clearDb, disconnectDb } from '../../test/postgres';
+import { getDb } from '../../db/postgres';
+import { userUploadHlsRenditions, userUploads } from '../../db/schema/creators';
+import type { UploadStorageRef } from '../../db/creators/uploads';
+import { deleteUploadStoredObjects } from '../compliance/takedown';
 import { getS3LockerAudioKey, getS3LockerHlsKey, getS3LockerHlsPrefix } from '../../config/s3.config';
 import {
   computeUploadExpiry,
@@ -14,9 +17,9 @@ import {
   type ExpiryNoticeInput,
 } from './expirySweeper';
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+beforeAll(connectDb);
+afterEach(clearDb);
+afterAll(disconnectDb);
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -26,18 +29,31 @@ const at = (offsetDays: number): Date => new Date(T0.getTime() + offsetDays * DA
 
 let shaCounter = 0;
 
-async function seedUpload(overrides: Record<string, unknown> = {}) {
+async function seedUpload(
+  overrides: Partial<typeof userUploads.$inferInsert> = {}
+): Promise<{ id: string }> {
   shaCounter += 1;
-  return UserUploadModel.create({
-    ownerOxyUserId: 'oxy-owner',
-    title: 'Some Recording',
-    duration: 210,
-    sizeBytes: 5_242_880,
-    sha256: shaCounter.toString(16).padStart(64, '0'),
-    status: 'ready',
-    audioSource: { key: 'locker/oxy-owner/x/source.mp3', format: 'mp3' },
-    ...overrides,
-  });
+  const [upload] = await getDb()
+    .insert(userUploads)
+    .values({
+      ownerOxyUserId: 'oxy-owner',
+      title: 'Some Recording',
+      duration: 210,
+      sizeBytes: 5_242_880,
+      sha256: shaCounter.toString(16).padStart(64, '0'),
+      status: 'ready',
+      audioSourceKey: 'locker/oxy-owner/x/source.mp3',
+      audioSourceFormat: 'mp3',
+      ...overrides,
+    })
+    .returning({ id: userUploads.id });
+  return upload;
+}
+
+/** The stored row, read back directly rather than through a production helper. */
+async function reload(uploadId: string) {
+  const [row] = await getDb().select().from(userUploads).where(eq(userUploads.id, uploadId));
+  return row;
 }
 
 /** Records what the sweeper asked to delete, so a test can assert on the keys. */
@@ -46,7 +62,7 @@ function recordingDeleter() {
   return {
     deleted,
     deleteObjects: async (upload: UploadStorageRef): Promise<number> => {
-      deleted.push(upload._id.toString());
+      deleted.push(upload.id);
       return 1;
     },
   };
@@ -117,10 +133,10 @@ describe('recordUploadPlay', () => {
   it('pushes expiresAt a full year out and counts the play', async () => {
     const upload = await seedUpload({ expiresAt: at(3) });
 
-    const played = await recordUploadPlay(upload._id.toString(), 'oxy-owner', T0);
+    const played = await recordUploadPlay(upload.id, 'oxy-owner', T0);
     expect(played).toBe(true);
 
-    const after = await UserUploadModel.findById(upload._id).lean();
+    const after = await reload(upload.id);
     expect(after?.expiresAt?.getTime()).toBe(T0.getTime() + UPLOAD_RETENTION_DAYS * DAY_MS);
     expect(after?.lastPlayedAt?.getTime()).toBe(T0.getTime());
     expect(after?.playCount).toBe(1);
@@ -131,19 +147,22 @@ describe('recordUploadPlay', () => {
     // skip its warning the next time it approaches deletion, a year later.
     const upload = await seedUpload({ expiresAt: at(3), deletionNoticeSentAt: at(-1) });
 
-    await recordUploadPlay(upload._id.toString(), 'oxy-owner', T0);
+    await recordUploadPlay(upload.id, 'oxy-owner', T0);
 
-    const after = await UserUploadModel.findById(upload._id).lean();
-    expect(after?.deletionNoticeSentAt).toBeUndefined();
+    const after = await reload(upload.id);
+    // `null`, not `undefined`: Mongo's `$unset` removed the field, and the
+    // Postgres write sets the column back to null. Both mean "no notice has
+    // been sent for the current window", which is what the next sweep reads.
+    expect(after?.deletionNoticeSentAt).toBeNull();
   });
 
   it('does nothing for a DIFFERENT owner', async () => {
     const upload = await seedUpload({ expiresAt: at(3) });
 
-    const played = await recordUploadPlay(upload._id.toString(), 'oxy-someone-else', T0);
+    const played = await recordUploadPlay(upload.id, 'oxy-someone-else', T0);
     expect(played).toBe(false);
 
-    const after = await UserUploadModel.findById(upload._id).lean();
+    const after = await reload(upload.id);
     expect(after?.playCount).toBe(0);
     expect(after?.expiresAt?.getTime()).toBe(at(3).getTime());
   });
@@ -151,7 +170,7 @@ describe('recordUploadPlay', () => {
   it('does nothing for a soft-deleted file', async () => {
     const upload = await seedUpload({ expiresAt: at(-1), deletedAt: at(-1) });
 
-    expect(await recordUploadPlay(upload._id.toString(), 'oxy-owner', T0)).toBe(false);
+    expect(await recordUploadPlay(upload.id, 'oxy-owner', T0)).toBe(false);
   });
 });
 
@@ -175,12 +194,13 @@ describe('expiry sweep — the T-14d notice', () => {
     expect(notice.ownerOxyUserId).toBe('oxy-owner');
     expect(notice.uploadCount).toBe(2);
     expect(notice.earliestExpiresAt.getTime()).toBe(at(3).getTime());
-    expect(new Set(notice.uploadIds)).toEqual(
-      new Set([soon._id.toString(), later._id.toString()]),
-    );
+    expect(new Set(notice.uploadIds)).toEqual(new Set([soon.id, later.id]));
 
     expect(result.uploadsNoticed).toBe(2);
-    const stamped = await UserUploadModel.find({ deletionNoticeSentAt: { $exists: true } }).lean();
+    const stamped = await getDb()
+      .select({ id: userUploads.id })
+      .from(userUploads)
+      .where(isNotNull(userUploads.deletionNoticeSentAt));
     expect(stamped).toHaveLength(2);
   });
 
@@ -220,7 +240,7 @@ describe('expiry sweep — the T-14d notice', () => {
   it('stops warning a file that was played back into safety', async () => {
     const upload = await seedUpload({ expiresAt: at(3) });
 
-    await recordUploadPlay(upload._id.toString(), 'oxy-owner', T0);
+    await recordUploadPlay(upload.id, 'oxy-owner', T0);
 
     const notifier = recordingNotifier();
     const result = await sweepAt(T0, { notify: notifier.notify });
@@ -241,7 +261,7 @@ describe('expiry sweep — T0 soft delete', () => {
 
     expect(result.uploadsSoftDeleted).toBe(1);
 
-    const after = await UserUploadModel.findById(upload._id).lean();
+    const after = await reload(upload.id);
     expect(after).not.toBeNull();
     expect(after?.deletedAt?.getTime()).toBe(T0.getTime());
 
@@ -257,8 +277,8 @@ describe('expiry sweep — T0 soft delete', () => {
     const result = await sweepAt(T0);
 
     expect(result.uploadsSoftDeleted).toBe(0);
-    const after = await UserUploadModel.findById(upload._id).lean();
-    expect(after?.deletedAt).toBeUndefined();
+    const after = await reload(upload.id);
+    expect(after?.deletedAt).toBeNull();
   });
 });
 
@@ -274,10 +294,10 @@ describe('expiry sweep — T+30d hard delete', () => {
 
     const result = await sweepAt(T0, { deleteObjects: deleter.deleteObjects });
 
-    expect(deleter.deleted).toEqual([upload._id.toString()]);
+    expect(deleter.deleted).toEqual([upload.id]);
     expect(result.uploadsHardDeleted).toBe(1);
     expect(result.objectsDeleted).toBe(1);
-    expect(await UserUploadModel.findById(upload._id).lean()).toBeNull();
+    expect(await reload(upload.id)).toBeUndefined();
   });
 
   it('waits out the full grace period', async () => {
@@ -291,7 +311,7 @@ describe('expiry sweep — T+30d hard delete', () => {
 
     expect(deleter.deleted).toEqual([]);
     expect(result.uploadsHardDeleted).toBe(0);
-    expect(await UserUploadModel.findById(upload._id).lean()).not.toBeNull();
+    expect(await reload(upload.id)).toBeDefined();
   });
 
   it('removes BOTH the source object and the whole HLS prefix', async () => {
@@ -306,28 +326,33 @@ describe('expiry sweep — T+30d hard delete', () => {
      * them.
      */
     const ownerOxyUserId = 'oxy-owner';
-    const uploadId = new mongoose.Types.ObjectId();
-    const audioKey = getS3LockerAudioKey(ownerOxyUserId, uploadId.toString(), 'mp3');
+    // The id is minted here rather than defaulted, because every S3 key below
+    // is composed from it — the same reason `storeLockerUpload` mints its own.
+    const uploadId = uuidv7();
+    const audioKey = getS3LockerAudioKey(ownerOxyUserId, uploadId, 'mp3');
 
-    await UserUploadModel.create({
-      _id: uploadId,
+    await getDb().insert(userUploads).values({
+      id: uploadId,
       ownerOxyUserId,
       title: 'Expired',
       duration: 210,
       sizeBytes: 1024,
       sha256: 'e'.repeat(64),
       status: 'ready',
-      audioSource: { key: audioKey, format: 'mp3' },
-      hlsMasterKey: getS3LockerHlsKey(ownerOxyUserId, uploadId.toString(), 'master.m3u8'),
-      hls: [
-        {
-          manifestKey: getS3LockerHlsKey(ownerOxyUserId, uploadId.toString(), '160/index.m3u8'),
-          bitrateKbps: 160,
-          encrypted: true,
-        },
-      ],
+      audioSourceKey: audioKey,
+      audioSourceFormat: 'mp3',
+      hlsMasterKey: getS3LockerHlsKey(ownerOxyUserId, uploadId, 'master.m3u8'),
       expiresAt: at(-HARD_DELETE_GRACE_DAYS - 1),
       deletedAt: at(-HARD_DELETE_GRACE_DAYS - 1),
+    });
+    // The ladder is a child table, so the manifest the purge has to find is a
+    // second insert rather than an embedded array on the row above.
+    await getDb().insert(userUploadHlsRenditions).values({
+      userUploadId: uploadId,
+      position: 0,
+      manifestKey: getS3LockerHlsKey(ownerOxyUserId, uploadId, '160/index.m3u8'),
+      bitrateKbps: 160,
+      encrypted: true,
     });
 
     const objectDeletes: string[] = [];
@@ -344,14 +369,14 @@ describe('expiry sweep — T+30d hard delete', () => {
     // The segments live under the upload's own directory, and only a PREFIX
     // delete reaches them: the document records the manifests, never the `.ts`
     // files beside them.
-    expect(prefixDeletes).toEqual([getS3LockerHlsPrefix(ownerOxyUserId, uploadId.toString())]);
+    expect(prefixDeletes).toEqual([getS3LockerHlsPrefix(ownerOxyUserId, uploadId)]);
     // The source object sits outside that directory, so it needs its own delete.
     expect(objectDeletes).toContain(audioKey);
     // ...and is NOT swept twice by the prefix, which would double-count.
-    expect(audioKey.startsWith(getS3LockerHlsPrefix(ownerOxyUserId, uploadId.toString()))).toBe(false);
+    expect(audioKey.startsWith(getS3LockerHlsPrefix(ownerOxyUserId, uploadId))).toBe(false);
 
     expect(result.uploadsHardDeleted).toBe(1);
-    expect(await UserUploadModel.findById(uploadId).lean()).toBeNull();
+    expect(await reload(uploadId)).toBeUndefined();
   });
 
   it('does NOT mistake the source key for a directory and empty the whole locker', async () => {
@@ -362,20 +387,18 @@ describe('expiry sweep — T+30d hard delete', () => {
      * path SEGMENT — which the source key, where the id is the filename, does not.
      */
     const ownerOxyUserId = 'oxy-owner';
-    const uploadId = new mongoose.Types.ObjectId();
+    const uploadId = uuidv7();
 
-    await UserUploadModel.create({
-      _id: uploadId,
+    await getDb().insert(userUploads).values({
+      id: uploadId,
       ownerOxyUserId,
       title: 'Never transcoded',
       duration: 210,
       sizeBytes: 1024,
       sha256: 'd'.repeat(64),
       status: 'failed',
-      audioSource: {
-        key: getS3LockerAudioKey(ownerOxyUserId, uploadId.toString(), 'mp3'),
-        format: 'mp3',
-      },
+      audioSourceKey: getS3LockerAudioKey(ownerOxyUserId, uploadId, 'mp3'),
+      audioSourceFormat: 'mp3',
       expiresAt: at(-HARD_DELETE_GRACE_DAYS - 1),
       deletedAt: at(-HARD_DELETE_GRACE_DAYS - 1),
     });
@@ -409,7 +432,7 @@ describe('expiry sweep — T+30d hard delete', () => {
     });
 
     expect(result.uploadsHardDeleted).toBe(0);
-    expect(await UserUploadModel.findById(upload._id).lean()).not.toBeNull();
+    expect(await reload(upload.id)).toBeDefined();
   });
 });
 
@@ -430,21 +453,21 @@ describe('expiry sweep — the full schedule', () => {
     // T-14d — the warning.
     await sweepAt(at(-DELETION_NOTICE_LEAD_DAYS), deps);
     expect(notifier.notices).toHaveLength(1);
-    expect((await UserUploadModel.findById(upload._id).lean())?.deletedAt).toBeUndefined();
+    expect((await reload(upload.id))?.deletedAt).toBeNull();
 
     // T0 — hidden, bytes retained.
     await sweepAt(at(0), deps);
-    expect((await UserUploadModel.findById(upload._id).lean())?.deletedAt).toBeDefined();
+    expect((await reload(upload.id))?.deletedAt).toBeDefined();
     expect(deleter.deleted).toEqual([]);
 
     // T+29d — still inside the grace period.
     await sweepAt(at(HARD_DELETE_GRACE_DAYS - 1), deps);
-    expect(await UserUploadModel.findById(upload._id).lean()).not.toBeNull();
+    expect(await reload(upload.id)).toBeDefined();
 
     // T+30d — gone, storage first.
     await sweepAt(at(HARD_DELETE_GRACE_DAYS), deps);
-    expect(deleter.deleted).toEqual([upload._id.toString()]);
-    expect(await UserUploadModel.findById(upload._id).lean()).toBeNull();
+    expect(deleter.deleted).toEqual([upload.id]);
+    expect(await reload(upload.id)).toBeUndefined();
   });
 });
 

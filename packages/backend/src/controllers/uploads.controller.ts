@@ -36,7 +36,8 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import mongoose from 'mongoose';
+import { and, eq, sql } from 'drizzle-orm';
+import { isLiveEntityId, isUniqueViolation, uuidv7 } from '@oxyhq/db';
 import multer from 'multer';
 import sharp from 'sharp';
 import type { Response, NextFunction } from 'express';
@@ -56,14 +57,27 @@ import {
 
 import { env } from '../config/env';
 import { getS3LockerAudioKey } from '../config/s3.config';
-import { UserUploadModel, type IUserUpload } from '../models/UserUpload';
-import { TrackModel } from '../models/Track';
-import { TrackKeyModel } from '../models/TrackKey';
-import { indexTrackAcoustically } from '../models/TrackFingerprint';
-import { ContributionAttestationModel } from '../models/ContributionAttestation';
-import { ImageAssetModel } from '../models/ImageAsset';
-import { ArtistModel } from '../models/CatalogEntity';
-import { AlbumModel } from '../models/Album';
+import { getDb, isPostgresConnected } from '../db/postgres';
+import { albums, catalogEntities, imageAssets, tracks } from '../db/schema/catalog';
+import { trackKeys } from '../db/schema/catalog';
+import { userUploads } from '../db/schema/creators';
+import { indexTrackAcoustically } from '../db/catalog/fingerprints';
+import { recordAttestation } from '../db/creators/attestations';
+import {
+  deleteUploads,
+  findOwnedUpload,
+  findOwnedUploadForPromotion,
+  findOwnedUploadIncludingDeleted,
+  findUploadBySha256,
+  listLockerAlbums,
+  listOwnedUploads,
+  loadUploadHls,
+  setUploadProvenanceMarkers,
+  UPLOAD_COLUMNS,
+  type UploadRow,
+} from '../db/creators/uploads';
+import { toUploadTrackDto, uploadImageIds } from '../db/creators/serialize';
+import { loadImageVariants } from '../db/catalog/hydrate';
 
 import {
   extractMetadata,
@@ -98,11 +112,9 @@ import { LOCKER_HLS_BITRATES_KBPS } from '../services/ingest/hlsPackager';
 import { mintStreamToken, verifyStreamToken } from '../services/stream/streamToken';
 import { buildMasterPlaylistFor, buildVariantPlaylistFor } from '../services/stream/manifestService';
 
-import { isDatabaseConnected } from '../utils/database';
 import { logger } from '../utils/logger';
 import { getErrorMessage, getErrorStack } from '../utils/error';
 import { getParam, parseBoundedLimit, parseOffset } from '../utils/reqParams';
-import { isDuplicateKeyOn } from '../utils/duplicateKey';
 import { normalizeImageRef } from '../db/catalog/serialize';
 import { getStoredImageColors } from '../utils/imageColors';
 import { storeImageAsset } from '../services/imageAssetService';
@@ -170,65 +182,13 @@ interface AudioUploadRequest extends AuthRequest {
 }
 
 // ── Serialisation ────────────────────────────────────────────────────────────
-
-/**
- * A locker file in the catalogue's Track shape, tagged `kind: 'upload'`.
- *
- * The boundary this function IS: every storage key stays behind it. The stored
- * record carries `audioSource.key`, `hlsMasterKey` and one `manifestKey` per
- * rendition — raw S3 object names — and none of them appear in the result. A
- * locker file is reachable only through `GET /api/uploads/:id/stream`, which
- * checks ownership; handing a client the key would be handing it a way around
- * that check the day the bucket policy is loosened by anyone, for any reason.
- *
- * `artistId` and `artistName` fall back to `''` rather than being omitted: the
- * shared Track shape requires both, an unresolved artist is a normal state for a
- * locker file, and the UI renders its own "Unknown artist" for an empty name so
- * the backend never ships a language-specific string.
- */
-export function toUploadTrackDto(upload: IUserUpload): UserUploadAsTrack {
-  return {
-    kind: 'upload',
-    id: upload._id.toString(),
-    title: upload.title,
-    artistId: upload.resolvedArtistId ?? '',
-    artistName: upload.artistName ?? '',
-    albumName: upload.albumName,
-    // The locker has NO Album collection; album views are a grouping over this
-    // key. Without it on the wire the client has to re-derive the grouping from
-    // display names, which splits a compilation across its guest artists and
-    // merges two same-titled releases from different years.
-    albumKey: upload.albumKey,
-    albumArtistName: upload.albumArtistName,
-    duration: upload.duration,
-    trackNumber: upload.trackNumber,
-    discNumber: upload.discNumber,
-    coverArt: normalizeImageRef(upload.coverArt),
-    coverArtSizes: upload.coverArtSizes,
-    metadata: upload.genres?.length ? { genre: [...upload.genres] } : undefined,
-    // The locker stores no advisory flag; a private file is not rated by anyone.
-    isExplicit: false,
-    // A soft-deleted file is past its expiry and no longer playable, so it
-    // reports the same unavailability a taken-down track would.
-    isAvailable: !upload.deletedAt,
-    source: 'upload',
-    status: upload.status,
-    playCount: upload.playCount,
-    primaryColor: upload.primaryColor,
-    secondaryColor: upload.secondaryColor,
-    /**
-     * When this file is due for deletion.
-     *
-     * User-facing, not bookkeeping: retention promises the owner a warning before
-     * anything is removed, and a warning the client cannot render is not a
-     * warning. The other retention stamps (`deletionNoticeSentAt`, `deletedAt`)
-     * stay server-side — they are how the sweeper tracks its own work.
-     */
-    expiresAt: upload.expiresAt?.toISOString(),
-    createdAt: upload.createdAt.toISOString(),
-    updatedAt: upload.updatedAt.toISOString(),
-  };
-}
+//
+// `toUploadTrackDto` lives in `db/creators/serialize.ts` now, beside the rows it
+// serialises and beside the `image_assets` lookup it needs — the same place
+// every other vertical keeps its serializer, and what lets `queue.controller`
+// read it without importing this file. It is still a hand-written allowlist and
+// still the boundary that keeps every storage key server-side; see its own doc
+// comment for what it deliberately omits.
 
 // ── Request parsing ──────────────────────────────────────────────────────────
 
@@ -565,10 +525,19 @@ export function isArtistPicture(picture: ExtractedPicture): boolean {
  */
 async function isCatalogEligibleImage(imageId: string | undefined): Promise<boolean> {
   if (!imageId) return false;
-  const asset = await ImageAssetModel.findById(imageId).select('width height').lean();
+  const [asset] = await getDb()
+    .select({ width: imageAssets.width, height: imageAssets.height })
+    .from(imageAssets)
+    .where(eq(imageAssets.id, imageId))
+    .limit(1);
+
+  // `null`, not `undefined`, is what an unmeasured image reads as now — and
+  // both halves are still required: unknown is not a reason to promote
+  // something to a page everybody sees.
   return (
-    asset?.width !== undefined &&
-    asset.height !== undefined &&
+    asset !== undefined &&
+    asset.width !== null &&
+    asset.height !== null &&
     asset.width >= MIN_CATALOG_COVER_ART_PX &&
     asset.height >= MIN_CATALOG_COVER_ART_PX
   );
@@ -669,22 +638,14 @@ function resolveUploadAccess(req: AuthRequest, uploadId: string): UploadAccess {
   return { ok: false };
 }
 
-/** Load a live (not soft-deleted) locker file that belongs to this owner. */
-async function findOwnedUpload(
-  uploadId: string,
-  ownerOxyUserId: string,
-): Promise<IUserUpload | null> {
-  return UserUploadModel.findOne({
-    _id: uploadId,
-    ownerOxyUserId,
-    deletedAt: null,
-  }).exec();
-}
+// `findOwnedUpload` is `db/creators/uploads.ts`'s, imported above: the owner
+// check is part of the query there for the same reason it was here, and the
+// sweeper and the purge need the identical predicate.
 
 // ── Storage ──────────────────────────────────────────────────────────────────
 
 interface StoredLocker {
-  stored: IUserUpload;
+  stored: UploadRow;
 }
 
 interface DuplicateLocker {
@@ -722,29 +683,34 @@ interface StoreLockerParams {
 }
 
 /**
- * Persist a locker file: document first, then bytes, then ingest.
+ * Persist a locker file: row first, then bytes, then ingest.
  *
- * The document goes first because the `{ownerOxyUserId, sha256}` unique index IS
- * the duplicate detector — a read-then-write leaves exactly the window a double
- * tap lands in — and losing that race before any bytes move means no orphaned S3
- * object to clean up. If the upload to S3 then fails, the document is removed
- * again rather than being left pointing at a key that holds nothing.
+ * The row goes first because the `(owner_oxy_user_id, sha256)` unique
+ * constraint IS the duplicate detector — a read-then-write leaves exactly the
+ * window a double tap lands in — and losing that race before any bytes move
+ * means no orphaned S3 object to clean up. If the upload to S3 then fails, the
+ * row is removed again rather than being left pointing at a key that holds
+ * nothing.
+ *
+ * The id is minted HERE rather than defaulted by the column, because the S3 key
+ * is built from it and the object has to be addressable before the row exists
+ * to name it.
  */
 async function storeLockerUpload(
   params: StoreLockerParams,
 ): Promise<StoredLocker | DuplicateLocker> {
   const { ownerOxyUserId, metadata, overrides, format, filePath, fingerprint, report } = params;
 
-  const uploadId = new mongoose.Types.ObjectId();
+  const uploadId = uuidv7();
   const now = new Date();
-  const audioKey = getS3LockerAudioKey(ownerOxyUserId, uploadId.toString(), format);
+  const audioKey = getS3LockerAudioKey(ownerOxyUserId, uploadId, format);
 
   const coverArtColors = overrides.coverArt
     ? await getStoredImageColors(overrides.coverArt)
     : undefined;
 
-  const document = new UserUploadModel({
-    _id: uploadId,
+  const values = {
+    id: uploadId,
     ownerOxyUserId,
 
     // `??` for the tag (absent means absent), `||` for the filename (a file
@@ -774,6 +740,9 @@ async function storeLockerUpload(
     trackNumber: overrides.trackNumber ?? metadata.trackNumber,
     discNumber: overrides.discNumber ?? metadata.discNumber,
     year: overrides.year ?? metadata.year,
+    // `genres` is NOT NULL with a `{}` default, matching the implicit `[]`
+    // Mongoose gave every upload — so an absent tag list is an empty array
+    // rather than a null the DTO would have to decide about.
     genres: overrides.genres?.length ? overrides.genres : metadata.genres,
 
     duration: metadata.technical.durationSec,
@@ -785,45 +754,61 @@ async function storeLockerUpload(
     fingerprint: fingerprint?.values,
     fingerprintDurationSec: fingerprint?.durationSec,
 
-    coverArt: overrides.coverArt,
+    coverArtId: overrides.coverArt,
     primaryColor: coverArtColors?.primaryColor,
     secondaryColor: coverArtColors?.secondaryColor,
 
-    audioSource: { key: audioKey, format },
-    status: 'processing',
+    audioSourceKey: audioKey,
+    audioSourceFormat: format,
+    status: 'processing' as const,
 
     /**
-     * The file's own tags, verbatim.
+     * The file's own tags, verbatim, flattened onto four columns.
      *
      * This is the audit record: months later a DMCA claim is answered by what the
      * file DECLARED at upload time, and nothing else preserves that — the
      * normalized fields above are a lossy view, and the source object may be
-     * gone. `select: false` on the model keeps it off every read that does not
-     * ask for it, so it never reaches a client.
+     * gone. All four are in `PROTECTED_COLUMNS_BY_TABLE`, so they are absent
+     * from `UploadRow` entirely and no serializer can name one.
      */
-    rawTags: metadata.rawTags,
+    rawTagsJson: metadata.rawTags?.json,
+    rawTagsTruncated: metadata.rawTags?.truncated,
+    rawTagsOriginalByteLength: metadata.rawTags?.originalByteLength,
 
     resolvedArtistId: params.resolvedArtistId,
 
     playCount: 0,
     expiresAt: computeUploadExpiry({ createdAt: now }),
-    provenance: report,
-  });
+    // `ProvenanceReport` flattened; its `markers[]` is a child table written
+    // inside the same transaction below.
+    provenanceScore: report.score,
+    provenanceVerdict: report.verdict,
+  };
 
-  let saved: IUserUpload;
+  let saved: UploadRow;
   try {
-    saved = await document.save();
+    /**
+     * The row and its markers together: a screening report with no markers
+     * behind it is a score nobody can explain, and an appeal quotes the marker
+     * codes.
+     */
+    saved = await getDb().transaction(async (tx) => {
+      const [row] = await tx.insert(userUploads).values(values).returning(UPLOAD_COLUMNS);
+      await setUploadProvenanceMarkers(tx, uploadId, report.markers);
+      return row;
+    });
   } catch (err) {
-    // Losing the race on THIS owner's copy of THESE bytes is the duplicate
-    // outcome. Named rather than a bare 11000 check: a collision on any other
-    // index is a bug, and recovering from it as "you already have this file"
-    // would answer with somebody else's row or silently drop the write.
-    if (!isDuplicateKeyOn(err, 'ownerOxyUserId', 'sha256')) throw err;
-    const existing = await UserUploadModel.findOne({ ownerOxyUserId, sha256: metadata.sha256 })
-      .select('_id')
-      .lean();
+    /**
+     * Losing the race on THIS owner's copy of THESE bytes is the duplicate
+     * outcome. Matched by CONSTRAINT NAME rather than by a bare `23505`, for the
+     * reason the Mongo version named its two fields: a collision on any other
+     * constraint is a bug, and recovering from it as "you already have this
+     * file" would answer with somebody else's row or silently drop the write.
+     */
+    if (!isUniqueViolation(err, 'user_uploads_owner_oxy_user_id_sha256_key')) throw err;
+    const existing = await findUploadBySha256(ownerOxyUserId, metadata.sha256);
     if (!existing) throw err;
-    return { duplicateUploadId: existing._id.toString() };
+    return { duplicateUploadId: existing.id };
   }
 
   try {
@@ -833,16 +818,16 @@ async function storeLockerUpload(
       contentType: `audio/${format}`,
     });
   } catch (err) {
-    await UserUploadModel.deleteOne({ _id: uploadId }).catch((cleanupErr: unknown) =>
+    await deleteUploads([uploadId]).catch((cleanupErr: unknown) =>
       logger.error('[uploads] failed to roll back locker row after S3 failure', {
-        uploadId: uploadId.toString(),
+        uploadId,
         err: cleanupErr,
       }),
     );
     throw err;
   }
 
-  await enqueueUploadIngest(uploadId.toString());
+  await enqueueUploadIngest(uploadId);
 
   return { stored: saved };
 }
@@ -1069,9 +1054,15 @@ async function screenPublicContribution(params: {
   }
 
   if (artistId) {
-    const target = await ArtistModel.findById(artistId)
-      .select('claimedByOxyUserId ownerOxyUserId externalIds.musicbrainzArtistId')
-      .lean();
+    const [target] = await getDb()
+      .select({
+        claimedByOxyUserId: catalogEntities.claimedByOxyUserId,
+        ownerOxyUserId: catalogEntities.ownerOxyUserId,
+        musicbrainzArtistId: catalogEntities.externalMusicbrainzArtistId,
+      })
+      .from(catalogEntities)
+      .where(eq(catalogEntities.id, artistId))
+      .limit(1);
 
     /**
      * A profile the artist owns is never touched and never gated.
@@ -1103,12 +1094,12 @@ async function screenPublicContribution(params: {
        *
        * Only ever fills an absence: an id already on the profile is left alone.
        */
-      const storedMbid = target.externalIds?.musicbrainzArtistId;
+      const storedMbid = target.musicbrainzArtistId;
       if (!storedMbid && resolvedArtistMbid) {
-        await ArtistModel.updateOne(
-          { _id: artistId },
-          { $set: { 'externalIds.musicbrainzArtistId': resolvedArtistMbid } },
-        );
+        await getDb()
+          .update(catalogEntities)
+          .set({ externalMusicbrainzArtistId: resolvedArtistMbid })
+          .where(eq(catalogEntities.id, artistId));
       }
       if (storedMbid ?? resolvedArtistMbid) void enqueueArtistEnrichment(artistId);
 
@@ -1137,7 +1128,11 @@ async function screenPublicContribution(params: {
     );
   }
 
-  const artist = await ArtistModel.findById(decision.artistId).select('name').lean();
+  const [artist] = await getDb()
+    .select({ name: catalogEntities.name })
+    .from(catalogEntities)
+    .where(eq(catalogEntities.id, decision.artistId))
+    .limit(1);
   if (!artist) {
     return refuse(404, 'artist_not_found', 'That artist profile does not exist.');
   }
@@ -1355,7 +1350,7 @@ async function publishContribution(params: PublishParams): Promise<string> {
    */
   const isrc = metadata.isrc ?? params.identity?.isrc ?? params.verifiedIsrc?.isrc;
 
-  const trackId = new mongoose.Types.ObjectId();
+  const trackId = uuidv7();
   const coverArtColors = overrides.coverArt
     ? await getStoredImageColors(overrides.coverArt)
     : undefined;
@@ -1363,17 +1358,20 @@ async function publishContribution(params: PublishParams): Promise<string> {
   const album = await resolveContributedAlbum(params);
   const taggedAlbumName = preferOverride(overrides.albumName, metadata.albumName);
 
-  const track = new TrackModel({
-    _id: trackId,
+  const audioSourceUrl = `/api/audio/${trackId}`;
+  const isExplicit = overrides.isExplicit ?? metadata.isExplicit ?? false;
+
+  const trackValues = {
+    id: trackId,
     title: preferOverride(overrides.title, metadata.title) ?? 'Untitled',
     artistId: params.artistId,
     artistName: params.artistName,
     albumId: album?.id,
     /**
      * The free-text fallback runs through the same placeholder check as the
-     * album document, or refusing to CREATE an "Unknown Album" release would
-     * still leave every track captioned with the placeholder — the pollution
-     * moved rather than stopped.
+     * album row, or refusing to CREATE an "Unknown Album" release would still
+     * leave every track captioned with the placeholder — the pollution moved
+     * rather than stopped.
      */
     albumName:
       album?.title ??
@@ -1381,57 +1379,53 @@ async function publishContribution(params: PublishParams): Promise<string> {
     duration: metadata.technical.durationSec,
     trackNumber: overrides.trackNumber ?? metadata.trackNumber,
     discNumber: overrides.discNumber ?? metadata.discNumber,
-    audioSource: {
-      url: `/api/audio/${trackId.toString()}`,
-      format,
-      bitrate: metadata.technical.bitrateKbps,
-      duration: metadata.technical.durationSec,
-    },
-    coverArt: overrides.coverArt,
+    audioSourceUrl,
+    audioSourceFormat: format,
+    audioSourceBitrate: metadata.technical.bitrateKbps,
+    audioSourceDuration: metadata.technical.durationSec,
+    coverArtId: overrides.coverArt,
     primaryColor: coverArtColors?.primaryColor,
     secondaryColor: coverArtColors?.secondaryColor,
-    metadata: {
-      /**
-       * The file's genres, or — for a file that states none — the release's.
-       *
-       * Gap-filling only, in the same direction as every other recovered fact.
-       * It matters more than it looks: `/browse` is built entirely from the
-       * genres of the catalogue's tracks, so a file with no genre tag
-       * contributes nothing to it and a catalogue of such files renders an
-       * empty browse screen however much music it holds.
-       */
-      genre: overrides.genres?.length
-        ? overrides.genres
-        : metadata.genres.length
-          ? metadata.genres
-          : (params.verifiedIsrc?.genres ?? []),
-      bpm: metadata.bpm,
-      key: metadata.key,
-      explicit: overrides.isExplicit ?? metadata.isExplicit ?? false,
-      language: metadata.language,
-      copyright: metadata.copyright,
-      publisher: metadata.publisher,
-    },
-    isExplicit: overrides.isExplicit ?? metadata.isExplicit ?? false,
+    /**
+     * The file's genres, or — for a file that states none — the release's.
+     *
+     * Gap-filling only, in the same direction as every other recovered fact.
+     * It matters more than it looks: `/browse` is built entirely from the
+     * genres of the catalogue's tracks, so a file with no genre tag
+     * contributes nothing to it and a catalogue of such files renders an
+     * empty browse screen however much music it holds.
+     */
+    metadataGenre: overrides.genres?.length
+      ? overrides.genres
+      : metadata.genres.length
+        ? metadata.genres
+        : (params.verifiedIsrc?.genres ?? []),
+    metadataBpm: metadata.bpm,
+    metadataKey: metadata.key,
+    metadataExplicit: isExplicit,
+    metadataLanguage: metadata.language,
+    metadataCopyright: metadata.copyright,
+    metadataPublisher: metadata.publisher,
+    isExplicit,
     isAvailable: true,
     playCount: 0,
     popularity: 0,
-    source: 'upload',
-    status: 'processing',
-    externalIds: isrc ? { isrc: isrc.toUpperCase() } : undefined,
+    source: 'upload' as const,
+    status: 'processing' as const,
+    externalIsrc: isrc ? isrc.toUpperCase() : undefined,
     /**
      * The content hash travels with the track, and without this line the whole
      * first tier of dedup is dead.
      *
      * `matchCatalog` tier 1 answers "these exact bytes are already in the
-     * catalogue" by reading `Track.sha256` — the cheapest and most certain tier
-     * there is. Nothing else in the codebase writes that field, so until this
+     * catalogue" by reading `tracks.sha256` — the cheapest and most certain tier
+     * there is. Nothing else in the codebase writes that column, so until this
      * upload path filled it, every re-upload of a track Syra already hosts fell
      * through to fingerprinting and fuzzy matching, and a file with stripped tags
      * matched nothing at all.
      */
     sha256: metadata.sha256,
-  });
+  };
 
   /**
    * The album id MUST match what the track is saved with.
@@ -1448,84 +1442,111 @@ async function publishContribution(params: PublishParams): Promise<string> {
    */
   await uploadTrackAudio(
     {
-      id: trackId.toString(),
+      id: trackId,
       artistId: params.artistId,
       albumId: album?.id,
-      title: track.title,
-      audioSource: track.audioSource,
+      title: trackValues.title,
+      audioSource: {
+        url: audioSourceUrl,
+        format,
+        bitrate: metadata.technical.bitrateKbps,
+        duration: metadata.technical.durationSec,
+      },
     },
     fs.createReadStream(params.filePath),
   );
 
-  const saved = await track.save();
+  /**
+   * The track, its attestation and both counters in ONE transaction.
+   *
+   * In Mongo these were four independent writes, and every gap between them was
+   * a state somebody has to reason about: a published recording whose signature
+   * never landed is a contribution with no evidence behind it — the one thing
+   * the attestation exists to prevent — and a failed `$inc` left the artist's
+   * `stats.tracks` under-counting a catalogue that already had the track in it.
+   *
+   * The acoustic index and the ingest enqueue stay OUTSIDE, deliberately: both
+   * are best-effort work about a track that is already published, and rolling
+   * the publication back because a fingerprint write failed would lose a track
+   * the uploader was told was accepted.
+   */
+  await getDb().transaction(async (tx) => {
+    await tx.insert(tracks).values(trackValues);
 
-  if (params.requiresAttestation && params.attestation) {
-    // The screening result that was current at signing time is part of the
-    // record: an attestation with no evidence of what it was signed against
-    // proves nothing, and proving something is the only reason it exists.
-    await ContributionAttestationModel.create({
-      trackId: saved._id.toString(),
-      uploaderOxyUserId: params.uploaderOxyUserId,
-      statement: params.attestation,
-      acceptedAt: new Date(),
-      ip: params.ip,
-      userAgent: params.userAgent,
-      provenanceReport: params.report,
-      /**
-       * What the file itself declared, kept beside the signature.
-       *
-       * An attestation says "I may distribute this"; the raw tags say what the
-       * uploader was looking at when they said it. A claim months later is
-       * answered from the pair — the statement alone proves only that a box was
-       * ticked, and the source object may be long deleted by then.
-       */
-      rawTags: params.metadata.rawTags,
-    });
-  }
+    if (params.requiresAttestation && params.attestation) {
+      // The screening result that was current at signing time is part of the
+      // record: an attestation with no evidence of what it was signed against
+      // proves nothing, and proving something is the only reason it exists.
+      await recordAttestation(tx, {
+        trackId,
+        uploaderOxyUserId: params.uploaderOxyUserId,
+        statement: params.attestation,
+        acceptedAt: new Date(),
+        ip: params.ip,
+        userAgent: params.userAgent,
+        provenanceReportScore: params.report.score,
+        provenanceReportVerdict: params.report.verdict,
+        provenanceMarkers: params.report.markers,
+        /**
+         * What the file itself declared, kept beside the signature.
+         *
+         * An attestation says "I may distribute this"; the raw tags say what
+         * the uploader was looking at when they said it. A claim months later
+         * is answered from the pair — the statement alone proves only that a
+         * box was ticked, and the source object may be long deleted by then.
+         */
+        rawTags: params.metadata.rawTags,
+      });
+    }
+
+    await tx
+      .update(catalogEntities)
+      .set({ statsTracks: sql`${catalogEntities.statsTracks} + 1` })
+      .where(eq(catalogEntities.id, params.artistId));
+
+    /**
+     * `totalDuration` accumulates; `totalTracks` does NOT.
+     *
+     * They are different kinds of fact. `totalDuration` is how much audio of
+     * this release Syra actually hosts, so every track added to it adds to
+     * that. `totalTracks` is the release's own track count, taken from the
+     * right-hand side of `TRCK` (`3/12`) — a property of the record, not of how
+     * much of it we happen to have. Incrementing it made a 12-track album
+     * report 13 after one upload, and would have kept climbing with every
+     * contribution.
+     */
+    if (album) {
+      await tx
+        .update(albums)
+        .set({ totalDuration: sql`${albums.totalDuration} + ${metadata.technical.durationSec}` })
+        .where(eq(albums.id, album.id));
+    }
+  });
 
   /**
    * Index the recording acoustically.
    *
-   * `TrackFingerprint` is READ by `matchCatalog` tier 3 and by the third leg of
-   * compliance's takedown purge, and before this write nothing in the codebase
-   * created a row — so both were querying a permanently empty collection. That is
-   * the difference between a purge that catches a re-encode of a taken-down
-   * recording and one that only catches byte-identical copies.
+   * `track_fingerprints` is READ by `matchCatalog` tier 3 and by the third leg
+   * of compliance's takedown purge, and before this write nothing in the
+   * codebase created a row — so both were querying a permanently empty table.
+   * That is the difference between a purge that catches a re-encode of a
+   * taken-down recording and one that only catches byte-identical copies.
    *
    * Best-effort: a missing acoustic index degrades matching, while failing the
    * publication would lose a track the uploader was told was accepted.
    */
   if (params.fingerprint) {
-    await indexTrackAcoustically(saved._id.toString(), params.fingerprint).catch((err: unknown) =>
+    await indexTrackAcoustically(trackId, params.fingerprint).catch((err: unknown) =>
       logger.error('[uploads] failed to index the published track acoustically', {
-        trackId: saved._id.toString(),
+        trackId,
         message: getErrorMessage(err),
       }),
     );
   }
 
-  await ArtistModel.updateOne({ _id: params.artistId }, { $inc: { 'stats.tracks': 1 } });
+  await enqueueIngest(trackId);
 
-  /**
-   * `totalDuration` accumulates; `totalTracks` does NOT.
-   *
-   * They are different kinds of fact. `totalDuration` is how much audio of this
-   * release Syra actually hosts, so every track added to it adds to that.
-   * `totalTracks` is the release's own track count, taken from the right-hand
-   * side of `TRCK` (`3/12`) — a property of the record, not of how much of it we
-   * happen to have. Incrementing it made a 12-track album report 13 after one
-   * upload, and would have kept climbing with every contribution.
-   */
-  if (album) {
-    await AlbumModel.updateOne(
-      { _id: album.id },
-      { $inc: { totalDuration: metadata.technical.durationSec } },
-    );
-  }
-
-  await enqueueIngest(saved._id.toString());
-
-  return saved._id.toString();
+  return trackId;
 }
 
 // ── POST /api/uploads ────────────────────────────────────────────────────────
@@ -1549,7 +1570,7 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
     const tempPath = file?.path;
 
     try {
-      if (!isDatabaseConnected()) {
+      if (!isPostgresConnected()) {
         res.status(503).json({ error: 'Database not available' });
         return;
       }
@@ -1569,11 +1590,11 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
       }
       const request = parsed.data;
 
-      if (request.coverArt && !mongoose.Types.ObjectId.isValid(request.coverArt)) {
+      if (request.coverArt && !isLiveEntityId(request.coverArt)) {
         res.status(400).json({
           error: 'Invalid coverArt',
           message:
-            'coverArt must be an image id (MongoDB ObjectId). Upload the image first via /api/images/upload.',
+            'coverArt must be an image id. Upload the image first via /api/images/upload.',
         });
         return;
       }
@@ -1761,7 +1782,10 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
 
         const outcome: UploadOutcome = {
           outcome: 'stored',
-          upload: toUploadTrackDto(result.stored),
+          upload: toUploadTrackDto(
+            result.stored,
+            await loadImageVariants(uploadImageIds(result.stored))
+          ),
         };
         res.status(201).json(outcome);
         return;
@@ -2044,7 +2068,7 @@ export const listUploads = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       res.status(503).json({ error: 'Database not available' });
       return;
     }
@@ -2052,15 +2076,13 @@ export const listUploads = async (
     const userId = getRequiredOxyUserId(req);
     const limit = parseBoundedLimit(req.query.limit, 50);
     const offset = parseOffset(req.query.offset);
-    const filter = { ownerOxyUserId: userId, deletedAt: null };
 
-    const [uploads, total] = await Promise.all([
-      UserUploadModel.find(filter).sort({ createdAt: -1 }).skip(offset).limit(limit).exec(),
-      UserUploadModel.countDocuments(filter),
-    ]);
+    const { uploads, total } = await listOwnedUploads(userId, limit, offset);
+    // One image read for the page, not one per row.
+    const images = await loadImageVariants(uploads.flatMap(uploadImageIds));
 
     res.json({
-      uploads: uploads.map(toUploadTrackDto),
+      uploads: uploads.map((upload) => toUploadTrackDto(upload, images)),
       total,
       hasMore: offset + uploads.length < total,
     });
@@ -2094,60 +2116,25 @@ export const listUploadAlbums = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       res.status(503).json({ error: 'Database not available' });
       return;
     }
 
     const userId = getRequiredOxyUserId(req);
 
-    const grouped = await UserUploadModel.aggregate<{
-      _id: string;
-      albumName?: string;
-      albumArtistName?: string;
-      year?: number;
-      coverArt?: string;
-      trackCount: number;
-      totalDuration: number;
-      trackIds: mongoose.Types.ObjectId[];
-    }>([
-      {
-        $match: {
-          ownerOxyUserId: userId,
-          deletedAt: null,
-          // A file with no album tags has no release to belong to. Grouping the
-          // untagged ones together would invent an album called nothing.
-          albumKey: { $nin: [null, ''] },
-        },
-      },
-      { $sort: { albumKey: 1, discNumber: 1, trackNumber: 1 } },
-      {
-        $group: {
-          _id: '$albumKey',
-          // `$first` after the sort, so a release is titled by its lowest-numbered
-          // track rather than by whichever document the storage engine returned.
-          albumName: { $first: '$albumName' },
-          albumArtistName: { $first: '$albumArtistName' },
-          year: { $first: '$year' },
-          coverArt: { $first: '$coverArt' },
-          trackCount: { $sum: 1 },
-          totalDuration: { $sum: '$duration' },
-          trackIds: { $push: '$_id' },
-        },
-      },
-      { $sort: { albumArtistName: 1, year: 1, albumName: 1 } },
-    ]);
+    const grouped = await listLockerAlbums(userId);
 
     res.json({
       albums: grouped.map((album) => ({
-        albumKey: album._id,
-        albumName: album.albumName,
-        albumArtistName: album.albumArtistName,
-        year: album.year,
-        coverArt: normalizeImageRef(album.coverArt),
+        albumKey: album.albumKey,
+        albumName: album.albumName ?? undefined,
+        albumArtistName: album.albumArtistName ?? undefined,
+        year: album.year ?? undefined,
+        coverArt: normalizeImageRef(album.coverArtId),
         trackCount: album.trackCount,
         totalDuration: album.totalDuration,
-        trackIds: album.trackIds.map((id) => id.toString()),
+        trackIds: album.trackIds,
       })),
       total: grouped.length,
     });
@@ -2166,7 +2153,7 @@ export const getUpload = async (
   try {
     const userId = getRequiredOxyUserId(req);
     const uploadId = getParam(req, 'id');
-    if (!mongoose.Types.ObjectId.isValid(uploadId)) {
+    if (!isLiveEntityId(uploadId)) {
       res.status(404).json({ error: 'Upload not found' });
       return;
     }
@@ -2177,7 +2164,7 @@ export const getUpload = async (
       return;
     }
 
-    res.json(toUploadTrackDto(upload));
+    res.json(toUploadTrackDto(upload, await loadImageVariants(uploadImageIds(upload))));
   } catch (error) {
     next(error);
   }
@@ -2202,7 +2189,7 @@ export const updateUpload = async (
   try {
     const userId = getRequiredOxyUserId(req);
     const uploadId = getParam(req, 'id');
-    if (!mongoose.Types.ObjectId.isValid(uploadId)) {
+    if (!isLiveEntityId(uploadId)) {
       res.status(404).json({ error: 'Upload not found' });
       return;
     }
@@ -2221,31 +2208,55 @@ export const updateUpload = async (
 
     const updates = parsed.data;
 
-    if (updates.coverArt !== undefined && !mongoose.Types.ObjectId.isValid(updates.coverArt)) {
+    if (updates.coverArt !== undefined && !isLiveEntityId(updates.coverArt)) {
       res.status(400).json({
         error: 'Invalid coverArt',
-        message: 'coverArt must be an image id (MongoDB ObjectId).',
+        message: 'coverArt must be an image id.',
       });
       return;
     }
 
-    if (updates.title !== undefined) upload.title = updates.title;
-    if (updates.artistName !== undefined) upload.artistName = updates.artistName;
-    if (updates.albumName !== undefined) upload.albumName = updates.albumName;
-    if (updates.trackNumber !== undefined) upload.trackNumber = updates.trackNumber;
-    if (updates.discNumber !== undefined) upload.discNumber = updates.discNumber;
-    if (updates.year !== undefined) upload.year = updates.year;
-    if (updates.genres !== undefined) upload.genres = updates.genres;
+    /**
+     * Built key by key from the PARSED body, never spread from it.
+     *
+     * `undefined` means "the client did not send this field", so it is omitted
+     * from the `set` rather than written as null — the difference between
+     * leaving an album name alone and clearing it. Everything absent from this
+     * object (`ownerOxyUserId`, `sha256`, the storage keys, `matchedTrackId`,
+     * `expiresAt` and the retention stamps) is unreachable from here, which is
+     * the same guarantee the field-by-field assignment gave.
+     */
+    const changes: Partial<typeof userUploads.$inferInsert> = {};
+    if (updates.title !== undefined) changes.title = updates.title;
+    if (updates.artistName !== undefined) changes.artistName = updates.artistName;
+    if (updates.albumName !== undefined) changes.albumName = updates.albumName;
+    if (updates.trackNumber !== undefined) changes.trackNumber = updates.trackNumber;
+    if (updates.discNumber !== undefined) changes.discNumber = updates.discNumber;
+    if (updates.year !== undefined) changes.year = updates.year;
+    if (updates.genres !== undefined) changes.genres = updates.genres;
     if (updates.coverArt !== undefined) {
-      upload.coverArt = updates.coverArt;
+      changes.coverArtId = updates.coverArt;
       const colors = await getStoredImageColors(updates.coverArt);
-      upload.primaryColor = colors?.primaryColor;
-      upload.secondaryColor = colors?.secondaryColor;
+      changes.primaryColor = colors?.primaryColor;
+      changes.secondaryColor = colors?.secondaryColor;
     }
 
-    await upload.save();
+    /**
+     * An empty body is a no-op, and it has to be handled rather than sent.
+     *
+     * `db.update(...).set({})` is a SQL syntax error, where Mongoose's
+     * `save()` on an unmodified document simply did nothing — so a PATCH with
+     * no recognised fields would 500 instead of echoing the row back.
+     */
+    const [updated] = Object.keys(changes).length > 0
+      ? await getDb()
+          .update(userUploads)
+          .set(changes)
+          .where(eq(userUploads.id, upload.id))
+          .returning(UPLOAD_COLUMNS)
+      : [upload];
 
-    res.json(toUploadTrackDto(upload));
+    res.json(toUploadTrackDto(updated, await loadImageVariants(uploadImageIds(updated))));
   } catch (error) {
     next(error);
   }
@@ -2272,20 +2283,40 @@ export const deleteUpload = async (
   try {
     const userId = getRequiredOxyUserId(req);
     const uploadId = getParam(req, 'id');
-    if (!mongoose.Types.ObjectId.isValid(uploadId)) {
+    if (!isLiveEntityId(uploadId)) {
       res.status(404).json({ error: 'Upload not found' });
       return;
     }
 
-    const upload = await UserUploadModel.findOne({ _id: uploadId, ownerOxyUserId: userId }).exec();
+    const upload = await findOwnedUploadIncludingDeleted(uploadId, userId);
     if (!upload) {
       res.status(404).json({ error: 'Upload not found' });
       return;
     }
 
-    await deleteUploadStoredObjects(upload);
-    await UserUploadModel.deleteOne({ _id: upload._id });
-    await TrackKeyModel.deleteOne({ trackId: upload._id.toString() });
+    const hls = (await loadUploadHls([upload.id])).get(upload.id) ?? [];
+    await deleteUploadStoredObjects({ ...upload, hls });
+
+    /**
+     * The row takes its HLS ladder and its provenance markers with it — those
+     * two are real `ON DELETE cascade` children of `user_uploads`.
+     *
+     * `track_keys` is NOT, and the delete below is therefore an explicit line
+     * this handler has to remember. That is carried over from Mongo at parity,
+     * deliberately: `track_keys.track_id` is polymorphic across three id spaces
+     * and carries no foreign key at all (see
+     * `schema/deferredForeignKeys.ts`), so there is nothing for a cascade to
+     * hang off.
+     *
+     * **The known consequence, unchanged by this port:** this manual path is
+     * the ONLY one that cleans the key up. `services/uploads/expirySweeper.ts`
+     * deletes the same rows on a timer and has no equivalent line, so every
+     * file the sweeper removes leaves its AES key behind forever. The port does
+     * not fix that and does not make it worse — the fix is the `track_keys`
+     * split, which is its own task; see the ledger entry named above.
+     */
+    await deleteUploads([upload.id]);
+    await getDb().delete(trackKeys).where(eq(trackKeys.trackId, upload.id));
 
     res.status(204).send();
   } catch (error) {
@@ -2317,19 +2348,19 @@ export const promoteUpload = async (
   let stagedDir: string | undefined;
 
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       res.status(503).json({ error: 'Database not available' });
       return;
     }
 
     const userId = getRequiredOxyUserId(req);
     const uploadId = getParam(req, 'id');
-    if (!mongoose.Types.ObjectId.isValid(uploadId)) {
+    if (!isLiveEntityId(uploadId)) {
       res.status(404).json({ error: 'Upload not found' });
       return;
     }
 
-    const upload = await findOwnedUpload(uploadId, userId);
+    const upload = await findOwnedUploadForPromotion(uploadId, userId);
     if (!upload) {
       res.status(404).json({ error: 'Upload not found' });
       return;
@@ -2343,13 +2374,17 @@ export const promoteUpload = async (
       return;
     }
 
-    if (upload.status !== 'ready' || !upload.audioSource?.key) {
+    // Both halves of what was one embedded `audioSource` subdocument: a row
+    // carrying a key and no format is a shape the old single check could not
+    // produce and two flattened columns can.
+    if (upload.status !== 'ready' || !upload.audioSourceKey || !upload.audioSourceFormat) {
       res.status(409).json({
         error: 'Upload not ready',
         message: 'This file is still being processed.',
       });
       return;
     }
+    const audioSource = { key: upload.audioSourceKey, format: upload.audioSourceFormat };
 
     const rawBody: Record<string, unknown> = req.body ?? {};
     const parsed = uploadTrackRequestSchema.safeParse({
@@ -2365,8 +2400,8 @@ export const promoteUpload = async (
     // Stage the stored bytes locally: every screening tool wants a path, and the
     // catalogue's ingest reads from the track's own key, not the locker's.
     stagedDir = fs.mkdtempSync(path.join(os.tmpdir(), 'promote-'));
-    const stagedPath = path.join(stagedDir, `source.${upload.audioSource.format}`);
-    const { stream } = await streamFromS3(upload.audioSource.key);
+    const stagedPath = path.join(stagedDir, `source.${audioSource.format}`);
+    const { stream } = await streamFromS3(audioSource.key);
     await new Promise<void>((resolve, reject) => {
       const destination = fs.createWriteStream(stagedPath);
       stream.pipe(destination);
@@ -2392,7 +2427,7 @@ export const promoteUpload = async (
         sha256: upload.sha256,
         durationSec: metadata.technical.durationSec,
         title: request.title ?? upload.title,
-        artistName: request.artistName ?? upload.artistName,
+        artistName: request.artistName ?? upload.artistName ?? undefined,
         isrc: metadata.isrc,
         fingerprint: upload.fingerprint,
       },
@@ -2400,8 +2435,10 @@ export const promoteUpload = async (
     );
 
     if (match.kind === 'track') {
-      upload.matchedTrackId = match.trackId;
-      await upload.save();
+      await getDb()
+        .update(userUploads)
+        .set({ matchedTrackId: match.trackId })
+        .where(eq(userUploads.id, upload.id));
       const outcome: UploadOutcome = { outcome: 'matched', trackId: match.trackId };
       res.status(200).json(outcome);
       return;
@@ -2421,7 +2458,7 @@ export const promoteUpload = async (
      * The stored fingerprint is reused, so promotion costs no extra decode.
      */
     const promoteFingerprint: Fingerprint | undefined =
-      upload.fingerprint?.length && upload.fingerprintDurationSec !== undefined
+      upload.fingerprint.length > 0 && upload.fingerprintDurationSec !== null
         ? { values: upload.fingerprint, durationSec: upload.fingerprintDurationSec }
         : undefined;
     const identity = await identifyForPublication(promoteFingerprint);
@@ -2463,7 +2500,7 @@ export const promoteUpload = async (
     const gate = await screenPublicContribution({
       uploaderOxyUserId: userId,
       metadata,
-      declaredArtistName: request.artistName ?? upload.artistName,
+      declaredArtistName: request.artistName ?? upload.artistName ?? undefined,
       acoustic: promoteAcoustic && {
         artistId: promoteAcoustic.artistId,
         artistName: promoteAcoustic.artistName,
@@ -2479,7 +2516,7 @@ export const promoteUpload = async (
       return;
     }
 
-    const catalogCoverEligible = await isCatalogEligibleImage(upload.coverArt);
+    const catalogCoverEligible = await isCatalogEligibleImage(upload.coverArtId ?? undefined);
 
     const trackId = await publishContribution({
       uploaderOxyUserId: userId,
@@ -2489,21 +2526,24 @@ export const promoteUpload = async (
       attestation: request.attestation,
       metadata,
       overrides: {
+        // `?? undefined` on every optional: a Postgres null is not the absent
+        // value `??` falls through on, so `request.x ?? upload.x` would hand a
+        // literal null to a field the DTO declares optional.
         title: request.title ?? upload.title,
-        artistName: request.artistName ?? upload.artistName,
-        albumName: request.albumName ?? upload.albumName,
-        trackNumber: request.trackNumber ?? upload.trackNumber,
-        discNumber: request.discNumber ?? upload.discNumber,
-        year: request.year ?? upload.year,
+        artistName: request.artistName ?? upload.artistName ?? undefined,
+        albumName: request.albumName ?? upload.albumName ?? undefined,
+        trackNumber: request.trackNumber ?? upload.trackNumber ?? undefined,
+        discNumber: request.discNumber ?? upload.discNumber ?? undefined,
+        year: request.year ?? upload.year ?? undefined,
         genres: request.genres ?? upload.genres,
         // The locker's own artwork was stored whatever its size; the catalogue
         // takes it only if it cleared the floor. Read from the stored asset's
         // recorded dimensions rather than re-measuring — and re-uploading — the
         // same image.
-        coverArt: request.coverArt ?? (catalogCoverEligible ? upload.coverArt : undefined),
+        coverArt: request.coverArt ?? (catalogCoverEligible ? (upload.coverArtId ?? undefined) : undefined),
         isExplicit: request.isExplicit,
       },
-      format: upload.audioSource.format,
+      format: audioSource.format,
       filePath: stagedPath,
       fingerprint: promoteFingerprint,
       report,
@@ -2513,9 +2553,10 @@ export const promoteUpload = async (
       userAgent: req.get('user-agent'),
     });
 
-    upload.matchedTrackId = trackId;
-    upload.resolvedArtistId = gate.artistId;
-    await upload.save();
+    await getDb()
+      .update(userUploads)
+      .set({ matchedTrackId: trackId, resolvedArtistId: gate.artistId })
+      .where(eq(userUploads.id, upload.id));
 
     const outcome: UploadOutcome = { outcome: 'published', trackId };
     res.status(201).json(outcome);
@@ -2549,7 +2590,7 @@ export const getUploadStream = async (
 ): Promise<void> => {
   try {
     const uploadId = getParam(req, 'id');
-    if (!mongoose.Types.ObjectId.isValid(uploadId)) {
+    if (!isLiveEntityId(uploadId)) {
       res.status(400).json({ error: 'Invalid upload id' });
       return;
     }
@@ -2573,7 +2614,12 @@ export const getUploadStream = async (
       return;
     }
 
-    if (upload.status !== 'ready' || !upload.hlsMasterKey || !upload.hls?.length) {
+    // The ladder is `user_upload_hls_renditions` now, so "has a playable
+    // rendition" is a second read rather than a field on the row. It is loaded
+    // AFTER the status checks above, which is what keeps the locker listing —
+    // the hot path — free of a join it never looks at.
+    const hls = (await loadUploadHls([upload.id])).get(upload.id) ?? [];
+    if (upload.status !== 'ready' || !upload.hlsMasterKey || hls.length === 0) {
       res.status(422).json({ error: 'Upload not playable' });
       return;
     }
@@ -2603,7 +2649,7 @@ export const getUploadStreamKey = async (
 ): Promise<void> => {
   try {
     const uploadId = getParam(req, 'id');
-    if (!mongoose.Types.ObjectId.isValid(uploadId)) {
+    if (!isLiveEntityId(uploadId)) {
       res.status(400).json({ error: 'Invalid upload id' });
       return;
     }
@@ -2620,7 +2666,15 @@ export const getUploadStreamKey = async (
       return;
     }
 
-    const trackKey = await TrackKeyModel.findOne({ trackId: uploadId }).lean();
+    // Looked up by `track_id` alone and not by `kind`, matching
+    // `stream.controller.ts` and `previewService.ts`: the unique constraint is
+    // on the id and the three id spaces never collide, so one id resolves to at
+    // most one key row.
+    const [trackKey] = await getDb()
+      .select({ keyHex: trackKeys.keyHex })
+      .from(trackKeys)
+      .where(eq(trackKeys.trackId, uploadId))
+      .limit(1);
     if (!trackKey) {
       res.status(404).json({ error: 'Key not found' });
       return;
@@ -2642,7 +2696,7 @@ export const getUploadMasterPlaylist = async (
 ): Promise<void> => {
   try {
     const uploadId = getParam(req, 'id');
-    if (!mongoose.Types.ObjectId.isValid(uploadId)) {
+    if (!isLiveEntityId(uploadId)) {
       res.status(400).json({ error: 'Invalid upload id' });
       return;
     }
@@ -2664,14 +2718,15 @@ export const getUploadMasterPlaylist = async (
       return;
     }
 
-    if (!upload.hlsMasterKey || !upload.hls?.length) {
+    const hls = (await loadUploadHls([upload.id])).get(upload.id) ?? [];
+    if (!upload.hlsMasterKey || hls.length === 0) {
       res.status(404).json({ error: 'Master playlist not available' });
       return;
     }
 
     const token = resolveManifestToken(req, uploadId, access.ownerOxyUserId, access.maxBitrateKbps);
     const playlist = await buildMasterPlaylistFor(
-      { id: uploadId, hls: upload.hls },
+      { id: uploadId, hls },
       {
         token,
         baseUrl: env.STREAM_KEY_BASE_URL,
@@ -2697,7 +2752,7 @@ export const getUploadVariantPlaylist = async (
 ): Promise<void> => {
   try {
     const uploadId = getParam(req, 'id');
-    if (!mongoose.Types.ObjectId.isValid(uploadId)) {
+    if (!isLiveEntityId(uploadId)) {
       res.status(400).json({ error: 'Invalid upload id' });
       return;
     }
@@ -2714,7 +2769,8 @@ export const getUploadVariantPlaylist = async (
       return;
     }
 
-    if (!upload.hls?.length) {
+    const hls = (await loadUploadHls([upload.id])).get(upload.id) ?? [];
+    if (hls.length === 0) {
       res.status(404).json({ error: 'Variant playlist not available' });
       return;
     }
@@ -2726,7 +2782,7 @@ export const getUploadVariantPlaylist = async (
       return;
     }
 
-    if (!upload.hls.some((rendition) => rendition.bitrateKbps === bitrateKbps)) {
+    if (!hls.some((rendition) => rendition.bitrateKbps === bitrateKbps)) {
       res.status(404).json({ error: `No rendition at ${bitrateKbps} kbps` });
       return;
     }
@@ -2741,7 +2797,7 @@ export const getUploadVariantPlaylist = async (
 
     const token = resolveManifestToken(req, uploadId, access.ownerOxyUserId, access.maxBitrateKbps);
     const playlist = await buildVariantPlaylistFor(
-      { id: uploadId, hls: upload.hls },
+      { id: uploadId, hls },
       {
         bitrateKbps,
         token,

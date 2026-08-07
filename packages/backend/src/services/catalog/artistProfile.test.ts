@@ -2,7 +2,6 @@ import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import { eq } from 'drizzle-orm';
 import { uuidv7 } from '@oxyhq/db';
 import { PlaylistVisibility } from '@syra/shared-types';
-import { connect, clear, disconnect } from '../../test/mongo';
 import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
 import { getDb } from '../../db/postgres';
 import {
@@ -13,7 +12,7 @@ import {
   tracks,
 } from '../../db/schema/catalog';
 import { playlistCollaborators, playlistTracks, playlists } from '../../db/schema/library';
-import { ContributionAttestationModel } from '../../models/ContributionAttestation';
+import { contributionAttestations } from '../../db/schema/creators';
 import {
   loadDiscography,
   loadCreditedOn,
@@ -28,18 +27,9 @@ import {
  * `ContributionAttestation` — which tells the profile which of its tracks a
  * third party published — is Task 13's vertical and still Mongoose.
  */
-beforeAll(async () => {
-  await connect();
-  await connectDb();
-});
-afterEach(async () => {
-  await clear();
-  await clearDb();
-});
-afterAll(async () => {
-  await disconnect();
-  await disconnectDb();
-});
+beforeAll(connectDb);
+afterEach(clearDb);
+afterAll(disconnectDb);
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -466,7 +456,7 @@ describe('loadProfileState', () => {
     const artist = await makeArtist();
     const own = await makeTrack(artist.id);
     const contributed = await makeTrack(artist.id);
-    await ContributionAttestationModel.create({
+    await getDb().insert(contributionAttestations).values({
       trackId: contributed,
       uploaderOxyUserId: 'a-stranger',
       statement: 'I may distribute this recording',

@@ -20,12 +20,11 @@ import { pipeline } from 'stream/promises';
 import mongoose from 'mongoose';
 import { eq } from 'drizzle-orm';
 import { uuidv7 } from '@oxyhq/db';
-import { clear, connect, disconnect } from '../test/mongo';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
 import { catalogEntities, trackFingerprints, tracks } from '../db/schema/catalog';
 import { indexTrackAcoustically } from '../db/catalog/fingerprints';
-import { UserUploadModel } from '../models/UserUpload';
+import { userUploads } from '../db/schema/creators';
 import { logger } from '../utils/logger';
 import {
   purgeLockerCopiesOfTrack,
@@ -34,18 +33,9 @@ import {
 } from '../services/compliance/takedown';
 import { backfillTrackFingerprints, type BackfillDeps } from './backfillTrackFingerprints';
 
-beforeAll(async () => {
-  await connect();
-  await connectDb();
-});
-afterEach(async () => {
-  await clear();
-  await clearDb();
-});
-afterAll(async () => {
-  await disconnect();
-  await disconnectDb();
-});
+beforeAll(connectDb);
+afterEach(clearDb);
+afterAll(disconnectDb);
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -478,9 +468,10 @@ function makeStorageSpy(): StorageSpy {
 
 /** A locker file that only the ACOUSTIC leg can find: different bytes, no link. */
 async function makeReencode(fingerprint: number[]): Promise<string> {
-  const id = new mongoose.Types.ObjectId();
-  await UserUploadModel.create({
-    _id: id,
+  // Minted here because the S3 key below is composed from it.
+  const id = uuidv7();
+  await getDb().insert(userUploads).values({
+    id,
     ownerOxyUserId: 'user-r',
     title: 'A re-encode',
     duration: 210,
@@ -489,9 +480,16 @@ async function makeReencode(fingerprint: number[]): Promise<string> {
     status: 'ready',
     fingerprint,
     fingerprintDurationSec: 211,
-    audioSource: { key: `audio/user-r/${id.toString()}.mp3`, format: 'mp3' },
+    audioSourceKey: `audio/user-r/${id}.mp3`,
+    audioSourceFormat: 'mp3',
   });
-  return id.toString();
+  return id;
+}
+
+/** A locker row, read back directly rather than through a production helper. */
+async function readUpload(uploadId: string) {
+  const [row] = await getDb().select().from(userUploads).where(eq(userUploads.id, uploadId));
+  return row;
 }
 
 /**
@@ -514,7 +512,7 @@ describe('backfillTrackFingerprints — the starvation it closes', () => {
     expect(before.acousticMatchingAvailable).toBe(false);
     expect(before.uploadsDeleted).toBe(0);
     // The confident negative: a clean-looking purge that missed the copy.
-    expect(await UserUploadModel.findById(reencode).lean()).not.toBeNull();
+    expect(await readUpload(reencode)).toBeDefined();
 
     // ── The backfill ──
     const stats = await backfillTrackFingerprints({}, deps());
@@ -525,7 +523,7 @@ describe('backfillTrackFingerprints — the starvation it closes', () => {
 
     expect(after.acousticMatchingAvailable).toBe(true);
     expect(after.uploadsDeleted).toBe(1);
-    expect(await UserUploadModel.findById(reencode).lean()).toBeNull();
+    expect(await readUpload(reencode)).toBeUndefined();
   });
 
   it('does not start deleting unrelated music once the table is loaded', async () => {
@@ -540,6 +538,6 @@ describe('backfillTrackFingerprints — the starvation it closes', () => {
 
     expect(result.acousticMatchingAvailable).toBe(true);
     expect(result.uploadsDeleted).toBe(0);
-    expect(await UserUploadModel.findById(otherMusic).lean()).not.toBeNull();
+    expect(await readUpload(otherMusic)).toBeDefined();
   });
 });

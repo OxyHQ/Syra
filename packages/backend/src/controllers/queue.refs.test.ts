@@ -10,12 +10,12 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll, mock } from 'bun:test';
 import type { Response } from 'express';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
+import { eq } from 'drizzle-orm';
 import { uuidv7 } from '@oxyhq/db';
-import { connect, clear, disconnect } from '../test/mongo';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
 import { catalogEntities, tracks } from '../db/schema/catalog';
-import { UserUploadModel } from '../models/UserUpload';
+import { userUploadHlsRenditions, userUploads } from '../db/schema/creators';
 import { replaceQueue, getQueueHandler } from './queue.controller';
 
 // The queue lives in Redis. A fake keyed by user id keeps this about REF
@@ -37,19 +37,12 @@ mock.module('../utils/redis', () => ({ getRedisClient: () => fakeRedis }));
  * is now a two-DATABASE ambiguity, and resolving a ref by trying one and
  * falling back to the other would be even worse than before.
  */
-beforeAll(async () => {
-  await connect();
-  await connectDb();
-});
+beforeAll(connectDb);
 afterEach(async () => {
-  await clear();
   await clearDb();
   queues.clear();
 });
-afterAll(async () => {
-  await disconnect();
-  await disconnectDb();
-});
+afterAll(disconnectDb);
 
 const OWNER = 'oxy-owner';
 const STRANGER = 'oxy-stranger';
@@ -83,21 +76,33 @@ const rethrow = (error: unknown): void => { if (error) throw error; };
 
 let shaCounter = 0;
 
-async function seedUpload(ownerOxyUserId = OWNER) {
+async function seedUpload(ownerOxyUserId = OWNER): Promise<{ id: string }> {
   shaCounter += 1;
-  return UserUploadModel.create({
-    ownerOxyUserId,
-    title: 'Midnight Ferry',
-    artistName: 'Nadia Ortiz',
-    duration: 210,
-    sizeBytes: 1024,
-    sha256: shaCounter.toString(16).padStart(64, '0'),
-    status: 'ready',
-    playCount: 0,
-    audioSource: { key: `locker/${ownerOxyUserId}/x/source.mp3`, format: 'mp3' },
-    hlsMasterKey: `hls/${ownerOxyUserId}/x/master.m3u8`,
-    hls: [{ manifestKey: `hls/${ownerOxyUserId}/x/160/index.m3u8`, bitrateKbps: 160, encrypted: true }],
+  const [upload] = await getDb()
+    .insert(userUploads)
+    .values({
+      ownerOxyUserId,
+      title: 'Midnight Ferry',
+      artistName: 'Nadia Ortiz',
+      duration: 210,
+      sizeBytes: 1024,
+      sha256: shaCounter.toString(16).padStart(64, '0'),
+      status: 'ready',
+      playCount: 0,
+      audioSourceKey: `locker/${ownerOxyUserId}/x/source.mp3`,
+      audioSourceFormat: 'mp3',
+      hlsMasterKey: `hls/${ownerOxyUserId}/x/master.m3u8`,
+    })
+    .returning({ id: userUploads.id });
+  // The ladder is a child table now.
+  await getDb().insert(userUploadHlsRenditions).values({
+    userUploadId: upload.id,
+    position: 0,
+    manifestKey: `hls/${ownerOxyUserId}/x/160/index.m3u8`,
+    bitrateKbps: 160,
+    encrypted: true,
   });
+  return upload;
 }
 
 /** Seeds the artist and the catalogue track; returns the track id. */
@@ -142,7 +147,7 @@ describe('PUT /api/queue — resolving refs', () => {
       makeReq(OWNER, {
         refs: [
           { kind: 'track', id: trackId },
-          { kind: 'upload', id: upload._id.toString() },
+          { kind: 'upload', id: upload.id },
         ],
         current: 0,
       }),
@@ -155,7 +160,7 @@ describe('PUT /api/queue — resolving refs', () => {
     expect(queue.tracks.map((item) => item.kind)).toEqual(['track', 'upload']);
     expect(queue.tracks.map((item) => item.id)).toEqual([
       trackId,
-      upload._id.toString(),
+      upload.id,
     ]);
   });
 
@@ -164,7 +169,7 @@ describe('PUT /api/queue — resolving refs', () => {
     const res = makeRes();
 
     await replaceQueue(
-      makeReq(OWNER, { refs: [{ kind: 'upload', id: upload._id.toString() }], current: 0 }),
+      makeReq(OWNER, { refs: [{ kind: 'upload', id: upload.id }], current: 0 }),
       res as unknown as Response,
       rethrow,
     );
@@ -181,7 +186,7 @@ describe('PUT /api/queue — resolving refs', () => {
     const res = makeRes();
 
     await replaceQueue(
-      makeReq(OWNER, { refs: [{ kind: 'track', id: upload._id.toString() }], current: 0 }),
+      makeReq(OWNER, { refs: [{ kind: 'track', id: upload.id }], current: 0 }),
       res as unknown as Response,
       rethrow,
     );
@@ -191,11 +196,14 @@ describe('PUT /api/queue — resolving refs', () => {
 
   it('refuses a locker file that is still transcoding', async () => {
     const upload = await seedUpload();
-    await UserUploadModel.updateOne({ _id: upload._id }, { $set: { status: 'processing' } });
+    await getDb()
+      .update(userUploads)
+      .set({ status: 'processing' })
+      .where(eq(userUploads.id, upload.id));
     const res = makeRes();
 
     await replaceQueue(
-      makeReq(OWNER, { refs: [{ kind: 'upload', id: upload._id.toString() }], current: 0 }),
+      makeReq(OWNER, { refs: [{ kind: 'upload', id: upload.id }], current: 0 }),
       res as unknown as Response,
       rethrow,
     );
@@ -207,11 +215,14 @@ describe('PUT /api/queue — resolving refs', () => {
 
   it('refuses a soft-deleted locker file', async () => {
     const upload = await seedUpload();
-    await UserUploadModel.updateOne({ _id: upload._id }, { $set: { deletedAt: new Date() } });
+    await getDb()
+      .update(userUploads)
+      .set({ deletedAt: new Date() })
+      .where(eq(userUploads.id, upload.id));
     const res = makeRes();
 
     await replaceQueue(
-      makeReq(OWNER, { refs: [{ kind: 'upload', id: upload._id.toString() }], current: 0 }),
+      makeReq(OWNER, { refs: [{ kind: 'upload', id: upload.id }], current: 0 }),
       res as unknown as Response,
       rethrow,
     );
@@ -228,7 +239,7 @@ describe('PUT /api/queue — resolving refs', () => {
       makeReq(OWNER, {
         refs: [
           { kind: 'track', id: trackId },
-          { kind: 'upload', id: foreign._id.toString() },
+          { kind: 'upload', id: foreign.id },
         ],
         current: 0,
       }),
@@ -258,7 +269,7 @@ describe('PUT /api/queue — resolving refs', () => {
   it('keeps the kind tag through a round trip', async () => {
     const upload = await seedUpload();
     await replaceQueue(
-      makeReq(OWNER, { refs: [{ kind: 'upload', id: upload._id.toString() }], current: 0 }),
+      makeReq(OWNER, { refs: [{ kind: 'upload', id: upload.id }], current: 0 }),
       makeRes() as unknown as Response,
       rethrow,
     );
@@ -277,7 +288,7 @@ describe('PUT /api/queue — resolving refs', () => {
     const res = makeRes();
 
     await replaceQueue(
-      makeReq(OWNER, { refs: [{ kind: 'upload', id: upload._id.toString() }], current: 0 }),
+      makeReq(OWNER, { refs: [{ kind: 'upload', id: upload.id }], current: 0 }),
       res as unknown as Response,
       rethrow,
     );

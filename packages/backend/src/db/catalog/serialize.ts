@@ -156,7 +156,7 @@ export function imageVariantLookup(assets: readonly ImageAssetRow[]): ImageVaria
 }
 
 /** The seven per-variant FK columns, in the order the DTO declares them. */
-interface ImageSizeIds {
+export interface ImageSizeIds {
   readonly small: string | null;
   readonly medium: string | null;
   readonly large: string | null;
@@ -165,7 +165,13 @@ interface ImageSizeIds {
   readonly original: string | null;
 }
 
-function toImageSizes(
+/**
+ * Exported for `db/creators/serialize.ts`, which reassembles the identical
+ * seven columns on `user_uploads`. Imported directly from this module rather
+ * than copied: two implementations of "which variants are renderable" would
+ * drift, and the half that drifted would serve a variant with no dimensions.
+ */
+export function toImageSizes(
   ids: ImageSizeIds,
   lookup: ImageVariantLookup
 ): CatalogImageSizes | undefined {

@@ -43,7 +43,15 @@ mis-typed during the port.
    production, not just a documentation gap**: the sweeper is the path that runs
    continuously and unattended, so most expired uploads' AES keys are left
    behind in `TrackKey` forever, keyed by an `upload._id` that no longer
-   resolves to anything once the upload is gone. `CopyrightReport` (one
+   resolves to anything once the upload is gone. **STILL OPEN after Task 13,
+   deliberately.** That task ported both paths at parity — `deleteUpload` keeps
+   its explicit `track_keys` delete, `expirySweeper` still has none — and added
+   no second explicit delete, because doing so would make the two agree while
+   leaving the next caller to remember the same line. The fix is a real foreign
+   key, which needs `track_keys` split into one column per id space; that is a
+   schema change spanning three verticals and has its own task. Owner and full
+   shape: `db/schema/deferredForeignKeys.ts`'s `track_keys.track_id` entry.
+   `CopyrightReport` (one
    rollback-only `deleteOne`, not a real deletion path — see its row below),
    `ModerationEvent`/`ModerationOutbox`/`ModerationEnforcement` (retention
    sweeps). Where the app silently orphans a reference today, a real `SET NULL`

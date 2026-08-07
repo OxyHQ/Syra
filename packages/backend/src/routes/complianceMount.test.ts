@@ -2,15 +2,13 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'bun:test';
 import express from 'express';
 import type { Server } from 'http';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { uuidv7 } from '@oxyhq/db';
 import { normalizeNameKey } from '@syra/shared-types';
-import { clear, connect, disconnect } from '../test/mongo';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
 import { catalogEntities, tracks } from '../db/schema/catalog';
-import { ArtistClaimModel } from '../models/ArtistClaim';
-import { copyrightReports } from '../db/schema/creators';
+import { artistClaims, copyrightReports } from '../db/schema/creators';
 import { COMPLIANCE_REVIEWERS_ENV } from '../services/compliance/reviewers';
 import artistsRoutes from './artists.routes';
 import artistsAuthRoutes from './artists.auth.routes';
@@ -39,18 +37,9 @@ import copyrightRoutes from './copyright.routes';
  * ROUTE MOUNTING, so it exercises the real handlers end to end and therefore
  * needs whatever they read.
  */
-beforeAll(async () => {
-  await connect();
-  await connectDb();
-});
-afterEach(async () => {
-  await clear();
-  await clearDb();
-});
-afterAll(async () => {
-  await disconnect();
-  await disconnectDb();
-});
+beforeAll(connectDb);
+afterEach(clearDb);
+afterAll(disconnectDb);
 
 /** The `server.ts` mount shape: public first, authenticated second, both at /api. */
 async function withApi(
@@ -164,7 +153,12 @@ describe('claim submission routing', () => {
 
     // Reached the handler, and the handler did what it promises: a pending row,
     // and no ownership written.
-    expect(await ArtistClaimModel.countDocuments({ artistId, status: 'pending' })).toBe(1);
+    expect(
+      await getDb()
+        .select({ id: artistClaims.id })
+        .from(artistClaims)
+        .where(and(eq(artistClaims.artistId, artistId), eq(artistClaims.status, 'pending')))
+    ).toHaveLength(1);
     const artist = await readArtist(artistId);
     expect(artist?.ownerOxyUserId).toBeNull();
     expect(artist?.claimable).toBe(true);

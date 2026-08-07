@@ -31,7 +31,7 @@ import { and, between, eq } from 'drizzle-orm';
 import { getDb } from '../../db/postgres';
 import { trackFingerprints, tracks } from '../../db/schema/catalog';
 import { isPlayableTrack, playableTrackFilter } from '../../db/catalog/visibility';
-import { UserUploadModel } from '../../models/UserUpload';
+import { findUploadBySha256 } from '../../db/creators/uploads';
 import { compareFingerprints, FINGERPRINT_MIN_OVERLAP_ITEMS } from './fingerprint';
 
 /**
@@ -177,19 +177,21 @@ async function findCatalogTrackByHash(sha256: string): Promise<MatchedTrack | nu
   return track ?? null;
 }
 
-/** The uploader's own locker — the only locker any match may look inside. */
+/**
+ * The uploader's own locker — the only locker any match may look inside.
+ *
+ * The Mongo read spelled "not soft-deleted" as `deletedAt: { $exists: false }`
+ * while `uploads.controller` spelled the same thing `deletedAt: null`. Those
+ * are different predicates in Mongo and agreed only because nothing ever stored
+ * an explicit null; `deleted_at is null` is both of them, so the divergence
+ * disappears at the port rather than being carried forward.
+ */
 async function findOwnUploadByHash(
   sha256: string,
   ownerOxyUserId: string,
 ): Promise<LockerMatch | undefined> {
-  const existing = await UserUploadModel.findOne({
-    ownerOxyUserId,
-    sha256,
-    deletedAt: { $exists: false },
-  })
-    .select('_id')
-    .lean();
-  return existing ? { kind: 'upload', uploadId: existing._id.toString(), tier: 'sha256' } : undefined;
+  const existing = await findUploadBySha256(ownerOxyUserId, sha256);
+  return existing ? { kind: 'upload', uploadId: existing.id, tier: 'sha256' } : undefined;
 }
 
 // ── Tier 2: ISRC ────────────────────────────────────────────────────────────

@@ -1,10 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
 import { and, count, eq, inArray, isNull, sql } from 'drizzle-orm';
-import { isLiveEntityId, sqlStateOf } from '@oxyhq/db';
+import { isLiveEntityId, isUniqueViolation, sqlStateOf } from '@oxyhq/db';
 import { publicColumns } from '@oxyhq/db/assert';
 import { z } from 'zod';
-import { getDb } from '../db/postgres';
+import { getDb, isPostgresConnected } from '../db/postgres';
 import { albums, catalogEntities, tracks } from '../db/schema/catalog';
 import { copyrightReports } from '../db/schema/creators';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../db/schema/protectedColumns';
@@ -19,12 +19,22 @@ import {
 } from '../db/catalog/containers';
 import { loadImageVariants, toAlbumDtos, toTrackDtos } from '../db/catalog/hydrate';
 import { normalizeImageRef, toArtistDto, type PublicCatalogEntityRow } from '../db/catalog/serialize';
-import { ArtistClaimModel, type IArtistClaim } from '../models/ArtistClaim';
-import { ContributionAttestationModel } from '../models/ContributionAttestation';
+import {
+  findArtistClaimById,
+  insertArtistClaim,
+  listArtistClaimsByClaimant,
+  listArtistClaimsByStatus,
+  rejectOtherPendingClaims,
+  resolvePendingArtistClaim,
+  toArtistClaimDto,
+} from '../db/creators/claims';
+import {
+  findAttestationUploader,
+  findAttestationsByTrackIds,
+} from '../db/creators/attestations';
 import { takeDownTrack } from '../services/compliance/takedown';
 import { mirrorCatalogImage } from '../services/catalog/catalogImageAssets';
 import { logger } from '../utils/logger';
-import { isDatabaseConnected } from '../utils/database';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { getRequiredOxyUserId as getAuthenticatedUserId } from '@oxyhq/core/server';
 import { getParam, parseBoundedLimit, parseOffset } from '../utils/reqParams';
@@ -138,7 +148,7 @@ async function findOwnedArtistRow(
  */
 export const getArtists = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -172,7 +182,7 @@ export const getArtists = async (req: Request, res: Response, next: NextFunction
  */
 export const getArtistById = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -200,7 +210,7 @@ export const getArtistById = async (req: Request, res: Response, next: NextFunct
  */
 export const getArtistAlbums = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -239,7 +249,7 @@ export const getArtistAlbums = async (req: Request, res: Response, next: NextFun
  */
 export const getArtistTracks = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -290,7 +300,7 @@ export const getArtistTracks = async (req: Request, res: Response, next: NextFun
  */
 export const registerAsArtist = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -407,7 +417,7 @@ export const registerAsArtist = async (req: AuthRequest, res: Response, next: Ne
  */
 export const getMyArtistProfile = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -431,7 +441,7 @@ export const getMyArtistProfile = async (req: AuthRequest, res: Response, next: 
  */
 export const getArtistDashboard = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -535,7 +545,7 @@ export const getArtistDashboard = async (req: AuthRequest, res: Response, next: 
  */
 export const getArtistInsights = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -602,7 +612,7 @@ export const getArtistInsights = async (req: AuthRequest, res: Response, next: N
  */
 export const updateMyArtistProfile = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -671,29 +681,8 @@ export const updateMyArtistProfile = async (req: AuthRequest, res: Response, nex
  * only thing that writes `ownerOxyUserId` / `claimedByOxyUserId` / `claimable`.
  */
 
-type ArtistClaimRecord = Pick<
-  IArtistClaim,
-  'artistId' | 'oxyUserId' | 'evidence' | 'status' | 'resolvedAt' | 'resolvedBy' | 'resolutionNote'
-> & {
-  _id: mongoose.Types.ObjectId;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-function serializeArtistClaim(claim: ArtistClaimRecord): ArtistClaim {
-  return {
-    id: claim._id.toString(),
-    artistId: claim.artistId,
-    oxyUserId: claim.oxyUserId,
-    evidence: claim.evidence,
-    status: claim.status,
-    resolvedAt: claim.resolvedAt?.toISOString(),
-    resolvedBy: claim.resolvedBy,
-    resolutionNote: claim.resolutionNote,
-    createdAt: claim.createdAt.toISOString(),
-    updatedAt: claim.updatedAt.toISOString(),
-  };
-}
+// The claim DTO is `toArtistClaimDto` in `db/creators/claims.ts`, beside the
+// rows it serialises — the same place every other vertical keeps its serializer.
 
 /**
  * POST /api/artists/:id/claim
@@ -705,7 +694,7 @@ function serializeArtistClaim(claim: ArtistClaimRecord): ArtistClaim {
  */
 export const createArtistClaim = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -761,22 +750,27 @@ export const createArtistClaim = async (req: AuthRequest, res: Response, next: N
     }
 
     try {
-      const claim = await ArtistClaimModel.create({
+      const claim = await insertArtistClaim({
         artistId: id,
         oxyUserId: userId,
         evidence: parsed.data.evidence.trim(),
-        status: 'pending',
       });
 
-      logger.info(`[Artists] Artist claim ${claim._id.toString()} opened on ${id} by ${userId}`);
-      return res.status(201).json({ claim: serializeArtistClaim(claim) });
+      logger.info(`[Artists] Artist claim ${claim.id} opened on ${id} by ${userId}`);
+      return res.status(201).json({ claim: toArtistClaimDto(claim) });
     } catch (error: unknown) {
-      // The partial unique index is the authority on "one OPEN claim per claimant
-      // per artist": a read-then-write leaves exactly the window two taps land in.
-      const mongoCode = error !== null && typeof error === 'object'
-        ? (error as Record<string, unknown>)['code']
-        : undefined;
-      if (mongoCode === 11000) {
+      /**
+       * The partial unique index is the authority on "one OPEN claim per
+       * claimant per artist": a read-then-write leaves exactly the window two
+       * taps land in.
+       *
+       * Matched by CONSTRAINT NAME, not by the bare `23505` the Mongo version's
+       * bare `11000` translated to. `artist_claims` carries exactly one unique
+       * index, so today the two are the same test — but a second one added
+       * tomorrow would be reported to the claimant as "you already have a claim
+       * awaiting review", which is a lie about a bug.
+       */
+      if (isUniqueViolation(error, 'artist_claims_artist_id_oxy_user_id_pending_key')) {
         return res.status(409).json({
           error: 'Claim pending',
           message: 'You already have a claim awaiting review on this artist',
@@ -792,17 +786,14 @@ export const createArtistClaim = async (req: AuthRequest, res: Response, next: N
 /** GET /api/artist-claims/mine — the claimant's own claims, newest first. */
 export const listMyArtistClaims = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
     const userId = getAuthenticatedUserId(req);
-    const claims = await ArtistClaimModel.find({ oxyUserId: userId })
-      .sort({ createdAt: -1 })
-      .limit(MAX_CLAIMS_PAGE)
-      .lean();
+    const claims = await listArtistClaimsByClaimant(userId, MAX_CLAIMS_PAGE);
 
-    res.json({ claims: claims.map(serializeArtistClaim) });
+    res.json({ claims: claims.map(toArtistClaimDto) });
   } catch (error) {
     next(error);
   }
@@ -811,7 +802,7 @@ export const listMyArtistClaims = async (req: AuthRequest, res: Response, next: 
 /** GET /api/artist-claims — the review queue (reviewers only), oldest first. */
 export const listArtistClaims = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -824,17 +815,10 @@ export const listArtistClaims = async (req: AuthRequest, res: Response, next: Ne
     const limit = parseBoundedLimit(req.query.limit, 50);
     const offset = parseOffset(req.query.offset);
 
-    const [claims, total] = await Promise.all([
-      ArtistClaimModel.find({ status })
-        .sort({ createdAt: 1 })
-        .skip(offset)
-        .limit(limit)
-        .lean(),
-      ArtistClaimModel.countDocuments({ status }),
-    ]);
+    const { claims, total } = await listArtistClaimsByStatus(status, limit, offset);
 
     res.json({
-      claims: claims.map(serializeArtistClaim),
+      claims: claims.map(toArtistClaimDto),
       total,
       hasMore: offset + claims.length < total,
     });
@@ -854,7 +838,7 @@ export const listArtistClaims = async (req: AuthRequest, res: Response, next: Ne
  */
 export const resolveArtistClaim = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -862,14 +846,14 @@ export const resolveArtistClaim = async (req: AuthRequest, res: Response, next: 
     const id = getParam(req, 'id');
 
     /**
-     * `ObjectId.isValid`, and DELIBERATELY not `isLiveEntityId` — this `id` is a
-     * CLAIM id, and `artist_claims` is Task 13's table, still Mongoose. The same
-     * controller now validates two id spaces, so the right guard is decided by
-     * which store the id addresses, not by the file it appears in. The sibling
-     * guard in `createArtistClaim` reads an ARTIST id and had to change; this one
-     * changes when Task 13 ports the claims.
+     * `isLiveEntityId` now, matching the sibling guard in `createArtistClaim`.
+     *
+     * This read `ObjectId.isValid` while `artist_claims` was Mongoose, on the
+     * rule that the guard is decided by which store the id addresses rather
+     * than by the file it appears in — Task 13 moved the table, so it moved
+     * with it. `ObjectId.isValid` alone would 404 every claim opened since.
      */
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!isLiveEntityId(id)) {
       return res.status(404).json({ error: 'Claim not found' });
     }
 
@@ -878,7 +862,7 @@ export const resolveArtistClaim = async (req: AuthRequest, res: Response, next: 
       return res.status(400).json({ error: 'Invalid request body', details: parsed.error.issues });
     }
 
-    const claim = await ArtistClaimModel.findById(id);
+    const claim = await findArtistClaimById(id);
     if (!claim) {
       return res.status(404).json({ error: 'Claim not found' });
     }
@@ -937,37 +921,52 @@ export const resolveArtistClaim = async (req: AuthRequest, res: Response, next: 
       }
     }
 
-    claim.status = parsed.data.status;
-    claim.resolvedAt = new Date();
-    claim.resolvedBy = reviewerId;
-    if (parsed.data.resolutionNote !== undefined) claim.resolutionNote = parsed.data.resolutionNote;
-    await claim.save();
+    const resolvedAt = new Date();
+
+    /**
+     * `status = 'pending'` is in the WHERE, not only in the check above.
+     *
+     * The read-then-save it replaces left a window two reviewers could both
+     * pass through, and on this path the loser would overwrite the winner's
+     * verdict on a claim whose artist had already been granted. Nothing matched
+     * means somebody else answered it first, which is a 409 rather than a
+     * silent no-op.
+     */
+    const resolved = await resolvePendingArtistClaim({
+      id,
+      status: parsed.data.status,
+      resolvedBy: reviewerId,
+      resolvedAt,
+      resolutionNote: parsed.data.resolutionNote,
+    });
+    if (!resolved) {
+      return res.status(409).json({
+        error: 'Already resolved',
+        message: 'Another reviewer answered this claim first',
+      });
+    }
 
     /**
      * Every other open claim on a granted profile is now unanswerable — the
      * artist has an owner, so no reviewer can approve them. Closing them here
      * keeps the queue truthful and, because the open-claim index is partial on
-     * `status: 'pending'`, frees the slot so a rejected claimant can appeal later.
+     * `status = 'pending'`, frees the slot so a rejected claimant can appeal later.
      */
     if (parsed.data.status === 'approved') {
-      await ArtistClaimModel.updateMany(
-        { artistId: claim.artistId, status: 'pending', _id: { $ne: claim._id } },
-        {
-          $set: {
-            status: 'rejected',
-            resolvedAt: new Date(),
-            resolvedBy: reviewerId,
-            resolutionNote: 'Another claim on this artist profile was approved',
-          },
-        },
-      );
+      await rejectOtherPendingClaims({
+        artistId: resolved.artistId,
+        exceptClaimId: resolved.id,
+        resolvedBy: reviewerId,
+        resolvedAt,
+        resolutionNote: 'Another claim on this artist profile was approved',
+      });
     }
 
     logger.info(
-      `[Artists] Claim ${id} ${parsed.data.status} by ${reviewerId} (artist ${claim.artistId})`,
+      `[Artists] Claim ${id} ${parsed.data.status} by ${reviewerId} (artist ${resolved.artistId})`,
     );
 
-    res.json({ claim: serializeArtistClaim(claim) });
+    res.json({ claim: toArtistClaimDto(resolved) });
   } catch (error) {
     next(error);
   }
@@ -1030,24 +1029,13 @@ async function loadContributedTrackIds(artistId: string): Promise<Map<string, {
 
   if (ownTrackIds.length === 0) return new Map();
 
-  const attestations = await ContributionAttestationModel.find({
-    trackId: { $in: ownTrackIds },
-  })
-    .select({ trackId: 1, uploaderOxyUserId: 1, acceptedAt: 1 })
-    .lean();
-
-  return new Map(
-    attestations.map((row) => [
-      row.trackId,
-      { uploaderOxyUserId: row.uploaderOxyUserId, acceptedAt: row.acceptedAt },
-    ])
-  );
+  return findAttestationsByTrackIds(ownTrackIds);
 }
 
 /** GET /api/artists/me/contributions — recordings other people published onto my profile. */
 export const getMyContributions = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -1124,7 +1112,7 @@ export const getMyContributions = async (req: AuthRequest, res: Response, next: 
  */
 export const resolveMyContribution = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -1156,10 +1144,8 @@ export const resolveMyContribution = async (req: AuthRequest, res: Response, nex
       return res.status(404).json({ error: 'Track not found' });
     }
 
-    const attestation = await ContributionAttestationModel.findOne({ trackId })
-      .select('uploaderOxyUserId')
-      .lean();
-    if (!attestation) {
+    const uploaderOxyUserId = await findAttestationUploader(trackId);
+    if (!uploaderOxyUserId) {
       return res.status(404).json({
         error: 'Not a contribution',
         message: 'This track was published by you, not contributed by someone else',
@@ -1263,7 +1249,7 @@ export const resolveMyContribution = async (req: AuthRequest, res: Response, nex
  */
 export const updateMyContributionSettings = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -1328,7 +1314,7 @@ const imageSuggestionActionSchema = z.object({
 /** GET /api/artists/me/image-suggestions — the artist's own pending photo suggestions. */
 export const getMyImageSuggestions = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -1372,7 +1358,7 @@ export const getMyImageSuggestions = async (req: AuthRequest, res: Response, nex
  */
 export const acceptMyImageSuggestion = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -1513,7 +1499,7 @@ export const acceptMyImageSuggestion = async (req: AuthRequest, res: Response, n
  */
 export const discardMyImageSuggestion = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 

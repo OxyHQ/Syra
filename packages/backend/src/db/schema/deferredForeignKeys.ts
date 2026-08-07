@@ -158,7 +158,21 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
       'foreign key: one column cannot reference a different table per `kind`. Splitting it into three ' +
       'nullable columns with a CHECK would be expressible, and is a real option for whichever task ports ' +
       'hlsStorage.ts, but it is a schema CHANGE rather than a port and is deliberately not made here ' +
-      '(RELATIONS.md).',
+      '(RELATIONS.md). ' +
+      // ── The live orphan this absence causes, and who owns fixing it ──
+      'THE ABSENCE HAS A LIVE CONSEQUENCE, and Task 13 measured it rather than fixing it: with no ' +
+      'cascade, every caller that deletes a parent has to delete the key itself, and only ONE of the two ' +
+      'does. `controllers/uploads.controller.ts` (`deleteUpload`) deletes it explicitly; ' +
+      '`services/uploads/expirySweeper.ts` never has, and that is the path which runs unattended every ' +
+      'hour — so most expired uploads leave an AES key behind forever, keyed by an id that resolves to ' +
+      'nothing. Both call sites now say so in place. Task 13 ported the vertical at PARITY and did not ' +
+      'add a second explicit delete, because that would make the two paths agree while leaving the next ' +
+      'caller to remember the same line. OWNER: the `track_keys` split task, dispatched separately — ' +
+      'three nullable columns, a CHECK that exactly one is non-null, three ON DELETE cascades, `kind` ' +
+      'dropped, and four files outside the creators vertical to update (`services/ingest/hlsStorage.ts` ' +
+      'as the writer; `controllers/stream.controller.ts`, `controllers/podcastAudio.controller.ts` and ' +
+      '`services/preview/previewService.ts` as readers). It also closes the same latent orphan on the ' +
+      '`tracks` and `episodes` arms, which is why it is not scoped to one vertical.',
   },
   // ── CROSS-SERVICE: Oxy account ids, owned by oxy-api, never a Syra row ────
   {

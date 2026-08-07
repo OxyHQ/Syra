@@ -1706,6 +1706,28 @@ describe('creators and uploads schema (Task 5)', () => {
     expect(names).toContain('user_uploads_owner_oxy_user_id_sha256_key');
   });
 
+  /**
+   * `user_uploads.expires_at` looks exactly like a sweep target and must not be
+   * one.
+   *
+   * `models/UserUpload.ts` declined a Mongo TTL index for a reason its own doc
+   * comment spelled out — a blind row delete leaves every one of the file's S3
+   * objects orphaned and skips the T−14d warning the retention policy promises
+   * — and a test on that model asserted the absence. Task 13 deleted the model,
+   * so the assertion moves here rather than disappearing with it: registering
+   * this column would hand the column to `sweepExpiredRows`, which IS that
+   * blind delete.
+   */
+  it('keeps user_uploads.expires_at OUT of the blind expiry sweep', () => {
+    const swept = EXPIRY_SWEEP_TARGETS.map(
+      (target) => `${getTableConfig(target.table).name}.${sqlColumnName(target.column)}`
+    );
+    expect(swept).not.toContain('user_uploads.expires_at');
+    // Vacuity floor: an empty registry would satisfy the line above for the
+    // wrong reason, and this gate would then never fail whatever was added.
+    expect(swept.length).toBeGreaterThan(0);
+  });
+
   it('keeps the locker-listing index NON-partial and the expiry index partial — the predicate, not just the name', async () => {
     const db = getDb();
     // `creators.ts` states that `user_uploads_owner_oxy_user_id_created_at_idx`

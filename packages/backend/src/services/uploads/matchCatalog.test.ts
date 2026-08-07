@@ -1,38 +1,27 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll } from 'bun:test';
 import { eq } from 'drizzle-orm';
 import { uuidv7 } from '@oxyhq/db';
-import { clear, connect, disconnect } from '../../test/mongo';
 import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
 import { getDb } from '../../db/postgres';
 import { catalogEntities, trackFingerprints, tracks } from '../../db/schema/catalog';
-import { UserUploadModel } from '../../models/UserUpload';
+import { userUploads } from '../../db/schema/creators';
 import { matchCatalog, normalizeForFuzzy, type MatchCandidate } from './matchCatalog';
 import corpus from './__fixtures__/fingerprints.json';
 
 /**
- * BOTH databases. Tiers 1-4 read the catalogue from Postgres; tier 1's OTHER
- * half — "is this already in the uploader's own locker" — reads `user_uploads`,
- * which is Task 13's vertical and still Mongoose.
+ * ONE database. Tiers 1-4 read the catalogue and tier 1's OTHER half — "is this
+ * already in the uploader's own locker" — reads `user_uploads`, which was Task
+ * 13's still-Mongoose vertical when this suite was written and is Postgres now.
  */
-beforeAll(async () => {
-  await connect();
-  await connectDb();
-});
+beforeAll(connectDb);
 beforeEach(async () => {
-  await UserUploadModel.createIndexes();
-  // `tracks.artist_id` is a real foreign key now, so the artist has to exist
+  // `tracks.artist_id` is a real foreign key, so the artist has to exist
   // before any track fixture does — and it is re-made per test because
   // `clearDb` truncates.
   ARTIST_ID = await seedArtist();
 });
-afterEach(async () => {
-  await clear();
-  await clearDb();
-});
-afterAll(async () => {
-  await disconnect();
-  await disconnectDb();
-});
+afterEach(clearDb);
+afterAll(disconnectDb);
 
 const OWNER = 'oxy-user-uploader';
 const OTHER_OWNER = 'oxy-user-someone-else';
@@ -88,17 +77,24 @@ async function setTrack(trackId: string, patch: Partial<typeof tracks.$inferInse
   await getDb().update(tracks).set(patch).where(eq(tracks.id, trackId));
 }
 
-async function seedUpload(overrides: Record<string, unknown> = {}) {
-  return UserUploadModel.create({
-    ownerOxyUserId: OWNER,
-    title: 'Midnight Ferry',
-    duration: 180,
-    sha256: SHA_OF_UPLOAD,
-    sizeBytes: 4096,
-    audioSource: { key: 'locker/x.mp3', format: 'mp3' },
-    status: 'ready',
-    ...overrides,
-  });
+async function seedUpload(
+  overrides: Partial<typeof userUploads.$inferInsert> = {}
+): Promise<{ id: string }> {
+  const [upload] = await getDb()
+    .insert(userUploads)
+    .values({
+      ownerOxyUserId: OWNER,
+      title: 'Midnight Ferry',
+      duration: 180,
+      sha256: SHA_OF_UPLOAD,
+      sizeBytes: 4096,
+      audioSourceKey: 'locker/x.mp3',
+      audioSourceFormat: 'mp3',
+      status: 'ready',
+      ...overrides,
+    })
+    .returning({ id: userUploads.id });
+  return upload;
 }
 
 function candidate(overrides: Partial<MatchCandidate> = {}): MatchCandidate {
@@ -155,7 +151,7 @@ describe('matchCatalog — tier 1, identical bytes', () => {
 
     expect(result).toEqual({
       kind: 'upload',
-      uploadId: upload._id.toString(),
+      uploadId: upload.id,
       tier: 'sha256',
     });
   });
@@ -407,7 +403,7 @@ describe('matchCatalog — tier precedence', () => {
     await seedTrack({ externalIsrc: 'ESA452300137' });
 
     const result = await matchCatalog(candidate({ isrc: 'ESA452300137' }), OWNER);
-    expect(result).toEqual({ kind: 'upload', uploadId: upload._id.toString(), tier: 'sha256' });
+    expect(result).toEqual({ kind: 'upload', uploadId: upload.id, tier: 'sha256' });
   });
 
   it('ISRC wins over the fingerprint tier', async () => {

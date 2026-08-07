@@ -1,7 +1,7 @@
 import { and, eq, inArray, ne } from 'drizzle-orm';
 import type { Album, ArtistOrigin, Playlist, SourceProvenance, Track } from '@syra/shared-types';
-import { ContributionAttestationModel } from '../../models/ContributionAttestation';
 import { getDb } from '../../db/postgres';
+import { findAttestationsByTrackIds } from '../../db/creators/attestations';
 import { albums, trackCredits, tracks } from '../../db/schema/catalog';
 import { playlistCollaborators, playlistTracks, playlists } from '../../db/schema/library';
 import { canViewPlaylist, playableTrackFilter } from '../../db/catalog/visibility';
@@ -324,11 +324,7 @@ export async function loadProfileState(
     ...new Set((artist.sources ?? []).flatMap((source) => source.fields ?? [])),
   ];
 
-  const attestations = trackIds.length > 0
-    ? await ContributionAttestationModel.find({ trackId: { $in: trackIds } })
-      .select('trackId')
-      .lean()
-    : [];
+  const contributedTrackIds = [...(await findAttestationsByTrackIds(trackIds)).keys()];
 
   return {
     origin: artist.origin,
@@ -337,7 +333,7 @@ export async function loadProfileState(
     acceptsContributions: artist.acceptsContributions === true,
     sources: artist.sources,
     externallySourcedFields,
-    contributedTrackIds: attestations.map((attestation) => attestation.trackId),
+    contributedTrackIds,
   };
 }
 

@@ -16,23 +16,34 @@
  * `expiresAt` is `max(lastPlayedAt, createdAt) + 365d`, recomputed on every play
  * by {@link recordUploadPlay}, so listening to a file is what keeps it.
  *
- * Deliberately NOT a Mongo TTL index (see the note on `UserUpload.expiresAt`): a
- * TTL index deletes documents without running application code, which would skip
- * the notice entirely and orphan every S3 object behind every deleted row.
+ * Deliberately NOT registered with `db/expiry.ts`'s sweep (see the note on
+ * `user_uploads.expires_at` in `schema/creators.ts`): a blind row delete skips
+ * the notice entirely and orphans every S3 object behind every deleted row.
  *
- * The tick takes a Mongo lock so exactly one ECS task in the fleet sweeps. The
- * lock is in Mongo rather than Redis — unlike the recommendation and podcast
- * schedulers, which skip a tick when Redis is down — because this job DELETES.
- * Its correctness depends on the same store it is deleting from being reachable,
- * and putting the mutual exclusion anywhere else means adding a second thing that
- * can be down while the deletes still run.
+ * The tick takes a Postgres advisory lock so exactly one ECS task in the fleet
+ * sweeps. The lock is in Postgres rather than Redis — unlike the recommendation
+ * and podcast schedulers, which skip a tick when Redis is down — because this
+ * job DELETES. Its correctness depends on the same store it is deleting from
+ * being reachable, and putting the mutual exclusion anywhere else means adding a
+ * second thing that can be down while the deletes still run. That reasoning is
+ * inherited verbatim from the Mongo lease row this replaces; see
+ * {@link acquireSweepLock} for what changed and why it is strictly better.
  */
 
-import mongoose, { Schema, type Document } from 'mongoose';
-import { UserUploadModel } from '../../models/UserUpload';
-import { deleteUploadStoredObjects, type UploadStorageRef } from '../compliance/takedown';
+import { and, eq, isNull, sql } from 'drizzle-orm';
+import { getDb, getPostgresClient } from '../../db/postgres';
+import { userUploads } from '../../db/schema/creators';
+import {
+  deleteUploads,
+  findExpiredUploadIds,
+  findUploadsDueForNotice,
+  findUploadsPastGrace,
+  markDeletionNoticeSent,
+  softDeleteUploads,
+  type UploadStorageRef,
+} from '../../db/creators/uploads';
+import { deleteUploadStoredObjects } from '../compliance/takedown';
 import { notifyUser } from '../notifications/notifier';
-import { isDuplicateKeyOn } from '../../utils/duplicateKey';
 import { logger } from '../../utils/logger';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -44,15 +55,18 @@ export const DELETION_NOTICE_LEAD_DAYS = 14;
 /** How long the bytes survive the soft delete before they are really gone. */
 export const HARD_DELETE_GRACE_DAYS = 30;
 
-/** Documents touched per phase per tick, so one sweep cannot run unbounded. */
+/** Rows touched per phase per tick, so one sweep cannot run unbounded. */
 const SWEEP_BATCH_SIZE = 500;
 
 /** How often the tick fires on each instance. */
 const TICK_INTERVAL_MS = 60 * 60 * 1000;
 /** First tick is delayed so it never competes with cold-start boot work. */
 const INITIAL_DELAY_MS = 5 * 60 * 1000;
-/** Lock lease; must comfortably exceed a worst-case sweep. */
-const SWEEP_LOCK_TTL_MS = 15 * 60 * 1000;
+// There is no lock lease any more, and therefore no TTL constant. The Mongo
+// version needed one because a lease has to guess how long the work takes; a
+// session advisory lock is released by the connection dropping, so a crashed
+// task frees it exactly and a slow sweep never outlives its own claim. See
+// `acquireSweepLock`.
 
 // ── Expiry arithmetic ────────────────────────────────────────────────────────
 
@@ -89,76 +103,97 @@ export async function recordUploadPlay(
   ownerOxyUserId: string,
   now: Date = new Date(),
 ): Promise<boolean> {
-  const result = await UserUploadModel.updateOne(
-    { _id: uploadId, ownerOxyUserId, deletedAt: null },
-    {
-      $set: {
-        lastPlayedAt: now,
-        expiresAt: new Date(now.getTime() + UPLOAD_RETENTION_DAYS * DAY_MS),
-      },
-      $inc: { playCount: 1 },
-      $unset: { deletionNoticeSentAt: '' },
-    },
-  );
+  const played = await getDb()
+    .update(userUploads)
+    .set({
+      lastPlayedAt: now,
+      expiresAt: new Date(now.getTime() + UPLOAD_RETENTION_DAYS * DAY_MS),
+      // `$inc` in the database, not a read-modify-write: two devices starting
+      // the same file at once must count two plays.
+      playCount: sql`${userUploads.playCount} + 1`,
+      // `$unset` becomes an explicit null. A notice is about ONE expiry window;
+      // leaving it set would mean the file silently skips its warning the next
+      // time it approaches deletion, a year later.
+      deletionNoticeSentAt: null,
+    })
+    .where(
+      and(
+        eq(userUploads.id, uploadId),
+        eq(userUploads.ownerOxyUserId, ownerOxyUserId),
+        isNull(userUploads.deletedAt)
+      )
+    )
+    .returning({ id: userUploads.id });
 
-  return result.matchedCount > 0;
+  return played.length > 0;
 }
 
 // ── Lock ─────────────────────────────────────────────────────────────────────
 
-/** `Document<string>` because the lock's `_id` IS its name — there is exactly one row. */
-interface ISweepLock extends Document<string> {
-  _id: string;
-  lockedUntil: Date;
-  holder: string;
-}
-
-const SweepLockSchema = new Schema<ISweepLock>({
-  _id: { type: String, required: true },
-  lockedUntil: { type: Date, required: true },
-  holder: { type: String, required: true },
-}, { versionKey: false });
-
-const SweepLockModel: mongoose.Model<ISweepLock> =
-  (mongoose.models.UploadSweepLock as mongoose.Model<ISweepLock>) ??
-  mongoose.model<ISweepLock>('UploadSweepLock', SweepLockSchema, 'uploadsweeplocks');
-
-const SWEEP_LOCK_ID = 'uploads:expiry';
+/**
+ * The advisory-lock key for this sweep.
+ *
+ * A fixed, arbitrary number that identifies the job — advisory locks share one
+ * namespace per database, so this value is the whole name. Written as a literal
+ * rather than hashed from `'uploads:expiry'` at runtime: a hash makes the value
+ * invisible in `pg_locks`, where the only way to answer "who holds this" is to
+ * compare the number against something written down. It is well inside int32,
+ * so it reaches the `bigint` overload as an ordinary parameter.
+ */
+const SWEEP_LOCK_KEY = 704_213_001;
 
 /**
  * Claim the sweep for this instance, or report that somebody else holds it.
  *
- * The upsert IS the decision. A read-then-write leaves exactly the window where
- * two tasks both see a free lock; here the second one's upsert collides on `_id`
- * and Mongo answers `E11000`, which is the expected non-exceptional path rather
- * than an error. A held lock also expires on its own, so a task that dies mid-
- * sweep never wedges the job permanently.
+ * A SESSION-scoped `pg_try_advisory_lock`, which is strictly better than the
+ * Mongo lease row it replaces and needs no table at all:
+ *
+ *  - `try` never blocks. A losing instance is told immediately and skips the
+ *    tick, exactly as the losing upsert did.
+ *  - There is no TTL to tune, and no lease TTL that a sweep could
+ *    outlive. A lease has to guess how long the work takes; guess short and two
+ *    instances sweep at once, guess long and a crashed task wedges the job.
+ *  - A task that dies mid-sweep drops its connection, and Postgres releases the
+ *    lock with it. That is the property the lease was approximating with an
+ *    expiry, and here it is exact.
+ *
+ * It needs a RESERVED connection because the lock lives on a session and the
+ * pool hands out a different backend per query — take it on one connection and
+ * release it on another and the release is a no-op that logs a warning, leaving
+ * the lock held until the first connection happens to be recycled. That is why
+ * this is the one place in the codebase reaching past `getDb()`.
  */
-async function acquireSweepLock(now: Date, holder: string): Promise<boolean> {
+type SweepLock = { release: () => Promise<void> };
+
+async function acquireSweepLock(): Promise<SweepLock | undefined> {
+  const reserved = await getPostgresClient().reserve();
   try {
-    await SweepLockModel.findOneAndUpdate(
-      { _id: SWEEP_LOCK_ID, lockedUntil: { $lte: now } },
-      { $set: { lockedUntil: new Date(now.getTime() + SWEEP_LOCK_TTL_MS), holder } },
-      { upsert: true },
-    );
-    return true;
+    const [claimed] = await reserved<{ locked: boolean }[]>`
+      select pg_try_advisory_lock(${SWEEP_LOCK_KEY}) as locked
+    `;
+    if (!claimed?.locked) {
+      reserved.release();
+      return undefined;
+    }
   } catch (err) {
-    // Losing the race on `_id` IS the answer — somebody else holds the sweep.
-    // Named rather than a bare 11000 check: a collision on any OTHER index would
-    // be a bug, and reporting it as "another instance has it" would skip the
-    // sweep forever without ever surfacing why.
-    if (isDuplicateKeyOn(err, '_id')) return false;
+    reserved.release();
     throw err;
   }
-}
 
-async function releaseSweepLock(holder: string): Promise<void> {
-  // Only the holder releases: a lease that already expired may belong to another
-  // task by now, and clearing it would let a third one in alongside it.
-  await SweepLockModel.updateOne(
-    { _id: SWEEP_LOCK_ID, holder },
-    { $set: { lockedUntil: new Date(0) } },
-  );
+  return {
+    release: async () => {
+      try {
+        // Only the holder can release a session lock — Postgres enforces that
+        // for us, which is what the Mongo version's `holder` filter was for.
+        await reserved`select pg_advisory_unlock(${SWEEP_LOCK_KEY})`;
+      } finally {
+        // Returns the connection to the pool. Distinct from the unlock above:
+        // dropping the reservation without unlocking would leave the lock held
+        // by whatever the pool hands that backend to next.
+        reserved.release();
+      }
+    },
+  };
 }
 
 // ── Sweep ────────────────────────────────────────────────────────────────────
@@ -240,30 +275,21 @@ async function sweepNotices(
 ): Promise<{ ownersNotified: number; uploadsNoticed: number }> {
   const noticeHorizon = new Date(now.getTime() + DELETION_NOTICE_LEAD_DAYS * DAY_MS);
 
-  const due = await UserUploadModel.find({
-    deletedAt: null,
-    deletionNoticeSentAt: { $exists: false },
-    expiresAt: { $gt: now, $lte: noticeHorizon },
-  })
-    .sort({ expiresAt: 1 })
-    .limit(SWEEP_BATCH_SIZE)
-    .select('_id ownerOxyUserId expiresAt')
-    .lean();
+  const due = await findUploadsDueForNotice(now, noticeHorizon, SWEEP_BATCH_SIZE);
 
   if (due.length === 0) return { ownersNotified: 0, uploadsNoticed: 0 };
 
   const byOwner = new Map<string, { ids: string[]; earliest: Date }>();
   for (const upload of due) {
+    // The range filter already excludes a null `expires_at`, so this guard is
+    // the type narrowing rather than a second predicate.
     if (!upload.expiresAt) continue;
     const entry = byOwner.get(upload.ownerOxyUserId);
     if (entry) {
-      entry.ids.push(upload._id.toString());
+      entry.ids.push(upload.id);
       if (upload.expiresAt < entry.earliest) entry.earliest = upload.expiresAt;
     } else {
-      byOwner.set(upload.ownerOxyUserId, {
-        ids: [upload._id.toString()],
-        earliest: upload.expiresAt,
-      });
+      byOwner.set(upload.ownerOxyUserId, { ids: [upload.id], earliest: upload.expiresAt });
     }
   }
 
@@ -275,33 +301,19 @@ async function sweepNotices(
       earliestExpiresAt: earliest,
       uploadIds: ids,
     });
-    const { modifiedCount } = await UserUploadModel.updateMany(
-      { _id: { $in: ids } },
-      { $set: { deletionNoticeSentAt: now } },
-    );
-    uploadsNoticed += modifiedCount;
+    uploadsNoticed += await markDeletionNoticeSent(ids, now);
   }
 
   return { ownersNotified: byOwner.size, uploadsNoticed };
 }
 
-/** Phase 2 — hide expired files. Bytes stay; only the document is stamped. */
+/** Phase 2 — hide expired files. Bytes stay; only the row is stamped. */
 async function sweepSoftDeletes(now: Date): Promise<number> {
-  const expired = await UserUploadModel.find({
-    deletedAt: null,
-    expiresAt: { $lte: now },
-  })
-    .limit(SWEEP_BATCH_SIZE)
-    .select('_id')
-    .lean();
-
-  if (expired.length === 0) return 0;
-
-  const { modifiedCount } = await UserUploadModel.updateMany(
-    { _id: { $in: expired.map((upload) => upload._id) } },
-    { $set: { deletedAt: now } },
-  );
-  return modifiedCount;
+  // Selected and then updated by id, rather than one `UPDATE … WHERE expires_at
+  // <= now`, because the batch cap is what keeps one tick bounded and a bare
+  // UPDATE has no LIMIT.
+  const expired = await findExpiredUploadIds(now, SWEEP_BATCH_SIZE);
+  return softDeleteUploads(expired, now);
 }
 
 /**
@@ -319,19 +331,14 @@ async function sweepHardDeletes(
   const graceCutoff = new Date(now.getTime() - HARD_DELETE_GRACE_DAYS * DAY_MS);
 
   /**
-   * A projection, not a hydrated document, and never `fingerprint`.
+   * A projection, never `fingerprint` — see {@link UploadStorageRef}.
    *
    * These rows are loaded only to be deleted, and the delete helper takes a
    * structural storage ref. A locker fingerprint is thousands of int32s per row
    * and the sweep walks up to `SWEEP_BATCH_SIZE` of them per tick — pulling that
    * across the wire to read three key fields is the whole batch's cost.
    */
-  const doomed = await UserUploadModel.find({
-    deletedAt: { $lte: graceCutoff },
-  })
-    .limit(SWEEP_BATCH_SIZE)
-    .select('_id audioSource hls hlsMasterKey')
-    .lean();
+  const doomed = await findUploadsPastGrace(graceCutoff, SWEEP_BATCH_SIZE);
 
   let uploadsHardDeleted = 0;
   let objectsDeleted = 0;
@@ -340,17 +347,34 @@ async function sweepHardDeletes(
     try {
       objectsDeleted += await deleteObjects(upload);
     } catch (err) {
-      // Keep the document: it is the only remaining record of which objects still
+      // Keep the row: it is the only remaining record of which objects still
       // need deleting. The next tick tries again.
       logger.error('[uploads] failed to delete stored objects for expired upload', {
-        uploadId: upload._id.toString(),
+        uploadId: upload.id,
         err,
       });
       continue;
     }
 
-    await UserUploadModel.deleteOne({ _id: upload._id });
-    uploadsHardDeleted += 1;
+    /**
+     * The row, its HLS ladder and its provenance markers — and NOT its AES key.
+     *
+     * That last omission is a KNOWN DEFECT carried over at parity, not an
+     * oversight of the port. `track_keys.track_id` is polymorphic across three
+     * id spaces and carries no foreign key, so nothing cascades; the manual
+     * `DELETE /api/uploads/:id` path deletes the key with an explicit line and
+     * this function never had one, so every file the sweeper removes leaves its
+     * key behind forever. Both facts are unchanged by the Mongo→Postgres port.
+     *
+     * An explicit delete here is deliberately NOT added: it would make this
+     * sweep agree with the manual path while leaving the next caller to
+     * remember the same line, which is how the divergence arose. The fix is a
+     * real foreign key, which needs `track_keys` split into one column per id
+     * space — a schema change with its own task. See
+     * `schema/deferredForeignKeys.ts`'s `track_keys.track_id` entry, which
+     * names the owner.
+     */
+    uploadsHardDeleted += await deleteUploads([upload.id]);
   }
 
   return { uploadsHardDeleted, objectsDeleted };
@@ -367,8 +391,8 @@ export async function runExpirySweep(deps: ExpirySweepDeps = {}): Promise<Expiry
   const deleteObjects = deps.deleteObjects ?? ((upload) => deleteUploadStoredObjects(upload));
   const notify = deps.notify ?? defaultNotify;
 
-  const holder = `${process.pid}:${Math.random().toString(36).slice(2)}`;
-  if (!(await acquireSweepLock(now, holder))) {
+  const lock = await acquireSweepLock();
+  if (!lock) {
     return { ...EMPTY_RESULT };
   }
 
@@ -386,7 +410,7 @@ export async function runExpirySweep(deps: ExpirySweepDeps = {}): Promise<Expiry
       objectsDeleted: hard.objectsDeleted,
     };
   } finally {
-    await releaseSweepLock(holder);
+    await lock.release();
   }
 }
 

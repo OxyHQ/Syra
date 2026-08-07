@@ -53,7 +53,10 @@ describe('ensureIndexes — discovery', () => {
     expect(planned.length).toBeGreaterThan(40);
     expect(models.has('Track')).toBe(true);
     expect(models.has('Album')).toBe(true);
-    expect(models.has('UserUpload')).toBe(true);
+    // `UserUpload` was named here and is gone: Task 13 ported the locker and
+    // deleted the model, so `ensureIndexes` — which only ever plans MONGO
+    // indexes — has nothing to plan for it. Its Postgres constraints are
+    // declared in `schema/creators.ts` and gated by `db/__tests__/gates.test.ts`.
     expect(models.has('artist')).toBe(true);
     expect(models.has('person')).toBe(true);
   });
@@ -73,8 +76,11 @@ describe('ensureIndexes — discovery', () => {
     expect(find('catalogentities', { linkedOxyUserId: 1 })?.options.unique).toBe(true);
     expect(find('tracks', { 'externalIds.isrc': 1 })?.options.unique).toBe(true);
     expect(find('albums', { 'externalIds.musicbrainzReleaseId': 1 })?.options.unique).toBe(true);
-    expect(find('useruploads', { ownerOxyUserId: 1, sha256: 1 })?.options.unique).toBe(true);
-    expect(find('useruploads', { fingerprintDurationSec: 1 })).toBeDefined();
+    // The two `useruploads` entries were here for the same reason and left with
+    // the model. `user_uploads_owner_oxy_user_id_sha256_key` and
+    // `user_uploads_fingerprint_duration_sec_idx` are the Postgres constraints
+    // that replace them, both asserted in `db/__tests__/gates.test.ts` — the
+    // first by writing a duplicate and reading the violation back.
   });
 });
 

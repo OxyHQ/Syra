@@ -1,16 +1,10 @@
 import { describe, it, expect } from 'bun:test';
 import { z } from 'zod';
 import mongoose from 'mongoose';
-import {
-  albumSchema,
-  artistSchema,
-  trackSchema,
-  userUploadSchema,
-} from '@syra/shared-types';
+import { albumSchema, artistSchema, trackSchema } from '@syra/shared-types';
 import { ArtistModel } from './CatalogEntity';
 import { TrackModel } from './Track';
 import { AlbumModel } from './Album';
-import { UserUploadModel } from './UserUpload';
 
 /**
  * Every field the zod DTO declares must resolve to a real Mongoose path.
@@ -54,7 +48,9 @@ const DTO_ONLY: Record<string, string[]> = {
   // `stats` is stored, but `monthlyListeners` is computed on read.
   Artist: [],
   Album: [],
-  UserUpload: [],
+  // `UserUpload` was here and is gone with its model: Task 13 ported the locker
+  // to drizzle, where this whole class of bug cannot occur — a column that does
+  // not exist is a `tsc` error at the write site, not a silently dropped `$set`.
 };
 
 /**
@@ -121,7 +117,6 @@ const CASES: Array<{
   { name: 'Artist', dto: artistSchema as z.ZodObject<z.ZodRawShape>, model: ArtistModel as unknown as mongoose.Model<never> },
   { name: 'Track', dto: trackSchema as z.ZodObject<z.ZodRawShape>, model: TrackModel as unknown as mongoose.Model<never> },
   { name: 'Album', dto: albumSchema as z.ZodObject<z.ZodRawShape>, model: AlbumModel as unknown as mongoose.Model<never> },
-  { name: 'UserUpload', dto: userUploadSchema as z.ZodObject<z.ZodRawShape>, model: UserUploadModel as unknown as mongoose.Model<never> },
 ];
 
 describe('every zod DTO field resolves to a Mongoose path', () => {

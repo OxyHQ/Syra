@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
-import { connect, clear, disconnect } from '../../test/mongo';
-import { ContributorStandingModel } from '../../models/ContributorStanding';
+import { eq } from 'drizzle-orm';
+import { connectDb, clearDb, disconnectDb } from '../../test/postgres';
+import { getDb } from '../../db/postgres';
+import { catalogEntities, tracks } from '../../db/schema/catalog';
+import { contributorStandings, contributorStrikes } from '../../db/schema/creators';
 import {
   recordContributorStrike,
   canContributePublicly,
@@ -8,26 +11,75 @@ import {
 } from './contributorStrikes';
 import { STRIKE_TERMINATION_THRESHOLD } from '../strikeService';
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+beforeAll(connectDb);
+afterEach(clearDb);
+afterAll(disconnectDb);
 
 const UPLOADER = 'oxy-contributor-1';
+
+/**
+ * A real track to hang a strike's audit pointer off.
+ *
+ * `contributor_strikes.track_id` is a real `ON DELETE set null` reference now,
+ * so the invented `'track-1'` this fixture used is a `23503`. That is worth
+ * having: the pointer exists so a reviewer can open the offending work, and a
+ * strike naming a track that does not exist was never a state worth supporting.
+ */
+async function seedTrack(): Promise<string> {
+  const db = getDb();
+  const [artist] = await db
+    .insert(catalogEntities)
+    .values({ name: 'strike-fixture-artist', type: 'artist', source: 'upload' })
+    .returning({ id: catalogEntities.id });
+  const [track] = await db
+    .insert(tracks)
+    .values({
+      title: 'strike-fixture-track',
+      artistId: artist.id,
+      artistName: 'strike-fixture-artist',
+      duration: 100,
+      source: 'upload',
+    })
+    .returning({ id: tracks.id });
+  return track.id;
+}
+
+/**
+ * The stored row, read back independently of the function under test.
+ *
+ * `getContributorStanding` is itself under test in this file, so the assertions
+ * about what actually LANDED read the table directly — a helper that shared the
+ * production read would pass whenever the two agreed, including when both are
+ * wrong.
+ */
+async function storedStanding(oxyUserId: string) {
+  const [standing] = await getDb()
+    .select()
+    .from(contributorStandings)
+    .where(eq(contributorStandings.oxyUserId, oxyUserId));
+  if (!standing) return undefined;
+  const strikes = await getDb()
+    .select()
+    .from(contributorStrikes)
+    .where(eq(contributorStrikes.contributorStandingId, standing.id));
+  return { ...standing, strikes };
+}
 
 describe('recordContributorStrike', () => {
   it('opens a record on the first strike — nobody has one until they need it', async () => {
     expect(await getContributorStanding(UPLOADER)).toBeNull();
 
-    const outcome = await recordContributorStrike(UPLOADER, 'first complaint', 'track-1');
+    const trackId = await seedTrack();
+    const outcome = await recordContributorStrike(UPLOADER, 'first complaint', trackId);
 
     expect(outcome).toEqual({
       oxyUserId: UPLOADER, strikeCount: 1, terminated: false, alreadyTerminated: false,
     });
-    const standing = await ContributorStandingModel.findOne({ oxyUserId: UPLOADER }).lean();
+    const standing = await storedStanding(UPLOADER);
     expect(standing?.strikeCount).toBe(1);
     expect(standing?.strikes).toHaveLength(1);
     expect(standing?.strikes[0]?.reason).toBe('first complaint');
-    expect(standing?.strikes[0]?.trackId).toBe('track-1');
+    expect(standing?.strikes[0]?.trackId).toBe(trackId);
     expect(standing?.lastStrikeAt).toBeInstanceOf(Date);
   });
 
@@ -37,7 +89,7 @@ describe('recordContributorStrike', () => {
 
     expect(second.strikeCount).toBe(2);
     expect(second.terminated).toBe(false);
-    const standing = await ContributorStandingModel.findOne({ oxyUserId: UPLOADER }).lean();
+    const standing = await storedStanding(UPLOADER);
     expect(standing?.terminated).toBe(false);
     expect(standing?.uploadsDisabled).toBe(false);
   });
@@ -57,7 +109,7 @@ describe('recordContributorStrike', () => {
 
     expect(final.strikeCount).toBe(STRIKE_TERMINATION_THRESHOLD);
     expect(final.terminated).toBe(true);
-    const standing = await ContributorStandingModel.findOne({ oxyUserId: UPLOADER }).lean();
+    const standing = await storedStanding(UPLOADER);
     expect(standing?.terminated).toBe(true);
     expect(standing?.uploadsDisabled).toBe(true);
     expect(standing?.terminatedAt).toBeInstanceOf(Date);
@@ -80,7 +132,7 @@ describe('recordContributorStrike', () => {
     expect(fourth.terminated).toBe(false);
     expect(fourth.alreadyTerminated).toBe(true);
     // Still terminated — a later strike never un-terminates.
-    const standing = await ContributorStandingModel.findOne({ oxyUserId: UPLOADER }).lean();
+    const standing = await storedStanding(UPLOADER);
     expect(standing?.terminated).toBe(true);
   });
 
@@ -112,7 +164,9 @@ describe('canContributePublicly', () => {
   });
 
   it('refuses an account with uploads disabled but not terminated', async () => {
-    await ContributorStandingModel.create({ oxyUserId: UPLOADER, uploadsDisabled: true });
+    await getDb()
+      .insert(contributorStandings)
+      .values({ oxyUserId: UPLOADER, uploadsDisabled: true });
     expect(await canContributePublicly(UPLOADER)).toBe(false);
   });
 });

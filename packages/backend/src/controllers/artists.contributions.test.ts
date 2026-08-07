@@ -5,12 +5,11 @@ import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { eq } from 'drizzle-orm';
 import { uuidv7 } from '@oxyhq/db';
 import { normalizeNameKey } from '@syra/shared-types';
-import { connect, clear, disconnect } from '../test/mongo';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
 import { catalogEntities, tracks } from '../db/schema/catalog';
 import { copyrightReports } from '../db/schema/creators';
-import { ContributionAttestationModel } from '../models/ContributionAttestation';
+import { contributionAttestations } from '../db/schema/creators';
 import {
   getMyContributions,
   resolveMyContribution,
@@ -24,18 +23,9 @@ import {
  * `$lookup`; it is three round trips now, and these tests are what say the
  * answer did not change.
  */
-beforeAll(async () => {
-  await connect();
-  await connectDb();
-});
-afterEach(async () => {
-  await clear();
-  await clearDb();
-});
-afterAll(async () => {
-  await disconnect();
-  await disconnectDb();
-});
+beforeAll(connectDb);
+afterEach(clearDb);
+afterAll(disconnectDb);
 
 async function readTrack(id: string) {
   const [row] = await getDb().select().from(tracks).where(eq(tracks.id, id)).limit(1);
@@ -134,7 +124,7 @@ async function makeTrack(artistId: string, title: string): Promise<string> {
 }
 
 async function attest(trackId: string, uploader: string): Promise<void> {
-  await ContributionAttestationModel.create({
+  await getDb().insert(contributionAttestations).values({
     trackId,
     uploaderOxyUserId: uploader,
     statement: 'I may distribute this recording',
@@ -381,7 +371,12 @@ describe('contribution lookup vacuity floor', () => {
     const trackId = await makeTrack(artistId, 'Definitely Contributed');
     await attest(trackId, 'a-stranger');
 
-    expect(await ContributionAttestationModel.countDocuments({ trackId })).toBe(1);
+    expect(
+      await getDb()
+        .select({ id: contributionAttestations.id })
+        .from(contributionAttestations)
+        .where(eq(contributionAttestations.trackId, trackId))
+    ).toHaveLength(1);
 
     const res = makeRes();
     await getMyContributions(makeReq({}, OWNER), res as unknown as Response, failNext);
@@ -400,7 +395,9 @@ describe('contribution lookup vacuity floor', () => {
     await getMyContributions(makeReq({}, OWNER), res as unknown as Response, failNext);
     const body = res._body as { total: number };
     expect(body.total).toBe(0);
-    expect(await ContributionAttestationModel.countDocuments({})).toBe(1);
+    expect(
+      await getDb().select({ id: contributionAttestations.id }).from(contributionAttestations)
+    ).toHaveLength(1);
   });
 });
 

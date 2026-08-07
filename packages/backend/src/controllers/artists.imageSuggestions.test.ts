@@ -13,9 +13,7 @@ import { uuidv7 } from '@oxyhq/db';
 import { normalizeNameKey } from '@syra/shared-types';
 import { getDb } from '../db/postgres';
 import { catalogEntities, tracks } from '../db/schema/catalog';
-import { ContributionAttestationModel } from '../models/ContributionAttestation';
-import { UserUploadModel } from '../models/UserUpload';
-import { toUploadTrackDto } from './uploads.controller';
+import { toUploadTrackDto } from '../db/creators/serialize';
 import { getEntityProfile } from './entityProfile.controller';
 import {
   getMyImageSuggestions,
@@ -58,6 +56,17 @@ import {
  * `mirrorCatalogImage` in test files found three podcast suites and missed this
  * one, which reaches it through a controller. The full run found it. That is the
  * cost of an implicit install being paid once, visibly, instead of indefinitely.
+ */
+/**
+ * Postgres AND Mongo, and the Mongo half is not this vertical's residue.
+ *
+ * Nothing here reads a Mongoose model. `entityProfile.controller` — which the
+ * "suggestions never reach a public surface" test drives — still guards every
+ * handler with `utils/database.ts`'s `isDatabaseConnected()`, which reports
+ * MONGOOSE readiness, even though it has no Mongoose read left. Without a Mongo
+ * connection that request answers 503. See `db/postgres.ts`'s
+ * `isPostgresConnected` for the guard it owes; the two controllers Task 13 owns
+ * (`artists`, `queue`) were switched, and this one is another task's file.
  */
 beforeAll(async () => {
   await connect();

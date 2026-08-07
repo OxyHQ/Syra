@@ -155,6 +155,25 @@ export function isDriverError(error: unknown): boolean {
   return false;
 }
 
+/**
+ * The raw postgres.js client behind {@link getDb}.
+ *
+ * Exported for the ONE thing drizzle has no API for: reserving a dedicated
+ * connection (`client.reserve()`) so a SESSION-scoped advisory lock can be
+ * taken and released on the same backend. Every ordinary query must go through
+ * `getDb()` — this is not a general escape hatch, and there is deliberately no
+ * helper wrapping it.
+ *
+ * @throws {Error} When the pool has not been opened, for the same reason
+ *   `getDb()` does.
+ */
+export function getPostgresClient(): ReturnType<typeof createDatabase>['client'] {
+  if (!handle) {
+    throw new Error('getPostgresClient() called before connectPostgres()');
+  }
+  return handle.client;
+}
+
 /** The handle `getDb()` returns. */
 export type Db = OxyDatabase<typeof schema>;
 

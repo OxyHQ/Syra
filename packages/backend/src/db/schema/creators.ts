@@ -9,6 +9,12 @@
  * field, against `packages/backend/docs/db/RELATIONS.md` for every foreign
  * key.
  *
+ * **Those five model files no longer exist.** Task 13 ported the vertical and
+ * deleted them (`CopyrightReport` went earlier, with Task 10c-3). Every
+ * `models/…` citation below — including the line and enum numbers — is
+ * PROVENANCE, naming what this schema was derived from, and is resolvable in
+ * git rather than in the tree. Read them that way; none is a live pointer.
+ *
  * ## The deferred ledger is EMPTY after this task
  *
  * `tracks.copyrightReportId` (`catalog.ts`, Task 2) was the last entry
