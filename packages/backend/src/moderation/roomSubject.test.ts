@@ -1,9 +1,8 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
-import mongoose from 'mongoose';
-import { connect, clear, disconnect } from '../test/mongo';
 import { connectDb, clearDb, disconnectDb } from '../test/postgres';
-import RoomModel, { RoomStatus, RoomType, OwnerType } from '../models/Room';
-import RecordingModel, { RecordingStatus, RecordingAccess } from '../models/Recording';
+import { createRoom, updateRoom, type CreateRoomInput } from '../db/rooms/rooms';
+import { createRecording } from '../db/rooms/recordings';
+import { RoomStatus, RoomType, OwnerType, SpeakerPermission } from '../db/rooms/types';
 import { uuidv7 } from '@oxyhq/db';
 import { getDb } from '../db/postgres';
 import { catalogEntities, tracks } from '../db/schema/catalog';
@@ -22,25 +21,27 @@ import type { ModerationResource } from './subjects/types';
  * change would quietly add.
  */
 
-// Both stores: rooms and recordings are still Mongoose (Task 14), playlists are
-// on Postgres since Task 11, and this file exercises providers for all three.
-beforeAll(async () => {
-  await connect();
-  await connectDb();
-});
-afterEach(async () => {
-  await clear();
-  await clearDb();
-});
-afterAll(async () => {
-  await disconnect();
-  await disconnectDb();
-});
+// One store now: Task 14 took rooms and recordings to Postgres, joining the
+// playlists and catalog entities this file already exercised there.
+beforeAll(connectDb);
+afterEach(clearDb);
+afterAll(disconnectDb);
 
 const HOST = 'oxy-host-1';
 
-async function makeRoom(overrides: Record<string, unknown> = {}) {
-  return await RoomModel.create({
+/**
+ * The stream fields a room only ever acquires through an ingress path, which is
+ * why `createRoom` does not accept them and this fixture applies them in a
+ * second update.
+ */
+type StreamOverrides = Partial<{
+  rtmpUrl: string;
+  rtmpStreamKey: string;
+  activeStreamUrl: string;
+}>;
+
+async function makeRoom(stream: StreamOverrides = {}, overrides: Partial<CreateRoomInput> = {}) {
+  const room = await createRoom({
     title: 'Late night talk',
     description: 'A description the host wrote',
     topic: 'music',
@@ -51,10 +52,19 @@ async function makeRoom(overrides: Record<string, unknown> = {}) {
     status: RoomStatus.LIVE,
     participants: ['listener-a', 'listener-b'],
     speakers: ['speaker-a'],
-    streamTitle: 'Stream title',
-    streamDescription: 'Stream description',
+    maxParticipants: 100,
+    speakerPermission: SpeakerPermission.INVITED,
     ...overrides,
   });
+
+  const withStream = await updateRoom(room.id, {
+    streamTitle: 'Stream title',
+    streamDescription: 'Stream description',
+    ...stream,
+  });
+
+  if (withStream === undefined) throw new Error('fixture room vanished');
+  return withStream;
 }
 
 const provider = subjectProviderFor(ReportedType.ROOM);
@@ -66,11 +76,11 @@ describe('room subject provider', () => {
 
   it('pins the host-authored text and names the host as author', async () => {
     const room = await makeRoom();
-    const snapshot = await provider?.snapshot(String(room._id));
+    const snapshot = await provider?.snapshot(room.id);
 
     expect(snapshot).not.toBeNull();
     expect(snapshot?.subject.type).toBe('custom.syra.room');
-    expect(snapshot?.subject.externalId).toBe(String(room._id));
+    expect(snapshot?.subject.externalId).toBe(room.id);
     // The host wrote the title and description, so the host is answerable for them.
     expect(snapshot?.subject.author?.oxyUserId).toBe(HOST);
 
@@ -94,7 +104,7 @@ describe('room subject provider', () => {
    */
   it('never carries the participant or speaker list', async () => {
     const room = await makeRoom();
-    const snapshot = await provider?.snapshot(String(room._id));
+    const snapshot = await provider?.snapshot(room.id);
     const serialised = JSON.stringify(snapshot);
 
     expect(serialised).not.toContain('listener-a');
@@ -115,19 +125,18 @@ describe('room subject provider', () => {
    */
   it('declares that a recording exists without attaching it', async () => {
     const room = await makeRoom();
-    await RecordingModel.create({
-      roomId: String(room._id),
+    await createRecording({
+      id: uuidv7(),
+      roomId: room.id,
       roomTitle: room.title,
       host: HOST,
-      status: RecordingStatus.READY,
       egressId: 'egress-1',
       objectKey: 'recordings/room-1.ogg',
       startedAt: new Date(),
-      access: RecordingAccess.PUBLIC,
       expiresAt: new Date(Date.now() + 1_000_000),
     });
 
-    const snapshot = await provider?.snapshot(String(room._id));
+    const snapshot = await provider?.snapshot(room.id);
     expect(snapshot?.content).toMatchObject({
       data: { recordingExists: true, recordingAttached: false },
     });
@@ -144,8 +153,10 @@ describe('room subject provider', () => {
    *
    * `rtmpStreamKey` + `rtmpUrl` are what a broadcaster authenticates with, so a
    * juror who read them could broadcast into the very room they were asked to
-   * judge. This is the test that keeps the provider's projection a whitelist: it
-   * fails if anyone widens it to a bare `findById()`.
+   * judge. The provider reads through `publicColumns`, so the four credentials
+   * are absent from the row's TYPE and reaching for one fails `tsc` — this is
+   * the behavioural half of that guard, and it fails if the provider is ever
+   * pointed at a credential-carrying read instead.
    */
   it('never carries the RTMP stream credential a juror could broadcast with', async () => {
     const room = await makeRoom({
@@ -153,8 +164,12 @@ describe('room subject provider', () => {
       rtmpStreamKey: 'sk_live_super_secret_stream_key',
       activeStreamUrl: 'https://cdn.example/stream.m3u8',
     });
+    // Not a vacuous check: the fixture really did store the credential, so the
+    // assertions below measure the provider withholding it rather than a row
+    // that never had one.
+    expect(room.rtmpStreamKey).toBe('sk_live_super_secret_stream_key');
 
-    const snapshot = await provider?.snapshot(String(room._id));
+    const snapshot = await provider?.snapshot(room.id);
     const serialised = JSON.stringify(snapshot);
 
     expect(serialised).not.toContain('sk_live_super_secret_stream_key');
@@ -166,12 +181,15 @@ describe('room subject provider', () => {
 
   it('says so plainly when there is no recording', async () => {
     const room = await makeRoom();
-    const snapshot = await provider?.snapshot(String(room._id));
+    const snapshot = await provider?.snapshot(room.id);
     expect(snapshot?.content).toMatchObject({ data: { recordingExists: false } });
   });
 
   it('returns null for a deleted room and for an id that is not one', async () => {
-    expect(await provider?.snapshot(new mongoose.Types.ObjectId().toHexString())).toBeNull();
+    // A well-formed id naming no row, and a malformed one. Both answer null, and
+    // the first is the one that matters: `isLiveEntityId` accepts a uuid v7, so
+    // it reaches the query rather than being turned away by a shape guard.
+    expect(await provider?.snapshot(uuidv7())).toBeNull();
     expect(await provider?.snapshot('not-an-object-id')).toBeNull();
   });
 });

@@ -97,7 +97,7 @@ export const CreateRoomSheet = forwardRef<CreateRoomSheetRef, CreateRoomSheetPro
     speakerPermission: isBroadcast ? 'invited' as const : speakerPermission,
     type: roomType,
     ownerType: selectedHouse ? 'house' as const : 'profile' as const,
-    houseId: selectedHouse?._id,
+    houseId: selectedHouse?.id,
     recordingEnabled,
   });
 
@@ -109,10 +109,10 @@ export const CreateRoomSheet = forwardRef<CreateRoomSheetRef, CreateRoomSheetPro
       const room = await roomsService.createRoom(buildCreatePayload());
 
       if (room) {
-        const started = await roomsService.startRoom(room._id);
+        const started = await roomsService.startRoom(room.id);
         onClose();
         if (started) {
-          joinLiveRoom(room._id);
+          joinLiveRoom(room.id);
         } else {
           toast.error('Room created but failed to start');
         }
@@ -317,10 +317,10 @@ export const CreateRoomSheet = forwardRef<CreateRoomSheetRef, CreateRoomSheetPro
               horizontal
               showsHorizontalScrollIndicator={false}
               data={[null, ...houses]}
-              keyExtractor={(item) => item?._id ?? 'personal'}
+              keyExtractor={(item) => item?.id ?? 'personal'}
               contentContainerStyle={styles.chipList}
               renderItem={({ item }) => {
-                const selected = item === null ? !selectedHouse : selectedHouse?._id === item._id;
+                const selected = item === null ? !selectedHouse : selectedHouse?.id === item.id;
                 return (
                   <TouchableOpacity
                     style={[

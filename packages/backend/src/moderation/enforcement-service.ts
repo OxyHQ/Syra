@@ -1,9 +1,9 @@
-import mongoose from 'mongoose';
 import { eq } from 'drizzle-orm';
 import type { Decision } from '@oxyhq/crowdsource-contracts';
 import { PlaylistVisibility, playlistVisibilitySchema } from '@syra/shared-types';
-import HouseModel from '../models/House';
-import RoomModel from '../models/Room';
+import { setHouseDiscovery, findHouseById } from '../db/rooms/houses';
+import { findPublicRoomById, setRoomArchived } from '../db/rooms/rooms';
+import { HouseDiscovery } from '../db/rooms/types';
 import { ReportedType } from '../models/Report';
 import { getDb } from '../db/postgres';
 import { tracks } from '../db/schema/catalog';
@@ -16,6 +16,7 @@ import {
 } from '../models/ModerationEnforcement';
 import { crowdSourceConfig, type ModerationEnforcementMode } from './config';
 import { planEnforcement, type PlannedEnforcementAction } from './enforcement-plan';
+import { describeErrorSafely } from '../utils/error';
 import { logger } from '../utils/logger';
 
 /**
@@ -110,13 +111,14 @@ async function lastApplied(
 async function restrict(subject: EnforcementSubject): Promise<EffectResult> {
   switch (subject.type) {
     case ReportedType.TRACK: {
-      // No id-shape guard on the Postgres branches. `tracks.id` and
-      // `playlists.id` are `text`, so a malformed id matches no row and the
-      // query gives the same answer the guard did — while an ObjectId-only
-      // guard, which is what this function used to open with, rejected every
-      // uuid v7 id the catalogue has minted since the cutover. The Mongo
-      // branches below keep theirs, because a wrong-shaped id reaches Mongoose
-      // as a CastError rather than a miss.
+      // No id-shape guard on ANY branch. Every id column this file reads is
+      // `text`, so a malformed id matches no row and the query gives the same
+      // answer a guard would — while an ObjectId-only guard, which is what this
+      // function used to open with, rejected every uuid v7 id the catalogue has
+      // minted since the cutover. The house and room branches carried theirs
+      // until Task 14 moved them off Mongoose, where a wrong-shaped id reached
+      // Mongoose as a CastError rather than a miss; that reason is gone with the
+      // models, and so are the guards.
       const [track] = await getDb()
         .select({ isAvailable: tracks.isAvailable })
         .from(tracks)
@@ -151,39 +153,30 @@ async function restrict(subject: EnforcementSubject): Promise<EffectResult> {
     }
 
     case ReportedType.HOUSE: {
-      if (!mongoose.isValidObjectId(subject.id)) {
-        return { changed: false, reason: 'The reported house no longer exists' };
-      }
-      const house = await HouseModel.findById(subject.id)
-        .select('visibility')
-        .lean<{ visibility?: { discovery?: string } } | null>();
+      const house = await findHouseById(subject.id);
       if (!house) return { changed: false, reason: 'The reported house no longer exists' };
-      const discovery = house.visibility?.discovery;
-      if (discovery === 'hidden') {
+      const discovery = house.visibilityDiscovery;
+      if (discovery === HouseDiscovery.HIDDEN) {
         return { changed: false, reason: 'The house was already hidden' };
       }
-      await HouseModel.updateOne(
-        { _id: subject.id },
-        { $set: { 'visibility.discovery': 'hidden' } },
-      );
-      return {
-        changed: true,
-        previousState: { visibility: discovery ?? 'public' },
-      };
+      await setHouseDiscovery(subject.id, HouseDiscovery.HIDDEN);
+      /**
+       * The recorded previous value is the column's own, with no `?? 'public'`
+       * fallback: `visibility_discovery` is `notNull` with a default, so there
+       * is no absent case to substitute for — and `'public'` was never one of
+       * the axis's three values, so recording it would have written a state
+       * `restore` below cannot put back.
+       */
+      return { changed: true, previousState: { visibility: discovery } };
     }
 
     case ReportedType.ROOM: {
-      if (!mongoose.isValidObjectId(subject.id)) {
-        return { changed: false, reason: 'The reported room no longer exists' };
-      }
-      const room = await RoomModel.findById(subject.id)
-        .select('archived')
-        .lean<{ archived?: boolean } | null>();
+      const room = await findPublicRoomById(subject.id);
       if (!room) return { changed: false, reason: 'The reported room no longer exists' };
-      if (room.archived === true) {
+      if (room.archived) {
         return { changed: false, reason: 'The room was already archived' };
       }
-      await RoomModel.updateOne({ _id: subject.id }, { $set: { archived: true } });
+      await setRoomArchived(subject.id, true);
       return { changed: true, previousState: { status: 'unarchived' } };
     }
 
@@ -255,28 +248,27 @@ async function restore(subject: EnforcementSubject): Promise<EffectResult> {
       if (previous.visibility === undefined) {
         return { changed: false, reason: 'No previous house visibility was recorded' };
       }
-      if (!mongoose.isValidObjectId(subject.id)) {
+      /**
+       * Parsed rather than trusted, for the same reason the playlist branch
+       * above parses its recorded visibility: `houses.visibility_discovery`
+       * carries a CHECK constraint where the Mongoose enum was inert under
+       * `updateOne`, so a recorded value that is not a real axis level used to
+       * be written back verbatim and would now abort the transaction. This is a
+       * row THIS process wrote in an earlier revision and may not have written
+       * at all.
+       */
+      const recorded = Object.values(HouseDiscovery).find((level) => level === previous.visibility);
+      if (recorded === undefined) {
+        return { changed: false, reason: 'The recorded house visibility is not a real one' };
+      }
+      if (!(await setHouseDiscovery(subject.id, recorded))) {
         return { changed: false, reason: 'The reported house no longer exists' };
       }
-      const result = await HouseModel.updateOne(
-        { _id: subject.id },
-        { $set: { 'visibility.discovery': previous.visibility } },
-      );
-      if (result.matchedCount === 0) {
-        return { changed: false, reason: 'The reported house no longer exists' };
-      }
-      return { changed: true, previousState: { visibility: 'hidden' } };
+      return { changed: true, previousState: { visibility: HouseDiscovery.HIDDEN } };
     }
 
     case ReportedType.ROOM: {
-      if (!mongoose.isValidObjectId(subject.id)) {
-        return { changed: false, reason: 'The reported room no longer exists' };
-      }
-      const result = await RoomModel.updateOne(
-        { _id: subject.id },
-        { $set: { archived: false } },
-      );
-      if (result.matchedCount === 0) {
+      if (!(await setRoomArchived(subject.id, false))) {
         return { changed: false, reason: 'The reported room no longer exists' };
       }
       return { changed: true, previousState: { status: 'archived' } };
@@ -433,7 +425,7 @@ async function applyOne(
       decisionId: decision.id,
       revision: decision.revision,
       action: planned.action,
-      error: error instanceof Error ? error.message : String(error),
+      error: describeErrorSafely(error),
     });
     throw error;
   }

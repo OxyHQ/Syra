@@ -170,7 +170,7 @@ function sweepHybridFiles(): string[] {
  * `readsPostgres` that answered false for everything, would report zero
  * unregistered files and read exactly like a clean tree.
  */
-const MINIMUM_HYBRID_FILES = 12;
+const MINIMUM_HYBRID_FILES = 11;
 
 /**
  * The same floor for property 4's sweep. **Six** today, down from ten in Task
@@ -205,15 +205,19 @@ describe('property 3 — every hybrid file in the tree is registered', () => {
     const found = sweepHybridFiles();
     expect(found.length).toBeGreaterThanOrEqual(MINIMUM_HYBRID_FILES);
     // Named, so a broken `readsPostgres` reports which shape it lost rather
-    // than a bare count. `takedown.ts` reads `db/postgres` with no
-    // `db/catalog/` import at all; `syraMedia.ts` sits in `src/utils/` and
-    // reaches its neighbours as `./x`.
+    // than a bare count. Both files that motivated the two resolution shapes
+    // are ported now — `takedown.ts` by Task 13, `syraMedia.ts` by Task 14 —
+    // so the shapes are exercised by `halfPortedImports.test.ts`'s own
+    // fixtures rather than by a live registry entry.
     // `takedown.ts` was named here as the file that reads `db/postgres` with no
     // `db/catalog/` import at all; Task 13 finished it, so the shape is now
-    // carried by `library.controller.ts`. `syraMedia.ts` sits in `src/utils/`
-    // and reaches its neighbours as `./x`.
+    // carried by `library.controller.ts`. The second named shape was
+    // `syraMedia.ts` — a file in `src/utils/` reaching its neighbours as `./x`
+    // — and Task 14 ported it, so `moderation/subjects/providers.ts` carries
+    // that shape instead: it sits outside `src/db/`, reaches the db layer by a
+    // relative path, and still imports a Mongoose model.
     expect(found).toContain('controllers/library.controller.ts');
-    expect(found).toContain('utils/syraMedia.ts');
+    expect(found).toContain('moderation/subjects/providers.ts');
   });
 
   it('registers every one of them, in one registry or the other', () => {
@@ -477,23 +481,30 @@ describe('vacuity floor', () => {
 
   it('the registry is not empty and covers the measured hybrids', () => {
     /**
-     * Thirteen. Twenty until Task 12, eighteen until Task 13.
+     * Twelve. Twenty until Task 12, eighteen until Task 13, thirteen until 14.
      *
      * The direction matters, because Task 11's note here explains why it went
      * UP: porting a file's catalog half is what makes it hybrid and therefore
      * registrable at all, so the registry grows while the migration is in its
      * middle. It shrinks only when a vertical's OWN models leave the tree —
      * Task 12 deleting `Podcast`, `Episode`, `EpisodeProgress` and `Library`,
-     * and now Task 13 deleting `UserUpload`, `ArtistClaim`,
-     * `ContributionAttestation` and `ContributorStanding`, taking with them the
-     * licences `artistProfile`, `takedown`, `matchCatalog`, `artists.controller`
-     * and `queue.controller` held to read them.
+     * Task 13 deleting `UserUpload`, `ArtistClaim`, `ContributionAttestation`
+     * and `ContributorStanding`, and now Task 14 deleting `House`, `Room`,
+     * `Series`, `Recording` and `RoomUserPreference`, taking with them the
+     * licences `artistProfile`, `takedown`, `matchCatalog`, `artists.controller`,
+     * `queue.controller` and `syraMedia` held to read them.
+     *
+     * Task 14 removed only ONE entry while deleting five models, which is the
+     * shape to expect from here on: `enforcement-service` and `providers` both
+     * lost their house/room/recording licences and stayed registered, because
+     * each still imports something of Task 8's. A vertical closing shrinks the
+     * `models` arrays before it shrinks this count.
      *
      * A registry that shrank to nothing WITHOUT the owning tasks landing means
      * the walk broke, not that the work finished. Tasks 8/15 each remove entries
      * and this floor drops with them, deliberately, by being edited.
      */
-    expect(HYBRID_MODULES.length).toBe(13);
+    expect(HYBRID_MODULES.length).toBe(12);
     /**
      * Three, down from six. Task 19a cleared the three half-connected bulk
      * loaders — `backfillTrackFingerprints`, `importIsrcRegistry` and

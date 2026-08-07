@@ -565,10 +565,10 @@ const HomeContent: React.FC<HomeContentProps> = ({
               >
                 {liveRooms.map((room) => (
                   <RoomCard
-                    key={room._id}
+                    key={room.id}
                     room={room}
                     variant="compact"
-                    onPress={() => joinLiveRoom(room._id)}
+                    onPress={() => joinLiveRoom(room.id)}
                   />
                 ))}
               </ScrollView>

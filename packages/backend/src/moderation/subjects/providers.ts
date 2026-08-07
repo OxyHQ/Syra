@@ -1,10 +1,10 @@
-import mongoose from 'mongoose';
+import { isLiveEntityId } from '@oxyhq/db';
 import { and, eq } from 'drizzle-orm';
 import { CONTRACT_LIMITS } from '@oxyhq/crowdsource-contracts';
 import { PlaylistVisibility } from '@syra/shared-types';
-import HouseModel from '../../models/House';
-import RoomModel from '../../models/Room';
-import RecordingModel from '../../models/Recording';
+import { findHouseById } from '../../db/rooms/houses';
+import { findPublicRoomById } from '../../db/rooms/rooms';
+import { roomHasRecording } from '../../db/rooms/recordings';
 import { ReportedType } from '../../models/Report';
 import { getDb } from '../../db/postgres';
 import { catalogEntities, tracks } from '../../db/schema/catalog';
@@ -120,15 +120,8 @@ function houseProvider(): ModerationSubjectProvider {
     subjectType: 'custom.syra.house',
 
     async snapshot(reportedId: string): Promise<ModerationSubjectSnapshot | null> {
-      if (!mongoose.isValidObjectId(reportedId)) return null;
-      const house = await HouseModel.findById(reportedId).lean<{
-        _id: mongoose.Types.ObjectId;
-        name?: string;
-        description?: string;
-        createdBy?: string;
-        visibility?: { discovery?: string };
-        createdAt?: Date;
-      } | null>();
+      if (!isLiveEntityId(reportedId)) return null;
+      const house = await findHouseById(reportedId);
       if (!house) return null;
 
       const title = bounded(house.name, CONTRACT_LIMITS.SHORT_TEXT_MAX_LENGTH);
@@ -137,12 +130,10 @@ function houseProvider(): ModerationSubjectProvider {
 
       return {
         subject: {
-          externalId: house._id.toHexString(),
+          externalId: house.id,
           type: 'custom.syra.house',
-          permalink: `${WEB_ORIGIN}/house/${house._id.toHexString()}`,
-          ...(house.createdBy === undefined
-            ? {}
-            : { author: { oxyUserId: house.createdBy } }),
+          permalink: `${WEB_ORIGIN}/house/${house.id}`,
+          author: { oxyUserId: house.createdBy },
         },
         content: {
           type: 'listing',
@@ -150,7 +141,7 @@ function houseProvider(): ModerationSubjectProvider {
             title,
             ...(description === undefined ? {} : { description }),
           },
-          ...(house.createdAt === undefined ? {} : { createdAt: new Date(house.createdAt) }),
+          createdAt: house.createdAt,
         },
       };
     },
@@ -355,9 +346,9 @@ function roomProvider(): ModerationSubjectProvider {
     subjectType: 'custom.syra.room',
 
     async snapshot(reportedId: string): Promise<ModerationSubjectSnapshot | null> {
-      if (!mongoose.isValidObjectId(reportedId)) return null;
+      if (!isLiveEntityId(reportedId)) return null;
       /**
-       * A WHITELIST, and the exclusion is the point rather than a side effect.
+       * The exclusion is the point rather than a side effect.
        *
        * The question to ask of any reported document is not only "what would a
        * jury learn that it should not" but "is there anything here a jury could
@@ -365,26 +356,18 @@ function roomProvider(): ModerationSubjectProvider {
        * credential for broadcasting INTO the room. A juror who read them could
        * take over the stream of the room they were asked to judge.
        *
-       * They are excluded at the Mongo projection so they are never loaded into
-       * this process at all — not filtered out later, where a future field added
-       * to a snapshot object could quietly pick them up again. Never widen this
-       * to a bare `findById()`; `roomSubject.test.ts` fails if the key ever
-       * reaches a snapshot.
+       * This used to be a hand-written Mongo projection listing nine fields,
+       * where forgetting one exclusion was all it took. `findPublicRoomById`
+       * reads through `publicColumns(rooms, PROTECTED_COLUMNS_BY_TABLE)`, so all
+       * four stream credentials are absent from the returned TYPE — reaching for
+       * one below fails `tsc` rather than shipping it, and the guard no longer
+       * depends on this call site spelling a projection correctly. The wider
+       * read is therefore safe where a bare `findById()` was not.
+       *
+       * `roomSubject.test.ts` still fails if a key ever reaches a snapshot; it
+       * is the behavioural half, and the type is the structural one.
        */
-      const room = await RoomModel.findById(reportedId)
-        .select('title description topic tags host status streamTitle streamDescription createdAt')
-        .lean<{
-          _id: mongoose.Types.ObjectId;
-          title?: string;
-          description?: string;
-          topic?: string;
-          tags?: string[];
-          host?: string;
-          status?: string;
-          streamTitle?: string;
-          streamDescription?: string;
-          createdAt?: Date;
-        } | null>();
+      const room = await findPublicRoomById(reportedId);
       if (!room) return null;
 
       const title = bounded(room.title, CONTRACT_LIMITS.SHORT_TEXT_MAX_LENGTH);
@@ -403,12 +386,11 @@ function roomProvider(): ModerationSubjectProvider {
         CONTRACT_LIMITS.LONG_TEXT_MAX_LENGTH,
       );
 
-      const hasRecording =
-        (await RecordingModel.countDocuments({ roomId: room._id.toHexString() }).limit(1)) > 0;
+      const hasRecording = await roomHasRecording(room.id);
 
       const context: ModerationContextResource[] = [];
       const topicAndTags = claim(
-        [room.topic?.trim(), ...(room.tags ?? [])].filter(Boolean).join(', '),
+        [room.topic?.trim(), ...room.tags].filter(Boolean).join(', '),
       );
 
       const content: ModerationResource = {
@@ -420,7 +402,7 @@ function roomProvider(): ModerationSubjectProvider {
           ...(claim(room.streamTitle) === undefined
             ? {}
             : { streamTitle: claim(room.streamTitle) ?? '' }),
-          ...(room.status === undefined ? {} : { roomStatus: room.status }),
+          roomStatus: room.status,
           /**
            * The two withheld things, stated rather than left to be inferred.
            * `participantsIncluded: false` is what tells a jury it is judging a
@@ -434,10 +416,10 @@ function roomProvider(): ModerationSubjectProvider {
 
       return {
         subject: {
-          externalId: room._id.toHexString(),
+          externalId: room.id,
           type: 'custom.syra.room',
-          permalink: `${WEB_ORIGIN}/room/${room._id.toHexString()}`,
-          ...(room.host === undefined ? {} : { author: { oxyUserId: room.host } }),
+          permalink: `${WEB_ORIGIN}/room/${room.id}`,
+          author: { oxyUserId: room.host },
         },
         content,
         ...(context.length > 0 ? { context } : {}),

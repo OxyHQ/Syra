@@ -46,9 +46,12 @@ const SOURCE_DIR = join(__dirname, '..', '..', '..');
  * Matched by RESOLVING each import specifier against the directory of the file
  * that writes it, never by comparing specifier text. The first version of this
  * gate used `specifier.endsWith('utils/catalogVisibility')`, which does not
- * match the sibling spelling `'./catalogVisibility'` — and the one file already
- * on both sides of the port, `utils/syraMedia.ts`, LIVES in `src/utils/`, so
- * that spelling is exactly the one it would use. Mutation-verified at the time:
+ * match the sibling spelling `'./catalogVisibility'` — and the file that was on
+ * both sides of the port when this was written, `utils/syraMedia.ts`, LIVES in
+ * `src/utils/`, so that spelling is exactly the one it would use. (Task 14
+ * finished that file; it still reads `db/catalog` from `src/utils/`, which is
+ * what keeps it the right example for the SPELLING even though it is no longer
+ * half-ported.) Mutation-verified at the time:
  * adding such an import left all eleven tests green, and every synthetic fixture
  * used the `../utils/` spelling, so the fixture set could not see the
  * difference. Both spellings are exercised below now.

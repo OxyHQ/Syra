@@ -80,7 +80,7 @@ const ACTION_HIT_SLOP = { top: 8, bottom: 8, left: 8, right: 8 };
 
 interface RoomCardProps {
   room: {
-    _id: string;
+    id: string;
     title: string;
     status: 'scheduled' | 'live' | 'ended';
     type?: 'talk' | 'stage' | 'broadcast';

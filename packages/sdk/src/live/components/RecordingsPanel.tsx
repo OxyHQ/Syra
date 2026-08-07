@@ -49,9 +49,9 @@ export function RecordingsPanel({ roomId, isHost, theme, onClose, onPlay }: Reco
   };
 
   const handlePlay = async (recording: Recording) => {
-    setPlayingId(recording._id);
+    setPlayingId(recording.id);
     try {
-      const result = await roomsService.getRecording(recording._id);
+      const result = await roomsService.getRecording(recording.id);
       if (result?.playbackUrl) {
         onPlay?.(result.playbackUrl, recording);
       } else {
@@ -66,10 +66,10 @@ export function RecordingsPanel({ roomId, isHost, theme, onClose, onPlay }: Reco
 
   const handleToggleAccess = async (recording: Recording) => {
     const newAccess = recording.access === 'public' ? 'participants' as const : 'public' as const;
-    const success = await roomsService.updateRecordingAccess(recording._id, newAccess);
+    const success = await roomsService.updateRecordingAccess(recording.id, newAccess);
     if (success) {
       setRecordings((prev) =>
-        prev.map((r) => r._id === recording._id ? { ...r, access: newAccess } : r)
+        prev.map((r) => r.id === recording.id ? { ...r, access: newAccess } : r)
       );
       toast.success(`Recording is now ${newAccess}`);
     } else {
@@ -78,9 +78,9 @@ export function RecordingsPanel({ roomId, isHost, theme, onClose, onPlay }: Reco
   };
 
   const handleDelete = async (recording: Recording) => {
-    const success = await roomsService.deleteRecording(recording._id);
+    const success = await roomsService.deleteRecording(recording.id);
     if (success) {
-      setRecordings((prev) => prev.filter((r) => r._id !== recording._id));
+      setRecordings((prev) => prev.filter((r) => r.id !== recording.id));
       toast.success('Recording deleted');
     } else {
       toast.error('Failed to delete recording');
@@ -110,7 +110,7 @@ export function RecordingsPanel({ roomId, isHost, theme, onClose, onPlay }: Reco
         ) : (
           recordings.map((recording) => (
             <View
-              key={recording._id}
+              key={recording.id}
               style={[styles.recordingCard, { backgroundColor: `${theme.colors.card}80`, borderColor: theme.colors.border }]}
             >
               <View style={styles.recordingHeader}>
@@ -144,10 +144,10 @@ export function RecordingsPanel({ roomId, isHost, theme, onClose, onPlay }: Reco
 
                 <TouchableOpacity
                   onPress={() => handlePlay(recording)}
-                  disabled={playingId === recording._id}
+                  disabled={playingId === recording.id}
                   style={[styles.playButton, { backgroundColor: theme.colors.primary }]}
                 >
-                  {playingId === recording._id ? (
+                  {playingId === recording.id ? (
                     <ActivityIndicator size="small" color="#FFFFFF" />
                   ) : (
                     <MaterialCommunityIcons name="play" size={22} color="#FFFFFF" />

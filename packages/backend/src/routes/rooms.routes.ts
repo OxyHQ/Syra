@@ -1,9 +1,53 @@
 import { Router, Response } from 'express';
 import multer from 'multer';
-import Room, { IRoom, MediaQueueItem, RoomStatus, RoomType, OwnerType, BroadcastKind, SpeakerPermission } from '../models/Room';
-import RoomUserPreference, { LiveVisibility, DEFAULT_LIVE_VISIBILITY, isLiveVisibility } from '../models/RoomUserPreference';
-import House, { HouseMemberRole, houseIdsWithRoomsHiddenFrom } from '../models/House';
+import { isLiveEntityId, uuidv7 } from '@oxyhq/db';
 import { requireOxyAuth, getRequiredOxyUserId, type OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
+import {
+  createRoom,
+  deleteRoom,
+  findLiveRoomBroadcasters,
+  findPublicRoomById,
+  findRoomById,
+  findRoomQueue,
+  listRooms,
+  replaceRoomStreamAndQueue,
+  stopRoomStreamFields,
+  updateRoom,
+  type RoomOwnershipFields,
+  type RoomWithCredentials,
+} from '../db/rooms/rooms';
+import {
+  canAccessRooms,
+  canSeeHouse,
+  findHouseWithMembers,
+  hasRole,
+  houseIdsWithRoomsHiddenFrom,
+} from '../db/rooms/houses';
+import {
+  createRecording,
+  findRecordingByEgressId,
+  findRecordingById,
+  findTopHosts,
+  finishRecording,
+  listRoomRecordings,
+  updateRecording,
+} from '../db/rooms/recordings';
+import { findLiveVisibilities, findLiveVisibility, setLiveVisibility } from '../db/rooms/preferences';
+import { stripInternalStreamFields, roomWithInternalStreamFields } from '../db/rooms/serialize';
+import {
+  BroadcastKind,
+  DEFAULT_LIVE_VISIBILITY,
+  HouseMemberRole,
+  OwnerType,
+  RoomStatus,
+  RoomType,
+  SpeakerPermission,
+  isLiveVisibility,
+  type LiveVisibility,
+  type MediaQueueItem,
+} from '../db/rooms/types';
+import { describeErrorSafely } from '../utils/error';
+import { getParam } from '../utils/reqParams';
 import { logger } from '../utils/logger';
 import {
   generateRoomToken,
@@ -21,7 +65,6 @@ import {
   mapLiveKitIngressError,
   shouldRetryIngressAfterDeletingExisting,
 } from '../utils/livekitErrors';
-import Recording, { IRecording, RecordingStatus, RecordingAccess } from '../models/Recording';
 import { getRecordingObjectKey, uploadObject, deleteObject, getAgoraRoomImageKey, cdnUrlToKey } from '../utils/spaces';
 import { processImage } from '../utils/imageProcessor';
 import { emitLiveRoomsUpdated } from '../utils/socket';
@@ -49,7 +92,6 @@ const uploadMiddleware = multer({
 const router = Router();
 
 type CreatedIngress = Awaited<ReturnType<typeof createRoomUrlIngress>>;
-type RoomOwnershipFields = Pick<IRoom, 'host' | 'ownerType' | 'houseId'>;
 
 interface IngressReplacementResult {
   ingress: CreatedIngress;
@@ -57,81 +99,9 @@ interface IngressReplacementResult {
   previousDeletedBeforeCreate: boolean;
 }
 
-/**
- * Room fields that are safe to return to a client.
- *
- * This is an allowlist, not a denylist: `stripInternalStreamFields` rebuilds the
- * response from these keys alone. A field added to the room schema later is dropped
- * from responses until it is listed here — that direction fails closed, so a new
- * internal field can never ship to clients just because nobody remembered to
- * exclude it. The internal stream credentials (`rtmpStreamKey`, `rtmpUrl`,
- * `activeStreamUrl`, `activeIngressId`) are absent by construction.
- */
-const PUBLIC_ROOM_FIELDS = [
-  '_id',
-  'title',
-  'description',
-  'ownerType',
-  'host',
-  'houseId',
-  'createdByAdmin',
-  'type',
-  'broadcastKind',
-  'status',
-  'scheduledStart',
-  'startedAt',
-  'endedAt',
-  'speakerPermission',
-  'participants',
-  'speakers',
-  'maxParticipants',
-  'topic',
-  'topicId',
-  'tags',
-  'archived',
-  'seriesId',
-  'stats',
-  'recordingEnabled',
-  'recordingEgressId',
-  'streamTitle',
-  'streamImage',
-  'streamDescription',
-  'streamStartedAt',
-  'streamDurationSec',
-  'podcastQueue',
-  'createdAt',
-  'updatedAt',
-] as const;
-
-type PublicRoomField = (typeof PUBLIC_ROOM_FIELDS)[number];
-
-/**
- * Build the public view of a room, omitting the internal stream credentials.
- *
- * Reads each allowed field explicitly and returns a NEW object, which is what makes
- * this correct for both a `.lean()` plain object and a hydrated Mongoose document.
- * The previous implementation deleted the credential fields from the input instead;
- * on a hydrated document that is a silent no-op — schema fields are prototype getters,
- * not own properties — so a live RTMP publishing key would serialize straight to the
- * client with no error, no log, and no failing test. Returning a rebuilt object cannot
- * regress that way regardless of what the caller passes in.
- *
- * Callers must use the RETURN VALUE; this no longer mutates its argument.
- */
-export function stripInternalStreamFields<T extends object>(
-  room: T,
-): Pick<T, Extract<keyof T, PublicRoomField>> {
-  const source = room as Partial<Record<PublicRoomField, unknown>>;
-  const sanitized: Partial<Record<PublicRoomField, unknown>> = {};
-
-  for (const field of PUBLIC_ROOM_FIELDS) {
-    const value = source[field];
-    if (value !== undefined) {
-      sanitized[field] = value;
-    }
-  }
-
-  return sanitized as Pick<T, Extract<keyof T, PublicRoomField>>;
+/** Look a room up only when the id could name one — see `isLiveEntityId`. */
+async function loadRoom(id: string): Promise<RoomWithCredentials | undefined> {
+  return isLiveEntityId(id) ? findRoomById(id) : undefined;
 }
 
 /**
@@ -142,6 +112,12 @@ export function stripInternalStreamFields<T extends object>(
  * are created and operated server-side by the platform, never over HTTP, and Syra
  * has no platform-wide superuser role that could grant access here. The omission is
  * the design, not a gap to fill in later.
+ *
+ * It also fails closed on a house-owned room whose `houseId` is null. That state
+ * is reachable now that deleting a house nulls its rooms' `house_id`
+ * (`ON DELETE SET NULL`) without touching their `owner_type` — see
+ * `schema/rooms.ts`, which records it as a deliberate open product question
+ * rather than a bug. The `!room.houseId` branch below is what makes it safe.
  */
 async function canManageRoom(room: RoomOwnershipFields, userId: string): Promise<boolean> {
   if (room.host === userId) {
@@ -153,8 +129,8 @@ async function canManageRoom(room: RoomOwnershipFields, userId: string): Promise
       return false;
     }
 
-    const house = await House.findById(room.houseId);
-    return Boolean(house?.hasRole(userId, HouseMemberRole.ADMIN));
+    const owning = await findHouseWithMembers(room.houseId);
+    return owning !== undefined && hasRole(owning.members, userId, HouseMemberRole.ADMIN);
   }
 
   return false;
@@ -176,7 +152,7 @@ async function sendForbiddenUnlessRoomManager(
 
 function emitStreamStarted(
   roomId: string,
-  room: Pick<IRoom, 'streamTitle' | 'streamImage' | 'streamDescription' | 'streamStartedAt' | 'streamDurationSec'>,
+  room: Pick<RoomWithCredentials, 'streamTitle' | 'streamImage' | 'streamDescription' | 'streamStartedAt' | 'streamDurationSec'>,
 ) {
   const io = global.io;
   if (!io) return;
@@ -233,7 +209,7 @@ function sendLiveKitIngressError(
 }
 
 async function createIngressReplacingExisting(
-  room: IRoom,
+  room: RoomWithCredentials,
   roomId: string,
   createIngress: () => Promise<CreatedIngress>
 ): Promise<IngressReplacementResult> {
@@ -287,27 +263,8 @@ type UrlIngressMeta = {
 
 /** Res-free result of {@link applyUrlIngressToRoom}. */
 type ApplyUrlIngressOutcome =
-  | { ok: true; ingressId: string; url: string }
+  | { ok: true; ingressId: string; url: string; room: RoomWithCredentials }
   | { ok: false; error: unknown };
-
-/**
- * Clear EVERY stream field on a room in one place, so the "stop / teardown"
- * paths (DELETE /stream, /stop, /end, queue-drained, webhook) can never drift
- * out of sync as fields are added. Includes the progress fields
- * (`streamStartedAt`, `streamDurationSec`) and the `podcastQueue`.
- */
-function clearRoomStreamFields(room: IRoom): void {
-  room.activeIngressId = undefined;
-  room.activeStreamUrl = undefined;
-  room.streamTitle = undefined;
-  room.streamImage = undefined;
-  room.streamDescription = undefined;
-  room.rtmpUrl = undefined;
-  room.rtmpStreamKey = undefined;
-  room.streamStartedAt = undefined;
-  room.streamDurationSec = undefined;
-  room.podcastQueue = undefined;
-}
 
 /**
  * Start (or replace) a LiveKit URL ingress for a live room and persist it —
@@ -318,15 +275,28 @@ function clearRoomStreamFields(room: IRoom): void {
  * and pass an already-validated `meta.url`; this owns only the ingress +
  * persistence + socket-broadcast half. `meta.title` / `meta.image` /
  * `meta.description` are stored verbatim (callers normalize); the RTMP fields
- * are cleared (starting a URL ingress switches the room out of RTMP mode);
+ * are CLEARED (starting a URL ingress switches the room out of RTMP mode);
  * `streamStartedAt` is stamped now and `streamDurationSec` mirrors
- * `meta.durationSec` (undefined for open-ended URLs). On a LiveKit failure it
- * returns `{ ok: false, error }` WITHOUT persisting — the caller maps the error.
+ * `meta.durationSec`. On a LiveKit failure it returns `{ ok: false, error }`
+ * WITHOUT persisting — the caller maps the error.
+ *
+ * Every optional field is written as `?? null` rather than left `undefined`.
+ * Drizzle DROPS an `undefined`-valued key from the update, so the Mongoose
+ * spelling would leave the PREVIOUS stream's title, artwork, duration and — for
+ * a room switching out of RTMP mode — its still-valid RTMP PUBLISHING KEY in
+ * place. That last one is why this is stated here rather than left to the
+ * update helper: the clear is a security property, not a cosmetic one.
+ *
+ * `queue` is the remainder to persist, written in the SAME transaction as the
+ * stream fields. That is what preserves the Mongo behaviour the routes rely on:
+ * a failed start never reaches here, so the persisted queue keeps its head for a
+ * retry.
  */
 async function applyUrlIngressToRoom(
-  room: IRoom,
+  room: RoomWithCredentials,
   id: string,
   meta: UrlIngressMeta,
+  queue: readonly MediaQueueItem[],
 ): Promise<ApplyUrlIngressOutcome> {
   let ingressResult: IngressReplacementResult;
   try {
@@ -339,24 +309,32 @@ async function applyUrlIngressToRoom(
     return { ok: false, error: liveKitError };
   }
 
-  // Persist ingress info + metadata (clear RTMP fields if switching modes)
-  room.activeIngressId = ingressResult.ingress.ingressId;
-  room.activeStreamUrl = meta.url;
-  room.rtmpUrl = undefined;
-  room.rtmpStreamKey = undefined;
-  room.streamTitle = meta.title;
-  room.streamImage = meta.image;
-  room.streamDescription = meta.description;
-  room.streamStartedAt = new Date();
-  room.streamDurationSec = typeof meta.durationSec === 'number' ? meta.durationSec : undefined;
-  await room.save();
+  const updated = await replaceRoomStreamAndQueue(
+    id,
+    {
+      activeIngressId: ingressResult.ingress.ingressId,
+      activeStreamUrl: meta.url,
+      rtmpUrl: null,
+      rtmpStreamKey: null,
+      streamTitle: meta.title ?? null,
+      streamImage: meta.image ?? null,
+      streamDescription: meta.description ?? null,
+      streamStartedAt: new Date(),
+      streamDurationSec: typeof meta.durationSec === 'number' ? meta.durationSec : null,
+    },
+    queue,
+  );
+
+  if (!updated) {
+    return { ok: false, error: new Error(`Room ${id} disappeared while starting its stream`) };
+  }
 
   logger.info(`Live stream started in room ${id}: ${meta.url}`);
 
   // Notify participants via socket (no URL -- only metadata)
-  emitStreamStarted(id, room);
+  emitStreamStarted(id, updated);
 
-  return { ok: true, ingressId: ingressResult.ingress.ingressId, url: meta.url };
+  return { ok: true, ingressId: ingressResult.ingress.ingressId, url: meta.url, room: updated };
 }
 
 /**
@@ -369,7 +347,7 @@ async function applyUrlIngressToRoom(
  * the resolved podcast/track paths — so no path reaches the ingress unvalidated.
  */
 async function startUrlIngressForRoom(
-  room: IRoom,
+  room: RoomWithCredentials,
   id: string,
   meta: UrlIngressMeta,
   res: Response,
@@ -381,7 +359,7 @@ async function startUrlIngressForRoom(
     return;
   }
 
-  const outcome = await applyUrlIngressToRoom(room, id, meta);
+  const outcome = await applyUrlIngressToRoom(room, id, meta, []);
   if (!outcome.ok) {
     sendLiveKitIngressError(res, outcome.error, 'create-url-ingress', { roomId: id, userId });
     return;
@@ -497,9 +475,10 @@ type MediaStreamOutcome =
  * LiveKit ingress failure → the mapped LiveKit status.
  */
 async function startResolvedMediaStream(
-  room: IRoom,
+  room: RoomWithCredentials,
   id: string,
   meta: UrlIngressMeta,
+  queue: readonly MediaQueueItem[],
   userId: string,
   operation: string,
 ): Promise<MediaStreamOutcome> {
@@ -508,7 +487,7 @@ async function startResolvedMediaStream(
     return { ok: false, status: validation.status, body: { message: validation.message } };
   }
 
-  const outcome = await applyUrlIngressToRoom(room, id, meta);
+  const outcome = await applyUrlIngressToRoom(room, id, meta, queue);
   if (!outcome.ok) {
     const mapped = mapLiveKitIngressError(outcome.error);
     logger.warn('LiveKit stream ingress operation failed', {
@@ -532,14 +511,15 @@ async function startResolvedMediaStream(
  * LiveKit auto-advance webhook so all enforce the identical policy.
  *
  * Failure mapping: `not_found` → 404, `unavailable` → 503, then the shared
- * probe/ingress mapping. The caller MUST have already set `room.podcastQueue` to
- * the post-start remainder (persisted atomically by the ingress save on success).
+ * probe/ingress mapping. `queue` is the post-start remainder, persisted
+ * atomically with the ingress fields only on success.
  */
 async function startPodcastEpisodeStream(
-  room: IRoom,
+  room: RoomWithCredentials,
   id: string,
   episodeId: string,
   expectedPodcastId: string | undefined,
+  queue: readonly MediaQueueItem[],
   userId: string,
 ): Promise<MediaStreamOutcome> {
   const resolved = await resolvePodcastEpisode(episodeId, expectedPodcastId);
@@ -560,6 +540,7 @@ async function startPodcastEpisodeStream(
       description: undefined,
       durationSec: resolved.episode.durationSec,
     },
+    queue,
     userId,
     'create-podcast-ingress',
   );
@@ -576,9 +557,10 @@ async function startPodcastEpisodeStream(
  * probe/ingress mapping.
  */
 async function startTrackStream(
-  room: IRoom,
+  room: RoomWithCredentials,
   id: string,
   trackId: string,
+  queue: readonly MediaQueueItem[],
   userId: string,
 ): Promise<MediaStreamOutcome> {
   const resolved = await resolveTrack(trackId);
@@ -599,6 +581,7 @@ async function startTrackStream(
       description: resolved.track.artist,
       durationSec: resolved.track.durationSec,
     },
+    queue,
     userId,
     'create-track-ingress',
   );
@@ -610,21 +593,22 @@ async function startTrackStream(
  * the LiveKit auto-advance webhook, so both handle a queue of either kind.
  */
 async function startMediaQueueItem(
-  room: IRoom,
+  room: RoomWithCredentials,
   id: string,
   item: MediaQueueItem,
+  queue: readonly MediaQueueItem[],
   userId: string,
 ): Promise<MediaStreamOutcome> {
   if (item.kind === 'track') {
     if (!item.trackId) {
       return { ok: false, status: 404, body: { message: 'Queued track is missing its id' } };
     }
-    return startTrackStream(room, id, item.trackId, userId);
+    return startTrackStream(room, id, item.trackId, queue, userId);
   }
   if (!item.episodeId) {
     return { ok: false, status: 404, body: { message: 'Queued episode is missing its id' } };
   }
-  return startPodcastEpisodeStream(room, id, item.episodeId, item.syraPodcastId, userId);
+  return startPodcastEpisodeStream(room, id, item.episodeId, item.syraPodcastId, queue, userId);
 }
 
 /** Upper bound on media items queued behind the current one (DoS / abuse guard). */
@@ -704,16 +688,15 @@ function parseTrackQueue(input: unknown): ParsedMediaQueue {
 
 /**
  * Stop the room's current stream (res-free): delete the active ingress, clear
- * every stream field (via {@link clearRoomStreamFields}), persist, and broadcast
+ * every stream field AND drain the queue in one transaction, and broadcast
  * `room:stream:stopped`. Safe to call when nothing is streaming — the ingress
- * delete is skipped and the field clears are no-ops.
+ * delete is skipped and the clears are no-ops.
  */
-async function stopRoomStream(room: IRoom, id: string): Promise<void> {
+async function stopRoomStream(room: RoomWithCredentials, id: string): Promise<void> {
   if (room.activeIngressId) {
     await deleteIngress(room.activeIngressId);
   }
-  clearRoomStreamFields(room);
-  await room.save();
+  await stopRoomStreamFields(id);
   logger.info(`Live stream stopped in room ${id}`);
   emitStreamStopped(id);
 }
@@ -728,28 +711,21 @@ export type AdvancePodcastResult =
  * Advance a room to the next queued media item, or stop the stream when the
  * queue is empty. Shared by `POST /:id/stream/podcast/next` (manual) and the
  * LiveKit `ingress_ended` webhook (auto-advance). The queue is a generic media
- * queue (`room.podcastQueue`): each item is resolved by its `kind` — a podcast
- * episode OR a music track — so a mixed queue advances correctly.
+ * queue: each item is resolved by its `kind` — a podcast episode OR a music
+ * track — so a mixed queue advances correctly.
  *
- * Pops the head of the queue, sets the room's queue to the remainder in memory
- * (persisted atomically by the ingress save only on a SUCCESSFUL start — so a
- * failed start leaves the persisted queue untouched, keeping the head for a
- * retry), then runs it through {@link startMediaQueueItem}. When the queue is
- * empty it stops the stream via {@link stopRoomStream}.
+ * Reads the queue from `room_media_queue_items`, pops the head, and hands the
+ * REMAINDER down to be persisted atomically with the ingress fields only on a
+ * SUCCESSFUL start — so a failed start leaves the persisted queue untouched,
+ * keeping the head for a retry. When the queue is empty it stops the stream via
+ * {@link stopRoomStream}.
  */
 export async function advancePodcastQueueForRoom(
-  room: IRoom,
+  room: RoomWithCredentials,
   id: string,
   userId: string,
 ): Promise<AdvancePodcastResult> {
-  const queue: MediaQueueItem[] = Array.isArray(room.podcastQueue)
-    ? room.podcastQueue.map((item) => ({
-        kind: item.kind,
-        syraPodcastId: item.syraPodcastId,
-        episodeId: item.episodeId,
-        trackId: item.trackId,
-      }))
-    : [];
+  const queue = await findRoomQueue(id);
 
   const head = queue.shift();
   if (!head) {
@@ -757,9 +733,7 @@ export async function advancePodcastQueueForRoom(
     return { kind: 'ended' };
   }
 
-  room.podcastQueue = queue.length > 0 ? queue : undefined;
-
-  const outcome = await startMediaQueueItem(room, id, head, userId);
+  const outcome = await startMediaQueueItem(room, id, head, queue, userId);
   if (!outcome.ok) {
     return { kind: 'error', status: outcome.status, body: outcome.body };
   }
@@ -779,15 +753,21 @@ function scheduleRecordingAutoStop(roomId: string, egressId: string, recordingId
     try {
       await stopRoomRecording(egressId);
 
-      const recording = await Recording.findById(recordingId);
-      if (recording && recording.status === RecordingStatus.RECORDING) {
-        recording.status = RecordingStatus.READY;
-        recording.stoppedAt = new Date();
-        recording.durationMs = recording.stoppedAt.getTime() - recording.startedAt.getTime();
-        await recording.save();
+      const recording = await findRecordingById(recordingId);
+      if (recording) {
+        const stoppedAt = new Date();
+        // The `status = 'recording'` guard lives in `finishRecording`'s WHERE
+        // clause, so the manual stop and this timer cannot both finish the same
+        // row; it returns undefined for the loser.
+        await finishRecording(
+          recordingId,
+          stoppedAt,
+          stoppedAt.getTime() - recording.startedAt.getTime(),
+          undefined,
+        );
       }
 
-      await Room.findByIdAndUpdate(roomId, { recordingEgressId: null });
+      await updateRoom(roomId, { recordingEgressId: null });
 
       const io = global.io;
       if (io) {
@@ -819,42 +799,50 @@ function clearRecordingAutoStop(roomId: string) {
 }
 
 /**
- * Helper: start recording for a room and return the Recording doc.
- * Non-fatal: returns null on failure so room lifecycle can proceed.
+ * Helper: start recording for a room and return the Recording row.
+ *
+ * The Mongo version inserted a placeholder row (`egressId: 'pending'`,
+ * `objectKey: 'pending'`) purely to mint an `_id` for the object key, then saved
+ * twice more. The id is minted by the application here (`generatedId()` is a
+ * `$defaultFn`, not a database default), so the object key is derived BEFORE the
+ * insert and the row is written once, already correct. `egressId` also carries a
+ * UNIQUE constraint now, which the `'pending'` sentinel would have collided on
+ * the moment two rooms started recording at the same time.
  */
-async function startRecordingForRoom(room: IRoom): Promise<IRecording> {
-  const recording = new Recording({
-    roomId: String(room._id),
+async function startRecordingForRoom(room: RoomWithCredentials) {
+  const recordingId = uuidv7();
+  const objectKey = getRecordingObjectKey(room.id, recordingId);
+
+  const egressId = await startRoomRecording(room.id, objectKey);
+
+  const recording = await createRecording({
+    id: recordingId,
+    roomId: room.id,
     roomTitle: room.title,
     host: room.host,
-    status: RecordingStatus.RECORDING,
-    egressId: 'pending',
-    objectKey: 'pending',
+    egressId,
+    objectKey,
     startedAt: new Date(),
-    access: RecordingAccess.PUBLIC,
     expiresAt: new Date(Date.now() + RECORDING_EXPIRY_MS),
   });
-  await recording.save();
 
-  const objectKey = getRecordingObjectKey(String(room._id), String(recording._id));
-  recording.objectKey = objectKey;
+  await updateRoom(room.id, { recordingEgressId: egressId });
 
-  const egressId = await startRoomRecording(String(room._id), objectKey);
-  recording.egressId = egressId;
-  await recording.save();
-
-  room.recordingEgressId = egressId;
-  await room.save();
-
-  scheduleRecordingAutoStop(String(room._id), egressId, String(recording._id));
+  scheduleRecordingAutoStop(room.id, egressId, recording.id);
 
   return recording;
 }
 
 /**
  * Helper: stop recording for a room. Non-fatal.
+ *
+ * Returns the room row with `recordingEgressId` already cleared, so callers that
+ * go on to change other fields do not have to remember to clear it themselves —
+ * the Mongo version set `room.recordingEgressId = undefined` in memory and
+ * relied on the caller's later `save()`, which is exactly the shape that becomes
+ * a silent no-op under drizzle.
  */
-async function stopRecordingForRoom(room: IRoom, reason: string = 'room_ended') {
+async function stopRecordingForRoom(room: RoomWithCredentials, reason: string = 'room_ended') {
   if (!room.recordingEgressId) return;
 
   const egressId = room.recordingEgressId;
@@ -864,23 +852,25 @@ async function stopRecordingForRoom(room: IRoom, reason: string = 'room_ended') 
     logger.warn(`Failed to stop egress ${egressId}, may have already stopped:`, err);
   }
 
-  const recording = await Recording.findOne({ egressId });
-  if (recording && recording.status === RecordingStatus.RECORDING) {
-    recording.status = RecordingStatus.READY;
-    recording.stoppedAt = new Date();
-    recording.durationMs = recording.stoppedAt.getTime() - recording.startedAt.getTime();
-    recording.participantIds = room.participants || [];
-    await recording.save();
+  const recording = await findRecordingByEgressId(egressId);
+  if (recording) {
+    const stoppedAt = new Date();
+    await finishRecording(
+      recording.id,
+      stoppedAt,
+      stoppedAt.getTime() - recording.startedAt.getTime(),
+      room.participants,
+    );
   }
 
-  clearRecordingAutoStop(String(room._id));
-  room.recordingEgressId = undefined;
+  clearRecordingAutoStop(room.id);
+  await updateRoom(room.id, { recordingEgressId: null });
 
   const io = global.io;
   if (io) {
-    io.of('/rooms').to(`room:${room._id}`).emit('room:recording:stopped', {
-      roomId: String(room._id),
-      recordingId: recording ? String(recording._id) : undefined,
+    io.of('/rooms').to(`room:${room.id}`).emit('room:recording:stopped', {
+      roomId: room.id,
+      recordingId: recording ? recording.id : undefined,
       reason,
       timestamp: new Date().toISOString(),
     });
@@ -938,13 +928,13 @@ router.post('/', async (req: AuthRequest, res: Response) => {
         return res.status(400).json({ message: 'houseId is required when ownerType is house' });
       }
 
-      const house = await House.findById(houseId);
-      if (!house) {
+      const owning = isLiveEntityId(houseId) ? await findHouseWithMembers(houseId) : undefined;
+      if (!owning) {
         return res.status(404).json({ message: 'House not found' });
       }
 
       // User must have HOST role or higher in the house
-      if (!house.hasRole(userId, HouseMemberRole.HOST)) {
+      if (!hasRole(owning.members, userId, HouseMemberRole.HOST)) {
         return res.status(403).json({ message: 'You must be a host or higher in this house to create rooms' });
       }
     }
@@ -968,53 +958,48 @@ router.post('/', async (req: AuthRequest, res: Response) => {
         ? speakerPermission
         : SpeakerPermission.INVITED);
 
-    // Resolve broadcastKind for broadcast rooms
-    let resolvedBroadcastKind: BroadcastKind | undefined;
-    if (isBroadcast) {
-      resolvedBroadcastKind = broadcastKind && Object.values(BroadcastKind).includes(broadcastKind)
-        ? broadcastKind
-        : BroadcastKind.USER;
-    }
+    // Resolve broadcastKind for broadcast rooms. `null` for a non-broadcast room
+    // rather than `undefined`: `rooms_broadcast_kind_requires_type_check`
+    // enforces that pairing, which is the constraint the Mongoose
+    // `pre('validate')` hook only ever asserted in application code.
+    const resolvedBroadcastKind = isBroadcast
+      ? (broadcastKind && Object.values(BroadcastKind).includes(broadcastKind)
+        ? (broadcastKind as BroadcastKind)
+        : BroadcastKind.USER)
+      : null;
 
-    // Create room
-    const room = new Room({
+    const room = await createRoom({
       title: title.trim(),
-      description: description ? String(description).trim() : undefined,
+      description: description ? String(description).trim() : null,
       host: userId,
       type: roomType,
       ownerType: roomOwnerType,
       broadcastKind: resolvedBroadcastKind,
-      houseId: roomOwnerType === OwnerType.HOUSE ? houseId : undefined,
+      houseId: roomOwnerType === OwnerType.HOUSE ? houseId : null,
       status: RoomStatus.SCHEDULED,
       participants: [],
       speakers: [userId], // Host is automatically a speaker
       maxParticipants: maxParticipants && typeof maxParticipants === 'number'
         ? Math.min(Math.max(maxParticipants, 1), 10000)
         : 100,
-      scheduledStart: scheduledStartDate,
-      topic: topic ? String(topic).trim() : undefined,
+      scheduledStart: scheduledStartDate ?? null,
+      topic: topic ? String(topic).trim() : null,
       tags: Array.isArray(tags) ? tags.map((t: unknown) => String(t).trim()).filter(Boolean) : [],
       speakerPermission: roomSpeakerPermission,
       recordingEnabled: recordingEnabled !== false, // default true
-      stats: {
-        peakListeners: 0,
-        totalJoined: 0,
-      },
     });
 
-    await room.save();
-
-    logger.info(`Room created: ${room._id} by ${userId} (type=${roomType}, ownerType=${roomOwnerType})`);
+    logger.info(`Room created: ${room.id} by ${userId} (type=${roomType}, ownerType=${roomOwnerType})`);
 
     res.status(201).json({
       message: 'Room created successfully',
-      room,
+      room: stripInternalStreamFields(room),
     });
   } catch (error) {
-    logger.error('Error creating room:', { userId: req.user?.id, error });
+    logger.error('Error creating room:', { userId: req.user?.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error creating room',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -1028,77 +1013,40 @@ router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const { status, host, type, ownerType, houseId, limit = '20', cursor } = req.query;
 
-    const query: Record<string, unknown> = {
-      archived: { $ne: true },
-    };
-
-    // Filter by status
-    if (status && typeof status === 'string') {
-      const validStatuses = Object.values(RoomStatus);
-      if (validStatuses.includes(status as RoomStatus)) {
-        query.status = status;
-      }
-    } else {
-      // By default, show live and scheduled rooms (not ended)
-      query.status = { $in: [RoomStatus.LIVE, RoomStatus.SCHEDULED] };
-    }
-
-    // Filter by host
-    if (host && typeof host === 'string') {
-      query.host = host;
-    }
-
-    // Filter by type
-    if (type && typeof type === 'string') {
-      const validTypes = Object.values(RoomType);
-      if (validTypes.includes(type as RoomType)) {
-        query.type = type;
-      }
-    }
-
-    // Filter by ownerType
-    if (ownerType && typeof ownerType === 'string') {
-      const validOwnerTypes = Object.values(OwnerType);
-      if (validOwnerTypes.includes(ownerType as OwnerType)) {
-        query.ownerType = ownerType;
-      }
-    }
-
-    // Filter by houseId
-    if (houseId && typeof houseId === 'string') {
-      query.houseId = houseId;
-    }
-
-    // Cursor-based pagination
-    if (cursor && typeof cursor === 'string') {
-      query._id = { $lt: cursor };
-    }
+    const limitNum = Math.min(Math.max(parseInt(limit as string, 10) || 20, 1), 100);
 
     // Withhold rooms owned by a house this caller may not see into. Without
     // this the global listing hands out titles, hosts and participant ids that
     // `GET /api/houses/:id/rooms` refuses for the very same rooms — and since
-    // `?houseId=` is honoured above, it also made this route an exact bypass of
-    // that refusal. Composed with `$and` so it can never be clobbered by (or
-    // clobber) the `houseId` equality filter.
+    // `?houseId=` is honoured too, it also made this route an exact bypass of
+    // that refusal.
     const hiddenHouseIds = await houseIdsWithRoomsHiddenFrom(req.user?.id);
-    if (hiddenHouseIds.length > 0) {
-      // A profile-owned room has `houseId: null`, which `$nin` matches, so
-      // rooms that were never house-owned are untouched.
-      query.$and = [{ houseId: { $nin: hiddenHouseIds } }];
-    }
 
-    const limitNum = Math.min(Math.max(parseInt(limit as string, 10) || 20, 1), 100);
-
-    const rooms = await Room.find(query)
-      .sort({ createdAt: -1 })
-      .limit(limitNum + 1)
-      .lean();
+    const rooms = await listRooms({
+      status:
+        typeof status === 'string' && Object.values(RoomStatus).includes(status as RoomStatus)
+          ? (status as RoomStatus)
+          : undefined,
+      host: typeof host === 'string' ? host : undefined,
+      type:
+        typeof type === 'string' && Object.values(RoomType).includes(type as RoomType)
+          ? (type as RoomType)
+          : undefined,
+      ownerType:
+        typeof ownerType === 'string' && Object.values(OwnerType).includes(ownerType as OwnerType)
+          ? (ownerType as OwnerType)
+          : undefined,
+      houseId: typeof houseId === 'string' ? houseId : undefined,
+      excludeHouseIds: hiddenHouseIds,
+      cursor: typeof cursor === 'string' ? cursor : undefined,
+      limit: limitNum + 1,
+    });
 
     // Check if there are more results
     const hasMore = rooms.length > limitNum;
     const roomsToReturn = hasMore ? rooms.slice(0, limitNum) : rooms;
     const nextCursor = hasMore && roomsToReturn.length > 0
-      ? roomsToReturn[roomsToReturn.length - 1]._id.toString()
+      ? roomsToReturn[roomsToReturn.length - 1].id
       : undefined;
 
     res.json({
@@ -1110,7 +1058,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     logger.error('Error fetching rooms:', { userId: req.user?.id, error, query: req.query });
     res.status(500).json({
       message: 'Error fetching rooms',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -1125,24 +1073,12 @@ router.get('/top-hosts', async (req: AuthRequest, res: Response) => {
     const { limit = '10' } = req.query;
     const limitNum = Math.min(Math.max(parseInt(limit as string, 10) || 10, 1), 20);
 
-    const hosts = await Recording.aggregate([
-      { $match: { status: RecordingStatus.READY } },
-      { $group: {
-          _id: '$host',
-          roomCount: { $sum: 1 },
-          totalListeners: { $sum: { $size: '$participantIds' } },
-      }},
-      { $sort: { totalListeners: -1 } },
-      { $limit: limitNum },
-      { $project: { _id: 0, userId: '$_id', roomCount: 1, totalListeners: 1 } },
-    ]);
-
-    res.json({ hosts });
+    res.json({ hosts: await findTopHosts(limitNum) });
   } catch (error) {
-    logger.error('Error fetching top hosts:', { userId: req.user?.id, error });
+    logger.error('Error fetching top hosts:', { userId: req.user?.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error fetching top hosts',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -1155,7 +1091,7 @@ router.get('/top-hosts', async (req: AuthRequest, res: Response) => {
 export type LiveUserEntry = { userId: string; roomId: string };
 
 /** The minimal live-room shape {@link selectLiveUsers} needs. */
-type LiveRoomBroadcasters = { _id: unknown; host: string; speakers?: readonly string[] };
+type LiveRoomBroadcasters = { id: string; host: string; speakers?: readonly string[] };
 
 /**
  * Pure core of `GET /rooms/live-users`: from the set of currently-live rooms and
@@ -1182,7 +1118,7 @@ export function selectLiveUsers(
   const entries: LiveUserEntry[] = [];
 
   for (const room of rooms) {
-    const roomId = String(room._id);
+    const roomId = String(room.id);
     const speakers = Array.isArray(room.speakers) ? room.speakers : [];
     const speakerSet = new Set<string>(speakers);
     // host ∪ speakers, deduped — the room's broadcasters.
@@ -1207,12 +1143,15 @@ export function selectLiveUsers(
  * viewer-specific.
  * GET /api/rooms/live-users
  * → { liveUsers: { userId: string; roomId: string }[] }
+ *
+ * `findLiveRoomBroadcasters` also filters `archived = false`, which Mongo did
+ * NOT — see its doc comment: an archived room is the moderation restriction for
+ * a room and is routinely live at the same time, so the old query kept emitting
+ * a live badge for a room a moderator had restricted.
  */
 router.get('/live-users', async (_req: AuthRequest, res: Response) => {
   try {
-    const rooms = await Room.find({ status: RoomStatus.LIVE })
-      .select('_id host speakers')
-      .lean();
+    const rooms = await findLiveRoomBroadcasters();
 
     // Collect every broadcaster (host + speakers) across all live rooms, then
     // resolve their preferences in a SINGLE batched query (default → active).
@@ -1224,22 +1163,14 @@ router.get('/live-users', async (_req: AuthRequest, res: Response) => {
       }
     }
 
-    const preferences = candidateIds.size > 0
-      ? await RoomUserPreference.find({ userId: { $in: Array.from(candidateIds) } })
-          .select('userId liveVisibility')
-          .lean()
-      : [];
-
-    const visibilityByUserId = new Map<string, LiveVisibility>(
-      preferences.map((pref) => [pref.userId, pref.liveVisibility]),
-    );
+    const visibilityByUserId = await findLiveVisibilities(Array.from(candidateIds));
 
     res.json({ liveUsers: selectLiveUsers(rooms, visibilityByUserId) });
   } catch (error) {
-    logger.error('Error fetching live users:', { error });
+    logger.error('Error fetching live users:', { error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error fetching live users',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -1252,16 +1183,12 @@ router.get('/live-users', async (_req: AuthRequest, res: Response) => {
 router.get('/me/presence-preference', requireOxyAuth, async (req: AuthRequest, res: Response) => {
   try {
     const userId = getRequiredOxyUserId(req);
-    const preference = await RoomUserPreference.findOne({ userId })
-      .select('liveVisibility')
-      .lean();
-
-    res.json({ liveVisibility: preference?.liveVisibility ?? DEFAULT_LIVE_VISIBILITY });
+    res.json({ liveVisibility: await findLiveVisibility(userId) });
   } catch (error) {
-    logger.error('Error fetching presence preference:', { userId: req.user?.id, error });
+    logger.error('Error fetching presence preference:', { userId: req.user?.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error fetching presence preference',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -1281,20 +1208,12 @@ router.put('/me/presence-preference', requireOxyAuth, async (req: AuthRequest, r
       return res.status(400).json({ message: "liveVisibility must be 'active' or 'speaking'" });
     }
 
-    const preference = await RoomUserPreference.findOneAndUpdate(
-      { userId },
-      { $set: { liveVisibility } },
-      { new: true, upsert: true, setDefaultsOnInsert: true },
-    )
-      .select('liveVisibility')
-      .lean();
-
-    res.json({ liveVisibility: preference?.liveVisibility ?? liveVisibility });
+    res.json({ liveVisibility: await setLiveVisibility(userId, liveVisibility) });
   } catch (error) {
-    logger.error('Error updating presence preference:', { userId: req.user?.id, error });
+    logger.error('Error updating presence preference:', { userId: req.user?.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error updating presence preference',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -1305,9 +1224,9 @@ router.put('/me/presence-preference', requireOxyAuth, async (req: AuthRequest, r
  */
 router.get('/:id', async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = getParam(req, 'id');
 
-    const room = await Room.findById(id).lean();
+    const room = await loadRoom(id);
 
     if (!room) {
       return res.status(404).json({ message: 'Room not found' });
@@ -1320,11 +1239,11 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
     // `GET /api/houses/:id/rooms`: 404 when the house is hidden (never confirm
     // a guessed id is real), 403 when it is merely sealed.
     if (room.houseId) {
-      const owningHouse = await House.findById(room.houseId);
-      if (!owningHouse || !owningHouse.canSeeHouse(userId)) {
+      const owning = await findHouseWithMembers(room.houseId);
+      if (!owning || !canSeeHouse(owning.house, owning.members, userId)) {
         return res.status(404).json({ message: 'Room not found' });
       }
-      if (!owningHouse.canAccessRooms(userId)) {
+      if (!canAccessRooms(owning.house, owning.members, userId)) {
         return res.status(403).json({ message: 'Only members can view this house\'s rooms' });
       }
     }
@@ -1333,14 +1252,18 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
       ? await canManageRoom(room, userId)
       : false;
 
+    const queue = await findRoomQueue(room.id);
+
     res.json({
-      room: canViewInternalStreamFields ? room : stripInternalStreamFields(room),
+      room: canViewInternalStreamFields
+        ? roomWithInternalStreamFields(room, queue)
+        : stripInternalStreamFields(room, queue),
     });
   } catch (error) {
-    logger.error('Error fetching room:', { userId: req.user?.id, roomId: req.params.id, error });
+    logger.error('Error fetching room:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error fetching room',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -1352,13 +1275,13 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
 router.post('/:id/start', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const room = await Room.findById(id);
+    const room = await loadRoom(id);
 
     if (!room) {
       return res.status(404).json({ message: 'Room not found' });
@@ -1375,34 +1298,39 @@ router.post('/:id/start', async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // For broadcast rooms, ensure speakers array only contains the primary host.
-    if (room.type === RoomType.BROADCAST) {
-      room.speakers = [room.host];
-      room.speakerPermission = SpeakerPermission.INVITED;
-    }
-
     // Create LiveKit room before going live
     try {
-      await createLiveKitRoomForRoom(String(id), room.maxParticipants);
+      await createLiveKitRoomForRoom(room.id, room.maxParticipants);
     } catch (lkErr) {
       logger.error(`Failed to create LiveKit room for room ${id}, starting anyway:`, lkErr);
     }
 
-    // Update room status
-    room.status = RoomStatus.LIVE;
-    room.startedAt = new Date();
-    await room.save();
+    // Update room status. For broadcast rooms, the speakers array is reset to
+    // the primary host and the permission forced to `invited` in the SAME
+    // update — `rooms_broadcast_speaker_permission_check` now enforces that
+    // pairing, so writing them apart could be rejected in between.
+    const started = await updateRoom(room.id, {
+      status: RoomStatus.LIVE,
+      startedAt: new Date(),
+      ...(room.type === RoomType.BROADCAST
+        ? { speakers: [room.host], speakerPermission: SpeakerPermission.INVITED }
+        : {}),
+    });
 
-    logger.info(`Room started: ${room._id} (type=${room.type})`);
+    if (!started) {
+      return res.status(404).json({ message: 'Room not found' });
+    }
+
+    logger.info(`Room started: ${started.id} (type=${started.type})`);
 
     // Auto-start recording if enabled
     let recordingDoc = null;
-    if (room.recordingEnabled) {
+    if (started.recordingEnabled) {
       try {
-        recordingDoc = await startRecordingForRoom(room);
-        logger.info(`Auto-started recording for room ${room._id}, egressId: ${recordingDoc.egressId}`);
+        recordingDoc = await startRecordingForRoom(started);
+        logger.info(`Auto-started recording for room ${started.id}, egressId: ${recordingDoc.egressId}`);
       } catch (recErr) {
-        logger.error(`Failed to auto-start recording for room ${room._id}:`, recErr);
+        logger.error(`Failed to auto-start recording for room ${started.id}:`, recErr);
         // Non-fatal: room goes live even if recording fails
       }
     }
@@ -1412,7 +1340,7 @@ router.post('/:id/start', async (req: AuthRequest, res: Response) => {
     if (io && recordingDoc) {
       io.of('/rooms').to(`room:${id}`).emit('room:recording:started', {
         roomId: id,
-        recordingId: String(recordingDoc._id),
+        recordingId: recordingDoc.id,
         timestamp: new Date().toISOString(),
       });
     }
@@ -1422,13 +1350,13 @@ router.post('/:id/start', async (req: AuthRequest, res: Response) => {
 
     res.json({
       message: 'Room started successfully',
-      room,
+      room: stripInternalStreamFields(started),
     });
   } catch (error) {
-    logger.error('Error starting room:', { userId: req.user?.id, roomId: req.params.id, error });
+    logger.error('Error starting room:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error starting room',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -1440,13 +1368,13 @@ router.post('/:id/start', async (req: AuthRequest, res: Response) => {
 router.post('/:id/end', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const room = await Room.findById(id);
+    const room = await loadRoom(id);
 
     if (!room) {
       return res.status(404).json({ message: 'Room not found' });
@@ -1470,39 +1398,43 @@ router.post('/:id/end', async (req: AuthRequest, res: Response) => {
       logger.error(`Error stopping recording for room ${id}:`, recErr);
     }
 
-    // Update room status
-    room.status = RoomStatus.ENDED;
-    room.endedAt = new Date();
-
-    // Clean up active ingress if any
+    // Clean up active ingress if any, then persist the end state. The stream
+    // teardown and the status change are ONE update, so a room is never
+    // observable as ended while its RTMP publishing key is still live.
+    const lifecycle = { status: RoomStatus.ENDED, endedAt: new Date() };
+    let ended;
     if (room.activeIngressId) {
       deleteIngress(room.activeIngressId).catch((err) => {
         logger.error(`Failed to delete ingress for room ${id}:`, err);
       });
-      clearRoomStreamFields(room);
+      ended = await stopRoomStreamFields(room.id, lifecycle);
+    } else {
+      ended = await updateRoom(room.id, lifecycle);
     }
 
-    await room.save();
+    if (!ended) {
+      return res.status(404).json({ message: 'Room not found' });
+    }
 
     // Clean up LiveKit room
-    deleteLiveKitRoomForRoom(String(id)).catch((err) => {
+    deleteLiveKitRoomForRoom(room.id).catch((err) => {
       logger.error(`Failed to delete LiveKit room for room ${id}:`, err);
     });
 
-    logger.info(`Room ended: ${room._id}`);
+    logger.info(`Room ended: ${ended.id}`);
 
     // Signal the live-rooms widget: a room left the live set.
     emitLiveRoomsUpdated('ended');
 
     res.json({
       message: 'Room ended successfully',
-      room,
+      room: stripInternalStreamFields(ended),
     });
   } catch (error) {
-    logger.error('Error ending room:', { userId: req.user?.id, roomId: req.params.id, error });
+    logger.error('Error ending room:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error ending room',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -1516,13 +1448,13 @@ router.post('/:id/end', async (req: AuthRequest, res: Response) => {
 router.post('/:id/stop', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const room = await Room.findById(id);
+    const room = await loadRoom(id);
 
     if (!room) {
       return res.status(404).json({ message: 'Room not found' });
@@ -1545,39 +1477,42 @@ router.post('/:id/stop', async (req: AuthRequest, res: Response) => {
       logger.error(`Error stopping recording for room ${id}:`, recErr);
     }
 
-    // Reset to scheduled so the host can go live again later
-    room.status = RoomStatus.SCHEDULED;
-    room.startedAt = undefined;
-
-    // Clean up active ingress if any
+    // Reset to scheduled so the host can go live again later, clearing the
+    // stream in the same update — see the `/end` route above.
+    const lifecycle = { status: RoomStatus.SCHEDULED, startedAt: null };
+    let stopped;
     if (room.activeIngressId) {
       deleteIngress(room.activeIngressId).catch((err) => {
         logger.error(`Failed to delete ingress for room ${id}:`, err);
       });
-      clearRoomStreamFields(room);
+      stopped = await stopRoomStreamFields(room.id, lifecycle);
+    } else {
+      stopped = await updateRoom(room.id, lifecycle);
     }
 
-    await room.save();
+    if (!stopped) {
+      return res.status(404).json({ message: 'Room not found' });
+    }
 
     // Clean up LiveKit room
-    deleteLiveKitRoomForRoom(String(id)).catch((err) => {
+    deleteLiveKitRoomForRoom(room.id).catch((err) => {
       logger.error(`Failed to delete LiveKit room for room ${id}:`, err);
     });
 
-    logger.info(`Room stopped (back to scheduled): ${room._id}`);
+    logger.info(`Room stopped (back to scheduled): ${stopped.id}`);
 
     // Signal the live-rooms widget: the room left the live set (back to scheduled).
     emitLiveRoomsUpdated('ended');
 
     res.json({
       message: 'Live session stopped',
-      room,
+      room: stripInternalStreamFields(stopped),
     });
   } catch (error) {
-    logger.error('Error stopping room:', { userId: req.user?.id, roomId: req.params.id, error });
+    logger.error('Error stopping room:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error stopping room',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -1589,13 +1524,13 @@ router.post('/:id/stop', async (req: AuthRequest, res: Response) => {
 router.post('/:id/join', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const room = await Room.findById(id);
+    const room = await loadRoom(id);
 
     if (!room) {
       return res.status(404).json({ message: 'Room not found' });
@@ -1605,8 +1540,8 @@ router.post('/:id/join', async (req: AuthRequest, res: Response) => {
     // a room in a `members`-only house requires membership. The house is
     // resolved from the room's own houseId; the user comes from the session.
     if (room.houseId) {
-      const house = await House.findById(room.houseId);
-      if (house && !house.canAccessRooms(userId)) {
+      const owning = await findHouseWithMembers(room.houseId);
+      if (owning && !canAccessRooms(owning.house, owning.members, userId)) {
         return res.status(403).json({ message: 'Only members can join this house\'s rooms' });
       }
     }
@@ -1633,16 +1568,18 @@ router.post('/:id/join', async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Add to participants
-    room.participants.push(userId);
-    room.stats.totalJoined += 1;
+    // Add to participants and update the stats. Every part is decided in SQL
+    // against the current row rather than from the snapshot above, so two people
+    // joining at once cannot each write back the roster they read.
+    const joined = await updateRoom(room.id, {
+      participants: [...room.participants, userId],
+      statsTotalJoined: room.statsTotalJoined + 1,
+      statsPeakListeners: Math.max(room.statsPeakListeners, room.participants.length + 1),
+    });
 
-    // Update peak listeners if necessary
-    if (room.participants.length > room.stats.peakListeners) {
-      room.stats.peakListeners = room.participants.length;
+    if (!joined) {
+      return res.status(404).json({ message: 'Room not found' });
     }
-
-    await room.save();
 
     logger.debug(`User ${userId} joined room ${id}`);
 
@@ -1651,13 +1588,13 @@ router.post('/:id/join', async (req: AuthRequest, res: Response) => {
 
     res.json({
       message: 'Joined room successfully',
-      room: stripInternalStreamFields(room),
+      room: stripInternalStreamFields(joined),
     });
   } catch (error) {
-    logger.error('Error joining room:', { userId: req.user?.id, roomId: req.params.id, error });
+    logger.error('Error joining room:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error joining room',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -1669,27 +1606,25 @@ router.post('/:id/join', async (req: AuthRequest, res: Response) => {
 router.post('/:id/leave', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const room = await Room.findById(id);
+    const room = await loadRoom(id);
 
     if (!room) {
       return res.status(404).json({ message: 'Room not found' });
     }
 
-    // Remove from participants
-    room.participants = room.participants.filter(p => p !== userId);
-
-    // If leaving as speaker, remove from speakers too (except host)
-    if (room.speakers.includes(userId) && room.host !== userId) {
-      room.speakers = room.speakers.filter(s => s !== userId);
-    }
-
-    await room.save();
+    // Remove from participants, and from speakers too (except the host)
+    await updateRoom(room.id, {
+      participants: room.participants.filter((p) => p !== userId),
+      ...(room.speakers.includes(userId) && room.host !== userId
+        ? { speakers: room.speakers.filter((s) => s !== userId) }
+        : {}),
+    });
 
     logger.debug(`User ${userId} left room ${id}`);
 
@@ -1702,10 +1637,10 @@ router.post('/:id/leave', async (req: AuthRequest, res: Response) => {
       message: 'Left room successfully',
     });
   } catch (error) {
-    logger.error('Error leaving room:', { userId: req.user?.id, roomId: req.params.id, error });
+    logger.error('Error leaving room:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error leaving room',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -1717,7 +1652,7 @@ router.post('/:id/leave', async (req: AuthRequest, res: Response) => {
 router.post('/:id/speakers', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
     const { userId: speakerId } = req.body;
 
     if (!userId) {
@@ -1728,7 +1663,7 @@ router.post('/:id/speakers', async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'userId is required' });
     }
 
-    const room = await Room.findById(id);
+    const room = await loadRoom(id);
 
     if (!room) {
       return res.status(404).json({ message: 'Room not found' });
@@ -1747,25 +1682,26 @@ router.post('/:id/speakers', async (req: AuthRequest, res: Response) => {
     if (room.speakers.includes(speakerId)) {
       return res.json({
         message: 'User is already a speaker',
-        room,
+        room: stripInternalStreamFields(room),
       });
     }
 
-    // Add to speakers
-    room.speakers.push(speakerId);
-    await room.save();
+    const updated = await updateRoom(room.id, { speakers: [...room.speakers, speakerId] });
+    if (!updated) {
+      return res.status(404).json({ message: 'Room not found' });
+    }
 
     logger.info(`User ${speakerId} added as speaker in room ${id} by ${userId}`);
 
     res.json({
       message: 'Speaker added successfully',
-      room,
+      room: stripInternalStreamFields(updated),
     });
   } catch (error) {
-    logger.error('Error adding speaker:', { userId: req.user?.id, roomId: req.params.id, speakerId: req.body.userId, error });
+    logger.error('Error adding speaker:', { userId: req.user?.id, roomId: req.params.id, speakerId: req.body.userId, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error adding speaker',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -1777,13 +1713,14 @@ router.post('/:id/speakers', async (req: AuthRequest, res: Response) => {
 router.delete('/:id/speakers/:userId', async (req: AuthRequest, res: Response) => {
   try {
     const currentUserId = req.user?.id;
-    const { id, userId: speakerId } = req.params;
+    const id = getParam(req, 'id');
+    const speakerId = getParam(req, 'userId');
 
     if (!currentUserId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const room = await Room.findById(id);
+    const room = await loadRoom(id);
 
     if (!room) {
       return res.status(404).json({ message: 'Room not found' });
@@ -1799,26 +1736,28 @@ router.delete('/:id/speakers/:userId', async (req: AuthRequest, res: Response) =
     }
 
     // Remove from speakers
-    const originalLength = room.speakers.length;
-    room.speakers = room.speakers.filter(s => s !== speakerId);
+    const remaining = room.speakers.filter((s) => s !== speakerId);
 
-    if (room.speakers.length === originalLength) {
+    if (remaining.length === room.speakers.length) {
       return res.status(404).json({ message: 'User is not a speaker' });
     }
 
-    await room.save();
+    const updated = await updateRoom(room.id, { speakers: remaining });
+    if (!updated) {
+      return res.status(404).json({ message: 'Room not found' });
+    }
 
     logger.info(`User ${speakerId} removed as speaker from room ${id} by ${currentUserId}`);
 
     res.json({
       message: 'Speaker removed successfully',
-      room,
+      room: stripInternalStreamFields(updated),
     });
   } catch (error) {
-    logger.error('Error removing speaker:', { userId: req.user?.id, roomId: req.params.id, speakerId: req.params.userId, error });
+    logger.error('Error removing speaker:', { userId: req.user?.id, roomId: req.params.id, speakerId: req.params.userId, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error removing speaker',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -1832,13 +1771,13 @@ router.delete('/:id/speakers/:userId', async (req: AuthRequest, res: Response) =
 router.post('/:id/token', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const room = await Room.findById(id).lean();
+    const room = isLiveEntityId(id) ? await findPublicRoomById(id) : undefined;
     if (!room) {
       return res.status(404).json({ message: 'Room not found' });
     }
@@ -1852,7 +1791,7 @@ router.post('/:id/token', async (req: AuthRequest, res: Response) => {
     if (room.type === RoomType.BROADCAST) {
       // Broadcast rooms: only host gets publish permissions
       const isHost = room.host === userId;
-      token = await generateBroadcastToken(String(id), userId, isHost);
+      token = await generateBroadcastToken(room.id, userId, isHost);
     } else {
       // Talk / Stage rooms: determine role normally
       let role: 'host' | 'speaker' | 'listener' = 'listener';
@@ -1861,7 +1800,7 @@ router.post('/:id/token', async (req: AuthRequest, res: Response) => {
       } else if (room.speakers.includes(userId)) {
         role = 'speaker';
       }
-      token = await generateRoomToken(String(id), userId, role);
+      token = await generateRoomToken(room.id, userId, role);
     }
 
     res.json({
@@ -1869,10 +1808,10 @@ router.post('/:id/token', async (req: AuthRequest, res: Response) => {
       url: process.env.LIVEKIT_URL || '',
     });
   } catch (error) {
-    logger.error('Error generating room token:', { userId: req.user?.id, roomId: req.params.id, error });
+    logger.error('Error generating room token:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error generating token',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -1885,7 +1824,7 @@ router.post('/:id/token', async (req: AuthRequest, res: Response) => {
 router.post('/:id/stream', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
     const { url, title, image, description } = req.body;
 
     if (!userId) {
@@ -1907,7 +1846,7 @@ router.post('/:id/stream', async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Invalid URL format' });
     }
 
-    const room = await Room.findById(id);
+    const room = await loadRoom(id);
     if (!room) {
       return res.status(404).json({ message: 'Room not found' });
     }
@@ -1922,7 +1861,7 @@ router.post('/:id/stream', async (req: AuthRequest, res: Response) => {
 
     await startUrlIngressForRoom(
       room,
-      String(id),
+      room.id,
       {
         url: trimmedUrl,
         title: title ? String(title).trim() : undefined,
@@ -1933,10 +1872,10 @@ router.post('/:id/stream', async (req: AuthRequest, res: Response) => {
       userId,
     );
   } catch (error) {
-    logger.error('Error starting stream:', { userId: req.user?.id, roomId: req.params.id, error });
+    logger.error('Error starting stream:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error starting stream',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -1959,13 +1898,13 @@ router.post('/:id/stream', async (req: AuthRequest, res: Response) => {
  * pairing.
  *
  * An optional `queue` of `{ syraPodcastId?, episodeId }[]` (the episodes AFTER
- * this one) is persisted as `room.podcastQueue` and advanced manually via
+ * this one) is persisted as `room_media_queue_items` and advanced manually via
  * `POST /:id/stream/podcast/next` or automatically when the current ingress ends.
  */
 router.post('/:id/stream/podcast', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
     const { syraPodcastId, episodeId, queue } = req.body ?? {};
 
     if (!userId) {
@@ -1989,7 +1928,7 @@ router.post('/:id/stream/podcast', async (req: AuthRequest, res: Response) => {
     const trimmedPodcastId =
       typeof syraPodcastId === 'string' && syraPodcastId.trim() ? syraPodcastId.trim() : undefined;
 
-    const room = await Room.findById(id);
+    const room = await loadRoom(id);
     if (!room) {
       return res.status(404).json({ message: 'Room not found' });
     }
@@ -2002,11 +1941,17 @@ router.post('/:id/stream/podcast', async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Room must be live to add a stream' });
     }
 
-    // Stage the remaining queue in memory; it is persisted atomically by the
-    // ingress save only when the first episode actually starts.
-    room.podcastQueue = parsedQueue.queue.length > 0 ? parsedQueue.queue : undefined;
-
-    const outcome = await startPodcastEpisodeStream(room, String(id), trimmedEpisodeId, trimmedPodcastId, userId);
+    // The remaining queue is handed down rather than staged on the room: it is
+    // persisted in the same transaction as the ingress fields, only when the
+    // first episode actually starts.
+    const outcome = await startPodcastEpisodeStream(
+      room,
+      room.id,
+      trimmedEpisodeId,
+      trimmedPodcastId,
+      parsedQueue.queue,
+      userId,
+    );
     if (!outcome.ok) {
       return res.status(outcome.status).json(outcome.body);
     }
@@ -2017,10 +1962,10 @@ router.post('/:id/stream/podcast', async (req: AuthRequest, res: Response) => {
       url: outcome.url,
     });
   } catch (error) {
-    logger.error('Error starting podcast stream:', { userId: req.user?.id, roomId: req.params.id, error });
+    logger.error('Error starting podcast stream:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error starting stream',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -2083,14 +2028,14 @@ function parseTrackStreamBody(body: unknown): ParsedTrackStreamBody {
  * playable audio (presigned original → tokenized HLS) +
  * metadata server-side, SSRF-validates it, then feeds it into the SAME LiveKit
  * URL ingress as the other stream routes. `albumId` / `playlistId` additionally
- * seed `room.podcastQueue` (the generic up-next queue) from the container's
- * ordered, playable tracks; the queue auto-advances via `/stream/podcast/next`
- * or the LiveKit `ingress_ended` webhook, and may mix with podcast items.
+ * seed the up-next queue from the container's ordered, playable tracks; the
+ * queue auto-advances via `/stream/podcast/next` or the LiveKit `ingress_ended`
+ * webhook, and may mix with podcast items.
  */
 router.post('/:id/stream/track', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized' });
@@ -2101,7 +2046,7 @@ router.post('/:id/stream/track', async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: parsed.message });
     }
 
-    const room = await Room.findById(id);
+    const room = await loadRoom(id);
     if (!room) {
       return res.status(404).json({ message: 'Room not found' });
     }
@@ -2135,11 +2080,7 @@ router.post('/:id/stream/track', async (req: AuthRequest, res: Response) => {
       queue = rest.slice(0, MAX_MEDIA_QUEUE_LENGTH);
     }
 
-    // Stage the remaining queue in memory; it is persisted atomically by the
-    // ingress save only when the first track actually starts.
-    room.podcastQueue = queue.length > 0 ? queue : undefined;
-
-    const outcome = await startTrackStream(room, String(id), firstTrackId, userId);
+    const outcome = await startTrackStream(room, room.id, firstTrackId, queue, userId);
     if (!outcome.ok) {
       return res.status(outcome.status).json(outcome.body);
     }
@@ -2150,10 +2091,10 @@ router.post('/:id/stream/track', async (req: AuthRequest, res: Response) => {
       url: outcome.url,
     });
   } catch (error) {
-    logger.error('Error starting track stream:', { userId: req.user?.id, roomId: req.params.id, error });
+    logger.error('Error starting track stream:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error starting stream',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -2163,7 +2104,7 @@ router.post('/:id/stream/track', async (req: AuthRequest, res: Response) => {
  * is drained (room manager only, room must be LIVE).
  * POST /api/rooms/:id/stream/podcast/next
  *
- * Pops the head of `room.podcastQueue` and drives it through the identical
+ * Pops the head of the room's queue and drives it through the identical
  * resolve → SSRF-validate → ingress path as `POST /:id/stream/podcast`. Returns
  * `{ message, ingressId, url }` when the next episode starts, or
  * `{ message, ended: true }` when the queue was empty and the stream stopped.
@@ -2171,13 +2112,13 @@ router.post('/:id/stream/track', async (req: AuthRequest, res: Response) => {
 router.post('/:id/stream/podcast/next', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const room = await Room.findById(id);
+    const room = await loadRoom(id);
     if (!room) {
       return res.status(404).json({ message: 'Room not found' });
     }
@@ -2190,7 +2131,7 @@ router.post('/:id/stream/podcast/next', async (req: AuthRequest, res: Response) 
       return res.status(400).json({ message: 'Room must be live to advance the stream' });
     }
 
-    const result = await advancePodcastQueueForRoom(room, String(id), userId);
+    const result = await advancePodcastQueueForRoom(room, room.id, userId);
     if (result.kind === 'ended') {
       return res.json({ message: 'Stream ended', ended: true });
     }
@@ -2204,10 +2145,10 @@ router.post('/:id/stream/podcast/next', async (req: AuthRequest, res: Response) 
       url: result.url,
     });
   } catch (error) {
-    logger.error('Error advancing podcast stream:', { userId: req.user?.id, roomId: req.params.id, error });
+    logger.error('Error advancing podcast stream:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error advancing stream',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -2219,13 +2160,13 @@ router.post('/:id/stream/podcast/next', async (req: AuthRequest, res: Response) 
 router.delete('/:id/stream', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const room = await Room.findById(id);
+    const room = await loadRoom(id);
     if (!room) {
       return res.status(404).json({ message: 'Room not found' });
     }
@@ -2241,21 +2182,20 @@ router.delete('/:id/stream', async (req: AuthRequest, res: Response) => {
     // Delete the ingress from LiveKit
     await deleteIngress(room.activeIngressId);
 
-    // Clear all stream fields (incl. progress + podcast queue)
-    clearRoomStreamFields(room);
-    await room.save();
+    // Clear all stream fields (incl. progress + the media queue)
+    await stopRoomStreamFields(room.id);
 
     logger.info(`Live stream stopped in room ${id}`);
 
     // Notify participants via both current and legacy namespaces
-    emitStreamStopped(String(id));
+    emitStreamStopped(room.id);
 
     res.json({ message: 'Stream stopped successfully' });
   } catch (error) {
-    logger.error('Error stopping stream:', { userId: req.user?.id, roomId: req.params.id, error });
+    logger.error('Error stopping stream:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error stopping stream',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -2268,12 +2208,21 @@ type UpdateStreamMetadataBody = {
 };
 
 type ParsedOptionalText =
-  | { ok: true; value: string | undefined }
+  | { ok: true; value: string | null }
   | { ok: false; message: string };
 
+/**
+ * An optional stream text field: a non-empty trimmed string, or `null` to CLEAR.
+ *
+ * Returns `null` rather than `undefined` for the empty case because that value
+ * is written straight into an update, where `undefined` means "leave alone" —
+ * the Mongoose original returned `undefined` and relied on `save()` issuing
+ * `$unset`, so carrying that spelling forward would make "clear the stream
+ * title" silently keep the old one.
+ */
 const parseOptionalStreamText = (value: unknown, field: string): ParsedOptionalText => {
   if (value === undefined || value === null) {
-    return { ok: true, value: undefined };
+    return { ok: true, value: null };
   }
 
   if (typeof value !== 'string') {
@@ -2281,7 +2230,7 @@ const parseOptionalStreamText = (value: unknown, field: string): ParsedOptionalT
   }
 
   const trimmed = value.trim();
-  return { ok: true, value: trimmed.length > 0 ? trimmed : undefined };
+  return { ok: true, value: trimmed.length > 0 ? trimmed : null };
 };
 
 /**
@@ -2292,7 +2241,7 @@ const parseOptionalStreamText = (value: unknown, field: string): ParsedOptionalT
 router.patch('/:id/stream', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
     const { url, title, image, description } = req.body as UpdateStreamMetadataBody;
 
     if (!userId) {
@@ -2337,7 +2286,7 @@ router.patch('/:id/stream', async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: parsedDescription.message });
     }
 
-    const room = await Room.findById(id);
+    const room = await loadRoom(id);
     if (!room) {
       return res.status(404).json({ message: 'Room not found' });
     }
@@ -2349,6 +2298,10 @@ router.patch('/:id/stream', async (req: AuthRequest, res: Response) => {
     if (!room.activeIngressId && nextStreamUrl === undefined) {
       return res.status(400).json({ message: 'No active stream to update' });
     }
+
+    // `undefined` LEAVES ALONE, so a field the caller did not name is untouched;
+    // the parsed `null`s above are what actually clear one.
+    const update: Parameters<typeof updateRoom>[1] = {};
 
     if (nextStreamUrl !== undefined && nextStreamUrl !== (room.activeStreamUrl ?? undefined)) {
       if (room.status !== RoomStatus.LIVE) {
@@ -2364,41 +2317,47 @@ router.patch('/:id/stream', async (req: AuthRequest, res: Response) => {
 
       let ingressResult: IngressReplacementResult;
       try {
-        await ensureLiveKitRoomForRoom(String(id), room.maxParticipants);
-        ingressResult = await createIngressReplacingExisting(room, String(id), () =>
-          createRoomUrlIngress(String(id), nextStreamUrl)
+        await ensureLiveKitRoomForRoom(room.id, room.maxParticipants);
+        ingressResult = await createIngressReplacingExisting(room, room.id, () =>
+          createRoomUrlIngress(room.id, nextStreamUrl)
         );
-        await cleanupPreviousIngressAfterReplacement(String(id), ingressResult);
+        await cleanupPreviousIngressAfterReplacement(room.id, ingressResult);
       } catch (liveKitError) {
         return sendLiveKitIngressError(res, liveKitError, 'update-url-ingress', {
-          roomId: String(id),
+          roomId: room.id,
           userId,
         });
       }
 
-      room.activeIngressId = ingressResult.ingress.ingressId;
-      room.activeStreamUrl = nextStreamUrl;
-      room.rtmpUrl = undefined;
-      room.rtmpStreamKey = undefined;
+      update.activeIngressId = ingressResult.ingress.ingressId;
+      update.activeStreamUrl = nextStreamUrl;
+      // Switching to a URL ingress leaves RTMP mode, so the still-valid RTMP
+      // PUBLISHING KEY must actually be cleared — `null`, never `undefined`.
+      update.rtmpUrl = null;
+      update.rtmpStreamKey = null;
     }
 
     // Update metadata fields
-    if (title !== undefined) room.streamTitle = parsedTitle.value;
-    if (image !== undefined) room.streamImage = parsedImage.value;
-    if (description !== undefined) room.streamDescription = parsedDescription.value;
-    await room.save();
+    if (title !== undefined) update.streamTitle = parsedTitle.value;
+    if (image !== undefined) update.streamImage = parsedImage.value;
+    if (description !== undefined) update.streamDescription = parsedDescription.value;
+
+    const updated = await updateRoom(room.id, update);
+    if (!updated) {
+      return res.status(404).json({ message: 'Room not found' });
+    }
 
     logger.info(`Stream metadata updated for room ${id}`);
 
     // Notify participants via socket with updated metadata
-    emitStreamStarted(String(id), room);
+    emitStreamStarted(room.id, updated);
 
-    res.json({ message: 'Stream info updated', url: room.activeStreamUrl || null });
+    res.json({ message: 'Stream info updated', url: updated.activeStreamUrl || null });
   } catch (error) {
-    logger.error('Error updating stream metadata:', { userId: req.user?.id, roomId: req.params.id, error });
+    logger.error('Error updating stream metadata:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error updating stream info',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -2411,14 +2370,14 @@ router.patch('/:id/stream', async (req: AuthRequest, res: Response) => {
 router.post('/:id/stream/rtmp', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
     const { title, image, description } = req.body;
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const room = await Room.findById(id);
+    const room = await loadRoom(id);
     if (!room) {
       return res.status(404).json({ message: 'Room not found' });
     }
@@ -2433,14 +2392,14 @@ router.post('/:id/stream/rtmp', async (req: AuthRequest, res: Response) => {
 
     let ingressResult: IngressReplacementResult;
     try {
-      await ensureLiveKitRoomForRoom(String(id), room.maxParticipants);
-      ingressResult = await createIngressReplacingExisting(room, String(id), () =>
-        createRoomRtmpIngress(String(id))
+      await ensureLiveKitRoomForRoom(room.id, room.maxParticipants);
+      ingressResult = await createIngressReplacingExisting(room, room.id, () =>
+        createRoomRtmpIngress(room.id)
       );
-      await cleanupPreviousIngressAfterReplacement(String(id), ingressResult);
+      await cleanupPreviousIngressAfterReplacement(room.id, ingressResult);
     } catch (liveKitError) {
       return sendLiveKitIngressError(res, liveKitError, 'create-rtmp-ingress', {
-        roomId: String(id),
+        roomId: room.id,
         userId,
       });
     }
@@ -2455,20 +2414,27 @@ router.post('/:id/stream/rtmp', async (req: AuthRequest, res: Response) => {
       if (host) rtmpUrl = `rtmp://${host}:1935/live`;
     }
 
-    // Persist ingress info + metadata (clear URL mode fields)
-    room.activeIngressId = ingressResult.ingress.ingressId;
-    room.activeStreamUrl = undefined;
-    room.rtmpUrl = rtmpUrl;
-    room.rtmpStreamKey = ingressResult.ingress.streamKey;
-    room.streamTitle = title ? String(title).trim() : undefined;
-    room.streamImage = image ? String(image).trim() : undefined;
-    room.streamDescription = description ? String(description).trim() : undefined;
-    await room.save();
+    // Persist ingress info + metadata, CLEARING the URL-mode fields with `null`
+    // rather than `undefined` — see `applyUrlIngressToRoom` for why the
+    // distinction is load-bearing here.
+    const updated = await updateRoom(room.id, {
+      activeIngressId: ingressResult.ingress.ingressId,
+      activeStreamUrl: null,
+      rtmpUrl,
+      rtmpStreamKey: ingressResult.ingress.streamKey,
+      streamTitle: title ? String(title).trim() : null,
+      streamImage: image ? String(image).trim() : null,
+      streamDescription: description ? String(description).trim() : null,
+    });
+
+    if (!updated) {
+      return res.status(404).json({ message: 'Room not found' });
+    }
 
     logger.info(`RTMP ingress created for room ${id}: ${ingressResult.ingress.ingressId}`);
 
     // Notify participants via socket (metadata only -- no credentials)
-    emitStreamStarted(String(id), room);
+    emitStreamStarted(room.id, updated);
 
     res.json({
       message: 'RTMP stream key generated',
@@ -2476,10 +2442,10 @@ router.post('/:id/stream/rtmp', async (req: AuthRequest, res: Response) => {
       streamKey: ingressResult.ingress.streamKey,
     });
   } catch (error) {
-    logger.error('Error generating RTMP key:', { userId: req.user?.id, roomId: req.params.id, error });
+    logger.error('Error generating RTMP key:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error generating stream key',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -2491,13 +2457,13 @@ router.post('/:id/stream/rtmp', async (req: AuthRequest, res: Response) => {
 router.delete('/:id', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const room = await Room.findById(id);
+    const room = await loadRoom(id);
 
     if (!room) {
       return res.status(404).json({ message: 'Room not found' });
@@ -2512,16 +2478,19 @@ router.delete('/:id', async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Cannot delete a live room. End it first.' });
     }
 
-    await Room.findByIdAndDelete(id);
+    // The media queue goes with it (`ON DELETE CASCADE`); its recordings survive
+    // with `room_id = null` (`ON DELETE SET NULL`), and its series episode-log
+    // rows keep their history the same way.
+    await deleteRoom(room.id);
 
     logger.info(`Room deleted: ${id} by ${userId}`);
 
     res.json({ success: true });
   } catch (error) {
-    logger.error('Error deleting room:', { userId: req.user?.id, roomId: req.params.id, error });
+    logger.error('Error deleting room:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error deleting room',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -2533,13 +2502,13 @@ router.delete('/:id', async (req: AuthRequest, res: Response) => {
 router.patch('/:id/archive', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const room = await Room.findById(id);
+    const room = await loadRoom(id);
 
     if (!room) {
       return res.status(404).json({ message: 'Room not found' });
@@ -2555,17 +2524,19 @@ router.patch('/:id/archive', async (req: AuthRequest, res: Response) => {
     }
 
     // Toggle archived status
-    room.archived = !room.archived;
-    await room.save();
+    const updated = await updateRoom(room.id, { archived: !room.archived });
+    if (!updated) {
+      return res.status(404).json({ message: 'Room not found' });
+    }
 
-    logger.info(`Room ${room.archived ? 'archived' : 'unarchived'}: ${id} by ${userId}`);
+    logger.info(`Room ${updated.archived ? 'archived' : 'unarchived'}: ${id} by ${userId}`);
 
-    res.json({ success: true, archived: room.archived });
+    res.json({ success: true, archived: updated.archived });
   } catch (error) {
-    logger.error('Error archiving room:', { userId: req.user?.id, roomId: req.params.id, error });
+    logger.error('Error archiving room:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error archiving room',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -2581,13 +2552,13 @@ router.patch('/:id/archive', async (req: AuthRequest, res: Response) => {
 router.post('/:id/recording/start', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const room = await Room.findById(id);
+    const room = await loadRoom(id);
     if (!room) {
       return res.status(404).json({ message: 'Room not found' });
     }
@@ -2610,7 +2581,7 @@ router.post('/:id/recording/start', async (req: AuthRequest, res: Response) => {
     if (io) {
       io.of('/rooms').to(`room:${id}`).emit('room:recording:started', {
         roomId: id,
-        recordingId: String(recording._id),
+        recordingId: recording.id,
         timestamp: new Date().toISOString(),
       });
     }
@@ -2622,10 +2593,10 @@ router.post('/:id/recording/start', async (req: AuthRequest, res: Response) => {
       recording,
     });
   } catch (error) {
-    logger.error('Error starting recording:', { userId: req.user?.id, roomId: req.params.id, error });
+    logger.error('Error starting recording:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error starting recording',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -2637,13 +2608,13 @@ router.post('/:id/recording/start', async (req: AuthRequest, res: Response) => {
 router.post('/:id/recording/stop', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const room = await Room.findById(id);
+    const room = await loadRoom(id);
     if (!room) {
       return res.status(404).json({ message: 'Room not found' });
     }
@@ -2656,17 +2627,19 @@ router.post('/:id/recording/stop', async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'No active recording' });
     }
 
+    // `stopRecordingForRoom` clears `recordingEgressId` itself. The Mongo
+    // version relied on a bare `room.save()` here to persist a field it had
+    // only set in memory, which under drizzle would have persisted nothing.
     await stopRecordingForRoom(room, 'manual');
-    await room.save();
 
     logger.info(`Recording manually stopped for room ${id}`);
 
     res.json({ message: 'Recording stopped' });
   } catch (error) {
-    logger.error('Error stopping recording:', { userId: req.user?.id, roomId: req.params.id, error });
+    logger.error('Error stopping recording:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error stopping recording',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -2678,10 +2651,10 @@ router.post('/:id/recording/stop', async (req: AuthRequest, res: Response) => {
 router.get('/:id/recordings', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
     const { limit = '20', cursor } = req.query;
 
-    const room = await Room.findById(id).lean();
+    const room = isLiveEntityId(id) ? await findPublicRoomById(id) : undefined;
     if (!room) {
       return res.status(404).json({ message: 'Room not found' });
     }
@@ -2690,36 +2663,20 @@ router.get('/:id/recordings', async (req: AuthRequest, res: Response) => {
       ? await canManageRoom(room, userId)
       : false;
 
-    const query: Record<string, unknown> = {
-      roomId: id,
-      status: RecordingStatus.READY,
-    };
-
-    // Non-managers can only see public recordings or ones they participated in.
-    if (!canManage && userId) {
-      query.$or = [
-        { access: RecordingAccess.PUBLIC },
-        { access: RecordingAccess.PARTICIPANTS, participantIds: userId },
-      ];
-    } else if (!userId) {
-      query.access = RecordingAccess.PUBLIC;
-    }
-
-    if (cursor && typeof cursor === 'string') {
-      query._id = { $lt: cursor };
-    }
-
     const limitNum = Math.min(Math.max(parseInt(limit as string, 10) || 20, 1), 100);
 
-    const recordings = await Recording.find(query)
-      .sort({ createdAt: -1 })
-      .limit(limitNum + 1)
-      .lean();
+    const recordings = await listRoomRecordings({
+      roomId: room.id,
+      canManage,
+      userId,
+      cursor: typeof cursor === 'string' ? cursor : undefined,
+      limit: limitNum + 1,
+    });
 
     const hasMore = recordings.length > limitNum;
     const recordingsToReturn = hasMore ? recordings.slice(0, limitNum) : recordings;
     const nextCursor = hasMore && recordingsToReturn.length > 0
-      ? recordingsToReturn[recordingsToReturn.length - 1]._id.toString()
+      ? recordingsToReturn[recordingsToReturn.length - 1].id
       : undefined;
 
     res.json({
@@ -2728,10 +2685,10 @@ router.get('/:id/recordings', async (req: AuthRequest, res: Response) => {
       nextCursor,
     });
   } catch (error) {
-    logger.error('Error fetching recordings:', { userId: req.user?.id, roomId: req.params.id, error });
+    logger.error('Error fetching recordings:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error fetching recordings',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -2747,12 +2704,12 @@ router.get('/:id/recordings', async (req: AuthRequest, res: Response) => {
 router.post('/:id/image', uploadMiddleware.single('file'), async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
 
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
     if (!req.file) return res.status(400).json({ message: 'No file provided' });
 
-    const room = await Room.findById(id);
+    const room = await loadRoom(id);
     if (!room) return res.status(404).json({ message: 'Room not found' });
     if (!(await sendForbiddenUnlessRoomManager(room, userId, res, 'Only a room manager can upload a room image'))) {
       return;
@@ -2767,13 +2724,12 @@ router.post('/:id/image', uploadMiddleware.single('file'), async (req: AuthReque
     }
 
     const cdnUrl = await uploadObject(objectKey, buffer, contentType, 'public-read');
-    room.streamImage = cdnUrl;
-    await room.save();
+    await updateRoom(room.id, { streamImage: cdnUrl });
 
     res.json({ streamImage: cdnUrl });
   } catch (error) {
-    logger.error('Error uploading room image:', { roomId: req.params.id, error });
-    res.status(500).json({ message: 'Error uploading image', error: error instanceof Error ? error.message : 'Unknown error' });
+    logger.error('Error uploading room image:', { roomId: req.params.id, error: describeErrorSafely(error) });
+    res.status(500).json({ message: 'Error uploading image', error: describeErrorSafely(error) });
   }
 });
 

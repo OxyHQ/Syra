@@ -1,6 +1,14 @@
 import { Server, Socket, Namespace } from 'socket.io';
+import { describeErrorSafely } from '../utils/error';
 import { logger } from '../utils/logger';
-import Room, { RoomStatus, RoomType, SpeakerPermission } from '../models/Room';
+import {
+  addParticipant,
+  addSpeaker,
+  findPublicRoomById,
+  removeParticipant,
+  removeSpeaker,
+} from '../db/rooms/rooms';
+import { RoomStatus, RoomType, SpeakerPermission } from '../db/rooms/types';
 import { checkFollowAccess } from '../utils/privacyHelpers';
 import { getRedisClient } from '../utils/redis';
 import { updateRoomParticipantPermissions } from '../utils/livekit';
@@ -225,7 +233,7 @@ export function initializeRoomSocket(io: Server): Namespace {
         }
 
         // Verify room exists and is live
-        const room = await Room.findById(roomId).lean();
+        const room = await findPublicRoomById(roomId);
         if (!room) {
           callback?.({ success: false, error: 'Room not found' });
           return;
@@ -281,22 +289,22 @@ export function initializeRoomSocket(io: Server): Namespace {
           myRole: role,
         });
 
-        // Update DB: add to participants if not already there
-        const isNewJoin = !room.participants.some((p) => String(p) === String(userId));
-        await Room.findByIdAndUpdate(roomId, {
-          $addToSet: { participants: userId },
-          ...(isNewJoin ? { $inc: { 'stats.totalJoined': 1 } } : {}),
-        });
-
-        // Update peak listeners
-        const currentCount = participants.size;
-        if (currentCount > (room.stats?.peakListeners || 0)) {
-          await Room.findByIdAndUpdate(roomId, {
-            $max: { 'stats.peakListeners': currentCount },
-          });
-        }
+        /**
+         * Update the DB: add to `participants`, bump `totalJoined` only on a
+         * genuinely new join, and raise `peakListeners` to the live Redis count.
+         *
+         * ONE statement where Mongo used up to two, and every part decided in
+         * SQL rather than from the row this handler read. The three Mongo
+         * operators each had a read-modify-write hiding in them at this call
+         * site — `isNewJoin` was computed from a snapshot taken before the
+         * Redis writes above, so two sockets joining at once could both see
+         * themselves as new. `$addToSet`/`$inc`/`$max` become an
+         * `array_append` under a membership guard, a conditional `+ 1`, and a
+         * `greatest(…)`, all evaluated against the CURRENT row.
+         */
+        await addParticipant(roomId, userId, participants.size);
       } catch (error) {
-        logger.error('Error handling room:join:', error);
+        logger.error('Error handling room:join:', { error: describeErrorSafely(error) });
         callback?.({ success: false, error: 'Internal error' });
       }
     });
@@ -336,11 +344,9 @@ export function initializeRoomSocket(io: Server): Namespace {
         await cleanupRoomIfEmpty(roomId);
 
         // Update DB: remove from participants
-        await Room.findByIdAndUpdate(roomId, {
-          $pull: { participants: userId },
-        });
+        await removeParticipant(roomId, userId);
       } catch (error) {
-        logger.error('Error handling room:leave:', error);
+        logger.error('Error handling room:leave:', { error: describeErrorSafely(error) });
       }
     });
 
@@ -368,7 +374,7 @@ export function initializeRoomSocket(io: Server): Namespace {
           timestamp: new Date().toISOString(),
         });
       } catch (error) {
-        logger.error('Error handling audio:mute:', error);
+        logger.error('Error handling audio:mute:', { error: describeErrorSafely(error) });
       }
     });
 
@@ -385,7 +391,7 @@ export function initializeRoomSocket(io: Server): Namespace {
         }
 
         // Look up room type to enforce broadcast restriction
-        const room = await Room.findById(roomId).lean();
+        const room = await findPublicRoomById(roomId);
         if (!room) {
           callback?.({ success: false, error: 'Room not found' });
           return;
@@ -406,7 +412,7 @@ export function initializeRoomSocket(io: Server): Namespace {
         if (room.type === RoomType.TALK && room.speakerPermission === SpeakerPermission.EVERYONE) {
           await redisUpdateParticipant(roomId, userId, { role: 'speaker' });
           await broadcastParticipants(roomsNamespace, roomId);
-          await Room.findByIdAndUpdate(roomId, { $addToSet: { speakers: userId } });
+          await addSpeaker(roomId, userId);
           // Grant LiveKit publish permission
           updateRoomParticipantPermissions(roomId, userId, true).catch(() => {});
           callback?.({ success: true, autoPromoted: true });
@@ -434,7 +440,7 @@ export function initializeRoomSocket(io: Server): Namespace {
         logger.debug(`User ${userId} requested to speak in room ${roomId}`);
         callback?.({ success: true });
       } catch (error) {
-        logger.error('Error handling speaker:request:', error);
+        logger.error('Error handling speaker:request:', { error: describeErrorSafely(error) });
         callback?.({ success: false, error: 'Internal error' });
       }
     });
@@ -452,7 +458,7 @@ export function initializeRoomSocket(io: Server): Namespace {
         }
 
         // Enforce broadcast restriction
-        const room = await Room.findById(roomId).lean();
+        const room = await findPublicRoomById(roomId);
         if (room && room.type === RoomType.BROADCAST) {
           callback?.({ success: false, error: 'Cannot approve speakers in broadcast rooms' });
           return;
@@ -487,14 +493,12 @@ export function initializeRoomSocket(io: Server): Namespace {
         await broadcastParticipants(roomsNamespace, roomId);
 
         // Update DB
-        await Room.findByIdAndUpdate(roomId, {
-          $addToSet: { speakers: targetUserId },
-        });
+        await addSpeaker(roomId, targetUserId);
 
         logger.info(`User ${targetUserId} approved as speaker in room ${roomId}`);
         callback?.({ success: true });
       } catch (error) {
-        logger.error('Error handling speaker:approve:', error);
+        logger.error('Error handling speaker:approve:', { error: describeErrorSafely(error) });
         callback?.({ success: false, error: 'Internal error' });
       }
     });
@@ -517,7 +521,7 @@ export function initializeRoomSocket(io: Server): Namespace {
           timestamp: new Date().toISOString(),
         });
       } catch (error) {
-        logger.error('Error handling speaker:deny:', error);
+        logger.error('Error handling speaker:deny:', { error: describeErrorSafely(error) });
       }
     });
 
@@ -534,7 +538,7 @@ export function initializeRoomSocket(io: Server): Namespace {
         }
 
         // Enforce broadcast restriction
-        const room = await Room.findById(roomId).lean();
+        const room = await findPublicRoomById(roomId);
         if (room && room.type === RoomType.BROADCAST) {
           callback?.({ success: false, error: 'Cannot remove speakers in broadcast rooms' });
           return;
@@ -568,14 +572,12 @@ export function initializeRoomSocket(io: Server): Namespace {
 
         await broadcastParticipants(roomsNamespace, roomId);
 
-        await Room.findByIdAndUpdate(roomId, {
-          $pull: { speakers: targetUserId },
-        });
+        await removeSpeaker(roomId, targetUserId);
 
         logger.info(`User ${targetUserId} removed as speaker from room ${roomId}`);
         callback?.({ success: true });
       } catch (error) {
-        logger.error('Error handling speaker:remove:', error);
+        logger.error('Error handling speaker:remove:', { error: describeErrorSafely(error) });
         callback?.({ success: false, error: 'Internal error' });
       }
     });
@@ -619,11 +621,9 @@ export function initializeRoomSocket(io: Server): Namespace {
 
         // Update DB
         try {
-          await Room.findByIdAndUpdate(roomId, {
-            $pull: { participants: userId },
-          });
+          await removeParticipant(roomId, userId);
         } catch (err) {
-          logger.error(`Failed to update DB on disconnect for room ${roomId}:`, err);
+          logger.error(`Failed to update DB on disconnect for room ${roomId}:`, { error: describeErrorSafely(err) });
         }
       }
     });
@@ -632,16 +632,16 @@ export function initializeRoomSocket(io: Server): Namespace {
      * Handle errors
      */
     socket.on('error', (error: Error) => {
-      logger.error('Rooms socket error:', error);
+      logger.error('Rooms socket error:', { error: describeErrorSafely(error) });
     });
   });
 
   roomsNamespace.on('connection_error', (error: Error) => {
-    logger.error('Rooms namespace connection error:', error);
+    logger.error('Rooms namespace connection error:', { error: describeErrorSafely(error) });
   });
 
   roomsNamespace.on('connect_error', (error: Error) => {
-    logger.error('Rooms namespace connect error:', error);
+    logger.error('Rooms namespace connect error:', { error: describeErrorSafely(error) });
   });
 
   logger.info('Rooms socket namespace initialized');

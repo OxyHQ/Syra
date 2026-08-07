@@ -1,6 +1,15 @@
 import { Router, Response } from 'express';
-import Recording, { RecordingStatus, RecordingAccess } from '../models/Recording';
+import { isLiveEntityId } from '@oxyhq/db';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
+import {
+  findRecordingById,
+  listPublicRecordings,
+  updateRecording,
+  type PublicRecordingSort,
+} from '../db/rooms/recordings';
+import { RecordingAccess, RecordingStatus } from '../db/rooms/types';
+import { describeErrorSafely } from '../utils/error';
+import { getParam } from '../utils/reqParams';
 import { logger } from '../utils/logger';
 import { getRecordingPresignedUrl, deleteRecordingFromSpaces } from '../utils/spaces';
 
@@ -16,34 +25,16 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     const { sortBy = 'recent', limit = '10' } = req.query;
     const limitNum = Math.min(Math.max(parseInt(limit as string, 10) || 10, 1), 50);
 
-    const sort: 'popular' | 'recent' = sortBy === 'popular' ? 'popular' : 'recent';
+    const sort: PublicRecordingSort = sortBy === 'popular' ? 'popular' : 'recent';
 
-    let recordings;
-
-    if (sort === 'popular') {
-      recordings = await Recording.aggregate([
-        { $match: { status: RecordingStatus.READY, access: RecordingAccess.PUBLIC } },
-        { $addFields: { listenerCount: { $size: '$participantIds' } } },
-        { $sort: { listenerCount: -1, createdAt: -1 } },
-        { $limit: limitNum },
-        { $project: { listenerCount: 0 } },
-      ]);
-    } else {
-      recordings = await Recording.find({
-        status: RecordingStatus.READY,
-        access: RecordingAccess.PUBLIC,
-      })
-        .sort({ createdAt: -1 })
-        .limit(limitNum)
-        .lean();
-    }
+    const recordings = await listPublicRecordings(sort, limitNum);
 
     res.json({ recordings });
   } catch (error) {
-    logger.error('Error listing recordings:', { userId: req.user?.id, error });
+    logger.error('Error listing recordings:', { userId: req.user?.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error listing recordings',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -55,9 +46,11 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 router.get('/:recordingId', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { recordingId } = req.params;
+    const recordingId = getParam(req, 'recordingId');
 
-    const recording = await Recording.findById(recordingId).lean();
+    const recording = isLiveEntityId(recordingId)
+      ? await findRecordingById(recordingId)
+      : undefined;
     if (!recording || recording.status === RecordingStatus.DELETED) {
       return res.status(404).json({ message: 'Recording not found' });
     }
@@ -81,10 +74,10 @@ router.get('/:recordingId', async (req: AuthRequest, res: Response) => {
       playbackUrl,
     });
   } catch (error) {
-    logger.error('Error fetching recording:', { userId: req.user?.id, recordingId: req.params.recordingId, error });
+    logger.error('Error fetching recording:', { userId: req.user?.id, recordingId: req.params.recordingId, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error fetching recording',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -96,38 +89,36 @@ router.get('/:recordingId', async (req: AuthRequest, res: Response) => {
 router.patch('/:recordingId', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { recordingId } = req.params;
+    const recordingId = getParam(req, 'recordingId');
     const { access } = req.body;
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const recording = await Recording.findById(recordingId);
-    if (!recording || recording.status === RecordingStatus.DELETED) {
+    const existing = isLiveEntityId(recordingId) ? await findRecordingById(recordingId) : undefined;
+    if (!existing || existing.status === RecordingStatus.DELETED) {
       return res.status(404).json({ message: 'Recording not found' });
     }
 
-    if (recording.host !== userId) {
+    if (existing.host !== userId) {
       return res.status(403).json({ message: 'Only the host can update recording settings' });
     }
 
-    if (access && Object.values(RecordingAccess).includes(access)) {
-      recording.access = access;
-    } else {
+    if (!access || !Object.values(RecordingAccess).includes(access)) {
       return res.status(400).json({ message: 'Invalid access value. Must be "public" or "participants".' });
     }
 
-    await recording.save();
+    const recording = await updateRecording(existing.id, { access });
 
     logger.info(`Recording ${recordingId} access updated to ${access} by ${userId}`);
 
     res.json({ recording });
   } catch (error) {
-    logger.error('Error updating recording:', { userId: req.user?.id, recordingId: req.params.recordingId, error });
+    logger.error('Error updating recording:', { userId: req.user?.id, recordingId: req.params.recordingId, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error updating recording',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -135,17 +126,24 @@ router.patch('/:recordingId', async (req: AuthRequest, res: Response) => {
 /**
  * Delete a recording (host only)
  * DELETE /api/recordings/:recordingId
+ *
+ * A soft delete — the row moves to `status: 'deleted'` and the audio leaves S3.
+ * The row itself stays, which is why `recordings.room_id` is `ON DELETE SET
+ * NULL` rather than `CASCADE`: neither deleting the room nor deleting the
+ * recording ever removes the other.
  */
 router.delete('/:recordingId', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { recordingId } = req.params;
+    const recordingId = getParam(req, 'recordingId');
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const recording = await Recording.findById(recordingId);
+    const recording = isLiveEntityId(recordingId)
+      ? await findRecordingById(recordingId)
+      : undefined;
     if (!recording || recording.status === RecordingStatus.DELETED) {
       return res.status(404).json({ message: 'Recording not found' });
     }
@@ -161,17 +159,16 @@ router.delete('/:recordingId', async (req: AuthRequest, res: Response) => {
       logger.warn(`Failed to delete recording file from Spaces (may already be gone):`, err);
     }
 
-    recording.status = RecordingStatus.DELETED;
-    await recording.save();
+    await updateRecording(recording.id, { status: RecordingStatus.DELETED });
 
     logger.info(`Recording ${recordingId} deleted by ${userId}`);
 
     res.json({ success: true });
   } catch (error) {
-    logger.error('Error deleting recording:', { userId: req.user?.id, recordingId: req.params.recordingId, error });
+    logger.error('Error deleting recording:', { userId: req.user?.id, recordingId: req.params.recordingId, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error deleting recording',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });

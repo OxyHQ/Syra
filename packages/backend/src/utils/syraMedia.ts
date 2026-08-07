@@ -8,7 +8,7 @@ import { playableTrackFilter } from '../db/catalog/visibility';
 import { normalizeImageRef } from '../db/catalog/serialize';
 import { getTrackStreamUrl } from '../services/audioStorageService';
 import { mintStreamToken } from '../services/stream/streamToken';
-import type { MediaQueueItem } from '../models/Room';
+import type { MediaQueueItem } from '../db/rooms/types';
 
 /**
  * Syra MUSIC → live-room ingress resolver — the music-shaped sibling of

@@ -60,7 +60,12 @@ export const OWNING_TASKS = {
   // `UserUpload`, `ArtistClaim`, `ContributionAttestation`,
   // `ContributorStanding`, and `TrackKey`, whose last consumer was
   // `uploads.controller`.
-  rooms: 'Task 14 — rooms',
+  //
+  // `rooms` is GONE for the same reason once more: Task 14 ported houses,
+  // series, rooms, recordings and the live-presence preference, and FIVE models
+  // left the tree with it — `House`, `Room`, `Series`, `Recording` and
+  // `RoomUserPreference`. `Series` and `RoomUserPreference` never appeared in
+  // `NON_CATALOG_MODEL_OWNERS` below because no catalog module ever read them.
   user: 'Task 15 — user and recommendations',
   // Task 8 is BLOCKED on an owner decision, so its models have no port in
   // sight. Registered anyway, because two files hold Postgres reads beside
@@ -110,12 +115,12 @@ export const CROSS_CUTTING_TASKS = {
  * remember to audit; the audit is what closing a task already does.
  */
 export const LIVE_TASK_IDS: readonly string[] = [
-  // `'Task 14 — rooms'` → `'Task 14'`. The vertical values carry a description;
-  // the `owner` field is the bare id, so the id is taken from the front rather
-  // than the two being maintained separately. (The example was Task 13's until
-  // that task closed and its entry was deleted — a comment naming a value the
-  // map no longer holds is the same staleness the deletion convention exists
-  // to prevent.)
+  // `'Task 15 — user and recommendations'` → `'Task 15'`. The vertical values
+  // carry a description; the `owner` field is the bare id, so the id is taken
+  // from the front rather than the two being maintained separately. (The
+  // example was Task 14's until that task closed and its entry was deleted,
+  // and Task 13's before that — a comment naming a value the map no longer
+  // holds is the same staleness the deletion convention exists to prevent.)
   ...Object.values(OWNING_TASKS).map((value) => value.split(' — ')[0] ?? value),
   ...Object.keys(CROSS_CUTTING_TASKS),
 ];
@@ -128,9 +133,6 @@ export const LIVE_TASK_IDS: readonly string[] = [
  * stops the registry becoming a general-purpose "this import is fine" list.
  */
 export const NON_CATALOG_MODEL_OWNERS = {
-  Room: 'rooms',
-  House: 'rooms',
-  Recording: 'rooms',
   Report: 'moderation',
   ModerationEnforcement: 'moderation',
   CatalogRelation: 'user',
@@ -259,31 +261,23 @@ export const HYBRID_MODULES: readonly HybridModule[] = [
   },
   {
     file: 'moderation/enforcement-service.ts',
-    models: ['House', 'ModerationEnforcement', 'Report', 'Room'],
+    models: ['ModerationEnforcement', 'Report'],
     reason:
-      'Carrying out a decision reaches four different nouns, and they now live in two stores. ' +
-      'The TRACK and PLAYLIST restrictions are drizzle (Task 11 ported both, having found them ' +
-      'reading Mongo collections whose rows had already moved — see the note on the sweep ' +
-      'below); houses and rooms are Task 14\'s, and the enforcement ledger and report taxonomy ' +
-      'are Task 8\'s, which is blocked. No branch joins the two stores: each is a switch case ' +
-      'that reads and writes one noun.',
+      'Every RESTRICTION this file applies is drizzle now — tracks and playlists since Task 11, ' +
+      'houses and rooms since Task 14. What keeps it registered is the enforcement LEDGER it ' +
+      'writes each decision to and the report taxonomy it switches on, both Task 8\'s, which is ' +
+      'blocked. No branch joins the two stores: each is a switch case that reads and writes one ' +
+      'noun, and the ledger write is the same for every case.',
   },
   {
     file: 'moderation/subjects/providers.ts',
-    models: ['House', 'Recording', 'Report', 'Room'],
+    models: ['Report'],
     reason:
-      'Five subject providers, same split and same reason as `enforcement-service` above: the ' +
-      'playlist, track and artist snapshots are drizzle, houses and rooms are Task 14\'s. ' +
-      '`ReportedType` is an enum on Task 8\'s model rather than a query.',
-  },
-  {
-    file: 'utils/syraMedia.ts',
-    models: ['Room'],
-    reason:
-      'Resolves a media reference across the catalogue and the live-rooms vertical. `rooms` is ' +
-      'Task 14\'s table; the catalog half reads Postgres. This file is also the reason ' +
-      '`halfPortedImports.test.ts` resolves import paths instead of matching specifier text — ' +
-      'it lives in `src/utils/`, so it reaches its neighbours as `./x`.',
+      'All FIVE subject providers read Postgres now — the playlist, track and artist snapshots ' +
+      'since Task 11, the house and room ones (and the room\'s recording-existence probe) since ' +
+      'Task 14. The single remaining import is `ReportedType`, an enum on Task 8\'s model rather ' +
+      'than a query: this file issues no Mongo read at all, and is registered only because that ' +
+      'enum still lives on a Mongoose model.',
   },
   {
     file: 'controllers/radio.controller.ts',
