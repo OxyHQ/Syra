@@ -63,18 +63,46 @@ async function storedCategories(podcastId: string): Promise<{ name: string; posi
 describe('resolvePodcastCategoryIds — scoped to kind = podcast', () => {
   it('creates podcast genres and does NOT reuse a music genre of the same name', async () => {
     /**
-     * The fixture that separates the scoped resolver from an unscoped one.
+     * The fixture that separates the scoped resolver from an unscoped one —
+     * and the ORDER of its two setup statements is part of the assertion.
      *
-     * A pre-existing MUSIC "Comedy" is the whole test: an unscoped resolver
-     * returns its id, the composite FK then refuses the insert, and the failure
-     * surfaces as a `23503` from the import path rather than as anything
-     * naming the resolver. Without a music row of the same name, a resolver
-     * that ignored `kind` entirely would pass.
+     * A pre-existing MUSIC "Comedy" is what makes the test possible at all: an
+     * unscoped read-back returns both rows, the wrong id reaches
+     * `podcast_categories`, and the composite FK refuses it as a `23503` from
+     * the import path rather than as anything naming the resolver.
+     *
+     * ## Why the podcast row is created FIRST
+     *
+     * `resolvePodcastCategoryIds` keys its read-back into a `Map` on the
+     * lower-cased name, so for one wanted name and two candidate rows the LAST
+     * row returned wins. On a freshly truncated table that is heap order, which
+     * is insert order.
+     *
+     * The first version of this test inserted the MUSIC row first. An unscoped
+     * resolver then read both rows, the podcast row came second, and it
+     * overwrote the music one **by accident** — so dropping
+     * `eq(genres.kind, 'podcast')` left this file 11/11 green. The fixture was
+     * the right shape and sat on the right side of the distinction, and still
+     * could not fail, because the mechanism it feeds is order-dependent and the
+     * fixture's position decided the outcome.
+     *
+     * Creating the podcast row first puts MUSIC last, where an unscoped
+     * resolver returns it and this test goes red. Verified in both directions.
+     * Do not reorder these two statements.
      */
-    await getDb().insert(genres).values({ name: 'Comedy', kind: 'music' });
+    const [podcastIdFromFirstCall] = await resolvePodcastCategoryIds(getDb(), ['Comedy']);
+    const [musicGenre] = await getDb()
+      .insert(genres)
+      .values({ name: 'Comedy', kind: 'music' })
+      .returning({ id: genres.id });
 
     const ids = await resolvePodcastCategoryIds(getDb(), ['Comedy']);
     expect(ids).toHaveLength(1);
+
+    // Named explicitly rather than inferred from `kind`, so a failure reports
+    // WHICH row came back instead of only that its kind was wrong.
+    expect(ids).toEqual([podcastIdFromFirstCall]);
+    expect(ids).not.toEqual([musicGenre?.id]);
 
     const [row] = await getDb()
       .select({ kind: genres.kind })
