@@ -21,7 +21,6 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll } from 'bun:test';
 import fs from 'fs';
 import path from 'path';
-import { clear, connect, disconnect } from '../../test/mongo';
 import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
 import { getDb } from '../../db/postgres';
 import { isrcRegistry } from '../../db/schema/catalog';
@@ -49,20 +48,17 @@ const payloads: DeezerPayloads = JSON.parse(
 const ISRC = 'ESA092607944';
 const FILE_DURATION_SEC = 191.92;
 
-// BOTH databases: `isrc_registry` is Postgres, and this suite's other fixtures
-// (upload screening state) are still Mongoose.
+// ONE database: `isrc_registry` and the upload screening state this suite's
+// other fixtures carry are both Postgres since Task 13.
 beforeAll(async () => {
-  await connect();
   await connectDb();
 });
 beforeEach(() => setDeezerFetchForTests());
 afterEach(async () => {
   setDeezerFetchForTests();
-  await clear();
   await clearDb();
 });
 afterAll(async () => {
-  await disconnect();
   await disconnectDb();
 });
 

@@ -4,7 +4,6 @@ import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { and, count, eq } from 'drizzle-orm';
 import { sqlStateOf, uuidv7 } from '@oxyhq/db';
 import { normalizeNameKey } from '@syra/shared-types';
-import { connect, clear, disconnect } from '../test/mongo';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
 import { catalogEntities, tracks } from '../db/schema/catalog';
@@ -19,22 +18,18 @@ import { requireComplianceReviewer } from '../middleware/complianceReviewer';
 import { COMPLIANCE_REVIEWERS_ENV, isComplianceReviewer } from '../services/compliance/reviewers';
 
 /**
- * BOTH databases: the catalogue, the reports and the strike ledger are Postgres,
- * while `takeDownTrack`'s safe-harbour locker purge still reads `user_uploads`
- * and `contribution_attestations` — Task 13's tables, registered in
- * `db/catalog/hybridServices.ts`. A takedown here therefore exercises one
- * handler across two stores, which is the split as it is.
+ * ONE database: the catalogue, the reports, the strike ledger and
+ * `takeDownTrack`'s safe-harbour locker purge (`user_uploads`,
+ * `contribution_attestations`) are all Postgres since Task 13. A takedown here
+ * exercises one handler across five tables, in one transaction-capable store.
  */
 beforeAll(async () => {
-  await connect();
   await connectDb();
 });
 afterEach(async () => {
-  await clear();
   await clearDb();
 });
 afterAll(async () => {
-  await disconnect();
   await disconnectDb();
 });
 

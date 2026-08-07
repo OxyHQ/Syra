@@ -23,9 +23,9 @@ import {
 } from './artistProfile';
 
 /**
- * BOTH databases: every catalog and playlist read is Postgres, and
- * `ContributionAttestation` — which tells the profile which of its tracks a
- * third party published — is Task 13's vertical and still Mongoose.
+ * ONE database: every catalog and playlist read, and
+ * `contribution_attestations` — which tells the profile which of its tracks a
+ * third party published — are all Postgres since Task 13.
  */
 beforeAll(connectDb);
 afterEach(clearDb);

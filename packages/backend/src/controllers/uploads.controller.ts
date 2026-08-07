@@ -2295,8 +2295,29 @@ export const updateUpload = async (
     if (updates.coverArt !== undefined) {
       changes.coverArtId = updates.coverArt;
       const colors = await getStoredImageColors(updates.coverArt);
-      changes.primaryColor = colors?.primaryColor;
-      changes.secondaryColor = colors?.secondaryColor;
+      /**
+       * `?? null`, and this is the whole difference between the two ORMs.
+       *
+       * Drizzle's `buildUpdateSet` DROPS every `undefined`-valued key
+       * (`pg-core/dialect.js` filters on `set[colName] !== void 0`), so
+       * `undefined` means "leave this column alone". Mongoose's `save()` issued
+       * `$unset` for the identical assignment, so there it meant "clear it".
+       *
+       * The new cover decides both accents, including deciding they are absent
+       * — `storeImageAsset` takes the palette as OPTIONAL input, so an image
+       * with no colours is reachable. Without the coalesce, changing to such an
+       * image leaves the PREVIOUS cover's accents on the row forever, and the
+       * client renders a palette belonging to artwork that is no longer there.
+       *
+       * The general rule, which the remaining verticals will meet too: in
+       * drizzle `undefined` is "leave alone" and `null` is "clear"; in Mongoose
+       * they were the same thing. Every ported `.set()` has to say which it
+       * means. The conditional spreads elsewhere in this vertical
+       * (`ingestUserUpload`, `resolvePendingArtistClaim`) are the OTHER
+       * intent — "leave alone" — and are correct as they stand.
+       */
+      changes.primaryColor = colors?.primaryColor ?? null;
+      changes.secondaryColor = colors?.secondaryColor ?? null;
     }
 
     /**

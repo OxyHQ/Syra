@@ -32,10 +32,10 @@ import copyrightRoutes from './copyright.routes';
  */
 
 /**
- * BOTH databases: the artist a claim targets is Postgres, the claim and the
- * copyright report are Task 13's tables and still Mongoose. This file is about
- * ROUTE MOUNTING, so it exercises the real handlers end to end and therefore
- * needs whatever they read.
+ * ONE database: the artist a claim targets, the claim itself and the copyright
+ * report are all Postgres — `artist_claims` moved with Task 13. This file is
+ * about ROUTE MOUNTING, so it exercises the real handlers end to end and
+ * therefore needs whatever they read.
  */
 beforeAll(connectDb);
 afterEach(clearDb);

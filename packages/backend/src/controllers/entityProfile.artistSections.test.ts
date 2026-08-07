@@ -29,11 +29,6 @@ import { getEntityProfile } from './entityProfile.controller';
  */
 
 /**
- * BOTH databases: the catalogue, its playlists and its provenance are Postgres,
- * while `ContributionAttestation` — which is what makes a track "contributed"
- * rather than the artist's own — is Task 13's table and still Mongoose.
- */
-/**
  * Postgres AND Mongo, and the Mongo half is not this vertical's residue.
  *
  * Nothing here reads a Mongoose model. `entityProfile.controller` — which these

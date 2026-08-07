@@ -301,19 +301,22 @@ export const getEntityProfile = async (req: Request, res: Response, next: NextFu
      * `podcasts`/`episodes` and their credit tables), so a process with Postgres
      * down answered 200 with a failure behind it.
      *
-     * It is not `isPostgresConnected()` alone either, and the reason is worth
-     * naming because a grep of THIS file will not find it: `loadArtistSections`
-     * calls `services/catalog/artistProfile.ts`, which still reads
-     * `ContributionAttestationModel` — Task 13's collection, and a registered
-     * hybrid in `db/catalog/hybridServices.ts`. Mongoose BUFFERS a query issued
-     * with no connection rather than throwing, so dropping the Mongo half turns
-     * an artist profile into a request that never answers rather than a 503.
-     * Measured: two cases in this controller's own suite hung for the full 5s
-     * timeout the moment the Mongo connection went away.
+     * It was not `isPostgresConnected()` alone either, and the reason was worth
+     * naming because a grep of THIS file would not find it: `loadArtistSections`
+     * calls `services/catalog/artistProfile.ts`, which read
+     * `ContributionAttestationModel` — Task 13's collection. Mongoose BUFFERS a
+     * query issued with no connection rather than throwing, so dropping the
+     * Mongo half turned an artist profile into a request that never answers
+     * rather than a 503. Measured: two cases in this controller's own suite hung
+     * for the full 5s timeout the moment the Mongo connection went away.
      *
-     * Same shape and same reasoning as `recommendations.controller`'s
-     * `isDatabaseConnected() && isPostgresConnected()`. It becomes the Postgres
-     * check alone when Task 13 ports that model.
+     * **That reason is now spent.** Task 13 ported `contribution_attestations`,
+     * and `artistProfile.ts` reads Postgres — this controller has no Mongoose
+     * read left, direct or transitive. The `isDatabaseConnected()` half is
+     * therefore asking about a database it does not use, and Mongo down with
+     * Postgres up answers 503 for a profile that would have rendered. Dropping
+     * it is a one-word change in a file Task 13 does not own; left for whoever
+     * does, alongside the same call in `recommendations.controller`.
      */
     if (!isDatabaseConnected() || !isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });

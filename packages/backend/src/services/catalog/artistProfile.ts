@@ -36,9 +36,10 @@ import { toPlaylistDto } from '../../db/catalog/serialize';
  * renders them from that query — a second reader would be two authorities for one
  * shelf.
  *
- * `ContributionAttestation` belongs to the creators vertical (Task 13) and is
- * still Mongoose. It is read for a list of track ids and never joined to a
- * catalog table.
+ * `contribution_attestations` belongs to the creators vertical (Task 13), which
+ * has landed — it is Postgres, read here for a list of track ids and never
+ * joined to a catalog table. The separate read is what the split needed and is
+ * now simply what this function does; nothing forces it any more.
  */
 
 // Caps. A profile page renders shelves, not archives — and every cap here also

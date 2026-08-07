@@ -30,8 +30,8 @@
  * semantically identical and reads like an exemption from that rule; it is not
  * one, because Postgres matches an ordering to an index syntactically and does
  * not reconcile the nulls placement using the constraint. `listUploadsNullsFirst`
- * below keeps the rejected shape and is asserted to STILL sort, so the fix
- * cannot be undone silently.
+ * below keeps the rejected shape and is asserted to STILL sort, which is what
+ * makes the shipped form's measurement mean something.
  *
  * That is also why the assertions here check for the absence of a **Sort node**
  * rather than only naming the index: the index NAME is identical either way,
@@ -51,14 +51,28 @@
  * partial index serve one phase and not the other; the range is what bounds
  * the work, and the batch cap bounds the rest.
  *
- * ## What these probes are worth
+ * ## What these probes are worth, and what they are NOT
  *
  * They are TRANSCRIPTIONS of what `db/creators/*.ts` builds with drizzle, not
- * the shipped SQL, and nothing binds the two — the same caveat every sibling in
- * this family states about itself. Each proves an index EXISTS AND IS REACHABLE
- * for a predicate of that shape; none proves the module still issues it. When
- * one of those queries changes its `WHERE`, change the probe with it, because
- * no gate will say so.
+ * the shipped SQL, and **nothing binds the two** — this file imports nothing
+ * from `db/creators/`. Each proves an index EXISTS AND IS REACHABLE for a
+ * predicate of that shape; none proves the module still issues it. When one of
+ * those queries changes its `WHERE`, change the probe with it, because no gate
+ * will say so.
+ *
+ * **That limit is not theoretical, and an earlier revision of this comment
+ * denied it.** It claimed the `listUploadsNullsFirst` probe meant the
+ * `descNullsLast` fix "cannot be undone silently". Measured: reverting
+ * `listOwnedUploads` to plain `desc()` leaves this suite at 25 pass / 0 fail,
+ * and no other test in the tree notices either — `created_at` is `NOT NULL`, so
+ * the ROWS are identical and only the plan differs. A paraphrase of a query
+ * cannot gate the query.
+ *
+ * Binding the probes to the real builders (`.toSQL()` on what `db/creators/*.ts`
+ * actually constructs) is the shape that would close it, and it is a change to
+ * all four suites in this family rather than to this one — dispatched as its
+ * own task. Until then, read every assertion here as being about an INDEX, never
+ * about a call site.
  */
 
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
@@ -245,7 +259,9 @@ const PROBES: readonly { readonly name: string; readonly sql: string }[] = [
      * on the owner plus a quicksort of the WHOLE locker before the `LIMIT 50`.
      * `created_at` being NOT NULL makes the two semantically identical and
      * changes nothing about the plan. Asserted below to STILL sort, which is
-     * what makes the shipped form's measurement mean something.
+     * what makes the shipped form's measurement mean something — but NOT what
+     * would catch a revert, since this probe is a transcription and not the
+     * shipped query. See the file header.
      */
     name: 'listUploadsNullsFirst',
     sql: `select id, title from user_uploads

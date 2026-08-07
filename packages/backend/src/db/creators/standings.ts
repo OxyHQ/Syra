@@ -8,7 +8,7 @@
  * AND an artist profile, and each is struck for what it did.
  */
 
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { descNullsLast } from '../catalog/containers';
 import { getDb, type DbOrTransaction } from '../postgres';
 import { contributorStandings, contributorStrikes } from '../schema/creators';
@@ -104,6 +104,10 @@ export async function incrementStrikeCount(
     .where(eq(contributorStandings.id, standingId))
     .returning({ strikeCount: contributorStandings.strikeCount });
 
+  // Unreachable today — every caller ensures the standing in the same
+  // transaction — and named rather than dereferenced blind, because the
+  // alternative is a `TypeError` on `undefined` two frames from the cause.
+  if (!updated) throw new Error(`contributor standing ${standingId} vanished mid-strike`);
   return updated.strikeCount;
 }
 
@@ -136,7 +140,7 @@ export async function terminateContributor(
     .update(contributorStandings)
     .set({ terminated: true, terminatedAt: now, terminationReason: reason, uploadsDisabled: true })
     .where(
-      sql`${contributorStandings.id} = ${standingId} and ${contributorStandings.terminated} = false`
+      and(eq(contributorStandings.id, standingId), eq(contributorStandings.terminated, false))
     )
     .returning({ id: contributorStandings.id });
 

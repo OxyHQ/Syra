@@ -9,8 +9,8 @@
  * for" are the same observable outcome, and for a work a rightsholder has
  * identified those are very different answers.
  *
- * BOTH databases. The catalogue side (artist, track, fingerprint) is Postgres;
- * the locker is `user_uploads`, Task 13's vertical, still Mongoose.
+ * ONE database. The catalogue side (artist, track, fingerprint) and the locker
+ * (`user_uploads`) are both Postgres — the locker moved with Task 13.
  */
 
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';

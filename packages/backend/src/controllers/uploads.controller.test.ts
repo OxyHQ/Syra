@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm';
 import { uuidv7 } from '@oxyhq/db';
 import { connectDb, clearDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
+import { imageAssets } from '../db/schema/catalog';
 import { userUploadHlsRenditions, userUploads } from '../db/schema/creators';
 import { trackKeys } from '../db/schema/catalog';
 import { UPLOAD_COLUMNS } from '../db/creators/uploads';
@@ -293,6 +294,79 @@ describe('PATCH /api/uploads/:id', () => {
     expect(after?.audioSourceKey).toBe('locker/oxy-owner/abc/source.mp3');
   });
 
+  /**
+   * A PATCH naming no recognised field answers 200 and changes nothing.
+   *
+   * `updateUserUploadRequestSchema` is all-optional and not `.strict()`, so an
+   * empty body — or one carrying only fields this route refuses — parses
+   * cleanly and reaches the update with an empty `changes`. Drizzle throws
+   * `No values to set` on `db.update(...).set({})`, where Mongoose's `save()`
+   * on an unmodified document simply did nothing; without the guard the route
+   * 500s on a request that asked for nothing.
+   */
+  it('answers 200 and changes nothing for a body with no editable field', async () => {
+    const upload = await seedUpload({ title: 'Untouched' });
+    const res = makeRes();
+
+    await updateUpload(
+      // `ownerOxyUserId` is not in the editable set, so this body is both empty
+      // in effect and non-empty on the wire — the shape a real client sends.
+      makeReq({ id: upload.id }, { userId: OWNER, body: { ownerOxyUserId: STRANGER } }),
+      res as unknown as Response,
+      rethrow,
+    );
+
+    expect(res._status).toBe(200);
+    expect((res._body as { title: string }).title).toBe('Untouched');
+    const after = await reload(upload.id);
+    expect(after?.title).toBe('Untouched');
+    expect(after?.ownerOxyUserId).toBe(OWNER);
+  });
+
+  /**
+   * Changing to artwork with NO palette CLEARS the accents.
+   *
+   * The new cover decides both, including deciding they are absent — and the
+   * two ORMs disagree about how to say that. Drizzle drops an `undefined`
+   * value from a `.set()` entirely ("leave alone"), where Mongoose's `save()`
+   * issued `$unset` for the same assignment ("clear it"). Without an explicit
+   * `null` the row keeps the PREVIOUS cover's colours forever and the client
+   * renders a palette belonging to artwork that is no longer there.
+   *
+   * `image_assets.primary_color` is nullable and `storeImageAsset` takes the
+   * palette as optional input, so a colourless image is an ordinary row rather
+   * than a contrived fixture.
+   */
+  it('clears the stored palette when the new cover art has none', async () => {
+    const upload = await seedUpload({ primaryColor: '#ff0000', secondaryColor: '#00ff00' });
+    const [colourless] = await getDb()
+      .insert(imageAssets)
+      .values({
+        s3Key: 'images/cover/colourless.jpg',
+        filename: 'colourless.jpg',
+        contentType: 'image/jpeg',
+        byteSize: 2048,
+        width: 800,
+        height: 800,
+        ownerType: 'upload',
+      })
+      .returning({ id: imageAssets.id });
+
+    const res = makeRes();
+    await updateUpload(
+      makeReq({ id: upload.id }, { userId: OWNER, body: { coverArt: colourless.id } }),
+      res as unknown as Response,
+      rethrow,
+    );
+
+    expect(res._status).toBe(200);
+    const after = await reload(upload.id);
+    expect(after?.coverArtId).toBe(colourless.id);
+    // The assertion the ORM difference turns on: `null`, not the old value.
+    expect(after?.primaryColor).toBeNull();
+    expect(after?.secondaryColor).toBeNull();
+  });
+
   it('refuses a stranger', async () => {
     const upload = await seedUpload();
     const res = makeRes();
@@ -378,7 +452,7 @@ describe('GET /api/uploads/:id/stream', () => {
 
     const after = await reload(upload.id);
     expect(after?.playCount).toBe(1);
-    expect(after?.lastPlayedAt).toBeDefined();
+    expect(after?.lastPlayedAt).toBeInstanceOf(Date);
     expect(after?.expiresAt?.getTime()).toBeGreaterThan(soon.getTime());
   });
 

@@ -32,11 +32,17 @@
  *  - **`deletedAt` and `deletionNoticeSentAt`** — the sweeper's own state.
  *    `expiresAt` IS on the wire, because retention promises the owner a
  *    warning and a warning the client cannot render is not a warning.
- *  - **The nine edition fields, `credits`, `lyrics` and `loudnessLufs`** —
- *    nothing writes any of them (see `schema/creators.ts`), so they were
- *    absent from the Mongo DTO too. They stay absent rather than being added
- *    on the way past: a column with no writer put on the wire is a field every
- *    client learns to read as always-null.
+ *  - **The nine edition fields, `credits` and `lyrics`** — nothing writes any
+ *    of them (see `schema/creators.ts`), so they were absent from the Mongo DTO
+ *    too. They stay absent rather than being added on the way past: a column
+ *    with no writer put on the wire is a field every client learns to read as
+ *    always-null.
+ *  - **`loudnessLufs`**, which IS written — `ingestUserUpload` sets it from the
+ *    packager's measurement. Omitted anyway, and for a different reason: it is
+ *    a mastering figure with no consumer, and the Mongo DTO omitted it too.
+ *    Listed separately because the reason above does not apply to it, and a
+ *    reader who found it under "nothing writes these" would go looking for a
+ *    missing writer that is right there.
  *
  * The omissions above are the ones the PORT decided. What it did not decide is
  * anything else: the key set here was diffed against the shipped Mongo

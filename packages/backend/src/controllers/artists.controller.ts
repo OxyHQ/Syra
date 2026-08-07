@@ -1,5 +1,4 @@
 import { Request, Response, NextFunction } from 'express';
-import mongoose from 'mongoose';
 import { and, count, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { isLiveEntityId, isUniqueViolation, sqlStateOf } from '@oxyhq/db';
 import { publicColumns } from '@oxyhq/db/assert';
@@ -1001,14 +1000,17 @@ const contributionSettingsSchema = z.object({
  * nothing else records that fact. Under Mongo this was a single aggregation with
  * a `$lookup` from `tracks` into `contributionattestations`.
  *
- * That pipeline cannot survive the split. `tracks` is Postgres and
- * `contribution_attestations` is still Mongoose until Task 13 ports its WRITER —
- * `contribution_attestations` EXISTS in `schema/creators.ts`, so this is a
- * split-brain constraint and not a capability gap, exactly as it is for
- * `UserMusicPreferences` in the playback controllers. Reading the Postgres table
- * today would return an empty shelf, because nothing writes it yet.
+ * That pipeline could not survive the SPLIT: `tracks` was Postgres while
+ * `contribution_attestations` was still Mongoose, so this became three bounded
+ * round trips.
  *
- * So it becomes three round trips, and the shape is chosen to keep them bounded:
+ * **Task 13 ported the writer, and both tables are Postgres now** — the split
+ * that forced the shape is gone, and one join would do. It is left as three
+ * round trips because that is a rewrite of a working read rather than part of
+ * the port, and each trip is already bounded (see below). Whoever collapses it
+ * should delete this paragraph with the code.
+ *
+ * The three round trips, and why each is bounded:
  *
  *   1. Postgres — the artist's own track ids. Indexed on `artist_id`, and this
  *      is the SAME set the old pipeline's leading `$match: { artistId }` scanned,

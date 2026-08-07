@@ -31,11 +31,12 @@ mock.module('../utils/redis', () => ({ getRedisClient: () => fakeRedis }));
 
 
 /**
- * BOTH databases, which is exactly the split this suite is about: the catalogue
- * is Postgres and the locker (`UserUpload`) is still Mongo until Task 13. The
- * two-collection ambiguity the queue's `(kind, id)` addressing exists to remove
- * is now a two-DATABASE ambiguity, and resolving a ref by trying one and
- * falling back to the other would be even worse than before.
+ * ONE database since Task 13 ported the locker — but the split this suite is
+ * about survives it. The queue is addressed by `(kind, id)` across two TABLES,
+ * `tracks` and `user_uploads`, and resolving a ref by trying one and falling
+ * back to the other would be as wrong now as when they were two databases: a
+ * catalog ref goes through `playableTrackFilter`, an upload ref is looked up
+ * with `ownerOxyUserId` in the same query.
  */
 beforeAll(connectDb);
 afterEach(async () => {

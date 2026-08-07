@@ -476,12 +476,12 @@ describe('POST /api/uploads — private destination', () => {
    * included. Task 19a found the same class in the fingerprint backfill and
    * shipped `isDriverError`/`describeDriverError` for it.
    *
-   * The failure is provoked by an over-long `title`: `user_uploads.title` is
-   * `text` and unbounded, so the CHECK on `artist_claims` cannot be borrowed —
-   * instead the row is made to collide with a `sha256` slot held by a row of a
-   * DIFFERENT owner… which is legal. So the provocation used here is the one
-   * shape that always fails and is not a duplicate: a `resolved_artist_id`
-   * pointing at no artist, which trips the foreign key.
+   * The failure is provoked with a `coverArt` id that is well-formed and names
+   * no `image_assets` row: `user_uploads.cover_art_id` is a real foreign key,
+   * so the INSERT fails with the whole row — raw tag block included — bound to
+   * it. Two other provocations were tried and rejected: `title` is unbounded
+   * `text` so no length CHECK exists to trip, and colliding on the `sha256`
+   * slot of a DIFFERENT owner is legal, since that constraint is per-owner.
    */
   it('never logs the failing statement or its bound parameters', async () => {
     const MARKER = 'RAWTAGLEAKMARKER';

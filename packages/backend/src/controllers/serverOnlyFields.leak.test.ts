@@ -55,10 +55,9 @@ import { getArtistById, getMyContributions, getMyImageSuggestions } from './arti
  */
 
 /**
- * BOTH databases. The catalogue is Postgres, the locker (`UserUpload`) and the
- * attestation are Task 13's and still Mongoose — and this suite covers all
- * three serializers at once, which is exactly why it lives at the controller
- * level.
+ * The catalogue, the locker (`user_uploads`) and the attestation are all
+ * Postgres since Task 13 — and this suite covers all three serializers at once,
+ * which is exactly why it lives at the controller level.
  */
 /**
  * Postgres AND Mongo, and the Mongo half is not this vertical's residue.

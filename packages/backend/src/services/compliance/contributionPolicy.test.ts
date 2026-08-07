@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import { uuidv7 } from '@oxyhq/db';
-import { connect, clear, disconnect } from '../../test/mongo';
 import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
 import { getDb } from '../../db/postgres';
 import { catalogEntities } from '../../db/schema/catalog';
@@ -12,20 +11,16 @@ import { recordContributorStrike } from './contributorStrikes';
 import { STRIKE_TERMINATION_THRESHOLD } from '../strikeService';
 
 /**
- * BOTH databases: the artist is Postgres, and `contributorStrikes` — the
- * UPLOADER's own standing, which this policy checks first — is Task 13's
- * vertical and still Mongoose.
+ * ONE database: the artist and `contributor_standings` — the UPLOADER's own
+ * standing, which this policy checks first — are both Postgres since Task 13.
  */
 beforeAll(async () => {
-  await connect();
   await connectDb();
 });
 afterEach(async () => {
-  await clear();
   await clearDb();
 });
 afterAll(async () => {
-  await disconnect();
   await disconnectDb();
 });
 

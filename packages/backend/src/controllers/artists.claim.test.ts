@@ -12,10 +12,10 @@ import { artistClaims } from '../db/schema/creators';
 import { createArtistClaim, resolveArtistClaim, listMyArtistClaims } from './artists.controller';
 
 /**
- * BOTH databases: the artist profile a claim GRANTS is Postgres, the claim
- * itself is `artist_claims` — Task 13's table, still Mongoose. The grant is the
- * one write that has to be atomic against a concurrent claim, and it is the
- * Postgres half that carries that guarantee.
+ * ONE database: the artist profile a claim GRANTS and the claim itself
+ * (`artist_claims`) are both Postgres since Task 13. The grant is still the one
+ * write that has to be atomic against a concurrent claim, and it still carries
+ * that guarantee in its `WHERE` rather than in a read before it.
  */
 beforeAll(connectDb);
 afterEach(clearDb);

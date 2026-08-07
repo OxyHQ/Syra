@@ -457,7 +457,7 @@ describe('expiry sweep — the full schedule', () => {
 
     // T0 — hidden, bytes retained.
     await sweepAt(at(0), deps);
-    expect((await reload(upload.id))?.deletedAt).toBeDefined();
+    expect((await reload(upload.id))?.deletedAt).toBeInstanceOf(Date);
     expect(deleter.deleted).toEqual([]);
 
     // T+29d — still inside the grace period.
