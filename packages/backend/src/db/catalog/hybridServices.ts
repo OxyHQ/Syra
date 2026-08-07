@@ -326,19 +326,19 @@ export const UNPORTED_CATALOG_MODULES: readonly {
   {
     file: 'scripts/seedMusicData.ts',
     models: ['Album', 'CatalogEntity', 'Track'],
-    owner: 'Task 10 — catalog (missed by its file selector; surfaced in Task 11)',
+    owner: 'Task 19 — MongoDB removal (re-owned from the closed Task 10)',
     reason: 'Seeds a development catalogue into Mongo. Nothing reads that catalogue any more.',
   },
   {
     file: 'scripts/backfillTrackFingerprints.ts',
     models: ['Track', 'TrackFingerprint'],
-    owner: 'Task 10 — catalog (missed by its file selector; surfaced in Task 11)',
+    owner: 'Task 19 — MongoDB removal (re-owned from the closed Task 10)',
     reason: 'Walks every track to index it acoustically; both collections are ported tables.',
   },
   {
     file: 'scripts/importIsrcRegistry.ts',
     models: ['IsrcRegistry'],
-    owner: 'Task 10 — catalog (missed by its file selector; surfaced in Task 11)',
+    owner: 'Task 19 — MongoDB removal (re-owned from the closed Task 10)',
     reason:
       'Bulk-loads the ISRC registry. The three SERVICES that read it were ported in Task 10b ' +
       '(they were missed by the same selector); the importer that fills it was not.',
@@ -346,13 +346,13 @@ export const UNPORTED_CATALOG_MODULES: readonly {
   {
     file: 'scripts/importMusicBrainzArtists.ts',
     models: ['MusicBrainzArtist'],
-    owner: 'Task 10 — catalog (missed by its file selector; surfaced in Task 11)',
+    owner: 'Task 19 — MongoDB removal (re-owned from the closed Task 10)',
     reason: 'Bulk-loads the MusicBrainz artist mirror `enrichCatalogEntity` reads from Postgres.',
   },
   {
     file: 'scripts/importDiscogsReleases.ts',
     models: ['DiscogsRelease'],
-    owner: 'Task 10 — catalog (missed by its file selector; surfaced in Task 11)',
+    owner: 'Task 19 — MongoDB removal (re-owned from the closed Task 10)',
     reason: 'Bulk-loads the Discogs release mirror.',
   },
   // `services/uploads/{acoustid,isrcLookup,provenanceSignals}.ts` were listed
