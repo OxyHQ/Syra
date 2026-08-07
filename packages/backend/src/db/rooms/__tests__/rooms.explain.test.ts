@@ -97,6 +97,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { sql } from 'drizzle-orm';
 import { executeRows } from '@oxyhq/db';
 import { closePostgres, connectPostgres, getDb } from '../../postgres';
+import { descNullsLast } from '../../catalog/containers';
+import { houseListingConditions } from '../houses';
+import { houses } from '../../schema/rooms';
 
 /** Thrown to roll the seeding transaction back once every plan is collected. */
 class Rollback extends Error {}
@@ -115,14 +118,50 @@ const SEEDED_PREFERENCES = 8000;
 
 const SEED_AND_EXPLAIN_TIMEOUT_MS = 120_000;
 
+/**
+ * The authenticated listing's SQL, rendered from the SHIPPED predicate.
+ *
+ * `toSQL()` gives the query drizzle would send, with `$1`-style placeholders;
+ * the parameters are inlined here because `EXPLAIN` is issued through
+ * `sql.raw`. Every value substituted is a marker string this file generated, so
+ * nothing user-supplied reaches the statement.
+ *
+ * The member id list is the size the seed gives the probed user, which is what
+ * makes the plan meaningful — a two-element list would let the planner pick
+ * differently from a 2,800-element one.
+ */
+function authedListingSql(): string {
+  const query = getDb()
+    .select({ id: houses.id, name: houses.name })
+    .from(houses)
+    .where(houseListingConditions({ memberHouseIds: seededMemberHouseIds }))
+    .orderBy(descNullsLast(houses.createdAt))
+    .limit(21)
+    .toSQL();
+
+  return query.sql.replace(/\$(\d+)/g, (_match, index) => {
+    const value = query.params[Number(index) - 1];
+    if (Array.isArray(value)) return `array[${value.map((v) => `'${String(v)}'`).join(',')}]`;
+    return `'${String(value)}'`;
+  });
+}
+
 /** Plan text by probe name, collected once in `beforeAll`. */
 const plans = new Map<string, string>();
+
+/** House ids the probed member belongs to, filled by the seed. */
+let seededMemberHouseIds: string[] = [];
 
 let seededRoomCount = 0;
 let seededHouseCount = 0;
 let seededRecordingCount = 0;
 
-const PROBES: readonly { readonly name: string; readonly sql: string }[] = [
+/**
+ * `sql` is a thunk where the statement has to be BUILT rather than written —
+ * `authedListingSql` calls `getDb()` and reads the seeded membership, neither of
+ * which exists at module load. Resolved in `beforeAll`, after the seed.
+ */
+const PROBES: readonly { readonly name: string; readonly sql: string | (() => string) }[] = [
   // ── rooms ───────────────────────────────────────────────────────────────
   {
     // `db/rooms/rooms.ts` — `listRooms` with no filters, `GET /api/rooms`.
@@ -205,6 +244,40 @@ const PROBES: readonly { readonly name: string; readonly sql: string }[] = [
     sql: `select id, name from houses
           where visibility_discovery in ('listed')
             and search_vector @@ plainto_tsquery('english', 'jazz')
+          order by created_at desc nulls last limit 21`,
+  },
+  {
+    /**
+     * **The arm that actually runs.** `GET /api/houses` is mounted behind
+     * `oxy.auth()` (`server.ts:353`, required), so a viewer is always resolved
+     * and `listHouses` always takes the membership arm. `housesListing` above
+     * probes the anonymous arm, which no request reaches.
+     *
+     * Unlike every other probe in this file, this one's WHERE clause is BUILT BY
+     * THE SHIPPED CODE — `houseListingConditions` — rather than transcribed. The
+     * Seq Scan this replaced survived precisely because a hand-written probe
+     * described a different query from the one that ran.
+     */
+    name: 'housesListingAuthed',
+    sql: authedListingSql,
+  },
+  {
+    /**
+     * The membership arm as a correlated `EXISTS`, which is what `listHouses`
+     * first shipped and the direct transcription of Mongo's
+     * `'members.userId': userId`.
+     *
+     * An `OR` between a column predicate and a correlated subquery gives the
+     * planner nothing to combine, so it is a **Seq Scan** even under
+     * `enable_seqscan = off` — asserted below. Kept so the finding cannot be
+     * undone quietly.
+     */
+    name: 'housesListingExists',
+    sql: `select id, name from houses
+          where (visibility_discovery in ('listed')
+                 or exists (select 1 from house_members
+                            where house_members.house_id = houses.id
+                              and house_members.oxy_user_id = '${MARKER}-u-7'))
           order by created_at desc nulls last limit 21`,
   },
   {
@@ -574,6 +647,13 @@ async function seed(tx: Tx): Promise<void> {
   const [recordings] = await executeRows<{ total: number }>(
     tx, sql.raw(`select count(*)::int as total from recordings where id like '${MARKER}-%'`));
   seededRecordingCount = recordings?.total ?? 0;
+
+  // Read back rather than reconstructed: the roster insert carries
+  // `on conflict do nothing`, so the probed member's real house set is whatever
+  // survived the unique constraint.
+  const memberRows = await executeRows<{ house_id: string }>(
+    tx, sql.raw(`select house_id from house_members where oxy_user_id = '${MARKER}-u-7'`));
+  seededMemberHouseIds = memberRows.map((row) => row.house_id);
 }
 
 beforeAll(async () => {
@@ -589,8 +669,9 @@ beforeAll(async () => {
       await executeRows(tx, sql.raw('set local enable_seqscan = off'));
 
       for (const probe of PROBES) {
+        const statement = typeof probe.sql === 'function' ? probe.sql() : probe.sql;
         const rows = await executeRows<{ 'QUERY PLAN': string }>(
-          tx, sql.raw(`explain (analyze, buffers) ${probe.sql}`));
+          tx, sql.raw(`explain (analyze, buffers) ${statement}`));
         plans.set(probe.name, rows.map((row) => row['QUERY PLAN']).join('\n'));
       }
 
@@ -769,6 +850,42 @@ describe('houses', () => {
     expect(plans.get('housesListingNotIn')).toContain('Seq Scan on houses');
     // The pair is the measurement: same rows, same ordering, one indexable.
     expectIndexed('housesListing', 'houses');
+  });
+
+  /**
+   * The arm the route actually takes, and the one the first version of this
+   * suite did not have.
+   *
+   * `housesListing` above is the ANONYMOUS caller. `GET /api/houses` is mounted
+   * behind required auth, so that arm never runs — and the membership arm was a
+   * Seq Scan while the suite was green. Its WHERE clause is built by
+   * `houseListingConditions`, so a change to the shipped predicate moves this
+   * probe with it.
+   */
+  it('the authenticated listing — the arm that runs — reaches an index', () => {
+    expectIndexed('housesListingAuthed', 'houses');
+    // A `BitmapOr` of the discovery index and the primary key: the two arms of
+    // the `OR` are each indexable once membership is an id list rather than a
+    // correlated subquery.
+    expectIndexAmong('housesListingAuthed', [
+      'houses_visibility_discovery_created_at_idx',
+      'houses_pkey',
+    ]);
+  });
+
+  it('the correlated EXISTS it replaced still scans', () => {
+    // The measurement that makes the fix mean something: same question, same
+    // rows, and an `OR` the planner cannot combine.
+    expect(plans.get('housesListingExists')).toContain('Seq Scan on houses');
+    expectIndexed('housesListingAuthed', 'houses');
+  });
+
+  it('the probed member really is in many houses', () => {
+    // A vacuity floor for the two assertions above. With a handful of member
+    // houses the planner's choice says nothing about the shape at scale, and a
+    // seed whose `on conflict do nothing` swallowed every row would leave the
+    // membership arm absent from the predicate entirely.
+    expect(seededMemberHouseIds.length).toBeGreaterThan(1000);
   });
 
   it('the GIN index serves the search predicate', () => {

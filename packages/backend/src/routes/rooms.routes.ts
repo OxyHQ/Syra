@@ -834,13 +834,20 @@ async function startRecordingForRoom(room: RoomWithCredentials) {
 }
 
 /**
- * Helper: stop recording for a room. Non-fatal.
+ * Helper: stop recording for a room. Non-fatal, and returns nothing.
  *
- * Returns the room row with `recordingEgressId` already cleared, so callers that
- * go on to change other fields do not have to remember to clear it themselves —
- * the Mongo version set `room.recordingEgressId = undefined` in memory and
- * relied on the caller's later `save()`, which is exactly the shape that becomes
- * a silent no-op under drizzle.
+ * It CLEARS `recordingEgressId` with its own UPDATE rather than leaving the
+ * caller to persist it. The Mongo version set `room.recordingEgressId =
+ * undefined` in memory and relied on the caller's later `save()` to carry it —
+ * exactly the shape that becomes a silent no-op under drizzle, so the write had
+ * to move in here.
+ *
+ * That does mean `/end` and `/stop` now issue two room writes where Mongo issued
+ * one, and a row is briefly observable with `recording_egress_id = NULL` while
+ * `status` is still `live`. That intermediate is unavoidable (the alternative is
+ * the no-op above) and harmless: the two writes touch disjoint columns, the
+ * second never re-sends `recordingEgressId`, and `POST /:id/recording/stop`
+ * produces the identical state deliberately.
  */
 async function stopRecordingForRoom(room: RoomWithCredentials, reason: string = 'room_ended') {
   if (!room.recordingEgressId) return;

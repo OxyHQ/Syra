@@ -52,6 +52,19 @@ afterAll(disconnectDb);
 
 const HOST = 'host-1';
 
+/** The nine columns a teardown has to clear. Named once, used by both halves. */
+const STREAM_FIELDS = [
+  'activeIngressId',
+  'activeStreamUrl',
+  'streamTitle',
+  'streamImage',
+  'streamDescription',
+  'rtmpUrl',
+  'rtmpStreamKey',
+  'streamStartedAt',
+  'streamDurationSec',
+];
+
 /** A live room carrying every stream field a teardown has to clear. */
 async function streamingRoom() {
   const room = await createRoom({
@@ -80,11 +93,17 @@ async function streamingRoom() {
   });
 
   if (streaming === undefined) throw new Error('fixture room vanished');
-  // Every assertion below measures a CLEAR, so a fixture that never set the
-  // field would make the test pass without the code doing anything.
-  expect(streaming.rtmpStreamKey).toBe('sk_live_secret');
-  expect(streaming.activeIngressId).toBe('ingress-1');
-  expect(streaming.streamDurationSec).toBe(1800);
+
+  // Every assertion below measures a CLEAR, so a field the fixture never set
+  // would make the test pass without the code doing anything. All NINE are
+  // checked, not a sample: a sample leaves the unchecked ones able to pass
+  // vacuously, which is the exact shape this guard exists to refuse.
+  for (const [field, value] of Object.entries(streaming)) {
+    if (!STREAM_FIELDS.includes(field)) continue;
+    expect(`${field} was set: ${value !== null && value !== undefined}`).toBe(
+      `${field} was set: true`
+    );
+  }
   return streaming;
 }
 

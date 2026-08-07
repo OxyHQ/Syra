@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'bun:test';
+import { eq } from 'drizzle-orm';
 import { connectDb, clearDb, disconnectDb } from '../test/postgres';
+import { getDb } from '../db/postgres';
+import { roomUserPreferences } from '../db/schema/rooms';
 import { findLiveVisibilities, findLiveVisibility, setLiveVisibility } from '../db/rooms/preferences';
 import { DEFAULT_LIVE_VISIBILITY, type LiveVisibility } from '../db/rooms/types';
 import { selectLiveUsers } from './rooms.routes';
@@ -70,11 +73,29 @@ describe('live-visibility preference', () => {
     expect(DEFAULT_LIVE_VISIBILITY).toBe('active');
   });
 
-  it("defaults liveVisibility to 'active' when the row is written without one", async () => {
-    // Through the column DEFAULT rather than the reader's `??` fallback, which
-    // is the half `findLiveVisibility` above cannot distinguish on its own.
-    await setLiveVisibility('user-explicit', DEFAULT_LIVE_VISIBILITY);
-    expect(await findLiveVisibility('user-explicit')).toBe('active');
+  it("defaults liveVisibility to 'active' through the COLUMN default", async () => {
+    /**
+     * Inserted without naming the column, which is the only way to reach the
+     * database's own default.
+     *
+     * An earlier version of this test called `setLiveVisibility(user, 'active')`
+     * and claimed it exercised the DEFAULT "rather than the reader's `??`
+     * fallback". It could not: `setLiveVisibility` requires the value and always
+     * names the column, so the default was never consulted and the assertion
+     * compared against the very `??` it claimed to distinguish from — it would
+     * have passed with no default on the column at all.
+     */
+    await getDb().insert(roomUserPreferences).values({ oxyUserId: 'user-column-default' });
+
+    const [row] = await getDb()
+      .select({ liveVisibility: roomUserPreferences.liveVisibility })
+      .from(roomUserPreferences)
+      .where(eq(roomUserPreferences.oxyUserId, 'user-column-default'));
+
+    // Read off the ROW, not through `findLiveVisibility`, so the reader's
+    // fallback cannot supply the answer.
+    expect(row?.liveVisibility).toBe('active');
+    expect(DEFAULT_LIVE_VISIBILITY).toBe('active');
   });
 
   it('upserts a single row keyed by oxyUserId (insert then update in place)', async () => {

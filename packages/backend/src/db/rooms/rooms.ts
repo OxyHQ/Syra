@@ -390,9 +390,12 @@ export async function updateRoom(
  *
  * The nine fields `clearRoomStreamFields` used to assign `undefined` to, spelled
  * as an explicit object so a teardown actually tears down — see this file's doc
- * comment for why `undefined` here would be a silent no-op. The queue is the
- * tenth field and lives in another table, so callers pair this with
- * {@link deleteRoomQueue}; {@link stopRoomStreamFields} does both.
+ * comment for why `undefined` here would be a silent no-op.
+ *
+ * The queue is the tenth field and lives in another table, so this object alone
+ * is not a complete teardown. Nothing outside {@link stopRoomStreamFields} uses
+ * it, and that is deliberate: going through the one function is what keeps the
+ * row clear and the queue drain in a single transaction.
  */
 export const CLEARED_STREAM_FIELDS: UpdateRoomInput = {
   activeIngressId: null,
@@ -424,14 +427,6 @@ export async function stopRoomStreamFields(
     await tx.delete(roomMediaQueueItems).where(eq(roomMediaQueueItems.roomId, id));
     return updateRoom(id, { ...CLEARED_STREAM_FIELDS, ...extra }, tx);
   });
-}
-
-/** Drain a room's queue. */
-export async function deleteRoomQueue(
-  roomId: string,
-  db: DbOrTransaction = getDb(),
-): Promise<void> {
-  await db.delete(roomMediaQueueItems).where(eq(roomMediaQueueItems.roomId, roomId));
 }
 
 /**

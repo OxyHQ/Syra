@@ -273,39 +273,42 @@ const DISCOVERABLE_LEVELS = HOUSE_DISCOVERY_LEVELS.filter(
   (level) => level !== HouseDiscovery.UNLISTED && level !== HouseDiscovery.HIDDEN
 );
 
-/**
- * The discoverable house listing, newest first.
- *
- * Returns every `listed` house, plus any house the caller is a member of —
- * which is how a member still finds their own `unlisted` or `hidden` houses.
- * Membership comes from the server-resolved session, never the request.
- *
- * ## Why this is `IN` and not `NOT IN`
- *
- * `visibility_discovery NOT IN ('unlisted', 'hidden')` renders as `<> ALL(...)`,
- * which Postgres cannot use a btree for AT ALL — measured under
- * `enable_seqscan = off`, it sequential-scans `houses` and then top-N sorts,
- * making `houses_visibility_discovery_created_at_idx` dead weight on the one
- * query it was built for. The same predicate as `IN (…)` over the complement is
- * an Index Scan with no sort at all. `schema/rooms.ts` describes this index as
- * serving `GET /api/houses`; before this it did not.
- *
- * The two spellings are equivalent because the axis is a CLOSED set of three
- * with a CHECK enforcing it — but Postgres cannot know that, which is why the
- * complement is computed in TypeScript from the same tuple the CHECK is derived
- * from. `__tests__/rooms.explain.test.ts` keeps both shapes as probes.
- */
-export async function listHouses(
-  options: ListHousesOptions,
+/** Every house id `oxyUserId` belongs to, read through `house_members_oxy_user_id_idx`. */
+export async function houseIdsForMember(
+  oxyUserId: string,
   db: DbOrTransaction = getDb(),
-): Promise<HouseRow[]> {
+): Promise<string[]> {
+  const rows = await db
+    .select({ houseId: houseMembers.houseId })
+    .from(houseMembers)
+    .where(eq(houseMembers.oxyUserId, oxyUserId));
+  return rows.map((row) => row.houseId);
+}
+
+/**
+ * The WHERE clause of the house listing, as a value the probe can read.
+ *
+ * Separated from {@link listHouses} for one reason: the first version of this
+ * query was a Seq Scan in production and the EXPLAIN probe said it was fine,
+ * because the probe was hand-transcribed SQL that happened to describe the
+ * ANONYMOUS caller. `GET /api/houses` is mounted behind `oxy.auth()`
+ * (`server.ts:353`, required), so a viewer is ALWAYS resolved and the
+ * membership arm ALWAYS applies — the arm the probe did not have. Exporting the
+ * conditions lets `__tests__/rooms.explain.test.ts` build its probe from the
+ * shipped predicate instead of a paraphrase of it, so the two cannot describe
+ * different queries again.
+ *
+ * `memberHouseIds` is resolved by the caller rather than expressed inline; see
+ * {@link listHouses} for why.
+ */
+export function houseListingConditions(options: {
+  readonly memberHouseIds: readonly string[];
+  readonly cursor?: string;
+  readonly search?: string;
+}): SQL {
   const visible: SQL[] = [inArray(houses.visibilityDiscovery, [...DISCOVERABLE_LEVELS])];
-  if (options.userId !== undefined) {
-    visible.push(
-      sql`exists (select 1 from ${houseMembers}
-                 where ${houseMembers.houseId} = ${houses.id}
-                   and ${houseMembers.oxyUserId} = ${options.userId})`
-    );
+  if (options.memberHouseIds.length > 0) {
+    visible.push(inArray(houses.id, [...options.memberHouseIds]));
   }
 
   const conditions: SQL[] = [or(...visible) as SQL];
@@ -319,10 +322,73 @@ export async function listHouses(
     conditions.push(sql`${houses.searchVector} @@ plainto_tsquery('english', ${options.search})`);
   }
 
+  return and(...conditions) as SQL;
+}
+
+/**
+ * The discoverable house listing, newest first.
+ *
+ * Returns every `listed` house, plus any house the caller is a member of —
+ * which is how a member still finds their own `unlisted` or `hidden` houses.
+ * Membership comes from the server-resolved session, never the request.
+ *
+ * ## Why this is `IN` and not `NOT IN`
+ *
+ * `visibility_discovery NOT IN ('unlisted', 'hidden')` renders as `<> ALL(...)`,
+ * which Postgres cannot use a btree for AT ALL — measured under
+ * `enable_seqscan = off`, it sequential-scans `houses` and then top-N sorts,
+ * making `houses_visibility_discovery_created_at_idx` dead weight on the one
+ * query it was built for. The two spellings are equivalent because the axis is
+ * a CLOSED set of three with a CHECK enforcing it — but Postgres cannot know
+ * that, which is why the complement is computed in TypeScript from the same
+ * tuple the CHECK is derived from.
+ *
+ * ## Why membership is TWO queries and not a correlated `EXISTS`
+ *
+ * `exists (select 1 from house_members where house_id = houses.id and …)` reads
+ * naturally and is the direct transcription of Mongo's `'members.userId': userId`
+ * — and it is a **Seq Scan**, because an `OR` between a column predicate and a
+ * correlated subquery gives the planner no index it can combine. That is not a
+ * rare path: this route is mounted behind required auth, so it is the ONLY path.
+ *
+ * Resolving the member's house ids first turns the second arm into `id = ANY(…)`,
+ * which the planner combines with the discovery index as a `BitmapOr`. Measured
+ * on 30,000 houses with the probed member in 2,869 of them:
+ *
+ * | shape | plan | time |
+ * |---|---|---|
+ * | `EXISTS` (this, before) | **Seq Scan** + top-N sort | 88.7 ms |
+ * | `id = ANY` (this, now) | BitmapOr of two indexes | 8.9 ms |
+ * | `UNION` with a per-arm `LIMIT` | Index Scan, stops at 21 | 5.9 ms |
+ *
+ * The `UNION` is faster still because each arm's own `LIMIT` lets the ordered
+ * index short-circuit, and it is deliberately NOT taken: it has to duplicate the
+ * cursor and search predicates into both arms and carries `UNION`'s dedupe, for
+ * 3 ms on a synthetic table far larger than Syra's. Recorded so the number is
+ * here if that ever stops being true.
+ *
+ * The extra round trip is one indexed read of `house_members` (0.24 ms at that
+ * size) and is the same "resolve ids, then filter" shape
+ * {@link houseIdsWithRoomsHiddenFrom} and `listRooms`' `excludeHouseIds` already
+ * use in this vertical.
+ */
+export async function listHouses(
+  options: ListHousesOptions,
+  db: DbOrTransaction = getDb(),
+): Promise<HouseRow[]> {
+  const memberHouseIds =
+    options.userId === undefined ? [] : await houseIdsForMember(options.userId, db);
+
+  const conditions = houseListingConditions({
+    memberHouseIds,
+    cursor: options.cursor,
+    search: options.search,
+  });
+
   return db
     .select(HOUSE_COLUMNS)
     .from(houses)
-    .where(and(...conditions))
+    .where(conditions)
     .orderBy(descNullsLast(houses.createdAt))
     .limit(options.limit);
 }

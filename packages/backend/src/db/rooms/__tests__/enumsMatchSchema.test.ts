@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import * as roomsSchema from '../../schema/rooms';
 import {
   HOUSE_DISCOVERY_LEVELS,
   HOUSE_JOIN_POLICIES,
@@ -82,6 +83,48 @@ describe('db/rooms/types enums match db/schema/rooms tuples', () => {
       expect(`${name}:${values.length >= 2}`).toBe(`${name}:true`);
       expect(`${name}:${tuple.length >= 2}`).toBe(`${name}:true`);
     }
+  });
+
+  /**
+   * Every value tuple the schema exports is accounted for.
+   *
+   * The count above pins how many pairs exist; it cannot notice a FOURTEENTH
+   * tuple added to `schema/rooms.ts` with no enum beside it — which is the
+   * direction that matters, because the missing enum is the one call sites would
+   * then spell by hand. Derived from the module's own exports rather than a
+   * second hand-written list, so there is nothing to keep in step.
+   *
+   * `MEDIA_QUEUE_KINDS` is covered by the string-literal case below rather than
+   * by a pair, so it is named as the one deliberate exemption.
+   */
+  it('leaves no schema value tuple without an enum', () => {
+    // `as unknown[]` before the predicate, exactly as `test/postgres.ts` and
+    // `db/__tests__/gates.test.ts` do and for the reason recorded there: against
+    // a heterogeneous barrel union a narrowing predicate fails TS2677, because
+    // the widened type is not assignable to each branded member. The runtime
+    // check is unaffected.
+    const tupleExports = (Object.entries(roomsSchema) as unknown[])
+      .filter((entry): entry is [string, readonly string[]] => {
+        if (!Array.isArray(entry)) return false;
+        const [, value] = entry as [string, unknown];
+        return Array.isArray(value) && value.every((item) => typeof item === 'string');
+      })
+      .map(([name]) => name);
+
+    // Vacuity floor: a filter that matched nothing would report full coverage.
+    expect(tupleExports.length).toBeGreaterThanOrEqual(14);
+
+    const covered = new Set([
+      ...EXPECTED_PAIRS.map(([, , tuple]) => tuple),
+    ].map((tuple) => tuple.join('|')));
+
+    const uncovered = tupleExports.filter((name) => {
+      if (name === 'MEDIA_QUEUE_KINDS') return false;
+      const tuple = roomsSchema[name as keyof typeof roomsSchema] as readonly string[];
+      return !covered.has(tuple.join('|'));
+    });
+
+    expect(uncovered).toEqual([]);
   });
 
   for (const [name, values, tuple] of EXPECTED_PAIRS) {
