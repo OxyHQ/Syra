@@ -38,6 +38,12 @@
  * with an ordinal `position` column, matching every other array-turned-table
  * in this schema (`track_credits.position`, `track_sources.position`, …).
  *
+ * **`podcast_categories` is the SEVENTH and was missed.** It is a junction
+ * rather than a subdocument array, which is why it was reasoned about
+ * separately below — but `Podcast.categories` was an ordered `string[]` all the
+ * same, and RSS declares the primary category first. It carries `position` as
+ * of Task 12; see that column's own comment.
+ *
  * Two of the six have real query-by-element evidence beyond the brief's own
  * instruction: `services/podcasts/resolvePersons.ts`'s `strongKeyCreditMatch`
  * runs `persons: { $elemMatch: { linkedOxyUserId } }` (falling back to
@@ -471,12 +477,37 @@ export const podcastCategories = pgTable(
      * `kind = 'music'` row.
      */
     genreId: text().notNull(),
+    /**
+     * The category's index in the feed's own list.
+     *
+     * Added in Task 12, and it closes a Task 4 gap rather than adding a
+     * feature: six of this vertical's seven child tables carry `position`
+     * (`podcast_funding`, `podcast_persons`, `podcast_sources`,
+     * `episode_transcripts`, `episode_persons`, `episode_hls_renditions`) and
+     * this one did not, so a `Podcast.categories` string array — which IS
+     * ordered, and whose first element is the primary category an RSS feed
+     * declares — lost that ordering the moment it became rows.
+     *
+     * The loss was one-directional: once dropped at import it is not
+     * recoverable from the table, and a reader ordering by name later would
+     * have no way to know the feed had said something different. Same
+     * "identical shape gets identical treatment" rule this schema has been
+     * bitten by twice already (`sources`, then `hls`).
+     */
+    position: integer().notNull(),
     /** Always `'podcast'` on this table — see the CHECK below and `genres.ts`. */
     kind: text({ enum: GENRE_KINDS }).notNull().default('podcast'),
   },
   (t) => [
     check('podcast_categories_kind_check', sql`${t.kind} = 'podcast'`),
+    check('podcast_categories_position_check', sql`${t.position} >= 0`),
     unique('podcast_categories_podcast_id_genre_id_key').on(t.podcastId, t.genreId),
+    /**
+     * A show cannot file the same category twice AND cannot put two categories
+     * at the same index — the two uniques constrain different things, and the
+     * six sibling tables carry the second one for the same reason.
+     */
+    unique('podcast_categories_podcast_id_position_key').on(t.podcastId, t.position),
     index('podcast_categories_genre_id_idx').on(t.genreId),
     foreignKey({
       columns: [t.genreId, t.kind],

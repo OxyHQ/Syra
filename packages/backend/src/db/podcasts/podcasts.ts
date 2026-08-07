@@ -531,14 +531,14 @@ export async function recordNewEpisode(id: string, pubDate: Date): Promise<void>
     .where(eq(podcasts.id, id));
 }
 
-/** The category names of one show, alphabetical — the single-show read. */
+/** The category names of one show, in the feed's own order — the single-show read. */
 export async function podcastCategoryNames(podcastId: string): Promise<string[]> {
   const rows = await getDb()
     .select({ name: genres.name })
     .from(podcastCategories)
     .innerJoin(genres, eq(genres.id, podcastCategories.genreId))
     .where(eq(podcastCategories.podcastId, podcastId))
-    .orderBy(asc(genres.name));
+    .orderBy(asc(podcastCategories.position));
 
   return rows.map((row) => row.name);
 }

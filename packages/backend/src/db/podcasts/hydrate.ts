@@ -24,14 +24,13 @@
  * and the ONE caller using them today is the RSS generator, which renders its own
  * XML and never builds a DTO.
  *
- * ## `categories` loses its order, and the schema is why
+ * ## `categories` keeps its feed order
  *
- * `Podcast.categories` was an ordered `string[]`. `podcast_categories` carries
- * no `position` column — unlike `podcast_funding`/`podcast_persons`/the episode
- * children, which all do — so feed order is not recoverable from the table.
- * Ordered by NAME here, which is at least stable across reads; the alternative
- * is an arbitrary order that changes when a row is rewritten. Recorded rather
- * than silently accepted: if feed order ever matters, the column has to be added.
+ * `Podcast.categories` was an ordered `string[]` and RSS declares the primary
+ * category first, so the order is information. `podcast_categories` originally
+ * shipped without the `position` column its six sibling child tables all carry,
+ * which dropped that ordering at import with no way to recover it from the
+ * table; the column was added in Task 12 and every read here orders by it.
  */
 
 import { asc, eq, inArray } from 'drizzle-orm';
@@ -126,7 +125,7 @@ function toPersonDto(row: {
 
 // ── Podcast child collections ─────────────────────────────────────────────
 
-/** Category NAMES per show, alphabetical — see the file-level doc comment. */
+/** Category NAMES per show, in the feed's own order — see the file-level doc comment. */
 export async function loadPodcastCategories(
   podcastIds: readonly string[]
 ): Promise<Map<string, string[]>> {
@@ -141,7 +140,7 @@ export async function loadPodcastCategories(
     // nothing and only invite the reader to wonder which of the two is load-bearing.
     .innerJoin(genres, eq(podcastCategories.genreId, genres.id))
     .where(inArray(podcastCategories.podcastId, [...podcastIds]))
-    .orderBy(asc(genres.name));
+    .orderBy(asc(podcastCategories.position));
 
   return groupByParent(rows, (row) => row.podcastId, (row) => row.name);
 }

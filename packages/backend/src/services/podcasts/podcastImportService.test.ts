@@ -85,6 +85,16 @@ const candidate: PodcastDirectoryCandidate = {
   categories: [],
 };
 
+/**
+ * Three categories whose feed order is NOT their alphabetical order.
+ *
+ * That is the whole point of the fixture: `podcast_categories` originally had no
+ * `position` column and the read ordered by name, so a fixture whose feed order
+ * happened to be alphabetical would pass either way. `News` first is also what
+ * RSS means by the primary category, so this is the real shape.
+ */
+const ORDERED_CATEGORIES = ['News', 'Daily News', 'Business'];
+
 describe('importFeed — cover re-host (search/bulk-import deep path)', () => {
   it('replaces the external cover URL with a Syra S3 image id + sizes + primaryColor', async () => {
     await seedMirroredAsset();
@@ -155,6 +165,52 @@ describe('importFeed — cover re-host (search/bulk-import deep path)', () => {
     const row = await findPodcastById(result.podcast.id);
     expect(row?.episodeCount).toBe(1);
     expect(row?.lastEpisodeAt?.toISOString()).toBe('2025-01-01T08:00:00.000Z');
+  });
+
+  it('keeps the feed\'s category order, which is not alphabetical order', async () => {
+    setCatalogImageMirrorImplementationForTests(async () => undefined);
+
+    const result = await importFeed(candidate.feedUrl, {
+      directory: { ...candidate, categories: ORDERED_CATEGORIES },
+      fetch: fakeFetch,
+    });
+
+    const row = await findPodcastById(result.podcast.id);
+    expect(row).toBeDefined();
+    if (!row) return;
+
+    const [dto] = await toPodcastDtos([row]);
+    // Feed order, not `['Business', 'Daily News', 'News']` — which is what an
+    // ordering by name returns, and what this assertion would have got before
+    // `position` existed.
+    expect(dto?.categories).toEqual(ORDERED_CATEGORIES);
+  });
+
+  it('re-crawling reassigns positions rather than colliding on them', async () => {
+    /**
+     * `podcast_categories_podcast_id_position_key` makes a naive append fail
+     * on the second crawl, so this is the idempotency check for the new column
+     * specifically: `setPodcastCategories` deletes before inserting, and the
+     * reordered feed has to land in its NEW order rather than the stored one.
+     */
+    setCatalogImageMirrorImplementationForTests(async () => undefined);
+
+    await importFeed(candidate.feedUrl, {
+      directory: { ...candidate, categories: ORDERED_CATEGORIES },
+      fetch: fakeFetch,
+    });
+    const reordered = [...ORDERED_CATEGORIES].reverse();
+    const second = await importFeed(candidate.feedUrl, {
+      directory: { ...candidate, categories: reordered },
+      fetch: fakeFetch,
+    });
+
+    const row = await findPodcastById(second.podcast.id);
+    expect(row).toBeDefined();
+    if (!row) return;
+
+    const [dto] = await toPodcastDtos([row]);
+    expect(dto?.categories).toEqual(reordered);
   });
 
   it('is idempotent: a second crawl updates rather than duplicating', async () => {

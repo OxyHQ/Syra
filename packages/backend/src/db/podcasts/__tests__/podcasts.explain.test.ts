@@ -369,8 +369,8 @@ async function seed(tx: Tx): Promise<void> {
     from generate_series(1, ${SEEDED_SHOWS}) g`));
 
   await executeRows(tx, sql.raw(`
-    insert into podcast_categories (id, podcast_id, genre_id, kind)
-    select '${MARKER}-pc-' || g, '${MARKER}-s-' || g, '${MARKER}-g-' || (1 + (g % 40)), 'podcast'
+    insert into podcast_categories (id, podcast_id, genre_id, "position", kind)
+    select '${MARKER}-pc-' || g, '${MARKER}-s-' || g, '${MARKER}-g-' || (1 + (g % 40)), 0, 'podcast'
     from generate_series(1, ${SEEDED_SHOWS}) g`));
 
   await executeRows(tx, sql.raw(`

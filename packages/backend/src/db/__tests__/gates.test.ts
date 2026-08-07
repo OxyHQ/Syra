@@ -957,7 +957,7 @@ describe('podcasts schema (Task 4)', () => {
       .returning({ id: podcasts.id });
 
     try {
-      await db.insert(podcastCategories).values({ podcastId: podcast.id, genreId: genre.id });
+      await db.insert(podcastCategories).values({ podcastId: podcast.id, genreId: genre.id, position: 0 });
 
       // RESTRICT — the genre cannot be deleted while a podcast still
       // references it, matching album_genres' own treatment in catalog.ts.

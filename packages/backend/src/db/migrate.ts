@@ -208,7 +208,7 @@ const MIGRATIONS_SEARCH_DEPTH = 6;
  * Said here as well as in the test because this is the file somebody opens when
  * they go to bump it.
  */
-export const LAST_GENESIS_MIGRATION_TAG = '0020_chilly_vector';
+export const LAST_GENESIS_MIGRATION_TAG = '0021_great_the_professor';
 
 /**
  * `packages/backend/drizzle`, found by walking UP from this module rather than

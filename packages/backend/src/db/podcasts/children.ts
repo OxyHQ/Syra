@@ -65,6 +65,26 @@ import {
  * reason: `genres_lower_name_kind_key` is a unique index on `(lower(name),
  * kind)`, so an exact-name read-back would miss a stored `"Comedy"` when asked
  * for `"comedy"` and create a duplicate.
+ *
+ * ## The result is in the CALLER'S order, and that is not free
+ *
+ * `setPodcastCategories` turns the index of an id in this result into
+ * `podcast_categories.position`, which is the feed's primary-category-first
+ * ordering. A `select … where lower(name) in (…)` returns rows in whatever
+ * order the planner produces — NOT the order of the `IN` list — so the ids have
+ * to be re-sequenced against `wanted` before they can carry an ordinal.
+ *
+ * This was a real defect, not a hypothetical: the first version of this
+ * function returned `rows.map(row => row.id)` under a comment in
+ * `setPodcastCategories` asserting the order was preserved. Measured on a real
+ * database, `['News', 'Daily News', 'Business']` came back stored as
+ * `[0 Business, 1 Daily News, 2 News]` — alphabetical, which is exactly the
+ * ordering `position` was added to stop the reader falling back to. The comment
+ * was the only thing claiming otherwise, and a comment is not a guard.
+ *
+ * `db/catalog/genres.ts`'s `resolveMusicGenreIds` has the same property and is
+ * deliberately NOT changed: `album_genres` carries no `position`, so nothing
+ * downstream reads its order. If that table ever gains one, it needs this too.
  */
 export async function resolvePodcastCategoryIds(
   db: DbOrTransaction,
@@ -88,8 +108,11 @@ export async function resolvePodcastCategoryIds(
     .values(wanted.map((name) => ({ name, kind: 'podcast' as const })))
     .onConflictDoNothing();
 
+  // `name` is selected alongside `id` so the rows can be keyed back to the
+  // caller's list — matching on `lower(name)` for the same reason the read
+  // filters on it.
   const rows = await db
-    .select({ id: genres.id })
+    .select({ id: genres.id, name: genres.name })
     .from(genres)
     .where(
       and(
@@ -101,10 +124,29 @@ export async function resolvePodcastCategoryIds(
       )
     );
 
-  return rows.map((row) => row.id);
+  const idByLowercaseName = new Map(rows.map((row) => [row.name.toLowerCase(), row.id]));
+
+  // `flatMap` over an absent id rather than `map` + a non-null assertion: a
+  // name that survived the upsert but did not read back would otherwise become
+  // an `undefined` occupying a position.
+  return wanted.flatMap((name) => {
+    const id = idByLowercaseName.get(name.toLowerCase());
+    return id === undefined ? [] : [id];
+  });
 }
 
-/** Replace a show's category links with exactly `names`. */
+/**
+ * Replace a show's category links with exactly `names`, IN ORDER.
+ *
+ * `position` carries the feed's own ordering, which matters here in a way it
+ * does not for a set: RSS declares the primary category first, so index 0 is
+ * information rather than an accident of iteration.
+ *
+ * `resolvePodcastCategoryIds` returns its ids in the caller's order, and that
+ * is a property it has to go out of its way to provide rather than one a
+ * `SELECT … IN (…)` gives for free — see its own doc comment for the defect
+ * that proved it.
+ */
 export async function setPodcastCategories(
   db: DbOrTransaction,
   podcastId: string,
@@ -117,7 +159,14 @@ export async function setPodcastCategories(
 
   await db
     .insert(podcastCategories)
-    .values(genreIds.map((genreId) => ({ podcastId, genreId, kind: 'podcast' as const })));
+    .values(
+      genreIds.map((genreId, position) => ({
+        podcastId,
+        genreId,
+        position,
+        kind: 'podcast' as const,
+      }))
+    );
 }
 
 /** Replace a show's `<podcast:funding>` links. */
