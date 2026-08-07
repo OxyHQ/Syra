@@ -9,8 +9,9 @@ import { clear, connect, disconnect } from '../test/mongo';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
 import { albums, catalogEntities, imageAssets, tracks } from '../db/schema/catalog';
-import { PodcastModel } from '../models/Podcast';
-import { EpisodeModel } from '../models/Episode';
+import { episodes as episodesTable, podcasts } from '../db/schema/podcasts';
+import { findEpisodeById } from '../db/podcasts/episodes';
+import { findPodcastById } from '../db/podcasts/podcasts';
 import {
   countAlbumsWithPlayableTracks,
   findOneAlbumWithPlayableTracks,
@@ -36,7 +37,7 @@ const INTRUDER_ID = 'oxy-intruder-2';
 /**
  * BOTH databases, because this file spans TWO verticals: the whole music
  * surface — artist, tracks, albums — is Postgres (Tasks 10c-2 and 10c-3), while
- * podcasts and episodes are Mongoose until Task 12.
+ * podcasts and episodes are drizzle since Task 12.
  *
  * The two-store artist fixture 10c-2 needed is gone with 10c-3: track and album
  * ownership resolved through `utils/catalogOwnership.ts` (Mongoose) then, which
@@ -401,139 +402,164 @@ describe('PATCH /api/artists/me', () => {
   });
 });
 
+/** A show row; returns its id. */
+async function insertShow(values: {
+  title: string;
+  source: 'rss' | 'syra';
+  ownerOxyUserId?: string;
+  status?: 'active' | 'unavailable' | 'removed';
+}): Promise<string> {
+  const [row] = await getDb().insert(podcasts).values(values).returning({ id: podcasts.id });
+  if (!row) throw new Error('insertShow: insert returned no row');
+  return row.id;
+}
+
+/** An episode row on `podcastId`; returns its id. */
+async function insertEpisodeRow(values: {
+  podcastId: string;
+  podcastTitle: string;
+  guid: string;
+  title: string;
+  source: 'rss' | 'syra';
+  status?: 'ready' | 'processing' | 'failed' | 'unavailable';
+  pubDate: Date;
+}): Promise<string> {
+  const [row] = await getDb()
+    .insert(episodesTable)
+    .values(values)
+    .returning({ id: episodesTable.id });
+  if (!row) throw new Error('insertEpisodeRow: insert returned no row');
+  return row.id;
+}
+
 describe('PATCH /api/podcasts/:id and /api/episodes/:id', () => {
   async function seedOwnedShow() {
-    const podcast = await PodcastModel.create({
+    const podcastId = await insertShow({
       title: 'Original Show',
       source: 'syra',
       ownerOxyUserId: OWNER_ID,
     });
-    const episode = await EpisodeModel.create({
-      podcastId: podcast._id,
+    const episodeId = await insertEpisodeRow({
+      podcastId,
       podcastTitle: 'Original Show',
       guid: 'episode-guid-1',
       title: 'Original Episode',
       source: 'syra',
       pubDate: new Date('2026-01-01'),
     });
-    return { podcast, episode };
+    return { podcastId, episodeId };
   }
 
   it('lets the owner edit a Syra-hosted show', async () => {
-    const { podcast } = await seedOwnedShow();
+    const { podcastId } = await seedOwnedShow();
 
     await withRouter('/api/podcasts', podcastsRoutes, OWNER_ID, async (baseUrl) => {
-      const response = await patch(`${baseUrl}/api/podcasts/${podcast._id.toString()}`, {
+      const response = await patch(`${baseUrl}/api/podcasts/${podcastId}`, {
         title: 'Corrected Show',
       });
 
       expect(response.status).toBe(200);
-      const stored = await PodcastModel.findById(podcast._id).lean();
-      expect(stored?.title).toBe('Corrected Show');
+      expect((await findPodcastById(podcastId))?.title).toBe('Corrected Show');
     });
   });
 
   it('rejects a non-owner editing a show with 403', async () => {
-    const { podcast } = await seedOwnedShow();
+    const { podcastId } = await seedOwnedShow();
 
     await withRouter('/api/podcasts', podcastsRoutes, INTRUDER_ID, async (baseUrl) => {
-      const response = await patch(`${baseUrl}/api/podcasts/${podcast._id.toString()}`, {
+      const response = await patch(`${baseUrl}/api/podcasts/${podcastId}`, {
         title: 'Hijacked Show',
       });
 
       expect(response.status).toBe(403);
-      const stored = await PodcastModel.findById(podcast._id).lean();
-      expect(stored?.title).toBe('Original Show');
+      expect((await findPodcastById(podcastId))?.title).toBe('Original Show');
     });
   });
 
   it('rejects editing an RSS-mirrored show even by its owner field', async () => {
-    const podcast = await PodcastModel.create({
+    const podcastId = await insertShow({
       title: 'Mirrored Show',
       source: 'rss',
       ownerOxyUserId: OWNER_ID,
     });
 
     await withRouter('/api/podcasts', podcastsRoutes, OWNER_ID, async (baseUrl) => {
-      const response = await patch(`${baseUrl}/api/podcasts/${podcast._id.toString()}`, {
+      const response = await patch(`${baseUrl}/api/podcasts/${podcastId}`, {
         title: 'Edited Mirror',
       });
 
       // An RSS mirror is overwritten by the next feed refresh, so edits are refused
       // rather than silently lost.
       expect(response.status).toBe(403);
-      const stored = await PodcastModel.findById(podcast._id).lean();
-      expect(stored?.title).toBe('Mirrored Show');
+      expect((await findPodcastById(podcastId))?.title).toBe('Mirrored Show');
     });
   });
 
   it('lets the owner edit an episode', async () => {
-    const { episode } = await seedOwnedShow();
+    const { episodeId } = await seedOwnedShow();
 
     await withRouter('/api/episodes', episodesRoutes, OWNER_ID, async (baseUrl) => {
-      const response = await patch(`${baseUrl}/api/episodes/${episode._id.toString()}`, {
+      const response = await patch(`${baseUrl}/api/episodes/${episodeId}`, {
         title: 'Corrected Episode',
       });
 
       expect(response.status).toBe(200);
-      const stored = await EpisodeModel.findById(episode._id).lean();
-      expect(stored?.title).toBe('Corrected Episode');
+      expect((await findEpisodeById(episodeId))?.title).toBe('Corrected Episode');
     });
   });
 
   it('rejects a non-owner editing an episode with 403', async () => {
-    const { episode } = await seedOwnedShow();
+    const { episodeId } = await seedOwnedShow();
 
     await withRouter('/api/episodes', episodesRoutes, INTRUDER_ID, async (baseUrl) => {
-      const response = await patch(`${baseUrl}/api/episodes/${episode._id.toString()}`, {
+      const response = await patch(`${baseUrl}/api/episodes/${episodeId}`, {
         title: 'Hijacked Episode',
       });
 
       expect(response.status).toBe(403);
-      const stored = await EpisodeModel.findById(episode._id).lean();
-      expect(stored?.title).toBe('Original Episode');
+      expect((await findEpisodeById(episodeId))?.title).toBe('Original Episode');
     });
   });
 
   it('lets the owner unpublish and republish a show without data loss', async () => {
-    const { podcast, episode } = await seedOwnedShow();
-    const podcastUrl = `/api/podcasts/${podcast._id.toString()}`;
+    const { podcastId, episodeId } = await seedOwnedShow();
+    const podcastUrl = `/api/podcasts/${podcastId}`;
 
     await withRouter('/api/podcasts', podcastsRoutes, OWNER_ID, async (baseUrl) => {
       expect((await fetch(`${baseUrl}${podcastUrl}/unpublish`, { method: 'POST' })).status).toBe(200);
 
-      const hidden = await PodcastModel.findById(podcast._id).lean();
+      const hidden = await findPodcastById(podcastId);
       expect(hidden?.status).toBe('unavailable');
       // Soft: the show and its episodes survive, so republishing is lossless.
       expect(hidden?.title).toBe('Original Show');
-      expect(await EpisodeModel.countDocuments({ podcastId: podcast._id })).toBe(1);
+      const remaining = await getDb()
+        .select({ id: episodesTable.id })
+        .from(episodesTable)
+        .where(eq(episodesTable.podcastId, podcastId));
+      expect(remaining).toHaveLength(1);
       // Deliberately does NOT cascade — a directly-linked episode keeps resolving.
-      const untouched = await EpisodeModel.findById(episode._id).lean();
-      expect(untouched?.status).not.toBe('unavailable');
+      expect((await findEpisodeById(episodeId))?.status).not.toBe('unavailable');
 
       expect((await fetch(`${baseUrl}${podcastUrl}/publish`, { method: 'POST' })).status).toBe(200);
-      const restored = await PodcastModel.findById(podcast._id).lean();
-      expect(restored?.status).toBe('active');
+      expect((await findPodcastById(podcastId))?.status).toBe('active');
     });
   });
 
   it('rejects a non-owner unpublishing a show and leaves it active', async () => {
-    const { podcast } = await seedOwnedShow();
+    const { podcastId } = await seedOwnedShow();
 
     await withRouter('/api/podcasts', podcastsRoutes, INTRUDER_ID, async (baseUrl) => {
-      const response = await fetch(
-        `${baseUrl}/api/podcasts/${podcast._id.toString()}/unpublish`,
-        { method: 'POST' },
-      );
+      const response = await fetch(`${baseUrl}/api/podcasts/${podcastId}/unpublish`, {
+        method: 'POST',
+      });
 
       expect(response.status).toBe(403);
-      const stored = await PodcastModel.findById(podcast._id).lean();
-      expect(stored?.status).toBe('active');
+      expect((await findPodcastById(podcastId))?.status).toBe('active');
     });
   });
 
   it('refuses to republish a platform-removed show', async () => {
-    const podcast = await PodcastModel.create({
+    const podcastId = await insertShow({
       title: 'Taken Down',
       source: 'syra',
       ownerOxyUserId: OWNER_ID,
@@ -541,44 +567,41 @@ describe('PATCH /api/podcasts/:id and /api/episodes/:id', () => {
     });
 
     await withRouter('/api/podcasts', podcastsRoutes, OWNER_ID, async (baseUrl) => {
-      const response = await fetch(
-        `${baseUrl}/api/podcasts/${podcast._id.toString()}/publish`,
-        { method: 'POST' },
-      );
+      const response = await fetch(`${baseUrl}/api/podcasts/${podcastId}/publish`, {
+        method: 'POST',
+      });
 
       // A takedown is not creator-reversible.
       expect(response.status).toBe(409);
-      const stored = await PodcastModel.findById(podcast._id).lean();
-      expect(stored?.status).toBe('removed');
+      expect((await findPodcastById(podcastId))?.status).toBe('removed');
     });
   });
 
   it('lets the owner unpublish and republish a single episode', async () => {
-    const { episode } = await seedOwnedShow();
-    const episodeUrl = `/api/episodes/${episode._id.toString()}`;
+    const { episodeId } = await seedOwnedShow();
+    const episodeUrl = `/api/episodes/${episodeId}`;
 
     await withRouter('/api/episodes', episodesRoutes, OWNER_ID, async (baseUrl) => {
       expect((await fetch(`${baseUrl}${episodeUrl}/unpublish`, { method: 'POST' })).status).toBe(200);
-      expect((await EpisodeModel.findById(episode._id).lean())?.status).toBe('unavailable');
+      expect((await findEpisodeById(episodeId))?.status).toBe('unavailable');
 
       expect((await fetch(`${baseUrl}${episodeUrl}/publish`, { method: 'POST' })).status).toBe(200);
-      const restored = await EpisodeModel.findById(episode._id).lean();
+      const restored = await findEpisodeById(episodeId);
       expect(restored?.status).toBe('ready');
       expect(restored?.title).toBe('Original Episode');
     });
   });
 
   it('rejects a non-owner unpublishing an episode', async () => {
-    const { episode } = await seedOwnedShow();
+    const { episodeId } = await seedOwnedShow();
 
     await withRouter('/api/episodes', episodesRoutes, INTRUDER_ID, async (baseUrl) => {
-      const response = await fetch(
-        `${baseUrl}/api/episodes/${episode._id.toString()}/unpublish`,
-        { method: 'POST' },
-      );
+      const response = await fetch(`${baseUrl}/api/episodes/${episodeId}/unpublish`, {
+        method: 'POST',
+      });
 
       expect(response.status).toBe(403);
-      expect((await EpisodeModel.findById(episode._id).lean())?.status).not.toBe('unavailable');
+      expect((await findEpisodeById(episodeId))?.status).not.toBe('unavailable');
     });
   });
 });
@@ -586,14 +609,14 @@ describe('PATCH /api/podcasts/:id and /api/episodes/:id', () => {
 
 describe('episode discovery follows the show', () => {
   async function seedShowWithEpisode(status: 'active' | 'unavailable') {
-    const podcast = await PodcastModel.create({
+    const podcastId = await insertShow({
       title: 'Discoverable Show',
       source: 'syra',
       ownerOxyUserId: OWNER_ID,
       status,
     });
-    const episode = await EpisodeModel.create({
-      podcastId: podcast._id,
+    const episodeId = await insertEpisodeRow({
+      podcastId,
       podcastTitle: 'Discoverable Show',
       guid: 'discovery-guid-1',
       title: 'Findable Episode',
@@ -601,7 +624,7 @@ describe('episode discovery follows the show', () => {
       status: 'ready',
       pubDate: new Date('2026-01-01'),
     });
-    return { podcast, episode };
+    return { podcastId, episodeId };
   }
 
   it('surfaces an episode of an active show in search', async () => {
@@ -626,10 +649,10 @@ describe('episode discovery follows the show', () => {
   });
 
   it('keeps a direct episode link working for a hidden show', async () => {
-    const { episode } = await seedShowWithEpisode('unavailable');
+    const { episodeId } = await seedShowWithEpisode('unavailable');
 
     await withRouter('/api/episodes', episodesRoutes, OWNER_ID, async (baseUrl) => {
-      const response = await fetch(`${baseUrl}/api/episodes/${episode._id.toString()}`);
+      const response = await fetch(`${baseUrl}/api/episodes/${episodeId}`);
 
       // Discovery follows the show; addressability does not. A saved link must not die.
       expect(response.status).toBe(200);

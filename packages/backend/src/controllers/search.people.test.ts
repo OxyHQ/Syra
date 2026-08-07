@@ -2,29 +2,21 @@ import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import type { Request, Response, NextFunction } from 'express';
 import { uuidv7 } from '@oxyhq/db';
 import { normalizeNameKey } from '@syra/shared-types';
-import { connect, clear, disconnect } from '../test/mongo';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
 import { catalogEntities } from '../db/schema/catalog';
 import { search } from './search.controller';
 
 /**
- * BOTH databases: persons are `catalog_entities` rows now, while the same
- * handler's podcast and episode categories are still Mongoose (Task 12), and
- * `search` touches them on every `category=all` request.
+ * ONE database. This file used to connect to both — persons are
+ * `catalog_entities` rows, while the same handler's podcast and episode
+ * categories were still Mongoose and `search` touches them on every
+ * `category=all` request. Task 12 took those two categories to drizzle, so
+ * every read `search` makes is Postgres and the Mongo connection is gone.
  */
-beforeAll(async () => {
-  await connect();
-  await connectDb();
-});
-afterEach(async () => {
-  await clear();
-  await clearDb();
-});
-afterAll(async () => {
-  await disconnect();
-  await disconnectDb();
-});
+beforeAll(connectDb);
+afterEach(clearDb);
+afterAll(disconnectDb);
 
 /** A person row — `type: 'person'`, the discriminator written out. */
 async function seedPerson(values: { name: string; href?: string; img?: string }): Promise<void> {

@@ -172,22 +172,22 @@ function sweepHybridFiles(): string[] {
 const MINIMUM_HYBRID_FILES = 15;
 
 /**
- * The same floor for property 4's sweep. **Ten** today, and the number is worth
- * pinning against the two other counts it gets confused with, because all three
- * are correct about different populations:
+ * The same floor for property 4's sweep. **Six** today, down from ten in Task
+ * 11, and the drop is the gate doing its job rather than being weakened:
+ * `podcastAudio.controller` (`TrackKey`), `podcasts.controller`
+ * (`CatalogEntity`), `services/podcasts/resolvePersons.ts` (`CatalogEntity`) and
+ * `scripts/reseedPersons.ts` (`CatalogEntity`) all stopped importing a catalog
+ * model when Task 12 ported them.
  *
- *  - **10** files import a catalog model at all — what THIS sweep finds, and
- *    what `UNPORTED_CATALOG_MODULES` must therefore hold.
- *  - **9** of those are entirely Mongoose, which is the blind spot properties
- *    1-3 cannot see. The tenth, `uploads.controller.ts`, also reads Postgres,
- *    so property 3's sweep had already caught it.
- *  - **8** were newly registered by Task 11 — the 9 minus `resolvePersons.ts`,
- *    which Task 10c had already listed.
+ * What is left is `uploads.controller.ts` (six catalog models, Task 13) and the
+ * five bulk-load scripts Task 10's file selector missed. The three-population
+ * split Task 11 recorded here has collapsed with the drop — all six survivors
+ * bar `uploads.controller` are entirely Mongoose — so it is not restated.
  *
- * It drops as those files port, and a sweep that suddenly finds none is a
- * broken walk, not a finished migration.
+ * It drops further as those files port, and a sweep that suddenly finds none is
+ * a broken walk, not a finished migration.
  */
-const MINIMUM_CATALOG_MODEL_IMPORTERS = 10;
+const MINIMUM_CATALOG_MODEL_IMPORTERS = 6;
 
 describe('property 3 — every hybrid file in the tree is registered', () => {
   const REGISTERED = new Set([
@@ -410,25 +410,30 @@ describe('vacuity floor', () => {
   });
 
   it('the registry is not empty and covers the measured hybrids', () => {
-    // Twenty: 10b's ten services, 10c-1's three playback controllers, 10c-2's
-    // two artist-surface controllers, 10c-3's `search.controller` and
-    // `library.controller`, `utils/syraMedia.ts`, and Task 11's two moderation
-    // files — the last three all added by property 3's sweep, which is the only
-    // reason anybody noticed any of them. A registry that shrank to nothing
-    // without the owning tasks landing means the walk broke, not that the work
-    // finished — Tasks 8/12/13/15 each remove entries and this floor drops with
-    // them, deliberately, by being edited when that happens. It went UP in Task
-    // 11 rather than down, because porting a file's catalog half is what makes
-    // it hybrid and therefore registrable in the first place. The unported list
-    // went 2 -> 1 when `manifestService`'s adapters were deleted, then 1 -> 2
-    // when property 3's sweep found `uploads.controller` — which holds six of
-    // its OWN vertical's catalog models, so it belongs here and not in
-    // HYBRID_MODULES. `resolvePersons` is the other, and it needs Task 12.
-    expect(HYBRID_MODULES.length).toBe(20);
-    // 2 -> 10 in Task 11: property 4's sweep found EIGHT new files importing a
-    // catalog model, all of them entirely Mongoose — the one shape properties
-    // 1-3 cannot see. See `MINIMUM_CATALOG_MODEL_IMPORTERS` for why 10, 9 and 8
-    // are three correct counts of three different populations.
-    expect(UNPORTED_CATALOG_MODULES.length).toBe(10);
+    /**
+     * Eighteen. It was twenty until Task 12, and this is the FIRST time this
+     * floor has gone down.
+     *
+     * That direction matters, because Task 11's note here explains why it went
+     * UP: porting a file's catalog half is what makes it hybrid and therefore
+     * registrable at all, so the registry grows while the migration is in its
+     * middle. It shrinks only when a vertical's OWN models leave the tree —
+     * which is what Task 12 did, deleting `Podcast`, `Episode`,
+     * `EpisodeProgress` and `Library` and with them the licence
+     * `entityProfile.controller` and `search.controller` held to read them.
+     *
+     * A registry that shrank to nothing WITHOUT the owning tasks landing means
+     * the walk broke, not that the work finished. Tasks 8/13/15 each remove
+     * entries and this floor drops with them, deliberately, by being edited.
+     */
+    expect(HYBRID_MODULES.length).toBe(18);
+    /**
+     * Six, down from ten. Task 12 cleared four: `podcastAudio.controller`,
+     * `podcasts.controller` and `services/podcasts/resolvePersons.ts` were its
+     * own, and `scripts/reseedPersons.ts` was Task 10's — ported here anyway
+     * because deleting the podcast models left it unable to compile at all.
+     * See `MINIMUM_CATALOG_MODEL_IMPORTERS`, which counts the same population.
+     */
+    expect(UNPORTED_CATALOG_MODULES.length).toBe(6);
   });
 });

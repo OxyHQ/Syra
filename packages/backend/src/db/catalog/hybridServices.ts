@@ -47,8 +47,13 @@ export const OWNING_TASKS = {
   // `library` is GONE, and its absence is the record that Task 11 landed: no
   // still-Mongoose model belongs to that vertical any more. `Playlist`,
   // `PlaylistTrack` and `RecentlyPlayed` were deleted with it, and `Library`
-  // was re-owned to `podcasts` — see the note on it below.
-  podcasts: 'Task 12 — podcasts',
+  // was re-owned to `podcasts`.
+  //
+  // `podcasts` is GONE for the same reason, and it took `Library` with it:
+  // Task 12 ported `podcasts`, `episodes` and `episode_progress`, which made
+  // `user_podcast_subscriptions` insertable and let `models/Library.ts` — the
+  // one-field remnant Task 11 left behind — be deleted outright. Four models
+  // (`Podcast`, `Episode`, `EpisodeProgress`, `Library`) left the tree with it.
   creators: 'Task 13 — creators and uploads',
   rooms: 'Task 14 — rooms',
   user: 'Task 15 — user and recommendations',
@@ -70,16 +75,6 @@ export type OwningTask = keyof typeof OWNING_TASKS;
  * stops the registry becoming a general-purpose "this import is fine" list.
  */
 export const NON_CATALOG_MODEL_OWNERS = {
-  /**
-   * Narrowed to `subscribedPodcasts` by Task 11 and re-owned with it.
-   *
-   * `user_podcast_subscriptions.podcast_id` references `podcasts`, whose rows
-   * are still written on Mongoose, so this one array cannot move until Task 12
-   * moves its writer — while the other four became junction tables. The model
-   * file itself was narrowed to match, so a stray `$addToSet: { likedTracks }`
-   * is a compile error rather than a silent write Mongoose drops.
-   */
-  Library: 'podcasts',
   Room: 'rooms',
   House: 'rooms',
   Recording: 'rooms',
@@ -88,8 +83,6 @@ export const NON_CATALOG_MODEL_OWNERS = {
   ArtistClaim: 'creators',
   ContributionAttestation: 'creators',
   UserUpload: 'creators',
-  Episode: 'podcasts',
-  Podcast: 'podcasts',
   CatalogRelation: 'user',
   ListeningEvent: 'user',
   UserMusicPreferences: 'user',
@@ -240,14 +233,6 @@ export const HYBRID_MODULES: readonly HybridModule[] = [
       'READ and cannot survive a cross-vertical FOREIGN KEY.',
   },
   {
-    file: 'controllers/entityProfile.controller.ts',
-    models: ['Episode', 'Podcast'],
-    reason:
-      'The `appearsIn` shelf is entirely podcasts — shows and episodes crediting a person, ' +
-      'matched by `strongKeyCreditMatch`. Task 12\'s vertical end to end; the catalogue half ' +
-      'of the same handler is drizzle, and the two never meet in one query.',
-  },
-  {
     file: 'controllers/queue.controller.ts',
     models: ['UserUpload'],
     reason:
@@ -293,18 +278,6 @@ export const HYBRID_MODULES: readonly HybridModule[] = [
       'it lives in `src/utils/`, so it reaches its neighbours as `./x`.',
   },
   {
-    file: 'controllers/search.controller.ts',
-    models: ['Episode', 'Podcast'],
-    reason:
-      'Eight categories, two verticals. The five CATALOG ones — tracks, albums, artists, ' +
-      'playlists, people — match through `search_vector` (`db/catalog/search.ts`); podcasts and ' +
-      'episodes are Task 12\'s tables and keep their Mongoose regex, which is why the ' +
-      '`escapeRegex` helper survives here and nowhere else. The two halves never meet in one ' +
-      'query: each category is an independent promise resolved into its own DTO list. ' +
-      '`podcasts.search_vector` and `episodes.search_vector` already exist, so Task 12 finishes ' +
-      'this file by deleting the regex rather than by building anything.',
-  },
-  {
     file: 'controllers/radio.controller.ts',
     models: ['UserMusicPreferences'],
     reason:
@@ -328,31 +301,6 @@ export const UNPORTED_CATALOG_MODULES: readonly {
   readonly owner: string;
   readonly reason: string;
 }[] = [
-  {
-    file: 'controllers/podcastAudio.controller.ts',
-    models: ['TrackKey'],
-    owner: 'Task 12',
-    reason:
-      'Reads the episode\'s decryption key out of `track_keys` to serve podcast audio. A catalog ' +
-      'table read from the podcasts vertical, so it moves with the rest of that controller.',
-  },
-  {
-    file: 'controllers/podcasts.controller.ts',
-    models: ['CatalogEntity'],
-    owner: 'Task 12',
-    reason:
-      'Resolves the artist a show is linked to. The rest of the file is Task 12\'s own vertical, ' +
-      'and `UserLibrary`\'s surviving `subscribedPodcasts` array is here too.',
-  },
-  {
-    file: 'services/podcasts/resolvePersons.ts',
-    models: ['CatalogEntity'],
-    owner: 'Task 12',
-    reason:
-      'A SCOPE constraint, not a capability one: `podcast_persons` and `episode_persons` exist ' +
-      'today (`schema/podcasts.ts`), so `strongKeyCreditMatch` CAN be expressed in drizzle — ' +
-      'doing it means writing podcast reads, which is Task 12\'s territory, not 10c\'s.',
-  },
   {
     file: 'controllers/uploads.controller.ts',
     models: ['Album', 'CatalogEntity', 'ImageAsset', 'Track', 'TrackFingerprint', 'TrackKey'],
@@ -380,12 +328,6 @@ export const UNPORTED_CATALOG_MODULES: readonly {
     models: ['Album', 'CatalogEntity', 'Track'],
     owner: 'Task 10 — catalog (missed by its file selector; surfaced in Task 11)',
     reason: 'Seeds a development catalogue into Mongo. Nothing reads that catalogue any more.',
-  },
-  {
-    file: 'scripts/reseedPersons.ts',
-    models: ['CatalogEntity'],
-    owner: 'Task 10 — catalog (missed by its file selector; surfaced in Task 11)',
-    reason: 'Deletes and re-creates unlinked `person` rows through the Mongoose discriminator.',
   },
   {
     file: 'scripts/backfillTrackFingerprints.ts',

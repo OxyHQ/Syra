@@ -10,7 +10,7 @@ import type {
   EntityAppearsIn,
   SourceProvenance,
 } from '@syra/shared-types';
-import { getDb } from '../db/postgres';
+import { getDb, isPostgresConnected } from '../db/postgres';
 import { albums, catalogEntities, catalogEntitySources, tracks } from '../db/schema/catalog';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../db/schema/protectedColumns';
 import { playableTrackFilter } from '../db/catalog/visibility';
@@ -21,21 +21,18 @@ import {
 } from '../db/catalog/containers';
 import { loadImageVariants, toAlbumDtos, toTrackDtos } from '../db/catalog/hydrate';
 import { toArtistDto, type PublicCatalogEntityRow } from '../db/catalog/serialize';
-import { PodcastModel } from '../models/Podcast';
-import { hiddenShowEpisodeFilter } from '../utils/podcastDiscovery';
-import { EpisodeModel } from '../models/Episode';
-import { isDatabaseConnected } from '../utils/database';
+import { findPodcastsCreditingPerson } from '../db/podcasts/podcasts';
+import { findEpisodesCreditingPerson } from '../db/podcasts/episodes';
+import { loadShowArtwork, toEpisodeDtos, toPodcastDtos } from '../db/podcasts/hydrate';
 import { getParam } from '../utils/reqParams';
+import { isDatabaseConnected } from '../utils/database';
 import { getRequestUserId } from '../utils/requestUser';
 import {
   loadArtistProfileSections,
   type ArtistProfileSource,
 } from '../services/catalog/artistProfile';
-import { serializePodcast, serializeEpisode } from '../services/podcasts/podcastSerializers';
-import { loadShowArtworkByPodcastId } from '../services/podcasts/episodeShowArtwork';
 import {
   enrichPersons,
-  strongKeyCreditMatch,
   makeOxyUsersFetcher,
   type PersonLike,
 } from '../services/podcasts/resolvePersons';
@@ -228,54 +225,47 @@ async function findEntity(id: string): Promise<PublicCatalogEntityRow | undefine
 
 /**
  * Podcast appearances for a person — shows + episodes crediting them, matched by
- * STRONG key (`linkedOxyUserId` → `href` → exact name). Episodes honour the same
- * public playability gate as search (`status:'ready'` AND Syra-hosted OR has an
- * enclosure), composed with `$and` so the credit `$elemMatch` is preserved.
+ * STRONG key (`linkedOxyUserId` → `href` → exact name).
+ *
+ * Both halves are `db/podcasts/` reads now. The credit match is a correlated
+ * `EXISTS` against `podcast_persons`/`episode_persons` rather than an
+ * `$elemMatch` over an embedded array, and the show-visibility gate that used to
+ * need a separate "which shows are hidden" query plus a `$nin` is folded into
+ * `publiclyPlayableEpisodeFilter` as a semi-join — so this handler issues two
+ * fewer round trips than it did, not more.
  */
 async function loadAppearsIn(person: PersonLike): Promise<EntityAppearsIn> {
-  const creditMatch = strongKeyCreditMatch(person);
-  const hiddenShows = await hiddenShowEpisodeFilter();
-  const [podcasts, episodes] = await Promise.all([
-    PodcastModel.find({ ...creditMatch, status: { $ne: 'removed' } })
-      .sort({ popularity: -1, lastEpisodeAt: -1 })
-      .limit(APPEARS_IN_CAP)
-      .lean(),
-    EpisodeModel.find({
-      ...creditMatch,
-      status: 'ready',
-      // Episodes of an unpublished or removed show drop out of credit listings with it.
-      ...hiddenShows,
-      $and: [{ $or: [{ source: 'syra' }, { enclosureUrl: { $exists: true, $nin: [null, ''] } }] }],
-    })
-      .sort({ pubDate: -1 })
-      .limit(APPEARS_IN_CAP)
-      .lean(),
+  const [podcastRows, episodeRows] = await Promise.all([
+    findPodcastsCreditingPerson(person, APPEARS_IN_CAP),
+    findEpisodesCreditingPerson(person, APPEARS_IN_CAP),
   ]);
 
   // Episodes here span many shows: resolve their parent-show artwork in ONE
-  // `$in` query so cover-less episodes inherit it without an N+1.
-  const showArtwork = await loadShowArtworkByPodcastId(episodes);
+  // query so cover-less episodes inherit it without an N+1.
+  const showArtwork = await loadShowArtwork(episodeRows);
 
-  return {
-    podcasts: podcasts.map(serializePodcast),
-    episodes: episodes.map((episode) =>
-      serializeEpisode(episode, showArtwork.get(episode.podcastId.toString())),
-    ),
-  };
+  const [podcastDtos, episodeDtos] = await Promise.all([
+    toPodcastDtos(podcastRows),
+    toEpisodeDtos(episodeRows, showArtwork),
+  ]);
+
+  return { podcasts: podcastDtos, episodes: episodeDtos };
 }
 
 /**
  * Build a `PersonLike` (the strong-key + enrichment shape) from an entity row.
  *
  * Exported for `search.controller`, which needs the identical mapping for the
- * people category. One adapter, not two: `PersonLike._id` is a Mongo-ism that
- * `services/podcasts/resolvePersons.ts` (Task 12) still owns, and duplicating
- * the bridge is how the two surfaces would start disagreeing about which
- * columns a person carries.
+ * people category. One adapter, not two: duplicating the bridge is how the two
+ * surfaces would start disagreeing about which columns a person carries.
+ *
+ * `_id` is `id` since Task 12: the field was spelled that way only so a Mongoose
+ * document could satisfy the same type during the split, and nothing
+ * Mongo-shaped reaches either function any more.
  */
 export function toPersonLike(person: PublicCatalogEntityRow): PersonLike {
   return {
-    _id: person.id,
+    id: person.id,
     name: person.name,
     img: person.img ?? undefined,
     href: person.href ?? undefined,
@@ -301,7 +291,31 @@ export function toPersonLike(person: PublicCatalogEntityRow): PersonLike {
  */
 export const getEntityProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    /**
+     * BOTH connections, which is what this handler actually needs.
+     *
+     * The guard used to be `isDatabaseConnected()` alone — MONGOOSE readiness
+     * (`mongoose.connection.readyState === 1`) — and that was already wrong
+     * before this task and got wronger with it: every read on the direct path
+     * here is Postgres (`catalog_entities`, `tracks`, and since Task 12
+     * `podcasts`/`episodes` and their credit tables), so a process with Postgres
+     * down answered 200 with a failure behind it.
+     *
+     * It is not `isPostgresConnected()` alone either, and the reason is worth
+     * naming because a grep of THIS file will not find it: `loadArtistSections`
+     * calls `services/catalog/artistProfile.ts`, which still reads
+     * `ContributionAttestationModel` — Task 13's collection, and a registered
+     * hybrid in `db/catalog/hybridServices.ts`. Mongoose BUFFERS a query issued
+     * with no connection rather than throwing, so dropping the Mongo half turns
+     * an artist profile into a request that never answers rather than a 503.
+     * Measured: two cases in this controller's own suite hung for the full 5s
+     * timeout the moment the Mongo connection went away.
+     *
+     * Same shape and same reasoning as `recommendations.controller`'s
+     * `isDatabaseConnected() && isPostgresConnected()`. It becomes the Postgres
+     * check alone when Task 13 ports that model.
+     */
+    if (!isDatabaseConnected() || !isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 

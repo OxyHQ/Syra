@@ -36,12 +36,12 @@
  * `schema/podcasts.ts`) — CASCADE, matching `RELATIONS.md`'s
  * `Library.subscribedPodcasts[] -> podcasts` entry. It also keeps its own
  * standalone index regardless of the FK, because `services/notifications/
- * triggers/episodePublished.ts` reverse-joins it (`find({ subscribedPodcasts:
- * episode.podcastId })`, fan-out to every subscriber on a new episode — still
- * a Mongoose read, since this is the one junction Task 11 could not port) —
- * the one junction of the five with a real reverse-read, not
- * just the forward "this user's list" one every `unique(oxy_user_id, *_id)`
- * already serves as a leading-column index.
+ * triggers/episodePublished.ts` reverse-joins it (`listSubscriberIds`, the
+ * fan-out to every subscriber on a new episode) — the one junction of the five
+ * with a real reverse-read, not just the forward "this user's list" one every
+ * `unique(oxy_user_id, *_id)` already serves as a leading-column index. This
+ * was the one junction Task 11 could not port, because its writer was still
+ * Mongoose; Task 12 moved both.
  *
  * ## The five junctions carry `created_at`, and it is not decoration
  *
@@ -57,10 +57,12 @@
  * anything this schema promises. Task 11 added the column rather than lean on
  * that.
  *
- * `user_podcast_subscriptions` gets it too, though its writer
- * (`controllers/podcasts.controller.ts`) is still Mongoose and Task 12 owns
- * that port: five sibling tables that differ in shape for no reason a reader
- * can see is how a schema starts drifting.
+ * `user_podcast_subscriptions` got it too, at a point when its writer
+ * (`controllers/podcasts.controller.ts`) was still Mongoose and could not use
+ * it: five sibling tables that differ in shape for no reason a reader can see
+ * is how a schema starts drifting. Task 12 ported that writer, and
+ * `listSubscribedPodcastIds` orders by this column exactly as the four
+ * siblings do.
  *
  * ## `Playlist.sources[]` — the fourth sibling
  *

@@ -2,10 +2,16 @@ import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import mongoose from 'mongoose';
 import { connect, clear, disconnect } from '../test/mongo';
 import { CatalogEntityModel, ArtistModel, PersonModel } from '../models/CatalogEntity';
-import { PodcastModel } from '../models/Podcast';
-import { EpisodeModel } from '../models/Episode';
 import { migrateArtistsToCatalogEntities } from './migrateArtistsToCatalogEntities';
-import { reseedPersons } from './reseedPersons';
+
+/**
+ * The `reseedPersons` half of this file MOVED to `reseedPersons.test.ts` in Task
+ * 12, and it had to: that script reads `podcast_persons`/`episode_persons` and
+ * writes `catalog_entities`, all Postgres, while `migrateArtistsToCatalogEntities`
+ * below is a Mongo-only collection rename that has no Postgres side at all. One
+ * file cannot own both `beforeAll(connect)` and `beforeAll(connectDb)` without
+ * every case paying for a database it does not use.
+ */
 
 beforeAll(connect);
 afterEach(clear);
@@ -50,35 +56,5 @@ describe('migrateArtistsToCatalogEntities', () => {
     await migrateArtistsToCatalogEntities(); // again
 
     expect(await ArtistModel.countDocuments({})).toBe(1);
-  });
-});
-
-describe('reseedPersons', () => {
-  it('drops name-only persons, keeps Oxy-linked, re-derives from credits', async () => {
-    // Pre-existing persons: one name-only (should drop), one Oxy-linked (should keep).
-    await PersonModel.create({ name: 'Stale RSS Person' });
-    await PersonModel.create({ name: 'Creator Oxy Person', linkedOxyUserId: 'oxy-keep' });
-
-    // Credits to re-derive from.
-    await PodcastModel.create({
-      title: 'Show', source: 'rss', feedUrl: 'https://f/s.xml', status: 'active',
-      persons: [{ name: 'Channel Host', role: 'host' }],
-    });
-    await EpisodeModel.create({
-      podcastId: new mongoose.Types.ObjectId(), podcastTitle: 'Show', title: 'Ep',
-      guid: 'g1', pubDate: new Date(), source: 'rss', enclosureUrl: 'https://x/1.mp3', status: 'ready',
-      persons: [{ name: 'Episode Guest', role: 'guest' }],
-    });
-
-    const stats = await reseedPersons();
-
-    expect(stats.deleted).toBe(1); // only the name-only RSS person dropped
-    expect(stats.creditsReplayed).toBe(2);
-
-    // Oxy-linked kept, channel + episode credits derived; stale one not duplicated.
-    const names = (await PersonModel.find({}).lean()).map((p) => p.name).sort();
-    expect(names).toEqual(['Channel Host', 'Creator Oxy Person', 'Episode Guest']);
-    // Every person row is type:'person'.
-    expect(await ArtistModel.countDocuments({})).toBe(0);
   });
 });

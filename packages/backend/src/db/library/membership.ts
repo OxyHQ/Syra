@@ -3,12 +3,12 @@
  * `UserLibrary`'s arrays.
  *
  * `models/Library.ts` held one document per user carrying five string arrays.
- * Four of them are ported here as real junction tables; the fifth,
- * `subscribedPodcasts`, stays on Mongoose because `user_podcast_subscriptions`
- * references `podcasts`, whose rows are still written by
- * `controllers/podcasts.controller.ts` (Task 12) — a drizzle insert would fail
- * `23503` against an empty table. `db/catalog/hybridServices.ts` carries the
- * registry entry that records it.
+ * Four of them are ported here as real junction tables. The fifth,
+ * `subscribedPodcasts`, could not move with them — `user_podcast_subscriptions`
+ * references `podcasts`, and nothing wrote that table yet, so a drizzle insert
+ * would have failed `23503` against an empty one. Task 12 ported its writer and
+ * took the array with it; it lives in `db/podcasts/subscriptions.ts` rather than
+ * here, beside the rest of that vertical, and `models/Library.ts` is deleted.
  *
  * ## What `$addToSet` promised and a unique constraint delivers
  *

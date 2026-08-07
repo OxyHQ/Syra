@@ -1,22 +1,28 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
-import mongoose from 'mongoose';
 import { uuidv7 } from '@oxyhq/db';
 import type { Request, Response, NextFunction } from 'express';
 import { normalizeNameKey } from '@syra/shared-types';
-import { connect, clear, disconnect } from '../test/mongo';
+import { clear, connect, disconnect } from '../test/mongo';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
 import { catalogEntities, tracks } from '../db/schema/catalog';
-import { PodcastModel } from '../models/Podcast';
-import { EpisodeModel } from '../models/Episode';
+import { episodePersons, episodes, podcastPersons, podcasts } from '../db/schema/podcasts';
 import { getEntityProfile } from './entityProfile.controller';
 import type { EntityProfile } from '@syra/shared-types';
 
 /**
- * BOTH databases: `catalog_entities` and `tracks` are Postgres; `Podcast` and
- * `Episode` — which is what `appearsIn` is built from — are Task 12's and still
- * Mongoose. This handler spanning the two is the whole reason it is worth
- * testing at the controller level rather than only in the services.
+ * STILL both databases, though for a different reason than before.
+ *
+ * `catalog_entities` and `tracks` were already Postgres, and Task 12 took
+ * `podcasts`/`episodes` and their credit tables with them — so the `appearsIn`
+ * shelf this file mostly exercises is single-store now. What keeps Mongo here is
+ * indirect and does not appear anywhere in the controller's own imports:
+ * `loadArtistSections` reaches `services/catalog/artistProfile.ts`, which reads
+ * `ContributionAttestationModel` (Task 13's, a registered hybrid).
+ *
+ * Dropping `connect()` does not fail loudly — Mongoose BUFFERS a query with no
+ * connection — so the two artist-branch cases below simply hang until the 5s
+ * test timeout. Verified by removing it.
  */
 beforeAll(async () => {
   await connect();
@@ -92,6 +98,47 @@ async function makePerson(name: string, linkedArtistId?: string): Promise<string
   return person.id;
 }
 
+/**
+ * A show crediting one person by NAME.
+ *
+ * The credits are `podcast_persons` rows now, not an embedded array, so a
+ * fixture has to create the child row explicitly — and `position` is required,
+ * because that column is what preserves the order the Mongo array had.
+ */
+async function makeShowCrediting(title: string, feedUrl: string, personName: string): Promise<string> {
+  const id = uuidv7();
+  await getDb().insert(podcasts).values({ id, title, source: 'rss', feedUrl, status: 'active' });
+  await getDb()
+    .insert(podcastPersons)
+    .values({ podcastId: id, position: 0, name: personName, role: 'host' });
+  return id;
+}
+
+/** An episode on `podcastId`, crediting one person by name. */
+async function makeEpisodeCrediting(
+  podcastId: string,
+  podcastTitle: string,
+  title: string,
+  personName: string
+): Promise<string> {
+  const id = uuidv7();
+  await getDb().insert(episodes).values({
+    id,
+    podcastId,
+    podcastTitle,
+    title,
+    guid: id,
+    pubDate: new Date(),
+    source: 'rss',
+    enclosureUrl: `https://x/${id}.mp3`,
+    status: 'ready',
+  });
+  await getDb()
+    .insert(episodePersons)
+    .values({ episodeId: id, position: 0, name: personName, role: 'guest' });
+  return id;
+}
+
 function bodyData(res: CapturedRes): EntityProfile {
   return (res._body as { data: EntityProfile }).data;
 }
@@ -106,15 +153,8 @@ describe('GET /api/p/:id — unified entity profile', () => {
     await seedPlayableTrack(artistId, 'Jane Track');
     // A Person linked to this artist drives the podcast appearances.
     await makePerson('Jane Music', artistId);
-    await PodcastModel.create({
-      title: 'Jane Talks', source: 'rss', feedUrl: 'https://f/jane.xml', status: 'active',
-      persons: [{ name: 'Jane Music', role: 'host' }],
-    });
-    await EpisodeModel.create({
-      podcastId: new mongoose.Types.ObjectId(), podcastTitle: 'Jane Talks', title: 'Ep with Jane',
-      guid: 'je1', pubDate: new Date(), source: 'rss', enclosureUrl: 'https://x/je1.mp3', status: 'ready',
-      persons: [{ name: 'Jane Music', role: 'guest' }],
-    });
+    const showId = await makeShowCrediting('Jane Talks', 'https://f/jane.xml', 'Jane Music');
+    await makeEpisodeCrediting(showId, 'Jane Talks', 'Ep with Jane', 'Jane Music');
 
     const res = makeRes();
     await getEntityProfile(makeReq(artistId), res as unknown as Response, failNext);
@@ -138,10 +178,7 @@ describe('GET /api/p/:id — unified entity profile', () => {
     const artistId = await makeArtist('Linked Band');
     await seedPlayableTrack(artistId, 'Band Track');
     const personId = await makePerson('Guest Joe', artistId);
-    await PodcastModel.create({
-      title: 'Joe Show', source: 'rss', feedUrl: 'https://f/joe.xml', status: 'active',
-      persons: [{ name: 'Guest Joe', role: 'guest' }],
-    });
+    await makeShowCrediting('Joe Show', 'https://f/joe.xml', 'Guest Joe');
 
     const res = makeRes();
     await getEntityProfile(makeReq(personId), res as unknown as Response, failNext);
@@ -157,10 +194,7 @@ describe('GET /api/p/:id — unified entity profile', () => {
 
   it('person with no linked artist → appearsIn only, no music', async () => {
     const personId = await makePerson('Solo Host');
-    await PodcastModel.create({
-      title: 'Solo Show', source: 'rss', feedUrl: 'https://f/solo.xml', status: 'active',
-      persons: [{ name: 'Solo Host', role: 'host' }],
-    });
+    await makeShowCrediting('Solo Show', 'https://f/solo.xml', 'Solo Host');
 
     const res = makeRes();
     await getEntityProfile(makeReq(personId), res as unknown as Response, failNext);
@@ -169,6 +203,46 @@ describe('GET /api/p/:id — unified entity profile', () => {
     expect(data.kind).toBe('person');
     expect(data.appearsIn?.podcasts).toHaveLength(1);
     expect(data.music).toBeUndefined();
+  });
+
+  it('an episode of an UNPUBLISHED show drops out of appearsIn', async () => {
+    /**
+     * The show-visibility rule inside the `appearsIn` shelf.
+     *
+     * Both episodes are `status: 'ready'` RSS episodes with an enclosure, and
+     * both credit the same person, so the only thing separating them is their
+     * SHOW's status — which is what `publiclyPlayableEpisodeFilter`'s semi-join
+     * decides. Without a fixture on the hidden side, dropping that half of the
+     * predicate would pass every other case in this file.
+     */
+    const personId = await makePerson('Shelf Host');
+    const active = await makeShowCrediting('Live Show', 'https://f/live.xml', 'Shelf Host');
+    await makeEpisodeCrediting(active, 'Live Show', 'Still listed', 'Shelf Host');
+
+    const hidden = uuidv7();
+    await getDb().insert(podcasts).values({
+      id: hidden, title: 'Pulled Show', source: 'rss', feedUrl: 'https://f/pulled.xml',
+      status: 'unavailable',
+    });
+    // The hidden show has to CREDIT the person too, or its absence from the
+    // `podcasts` half below would prove nothing about the show filter.
+    await getDb()
+      .insert(podcastPersons)
+      .values({ podcastId: hidden, position: 0, name: 'Shelf Host', role: 'host' });
+    await makeEpisodeCrediting(hidden, 'Pulled Show', 'Hidden with its show', 'Shelf Host');
+
+    const res = makeRes();
+    await getEntityProfile(makeReq(personId), res as unknown as Response, failNext);
+
+    const data = bodyData(res);
+    expect(data.appearsIn?.episodes?.map((episode) => episode.title)).toEqual(['Still listed']);
+    // The SHOW itself is still listed — `status <> 'removed'` for shows, not
+    // `= 'active'`, so unpublishing hides a show's episodes from other people's
+    // profiles without erasing the credit itself.
+    expect(data.appearsIn?.podcasts?.map((show) => show.title).sort()).toEqual([
+      'Live Show',
+      'Pulled Show',
+    ]);
   });
 
   it('unknown id → 404', async () => {

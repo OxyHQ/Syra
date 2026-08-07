@@ -17,7 +17,8 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { Readable } from 'stream';
-import { EpisodeModel, IEpisode } from '../../models/Episode';
+import { findEpisodeById, setEpisodeHls, setEpisodeStatus } from '../../db/podcasts/episodes';
+import type { EpisodeRow } from '../../db/podcasts/serialize';
 import { logger } from '../../utils/logger';
 import { getS3HlsKey, getS3PodcastEpisodeAudioKey } from '../../config/s3.config';
 import { streamFromS3 } from '../s3Service';
@@ -33,7 +34,7 @@ export interface EpisodeFetchSourceResult {
 }
 
 export interface IngestEpisodeDeps {
-  fetchSource?: (episode: IEpisode) => Promise<EpisodeFetchSourceResult>;
+  fetchSource?: (episode: EpisodeRow) => Promise<EpisodeFetchSourceResult>;
   packageHls?: (opts: PackageOptions) => Promise<PackageResult>;
   storeHls?: (result: PackageResult, target: StoreHlsTarget) => Promise<StoredHls>;
   keyUri?: string;
@@ -41,20 +42,22 @@ export interface IngestEpisodeDeps {
 
 // ── Default fetchSource: stream the uploaded source from S3 to a temp file ─────
 
-async function defaultFetchSource(episode: IEpisode): Promise<EpisodeFetchSourceResult> {
-  if (!episode.audioSource) {
-    throw new Error(`ingestEpisode: no source audio for episode ${episode._id.toString()}`);
+async function defaultFetchSource(episode: EpisodeRow): Promise<EpisodeFetchSourceResult> {
+  // `audioSource` was one optional subdocument; `schema/podcasts.ts` flattened
+  // it onto four nullable columns, and `format` is the one the S3 key needs.
+  if (!episode.audioSourceFormat) {
+    throw new Error(`ingestEpisode: no source audio for episode ${episode.id}`);
   }
 
   const s3Key = getS3PodcastEpisodeAudioKey(
-    episode._id.toString(),
-    episode.podcastId.toString(),
-    episode.audioSource.format,
+    episode.id,
+    episode.podcastId,
+    episode.audioSourceFormat,
   );
   const { stream } = await streamFromS3(s3Key);
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'episode-src-'));
-  const localPath = path.join(tmpDir, `source.${episode.audioSource.format}`);
+  const localPath = path.join(tmpDir, `source.${episode.audioSourceFormat}`);
 
   await new Promise<void>((resolve, reject) => {
     const dest = fs.createWriteStream(localPath);
@@ -73,21 +76,19 @@ async function defaultFetchSource(episode: IEpisode): Promise<EpisodeFetchSource
 // ── Main job ───────────────────────────────────────────────────────────────────
 
 export async function ingestEpisode(episodeId: string, deps?: IngestEpisodeDeps): Promise<void> {
-  const episode = await EpisodeModel.findById(episodeId);
+  const episode = await findEpisodeById(episodeId);
   if (!episode) {
     throw new Error(`ingestEpisode: episode not found: ${episodeId}`);
   }
 
-  if (!episode.audioSource) {
-    episode.status = 'failed';
-    await episode.save().catch((saveErr) =>
+  if (!episode.audioSourceUrl || !episode.audioSourceFormat) {
+    await setEpisodeStatus(episodeId, 'failed').catch((saveErr) =>
       logger.error('[podcasts] failed to persist failed episode status', { episodeId, err: saveErr }),
     );
     throw new Error(`ingestEpisode: no source audio for episode ${episodeId}`);
   }
 
-  episode.status = 'processing';
-  await episode.save();
+  await setEpisodeStatus(episodeId, 'processing');
 
   const fetchSource = deps?.fetchSource ?? defaultFetchSource;
   const packageHls = deps?.packageHls ?? packageToEncryptedHls;
@@ -109,16 +110,16 @@ export async function ingestEpisode(episodeId: string, deps?: IngestEpisodeDeps)
     const stored = await doStoreHls(result, {
       kind: 'episode',
       recordId: episodeId,
-      buildKey: (relPath) => getS3HlsKey(episode.podcastId.toString(), episodeId, relPath),
+      buildKey: (relPath) => getS3HlsKey(episode.podcastId, episodeId, relPath),
     });
 
-    episode.hls = stored.hls;
-    episode.hlsMasterKey = stored.hlsMasterKey;
-    episode.status = 'ready';
-    await episode.save();
+    // The ladder is `episode_hls_renditions` now, so the master key and the
+    // rendition rows are two statements — written in ONE transaction, together
+    // with the `ready` status, because an episode advertising a master playlist
+    // whose variants never landed is a 404 mid-playback.
+    await setEpisodeHls(episodeId, stored.hlsMasterKey, stored.hls);
   } catch (err) {
-    episode.status = 'failed';
-    await episode.save().catch((saveErr) =>
+    await setEpisodeStatus(episodeId, 'failed').catch((saveErr) =>
       logger.error('[podcasts] failed to persist failed episode status', { episodeId, err: saveErr }),
     );
     logger.error('[podcasts] episode ingest failed', { episodeId, err });

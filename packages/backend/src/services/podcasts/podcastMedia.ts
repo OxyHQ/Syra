@@ -12,7 +12,7 @@
  * never blindly overwrite. `imageId !== previousImageId` signals a change.
  */
 
-import mongoose from 'mongoose';
+import { isLiveEntityId } from '@oxyhq/db';
 import type { CatalogImageSizes, PodcastSource } from '@syra/shared-types';
 import { mirrorCatalogImage } from '../catalog/catalogImageAssets';
 
@@ -40,10 +40,19 @@ export async function rehostPodcastImage(
     existingImageSizes?: CatalogImageSizes;
   },
 ): Promise<RehostedImage | undefined> {
-  const existingImageId =
-    opts.existingImageId && mongoose.Types.ObjectId.isValid(opts.existingImageId)
-      ? opts.existingImageId
-      : undefined;
+  /**
+   * `isLiveEntityId`, not `ObjectId.isValid`.
+   *
+   * This schema stores ids in TWO shapes — a 24-char ObjectId hex for every row
+   * that predates the cutover, and a uuid v7 for every row created since. The
+   * ObjectId-only test therefore returned `undefined` for every image minted
+   * after the cutover, which silently disabled the idempotent "unchanged image"
+   * path: `mirrorCatalogImage` re-downloads, re-processes and re-uploads the
+   * artwork on EVERY crawl of every feed, and the caller sees `image !==
+   * previousImageId` and replaces the extracted colors each time. Same defect,
+   * and the same fix, as `db/catalog/serialize.ts`'s `normalizeImageRef`.
+   */
+  const existingImageId = isLiveEntityId(opts.existingImageId) ? opts.existingImageId : undefined;
 
   const asset = await mirrorCatalogImage([{ url: externalUrl }], {
     provider: opts.source,
