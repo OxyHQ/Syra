@@ -1,6 +1,6 @@
 import { isPostgresConnected } from '../db/postgres';
 import { Request, Response, NextFunction } from 'express';
-import mongoose from 'mongoose';
+import { isLiveEntityId } from '@oxyhq/db';
 import { logger } from '../utils/logger';
 import { getErrorMessage } from '../utils/error';
 import { getParam } from '../utils/reqParams';
@@ -80,11 +80,24 @@ export const getImage = async (req: Request, res: Response, next: NextFunction) 
 
     const id = getParam(req, 'id');
 
-    // Validate ObjectId format (24 hex characters)
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ 
-        error: 'Invalid image ID', 
-        message: 'Image ID must be a valid MongoDB ObjectId' 
+    /**
+     * BOTH live id shapes, not the 24-hex one alone.
+     *
+     * This endpoint SERVES what `uploadImage` above mints, and that id comes
+     * from `services/imageAssetService.ts`, which mints a uuid v7. A
+     * `mongoose.Types.ObjectId.isValid` guard here therefore 400'd every image
+     * uploaded since the cutover — including the `/api/images/<id>` URLs
+     * `db/catalog/serialize.ts` puts on every cover art it serialises, so a
+     * 201 from the upload endpoint produced a URL this endpoint refused.
+     *
+     * `playlists.controller` fixed the same guard on the WRITE side (validating
+     * a client-supplied `coverArt`); this is the read side of that one id
+     * space, and it outlived that fix.
+     */
+    if (!isLiveEntityId(id)) {
+      return res.status(400).json({
+        error: 'Invalid image ID',
+        message: 'Image ID is not a valid image identifier'
       });
     }
 

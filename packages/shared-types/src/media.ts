@@ -51,7 +51,6 @@ export type MediaMetadata = z.infer<typeof mediaMetadataSchema>;
 
 export const mediaSchema = z.object({
   id: z.string(),
-  _id: z.string().optional(),
   type: mediaTypeSchema,
   status: mediaStatusSchema,
   url: z.string(),

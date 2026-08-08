@@ -26,7 +26,6 @@ export type AlbumExternalIds = z.infer<typeof albumExternalIdsSchema>;
 
 export const albumSchema = timestampsSchema.extend({
   id: z.string(),
-  _id: z.string().optional(),
   title: z.string(),
   artistId: z.string(),
   artistName: z.string(),

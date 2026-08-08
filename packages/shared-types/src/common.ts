@@ -1,3 +1,29 @@
+/**
+ * Shapes shared by every Syra DTO.
+ *
+ * ## A row's id is spelled `id`, and only `id`
+ *
+ * Thirteen DTOs across this package carried `_id: z.string().optional()`
+ * alongside a required `id`. That pair dates from the Mongo era, when a handler
+ * could return a Mongoose document whose id was `_id` — the optional `_id` was
+ * the contract admitting it did not know which spelling it would get.
+ *
+ * Both halves of that are now gone. Every vertical is on Postgres, where the
+ * primary key column is literally named `id`, and the serializers name their
+ * output keys explicitly. So `_id` described a shape nothing produced: a field
+ * clients could read, could not rely on, and would always find absent.
+ *
+ * It is removed rather than deprecated. Leaving it optional would be a compat
+ * alias for a document type that no longer exists, and an optional field nobody
+ * emits is indistinguishable to a client from one the server merely forgot —
+ * which is worse than no field, because it invites a `?? _id` fallback that can
+ * never fire.
+ *
+ * The rule this leaves: a DTO names a row's id `id`. If a new DTO needs a
+ * SECOND id, it names what that id points AT (`trackId`, `coverArt`), never a
+ * second spelling of its own.
+ */
+
 import { z } from 'zod';
 
 export const coordinatesSchema = z.object({

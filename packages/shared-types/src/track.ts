@@ -355,7 +355,6 @@ export const releaseEditionFields = {
 export const trackSchema = timestampsSchema.extend({
   ...releaseEditionFields,
   id: z.string(),
-  _id: z.string().optional(),
   title: z.string(),
   artistId: z.string(),
   artistName: z.string(),

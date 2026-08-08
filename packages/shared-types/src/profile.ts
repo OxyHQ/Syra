@@ -86,7 +86,6 @@ export type ProfileStats = z.infer<typeof profileStatsSchema>;
 
 export const profileSchema = z.object({
   id: z.string(),
-  _id: z.string().optional(),
   oxyUserId: z.string(),
   profileType: profileTypeSchema,
   isPrimary: z.boolean(),

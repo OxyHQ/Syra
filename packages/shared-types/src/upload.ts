@@ -159,7 +159,6 @@ export const userUploadSchema = timestampsSchema.extend({
   ...releaseEditionFields,
 
   id: z.string(),
-  _id: z.string().optional(),
   ownerOxyUserId: z.string(),
 
   title: z.string(),
@@ -502,7 +501,6 @@ export type UploadOutcome = z.infer<typeof uploadOutcomeSchema>;
  */
 export const contributionAttestationSchema = timestampsSchema.extend({
   id: z.string(),
-  _id: z.string().optional(),
   trackId: z.string(),
   uploaderOxyUserId: z.string(),
   statement: z.string(),

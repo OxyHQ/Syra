@@ -6,12 +6,14 @@
  * survive the port unchanged, and both are stated here rather than left to be
  * discovered from a diff:
  *
- *  - **`_id` becomes `id`.** Every ported vertical emits `id`
- *    (`@syra/shared-types`' own DTOs make `id` required and `_id` merely
- *    optional), and the `rooms`/`houses`/`series`/`recordings` primary key is
- *    literally named `id`. Emitting `_id` would mean carrying a compat alias
- *    forward for a document type that no longer exists. The three frontend call
- *    sites that read `room._id` move with this change.
+ *  - **`_id` becomes `id`.** Every ported vertical emits `id`, and the
+ *    `rooms`/`houses`/`series`/`recordings` primary key is literally named
+ *    `id`. Emitting `_id` would mean carrying a compat alias forward for a
+ *    document type that no longer exists. The three frontend call sites that
+ *    read `room._id` move with this change. `@syra/shared-types`' DTOs no
+ *    longer declare `_id` at all — it was optional alongside a required `id`
+ *    while both spellings were live, and Task 16 removed it once nothing
+ *    emitted it, so the contract now has exactly one name for a row's id.
  *  - **`topicId` is gone from `PUBLIC_ROOM_FIELDS`.** It named a dropped column
  *    (`schema/rooms.ts` records why: a `ref: 'Topic'` against a model this repo
  *    does not have, `undefined` on every document ever written). Keeping the

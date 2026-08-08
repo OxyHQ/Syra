@@ -59,7 +59,6 @@ export type EpisodePerson = z.infer<typeof episodePersonSchema>;
 
 export const episodeSchema = timestampsSchema.extend({
   id: z.string(),
-  _id: z.string().optional(),
   podcastId: z.string(),
   podcastTitle: z.string(),
   title: z.string(),
