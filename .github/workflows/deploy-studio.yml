@@ -8,6 +8,10 @@ on:
       - '.github/workflows/deploy-studio.yml'
       - 'packages/studio/**'
       - 'packages/shared-types/**'
+      # Bundled `workspace:*` dependency — same reason as
+      # `deploy-frontends.yml`, where omitting it meant an SDK-only fix did not
+      # deploy and had to be dispatched by hand.
+      - 'packages/sdk/**'
       - 'package.json'
       - 'bun.lock'
 

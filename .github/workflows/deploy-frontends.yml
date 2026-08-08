@@ -8,6 +8,14 @@ on:
       - '.github/workflows/deploy-frontends.yml'
       - 'packages/frontend/**'
       - 'packages/shared-types/**'
+      # `@syra.fm/sdk` is a `workspace:*` dependency the app BUNDLES, so a change
+      # to it ships inside this deploy — but it was missing here, and the gap is
+      # not theoretical: the PostgreSQL migration's wire-contract change made
+      # `id` required on `ZRoom` while `validateRooms` DROPS what it cannot
+      # parse, so an SDK-only fix had to be dispatched by hand while the Live
+      # screen sat empty in production. A path filter that omits a bundled
+      # workspace package does not fail — it silently does not deploy.
+      - 'packages/sdk/**'
       - 'package.json'
       - 'bun.lock'
 
