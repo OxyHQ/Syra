@@ -69,21 +69,23 @@ export const EmptyState = memo<EmptyStateProps>(
         // Error state with retry
         if (error) {
             return (
-                <View
+                <View className="bg-background"
                     style={flattenStyleArray([
                         styles.errorContainer,
-                        { backgroundColor: theme.colors.background },
                         containerStyle,
                     ])}
                 >
                     <View style={styles.errorContent}>
                         {icon && (
                             <View
+                                // `bg-error/10` rather than `theme.colors.error + '15'`: a
+                                // hex-alpha suffix on a Bloom token yields a malformed colour
+                                // react-native-web reads as fully OPAQUE. A caller-supplied
+                                // `icon.backgroundColor` still wins — inline beats class.
+                                className={icon.backgroundColor ? undefined : 'bg-error/10'}
                                 style={[
                                     styles.iconWrapper,
-                                    {
-                                        backgroundColor: icon.backgroundColor || theme.colors.error + '15',
-                                    },
+                                    icon.backgroundColor ? { backgroundColor: icon.backgroundColor } : null,
                                 ]}
                             >
                                 <Ionicons
@@ -94,20 +96,18 @@ export const EmptyState = memo<EmptyStateProps>(
                             </View>
                         )}
 
-                        <Text
+                        <Text className="text-foreground"
                             style={flattenStyleArray([
                                 styles.errorTitle,
-                                { color: theme.colors.text },
                                 titleStyle,
                             ])}
                         >
                             {error.title}
                         </Text>
 
-                        <Text
+                        <Text className="text-muted-foreground"
                             style={flattenStyleArray([
                                 styles.errorMessage,
-                                { color: theme.colors.textSecondary },
                                 subtitleStyle,
                             ])}
                         >
@@ -140,10 +140,9 @@ export const EmptyState = memo<EmptyStateProps>(
                                             color={theme.colors.card}
                                             style={styles.retryIcon}
                                         />
-                                        <Text
+                                        <Text className="text-card"
                                             style={[
                                                 styles.retryButtonText,
-                                                { color: theme.colors.card },
                                             ]}
                                         >
                                             {t('common.tryAgain')}
@@ -163,10 +162,9 @@ export const EmptyState = memo<EmptyStateProps>(
         }
 
         return (
-            <View
+            <View className="bg-background"
                 style={flattenStyleArray([
                     styles.emptyState,
-                    { backgroundColor: theme.colors.background },
                     containerStyle,
                 ])}
                 accessible={accessible}
@@ -193,10 +191,9 @@ export const EmptyState = memo<EmptyStateProps>(
                 )}
 
                 {title && (
-                    <Text
+                    <Text className="text-foreground"
                         style={flattenStyleArray([
                             styles.emptyStateText,
-                            { color: theme.colors.text },
                             titleStyle,
                         ])}
                     >
@@ -205,10 +202,9 @@ export const EmptyState = memo<EmptyStateProps>(
                 )}
 
                 {subtitle && (
-                    <Text
+                    <Text className="text-muted-foreground"
                         style={flattenStyleArray([
                             styles.emptyStateSubtext,
-                            { color: theme.colors.textSecondary },
                             subtitleStyle,
                         ])}
                     >
@@ -217,10 +213,9 @@ export const EmptyState = memo<EmptyStateProps>(
                 )}
 
                 {action && (
-                    <TouchableOpacity
+                    <TouchableOpacity className="bg-primary"
                         style={[
                             styles.actionButton,
-                            { backgroundColor: theme.colors.primary },
                         ]}
                         onPress={action.onPress}
                         activeOpacity={0.8}
@@ -233,10 +228,9 @@ export const EmptyState = memo<EmptyStateProps>(
                                 style={styles.actionIcon}
                             />
                         )}
-                        <Text
+                        <Text className="text-card"
                             style={[
                                 styles.actionButtonText,
-                                { color: theme.colors.card },
                             ]}
                         >
                             {action.label}

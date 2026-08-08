@@ -88,9 +88,14 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
 
   return (
     <Pressable
+      className={isCurrentTrack ? 'bg-surface/25' : undefined}
       style={[
         styles.trackRow,
-        isCurrentTrack && { backgroundColor: theme.colors.backgroundSecondary + '40' },
+        // `bg-surface/25`, never `theme.colors.backgroundSecondary + '40'`: an accent
+        // role resolves to `rgb(...)`, so a hex-alpha suffix yields a malformed colour
+        // that react-native-web parses back as fully OPAQUE — the row would hide the
+        // art behind it instead of tinting.
+        undefined,
         ...Platform.select({
           web: [webViewStyle({ cursor: 'pointer' })],
           default: [],

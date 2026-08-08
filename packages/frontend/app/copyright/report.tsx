@@ -239,7 +239,7 @@ const CopyrightReportScreen: React.FC = () => {
 
             {/* Selected Track */}
             {selectedTrack && (
-              <View style={[styles.selectedTrack, { backgroundColor: theme.colors.primary + '20', borderColor: theme.colors.primary }]}>
+              <View className="bg-primary/10 border-primary" style={styles.selectedTrack}>
                 <View style={styles.selectedTrackInfo}>
                   <MaterialCommunityIcons
                     name="music"

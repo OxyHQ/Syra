@@ -333,10 +333,9 @@ const AlbumView: React.FC<AlbumViewProps> = ({
 
           {/* Playback Controls */}
           <View style={styles.controlsContainer}>
-            <Pressable
+            <Pressable className="bg-primary"
               style={[
                 styles.playButton,
-                { backgroundColor: theme.colors.primary },
                 !canPlay && styles.disabledControl,
               ]}
               onPress={onPlayAlbum}
@@ -428,11 +427,11 @@ const AlbumView: React.FC<AlbumViewProps> = ({
             const isLiked = isTrackLiked(track.id);
 
             return (
-              <Pressable
+              <Pressable className={isCurrentTrack ? 'bg-surface/25' : undefined}
                 key={track.id}
                 style={[
                   styles.trackRow,
-                  isCurrentTrack && { backgroundColor: theme.colors.backgroundSecondary + '40' },
+                  undefined,
                 ]}
                 onPress={() => onTrackPress(track)}
               >

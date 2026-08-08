@@ -152,17 +152,15 @@ export const Slider: React.FC<SliderProps> = ({
             widthSV.value = newWidth;
           }}
         >
-          <View
+          <View className="bg-border"
             style={[
               styles.track,
-              { backgroundColor: theme.colors.border },
               disabled && { opacity: 0.5 },
             ]}
           />
-          <Animated.View
+          <Animated.View className="bg-primary"
             style={[
               styles.fill,
-              { backgroundColor: theme.colors.primary },
               disabled && { opacity: 0.5 },
               fillStyle,
             ]}

@@ -376,10 +376,9 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
 
             {/* Right side - Controls */}
             <View style={styles.stickyHeaderControls}>
-              <Pressable
+              <Pressable className="bg-primary"
                 style={[
                   styles.stickyHeaderPlayButton,
-                  { backgroundColor: theme.colors.primary },
                   !canPlay && styles.disabledControl,
                 ]}
                 onPress={onPlayPlaylist}
@@ -514,10 +513,9 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
 
             {/* Playback Controls */}
             <View style={styles.controlsContainer}>
-              <Pressable
+              <Pressable className="bg-primary"
                 style={[
                   styles.playButton,
-                  { backgroundColor: theme.colors.primary },
                   !canPlay && styles.disabledControl,
                 ]}
                 onPress={onPlayPlaylist}

@@ -308,16 +308,12 @@ const SearchScreen: React.FC = () => {
               <Pressable
                 key={category.value}
                 onPress={() => handleCategoryChange(category.value)}
-                style={[
-                  styles.categoryTab,
-                  activeCategory === category.value && {
-                    backgroundColor: theme.colors.primary + '20',
-                    borderColor: theme.colors.primary,
-                  },
-                  !(activeCategory === category.value) && {
-                    borderColor: 'transparent',
-                  },
-                ]}
+                className={
+                  activeCategory === category.value
+                    ? 'bg-primary/10 border-primary'
+                    : 'border-transparent'
+                }
+                style={styles.categoryTab}
               >
                 <Text
                   style={[

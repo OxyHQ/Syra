@@ -95,11 +95,11 @@ const EpisodeRowComponent: React.FC<EpisodeRowProps> = ({
   }, [episode.pubDate, episode.duration, completed, hasProgress, progress]);
 
   return (
-    <Pressable
+    <Pressable className={isCurrent ? 'bg-surface/25' : undefined}
       onPress={onPress}
       style={[
         styles.row,
-        isCurrent && { backgroundColor: theme.colors.backgroundSecondary + '40' },
+        undefined,
         ...Platform.select({ web: [webViewStyle({ cursor: 'pointer' })], default: [] }),
       ]}
     >
