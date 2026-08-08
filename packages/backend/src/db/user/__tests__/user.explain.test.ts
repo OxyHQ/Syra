@@ -181,6 +181,21 @@ const PROBES: readonly { readonly name: string; readonly sql: string }[] = [
           where expires_at <= now() - make_interval(secs => 0) limit 1000`,
   },
   {
+    // Task 8's two, both `retentionSeconds: 0` for the same reason: the WRITER
+    // computes `expires_at` from the package's own retention window, so the
+    // column already holds the deadline. The tables are
+    // @oxyhq/crowdsource-app's; the INDEX is in Syra's migration, which is
+    // what makes this Syra's probe to run.
+    name: 'sweep_moderation_outbox',
+    sql: `select ctid from moderation_outbox
+          where expires_at <= now() - make_interval(secs => 0) limit 1000`,
+  },
+  {
+    name: 'sweep_moderation_events',
+    sql: `select ctid from moderation_events
+          where expires_at <= now() - make_interval(secs => 0) limit 1000`,
+  },
+  {
     /**
      * The control. `listening_events.listened_sec` carries no index, so this
      * MUST still report a Seq Scan under `enable_seqscan = off` — otherwise
@@ -434,6 +449,13 @@ describe('the expiry sweep is a range scan on every registered target', () => {
   const SWEEP_INDEXES: Readonly<Record<string, string>> = {
     listening_events: 'listening_events_played_at_idx',
     notification_suppressions: 'notification_suppressions_expires_at_idx',
+    // Task 8's two. They are @oxyhq/crowdsource-app's tables, but the sweep
+    // runs against SYRA's catalogue and the index is in Syra's migration, so
+    // the probe belongs here with the rest — a package that stopped declaring
+    // the index would otherwise cost a full scan of both tables on every tick
+    // with nothing in this repo saying so.
+    moderation_outbox: 'moderation_outbox_expires_at_idx',
+    moderation_events: 'moderation_events_expires_at_idx',
   };
 
   it('probed every registered target', () => {

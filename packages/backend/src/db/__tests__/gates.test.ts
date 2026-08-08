@@ -2996,14 +2996,6 @@ describe('rooms and live schema (Task 6)', () => {
   });
 });
 
-/**
- * Sentinel `port` value for a Mongoose TTL index whose Postgres table has not
- * landed yet. A plain string rather than a `null` so the intent reads at the
- * call site, and compared by identity below — an entry carrying it is NOT
- * counted as covered by the registry.
- */
-const DEFERRED_TO_TASK_8 = 'DEFERRED: Task 8, the moderation vertical';
-
 describe('user, taste and listening schema (Task 7)', () => {
   /** Every table `schema/user.ts` promises, by SQL name. */
   const EXPECTED_TABLES = [
@@ -3046,154 +3038,7 @@ describe('user, taste and listening schema (Task 7)', () => {
     expect(present).toEqual([...EXPECTED_TABLES].sort());
   });
 
-  it('accounts for every Mongoose TTL index — the gate expiry.ts asked for and did not have', () => {
-    /**
-     * `db/expiry.ts` says a registry that names tables by hand "can only fall
-     * as far behind as the last time someone remembered to update it", and
-     * asks for a gate that WALKS the models instead. This is it, and it exists
-     * because the alternative was a hand `grep` in a report — the Task 7 review
-     * (M5) had to re-run that grep itself to confirm nothing was missed, which
-     * is the definition of a claim nothing checks.
-     *
-     * The failure it closes is the one `expiry.ts` calls structurally
-     * invisible: a later vertical ports a model carrying `expireAfterSeconds`,
-     * adds no registry entry, and NOTHING breaks — no error, no failing test,
-     * no symptom until disk. After this, that port fails here instead, naming
-     * the model.
-     *
-     * The map below is the one hand-maintained part, and deliberately so: only
-     * a human can say which Postgres column a Mongo field became. What is NOT
-     * hand-maintained is the SET of declarations — that comes from the model
-     * files — so a new TTL nobody mapped fails as `undeclared`, and a mapping
-     * whose model lost its TTL fails as `stale`.
-     *
-     * ## A ported model's file is GONE, and the walk must expect that
-     *
-     * Task 15 deletes `ListeningEvent.ts` and `NotificationSuppression.ts`: the
-     * tables are on drizzle, so the Mongoose declarations they were compared
-     * against no longer exist to be found. A plain set equality between the walk
-     * and the map goes red at exactly that moment — the migration succeeding
-     * looks identical to somebody deleting a TTL by accident.
-     *
-     * So the expectation is DERIVED from whether each mapped model's file still
-     * exists, rather than the map carrying a hand-kept "ported" flag that could
-     * disagree with the tree. That is strictly stronger than the equality it
-     * replaces, because it now catches a third case the old shape could not: a
-     * mapping whose model was deleted while something still declares its TTL.
-     *
-     * It also does the work the file-count floor used to. `existsSync` does not
-     * go through `readdirSync`, so a traversal that returns nothing leaves every
-     * still-present model expecting a declaration the walk did not find, and the
-     * gate fails naming it — which is why the floor below could be lowered to a
-     * number this migration will not overtake instead of deleted outright.
-     */
-    const MONGO_TTL_INDEXES: readonly { model: string; field: string; port: string }[] = [
-      // Ported by Task 15; both model files are deleted, so neither is expected
-      // in `declared` any more — the `existsSync` split below is what says so.
-      // Their `port` still names a real column, so both remain COVERED and the
-      // registry must still carry them.
-      { model: 'ListeningEvent', field: 'playedAt', port: 'listening_events.played_at' },
-      { model: 'NotificationSuppression', field: 'expiresAt', port: 'notification_suppressions.expires_at' },
-      // Task 8's moderation vertical. `port` is deliberately NOT a
-      // `table.column` — an entry that names no column is not counted as
-      // covered, so landing those tables without registry entries fails the
-      // `covered` check below rather than passing on a promise.
-      { model: 'ModerationOutbox', field: 'expiresAt', port: DEFERRED_TO_TASK_8 },
-      { model: 'ModerationEvent', field: 'expiresAt', port: DEFERRED_TO_TASK_8 },
-    ];
-
-    /**
-     * `<Name>Schema.index({ field: 1 }, { … expireAfterSeconds … })` — THE ONLY
-     * SPELLING THIS REPO USES, which is not the same claim as the only spelling
-     * Mongoose accepts, and the difference is the whole risk in this gate.
-     *
-     * Verified, not assumed: every `.index(` call in `src/models/*.ts` has a
-     * `<Name>Schema` receiver (28 distinct ones, zero exceptions), and there is
-     * no `expires:` path shorthand and no `.expires(` anywhere in that
-     * directory.
-     *
-     * Four shapes it would MISS, all legal Mongoose:
-     *  - `{ partialFilterExpression: {…}, expireAfterSeconds: 0 }` — the inner
-     *    `{…}` closes the `[^}]*` before `expireAfterSeconds` is reached.
-     *  - a quoted or dotted field key (`{ 'meta.expiresAt': 1 }`).
-     *  - a receiver not named `*Schema`.
-     *  - `expires:` on the path itself, Mongoose's own TTL shorthand.
-     *
-     * AND A MISS IS SILENT, which is why it is spelled out here rather than
-     * left to whoever hits it: an unseen declaration keeps `declared` short,
-     * and the author who wrote it in that shape is the same person who would
-     * have added the mapping — so BOTH sides of the set equality below go short
-     * together and it passes. Task 8 adds the two moderation TTLs; if either is
-     * written with a partial filter, widen this pattern in the same change.
-     */
-    const TTL_INDEX = /(\w+)Schema\.index\(\s*\{\s*(\w+):\s*-?1\s*\}\s*,\s*\{[^}]*expireAfterSeconds/g;
-    const modelsDir = join(__dirname, '..', '..', 'models');
-    const modelFiles = readdirSync(modelsDir).filter(
-      (entry) => entry.endsWith('.ts') && !entry.endsWith('.test.ts')
-    );
-    const declared: string[] = [];
-    for (const file of modelFiles) {
-      const text = readFileSync(join(modelsDir, file), 'utf8');
-      for (const match of text.matchAll(TTL_INDEX)) declared.push(`${match[1]}.${match[2]}`);
-    }
-
-    /**
-     * TWO VACUITY FLOORS, NOT INVENTORY ASSERTIONS — and the distinction is
-     * worth stating because the numbers look like inventory and are not.
-     * Model files are DELETED as verticals finish porting off Mongoose, so a
-     * floor pinned near the real count would fire at the exact moment the
-     * migration succeeds, and a gate that cries wolf gets deleted by whoever
-     * hits it next. That is not hypothetical: the floor was 20 against 41 files
-     * when it was written, and Task 15's eight deletions took the directory to
-     * 14 — the wolf arrived one vertical sooner than the comment expected.
-     *
-     * 5 was the replacement, and 4 is the value now — Task 19a took the
-     * directory from 6 to 4 by deleting `Album`, `CatalogEntity`, `Track` and
-     * `TrackFingerprint`, so the wolf arrived one vertical sooner AGAIN, in the
-     * same way and for the same reason the paragraph above records. That is
-     * twice, which makes it a pattern rather than a miss: any floor pinned to
-     * this directory's size is a countdown, because the directory only shrinks.
-     *
-     * It stays a BACKSTOP rather than the primary check: the `existsSync` split
-     * above fails on a broken traversal by itself, for as long as any mapped
-     * model file survives — and both mapped moderation models are still here,
-     * so it is doing that work today. 4 is now exactly the moderation vertical,
-     * so the next time this number moves is when Task 8 deletes those models,
-     * and at that point the right change is to DELETE this gate with them
-     * rather than lower the floor to zero — the same call `ensureIndexes.ts`
-     * faces in the same commit.
-     *
-     * The second floor is on the MAP, not on what the walk found: an emptied map
-     * paired with a broken walk is the one shape where both sides go to zero and
-     * an equality passes.
-     */
-    expect(modelFiles.length).toBeGreaterThanOrEqual(4);
-    expect(MONGO_TTL_INDEXES.length).toBeGreaterThanOrEqual(1);
-
-    // Only a model whose FILE still exists can still declare its TTL. A mapped
-    // model that has been ported off Mongoose must declare nothing, and one that
-    // has not must declare exactly what the map says.
-    const expectedDeclared = MONGO_TTL_INDEXES.filter((entry) =>
-      existsSync(join(modelsDir, `${entry.model}.ts`))
-    ).map((entry) => `${entry.model}.${entry.field}`);
-
-    // Both directions: a TTL nobody mapped, and a mapping whose TTL is gone —
-    // plus, now, a declaration surviving a model the map calls deleted.
-    expect([...declared].sort()).toEqual([...expectedDeclared].sort());
-
-    // Every mapping that claims a real column must actually be registered, and
-    // every registered target must be claimed by one — so a registry entry
-    // cannot exist for a table whose model never had a TTL either.
-    const registered = EXPIRY_SWEEP_TARGETS.map(
-      (target) => `${getTableConfig(target.table).name}.${sqlColumnName(target.column)}`
-    );
-    const covered = MONGO_TTL_INDEXES.filter((entry) => entry.port !== DEFERRED_TO_TASK_8).map(
-      (entry) => entry.port
-    );
-    expect([...registered].sort()).toEqual([...covered].sort());
-  });
-
-  it('registers exactly the two Mongo TTL indexes this vertical had, with their own retention', () => {
+  it('registers every Mongo TTL index that was ported, with its own retention', () => {
     // `grep -rn "expireAfterSeconds" packages/backend/src` returns FOUR
     // declarations: these two, plus `ModerationOutbox` and `ModerationEvent`,
     // which are Task 8's. So this task lands two of the four — the brief's
@@ -3224,6 +3069,16 @@ describe('user, taste and listening schema (Task 7)', () => {
       // `expireAfterSeconds: LISTENING_EVENT_TTL_SEC` — 90 days, measured from
       // a birth column.
       `listening_events.played_at:${90 * 24 * 60 * 60}`,
+      // Task 8's two, and the review this shape exists to force has been done:
+      // both were `expireAfterSeconds: 0` on an `expiresAt` the WRITER computes
+      // from `MODERATION_*_RETENTION_SECONDS`, so 0 here is correct — the column
+      // already IS the deadline, and the retention window lives in the package
+      // where both of its backends read it. They arrive as a FRAGMENT
+      // (`moderationExpirySweepTargets`) rather than as entries written in
+      // `expiry.ts`, because `@oxyhq/crowdsource-app` is the only place that can
+      // say what sweeping either one costs; the order below is that fragment's.
+      'moderation_outbox.expires_at:0',
+      'moderation_events.expires_at:0',
     ]);
   });
 

@@ -174,6 +174,14 @@ const TABLES_WITHOUT_DTO: Record<string, string> = {
   userSettings: 'no zod DTO — db/user/settings.ts names columns by hand',
   userTasteProfiles: 'server-internal — recommendation state',
 
+  // Moderation vertical — the report DTO is the ROUTE's hand-built literal
+  // (routes/reports.routes.ts), and the other three tables belong to
+  // @oxyhq/crowdsource-app, which serialises none of them to a client at all.
+  reports: 'moderation vertical — hand-built response literal in routes/reports.routes.ts',
+  moderationOutbox: 'server-internal — @oxyhq/crowdsource-app work queue, never serialised',
+  moderationEvents: 'server-internal — @oxyhq/crowdsource-app inbound audit log and dedupe claim',
+  moderationEnforcements: 'server-internal — @oxyhq/crowdsource-app enforcement ledger',
+
   // Rooms vertical — DTOs are hand-built TypeScript in db/rooms/serialize.ts,
   // not zod, so this whole vertical is outside a zod↔drizzle check.
   rooms: 'rooms vertical — hand-built DTO in db/rooms/serialize.ts',
