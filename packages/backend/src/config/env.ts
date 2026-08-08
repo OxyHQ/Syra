@@ -11,8 +11,6 @@ const schema = z.object({
 
   // Optional at parse time so `env` stays importable in any context (tests,
   // tooling) without a live DB config. The connection is the real authority:
-  // `utils/database.ts` throws at connect time when MONGODB_URI is missing.
-  MONGODB_URI: z.string().optional(),
   MONGODB_MAX_POOL_SIZE: z.coerce.number().default(100),
   MONGODB_MIN_POOL_SIZE: z.coerce.number().default(10),
   MONGODB_READ_PREFERENCE: z.string().default('primary'),

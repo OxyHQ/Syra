@@ -2,15 +2,13 @@ import { env } from './src/config/env';
 
 import express from 'express';
 import http from 'http';
-import mongoose from 'mongoose';
 import compression from 'compression';
 import cors from 'cors';
 import { Server as SocketIOServer, Socket, Namespace } from 'socket.io';
 import { createOptionalOxyAuth, createOxyRateLimit } from '@oxyhq/core/server';
 import { oxy } from './src/oxyClient';
 
-import { connectToDatabase, isDatabaseConnected, getDatabaseStats } from './src/utils/database';
-import { connectPostgres } from './src/db/postgres';
+import { connectPostgres, isPostgresConnected } from './src/db/postgres';
 import { createRedisPubSub, isRedisConnected, getRedisStats } from './src/utils/redis';
 import { ensureRedisConnected, isRedisConnectionError } from './src/utils/redisHelpers';
 import { createAdapter } from '@socket.io/redis-adapter';
@@ -154,15 +152,6 @@ app.use((req, _res, next) => {
     if (Object.keys(filters).length > 0) {
       (req.query as Record<string, unknown>).filters = filters;
     }
-  }
-  next();
-});
-
-app.use(async (_req, _res, next) => {
-  try {
-    await connectToDatabase();
-  } catch {
-    logger.debug('MongoDB connection unavailable for request');
   }
   next();
 });
@@ -364,11 +353,16 @@ app.get('', async (_req, res) => {
 app.get('/health', async (_req, res) => {
   try {
     const [dbConnected, redisConnected] = await Promise.all([
-      isDatabaseConnected(),
+      Promise.resolve(isPostgresConnected()),
       isRedisConnected(),
     ]);
 
-    const dbStats = getDatabaseStats();
+    // What /health has reported as "database" since the migration finished: the
+    // POSTGRES pool, which is now the only one. It reported Mongo's
+    // `readyState` until Task 8 removed the last Mongoose model — and a health
+    // endpoint answering about a database the service no longer opens is worse
+    // than one answering nothing, because it reads as green forever.
+    const dbStats = { engine: 'postgres' as const, state: dbConnected ? 'connected' : 'disconnected' };
     const redisStats = getRedisStats();
     const perfStats = getPerformanceStats();
 
@@ -416,43 +410,14 @@ app.use((err: Error & { statusCode?: number; status?: number }, req: express.Req
   });
 });
 
-const db = mongoose.connection;
-let hasLoggedMongoError = false;
-db.on('error', (error: Error & { code?: string; syscall?: string }) => {
-  if (error.code === 'ECONNREFUSED' || error.syscall === 'querySrv') {
-    if (!hasLoggedMongoError) {
-      hasLoggedMongoError = true;
-      logger.debug('MongoDB connection error', { err: error });
-    }
-  } else {
-    logger.error('MongoDB connection error', { err: error });
-  }
-});
-
-db.once('open', () => {
-  hasLoggedMongoError = false;
-  logger.info('Connected to MongoDB successfully');
-});
-
 const bootServer = async () => {
-  try {
-    await connectToDatabase();
-  } catch {
-    logger.warn('MongoDB connection unavailable - server will start but database operations will fail');
-  }
-
   /**
-   * PostgreSQL, opened with exactly the failure semantics the Mongo connection
-   * above has: log and continue. A boot that fails closed on an unset
-   * `DATABASE_URL` would take the whole service down for the routes that are
-   * still entirely on Mongo, which is strictly worse than the ported routes
-   * failing on their own.
+   * PostgreSQL, and now the only database this service opens.
    *
-   * Opened here rather than in Task 20 because the Mongo->Postgres port has
-   * reached a request path: `utils/syraMedia.ts` (the live-room track/album/
-   * playlist ingress resolver) reads through drizzle now. Every remaining port
-   * task needs this connection too, and until it exists each one inherits a
-   * broken baseline and cannot tell its own breakage from this.
+   * Log-and-continue, which is what the Mongo connection beside it did and what
+   * every route here still expects: `withDb` answers 503 per request when the
+   * pool is down, so a boot that failed closed would trade a degraded service
+   * for an outage.
    */
   try {
     await connectPostgres();
@@ -464,7 +429,7 @@ const bootServer = async () => {
 
   server.listen(env.PORT, '0.0.0.0', () => {
     logger.info('Server running', { port: env.PORT });
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       logger.warn('Server started without database connection - some features may be unavailable');
     }
   });
