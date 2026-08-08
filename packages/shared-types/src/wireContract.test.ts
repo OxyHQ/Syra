@@ -18,7 +18,14 @@ import { join } from 'node:path';
  * `artistSchema.strikes[]`).
  */
 
-const SRC = import.meta.dir;
+/**
+ * `__dirname`, not `import.meta.dir`: this package builds with
+ * `"module": "commonjs"` and `tsc` compiles `src/**` wholesale — test files
+ * included, which is why `dist/` already carries `nameKey.test.js`. So
+ * `import.meta` here is a TS1343 that fails `bun run build` while `bun test`
+ * passes, since bun accepts it. The build is the check that catches it.
+ */
+const SRC = __dirname;
 
 function schemaFiles(): string[] {
   return readdirSync(SRC)
