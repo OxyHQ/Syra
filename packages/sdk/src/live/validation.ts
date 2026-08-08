@@ -1,5 +1,34 @@
 import { z } from 'zod';
 
+/**
+ * Accept a document whose identity arrives as `_id` and present it as `id`.
+ *
+ * The PostgreSQL migration made `id` REQUIRED on the four schemas below, which is
+ * correct against the ported backend — `_id` left the wire contract there. But the
+ * frontend deploys on its own path (`deploy-frontends.yml`, on `packages/frontend`
+ * and `packages/shared-types`) while the backend deploy is gated, so a merge to
+ * `main` ships the client half ALONE. It did: `GET /rooms` still answers `_id`,
+ * every room failed `ZRoom`, and `validateRooms` DROPS what it cannot parse — so
+ * the Live screen went empty in production with only a `console.warn` to say so.
+ *
+ * Normalising here rather than teaching call sites to read `room.id ?? room._id`
+ * is the architecture this repo already states: parse once at the API boundary and
+ * return typed data. One place, no UI knows, and it is correct against BOTH
+ * backends — so the cutover needs no coordinated client flip, which is the failure
+ * this comment exists because of.
+ *
+ * It can be deleted once no deployed Syra backend serves `_id`. Nothing breaks if
+ * it outlives that: a payload carrying only `id` passes through untouched.
+ */
+function withMongoIdFallback<T extends z.ZodTypeAny>(schema: T) {
+  return z.preprocess((value) => {
+    if (value === null || typeof value !== 'object') return value;
+    const doc = value as Record<string, unknown>;
+    if (typeof doc['id'] === 'string' || typeof doc['_id'] !== 'string') return value;
+    return { ...doc, id: doc['_id'] };
+  }, schema);
+}
+
 // --- Podcast queue ---
 
 /**
@@ -17,7 +46,7 @@ export type PodcastQueueItem = z.infer<typeof ZPodcastQueueItem>;
 
 // --- Room (replaces Space) ---
 
-export const ZRoom = z.object({
+export const ZRoom = withMongoIdFallback(z.object({
   id: z.string(),
   title: z.string(),
   description: z.string().nullish(),
@@ -77,7 +106,7 @@ export const ZRoom = z.object({
   recordingEgressId: z.string().nullish(),
 
   createdAt: z.string(),
-}).passthrough();
+}).passthrough());
 
 export type Room = z.infer<typeof ZRoom>;
 
@@ -116,7 +145,7 @@ export const ZHouseVisibility = z.object({
 
 export type HouseVisibility = z.infer<typeof ZHouseVisibility>;
 
-export const ZHouse = z.object({
+export const ZHouse = withMongoIdFallback(z.object({
   id: z.string(),
   name: z.string(),
   description: z.string().optional(),
@@ -130,7 +159,7 @@ export const ZHouse = z.object({
   visibility: ZHouseVisibility.default({ discovery: 'listed', rooms: 'anyone', join: 'invite' }),
   tags: z.array(z.string()).optional(),
   createdAt: z.string(),
-}).passthrough();
+}).passthrough());
 
 export type House = z.infer<typeof ZHouse>;
 
@@ -165,7 +194,7 @@ export const ZSeriesEpisode = z.object({
 
 export type SeriesEpisode = z.infer<typeof ZSeriesEpisode>;
 
-export const ZSeries = z.object({
+export const ZSeries = withMongoIdFallback(z.object({
   id: z.string(),
   title: z.string(),
   description: z.string().optional(),
@@ -178,13 +207,13 @@ export const ZSeries = z.object({
   nextEpisodeNumber: z.number().default(1),
   isActive: z.boolean().default(true),
   createdAt: z.string(),
-}).passthrough();
+}).passthrough());
 
 export type Series = z.infer<typeof ZSeries>;
 
 // --- Recording ---
 
-export const ZRecording = z.object({
+export const ZRecording = withMongoIdFallback(z.object({
   id: z.string(),
   roomId: z.string(),
   roomTitle: z.string(),
@@ -200,7 +229,7 @@ export const ZRecording = z.object({
   participantIds: z.array(z.string()).default([]),
   expiresAt: z.string(),
   createdAt: z.string(),
-}).passthrough();
+}).passthrough());
 
 export type Recording = z.infer<typeof ZRecording>;
 
