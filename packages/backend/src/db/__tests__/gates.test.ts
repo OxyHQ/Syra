@@ -60,7 +60,8 @@ import {
   findUnsupportedExpiryColumns,
 } from '@oxyhq/db/assert';
 import { readJournal, readMigrationPhases, type DeployPhase } from '@oxyhq/db/migrate';
-import { closePostgres, connectPostgres, getDb } from '../postgres';
+import { closePostgres, getDb } from '../postgres';
+import { connectUnmanagedDb } from '../../test/postgres';
 import { findMigrationsFolder, LAST_GENESIS_MIGRATION_TAG } from '../migrate';
 import * as schema from '../schema';
 import * as catalogModule from '../schema/catalog';
@@ -426,22 +427,21 @@ function expectForeignKey(
 }
 
 beforeAll(async () => {
-  // `TEST_DATABASE_URL` WINS, falling back to `DATABASE_URL` for a local run
-  // against a developer's own `docker-compose.postgres.yml` instance. It is the
-  // same precedence `test/postgres.ts`'s `connectDb` uses, and matching it is
-  // not tidiness.
+  // Not `connectPostgres()` directly: `connectUnmanagedDb` resolves the url with
+  // `TEST_DATABASE_URL` winning, and refuses a database that has not declared
+  // itself disposable. Both rules now live there rather than being restated per
+  // suite — which is what let two of the nine callers keep the WRONG precedence
+  // (`||=`, i.e. `DATABASE_URL` wins) long after this file was fixed.
   //
-  // This file used to prefer `DATABASE_URL`. `connectDb` OVERWRITES
-  // `process.env.DATABASE_URL` with the test url, and `bun test` runs every
-  // file in one process — so which database this suite read depended on whether
-  // a `test/postgres` suite happened to run before it. Same command, same tree,
-  // different answer by file ordering: measured at 30 pass / 48 fail when this
-  // file went first against a stale `DATABASE_URL`, with failures that name the
-  // schema under test rather than the configuration that actually caused them.
-  // A developer who wants a specific database sets `TEST_DATABASE_URL`, which
-  // is the variable every other suite here already honours.
-  process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
-  await connectPostgres();
+  // Why the precedence is load-bearing, since the incident is worth keeping even
+  // though the mechanism moved: `connectDb` OVERWRITES `process.env.DATABASE_URL`
+  // with the test url, and `bun test` runs every file in one process — so which
+  // database this suite read depended on whether a `test/postgres` suite happened
+  // to run first. Same command, same tree, different answer by file ordering,
+  // measured at 30 pass / 48 fail when this file went first against a stale
+  // `DATABASE_URL`, with failures naming the schema under test rather than the
+  // configuration that actually caused them.
+  await connectUnmanagedDb();
 });
 
 afterAll(async () => {

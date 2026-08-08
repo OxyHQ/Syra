@@ -423,11 +423,13 @@ export const catalogEntities = pgTable(
      * `has part`.
      *
      * So the port would have dropped a field that is written, read and tested —
-     * silently, because nothing gates "every Mongoose path has a column" (the
-     * gates check `*_id` columns, protected columns and identifier length, and
-     * `zodPathsExistInMongoose.test.ts` checks the zod<->MONGOOSE direction).
-     * It surfaced only because drizzle refuses an unknown column key at compile
-     * time where Mongoose dropped the `$set` in silence.
+     * silently, because at the time nothing gated "every DTO field has a
+     * column": the other gates check `*_id` columns, protected columns and
+     * identifier length. It surfaced only because drizzle refuses an unknown
+     * column key at compile time where Mongoose dropped the `$set` in silence.
+     *
+     * `__tests__/zodPathsExistInDrizzle.test.ts` now closes that gap directly —
+     * this defect is the reason it exists, and `members` is one of its fixtures.
      *
      * `jsonb` rather than a child table, which is what the original decision
      * got right: unlike `Track.credits[]`, nothing queries a member by element

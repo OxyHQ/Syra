@@ -54,6 +54,20 @@ import * as schema from '../schema';
  *    column of the REFERENCED table. Descending past the key would demand 18
  *    columns per DTO that correctly do not exist on it.
  *
+ * ## WHAT A GREEN RUN HERE DOES NOT PROVE
+ *
+ * This check can only reach a vertical whose wire shape is a zod schema. The
+ * **rooms vertical is not one** — `rooms`, `houses`, `series`, `recordings`,
+ * `room_media_queue_items`, `room_user_preferences` and `playback_states` have
+ * no zod DTO at all; `db/rooms/serialize.ts` builds those responses in plain
+ * TypeScript. A field added there with no storage is invisible to this gate AND
+ * to `tsc`, which is exactly the exposure `catalog_entities.members` had.
+ *
+ * So: green here says nothing whatsoever about rooms, houses, series or
+ * recordings. Closing that needs a contract change (zod DTOs for the vertical),
+ * not a wider traversal — and it is stated here rather than only in a report
+ * because this is where someone reading a passing run will be.
+ *
  * ## A bug in the original, found while porting it
  *
  * Its comment says "Only descend into plain objects. An array of objects is

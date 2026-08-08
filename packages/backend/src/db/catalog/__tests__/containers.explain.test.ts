@@ -63,7 +63,8 @@ import {
   type SQLWrapper,
 } from 'drizzle-orm';
 import { executeRows } from '@oxyhq/db';
-import { closePostgres, connectPostgres, getDb } from '../../postgres';
+import { closePostgres, getDb } from '../../postgres';
+import { connectUnmanagedDb } from '../../../test/postgres';
 import { albums, catalogEntities, tracks } from '../../schema/catalog';
 import { playlistTracks, playlists } from '../../schema/library';
 import {
@@ -179,8 +180,7 @@ async function seed(tx: Parameters<Parameters<ReturnType<typeof getDb>['transact
 }
 
 beforeAll(async () => {
-  process.env.DATABASE_URL ||= process.env.TEST_DATABASE_URL;
-  await connectPostgres();
+  await connectUnmanagedDb();
 
   try {
     await getDb().transaction(async (tx) => {

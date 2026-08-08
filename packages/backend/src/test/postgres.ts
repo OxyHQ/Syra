@@ -128,9 +128,9 @@ export function assertDisposableDatabase(url: string): void {
   if (isDisposableName(name)) return;
 
   throw new Error(
-    `Refusing to run the suite against the database "${name}": clearDb() TRUNCATEs every ` +
-    'table, and this name does not declare itself disposable, so it may be a shared ' +
-    'database someone else is using.\n' +
+    `Refusing to run the suite against the database "${name}": the suite writes fixtures ` +
+    'into it and `clearDb` TRUNCATEs every table, and this name does not declare itself ' +
+    'disposable, so it may be a shared database someone else is using.\n' +
     'A disposable database names itself one in an underscore-delimited segment — ' +
     `${[...DISPOSABLE_SEGMENTS].map((s) => `"${s}"`).join(', ')}, or "task<n>" ` +
     '(e.g. syra_test, syra_ci, syra_task16).\n' +
@@ -218,6 +218,31 @@ export async function connectDb(): Promise<void> {
       'Run `bun run db:migrate` against it before running the suite.'
     );
   }
+}
+
+/**
+ * Connect for a suite that manages its OWN rows — the `EXPLAIN` probes and
+ * `gates.test.ts`, which seed large fixtures and clean up themselves rather than
+ * truncating between tests.
+ *
+ * They used to call `connectPostgres()` directly, which meant the disposable
+ * check never saw them: nine files opening a pool and writing fixtures into
+ * whatever `DATABASE_URL` happened to name. They do not TRUNCATE, so the damage
+ * was pollution rather than destruction — but "it only writes to the shared
+ * database" is not a property worth relying on.
+ *
+ * It also settles the precedence. Seven of the nine already resolved
+ * `TEST_DATABASE_URL ?? DATABASE_URL`; two used `||=`, which lets `DATABASE_URL`
+ * WIN and sends a developer's run at whatever their local default names —
+ * `syra_dev`, in the case this guard exists for. `gates.test.ts` records why that
+ * ordering matters at length, having been fixed once already; this is the rest of
+ * that sweep, in one place where it cannot be half-applied again.
+ */
+export async function connectUnmanagedDb(): Promise<void> {
+  const url = resolveTestDatabaseUrl();
+  assertDisposableDatabase(url);
+  process.env.DATABASE_URL = url;
+  await connectPostgres();
 }
 
 /**

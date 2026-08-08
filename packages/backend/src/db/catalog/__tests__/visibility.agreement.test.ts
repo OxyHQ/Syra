@@ -51,7 +51,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { and, eq, inArray, like, sql, type SQL } from 'drizzle-orm';
 import { executeRows, sqlStateOf } from '@oxyhq/db';
-import { closePostgres, connectPostgres, getDb } from '../../postgres';
+import { closePostgres, getDb } from '../../postgres';
+import { connectUnmanagedDb } from '../../../test/postgres';
 import { albums, catalogEntities, imageAssets, tracks } from '../../schema/catalog';
 import { isTrackPlayable } from '../../../controllers/stream.controller';
 import { isPlayableTrack, playableTrackFilter } from '../visibility';
@@ -80,8 +81,7 @@ const SHAPES: readonly Shape[] = [true, false].flatMap((isAvailable) =>
 );
 
 beforeAll(async () => {
-  process.env.DATABASE_URL ||= process.env.TEST_DATABASE_URL;
-  await connectPostgres();
+  await connectUnmanagedDb();
   const db = getDb();
 
   await db

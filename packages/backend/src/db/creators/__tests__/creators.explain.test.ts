@@ -78,7 +78,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { sql } from 'drizzle-orm';
 import { executeRows } from '@oxyhq/db';
-import { closePostgres, connectPostgres, getDb } from '../../postgres';
+import { closePostgres, getDb } from '../../postgres';
+import { connectUnmanagedDb } from '../../../test/postgres';
 
 /** Thrown to roll the seeding transaction back once every plan is collected. */
 class Rollback extends Error {}
@@ -399,8 +400,7 @@ async function seed(tx: Tx): Promise<void> {
 }
 
 beforeAll(async () => {
-  process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
-  await connectPostgres();
+  await connectUnmanagedDb();
 
   try {
     await getDb().transaction(async (tx) => {
