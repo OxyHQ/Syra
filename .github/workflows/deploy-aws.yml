@@ -202,7 +202,6 @@ jobs:
           SYNC_AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           SYNC_DATABASE_URL: ${{ secrets.DATABASE_URL }}
           SYNC_JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          SYNC_MONGODB_URI: ${{ secrets.MONGODB_URI }}
           SYNC_REDIS_URL: ${{ secrets.REDIS_URL }}
           SYNC_STREAM_TOKEN_SECRET: ${{ secrets.STREAM_TOKEN_SECRET }}
         run: |
@@ -218,7 +217,7 @@ jobs:
           # `ResourceInitializationError: unable to pull secrets or registry
           # auth`. This step is what puts it there, on the same run, before that
           # step. Dropping it from this list breaks the Mongo->Postgres cutover.
-          APP_SECRETS="ACOUSTID_API_KEY DATABASE_URL JWT_SECRET MONGODB_URI STREAM_TOKEN_SECRET"
+          APP_SECRETS="ACOUSTID_API_KEY DATABASE_URL JWT_SECRET STREAM_TOKEN_SECRET"
 
           # LIVEKIT_API_KEY and LIVEKIT_API_SECRET are deliberately absent,
           # though oxy-syra:8 reads both from /oxy/_shared/. Syra CONSUMES those
