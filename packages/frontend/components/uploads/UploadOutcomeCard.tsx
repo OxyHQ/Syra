@@ -208,9 +208,10 @@ export const UploadOutcomeCard: React.FC<UploadOutcomeCardProps> = ({
 
   return (
     <View
+      className="bg-popover"
       style={[
         styles.card,
-        { backgroundColor: theme.colors.backgroundTertiary, borderColor: accent },
+        { borderColor: accent },
       ]}
     >
       <Text className="text-muted-foreground" style={styles.fileName} numberOfLines={1}>

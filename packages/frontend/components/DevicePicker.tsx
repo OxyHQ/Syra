@@ -41,16 +41,15 @@ const DeviceRow: React.FC<DeviceRowProps> = ({ device, isActive, onPress }) => {
   const { t } = useTranslation();
   const theme = useTheme();
 
-  const rowStyle = useMemo(
-    () => [
-      styles.deviceRow,
-      isActive && { backgroundColor: theme.colors.backgroundSecondary },
-    ],
-    [isActive, theme.colors.backgroundSecondary],
-  );
+  const rowStyle = useMemo(() => [styles.deviceRow], []);
 
   return (
-    <Pressable style={rowStyle} onPress={onPress} accessibilityRole="button">
+    <Pressable
+      className={isActive ? 'bg-surface' : undefined}
+      style={rowStyle}
+      onPress={onPress}
+      accessibilityRole="button"
+    >
       <MaterialCommunityIcons
         name={DEVICE_TYPE_ICON[device.type] ?? 'devices'}
         size={24}
@@ -122,7 +121,7 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({
   );
 
   const sheetStyle = useMemo(
-    () => [styles.sheet, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }],
+    () => [styles.sheet],
     [theme.colors.card, theme.colors.border],
   );
 
@@ -152,7 +151,7 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({
     >
       <Pressable style={backdropStyle} onPress={onClose}>
         {/* Stop propagation so taps inside the sheet don't close it */}
-        <Pressable style={sheetStyle} onPress={() => undefined}>
+        <Pressable className="bg-card border-border" style={sheetStyle} onPress={() => undefined}>
           <View style={styles.header}>
             <Text className="text-foreground" style={styles.title}>
               {t('devices.title')}

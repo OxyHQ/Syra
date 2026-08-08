@@ -133,7 +133,8 @@ const EpisodeRowComponent: React.FC<EpisodeRowProps> = ({
         {hasProgress && (
           <View className="bg-border" style={styles.progressTrack}>
             <View
-              style={[styles.progressFill, { backgroundColor: theme.colors.primary, width: `${progressPercent}%` }]}
+              className="bg-primary"
+              style={[styles.progressFill, { width: `${progressPercent}%` }]}
             />
           </View>
         )}

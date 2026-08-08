@@ -166,12 +166,9 @@ export const Slider: React.FC<SliderProps> = ({
             ]}
           />
           <Animated.View
+            className="bg-card border-primary"
             style={[
               styles.thumb,
-              {
-                backgroundColor: theme.colors.card,
-                borderColor: theme.colors.primary,
-              },
               disabled && { opacity: 0.5 },
               thumbStyle,
             ]}

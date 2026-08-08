@@ -122,14 +122,8 @@ export const PlaylistActionsSheet: React.FC<PlaylistActionsSheetProps> = ({
                 onChangeText={setName}
                 placeholder={t('playlistActions.namePlaceholder')}
                 placeholderTextColor={theme.colors.textSecondary}
-                style={[
-                  styles.input,
-                  {
-                    color: theme.colors.text,
-                    backgroundColor: theme.colors.backgroundTertiary,
-                    borderColor: theme.colors.border,
-                  },
-                ]}
+                className="text-foreground bg-popover border-border"
+                style={styles.input}
                 autoFocus
                 returnKeyType="done"
                 onSubmitEditing={handleRenameSubmit}

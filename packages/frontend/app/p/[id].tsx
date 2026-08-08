@@ -463,11 +463,8 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
       <View className="bg-surface" style={styles.container}>
         {/* Sticky Header */}
         <Animated.View
-          style={[
-            styles.stickyHeader,
-            { backgroundColor: theme.colors.background, borderBottomColor: theme.colors.backgroundSecondary },
-            stickyHeaderAnimatedStyle,
-          ]}
+          className="bg-background border-b-surface"
+          style={[styles.stickyHeader, stickyHeaderAnimatedStyle]}
           pointerEvents="box-none"
         >
           <View style={styles.stickyHeaderContent}>

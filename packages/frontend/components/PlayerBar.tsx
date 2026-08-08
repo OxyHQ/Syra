@@ -121,13 +121,10 @@ export const PlayerBar: React.FC = () => {
   const SPACING = 12;
 
   // Desktop: Normal flow container style
-  const containerStyle = useMemo(() => ({
-    ...styles.container,
-    backgroundColor: theme.colors.background,
-  }), [theme.colors.background]);
+  const containerStyle = useMemo(() => ({ ...styles.container }), []);
 
   return (
-    <View style={containerStyle}>
+    <View className="bg-background" style={containerStyle}>
       {/* Progress Bar */}
       <Pressable
         className="bg-border" style={styles.progressBarContainer}
@@ -139,13 +136,8 @@ export const PlayerBar: React.FC = () => {
         }}
       >
         <View
-          style={[
-            styles.progressBar,
-            {
-              backgroundColor: theme.colors.primary,
-              width: progressFillWidth,
-            }
-          ]}
+          className="bg-primary"
+          style={[styles.progressBar, { width: progressFillWidth }]}
         />
       </Pressable>
 
