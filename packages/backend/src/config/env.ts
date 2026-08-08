@@ -48,7 +48,34 @@ const schema = z.object({
   S3_HLS_PREFIX: z.string().default('hls'),
 
   STREAM_TOKEN_SECRET: z.string().optional(),
-  STREAM_KEY_BASE_URL: z.string().default(''),
+  /**
+   * The absolute origin the API answers on, stamped into every URL a client is
+   * told to fetch — the HLS master playlist, the variant playlists, the key, and
+   * the podcast RSS link.
+   *
+   * **Empty is the LOCAL-DEV value and it must never reach production.** The
+   * empty default leaves those URLs relative, which is right on a dev machine
+   * where the app and the API share an origin. In production they do not:
+   * `syra.fm` serves the app and `api.syra.fm` serves the API, so a relative
+   * `/api/stream/<id>/master.m3u8` resolves against the WEB origin and hls.js is
+   * handed the SPA's HTML instead of a manifest — `NotSupportedError: Failed to
+   * load because no supported source was found`, with nothing failing on the
+   * server and no error in any log.
+   *
+   * That is exactly what happened: the live task definition never set it, and
+   * the outage was one unset variable degrading silently. The refinement below
+   * is why it cannot happen again — an unset or relative value now fails at
+   * boot, naming the variable, instead of shipping broken playback.
+   *
+   * A trailing slash is normalised rather than refused: every consumer
+   * concatenates `${base}/api/...`, so `https://api.syra.fm/` would yield `//api`
+   * — a different URL for no reason anyone intended, and not the class of
+   * mistake worth refusing a deployment over.
+   */
+  STREAM_KEY_BASE_URL: z
+    .string()
+    .default('')
+    .transform((value) => value.trim().replace(/\/+$/, '')),
 
   PREMIUM_USER_IDS: z.string().optional(),
 
@@ -102,6 +129,48 @@ const schema = z.object({
    * re-derivable rather than frozen at first import. `src/moderation/config.ts`
    * owns those reads and the validation that makes them meaningful.
    */
+}).superRefine((value, ctx) => {
+  /**
+   * Production must not boot on a local-dev media origin.
+   *
+   * Checked here rather than on the field itself because the rule is a RELATION
+   * between two values — the variable is legitimately empty in development and
+   * in tests, and only `NODE_ENV === 'production'` makes an empty or relative
+   * one wrong. A per-field validator cannot express that, which is how it was
+   * unset in production for as long as it was.
+   *
+   * Absolute means an `http:`/`https:` origin, parsed rather than pattern-
+   * matched: `//api.syra.fm` and `api.syra.fm` both LOOK addressable and neither
+   * survives `${base}/api/...` on a page served from another origin.
+   */
+  if (value.NODE_ENV !== 'production') return;
+
+  const base = value.STREAM_KEY_BASE_URL;
+  const absolute = (() => {
+    if (base === '') return false;
+    try {
+      return ['http:', 'https:'].includes(new URL(base).protocol);
+    } catch {
+      return false;
+    }
+  })();
+
+  if (!absolute) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['STREAM_KEY_BASE_URL'],
+      message:
+        `STREAM_KEY_BASE_URL must be an absolute http(s) origin in production, and is ${
+          base === '' ? 'unset' : `'${base}'`
+        }. It is stamped into every media URL a client fetches — the HLS master ` +
+        'playlist, the variant playlists, the key and the podcast RSS link. Left ' +
+        'relative, those resolve against the WEB origin (syra.fm) instead of the ' +
+        'API origin, so the player is handed the SPA\'s HTML and fails with ' +
+        '"NotSupportedError: Failed to load because no supported source was ' +
+        'found" — with nothing failing server-side. Set it to https://api.syra.fm ' +
+        'on the task definition.',
+    });
+  }
 });
 
 export const env = schema.parse(process.env);
