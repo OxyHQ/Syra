@@ -88,7 +88,9 @@ export const TopBar: React.FC = () => {
   };
 
   // Subtle raised pill behind the active nav icon, derived from the theme.
-  const activeButtonStyle: ViewStyle = { ...styles.activeButton, backgroundColor: theme.colors.backgroundTertiary };
+  // Layout only — the pill's colour comes from `className="bg-popover"` at the
+  // call sites, so it follows a preset change instead of freezing a read.
+  const activeButtonStyle: ViewStyle = styles.activeButton;
   const navIconColor = theme.colors.text;
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 250);
   const hasHeaderSearchQuery = debouncedSearchQuery.trim().length > 0;
@@ -280,13 +282,8 @@ export const TopBar: React.FC = () => {
     showPlayButton: boolean,
   ) => (
     <View
-      style={[
-        styles.searchResultArtwork,
-        {
-          backgroundColor: theme.colors.backgroundTertiary,
-          borderRadius: item.rounded ? 18 : 6,
-        },
-      ]}
+      className="bg-popover"
+      style={[styles.searchResultArtwork, { borderRadius: item.rounded ? 18 : 6 }]}
     >
       {item.avatarId ? (
         <Avatar source={item.avatarId} variant="thumb" size={36} label={item.title} />
@@ -302,7 +299,7 @@ export const TopBar: React.FC = () => {
           accessibilityRole="button"
           accessibilityLabel={t('common.playItem', { title: item.title })}
         >
-          <View style={[styles.searchResultPlayButton, { backgroundColor: theme.colors.primary }]}>
+          <View className="bg-primary" style={styles.searchResultPlayButton}>
             <MaterialCommunityIcons name="play" size={18} color={theme.colors.primaryForeground} />
           </View>
         </Pressable>
@@ -324,17 +321,18 @@ export const TopBar: React.FC = () => {
         key={item.key}
         onPress={() => navigateFromSearch(item.href)}
         onHoverIn={() => setActiveSearchIndex(index)}
+        className={isActive ? 'bg-popover' : undefined}
         style={({ pressed }) => [
           styles.searchResultRow,
-          (pressed || isActive) && { backgroundColor: theme.colors.backgroundTertiary },
+          pressed && { opacity: 0.9 },
         ]}
       >
         {renderArtwork(item, isActive)}
         <View style={styles.searchResultText}>
-          <Text style={[styles.searchResultTitle, { color: theme.colors.text }]} numberOfLines={1}>
+          <Text className="text-foreground" style={styles.searchResultTitle} numberOfLines={1}>
             {item.title}
           </Text>
-          <Text style={[styles.searchResultSubtitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+          <Text className="text-muted-foreground" style={styles.searchResultSubtitle} numberOfLines={1}>
             {item.subtitle}
           </Text>
         </View>
@@ -350,7 +348,7 @@ export const TopBar: React.FC = () => {
 
     return (
       <View style={styles.searchResultSection}>
-        <Text style={[styles.searchResultSectionTitle, { color: theme.colors.textSecondary }]}>{t(SEARCH_SECTION_KEYS[title])}</Text>
+        <Text className="text-muted-foreground" style={styles.searchResultSectionTitle}>{t(SEARCH_SECTION_KEYS[title])}</Text>
         {sectionItems.map((item) => renderSearchResultRow({
           item,
           index: searchItems.findIndex((candidate) => candidate.key === item.key),
@@ -391,9 +389,10 @@ export const TopBar: React.FC = () => {
             <Pressable
               onPress={handleSearchSubmit}
               onHoverIn={() => setActiveSearchIndex(viewAllIndex)}
+              className={isViewAllActive ? 'bg-popover' : undefined}
               style={({ pressed }) => [
                 styles.viewAllButton,
-                (pressed || isViewAllActive) && { backgroundColor: theme.colors.backgroundTertiary },
+                pressed && { opacity: 0.9 },
               ]}
             >
               <Text style={[styles.viewAllText, { color: theme.colors.primary }]}>{t('topbar.viewAllResults')}</Text>
@@ -443,7 +442,7 @@ export const TopBar: React.FC = () => {
               <MaterialCommunityIcons name="close-circle" size={18} color={theme.colors.textSecondary} />
             </Pressable>
           )}
-          <View style={[styles.searchActionSeparator, { backgroundColor: theme.colors.border }]} />
+          <View className="bg-border" style={styles.searchActionSeparator} />
           <Pressable onPress={handleBrowse} accessibilityRole="button" accessibilityLabel={t('search.browse')}>
             <MaterialCommunityIcons name="view-grid-outline" size={19} color={theme.colors.textSecondary} />
           </Pressable>
@@ -499,6 +498,7 @@ export const TopBar: React.FC = () => {
         <View style={styles.centerGroup}>
           <Pressable
             onPress={handleHome}
+            className={pathname === '/' ? 'bg-popover' : undefined}
             style={[styles.iconButton, pathname === '/' && activeButtonStyle]}
           >
             <MaterialCommunityIcons
@@ -510,6 +510,7 @@ export const TopBar: React.FC = () => {
 
           <Pressable
             onPress={() => router.push('/live')}
+            className={pathname.startsWith('/live') ? 'bg-popover' : undefined}
             style={[styles.iconButton, pathname.startsWith('/live') && activeButtonStyle]}
             accessibilityRole="button"
             accessibilityLabel={t('topbar.live')}
@@ -523,6 +524,7 @@ export const TopBar: React.FC = () => {
 
           <Pressable
             onPress={() => router.push('/podcasts')}
+            className={pathname.startsWith('/podcasts') ? 'bg-popover' : undefined}
             style={[styles.iconButton, pathname.startsWith('/podcasts') && activeButtonStyle]}
             accessibilityRole="button"
             accessibilityLabel={t('common.podcasts')}
