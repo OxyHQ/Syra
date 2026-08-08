@@ -43,14 +43,18 @@ mis-typed during the port.
    production, not just a documentation gap**: the sweeper is the path that runs
    continuously and unattended, so most expired uploads' AES keys are left
    behind in `TrackKey` forever, keyed by an `upload._id` that no longer
-   resolves to anything once the upload is gone. **STILL OPEN after Task 13,
-   deliberately.** That task ported both paths at parity — `deleteUpload` keeps
-   its explicit `track_keys` delete, `expirySweeper` still has none — and added
-   no second explicit delete, because doing so would make the two agree while
-   leaving the next caller to remember the same line. The fix is a real foreign
-   key, which needs `track_keys` split into one column per id space; that is a
-   schema change spanning three verticals and has its own task. Owner and full
-   shape: `db/schema/deferredForeignKeys.ts`'s `track_keys.track_id` entry.
+   resolves to anything once the upload is gone. **CLOSED by Task 13a.** Task 13 ported both
+   paths at parity — `deleteUpload` kept its explicit `track_keys` delete,
+   `expirySweeper` still had none — and added no second explicit delete, because
+   doing so would make the two agree while leaving the next caller to remember
+   the same line. Task 13a fixed it with the constraint instead:
+   `track_keys.user_upload_id` is a real `ON DELETE cascade` reference, so the
+   key goes with the row for BOTH paths and for every caller after them.
+   `deleteUpload`'s explicit delete was REMOVED rather than kept alongside it — a
+   redundant application-level delete beside a real cascade is what made the
+   divergence read as an oversight in one caller rather than a missing
+   constraint. The ledger entry that used to name the owner is gone; see
+   `db/schema/trackKeys.ts`.
    `CopyrightReport` (one
    rollback-only `deleteOne`, not a real deletion path — see its row below),
    `ModerationEvent`/`ModerationOutbox`/`ModerationEnforcement` (retention
@@ -65,6 +69,8 @@ mis-typed during the port.
    `subjectType`), `Room.podcastQueue[].{episodeId,trackId,syraPodcastId}` (by
    `kind: 'podcast'|'track'`), and `TrackKey.trackId` (by which of three ingest
    pipelines wrote it — **no discriminator column exists at all**, see its row).
+   `TrackKey.trackId` is the one of these five no longer polymorphic in
+   Postgres: Task 13a split it into three constrained columns (see its row).
 4. **CrowdSource** (`@oxyhq/crowdsource`, see `moderation/client.ts`) is a
    third-party moderation SaaS in its own database, exactly like Oxy is for
    `oxyUserId` — its case/decision ids are never a Syra row and never an FK. The
@@ -459,7 +465,7 @@ columns.
 | source | class | target | ON DELETE | proof | note |
 |---|---|---|---|---|---|
 | `TrackFingerprint.trackId` | FK | `tracks` | CASCADE | `models/TrackFingerprint.ts:32,75` (unique — `indexTrackAcoustically` upserts by it) | Acoustic index, meaningless without the track it fingerprints. |
-| `TrackKey.trackId` | FK (polymorphic — **no discriminator column at all**) | `tracks`, `user_uploads`, **or** `episodes` | — | `services/ingest/hlsStorage.ts:108-115` (code comment: "`TrackKey.trackId` holds a Track id for catalog jobs and a UserUpload id for locker jobs"); `controllers/uploads.controller.ts:2288,2623` (`{ trackId: upload._id.toString() }`, `{ trackId: uploadId }`); `controllers/podcastAudio.controller.ts:272` (`{ trackId: episodeId }`) | The single most structurally awkward relation in the inventory: this collection is a shared AES-key store keyed by "whatever content id owns this HLS asset," across **three** different tables, distinguished only by which id space the caller happens to be in (three separate ObjectId spaces never collide, per the code comment) — there is no `kind`/`sourceModel` field to discriminate them. **Cannot be a real single-target FK without adding a discriminator column first** (a schema change, out of scope for this inventory) — recommend leaving it as a plain indexed string column with no constraint, or adding the discriminator as part of the schema task. |
+| `TrackKey.trackId` | FK (polymorphic — **no discriminator column at all**) | `tracks`, `user_uploads`, **or** `episodes` | — | `services/ingest/hlsStorage.ts:108-115` (code comment: "`TrackKey.trackId` holds a Track id for catalog jobs and a UserUpload id for locker jobs"); `controllers/uploads.controller.ts:2288,2623` (`{ trackId: upload._id.toString() }`, `{ trackId: uploadId }`); `controllers/podcastAudio.controller.ts:272` (`{ trackId: episodeId }`) | The single most structurally awkward relation in the inventory: this collection is a shared AES-key store keyed by "whatever content id owns this HLS asset," across **three** different tables, distinguished only by which id space the caller happens to be in (three separate ObjectId spaces never collide, per the code comment) — there is no `kind`/`sourceModel` field to discriminate them. **Cannot be a real single-target FK without adding a discriminator column first** (a schema change, out of scope for this inventory). **SUPERSEDED — the recommendation this row used to make ("leave it a plain indexed string column with no constraint, or add the discriminator") was overtaken by its own escape hatch, and Task 13a took it.** `track_keys` carries THREE nullable columns — `track_id`, `user_upload_id`, `episode_id` — each a real `.references()` with `ON DELETE cascade`, plus `track_keys_one_parent_check` (`num_nonnulls(...) = 1`) and one unique per arm; `kind` is dropped (`db/schema/trackKeys.ts`, migrations `0022`/`0023`). Adding the discriminator ALONE would not have been enough, which is why the first half of this recommendation was the wrong one to take: a `kind` column names the id space but still carries no constraint, so the live orphan above survives it — the port did exactly that and the sweeper kept leaking keys. Three separate columns are what let a foreign key exist at all. The uniqueness note is settled too: one unique over the shared column forced three id spaces into one namespace on the strength of the code comment saying they never collide; three per-arm uniques remove the coupling. |
 
 ### UserBehavior — see "dead readers" above; whole model recommended for drop, not migration.
 
@@ -536,4 +542,9 @@ the controllers surfaced, because none of them end in `Id`.
   `Room.podcastQueue[]`) and the 1 undiscriminated one (`TrackKey.trackId`) need
   an explicit decision from whichever schema task owns them — they cannot be
   auto-classified by the `findIdColumnViolations` gate as a simple FK, and
-  should not be force-fit into one.
+  should not be force-fit into one. `TrackKey.trackId`'s decision has been made:
+  Task 13a SPLIT it into three constrained columns rather than leaving it
+  unconstrained, so it is no longer in `ID_COLUMNS_WITHOUT_FOREIGN_KEY` at all.
+  That is the one of the five where splitting was worth it, because each arm has
+  exactly one owner and the missing cascade was leaking rows in production; the
+  other four are cache/advisory columns whose staleness costs nothing.
