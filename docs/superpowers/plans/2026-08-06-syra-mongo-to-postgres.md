@@ -641,3 +641,67 @@ tests was not run — recorded as a class to check when touching an ordered read
 not as a known defect. Postgres makes this worse than Mongo did in one specific
 way already recorded on this branch: **`desc()` is `NULLS FIRST`**, so a nullable
 sort key changes which row leads even when the sort is present.
+
+### A third class, and this one BITES: drizzle's two spellings of "descending" disagree
+
+CrowdSource's Task 9 asked the planner instead of assuming, and found:
+
+- `.desc()` inside a drizzle **INDEX** emits `DESC NULLS LAST`.
+- `desc(column)` in a drizzle **ORDER BY** emits plain `DESC`, which in Postgres is
+  `DESC NULLS FIRST`.
+
+They do not match, so **no index can satisfy the sort** and the query gains a
+blocking `Sort` — even on a `NOT NULL` column, where the two orderings cannot
+differ by a single row. Measured there on PG 17 with `enable_seqscan = off`:
+`order by created_at desc` planned `Limit → Sort → Index Scan`, and
+`… desc nulls last` planned `Limit → Index Scan`.
+
+**The subtlety that makes it greppable, and explains why most of this branch is
+fine:** a *plain ASC* index scanned backwards yields `DESC NULLS FIRST`, which is
+exactly what unspelled `desc()` asks for. So the mismatch arises only from a
+`.desc()` index paired with an unspelled `desc()` ORDER BY. ASC orderings are safe
+by luck (both default NULLS LAST). **Only descending pairs need the explicit
+spelling.**
+
+**Swept on this branch — 9 `desc()` orderings, 3 of them in a test file, so 6
+production sites:**
+
+| site | index | verdict |
+|---|---|---|
+| `db/library/recentlyPlayed.ts:73` | `recently_played_oxy_user_id_played_at_idx` on `(oxyUserId, playedAt.desc())` | **DEFECT** — blocking sort |
+| `db/library/recentlyPlayed.ts:108` | same | **DEFECT** |
+| `db/user/relations.ts:79` | `catalog_relations_kind_source_id_score_idx` on `(kind, sourceId, score.desc())` | **DEFECT** |
+| `db/library/recentlyPlayed.ts:43` | orders by `desc(max(playedAt))` — an aggregate, no index applies either way | not this class |
+| `db/user/listening.ts:109` | `listening_events_oxy_user_id_played_at_idx` is plain ASC → backward scan yields `DESC NULLS FIRST` | fine |
+| `db/playback/devices.ts:93` | no index on `lastSeen` at all | not this class (unindexed, tiny per-user table) |
+
+Both defective columns are `notNull()` (`playedAt` timestamptz, `score`
+doublePrecision), so the sort is pure waste — it can never reorder a row.
+
+**Two valid fixes, and the choice is not obvious.** Spell `nulls last` in the three
+ORDER BYs (what CrowdSource did), or drop `.desc()` from the two indexes so a
+backward scan serves them. The second is a schema change needing a migration; the
+first is three lines. Prefer the first.
+
+**Five other files already spell it** (`db/catalog/containers.ts`,
+`db/creators/{claims,standings,uploads}.ts`, `db/podcasts/podcasts.ts`), which is
+the "partial application fails silently in the under-coverage direction" rule
+again: the knowledge existed on this branch and landed in five files, and nothing
+distinguished the sixth.
+
+### And why the EXPLAIN suites did not catch it
+
+CrowdSource's first version of this test wrote its own `EXPLAIN` with
+`desc nulls last` spelled out **in the test file**, so reverting the store left it
+green — it asserted a property of a string written next to the assertion. It now
+explains the SQL taken from postgres.js's `debug` hook: the query the store
+actually sent.
+
+**Our seven `*.explain.test.ts` suites have that exact shape** — they
+`sql.raw('explain (analyze, buffers) ' + probe.sql)` against SQL written in the
+test file. They are honest about it (`library.explain.test.ts` says each "proves an
+index EXISTS"), and index existence is genuinely what they were built to prove. But
+it means **they cannot see a production query that fails to use the index they
+prove exists** — which is precisely this defect. That reframes "bind the probes to
+the real query builders" from a deliberate deferral into the thing that would have
+caught a live regression. It stays a follow-up, but not an optional one.
