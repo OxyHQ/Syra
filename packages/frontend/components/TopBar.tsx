@@ -410,14 +410,8 @@ export const TopBar: React.FC = () => {
     return (
     <View style={styles.searchShell}>
       <View
-        style={[
-          styles.searchSurface,
-          isExpanded && styles.searchSurfaceExpanded,
-          {
-            backgroundColor: theme.colors.backgroundSecondary,
-            borderColor: isExpanded ? theme.colors.border : 'transparent',
-          },
-        ]}
+        className={`bg-surface ${isExpanded ? 'border-border' : 'border-transparent'}`}
+        style={[styles.searchSurface, isExpanded && styles.searchSurfaceExpanded]}
       >
         <View
           style={[

@@ -124,13 +124,8 @@ export const EmptyState = memo<EmptyStateProps>(
 
                         {error.onRetry && (
                             <TouchableOpacity
-                                style={[
-                                    styles.retryButton,
-                                    {
-                                        backgroundColor: theme.colors.primary,
-                                        opacity: isRetrying ? 0.6 : 1,
-                                    },
-                                ]}
+                                className={`bg-primary ${isRetrying ? 'opacity-60' : 'opacity-100'}`}
+                                style={styles.retryButton}
                                 onPress={handleRetry}
                                 disabled={isRetrying}
                                 activeOpacity={0.8}

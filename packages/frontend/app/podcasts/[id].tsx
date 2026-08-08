@@ -234,12 +234,8 @@ const PodcastShowView: React.FC<PodcastShowViewProps> = ({
             ) : null}
             <Pressable
               onPress={onToggleSubscription}
-              style={[
-                styles.subscribeButton,
-                subscribed
-                  ? { borderColor: theme.colors.border, borderWidth: 1 }
-                  : { backgroundColor: theme.colors.primary },
-              ]}
+              className={subscribed ? 'border-border' : 'bg-primary'}
+              style={[styles.subscribeButton, subscribed && { borderWidth: 1 }]}
               accessibilityRole="button"
               accessibilityState={{ selected: subscribed }}
             >

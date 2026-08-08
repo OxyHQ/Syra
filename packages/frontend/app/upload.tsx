@@ -625,14 +625,8 @@ const UploadScreen: React.FC = () => {
 
         {pendingFiles.length > 0 && (
           <View
-            style={[
-              styles.footer,
-              {
-                backgroundColor: theme.colors.backgroundSecondary,
-                borderTopColor: theme.colors.border,
-                paddingBottom: 16 + insets.bottom,
-              },
-            ]}
+            className="bg-surface border-t-border"
+            style={[styles.footer, { paddingBottom: 16 + insets.bottom }]}
           >
             <Pressable
               onPress={() => void handleUploadAll()}

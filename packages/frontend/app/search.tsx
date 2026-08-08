@@ -777,13 +777,8 @@ const SearchScreen: React.FC = () => {
                         <Pressable
                           key={person.personId}
                           onPress={onPress}
-                          style={({ pressed }) => [
-                            styles.userRow,
-                            {
-                              backgroundColor: pressed ? theme.colors.backgroundTertiary : theme.colors.backgroundSecondary,
-                              borderColor: theme.colors.border,
-                            },
-                          ]}
+                          className="bg-surface border-border active:bg-popover"
+                          style={styles.userRow}
                         >
                           {person.oxyAvatar ? (
                             <Avatar source={person.oxyAvatar} variant="thumb" size={48} label={label} />
@@ -830,15 +825,8 @@ const SearchScreen: React.FC = () => {
                         <Pressable
                           key={user.id}
                           onPress={() => handleUserPress(user)}
-                          style={({ pressed }) => [
-                            styles.userRow,
-                            {
-                              backgroundColor: pressed
-                                ? theme.colors.backgroundTertiary
-                                : theme.colors.backgroundSecondary,
-                              borderColor: theme.colors.border,
-                            },
-                          ]}
+                          className="bg-surface border-border active:bg-popover"
+                          style={styles.userRow}
                         >
                           <Avatar
                             source={user.avatar ?? undefined}

@@ -77,7 +77,34 @@ And verify in a real, FOREGROUNDED browser tab. A backgrounded tab freezes CSS
 transitions, so a computed style stays at its from-value forever and mimics "the
 className never applied".
 
-## Status
+## Status — the conversion is done
+
+**485 convertible sites -> 2.** Both survivors are in
+`context/BottomSheetContext.tsx`, and they are CORRECT: `backgroundStyle` and
+`handleIndicatorStyle` belong to `@gorhom/bottom-sheet`, a third-party component
+whose props take style objects. Reading the theme there is the right thing, the
+same category as an icon's `color=` prop (187 of those, all legitimate).
+
+className token usages went 26 -> ~470.
+
+Shapes that needed a human rather than the transformer, in case the next one
+looks similar:
+
+- colours living inside a `StyleSheet.create` built from `theme` in a `useMemo`
+  (`OfflineBanner`, `PlayerBar`, `app/_layout.tsx`);
+- colours threaded through a PROP to a child (`EmptyState` took 17 of these; it
+  now accepts `className` and defaults to `bg-background`);
+- a colour chosen by a `pressed`/`isActive` condition, which becomes either a
+  conditional class or an `active:` variant;
+- objects carrying several properties at once, where only some are colours.
+
+One hazard confirmed the hard way: converting `app/live.tsx` by hand produced TWO
+`className` attributes on one element. `tsc` caught it (TS17001) only because JSX
+forbids duplicates — the same mistake inside a style array is legal and silent,
+which is why the transformer merges into an existing `className` instead of
+appending a second.
+
+## Version status
 
 `@oxyhq/bloom` is on **0.89.0** (`e1ee4b0`) — the bump needed the root `overrides`
 entry moved too, because a caret on a 0.x line is minor-locked and `bun install`

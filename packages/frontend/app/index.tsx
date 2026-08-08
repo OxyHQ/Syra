@@ -629,12 +629,10 @@ const HomeContent: React.FC<HomeContentProps> = ({
                     onHoverOut={onSeedHoverOut}
                   >
                     <View
+                      className="bg-background"
                       style={[
                         styles.compactImageContainer,
-                        {
-                          backgroundColor: theme.colors.background,
-                          borderRadius: item.shape === 'circle' ? 999 : 12,
-                        }
+                        { borderRadius: item.shape === 'circle' ? 999 : 12 },
                       ]}
                     >
                       {imageUri ? (

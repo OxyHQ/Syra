@@ -166,13 +166,8 @@ export default function LiveScreen() {
             <Pressable
               onPress={() => createRef.current?.handleSchedule()}
               disabled={!formState.isValid || formState.loading}
-              className="flex-row items-center justify-center gap-1.5 rounded-full py-3"
-              style={{
-                backgroundColor: theme.colors.backgroundSecondary,
-                borderWidth: 1,
-                borderColor: theme.colors.border,
-                opacity: formState.loading ? 0.6 : 1,
-              }}
+              className={`flex-row items-center justify-center gap-1.5 rounded-full py-3 bg-surface border-border ${formState.loading ? 'opacity-60' : 'opacity-100'}`}
+              style={{ borderWidth: 1 }}
             >
               <MaterialCommunityIcons name="calendar" size={20} color={theme.colors.text} />
               <Text className="text-base font-semibold text-foreground" >

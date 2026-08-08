@@ -345,12 +345,9 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
       <View className="bg-surface" style={styles.container}>
         {/* Sticky Header */}
         <Animated.View
+          className="bg-background border-b-surface"
           style={[
             styles.stickyHeader,
-            {
-              backgroundColor: theme.colors.background,
-              borderBottomColor: theme.colors.backgroundSecondary,
-            },
             stickyHeaderAnimatedStyle
           ]}
           pointerEvents="box-none"

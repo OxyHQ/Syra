@@ -103,16 +103,8 @@ export const CoverArtPicker: React.FC<CoverArtPickerProps> = ({
       disabled={disabled}
       onPointerEnter={Platform.OS === 'web' ? () => setIsHovered(true) : undefined}
       onPointerLeave={Platform.OS === 'web' ? () => setIsHovered(false) : undefined}
-      style={[
-        styles.container,
-        {
-          width: size,
-          height: size,
-          backgroundColor: theme.colors.backgroundSecondary,
-          borderColor: theme.colors.border,
-          opacity: disabled || isUploading ? 0.5 : 1,
-        },
-      ]}
+      className={`bg-surface border-border ${disabled || isUploading ? 'opacity-50' : 'opacity-100'}`}
+      style={[styles.container, { width: size, height: size }]}
     >
       {isUploading ? (
         <View style={styles.uploadingContainer}>

@@ -40,13 +40,8 @@ export const StatCardGridSkeleton: React.FC<StatCardGridSkeletonProps> =
             count={count}
             render={() => (
               <View
-                style={[
-                  styles.statCard,
-                  {
-                    minWidth,
-                    backgroundColor: theme.colors.backgroundSecondary,
-                  },
-                ]}
+                className="bg-surface"
+                style={[styles.statCard, { minWidth }]}
               >
                 <Skeleton.Circle size={32} />
                 <Skeleton.Box width={64} height={24} borderRadius={6} />

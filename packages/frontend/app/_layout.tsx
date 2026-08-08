@@ -126,7 +126,6 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
     outerContainer: {
       flex: 1,
       width: '100%',
-      backgroundColor: theme.colors.background,
     },
     contentWrapper: {
       flex: 1,
@@ -198,7 +197,7 @@ const MainLayout: React.FC<MainLayoutProps> = memo(({ isScreenNotMobile }) => {
   );
 
   return (
-    <View style={styles.outerContainer} {...containerProps}>
+    <View className="bg-background" style={styles.outerContainer} {...containerProps}>
       {/* Top Navigation Bar - Outside panels wrapper */}
       <View style={styles.topBarContainer}>
         <TopBar />

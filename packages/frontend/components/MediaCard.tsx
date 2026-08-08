@@ -319,13 +319,7 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
       ]}
     >
       {/* Image/Icon */}
-      <View style={[
-        styles.imageContainer, 
-        { 
-          backgroundColor: theme.colors.backgroundSecondary,
-          borderRadius,
-        }
-      ]}>
+      <View className="bg-surface" style={[styles.imageContainer, { borderRadius }]}>
         {resolvedImageUri ? (
           <Image
             source={{ uri: resolvedImageUri }}
