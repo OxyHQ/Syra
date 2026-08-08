@@ -21,6 +21,7 @@
  */
 
 import { and, desc, eq, gte, inArray, lte, max } from 'drizzle-orm';
+import { descNullsLast } from '../catalog/containers';
 import { getDb } from '../postgres';
 import { recentlyPlayed } from '../schema/library';
 
@@ -70,7 +71,7 @@ export async function touchRecentPlay(
         gte(recentlyPlayed.playedAt, since)
       )
     )
-    .orderBy(desc(recentlyPlayed.playedAt))
+    .orderBy(descNullsLast(recentlyPlayed.playedAt))
     .limit(1);
 
   const refreshed = await getDb()
@@ -105,7 +106,7 @@ export async function prunePlayHistory(oxyUserId: string, retention: number): Pr
     .select({ playedAt: recentlyPlayed.playedAt })
     .from(recentlyPlayed)
     .where(eq(recentlyPlayed.oxyUserId, oxyUserId))
-    .orderBy(desc(recentlyPlayed.playedAt))
+    .orderBy(descNullsLast(recentlyPlayed.playedAt))
     .offset(retention)
     .limit(1);
 

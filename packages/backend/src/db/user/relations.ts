@@ -27,7 +27,8 @@
  * conflict target.
  */
 
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
+import { descNullsLast } from '../catalog/containers';
 import { getDb, type DbOrTransaction } from '../postgres';
 import { CATALOG_RELATION_KINDS, catalogRelations } from '../schema/user';
 
@@ -47,10 +48,17 @@ const WRITE_BATCH = 1_000;
 /**
  * The top edges out of one or more sources, best score first.
  *
- * `desc(score)` matches the direction of
- * `catalog_relations_kind_source_id_score_idx`, and `score` is `notNull()`, so
- * the `NULLS FIRST` inversion Postgres applies to a descending sort has no null
- * branch to hoist above the real rows.
+ * `descNullsLast` rather than `desc`, and `notNull()` is exactly why that reads
+ * as unnecessary. It is not. A bare `desc(score)` is right about the RESULT — a
+ * `NOT NULL` column has no null branch for `NULLS FIRST` to hoist above the real
+ * rows — and wrong about the PLAN: it emits `DESC` (`NULLS FIRST`) while
+ * `catalog_relations_kind_source_id_score_idx` was declared with drizzle's
+ * `.desc()`, which emits `DESC NULLS LAST`. Those two orderings cannot meet, so
+ * no index can serve the sort and every lookup gains a blocking `Sort` — over
+ * rows where the sort can never change the answer.
+ *
+ * The nullability argument is therefore about correctness only, and answering it
+ * is not the same as answering whether the index applies.
  *
  * Callers that pass several sources sum the scores per target themselves, which
  * is why this returns edges rather than an aggregate: `radioPools` weights a
@@ -76,7 +84,7 @@ export async function findRelatedEdges(
         inArray(catalogRelations.sourceId, sourceIds),
       ),
     )
-    .orderBy(desc(catalogRelations.score))
+    .orderBy(descNullsLast(catalogRelations.score))
     .limit(limit);
 }
 
