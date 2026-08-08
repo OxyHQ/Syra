@@ -419,18 +419,27 @@ diff -u \
 # in exactly the way that left `dist/scripts/migrate.js` — a path this package
 # has never emitted — wired into this script with every test green.
 workflow_file="$repository_root/.github/workflows/deploy-aws.yml"
+# Read one command out of deploy-aws.yml. The values are no longer step `env:`
+# keys: since the workflow gained its `migration_phase` input they are written to
+# $GITHUB_ENV by whichever of two mutually exclusive selector steps runs, so the
+# same variable name legitimately appears more than once and the PHASE is what
+# identifies which occurrence this is. Matching on the phase rather than on
+# position keeps the "declared exactly once" check meaningful — reordering the
+# selectors or adding a third cannot silently satisfy it.
 read_workflow_command() {
   local variable_name="$1"
+  local expected_phase="$2"
   local value
 
-  value="$(sed -n -E "s/^[[:space:]]*${variable_name}:[[:space:]]*'(.*)'[[:space:]]*$/\1/p" \
+  value="$(sed -n -E \
+    "s/^[[:space:]]*echo '${variable_name}=(\[.*\"--phase=${expected_phase}\".*\])'[[:space:]]*$/\1/p" \
     "$workflow_file")"
   if [[ -z "$value" ]]; then
-    echo "deploy-aws.yml declares no $variable_name." >&2
+    echo "deploy-aws.yml declares no $variable_name for --phase=$expected_phase." >&2
     return 1
   fi
   if [[ "$(wc -l <<<"$value")" != "1" ]]; then
-    echo "deploy-aws.yml declares $variable_name more than once." >&2
+    echo "deploy-aws.yml declares $variable_name for --phase=$expected_phase more than once." >&2
     return 1
   fi
   if ! jq -e '
@@ -444,8 +453,13 @@ read_workflow_command() {
   printf '%s\n' "$value"
 }
 
-workflow_pre_command="$(read_workflow_command PRE_DEPLOY_TASK_COMMAND_JSON)"
-workflow_post_command="$(read_workflow_command POST_DEPLOY_TASK_COMMAND_JSON)"
+workflow_pre_command="$(read_workflow_command PRE_DEPLOY_TASK_COMMAND_JSON pre)"
+workflow_post_command="$(read_workflow_command POST_DEPLOY_TASK_COMMAND_JSON post)"
+# The cutover's own pre-deploy command. It runs against PRODUCTION exactly once —
+# the genesis apply, where `pre` and `post` both block — so it is the argv least
+# likely to be exercised before it matters and the one most worth holding to the
+# same entry-point and target-database checks as the phased pair.
+workflow_cutover_command="$(read_workflow_command PRE_DEPLOY_TASK_COMMAND_JSON all)"
 
 # Every migration command must name a compiled entry point that EXISTS in
 # source. The check maps the runtime path back through tsconfig's layout
@@ -491,6 +505,17 @@ assert_migration_command() {
 
 assert_migration_command PRE_DEPLOY_TASK_COMMAND_JSON "$workflow_pre_command" pre
 assert_migration_command POST_DEPLOY_TASK_COMMAND_JSON "$workflow_post_command" post
+assert_migration_command 'PRE_DEPLOY_TASK_COMMAND_JSON (cutover)' "$workflow_cutover_command" all
+
+# The cutover selector must leave the post-deploy command EMPTY, which is how
+# this script is told to skip that task. It is checked here, and not only in the
+# workflow's own test, because the meaning of an empty value is defined by THIS
+# script: the `all` run has already applied the whole journal, so a post task
+# could only find nothing pending and turn a green cutover red.
+if ! grep -qE "^[[:space:]]*echo 'POST_DEPLOY_TASK_COMMAND_JSON='$" "$workflow_file"; then
+  echo "deploy-aws.yml's cutover path does not clear POST_DEPLOY_TASK_COMMAND_JSON." >&2
+  exit 1
+fi
 
 # A failing pre-deploy migration must abort the release BEFORE update-service,
 # leaving the previously deployed image serving and nothing to roll back.
