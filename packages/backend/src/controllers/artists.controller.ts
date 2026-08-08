@@ -1,17 +1,39 @@
 import { Request, Response, NextFunction } from 'express';
-import mongoose from 'mongoose';
+import { and, count, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { isLiveEntityId, isUniqueViolation, sqlStateOf } from '@oxyhq/db';
+import { publicColumns } from '@oxyhq/db/assert';
 import { z } from 'zod';
-import { ArtistModel } from '../models/CatalogEntity';
-import { AlbumModel } from '../models/Album';
-import { TrackModel } from '../models/Track';
-import { ArtistClaimModel, type IArtistClaim } from '../models/ArtistClaim';
-import { ContributionAttestationModel } from '../models/ContributionAttestation';
-import { CopyrightReportModel } from '../models/CopyrightReport';
+import { getDb, isPostgresConnected } from '../db/postgres';
+import { albums, catalogEntities, tracks } from '../db/schema/catalog';
+import { copyrightReports } from '../db/schema/creators';
+import { PROTECTED_COLUMNS_BY_TABLE } from '../db/schema/protectedColumns';
+import { playableTrackFilter } from '../db/catalog/visibility';
+import {
+  countArtistsWithPlayableTracks,
+  findAlbumsWithPlayableTracks,
+  findArtistsWithPlayableTracks,
+  findOneArtistWithPlayableTracks,
+  imageFirst,
+  descNullsLast,
+} from '../db/catalog/containers';
+import { loadImageVariants, toAlbumDtos, toTrackDtos } from '../db/catalog/hydrate';
+import { normalizeImageRef, toArtistDto, type PublicCatalogEntityRow } from '../db/catalog/serialize';
+import {
+  findArtistClaimById,
+  insertArtistClaim,
+  listArtistClaimsByClaimant,
+  listArtistClaimsByStatus,
+  rejectOtherPendingClaims,
+  resolvePendingArtistClaim,
+  toArtistClaimDto,
+} from '../db/creators/claims';
+import {
+  findAttestationUploader,
+  findAttestationsByTrackIds,
+} from '../db/creators/attestations';
 import { takeDownTrack } from '../services/compliance/takedown';
 import { mirrorCatalogImage } from '../services/catalog/catalogImageAssets';
 import { logger } from '../utils/logger';
-import { formatTracksWithCoverArt, formatAlbumWithCoverArt, formatArtistWithImage, formatArtistsWithImage } from '../utils/musicHelpers';
-import { isDatabaseConnected } from '../utils/database';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { getRequiredOxyUserId as getAuthenticatedUserId } from '@oxyhq/core/server';
 import { getParam, parseBoundedLimit, parseOffset } from '../utils/reqParams';
@@ -25,23 +47,99 @@ import {
   artistClaimStatusSchema,
   type ArtistClaim,
   type ArtistImageSuggestionsResponse,
+  normalizeNameKey,
 } from '@syra/shared-types';
 import { getStoredImageColors } from '../utils/imageColors';
-import { withImageFirstSort } from '../utils/imageFirstSort';
-import {
-  getRequestUserId,
-  playableTrackFilter,
-} from '../utils/catalogVisibility';
-import {
-  countArtistsWithPlayableTracks,
-  findAlbumsWithPlayableTracks,
-  findArtistsWithPlayableTracks,
-  findOneArtistWithPlayableTracks,
-} from '../utils/playableContainers';
+import { getRequestUserId } from '../utils/requestUser';
 
 const ARTIST_ALBUMS_LIMIT = 100;
 /** A claimant's own history — bounded, and far above the number anyone accumulates. */
 const MAX_CLAIMS_PAGE = 50;
+
+/** The ordering every artist listing uses: has-a-photo, then popularity, then reach. */
+const ARTIST_LISTING_ORDER = [
+  imageFirst(catalogEntities.imageId),
+  descNullsLast(catalogEntities.popularity),
+  descNullsLast(catalogEntities.statsFollowers),
+];
+
+/** Serialize one entity row, loading only the image assets it references. */
+async function toArtistResponse(row: PublicCatalogEntityRow) {
+  const lookup = await loadImageVariants([
+    row.imageId,
+    row.imageSizesSmallId,
+    row.imageSizesMediumId,
+    row.imageSizesLargeId,
+    row.imageSizesXlargeId,
+    row.imageSizesXxlargeId,
+    row.imageSizesOriginalId,
+  ]);
+  return toArtistDto(row, lookup);
+}
+
+/** Serialize a page of artists — ONE `image_assets` query for the whole page. */
+async function toArtistResponses(rows: readonly PublicCatalogEntityRow[]) {
+  const lookup = await loadImageVariants(
+    rows.flatMap((row) => [
+      row.imageId,
+      row.imageSizesSmallId,
+      row.imageSizesMediumId,
+      row.imageSizesLargeId,
+      row.imageSizesXlargeId,
+      row.imageSizesXxlargeId,
+      row.imageSizesOriginalId,
+    ])
+  );
+  return rows.map((row) => toArtistDto(row, lookup));
+}
+
+/**
+ * The owner's own suggestions, read through a projection that NAMES the
+ * protected column.
+ *
+ * `imageSuggestions` is in `PROTECTED_COLUMNS_BY_TABLE`, so `publicColumns()`
+ * removes it from every catalog read and {@link PublicCatalogEntityRow} has no
+ * property for it — a serializer naming it stops compiling. That protection is
+ * against it reaching a CLIENT through a catalog surface; the artist reading
+ * their own pending photos is exactly who it is for, so this asks for it
+ * explicitly rather than widening anything.
+ */
+async function findOwnArtistWithSuggestions(ownerOxyUserId: string) {
+  const [row] = await getDb()
+    .select({
+      id: catalogEntities.id,
+      imageId: catalogEntities.imageId,
+      imageSizesSmallId: catalogEntities.imageSizesSmallId,
+      imageSizesMediumId: catalogEntities.imageSizesMediumId,
+      imageSizesLargeId: catalogEntities.imageSizesLargeId,
+      imageSizesXlargeId: catalogEntities.imageSizesXlargeId,
+      imageSizesXxlargeId: catalogEntities.imageSizesXxlargeId,
+      imageSizesOriginalId: catalogEntities.imageSizesOriginalId,
+      imageSuggestions: catalogEntities.imageSuggestions,
+    })
+    .from(catalogEntities)
+    .where(
+      and(eq(catalogEntities.type, 'artist'), eq(catalogEntities.ownerOxyUserId, ownerOxyUserId))
+    )
+    .limit(1);
+
+  return row;
+}
+
+/** The signed-in user's own artist row, or `undefined`. */
+async function findOwnedArtistRow(
+  ownerOxyUserId: string
+): Promise<PublicCatalogEntityRow | undefined> {
+  const [row] = await getDb()
+    .select(publicColumns(catalogEntities, PROTECTED_COLUMNS_BY_TABLE))
+    .from(catalogEntities)
+    .where(
+      and(eq(catalogEntities.type, 'artist'), eq(catalogEntities.ownerOxyUserId, ownerOxyUserId))
+    )
+    .limit(1);
+
+  return row;
+}
 
 /**
  * GET /api/artists
@@ -49,7 +147,7 @@ const MAX_CLAIMS_PAGE = 50;
  */
 export const getArtists = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -57,15 +155,15 @@ export const getArtists = async (req: Request, res: Response, next: NextFunction
     const offset = parseOffset(req.query.offset);
 
     const [artists, total] = await Promise.all([
-      findArtistsWithPlayableTracks({}, {
-        sort: withImageFirstSort('artist', { popularity: -1, 'stats.followers': -1 }),
+      findArtistsWithPlayableTracks(undefined, {
+        orderBy: ARTIST_LISTING_ORDER,
         offset,
         limit,
       }),
-      countArtistsWithPlayableTracks({}),
+      countArtistsWithPlayableTracks(),
     ]);
 
-    const formattedArtists = formatArtistsWithImage(artists);
+    const formattedArtists = await toArtistResponses(artists);
 
     res.json({
       artists: formattedArtists,
@@ -83,14 +181,13 @@ export const getArtists = async (req: Request, res: Response, next: NextFunction
  */
 export const getArtistById = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
     const id = getParam(req, 'id');
     
-    // Validate ObjectId format
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!isLiveEntityId(id)) {
       return res.status(404).json({ error: 'Artist not found' });
     }
 
@@ -100,8 +197,7 @@ export const getArtistById = async (req: Request, res: Response, next: NextFunct
       return res.status(404).json({ error: 'Artist not found' });
     }
 
-    const formattedArtist = formatArtistWithImage(artist);
-    res.json(formattedArtist);
+    res.json(await toArtistResponse(artist));
   } catch (error) {
     next(error);
   }
@@ -113,14 +209,13 @@ export const getArtistById = async (req: Request, res: Response, next: NextFunct
  */
 export const getArtistAlbums = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
     const id = getParam(req, 'id');
     
-    // Validate ObjectId format
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!isLiveEntityId(id)) {
       return res.status(404).json({ error: 'Artist not found' });
     }
     
@@ -131,12 +226,12 @@ export const getArtistAlbums = async (req: Request, res: Response, next: NextFun
     }
 
     // Fetch albums for this artist, sorted by release date
-    const albums = await findAlbumsWithPlayableTracks({ artistId: id }, {
-      sort: withImageFirstSort('album', { releaseDate: -1 }),
+    const albumRows = await findAlbumsWithPlayableTracks(eq(albums.artistId, id), {
+      orderBy: [imageFirst(albums.coverArtId), descNullsLast(albums.releaseDate)],
       limit: ARTIST_ALBUMS_LIMIT,
     });
 
-    const formattedAlbums = albums.map(album => formatAlbumWithCoverArt(album)).filter(Boolean);
+    const formattedAlbums = await toAlbumDtos(albumRows);
 
     res.json({
       albums: formattedAlbums,
@@ -153,7 +248,7 @@ export const getArtistAlbums = async (req: Request, res: Response, next: NextFun
  */
 export const getArtistTracks = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -161,8 +256,7 @@ export const getArtistTracks = async (req: Request, res: Response, next: NextFun
     const limit = parseBoundedLimit(req.query.limit, 20);
     const offset = parseOffset(req.query.offset);
     
-    // Validate ObjectId format
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!isLiveEntityId(id)) {
       return res.status(404).json({ error: 'Artist not found' });
     }
     
@@ -173,16 +267,20 @@ export const getArtistTracks = async (req: Request, res: Response, next: NextFun
     }
 
     // Fetch tracks for this artist, sorted by popularity then date
-    const [tracks, total] = await Promise.all([
-      TrackModel.find(playableTrackFilter({ artistId: id }))
-        .sort(withImageFirstSort('track', { popularity: -1, createdAt: -1 }))
-        .skip(offset)
-        .limit(limit)
-        .lean(),
-      TrackModel.countDocuments(playableTrackFilter({ artistId: id })),
+    const artistTracksWhere = and(playableTrackFilter(), eq(tracks.artistId, id));
+    const [trackRows, counted] = await Promise.all([
+      getDb()
+        .select(publicColumns(tracks, PROTECTED_COLUMNS_BY_TABLE))
+        .from(tracks)
+        .where(artistTracksWhere)
+        .orderBy(imageFirst(tracks.coverArtId), descNullsLast(tracks.popularity), descNullsLast(tracks.createdAt))
+        .offset(offset)
+        .limit(limit),
+      getDb().select({ total: count() }).from(tracks).where(artistTracksWhere),
     ]);
 
-    const formattedTracks = await formatTracksWithCoverArt(tracks);
+    const total = counted[0]?.total ?? 0;
+    const formattedTracks = await toTrackDtos(trackRows);
 
     res.json({
       tracks: formattedTracks,
@@ -201,7 +299,7 @@ export const getArtistTracks = async (req: Request, res: Response, next: NextFun
  */
 export const registerAsArtist = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -209,17 +307,22 @@ export const registerAsArtist = async (req: AuthRequest, res: Response, next: Ne
     const data: CreateArtistRequest = req.body;
 
     // Check if user already has an artist profile
-    const existingArtist = await ArtistModel.findOne({ ownerOxyUserId: userId }).lean();
+    const existingArtist = await findOwnedArtistRow(userId);
     if (existingArtist) {
       return res.status(400).json({ 
         error: 'Already registered',
         message: 'You already have an artist profile',
-        artistId: existingArtist._id.toString(),
+        artistId: existingArtist.id,
       });
     }
 
-    // Check if artist name is already taken
-    const nameExists = await ArtistModel.findOne({ name: data.name }).lean();
+    // Check if artist name is already taken. `type = 'artist'` is stated: one
+    // table holds artists and persons now, and a person may share a name.
+    const [nameExists] = await getDb()
+      .select({ id: catalogEntities.id })
+      .from(catalogEntities)
+      .where(and(eq(catalogEntities.type, 'artist'), eq(catalogEntities.name, data.name)))
+      .limit(1);
     if (nameExists) {
       return res.status(400).json({ 
         error: 'Name taken',
@@ -227,22 +330,29 @@ export const registerAsArtist = async (req: AuthRequest, res: Response, next: Ne
       });
     }
 
-    // Validate image if provided - must be a valid MongoDB ObjectId string
+    // Validate image if provided — must be an id of an already-uploaded asset.
     let colors;
     if (data.image !== undefined && data.image !== null && data.image !== '') {
       // Reject blob URLs, http/https URLs, or any other format
       if (data.image.startsWith('blob:') || data.image.startsWith('http://') || data.image.startsWith('https://') || data.image.startsWith('/api/')) {
         return res.status(400).json({ 
           error: 'Invalid image', 
-          message: 'image must be a valid image ID (MongoDB ObjectId). Images must be uploaded first using /api/images/upload.' 
+          message: 'image must be a valid image ID. Images must be uploaded first using /api/images/upload.' 
         });
       }
 
-      // Validate ObjectId format (24 hex characters)
-      if (!mongoose.Types.ObjectId.isValid(data.image)) {
+      /**
+       * Both live id shapes, not just the 24-hex one.
+       *
+       * `image_assets.id` is `generatedId()` — a uuid v7 — so a check for an
+       * ObjectId would reject every image uploaded after the cutover while the
+       * upload endpoint that minted it succeeded. The message said "MongoDB
+       * ObjectId (24 hex characters)" and is corrected with the check.
+       */
+      if (!isLiveEntityId(data.image)) {
         return res.status(400).json({ 
           error: 'Invalid image', 
-          message: 'image must be a valid MongoDB ObjectId string (24 hex characters). Images must be uploaded first using /api/images/upload.' 
+          message: 'image must be a valid image ID. Images must be uploaded first using /api/images/upload.' 
         });
       }
 
@@ -250,35 +360,47 @@ export const registerAsArtist = async (req: AuthRequest, res: Response, next: Ne
     }
 
     // Create artist profile
-    const artist = new ArtistModel({
-      name: data.name,
-      bio: data.bio,
-      image: data.image,
-      genres: data.genres || [],
-      verified: false, // Artists start unverified
-      ownerOxyUserId: userId,
-      primaryColor: colors?.primaryColor,
-      secondaryColor: colors?.secondaryColor,
-      stats: {
-        followers: 0,
-        albums: 0,
-        tracks: 0,
-        totalPlays: 0,
-        monthlyListeners: 0,
-      },
-      source: 'upload',
-    });
+    const [created] = await getDb()
+      .insert(catalogEntities)
+      .values({
+        type: 'artist',
+        name: data.name,
+        /**
+         * DERIVED, not supplied — `models/CatalogEntity.ts` computed it in a
+         * pre-save hook, and Postgres has no hook. Omitting it leaves the
+         * artist unreachable from `loadCreditedOn`, which matches
+         * `track_credits.name_key` against exactly this value.
+         */
+        nameKey: normalizeNameKey(data.name),
+        bio: data.bio,
+        imageId: data.image,
+        genres: data.genres || [],
+        verified: false, // Artists start unverified
+        ownerOxyUserId: userId,
+        primaryColor: colors?.primaryColor,
+        secondaryColor: colors?.secondaryColor,
+        statsFollowers: 0,
+        statsAlbums: 0,
+        statsTracks: 0,
+        statsTotalPlays: 0,
+        statsMonthlyListeners: 0,
+        source: 'upload',
+      })
+      .returning(publicColumns(catalogEntities, PROTECTED_COLUMNS_BY_TABLE));
 
-    await artist.save();
+    if (!created) {
+      return res.status(500).json({ error: 'Failed to create artist profile' });
+    }
 
-    const formattedArtist = formatArtistWithImage(artist);
-    res.status(201).json(formattedArtist);
+    res.status(201).json(await toArtistResponse(created));
   } catch (error: unknown) {
-    const mongoCode = error !== null && typeof error === 'object'
-      ? (error as Record<string, unknown>)['code']
-      : undefined;
-    if (mongoCode === 11000) {
-      // Duplicate key error
+    /**
+     * `23505` is Postgres's `unique_violation`, the replacement for Mongo's
+     * duplicate-key `11000`. It still has to be caught: the name check above is
+     * a read followed by a write, so two simultaneous registrations both pass it
+     * and the unique index is what actually decides.
+     */
+    if (sqlStateOf(error) === '23505') {
       return res.status(400).json({
         error: 'Name taken',
         message: 'This artist name is already taken',
@@ -294,20 +416,19 @@ export const registerAsArtist = async (req: AuthRequest, res: Response, next: Ne
  */
 export const getMyArtistProfile = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
     const userId = getAuthenticatedUserId(req);
 
-    const artist = await ArtistModel.findOne({ ownerOxyUserId: userId }).lean();
+    const artist = await findOwnedArtistRow(userId);
 
     if (!artist) {
       return res.json(null);
     }
 
-    const formattedArtist = formatArtistWithImage(artist);
-    res.json(formattedArtist);
+    res.json(await toArtistResponse(artist));
   } catch (error) {
     next(error);
   }
@@ -319,14 +440,14 @@ export const getMyArtistProfile = async (req: AuthRequest, res: Response, next: 
  */
 export const getArtistDashboard = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
     const userId = getAuthenticatedUserId(req);
 
     // Get artist profile
-    const artist = await ArtistModel.findOne({ ownerOxyUserId: userId }).lean();
+    const artist = await findOwnedArtistRow(userId);
     if (!artist) {
       return res.status(404).json({ 
         error: 'Not found',
@@ -334,51 +455,80 @@ export const getArtistDashboard = async (req: AuthRequest, res: Response, next: 
       });
     }
 
-    const artistId = artist._id.toString();
+    const artistId = artist.id;
+    const db = getDb();
 
-    // Get tracks and albums
-    const [tracks, albums, copyrightRemovedTracks] = await Promise.all([
-      TrackModel.find({ artistId }).sort({ createdAt: -1 }).limit(10).lean(),
-      AlbumModel.find({ artistId }).sort({ createdAt: -1 }).limit(10).lean(),
-      TrackModel.find({ artistId, copyrightRemoved: true })
-        .sort({ removedAt: -1 })
-        .limit(20)
-        .lean(),
-    ]);
+    /**
+     * The dashboard is the artist's OWN view of their catalogue, so none of
+     * these compose `playableTrackFilter()` — a taken-down track has to appear
+     * here, and the third query exists to list exactly those.
+     */
+    const [recentTracks, recentAlbums, copyrightRemovedTracks, trackCount, albumCount] =
+      await Promise.all([
+        db
+          .select({
+            id: tracks.id, title: tracks.title, createdAt: tracks.createdAt,
+            playCount: tracks.playCount,
+          })
+          .from(tracks)
+          .where(eq(tracks.artistId, artistId))
+          .orderBy(descNullsLast(tracks.createdAt))
+          .limit(10),
+        db
+          .select({
+            id: albums.id, title: albums.title, createdAt: albums.createdAt,
+            totalTracks: albums.totalTracks,
+          })
+          .from(albums)
+          .where(eq(albums.artistId, artistId))
+          .orderBy(descNullsLast(albums.createdAt))
+          .limit(10),
+        db
+          .select({
+            id: tracks.id, title: tracks.title, removedAt: tracks.removedAt,
+            removedReason: tracks.removedReason,
+          })
+          .from(tracks)
+          .where(and(eq(tracks.artistId, artistId), eq(tracks.copyrightRemoved, true)))
+          .orderBy(descNullsLast(tracks.removedAt))
+          .limit(20),
+        db.select({ total: count() }).from(tracks).where(eq(tracks.artistId, artistId)),
+        db.select({ total: count() }).from(albums).where(eq(albums.artistId, artistId)),
+      ]);
 
-    // Get counts
-    const [totalTracks, totalAlbums] = await Promise.all([
-      TrackModel.countDocuments({ artistId }),
-      AlbumModel.countDocuments({ artistId }),
-    ]);
-
-    const totalPlays = tracks.reduce((sum, track) => sum + (track.playCount || 0), 0);
+    /**
+     * Summed over the ten most recent tracks, which is what the Mongo version
+     * did too — `tracks` there was the same `.limit(10)` list. Preserved rather
+     * than corrected to a real total: changing what a dashboard number MEANS is
+     * not a port, and doing it silently inside one would be worse.
+     */
+    const totalPlays = recentTracks.reduce((sum, track) => sum + (track.playCount || 0), 0);
 
     const dashboard: ArtistDashboard = {
-      artist: formatArtistWithImage(artist),
-      totalTracks,
-      totalAlbums,
+      artist: await toArtistResponse(artist),
+      totalTracks: trackCount[0]?.total ?? 0,
+      totalAlbums: albumCount[0]?.total ?? 0,
       totalPlays,
-      followers: artist.stats.followers || 0,
+      followers: artist.statsFollowers || 0,
       strikeCount: artist.strikeCount || 0,
       uploadsDisabled: artist.uploadsDisabled || false,
-      recentTracks: tracks.map(track => ({
-        id: track._id.toString(),
+      recentTracks: recentTracks.map(track => ({
+        id: track.id,
         title: track.title,
-        createdAt: track.createdAt?.toISOString() || new Date().toISOString(),
+        createdAt: track.createdAt.toISOString(),
         playCount: track.playCount || 0,
       })),
-      recentAlbums: albums.map(album => ({
-        id: album._id.toString(),
+      recentAlbums: recentAlbums.map(album => ({
+        id: album.id,
         title: album.title,
-        createdAt: album.createdAt?.toISOString() || new Date().toISOString(),
+        createdAt: album.createdAt.toISOString(),
         totalTracks: album.totalTracks || 0,
       })),
       copyrightRemovedTracks: copyrightRemovedTracks.map(track => ({
-        id: track._id.toString(),
+        id: track.id,
         title: track.title,
         removedAt: track.removedAt?.toISOString() || new Date().toISOString(),
-        removedReason: track.removedReason,
+        removedReason: track.removedReason ?? undefined,
       })),
     };
 
@@ -394,7 +544,7 @@ export const getArtistDashboard = async (req: AuthRequest, res: Response, next: 
  */
 export const getArtistInsights = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -402,7 +552,7 @@ export const getArtistInsights = async (req: AuthRequest, res: Response, next: N
     const period = (req.query.period as string) || 'alltime';
 
     // Get artist profile
-    const artist = await ArtistModel.findOne({ ownerOxyUserId: userId }).lean();
+    const artist = await findOwnedArtistRow(userId);
     if (!artist) {
       return res.status(404).json({ 
         error: 'Not found',
@@ -410,29 +560,39 @@ export const getArtistInsights = async (req: AuthRequest, res: Response, next: N
       });
     }
 
-    const artistId = artist._id.toString();
+    const artistId = artist.id;
 
-    // Get all tracks for this artist
-    const allTracks = await TrackModel.find({ artistId }).lean();
-
-    // Calculate total plays
-    const totalPlays = allTracks.reduce((sum, track) => sum + (track.playCount || 0), 0);
-
-    // Get top tracks by play count
-    const topTracks = allTracks
-      .map(track => ({
-        trackId: track._id.toString(),
-        title: track.title,
-        playCount: track.playCount || 0,
-      }))
-      .sort((a, b) => b.playCount - a.playCount)
-      .slice(0, 10);
+    /**
+     * Two queries instead of loading every track into memory.
+     *
+     * The Mongo version read the artist's ENTIRE catalogue with `.lean()`, summed
+     * `playCount` in JS and sorted the whole array to take ten. Both answers are
+     * available from the database: the sum is an aggregate and the top ten is an
+     * `ORDER BY … LIMIT 10` the `tracks_artist_id_idx` can serve. Same numbers,
+     * bounded memory.
+     */
+    const [summed, topTrackRows] = await Promise.all([
+      getDb()
+        .select({ totalPlays: sql<number>`coalesce(sum(${tracks.playCount}), 0)::int` })
+        .from(tracks)
+        .where(eq(tracks.artistId, artistId)),
+      getDb()
+        .select({ id: tracks.id, title: tracks.title, playCount: tracks.playCount })
+        .from(tracks)
+        .where(eq(tracks.artistId, artistId))
+        .orderBy(descNullsLast(tracks.playCount))
+        .limit(10),
+    ]);
 
     const insights: ArtistInsights = {
-      totalPlays,
-      monthlyListeners: artist.stats.monthlyListeners || 0,
-      followers: artist.stats.followers || 0,
-      topTracks,
+      totalPlays: summed[0]?.totalPlays ?? 0,
+      monthlyListeners: artist.statsMonthlyListeners || 0,
+      followers: artist.statsFollowers || 0,
+      topTracks: topTrackRows.map((track) => ({
+        trackId: track.id,
+        title: track.title,
+        playCount: track.playCount || 0,
+      })),
       period: period as '7days' | '30days' | 'alltime',
     };
 
@@ -451,7 +611,7 @@ export const getArtistInsights = async (req: AuthRequest, res: Response, next: N
  */
 export const updateMyArtistProfile = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -462,23 +622,41 @@ export const updateMyArtistProfile = async (req: AuthRequest, res: Response, nex
       return res.status(400).json({ error: 'Invalid request body', details: parsed.error.issues });
     }
 
-    const artist = await ArtistModel.findOne({ ownerOxyUserId: userId });
+    const artist = await findOwnedArtistRow(userId);
     if (!artist) {
       return res.status(404).json({ error: 'Artist profile not found' });
     }
 
     const updates = parsed.data;
 
-    // Explicit field-by-field assignment — the parsed object is never spread onto the doc.
-    if (updates.name !== undefined) artist.name = updates.name;
-    if (updates.bio !== undefined) artist.bio = updates.bio;
-    if (updates.image !== undefined) artist.image = updates.image;
-    if (updates.genres !== undefined) artist.genres = updates.genres;
+    /**
+     * An explicit set object, built key by key — the parsed body is never
+     * spread. `name` carries `nameKey` with it, because the two are one fact and
+     * Mongoose's pre-save hook used to keep them together; leaving `nameKey`
+     * behind would silently strand every credit that matches on it.
+     */
+    const set: Partial<typeof catalogEntities.$inferInsert> = {};
+    if (updates.name !== undefined) {
+      set.name = updates.name;
+      set.nameKey = normalizeNameKey(updates.name);
+    }
+    if (updates.bio !== undefined) set.bio = updates.bio;
+    if (updates.image !== undefined) set.imageId = updates.image;
+    if (updates.genres !== undefined) set.genres = updates.genres;
 
-    await artist.save();
+    const [updated] = Object.keys(set).length
+      ? await getDb()
+          .update(catalogEntities)
+          .set(set)
+          .where(eq(catalogEntities.id, artist.id))
+          .returning(publicColumns(catalogEntities, PROTECTED_COLUMNS_BY_TABLE))
+      : [artist];
 
-    const formattedArtist = formatArtistWithImage(artist.toObject());
-    res.json(formattedArtist);
+    if (!updated) {
+      return res.status(404).json({ error: 'Artist profile not found' });
+    }
+
+    res.json(await toArtistResponse(updated));
   } catch (error) {
     next(error);
   }
@@ -502,29 +680,8 @@ export const updateMyArtistProfile = async (req: AuthRequest, res: Response, nex
  * only thing that writes `ownerOxyUserId` / `claimedByOxyUserId` / `claimable`.
  */
 
-type ArtistClaimRecord = Pick<
-  IArtistClaim,
-  'artistId' | 'oxyUserId' | 'evidence' | 'status' | 'resolvedAt' | 'resolvedBy' | 'resolutionNote'
-> & {
-  _id: mongoose.Types.ObjectId;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-function serializeArtistClaim(claim: ArtistClaimRecord): ArtistClaim {
-  return {
-    id: claim._id.toString(),
-    artistId: claim.artistId,
-    oxyUserId: claim.oxyUserId,
-    evidence: claim.evidence,
-    status: claim.status,
-    resolvedAt: claim.resolvedAt?.toISOString(),
-    resolvedBy: claim.resolvedBy,
-    resolutionNote: claim.resolutionNote,
-    createdAt: claim.createdAt.toISOString(),
-    updatedAt: claim.updatedAt.toISOString(),
-  };
-}
+// The claim DTO is `toArtistClaimDto` in `db/creators/claims.ts`, beside the
+// rows it serialises — the same place every other vertical keeps its serializer.
 
 /**
  * POST /api/artists/:id/claim
@@ -536,14 +693,14 @@ function serializeArtistClaim(claim: ArtistClaimRecord): ArtistClaim {
  */
 export const createArtistClaim = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
     const userId = getAuthenticatedUserId(req);
     const id = getParam(req, 'id');
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!isLiveEntityId(id)) {
       return res.status(404).json({ error: 'Artist not found' });
     }
 
@@ -552,9 +709,15 @@ export const createArtistClaim = async (req: AuthRequest, res: Response, next: N
       return res.status(400).json({ error: 'Invalid request body', details: parsed.error.issues });
     }
 
-    const artist = await ArtistModel.findById(id)
-      .select('claimable ownerOxyUserId claimedByOxyUserId')
-      .lean();
+    const [artist] = await getDb()
+      .select({
+        claimable: catalogEntities.claimable,
+        ownerOxyUserId: catalogEntities.ownerOxyUserId,
+        claimedByOxyUserId: catalogEntities.claimedByOxyUserId,
+      })
+      .from(catalogEntities)
+      .where(and(eq(catalogEntities.type, 'artist'), eq(catalogEntities.id, id)))
+      .limit(1);
     if (!artist) {
       return res.status(404).json({ error: 'Artist not found' });
     }
@@ -575,35 +738,38 @@ export const createArtistClaim = async (req: AuthRequest, res: Response, next: N
      * claimant read a real reason instead of waiting for a review that could only
      * ever be rejected.
      */
-    const existingProfile = await ArtistModel.findOne({ ownerOxyUserId: userId })
-      .select('_id')
-      .lean();
+    const existingProfile = await findOwnedArtistRow(userId);
     if (existingProfile) {
       return res.status(409).json({
         error: 'Already an artist',
         message:
           'You already have an artist profile. Contact support to merge it with this one.',
-        artistId: existingProfile._id.toString(),
+        artistId: existingProfile.id,
       });
     }
 
     try {
-      const claim = await ArtistClaimModel.create({
+      const claim = await insertArtistClaim({
         artistId: id,
         oxyUserId: userId,
         evidence: parsed.data.evidence.trim(),
-        status: 'pending',
       });
 
-      logger.info(`[Artists] Artist claim ${claim._id.toString()} opened on ${id} by ${userId}`);
-      return res.status(201).json({ claim: serializeArtistClaim(claim) });
+      logger.info(`[Artists] Artist claim ${claim.id} opened on ${id} by ${userId}`);
+      return res.status(201).json({ claim: toArtistClaimDto(claim) });
     } catch (error: unknown) {
-      // The partial unique index is the authority on "one OPEN claim per claimant
-      // per artist": a read-then-write leaves exactly the window two taps land in.
-      const mongoCode = error !== null && typeof error === 'object'
-        ? (error as Record<string, unknown>)['code']
-        : undefined;
-      if (mongoCode === 11000) {
+      /**
+       * The partial unique index is the authority on "one OPEN claim per
+       * claimant per artist": a read-then-write leaves exactly the window two
+       * taps land in.
+       *
+       * Matched by CONSTRAINT NAME, not by the bare `23505` the Mongo version's
+       * bare `11000` translated to. `artist_claims` carries exactly one unique
+       * index, so today the two are the same test — but a second one added
+       * tomorrow would be reported to the claimant as "you already have a claim
+       * awaiting review", which is a lie about a bug.
+       */
+      if (isUniqueViolation(error, 'artist_claims_artist_id_oxy_user_id_pending_key')) {
         return res.status(409).json({
           error: 'Claim pending',
           message: 'You already have a claim awaiting review on this artist',
@@ -619,17 +785,14 @@ export const createArtistClaim = async (req: AuthRequest, res: Response, next: N
 /** GET /api/artist-claims/mine — the claimant's own claims, newest first. */
 export const listMyArtistClaims = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
     const userId = getAuthenticatedUserId(req);
-    const claims = await ArtistClaimModel.find({ oxyUserId: userId })
-      .sort({ createdAt: -1 })
-      .limit(MAX_CLAIMS_PAGE)
-      .lean();
+    const claims = await listArtistClaimsByClaimant(userId, MAX_CLAIMS_PAGE);
 
-    res.json({ claims: claims.map(serializeArtistClaim) });
+    res.json({ claims: claims.map(toArtistClaimDto) });
   } catch (error) {
     next(error);
   }
@@ -638,7 +801,7 @@ export const listMyArtistClaims = async (req: AuthRequest, res: Response, next: 
 /** GET /api/artist-claims — the review queue (reviewers only), oldest first. */
 export const listArtistClaims = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -651,17 +814,10 @@ export const listArtistClaims = async (req: AuthRequest, res: Response, next: Ne
     const limit = parseBoundedLimit(req.query.limit, 50);
     const offset = parseOffset(req.query.offset);
 
-    const [claims, total] = await Promise.all([
-      ArtistClaimModel.find({ status })
-        .sort({ createdAt: 1 })
-        .skip(offset)
-        .limit(limit)
-        .lean(),
-      ArtistClaimModel.countDocuments({ status }),
-    ]);
+    const { claims, total } = await listArtistClaimsByStatus(status, limit, offset);
 
     res.json({
-      claims: claims.map(serializeArtistClaim),
+      claims: claims.map(toArtistClaimDto),
       total,
       hasMore: offset + claims.length < total,
     });
@@ -681,14 +837,22 @@ export const listArtistClaims = async (req: AuthRequest, res: Response, next: Ne
  */
 export const resolveArtistClaim = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
     const reviewerId = getAuthenticatedUserId(req);
     const id = getParam(req, 'id');
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    /**
+     * `isLiveEntityId` now, matching the sibling guard in `createArtistClaim`.
+     *
+     * This read `ObjectId.isValid` while `artist_claims` was Mongoose, on the
+     * rule that the guard is decided by which store the id addresses rather
+     * than by the file it appears in — Task 13 moved the table, so it moved
+     * with it. `ObjectId.isValid` alone would 404 every claim opened since.
+     */
+    if (!isLiveEntityId(id)) {
       return res.status(404).json({ error: 'Claim not found' });
     }
 
@@ -697,7 +861,7 @@ export const resolveArtistClaim = async (req: AuthRequest, res: Response, next: 
       return res.status(400).json({ error: 'Invalid request body', details: parsed.error.issues });
     }
 
-    const claim = await ArtistClaimModel.findById(id);
+    const claim = await findArtistClaimById(id);
     if (!claim) {
       return res.status(404).json({ error: 'Claim not found' });
     }
@@ -709,38 +873,46 @@ export const resolveArtistClaim = async (req: AuthRequest, res: Response, next: 
     }
 
     if (parsed.data.status === 'approved') {
-      const conflictingProfile = await ArtistModel.findOne({ ownerOxyUserId: claim.oxyUserId })
-        .select('_id')
-        .lean();
+      const conflictingProfile = await findOwnedArtistRow(claim.oxyUserId);
       if (conflictingProfile) {
         return res.status(409).json({
           error: 'Claimant already an artist',
           message:
             'The claimant registered an artist profile after opening this claim; ' +
             'approving would give them two.',
-          artistId: conflictingProfile._id.toString(),
+          artistId: conflictingProfile.id,
         });
       }
 
-      // Equality to null matches a missing field as well as an explicit null, so
-      // this is the precondition "nobody holds this profile" in one filter.
-      const granted = await ArtistModel.updateOne(
-        {
-          _id: claim.artistId,
-          claimable: true,
-          ownerOxyUserId: null,
-          claimedByOxyUserId: null,
-        },
-        {
-          $set: {
-            ownerOxyUserId: claim.oxyUserId,
-            claimedByOxyUserId: claim.oxyUserId,
-            claimable: false,
-          },
-        },
-      );
+      /**
+       * The precondition "nobody holds this profile" stays IN the `WHERE`, which
+       * is what makes the grant atomic against a concurrent claim.
+       *
+       * `isNull` rather than `eq(column, null)`: in SQL `x = null` is never true,
+       * so the Mongo spelling — where equality to null also matched a MISSING
+       * field — would translate to a filter that matches nothing and a grant
+       * that always 409s. The two owner columns are nullable and unset means
+       * null here, so `is null` is the faithful translation.
+       */
+      const granted = await getDb()
+        .update(catalogEntities)
+        .set({
+          ownerOxyUserId: claim.oxyUserId,
+          claimedByOxyUserId: claim.oxyUserId,
+          claimable: false,
+        })
+        .where(
+          and(
+            eq(catalogEntities.id, claim.artistId),
+            eq(catalogEntities.type, 'artist'),
+            eq(catalogEntities.claimable, true),
+            isNull(catalogEntities.ownerOxyUserId),
+            isNull(catalogEntities.claimedByOxyUserId)
+          )
+        )
+        .returning({ id: catalogEntities.id });
 
-      if (granted.modifiedCount !== 1) {
+      if (granted.length !== 1) {
         return res.status(409).json({
           error: 'Not claimable',
           message: 'This artist profile already belongs to someone',
@@ -748,37 +920,52 @@ export const resolveArtistClaim = async (req: AuthRequest, res: Response, next: 
       }
     }
 
-    claim.status = parsed.data.status;
-    claim.resolvedAt = new Date();
-    claim.resolvedBy = reviewerId;
-    if (parsed.data.resolutionNote !== undefined) claim.resolutionNote = parsed.data.resolutionNote;
-    await claim.save();
+    const resolvedAt = new Date();
+
+    /**
+     * `status = 'pending'` is in the WHERE, not only in the check above.
+     *
+     * The read-then-save it replaces left a window two reviewers could both
+     * pass through, and on this path the loser would overwrite the winner's
+     * verdict on a claim whose artist had already been granted. Nothing matched
+     * means somebody else answered it first, which is a 409 rather than a
+     * silent no-op.
+     */
+    const resolved = await resolvePendingArtistClaim({
+      id,
+      status: parsed.data.status,
+      resolvedBy: reviewerId,
+      resolvedAt,
+      resolutionNote: parsed.data.resolutionNote,
+    });
+    if (!resolved) {
+      return res.status(409).json({
+        error: 'Already resolved',
+        message: 'Another reviewer answered this claim first',
+      });
+    }
 
     /**
      * Every other open claim on a granted profile is now unanswerable — the
      * artist has an owner, so no reviewer can approve them. Closing them here
      * keeps the queue truthful and, because the open-claim index is partial on
-     * `status: 'pending'`, frees the slot so a rejected claimant can appeal later.
+     * `status = 'pending'`, frees the slot so a rejected claimant can appeal later.
      */
     if (parsed.data.status === 'approved') {
-      await ArtistClaimModel.updateMany(
-        { artistId: claim.artistId, status: 'pending', _id: { $ne: claim._id } },
-        {
-          $set: {
-            status: 'rejected',
-            resolvedAt: new Date(),
-            resolvedBy: reviewerId,
-            resolutionNote: 'Another claim on this artist profile was approved',
-          },
-        },
-      );
+      await rejectOtherPendingClaims({
+        artistId: resolved.artistId,
+        exceptClaimId: resolved.id,
+        resolvedBy: reviewerId,
+        resolvedAt,
+        resolutionNote: 'Another claim on this artist profile was approved',
+      });
     }
 
     logger.info(
-      `[Artists] Claim ${id} ${parsed.data.status} by ${reviewerId} (artist ${claim.artistId})`,
+      `[Artists] Claim ${id} ${parsed.data.status} by ${reviewerId} (artist ${resolved.artistId})`,
     );
 
-    res.json({ claim: serializeArtistClaim(claim) });
+    res.json({ claim: toArtistClaimDto(resolved) });
   } catch (error) {
     next(error);
   }
@@ -804,92 +991,109 @@ const contributionSettingsSchema = z.object({
   acceptsContributions: z.boolean(),
 });
 
-interface ContributedTrackRow {
-  _id: mongoose.Types.ObjectId;
-  title: string;
-  albumName?: string;
-  duration: number;
-  coverArt?: string;
-  isAvailable?: boolean;
-  copyrightRemoved?: boolean;
-  removedAt?: Date;
-  removedReason?: string;
-  createdAt?: Date;
-  attestation: { uploaderOxyUserId: string; acceptedAt: Date }[];
-}
-
 /**
- * The stages that select "tracks on this artist that somebody else contributed".
+ * "Tracks on this artist that somebody else contributed" — and the ONE place
+ * the vertical split is a real join rather than two independent reads.
  *
- * A `ContributionAttestation` is what makes a track a contribution — it is
+ * A `ContributionAttestation` is what makes a track a contribution: it is
  * written when a publication is made by an account that is not the artist, and
- * nothing else records that fact. The `$lookup` converts on the LOCAL side
- * (`$toString: '$_id'`) and leaves the foreign `trackId` a bare path so the
- * attestation's unique index on it serves the join; the leading `$match` is a bare
- * indexed field, so the lookup only ever runs over one artist's own tracks.
+ * nothing else records that fact. Under Mongo this was a single aggregation with
+ * a `$lookup` from `tracks` into `contributionattestations`.
+ *
+ * That pipeline could not survive the SPLIT: `tracks` was Postgres while
+ * `contribution_attestations` was still Mongoose, so this became three bounded
+ * round trips.
+ *
+ * **Task 13 ported the writer, and both tables are Postgres now** — the split
+ * that forced the shape is gone, and one join would do. It is left as three
+ * round trips because that is a rewrite of a working read rather than part of
+ * the port, and each trip is already bounded (see below). Whoever collapses it
+ * should delete this paragraph with the code.
+ *
+ * The three round trips, all Postgres now, and why each is bounded:
+ *
+ *   1. The artist's own track ids. Indexed on `artist_id`, and this is the SAME
+ *      set the old pipeline's leading `$match: { artistId }` scanned, so
+ *      nothing got wider.
+ *   2. Attestations for those ids. `contribution_attestations_track_id_key`
+ *      serves the `IN`, as the unique index served the `$lookup` before.
+ *   3. The page itself, over the contributed ids only.
  */
-function contributedTrackStages(artistId: string): mongoose.PipelineStage[] {
-  return [
-    { $match: { artistId } },
-    {
-      $lookup: {
-        from: ContributionAttestationModel.collection.name,
-        let: { tid: { $toString: '$_id' } },
-        pipeline: [
-          { $match: { $expr: { $eq: ['$trackId', '$$tid'] } } },
-          { $project: { _id: 0, uploaderOxyUserId: 1, acceptedAt: 1 } },
-        ],
-        as: 'attestation',
-      },
-    },
-    { $match: { 'attestation.0': { $exists: true } } },
-  ];
+async function loadContributedTrackIds(artistId: string): Promise<Map<string, {
+  uploaderOxyUserId: string;
+  acceptedAt: Date;
+}>> {
+  const ownTrackIds = (
+    await getDb().select({ id: tracks.id }).from(tracks).where(eq(tracks.artistId, artistId))
+  ).map((row) => row.id);
+
+  if (ownTrackIds.length === 0) return new Map();
+
+  return findAttestationsByTrackIds(ownTrackIds);
 }
 
 /** GET /api/artists/me/contributions — recordings other people published onto my profile. */
 export const getMyContributions = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
     const userId = getAuthenticatedUserId(req);
-    const artist = await ArtistModel.findOne({ ownerOxyUserId: userId }).select('_id').lean();
+    const artist = await findOwnedArtistRow(userId);
     if (!artist) {
       return res.status(404).json({ error: 'Artist profile not found' });
     }
 
     const limit = parseBoundedLimit(req.query.limit, 50);
     const offset = parseOffset(req.query.offset);
-    const stages = contributedTrackStages(artist._id.toString());
 
-    const [rows, counted] = await Promise.all([
-      TrackModel.aggregate<ContributedTrackRow>([
-        ...stages,
-        { $sort: { createdAt: -1 } },
-        { $skip: offset },
-        { $limit: limit },
-      ]),
-      TrackModel.aggregate<{ total: number }>([...stages, { $count: 'total' }]),
-    ]);
+    const attestationByTrackId = await loadContributedTrackIds(artist.id);
+    const contributedIds = [...attestationByTrackId.keys()];
 
-    const total = counted[0]?.total ?? 0;
+    // `inArray` with an empty list is a Postgres syntax error, not an empty
+    // result — so the empty case answers without a query at all.
+    const rows = contributedIds.length
+      ? await getDb()
+          .select({
+            id: tracks.id,
+            title: tracks.title,
+            albumName: tracks.albumName,
+            duration: tracks.duration,
+            coverArtId: tracks.coverArtId,
+            isAvailable: tracks.isAvailable,
+            copyrightRemoved: tracks.copyrightRemoved,
+            removedAt: tracks.removedAt,
+            removedReason: tracks.removedReason,
+            createdAt: tracks.createdAt,
+          })
+          .from(tracks)
+          .where(inArray(tracks.id, contributedIds))
+          .orderBy(descNullsLast(tracks.createdAt))
+          .offset(offset)
+          .limit(limit)
+      : [];
+
+    const total = contributedIds.length;
 
     res.json({
-      contributions: rows.map((row) => ({
-        trackId: row._id.toString(),
-        title: row.title,
-        albumName: row.albumName,
-        duration: row.duration,
-        coverArt: row.coverArt,
-        isAvailable: row.isAvailable !== false,
-        copyrightRemoved: row.copyrightRemoved === true,
-        removedAt: row.removedAt?.toISOString(),
-        removedReason: row.removedReason,
-        createdAt: row.createdAt?.toISOString(),
-        uploaderOxyUserId: row.attestation[0]?.uploaderOxyUserId,
-        attestedAt: row.attestation[0]?.acceptedAt?.toISOString(),
-      })),
+      contributions: rows.map((row) => {
+        const attestation = attestationByTrackId.get(row.id);
+        return {
+          trackId: row.id,
+          title: row.title,
+          albumName: row.albumName ?? undefined,
+          duration: row.duration,
+          coverArt: normalizeImageRef(row.coverArtId),
+          isAvailable: row.isAvailable,
+          copyrightRemoved: row.copyrightRemoved,
+          removedAt: row.removedAt?.toISOString(),
+          removedReason: row.removedReason ?? undefined,
+          createdAt: row.createdAt.toISOString(),
+          uploaderOxyUserId: attestation?.uploaderOxyUserId,
+          attestedAt: attestation?.acceptedAt?.toISOString(),
+        };
+      }),
       total,
       hasMore: offset + rows.length < total,
     });
@@ -908,14 +1112,14 @@ export const getMyContributions = async (req: AuthRequest, res: Response, next: 
  */
 export const resolveMyContribution = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
     const userId = getAuthenticatedUserId(req);
     const trackId = getParam(req, 'trackId');
 
-    if (!mongoose.Types.ObjectId.isValid(trackId)) {
+    if (!isLiveEntityId(trackId)) {
       return res.status(404).json({ error: 'Track not found' });
     }
 
@@ -924,20 +1128,24 @@ export const resolveMyContribution = async (req: AuthRequest, res: Response, nex
       return res.status(400).json({ error: 'Invalid request body', details: parsed.error.issues });
     }
 
-    const artist = await ArtistModel.findOne({ ownerOxyUserId: userId }).select('_id name').lean();
+    const artist = await findOwnedArtistRow(userId);
     if (!artist) {
       return res.status(404).json({ error: 'Artist profile not found' });
     }
 
-    const track = await TrackModel.findOne({ _id: trackId, artistId: artist._id.toString() });
+    // The ownership check is IN the query — a track on somebody else's profile
+    // resolves to nothing, exactly as a nonexistent id does.
+    const [track] = await getDb()
+      .select({ id: tracks.id, copyrightRemoved: tracks.copyrightRemoved })
+      .from(tracks)
+      .where(and(eq(tracks.id, trackId), eq(tracks.artistId, artist.id)))
+      .limit(1);
     if (!track) {
       return res.status(404).json({ error: 'Track not found' });
     }
 
-    const attestation = await ContributionAttestationModel.findOne({ trackId })
-      .select('uploaderOxyUserId')
-      .lean();
-    if (!attestation) {
+    const uploaderOxyUserId = await findAttestationUploader(trackId);
+    if (!uploaderOxyUserId) {
       return res.status(404).json({
         error: 'Not a contribution',
         message: 'This track was published by you, not contributed by someone else',
@@ -952,7 +1160,7 @@ export const resolveMyContribution = async (req: AuthRequest, res: Response, nex
      * one would file a second report and, without the service's own guard, count a
      * second strike for one work.
      */
-    if (track.copyrightRemoved === true) {
+    if (track.copyrightRemoved) {
       return res.status(409).json({
         error: 'Track removed',
         message: 'This track was already removed for copyright',
@@ -968,39 +1176,66 @@ export const resolveMyContribution = async (req: AuthRequest, res: Response, nex
        * says who asked or why. The claim was reviewed by a human, so the profile
        * owner IS the rightsholder here and the report is stored already resolved.
        */
-      const report = await CopyrightReportModel.create({
-        trackId,
-        artistId: artist._id.toString(),
-        reporterOxyUserId: userId,
-        reason: parsed.data.reason?.trim() ||
-          `Takedown requested by the owner of the artist profile "${artist.name}"`,
-        status: 'approved',
-        resolvedAt: new Date(),
-        resolvedBy: userId,
-      });
+      /**
+       * On DRIZZLE, and this one is not a scope choice — a foreign key decides
+       * it.
+       *
+       * `copyright_reports` belongs to Task 13's vertical, so the obvious split
+       * is the one every other cross-vertical read here takes: keep the Mongoose
+       * write, hand the id to the ported service. That is UNREPRESENTABLE.
+       * `tracks.copyright_report_id` is a REAL `.references()` constraint on
+       * `copyright_reports.id`, so `takeDownTrack` — already drizzle — writes a
+       * Mongo ObjectId into a column Postgres checks, and the update fails with
+       * `23503 tracks_copyright_report_id_copyright_reports_id_fk`. Measured,
+       * not predicted: that is exactly what this test suite reported.
+       *
+       * The difference from `UserUpload` and `UserMusicPreferences`, which
+       * stayed Mongoose while that was written, is that neither is referenced
+       * by a catalog column. A hybrid split survives a cross-vertical READ and
+       * cannot survive a cross-vertical FOREIGN KEY. (`user_uploads` has since
+       * moved with Task 13; `user_music_preferences` is Task 15's and is still
+       * the live example.)
+       */
+      const [report] = await getDb()
+        .insert(copyrightReports)
+        .values({
+          trackId,
+          artistId: artist.id,
+          reporterOxyUserId: userId,
+          reason: parsed.data.reason?.trim() ||
+            `Takedown requested by the owner of the artist profile "${artist.name}"`,
+          status: 'approved',
+          resolvedAt: new Date(),
+          resolvedBy: userId,
+        })
+        .returning({ id: copyrightReports.id, reason: copyrightReports.reason });
+
+      if (!report) {
+        return res.status(500).json({ error: 'Failed to record the takedown' });
+      }
 
       const takedown = await takeDownTrack({
         trackId,
         reason: report.reason,
         actorOxyUserId: userId,
-        copyrightReportId: report._id.toString(),
+        copyrightReportId: report.id,
       });
 
       if (!takedown) {
         // The track went between the ownership check and the takedown. Nothing was
         // removed, so the report describes a decision that never happened — leaving
         // it would be a resolved takedown with no takedown behind it.
-        await CopyrightReportModel.deleteOne({ _id: report._id });
+        await getDb().delete(copyrightReports).where(eq(copyrightReports.id, report.id));
         return res.status(404).json({ error: 'Track not found' });
       }
 
       return res.json({ action: 'takedown', trackId, takedown });
     }
 
-    track.isAvailable = parsed.data.action === 'keep';
-    await track.save();
+    const isAvailable = parsed.data.action === 'keep';
+    await getDb().update(tracks).set({ isAvailable }).where(eq(tracks.id, trackId));
 
-    res.json({ action: parsed.data.action, trackId, isAvailable: track.isAvailable });
+    res.json({ action: parsed.data.action, trackId, isAvailable });
   } catch (error) {
     next(error);
   }
@@ -1016,7 +1251,7 @@ export const resolveMyContribution = async (req: AuthRequest, res: Response, nex
  */
 export const updateMyContributionSettings = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -1027,15 +1262,19 @@ export const updateMyContributionSettings = async (req: AuthRequest, res: Respon
       return res.status(400).json({ error: 'Invalid request body', details: parsed.error.issues });
     }
 
-    const artist = await ArtistModel.findOne({ ownerOxyUserId: userId });
-    if (!artist) {
+    const [updated] = await getDb()
+      .update(catalogEntities)
+      .set({ acceptsContributions: parsed.data.acceptsContributions })
+      .where(
+        and(eq(catalogEntities.type, 'artist'), eq(catalogEntities.ownerOxyUserId, userId))
+      )
+      .returning({ acceptsContributions: catalogEntities.acceptsContributions });
+
+    if (!updated) {
       return res.status(404).json({ error: 'Artist profile not found' });
     }
 
-    artist.acceptsContributions = parsed.data.acceptsContributions;
-    await artist.save();
-
-    res.json({ acceptsContributions: artist.acceptsContributions });
+    res.json({ acceptsContributions: updated.acceptsContributions });
   } catch (error) {
     next(error);
   }
@@ -1053,13 +1292,18 @@ export const updateMyContributionSettings = async (req: AuthRequest, res: Respon
  * artist has said yes.
  *
  * Two independent mechanisms already make that structural, and these handlers
- * are written to work WITH them rather than around them: the Mongoose path is
- * `select: false`, so a serializer cannot spread a field the query never
- * fetched, and `artistSchema` has no name for it, so it cannot be emitted
- * deliberately either. Reading suggestions therefore takes an explicit
- * `+imageSuggestions`, and the response is typed as
+ * are written to work WITH them rather than around them: `imageSuggestions` is
+ * in `PROTECTED_COLUMNS_BY_TABLE`, so `publicColumns()` leaves it off the row
+ * type entirely and a serializer cannot name it, and `artistSchema` has no name
+ * for it either, so it cannot be emitted deliberately. Reading suggestions
+ * therefore takes an explicit projection, and the response is typed as
  * `ArtistImageSuggestionsResponse` — its own contract, reachable only from an
  * endpoint scoped to the caller's own profile.
+ *
+ * (Under Mongo the first mechanism was `select: false`, which was a QUERY
+ * PROJECTION and inert against `aggregate()`. The protected-column registry is
+ * the stronger replacement: it removes the column from the TYPE, so naming it
+ * fails `tsc` rather than depending on which read shape was used.)
  */
 
 const imageSuggestionActionSchema = z.object({
@@ -1077,14 +1321,12 @@ const imageSuggestionActionSchema = z.object({
 /** GET /api/artists/me/image-suggestions — the artist's own pending photo suggestions. */
 export const getMyImageSuggestions = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
     const userId = getAuthenticatedUserId(req);
-    const artist = await ArtistModel.findOne({ ownerOxyUserId: userId })
-      .select('+imageSuggestions')
-      .lean();
+    const artist = await findOwnArtistWithSuggestions(userId);
     if (!artist) {
       return res.status(404).json({ error: 'Artist profile not found' });
     }
@@ -1092,7 +1334,10 @@ export const getMyImageSuggestions = async (req: AuthRequest, res: Response, nex
     const response: ArtistImageSuggestionsResponse = {
       suggestions: (artist.imageSuggestions ?? []).map((suggestion) => ({
         image: suggestion.image,
-        proposedAt: suggestion.proposedAt.toISOString(),
+        // `jsonb` round-trips a Date as an ISO STRING, where Mongo handed back a
+        // `Date`. Accepting both keeps this correct for rows written on either
+        // side of the cutover rather than only for ones written since.
+        proposedAt: new Date(suggestion.proposedAt).toISOString(),
         proposedByOxyUserId: suggestion.proposedByOxyUserId,
         sourceUploadId: suggestion.sourceUploadId,
       })),
@@ -1120,7 +1365,7 @@ export const getMyImageSuggestions = async (req: AuthRequest, res: Response, nex
  */
 export const acceptMyImageSuggestion = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -1130,7 +1375,7 @@ export const acceptMyImageSuggestion = async (req: AuthRequest, res: Response, n
       return res.status(400).json({ error: 'Invalid request body', details: parsed.error.issues });
     }
 
-    const artist = await ArtistModel.findOne({ ownerOxyUserId: userId }).select('+imageSuggestions');
+    const artist = await findOwnArtistWithSuggestions(userId);
     if (!artist) {
       return res.status(404).json({ error: 'Artist profile not found' });
     }
@@ -1152,6 +1397,39 @@ export const acceptMyImageSuggestion = async (req: AuthRequest, res: Response, n
      */
     const externalImage = suggestion.image.origin === 'external' ? suggestion.image : undefined;
 
+    const storedVariantIds = [
+      artist.imageSizesSmallId,
+      artist.imageSizesMediumId,
+      artist.imageSizesLargeId,
+      artist.imageSizesXlargeId,
+      artist.imageSizesXxlargeId,
+      artist.imageSizesOriginalId,
+    ];
+    const existingVariants = await loadImageVariants(storedVariantIds);
+
+    /**
+     * `undefined` when the artist has NO stored variants — not an object of six
+     * undefineds.
+     *
+     * The two are not interchangeable: `mirrorCatalogImage` treats a present
+     * `existingImageSizes` as "sizes are already stored" and can return them
+     * unchanged, so handing it a fully-empty object claims something false and
+     * yields an artist whose six size columns stay null after a successful
+     * accept. Caught by this suite rather than reasoned about — the Mongo code
+     * passed `artist.imageSizes`, which was simply absent for a fresh artist,
+     * and the shape of that absence is what had to be preserved.
+     */
+    const existingImageSizes = storedVariantIds.some((id) => id !== null)
+      ? {
+          small: existingVariants(artist.imageSizesSmallId),
+          medium: existingVariants(artist.imageSizesMediumId),
+          large: existingVariants(artist.imageSizesLargeId),
+          xlarge: existingVariants(artist.imageSizesXlargeId),
+          xxlarge: existingVariants(artist.imageSizesXxlargeId),
+          original: existingVariants(artist.imageSizesOriginalId),
+        }
+      : undefined;
+
     const mirrored = await mirrorCatalogImage(
       [{ url: suggestion.image.url, width: suggestion.image.width, height: suggestion.image.height }],
       {
@@ -1160,9 +1438,12 @@ export const acceptMyImageSuggestion = async (req: AuthRequest, res: Response, n
         // `upload`.
         provider: externalImage ? 'cc' : 'upload',
         entityType: 'artist',
-        externalId: artist._id.toString(),
-        existingImageId: artist.image,
-        existingImageSizes: artist.imageSizes,
+        externalId: artist.id,
+        existingImageId: artist.imageId ?? undefined,
+        // Rebuilt from the six FK columns the port split `imageSizes` into, via
+        // the same batch lookup every serializer uses — a variant needs real
+        // `width`/`height`, which live on the `image_assets` row, not on the FK.
+        existingImageSizes,
       },
     );
 
@@ -1173,26 +1454,44 @@ export const acceptMyImageSuggestion = async (req: AuthRequest, res: Response, n
       });
     }
 
-    artist.image = mirrored.imageId;
-    artist.imageSizes = mirrored.imageSizes;
-    if (mirrored.primaryColor) artist.primaryColor = mirrored.primaryColor;
-    if (mirrored.secondaryColor) artist.secondaryColor = mirrored.secondaryColor;
-    /**
-     * Attribution travels with the bytes, or the image may not be used at all.
-     * Cleared for an upload-origin photo rather than left alone: a stale licence
-     * describing the PREVIOUS image would credit the wrong author for the one now
-     * on display, which is worse than no credit.
-     */
-    artist.imageLicence = externalImage?.licence;
-    artist.imageSuggestions = [];
-    await artist.save();
+    const [updated] = await getDb()
+      .update(catalogEntities)
+      .set({
+        imageId: mirrored.imageId,
+        imageSizesSmallId: mirrored.imageSizes.small?.id ?? null,
+        imageSizesMediumId: mirrored.imageSizes.medium?.id ?? null,
+        imageSizesLargeId: mirrored.imageSizes.large?.id ?? null,
+        imageSizesXlargeId: mirrored.imageSizes.xlarge?.id ?? null,
+        imageSizesXxlargeId: mirrored.imageSizes.xxlarge?.id ?? null,
+        imageSizesOriginalId: mirrored.imageSizes.original?.id ?? null,
+        ...(mirrored.primaryColor ? { primaryColor: mirrored.primaryColor } : {}),
+        ...(mirrored.secondaryColor ? { secondaryColor: mirrored.secondaryColor } : {}),
+        /**
+         * Attribution travels with the bytes, or the image may not be used at
+         * all. Written unconditionally — set for an external photo, NULLED for an
+         * upload-origin one — because a stale licence describing the PREVIOUS
+         * image would credit the wrong author for the one now on display, which
+         * is worse than no credit. Four columns, so all four move together.
+         */
+        imageLicenceLicence: externalImage?.licence.licence ?? null,
+        imageLicenceLicenceUrl: externalImage?.licence.licenceUrl ?? null,
+        imageLicenceAttribution: externalImage?.licence.attribution ?? null,
+        imageLicenceSourceUrl: externalImage?.licence.sourceUrl ?? null,
+        imageSuggestions: [],
+      })
+      .where(eq(catalogEntities.id, artist.id))
+      .returning(publicColumns(catalogEntities, PROTECTED_COLUMNS_BY_TABLE));
+
+    if (!updated) {
+      return res.status(404).json({ error: 'Artist profile not found' });
+    }
 
     logger.info(
-      `[Artists] Artist ${artist._id.toString()} accepted a suggested profile photo ` +
+      `[Artists] Artist ${artist.id} accepted a suggested profile photo ` +
       `(${externalImage ? `external/${externalImage.provider}` : 'upload'})`,
     );
 
-    res.json(formatArtistWithImage(artist.toObject()));
+    res.json(await toArtistResponse(updated));
   } catch (error) {
     next(error);
   }
@@ -1207,7 +1506,7 @@ export const acceptMyImageSuggestion = async (req: AuthRequest, res: Response, n
  */
 export const discardMyImageSuggestion = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -1217,7 +1516,7 @@ export const discardMyImageSuggestion = async (req: AuthRequest, res: Response, 
       return res.status(400).json({ error: 'Invalid request body', details: parsed.error.issues });
     }
 
-    const artist = await ArtistModel.findOne({ ownerOxyUserId: userId }).select('+imageSuggestions');
+    const artist = await findOwnArtistWithSuggestions(userId);
     if (!artist) {
       return res.status(404).json({ error: 'Artist profile not found' });
     }
@@ -1228,13 +1527,15 @@ export const discardMyImageSuggestion = async (req: AuthRequest, res: Response, 
       return res.status(404).json({ error: 'Suggestion not found' });
     }
 
-    artist.imageSuggestions = remaining;
-    await artist.save();
+    await getDb()
+      .update(catalogEntities)
+      .set({ imageSuggestions: remaining })
+      .where(eq(catalogEntities.id, artist.id));
 
     const response: ArtistImageSuggestionsResponse = {
       suggestions: remaining.map((suggestion) => ({
         image: suggestion.image,
-        proposedAt: suggestion.proposedAt.toISOString(),
+        proposedAt: new Date(suggestion.proposedAt).toISOString(),
         proposedByOxyUserId: suggestion.proposedByOxyUserId,
         sourceUploadId: suggestion.sourceUploadId,
       })),

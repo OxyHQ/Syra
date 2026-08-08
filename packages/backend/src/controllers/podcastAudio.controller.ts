@@ -15,13 +15,17 @@
  * no duplication of token/key logic.
  */
 
-import mongoose from 'mongoose';
 import type { Response } from 'express';
 import { Readable } from 'stream';
+import { eq } from 'drizzle-orm';
+import { isLiveEntityId } from '@oxyhq/db';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { safeFetch, SsrfRejection } from '@oxyhq/core/server';
-import { EpisodeModel, IEpisode } from '../models/Episode';
-import { TrackKeyModel } from '../models/TrackKey';
+import { getDb } from '../db/postgres';
+import { trackKeys } from '../db/schema/trackKeys';
+import { findEpisodeById } from '../db/podcasts/episodes';
+import { loadEpisodeHls } from '../db/podcasts/hydrate';
+import type { EpisodeRow } from '../db/podcasts/serialize';
 import { env } from '../config/env';
 import { getS3PodcastEpisodeAudioKey } from '../config/s3.config';
 import { streamFromS3, getObjectMetadata } from '../services/s3Service';
@@ -30,6 +34,7 @@ import { mintStreamToken } from '../services/stream/streamToken';
 import { buildMasterPlaylistFor, buildVariantPlaylistFor } from '../services/stream/manifestService';
 import { maybeCacheEpisode } from '../services/podcasts/podcastCache';
 import { logger } from '../utils/logger';
+import { describeErrorSafely } from '../utils/error';
 
 const CONTENT_TYPE_OCTET_STREAM = 'application/octet-stream';
 const CONTENT_TYPE_HLS_PLAYLIST = 'application/vnd.apple.mpegurl';
@@ -42,11 +47,26 @@ const STREAM_SESSION_TTL_SEC = 3600;
 
 function getEpisodeIdParam(req: AuthRequest): string | undefined {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  return raw && mongoose.Types.ObjectId.isValid(raw) ? raw : undefined;
+  // `isLiveEntityId`, not `ObjectId.isValid`: this schema stores both a 24-char
+  // ObjectId hex (pre-cutover rows) and a uuid v7 (everything since), and the
+  // ObjectId-only test rejected every episode created after the cutover.
+  return raw && isLiveEntityId(raw) ? raw : undefined;
 }
 
-function isEpisodePlayable(episode: { status?: string }): boolean {
+function isEpisodePlayable(episode: { status: string }): boolean {
   return episode.status !== 'unavailable';
+}
+
+/**
+ * The HLS ladder of one episode.
+ *
+ * `Episode.hls` was an embedded array; it is `episode_hls_renditions` now, so
+ * every HLS handler below loads it explicitly. Kept as its own read rather than
+ * folded into `findEpisodeById`, because `/audio` — the busiest of the five
+ * endpoints — never needs it.
+ */
+async function episodeHls(episodeId: string) {
+  return (await loadEpisodeHls([episodeId])).get(episodeId) ?? [];
 }
 
 interface ParsedRange {
@@ -122,7 +142,7 @@ async function serveFromS3(req: AuthRequest, res: Response, s3Key: string): Prom
 
 // ── /audio: SSRF-safe origin reverse proxy (external rss) ──────────────────────
 
-async function proxyOrigin(req: AuthRequest, res: Response, episode: IEpisode): Promise<void> {
+async function proxyOrigin(req: AuthRequest, res: Response, episode: EpisodeRow): Promise<void> {
   if (!episode.enclosureUrl) {
     res.status(404).json({ error: 'No enclosure for episode' });
     return;
@@ -139,7 +159,7 @@ async function proxyOrigin(req: AuthRequest, res: Response, episode: IEpisode): 
       res.status(403).json({ error: 'Blocked enclosure host' });
       return;
     }
-    logger.warn('[podcasts] audio proxy upstream failed', { episodeId: episode._id.toString(), err });
+    logger.warn('[podcasts] audio proxy upstream failed', { episodeId: episode.id, err: describeErrorSafely(err) });
     res.status(502).json({ error: 'Upstream audio unavailable' });
     return;
   }
@@ -177,24 +197,24 @@ export async function getEpisodeAudio(req: AuthRequest, res: Response): Promise<
     return;
   }
 
-  const episode = await EpisodeModel.findById(episodeId);
+  const episode = await findEpisodeById(episodeId);
   if (!episode || !isEpisodePlayable(episode)) {
     res.status(404).json({ error: 'Episode not found' });
     return;
   }
 
   if (episode.source === 'syra') {
-    if (!episode.audioSource) {
+    if (!episode.audioSourceFormat) {
       res.status(404).json({ error: 'No audio for episode' });
       return;
     }
-    const key = getS3PodcastEpisodeAudioKey(episodeId, episode.podcastId.toString(), episode.audioSource.format);
+    const key = getS3PodcastEpisodeAudioKey(episodeId, episode.podcastId, episode.audioSourceFormat);
     await serveFromS3(req, res, key);
     return;
   }
 
-  if (episode.cache?.status === 'cached' && episode.cache.s3Key) {
-    await serveFromS3(req, res, episode.cache.s3Key);
+  if (episode.cacheStatus === 'cached' && episode.cacheObjectKey) {
+    await serveFromS3(req, res, episode.cacheObjectKey);
     return;
   }
 
@@ -214,7 +234,7 @@ export async function getEpisodeStream(req: AuthRequest, res: Response): Promise
     return;
   }
 
-  const episode = await EpisodeModel.findById(episodeId).lean();
+  const episode = await findEpisodeById(episodeId);
   if (!episode || !isEpisodePlayable(episode)) {
     res.status(404).json({ error: 'Episode not found' });
     return;
@@ -230,7 +250,7 @@ export async function getEpisodeStream(req: AuthRequest, res: Response): Promise
     return;
   }
 
-  if (!episode.hlsMasterKey || !episode.hls?.length) {
+  if (!episode.hlsMasterKey || (await episodeHls(episodeId)).length === 0) {
     res.status(422).json({ error: 'Episode has no HLS stream' });
     return;
   }
@@ -269,7 +289,14 @@ export async function getEpisodeStreamKey(req: AuthRequest, res: Response): Prom
     return;
   }
 
-  const trackKey = await TrackKeyModel.findOne({ trackId: episodeId }).lean();
+  // `track_keys.episode_id`, NOT `track_id`: the table carries one column per
+  // id space (see `schema/trackKeys.ts`), and this endpoint holds an episode
+  // id. `storePackagedHls` files it under the same arm from `ingestEpisode`.
+  const [trackKey] = await getDb()
+    .select({ keyHex: trackKeys.keyHex })
+    .from(trackKeys)
+    .where(eq(trackKeys.episodeId, episodeId))
+    .limit(1);
   if (!trackKey) {
     res.status(404).json({ error: 'Key not found' });
     return;
@@ -296,12 +323,13 @@ export async function getEpisodeMasterPlaylist(req: AuthRequest, res: Response):
     return;
   }
 
-  const episode = await EpisodeModel.findById(episodeId).lean();
+  const episode = await findEpisodeById(episodeId);
   if (!episode || !isEpisodePlayable(episode)) {
     res.status(404).json({ error: 'Episode not found' });
     return;
   }
-  if (!episode.hlsMasterKey || !episode.hls?.length) {
+  const hls = await episodeHls(episodeId);
+  if (!episode.hlsMasterKey || hls.length === 0) {
     res.status(404).json({ error: 'Master playlist not available' });
     return;
   }
@@ -313,7 +341,7 @@ export async function getEpisodeMasterPlaylist(req: AuthRequest, res: Response):
 
   const baseUrl = env.STREAM_KEY_BASE_URL;
   const playlist = await buildMasterPlaylistFor(
-    { id: episodeId, hls: episode.hls },
+    { id: episodeId, hls },
     { token, baseUrl, maxBitrateKbps: access.maxBitrateKbps, basePath: `/api/podcasts/episodes/${episodeId}` },
   );
 
@@ -340,12 +368,13 @@ export async function getEpisodeVariantPlaylist(req: AuthRequest, res: Response)
     return;
   }
 
-  const episode = await EpisodeModel.findById(episodeId).lean();
+  const episode = await findEpisodeById(episodeId);
   if (!episode || !isEpisodePlayable(episode)) {
     res.status(404).json({ error: 'Episode not found' });
     return;
   }
-  if (!episode.hls?.length) {
+  const hls = await episodeHls(episodeId);
+  if (hls.length === 0) {
     res.status(404).json({ error: 'Variant playlist not available' });
     return;
   }
@@ -356,7 +385,7 @@ export async function getEpisodeVariantPlaylist(req: AuthRequest, res: Response)
     res.status(400).json({ error: 'Invalid variant' });
     return;
   }
-  if (!episode.hls.some((r) => r.bitrateKbps === bitrateKbps)) {
+  if (!hls.some((r) => r.bitrateKbps === bitrateKbps)) {
     res.status(404).json({ error: `No rendition at ${bitrateKbps} kbps` });
     return;
   }
@@ -372,7 +401,7 @@ export async function getEpisodeVariantPlaylist(req: AuthRequest, res: Response)
 
   const baseUrl = env.STREAM_KEY_BASE_URL;
   const playlist = await buildVariantPlaylistFor(
-    { id: episodeId, hls: episode.hls },
+    { id: episodeId, hls },
     { bitrateKbps, token, baseUrl, basePath: `/api/podcasts/episodes/${episodeId}` },
   );
 

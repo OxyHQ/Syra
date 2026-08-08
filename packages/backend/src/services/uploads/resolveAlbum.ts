@@ -18,10 +18,13 @@
  * created once.
  */
 
+import { eq, type SQL } from 'drizzle-orm';
 import type { Album, CatalogImageSizes, ImageLicence } from '@syra/shared-types';
 import { buildAlbumKey, isDenylistedArtistName, normalizeNameKey } from '@syra/shared-types';
-import type { IAlbum } from '../../models/Album';
-import { AlbumModel } from '../../models/Album';
+import { isUniqueViolation } from '@oxyhq/db';
+import { getDb } from '../../db/postgres';
+import { albumSources, albums } from '../../db/schema/catalog';
+import { setAlbumGenres } from '../../db/catalog/genres';
 import { recoverCoverArt } from './enrichCatalogEntity';
 
 export type AlbumType = Album['type'];
@@ -114,6 +117,12 @@ export function classifyAlbumType(input: AlbumResolutionInput): AlbumType {
 
 const NOTHING: AlbumResolution = { confidence: 'none', signal: 'none', type: 'album' };
 
+/** The id of the first album matching `where`, or null. */
+async function findAlbumIdBy(where: SQL): Promise<string | null> {
+  const [row] = await getDb().select({ id: albums.id }).from(albums).where(where).limit(1);
+  return row?.id ?? null;
+}
+
 /**
  * Resolve the album for one file (or one already-grouped set of files).
  *
@@ -145,22 +154,20 @@ export async function resolveAlbum(input: AlbumResolutionInput): Promise<AlbumRe
 
   // ── 1: UPC / barcode ──
   if (input.upc) {
-    const byUpc = await AlbumModel.findOne({ upc: input.upc }).select('_id').lean();
+    const byUpc = await findAlbumIdBy(eq(albums.upc, input.upc));
     if (byUpc) {
-      const id = byUpc._id.toString();
+      const id = byUpc;
       return { ...base, confidence: 'high', signal: 'upc', matchedAlbumId: id, linkedAlbumId: id };
     }
   }
 
   // ── 2: MusicBrainz release id ──
   if (input.musicbrainzReleaseId) {
-    const byRelease = await AlbumModel.findOne({
-      'externalIds.musicbrainzReleaseId': input.musicbrainzReleaseId,
-    })
-      .select('_id')
-      .lean();
+    const byRelease = await findAlbumIdBy(
+      eq(albums.externalMusicbrainzReleaseId, input.musicbrainzReleaseId)
+    );
     if (byRelease) {
-      const id = byRelease._id.toString();
+      const id = byRelease;
       return {
         ...base,
         confidence: 'high',
@@ -181,22 +188,28 @@ export async function resolveAlbum(input: AlbumResolutionInput): Promise<AlbumRe
   // becomes a collection scan.
   const artistNameKey = input.albumArtistName ? normalizeNameKey(input.albumArtistName) : undefined;
   const titleKey = normalizeNameKey(title);
-  const candidates = input.artistId
-    ? await AlbumModel.find({ artistId: input.artistId }).select('_id title artistName releaseDate').lean()
-    : await AlbumModel.find({ title }).select('_id title artistName releaseDate').lean();
+  const candidates = await getDb()
+    .select({
+      id: albums.id,
+      title: albums.title,
+      artistName: albums.artistName,
+      releaseDate: albums.releaseDate,
+    })
+    .from(albums)
+    .where(input.artistId ? eq(albums.artistId, input.artistId) : eq(albums.title, title));
 
   for (const candidate of candidates) {
     if (normalizeNameKey(candidate.title) !== titleKey) continue;
     if (artistNameKey !== undefined && normalizeNameKey(candidate.artistName) !== artistNameKey) continue;
     if (input.year !== undefined) {
-      const candidateYear = Number(candidate.releaseDate?.slice(0, 4));
+      const candidateYear = Number(candidate.releaseDate.slice(0, 4));
       if (Number.isFinite(candidateYear) && candidateYear !== input.year) continue;
     }
     return {
       ...base,
       confidence: 'medium',
       signal: 'album-key',
-      matchedAlbumId: candidate._id.toString(),
+      matchedAlbumId: candidate.id,
     };
   }
 
@@ -257,10 +270,14 @@ export interface ContributedAlbumInput {
  */
 export async function ensureContributedAlbum(
   input: ContributedAlbumInput,
-): Promise<IAlbum | null> {
+): Promise<ContributedAlbum | null> {
   const title = input.title.trim();
   if (!title) return null;
-  if (!input.releaseDate) return null;
+  // Bound to a local before the guard: `albums.release_date` is NOT NULL, and a
+  // narrowing on `input.releaseDate` does not survive into the transaction
+  // callback below, where the insert actually reads it.
+  const releaseDate = input.releaseDate;
+  if (!releaseDate) return null;
 
   let coverArt = input.coverArt;
   let coverArtSizes: CatalogImageSizes | undefined;
@@ -281,56 +298,128 @@ export async function ensureContributedAlbum(
 
   if (!coverArt) return null;
 
+  const provenanceExternalId =
+    input.musicbrainzReleaseId ?? input.musicbrainzReleaseGroupId ?? title;
+
   try {
-    return await AlbumModel.create({
-      title,
-      artistId: input.artistId,
-      artistName: input.artistName,
-      releaseDate: input.releaseDate,
-      coverArt,
-      ...(coverArtSizes !== undefined && { coverArtSizes }),
-      type: input.type ?? 'album',
-      source: 'upload',
-      ...(coverArtLicence !== undefined && {
-        sources: [
-          {
-            provider: 'cover-art-archive',
-            externalId: input.musicbrainzReleaseId ?? input.musicbrainzReleaseGroupId ?? title,
-            importedAt: new Date().toISOString(),
-            fields: ['coverArt'],
-          },
-        ],
-      }),
-      ...(input.genres?.length && { genre: input.genres }),
-      ...(input.totalTracks !== undefined && { totalTracks: input.totalTracks }),
-      ...(input.totalDurationSec !== undefined && { totalDuration: input.totalDurationSec }),
-      ...(input.upc && { upc: input.upc }),
-      ...(input.musicbrainzReleaseId && {
-        externalIds: { musicbrainzReleaseId: input.musicbrainzReleaseId },
-      }),
-      ...(input.label && { label: input.label }),
-      ...(input.copyright && { copyright: input.copyright }),
-      ...(input.isExplicit !== undefined && { isExplicit: input.isExplicit }),
+    /**
+     * The album row, its provenance entry and its genre links commit TOGETHER.
+     * All three were one `AlbumModel.create()` under Mongo because the last two
+     * were embedded arrays; they are child tables now, and a partial write
+     * would leave a release whose cover art has no recorded licence — the one
+     * fact `sources` exists to carry.
+     */
+    return await getDb().transaction(async (tx) => {
+      const [created] = await tx
+        .insert(albums)
+        .values({
+          title,
+          artistId: input.artistId,
+          artistName: input.artistName,
+          releaseDate,
+          coverArtId: coverArt,
+          ...coverArtSizeIds(coverArtSizes),
+          /**
+           * `coverArtLicence` is NOT written here, and that is parity rather
+           * than an oversight of this port: the Mongo version recovered a
+           * licence from Cover Art Archive and used it only to decide whether
+           * to record a `sources` entry, never storing the licence itself.
+           * Nothing in production writes `albums.cover_art_licence_*` — the
+           * only writer anywhere is `models/Album.test.ts`. Reported rather
+           * than fixed, because storing it changes what `toAlbumDto` puts on
+           * the wire and that is a contract decision, not a translation.
+           */
+          type: input.type ?? 'album',
+          source: 'upload',
+          totalTracks: input.totalTracks,
+          totalDuration: input.totalDurationSec,
+          upc: input.upc,
+          externalMusicbrainzReleaseId: input.musicbrainzReleaseId,
+          label: input.label,
+          copyright: input.copyright,
+          isExplicit: input.isExplicit,
+        })
+        .returning({ id: albums.id, title: albums.title });
+
+      if (!created) throw new Error(`Failed to create contributed album "${title}"`);
+
+      if (coverArtLicence !== undefined) {
+        await tx.insert(albumSources).values({
+          albumId: created.id,
+          position: 0,
+          provider: 'cover-art-archive',
+          externalId: provenanceExternalId,
+          importedAt: new Date(),
+          fields: ['coverArt'],
+        });
+      }
+
+      if (input.genres?.length) {
+        await setAlbumGenres(tx, created.id, input.genres);
+      }
+
+      return created;
     });
   } catch (err) {
-    // `upc` and `externalIds.musicbrainzReleaseId` are sparse-unique, so two
-    // uploads of the same release racing here end with one album and the loser
-    // reading the winner's row — the same arbitration the artist side uses.
-    // Only those two keys can raise an E11000 here, so recovery is attempted
-    // only when one of them was supplied; a duplicate-key error with neither is
-    // an index nobody expected and must surface rather than resolve to a
-    // findOne on `undefined`, which would match an unrelated album.
-    if ((err as { code?: number }).code === 11000) {
-      if (input.upc) {
-        const winner = await AlbumModel.findOne({ upc: input.upc });
-        if (winner) return winner;
-      } else if (input.musicbrainzReleaseId) {
-        const winner = await AlbumModel.findOne({
-          'externalIds.musicbrainzReleaseId': input.musicbrainzReleaseId,
-        });
-        if (winner) return winner;
-      }
+    // `upc` and `external_musicbrainz_release_id` are the only unique keys on
+    // `albums`, so two uploads of the same release racing here end with one
+    // album and the loser reading the winner's row — the same arbitration the
+    // artist side uses. Each branch names its OWN constraint rather than
+    // testing "some unique index rejected this": a violation of the other key
+    // must not be answered with a lookup on a value that was never the cause.
+    if (input.upc && isUniqueViolation(err, 'albums_upc_key')) {
+      const winner = await findAlbumBy(eq(albums.upc, input.upc));
+      if (winner) return winner;
+    }
+    if (
+      input.musicbrainzReleaseId &&
+      isUniqueViolation(err, 'albums_external_musicbrainz_release_id_key')
+    ) {
+      const winner = await findAlbumBy(
+        eq(albums.externalMusicbrainzReleaseId, input.musicbrainzReleaseId)
+      );
+      if (winner) return winner;
     }
     throw err;
   }
+}
+
+/** The `albums` row this module returns — never the whole row. */
+export interface ContributedAlbum {
+  id: string;
+  title: string;
+}
+
+async function findAlbumBy(where: SQL): Promise<ContributedAlbum | null> {
+  const [row] = await getDb()
+    .select({ id: albums.id, title: albums.title })
+    .from(albums)
+    .where(where)
+    .limit(1);
+
+  return row ?? null;
+}
+
+/**
+ * `CatalogImageSizes` to the six per-variant FK columns.
+ *
+ * Every key is emitted, `null` included, so an album re-created without a given
+ * variant does not silently inherit the column's absence as "unchanged".
+ */
+function coverArtSizeIds(sizes: CatalogImageSizes | undefined): {
+  coverArtSizesSmallId: string | null;
+  coverArtSizesMediumId: string | null;
+  coverArtSizesLargeId: string | null;
+  coverArtSizesXlargeId: string | null;
+  coverArtSizesXxlargeId: string | null;
+  coverArtSizesOriginalId: string | null;
+} {
+  return {
+    coverArtSizesSmallId: sizes?.small?.id ?? null,
+    coverArtSizesMediumId: sizes?.medium?.id ?? null,
+    coverArtSizesLargeId: sizes?.large?.id ?? null,
+    coverArtSizesXlargeId: sizes?.xlarge?.id ?? null,
+    coverArtSizesXxlargeId: sizes?.xxlarge?.id ?? null,
+    coverArtSizesOriginalId: sizes?.original?.id ?? null,
+  };
 }

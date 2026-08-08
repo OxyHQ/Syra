@@ -1,13 +1,16 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
-import { connect, clear, disconnect } from '../../test/mongo';
-import { TrackModel } from '../../models/Track';
+import { eq } from 'drizzle-orm';
+import { uuidv7 } from '@oxyhq/db';
+import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
+import { getDb } from '../../db/postgres';
+import { catalogEntities, tracks } from '../../db/schema/catalog';
 import { enqueueIngest, startIngestWorker, stopIngestQueue } from './ingestQueue';
 
-beforeAll(connect);
-afterEach(clear);
+beforeAll(connectDb);
+afterEach(clearDb);
 afterAll(async () => {
   await stopIngestQueue();
-  await disconnect();
+  await disconnectDb();
 });
 
 /**
@@ -52,23 +55,37 @@ async function elapsed(work: () => Promise<void>): Promise<number> {
 
 /** A track with no `audioSource`, so ingest fails fast without S3 or ffmpeg. */
 async function createProcessingTrack() {
-  return TrackModel.create({
+  const suffix = uuidv7();
+  const [artist] = await getDb()
+    .insert(catalogEntities)
+    .values({
+      type: 'artist',
+      name: 'Fallback Artist',
+      nameKey: `fallback-${suffix}`,
+      source: 'upload',
+    })
+    .returning({ id: catalogEntities.id });
+
+  const [track] = await getDb().insert(tracks).values({
     title: 'Fallback Track',
-    artistId: '507f1f77bcf86cd799439011',
+    artistId: artist?.id ?? '',
     artistName: 'Test Artist',
     duration: 180,
     source: 'upload',
     status: 'processing',
     isExplicit: false,
     isAvailable: true,
-  });
+  }).returning({ id: tracks.id });
+
+  if (!track) throw new Error('createProcessingTrack: insert returned no row');
+  return track;
 }
 
 async function waitForStatus(trackId: string, status: string, timeoutMs = 5_000): Promise<string> {
   const deadline = Date.now() + timeoutMs;
   let current = '';
   while (Date.now() < deadline) {
-    const track = await TrackModel.findById(trackId).lean();
+    const [track] = await getDb().select().from(tracks).where(eq(tracks.id, trackId)).limit(1);
     current = track?.status ?? '';
     if (current === status) return current;
     await new Promise((resolve) => setTimeout(resolve, 25));
@@ -93,7 +110,7 @@ describe('ingest queue', () => {
     // ffmpeg, and records `failed`. That transition is only reachable by the job
     // actually running — a dropped job leaves the track at `processing`.
     const track = await createProcessingTrack();
-    const trackId = track._id.toString();
+    const trackId = track.id;
 
     // The caller's own wait. In production this sits inside the upload request
     // before its 201, so it must be a config read, not a connection attempt.
@@ -107,11 +124,11 @@ describe('ingest queue', () => {
     // Ten enqueues back to back. A per-call connect attempt would compound into
     // seconds here even if one call alone slipped under the budget — which is the
     // production shape that matters: uploads serialising behind repeated timeouts.
-    const tracks = await Promise.all(Array.from({ length: 10 }, () => createProcessingTrack()));
+    const processing = await Promise.all(Array.from({ length: 10 }, () => createProcessingTrack()));
 
     const totalMs = await elapsed(async () => {
-      for (const track of tracks) {
-        await enqueueIngest(track._id.toString());
+      for (const track of processing) {
+        await enqueueIngest(track.id);
       }
     });
 

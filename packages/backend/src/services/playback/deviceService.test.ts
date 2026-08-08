@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
-import { connect, clear, disconnect } from '../../test/mongo';
-import { DeviceModel } from '../../models/Device';
+import { and, eq } from 'drizzle-orm';
+import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
+import { getDb } from '../../db/postgres';
+import { devices } from '../../db/schema/library';
 import {
   registerDevice,
   listDevices,
@@ -8,9 +10,9 @@ import {
   markInactive,
 } from './deviceService';
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+beforeAll(connectDb);
+afterEach(clearDb);
+afterAll(disconnectDb);
 
 const USER_A = 'user-aaa';
 const USER_B = 'user-bbb';
@@ -22,8 +24,21 @@ const BASE_INPUT = {
   capabilities: ['play', 'volume'],
 };
 
+/** The stored rows for one account — the assertions' view of the table. */
+function rowsFor(oxyUserId: string) {
+  return getDb().select().from(devices).where(eq(devices.oxyUserId, oxyUserId));
+}
+
+function rowFor(oxyUserId: string, deviceId: string) {
+  return getDb()
+    .select()
+    .from(devices)
+    .where(and(eq(devices.oxyUserId, oxyUserId), eq(devices.deviceId, deviceId)))
+    .limit(1);
+}
+
 describe('registerDevice', () => {
-  it('creates a device doc with correct fields', async () => {
+  it('creates a device row with correct fields', async () => {
     const device = await registerDevice(USER_A, BASE_INPUT);
 
     expect(device.oxyUserId).toBe(USER_A);
@@ -35,32 +50,44 @@ describe('registerDevice', () => {
     expect(device.lastSeen).toBeInstanceOf(Date);
   });
 
-  it('upserts on re-register — same deviceId → only 1 doc, name updated', async () => {
+  it('upserts on re-register — same deviceId → only 1 row, name updated', async () => {
     await registerDevice(USER_A, BASE_INPUT);
     await registerDevice(USER_A, { ...BASE_INPUT, name: 'Updated Name' });
 
-    const docs = await DeviceModel.find({ oxyUserId: USER_A });
-    expect(docs).toHaveLength(1);
-    expect(docs[0].name).toBe('Updated Name');
+    const rows = await rowsFor(USER_A);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].name).toBe('Updated Name');
   });
 
-  it('two different deviceIds for the same user → 2 docs', async () => {
+  it('re-registering without capabilities CLEARS them, as the upsert always set them', async () => {
+    // Parity with the Mongoose `findOneAndUpdate`, whose update document always
+    // carried `capabilities: input.capabilities ?? []`. The conflict branch of
+    // the drizzle upsert has to set the same key or the field silently becomes
+    // sticky — a difference no type would catch, since both spellings compile.
+    await registerDevice(USER_A, BASE_INPUT);
+    await registerDevice(USER_A, { deviceId: 'device-001', name: 'Same', type: 'web' });
+
+    const rows = await rowsFor(USER_A);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].capabilities).toEqual([]);
+  });
+
+  it('two different deviceIds for the same user → 2 rows', async () => {
     await registerDevice(USER_A, { ...BASE_INPUT, deviceId: 'device-001' });
     await registerDevice(USER_A, { ...BASE_INPUT, deviceId: 'device-002', name: 'Mobile' });
 
-    const docs = await DeviceModel.find({ oxyUserId: USER_A });
-    expect(docs).toHaveLength(2);
+    expect(await rowsFor(USER_A)).toHaveLength(2);
   });
 
-  it('same deviceId for two different users → 2 distinct docs (compound key)', async () => {
+  it('same deviceId for two different users → 2 distinct rows (compound key)', async () => {
     await registerDevice(USER_A, BASE_INPUT);
     await registerDevice(USER_B, BASE_INPUT);
 
-    const docsA = await DeviceModel.find({ oxyUserId: USER_A });
-    const docsB = await DeviceModel.find({ oxyUserId: USER_B });
-    expect(docsA).toHaveLength(1);
-    expect(docsB).toHaveLength(1);
-    expect(docsA[0]._id.toString()).not.toBe(docsB[0]._id.toString());
+    const rowsA = await rowsFor(USER_A);
+    const rowsB = await rowsFor(USER_B);
+    expect(rowsA).toHaveLength(1);
+    expect(rowsB).toHaveLength(1);
+    expect(rowsA[0].id).not.toBe(rowsB[0].id);
   });
 });
 
@@ -72,15 +99,36 @@ describe('listDevices', () => {
     await new Promise((r) => setTimeout(r, 5));
     await registerDevice(USER_A, { ...BASE_INPUT, deviceId: 'device-002', name: 'Mobile' });
 
-    const devices = await listDevices(USER_A);
-    expect(devices).toHaveLength(2);
-    expect(devices[0].deviceId).toBe('device-002');
-    expect(devices[1].deviceId).toBe('device-001');
+    const listed = await listDevices(USER_A);
+    expect(listed).toHaveLength(2);
+    expect(listed[0].deviceId).toBe('device-002');
+    expect(listed[1].deviceId).toBe('device-001');
+  });
+
+  it('returns the wire shape the socket promises — id, no oxyUserId, lastSeen a string', async () => {
+    // `listDevices` IS the `device:list` payload (three emit sites in
+    // `sockets/playerSocket.ts`), and `deviceSchema` is its declared contract.
+    // The Mongoose version emitted raw documents, so `_id`/`__v` reached
+    // clients and `lastSeen` was a Date. Asserted here because nothing else
+    // parses this payload server-side.
+    await registerDevice(USER_A, BASE_INPUT);
+
+    const [device] = await listDevices(USER_A);
+    expect(Object.keys(device).sort()).toEqual(
+      ['capabilities', 'deviceId', 'id', 'isActive', 'lastSeen', 'name', 'type'].sort()
+    );
+    expect(typeof device.lastSeen).toBe('string');
+    expect(new Date(device.lastSeen).getTime()).not.toBeNaN();
   });
 
   it('returns empty array when user has no devices', async () => {
-    const devices = await listDevices(USER_A);
-    expect(devices).toHaveLength(0);
+    expect(await listDevices(USER_A)).toHaveLength(0);
+  });
+
+  it('does not leak another account’s devices', async () => {
+    await registerDevice(USER_B, BASE_INPUT);
+
+    expect(await listDevices(USER_A)).toHaveLength(0);
   });
 });
 
@@ -93,10 +141,18 @@ describe('heartbeat', () => {
     await new Promise((r) => setTimeout(r, 5));
     await heartbeat(USER_A, 'device-001');
 
-    const after = await DeviceModel.findOne({ oxyUserId: USER_A, deviceId: 'device-001' });
-    expect(after).not.toBeNull();
-    expect(after!.lastSeen.getTime()).toBeGreaterThan(beforeLastSeen);
-    expect(after!.isActive).toBe(true);
+    const [after] = await rowFor(USER_A, 'device-001');
+    expect(after).toBeDefined();
+    expect(after.lastSeen.getTime()).toBeGreaterThan(beforeLastSeen);
+    expect(after.isActive).toBe(true);
+  });
+
+  it('is a no-op for a device that was never registered', async () => {
+    // The socket heartbeats on a timer; a client that has not sent
+    // `device:register` yet must not throw one.
+    await heartbeat(USER_A, 'never-registered');
+
+    expect(await rowsFor(USER_A)).toHaveLength(0);
   });
 });
 
@@ -105,8 +161,20 @@ describe('markInactive', () => {
     await registerDevice(USER_A, BASE_INPUT);
     await markInactive(USER_A, 'device-001');
 
-    const doc = await DeviceModel.findOne({ oxyUserId: USER_A, deviceId: 'device-001' });
-    expect(doc).not.toBeNull();
-    expect(doc!.isActive).toBe(false);
+    const [row] = await rowFor(USER_A, 'device-001');
+    expect(row).toBeDefined();
+    expect(row.isActive).toBe(false);
+  });
+
+  it('leaves another account’s identically-named device alone', async () => {
+    await registerDevice(USER_A, BASE_INPUT);
+    await registerDevice(USER_B, BASE_INPUT);
+
+    await markInactive(USER_A, 'device-001');
+
+    const [mine] = await rowFor(USER_A, 'device-001');
+    const [theirs] = await rowFor(USER_B, 'device-001');
+    expect(mine.isActive).toBe(false);
+    expect(theirs.isActive).toBe(true);
   });
 });

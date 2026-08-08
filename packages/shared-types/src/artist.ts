@@ -20,7 +20,6 @@ export const artistStatsSchema = z.object({
 export type ArtistStats = z.infer<typeof artistStatsSchema>;
 
 export const artistStrikeSchema = z.object({
-  _id: z.string().optional(),
   reason: z.string(),
   createdAt: z.string(),
   trackId: z.string().optional(),
@@ -119,7 +118,6 @@ export type ArtistExternalIds = z.infer<typeof artistExternalIdsSchema>;
 
 export const artistSchema = timestampsSchema.extend({
   id: z.string(),
-  _id: z.string().optional(),
   name: z.string(),
   /**
    * `name` normalised for matching: NFKD, diacritics stripped, lowercased,
@@ -314,7 +312,6 @@ export type ArtistClaimStatus = z.infer<typeof artistClaimStatusSchema>;
 
 export const artistClaimSchema = timestampsSchema.extend({
   id: z.string(),
-  _id: z.string().optional(),
   artistId: z.string(),
   /** The Oxy user asking to be recognised as this artist. */
   oxyUserId: z.string(),

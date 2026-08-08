@@ -19,10 +19,15 @@
  * per-query TTL throttle; env kill-switch `PODCAST_BULK_IMPORT_ENABLED=false`.
  */
 
-import { PodcastModel } from '../../models/Podcast';
+import {
+  findDeepImportTargets,
+  shallowUpsertPodcasts,
+  type ShallowCandidate,
+} from '../../db/podcasts/podcasts';
 import { logger } from '../../utils/logger';
 import { searchPodcasts as directorySearch, type PodcastDirectoryCandidate } from './PodcastDirectory';
 import { importFeed } from './podcastImportService';
+import { describeErrorSafely } from '../../utils/error';
 
 /** Minimum gap between directory syncs for the same normalized query (10 min). */
 const SEARCH_IMPORT_TTL_MS = 10 * 60 * 1000;
@@ -80,14 +85,6 @@ function bulkImportEnabled(): boolean {
   return process.env.PODCAST_BULK_IMPORT_ENABLED !== 'false';
 }
 
-function definedOnly(fields: Record<string, unknown>): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(fields)) {
-    if (value !== undefined) result[key] = value;
-  }
-  return result;
-}
-
 /** Resolve a promise to a fallback if it doesn't settle within `ms`. */
 async function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
@@ -112,39 +109,51 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Pro
 export async function shallowUpsertCandidates(candidates: PodcastDirectoryCandidate[]): Promise<void> {
   if (candidates.length === 0) return;
 
-  const ops = candidates.map((candidate) => ({
-    updateOne: {
-      filter: { feedUrl: candidate.feedUrl },
-      update: {
-        // Refresh directory-owned metadata on every sync. `image` (the Syra id)
-        // is owned by the deep re-host step and is never touched here; the
-        // external artwork URL lives in `imageSourceUrl` for instant display.
-        $set: definedOnly({
-          title: candidate.title,
-          author: candidate.author,
-          imageSourceUrl: candidate.image,
-          ...(candidate.categories.length > 0 ? { categories: candidate.categories } : {}),
-        }),
-        // Stable identity + flags set once, on insert.
-        $setOnInsert: definedOnly({
-          source: 'rss',
-          status: 'active',
-          claimable: true,
-          needsDeepImport: true,
-          podcastGuid: candidate.podcastGuid,
-          podcastIndexId: candidate.podcastIndexId,
-          appleCollectionId: candidate.appleCollectionId,
-        }),
-      },
-      upsert: true,
-    },
-  }));
+  const rows: ShallowCandidate[] = candidates.map((candidate) => {
+    // Refresh directory-owned metadata on every sync. The Syra image id is
+    // owned by the deep re-host step and is never touched here; the external
+    // artwork URL lives in `imageSourceUrl` for instant display.
+    const set = {
+      title: candidate.title,
+      author: candidate.author,
+      imageSourceUrl: candidate.image,
+    };
 
-  try {
-    await PodcastModel.bulkWrite(ops, { ordered: false });
-  } catch (err) {
-    logger.warn('[podcast-import] shallow upsert bulkWrite partial failure', { err });
-  }
+    return {
+      feedUrl: candidate.feedUrl,
+      set,
+      insert: {
+        ...set,
+        feedUrl: candidate.feedUrl,
+        // Stable identity + flags set once, on insert.
+        source: 'rss' as const,
+        status: 'active' as const,
+        claimable: true,
+        needsDeepImport: true,
+        podcastGuid: candidate.podcastGuid,
+        podcastIndexId: candidate.podcastIndexId,
+        appleCollectionId: candidate.appleCollectionId,
+      },
+      /**
+       * Categories are a JUNCTION now, so `undefined` (leave alone) and `[]`
+       * (erase) are different writes and the Mongo conditional spread has to be
+       * preserved exactly. It read `...(categories.length > 0 ? { categories } :
+       * {})` — a directory result with no categories must not wipe the ones the
+       * deep feed import already resolved.
+       */
+      ...(candidate.categories.length > 0 ? { categories: candidate.categories } : {}),
+    };
+  });
+
+  /**
+   * Mongo's `bulkWrite(..., { ordered: false })` let one bad candidate fail on
+   * its own; `shallowUpsertPodcasts` keeps that by isolating per row, and takes
+   * the error handler so the log line stays here with the rest of this module's
+   * logging rather than inside the data layer.
+   */
+  await shallowUpsertPodcasts(rows, (feedUrl, err) =>
+    logger.warn('[podcast-import] shallow upsert failed for one candidate', { feedUrl, err: describeErrorSafely(err) })
+  );
 }
 
 // ── Deep import (background) ─────────────────────────────────────────────────────
@@ -167,7 +176,7 @@ export function enqueuePodcastImport(feedUrl: string, directory?: PodcastDirecto
       try {
         await importFeed(feedUrl, directory ? { directory } : {});
       } catch (err) {
-        logger.warn('[podcast-import] deep feed import failed', { feedUrl, err });
+        logger.warn('[podcast-import] deep feed import failed', { feedUrl, err: describeErrorSafely(err) });
       } finally {
         queuedFeeds.delete(key);
       }
@@ -187,23 +196,12 @@ async function enqueueDeepImports(
 ): Promise<number> {
   const feedUrls = candidates.map((c) => c.feedUrl);
   const staleBefore = new Date(now - DEEP_REFRESH_STALE_MS);
-
-  const targets = await PodcastModel.find({
-    feedUrl: { $in: feedUrls },
-    $or: [
-      { needsDeepImport: true },
-      { lastRefreshedAt: { $exists: false } },
-      { lastRefreshedAt: { $lt: staleBefore } },
-    ],
-  })
-    .select('feedUrl')
-    .lean();
+  const targets = await findDeepImportTargets(feedUrls, staleBefore);
 
   const byFeedUrl = new Map(candidates.map((c) => [c.feedUrl, c]));
   let enqueued = 0;
-  for (const target of targets) {
-    if (!target.feedUrl) continue;
-    enqueue(target.feedUrl, byFeedUrl.get(target.feedUrl));
+  for (const feedUrl of targets) {
+    enqueue(feedUrl, byFeedUrl.get(feedUrl));
     enqueued += 1;
   }
   return enqueued;
@@ -255,7 +253,7 @@ export async function syncPodcastSearch(
       MAX_FEEDS_PER_SEARCH,
     );
   } catch (err) {
-    logger.warn('[podcast-import] directory search failed', { query: key, err });
+    logger.warn('[podcast-import] directory search failed', { query: key, err: describeErrorSafely(err) });
     return { ...empty, skipped: false };
   }
 
@@ -266,7 +264,7 @@ export async function syncPodcastSearch(
   try {
     deepEnqueued = await enqueueDeepImports(candidates, enqueue, now);
   } catch (err) {
-    logger.warn('[podcast-import] deep-import scheduling failed', { query: key, err });
+    logger.warn('[podcast-import] deep-import scheduling failed', { query: key, err: describeErrorSafely(err) });
   }
 
   logger.info('[podcast-import] search sync', { query: key, candidates: candidates.length, deepEnqueued });

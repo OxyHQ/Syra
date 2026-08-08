@@ -1,21 +1,60 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
-import mongoose from 'mongoose';
 import type { Response, NextFunction } from 'express';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
-import { connect, clear, disconnect } from '../test/mongo';
-import { ArtistModel } from '../models/CatalogEntity';
-import { TrackModel } from '../models/Track';
-import { ContributionAttestationModel } from '../models/ContributionAttestation';
-import { CopyrightReportModel } from '../models/CopyrightReport';
+import { eq } from 'drizzle-orm';
+import { uuidv7 } from '@oxyhq/db';
+import { normalizeNameKey } from '@syra/shared-types';
+import { clearDb, connectDb, disconnectDb } from '../test/postgres';
+import { getDb } from '../db/postgres';
+import { catalogEntities, tracks } from '../db/schema/catalog';
+import { copyrightReports } from '../db/schema/creators';
+import { contributionAttestations } from '../db/schema/creators';
 import {
   getMyContributions,
   resolveMyContribution,
   updateMyContributionSettings,
 } from './artists.controller';
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+/**
+ * A "contribution" is a `tracks` row PLUS a `contribution_attestations` row, and
+ * neither alone means anything — both Postgres since Task 13. It was one
+ * `$lookup` under Mongo and it is three round trips now, and these tests are
+ * what say the answer did not change across both moves.
+ */
+beforeAll(connectDb);
+afterEach(clearDb);
+afterAll(disconnectDb);
+
+async function readTrack(id: string) {
+  const [row] = await getDb().select().from(tracks).where(eq(tracks.id, id)).limit(1);
+  return row;
+}
+
+async function readArtist(id: string) {
+  const [row] = await getDb()
+    .select()
+    .from(catalogEntities)
+    .where(eq(catalogEntities.id, id))
+    .limit(1);
+  return row;
+}
+
+/** An artist owned by somebody, for the cross-profile isolation cases. */
+async function makeArtistOwnedBy(name: string, ownerOxyUserId: string): Promise<string> {
+  const [artist] = await getDb()
+    .insert(catalogEntities)
+    .values({
+      type: 'artist',
+      name,
+      nameKey: normalizeNameKey(`${name} ${uuidv7()}`),
+      source: 'upload',
+      ownerOxyUserId,
+    })
+    .returning({ id: catalogEntities.id });
+
+  if (!artist) throw new Error('makeArtistOwnedBy: insert returned no row');
+  return artist.id;
+}
 
 interface CapturedRes {
   _status: number;
@@ -46,31 +85,44 @@ function makeReq(
 const OWNER = 'the-artist';
 
 async function makeOwnedArtist(): Promise<string> {
-  const artist = await ArtistModel.create({
-    name: `Claimed ${Math.random().toString(36).slice(2)}`,
-    source: 'upload',
-    origin: 'contributed',
-    ownerOxyUserId: OWNER,
-    claimedByOxyUserId: OWNER,
-    claimable: false,
-  });
-  return artist._id.toString();
+  const name = `Claimed ${uuidv7()}`;
+  const [artist] = await getDb()
+    .insert(catalogEntities)
+    .values({
+      type: 'artist',
+      name,
+      nameKey: normalizeNameKey(name),
+      source: 'upload',
+      origin: 'contributed',
+      ownerOxyUserId: OWNER,
+      claimedByOxyUserId: OWNER,
+      claimable: false,
+    })
+    .returning({ id: catalogEntities.id });
+
+  if (!artist) throw new Error('makeOwnedArtist: insert returned no row');
+  return artist.id;
 }
 
 async function makeTrack(artistId: string, title: string): Promise<string> {
-  const track = await TrackModel.create({
-    title,
-    artistId,
-    artistName: 'Whoever',
-    duration: 180,
-    source: 'upload',
-    status: 'ready',
-  });
-  return track._id.toString();
+  const [track] = await getDb()
+    .insert(tracks)
+    .values({
+      title,
+      artistId,
+      artistName: 'Whoever',
+      duration: 180,
+      source: 'upload',
+      status: 'ready',
+    })
+    .returning({ id: tracks.id });
+
+  if (!track) throw new Error('makeTrack: insert returned no row');
+  return track.id;
 }
 
 async function attest(trackId: string, uploader: string): Promise<void> {
-  await ContributionAttestationModel.create({
+  await getDb().insert(contributionAttestations).values({
     trackId,
     uploaderOxyUserId: uploader,
     statement: 'I may distribute this recording',
@@ -102,10 +154,8 @@ describe('GET /api/artists/me/contributions', () => {
 
   it('never leaks another artist\'s contributions', async () => {
     const mine = await makeOwnedArtist();
-    const theirs = await ArtistModel.create({
-      name: 'Other Artist', source: 'upload', ownerOxyUserId: 'somebody-else',
-    });
-    const theirTrack = await makeTrack(theirs._id.toString(), 'Their Contributed Song');
+    const theirs = await makeArtistOwnedBy('Other Artist', 'somebody-else');
+    const theirTrack = await makeTrack(theirs, 'Their Contributed Song');
     await attest(theirTrack, 'a-stranger');
     const myTrack = await makeTrack(mine, 'My Contributed Song');
     await attest(myTrack, 'a-stranger');
@@ -137,21 +187,19 @@ describe('PATCH /api/artists/me/contributions/:trackId', () => {
       makeRes() as unknown as Response,
       failNext,
     );
-    expect((await TrackModel.findById(trackId).lean())?.isAvailable).toBe(false);
+    expect((await readTrack(trackId))?.isAvailable).toBe(false);
 
     await resolveMyContribution(
       makeReq({ trackId }, OWNER, { action: 'keep' }),
       makeRes() as unknown as Response,
       failNext,
     );
-    expect((await TrackModel.findById(trackId).lean())?.isAvailable).toBe(true);
+    expect((await readTrack(trackId))?.isAvailable).toBe(true);
   });
 
   it('takedown records a resolved report, removes the track, and strikes the uploader', async () => {
     const artistId = await makeOwnedArtist();
-    const uploaderArtist = await ArtistModel.create({
-      name: 'The Uploader', source: 'upload', ownerOxyUserId: 'a-stranger',
-    });
+    const uploaderArtistId = await makeArtistOwnedBy('The Uploader', 'a-stranger');
     const trackId = await makeTrack(artistId, 'Contributed');
     await attest(trackId, 'a-stranger');
 
@@ -164,22 +212,29 @@ describe('PATCH /api/artists/me/contributions/:trackId', () => {
 
     expect(res._status).toBe(200);
 
-    const track = await TrackModel.findById(trackId).lean();
+    const track = await readTrack(trackId);
     expect(track?.copyrightRemoved).toBe(true);
     expect(track?.isAvailable).toBe(false);
     expect(track?.removedBy).toBe(OWNER);
 
     // The audit trail: a takedown with no report behind it is an unexplained
     // disappearance.
-    const report = await CopyrightReportModel.findOne({ trackId }).lean();
+    const [report] = await getDb()
+      .select()
+      .from(copyrightReports)
+      .where(eq(copyrightReports.trackId, trackId))
+      .limit(1);
     expect(report?.status).toBe('approved');
     expect(report?.reporterOxyUserId).toBe(OWNER);
-    expect(track?.copyrightReportId).toBe(report?._id.toString());
+    // The report id really exists, asserted before it is compared — otherwise
+    // `undefined === undefined` would pass with no report written at all.
+    expect(typeof report?.id).toBe('string');
+    expect(track?.copyrightReportId).toBe(report?.id ?? null);
 
     // Struck the contributor, not the artist who asked for the takedown.
-    const uploader = await ArtistModel.findById(uploaderArtist._id).lean();
+    const uploader = await readArtist(uploaderArtistId);
     expect(uploader?.strikeCount).toBe(1);
-    const victim = await ArtistModel.findById(artistId).lean();
+    const victim = await readArtist(artistId);
     expect(victim?.strikeCount ?? 0).toBe(0);
   });
 
@@ -187,7 +242,10 @@ describe('PATCH /api/artists/me/contributions/:trackId', () => {
     const artistId = await makeOwnedArtist();
     const trackId = await makeTrack(artistId, 'Contributed');
     await attest(trackId, 'a-stranger');
-    await TrackModel.updateOne({ _id: trackId }, { copyrightRemoved: true, isAvailable: false });
+    await getDb()
+      .update(tracks)
+      .set({ copyrightRemoved: true, isAvailable: false })
+      .where(eq(tracks.id, trackId));
 
     const res = makeRes();
     await resolveMyContribution(
@@ -197,7 +255,7 @@ describe('PATCH /api/artists/me/contributions/:trackId', () => {
     );
 
     expect(res._status).toBe(409);
-    expect((await TrackModel.findById(trackId).lean())?.isAvailable).toBe(false);
+    expect((await readTrack(trackId))?.isAvailable).toBe(false);
   });
 
   it('404s a track on the profile that nobody contributed — that is the creator\'s own catalog', async () => {
@@ -212,15 +270,13 @@ describe('PATCH /api/artists/me/contributions/:trackId', () => {
     );
 
     expect(res._status).toBe(404);
-    expect((await TrackModel.findById(trackId).lean())?.isAvailable).toBe(true);
+    expect((await readTrack(trackId))?.isAvailable).toBe(true);
   });
 
   it('404s a track belonging to another artist — no cross-profile reach', async () => {
     await makeOwnedArtist();
-    const other = await ArtistModel.create({
-      name: 'Other Artist', source: 'upload', ownerOxyUserId: 'somebody-else',
-    });
-    const trackId = await makeTrack(other._id.toString(), 'Not Mine');
+    const other = await makeArtistOwnedBy('Other Artist', 'somebody-else');
+    const trackId = await makeTrack(other, 'Not Mine');
     await attest(trackId, 'a-stranger');
 
     const res = makeRes();
@@ -231,7 +287,7 @@ describe('PATCH /api/artists/me/contributions/:trackId', () => {
     );
 
     expect(res._status).toBe(404);
-    expect((await TrackModel.findById(trackId).lean())?.copyrightRemoved).toBe(false);
+    expect((await readTrack(trackId))?.copyrightRemoved).toBe(false);
   });
 
   it('rejects an unknown action', async () => {
@@ -272,14 +328,14 @@ describe('PATCH /api/artists/me/contribution-settings', () => {
       makeRes() as unknown as Response,
       failNext,
     );
-    expect((await ArtistModel.findById(artistId).lean())?.acceptsContributions).toBe(true);
+    expect((await readArtist(artistId))?.acceptsContributions).toBe(true);
 
     await updateMyContributionSettings(
       makeReq({}, OWNER, { acceptsContributions: false }),
       makeRes() as unknown as Response,
       failNext,
     );
-    expect((await ArtistModel.findById(artistId).lean())?.acceptsContributions).toBe(false);
+    expect((await readArtist(artistId))?.acceptsContributions).toBe(false);
   });
 
   it('rejects a non-boolean', async () => {
@@ -313,7 +369,12 @@ describe('contribution lookup vacuity floor', () => {
     const trackId = await makeTrack(artistId, 'Definitely Contributed');
     await attest(trackId, 'a-stranger');
 
-    expect(await ContributionAttestationModel.countDocuments({ trackId })).toBe(1);
+    expect(
+      await getDb()
+        .select({ id: contributionAttestations.id })
+        .from(contributionAttestations)
+        .where(eq(contributionAttestations.trackId, trackId))
+    ).toHaveLength(1);
 
     const res = makeRes();
     await getMyContributions(makeReq({}, OWNER), res as unknown as Response, failNext);
@@ -324,17 +385,17 @@ describe('contribution lookup vacuity floor', () => {
 
   it('is scoped by artist, not global — a foreign attestation does not leak in', async () => {
     await makeOwnedArtist();
-    const foreign = await ArtistModel.create({
-      name: 'Foreign', source: 'upload', ownerOxyUserId: 'someone',
-    });
-    const foreignTrack = await makeTrack(foreign._id.toString(), 'Foreign Contributed');
+    const foreign = await makeArtistOwnedBy('Foreign', 'someone');
+    const foreignTrack = await makeTrack(foreign, 'Foreign Contributed');
     await attest(foreignTrack, 'a-stranger');
 
     const res = makeRes();
     await getMyContributions(makeReq({}, OWNER), res as unknown as Response, failNext);
     const body = res._body as { total: number };
     expect(body.total).toBe(0);
-    expect(await ContributionAttestationModel.countDocuments({})).toBe(1);
+    expect(
+      await getDb().select({ id: contributionAttestations.id }).from(contributionAttestations)
+    ).toHaveLength(1);
   });
 });
 
@@ -343,11 +404,17 @@ describe('takedown from the panel needs a real track', () => {
     await makeOwnedArtist();
     const res = makeRes();
     await resolveMyContribution(
-      makeReq({ trackId: new mongoose.Types.ObjectId().toString() }, OWNER, { action: 'takedown' }),
+      // A uuid v7 — the shape `generatedId()` mints, so this exercises the
+      // 404 an unknown id in the LIVE space takes, not the one a rejected id
+      // shape takes.
+      makeReq({ trackId: uuidv7() }, OWNER, { action: 'takedown' }),
       res as unknown as Response,
       failNext,
     );
     expect(res._status).toBe(404);
-    expect(await CopyrightReportModel.countDocuments({})).toBe(0);
+    // No orphan report: the 404 happens before the audit row is written, so a
+    // report here would describe a takedown that never occurred.
+    const reports = await getDb().select({ id: copyrightReports.id }).from(copyrightReports);
+    expect(reports).toEqual([]);
   });
 });

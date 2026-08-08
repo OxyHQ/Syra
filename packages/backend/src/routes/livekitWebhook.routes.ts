@@ -1,6 +1,7 @@
 import express, { Router, Request, Response } from 'express';
 import { WebhookReceiver } from 'livekit-server-sdk';
-import Room from '../models/Room';
+import { findRoomByIngressId } from '../db/rooms/rooms';
+import { describeErrorSafely } from '../utils/error';
 import { logger } from '../utils/logger';
 import { advancePodcastQueueForRoom } from './rooms.routes';
 
@@ -73,20 +74,30 @@ router.post(
       return res.status(200).json({ ok: true, ignored: 'missing-ingress-id' });
     }
 
-    const room = await Room.findOne({ activeIngressId: ingressId });
-    if (!room) {
-      // The ended ingress is not the room's currently-active one (already
-      // replaced/stopped, or belongs to no live room). Nothing to do.
-      return res.status(200).json({ ok: true, ignored: 'no-matching-room' });
-    }
-
+    /**
+     * The room lookup is INSIDE the try, and that changed with the port.
+     *
+     * Mongoose BUFFERS when its connection is absent rather than throwing, so
+     * `Room.findOne(...)` here could only hang — never reject. `getDb()` and the
+     * driver both throw, so leaving this outside the guard would let a database
+     * outage reject out of an async handler and hand LiveKit a 500, which is
+     * exactly the retry-the-whole-delivery outcome the catch below exists to
+     * prevent. Same policy, applied to the one call that newly needs it.
+     */
     try {
+      const room = await findRoomByIngressId(ingressId);
+      if (!room) {
+        // The ended ingress is not the room's currently-active one (already
+        // replaced/stopped, or belongs to no live room). Nothing to do.
+        return res.status(200).json({ ok: true, ignored: 'no-matching-room' });
+      }
+
       // Empty queue ⇒ this stops the stream + emits `room:stream:stopped`;
       // non-empty ⇒ starts the next episode. Identical policy to `/next`.
-      const result = await advancePodcastQueueForRoom(room, String(room._id), 'livekit-webhook');
+      const result = await advancePodcastQueueForRoom(room, room.id, 'livekit-webhook');
       if (result.kind === 'error') {
         logger.warn('[LiveKitWebhook] Failed to start next queued episode after ingress_ended', {
-          roomId: String(room._id),
+          roomId: room.id,
           status: result.status,
           message: result.body.message,
         });
@@ -94,9 +105,14 @@ router.post(
     } catch (err) {
       // Never surface a 5xx to LiveKit (it would retry the whole delivery); the
       // failure is logged and a manual `/next` can recover the room.
+      //
+      // Redacted: every call in this try issues SQL, so a driver error carries
+      // the statement and its bound parameters. `roomId` is deliberately absent
+      // — the lookup that produces it is now inside the guard, so there may not
+      // be one.
       logger.error('[LiveKitWebhook] Error advancing/stopping stream after ingress_ended', {
-        roomId: String(room._id),
-        error: err,
+        ingressId,
+        error: describeErrorSafely(err),
       });
     }
 

@@ -17,9 +17,11 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll } from 'bun:test';
 import fs from 'fs';
 import path from 'path';
-import { clear, connect, disconnect } from '../../test/mongo';
 import { env } from '../../config/env';
-import { IsrcRegistryModel } from '../../models/IsrcRegistry';
+import { sql } from 'drizzle-orm';
+import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
+import { getDb } from '../../db/postgres';
+import { isrcRegistry } from '../../db/schema/catalog';
 import {
   ACOUSTID_MATCH_SCORE,
   ACOUSTID_MAX_QUEUE_WAIT_MS,
@@ -48,13 +50,17 @@ const groundTruth: { cases: ChromaprintCase[]; producedBy: Record<string, string
   fs.readFileSync(path.join(__dirname, '__fixtures__', 'chromaprint-compressed.json'), 'utf8'),
 );
 
-beforeAll(connect);
+beforeAll(async () => {
+  await connectDb();
+});
 beforeEach(resetAcoustidRateLimitForTests);
 afterEach(async () => {
   setAcoustidFetchForTests();
-  await clear();
+  await clearDb();
 });
-afterAll(disconnect);
+afterAll(async () => {
+  await disconnectDb();
+});
 
 // ── The encoder ─────────────────────────────────────────────────────────────
 
@@ -418,7 +424,7 @@ describe('resolveAcousticIdentity turns a match into identifiers', () => {
   });
 
   async function seedRegistry(): Promise<void> {
-    await IsrcRegistryModel.create({
+    await getDb().insert(isrcRegistry).values({
       isrc: 'ESA452300137',
       recordingMbid: RECORDING_MBID,
       title: 'Midnight Ferry',
@@ -475,7 +481,14 @@ describe('resolveAcousticIdentity turns a match into identifiers', () => {
     // The reverse direction (recording → ISRC) is what this feature added. Without
     // the index it is a scan over the whole MusicBrainz slice, on the upload path
     // with a person waiting.
-    const indexes = await IsrcRegistryModel.collection.indexes();
-    expect(indexes.some((index) => index.key.recordingMbid === 1)).toBe(true);
+    //
+    // Asked of `pg_indexes` rather than of a Mongo collection — and asked for the
+    // INDEXDEF, not just the name, so an index renamed to match while indexing a
+    // different column cannot satisfy it.
+    const [index] = await getDb().execute<{ indexdef: string }>(
+      sql`select indexdef from pg_indexes
+          where tablename = 'isrc_registry' and indexname = 'isrc_registry_recording_mbid_idx'`
+    );
+    expect(index?.indexdef ?? 'MISSING').toContain('(recording_mbid)');
   });
 });

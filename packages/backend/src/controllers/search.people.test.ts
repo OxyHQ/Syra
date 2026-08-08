@@ -1,12 +1,34 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import type { Request, Response, NextFunction } from 'express';
-import { connect, clear, disconnect } from '../test/mongo';
-import { PersonModel } from '../models/CatalogEntity';
+import { uuidv7 } from '@oxyhq/db';
+import { normalizeNameKey } from '@syra/shared-types';
+import { clearDb, connectDb, disconnectDb } from '../test/postgres';
+import { getDb } from '../db/postgres';
+import { catalogEntities } from '../db/schema/catalog';
 import { search } from './search.controller';
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+/**
+ * ONE database. This file used to connect to both — persons are
+ * `catalog_entities` rows, while the same handler's podcast and episode
+ * categories were still Mongoose and `search` touches them on every
+ * `category=all` request. Task 12 took those two categories to drizzle, so
+ * every read `search` makes is Postgres and the Mongo connection is gone.
+ */
+beforeAll(connectDb);
+afterEach(clearDb);
+afterAll(disconnectDb);
+
+/** A person row — `type: 'person'`, the discriminator written out. */
+async function seedPerson(values: { name: string; href?: string; img?: string }): Promise<void> {
+  await getDb().insert(catalogEntities).values({
+    id: uuidv7(),
+    type: 'person',
+    name: values.name,
+    nameKey: normalizeNameKey(values.name),
+    href: values.href,
+    img: values.img,
+  });
+}
 
 interface SearchBody {
   results: { people: Array<{ name: string; img?: string }> };
@@ -38,10 +60,8 @@ const failNext: NextFunction = (err) => { throw err; };
 describe('unified search — people category', () => {
   it('finds people by name and keeps the external img for RSS persons', async () => {
     // href-keyed (RSS) persons → no Oxy enrichment fetch (offline test).
-    await PersonModel.create([
-      { name: 'Joe Rogan', nameKey: 'joe rogan', href: 'https://x/jr', img: 'https://x/jr.jpg' },
-      { name: 'Unrelated Person', nameKey: 'unrelated person', href: 'https://x/up' },
-    ]);
+    await seedPerson({ name: 'Joe Rogan', href: 'https://x/jr', img: 'https://x/jr.jpg' });
+    await seedPerson({ name: 'Unrelated Person', href: 'https://x/up' });
 
     const res = makeRes();
     await search(makeReq({ q: 'rogan', category: 'people' }), res as unknown as Response, failNext);

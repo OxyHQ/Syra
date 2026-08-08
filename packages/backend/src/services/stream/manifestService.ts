@@ -1,17 +1,31 @@
 /**
  * HLS manifest building service.
  *
- * Master playlist: built directly from `track.hls` (no S3 round-trip) and
- * filtered to bitrates ≤ the user's entitlement cap. This makes filtering
- * trivial and avoids a network read for a file we'd rewrite entirely anyway.
+ * Master playlist: built directly from the rendition ladder the CALLER loaded
+ * (no S3 round-trip) and filtered to bitrates ≤ the user's entitlement cap.
+ * This makes filtering trivial and avoids a network read for a file we'd
+ * rewrite entirely anyway.
  *
  * Variant playlist: fetched from S3 and rewritten via the pure rewriter.
  * All I/O is injectable for testing without real S3 calls.
+ *
+ * ## Why the caller loads the ladder
+ *
+ * This module used to export two extra entry points, `buildMasterPlaylist` and
+ * `buildVariantPlaylist`, taking an `ITrack` and reading `track.hls` off it.
+ * Task 4 moved the ladder to `track_hls_renditions`, so that column no longer
+ * exists and both adapters were broken by construction against a Postgres row —
+ * they would have filtered an `undefined` ladder to an empty manifest, which is
+ * a 200 with no renditions rather than an error.
+ *
+ * They are deleted rather than ported. The `*For` pair below already served
+ * podcast episodes on exactly this contract, so the caller-loads-the-ladder
+ * shape was already the one in production; keeping a track-shaped adapter beside
+ * it would only re-create the coupling to one entity's storage layout.
  */
 
 import { Readable } from 'stream';
 import type { HlsRendition } from '@syra/shared-types';
-import type { ITrack } from '../../models/Track';
 import { streamFromS3, getPresignedUrl } from '../s3Service';
 import { rewriteVariantPlaylist } from './playlistRewrite';
 
@@ -107,30 +121,6 @@ async function defaultPresign(s3Key: string, ttlSec: number = SEGMENT_URL_TTL_SE
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
- * Build the master playlist for the given track, filtered to renditions whose
- * bitrateKbps ≤ maxBitrateKbps.
- *
- * The master is generated directly from `track.hls` (no S3 fetch) so filtering
- * is trivial and avoids a network round-trip.
- *
- * Phase-5 seam: additional entitlement-based filtering (e.g. content tier) can
- * be applied here before the `track.hls.filter(...)` step.
- */
-export async function buildMasterPlaylist(
-  track: ITrack,
-  token: string,
-  baseUrl: string,
-  maxBitrateKbps: number,
-  _deps?: ManifestDeps,
-): Promise<string> {
-  const trackId = track._id.toString();
-  return buildMasterPlaylistFor(
-    { id: trackId, hls: track.hls },
-    { token, baseUrl, maxBitrateKbps, basePath: `/api/stream/${trackId}` },
-  );
-}
-
-/**
  * Generic master-playlist builder shared by tracks and episodes. Variant URLs
  * are built as `${baseUrl}${basePath}/v/<kbps>.m3u8?t=<token>`.
  */
@@ -149,25 +139,6 @@ export async function buildMasterPlaylistFor(
   }
 
   return lines.join('\n');
-}
-
-/**
- * Build the rewritten variant playlist for the given track and bitrate.
- *
- * Throws if `bitrateKbps` is not present in `track.hls`.
- */
-export async function buildVariantPlaylist(
-  track: ITrack,
-  bitrateKbps: number,
-  token: string,
-  baseUrl: string,
-  deps?: ManifestDeps,
-): Promise<string> {
-  const trackId = track._id.toString();
-  return buildVariantPlaylistFor(
-    { id: trackId, hls: track.hls },
-    { bitrateKbps, token, baseUrl, basePath: `/api/stream/${trackId}`, deps },
-  );
 }
 
 /**

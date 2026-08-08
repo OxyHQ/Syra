@@ -1,12 +1,15 @@
-import mongoose from 'mongoose';
+import { and, asc, eq } from 'drizzle-orm';
+import { isLiveEntityId } from '@oxyhq/db';
 import type { Response } from 'express';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
+import type { HlsRendition } from '@syra/shared-types';
 import { env } from '../config/env';
-import { TrackModel } from '../models/Track';
-import { TrackKeyModel } from '../models/TrackKey';
-import { UserMusicPreferencesModel } from '../models/UserMusicPreferences';
+import { getDb } from '../db/postgres';
+import { trackHlsRenditions, tracks } from '../db/schema/catalog';
+import { trackKeys } from '../db/schema/trackKeys';
+import { findMusicPreferences } from '../db/user/musicPreferences';
 import { mintStreamToken, verifyStreamToken } from '../services/stream/streamToken';
-import { buildMasterPlaylist, buildVariantPlaylist } from '../services/stream/manifestService';
+import { buildMasterPlaylistFor, buildVariantPlaylistFor } from '../services/stream/manifestService';
 import { getUserEntitlement } from '../services/premium/entitlement';
 import { computeMaxBitrateKbps } from '../services/stream/audioQuality';
 
@@ -51,7 +54,7 @@ export async function resolveStreamAccess(
   if (req.user?.id) {
     const [entitlement, prefs] = await Promise.all([
       getUserEntitlement(req.user.id),
-      UserMusicPreferencesModel.findOne({ oxyUserId: req.user.id }).lean(),
+      findMusicPreferences(req.user.id),
     ]);
     const maxBitrateKbps = computeMaxBitrateKbps(
       { audioQuality: prefs?.audioQuality, dataSaver: prefs?.dataSaver },
@@ -63,10 +66,79 @@ export async function resolveStreamAccess(
   return { ok: false };
 }
 
+// ── Track reads ───────────────────────────────────────────────────────────────
+
+/**
+ * The columns every handler here needs, and no others.
+ *
+ * Nothing in this file SERIALIZES a track — it answers with a URL, a key, or a
+ * manifest — so a narrow projection is right here in a way it was not in
+ * `recommendationService`, where the same shape produced a DTO with `id: ""`.
+ * The difference is whether a row leaves the module as a DTO; none does.
+ */
+const PLAYBACK_TRACK_COLUMNS = {
+  isAvailable: tracks.isAvailable,
+  copyrightRemoved: tracks.copyrightRemoved,
+  status: tracks.status,
+  hlsMasterKey: tracks.hlsMasterKey,
+} as const;
+
+/** Picked off the schema type, so a column changing shape fails here. */
+type PlaybackTrackRow = Pick<
+  typeof tracks.$inferSelect,
+  keyof typeof PLAYBACK_TRACK_COLUMNS
+>;
+
+async function findPlaybackTrack(trackId: string): Promise<PlaybackTrackRow | undefined> {
+  const [track] = await getDb()
+    .select(PLAYBACK_TRACK_COLUMNS)
+    .from(tracks)
+    .where(eq(tracks.id, trackId))
+    .limit(1);
+
+  return track;
+}
+
+/**
+ * The HLS ladder, in ladder order.
+ *
+ * A child table since Task 4, so it is a second read rather than an embedded
+ * array — and `position` is what orders it. `bitrateKbps` ascending would
+ * usually agree, but the manifest builders sort by bitrate themselves, so the
+ * stored order is the one thing this read must not invent.
+ */
+async function findHlsRenditions(trackId: string): Promise<HlsRendition[]> {
+  return getDb()
+    .select({
+      manifestKey: trackHlsRenditions.manifestKey,
+      bitrateKbps: trackHlsRenditions.bitrateKbps,
+      encrypted: trackHlsRenditions.encrypted,
+    })
+    .from(trackHlsRenditions)
+    .where(eq(trackHlsRenditions.trackId, trackId))
+    .orderBy(asc(trackHlsRenditions.position));
+}
+
 // ── Track availability guard ──────────────────────────────────────────────────
 
-export function isTrackPlayable(track: { isAvailable?: boolean; copyrightRemoved?: boolean }): boolean {
-  return track.isAvailable !== false && !track.copyrightRemoved;
+/**
+ * The PLAYBACK authority, and the third of the three predicates.
+ *
+ * It was `isAvailable !== false && !copyrightRemoved` against Mongo, where both
+ * fields were optional — so it disagreed with the catalog filter on an absent
+ * `isAvailable` and with the in-memory catalog predicate on a truthy
+ * non-boolean `copyrightRemoved`. A takedown that set only `copyrightRemoved`
+ * to something other than exactly `true` stayed listed, searchable, AND
+ * playable.
+ *
+ * Both columns are `NOT NULL` booleans in Postgres, so neither disagreeing
+ * shape is representable, and this is now the literal mirror of
+ * `db/catalog/visibility.ts`'s `isPlayableTrack` — same comparison, same
+ * direction. `__tests__/visibility.agreement.test.ts` holds all three to that
+ * over real rows rather than to a comment.
+ */
+export function isTrackPlayable(track: { isAvailable: boolean; copyrightRemoved: boolean }): boolean {
+  return track.isAvailable === true && track.copyrightRemoved === false;
 }
 
 // ── Manifest token helper ─────────────────────────────────────────────────────
@@ -112,13 +184,13 @@ export async function getStream(req: AuthRequest, res: Response): Promise<void> 
   const trackId = Array.isArray(req.params.trackId)
     ? req.params.trackId[0]
     : req.params.trackId;
-  if (!trackId || !mongoose.Types.ObjectId.isValid(trackId)) {
+  if (!trackId || !isLiveEntityId(trackId)) {
     res.status(400).json({ error: 'Invalid track ID' });
     return;
   }
 
   // 2. Load and validate availability (no auth needed to know a track is gone).
-  const track = await TrackModel.findById(trackId).lean();
+  const track = await findPlaybackTrack(trackId);
   if (!track) {
     res.status(404).json({ error: 'Track not found' });
     return;
@@ -143,14 +215,19 @@ export async function getStream(req: AuthRequest, res: Response): Promise<void> 
 
   const [entitlement, prefs] = await Promise.all([
     getUserEntitlement(req.user.id),
-    UserMusicPreferencesModel.findOne({ oxyUserId: req.user.id }).lean(),
+    findMusicPreferences(req.user.id),
   ]);
   const maxBitrateKbps = computeMaxBitrateKbps(
     { audioQuality: prefs?.audioQuality, dataSaver: prefs?.dataSaver },
     entitlement,
   );
 
-  if (track.status === 'ready' && track.hlsMasterKey && track.hls?.length) {
+  const hasLadder =
+    track.status === 'ready' &&
+    Boolean(track.hlsMasterKey) &&
+    (await findHlsRenditions(trackId)).length > 0;
+
+  if (hasLadder) {
     const token = mintStreamToken(
       { trackId, userId: req.user.id, maxBitrateKbps },
       STREAM_SESSION_TTL_SEC,
@@ -183,7 +260,7 @@ export async function getStreamKey(req: AuthRequest, res: Response): Promise<voi
     ? req.params.trackId[0]
     : req.params.trackId;
 
-  if (!trackId || !mongoose.Types.ObjectId.isValid(trackId)) {
+  if (!trackId || !isLiveEntityId(trackId)) {
     res.status(400).json({ error: 'Invalid track ID' });
     return;
   }
@@ -194,7 +271,7 @@ export async function getStreamKey(req: AuthRequest, res: Response): Promise<voi
     return;
   }
 
-  const track = await TrackModel.findById(trackId).lean();
+  const track = await findPlaybackTrack(trackId);
   if (!track) {
     res.status(404).json({ error: 'Track not found' });
     return;
@@ -205,7 +282,16 @@ export async function getStreamKey(req: AuthRequest, res: Response): Promise<voi
     return;
   }
 
-  const trackKey = await TrackKeyModel.findOne({ trackId }).lean();
+  // `track_keys.track_id` is the CATALOGUE arm and only that — one column per
+  // id space (see `schema/trackKeys.ts`), each with its own foreign key. A
+  // locker upload's or an episode's key lives in a different column and cannot
+  // be reached from here, which is what the shared column used to allow.
+  const [trackKey] = await getDb()
+    .select({ keyHex: trackKeys.keyHex })
+    .from(trackKeys)
+    .where(eq(trackKeys.trackId, trackId))
+    .limit(1);
+
   if (!trackKey) {
     res.status(404).json({ error: 'Key not found' });
     return;
@@ -233,7 +319,7 @@ export async function getMasterPlaylist(req: AuthRequest, res: Response): Promis
     ? req.params.trackId[0]
     : req.params.trackId;
 
-  if (!trackId || !mongoose.Types.ObjectId.isValid(trackId)) {
+  if (!trackId || !isLiveEntityId(trackId)) {
     res.status(400).json({ error: 'Invalid track ID' });
     return;
   }
@@ -244,7 +330,7 @@ export async function getMasterPlaylist(req: AuthRequest, res: Response): Promis
     return;
   }
 
-  const track = await TrackModel.findById(trackId);
+  const track = await findPlaybackTrack(trackId);
   if (!track) {
     res.status(404).json({ error: 'Track not found' });
     return;
@@ -260,7 +346,8 @@ export async function getMasterPlaylist(req: AuthRequest, res: Response): Promis
     return;
   }
 
-  if (!track.hlsMasterKey || !track.hls?.length) {
+  const renditions = await findHlsRenditions(trackId);
+  if (!track.hlsMasterKey || renditions.length === 0) {
     res.status(404).json({ error: 'Master playlist not available' });
     return;
   }
@@ -269,7 +356,10 @@ export async function getMasterPlaylist(req: AuthRequest, res: Response): Promis
   const baseUrl = env.STREAM_KEY_BASE_URL;
   const token = resolveManifestToken(req, trackId, maxBitrateKbps);
 
-  const playlist = await buildMasterPlaylist(track, token, baseUrl, maxBitrateKbps);
+  const playlist = await buildMasterPlaylistFor(
+    { id: trackId, hls: renditions },
+    { token, baseUrl, maxBitrateKbps, basePath: `/api/stream/${trackId}` },
+  );
   res.set('Content-Type', CONTENT_TYPE_HLS_PLAYLIST);
   res.set('Cache-Control', CACHE_CONTROL_PLAYLIST);
   res.set('Vary', 'Authorization');
@@ -294,7 +384,7 @@ export async function getVariantPlaylist(req: AuthRequest, res: Response): Promi
     ? req.params.trackId[0]
     : req.params.trackId;
 
-  if (!trackId || !mongoose.Types.ObjectId.isValid(trackId)) {
+  if (!trackId || !isLiveEntityId(trackId)) {
     res.status(400).json({ error: 'Invalid track ID' });
     return;
   }
@@ -305,7 +395,7 @@ export async function getVariantPlaylist(req: AuthRequest, res: Response): Promi
     return;
   }
 
-  const track = await TrackModel.findById(trackId);
+  const track = await findPlaybackTrack(trackId);
   if (!track) {
     res.status(404).json({ error: 'Track not found' });
     return;
@@ -321,7 +411,8 @@ export async function getVariantPlaylist(req: AuthRequest, res: Response): Promi
     return;
   }
 
-  if (!track.hls?.length) {
+  const renditions = await findHlsRenditions(trackId);
+  if (renditions.length === 0) {
     res.status(404).json({ error: 'Variant playlist not available' });
     return;
   }
@@ -338,7 +429,7 @@ export async function getVariantPlaylist(req: AuthRequest, res: Response): Promi
     return;
   }
 
-  const rendition = track.hls.find((r) => r.bitrateKbps === bitrateKbps);
+  const rendition = renditions.find((r) => r.bitrateKbps === bitrateKbps);
   if (!rendition) {
     res.status(404).json({ error: `No rendition at ${bitrateKbps} kbps` });
     return;
@@ -354,7 +445,10 @@ export async function getVariantPlaylist(req: AuthRequest, res: Response): Promi
   const baseUrl = env.STREAM_KEY_BASE_URL;
   const token = resolveManifestToken(req, trackId, access.maxBitrateKbps);
 
-  const playlist = await buildVariantPlaylist(track, bitrateKbps, token, baseUrl);
+  const playlist = await buildVariantPlaylistFor(
+    { id: trackId, hls: renditions },
+    { bitrateKbps, token, baseUrl, basePath: `/api/stream/${trackId}` },
+  );
   res.set('Content-Type', CONTENT_TYPE_HLS_PLAYLIST);
   res.set('Cache-Control', CACHE_CONTROL_PLAYLIST);
   res.set('Vary', 'Authorization');

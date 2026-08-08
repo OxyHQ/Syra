@@ -1,13 +1,14 @@
-import mongoose from 'mongoose';
+import { isLiveEntityId } from '@oxyhq/db';
+import { and, eq } from 'drizzle-orm';
 import { CONTRACT_LIMITS } from '@oxyhq/crowdsource-contracts';
 import { PlaylistVisibility } from '@syra/shared-types';
-import { PlaylistModel } from '../../models/Playlist';
-import HouseModel from '../../models/House';
-import RoomModel from '../../models/Room';
-import RecordingModel from '../../models/Recording';
-import { TrackModel } from '../../models/Track';
-import { ArtistModel } from '../../models/CatalogEntity';
-import { ReportedType } from '../../models/Report';
+import { findHouseById } from '../../db/rooms/houses';
+import { findPublicRoomById } from '../../db/rooms/rooms';
+import { roomHasRecording } from '../../db/rooms/recordings';
+import { ReportedType } from '../types';
+import { getDb } from '../../db/postgres';
+import { catalogEntities, tracks } from '../../db/schema/catalog';
+import { playlists } from '../../db/schema/library';
 import type {
   ModerationContextResource,
   ModerationResource,
@@ -57,17 +58,22 @@ function playlistProvider(): ModerationSubjectProvider {
     subjectType: 'custom.syra.playlist',
 
     async snapshot(reportedId: string): Promise<ModerationSubjectSnapshot | null> {
-      if (!mongoose.isValidObjectId(reportedId)) return null;
-      const playlist = await PlaylistModel.findById(reportedId)
-        .select('name description ownerOxyUserId visibility createdAt')
-        .lean<{
-          _id: mongoose.Types.ObjectId;
-          name?: string;
-          description?: string;
-          ownerOxyUserId?: string;
-          visibility?: string;
-          createdAt?: Date;
-        } | null>();
+      // No id-shape guard on the Postgres providers: `playlists.id` is `text`,
+      // so a malformed id matches no row and the query answers the question the
+      // guard used to. The Mongo providers below keep theirs, because an id of
+      // the wrong shape reaches Mongoose as a CastError rather than a miss.
+      const [playlist] = await getDb()
+        .select({
+          id: playlists.id,
+          name: playlists.name,
+          description: playlists.description,
+          ownerOxyUserId: playlists.ownerOxyUserId,
+          visibility: playlists.visibility,
+          createdAt: playlists.createdAt,
+        })
+        .from(playlists)
+        .where(eq(playlists.id, reportedId))
+        .limit(1);
       if (!playlist) return null;
       if (playlist.visibility !== PlaylistVisibility.PUBLIC) return null;
 
@@ -82,12 +88,10 @@ function playlistProvider(): ModerationSubjectProvider {
 
       return {
         subject: {
-          externalId: playlist._id.toHexString(),
+          externalId: playlist.id,
           type: 'custom.syra.playlist',
-          permalink: `${WEB_ORIGIN}/playlist/${playlist._id.toHexString()}`,
-          ...(playlist.ownerOxyUserId === undefined
-            ? {}
-            : { author: { oxyUserId: playlist.ownerOxyUserId } }),
+          permalink: `${WEB_ORIGIN}/playlist/${playlist.id}`,
+          author: { oxyUserId: playlist.ownerOxyUserId },
         },
         content: {
           type: 'listing',
@@ -95,9 +99,7 @@ function playlistProvider(): ModerationSubjectProvider {
             title,
             ...(description === undefined ? {} : { description }),
           },
-          ...(playlist.createdAt === undefined
-            ? {}
-            : { createdAt: new Date(playlist.createdAt) }),
+          createdAt: playlist.createdAt,
         },
       };
     },
@@ -118,15 +120,8 @@ function houseProvider(): ModerationSubjectProvider {
     subjectType: 'custom.syra.house',
 
     async snapshot(reportedId: string): Promise<ModerationSubjectSnapshot | null> {
-      if (!mongoose.isValidObjectId(reportedId)) return null;
-      const house = await HouseModel.findById(reportedId).lean<{
-        _id: mongoose.Types.ObjectId;
-        name?: string;
-        description?: string;
-        createdBy?: string;
-        visibility?: { discovery?: string };
-        createdAt?: Date;
-      } | null>();
+      if (!isLiveEntityId(reportedId)) return null;
+      const house = await findHouseById(reportedId);
       if (!house) return null;
 
       const title = bounded(house.name, CONTRACT_LIMITS.SHORT_TEXT_MAX_LENGTH);
@@ -135,12 +130,10 @@ function houseProvider(): ModerationSubjectProvider {
 
       return {
         subject: {
-          externalId: house._id.toHexString(),
+          externalId: house.id,
           type: 'custom.syra.house',
-          permalink: `${WEB_ORIGIN}/house/${house._id.toHexString()}`,
-          ...(house.createdBy === undefined
-            ? {}
-            : { author: { oxyUserId: house.createdBy } }),
+          permalink: `${WEB_ORIGIN}/house/${house.id}`,
+          author: { oxyUserId: house.createdBy },
         },
         content: {
           type: 'listing',
@@ -148,7 +141,7 @@ function houseProvider(): ModerationSubjectProvider {
             title,
             ...(description === undefined ? {} : { description }),
           },
-          ...(house.createdAt === undefined ? {} : { createdAt: new Date(house.createdAt) }),
+          createdAt: house.createdAt,
         },
       };
     },
@@ -174,15 +167,21 @@ function artistProvider(): ModerationSubjectProvider {
     subjectType: 'identity.profile',
 
     async snapshot(reportedId: string): Promise<ModerationSubjectSnapshot | null> {
-      if (!mongoose.isValidObjectId(reportedId)) return null;
-      const artist = await ArtistModel.findById(reportedId)
-        .select('name bio claimedByOxyUserId')
-        .lean<{
-          _id: mongoose.Types.ObjectId;
-          name?: string;
-          bio?: string;
-          claimedByOxyUserId?: string;
-        } | null>();
+      const [artist] = await getDb()
+        .select({
+          id: catalogEntities.id,
+          name: catalogEntities.name,
+          bio: catalogEntities.bio,
+          claimedByOxyUserId: catalogEntities.claimedByOxyUserId,
+        })
+        .from(catalogEntities)
+        // `type = 'artist'` restores what `ArtistModel` did implicitly: it is a
+        // Mongoose DISCRIMINATOR, so every query through it carried the type
+        // filter. `catalog_entities` holds persons in the same table and drizzle
+        // adds nothing, so the filter is written out — a person reported as an
+        // artist profile is not this provider's subject.
+        .where(and(eq(catalogEntities.id, reportedId), eq(catalogEntities.type, 'artist')))
+        .limit(1);
       if (!artist) return null;
 
       const displayName = bounded(artist.name, CONTRACT_LIMITS.SHORT_TEXT_MAX_LENGTH);
@@ -195,10 +194,10 @@ function artistProvider(): ModerationSubjectProvider {
 
       return {
         subject: {
-          externalId: artist._id.toHexString(),
+          externalId: artist.id,
           type: 'identity.profile',
-          permalink: `${WEB_ORIGIN}/artist/${artist._id.toHexString()}`,
-          ...(artist.claimedByOxyUserId === undefined
+          permalink: `${WEB_ORIGIN}/artist/${artist.id}`,
+          ...(artist.claimedByOxyUserId === null
             ? {}
             : { author: { oxyUserId: artist.claimedByOxyUserId } }),
         },
@@ -245,15 +244,15 @@ function trackProvider(): ModerationSubjectProvider {
     subjectType: 'custom.syra.track',
 
     async snapshot(reportedId: string): Promise<ModerationSubjectSnapshot | null> {
-      if (!mongoose.isValidObjectId(reportedId)) return null;
-      const track = await TrackModel.findById(reportedId)
-        .select('title artistId createdAt')
-        .lean<{
-          _id: mongoose.Types.ObjectId;
-          title?: string;
-          artistId?: string;
-          createdAt?: Date;
-        } | null>();
+      const [track] = await getDb()
+        .select({
+          id: tracks.id,
+          title: tracks.title,
+          artistId: tracks.artistId,
+        })
+        .from(tracks)
+        .where(eq(tracks.id, reportedId))
+        .limit(1);
       if (!track) return null;
 
       const title = bounded(track.title, CONTRACT_LIMITS.SHORT_TEXT_MAX_LENGTH);
@@ -261,11 +260,24 @@ function trackProvider(): ModerationSubjectProvider {
 
       const context: ModerationContextResource[] = [];
       let ownerId: string | undefined;
-      if (track.artistId && mongoose.isValidObjectId(track.artistId)) {
-        const artist = await ArtistModel.findById(track.artistId)
-          .select('name claimedByOxyUserId')
-          .lean<{ name?: string; claimedByOxyUserId?: string } | null>();
-        ownerId = artist?.claimedByOxyUserId;
+      if (track.artistId) {
+        const [artist] = await getDb()
+          .select({
+            name: catalogEntities.name,
+            claimedByOxyUserId: catalogEntities.claimedByOxyUserId,
+          })
+          .from(catalogEntities)
+          // `type = 'artist'` for the same reason `artistProvider` above needs
+          // it, and missing it here is worse: `tracks.artist_id` references
+          // `catalog_entities`, which holds PERSONS in the same table, so a
+          // track pointing at a person row would contribute that person's name
+          // as context and their `claimed_by_oxy_user_id` as the moderation
+          // subject's AUTHOR — a report attributed to somebody who did not
+          // publish it. `ArtistModel.findById` scoped this implicitly; drizzle
+          // adds nothing.
+          .where(and(eq(catalogEntities.id, track.artistId), eq(catalogEntities.type, 'artist')))
+          .limit(1);
+        ownerId = artist?.claimedByOxyUserId ?? undefined;
         const artistName = bounded(artist?.name, CONTRACT_LIMITS.TEXT_RESOURCE_MAX_LENGTH);
         if (artistName !== undefined) {
           context.push({ role: 'context', type: 'text', data: { text: artistName } });
@@ -274,9 +286,9 @@ function trackProvider(): ModerationSubjectProvider {
 
       return {
         subject: {
-          externalId: track._id.toHexString(),
+          externalId: track.id,
           type: 'custom.syra.track',
-          permalink: `${WEB_ORIGIN}/track/${track._id.toHexString()}`,
+          permalink: `${WEB_ORIGIN}/track/${track.id}`,
           ...(ownerId === undefined ? {} : { author: { oxyUserId: ownerId } }),
         },
         content: {
@@ -334,9 +346,9 @@ function roomProvider(): ModerationSubjectProvider {
     subjectType: 'custom.syra.room',
 
     async snapshot(reportedId: string): Promise<ModerationSubjectSnapshot | null> {
-      if (!mongoose.isValidObjectId(reportedId)) return null;
+      if (!isLiveEntityId(reportedId)) return null;
       /**
-       * A WHITELIST, and the exclusion is the point rather than a side effect.
+       * The exclusion is the point rather than a side effect.
        *
        * The question to ask of any reported document is not only "what would a
        * jury learn that it should not" but "is there anything here a jury could
@@ -344,26 +356,18 @@ function roomProvider(): ModerationSubjectProvider {
        * credential for broadcasting INTO the room. A juror who read them could
        * take over the stream of the room they were asked to judge.
        *
-       * They are excluded at the Mongo projection so they are never loaded into
-       * this process at all — not filtered out later, where a future field added
-       * to a snapshot object could quietly pick them up again. Never widen this
-       * to a bare `findById()`; `roomSubject.test.ts` fails if the key ever
-       * reaches a snapshot.
+       * This used to be a hand-written Mongo projection listing nine fields,
+       * where forgetting one exclusion was all it took. `findPublicRoomById`
+       * reads through `publicColumns(rooms, PROTECTED_COLUMNS_BY_TABLE)`, so all
+       * four stream credentials are absent from the returned TYPE — reaching for
+       * one below fails `tsc` rather than shipping it, and the guard no longer
+       * depends on this call site spelling a projection correctly. The wider
+       * read is therefore safe where a bare `findById()` was not.
+       *
+       * `roomSubject.test.ts` still fails if a key ever reaches a snapshot; it
+       * is the behavioural half, and the type is the structural one.
        */
-      const room = await RoomModel.findById(reportedId)
-        .select('title description topic tags host status streamTitle streamDescription createdAt')
-        .lean<{
-          _id: mongoose.Types.ObjectId;
-          title?: string;
-          description?: string;
-          topic?: string;
-          tags?: string[];
-          host?: string;
-          status?: string;
-          streamTitle?: string;
-          streamDescription?: string;
-          createdAt?: Date;
-        } | null>();
+      const room = await findPublicRoomById(reportedId);
       if (!room) return null;
 
       const title = bounded(room.title, CONTRACT_LIMITS.SHORT_TEXT_MAX_LENGTH);
@@ -382,12 +386,11 @@ function roomProvider(): ModerationSubjectProvider {
         CONTRACT_LIMITS.LONG_TEXT_MAX_LENGTH,
       );
 
-      const hasRecording =
-        (await RecordingModel.countDocuments({ roomId: room._id.toHexString() }).limit(1)) > 0;
+      const hasRecording = await roomHasRecording(room.id);
 
       const context: ModerationContextResource[] = [];
       const topicAndTags = claim(
-        [room.topic?.trim(), ...(room.tags ?? [])].filter(Boolean).join(', '),
+        [room.topic?.trim(), ...room.tags].filter(Boolean).join(', '),
       );
 
       const content: ModerationResource = {
@@ -399,7 +402,7 @@ function roomProvider(): ModerationSubjectProvider {
           ...(claim(room.streamTitle) === undefined
             ? {}
             : { streamTitle: claim(room.streamTitle) ?? '' }),
-          ...(room.status === undefined ? {} : { roomStatus: room.status }),
+          roomStatus: room.status,
           /**
            * The two withheld things, stated rather than left to be inferred.
            * `participantsIncluded: false` is what tells a jury it is judging a
@@ -413,10 +416,10 @@ function roomProvider(): ModerationSubjectProvider {
 
       return {
         subject: {
-          externalId: room._id.toHexString(),
+          externalId: room.id,
           type: 'custom.syra.room',
-          permalink: `${WEB_ORIGIN}/room/${room._id.toHexString()}`,
-          ...(room.host === undefined ? {} : { author: { oxyUserId: room.host } }),
+          permalink: `${WEB_ORIGIN}/room/${room.id}`,
+          author: { oxyUserId: room.host },
         },
         content,
         ...(context.length > 0 ? { context } : {}),

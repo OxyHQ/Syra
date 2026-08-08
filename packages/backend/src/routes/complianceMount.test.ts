@@ -2,11 +2,13 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'bun:test';
 import express from 'express';
 import type { Server } from 'http';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
-import { clear, connect, disconnect } from '../test/mongo';
-import { ArtistModel } from '../models/CatalogEntity';
-import { TrackModel } from '../models/Track';
-import { ArtistClaimModel } from '../models/ArtistClaim';
-import { CopyrightReportModel } from '../models/CopyrightReport';
+import { and, eq } from 'drizzle-orm';
+import { uuidv7 } from '@oxyhq/db';
+import { normalizeNameKey } from '@syra/shared-types';
+import { clearDb, connectDb, disconnectDb } from '../test/postgres';
+import { getDb } from '../db/postgres';
+import { catalogEntities, tracks } from '../db/schema/catalog';
+import { artistClaims, copyrightReports } from '../db/schema/creators';
 import { COMPLIANCE_REVIEWERS_ENV } from '../services/compliance/reviewers';
 import artistsRoutes from './artists.routes';
 import artistsAuthRoutes from './artists.auth.routes';
@@ -29,9 +31,15 @@ import copyrightRoutes from './copyright.routes';
  * handler it is supposed to.
  */
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+/**
+ * ONE database: the artist a claim targets, the claim itself and the copyright
+ * report are all Postgres — `artist_claims` moved with Task 13. This file is
+ * about ROUTE MOUNTING, so it exercises the real handlers end to end and
+ * therefore needs whatever they read.
+ */
+beforeAll(connectDb);
+afterEach(clearDb);
+afterAll(disconnectDb);
 
 /** The `server.ts` mount shape: public first, authenticated second, both at /api. */
 async function withApi(
@@ -93,13 +101,43 @@ function withReviewers<T>(value: string | undefined, run: () => Promise<T>): Pro
 }
 
 async function makeClaimableArtist(): Promise<string> {
-  const artist = await ArtistModel.create({
-    name: `Contributed ${Math.random().toString(36).slice(2)}`,
-    source: 'upload',
-    origin: 'contributed',
-    claimable: true,
-  });
-  return artist._id.toString();
+  const name = `Contributed ${uuidv7()}`;
+  const [artist] = await getDb()
+    .insert(catalogEntities)
+    .values({
+      type: 'artist',
+      name,
+      nameKey: normalizeNameKey(name),
+      source: 'upload',
+      origin: 'contributed',
+      claimable: true,
+    })
+    .returning({ id: catalogEntities.id });
+
+  if (!artist) throw new Error('makeClaimableArtist: insert returned no row');
+  return artist.id;
+}
+
+/** A ready track for `artistId`, on the Postgres side. */
+async function makeTrack(artistId: string): Promise<string> {
+  const [track] = await getDb()
+    .insert(tracks)
+    .values({
+      title: 'Reported', artistId, artistName: 'X',
+      duration: 100, source: 'upload', status: 'ready',
+    })
+    .returning({ id: tracks.id });
+  if (!track) throw new Error('makeTrack: insert returned no row');
+  return track.id;
+}
+
+async function readArtist(id: string) {
+  const [row] = await getDb()
+    .select()
+    .from(catalogEntities)
+    .where(eq(catalogEntities.id, id))
+    .limit(1);
+  return row;
 }
 
 describe('claim submission routing', () => {
@@ -115,15 +153,20 @@ describe('claim submission routing', () => {
 
     // Reached the handler, and the handler did what it promises: a pending row,
     // and no ownership written.
-    expect(await ArtistClaimModel.countDocuments({ artistId, status: 'pending' })).toBe(1);
-    const artist = await ArtistModel.findById(artistId).lean();
-    expect(artist?.ownerOxyUserId).toBeUndefined();
+    expect(
+      await getDb()
+        .select({ id: artistClaims.id })
+        .from(artistClaims)
+        .where(and(eq(artistClaims.artistId, artistId), eq(artistClaims.status, 'pending')))
+    ).toHaveLength(1);
+    const artist = await readArtist(artistId);
+    expect(artist?.ownerOxyUserId).toBeNull();
     expect(artist?.claimable).toBe(true);
   });
 
   it('GET /api/artists/:id still reaches the PUBLIC handler, unauthenticated', async () => {
     const artistId = await makeClaimableArtist();
-    await TrackModel.create({
+    await getDb().insert(tracks).values({
       title: 'Something Playable', artistId, artistName: 'X',
       duration: 100, source: 'upload', status: 'ready', isAvailable: true,
     });
@@ -173,20 +216,21 @@ describe('review routing and gating', () => {
 describe('copyright routing', () => {
   it('reporting stays open to an unauthenticated rightsholder', async () => {
     const artistId = await makeClaimableArtist();
-    const track = await TrackModel.create({
-      title: 'Reported', artistId, artistName: 'X',
-      duration: 100, source: 'upload', status: 'ready',
-    });
+    const trackId = await makeTrack(artistId);
 
     await withApi(undefined, async (baseUrl) => {
       const response = await post(`${baseUrl}/api/copyright/report`, {
-        trackId: track._id.toString(),
+        trackId,
         reason: 'That is my recording',
       });
       expect(response.status).toBe(201);
     });
 
-    expect(await CopyrightReportModel.countDocuments({ status: 'pending' })).toBe(1);
+    const pending = await getDb()
+      .select({ id: copyrightReports.id })
+      .from(copyrightReports)
+      .where(eq(copyrightReports.status, 'pending'));
+    expect(pending).toHaveLength(1);
   });
 
   /**
@@ -196,20 +240,17 @@ describe('copyright routing', () => {
    */
   it('records the reporter when the caller IS signed in', async () => {
     const artistId = await makeClaimableArtist();
-    const track = await TrackModel.create({
-      title: 'Reported', artistId, artistName: 'X',
-      duration: 100, source: 'upload', status: 'ready',
-    });
+    const trackId = await makeTrack(artistId);
 
     await withApi('signed-in-reporter', async (baseUrl) => {
       const response = await post(`${baseUrl}/api/copyright/report`, {
-        trackId: track._id.toString(),
+        trackId,
         reason: 'That is my recording',
       });
       expect(response.status).toBe(201);
     });
 
-    const report = await CopyrightReportModel.findOne({}).lean();
+    const [report] = await getDb().select().from(copyrightReports).limit(1);
     expect(report?.reporterOxyUserId).toBe('signed-in-reporter');
   });
 

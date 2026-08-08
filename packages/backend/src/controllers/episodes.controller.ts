@@ -4,17 +4,23 @@
  * listening". Auth writes resolve the user via `getRequiredOxyUserId`.
  */
 
-import mongoose from 'mongoose';
 import type { Response } from 'express';
+import { isLiveEntityId } from '@oxyhq/db';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { getRequiredOxyUserId } from '@oxyhq/core/server';
 import { updateEpisodeProgressRequestSchema, updateEpisodeRequestSchema } from '@syra/shared-types';
-import { EpisodeModel, type IEpisode } from '../models/Episode';
-import { EpisodeProgressModel } from '../models/EpisodeProgress';
-import { PodcastModel } from '../models/Podcast';
+import {
+  findEpisodeById,
+  findEpisodeProgress,
+  findEpisodesByIds,
+  listContinueListening,
+  updateEpisode as updateEpisodeRow,
+  upsertEpisodeProgress,
+} from '../db/podcasts/episodes';
+import { findPodcastById } from '../db/podcasts/podcasts';
+import { loadEpisodePersons, loadShowArtwork, toEpisodeDtos } from '../db/podcasts/hydrate';
+import type { EpisodeRow } from '../db/podcasts/serialize';
 import { getParam, parseClampedLimit } from '../utils/reqParams';
-import { serializeEpisode } from '../services/podcasts/podcastSerializers';
-import { PODCAST_ARTWORK_PROJECTION, loadShowArtworkByPodcastId } from '../services/podcasts/episodeShowArtwork';
 import { resolvePersons, makeOxyUsersFetcher } from '../services/podcasts/resolvePersons';
 import { oxy } from '../oxyClient';
 
@@ -24,42 +30,41 @@ const CONTINUE_LIMIT_MAX = 50;
 
 /**
  * GET /api/episodes/:id — episode detail, including chapters/transcripts and
- * persons resolved to Person/Artist links, plus the caller's saved progress.
+ * persons resolved to person/artist links, plus the caller's saved progress.
  */
 export async function getEpisode(req: AuthRequest, res: Response): Promise<void> {
   const id = getParam(req, 'id');
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  if (!isLiveEntityId(id)) {
     res.status(400).json({ error: 'Invalid episode ID' });
     return;
   }
 
-  const episode = await EpisodeModel.findById(id).lean();
+  const episode = await findEpisodeById(id);
   if (!episode || episode.status === 'unavailable') {
     res.status(404).json({ error: 'Episode not found' });
     return;
   }
 
-  // Resolve persons and the parent show's artwork in parallel: a cover-less
-  // episode inherits the show's artwork in the serialized DTO.
-  const [persons, podcastArtwork] = await Promise.all([
-    resolvePersons(episode.persons, makeOxyUsersFetcher(oxy)),
-    PodcastModel.findById(episode.podcastId).select(PODCAST_ARTWORK_PROJECTION).lean(),
+  // The inline credits are a child table now, so they are read here and handed
+  // to the resolver. Resolved in parallel with the parent show's artwork: a
+  // cover-less episode inherits the show's in the serialized DTO.
+  const credits = (await loadEpisodePersons([episode.id])).get(episode.id) ?? [];
+
+  const [persons, artwork] = await Promise.all([
+    resolvePersons(credits, makeOxyUsersFetcher(oxy)),
+    loadShowArtwork([episode]),
   ]);
 
-  let progressSec: number | undefined;
-  let completed: boolean | undefined;
-  if (req.user?.id) {
-    const progress = await EpisodeProgressModel.findOne({ oxyUserId: req.user.id, episodeId: id })
-      .select('positionSec completed')
-      .lean();
-    if (progress) {
-      progressSec = progress.positionSec;
-      completed = progress.completed;
-    }
-  }
+  const progress = req.user?.id ? await findEpisodeProgress(req.user.id, id) : undefined;
+  const [dto] = await toEpisodeDtos([episode], artwork);
 
   res.json({
-    data: { episode: serializeEpisode(episode, podcastArtwork ?? undefined), persons, progressSec, completed },
+    data: {
+      episode: dto,
+      persons,
+      progressSec: progress?.positionSec,
+      completed: progress?.completed,
+    },
   });
 }
 
@@ -69,7 +74,7 @@ export async function getEpisode(req: AuthRequest, res: Response): Promise<void>
 export async function updateEpisodeProgress(req: AuthRequest, res: Response): Promise<void> {
   const userId = getRequiredOxyUserId(req);
   const id = getParam(req, 'id');
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  if (!isLiveEntityId(id)) {
     res.status(400).json({ error: 'Invalid episode ID' });
     return;
   }
@@ -81,58 +86,47 @@ export async function updateEpisodeProgress(req: AuthRequest, res: Response): Pr
   }
   const { positionSec, durationSec, completed } = parsed.data;
 
-  const set: Record<string, unknown> = {
+  const progress = await upsertEpisodeProgress(userId, id, {
     positionSec: Math.max(0, positionSec),
     completed: completed ?? false,
-  };
-  if (durationSec !== undefined) set.durationSec = Math.max(0, durationSec);
+    ...(durationSec === undefined ? {} : { durationSec: Math.max(0, durationSec) }),
+  });
 
-  const progress = await EpisodeProgressModel.findOneAndUpdate(
-    { oxyUserId: userId, episodeId: id },
-    { $set: set },
-    { upsert: true, new: true },
-  );
-
-  res.json({ ok: true, positionSec: progress?.positionSec ?? positionSec, completed: progress?.completed ?? false });
+  res.json({ ok: true, positionSec: progress.positionSec, completed: progress.completed });
 }
 
 /**
  * GET /api/episodes/continue — the caller's in-progress (not completed)
- * episodes, most recently played first, joined with the episode documents.
+ * episodes, most recently played first, joined with the episode rows.
  */
 export async function getContinueListening(req: AuthRequest, res: Response): Promise<void> {
   const userId = getRequiredOxyUserId(req);
   const limit = parseClampedLimit(req.query.limit, { min: CONTINUE_LIMIT_MIN, max: CONTINUE_LIMIT_MAX, fallback: CONTINUE_LIMIT_DEFAULT });
 
-  const progressRows = await EpisodeProgressModel.find({ oxyUserId: userId, completed: false })
-    .sort({ updatedAt: -1 })
-    .limit(limit)
-    .lean();
-
+  const progressRows = await listContinueListening(userId, limit);
   if (progressRows.length === 0) {
     res.json({ data: [] });
     return;
   }
 
-  const episodeIds = progressRows.map((row) => row.episodeId);
-  const episodes = await EpisodeModel.find({ _id: { $in: episodeIds }, status: { $ne: 'unavailable' } }).lean();
-  const episodeById = new Map(episodes.map((episode) => [episode._id.toString(), episode]));
+  const episodeRows = await findEpisodesByIds(progressRows.map((row) => row.episodeId));
   // Distinct parent shows resolved in ONE query so cover-less episodes inherit
   // their show's artwork without an N+1.
-  const showArtwork = await loadShowArtworkByPodcastId(episodes);
+  const dtos = await toEpisodeDtos(episodeRows);
+  const dtoById = new Map(dtos.map((dto) => [dto.id, dto]));
 
-  const data = progressRows
-    .map((row) => {
-      const episode = episodeById.get(row.episodeId.toString());
-      if (!episode) return null;
-      return {
-        episode: serializeEpisode(episode, showArtwork.get(episode.podcastId.toString())),
+  const data = progressRows.flatMap((row) => {
+    const episode = dtoById.get(row.episodeId);
+    if (!episode) return [];
+    return [
+      {
+        episode,
         progressSec: row.positionSec,
         durationSec: row.durationSec,
         completed: row.completed,
-      };
-    })
-    .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+      },
+    ];
+  });
 
   res.json({ data });
 }
@@ -150,7 +144,7 @@ export async function updateEpisode(req: AuthRequest, res: Response): Promise<vo
   const userId = getRequiredOxyUserId(req);
   const id = getParam(req, 'id');
 
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  if (!isLiveEntityId(id)) {
     res.status(400).json({ error: 'Invalid episode ID' });
     return;
   }
@@ -161,15 +155,13 @@ export async function updateEpisode(req: AuthRequest, res: Response): Promise<vo
     return;
   }
 
-  const episode = await EpisodeModel.findById(id);
+  const episode = await findEpisodeById(id);
   if (!episode) {
     res.status(404).json({ error: 'Episode not found' });
     return;
   }
 
-  const podcast = await PodcastModel.findById(episode.podcastId)
-    .select(`source ownerOxyUserId ${PODCAST_ARTWORK_PROJECTION}`)
-    .lean();
+  const podcast = await findPodcastById(episode.podcastId);
   if (!podcast || podcast.source !== 'syra' || podcast.ownerOxyUserId !== userId) {
     res.status(403).json({ error: 'You do not own this podcast' });
     return;
@@ -177,49 +169,67 @@ export async function updateEpisode(req: AuthRequest, res: Response): Promise<vo
 
   const updates = parsed.data;
 
-  // Explicit field-by-field assignment — the parsed object is never spread onto the doc.
-  if (updates.title !== undefined) episode.title = updates.title;
-  if (updates.description !== undefined) episode.description = updates.description;
-  if (updates.summary !== undefined) episode.summary = updates.summary;
-  if (updates.season !== undefined) episode.season = updates.season;
-  if (updates.episodeNumber !== undefined) episode.episodeNumber = updates.episodeNumber;
-  if (updates.episodeType !== undefined) episode.episodeType = updates.episodeType;
-  if (updates.image !== undefined) episode.image = updates.image;
-  if (updates.explicit !== undefined) episode.explicit = updates.explicit;
+  // Explicit field-by-field assignment — the parsed object is never spread onto the row.
+  const values: Parameters<typeof updateEpisodeRow>[1] = {};
+  if (updates.title !== undefined) values.title = updates.title;
+  if (updates.description !== undefined) values.description = updates.description;
+  if (updates.summary !== undefined) values.summary = updates.summary;
+  if (updates.season !== undefined) values.season = updates.season;
+  if (updates.episodeNumber !== undefined) values.episodeNumber = updates.episodeNumber;
+  if (updates.episodeType !== undefined) values.episodeType = updates.episodeType;
+  /**
+   * `image_id` is a foreign key to `image_assets`, so an id naming no asset is
+   * `23503` rather than the string Mongo stored. `isLiveEntityId` rejects a
+   * malformed one here; a well-formed id for an asset that does not exist still
+   * reaches the constraint, and that is the caller's 500 to avoid by uploading
+   * the cover first — the same contract `uploads.controller` already has.
+   */
+  if (updates.image !== undefined) {
+    if (!isLiveEntityId(updates.image)) {
+      res.status(400).json({ error: 'Invalid image id' });
+      return;
+    }
+    values.imageId = updates.image;
+  }
+  if (updates.explicit !== undefined) values.explicit = updates.explicit;
 
-  await episode.save();
+  const updated = await updateEpisodeRow(id, values);
+  if (!updated) {
+    res.status(404).json({ error: 'Episode not found' });
+    return;
+  }
 
-  res.json({ data: { episode: serializeEpisode(episode, podcast) } });
+  const artwork = await loadShowArtwork([updated]);
+  const [dto] = await toEpisodeDtos([updated], artwork);
+  res.json({ data: { episode: dto } });
 }
 
 /**
  * Load an episode on a Syra-hosted show the caller owns, or send the matching error.
- * Returns null once a response has been sent.
+ * Returns undefined once a response has been sent.
  */
 async function loadOwnedEpisodeOrRespond(
   req: AuthRequest,
-  res: Response,
-): Promise<IEpisode | null> {
+  res: Response
+): Promise<EpisodeRow | undefined> {
   const userId = getRequiredOxyUserId(req);
   const id = getParam(req, 'id');
 
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  if (!isLiveEntityId(id)) {
     res.status(400).json({ error: 'Invalid episode ID' });
-    return null;
+    return undefined;
   }
 
-  const episode = await EpisodeModel.findById(id);
+  const episode = await findEpisodeById(id);
   if (!episode) {
     res.status(404).json({ error: 'Episode not found' });
-    return null;
+    return undefined;
   }
 
-  const podcast = await PodcastModel.findById(episode.podcastId)
-    .select('source ownerOxyUserId')
-    .lean();
+  const podcast = await findPodcastById(episode.podcastId);
   if (!podcast || podcast.source !== 'syra' || podcast.ownerOxyUserId !== userId) {
     res.status(403).json({ error: 'You do not own this podcast' });
-    return null;
+    return undefined;
   }
 
   return episode;
@@ -229,7 +239,7 @@ async function loadOwnedEpisodeOrRespond(
  * POST /api/episodes/:id/unpublish — hide a single episode.
  *
  * Soft by design: `status: 'unavailable'` is the episode-level equivalent of a track's
- * `isAvailable:false`. The document, its media and every listener's saved progress stay
+ * `isAvailable:false`. The row, its media and every listener's saved progress stay
  * intact, so republishing is lossless. Note this reuses the same `status` field that
  * carries processing state, so an episode still importing should not be unpublished —
  * publishing restores it to 'ready'.
@@ -238,10 +248,8 @@ export async function unpublishEpisode(req: AuthRequest, res: Response): Promise
   const episode = await loadOwnedEpisodeOrRespond(req, res);
   if (!episode) return;
 
-  episode.status = 'unavailable';
-  await episode.save();
-
-  res.json({ data: { id: episode._id.toString(), status: episode.status } });
+  await updateEpisodeRow(episode.id, { status: 'unavailable' });
+  res.json({ data: { id: episode.id, status: 'unavailable' } });
 }
 
 /** POST /api/episodes/:id/publish — undo `unpublishEpisode`. */
@@ -249,8 +257,6 @@ export async function publishEpisode(req: AuthRequest, res: Response): Promise<v
   const episode = await loadOwnedEpisodeOrRespond(req, res);
   if (!episode) return;
 
-  episode.status = 'ready';
-  await episode.save();
-
-  res.json({ data: { id: episode._id.toString(), status: episode.status } });
+  await updateEpisodeRow(episode.id, { status: 'ready' });
+  res.json({ data: { id: episode.id, status: 'ready' } });
 }

@@ -1,13 +1,17 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import type { Response, NextFunction } from 'express';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
-import { connect, clear, disconnect } from '../test/mongo';
-import { ArtistModel } from '../models/CatalogEntity';
-import { TrackModel } from '../models/Track';
-import { UserUploadModel } from '../models/UserUpload';
-import { ContributionAttestationModel } from '../models/ContributionAttestation';
-import { formatTracksWithCoverArt, formatArtistWithImage } from '../utils/musicHelpers';
-import { toUploadTrackDto } from './uploads.controller';
+import { eq } from 'drizzle-orm';
+import { uuidv7 } from '@oxyhq/db';
+import { normalizeNameKey, type ArtistImageSuggestion } from '@syra/shared-types';
+import { clearDb, connectDb, disconnectDb } from '../test/postgres';
+import { getDb } from '../db/postgres';
+import { catalogEntities, tracks } from '../db/schema/catalog';
+import { loadImageVariants } from '../db/catalog/hydrate';
+import { toArtistDto, toTrackDto } from '../db/catalog/serialize';
+import { contributionAttestations, userUploadHlsRenditions, userUploads } from '../db/schema/creators';
+import { UPLOAD_COLUMNS } from '../db/creators/uploads';
+import { toUploadTrackDto, uploadImageIds } from '../db/creators/serialize';
 import { getEntityProfile } from './entityProfile.controller';
 import { getArtistById, getMyContributions, getMyImageSuggestions } from './artists.controller';
 
@@ -49,9 +53,52 @@ import { getArtistById, getMyContributions, getMyImageSuggestions } from './arti
  * and the route 404'd.
  */
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+/**
+ * The catalogue, the locker (`user_uploads`) and the attestation are all
+ * Postgres since Task 13 — and this suite covers all three serializers at once,
+ * which is exactly why it lives at the controller level.
+ */
+/**
+ * POSTGRES ONLY.
+ *
+ * This block used to say the opposite, and the reason it was wrong is worth
+ * keeping: nothing here reads a Mongoose model, but `entityProfile.controller`
+ * still GATED every handler on `isDatabaseConnected()` — Mongoose readiness —
+ * so without a Mongo connection every request answered 503 and these suites had
+ * to open one. The guard was the whole dependency.
+ *
+ * Task 15 switched that gate to `isPostgresConnected()`, and the Mongo hooks
+ * went with it. `db/__tests__/connectivityGates.test.ts` is what keeps this
+ * true: it walks this controller's whole import graph and fails if anything it
+ * reaches opens a model again.
+ */
+beforeAll(async () => {
+  await connectDb();
+});
+afterEach(async () => {
+  await clearDb();
+});
+afterAll(async () => {
+  await disconnectDb();
+});
+
+async function readArtist(id: string) {
+  const [row] = await getDb()
+    .select()
+    .from(catalogEntities)
+    .where(eq(catalogEntities.id, id))
+    .limit(1);
+  return row;
+}
+
+async function readTrackOfArtist(artistId: string) {
+  const [row] = await getDb()
+    .select()
+    .from(tracks)
+    .where(eq(tracks.artistId, artistId))
+    .limit(1);
+  return row;
+}
 
 interface CapturedRes {
   _status: number;
@@ -79,7 +126,7 @@ const OWNER = 'the-artist';
 const COMMONS_URL = 'https://upload.wikimedia.org/wikipedia/commons/a/ab/Artist.jpg';
 const EMBEDDED_URL = 'https://syra.example/embedded/cover.jpg';
 
-const COMMONS_SUGGESTION = {
+const COMMONS_SUGGESTION: ArtistImageSuggestion = {
   image: {
     origin: 'external' as const,
     url: COMMONS_URL,
@@ -93,44 +140,51 @@ const COMMONS_SUGGESTION = {
       sourceUrl: 'https://commons.wikimedia.org/wiki/File:Artist.jpg',
     },
   },
-  proposedAt: new Date('2026-07-01T00:00:00.000Z'),
+  proposedAt: '2026-07-01T00:00:00.000Z',
 };
 
-const EMBEDDED_SUGGESTION = {
+const EMBEDDED_SUGGESTION: ArtistImageSuggestion = {
   image: { origin: 'upload' as const, url: EMBEDDED_URL, width: 500, height: 500 },
-  proposedAt: new Date('2026-07-02T00:00:00.000Z'),
+  proposedAt: '2026-07-02T00:00:00.000Z',
   proposedByOxyUserId: 'a-stranger',
   sourceUploadId: '6a6d000000000000000000aa',
 };
 
 async function makeArtistWithSuggestions(
-  suggestions: Record<string, unknown>[] = [COMMONS_SUGGESTION, EMBEDDED_SUGGESTION],
+  suggestions: ArtistImageSuggestion[] = [COMMONS_SUGGESTION, EMBEDDED_SUGGESTION],
 ): Promise<string> {
-  const artist = await ArtistModel.create({
-    name: `Suggested ${Math.random().toString(36).slice(2)}`,
-    source: 'upload',
-    origin: 'contributed',
-    ownerOxyUserId: OWNER,
-    claimedByOxyUserId: OWNER,
-    claimable: false,
-    imageSuggestions: suggestions,
-  });
+  const name = `Suggested ${uuidv7()}`;
+  const [artist] = await getDb()
+    .insert(catalogEntities)
+    .values({
+      type: 'artist',
+      name,
+      nameKey: normalizeNameKey(name),
+      source: 'upload',
+      origin: 'contributed',
+      ownerOxyUserId: OWNER,
+      claimedByOxyUserId: OWNER,
+      claimable: false,
+      imageSuggestions: suggestions,
+    })
+    .returning({ id: catalogEntities.id, name: catalogEntities.name });
+  if (!artist) throw new Error('makeArtistWithSuggestions: insert returned no row');
   /**
    * A PLAYABLE track, and it is load-bearing rather than scenery: the public
    * artist endpoint resolves through `findOneArtistWithPlayableTracks`, so an
    * artist with no catalogue 404s — and every "the secret did not leak"
    * assertion would then pass against an empty error body, proving nothing.
    */
-  await TrackModel.create({
+  await getDb().insert(tracks).values({
     title: 'Something Playable',
-    artistId: artist._id.toString(),
+    artistId: artist.id,
     artistName: artist.name,
     duration: 180,
     source: 'upload',
     status: 'ready',
     isAvailable: true,
   });
-  return artist._id.toString();
+  return artist.id;
 }
 
 describe('suggestions never reach a public surface', () => {
@@ -189,12 +243,15 @@ describe('server-only fields never reach a catalog response', () => {
 
   it('strips every one of them from the public artist and track reads', async () => {
     const artistId = await makeArtistWithSuggestions();
-    await TrackModel.updateMany({ artistId }, { $set: { sha256: 'SHA256SERVERONLYMARKER' } });
+    await getDb()
+      .update(tracks)
+      .set({ sha256: 'SHA256SERVERONLYMARKER' })
+      .where(eq(tracks.artistId, artistId));
 
     // Vacuity floor: the values must really be stored, or "absent" proves nothing.
-    const stored = await TrackModel.findOne({ artistId }).select('+sha256').lean();
+    const stored = await readTrackOfArtist(artistId);
     expect(stored?.sha256).toBe('SHA256SERVERONLYMARKER');
-    const storedArtist = await ArtistModel.findById(artistId).select('+imageSuggestions').lean();
+    const storedArtist = await readArtist(artistId);
     expect(storedArtist?.imageSuggestions).toHaveLength(2);
 
     const artistRes = makeRes();
@@ -226,37 +283,55 @@ describe('server-only fields never reach a catalog response', () => {
   });
 
   /**
-   * The route test above passes today because of `select: false`, NOT because of
-   * the strip — removing the strip alone does not break it, because track reads
-   * are currently queries. That makes the strip defence for a path that does not
-   * exist yet, and an untested defence is the one that gets deleted as dead code.
+   * The route test above can pass for the wrong reason, so this tests the
+   * SERIALIZER directly — and what makes it the right test changed with the
+   * port, which is worth stating rather than leaving the old rationale in place.
    *
-   * So this tests the FUNNEL directly, with a document shaped the way an
-   * aggregation returns one: fields present, projection never applied. It is the
-   * `imageSuggestions` failure reproduced in miniature, and it fails the moment
-   * either strip is removed.
+   * Under Mongo the danger was that `select: false` is a query projection and
+   * `aggregate()` ignores it, so a document arrived with the field present and
+   * the ONLY guard was the `delete` in `stripExternalCatalogFields`. This test
+   * reproduced that: hand the formatter a document shaped the way an aggregation
+   * returns one, assert the strip fires.
+   *
+   * On Postgres the mechanism is an ALLOWLIST, not a denylist: `toTrackDto` and
+   * `toArtistDto` name every field they emit, and `publicColumns()` removes
+   * `sha256`, `images` and `image_suggestions` from the row TYPE so a serializer
+   * naming one does not compile. That is strictly stronger — but only for a
+   * caller that used `publicColumns()`. A caller that selects the whole row is
+   * exactly the modern equivalent of the aggregation, so that is what this seeds:
+   * a full `select()` carrying the protected columns, handed to the real DTO.
    */
-  it('strips server-only fields from a document an AGGREGATION would produce', async () => {
+  it('drops server-only columns from a row selected WITHOUT publicColumns()', async () => {
     const artistId = await makeArtistWithSuggestions();
-    const artistDoc = await ArtistModel.findById(artistId).select('+imageSuggestions').lean();
-    const trackDoc = await TrackModel.findOne({ artistId }).lean();
+    await getDb()
+      .update(tracks)
+      .set({ sha256: 'SHA256FUNNELMARKER' })
+      .where(eq(tracks.artistId, artistId));
 
-    // An aggregation ignores `select: false`, so the fields are simply THERE.
-    const asAggregated = {
-      ...trackDoc,
-      sha256: 'SHA256FUNNELMARKER',
-    };
-    const formattedTrack = await formatTracksWithCoverArt([asAggregated]);
+    // A bare `select()` — every column, including the protected ones.
+    const artistRow = await readArtist(artistId);
+    const trackRow = await readTrackOfArtist(artistId);
+
+    // Vacuity floor, before the assertions: both rows must exist AND must really
+    // carry the secrets, or every `not.toContain` below proves nothing.
+    if (!artistRow || !trackRow) {
+      throw new Error('fixture produced no artist/track — the leak assertions would be vacuous');
+    }
+    expect(trackRow.sha256).toBe('SHA256FUNNELMARKER');
+    expect(artistRow.imageSuggestions).toHaveLength(2);
+
+    const lookup = await loadImageVariants([]);
+    const formattedTrack = toTrackDto(trackRow, lookup, { hlsRenditionCount: 0 });
     expect(JSON.stringify(formattedTrack)).not.toContain('SHA256FUNNELMARKER');
     expect(JSON.stringify(formattedTrack)).not.toContain('sha256');
 
-    const formattedArtist = formatArtistWithImage(artistDoc);
+    const formattedArtist = toArtistDto(artistRow, lookup);
     expect(JSON.stringify(formattedArtist)).not.toContain('imageSuggestions');
     expect(JSON.stringify(formattedArtist)).not.toContain('upload.wikimedia.org');
 
-    // Vacuity floor: the formatters really did return the entities.
-    expect((formattedTrack[0] as { id?: string }).id).toBe(trackDoc?._id.toString());
-    expect((formattedArtist as { id?: string }).id).toBe(artistId);
+    // Vacuity floor: the serializers really did return the entities.
+    expect(formattedTrack.id).toBe(trackRow.id);
+    expect(formattedArtist.id).toBe(artistId);
   });
 
   /**
@@ -276,28 +351,55 @@ describe('server-only fields never reach a catalog response', () => {
    * a denylist where the real guard is an allowlist.
    */
   it('the locker DTO names only public fields — no storage key, hash, tags or owner id', async () => {
-    const upload = await UserUploadModel.create({
-      ownerOxyUserId: 'OWNERIDLEAKMARKER',
-      title: 'Locker File',
-      duration: 200,
-      sizeBytes: 1,
-      sha256: 'SHA256LEAKMARKER',
-      status: 'ready',
-      audioSource: { key: 'uploads/OWNERIDLEAKMARKER/AUDIOKEYLEAKMARKER.mp3', format: 'mp3' },
-      hlsMasterKey: 'hls/uploads/OWNERIDLEAKMARKER/HLSLEAKMARKER/master.m3u8',
-      hls: [{ manifestKey: 'hls/uploads/OWNERIDLEAKMARKER/HLSLEAKMARKER/160/index.m3u8', bitrateKbps: 160, encrypted: true }],
-      fingerprint: [1, 2, 3],
-      fingerprintDurationSec: 200,
-      rawTags: { json: JSON.stringify({ apID: 'APIDLEAKMARKER' }), truncated: false, originalByteLength: 42 },
+    const [inserted] = await getDb()
+      .insert(userUploads)
+      .values({
+        ownerOxyUserId: 'OWNERIDLEAKMARKER',
+        title: 'Locker File',
+        duration: 200,
+        sizeBytes: 1,
+        sha256: 'SHA256LEAKMARKER',
+        status: 'ready',
+        audioSourceKey: 'uploads/OWNERIDLEAKMARKER/AUDIOKEYLEAKMARKER.mp3',
+        audioSourceFormat: 'mp3',
+        hlsMasterKey: 'hls/uploads/OWNERIDLEAKMARKER/HLSLEAKMARKER/master.m3u8',
+        fingerprint: [1, 2, 3],
+        fingerprintDurationSec: 200,
+        rawTagsJson: JSON.stringify({ apID: 'APIDLEAKMARKER' }),
+        rawTagsTruncated: false,
+        rawTagsOriginalByteLength: 42,
+      })
+      .returning({ id: userUploads.id });
+    await getDb().insert(userUploadHlsRenditions).values({
+      userUploadId: inserted.id,
+      position: 0,
+      manifestKey: 'hls/uploads/OWNERIDLEAKMARKER/HLSLEAKMARKER/160/index.m3u8',
+      bitrateKbps: 160,
+      encrypted: true,
     });
 
-    // Vacuity floor: every secret really is stored on the document.
-    const stored = await UserUploadModel.findById(upload._id).select('+rawTags').lean();
-    expect(stored?.rawTags?.json).toContain('APIDLEAKMARKER');
+    // Vacuity floor: every secret really is stored on the row. Read with an
+    // EXPLICIT projection naming the protected columns, because the sanctioned
+    // read (`UPLOAD_COLUMNS`) cannot see them — which is itself the point.
+    const [stored] = await getDb()
+      .select({
+        rawTagsJson: userUploads.rawTagsJson,
+        sha256: userUploads.sha256,
+        audioSourceKey: userUploads.audioSourceKey,
+      })
+      .from(userUploads)
+      .where(eq(userUploads.id, inserted.id));
+    expect(stored?.rawTagsJson).toContain('APIDLEAKMARKER');
     expect(stored?.sha256).toBe('SHA256LEAKMARKER');
-    expect(stored?.audioSource?.key).toContain('AUDIOKEYLEAKMARKER');
+    expect(stored?.audioSourceKey).toContain('AUDIOKEYLEAKMARKER');
 
-    const dto = JSON.stringify(toUploadTrackDto(upload));
+    // The row as the DTO actually receives it — through `UPLOAD_COLUMNS`, the
+    // same projection every production caller uses.
+    const [row] = await getDb()
+      .select(UPLOAD_COLUMNS)
+      .from(userUploads)
+      .where(eq(userUploads.id, inserted.id));
+    const dto = JSON.stringify(toUploadTrackDto(row, await loadImageVariants(uploadImageIds(row))));
 
     // The DTO answered with the real file — otherwise the absences prove nothing.
     expect(dto).toContain('Locker File');
@@ -323,15 +425,18 @@ describe('server-only fields never reach a catalog response', () => {
    */
   it('never exposes an attestation\'s ip, user agent or raw tags', async () => {
     const artistId = await makeArtistWithSuggestions();
-    const track = await TrackModel.findOne({ artistId }).lean();
-    await ContributionAttestationModel.create({
-      trackId: track?._id.toString(),
+    const track = await readTrackOfArtist(artistId);
+    if (!track) throw new Error('readTrackOfArtist returned no track');
+    await getDb().insert(contributionAttestations).values({
+      trackId: track.id,
       uploaderOxyUserId: 'a-stranger',
       statement: 'I may distribute this recording',
       acceptedAt: new Date(),
       ip: 'IPSERVERONLYMARKER',
       userAgent: 'UASERVERONLYMARKER',
-      rawTags: { json: JSON.stringify({ apID: 'APIDSERVERONLYMARKER' }), truncated: false, originalByteLength: 9 },
+      rawTagsJson: JSON.stringify({ apID: 'APIDSERVERONLYMARKER' }),
+      rawTagsTruncated: false,
+      rawTagsOriginalByteLength: 9,
     });
 
     const res = makeRes();

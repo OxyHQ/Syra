@@ -1,4 +1,4 @@
-import { UserLibraryModel } from '../../../models/Library';
+import { listSubscriberIds } from '../../../db/podcasts/subscriptions';
 import { notifyUser, type NotifierDeps } from '../notifier';
 
 /**
@@ -47,14 +47,12 @@ export async function notifySubscribersOfNewEpisode(
     return { notified: 0, skippedAsBackfill: true };
   }
 
-  const subscribers = await UserLibraryModel.find({ subscribedPodcasts: episode.podcastId })
-    .select('oxyUserId')
-    .lean();
+  const subscriberIds = await listSubscriberIds(episode.podcastId);
 
   let notified = 0;
-  for (const subscriber of subscribers) {
+  for (const recipientId of subscriberIds) {
     const result = await notifyUser({
-      recipientId: subscriber.oxyUserId,
+      recipientId,
       actorId: episode.podcastId,
       event: 'episode.published',
       entityId: episode.episodeId,

@@ -1,15 +1,45 @@
 import { Response, NextFunction } from 'express';
-import mongoose from 'mongoose';
+import { and, inArray } from 'drizzle-orm';
+import { isForeignKeyViolation, isLiveEntityId } from '@oxyhq/db';
+import { publicColumns } from '@oxyhq/db/assert';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
-import { UserLibraryModel } from '../models/Library';
-import { RecentlyPlayedModel } from '../models/RecentlyPlayed';
-import { TrackModel } from '../models/Track';
-import { formatTracksWithCoverArt } from '../utils/musicHelpers';
+import { getDb } from '../db/postgres';
+import { tracks } from '../db/schema/catalog';
+import { PROTECTED_COLUMNS_BY_TABLE } from '../db/schema/protectedColumns';
+import { toTrackDtos } from '../db/catalog/hydrate';
+import { playableTrackFilter } from '../db/catalog/visibility';
+import {
+  addMembership,
+  listMembership,
+  removeMembership,
+  type MembershipKind,
+} from '../db/library/membership';
+import {
+  findRecentTrackIds,
+  prunePlayHistory,
+  recordPlayEvent,
+  touchRecentPlay,
+} from '../db/library/recentlyPlayed';
 import { getParam, parseBoundedLimit } from '../utils/reqParams';
 import { recordPlay } from '../services/recommendations/recordPlay';
 import { applyLikeSignal, applyFollowSignal } from '../services/recommendations/tasteSignals';
-import { LISTENING_SOURCES, type ListeningSource } from '../models/ListeningEvent';
-import { playableTrackFilter } from '../utils/catalogVisibility';
+import { LISTENING_SOURCES } from '../db/schema/user';
+import type { ListeningSource } from '../db/user/listening';
+
+/**
+ * The playable tracks behind a list of ids, in no particular order.
+ *
+ * `inArray(column, [])` generates `in ()`, which is a SYNTAX ERROR in Postgres
+ * rather than an empty result — so the empty case is answered without a query,
+ * the same guard `db/catalog/hydrate.ts`'s `loadImageVariants` carries.
+ */
+async function findPlayableTracksByIds(ids: readonly string[]) {
+  if (ids.length === 0) return [];
+  return getDb()
+    .select(publicColumns(tracks, PROTECTED_COLUMNS_BY_TABLE))
+    .from(tracks)
+    .where(and(playableTrackFilter(), inArray(tracks.id, [...ids])));
+}
 
 /** Validate a client-supplied listening source against the known set. */
 function parseListeningSource(value: unknown): ListeningSource {
@@ -37,57 +67,51 @@ const RECENTLY_PLAYED_RETENTION = 100;
 const RECENTLY_PLAYED_DEDUP_WINDOW_MS = 30 * 1000;
 
 /**
- * Membership arrays on the user's library document. Each is an idempotent
- * set of catalog entity IDs the user has liked/saved/followed.
+ * The 404 body a membership write answers with when the id names nothing.
+ *
+ * A bare `$addToSet` stored any string; each junction table's target is a real
+ * foreign key, so the database now answers the existence question the handlers
+ * never asked. See `db/library/membership.ts` for why that makes adding
+ * fallible while removing stays a no-op.
  */
-type MembershipField =
-  | 'likedTracks'
-  | 'savedAlbums'
-  | 'followedArtists'
-  | 'savedPlaylists';
+const MISSING_TARGET_MESSAGE: Readonly<Record<MembershipKind, string>> = {
+  likedTracks: 'Track not found',
+  savedAlbums: 'Album not found',
+  followedArtists: 'Artist not found',
+  savedPlaylists: 'Playlist not found',
+};
 
 /**
- * Add a catalog entity ID to a membership array, upserting the user's library
- * document if it does not yet exist. Idempotent via `$addToSet`.
- * Returns the updated membership array.
+ * Add one membership and answer with the user's full updated list — the
+ * response shape every one of these endpoints has always had.
+ *
+ * Returns `null` when the id names nothing, so the caller can 404 before
+ * running any side effect that assumes the entity exists (the taste signals
+ * behind a like and a follow both do).
  */
 async function addToLibrary(
   oxyUserId: string,
-  field: MembershipField,
+  kind: MembershipKind,
   entityId: string
-): Promise<string[]> {
-  const library = await UserLibraryModel.findOneAndUpdate(
-    { oxyUserId },
-    { $addToSet: { [field]: entityId } },
-    { upsert: true, new: true }
-  ).lean();
-
-  return library?.[field] ?? [];
+): Promise<string[] | null> {
+  if ((await addMembership(kind, oxyUserId, entityId)) === 'missing-target') return null;
+  return listMembership(kind, oxyUserId);
 }
 
-/**
- * Remove a catalog entity ID from a membership array. Upserts the user's
- * library document so removing from an empty library is a no-op (not a 404).
- * Idempotent via `$pull`. Returns the updated membership array.
- */
+/** Remove one membership and answer with the user's full updated list. */
 async function removeFromLibrary(
   oxyUserId: string,
-  field: MembershipField,
+  kind: MembershipKind,
   entityId: string
 ): Promise<string[]> {
-  const library = await UserLibraryModel.findOneAndUpdate(
-    { oxyUserId },
-    { $pull: { [field]: entityId } },
-    { upsert: true, new: true }
-  ).lean();
-
-  return library?.[field] ?? [];
+  await removeMembership(kind, oxyUserId, entityId);
+  return listMembership(kind, oxyUserId);
 }
 
 /**
  * GET /api/library
- * Get the user's library membership arrays (requires auth).
- * Returns empty arrays if the user has no library document yet.
+ * Get the user's library memberships (requires auth).
+ * Returns empty arrays for a user who has liked/saved/followed nothing.
  */
 export const getUserLibrary = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
@@ -97,15 +121,14 @@ export const getUserLibrary = async (req: AuthRequest, res: Response, next: Next
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const library = await UserLibraryModel.findOne({ oxyUserId: userId }).lean();
+    const [likedTracks, savedAlbums, followedArtists, savedPlaylists] = await Promise.all([
+      listMembership('likedTracks', userId),
+      listMembership('savedAlbums', userId),
+      listMembership('followedArtists', userId),
+      listMembership('savedPlaylists', userId),
+    ]);
 
-    res.json({
-      oxyUserId: userId,
-      likedTracks: library?.likedTracks ?? [],
-      savedAlbums: library?.savedAlbums ?? [],
-      followedArtists: library?.followedArtists ?? [],
-      savedPlaylists: library?.savedPlaylists ?? [],
-    });
+    res.json({ oxyUserId: userId, likedTracks, savedAlbums, followedArtists, savedPlaylists });
   } catch (error) {
     next(error);
   }
@@ -123,21 +146,13 @@ export const getLikedTracks = async (req: AuthRequest, res: Response, next: Next
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const library = await UserLibraryModel.findOne({ oxyUserId: userId }).lean();
-    const likedTrackIds = library?.likedTracks ?? [];
+    const likedTrackIds = await listMembership('likedTracks', userId);
 
     if (likedTrackIds.length === 0) {
       return res.json({ tracks: [], total: 0, oxyUserId: userId });
     }
 
-    // Only valid ObjectIds can match a Track _id; ignore any stale/invalid ids.
-    const validTrackIds = likedTrackIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
-
-    const tracks = await TrackModel.find(playableTrackFilter({
-      _id: { $in: validTrackIds },
-    })).lean();
-
-    const formattedTracks = await formatTracksWithCoverArt(tracks);
+    const formattedTracks = await toTrackDtos(await findPlayableTracksByIds(likedTrackIds));
 
     res.json({
       tracks: formattedTracks,
@@ -163,6 +178,10 @@ export const likeTrack = async (req: AuthRequest, res: Response, next: NextFunct
     }
 
     const likedTracks = await addToLibrary(userId, 'likedTracks', id);
+    if (!likedTracks) {
+      return res.status(404).json({ error: MISSING_TARGET_MESSAGE.likedTracks });
+    }
+
     await applyLikeSignal(userId, id);
     res.json({ ok: true, likedTracks });
   } catch (error) {
@@ -204,6 +223,10 @@ export const saveAlbum = async (req: AuthRequest, res: Response, next: NextFunct
     }
 
     const savedAlbums = await addToLibrary(userId, 'savedAlbums', id);
+    if (!savedAlbums) {
+      return res.status(404).json({ error: MISSING_TARGET_MESSAGE.savedAlbums });
+    }
+
     res.json({ ok: true, savedAlbums });
   } catch (error) {
     next(error);
@@ -244,6 +267,10 @@ export const followArtist = async (req: AuthRequest, res: Response, next: NextFu
     }
 
     const followedArtists = await addToLibrary(userId, 'followedArtists', id);
+    if (!followedArtists) {
+      return res.status(404).json({ error: MISSING_TARGET_MESSAGE.followedArtists });
+    }
+
     await applyFollowSignal(userId, id);
     res.json({ ok: true, followedArtists });
   } catch (error) {
@@ -285,6 +312,10 @@ export const savePlaylist = async (req: AuthRequest, res: Response, next: NextFu
     }
 
     const savedPlaylists = await addToLibrary(userId, 'savedPlaylists', id);
+    if (!savedPlaylists) {
+      return res.status(404).json({ error: MISSING_TARGET_MESSAGE.savedPlaylists });
+    }
+
     res.json({ ok: true, savedPlaylists });
   } catch (error) {
     next(error);
@@ -331,37 +362,19 @@ export const getRecentlyPlayed = async (req: AuthRequest, res: Response, next: N
       RECENTLY_PLAYED_MAX_LIMIT,
     );
 
-    // Collapse plays to the most recent occurrence per trackId, newest first.
-    // We over-fetch (retention window) so duplicate plays don't starve the list
-    // below `limit` distinct tracks before slicing.
-    const recent = await RecentlyPlayedModel.aggregate<{ _id: string; playedAt: Date }>([
-      { $match: { oxyUserId: userId } },
-      { $sort: { playedAt: -1 } },
-      { $group: { _id: '$trackId', playedAt: { $first: '$playedAt' } } },
-      { $sort: { playedAt: -1 } },
-      { $limit: limit },
-    ]);
-
-    if (recent.length === 0) {
-      return res.json({ tracks: [] });
-    }
-
-    // Preserve recency order from the aggregation when resolving Track docs.
-    const orderedTrackIds = recent
-      .map((entry) => entry._id)
-      .filter((id) => mongoose.Types.ObjectId.isValid(id));
+    // Plays collapsed to the most recent occurrence per track, newest first.
+    // No id-shape filter on the way out: `recently_played.track_id` is a real
+    // foreign key, so every id here names a row — and the catalog query below
+    // already answers "is it still playable" for free.
+    const orderedTrackIds = await findRecentTrackIds(userId, limit);
 
     if (orderedTrackIds.length === 0) {
       return res.json({ tracks: [] });
     }
 
-    const tracks = await TrackModel.find(playableTrackFilter({
-      _id: { $in: orderedTrackIds },
-    })).lean();
+    const formattedTracks = await toTrackDtos(await findPlayableTracksByIds(orderedTrackIds));
 
-    const formattedTracks = await formatTracksWithCoverArt(tracks);
-
-    // TrackModel.find does not honour the $in order; re-sort to match recency
+    // An `in (…)` does not honour the list's order; re-sort to match recency
     // and drop any ids that resolved to no available track.
     const orderIndex = new Map(orderedTrackIds.map((id, index) => [id, index]));
     const sortedTracks = formattedTracks
@@ -395,7 +408,7 @@ export const recordRecentlyPlayed = async (req: AuthRequest, res: Response, next
     if (!trackId) {
       return res.status(400).json({ error: 'trackId is required' });
     }
-    if (!mongoose.Types.ObjectId.isValid(trackId)) {
+    if (!isLiveEntityId(trackId)) {
       return res.status(400).json({ error: 'Invalid trackId' });
     }
 
@@ -403,30 +416,20 @@ export const recordRecentlyPlayed = async (req: AuthRequest, res: Response, next
     const dedupSince = new Date(now.getTime() - RECENTLY_PLAYED_DEDUP_WINDOW_MS);
 
     // If the same track was logged very recently, just bump its timestamp.
-    const refreshed = await RecentlyPlayedModel.findOneAndUpdate(
-      { oxyUserId: userId, trackId, playedAt: { $gte: dedupSince } },
-      { $set: { playedAt: now } },
-      { new: true }
-    ).lean();
-
-    if (!refreshed) {
-      await RecentlyPlayedModel.create({ oxyUserId: userId, trackId, playedAt: now });
-
-      // Prune anything beyond the retention window for this user.
-      const cutoff = await RecentlyPlayedModel.find({ oxyUserId: userId })
-        .sort({ playedAt: -1 })
-        .skip(RECENTLY_PLAYED_RETENTION)
-        .limit(1)
-        .select({ playedAt: 1 })
-        .lean();
-
-      const cutoffPlayedAt = cutoff[0]?.playedAt;
-      if (cutoffPlayedAt) {
-        await RecentlyPlayedModel.deleteMany({
-          oxyUserId: userId,
-          playedAt: { $lte: cutoffPlayedAt },
-        });
+    if (!(await touchRecentPlay(userId, trackId, dedupSince, now))) {
+      // `recently_played.track_id` references `tracks`, so an id that is
+      // well-formed but names nothing is `23503` rather than a stored row —
+      // the same answer `likeTrack` gives, for the same reason.
+      try {
+        await recordPlayEvent(userId, trackId, now);
+      } catch (error) {
+        if (isForeignKeyViolation(error, 'recently_played_track_id_tracks_id_fk')) {
+          return res.status(404).json({ error: 'Track not found' });
+        }
+        throw error;
       }
+
+      await prunePlayHistory(userId, RECENTLY_PLAYED_RETENTION);
     }
 
     // Feed the recommendation engine ONLY when the client reports engagement

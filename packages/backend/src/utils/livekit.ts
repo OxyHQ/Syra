@@ -6,6 +6,7 @@ import {
 import { getS3UploadConfig } from './spaces';
 import { logger } from './logger';
 import { isLiveKitAlreadyExistsError } from './livekitErrors';
+import { describeErrorSafely } from './error';
 
 const LIVEKIT_URL = process.env.LIVEKIT_URL || '';
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY || '';
@@ -132,7 +133,7 @@ export async function ensureLiveKitRoomForRoom(roomId: string, maxParticipants: 
       return null;
     }
 
-    logger.error(`Failed to create LiveKit room for room ${roomId}:`, error);
+    logger.error(`Failed to create LiveKit room for room ${roomId}:`, { error: describeErrorSafely(error) });
     throw error;
   }
 }
@@ -146,7 +147,7 @@ export async function deleteLiveKitRoomForRoom(roomId: string) {
     logger.info(`LiveKit room deleted: room_${roomId}`);
   } catch (error) {
     // Room may already be gone -- not critical
-    logger.warn(`Failed to delete LiveKit room for room ${roomId}:`, error);
+    logger.warn(`Failed to delete LiveKit room for room ${roomId}:`, { error: describeErrorSafely(error) });
   }
 }
 
@@ -168,7 +169,7 @@ export async function updateRoomParticipantPermissions(
     logger.debug(`Updated LiveKit permissions for ${userId} in room ${roomId}: canPublish=${canPublish}`);
   } catch (error) {
     // Participant may not be in the LiveKit room yet -- not critical
-    logger.warn(`Failed to update LiveKit permissions for ${userId} in room ${roomId}:`, error);
+    logger.warn(`Failed to update LiveKit permissions for ${userId} in room ${roomId}:`, { error: describeErrorSafely(error) });
   }
 }
 
@@ -190,7 +191,7 @@ export async function createRoomUrlIngress(
     logger.info(`URL ingress created for room ${roomId}: ${ingress.ingressId}`);
     return ingress;
   } catch (error) {
-    logger.error(`Failed to create URL ingress for room ${roomId}:`, error);
+    logger.error(`Failed to create URL ingress for room ${roomId}:`, { error: describeErrorSafely(error) });
     throw error;
   }
 }
@@ -209,7 +210,7 @@ export async function createRoomRtmpIngress(roomId: string): Promise<IngressInfo
     logger.info(`RTMP ingress created for room ${roomId}: ${ingress.ingressId}`);
     return ingress;
   } catch (error) {
-    logger.error(`Failed to create RTMP ingress for room ${roomId}:`, error);
+    logger.error(`Failed to create RTMP ingress for room ${roomId}:`, { error: describeErrorSafely(error) });
     throw error;
   }
 }
@@ -221,7 +222,7 @@ export async function listRoomIngresses(roomId: string): Promise<IngressInfo[]> 
   try {
     return await getIngressClient().listIngress({ roomName: `room_${roomId}` });
   } catch (error) {
-    logger.warn(`Failed to list ingresses for room ${roomId}:`, error);
+    logger.warn(`Failed to list ingresses for room ${roomId}:`, { error: describeErrorSafely(error) });
     return [];
   }
 }
@@ -234,7 +235,7 @@ export async function deleteIngress(ingressId: string): Promise<void> {
     await getIngressClient().deleteIngress(ingressId);
     logger.info(`Ingress deleted: ${ingressId}`);
   } catch (error) {
-    logger.warn(`Failed to delete ingress ${ingressId}:`, error);
+    logger.warn(`Failed to delete ingress ${ingressId}:`, { error: describeErrorSafely(error) });
   }
 }
 
@@ -272,7 +273,7 @@ export async function startRoomRecording(
     logger.info(`Recording started for room ${roomId}, egressId: ${info.egressId}`);
     return info.egressId;
   } catch (error) {
-    logger.error(`Failed to start recording for room ${roomId}:`, error);
+    logger.error(`Failed to start recording for room ${roomId}:`, { error: describeErrorSafely(error) });
     throw error;
   }
 }
@@ -285,7 +286,7 @@ export async function stopRoomRecording(egressId: string): Promise<void> {
     await getEgressClient().stopEgress(egressId);
     logger.info(`Recording stopped: egressId ${egressId}`);
   } catch (error) {
-    logger.error(`Failed to stop recording (egressId: ${egressId}):`, error);
+    logger.error(`Failed to stop recording (egressId: ${egressId}):`, { error: describeErrorSafely(error) });
     throw error;
   }
 }

@@ -1,0 +1,194 @@
+/**
+ * Catalog playability and playlist readability, on drizzle.
+ *
+ * The only half there is. `utils/catalogVisibility.ts` held the Mongoose one
+ * while call sites moved across, and Task 11 DELETED it — not deprecated it,
+ * not re-exported it — when `playlists.controller` and `musicHelpers`, its last
+ * two importers, were ported. Two implementations against two databases with an
+ * explicit death date is what made that a migration rather than a compatibility
+ * shim, and the death date has passed.
+ *
+ * ## The predicate
+ *
+ * Syra is an own-catalogue platform — every track is Syra-hosted — so a track is
+ * playable iff it is available and not copyright-removed. There is no provider
+ * dimension, no deployment flag and no per-user variation: the same predicate
+ * holds for every viewer, authenticated or not.
+ *
+ * `copyrightRemoved` is checked alongside `isAvailable` so the CATALOG authority
+ * agrees with the PLAYBACK authority by construction. Artist-termination
+ * takedowns set only `copyrightRemoved`, which once left those tracks listed and
+ * searchable but unplayable.
+ *
+ * ## Three artefacts, and why their agreement is now structural
+ *
+ * {@link playableTrackFilter} is a reusable SQL condition and
+ * {@link isPlayableTrack} is its in-memory twin; the THIRD is `isTrackPlayable`
+ * in `controllers/stream.controller.ts`, which is the playback authority and
+ * lives there because deciding whether to issue a stream is that controller's
+ * job. Three artefacts, because listing and playback are genuinely two
+ * authorities and the catalog needs both a query and a row predicate — but
+ * under Mongo they did not actually agree, and the port is what fixes that.
+ *
+ * Measured on the Mongo pair before the port: the filter required
+ * `isAvailable: true`, which a document with the key ABSENT does not match,
+ * while the in-memory predicate accepted `isAvailable !== false`, which it does.
+ * Two of the nine `{true, false, absent}²` shapes disagreed. The third
+ * predicate, `isTrackPlayable` in `stream.controller.ts`, used
+ * `!copyrightRemoved` against this file's `copyrightRemoved !== true`, which
+ * diverge on a truthy non-boolean.
+ *
+ * Both divergences are gone here, and not by discipline: `tracks.is_available`
+ * and `tracks.copyright_removed` are `NOT NULL` booleans, so "absent" and
+ * "truthy non-boolean" are unrepresentable. The comparisons below are written
+ * `=== true` / `=== false` rather than `!x` so the TypeScript predicate is the
+ * literal mirror of the SQL — and so a value that somehow is not a boolean
+ * fails closed in both, exactly as `eq()` would.
+ *
+ * `__tests__/visibility.agreement.test.ts` proves the agreement against real
+ * rows rather than asserting it in this comment.
+ */
+
+import { and, eq, sql, type SQL } from 'drizzle-orm';
+import { PlaylistVisibility } from '@syra/shared-types';
+import { catalogEntities, tracks } from '../schema/catalog';
+
+/**
+ * The condition every catalog read of `tracks` composes first.
+ *
+ * Takes no arguments and returns a bare condition: drizzle composes with
+ * `and()`, so there is no counterpart to the Mongo helper's filter parameter
+ * (nor to `andMongoFilters`, which existed only because spreading two filter
+ * objects could clobber an existing `$or`).
+ *
+ *     db.select().from(tracks).where(and(playableTrackFilter(), eq(tracks.albumId, id)))
+ *
+ * Both columns are `NOT NULL`, so these are plain equality tests, and
+ * `schema/catalog.ts` folds this exact predicate into seven partial indexes
+ * (`schema/catalog.ts:711-731`, counted rather than remembered — this task added
+ * the seventh). Postgres will not use any of them for a query that omits the
+ * predicate, so composing this condition is what makes those indexes reachable
+ * at all.
+ */
+export function playableTrackFilter(): SQL {
+  // `and()` is typed as possibly-undefined for the zero-argument case; with two
+  // conditions it always returns one, and the cast keeps every call site from
+  // having to narrow a value that cannot be undefined.
+  return and(eq(tracks.isAvailable, true), eq(tracks.copyrightRemoved, false)) as SQL;
+}
+
+/**
+ * "This `catalog_entities` row is an artist whose account is not terminated."
+ *
+ * `is not true`, NOT `!= true`, and the difference is not stylistic.
+ * `terminated` is an artist-only column on a table shared with persons, so it is
+ * NULLABLE — and in SQL `null != true` evaluates to NULL, which a `WHERE` treats
+ * as false. Written with `!=`, every artist whose `terminated` was never set
+ * either way would silently vanish from every related-artists shelf, every
+ * genre fallback and every radio artist seed. `is not true` is the three-valued
+ * spelling that means what Mongo's `{ terminated: { $ne: true } }` meant:
+ * false, null and absent all pass; only an explicit true is excluded.
+ *
+ * One spelling, because there are four call sites across the recommendation and
+ * radio services and a fifth in Task 10c's controllers — and the failure mode is
+ * invisible in a test whose fixtures all set the column.
+ */
+export function notTerminatedArtist(): SQL {
+  return and(
+    eq(catalogEntities.type, 'artist'),
+    sql`${catalogEntities.terminated} is not true`
+  ) as SQL;
+}
+
+/** The columns {@link isPlayableTrack} reads. Both are `NOT NULL` in Postgres. */
+export interface PlayableTrackRow {
+  readonly isAvailable: boolean;
+  readonly copyrightRemoved: boolean;
+}
+
+/**
+ * In-memory equivalent of {@link playableTrackFilter}: a row this returns `true`
+ * for is exactly a row the catalog query would surface.
+ */
+export function isPlayableTrack(track: PlayableTrackRow): boolean {
+  return track.isAvailable === true && track.copyrightRemoved === false;
+}
+
+/** The columns {@link isPreviewEligibleTrack} reads, beyond playability. */
+export interface PreviewEligibleTrackRow extends PlayableTrackRow {
+  readonly status: string;
+  readonly hlsMasterKey: string | null;
+  /**
+   * How many rows this track has in `track_hls_renditions`.
+   *
+   * The Mongo shape was an embedded `hls[]` array and the check was
+   * `hls.length > 0`; Task 4 moved the ladder to a child table, so the caller
+   * supplies the count rather than the array. Nothing here needs a rendition's
+   * contents — only whether the ladder exists.
+   */
+  readonly hlsRenditionCount: number;
+  /** `audioSource.url` flattened; null while a track is still processing. */
+  readonly audioSourceUrl: string | null;
+}
+
+/** True iff the track has Syra-hosted, ready, encrypted HLS we can clip from. */
+function hasReadyHls(track: PreviewEligibleTrackRow): boolean {
+  return (
+    track.status === 'ready' &&
+    typeof track.hlsMasterKey === 'string' &&
+    track.hlsMasterKey.length > 0 &&
+    track.hlsRenditionCount > 0
+  );
+}
+
+/**
+ * True iff a 30s preview can actually be generated for this track — it has a
+ * regenerable source: either a retained original file (uploads / CC) or its own
+ * ready HLS ladder.
+ *
+ * Not exported: `hasReadyHls` and its sibling `hasRegenerablePreviewSource` were
+ * both exported from the Mongo module and referenced nowhere outside it, so the
+ * two are folded back in here rather than carried over as dead surface.
+ */
+function hasRegenerablePreviewSource(track: PreviewEligibleTrackRow): boolean {
+  return (track.audioSourceUrl !== null && track.audioSourceUrl.length > 0) || hasReadyHls(track);
+}
+
+/**
+ * Truthful `previewAvailable`: the track is playable AND a preview clip is
+ * actually regenerable, so the SDK never surfaces a track whose preview would
+ * 404.
+ */
+export function isPreviewEligibleTrack(track: PreviewEligibleTrackRow): boolean {
+  return isPlayableTrack(track) && hasRegenerablePreviewSource(track);
+}
+
+/** What deciding who may read a playlist needs. */
+export interface ViewablePlaylistRow {
+  readonly visibility: string;
+  readonly ownerOxyUserId: string;
+  /**
+   * `playlist_collaborators.oxy_user_id` for this playlist, of any role.
+   *
+   * A separate table now rather than an embedded array, so a caller that has
+   * not loaded them passes `undefined` — which is treated as "no collaborators",
+   * the same fail-closed answer the Mongo version gave for an absent field.
+   */
+  readonly collaboratorOxyUserIds?: readonly string[];
+}
+
+/**
+ * Playlist readability, in one place.
+ *
+ * Unlike track playability, playlists DO vary per viewer: a public playlist is
+ * readable by anyone, a non-public one only by its owner or a collaborator of
+ * any role. Kept beside the track predicate so every surface that exposes a
+ * playlist — the playlists API, radio seeds — asks the same question, and a
+ * change to the rule cannot land in one place and miss the other.
+ */
+export function canViewPlaylist(playlist: ViewablePlaylistRow, userId?: string): boolean {
+  if (playlist.visibility === PlaylistVisibility.PUBLIC) return true;
+  if (!userId) return false;
+  if (playlist.ownerOxyUserId === userId) return true;
+  return playlist.collaboratorOxyUserIds?.includes(userId) === true;
+}

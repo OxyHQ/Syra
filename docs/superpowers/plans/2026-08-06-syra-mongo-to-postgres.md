@@ -397,7 +397,7 @@ Do not invent a `topics` table to satisfy the reference. One `tsvector` column: 
 **Reference:** `models/{UserSettings,UserMusicPreferences,UserBehavior,UserTasteProfile,ListeningEvent,CatalogRelation,NotificationPreference,NotificationSuppression}.ts`.
 **Produces:** `userSettings`, `userMusicPreferences`, `userBehavior`, `userTasteProfiles`, `listeningEvents`, `catalogRelations`, `notificationPreferences`, `notificationSuppressions`.
 
-**This task lands three of the four expiry registry entries.** Mongo's TTL indexes have no Postgres counterpart, so each becomes an `EXPIRY_SWEEP_TARGET` plus a supporting btree index — the sweep's predicate is a range scan and Mongo's TTL index carried the same obligation:
+**This task lands two of the four expiry registry entries.** Mongo's TTL indexes have no Postgres counterpart, so each becomes an `EXPIRY_SWEEP_TARGET` plus a supporting btree index — the sweep's predicate is a range scan and Mongo's TTL index carried the same obligation:
 
 | Mongo | entry |
 |---|---|
@@ -588,3 +588,137 @@ something, and it is why the floor rises rather than being set once.
 Each schema task should also expect to fix something in its predecessor's tests,
 and should say so in its report rather than fixing it silently — the pattern is
 more useful than any individual fix.
+
+## Carried in from the CrowdSource port — one latent fragility in our own gate
+
+`@oxyhq/crowdsource-app`'s Task 6 measured that **`column.name` is the TypeScript
+property name for some drizzle columns and the SQL name for others, in the same
+schema** — it returns the property name for a column declared with no name
+argument (whose SQL name `DATABASE_CASING` derives) and the SQL name for one
+declared explicitly. `sqlColumnName(column)` is the only read that is correct for
+both, which is what its own doc comment says.
+
+Our gates mostly know this: `gates.test.ts` uses `sqlColumnName` with comments
+saying "never `column.name`". **One place does not** —
+`zodPathsExistInDrizzle.test.ts:380` builds its column set from `column.name`.
+
+It is correct **today, by uniformity rather than by design**: measured on this
+branch, all 667 columns across the seven schema files are declared with *no* name
+argument and zero are declared explicitly, so `column.name` is uniformly the
+camelCase property name and matches the camelCase zod fields it is compared
+against.
+
+The fragility is that the fix for a *different* known trap breaks it. Drizzle's
+casing mangles digit-adjacent capitals (`cacheS3Key` → `cache_s_3_key`), and the
+natural repair is an explicit name (`text('cache_s3_key')`) — at which point that
+one column's `column.name` becomes snake_case, stops matching its camelCase zod
+field, and the gate reports a correct schema as missing a path.
+
+**Make the invariant explicit rather than accidental:** assert in the gate that
+every column's `column.name` equals its property key, so the day someone declares
+one explicitly the gate says *why* instead of blaming the field. Cheap, and it
+converts a silent dependency into a stated one. Fold into Task 8 or Task 18's
+follow-up, not its own task.
+
+### A second class carried in: an ORDER BY assertion whose fixture cannot fail it
+
+CrowdSource's Task 7 mutated `orderBy(asc(createdAt))` out of its outbox claim and
+the test stayed **green** — both fixture rows had been inserted oldest-first, so a
+sequential scan returned them in the order the assertion wanted. The fixture now
+inserts them **newest-first**, the only arrangement where physical order and
+chronological order disagree and the two implementations are distinguishable.
+
+This is AGENTS.md's "the fixtures are too tidy" rule pointed at ordering, and the
+sharp form is worth stating once: **an `ORDER BY` assertion is vacuous unless the
+fixture's insertion order differs from the asserted order.** The tidy version —
+insert in the order you expect to read — is what anybody writes by default, and it
+passes with the sort removed.
+
+Sampled on this branch and NOT found biting: the date-ordering candidates
+(`browse.controller.test.ts`, `services/catalog/artistProfile.test.ts`) each carry
+a single dated row, so there is no order to get wrong. A full sweep across ~1,873
+tests was not run — recorded as a class to check when touching an ordered read,
+not as a known defect. Postgres makes this worse than Mongo did in one specific
+way already recorded on this branch: **`desc()` is `NULLS FIRST`**, so a nullable
+sort key changes which row leads even when the sort is present.
+
+### A third class, and this one BITES: drizzle's two spellings of "descending" disagree
+
+CrowdSource's Task 9 asked the planner instead of assuming, and found:
+
+- `.desc()` inside a drizzle **INDEX** emits `DESC NULLS LAST`.
+- `desc(column)` in a drizzle **ORDER BY** emits plain `DESC`, which in Postgres is
+  `DESC NULLS FIRST`.
+
+They do not match, so **no index can satisfy the sort** and the query gains a
+blocking `Sort` — even on a `NOT NULL` column, where the two orderings cannot
+differ by a single row. Measured there on PG 17 with `enable_seqscan = off`:
+`order by created_at desc` planned `Limit → Sort → Index Scan`, and
+`… desc nulls last` planned `Limit → Index Scan`.
+
+**The subtlety that makes it greppable, and explains why most of this branch is
+fine:** a *plain ASC* index scanned backwards yields `DESC NULLS FIRST`, which is
+exactly what unspelled `desc()` asks for. So the mismatch arises only from a
+`.desc()` index paired with an unspelled `desc()` ORDER BY. ASC orderings are safe
+by luck (both default NULLS LAST). **Only descending pairs need the explicit
+spelling.**
+
+**Swept on this branch — 9 `desc()` orderings, 3 of them in a test file, so 6
+production sites:**
+
+| site | index | verdict |
+|---|---|---|
+| `db/library/recentlyPlayed.ts:73` | `recently_played_oxy_user_id_played_at_idx` on `(oxyUserId, playedAt.desc())` | **DEFECT** — blocking sort |
+| `db/library/recentlyPlayed.ts:108` | same | **DEFECT** |
+| `db/user/relations.ts:79` | `catalog_relations_kind_source_id_score_idx` on `(kind, sourceId, score.desc())` | **DEFECT** |
+| `db/library/recentlyPlayed.ts:43` | orders by `desc(max(playedAt))` — an aggregate, no index applies either way | not this class |
+| `db/user/listening.ts:109` | `listening_events_oxy_user_id_played_at_idx` is plain ASC → backward scan yields `DESC NULLS FIRST` | fine |
+| `db/playback/devices.ts:93` | no index on `lastSeen` at all | not this class (unindexed, tiny per-user table) |
+
+Both defective columns are `notNull()` (`playedAt` timestamptz, `score`
+doublePrecision), so the sort is pure waste — it can never reorder a row.
+
+**Two valid fixes, and the choice is not obvious.** Spell `nulls last` in the three
+ORDER BYs (what CrowdSource did), or drop `.desc()` from the two indexes so a
+backward scan serves them. The second is a schema change needing a migration; the
+first is three lines. Prefer the first.
+
+**Five other files already spell it** (`db/catalog/containers.ts`,
+`db/creators/{claims,standings,uploads}.ts`, `db/podcasts/podcasts.ts`), which is
+the "partial application fails silently in the under-coverage direction" rule
+again: the knowledge existed on this branch and landed in five files, and nothing
+distinguished the sixth.
+
+### And why the EXPLAIN suites did not catch it
+
+CrowdSource's first version of this test wrote its own `EXPLAIN` with
+`desc nulls last` spelled out **in the test file**, so reverting the store left it
+green — it asserted a property of a string written next to the assertion. It now
+explains the SQL taken from postgres.js's `debug` hook: the query the store
+actually sent.
+
+**Our seven `*.explain.test.ts` suites have that exact shape** — they
+`sql.raw('explain (analyze, buffers) ' + probe.sql)` against SQL written in the
+test file. They are honest about it (`library.explain.test.ts` says each "proves an
+index EXISTS"), and index existence is genuinely what they were built to prove. But
+it means **they cannot see a production query that fails to use the index they
+prove exists** — which is precisely this defect. That reframes "bind the probes to
+the real query builders" from a deliberate deferral into the thing that would have
+caught a live regression. It stays a follow-up, but not an optional one.
+
+#### Two refinements to the ORDER BY class, from CrowdSource Task 10
+
+**An UPDATE writes a new row version, so updating a row MOVES it physically.** The
+first repair of a vacuous ordering fixture there was itself vacuous for exactly
+that reason: pinning `created_at` in ascending order via an update left the rows
+sitting on disk in precisely the answer's order, so a sequential scan returned it
+and the deleted sort was still invisible. Ordering fixtures must pin timestamps so
+the rows are out of chronological order *on disk*, which is not the same as merely
+inserting them out of order.
+
+**And the assumption is checkable, so check it.** That test now reads the unordered
+scan and asserts it differs from the expected order — physical order is the storage
+engine's business, and if a future Postgres hands rows back already sorted the test
+should say so rather than quietly losing the only property that lets it fail. Any
+ordering assertion whose ability to fail rests on physical order should carry that
+self-check.

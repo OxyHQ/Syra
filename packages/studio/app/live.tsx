@@ -86,7 +86,7 @@ function GoLive() {
         ) : liveRooms.length > 0 ? (
           <View className="gap-3">
             {liveRooms.map((room: Room) => (
-              <RoomCard key={room._id} room={room} onPress={() => joinLiveRoom(room._id)} />
+              <RoomCard key={room.id} room={room} onPress={() => joinLiveRoom(room.id)} />
             ))}
           </View>
         ) : (

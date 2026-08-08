@@ -1,12 +1,17 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
-import mongoose from 'mongoose';
 import type { Response } from 'express';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
-import { connect, clear, disconnect } from '../test/mongo';
-import { UserUploadModel } from '../models/UserUpload';
-import { TrackKeyModel } from '../models/TrackKey';
+import { eq } from 'drizzle-orm';
+import { uuidv7 } from '@oxyhq/db';
+import { connectDb, clearDb, disconnectDb } from '../test/postgres';
+import { getDb } from '../db/postgres';
+import { imageAssets } from '../db/schema/catalog';
+import { userUploadHlsRenditions, userUploads } from '../db/schema/creators';
+import { trackKeys } from '../db/schema/trackKeys';
+import { UPLOAD_COLUMNS } from '../db/creators/uploads';
+import { toUploadTrackDto, uploadImageIds } from '../db/creators/serialize';
+import { loadImageVariants } from '../db/catalog/hydrate';
 import {
-  toUploadTrackDto,
   getUpload,
   getUploadStream,
   getUploadStreamKey,
@@ -20,9 +25,9 @@ import { mintStreamToken, verifyStreamToken } from '../services/stream/streamTok
 // Set before the module under test reads it — the minting helper has no fallback.
 process.env.STREAM_TOKEN_SECRET = 'test-secret-uploads-controller';
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+beforeAll(connectDb);
+afterEach(clearDb);
+afterAll(disconnectDb);
 
 const OWNER = 'oxy-owner';
 const STRANGER = 'oxy-stranger';
@@ -73,24 +78,58 @@ function rethrow(error: unknown): void {
 
 let shaCounter = 0;
 
-async function seedUpload(overrides: Record<string, unknown> = {}) {
+type UploadOverrides = Partial<typeof userUploads.$inferInsert> & { withHls?: boolean };
+
+async function seedUpload(
+  overrides: UploadOverrides = {}
+): Promise<{ id: string; sha256: string }> {
   shaCounter += 1;
-  return UserUploadModel.create({
-    ownerOxyUserId: OWNER,
-    title: 'Midnight Ferry',
-    artistName: 'Nadia Ortiz',
-    duration: 210,
-    sizeBytes: 5_242_880,
-    sha256: shaCounter.toString(16).padStart(64, '0'),
-    status: 'ready',
-    playCount: 0,
-    audioSource: { key: 'locker/oxy-owner/abc/source.mp3', format: 'mp3' },
-    hlsMasterKey: 'hls/locker/oxy-owner/abc/master.m3u8',
-    hls: [
-      { manifestKey: 'hls/locker/oxy-owner/abc/160/index.m3u8', bitrateKbps: 160, encrypted: true },
-    ],
-    ...overrides,
-  });
+  const { withHls = true, ...columns } = overrides;
+  const [upload] = await getDb()
+    .insert(userUploads)
+    .values({
+      ownerOxyUserId: OWNER,
+      title: 'Midnight Ferry',
+      artistName: 'Nadia Ortiz',
+      duration: 210,
+      sizeBytes: 5_242_880,
+      sha256: shaCounter.toString(16).padStart(64, '0'),
+      status: 'ready',
+      playCount: 0,
+      audioSourceKey: 'locker/oxy-owner/abc/source.mp3',
+      audioSourceFormat: 'mp3',
+      hlsMasterKey: 'hls/locker/oxy-owner/abc/master.m3u8',
+      ...columns,
+    })
+    .returning({ id: userUploads.id, sha256: userUploads.sha256 });
+
+  // The ladder is `user_upload_hls_renditions` now, so a fixture that needs a
+  // playable file needs a second insert.
+  if (withHls) {
+    await getDb().insert(userUploadHlsRenditions).values({
+      userUploadId: upload.id,
+      position: 0,
+      manifestKey: 'hls/locker/oxy-owner/abc/160/index.m3u8',
+      bitrateKbps: 160,
+      encrypted: true,
+    });
+  }
+  return upload;
+}
+
+/** The stored row, read back directly rather than through a production helper. */
+async function reload(uploadId: string) {
+  const [row] = await getDb().select().from(userUploads).where(eq(userUploads.id, uploadId));
+  return row;
+}
+
+/** The row as a production caller sees it, plus its image lookup. */
+async function dtoFor(uploadId: string) {
+  const [row] = await getDb()
+    .select(UPLOAD_COLUMNS)
+    .from(userUploads)
+    .where(eq(userUploads.id, uploadId));
+  return toUploadTrackDto(row, await loadImageVariants(uploadImageIds(row)));
 }
 
 // ── The serialisation boundary ───────────────────────────────────────────────
@@ -99,7 +138,7 @@ describe('toUploadTrackDto', () => {
   it('carries no storage key of any kind', async () => {
     const upload = await seedUpload();
 
-    const dto = toUploadTrackDto(upload);
+    const dto = await dtoFor(upload.id);
     const serialised = JSON.stringify(dto);
 
     // The assertion that matters: the stored record holds a raw S3 key for the
@@ -117,15 +156,15 @@ describe('toUploadTrackDto', () => {
   it('is tagged `upload` so the player resolves it through the locker', async () => {
     const upload = await seedUpload();
 
-    expect(toUploadTrackDto(upload).kind).toBe('upload');
+    expect((await dtoFor(upload.id)).kind).toBe('upload');
   });
 
   it('renders an unresolved artist as empty strings, not as a placeholder name', async () => {
     // A file with no artist tag is a valid private upload. The UI renders its own
     // "Unknown artist" so the backend never ships a language-specific string.
-    const upload = await seedUpload({ artistName: undefined, resolvedArtistId: undefined });
+    const upload = await seedUpload({ artistName: null, resolvedArtistId: null });
 
-    const dto = toUploadTrackDto(upload);
+    const dto = await dtoFor(upload.id);
     expect(dto.artistName).toBe('');
     expect(dto.artistId).toBe('');
   });
@@ -133,7 +172,7 @@ describe('toUploadTrackDto', () => {
   it('reports a soft-deleted file as unavailable', async () => {
     const upload = await seedUpload({ deletedAt: new Date() });
 
-    expect(toUploadTrackDto(upload).isAvailable).toBe(false);
+    expect((await dtoFor(upload.id)).isAvailable).toBe(false);
   });
 });
 
@@ -144,10 +183,10 @@ describe('GET /api/uploads/:id', () => {
     const upload = await seedUpload();
     const res = makeRes();
 
-    await getUpload(makeReq({ id: upload._id.toString() }, { userId: OWNER }), res as unknown as Response, rethrow);
+    await getUpload(makeReq({ id: upload.id }, { userId: OWNER }), res as unknown as Response, rethrow);
 
     expect(res._status).toBe(200);
-    expect((res._body as { id: string }).id).toBe(upload._id.toString());
+    expect((res._body as { id: string }).id).toBe(upload.id);
   });
 
   it('answers 404 — not 403 — to a DIFFERENT session', async () => {
@@ -157,7 +196,7 @@ describe('GET /api/uploads/:id', () => {
     const upload = await seedUpload();
     const res = makeRes();
 
-    await getUpload(makeReq({ id: upload._id.toString() }, { userId: STRANGER }), res as unknown as Response, rethrow);
+    await getUpload(makeReq({ id: upload.id }, { userId: STRANGER }), res as unknown as Response, rethrow);
 
     expect(res._status).toBe(404);
   });
@@ -166,7 +205,7 @@ describe('GET /api/uploads/:id', () => {
     const upload = await seedUpload({ deletedAt: new Date() });
     const res = makeRes();
 
-    await getUpload(makeReq({ id: upload._id.toString() }, { userId: OWNER }), res as unknown as Response, rethrow);
+    await getUpload(makeReq({ id: upload.id }, { userId: OWNER }), res as unknown as Response, rethrow);
 
     expect(res._status).toBe(404);
   });
@@ -204,13 +243,13 @@ describe('PATCH /api/uploads/:id', () => {
     const res = makeRes();
 
     await updateUpload(
-      makeReq({ id: upload._id.toString() }, { userId: OWNER, body: { title: 'Corrected Title' } }),
+      makeReq({ id: upload.id }, { userId: OWNER, body: { title: 'Corrected Title' } }),
       res as unknown as Response,
       rethrow,
     );
 
     expect(res._status).toBe(200);
-    expect((await UserUploadModel.findById(upload._id).lean())?.title).toBe('Corrected Title');
+    expect((await reload(upload.id))?.title).toBe('Corrected Title');
   });
 
   it('cannot be used to reassign ownership or rewrite the retention stamps', async () => {
@@ -218,12 +257,15 @@ describe('PATCH /api/uploads/:id', () => {
     // spread onto the document, so none of these can be reached from here.
     const upload = await seedUpload();
     const originalExpiry = new Date('2027-01-01T00:00:00.000Z');
-    await UserUploadModel.updateOne({ _id: upload._id }, { $set: { expiresAt: originalExpiry } });
+    await getDb()
+      .update(userUploads)
+      .set({ expiresAt: originalExpiry })
+      .where(eq(userUploads.id, upload.id));
 
     const res = makeRes();
     await updateUpload(
       makeReq(
-        { id: upload._id.toString() },
+        { id: upload.id },
         {
           userId: OWNER,
           body: {
@@ -231,8 +273,12 @@ describe('PATCH /api/uploads/:id', () => {
             ownerOxyUserId: STRANGER,
             sha256: 'f'.repeat(64),
             expiresAt: new Date('2099-01-01T00:00:00.000Z').toISOString(),
-            matchedTrackId: new mongoose.Types.ObjectId().toString(),
+            matchedTrackId: uuidv7(),
+            // Both spellings, because `audioSource` was one embedded
+            // subdocument and is two flattened columns now — a body naming
+            // either must reach neither.
             audioSource: { key: 'hacked', format: 'mp3' },
+            audioSourceKey: 'hacked',
           },
         },
       ),
@@ -240,12 +286,85 @@ describe('PATCH /api/uploads/:id', () => {
       rethrow,
     );
 
-    const after = await UserUploadModel.findById(upload._id).lean();
+    const after = await reload(upload.id);
     expect(after?.ownerOxyUserId).toBe(OWNER);
     expect(after?.sha256).toBe(upload.sha256);
     expect(after?.expiresAt?.getTime()).toBe(originalExpiry.getTime());
-    expect(after?.matchedTrackId).toBeUndefined();
-    expect(after?.audioSource?.key).toBe('locker/oxy-owner/abc/source.mp3');
+    expect(after?.matchedTrackId).toBeNull();
+    expect(after?.audioSourceKey).toBe('locker/oxy-owner/abc/source.mp3');
+  });
+
+  /**
+   * A PATCH naming no recognised field answers 200 and changes nothing.
+   *
+   * `updateUserUploadRequestSchema` is all-optional and not `.strict()`, so an
+   * empty body — or one carrying only fields this route refuses — parses
+   * cleanly and reaches the update with an empty `changes`. Drizzle throws
+   * `No values to set` on `db.update(...).set({})`, where Mongoose's `save()`
+   * on an unmodified document simply did nothing; without the guard the route
+   * 500s on a request that asked for nothing.
+   */
+  it('answers 200 and changes nothing for a body with no editable field', async () => {
+    const upload = await seedUpload({ title: 'Untouched' });
+    const res = makeRes();
+
+    await updateUpload(
+      // `ownerOxyUserId` is not in the editable set, so this body is both empty
+      // in effect and non-empty on the wire — the shape a real client sends.
+      makeReq({ id: upload.id }, { userId: OWNER, body: { ownerOxyUserId: STRANGER } }),
+      res as unknown as Response,
+      rethrow,
+    );
+
+    expect(res._status).toBe(200);
+    expect((res._body as { title: string }).title).toBe('Untouched');
+    const after = await reload(upload.id);
+    expect(after?.title).toBe('Untouched');
+    expect(after?.ownerOxyUserId).toBe(OWNER);
+  });
+
+  /**
+   * Changing to artwork with NO palette CLEARS the accents.
+   *
+   * The new cover decides both, including deciding they are absent — and the
+   * two ORMs disagree about how to say that. Drizzle drops an `undefined`
+   * value from a `.set()` entirely ("leave alone"), where Mongoose's `save()`
+   * issued `$unset` for the same assignment ("clear it"). Without an explicit
+   * `null` the row keeps the PREVIOUS cover's colours forever and the client
+   * renders a palette belonging to artwork that is no longer there.
+   *
+   * `image_assets.primary_color` is nullable and `storeImageAsset` takes the
+   * palette as optional input, so a colourless image is an ordinary row rather
+   * than a contrived fixture.
+   */
+  it('clears the stored palette when the new cover art has none', async () => {
+    const upload = await seedUpload({ primaryColor: '#ff0000', secondaryColor: '#00ff00' });
+    const [colourless] = await getDb()
+      .insert(imageAssets)
+      .values({
+        s3Key: 'images/cover/colourless.jpg',
+        filename: 'colourless.jpg',
+        contentType: 'image/jpeg',
+        byteSize: 2048,
+        width: 800,
+        height: 800,
+        ownerType: 'upload',
+      })
+      .returning({ id: imageAssets.id });
+
+    const res = makeRes();
+    await updateUpload(
+      makeReq({ id: upload.id }, { userId: OWNER, body: { coverArt: colourless.id } }),
+      res as unknown as Response,
+      rethrow,
+    );
+
+    expect(res._status).toBe(200);
+    const after = await reload(upload.id);
+    expect(after?.coverArtId).toBe(colourless.id);
+    // The assertion the ORM difference turns on: `null`, not the old value.
+    expect(after?.primaryColor).toBeNull();
+    expect(after?.secondaryColor).toBeNull();
   });
 
   it('refuses a stranger', async () => {
@@ -253,13 +372,13 @@ describe('PATCH /api/uploads/:id', () => {
     const res = makeRes();
 
     await updateUpload(
-      makeReq({ id: upload._id.toString() }, { userId: STRANGER, body: { title: 'Yours now' } }),
+      makeReq({ id: upload.id }, { userId: STRANGER, body: { title: 'Yours now' } }),
       res as unknown as Response,
       rethrow,
     );
 
     expect(res._status).toBe(404);
-    expect((await UserUploadModel.findById(upload._id).lean())?.title).toBe('Midnight Ferry');
+    expect((await reload(upload.id))?.title).toBe('Midnight Ferry');
   });
 });
 
@@ -269,25 +388,37 @@ describe('DELETE /api/uploads/:id', () => {
     // ask S3 for and this test stays about the DOCUMENT side of the delete. That
     // the bytes go too is asserted end to end, against a real upload, in
     // `uploads.createUpload.test.ts` — the file that owns the storage fake.
-    const upload = await seedUpload({ audioSource: undefined, hlsMasterKey: undefined, hls: [] });
-    await TrackKeyModel.create({ trackId: upload._id.toString(), keyHex: 'ab'.repeat(16), keyUri: 'key' });
+    const upload = await seedUpload({
+      audioSourceKey: null,
+      audioSourceFormat: null,
+      hlsMasterKey: null,
+      withHls: false,
+    });
+    await getDb().insert(trackKeys).values({ userUploadId: upload.id, keyHex: 'ab'.repeat(16), keyUri: 'key' });
     const res = makeRes();
 
-    await deleteUpload(makeReq({ id: upload._id.toString() }, { userId: OWNER }), res as unknown as Response, rethrow);
+    await deleteUpload(makeReq({ id: upload.id }, { userId: OWNER }), res as unknown as Response, rethrow);
 
     expect(res._status).toBe(204);
-    expect(await UserUploadModel.findById(upload._id).lean()).toBeNull();
-    expect(await TrackKeyModel.findOne({ trackId: upload._id.toString() }).lean()).toBeNull();
+    expect(await reload(upload.id)).toBeUndefined();
+    expect(
+      await getDb().select().from(trackKeys).where(eq(trackKeys.userUploadId, upload.id))
+    ).toEqual([]);
   });
 
   it('refuses a stranger, and keeps the file', async () => {
-    const upload = await seedUpload({ audioSource: undefined, hlsMasterKey: undefined, hls: [] });
+    const upload = await seedUpload({
+      audioSourceKey: null,
+      audioSourceFormat: null,
+      hlsMasterKey: null,
+      withHls: false,
+    });
     const res = makeRes();
 
-    await deleteUpload(makeReq({ id: upload._id.toString() }, { userId: STRANGER }), res as unknown as Response, rethrow);
+    await deleteUpload(makeReq({ id: upload.id }, { userId: STRANGER }), res as unknown as Response, rethrow);
 
     expect(res._status).toBe(404);
-    expect(await UserUploadModel.findById(upload._id).lean()).not.toBeNull();
+    expect(await reload(upload.id)).toBeDefined();
   });
 });
 
@@ -296,7 +427,7 @@ describe('DELETE /api/uploads/:id', () => {
 describe('GET /api/uploads/:id/stream', () => {
   it('mints a session bound to the upload and the owner', async () => {
     const upload = await seedUpload();
-    const uploadId = upload._id.toString();
+    const uploadId = upload.id;
     const res = makeRes();
 
     await getUploadStream(makeReq({ id: uploadId }, { userId: OWNER }), res as unknown as Response, rethrow);
@@ -317,11 +448,11 @@ describe('GET /api/uploads/:id/stream', () => {
     const upload = await seedUpload({ expiresAt: soon });
     const res = makeRes();
 
-    await getUploadStream(makeReq({ id: upload._id.toString() }, { userId: OWNER }), res as unknown as Response, rethrow);
+    await getUploadStream(makeReq({ id: upload.id }, { userId: OWNER }), res as unknown as Response, rethrow);
 
-    const after = await UserUploadModel.findById(upload._id).lean();
+    const after = await reload(upload.id);
     expect(after?.playCount).toBe(1);
-    expect(after?.lastPlayedAt).toBeDefined();
+    expect(after?.lastPlayedAt).toBeInstanceOf(Date);
     expect(after?.expiresAt?.getTime()).toBeGreaterThan(soon.getTime());
   });
 
@@ -329,7 +460,7 @@ describe('GET /api/uploads/:id/stream', () => {
     const upload = await seedUpload();
     const res = makeRes();
 
-    await getUploadStream(makeReq({ id: upload._id.toString() }, { userId: STRANGER }), res as unknown as Response, rethrow);
+    await getUploadStream(makeReq({ id: upload.id }, { userId: STRANGER }), res as unknown as Response, rethrow);
 
     expect(res._status).toBe(404);
     expect(res._body).not.toHaveProperty('url');
@@ -339,23 +470,23 @@ describe('GET /api/uploads/:id/stream', () => {
     const upload = await seedUpload();
     const res = makeRes();
 
-    await getUploadStream(makeReq({ id: upload._id.toString() }, { userId: STRANGER }), res as unknown as Response, rethrow);
+    await getUploadStream(makeReq({ id: upload.id }, { userId: STRANGER }), res as unknown as Response, rethrow);
 
-    expect((await UserUploadModel.findById(upload._id).lean())?.playCount).toBe(0);
+    expect((await reload(upload.id))?.playCount).toBe(0);
   });
 
   it('refuses an anonymous caller', async () => {
     const upload = await seedUpload();
     const res = makeRes();
 
-    await getUploadStream(makeReq({ id: upload._id.toString() }, {}), res as unknown as Response, rethrow);
+    await getUploadStream(makeReq({ id: upload.id }, {}), res as unknown as Response, rethrow);
 
     expect(res._status).toBe(401);
   });
 
   it('will not mint a session from a stream token — the resolver ISSUES them', async () => {
     const upload = await seedUpload();
-    const uploadId = upload._id.toString();
+    const uploadId = upload.id;
     const token = mintStreamToken({ trackId: uploadId, userId: OWNER, maxBitrateKbps: 160 }, 60);
     const res = makeRes();
 
@@ -369,19 +500,19 @@ describe('GET /api/uploads/:id/stream', () => {
   });
 
   it('answers 409 while the file is still being transcoded', async () => {
-    const upload = await seedUpload({ status: 'processing', hls: [], hlsMasterKey: undefined });
+    const upload = await seedUpload({ status: 'processing', hlsMasterKey: null, withHls: false });
     const res = makeRes();
 
-    await getUploadStream(makeReq({ id: upload._id.toString() }, { userId: OWNER }), res as unknown as Response, rethrow);
+    await getUploadStream(makeReq({ id: upload.id }, { userId: OWNER }), res as unknown as Response, rethrow);
 
     expect(res._status).toBe(409);
   });
 
   it('answers 422 for a file whose ingest failed', async () => {
-    const upload = await seedUpload({ status: 'failed', hls: [], hlsMasterKey: undefined });
+    const upload = await seedUpload({ status: 'failed', hlsMasterKey: null, withHls: false });
     const res = makeRes();
 
-    await getUploadStream(makeReq({ id: upload._id.toString() }, { userId: OWNER }), res as unknown as Response, rethrow);
+    await getUploadStream(makeReq({ id: upload.id }, { userId: OWNER }), res as unknown as Response, rethrow);
 
     expect(res._status).toBe(422);
   });
@@ -390,8 +521,8 @@ describe('GET /api/uploads/:id/stream', () => {
 describe('GET /api/uploads/:id/stream/key', () => {
   it('serves the key to the owner', async () => {
     const upload = await seedUpload();
-    const uploadId = upload._id.toString();
-    await TrackKeyModel.create({ trackId: uploadId, keyHex: 'ab'.repeat(16), keyUri: 'key' });
+    const uploadId = upload.id;
+    await getDb().insert(trackKeys).values({ userUploadId: uploadId, keyHex: 'ab'.repeat(16), keyUri: 'key' });
     const res = makeRes();
 
     await getUploadStreamKey(makeReq({ id: uploadId }, { userId: OWNER }), res as unknown as Response, rethrow);
@@ -403,8 +534,8 @@ describe('GET /api/uploads/:id/stream/key', () => {
 
   it('accepts the owner’s stream token — players cannot set an Authorization header', async () => {
     const upload = await seedUpload();
-    const uploadId = upload._id.toString();
-    await TrackKeyModel.create({ trackId: uploadId, keyHex: 'ab'.repeat(16), keyUri: 'key' });
+    const uploadId = upload.id;
+    await getDb().insert(trackKeys).values({ userUploadId: uploadId, keyHex: 'ab'.repeat(16), keyUri: 'key' });
     const token = mintStreamToken({ trackId: uploadId, userId: OWNER, maxBitrateKbps: 160 }, 60);
     const res = makeRes();
 
@@ -422,8 +553,8 @@ describe('GET /api/uploads/:id/stream/key', () => {
     // (id, ownerOxyUserId) together — so a stranger's valid token names an owner
     // that matches no document of this file's.
     const upload = await seedUpload();
-    const uploadId = upload._id.toString();
-    await TrackKeyModel.create({ trackId: uploadId, keyHex: 'ab'.repeat(16), keyUri: 'key' });
+    const uploadId = upload.id;
+    await getDb().insert(trackKeys).values({ userUploadId: uploadId, keyHex: 'ab'.repeat(16), keyUri: 'key' });
     const token = mintStreamToken({ trackId: uploadId, userId: STRANGER, maxBitrateKbps: 160 }, 60);
     const res = makeRes();
 
@@ -440,15 +571,15 @@ describe('GET /api/uploads/:id/stream/key', () => {
   it('refuses a token minted for a DIFFERENT upload', async () => {
     const mine = await seedUpload();
     const other = await seedUpload();
-    await TrackKeyModel.create({ trackId: mine._id.toString(), keyHex: 'ab'.repeat(16), keyUri: 'key' });
+    await getDb().insert(trackKeys).values({ userUploadId: mine.id, keyHex: 'ab'.repeat(16), keyUri: 'key' });
     const token = mintStreamToken(
-      { trackId: other._id.toString(), userId: OWNER, maxBitrateKbps: 160 },
+      { trackId: other.id, userId: OWNER, maxBitrateKbps: 160 },
       60,
     );
     const res = makeRes();
 
     await getUploadStreamKey(
-      makeReq({ id: mine._id.toString() }, { query: { t: token } }),
+      makeReq({ id: mine.id }, { query: { t: token } }),
       res as unknown as Response,
       rethrow,
     );
@@ -459,11 +590,11 @@ describe('GET /api/uploads/:id/stream/key', () => {
 
   it('refuses a stranger’s session', async () => {
     const upload = await seedUpload();
-    await TrackKeyModel.create({ trackId: upload._id.toString(), keyHex: 'ab'.repeat(16), keyUri: 'key' });
+    await getDb().insert(trackKeys).values({ userUploadId: upload.id, keyHex: 'ab'.repeat(16), keyUri: 'key' });
     const res = makeRes();
 
     await getUploadStreamKey(
-      makeReq({ id: upload._id.toString() }, { userId: STRANGER }),
+      makeReq({ id: upload.id }, { userId: STRANGER }),
       res as unknown as Response,
       rethrow,
     );
@@ -475,7 +606,7 @@ describe('GET /api/uploads/:id/stream/key', () => {
 describe('GET /api/uploads/:id/stream/master.m3u8', () => {
   it('points its variants at the LOCKER path, not the catalogue one', async () => {
     const upload = await seedUpload();
-    const uploadId = upload._id.toString();
+    const uploadId = upload.id;
     const res = makeRes();
 
     await getUploadMasterPlaylist(
@@ -495,7 +626,7 @@ describe('GET /api/uploads/:id/stream/master.m3u8', () => {
     const res = makeRes();
 
     await getUploadMasterPlaylist(
-      makeReq({ id: upload._id.toString() }, { userId: STRANGER }),
+      makeReq({ id: upload.id }, { userId: STRANGER }),
       res as unknown as Response,
       rethrow,
     );

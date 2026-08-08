@@ -3,10 +3,14 @@
  * Shared validation and utility functions for audio endpoints
  */
 
-import { Request, Response } from 'express';
-import mongoose from 'mongoose';
-import { TrackModel } from '../models/Track';
-import { toApiFormat, formatTrackWithCoverArt } from '../utils/musicHelpers';
+import { eq } from 'drizzle-orm';
+import { isLiveEntityId } from '@oxyhq/db';
+import { publicColumns } from '@oxyhq/db/assert';
+import { Response } from 'express';
+import { getDb } from '../db/postgres';
+import { tracks } from '../db/schema/catalog';
+import { PROTECTED_COLUMNS_BY_TABLE } from '../db/schema/protectedColumns';
+import { toTrackDtos } from '../db/catalog/hydrate';
 import { getTrackAudioMetadata } from '../services/audioStorageService';
 import { Track } from '@syra/shared-types';
 
@@ -26,7 +30,7 @@ export interface TrackValidationResult {
  * @returns Validation result
  */
 export function validateTrackId(trackId: string): { isValid: boolean; error?: string } {
-  if (!mongoose.Types.ObjectId.isValid(trackId)) {
+  if (!isLiveEntityId(trackId)) {
     return {
       isValid: false,
       error: 'Invalid track ID format',
@@ -52,8 +56,13 @@ export async function fetchAndValidateTrack(trackId: string): Promise<TrackValid
   }
 
   // Fetch track from database
-  const trackDoc = await TrackModel.findById(trackId).lean();
-  if (!trackDoc) {
+  const [row] = await getDb()
+    .select(publicColumns(tracks, PROTECTED_COLUMNS_BY_TABLE))
+    .from(tracks)
+    .where(eq(tracks.id, trackId))
+    .limit(1);
+
+  if (!row) {
     return {
       isValid: false,
       statusCode: 404,
@@ -61,7 +70,17 @@ export async function fetchAndValidateTrack(trackId: string): Promise<TrackValid
     };
   }
 
-  const track = await formatTrackWithCoverArt(trackDoc);
+  // Serialized through `toTrackDtos`, which returns a real `Track` — the Mongo
+  // path went through `formatTrackWithCoverArt`, typed `any` on both ends, so
+  // this function's declared `track?: Track` was never actually checked.
+  const [track] = await toTrackDtos([row]);
+  if (!track) {
+    return {
+      isValid: false,
+      statusCode: 404,
+      error: 'Track not found',
+    };
+  }
 
   // Check if track is available
   if (!track.isAvailable) {

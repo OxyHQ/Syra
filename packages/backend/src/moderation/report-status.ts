@@ -1,11 +1,16 @@
-import { ReportStatus, type ModerationLocalStatus } from '../models/Report';
+import { ReportStatus } from './types';
 
 /**
- * The one place a report's two status axes are decided.
+ * Syra's verdict axis, derived from a decision and nowhere else.
+ *
+ * The OTHER axis — `localStatus`, "did the report get out of here and come
+ * back" — belongs to `@oxyhq/crowdsource-app` and is written by it. This one is
+ * Syra's, it existed before Syra adopted CrowdSource, and it reaches the same
+ * update through the integration's `reportDecisionExtraFields` hook, which the
+ * package provides for exactly this case.
  *
  * Two status fields maintained by two call sites is how they drift, so both are
- * derived here — from the decision, not from each other — and every writer in the
- * moderation pipeline goes through {@link reportStateForDecision}.
+ * derived from the decision and neither from the other.
  *
  * The mapping is deliberately conservative about the difference between "a jury
  * looked at this" and "this was a violation". `resolved` and `dismissed` are the
@@ -22,15 +27,9 @@ import { ReportStatus, type ModerationLocalStatus } from '../models/Report';
  *
  * An outcome this version does not know also maps to `reviewed`: a newer
  * CrowdSource must not be able to silently produce `dismissed` here.
- */
-
-/**
- * The outcome, as a string.
  *
- * Not typed as `DecisionOutcome` on purpose: this is reached from the decision
- * worker with a value that came off the wire, and §10.11 requires an unrecognised
- * outcome to be handled rather than to throw. The known values are matched
- * explicitly and everything else falls through.
+ * The outcome is a plain STRING on purpose. It is reached with a value that came
+ * off the wire, and an unrecognised outcome must be handled rather than throw.
  */
 export function legacyStatusForOutcome(outcome: string): ReportStatus {
   switch (outcome) {
@@ -41,32 +40,4 @@ export function legacyStatusForOutcome(outcome: string): ReportStatus {
     default:
       return ReportStatus.REVIEWED;
   }
-}
-
-export interface ReportDecisionState {
-  status: ReportStatus;
-  localStatus: ModerationLocalStatus;
-}
-
-/**
- * Decision statuses that end Syra's side of the case.
- *
- * A `provisional` decision leaves the report at `submitted`: §9.6 allows a later
- * revision to supersede it, and a report Syra had already closed would have to be
- * reopened. `superseded` is not here either — a superseded revision is not the
- * current answer and must never be the one that closes the report.
- */
-const TERMINAL_DECISION_STATUSES: ReadonlySet<string> = new Set(['final', 'corrected']);
-
-/** Both axes for a report whose case has been decided. */
-export function reportStateForDecision(input: {
-  outcome: string;
-  decisionStatus: string;
-}): ReportDecisionState {
-  return {
-    status: legacyStatusForOutcome(input.outcome),
-    localStatus: TERMINAL_DECISION_STATUSES.has(input.decisionStatus)
-      ? 'closed'
-      : 'submitted',
-  };
 }

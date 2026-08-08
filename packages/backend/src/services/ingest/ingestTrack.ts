@@ -18,7 +18,10 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { Readable } from 'stream';
-import { TrackModel } from '../../models/Track';
+import { eq } from 'drizzle-orm';
+import type { AudioSource } from '@syra/shared-types';
+import { getDb } from '../../db/postgres';
+import { tracks, trackHlsRenditions } from '../../db/schema/catalog';
 import { logger } from '../../utils/logger';
 import { getTrackS3Key } from '../audioStorageService';
 import { streamFromS3 } from '../s3Service';
@@ -31,11 +34,11 @@ import { probeAudio } from './probeAudio';
 import type { ProbedAudio } from './probeAudio';
 import { fingerprintFile } from '../uploads/fingerprint';
 import type { FingerprintResult } from '../uploads/fingerprint';
-import { TrackFingerprintModel, indexTrackAcoustically } from '../../models/TrackFingerprint';
+import { hasTrackFingerprint, indexTrackAcoustically } from '../../db/catalog/fingerprints';
 import { buildStreamKeyUri } from './streamKeyUri';
 import { storePreviewFromSourceFile } from '../preview/previewService';
 import type { StorePreviewFromSourceParams } from '../preview/previewService';
-import type { ITrack } from '../../models/Track';
+import { describeErrorSafely } from '../../utils/error';
 
 /** Offset of the default preview clip generated at ingest time. */
 const DEFAULT_PREVIEW_START_SEC = 0;
@@ -47,8 +50,22 @@ export interface FetchSourceResult {
   cleanup: () => void;
 }
 
+/**
+ * The track columns ingest reads — everything needed to locate the source audio
+ * in S3 and to key the HLS output.
+ *
+ * `audioSource` is reassembled from its four flat columns into the shape
+ * `getTrackS3Key` takes, so the key layout is unchanged by the port.
+ */
+export interface IngestTrackSource {
+  id: string;
+  artistId: string;
+  albumId?: string;
+  audioSource?: AudioSource;
+}
+
 export interface IngestDeps {
-  fetchSource?: (track: ITrack) => Promise<FetchSourceResult>;
+  fetchSource?: (track: IngestTrackSource) => Promise<FetchSourceResult>;
   probe?: (inputPath: string) => Promise<ProbedAudio>;
   fingerprint?: (inputPath: string) => Promise<FingerprintResult>;
   indexFingerprint?: (
@@ -72,15 +89,15 @@ export interface IngestOptions {
 
 // ── Default fetchSource: stream from S3 to a temp file ───────────────────────
 
-async function defaultFetchSource(track: ITrack): Promise<FetchSourceResult> {
+async function defaultFetchSource(track: IngestTrackSource): Promise<FetchSourceResult> {
   if (!track.audioSource) {
-    throw new Error(`No source audio for track ${track._id.toString()}`);
+    throw new Error(`No source audio for track ${track.id}`);
   }
 
-  // getTrackS3Key expects the shared Track type; ITrack is Track minus the virtual id.
-  // We provide the fields it actually uses (id, artistId, albumId, audioSource).
+  // `getTrackS3Key` takes the shared `Track` DTO but reads only these four
+  // fields, which is exactly what `IngestTrackSource` carries.
   const s3Key = getTrackS3Key({
-    id: track._id.toString(),
+    id: track.id,
     artistId: track.artistId,
     albumId: track.albumId,
     audioSource: track.audioSource,
@@ -141,7 +158,7 @@ async function indexTrackFingerprint(
      * Safe because a fingerprint is a property of the audio, and nothing replaces
      * the audio under an existing track id: re-ingest re-packages the same source.
      */
-    if (await TrackFingerprintModel.exists({ trackId })) {
+    if (await hasTrackFingerprint(trackId)) {
       logger.debug('[ingest] track already indexed acoustically — skipping fpcalc', { trackId });
       return;
     }
@@ -175,18 +192,74 @@ async function indexTrackFingerprint(
       });
     }
   } catch (err) {
-    logger.error('[ingest] acoustic indexing failed (non-fatal)', { trackId, err });
+    logger.error('[ingest] acoustic indexing failed (non-fatal)', { trackId, err: describeErrorSafely(err) });
   }
 }
 
 // ── Main job ─────────────────────────────────────────────────────────────────
+
+/** Load the four columns ingest needs, reassembling `audioSource`. */
+async function loadIngestSource(trackId: string): Promise<IngestTrackSource | null> {
+  const [row] = await getDb()
+    .select({
+      id: tracks.id,
+      artistId: tracks.artistId,
+      albumId: tracks.albumId,
+      audioSourceUrl: tracks.audioSourceUrl,
+      audioSourceFormat: tracks.audioSourceFormat,
+      audioSourceBitrate: tracks.audioSourceBitrate,
+      audioSourceDuration: tracks.audioSourceDuration,
+    })
+    .from(tracks)
+    .where(eq(tracks.id, trackId))
+    .limit(1);
+
+  if (!row) return null;
+
+  return {
+    id: row.id,
+    artistId: row.artistId,
+    albumId: row.albumId ?? undefined,
+    // `url` and `format` are what make an `AudioSource`; a track still
+    // processing has neither, and a row with one but not the other cannot
+    // locate a file either.
+    audioSource:
+      row.audioSourceUrl && row.audioSourceFormat
+        ? {
+            url: row.audioSourceUrl,
+            format: row.audioSourceFormat,
+            ...(row.audioSourceBitrate === null ? {} : { bitrate: row.audioSourceBitrate }),
+            ...(row.audioSourceDuration === null ? {} : { duration: row.audioSourceDuration }),
+          }
+        : undefined,
+  };
+}
+
+/** Persist a status transition on its own, never as part of a larger write. */
+async function setStatus(trackId: string, status: 'processing' | 'failed'): Promise<void> {
+  await getDb().update(tracks).set({ status }).where(eq(tracks.id, trackId));
+}
+
+/**
+ * `setStatus`, with a write failure logged rather than raised.
+ *
+ * Used on the two paths that are ALREADY failing: an unreachable database there
+ * must not replace the real ingest error with a write error nobody can act on.
+ * The `processing` transition deliberately does not go through this — if that
+ * write cannot land, the job has not started and the caller should hear so.
+ */
+async function setStatusQuietly(trackId: string, status: 'failed'): Promise<void> {
+  await setStatus(trackId, status).catch((err: unknown) =>
+    logger.error('[ingest] failed to persist failed status', { trackId, err: describeErrorSafely(err) }),
+  );
+}
 
 export async function ingestTrack(
   trackId: string,
   deps?: IngestDeps,
   options?: IngestOptions,
 ): Promise<void> {
-  const track = await TrackModel.findById(trackId);
+  const track = await loadIngestSource(trackId);
   if (!track) {
     throw new Error(`ingestTrack: track not found: ${trackId}`);
   }
@@ -194,15 +267,11 @@ export async function ingestTrack(
   // Guard: audioSource required for transcoding
   if (!track.audioSource) {
     // Set failed immediately before throwing so the status is persisted
-    track.status = 'failed';
-    await track.save().catch((saveErr) =>
-      logger.error('[ingest] failed to persist failed status', { trackId, err: saveErr }),
-    );
+    await setStatusQuietly(trackId, 'failed');
     throw new Error(`No source audio for track ${trackId}`);
   }
 
-  track.status = 'processing';
-  await track.save();
+  await setStatus(trackId, 'processing');
 
   const fetchSource = deps?.fetchSource ?? defaultFetchSource;
   const probe = deps?.probe ?? probeAudio;
@@ -235,19 +304,48 @@ export async function ingestTrack(
     });
 
     const stored = await doStoreHls(result, {
+      kind: 'track',
       recordId: trackId,
       buildKey: (relPath) => getS3HlsKey(track.artistId, trackId, relPath),
     });
 
-    track.audioSource.duration = probed.durationSec;
-    if (probed.bitrateKbps !== undefined) {
-      track.audioSource.bitrate = probed.bitrateKbps;
-    }
-    track.hls = stored.hls;
-    track.hlsMasterKey = stored.hlsMasterKey;
-    track.loudnessLufs = result.loudnessLufs;
-    track.status = 'ready';
-    await track.save();
+    /**
+     * The measured audio facts, the rendition ladder and the `ready` status
+     * commit TOGETHER.
+     *
+     * They were one `track.save()` under Mongo because `hls` was an embedded
+     * array; `track_hls_renditions` is a child table now, and a track marked
+     * `ready` with no rendition rows is a track the stream endpoint offers and
+     * then cannot serve.
+     */
+    await getDb().transaction(async (tx) => {
+      await tx
+        .update(tracks)
+        .set({
+          audioSourceDuration: probed.durationSec,
+          ...(probed.bitrateKbps !== undefined ? { audioSourceBitrate: probed.bitrateKbps } : {}),
+          hlsMasterKey: stored.hlsMasterKey,
+          loudnessLufs: result.loudnessLufs,
+          status: 'ready',
+        })
+        .where(eq(tracks.id, trackId));
+
+      // Re-ingest replaces the ladder rather than appending to it: the unique
+      // `(track_id, position)` constraint would refuse a second pass otherwise,
+      // and a ladder half from each pass is not a ladder.
+      await tx.delete(trackHlsRenditions).where(eq(trackHlsRenditions.trackId, trackId));
+      if (stored.hls.length > 0) {
+        await tx.insert(trackHlsRenditions).values(
+          stored.hls.map((rendition, position) => ({
+            trackId,
+            position,
+            manifestKey: rendition.manifestKey,
+            bitrateKbps: rendition.bitrateKbps,
+            encrypted: rendition.encrypted,
+          }))
+        );
+      }
+    });
 
     // Acoustic index for the catalogue. Best-effort, like the preview below: a
     // track that plays is worth more than one that is perfectly indexed, and
@@ -277,11 +375,8 @@ export async function ingestTrack(
       });
     }
   } catch (err) {
-    track.status = 'failed';
-    await track.save().catch((saveErr) =>
-      logger.error('[ingest] failed to persist failed status', { trackId, err: saveErr }),
-    );
-    logger.error('[ingest] ingest failed', { trackId, err });
+    await setStatusQuietly(trackId, 'failed');
+    logger.error('[ingest] ingest failed', { trackId, err: describeErrorSafely(err) });
     throw err;
   } finally {
     cleanup?.();

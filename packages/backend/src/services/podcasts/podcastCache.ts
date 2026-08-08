@@ -11,10 +11,11 @@
 
 import type { IncomingMessage } from 'node:http';
 import { safeFetch, SsrfRejection, UpstreamError } from '@oxyhq/core/server';
-import { EpisodeModel } from '../../models/Episode';
+import { findEpisodeById, setEpisodeCache } from '../../db/podcasts/episodes';
 import { getS3PodcastEpisodeCacheKey } from '../../config/s3.config';
 import { uploadToS3 } from '../s3Service';
 import { logger } from '../../utils/logger';
+import { describeErrorSafely } from '../../utils/error';
 
 /** Hard cap on a cached episode body (on-demand copy buffers in memory). */
 export const MAX_CACHE_BYTES = 250 * 1024 * 1024; // 250 MB
@@ -69,13 +70,15 @@ async function readCapped(stream: IncomingMessage, maxBytes: number): Promise<Bu
  * null when the episode is not a cacheable external episode.
  */
 export async function cacheEpisode(episodeId: string): Promise<string | null> {
-  const episode = await EpisodeModel.findById(episodeId);
+  const episode = await findEpisodeById(episodeId);
   if (!episode) return null;
   if (episode.source !== 'rss' || !episode.enclosureUrl) return null;
-  if (episode.cache?.status === 'cached' && episode.cache.s3Key) return episode.cache.s3Key;
+  // `cache.s3Key` is `cache_object_key` here — renamed in `schema/podcasts.ts`
+  // because `cacheS3Key` tokenizes as `cache_s_3_key` under drizzle's casing.
+  if (episode.cacheStatus === 'cached' && episode.cacheObjectKey) return episode.cacheObjectKey;
 
-  const ext = extFor(episode.enclosureType, episode.enclosureUrl);
-  const s3Key = getS3PodcastEpisodeCacheKey(episodeId, episode.podcastId.toString(), ext);
+  const ext = extFor(episode.enclosureType ?? undefined, episode.enclosureUrl);
+  const s3Key = getS3PodcastEpisodeCacheKey(episodeId, episode.podcastId, ext);
 
   let result;
   try {
@@ -97,8 +100,7 @@ export async function cacheEpisode(episodeId: string): Promise<string | null> {
   const buffer = await readCapped(result.response, MAX_CACHE_BYTES);
   await uploadToS3(s3Key, buffer, { contentType });
 
-  episode.cache = { status: 'cached', s3Key, cachedAt: new Date() };
-  await episode.save();
+  await setEpisodeCache(episodeId, { status: 'cached', objectKey: s3Key, cachedAt: new Date() });
 
   logger.info('[podcasts] episode cached to S3', { episodeId, s3Key, bytes: buffer.length });
   return s3Key;
@@ -110,20 +112,21 @@ export async function cacheEpisode(episodeId: string): Promise<string | null> {
  * and is not already cached. Errors are swallowed (best-effort optimisation).
  */
 export function maybeCacheEpisode(episode: {
-  _id: { toString(): string };
+  id: string;
   source: 'rss' | 'syra';
-  enclosureUrl?: string;
-  popularity?: number;
-  playCount?: number;
-  cache?: { status: 'none' | 'cached' | 'hls' };
+  enclosureUrl: string | null;
+  popularity: number;
+  playCount: number;
+  /** `null` is what an absent Mongo `cache` subdocument became. */
+  cacheStatus: 'none' | 'cached' | 'hls' | null;
 }): void {
   if (episode.source !== 'rss' || !episode.enclosureUrl) return;
-  if (episode.cache && episode.cache.status !== 'none') return;
-  const popular = (episode.popularity ?? 0) >= CACHE_POPULARITY_THRESHOLD;
-  const played = (episode.playCount ?? 0) >= CACHE_PLAY_THRESHOLD;
+  if (episode.cacheStatus !== null && episode.cacheStatus !== 'none') return;
+  const popular = episode.popularity >= CACHE_POPULARITY_THRESHOLD;
+  const played = episode.playCount >= CACHE_PLAY_THRESHOLD;
   if (!popular && !played) return;
 
-  cacheEpisode(episode._id.toString()).catch((err) =>
-    logger.debug('[podcasts] background cache failed', { episodeId: episode._id.toString(), err }),
+  cacheEpisode(episode.id).catch((err) =>
+    logger.debug('[podcasts] background cache failed', { episodeId: episode.id, err: describeErrorSafely(err) }),
   );
 }

@@ -1,9 +1,31 @@
 /**
- * Import the ARTIST slice of the MusicBrainz database into `MusicBrainzArtist`.
+ * Import the ARTIST slice of the MusicBrainz database into `musicbrainz_artists`
+ * and `musicbrainz_artist_urls`.
  *
  * The sibling of `importIsrcRegistry.ts`, reading the same extracted dump with
  * the same COPY-format parser, the same checkpoint discipline and the same
  * idempotent upsert. One import pipeline, two slices — not two bespoke ones.
+ *
+ * WHERE THE TWO SIBLINGS DIVERGE
+ * The ISRC slice is one flat table; this one is a parent and a child, because
+ * `urls` was an embedded array and Postgres has no such thing. So a flush here
+ * is an upsert, a delete and an insert across two tables inside ONE transaction,
+ * rather than a single statement. See {@link importMusicBrainzArtists}.
+ *
+ * PARTIAL FAILURE: RESUME, not redo — same as the ISRC slice. The checkpoint is
+ * written only after the transaction commits, and re-running the batch in flight
+ * is harmless because every write in it is idempotent. The same separation
+ * applies: the UPSERT makes a replay safe, the CHECKPOINT makes it cheap, and
+ * the checkpoint must be deleted between dumps because a new export carries a
+ * new TIMESTAMP. See the ISRC importer's header for the full statement.
+ *
+ * THE DUMP IS AUTHORITATIVE. An artist whose disambiguation, country or ISNI
+ * disappears upstream has it CLEARED here, and an artist who loses a URL loses
+ * the row: the conflict `SET` writes `excluded.*` for every mutable column, and
+ * the child rows are replaced wholesale rather than merged. Mongo's `$set`
+ * omitted absent keys and let stale values survive indefinitely. This table is a
+ * mirror of somebody else's dataset — when the source stops asserting a fact,
+ * the mirror stops asserting it too.
  *
  * WHY A LOCAL SLICE AND NOT THE WEB SERVICE
  * MetaBrainz charges for commercial use of the MusicBrainz web service. The
@@ -27,13 +49,14 @@
  * so one download serves both.
  */
 
-import mongoose from 'mongoose';
+import { inArray, sql } from 'drizzle-orm';
 import { normalizeNameKey } from '@syra/shared-types';
 import type { ArtistType } from '@syra/shared-types';
-import { MusicBrainzArtistModel } from '../models/MusicBrainzArtist';
-import { connectToDatabase } from '../utils/database';
+import { closePostgres, connectPostgres, getDb } from '../db/postgres';
+import { musicbrainzArtists, musicbrainzArtistUrls } from '../db/schema/catalog';
 import { logger } from '../utils/logger';
 import {
+  chunkForBindParams,
   loadCheckpoint,
   parseDumpArgs,
   readDumpTable,
@@ -234,10 +257,24 @@ async function readArtistUrls(
 
 export interface MusicBrainzArtistImportSummary {
   artistRowsRead: number;
-  documentsWritten: number;
+  rowsWritten: number;
   skippedResumed: number;
   skippedUnusable: number;
 }
+
+/**
+ * Worst-case bind parameters per `musicbrainz_artists` row: the fourteen columns
+ * this importer writes, plus the client-minted `id`.
+ *
+ * This is the table that made {@link chunkForBindParams} necessary. At the
+ * `--batch-size` default of 5000 a single statement would ask Postgres for
+ * 75001 parameters against a 65535 ceiling, so the naive port fails on the first
+ * full flush — on real data, never on a small fixture.
+ */
+const ARTIST_BIND_PARAMS_PER_ROW = 15;
+
+/** `musicbrainz_artist_urls`: the four columns written, plus the minted `id`. */
+const ARTIST_URL_BIND_PARAMS_PER_ROW = 5;
 
 export async function importMusicBrainzArtists(
   options: DumpImportOptions,
@@ -266,19 +303,108 @@ export async function importMusicBrainzArtists(
 
   const summary: MusicBrainzArtistImportSummary = {
     artistRowsRead: 0,
-    documentsWritten: 0,
+    rowsWritten: 0,
     skippedResumed: 0,
     skippedUnusable: 0,
   };
 
-  type ArtistUpsert = Parameters<typeof MusicBrainzArtistModel.bulkWrite>[0][number];
-  let batch: ArtistUpsert[] = [];
+  /**
+   * One entry per artist: the parent row, and the URL relationships that used to
+   * be an embedded array on it. Keyed by `mbid` so the conflict key is unique
+   * within every statement — see the same reasoning in `importIsrcRegistry`.
+   */
+  let batch = new Map<
+    string,
+    { row: typeof musicbrainzArtists.$inferInsert; urls: Array<{ type: string; url: string }> }
+  >();
 
+  /**
+   * A flush is now a MULTI-TABLE write, and that is what the relational split
+   * cost us.
+   *
+   * Under Mongo the artist and its URLs were one document, so one `updateOne`
+   * either landed entirely or not at all. Here the parent is upserted and the
+   * children are deleted and rewritten, which is three statements that must not
+   * be observable apart: a crash between them would leave an artist carrying the
+   * PREVIOUS dump's URLs, or none at all, with nothing to indicate it. The
+   * transaction restores the atomicity the document model gave for free, and the
+   * checkpoint is written only after it commits.
+   */
   const flush = async (rowsCovered: number): Promise<void> => {
-    if (batch.length > 0) {
-      await MusicBrainzArtistModel.bulkWrite(batch, { ordered: false });
-      summary.documentsWritten += batch.length;
-      batch = [];
+    if (batch.size > 0) {
+      const entries = [...batch.values()];
+
+      await getDb().transaction(async (tx) => {
+        const idByMbid = new Map<string, string>();
+        for (const chunk of chunkForBindParams(entries, ARTIST_BIND_PARAMS_PER_ROW)) {
+          const written = await tx
+            .insert(musicbrainzArtists)
+            .values(chunk.map((entry) => entry.row))
+            .onConflictDoUpdate({
+              target: musicbrainzArtists.mbid,
+              set: {
+                name: sql`excluded.name`,
+                sortName: sql`excluded.sort_name`,
+                nameKey: sql`excluded.name_key`,
+                disambiguation: sql`excluded.disambiguation`,
+                artistType: sql`excluded.artist_type`,
+                areaName: sql`excluded.area_name`,
+                countryCode: sql`excluded.country_code`,
+                beginDate: sql`excluded.begin_date`,
+                endDate: sql`excluded.end_date`,
+                ended: sql`excluded.ended`,
+                aliases: sql`excluded.aliases`,
+                isni: sql`excluded.isni`,
+                ipi: sql`excluded.ipi`,
+              },
+            })
+            /**
+             * The child table references the SURROGATE id, not the MBID, and an
+             * upsert gives no way to know it in advance. `RETURNING` reports it
+             * for the update path as well as the insert path, which is what
+             * makes one round trip enough.
+             */
+            .returning({ id: musicbrainzArtists.id, mbid: musicbrainzArtists.mbid });
+
+          for (const row of written) idByMbid.set(row.mbid, row.id);
+        }
+
+        const artistIds = [...idByMbid.values()];
+        // `position` is `unique(artist_id, position)`, so the old rows have to go
+        // before the new ones arrive — an artist who lost a URL upstream would
+        // otherwise keep it forever, and one whose URLs merely reordered would
+        // collide on a position that is still occupied.
+        for (const chunk of chunkForBindParams(artistIds, 1)) {
+          await tx
+            .delete(musicbrainzArtistUrls)
+            .where(inArray(musicbrainzArtistUrls.musicbrainzArtistId, chunk));
+        }
+
+        const urlRows = entries.flatMap((entry) => {
+          const artistId = idByMbid.get(entry.row.mbid);
+          if (artistId === undefined) {
+            throw new Error(
+              `musicbrainz_artists upsert returned no id for mbid ${entry.row.mbid}; refusing to write orphaned URL rows`,
+            );
+          }
+          // The index IS the position: `enrichCatalogEntity` reads these back
+          // ordered by it and takes the FIRST relationship of a type, so this
+          // preserves the order the embedded array had.
+          return entry.urls.map((url, position) => ({
+            musicbrainzArtistId: artistId,
+            position,
+            type: url.type,
+            url: url.url,
+          }));
+        });
+
+        for (const chunk of chunkForBindParams(urlRows, ARTIST_URL_BIND_PARAMS_PER_ROW)) {
+          await tx.insert(musicbrainzArtistUrls).values(chunk);
+        }
+      });
+
+      summary.rowsWritten += entries.length;
+      batch = new Map();
     }
     writeCheckpoint(options.checkpointPath, { dumpTimestamp, committedRows: rowsCovered });
   };
@@ -317,38 +443,33 @@ export async function importMusicBrainzArtists(
       ARTIST_COLUMNS.endDay,
     );
 
-    batch.push({
-      updateOne: {
-        filter: { mbid },
-        update: {
-          $set: {
-            name,
-            sortName,
-            nameKey: normalizeNameKey(name),
-            ended: unescapeCopyValue(row[ARTIST_COLUMNS.ended]) === 't',
-            aliases: aliases.get(id) ?? [],
-            urls: urls.get(id) ?? [],
-            ...(unescapeCopyValue(row[ARTIST_COLUMNS.comment]) !== undefined && {
-              disambiguation: unescapeCopyValue(row[ARTIST_COLUMNS.comment]),
-            }),
-            ...(artistType !== undefined && { artistType }),
-            ...(areaId !== undefined && areaNames.has(areaId) && { areaName: areaNames.get(areaId) }),
-            ...(areaId !== undefined && countryCodes.has(areaId) && {
-              countryCode: countryCodes.get(areaId),
-            }),
-            ...(beginDate !== undefined && { beginDate }),
-            ...(endDate !== undefined && { endDate }),
-            ...(isni.has(id) && { isni: isni.get(id) }),
-            ...(ipi.has(id) && { ipi: ipi.get(id) }),
-          },
-        },
-        upsert: true,
+    batch.set(mbid, {
+      row: {
+        mbid,
+        name,
+        sortName,
+        nameKey: normalizeNameKey(name),
+        ended: unescapeCopyValue(row[ARTIST_COLUMNS.ended]) === 't',
+        aliases: aliases.get(id) ?? [],
+        ...(unescapeCopyValue(row[ARTIST_COLUMNS.comment]) !== undefined && {
+          disambiguation: unescapeCopyValue(row[ARTIST_COLUMNS.comment]),
+        }),
+        ...(artistType !== undefined && { artistType }),
+        ...(areaId !== undefined && areaNames.has(areaId) && { areaName: areaNames.get(areaId) }),
+        ...(areaId !== undefined && countryCodes.has(areaId) && {
+          countryCode: countryCodes.get(areaId),
+        }),
+        ...(beginDate !== undefined && { beginDate }),
+        ...(endDate !== undefined && { endDate }),
+        ...(isni.has(id) && { isni: isni.get(id) }),
+        ...(ipi.has(id) && { ipi: ipi.get(id) }),
       },
+      urls: urls.get(id) ?? [],
     });
 
-    if (batch.length >= options.batchSize) {
+    if (batch.size >= options.batchSize) {
       await flush(summary.artistRowsRead);
-      logger.info(`artist: ${summary.documentsWritten} documents written`);
+      logger.info(`artist: ${summary.rowsWritten} rows written`);
     }
   }
 
@@ -363,15 +484,15 @@ async function main(): Promise<void> {
     script: 'importMusicBrainzArtists',
     defaultCheckpoint: '.musicbrainz-artist-import-checkpoint.json',
   });
-  await connectToDatabase();
+  await connectPostgres();
   try {
     const summary = await importMusicBrainzArtists(options);
     logger.info(
-      `MusicBrainz artist import complete: read ${summary.artistRowsRead}, wrote ${summary.documentsWritten}, ` +
+      `MusicBrainz artist import complete: read ${summary.artistRowsRead}, wrote ${summary.rowsWritten}, ` +
         `resumed past ${summary.skippedResumed}, dropped ${summary.skippedUnusable} unusable`,
     );
   } finally {
-    await mongoose.disconnect();
+    await closePostgres();
   }
 }
 

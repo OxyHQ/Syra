@@ -5,7 +5,7 @@ import type { Lyrics, LyricsQuery } from '@syra/shared-types';
  *
  * Concrete implementations (LrclibProvider, future licensed sources) return
  * lyrics without `trackId` or `updatedAt` — those are added by the cache
- * layer when persisting to MongoDB.
+ * layer when the result is persisted.
  */
 export interface LyricsProvider {
   /** Identifier for the upstream source (e.g. 'lrclib'). */

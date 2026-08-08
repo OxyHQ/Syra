@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'bun:test';
-import mongoose from 'mongoose';
+import { uuidv7 } from '@oxyhq/db';
 import { PlaylistVisibility } from '@syra/shared-types';
-import { connect, clear, disconnect } from '../../test/mongo';
+import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
 import { loadRadioTaste, resolveRadioSeed } from './radioSeed';
 import {
   addPlaylistTracks,
@@ -13,11 +13,16 @@ import {
   makeTrack,
 } from './radioFixtures';
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+/**
+ * One database. The catalogue and the playlists were already Postgres; Task 15
+ * moved the taste profile and Task 11 the library, so the Mongo hooks are gone.
+ */
+beforeAll(connectDb);
+afterEach(clearDb);
+afterAll(disconnectDb);
 
-const MISSING_ID = new mongoose.Types.ObjectId().toString();
+/** An id shaped like a real one that no row carries. */
+const MISSING_ID = uuidv7();
 
 describe('resolveRadioSeed — track', () => {
   it('resolves the track as its own CF seed with its artist, genre and mood', async () => {
@@ -31,10 +36,10 @@ describe('resolveRadioSeed — track', () => {
       tags: ['late-night'],
     });
 
-    const seed = await resolveRadioSeed({ seedType: 'track', seedId: track._id.toString() }, undefined);
+    const seed = await resolveRadioSeed({ seedType: 'track', seedId: track.id }, undefined);
 
     expect(seed).not.toBeNull();
-    expect(seed?.seedTrackIds).toEqual([track._id.toString()]);
+    expect(seed?.seedTrackIds).toEqual([track.id]);
     expect(seed?.seedArtistIds).toEqual([artistId]);
     expect(seed?.genres).toEqual(['house']);
     expect(seed?.moods).toEqual(['euphoric']);
@@ -49,7 +54,7 @@ describe('resolveRadioSeed — track', () => {
     expect(await resolveRadioSeed({ seedType: 'track', seedId: MISSING_ID }, undefined)).toBeNull();
     expect(await resolveRadioSeed({ seedType: 'track', seedId: 'not-an-id' }, undefined)).toBeNull();
     expect(
-      await resolveRadioSeed({ seedType: 'track', seedId: struck._id.toString() }, undefined)
+      await resolveRadioSeed({ seedType: 'track', seedId: struck.id }, undefined)
     ).toBeNull();
   });
 });
@@ -63,7 +68,7 @@ describe('resolveRadioSeed — artist', () => {
 
     const seed = await resolveRadioSeed({ seedType: 'artist', seedId: artistId }, undefined);
 
-    expect(seed?.seedTrackIds).toEqual([popular._id.toString(), deepCut._id.toString()]);
+    expect(seed?.seedTrackIds).toEqual([popular.id, deepCut.id]);
     expect(seed?.seedArtistIds).toEqual([artistId]);
     expect(seed?.genres).toEqual(['house']);
     expect(seed?.title).toBe('Nova Radio');
@@ -92,7 +97,7 @@ describe('resolveRadioSeed — album', () => {
 
     const seed = await resolveRadioSeed({ seedType: 'album', seedId: albumId }, undefined);
 
-    expect(seed?.seedTrackIds).toEqual([first._id.toString()]);
+    expect(seed?.seedTrackIds).toEqual([first.id]);
     expect(seed?.seedArtistIds).toEqual([artistId]);
     expect(seed?.genres).toEqual(['house']);
     expect(seed?.moods).toEqual(['calm']);
@@ -113,14 +118,14 @@ describe('resolveRadioSeed — playlist', () => {
     const struck = await makeTrack({ copyrightRemoved: true, title: 'B' });
     const third = await makeTrack({ genre: 'techno', title: 'C' });
     await addPlaylistTracks(playlistId, [
-      first._id.toString(),
-      struck._id.toString(),
-      third._id.toString(),
+      first.id,
+      struck.id,
+      third.id,
     ]);
 
     const seed = await resolveRadioSeed({ seedType: 'playlist', seedId: playlistId }, undefined);
 
-    expect(seed?.seedTrackIds).toEqual([first._id.toString(), third._id.toString()]);
+    expect(seed?.seedTrackIds).toEqual([first.id, third.id]);
     expect(seed?.genres).toEqual(['house', 'techno']);
     expect(seed?.title).toBe('Night Drive Radio');
   });
@@ -171,13 +176,13 @@ describe('resolveRadioSeed — user', () => {
     const artistId = await makeArtist({ name: 'Nova' });
     const liked = await makeTrack({ artistId });
     await makeTasteProfile('user-1', [{ key: 'house', weight: 9 }], [{ key: artistId, weight: 5 }]);
-    await makeLibrary('user-1', [liked._id.toString()]);
+    await makeLibrary('user-1', [liked.id]);
 
     const seed = await resolveRadioSeed({ seedType: 'user', seedId: '' }, 'user-1');
 
     expect(seed?.seedArtistIds).toEqual([artistId]);
     expect(seed?.genres).toEqual(['house']);
-    expect(seed?.seedTrackIds).toEqual([liked._id.toString()]);
+    expect(seed?.seedTrackIds).toEqual([liked.id]);
     expect(seed?.title).toBe('Your Daily Mix');
     expect(seed?.personalized).toBe(true);
   });
@@ -205,19 +210,24 @@ describe('resolveRadioSeed — user', () => {
 
 describe('loadRadioTaste', () => {
   it('normalises affinities against the listener\'s own strongest weight', async () => {
+    // A REAL artist id, not the string `'artist-a'` this fixture used to pass:
+    // `user_taste_artists.artist_id` is a foreign key into `catalog_entities`
+    // now, so an invented id is a `23503` where Mongo stored it verbatim.
+    const artistId = await makeArtist({ name: `Affinity ${uuidv7()}` });
+
     await makeTasteProfile(
       'user-1',
       [
         { key: 'house', weight: 10 },
         { key: 'techno', weight: 5 },
       ],
-      [{ key: 'artist-a', weight: 4 }]
+      [{ key: artistId, weight: 4 }]
     );
 
     const taste = await loadRadioTaste('user-1');
 
     expect(taste.genreAffinity).toEqual({ house: 1, techno: 0.5 });
-    expect(taste.artistAffinity).toEqual({ 'artist-a': 1 });
+    expect(taste.artistAffinity).toEqual({ [artistId]: 1 });
   });
 
   it('scores a guest and an unknown user flat', async () => {

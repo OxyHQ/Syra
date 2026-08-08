@@ -2,9 +2,16 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'bun:test';
 import express from 'express';
 import type { Server } from 'http';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
-import { clear, connect, disconnect } from '../test/mongo';
-import Room, { OwnerType, RoomStatus, RoomType } from '../models/Room';
-import House from '../models/House';
+import { clearDb, connectDb, disconnectDb } from '../test/postgres';
+import { createRoom, updateRoom, type CreateRoomInput } from '../db/rooms/rooms';
+import { createHouse } from '../db/rooms/houses';
+import {
+  DEFAULT_HOUSE_VISIBILITY,
+  OwnerType,
+  RoomStatus,
+  RoomType,
+  SpeakerPermission,
+} from '../db/rooms/types';
 import roomsRoutes from './rooms.routes';
 import housesRoutes from './houses.routes';
 
@@ -24,25 +31,49 @@ const SECRET_STREAM_KEY = 'LK_sensitive_stream_key';
 const LISTENER_ID = 'listener-not-the-host';
 const HOST_ID = 'host-1';
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+beforeAll(connectDb);
+afterEach(clearDb);
+afterAll(disconnectDb);
 
-/** Fields that put a room in the exact state where a live RTMP key exists. */
-function liveRoomWithCredentials(overrides: Record<string, unknown> = {}) {
-  return {
+/**
+ * A live room in the exact state where a live RTMP key exists.
+ *
+ * The credentials go on in a second UPDATE rather than at insert, because
+ * `createRoom` deliberately does not accept them: they are only ever written by
+ * an ingress path, so the create input has no way to name one. That is the
+ * point of the split, not an inconvenience — but it means this fixture has to
+ * write them explicitly, and if it ever stopped doing so every assertion below
+ * would pass for the wrong reason. The returned row is asserted to actually
+ * carry the key before any test uses it.
+ */
+async function liveRoomWithCredentials(overrides: Partial<CreateRoomInput> = {}) {
+  const room = await createRoom({
     title: 'Live room',
     host: HOST_ID,
     ownerType: OwnerType.PROFILE,
     type: RoomType.BROADCAST,
     status: RoomStatus.LIVE,
+    participants: [],
+    speakers: [HOST_ID],
+    maxParticipants: 100,
+    tags: [],
+    speakerPermission: SpeakerPermission.INVITED,
+    ...overrides,
+  });
+
+  const withCredentials = await updateRoom(room.id, {
     activeIngressId: 'ingress-1',
     activeStreamUrl: 'https://example.com/source.m3u8',
     rtmpUrl: 'rtmp://livekit.example/live',
     rtmpStreamKey: SECRET_STREAM_KEY,
     streamTitle: 'Public stream title',
-    ...overrides,
-  };
+  });
+
+  if (withCredentials?.rtmpStreamKey !== SECRET_STREAM_KEY) {
+    throw new Error('fixture failed to store the RTMP key; every assertion below would be vacuous');
+  }
+
+  return withCredentials;
 }
 
 /**
@@ -92,10 +123,10 @@ function expectNoStreamCredentials(body: string): void {
 
 describe('POST /api/rooms/:id/join', () => {
   it('does not return stream credentials to a listener joining a live room', async () => {
-    const room = await Room.create(liveRoomWithCredentials());
+    const room = await liveRoomWithCredentials();
 
     await withRouter('/api/rooms', roomsRoutes, async (baseUrl) => {
-      const response = await fetch(`${baseUrl}/api/rooms/${room._id.toString()}/join`, {
+      const response = await fetch(`${baseUrl}/api/rooms/${room.id}/join`, {
         method: 'POST',
       });
       const body = await response.text();
@@ -109,10 +140,10 @@ describe('POST /api/rooms/:id/join', () => {
   });
 
   it('does not return stream credentials on the already-joined branch', async () => {
-    const room = await Room.create(liveRoomWithCredentials({ participants: [LISTENER_ID] }));
+    const room = await liveRoomWithCredentials({ participants: [LISTENER_ID] });
 
     await withRouter('/api/rooms', roomsRoutes, async (baseUrl) => {
-      const response = await fetch(`${baseUrl}/api/rooms/${room._id.toString()}/join`, {
+      const response = await fetch(`${baseUrl}/api/rooms/${room.id}/join`, {
         method: 'POST',
       });
       const body = await response.text();
@@ -127,11 +158,16 @@ describe('POST /api/rooms/:id/join', () => {
 
 describe('GET /api/houses/:id/rooms', () => {
   it('does not return stream credentials when listing a house room', async () => {
-    const house = await House.create({ name: 'A House', createdBy: HOST_ID });
-    await Room.create(liveRoomWithCredentials({ houseId: house._id.toString() }));
+    const { house } = await createHouse({
+      name: 'A House',
+      createdBy: HOST_ID,
+      visibility: DEFAULT_HOUSE_VISIBILITY,
+      tags: [],
+    });
+    await liveRoomWithCredentials({ ownerType: OwnerType.HOUSE, houseId: house.id });
 
     await withRouter('/api/houses', housesRoutes, async (baseUrl) => {
-      const response = await fetch(`${baseUrl}/api/houses/${house._id.toString()}/rooms`);
+      const response = await fetch(`${baseUrl}/api/houses/${house.id}/rooms`);
       const body = await response.text();
 
       expect(response.status).toBe(200);

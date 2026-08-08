@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
-import { connect, clear, disconnect } from '../../test/mongo';
-import { ArtistModel } from '../../models/CatalogEntity';
+import { uuidv7 } from '@oxyhq/db';
+import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
+import { getDb } from '../../db/postgres';
+import { catalogEntities } from '../../db/schema/catalog';
 import {
   evaluatePublicContribution,
   CONTRIBUTION_REJECTION_CODES,
@@ -8,20 +10,42 @@ import {
 import { recordContributorStrike } from './contributorStrikes';
 import { STRIKE_TERMINATION_THRESHOLD } from '../strikeService';
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+/**
+ * ONE database: the artist and `contributor_standings` — the UPLOADER's own
+ * standing, which this policy checks first — are both Postgres since Task 13.
+ */
+beforeAll(async () => {
+  await connectDb();
+});
+afterEach(async () => {
+  await clearDb();
+});
+afterAll(async () => {
+  await disconnectDb();
+});
 
 const UPLOADER = 'oxy-uploader';
 const SOMEONE_ELSE = 'oxy-other';
 
-async function makeArtist(overrides: Record<string, unknown> = {}): Promise<string> {
-  const artist = await ArtistModel.create({
-    name: `Artist ${Math.random().toString(36).slice(2)}`,
-    source: 'upload',
-    ...overrides,
-  });
-  return artist._id.toString();
+async function makeArtist(
+  overrides: Partial<typeof catalogEntities.$inferInsert> = {}
+): Promise<string> {
+  const suffix = uuidv7();
+  const [artist] = await getDb()
+    .insert(catalogEntities)
+    .values({
+      type: 'artist',
+      name: `Artist ${suffix}`,
+      // `catalog_entities_artist_name_key_key` is a unique partial index over
+      // artists, so each fixture needs its own key.
+      nameKey: `artist-${suffix}`,
+      source: 'upload',
+      ...overrides,
+    })
+    .returning({ id: catalogEntities.id });
+
+  if (!artist) throw new Error('makeArtist: insert returned no row');
+  return artist.id;
 }
 
 describe('evaluatePublicContribution — no artist resolved', () => {

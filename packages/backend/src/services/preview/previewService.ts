@@ -23,11 +23,13 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { Readable } from 'stream';
+import { eq } from 'drizzle-orm';
 import type { AudioSource, HlsRendition } from '@syra/shared-types';
 import { getS3PreviewKey } from '../../config/s3.config';
 import { uploadToS3, streamFromS3, objectExists } from '../s3Service';
 import { getTrackS3Key, type TrackAudioRef } from '../audioStorageService';
-import { TrackKeyModel } from '../../models/TrackKey';
+import { getDb } from '../../db/postgres';
+import { trackKeys } from '../../db/schema/trackKeys';
 import {
   generatePreviewClip,
   generatePreviewClipFromHls,
@@ -232,8 +234,24 @@ export function buildWindowedHlsPlaylist(
   };
 }
 
+/**
+ * The AES-128 key a preview clip has to decrypt with.
+ *
+ * `track_keys.track_id` — the CATALOGUE arm, and the only one this path can
+ * reach. Previews are generated for catalogue tracks alone: `ensurePreviewClip`
+ * is called from `controllers/preview.controller.ts` with a row selected from
+ * `tracks`, and nothing else calls it. An earlier comment here claimed the
+ * id-only lookup was what let one function serve locker uploads and episodes
+ * too; no caller ever passed either, and since the split each id space has its
+ * own column, so an id from one would resolve to nothing rather than to a key.
+ */
 async function defaultGetKeyHex(trackId: string): Promise<string | null> {
-  const trackKey = await TrackKeyModel.findOne({ trackId }).select('keyHex').lean<{ keyHex: string }>();
+  const [trackKey] = await getDb()
+    .select({ keyHex: trackKeys.keyHex })
+    .from(trackKeys)
+    .where(eq(trackKeys.trackId, trackId))
+    .limit(1);
+
   return trackKey?.keyHex ?? null;
 }
 

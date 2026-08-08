@@ -1,14 +1,26 @@
 import { Response, NextFunction } from 'express';
-import mongoose from 'mongoose';
+import { and, asc, count, eq, inArray } from 'drizzle-orm';
+import { isLiveEntityId } from '@oxyhq/db';
 import { z } from 'zod';
-import { CopyrightReportModel, type ICopyrightReport } from '../models/CopyrightReport';
-import { TrackModel } from '../models/Track';
-import { isDatabaseConnected } from '../utils/database';
+import { getDb, isPostgresConnected } from '../db/postgres';
+import { tracks } from '../db/schema/catalog';
+import { copyrightReports } from '../db/schema/creators';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { getRequiredOxyUserId } from '@oxyhq/core/server';
 import { getParam, parseBoundedLimit, parseOffset } from '../utils/reqParams';
 import { takeDownTrack, type TakeDownTrackResult } from '../services/compliance/takedown';
 import { logger } from '../utils/logger';
+import { describeErrorSafely } from '../utils/error';
+
+/**
+ * Ported here rather than deferred with the rest of Task 13's vertical, and the
+ * reason is structural: `tracks.copyright_report_id` really
+ * `.references(() => copyrightReports.id)`. A hybrid split survives a
+ * cross-vertical READ and cannot survive a cross-vertical FOREIGN KEY — leaving
+ * this table on Mongoose while `takeDownTrack` is drizzle means the takedown
+ * writes a Mongo `_id` into a column constrained against `copyright_reports`,
+ * and Postgres refuses it with `23503`.
+ */
 
 /**
  * POST /api/copyright/report
@@ -16,7 +28,7 @@ import { logger } from '../utils/logger';
  */
 export const reportCopyrightViolation = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -29,22 +41,33 @@ export const reportCopyrightViolation = async (req: AuthRequest, res: Response, 
       });
     }
 
-    // Validate ObjectId format
-    if (!mongoose.Types.ObjectId.isValid(trackId)) {
+    // Both live id shapes — `tracks.id` is a uuid v7 since the cutover.
+    if (!isLiveEntityId(trackId)) {
       return res.status(400).json({ error: 'Invalid trackId format' });
     }
 
     // Verify track exists
-    const track = await TrackModel.findById(trackId).lean();
+    const [track] = await getDb()
+      .select({ artistId: tracks.artistId })
+      .from(tracks)
+      .where(eq(tracks.id, trackId))
+      .limit(1);
     if (!track) {
       return res.status(404).json({ error: 'Track not found' });
     }
 
-    // Check if already reported (pending or approved)
-    const existingReport = await CopyrightReportModel.findOne({
-      trackId,
-      status: { $in: ['pending', 'approved'] },
-    }).lean();
+    // Check if already reported (pending or approved). Served by
+    // `copyright_reports_track_id_status_idx`.
+    const [existingReport] = await getDb()
+      .select({ id: copyrightReports.id })
+      .from(copyrightReports)
+      .where(
+        and(
+          eq(copyrightReports.trackId, trackId),
+          inArray(copyrightReports.status, ['pending', 'approved'])
+        )
+      )
+      .limit(1);
 
     if (existingReport) {
       return res.status(400).json({
@@ -55,27 +78,29 @@ export const reportCopyrightViolation = async (req: AuthRequest, res: Response, 
 
     const reporterOxyUserId = req.user?.id;
 
-    // Create copyright report
-    const report = new CopyrightReportModel({
-      trackId,
-      artistId: track.artistId,
-      reporterOxyUserId,
-      reason: reason.trim(),
-      status: 'pending',
-    });
+    const [report] = await getDb()
+      .insert(copyrightReports)
+      .values({
+        trackId,
+        artistId: track.artistId,
+        reporterOxyUserId,
+        reason: reason.trim(),
+        status: 'pending',
+      })
+      .returning({ id: copyrightReports.id });
 
-    await report.save();
+    if (!report) throw new Error('reportCopyrightViolation: insert returned no row');
 
     logger.info(`[CopyrightController] Copyright report created for track ${trackId} by ${reporterOxyUserId || 'anonymous'}`);
 
     res.status(201).json({
-      id: report._id.toString(),
+      id: report.id,
       trackId,
       status: 'pending',
       message: 'Copyright violation report submitted successfully',
     });
   } catch (error) {
-    logger.error('[CopyrightController] Error reporting copyright violation:', error);
+    logger.error('[CopyrightController] Error reporting copyright violation:', { error: describeErrorSafely(error) });
     next(error);
   }
 };
@@ -99,17 +124,28 @@ const resolveCopyrightReportSchema = z.object({
 /** Which slice of the queue to read. Defaults to what a reviewer opens it for. */
 const copyrightReportStatusSchema = z.enum(['pending', 'approved', 'rejected']);
 
-function serializeReport(report: ICopyrightReport) {
+type CopyrightReportRow = typeof copyrightReports.$inferSelect;
+
+/**
+ * An explicit allowlist, exactly as it was: every key is named, nothing is
+ * spread. `updated_at` is a column here and was not a field on the Mongo
+ * document, so it stays off the wire by simply not being written down.
+ *
+ * `reporterOxyUserId` IS on it, deliberately and unchanged — this response is
+ * reachable only behind `requireComplianceReviewer`, and knowing who filed a
+ * DMCA notice is the reviewer's job.
+ */
+function serializeReport(report: CopyrightReportRow) {
   return {
-    id: report._id.toString(),
+    id: report.id,
     trackId: report.trackId,
     artistId: report.artistId,
-    reporterOxyUserId: report.reporterOxyUserId,
+    reporterOxyUserId: report.reporterOxyUserId ?? undefined,
     reason: report.reason,
     status: report.status,
-    createdAt: report.createdAt?.toISOString(),
+    createdAt: report.createdAt.toISOString(),
     resolvedAt: report.resolvedAt?.toISOString(),
-    resolvedBy: report.resolvedBy,
+    resolvedBy: report.resolvedBy ?? undefined,
   };
 }
 
@@ -121,7 +157,7 @@ function serializeReport(report: ICopyrightReport) {
  */
 export const listCopyrightReports = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -134,17 +170,24 @@ export const listCopyrightReports = async (req: AuthRequest, res: Response, next
     const limit = parseBoundedLimit(req.query.limit, 50);
     const offset = parseOffset(req.query.offset);
 
-    const [reports, total] = await Promise.all([
-      CopyrightReportModel.find({ status })
-        .sort({ createdAt: 1 })
-        .skip(offset)
-        .limit(limit)
-        .lean(),
-      CopyrightReportModel.countDocuments({ status }),
+    const [reports, [totals]] = await Promise.all([
+      getDb()
+        .select()
+        .from(copyrightReports)
+        .where(eq(copyrightReports.status, status))
+        .orderBy(asc(copyrightReports.createdAt))
+        .offset(offset)
+        .limit(limit),
+      getDb()
+        .select({ total: count() })
+        .from(copyrightReports)
+        .where(eq(copyrightReports.status, status)),
     ]);
 
+    const total = totals?.total ?? 0;
+
     res.json({
-      reports: reports.map((report) => serializeReport(report as ICopyrightReport)),
+      reports: reports.map(serializeReport),
       total,
       hasMore: offset + reports.length < total,
     });
@@ -168,14 +211,14 @@ export const listCopyrightReports = async (req: AuthRequest, res: Response, next
  */
 export const resolveCopyrightReport = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
     const reviewerId = getRequiredOxyUserId(req);
     const id = getParam(req, 'id');
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!isLiveEntityId(id)) {
       return res.status(400).json({ error: 'Invalid report ID' });
     }
 
@@ -184,7 +227,11 @@ export const resolveCopyrightReport = async (req: AuthRequest, res: Response, ne
       return res.status(400).json({ error: 'Invalid request body', details: parsed.error.issues });
     }
 
-    const report = await CopyrightReportModel.findById(id);
+    const [report] = await getDb()
+      .select()
+      .from(copyrightReports)
+      .where(eq(copyrightReports.id, id))
+      .limit(1);
     if (!report) {
       return res.status(404).json({ error: 'Report not found' });
     }
@@ -201,7 +248,7 @@ export const resolveCopyrightReport = async (req: AuthRequest, res: Response, ne
         trackId: report.trackId,
         reason: parsed.data.resolutionNote?.trim() || `Copyright report: ${report.reason}`,
         actorOxyUserId: reviewerId,
-        copyrightReportId: report._id.toString(),
+        copyrightReportId: report.id,
       });
 
       if (!takedown) {
@@ -212,10 +259,13 @@ export const resolveCopyrightReport = async (req: AuthRequest, res: Response, ne
       }
     }
 
-    report.status = parsed.data.status;
-    report.resolvedAt = new Date();
-    report.resolvedBy = reviewerId;
-    await report.save();
+    const [resolved] = await getDb()
+      .update(copyrightReports)
+      .set({ status: parsed.data.status, resolvedAt: new Date(), resolvedBy: reviewerId })
+      .where(eq(copyrightReports.id, report.id))
+      .returning();
+
+    if (!resolved) throw new Error('resolveCopyrightReport: update returned no row');
 
     logger.info(
       `[CopyrightController] Report ${id} ${parsed.data.status} by ${reviewerId}` +
@@ -226,7 +276,7 @@ export const resolveCopyrightReport = async (req: AuthRequest, res: Response, ne
     );
 
     res.json({
-      report: serializeReport(report),
+      report: serializeReport(resolved),
       takedown,
     });
   } catch (error) {

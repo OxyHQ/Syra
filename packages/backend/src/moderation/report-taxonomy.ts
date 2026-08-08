@@ -1,5 +1,5 @@
 import type { TaxonomyCode } from '@oxyhq/crowdsource-contracts';
-import { ReportCategory } from '../models/Report';
+import { ReportCategory } from './types';
 
 /**
  * Syra's report categories, translated into CrowdSource's universal taxonomy.

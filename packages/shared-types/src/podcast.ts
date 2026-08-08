@@ -73,7 +73,6 @@ export type ResolvedPerson = z.infer<typeof resolvedPersonSchema>;
 
 export const podcastSchema = timestampsSchema.extend({
   id: z.string(),
-  _id: z.string().optional(),
   // Identity
   title: z.string(),
   description: z.string().optional(),

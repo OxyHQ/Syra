@@ -1,13 +1,28 @@
 import { Request, Response, NextFunction } from 'express';
 import fs from 'fs';
 import os from 'os';
-import mongoose from 'mongoose';
 import multer from 'multer';
-import { TrackModel } from '../models/Track';
-import { ArtistModel } from '../models/CatalogEntity';
-import { AlbumModel } from '../models/Album';
-import { toApiFormat, toApiFormatArray, formatTracksWithCoverArt, formatTrackWithCoverArt } from '../utils/musicHelpers';
-import { isDatabaseConnected } from '../utils/database';
+import { and, asc, count, eq, sql } from 'drizzle-orm';
+import { isLiveEntityId, uuidv7 } from '@oxyhq/db';
+import { publicColumns } from '@oxyhq/db/assert';
+import type { HlsRendition, SourceProvenance, Track, TrackCredit } from '@syra/shared-types';
+import { updateTrackRequestSchema } from '@syra/shared-types';
+import { getDb, isPostgresConnected } from '../db/postgres';
+import {
+  albums,
+  catalogEntities,
+  trackCredits,
+  trackHlsRenditions,
+  trackSources,
+  tracks,
+} from '../db/schema/catalog';
+import { PROTECTED_COLUMNS_BY_TABLE } from '../db/schema/protectedColumns';
+import { descNullsLast } from '../db/catalog/containers';
+import { textSearch } from '../db/catalog/search';
+import { toTrackDtos } from '../db/catalog/hydrate';
+import { findOwnedArtist } from '../db/catalog/ownership';
+import type { PublicTrackRow } from '../db/catalog/serialize';
+import { playableTrackFilter } from '../db/catalog/visibility';
 import { env } from '../config/env';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { getRequiredOxyUserId as getAuthenticatedUserId } from '@oxyhq/core/server';
@@ -25,16 +40,14 @@ import { probeAudio } from '../services/ingest/probeAudio';
 import type { ProbedAudio } from '../services/ingest/probeAudio';
 import { getErrorMessage, getErrorStack, getHttpStatus } from '../utils/error';
 import { getParam, parseBoundedLimit, parseOffset } from '../utils/reqParams';
-import { findOwnedArtist } from '../utils/catalogOwnership';
-import { updateTrackRequestSchema } from '@syra/shared-types';
-import {
-  getRequestUserId,
-  playableTrackFilter,
-} from '../utils/catalogVisibility';
+import { describeErrorSafely } from '../utils/error';
 
 interface AudioUploadRequest extends AuthRequest {
   file?: Express.Multer.File;
 }
+
+/** The public columns of `tracks` — no `sha256`, no `images`. */
+const publicTrackColumns = () => publicColumns(tracks, PROTECTED_COLUMNS_BY_TABLE);
 
 /**
  * GET /api/tracks
@@ -42,26 +55,28 @@ interface AudioUploadRequest extends AuthRequest {
  */
 export const getTracks = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
     const limit = parseBoundedLimit(req.query.limit, 20);
     const offset = parseOffset(req.query.offset);
 
-    const [tracks, total] = await Promise.all([
-      TrackModel.find(playableTrackFilter({}))
-        .sort({ createdAt: -1 })
-        .skip(offset)
-        .limit(limit)
-        .lean(),
-      TrackModel.countDocuments(playableTrackFilter({})),
+    const [rows, [totals]] = await Promise.all([
+      getDb()
+        .select(publicTrackColumns())
+        .from(tracks)
+        .where(playableTrackFilter())
+        .orderBy(descNullsLast(tracks.createdAt))
+        .offset(offset)
+        .limit(limit),
+      getDb().select({ total: count() }).from(tracks).where(playableTrackFilter()),
     ]);
 
-    const formattedTracks = await formatTracksWithCoverArt(tracks);
+    const total = totals?.total ?? 0;
 
     res.json({
-      tracks: formattedTracks,
+      tracks: await toTrackDtos(rows),
       total,
       hasMore: offset + limit < total,
     });
@@ -71,53 +86,135 @@ export const getTracks = async (req: Request, res: Response, next: NextFunction)
 };
 
 /**
+ * The child collections only the single-track surface renders.
+ *
+ * `credits`, `sources` and the HLS ladder were EMBEDDED arrays on the Mongo
+ * document, so `toApiFormat`'s spread put all three on `GET /api/tracks/:id`
+ * for free. They are child tables now and `toTrackDto` is an allowlist, so a
+ * port that did not ask for them would have dropped three live fields with
+ * nothing to notice — an allowlist omits in silence, which is what makes this
+ * the dangerous direction. Three bounded reads, and only for the one endpoint
+ * that renders them: `toTrackDtos` deliberately loads none of them for a page.
+ */
+async function loadTrackDetail(trackId: string): Promise<{
+  credits: TrackCredit[];
+  sources: SourceProvenance[];
+  hlsRenditions: HlsRendition[];
+}> {
+  const [creditRows, sourceRows, renditionRows] = await Promise.all([
+    getDb()
+      .select({ name: trackCredits.name, role: trackCredits.role, nameKey: trackCredits.nameKey })
+      .from(trackCredits)
+      .where(eq(trackCredits.trackId, trackId))
+      .orderBy(asc(trackCredits.position)),
+    getDb()
+      .select({
+        provider: trackSources.provider,
+        externalId: trackSources.externalId,
+        importedAt: trackSources.importedAt,
+        fields: trackSources.fields,
+      })
+      .from(trackSources)
+      .where(eq(trackSources.trackId, trackId))
+      .orderBy(asc(trackSources.position)),
+    getDb()
+      .select({
+        manifestKey: trackHlsRenditions.manifestKey,
+        bitrateKbps: trackHlsRenditions.bitrateKbps,
+        encrypted: trackHlsRenditions.encrypted,
+      })
+      .from(trackHlsRenditions)
+      .where(eq(trackHlsRenditions.trackId, trackId))
+      // `position`, not `bitrateKbps`: the stored order is the one the ladder
+      // was written in, and a read must not invent a different one.
+      .orderBy(asc(trackHlsRenditions.position)),
+  ]);
+
+  return {
+    credits: creditRows,
+    sources: sourceRows.map((row) => ({
+      provider: row.provider,
+      externalId: row.externalId,
+      importedAt: row.importedAt.toISOString(),
+      fields: row.fields,
+    })),
+    hlsRenditions: renditionRows,
+  };
+}
+
+/**
+ * Serialize ONE track: the page serializer plus the three child collections it
+ * deliberately leaves out.
+ *
+ * Built on `toTrackDtos` rather than on `toTrackDto` directly so the album
+ * cover-art fallback, the image-variant lookup and the HLS count behind
+ * `previewAvailable` are the SAME code the listings run. A hand-rolled
+ * single-row path would be a second implementation of the fallback, free to
+ * drift from the one every list surface uses.
+ */
+async function toTrackResponse(row: PublicTrackRow): Promise<Track> {
+  const [[dto], detail] = await Promise.all([toTrackDtos([row]), loadTrackDetail(row.id)]);
+  if (!dto) throw new Error('toTrackResponse: the serializer returned no DTO');
+
+  return {
+    ...dto,
+    credits: detail.credits,
+    sources: detail.sources,
+    hls: detail.hlsRenditions,
+  };
+}
+
+/**
  * GET /api/tracks/:id
  * Get track by ID
  */
 export const getTrackById = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
     const id = getParam(req, 'id');
-    
-    // Validate ObjectId format
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+
+    if (!isLiveEntityId(id)) {
       return res.status(404).json({ error: 'Track not found' });
     }
-    
-    const track = await TrackModel.findOne(playableTrackFilter({ _id: id })).lean();
+
+    const [track] = await getDb()
+      .select(publicTrackColumns())
+      .from(tracks)
+      .where(and(eq(tracks.id, id), playableTrackFilter()))
+      .limit(1);
 
     if (!track) {
       return res.status(404).json({ error: 'Track not found' });
     }
 
-    const formattedTrack = await formatTrackWithCoverArt(track);
-    res.json(formattedTrack);
+    res.json(await toTrackResponse(track));
   } catch (error) {
     next(error);
   }
 };
 
 /**
- * `GET /api/tracks/search` is public and unauthenticated, so `q` is
- * attacker-controlled and must never reach the regex compiler unescaped: a
- * crafted pattern is a ReDoS against a collection scan. `search.controller.ts`
- * and `podcasts.controller.ts` each carry this same helper and use it; this
- * file was the one that did not.
- */
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/**
  * GET /api/tracks/search
  * Search tracks
+ *
+ * `search_vector @@ websearch_to_tsquery(…)` with a prefix on the final term —
+ * see `db/catalog/search.ts` for the ruling, what it gains (a GIN index, and
+ * stemming) and what it deliberately loses (infix: "love" no longer finds
+ * "Glove"). This site and `search.controller`'s five moved together.
+ *
+ * It also ends the ReDoS this endpoint shipped with. `new RegExp(req.query.q,
+ * 'i')` compiled a raw query-string parameter on a PUBLIC route and ran it
+ * against every track; `main`'s PR #84 fixed it by escaping the pattern. There
+ * is no regex ENGINE here any more, so there is nothing left to escape and no
+ * backtracking to exploit — see the report on retiring #84's source assertions
+ * with the code they guard.
  */
 export const searchTracks = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
@@ -133,32 +230,23 @@ export const searchTracks = async (req: Request, res: Response, next: NextFuncti
       });
     }
 
-    const searchRegex = new RegExp(escapeRegex(query.trim()), 'i');
-    const [tracks, total] = await Promise.all([
-      TrackModel.find(
-        playableTrackFilter({
-          $or: [
-            { title: searchRegex },
-            { artistName: searchRegex },
-          ],
-        }),
-      )
-        .sort({ popularity: -1, createdAt: -1 })
-        .skip(offset)
-        .limit(limit)
-        .lean(),
-      TrackModel.countDocuments(playableTrackFilter({
-        $or: [
-          { title: searchRegex },
-          { artistName: searchRegex },
-        ],
-      })),
+    const matches = and(playableTrackFilter(), textSearch(tracks.searchVector, query));
+
+    const [rows, [totals]] = await Promise.all([
+      getDb()
+        .select(publicTrackColumns())
+        .from(tracks)
+        .where(matches)
+        .orderBy(descNullsLast(tracks.popularity), descNullsLast(tracks.createdAt))
+        .offset(offset)
+        .limit(limit),
+      getDb().select({ total: count() }).from(tracks).where(matches),
     ]);
 
-    const formattedTracks = await formatTracksWithCoverArt(tracks);
+    const total = totals?.total ?? 0;
 
     res.json({
-      tracks: formattedTracks,
+      tracks: await toTrackDtos(rows),
       total,
       hasMore: offset + limit < total,
     });
@@ -199,7 +287,7 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
   // Handle file upload
   audioUpload(req, res, async (err) => {
     if (err) {
-      logger.error('[TracksController] Multer upload error:', err);
+      logger.error('[TracksController] Multer upload error:', { err: describeErrorSafely(err) });
       return res.status(400).json({ error: 'Upload error', message: err.message });
     }
 
@@ -209,7 +297,7 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
 
     try {
       logger.debug('[TracksController] Starting track upload process...');
-      if (!isDatabaseConnected()) {
+      if (!isPostgresConnected()) {
         return res.status(503).json({ error: 'Database not available' });
       }
 
@@ -224,47 +312,46 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
       const { title, artistId, albumId, coverArt, genre, isExplicit } = req.body;
 
       if (!title || !artistId) {
-        return res.status(400).json({ 
-          error: 'Missing required fields', 
-          message: 'Title and artistId are required' 
+        return res.status(400).json({
+          error: 'Missing required fields',
+          message: 'Title and artistId are required'
         });
       }
 
-      // Verify user owns the artist
-      const artist = await ArtistModel.findOne({ 
-        _id: artistId,
-        ownerOxyUserId: userId 
-      }).lean();
+      // Ownership from the authenticated user plus the STORED artist row.
+      const artist = await findOwnedArtist(artistId, userId);
 
       if (!artist) {
-        return res.status(403).json({ 
-          error: 'Forbidden', 
-          message: 'You do not own this artist profile' 
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: 'You do not own this artist profile'
         });
       }
 
       // Check if uploads are disabled due to strikes
       if (artist.uploadsDisabled) {
-        return res.status(403).json({ 
-          error: 'Uploads disabled', 
-          message: 'Uploads are disabled due to copyright strikes. Please contact support for more information.' 
+        return res.status(403).json({
+          error: 'Uploads disabled',
+          message: 'Uploads are disabled due to copyright strikes. Please contact support for more information.'
         });
       }
 
       // Validate album if provided
-      let album = null;
+      let album: { id: string; title: string } | null = null;
       if (albumId) {
-        album = await AlbumModel.findOne({ 
-          _id: albumId,
-          artistId: artistId 
-        }).lean();
+        const [found] = await getDb()
+          .select({ id: albums.id, title: albums.title })
+          .from(albums)
+          .where(and(eq(albums.id, albumId), eq(albums.artistId, artistId)))
+          .limit(1);
 
-        if (!album) {
-          return res.status(404).json({ 
-            error: 'Album not found', 
-            message: 'Album does not exist or does not belong to this artist' 
+        if (!found) {
+          return res.status(404).json({
+            error: 'Album not found',
+            message: 'Album does not exist or does not belong to this artist'
           });
         }
+        album = found;
       }
 
       // Determine audio format from file
@@ -287,21 +374,23 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
         });
       }
 
-      // Validate coverArt if provided - must be a valid MongoDB ObjectId string
+      // Validate coverArt if provided - must be the id of an already-uploaded asset
       if (coverArt) {
         // Reject blob URLs, http/https URLs, or any other format
         if (coverArt.startsWith('blob:') || coverArt.startsWith('http://') || coverArt.startsWith('https://') || coverArt.startsWith('/api/')) {
-          return res.status(400).json({ 
-            error: 'Invalid coverArt', 
-            message: 'coverArt must be a valid image ID (MongoDB ObjectId). Images must be uploaded first using /api/images/upload.' 
+          return res.status(400).json({
+            error: 'Invalid coverArt',
+            message: 'coverArt must be a valid image ID. Images must be uploaded first using /api/images/upload.'
           });
         }
 
-        // Validate ObjectId format (24 hex characters)
-        if (!mongoose.Types.ObjectId.isValid(coverArt)) {
-          return res.status(400).json({ 
-            error: 'Invalid coverArt', 
-            message: 'coverArt must be a valid MongoDB ObjectId string (24 hex characters). Images must be uploaded first using /api/images/upload.' 
+        // Both live id shapes — `image_assets.id` is a uuid v7 for anything
+        // uploaded since the cutover, so an ObjectId-only check would reject
+        // the id the upload endpoint had just minted.
+        if (!isLiveEntityId(coverArt)) {
+          return res.status(400).json({
+            error: 'Invalid coverArt',
+            message: 'coverArt must be a valid image ID. Images must be uploaded first using /api/images/upload.'
           });
         }
 
@@ -309,81 +398,103 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
 
       const coverArtColors = coverArt ? await getStoredImageColors(coverArt) : undefined;
 
-      // Generate track ID first so we can create the audio URL
-      const trackId = new mongoose.Types.ObjectId();
+      /**
+       * The id is minted before the upload, and that ordering is load-bearing:
+       * the S3 key embeds it (`getTrackS3Key`), so the object cannot be written
+       * until the id exists. An upload that succeeds and an insert that then
+       * fails leaves an orphaned object with no row — the safe direction, and
+       * the same trade `services/imageAssetService.ts` documents. `new
+       * mongoose.Types.ObjectId()` did exactly this job before.
+       */
+      const trackId = uuidv7();
+      const metadataGenre = genre ? (Array.isArray(genre) ? genre : [genre]) : undefined;
+      const explicit = isExplicit === 'true' || isExplicit === true;
+      const audioSourceUrl = `/api/audio/${trackId}`;
 
-      // Create track record with proper audio URL
-      const track = new TrackModel({
-        _id: trackId,
-        title,
-        artistId: artistId,
-        artistName: artist.name,
-        albumId: albumId || undefined,
-        albumName: album?.title,
-        duration: probed.durationSec,
-        audioSource: {
-          url: `/api/audio/${trackId.toString()}`,
-          format,
-          bitrate: probed.bitrateKbps,
-          duration: probed.durationSec,
-        },
-        coverArt: coverArt || undefined,
-        primaryColor: coverArtColors?.primaryColor,
-        secondaryColor: coverArtColors?.secondaryColor,
-        metadata: {
-          genre: genre ? (Array.isArray(genre) ? genre : [genre]) : undefined,
-          explicit: isExplicit === 'true' || isExplicit === true,
-        },
-        isExplicit: isExplicit === 'true' || isExplicit === true,
-        isAvailable: true,
-        playCount: 0,
-        popularity: 0,
-        source: 'upload',
-        status: 'processing',
-      });
-
-      // Upload audio file to S3 first
-      const trackForUpload = toApiFormat(track);
-      if (!trackForUpload) {
-        throw new Error('Failed to serialize track for upload');
-      }
       logger.debug('[TracksController] Starting S3 upload...');
       // Streamed from the temp file rather than buffered: the S3 client derives
       // Content-Length from the fs.ReadStream's path, so nothing is held in memory.
-      await uploadTrackAudio(trackForUpload, fs.createReadStream(file.path));
+      await uploadTrackAudio(
+        {
+          id: trackId,
+          artistId,
+          albumId: albumId || undefined,
+          title,
+          audioSource: {
+            url: audioSourceUrl,
+            format,
+            bitrate: probed.bitrateKbps,
+            duration: probed.durationSec,
+          },
+        },
+        fs.createReadStream(file.path),
+      );
       logger.debug('[TracksController] S3 upload completed, saving track to database...');
 
-      // Save track after successful upload
-      logger.debug('[TracksController] Attempting to save track to database', { trackId: trackId.toString() });
-      const savedTrack = await track.save();
-      logger.debug('[TracksController] Track saved to database successfully', { trackId: savedTrack._id.toString() });
+      logger.debug('[TracksController] Attempting to save track to database', { trackId });
+      /**
+       * One transaction for the track and both counters. In Mongo these were
+       * three independent writes, so a failed `$inc` left the catalogue with a
+       * track the artist's `stats.tracks` did not count.
+       */
+      const saved = await getDb().transaction(async (tx) => {
+        const [row] = await tx
+          .insert(tracks)
+          .values({
+            id: trackId,
+            title,
+            artistId,
+            artistName: artist.name,
+            albumId: albumId || undefined,
+            albumName: album?.title,
+            duration: probed.durationSec,
+            audioSourceUrl,
+            audioSourceFormat: format,
+            audioSourceBitrate: probed.bitrateKbps,
+            audioSourceDuration: probed.durationSec,
+            coverArtId: coverArt || undefined,
+            primaryColor: coverArtColors?.primaryColor,
+            secondaryColor: coverArtColors?.secondaryColor,
+            metadataGenre,
+            metadataExplicit: explicit,
+            isExplicit: explicit,
+            isAvailable: true,
+            playCount: 0,
+            popularity: 0,
+            source: 'upload',
+            status: 'processing',
+          })
+          .returning(publicTrackColumns());
 
-      // Update artist stats
-      await ArtistModel.updateOne(
-        { _id: artistId },
-        { $inc: { 'stats.tracks': 1 } }
-      );
-      logger.debug('[TracksController] Artist stats updated');
+        if (!row) throw new Error('uploadTrack: insert returned no row');
 
-      // Update album stats if track is part of album
-      if (albumId) {
-        await AlbumModel.updateOne(
-          { _id: albumId },
-          { 
-            $inc: { totalTracks: 1, totalDuration: probed.durationSec }
-          }
-        );
-        logger.debug('[TracksController] Album stats updated');
-      }
+        await tx
+          .update(catalogEntities)
+          .set({ statsTracks: sql`${catalogEntities.statsTracks} + 1` })
+          .where(eq(catalogEntities.id, artistId));
+
+        if (albumId) {
+          await tx
+            .update(albums)
+            .set({
+              totalTracks: sql`${albums.totalTracks} + 1`,
+              totalDuration: sql`${albums.totalDuration} + ${probed.durationSec}`,
+            })
+            .where(eq(albums.id, albumId));
+        }
+
+        return row;
+      });
+      logger.debug('[TracksController] Track saved to database successfully', { trackId });
 
       // Hand the track to durable ingest; status transitions processing→ready|failed.
       // Awaited so the 201 is only sent once the job is recorded, but it never
       // waits for the transcode itself.
-      await enqueueIngest(savedTrack._id.toString());
+      await enqueueIngest(trackId);
 
       logger.debug('[TracksController] Formatting response...');
-      const finalTrack = await formatTrackWithCoverArt(track);
-      logger.debug('[TracksController] Sending response', { trackId: finalTrack?.id });
+      const finalTrack = await toTrackResponse(saved);
+      logger.debug('[TracksController] Sending response', { trackId: finalTrack.id });
 
       // Ensure response is sent
       if (!res.headersSent) {
@@ -429,14 +540,14 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
  */
 export const updateTrack = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
     const userId = getAuthenticatedUserId(req);
     const trackId = getParam(req, 'id');
 
-    if (!mongoose.Types.ObjectId.isValid(trackId)) {
+    if (!isLiveEntityId(trackId)) {
       return res.status(400).json({ error: 'Invalid track id' });
     }
 
@@ -445,7 +556,15 @@ export const updateTrack = async (req: AuthRequest, res: Response, next: NextFun
       return res.status(400).json({ error: 'Invalid request body', details: parsed.error.issues });
     }
 
-    const track = await TrackModel.findById(trackId);
+    const [track] = await getDb()
+      .select({
+        id: tracks.id,
+        artistId: tracks.artistId,
+        copyrightRemoved: tracks.copyrightRemoved,
+      })
+      .from(tracks)
+      .where(eq(tracks.id, trackId))
+      .limit(1);
     if (!track) {
       return res.status(404).json({ error: 'Track not found' });
     }
@@ -467,7 +586,11 @@ export const updateTrack = async (req: AuthRequest, res: Response, next: NextFun
     const updates = parsed.data;
 
     if (updates.albumId !== undefined) {
-      const album = await AlbumModel.findById(updates.albumId).select('artistId').lean();
+      const [album] = await getDb()
+        .select({ artistId: albums.artistId })
+        .from(albums)
+        .where(eq(albums.id, updates.albumId))
+        .limit(1);
       if (!album || album.artistId !== track.artistId) {
         return res.status(400).json({
           error: 'Invalid albumId',
@@ -476,21 +599,49 @@ export const updateTrack = async (req: AuthRequest, res: Response, next: NextFun
       }
     }
 
-    // Explicit field-by-field assignment — the parsed object is never spread onto the doc.
-    if (updates.title !== undefined) track.title = updates.title;
-    if (updates.albumId !== undefined) track.albumId = updates.albumId;
-    if (updates.trackNumber !== undefined) track.trackNumber = updates.trackNumber;
-    if (updates.discNumber !== undefined) track.discNumber = updates.discNumber;
-    if (updates.coverArt !== undefined) track.coverArt = updates.coverArt;
-    if (updates.isAvailable !== undefined) track.isAvailable = updates.isAvailable;
+    // Explicit field-by-field assignment — the parsed object is never spread
+    // into the `set`.
+    const set: Partial<typeof tracks.$inferInsert> = {};
+    if (updates.title !== undefined) set.title = updates.title;
+    if (updates.albumId !== undefined) set.albumId = updates.albumId;
+    if (updates.trackNumber !== undefined) set.trackNumber = updates.trackNumber;
+    if (updates.discNumber !== undefined) set.discNumber = updates.discNumber;
+    if (updates.coverArt !== undefined) set.coverArtId = updates.coverArt;
+    if (updates.isAvailable !== undefined) set.isAvailable = updates.isAvailable;
+    /**
+     * `metadata` was a subdocument merged with `{ ...track.metadata, ...updates.metadata }`
+     * — the keys the caller sent overwrite, the rest survive. Six flat columns
+     * give exactly that: a key absent from `updates.metadata` is absent from the
+     * `set` and its column is not written.
+     */
     if (updates.metadata !== undefined) {
-      track.metadata = { ...track.metadata, ...updates.metadata };
+      const metadata = updates.metadata;
+      if (metadata.genre !== undefined) set.metadataGenre = metadata.genre;
+      if (metadata.bpm !== undefined) set.metadataBpm = metadata.bpm;
+      if (metadata.key !== undefined) set.metadataKey = metadata.key;
+      if (metadata.explicit !== undefined) set.metadataExplicit = metadata.explicit;
+      if (metadata.language !== undefined) set.metadataLanguage = metadata.language;
+      if (metadata.copyright !== undefined) set.metadataCopyright = metadata.copyright;
+      if (metadata.publisher !== undefined) set.metadataPublisher = metadata.publisher;
     }
 
-    await track.save();
+    const [updated] = Object.keys(set).length
+      ? await getDb()
+          .update(tracks)
+          .set(set)
+          .where(eq(tracks.id, track.id))
+          .returning(publicTrackColumns())
+      : await getDb()
+          .select(publicTrackColumns())
+          .from(tracks)
+          .where(eq(tracks.id, track.id))
+          .limit(1);
 
-    const formattedTrack = await formatTrackWithCoverArt(track.toObject());
-    res.json(formattedTrack);
+    if (!updated) {
+      return res.status(404).json({ error: 'Track not found' });
+    }
+
+    res.json(await toTrackResponse(updated));
   } catch (error) {
     next(error);
   }

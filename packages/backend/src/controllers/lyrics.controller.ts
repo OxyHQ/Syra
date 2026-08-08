@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import mongoose from 'mongoose';
+import { isLiveEntityId } from '@oxyhq/db';
 import { getLyricsForTrack } from '../services/lyrics/lyricsService';
 import { getParam } from '../utils/reqParams';
 
@@ -10,17 +10,17 @@ const LYRICS_CACHE_MAX_AGE = 3600;
  * GET /api/lyrics/:trackId
  *
  * Public endpoint — returns cached or freshly-fetched lyrics for the given
- * track. Lyrics are fetched from LRCLIB on first miss and cached in MongoDB.
+ * track. Lyrics are fetched from LRCLIB on first miss and cached in `lyrics`.
  *
  * Responses:
  *  200 — lyrics found (cached or freshly fetched).
- *  400 — trackId is not a valid ObjectId.
+ *  400 — trackId is not an id in either live shape.
  *  404 — no lyrics found for this track.
  */
 export async function getLyrics(req: Request, res: Response): Promise<void> {
   const trackId = getParam(req, 'trackId');
 
-  if (!mongoose.Types.ObjectId.isValid(trackId)) {
+  if (!isLiveEntityId(trackId)) {
     res.status(400).json({ error: 'Invalid trackId' });
     return;
   }

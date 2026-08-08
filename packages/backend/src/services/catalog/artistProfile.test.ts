@@ -1,13 +1,18 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
-import mongoose from 'mongoose';
+import { eq } from 'drizzle-orm';
+import { uuidv7 } from '@oxyhq/db';
 import { PlaylistVisibility } from '@syra/shared-types';
-import { connect, clear, disconnect } from '../../test/mongo';
-import { ArtistModel } from '../../models/CatalogEntity';
-import { TrackModel } from '../../models/Track';
-import { AlbumModel } from '../../models/Album';
-import { PlaylistModel } from '../../models/Playlist';
-import { PlaylistTrackModel } from '../../models/PlaylistTrack';
-import { ContributionAttestationModel } from '../../models/ContributionAttestation';
+import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
+import { getDb } from '../../db/postgres';
+import {
+  albums,
+  catalogEntities,
+  imageAssets,
+  trackCredits,
+  tracks,
+} from '../../db/schema/catalog';
+import { playlistCollaborators, playlistTracks, playlists } from '../../db/schema/library';
+import { contributionAttestations } from '../../db/schema/creators';
 import {
   loadDiscography,
   loadCreditedOn,
@@ -17,71 +22,159 @@ import {
   type ArtistProfileSource,
 } from './artistProfile';
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+/**
+ * ONE database: every catalog and playlist read, and
+ * `contribution_attestations` — which tells the profile which of its tracks a
+ * third party published — are all Postgres since Task 13.
+ */
+beforeAll(connectDb);
+afterEach(clearDb);
+afterAll(disconnectDb);
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
-async function makeArtist(overrides: Record<string, unknown> = {}) {
-  return ArtistModel.create({
-    name: `Artist ${Math.random().toString(36).slice(2)}`,
-    source: 'upload',
-    ...overrides,
-  });
+/**
+ * The artist SOURCE the sections take, not a document.
+ *
+ * `ArtistProfileSource` names `id` and seven optional fields rather than
+ * `Pick`ing a model type, so a fixture builds one directly and the row it
+ * inserts is separate — which is also what makes the "no name key" test below
+ * expressible without `$unset`.
+ */
+async function makeArtist(
+  overrides: Partial<typeof catalogEntities.$inferInsert> = {}
+): Promise<ArtistProfileSource & { id: string }> {
+  const suffix = uuidv7();
+  const [artist] = await getDb()
+    .insert(catalogEntities)
+    .values({
+      type: 'artist',
+      name: `Artist ${suffix}`,
+      nameKey: `artist-${suffix}`,
+      source: 'upload',
+      ...overrides,
+    })
+    .returning();
+
+  if (!artist) throw new Error('makeArtist: insert returned no row');
+  return {
+    id: artist.id,
+    nameKey: artist.nameKey ?? undefined,
+    origin: artist.origin ?? undefined,
+    claimable: artist.claimable ?? undefined,
+    claimedByOxyUserId: artist.claimedByOxyUserId ?? undefined,
+    ownerOxyUserId: artist.ownerOxyUserId ?? undefined,
+    acceptsContributions: artist.acceptsContributions ?? undefined,
+  };
 }
 
+/** Credits are a child table now, so a track fixture writes two tables. */
 async function makeTrack(
   artistId: string,
-  overrides: Record<string, unknown> = {},
+  overrides: Partial<typeof tracks.$inferInsert> & {
+    credits?: { name: string; role: string; nameKey: string }[];
+  } = {},
 ): Promise<string> {
-  const track = await TrackModel.create({
-    title: `Track ${Math.random().toString(36).slice(2)}`,
-    artistId,
-    artistName: 'Someone',
-    duration: 200,
-    source: 'upload',
-    status: 'ready',
-    ...overrides,
-  });
-  return track._id.toString();
+  const { credits, ...columns } = overrides;
+  const [track] = await getDb()
+    .insert(tracks)
+    .values({
+      title: `Track ${uuidv7()}`,
+      artistId,
+      artistName: 'Someone',
+      duration: 200,
+      source: 'upload',
+      status: 'ready',
+      ...columns,
+    })
+    .returning({ id: tracks.id });
+
+  if (!track) throw new Error('makeTrack: insert returned no row');
+
+  if (credits?.length) {
+    await getDb().insert(trackCredits).values(
+      credits.map((credit, position) => ({ trackId: track.id, position, ...credit }))
+    );
+  }
+  return track.id;
 }
 
+/** `albums.cover_art_id` is a NOT NULL foreign key, so the asset is real. */
 async function makeAlbum(
   artistId: string,
-  overrides: Record<string, unknown> = {},
+  overrides: Partial<typeof albums.$inferInsert> = {},
 ): Promise<string> {
-  const album = await AlbumModel.create({
-    title: `Album ${Math.random().toString(36).slice(2)}`,
-    artistId,
-    artistName: 'Someone',
-    releaseDate: '2024-01-01',
-    coverArt: new mongoose.Types.ObjectId().toString(),
-    ...overrides,
-  });
-  return album._id.toString();
+  const suffix = uuidv7();
+  const [asset] = await getDb()
+    .insert(imageAssets)
+    .values({
+      s3Key: `fixtures/${suffix}.jpg`,
+      filename: 'c.jpg',
+      contentType: 'image/jpeg',
+      byteSize: 1,
+      ownerType: 'album',
+    })
+    .returning({ id: imageAssets.id });
+
+  const [album] = await getDb()
+    .insert(albums)
+    .values({
+      title: `Album ${suffix}`,
+      artistId,
+      artistName: 'Someone',
+      releaseDate: '2024-01-01',
+      coverArtId: asset?.id ?? '',
+      ...overrides,
+    })
+    .returning({ id: albums.id });
+
+  if (!album) throw new Error('makeAlbum: insert returned no row');
+  return album.id;
 }
 
 async function makePlaylist(
   trackIds: string[],
-  overrides: Record<string, unknown> = {},
+  overrides: Partial<typeof playlists.$inferInsert> & {
+    collaborators?: string[];
+  } = {},
 ): Promise<string> {
-  const playlist = await PlaylistModel.create({
-    name: `Playlist ${Math.random().toString(36).slice(2)}`,
-    ownerOxyUserId: 'curator-1',
-    ownerUsername: 'curator',
-    visibility: PlaylistVisibility.PUBLIC,
-    ...overrides,
-  });
-  await Promise.all(trackIds.map((trackId, order) =>
-    PlaylistTrackModel.create({
-      playlistId: playlist._id,
-      trackId,
-      addedAt: new Date().toISOString(),
-      order,
-    }),
-  ));
-  return playlist._id.toString();
+  const { collaborators, ...columns } = overrides;
+  const [playlist] = await getDb()
+    .insert(playlists)
+    .values({
+      name: `Playlist ${uuidv7()}`,
+      ownerOxyUserId: 'curator-1',
+      ownerUsername: 'curator',
+      visibility: PlaylistVisibility.PUBLIC,
+      ...columns,
+    })
+    .returning({ id: playlists.id });
+
+  if (!playlist) throw new Error('makePlaylist: insert returned no row');
+
+  if (trackIds.length > 0) {
+    await getDb().insert(playlistTracks).values(
+      trackIds.map((trackId, position) => ({
+        playlistId: playlist.id,
+        trackId,
+        addedAt: new Date(),
+        position,
+      }))
+    );
+  }
+
+  if (collaborators?.length) {
+    await getDb().insert(playlistCollaborators).values(
+      collaborators.map((oxyUserId) => ({
+        playlistId: playlist.id,
+        oxyUserId,
+        username: 'friend',
+        role: 'editor' as const,
+        addedAt: new Date(),
+      }))
+    );
+  }
+  return playlist.id;
 }
 
 function ids(list: unknown[]): string[] {
@@ -93,7 +186,7 @@ function ids(list: unknown[]): string[] {
 describe('loadDiscography — split by release type', () => {
   it('separates albums, singles/EPs and compilations', async () => {
     const artist = await makeArtist();
-    const artistId = artist._id.toString();
+    const artistId = artist.id;
 
     const lp = await makeAlbum(artistId, { type: 'album' });
     const single = await makeAlbum(artistId, { type: 'single' });
@@ -112,7 +205,7 @@ describe('loadDiscography — split by release type', () => {
 
   it('treats an album with no explicit type as an album', async () => {
     const artist = await makeArtist();
-    const artistId = artist._id.toString();
+    const artistId = artist.id;
     const untyped = await makeAlbum(artistId);
     await makeTrack(artistId, { albumId: untyped });
 
@@ -126,7 +219,7 @@ describe('loadDiscography — split by release type', () => {
    */
   it('omits an album whose only track was taken down', async () => {
     const artist = await makeArtist();
-    const artistId = artist._id.toString();
+    const artistId = artist.id;
     const empty = await makeAlbum(artistId, { type: 'album' });
     await makeTrack(artistId, { albumId: empty, copyrightRemoved: true, isAvailable: false });
 
@@ -136,7 +229,7 @@ describe('loadDiscography — split by release type', () => {
 
   it('omits an album the creator unpublished, even with playable tracks', async () => {
     const artist = await makeArtist();
-    const artistId = artist._id.toString();
+    const artistId = artist.id;
     const hidden = await makeAlbum(artistId, { type: 'album', isAvailable: false });
     await makeTrack(artistId, { albumId: hidden });
 
@@ -151,7 +244,7 @@ describe('loadCreditedOn — secondary participation', () => {
   it('finds a track where the artist is a credit, not the primary, and names the roles', async () => {
     const guest = await makeArtist({ name: 'Guest Star', nameKey: 'guest star' });
     const host = await makeArtist({ name: 'Host Band', nameKey: 'host band' });
-    const trackId = await makeTrack(host._id.toString(), {
+    const trackId = await makeTrack(host.id, {
       title: 'Collab',
       credits: [
         { name: 'Guest Star', role: 'artist', nameKey: 'guest star' },
@@ -169,7 +262,7 @@ describe('loadCreditedOn — secondary participation', () => {
 
   it('excludes the artist\'s OWN releases — those are the discography', async () => {
     const artist = await makeArtist({ name: 'Solo', nameKey: 'solo' });
-    await makeTrack(artist._id.toString(), {
+    await makeTrack(artist.id, {
       credits: [{ name: 'Solo', role: 'artist', nameKey: 'solo' }],
     });
 
@@ -179,7 +272,7 @@ describe('loadCreditedOn — secondary participation', () => {
   it('excludes a taken-down track', async () => {
     const guest = await makeArtist({ name: 'Guest', nameKey: 'guest' });
     const host = await makeArtist({ name: 'Host', nameKey: 'host' });
-    await makeTrack(host._id.toString(), {
+    await makeTrack(host.id, {
       copyrightRemoved: true,
       isAvailable: false,
       credits: [{ name: 'Guest', role: 'producer', nameKey: 'guest' }],
@@ -189,122 +282,126 @@ describe('loadCreditedOn — secondary participation', () => {
   });
 
   /**
-   * A credit already RESOLVED to a different entity must not be attributed to
-   * this one just because the names normalise alike, or the profile claims work
-   * its subject never touched.
+   * TWO TESTS WERE DELETED HERE, and the reason is a schema fact rather than a
+   * change of mind.
    *
-   * The `catalogEntityId` is written only on a high-confidence match, so where it
-   * disagrees with the name it is the name that is wrong. (Two ARTISTS cannot
-   * share a `nameKey` — it is uniquely indexed — but a credit can be resolved to
-   * any catalog entity, and persons share that collection and dedup by strong
-   * keys instead.)
+   * They covered the in-memory refinement `loadCreditedOn` used to apply: a
+   * credit counted when it was explicitly linked to THIS artist
+   * (`credits[].catalogEntityId`), or when it linked nowhere and matched by
+   * name; a credit resolved to a DIFFERENT entity sharing a name key was
+   * excluded. `track_credits` has no `catalog_entity_id` column —
+   * `schema/catalog.ts` dropped it across all four places it was declared
+   * because NONE of them was ever written — so the distinction the two tests
+   * drew is not expressible, and neither is the fixture that set it up.
+   *
+   * Behaviour is unchanged in practice: the field being always absent means
+   * every credit was already the "links nowhere" case. What is gone is a
+   * refinement that could never fire, and the tests that gave it the appearance
+   * of being load-bearing.
+   *
+   * If a high-confidence credit link is wanted back, it is a schema change
+   * (a real `catalog_entity_id` FK on `track_credits`) plus a writer — not a
+   * predicate restored in this file.
    */
-  it('excludes a credit resolved to a different entity', async () => {
-    const guest = await makeArtist({ name: 'Nirvana' });
-    const somebodyElse = await makeArtist({ name: 'A Different Band' });
-    const host = await makeArtist({ name: 'Host' });
-
-    await makeTrack(host._id.toString(), {
-      credits: [{
-        name: 'Nirvana',
-        role: 'artist',
-        // Matches our artist by name, resolved to somebody else.
-        nameKey: 'nirvana',
-        catalogEntityId: somebodyElse._id.toString(),
-      }],
-    });
-
-    // Vacuity floor: the query DOES reach that track — only the in-memory
-    // refinement rejects it. Without this the test would pass on a broken query.
-    expect(await TrackModel.countDocuments({ 'credits.nameKey': 'nirvana' })).toBe(1);
-    expect(await loadCreditedOn(guest)).toEqual([]);
-  });
-
-  it('INCLUDES a credit explicitly linked to this artist', async () => {
-    const guest = await makeArtist({ name: 'Linked', nameKey: 'linked' });
-    const host = await makeArtist({ name: 'Host', nameKey: 'host' });
-    const trackId = await makeTrack(host._id.toString(), {
-      credits: [{
-        name: 'Linked',
-        role: 'remixer',
-        nameKey: 'linked',
-        catalogEntityId: guest._id.toString(),
-      }],
-    });
-
-    const credited = await loadCreditedOn(guest);
-    expect(ids(credited.map((entry) => entry.track))).toEqual([trackId]);
-    expect(credited[0]?.roles).toEqual(['remixer']);
-  });
 
   it('returns nothing for an artist with no name key rather than matching everything', async () => {
     const artist = await makeArtist({ name: 'No Key' });
-    await ArtistModel.updateOne({ _id: artist._id }, { $unset: { nameKey: 1 } });
     const host = await makeArtist({ name: 'Host', nameKey: 'host' });
-    await makeTrack(host._id.toString(), {
+    await makeTrack(host.id, {
       credits: [{ name: 'No Key', role: 'artist', nameKey: 'no key' }],
     });
 
-    const reloaded = await ArtistModel.findById(artist._id).lean();
-    if (!reloaded) throw new Error('expected the artist to still exist');
-    expect(reloaded.nameKey).toBeUndefined();
-    expect(await loadCreditedOn(reloaded)).toEqual([]);
+    // The absent key is expressed on the SOURCE the function takes, not by
+    // unsetting a column: `nameKey` is optional on `ArtistProfileSource`
+    // precisely so a caller that failed to load it is the case under test.
+    // A credit that WOULD match by name exists, so this fails if the guard goes.
+    expect(await loadCreditedOn({ ...artist, nameKey: undefined })).toEqual([]);
   });
 });
 
 // ── Playlists ─────────────────────────────────────────────────────────────────
 
+describe('loadCreditedOn — the cap counts TRACKS, not credit rows', () => {
+  /**
+   * The review's finding: `credits.nameKey` is one-to-many, so a `LIMIT` over
+   * the joined shape bounds credit ROWS. Mongo bounded 50 documents and folded
+   * roles afterwards. Without the two-query form, an artist credited twice on
+   * every track gets half a shelf — and the shortfall scales with how rich
+   * their credits are, which is the opposite of the intent.
+   *
+   * Two roles per track, so a row-bounded implementation returns half as many.
+   */
+  it('returns a full page of tracks even when each carries several roles', async () => {
+    const guest = await makeArtist({ name: 'Busy Guest', nameKey: 'busy guest' });
+    const host = await makeArtist({ name: 'Prolific Host', nameKey: 'prolific host' });
+
+    const wanted = 8;
+    for (let i = 0; i < wanted; i += 1) {
+      await makeTrack(host.id, {
+        credits: [
+          { name: 'Busy Guest', role: 'producer', nameKey: 'busy guest' },
+          { name: 'Busy Guest', role: 'composer', nameKey: 'busy guest' },
+        ],
+      });
+    }
+
+    const credited = await loadCreditedOn(guest);
+
+    expect(credited).toHaveLength(wanted);
+    // …and the roles still fold, so this is not passing by dropping the join.
+    expect(credited[0]?.roles.sort()).toEqual(['composer', 'producer']);
+  });
+});
+
 describe('loadPlaylistsFeaturing — readability is canViewPlaylist\'s decision', () => {
   it('includes a public playlist that contains one of the artist\'s tracks', async () => {
     const artist = await makeArtist();
-    const trackId = await makeTrack(artist._id.toString());
+    const trackId = await makeTrack(artist.id);
     const playlistId = await makePlaylist([trackId]);
 
-    const playlists = await loadPlaylistsFeaturing(artist._id.toString());
+    const playlists = await loadPlaylistsFeaturing(artist.id);
     expect(ids(playlists)).toEqual([playlistId]);
   });
 
   it('hides a PRIVATE playlist from a guest but shows it to its owner', async () => {
     const artist = await makeArtist();
-    const trackId = await makeTrack(artist._id.toString());
+    const trackId = await makeTrack(artist.id);
     const playlistId = await makePlaylist([trackId], {
       visibility: PlaylistVisibility.PRIVATE,
       ownerOxyUserId: 'curator-1',
     });
 
-    expect(await loadPlaylistsFeaturing(artist._id.toString())).toEqual([]);
-    expect(ids(await loadPlaylistsFeaturing(artist._id.toString(), 'curator-1'))).toEqual([playlistId]);
+    expect(await loadPlaylistsFeaturing(artist.id)).toEqual([]);
+    expect(ids(await loadPlaylistsFeaturing(artist.id, 'curator-1'))).toEqual([playlistId]);
   });
 
   it('shows a private playlist to a collaborator', async () => {
     const artist = await makeArtist();
-    const trackId = await makeTrack(artist._id.toString());
+    const trackId = await makeTrack(artist.id);
     const playlistId = await makePlaylist([trackId], {
       visibility: PlaylistVisibility.PRIVATE,
       ownerOxyUserId: 'curator-1',
-      collaborators: [{
-        oxyUserId: 'friend-2',
-        username: 'friend',
-        role: 'editor',
-        addedAt: new Date().toISOString(),
-      }],
+      collaborators: ['friend-2'],
     });
 
-    expect(ids(await loadPlaylistsFeaturing(artist._id.toString(), 'friend-2'))).toEqual([playlistId]);
+    expect(ids(await loadPlaylistsFeaturing(artist.id, 'friend-2'))).toEqual([playlistId]);
   });
 
   it('excludes a playlist whose tracks are all taken down', async () => {
     const artist = await makeArtist();
-    const trackId = await makeTrack(artist._id.toString());
+    const trackId = await makeTrack(artist.id);
     await makePlaylist([trackId]);
-    await TrackModel.updateOne({ _id: trackId }, { copyrightRemoved: true, isAvailable: false });
+    await getDb()
+      .update(tracks)
+      .set({ copyrightRemoved: true, isAvailable: false })
+      .where(eq(tracks.id, trackId));
 
-    expect(await loadPlaylistsFeaturing(artist._id.toString())).toEqual([]);
+    expect(await loadPlaylistsFeaturing(artist.id)).toEqual([]);
   });
 
   it('is empty for an artist with no playable tracks at all', async () => {
     const artist = await makeArtist();
-    expect(await loadPlaylistsFeaturing(artist._id.toString())).toEqual([]);
+    expect(await loadPlaylistsFeaturing(artist.id)).toEqual([]);
   });
 });
 
@@ -339,12 +436,17 @@ describe('loadProfileState', () => {
   });
 
   it('lists every field that came from an external source, deduplicated', async () => {
-    const artist = await makeArtist({
+    // `sources` is supplied on the SOURCE rather than seeded into
+    // `catalog_entity_sources`: `loadProfileState` reads it off its argument,
+    // which is what lets the caller pass the provenance it already loaded
+    // instead of this function issuing a second query for it.
+    const artist = {
+      ...(await makeArtist()),
       sources: [
-        { provider: 'cc', externalId: 'mb-1', importedAt: '2026-01-01', fields: ['bio', 'country'] },
-        { provider: 'cc', externalId: 'wd-1', importedAt: '2026-01-02', fields: ['country', 'image'] },
+        { provider: 'cc' as const, externalId: 'mb-1', importedAt: '2026-01-01', fields: ['bio', 'country'] },
+        { provider: 'cc' as const, externalId: 'wd-1', importedAt: '2026-01-02', fields: ['country', 'image'] },
       ],
-    });
+    };
 
     const state = await loadProfileState(artist, []);
     expect(state.externallySourcedFields.sort()).toEqual(['bio', 'country', 'image']);
@@ -352,9 +454,9 @@ describe('loadProfileState', () => {
 
   it('separates tracks a third party contributed from the artist\'s own', async () => {
     const artist = await makeArtist();
-    const own = await makeTrack(artist._id.toString());
-    const contributed = await makeTrack(artist._id.toString());
-    await ContributionAttestationModel.create({
+    const own = await makeTrack(artist.id);
+    const contributed = await makeTrack(artist.id);
+    await getDb().insert(contributionAttestations).values({
       trackId: contributed,
       uploaderOxyUserId: 'a-stranger',
       statement: 'I may distribute this recording',
@@ -371,13 +473,13 @@ describe('loadProfileState', () => {
 describe('loadArtistProfileSections', () => {
   it('assembles every section for one artist', async () => {
     const artist = await makeArtist({ name: 'Full Profile', nameKey: 'full profile', claimable: true, origin: 'contributed' });
-    const artistId = artist._id.toString();
+    const artistId = artist.id;
 
     const albumId = await makeAlbum(artistId, { type: 'ep' });
     const ownTrack = await makeTrack(artistId, { albumId });
 
     const host = await makeArtist({ name: 'Host', nameKey: 'host' });
-    await makeTrack(host._id.toString(), {
+    await makeTrack(host.id, {
       credits: [{ name: 'Full Profile', role: 'producer', nameKey: 'full profile' }],
     });
 

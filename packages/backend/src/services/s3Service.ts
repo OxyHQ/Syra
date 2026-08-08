@@ -12,6 +12,7 @@ import { s3Client, S3_BUCKET_NAME, S3_REGION, S3_ENDPOINT } from '../config/s3.c
 import { logger } from '../utils/logger';
 import { getErrorMessage } from '../utils/error';
 import { Readable } from 'stream';
+import { describeErrorSafely } from '../utils/error';
 
 interface AwsSdkError {
     name: string;
@@ -89,7 +90,7 @@ export async function uploadToS3(
       hostId: e.HostId ?? e.$metadata?.extendedRequestId,
       errorBucketName: e.BucketName,
     };
-    logger.error(`[S3Service] Error uploading to S3:`, errorDetails, error);
+    logger.error(`[S3Service] Error uploading to S3:`, errorDetails, { error: describeErrorSafely(error) });
     throw error;
   }
 }
@@ -121,7 +122,7 @@ export async function getPresignedUrl(
       errorCode: e.Code ?? e.name,
       errorMessage: e.message,
     };
-    logger.error(`[S3Service] Error generating pre-signed URL:`, errorDetails, error);
+    logger.error(`[S3Service] Error generating pre-signed URL:`, errorDetails, { error: describeErrorSafely(error) });
     throw error;
   }
 }
@@ -161,7 +162,7 @@ export async function getObjectMetadata(key: string): Promise<{
       errorCode: e.Code ?? e.name,
       errorMessage: e.message,
     };
-    logger.error(`[S3Service] Error getting object metadata:`, errorDetails, error);
+    logger.error(`[S3Service] Error getting object metadata:`, errorDetails, { error: describeErrorSafely(error) });
     throw error;
   }
 }
@@ -214,7 +215,7 @@ export async function streamFromS3(
       errorCode: e.Code ?? e.name,
       errorMessage: e.message,
     };
-    logger.error(`[S3Service] Error streaming from S3:`, errorDetails, error);
+    logger.error(`[S3Service] Error streaming from S3:`, errorDetails, { error: describeErrorSafely(error) });
     throw error;
   }
 }
@@ -241,7 +242,7 @@ export async function deleteFromS3(key: string): Promise<void> {
       errorCode: e.Code ?? e.name,
       errorMessage: e.message,
     };
-    logger.error(`[S3Service] Error deleting from S3:`, errorDetails, error);
+    logger.error(`[S3Service] Error deleting from S3:`, errorDetails, { error: describeErrorSafely(error) });
     throw error;
   }
 }
@@ -301,7 +302,7 @@ export async function deleteS3Prefix(prefix: string): Promise<number> {
       bucket: S3_BUCKET_NAME,
       errorCode: e.Code ?? e.name,
       errorMessage: e.message,
-    }, error);
+    }, { error: describeErrorSafely(error) });
     throw error;
   }
 }

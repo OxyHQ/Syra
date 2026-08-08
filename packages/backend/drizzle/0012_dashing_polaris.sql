@@ -1,0 +1,27 @@
+-- oxy:deploy-phase=pre
+-- ADDITIVE ONLY. Two constraint-support indexes, both non-partial, both on a
+-- column an ON DELETE SET NULL has to scan: `rooms.house_id` and
+-- `series.house_id`. CREATE INDEX takes no lock a reader blocks on beyond the
+-- write lock and rejects nothing, so this is correct against the image still
+-- serving as well as the one arriving.
+--
+-- Hand-split from the same `drizzle-kit generate` run as 0013, which carries
+-- the two CHECK constraints. Generating them together produced ONE file mixing
+-- additive and narrowing DDL, and a file is phased as a whole — so the two
+-- indexes would have been dragged onto the `post` side by the constraints.
+-- That is the exact shape migrate.ts's "A COROLLARY FOR EVERY MIGRATION AFTER
+-- THE BOUNDARY" paragraph names, and 0004 is its cautionary example. Split by
+-- re-generating in two steps rather than by editing SQL, so each file has a
+-- correct snapshot and journal entry rather than a hand-patched one.
+--
+-- WHY THESE INDEXES EXIST, since they look redundant beside the partial
+-- `rooms_house_id_status_created_at_idx` / `series_house_id_active_created_at_idx`
+-- and are not: Postgres will not use a partial index unless the query's
+-- predicate IMPLIES the index predicate. The referential-integrity query behind
+-- ON DELETE SET NULL is `select 1 from only rooms x where house_id = $1 for key
+-- share of x` -- no `archived` clause, and it must find archived rows too. So
+-- before this migration, deleting a house sequential-scanned both `rooms` and
+-- `series`. Measured with `enable_seqscan = off` against working controls; see
+-- task-6-review.md I1.
+CREATE INDEX "rooms_house_id_idx" ON "rooms" USING btree ("house_id");--> statement-breakpoint
+CREATE INDEX "series_house_id_idx" ON "series" USING btree ("house_id");

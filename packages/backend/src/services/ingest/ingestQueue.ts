@@ -31,6 +31,7 @@ import { ingestTrack } from './ingestTrack';
 import type { IngestOptions } from './ingestTrack';
 import { ingestUserUpload } from './ingestUserUpload';
 import { enrichArtistProfile } from '../uploads/enrichCatalogEntity';
+import { describeErrorSafely } from '../../utils/error';
 
 /** BullMQ rejects `:` in queue names — it is its own key separator. */
 const INGEST_QUEUE_NAME = 'syra-ingest';
@@ -141,7 +142,7 @@ function getQueue(): Queue<IngestJobData> | null {
   if (!url) return null;
 
   queue = new Queue<IngestJobData>(INGEST_QUEUE_NAME, { connection: buildConnection(url) });
-  queue.on('error', (err) => logger.error('[ingest] queue error', { err }));
+  queue.on('error', (err) => logger.error('[ingest] queue error', { err: describeErrorSafely(err) }));
   return queue;
 }
 
@@ -206,10 +207,10 @@ export function startIngestWorker(): void {
       kind: job?.data.kind,
       recordId: job?.data.recordId,
       attemptsMade: job?.attemptsMade,
-      err,
+      err: describeErrorSafely(err),
     });
   });
-  worker.on('error', (err) => logger.error('[ingest] worker error', { err }));
+  worker.on('error', (err) => logger.error('[ingest] worker error', { err: describeErrorSafely(err) }));
 
   // Open the producer connection now too. Constructed lazily it would be the
   // first upload after a deploy that pays for establishing it, and that upload
@@ -262,7 +263,7 @@ async function deliver(data: IngestJobData): Promise<void> {
       .then(
         (): EnqueueOutcome => 'enqueued',
         (err: unknown): EnqueueOutcome => {
-          logger.error('[ingest] enqueue rejected, running in-process instead', { kind, recordId, err });
+          logger.error('[ingest] enqueue rejected, running in-process instead', { kind, recordId, err: describeErrorSafely(err) });
           return 'rejected';
         },
       );
@@ -281,7 +282,7 @@ async function deliver(data: IngestJobData): Promise<void> {
   // Fallback: no Redis, the enqueue was refused, or it took too long. Same
   // behaviour as before the queue existed — `status: 'failed'` records the outcome.
   void runJob(data).catch((err) =>
-    logger.error('[ingest] in-process run failed', { kind, recordId, err }),
+    logger.error('[ingest] in-process run failed', { kind, recordId, err: describeErrorSafely(err) }),
   );
 }
 

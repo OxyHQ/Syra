@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll, beforeEach } from 'bun:test';
-import { connect, clear, disconnect } from '../../test/mongo';
-import { PodcastModel } from '../../models/Podcast';
+import { count, eq } from 'drizzle-orm';
+import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
+import { getDb } from '../../db/postgres';
+import { podcasts } from '../../db/schema/podcasts';
+import { findPodcastByFeedUrl } from '../../db/podcasts/podcasts';
 import type { PodcastDirectoryCandidate } from './PodcastDirectory';
 import {
   syncPodcastSearch,
@@ -9,10 +12,16 @@ import {
   MAX_THROTTLE_KEYS,
 } from './podcastBackgroundImport';
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+beforeAll(connectDb);
+afterEach(clearDb);
+afterAll(disconnectDb);
 beforeEach(() => resetPodcastImportStateForTests());
+
+/** How many shows exist — the Mongo `countDocuments({})` equivalent. */
+async function showCount(): Promise<number> {
+  const [row] = await getDb().select({ total: count() }).from(podcasts);
+  return row?.total ?? 0;
+}
 
 const NOW = 1_000_000_000_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -42,15 +51,15 @@ describe('syncPodcastSearch — shallow upsert + deep scheduling', () => {
     expect(result.skipped).toBe(false);
     expect(result.candidates).toBe(MAX_FEEDS_PER_SEARCH); // 30 sliced to 25
     expect(result.shallowUpserted).toBe(MAX_FEEDS_PER_SEARCH);
-    expect(await PodcastModel.countDocuments({})).toBe(MAX_FEEDS_PER_SEARCH);
+    expect(await showCount()).toBe(MAX_FEEDS_PER_SEARCH);
 
-    const doc = await PodcastModel.findOne({ feedUrl: 'https://feeds.example/0.xml' }).lean();
-    expect(doc?.title).toBe('Show 0');
-    expect(doc?.author).toBe('Author 0');
-    expect(doc?.imageSourceUrl).toBe('https://img.example/0.jpg');
-    expect(doc?.image).toBeUndefined(); // no Syra id yet (deep import re-hosts)
-    expect(doc?.source).toBe('rss');
-    expect(doc?.needsDeepImport).toBe(true);
+    const row = await findPodcastByFeedUrl('https://feeds.example/0.xml');
+    expect(row?.title).toBe('Show 0');
+    expect(row?.author).toBe('Author 0');
+    expect(row?.imageSourceUrl).toBe('https://img.example/0.jpg');
+    expect(row?.imageId).toBeNull(); // no Syra id yet (deep import re-hosts)
+    expect(row?.source).toBe('rss');
+    expect(row?.needsDeepImport).toBe(true);
 
     // Every new (needsDeepImport) show is enqueued for the background deep import.
     expect(result.deepEnqueued).toBe(MAX_FEEDS_PER_SEARCH);
@@ -58,7 +67,7 @@ describe('syncPodcastSearch — shallow upsert + deep scheduling', () => {
   });
 
   it('REFRESHES an existing show and does NOT re-enqueue it when fresh', async () => {
-    await PodcastModel.create({
+    await getDb().insert(podcasts).values({
       title: 'Old Title',
       author: 'Old Author',
       source: 'rss',
@@ -74,17 +83,17 @@ describe('syncPodcastSearch — shallow upsert + deep scheduling', () => {
       now: () => NOW,
     });
 
-    const doc = await PodcastModel.findOne({ feedUrl: 'https://feeds.example/0.xml' }).lean();
-    expect(doc?.title).toBe('Show 0'); // metadata refreshed from the directory
-    expect(doc?.author).toBe('Author 0');
-    expect(doc?.imageSourceUrl).toBe('https://img.example/0.jpg');
-    expect(doc?.needsDeepImport).toBe(false); // not re-flagged
+    const row = await findPodcastByFeedUrl('https://feeds.example/0.xml');
+    expect(row?.title).toBe('Show 0'); // metadata refreshed from the directory
+    expect(row?.author).toBe('Author 0');
+    expect(row?.imageSourceUrl).toBe('https://img.example/0.jpg');
+    expect(row?.needsDeepImport).toBe(false); // not re-flagged
     expect(result.deepEnqueued).toBe(0); // fresh → no heavy re-fetch
     expect(enqueued).toHaveLength(0);
   });
 
   it('re-enqueues a STALE existing show for a deep refresh', async () => {
-    await PodcastModel.create({
+    await getDb().insert(podcasts).values({
       title: 'Old',
       source: 'rss',
       feedUrl: 'https://feeds.example/0.xml',
@@ -116,13 +125,13 @@ describe('syncPodcastSearch — shallow upsert + deep scheduling', () => {
 
     expect(first.skipped).toBe(false);
     expect(second.skipped).toBe(true);
-    expect(await PodcastModel.countDocuments({})).toBe(1); // not upserted twice
+    expect(await showCount()).toBe(1); // not upserted twice
   });
 
   it('is a no-op for a blank query', async () => {
     const result = await syncPodcastSearch('   ', { search: async () => [candidate(1)], enqueue: () => {} });
     expect(result).toEqual({ skipped: true, candidates: 0, shallowUpserted: 0, deepEnqueued: 0 });
-    expect(await PodcastModel.countDocuments({})).toBe(0);
+    expect(await showCount()).toBe(0);
   });
 });
 

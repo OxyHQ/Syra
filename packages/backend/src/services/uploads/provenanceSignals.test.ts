@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import path from 'path';
-import { clear, connect, disconnect } from '../../test/mongo';
-import { IsrcRegistryModel } from '../../models/IsrcRegistry';
+import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
+import { getDb } from '../../db/postgres';
+import { isrcRegistry } from '../../db/schema/catalog';
 import { extractMetadata, type ExtractedMetadata } from './extractMetadata';
 import {
   COMMERCIAL_SCORE_THRESHOLD,
@@ -23,7 +24,7 @@ let cdRip: ExtractedMetadata;
 let untagged: ExtractedMetadata;
 
 beforeAll(async () => {
-  await connect();
+  await connectDb();
   [indie, purchased, cdRip, untagged] = await Promise.all([
     extractMetadata(INDIE_MP3),
     extractMetadata(PURCHASED_M4A),
@@ -31,8 +32,12 @@ beforeAll(async () => {
     extractMetadata(UNTAGGED_WAV),
   ]);
 });
-afterEach(clear);
-afterAll(disconnect);
+afterEach(async () => {
+  await clearDb();
+});
+afterAll(async () => {
+  await disconnectDb();
+});
 
 function codes(report: ScreeningReport): ProvenanceMarkerCode[] {
   return report.markers.map((marker) => marker.code);
@@ -523,7 +528,7 @@ describe('what the audio itself identifies as', () => {
 
 describe('collectProvenanceSignals', () => {
   it('resolves the ISRC against IsrcRegistry and returns the row for enrichment', async () => {
-    await IsrcRegistryModel.create({
+    await getDb().insert(isrcRegistry).values({
       isrc: 'ESA452300137',
       recordingMbid: '5f0a1b2c-3d4e-4f50-8a61-72b3c4d5e6f7',
       title: 'Midnight Ferry',

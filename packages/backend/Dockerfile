@@ -175,6 +175,21 @@ COPY --from=builder --chown=node:node /app/packages/sdk/lib ./packages/sdk/lib
 # i18n locale files and other runtime assets shipped with the backend source.
 COPY --from=builder --chown=node:node /app/packages/backend/assets ./packages/backend/assets
 
+# The SQL migrations and their journal. NOT optional and NOT dev-only: the deploy
+# runs `node packages/backend/dist/src/db/migrate.js` as a one-shot ECS task from
+# THIS image (see .github/scripts/deploy-ecs-image.sh), and `findMigrationsFolder`
+# in src/db/migrate.ts locates `drizzle/` by walking UP from the compiled module —
+# /app/packages/backend/dist/src/db -> ... -> /app/packages/backend/drizzle. Four
+# levels, inside its search depth of six.
+#
+# Measured against a faithful reconstruction of this stage's COPY set: without
+# this line the migration task dies with "Cannot locate the drizzle/ migrations
+# directory", naming all six directories it searched; with it, the same command
+# proceeds to open a connection. It fails loudly rather than silently reporting a
+# clean run that migrated nothing — that is `readJournal`'s doing, not this
+# Dockerfile's — but it fails, and it fails inside a production deploy.
+COPY --from=builder --chown=node:node /app/packages/backend/drizzle ./packages/backend/drizzle
+
 EXPOSE 3000
 
 # Container-level health check hitting the app's /health endpoint.

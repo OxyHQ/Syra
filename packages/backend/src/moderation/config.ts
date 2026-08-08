@@ -1,3 +1,7 @@
+import type {
+  CrowdSourceConnectionConfig,
+  ModerationEnforcementMode,
+} from '@oxyhq/crowdsource-app';
 import { logger } from '../utils/logger';
 
 /**
@@ -23,8 +27,6 @@ import { logger } from '../utils/logger';
  * isolation, it is an IDOR.
  */
 
-export type ModerationEnforcementMode = 'observe' | 'manual' | 'automatic';
-
 const ENFORCEMENT_MODES: readonly ModerationEnforcementMode[] = [
   'observe',
   'manual',
@@ -36,7 +38,15 @@ const DEFAULT_OUTBOX_POLL_INTERVAL_MS = 5_000;
 const MIN_OUTBOX_POLL_INTERVAL_MS = 1_000;
 const MAX_OUTBOX_BATCH_SIZE = 500;
 
-export interface CrowdSourceConfig {
+/**
+ * Syra's deployment configuration, which IS the package's connection config.
+ *
+ * Declared as an extension rather than restated: the package reads `enabled`,
+ * the credentials and the mode, and Syra adds nothing to them. Naming its type
+ * here is what makes a field renamed upstream a compile error instead of a
+ * silently-ignored option.
+ */
+export interface CrowdSourceConfig extends CrowdSourceConnectionConfig {
   readonly enabled: boolean;
   /** `applicationId:credentialId:secret`, ONE opaque value. Never split here. */
   readonly serviceKey?: string;

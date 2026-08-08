@@ -31,13 +31,18 @@
  * rest of the BullMQ setup in `services/ingest`.
  */
 
-import type { CatalogImageSizes, ImageLicence, SourceProvenance } from '@syra/shared-types';
+import { and, asc, count, eq, sql } from 'drizzle-orm';
+import type { ArtistMember, CatalogImageSizes, ImageLicence, SourceProvenance } from '@syra/shared-types';
 import { normalizeNameKey } from '@syra/shared-types';
-import type { IArtist } from '../../models/CatalogEntity';
-import { ArtistModel } from '../../models/CatalogEntity';
-import { AlbumModel } from '../../models/Album';
-import type { IMusicBrainzArtist } from '../../models/MusicBrainzArtist';
-import { MusicBrainzArtistModel } from '../../models/MusicBrainzArtist';
+import { getDb, type DbOrTransaction } from '../../db/postgres';
+import {
+  albums,
+  albumSources,
+  catalogEntities,
+  catalogEntitySources,
+  musicbrainzArtists,
+  musicbrainzArtistUrls,
+} from '../../db/schema/catalog';
 import sharp from 'sharp';
 import { mirrorCatalogImage } from '../catalog/catalogImageAssets';
 import { storeImageAsset } from '../imageAssetService';
@@ -61,13 +66,6 @@ export interface ArtistEnrichmentResult {
   reason?: string;
 }
 
-export interface AlbumCoverResult {
-  status: EnrichmentStatus;
-  /** The stored image id, when one was recovered. */
-  coverArt?: string;
-  reason?: string;
-}
-
 /**
  * `ImageAsset.catalog.provider` has no `wikimedia-commons` / `cover-art-archive`
  * value, so the stored asset is tagged with the closest existing one.
@@ -81,12 +79,105 @@ const MIRROR_PROVIDER = 'cc' as const;
 
 // ── Provenance ──────────────────────────────────────────────────────────────
 
-function provenanceEntry(
+/**
+ * Append a provenance entry to a child table.
+ *
+ * `$push` had no position to maintain; `catalog_entity_sources` and
+ * `album_sources` are ordered by a `position` unique per parent, so the next
+ * one is counted rather than assumed. Counting inside the caller's transaction
+ * is what makes two concurrent enrichments of the same artist fail loudly on
+ * the unique constraint instead of silently overwriting each other's entry.
+ */
+async function appendProvenance(
+  db: DbOrTransaction,
+  table: typeof catalogEntitySources | typeof albumSources,
+  parentColumn: 'catalogEntityId' | 'albumId',
+  parentId: string,
   provider: SourceProvenance['provider'],
   externalId: string,
   fields: string[],
-): SourceProvenance {
-  return { provider, externalId, importedAt: new Date().toISOString(), fields };
+): Promise<void> {
+  const column = parentColumn === 'catalogEntityId'
+    ? catalogEntitySources.catalogEntityId
+    : albumSources.albumId;
+  const [existing] = await db.select({ total: count() }).from(table).where(eq(column, parentId));
+
+  await db.insert(table).values({
+    [parentColumn]: parentId,
+    position: existing?.total ?? 0,
+    provider,
+    externalId,
+    importedAt: new Date(),
+    fields,
+  });
+}
+
+/**
+ * The artist columns the gaps-only rule reads. Named, not the whole row:
+ * `publicColumns()` protects two of them and a whole-row read would carry both
+ * into a value this module passes around.
+ */
+const ENRICHABLE_COLUMNS = {
+  id: catalogEntities.id,
+  bio: catalogEntities.bio,
+  country: catalogEntities.country,
+  sortName: catalogEntities.sortName,
+  disambiguation: catalogEntities.disambiguation,
+  artistType: catalogEntities.artistType,
+  activeFrom: catalogEntities.activeFrom,
+  activeUntil: catalogEntities.activeUntil,
+  aliases: catalogEntities.aliases,
+  labels: catalogEntities.labels,
+  members: catalogEntities.members,
+  linksWebsite: catalogEntities.linksWebsite,
+  linksInstagram: catalogEntities.linksInstagram,
+  linksX: catalogEntities.linksX,
+  linksYoutube: catalogEntities.linksYoutube,
+  linksWikidata: catalogEntities.linksWikidata,
+  linksDiscogs: catalogEntities.linksDiscogs,
+  linksBandcamp: catalogEntities.linksBandcamp,
+  linksSoundcloud: catalogEntities.linksSoundcloud,
+  externalWikidataId: catalogEntities.externalWikidataId,
+  externalIsni: catalogEntities.externalIsni,
+  externalIpi: catalogEntities.externalIpi,
+  externalDiscogsArtistId: catalogEntities.externalDiscogsArtistId,
+  externalMusicbrainzArtistId: catalogEntities.externalMusicbrainzArtistId,
+  imageId: catalogEntities.imageId,
+} as const;
+
+type EnrichableArtist = {
+  [K in keyof typeof ENRICHABLE_COLUMNS]: (typeof catalogEntities.$inferSelect)[K];
+};
+
+/** The subset of `catalog_entities` columns an enrichment run may write. */
+type ArtistPatch = Partial<
+  Pick<
+    typeof catalogEntities.$inferInsert,
+    | 'bio' | 'country' | 'sortName' | 'disambiguation' | 'artistType'
+    | 'activeFrom' | 'activeUntil' | 'aliases' | 'labels' | 'members'
+    | 'linksWebsite' | 'linksInstagram' | 'linksX' | 'linksYoutube'
+    | 'linksWikidata' | 'linksDiscogs' | 'linksBandcamp' | 'linksSoundcloud'
+    | 'externalWikidataId' | 'externalIsni' | 'externalIpi' | 'externalDiscogsArtistId'
+    | 'imageId' | 'imageSizesSmallId' | 'imageSizesMediumId' | 'imageSizesLargeId'
+    | 'imageSizesXlargeId' | 'imageSizesXxlargeId' | 'imageSizesOriginalId'
+    | 'imageLicenceLicence' | 'imageLicenceLicenceUrl' | 'imageLicenceAttribution'
+    | 'imageLicenceSourceUrl' | 'primaryColor' | 'secondaryColor'
+  >
+>;
+
+/** The MusicBrainz mirror row plus its URL relationships. */
+interface MusicBrainzSlice {
+  sortName: string;
+  disambiguation: string | null;
+  artistType: string | null;
+  areaName: string | null;
+  countryCode: string | null;
+  beginDate: string | null;
+  endDate: string | null;
+  aliases: string[];
+  isni: string | null;
+  ipi: string | null;
+  urls: { type: string; url: string }[];
 }
 
 // ── Artist ──────────────────────────────────────────────────────────────────
@@ -99,42 +190,62 @@ function provenanceEntry(
  * field with one place to forget it.
  */
 function gapFilling(
-  artist: IArtist,
+  artist: EnrichableArtist,
   facts: WikidataArtistFacts,
-  musicBrainz: IMusicBrainzArtist | null,
-): { set: Record<string, unknown>; fields: string[] } {
-  const set: Record<string, unknown> = {};
+  musicBrainz: MusicBrainzSlice | null,
+): { set: ArtistPatch; fields: string[] } {
+  const set: ArtistPatch = {};
   const fields: string[] = [];
 
-  const fillText = (field: string, current: unknown, incoming: string | undefined): void => {
+  /**
+   * `column` is the drizzle key the value is written to; `field` is the DOTTED
+   * name reported in `fieldsWritten` and recorded in the provenance entry.
+   *
+   * They differ (`links.website` -> `linksWebsite`) and both matter: the column
+   * is what lands, and the dotted name is what the API and the `sources[]`
+   * audit trail have always called the field. Reporting the column name instead
+   * would silently rewrite a provenance vocabulary that is already stored.
+   */
+  const fillText = (
+    column: keyof ArtistPatch,
+    field: string,
+    current: string | null | undefined,
+    incoming: string | null | undefined,
+  ): void => {
     const existing = typeof current === 'string' ? current.trim() : '';
     if (existing.length > 0) return;
-    if (incoming === undefined || incoming.trim().length === 0) return;
-    set[field] = incoming.trim();
+    if (incoming === undefined || incoming === null || incoming.trim().length === 0) return;
+    Object.assign(set, { [column]: incoming.trim() });
     fields.push(field);
   };
 
-  const fillList = (field: string, current: unknown, incoming: ReadonlyArray<string>): void => {
+  const fillList = (
+    column: keyof ArtistPatch,
+    field: string,
+    current: readonly string[] | null | undefined,
+    incoming: ReadonlyArray<string>,
+  ): void => {
     if (Array.isArray(current) && current.length > 0) return;
     const values = [...new Set(incoming.map((value) => value.trim()).filter(Boolean))];
     if (values.length === 0) return;
-    set[field] = values;
+    Object.assign(set, { [column]: values });
     fields.push(field);
   };
 
   // MusicBrainz is preferred over Wikidata wherever both speak, because it is
   // the identity the MBID names — Wikidata's copy of the same fact is a mirror
   // of it. Wikidata is the only source for the description and the photo.
-  fillText('bio', artist.bio, facts.description);
-  fillText('country', artist.country, musicBrainz?.countryCode ?? facts.country?.name);
-  fillText('sortName', artist.sortName, musicBrainz?.sortName);
-  fillText('disambiguation', artist.disambiguation, musicBrainz?.disambiguation);
-  fillText('artistType', artist.artistType, musicBrainz?.artistType);
-  fillText('activeFrom', artist.activeFrom, musicBrainz?.beginDate ?? facts.activeFrom);
-  fillText('activeUntil', artist.activeUntil, musicBrainz?.endDate ?? facts.activeUntil);
+  fillText('bio', 'bio', artist.bio, facts.description);
+  fillText('country', 'country', artist.country, musicBrainz?.countryCode ?? facts.country?.name);
+  fillText('sortName', 'sortName', artist.sortName, musicBrainz?.sortName);
+  fillText('disambiguation', 'disambiguation', artist.disambiguation, musicBrainz?.disambiguation);
+  fillText('artistType', 'artistType', artist.artistType, musicBrainz?.artistType);
+  fillText('activeFrom', 'activeFrom', artist.activeFrom, musicBrainz?.beginDate ?? facts.activeFrom);
+  fillText('activeUntil', 'activeUntil', artist.activeUntil, musicBrainz?.endDate ?? facts.activeUntil);
 
-  fillList('aliases', artist.aliases, [...(musicBrainz?.aliases ?? []), ...facts.aliases]);
+  fillList('aliases', 'aliases', artist.aliases, [...(musicBrainz?.aliases ?? []), ...facts.aliases]);
   fillList(
+    'labels',
     'labels',
     artist.labels,
     facts.labels.map((label) => label.name).filter((name): name is string => name !== undefined),
@@ -144,7 +255,7 @@ function gapFilling(
   // rather than a scan, and NO `catalogEntityId`: linking a member to a catalog
   // entity is a high-confidence identity claim, and a name from Wikidata's
   // `has part` is not one.
-  const members = facts.members
+  const members: ArtistMember[] = facts.members
     .map((member) => member.name)
     .filter((name): name is string => name !== undefined)
     .map((name) => ({ name, nameKey: normalizeNameKey(name) }));
@@ -153,32 +264,35 @@ function gapFilling(
     fields.push('members');
   }
 
-  fillText('links.website', artist.links?.website, urlFor(musicBrainz, 'official homepage') ?? facts.officialWebsite);
-  fillText('links.instagram', artist.links?.instagram, facts.instagram);
-  fillText('links.x', artist.links?.x, facts.x);
-  fillText('links.youtube', artist.links?.youtube, facts.youtube);
+  fillText('linksWebsite', 'links.website', artist.linksWebsite, urlFor(musicBrainz, 'official homepage') ?? facts.officialWebsite);
+  fillText('linksInstagram', 'links.instagram', artist.linksInstagram, facts.instagram);
+  fillText('linksX', 'links.x', artist.linksX, facts.x);
+  fillText('linksYoutube', 'links.youtube', artist.linksYoutube, facts.youtube);
   // Guarded on the item id: when only the MusicBrainz slice answered, `itemId`
   // is empty and an unguarded template yields `…/wiki/`, a link to nothing that
   // renders on the profile as though it went somewhere.
   fillText(
+    'linksWikidata',
     'links.wikidata',
-    artist.links?.wikidata,
+    artist.linksWikidata,
     facts.itemId ? `https://www.wikidata.org/wiki/${facts.itemId}` : undefined,
   );
-  fillText('links.discogs', artist.links?.discogs, discogsUrl(facts.discogsArtistId));
-  fillText('links.bandcamp', artist.links?.bandcamp, facts.bandcamp);
-  fillText('links.soundcloud', artist.links?.soundcloud, facts.soundcloud);
+  fillText('linksDiscogs', 'links.discogs', artist.linksDiscogs, discogsUrl(facts.discogsArtistId));
+  fillText('linksBandcamp', 'links.bandcamp', artist.linksBandcamp, facts.bandcamp);
+  fillText('linksSoundcloud', 'links.soundcloud', artist.linksSoundcloud, facts.soundcloud);
 
   fillText(
+    'externalWikidataId',
     'externalIds.wikidataId',
-    artist.externalIds?.wikidataId,
+    artist.externalWikidataId,
     facts.itemId ? facts.itemId : undefined,
   );
-  fillText('externalIds.isni', artist.externalIds?.isni, musicBrainz?.isni ?? facts.isni);
-  fillText('externalIds.ipi', artist.externalIds?.ipi, musicBrainz?.ipi ?? facts.ipi);
+  fillText('externalIsni', 'externalIds.isni', artist.externalIsni, musicBrainz?.isni ?? facts.isni);
+  fillText('externalIpi', 'externalIds.ipi', artist.externalIpi, musicBrainz?.ipi ?? facts.ipi);
   fillText(
+    'externalDiscogsArtistId',
     'externalIds.discogsArtistId',
-    artist.externalIds?.discogsArtistId,
+    artist.externalDiscogsArtistId,
     facts.discogsArtistId,
   );
 
@@ -186,7 +300,7 @@ function gapFilling(
 }
 
 /** A URL relationship of the given type from the MusicBrainz slice. */
-function urlFor(musicBrainz: IMusicBrainzArtist | null, type: string): string | undefined {
+function urlFor(musicBrainz: MusicBrainzSlice | null, type: string): string | undefined {
   return musicBrainz?.urls.find((url) => url.type === type)?.url;
 }
 
@@ -205,24 +319,32 @@ function discogsUrl(discogsArtistId: string | undefined): string | undefined {
  * variants every surface renders. Nothing here fetches a URL itself.
  */
 async function storeArtistPhoto(
-  artist: IArtist,
+  artistId: string,
   imageUrl: string,
   licence: ImageLicence,
-): Promise<{ set: Record<string, unknown>; fields: string[] } | undefined> {
+): Promise<{ set: ArtistPatch; fields: string[] } | undefined> {
   const mirrored = await mirrorCatalogImage([{ url: imageUrl }], {
     provider: MIRROR_PROVIDER,
     entityType: 'artist',
-    externalId: artist._id.toString(),
+    externalId: artistId,
   });
   if (!mirrored) return undefined;
 
   return {
     set: {
-      image: mirrored.imageId,
-      imageSizes: mirrored.imageSizes,
+      imageId: mirrored.imageId,
+      imageSizesSmallId: mirrored.imageSizes.small?.id ?? null,
+      imageSizesMediumId: mirrored.imageSizes.medium?.id ?? null,
+      imageSizesLargeId: mirrored.imageSizes.large?.id ?? null,
+      imageSizesXlargeId: mirrored.imageSizes.xlarge?.id ?? null,
+      imageSizesXxlargeId: mirrored.imageSizes.xxlarge?.id ?? null,
+      imageSizesOriginalId: mirrored.imageSizes.original?.id ?? null,
       // Stored BESIDE the image, because that is what the licence actually
       // requires — attribution held in a table nobody renders discharges nothing.
-      imageLicence: licence,
+      imageLicenceLicence: licence.licence,
+      imageLicenceLicenceUrl: licence.licenceUrl ?? null,
+      imageLicenceAttribution: licence.attribution,
+      imageLicenceSourceUrl: licence.sourceUrl,
       ...(mirrored.primaryColor !== undefined && { primaryColor: mirrored.primaryColor }),
       ...(mirrored.secondaryColor !== undefined && { secondaryColor: mirrored.secondaryColor }),
     },
@@ -237,12 +359,17 @@ async function storeArtistPhoto(
  * it is safe to re-queue after a failure or run over the whole catalogue.
  */
 export async function enrichArtistProfile(artistId: string): Promise<ArtistEnrichmentResult> {
-  const artist = await ArtistModel.findById(artistId);
+  const [artist] = await getDb()
+    .select(ENRICHABLE_COLUMNS)
+    .from(catalogEntities)
+    .where(and(eq(catalogEntities.id, artistId), eq(catalogEntities.type, 'artist')))
+    .limit(1);
+
   if (!artist) {
     return { status: 'skipped', fieldsWritten: [], imageWritten: false, reason: 'artist not found' };
   }
 
-  const mbid = artist.externalIds?.musicbrainzArtistId;
+  const mbid = artist.externalMusicbrainzArtistId;
   if (!mbid) {
     // The single most important branch in this file. An artist resolved by name
     // alone has no verified identity, and enriching one is how the wrong
@@ -261,7 +388,7 @@ export async function enrichArtistProfile(artistId: string): Promise<ArtistEnric
   // item — so the run continues on whichever answered.
   const [facts, musicBrainz] = await Promise.all([
     lookupArtistOnWikidata(mbid),
-    MusicBrainzArtistModel.findOne({ mbid }).lean(),
+    loadMusicBrainzSlice(mbid),
   ]);
 
   if (!facts && !musicBrainz) {
@@ -285,10 +412,10 @@ export async function enrichArtistProfile(artistId: string): Promise<ArtistEnric
   // the expensive part of this job, so the check comes before the fetch rather
   // than after it.
   let imageWritten = false;
-  if (!artist.image && wikidataFacts.imageFileName) {
+  if (!artist.imageId && wikidataFacts.imageFileName) {
     const commons = await fetchCommonsImage(wikidataFacts.imageFileName);
     if (commons) {
-      const stored = await storeArtistPhoto(artist, commons.url, commons.licence);
+      const stored = await storeArtistPhoto(artistId, commons.url, commons.licence);
       if (stored) {
         Object.assign(set, stored.set);
         fields.push(...stored.fields);
@@ -306,75 +433,78 @@ export async function enrichArtistProfile(artistId: string): Promise<ArtistEnric
     };
   }
 
-  await ArtistModel.updateOne({ _id: artist._id }, { $set: set });
-
   /**
-   * Verify the write landed before claiming it did.
+   * The write and its provenance entry commit TOGETHER.
    *
-   * Mongoose strict mode DISCARDS a `$set` on a path the schema does not
-   * declare — silently, with no throw and no warning. Because `IArtist` derives
-   * from the zod `Artist` type, a field present there and absent from the
-   * Mongoose schema typechecks perfectly and writes nothing, so tsc cannot see
-   * this and neither can a test that only inspects the return value.
+   * The Mongo version issued them as two `updateOne`s with a verification read
+   * between them, because Mongoose strict mode DISCARDS a `$set` on an
+   * undeclared path — silently, with no throw — so "did the fields land" was a
+   * real question that had to be asked at runtime, and a background job could
+   * otherwise append a provenance entry per run forever while persisting
+   * nothing.
    *
-   * Left unchecked it is worse than lost data: the gaps-only rule would find the
-   * same gaps on every pass, so a background job scheduled over the catalogue
-   * would append a provenance entry per run forever while persisting nothing.
-   * This is the smoke alarm for that — it names the dropped paths and refuses to
-   * record provenance for a field that is not there.
+   * That question cannot be asked here because it cannot be false: an unknown
+   * column key is a `tsc` error, and an unknown column in SQL is a runtime
+   * error, so a write that returns is a write that landed. The verification
+   * read, `readPath`, and the "nothing persisted" result arm are deleted rather
+   * than translated — they were compensating for a database behaviour this one
+   * does not have.
    */
-  const persisted = await ArtistModel.findById(artist._id).lean();
-  const landed = fields.filter((field) => readPath(persisted, field) !== undefined);
-  const dropped = fields.filter((field) => !landed.includes(field));
-
-  if (dropped.length > 0) {
-    logger.error('[enrichment] fields did not persist — Mongoose schema is missing these paths', {
+  await getDb().transaction(async (tx) => {
+    await tx.update(catalogEntities).set(set).where(eq(catalogEntities.id, artistId));
+    await appendProvenance(
+      tx,
+      catalogEntitySources,
+      'catalogEntityId',
       artistId,
-      dropped,
-    });
-  }
-
-  if (landed.length === 0) {
-    return {
-      status: 'skipped',
-      fieldsWritten: [],
-      imageWritten,
-      reason: `nothing persisted; the artist schema declares none of: ${dropped.join(', ')}`,
-    };
-  }
-
-  await ArtistModel.updateOne(
-    { _id: artist._id },
-    {
-      $push: {
-        sources: provenanceEntry(
-          facts ? 'wikidata' : 'musicbrainz',
-          facts ? facts.itemId : mbid,
-          landed,
-        ),
-      },
-    },
-  );
+      facts ? 'wikidata' : 'musicbrainz',
+      facts ? facts.itemId : mbid,
+      fields,
+    );
+  });
 
   logger.info('[enrichment] artist profile enriched', {
     artistId,
     wikidataItem: facts?.itemId,
     musicbrainzArtistId: mbid,
-    fields: landed,
+    fields,
   });
 
-  return { status: 'enriched', fieldsWritten: landed, imageWritten };
+  return { status: 'enriched', fieldsWritten: fields, imageWritten };
 }
 
-/** Read a dotted path (`links.website`) off a lean document. */
-function readPath(document: unknown, dottedPath: string): unknown {
-  let current: unknown = document;
-  for (const segment of dottedPath.split('.')) {
-    const record = current as Record<string, unknown> | null | undefined;
-    if (typeof record !== 'object' || record === null) return undefined;
-    current = record[segment];
-  }
-  return current;
+/** The MusicBrainz mirror row for one MBID, with its URL relationships. */
+async function loadMusicBrainzSlice(mbid: string): Promise<MusicBrainzSlice | null> {
+  const [row] = await getDb()
+    .select({
+      id: musicbrainzArtists.id,
+      sortName: musicbrainzArtists.sortName,
+      disambiguation: musicbrainzArtists.disambiguation,
+      artistType: musicbrainzArtists.artistType,
+      areaName: musicbrainzArtists.areaName,
+      countryCode: musicbrainzArtists.countryCode,
+      beginDate: musicbrainzArtists.beginDate,
+      endDate: musicbrainzArtists.endDate,
+      aliases: musicbrainzArtists.aliases,
+      isni: musicbrainzArtists.isni,
+      ipi: musicbrainzArtists.ipi,
+    })
+    .from(musicbrainzArtists)
+    .where(eq(musicbrainzArtists.mbid, mbid))
+    .limit(1);
+
+  if (!row) return null;
+
+  // `urls` was an embedded array; `musicbrainz_artist_urls` preserves its order
+  // by `position`, and `urlFor` takes the FIRST relationship of a type, so the
+  // ordering is load-bearing rather than cosmetic.
+  const urls = await getDb()
+    .select({ type: musicbrainzArtistUrls.type, url: musicbrainzArtistUrls.url })
+    .from(musicbrainzArtistUrls)
+    .where(eq(musicbrainzArtistUrls.musicbrainzArtistId, row.id))
+    .orderBy(asc(musicbrainzArtistUrls.position));
+
+  return { ...row, urls };
 }
 
 // ── Artist photo suggestions from an uploaded file ──────────────────────────
@@ -451,7 +581,11 @@ export async function suggestArtistPhotosFromUpload(
   const candidates = input.pictures.filter((picture) => isArtistPicture(picture.type));
   if (candidates.length === 0) return 0;
 
-  const artist = await ArtistModel.findById(input.artistId).select('_id claimedByOxyUserId');
+  const [artist] = await getDb()
+    .select({ id: catalogEntities.id })
+    .from(catalogEntities)
+    .where(and(eq(catalogEntities.id, input.artistId), eq(catalogEntities.type, 'artist')))
+    .limit(1);
   if (!artist) return 0;
 
   let stored = 0;
@@ -473,24 +607,35 @@ export async function suggestArtistPhotosFromUpload(
         ...(probed.height !== undefined && { height: probed.height }),
       });
 
-      await ArtistModel.updateOne(
-        { _id: artist._id },
-        {
-          $push: {
-            imageSuggestions: {
-              image: {
-                origin: 'upload',
-                url: asset.id,
-                ...(probed.width !== undefined && { width: probed.width }),
-                ...(probed.height !== undefined && { height: probed.height }),
-              },
-              proposedAt: new Date().toISOString(),
-              ...(input.proposedByOxyUserId && { proposedByOxyUserId: input.proposedByOxyUserId }),
-              ...(input.sourceUploadId && { sourceUploadId: input.sourceUploadId }),
-            },
-          },
+      /**
+       * `jsonb || jsonb` — the append `$push` did, expressed in SQL so the read
+       * and the write are one statement. Reading the array, appending in JS and
+       * writing it back would lose a suggestion whenever two uploads of the same
+       * artist land at once, which is exactly the shape this path has: several
+       * files of one release, screened in parallel.
+       *
+       * `coalesce` because the column is nullable and `null || anything` is null
+       * in Postgres — without it the FIRST suggestion for an artist would be
+       * silently discarded, and only the first.
+       */
+      const suggestion = {
+        image: {
+          origin: 'upload',
+          url: asset.id,
+          ...(probed.width !== undefined && { width: probed.width }),
+          ...(probed.height !== undefined && { height: probed.height }),
         },
-      );
+        proposedAt: new Date().toISOString(),
+        ...(input.proposedByOxyUserId && { proposedByOxyUserId: input.proposedByOxyUserId }),
+        ...(input.sourceUploadId && { sourceUploadId: input.sourceUploadId }),
+      };
+
+      await getDb()
+        .update(catalogEntities)
+        .set({
+          imageSuggestions: sql`coalesce(${catalogEntities.imageSuggestions}, '[]'::jsonb) || ${JSON.stringify([suggestion])}::jsonb`,
+        })
+        .where(eq(catalogEntities.id, artist.id));
       stored += 1;
     } catch (err) {
       // A malformed picture frame must not fail the upload that carried it —
@@ -562,40 +707,21 @@ export async function recoverCoverArt(input: {
 }
 
 /**
- * Fill in an EXISTING album's missing cover art.
+ * `enrichAlbumCoverArt` is DELETED, not ported, and the reason is worth keeping.
  *
- * Separate from {@link recoverCoverArt} because the two run at different times:
- * that one unblocks creation, this one repairs an album already in the catalogue
- * — typically after a release id arrives from a later upload of the same record.
+ * It repaired "an EXISTING album's missing cover art" — a state that cannot
+ * exist. `albums.cover_art_id` is NOT NULL (and `models/Album.ts:69` declared
+ * `coverArt: { type: String, required: true }` for the same reason: an album is
+ * not created at all unless real artwork was found), so its second line —
+ * `if (album.coverArt) return skipped` — was unconditionally true.
+ *
+ * It had no production caller either: the only references anywhere were its own
+ * definition and its own tests, and those reached the working arm by `$unset`-ing
+ * `coverArt` after creation, i.e. by constructing a document Mongoose would have
+ * refused to save. Under a NOT NULL column that fixture is unrepresentable, so a
+ * faithful port would have been a function that provably does nothing plus tests
+ * that could no longer set it up.
+ *
+ * `recoverCoverArt` above is the live half of this pair and is untouched: it runs
+ * BEFORE an album exists and is what decides whether the container can be created.
  */
-export async function enrichAlbumCoverArt(albumId: string): Promise<AlbumCoverResult> {
-  const album = await AlbumModel.findById(albumId);
-  if (!album) return { status: 'skipped', reason: 'album not found' };
-  if (album.coverArt) return { status: 'skipped', reason: 'album already has cover art' };
-
-  const releaseMbid = album.externalIds?.musicbrainzReleaseId;
-  if (!releaseMbid) {
-    return { status: 'skipped', reason: 'no MusicBrainz release id to look the artwork up by' };
-  }
-
-  const recovered = await recoverCoverArt({ releaseMbid, externalId: albumId });
-  if (!recovered) {
-    return { status: 'nothing-found', reason: `Cover Art Archive has no front cover for ${releaseMbid}` };
-  }
-
-  await AlbumModel.updateOne(
-    { _id: album._id },
-    {
-      $set: {
-        coverArt: recovered.coverArt,
-        coverArtSizes: recovered.imageSizes,
-        ...(recovered.primaryColor !== undefined && { primaryColor: recovered.primaryColor }),
-        ...(recovered.secondaryColor !== undefined && { secondaryColor: recovered.secondaryColor }),
-      },
-      $push: { sources: provenanceEntry('cover-art-archive', releaseMbid, ['coverArt']) },
-    },
-  );
-
-  logger.info('[enrichment] album cover art recovered', { albumId, releaseMbid });
-  return { status: 'enriched', coverArt: recovered.coverArt };
-}

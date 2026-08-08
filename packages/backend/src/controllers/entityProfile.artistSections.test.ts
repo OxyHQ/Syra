@@ -1,15 +1,21 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
-import mongoose from 'mongoose';
+import { eq } from 'drizzle-orm';
+import { uuidv7 } from '@oxyhq/db';
 import type { Request, Response, NextFunction } from 'express';
 import type { EntityProfile } from '@syra/shared-types';
-import { PlaylistVisibility } from '@syra/shared-types';
-import { connect, clear, disconnect } from '../test/mongo';
-import { ArtistModel, PersonModel } from '../models/CatalogEntity';
-import { TrackModel } from '../models/Track';
-import { AlbumModel } from '../models/Album';
-import { PlaylistModel } from '../models/Playlist';
-import { PlaylistTrackModel } from '../models/PlaylistTrack';
-import { ContributionAttestationModel } from '../models/ContributionAttestation';
+import { normalizeNameKey, PlaylistVisibility } from '@syra/shared-types';
+import { clearDb, connectDb, disconnectDb } from '../test/postgres';
+import { getDb } from '../db/postgres';
+import {
+  albums,
+  catalogEntities,
+  catalogEntitySources,
+  imageAssets,
+  trackCredits,
+  tracks,
+} from '../db/schema/catalog';
+import { playlistTracks, playlists } from '../db/schema/library';
+import { contributionAttestations } from '../db/schema/creators';
 import { getEntityProfile } from './entityProfile.controller';
 
 /**
@@ -21,9 +27,29 @@ import { getEntityProfile } from './entityProfile.controller';
  * opens the wrong URL.
  */
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+/**
+ * POSTGRES ONLY.
+ *
+ * This block used to say the opposite, and the reason it was wrong is worth
+ * keeping: nothing here reads a Mongoose model, but `entityProfile.controller`
+ * still GATED every handler on `isDatabaseConnected()` — Mongoose readiness —
+ * so without a Mongo connection every request answered 503 and these suites had
+ * to open one. The guard was the whole dependency.
+ *
+ * Task 15 switched that gate to `isPostgresConnected()`, and the Mongo hooks
+ * went with it. `db/__tests__/connectivityGates.test.ts` is what keeps this
+ * true: it walks this controller's whole import graph and fails if anything it
+ * reaches opens a model again.
+ */
+beforeAll(async () => {
+  await connectDb();
+});
+afterEach(async () => {
+  await clearDb();
+});
+afterAll(async () => {
+  await disconnectDb();
+});
 
 interface CapturedRes {
   _status: number;
@@ -55,64 +81,161 @@ function profileOf(res: CapturedRes): EntityProfile {
   return (res._body as { data: EntityProfile }).data;
 }
 
+/** An `image_assets` row, so a cover art / photo reference resolves. */
+async function makeImageAsset(ownerType: 'album' | 'artist'): Promise<string> {
+  const [asset] = await getDb()
+    .insert(imageAssets)
+    .values({
+      s3Key: `fixtures/${uuidv7()}.jpg`,
+      filename: 'c.jpg',
+      contentType: 'image/jpeg',
+      byteSize: 1,
+      width: 640,
+      height: 640,
+      ownerType,
+    })
+    .returning({ id: imageAssets.id });
+
+  if (!asset) throw new Error('makeImageAsset: insert returned no row');
+  return asset.id;
+}
+
 /** An artist with one EP, one taken-down single, a guest credit and a playlist. */
 async function seedRichArtist() {
-  const artist = await ArtistModel.create({
-    name: 'Rich Artist',
-    source: 'upload',
-    origin: 'contributed',
-    claimable: true,
-    country: 'ES',
-    sources: [{ provider: 'cc', externalId: 'mb-1', importedAt: '2026-01-01', fields: ['bio', 'country'] }],
-  });
-  const artistId = artist._id.toString();
+  const [artist] = await getDb()
+    .insert(catalogEntities)
+    .values({
+      type: 'artist',
+      name: 'Rich Artist',
+      /**
+       * `normalizeNameKey('Rich Artist')`, written explicitly.
+       *
+       * Mongoose DERIVED this from `name` in a pre-save hook, so the old fixture
+       * never mentioned it — and `loadCreditedOn` matches
+       * `track_credits.name_key` against exactly this value, which is why a
+       * fixture that invented a unique key here returns an EMPTY credited-on
+       * shelf and still looks like a seeded artist. Stable rather than
+       * suffixed: `catalog_entities_artist_name_key_key` is unique over artists,
+       * and `clearDb` truncates between tests, so the only collision risk is
+       * within one fixture — where the two artists differ.
+       */
+      nameKey: normalizeNameKey('Rich Artist'),
+      source: 'upload',
+      origin: 'contributed',
+      claimable: true,
+      country: 'ES',
+    })
+    .returning({ id: catalogEntities.id });
+  if (!artist) throw new Error('seedRichArtist: artist insert returned no row');
+  const artistId = artist.id;
 
-  const ep = await AlbumModel.create({
-    title: 'The EP', artistId, artistName: 'Rich Artist',
-    releaseDate: '2025-06-01', coverArt: new mongoose.Types.ObjectId().toString(), type: 'ep',
+  // `sources[]` is a child table now, not an embedded array.
+  await getDb().insert(catalogEntitySources).values({
+    catalogEntityId: artistId,
+    position: 0,
+    provider: 'cc',
+    externalId: 'mb-1',
+    importedAt: new Date('2026-01-01T00:00:00Z'),
+    fields: ['bio', 'country'],
   });
-  const ownTrack = await TrackModel.create({
-    title: 'Own Song', artistId, artistName: 'Rich Artist', duration: 200,
-    source: 'upload', status: 'ready', albumId: ep._id.toString(),
-  });
+
+  const [ep] = await getDb()
+    .insert(albums)
+    .values({
+      title: 'The EP',
+      artistId,
+      artistName: 'Rich Artist',
+      releaseDate: '2025-06-01',
+      coverArtId: await makeImageAsset('album'),
+      type: 'ep',
+    })
+    .returning({ id: albums.id });
+  if (!ep) throw new Error('seedRichArtist: album insert returned no row');
+
+  const [ownTrack] = await getDb()
+    .insert(tracks)
+    .values({
+      title: 'Own Song', artistId, artistName: 'Rich Artist', duration: 200,
+      source: 'upload', status: 'ready', albumId: ep.id,
+    })
+    .returning({ id: tracks.id });
+  if (!ownTrack) throw new Error('seedRichArtist: own track insert returned no row');
 
   // A recording somebody else published onto this profile.
-  const contributed = await TrackModel.create({
-    title: 'Contributed Song', artistId, artistName: 'Rich Artist', duration: 190,
-    source: 'upload', status: 'ready',
-  });
-  await ContributionAttestationModel.create({
-    trackId: contributed._id.toString(),
+  const [contributed] = await getDb()
+    .insert(tracks)
+    .values({
+      title: 'Contributed Song', artistId, artistName: 'Rich Artist', duration: 190,
+      source: 'upload', status: 'ready',
+    })
+    .returning({ id: tracks.id });
+  if (!contributed) throw new Error('seedRichArtist: contributed track insert returned no row');
+
+  await getDb().insert(contributionAttestations).values({
+    trackId: contributed.id,
     uploaderOxyUserId: 'a-stranger',
     statement: 'I may distribute this recording',
     acceptedAt: new Date(),
   });
 
   // A track by somebody ELSE that credits this artist as a producer.
-  const host = await ArtistModel.create({ name: 'Another Band', source: 'upload' });
-  const creditedTrack = await TrackModel.create({
-    title: 'Produced By Them', artistId: host._id.toString(), artistName: 'Another Band',
-    duration: 210, source: 'upload', status: 'ready',
-    credits: [{ name: 'Rich Artist', role: 'producer', nameKey: 'rich artist' }],
+  const [host] = await getDb()
+    .insert(catalogEntities)
+    .values({
+      type: 'artist', name: 'Another Band', nameKey: normalizeNameKey('Another Band'),
+      source: 'upload',
+    })
+    .returning({ id: catalogEntities.id });
+  if (!host) throw new Error('seedRichArtist: host insert returned no row');
+
+  const [creditedTrack] = await getDb()
+    .insert(tracks)
+    .values({
+      title: 'Produced By Them', artistId: host.id, artistName: 'Another Band',
+      duration: 210, source: 'upload', status: 'ready',
+    })
+    .returning({ id: tracks.id });
+  if (!creditedTrack) throw new Error('seedRichArtist: credited track insert returned no row');
+
+  // `credits[]` is `track_credits` now — the one subdocument array that DID
+  // become a child table, because `loadCreditedOn` queries it by element.
+  await getDb().insert(trackCredits).values({
+    trackId: creditedTrack.id, position: 0, name: 'Rich Artist', role: 'producer',
+    nameKey: normalizeNameKey('Rich Artist'),
   });
 
-  const playlist = await PlaylistModel.create({
-    name: 'A Public Mix', ownerOxyUserId: 'curator-1', ownerUsername: 'curator',
-    visibility: PlaylistVisibility.PUBLIC,
-  });
-  await PlaylistTrackModel.create({
-    playlistId: playlist._id, trackId: ownTrack._id.toString(),
-    addedAt: new Date().toISOString(), order: 0,
+  const [playlist] = await getDb()
+    .insert(playlists)
+    .values({
+      name: 'A Public Mix', ownerOxyUserId: 'curator-1', ownerUsername: 'curator',
+      visibility: PlaylistVisibility.PUBLIC,
+    })
+    .returning({ id: playlists.id });
+  if (!playlist) throw new Error('seedRichArtist: playlist insert returned no row');
+
+  await getDb().insert(playlistTracks).values({
+    playlistId: playlist.id, trackId: ownTrack.id, addedAt: new Date(), position: 0,
   });
 
   return {
     artistId,
-    epId: ep._id.toString(),
-    ownTrackId: ownTrack._id.toString(),
-    contributedTrackId: contributed._id.toString(),
-    creditedTrackId: creditedTrack._id.toString(),
-    playlistId: playlist._id.toString(),
+    epId: ep.id,
+    ownTrackId: ownTrack.id,
+    contributedTrackId: contributed.id,
+    creditedTrackId: creditedTrack.id,
+    playlistId: playlist.id,
   };
+}
+
+/** A `type:'person'` row, optionally linked to an artist. */
+async function makePerson(name: string, linkedArtistId?: string): Promise<string> {
+  const [person] = await getDb()
+    .insert(catalogEntities)
+    .values({ type: 'person', name, ...(linkedArtistId ? { linkedArtistId } : {}) })
+    .returning({ id: catalogEntities.id });
+
+  if (!person) throw new Error('makePerson: insert returned no row');
+  return person.id;
 }
 
 function ids(list: unknown[] | undefined): string[] {
@@ -168,10 +291,10 @@ describe('GET /api/p/:id — artist sections on the artist branch', () => {
 
   it('hides a private playlist from a guest and shows it to its owner', async () => {
     const seed = await seedRichArtist();
-    await PlaylistModel.updateOne(
-      { _id: seed.playlistId },
-      { visibility: PlaylistVisibility.PRIVATE },
-    );
+    await getDb()
+      .update(playlists)
+      .set({ visibility: PlaylistVisibility.PRIVATE })
+      .where(eq(playlists.id, seed.playlistId));
 
     const guest = makeRes();
     await getEntityProfile(makeReq(seed.artistId), guest as unknown as Response, failNext);
@@ -203,9 +326,14 @@ describe('GET /api/p/:id — attribution reaches the client', () => {
 
   it('serves imageLicence and the identity fields on the ARTIST branch', async () => {
     const seed = await seedRichArtist();
-    await ArtistModel.updateOne({ _id: seed.artistId }, {
-      $set: {
-        imageLicence: LICENCE,
+    await getDb()
+      .update(catalogEntities)
+      .set({
+        // The embedded `imageLicence` object is four flat columns now.
+        imageLicenceLicence: LICENCE.licence,
+        imageLicenceLicenceUrl: LICENCE.licenceUrl,
+        imageLicenceAttribution: LICENCE.attribution,
+        imageLicenceSourceUrl: LICENCE.sourceUrl,
         sortName: 'Artist, Rich',
         disambiguation: 'Spanish producer',
         artistType: 'person',
@@ -213,9 +341,12 @@ describe('GET /api/p/:id — attribution reaches the client', () => {
         activeUntil: '2024',
         aliases: ['R. Artist', 'Rico'],
         labels: ['Harbour Records'],
-        members: [{ name: 'Rich Artist', role: 'vocals' }],
-      },
-    });
+        // Still `jsonb`, and it reaches the wire only because `toArtistDto`
+        // names it — an allowlist drops silently, and this assertion is the one
+        // thing that would have caught the port removing it.
+        members: [{ name: 'Rich Artist', nameKey: normalizeNameKey('Rich Artist') }],
+      })
+      .where(eq(catalogEntities.id, seed.artistId));
 
     const res = makeRes();
     await getEntityProfile(makeReq(seed.artistId), res as unknown as Response, failNext);
@@ -245,16 +376,21 @@ describe('GET /api/p/:id — attribution reaches the client', () => {
    */
   it('serves them on the PERSON branch too, from the linked artist', async () => {
     const seed = await seedRichArtist();
-    await ArtistModel.updateOne({ _id: seed.artistId }, {
-      $set: { imageLicence: LICENCE, aliases: ['R. Artist'], activeFrom: '2011' },
-    });
-    const person = await PersonModel.create({
-      name: 'Rich Artist',
-      linkedArtistId: new mongoose.Types.ObjectId(seed.artistId),
-    });
+    await getDb()
+      .update(catalogEntities)
+      .set({
+        imageLicenceLicence: LICENCE.licence,
+        imageLicenceLicenceUrl: LICENCE.licenceUrl,
+        imageLicenceAttribution: LICENCE.attribution,
+        imageLicenceSourceUrl: LICENCE.sourceUrl,
+        aliases: ['R. Artist'],
+        activeFrom: '2011',
+      })
+      .where(eq(catalogEntities.id, seed.artistId));
+    const personId = await makePerson('Rich Artist', seed.artistId);
 
     const res = makeRes();
-    await getEntityProfile(makeReq(person._id.toString()), res as unknown as Response, failNext);
+    await getEntityProfile(makeReq(personId), res as unknown as Response, failNext);
     const profile = profileOf(res);
 
     expect(profile.kind).toBe('person');
@@ -277,13 +413,10 @@ describe('GET /api/p/:id — attribution reaches the client', () => {
 describe('GET /api/p/:id — the same sections on the PERSON branch', () => {
   it('serves the linked artist\'s sections when addressed by person id', async () => {
     const seed = await seedRichArtist();
-    const person = await PersonModel.create({
-      name: 'Rich Artist',
-      linkedArtistId: new mongoose.Types.ObjectId(seed.artistId),
-    });
+    const personId = await makePerson('Rich Artist', seed.artistId);
 
     const res = makeRes();
-    await getEntityProfile(makeReq(person._id.toString()), res as unknown as Response, failNext);
+    await getEntityProfile(makeReq(personId), res as unknown as Response, failNext);
     const profile = profileOf(res);
 
     expect(profile.kind).toBe('person');
@@ -296,10 +429,10 @@ describe('GET /api/p/:id — the same sections on the PERSON branch', () => {
   });
 
   it('omits the artist sections entirely for a person with no linked artist', async () => {
-    const person = await PersonModel.create({ name: 'Just A Host' });
+    const personId = await makePerson('Just A Host');
 
     const res = makeRes();
-    await getEntityProfile(makeReq(person._id.toString()), res as unknown as Response, failNext);
+    await getEntityProfile(makeReq(personId), res as unknown as Response, failNext);
     const profile = profileOf(res);
 
     expect(profile.kind).toBe('person');
@@ -312,10 +445,16 @@ describe('GET /api/p/:id — the same sections on the PERSON branch', () => {
 
 describe('GET /api/p/:id — empty sections stay empty', () => {
   it('returns empty shelves for an artist with nothing playable', async () => {
-    const artist = await ArtistModel.create({ name: 'Silent', source: 'upload' });
+    const [artist] = await getDb()
+      .insert(catalogEntities)
+      .values({
+        type: 'artist', name: 'Silent', nameKey: normalizeNameKey('Silent'), source: 'upload',
+      })
+      .returning({ id: catalogEntities.id });
+    if (!artist) throw new Error('insert returned no row');
 
     const res = makeRes();
-    await getEntityProfile(makeReq(artist._id.toString()), res as unknown as Response, failNext);
+    await getEntityProfile(makeReq(artist.id), res as unknown as Response, failNext);
     const profile = profileOf(res);
 
     expect(profile.discography).toEqual({ albums: [], singlesAndEps: [], compilations: [] });

@@ -1,42 +1,45 @@
-import mongoose from 'mongoose';
+import { and, eq, inArray, ne } from 'drizzle-orm';
 import type { Album, ArtistOrigin, Playlist, SourceProvenance, Track } from '@syra/shared-types';
-import { TrackModel } from '../../models/Track';
-import { PlaylistTrackModel } from '../../models/PlaylistTrack';
-import { ContributionAttestationModel } from '../../models/ContributionAttestation';
-import type { IArtist } from '../../models/CatalogEntity';
+import { getDb } from '../../db/postgres';
+import { findAttestationsByTrackIds } from '../../db/creators/attestations';
+import { albums, trackCredits, tracks } from '../../db/schema/catalog';
+import { playlistCollaborators, playlistTracks, playlists } from '../../db/schema/library';
+import { canViewPlaylist, playableTrackFilter } from '../../db/catalog/visibility';
 import {
-  formatTracksWithCoverArt,
-  formatAlbumWithCoverArt,
-  formatPlaylistsWithCoverArt,
-} from '../../utils/musicHelpers';
-import { withImageFirstSort } from '../../utils/imageFirstSort';
-import { canViewPlaylist, playableTrackFilter, type ViewablePlaylistShape } from '../../utils/catalogVisibility';
-import {
+  desc as descOrder,
   findAlbumsWithPlayableTracks,
   findPlaylistsWithPlayableTracks,
-} from '../../utils/playableContainers';
+  imageFirst,
+  descNullsLast,
+} from '../../db/catalog/containers';
+import { loadImageVariants, toAlbumDtos, toTrackDtos } from '../../db/catalog/hydrate';
+import { toPlaylistDto } from '../../db/catalog/serialize';
 
 /**
  * Everything Syra knows about an artist, assembled for their profile page.
  *
  * Every section here is gated by the SAME playability rules the rest of the
- * catalog uses — `playableTrackFilter` for tracks, the `playableContainers`
- * helpers for albums, artists and playlists. A section that is empty after
- * filtering comes back empty, because the alternative is a profile that offers a
- * shelf of containers which open to nothing.
+ * catalog uses — `playableTrackFilter` for tracks, the `db/catalog/containers`
+ * helpers for albums and playlists. A section that is empty after filtering
+ * comes back empty, because the alternative is a profile that offers a shelf of
+ * containers which open to nothing.
  *
  * **Credited on** could not exist before this work, and is not a nicety: `Track`
  * carried only `artistId` until `credits[]` landed, so a guest verse, a
  * production credit or a remix could not be expressed at all, let alone found.
- * `credits.nameKey` is indexed precisely so this is a lookup rather than a scan
- * of every track's credit array.
+ * `track_credits.name_key` is indexed precisely so this is a lookup rather than a
+ * scan of every track's credits.
  *
  * Related artists are deliberately NOT here. They are already served by
  * `GET /api/artists/:id/related` (`recommendationService.getRelatedArtists`,
  * which reads the same `CatalogRelation` graph) and the profile screen already
  * renders them from that query — a second reader would be two authorities for one
- * shelf. What that path was missing is the playability gate, and it was fixed
- * there rather than worked around here.
+ * shelf.
+ *
+ * `contribution_attestations` belongs to the creators vertical (Task 13), which
+ * has landed — it is Postgres, read here for a list of track ids and never
+ * joined to a catalog table. The separate read is what the split needed and is
+ * now simply what this function does; nothing forces it any more.
  */
 
 // Caps. A profile page renders shelves, not archives — and every cap here also
@@ -49,7 +52,7 @@ const PLAYLISTS_LIMIT = 24;
  *
  * Not the same number as the tracks shown on the page: a playlist that includes
  * one deep cut still features the artist, so the seed set is deliberately wider
- * than the shelf. It stays bounded because the `$in` it feeds is the leading
+ * than the shelf. It stays bounded because the `IN (…)` it feeds is the leading
  * predicate of the playlist query.
  */
 const PLAYLIST_SEED_TRACKS = 200;
@@ -88,40 +91,51 @@ export interface ArtistProfileSections {
   profileState: ArtistProfileState;
 }
 
-/** The artist fields these sections read. A lean projection satisfies it. */
-export type ArtistProfileSource = Pick<
-  IArtist,
-  'nameKey' | 'origin' | 'claimable' | 'claimedByOxyUserId' | 'ownerOxyUserId' | 'acceptsContributions' | 'sources'
-> & { _id: mongoose.Types.ObjectId };
+/**
+ * The artist fields these sections read.
+ *
+ * Named explicitly rather than `Pick`ed off a model type. Every field but `id` is
+ * optional, so a caller that failed to load `nameKey` still typechecks and
+ * silently returns an empty "credited on" section — which is why the caller's
+ * own read has to name them too.
+ */
+export interface ArtistProfileSource {
+  id: string;
+  nameKey?: string;
+  origin?: ArtistOrigin;
+  claimable?: boolean;
+  claimedByOxyUserId?: string;
+  ownerOxyUserId?: string;
+  acceptsContributions?: boolean;
+  sources?: SourceProvenance[];
+}
 
 // ── Discography ───────────────────────────────────────────────────────────────
 
 /**
  * The artist's own releases, split by the release-type enum already on the model.
  *
- * ONE aggregation, partitioned in memory rather than three queries: each of those
- * would re-run the same `$lookup`-backed playability pipeline over the artist's
- * albums, and the split is a display concern, not a different question.
+ * ONE query, partitioned in memory rather than three: each of those would re-run
+ * the same playability semi-join over the artist's albums, and the split is a
+ * display concern, not a different question.
  *
  * Albums with no playable track never appear — `findAlbumsWithPlayableTracks` also
  * honours the album's own `isAvailable`, so a creator can unpublish a container
  * while its tracks stay individually discoverable.
  */
 export async function loadDiscography(artistId: string): Promise<ArtistDiscography> {
-  const albums = await findAlbumsWithPlayableTracks({ artistId }, {
-    sort: withImageFirstSort('album', { releaseDate: -1 }),
+  const rows = await findAlbumsWithPlayableTracks(eq(albums.artistId, artistId), {
+    orderBy: [imageFirst(albums.coverArtId), descOrder(albums.releaseDate)],
     limit: DISCOGRAPHY_LIMIT,
   });
 
+  const formatted = await toAlbumDtos(rows);
   const discography: ArtistDiscography = { albums: [], singlesAndEps: [], compilations: [] };
 
-  for (const album of albums) {
-    const formatted = formatAlbumWithCoverArt(album);
-    if (!formatted) continue;
-    const type = (album as { type?: string }).type;
-    if (type === 'single' || type === 'ep') discography.singlesAndEps.push(formatted);
-    else if (type === 'compilation') discography.compilations.push(formatted);
-    else discography.albums.push(formatted);
+  for (const album of formatted) {
+    if (album.type === 'single' || album.type === 'ep') discography.singlesAndEps.push(album);
+    else if (album.type === 'compilation') discography.compilations.push(album);
+    else discography.albums.push(album);
   }
 
   return discography;
@@ -132,56 +146,82 @@ export async function loadDiscography(artistId: string): Promise<ArtistDiscograp
 /**
  * Tracks this artist participated in without being the primary artist.
  *
- * Queried on `credits.nameKey` ALONE, which is the indexed field. The obvious
- * widening — `$or` with `credits.catalogEntityId` — would be a mistake that costs
- * nothing to write and everything to run: MongoDB can only serve an `$or` from
- * indexes when EVERY branch is indexed, so adding an unindexed branch turns this
- * into a collection scan of `tracks` on every profile view.
+ * A join on `track_credits.name_key`, which is the indexed column, rather than
+ * the Mongo `$or` widening that would have turned this into a collection scan of
+ * every track on every profile view.
  *
- * The refinement happens in memory instead, over the small matched set: a credit
- * counts when it is explicitly linked to THIS artist, or when it links nowhere and
- * matches by name. A credit resolved to a DIFFERENT entity that happens to share a
- * name key is excluded — two people genuinely called the same thing are two
- * people, and attributing one's work to the other is the failure this guards.
+ * The Mongo version then refined in memory: a credit counted when it was
+ * explicitly linked to THIS artist, or when it linked nowhere and matched by
+ * name. `track_credits` has no `catalog_entity_id` column at all —
+ * `schema/catalog.ts` dropped it across all four places it was declared because
+ * NONE of them was ever written — so every credit is the "links nowhere" case
+ * and the refinement has nothing left to distinguish. Behaviour is unchanged
+ * because the field was always absent; what is gone is the code that checked for
+ * a value nothing produced.
  */
 export async function loadCreditedOn(artist: ArtistProfileSource): Promise<CreditedTrack[]> {
   const nameKey = artist.nameKey;
   if (!nameKey) return [];
 
-  const artistId = artist._id.toString();
-  const tracks = await TrackModel.find(
-    playableTrackFilter({
-      'credits.nameKey': nameKey,
-      // Their own releases are the discography above; this section is everything else.
-      artistId: { $ne: artistId },
-    }),
-  )
-    .sort({ popularity: -1, createdAt: -1 })
-    .limit(CREDITED_ON_LIMIT)
-    .lean();
-
-  if (tracks.length === 0) return [];
-
-  const rolesByTrackId = new Map<string, string[]>();
-  const kept: typeof tracks = [];
-
-  for (const track of tracks) {
-    const roles = (track.credits ?? [])
-      .filter((credit) =>
-        credit.nameKey === nameKey &&
-        (credit.catalogEntityId === undefined || credit.catalogEntityId === artistId),
+  /**
+   * The LIMIT bounds tracks, not credit rows — and that needs two queries.
+   *
+   * `credits.nameKey` is one-to-many: an artist credited as producer AND
+   * composer on the same track yields two joined rows. `LIMIT 50` over the join
+   * therefore returns fewer than 50 TRACKS, and how many fewer depends on how
+   * many roles each one happens to carry. Mongo bounded 50 documents and folded
+   * roles afterwards, so a single query with a limit is a silent behaviour
+   * change: the shelf shrinks for exactly the artists with the richest credits.
+   *
+   * `selectDistinct` over the joined shape is not the fix either — distinct
+   * applies to the whole projected row, and the rows differ by `role`.
+   */
+  const trackIdRows = await getDb()
+    .selectDistinct({ id: tracks.id, popularity: tracks.popularity, createdAt: tracks.createdAt })
+    .from(tracks)
+    .innerJoin(trackCredits, eq(trackCredits.trackId, tracks.id))
+    .where(
+      and(
+        eq(trackCredits.nameKey, nameKey),
+        // Their own releases are the discography above; this section is everything else.
+        ne(tracks.artistId, artist.id),
+        playableTrackFilter()
       )
-      .map((credit) => credit.role);
+    )
+    .orderBy(descNullsLast(tracks.popularity), descNullsLast(tracks.createdAt))
+    .limit(CREDITED_ON_LIMIT);
 
-    if (roles.length === 0) continue; // every matching credit belongs to somebody else
-    rolesByTrackId.set(track._id.toString(), [...new Set(roles)]);
-    kept.push(track);
+  if (trackIdRows.length === 0) return [];
+
+  const rows = await getDb()
+    .select({ track: tracks, role: trackCredits.role })
+    .from(tracks)
+    .innerJoin(trackCredits, eq(trackCredits.trackId, tracks.id))
+    .where(
+      and(
+        inArray(tracks.id, trackIdRows.map((row) => row.id)),
+        eq(trackCredits.nameKey, nameKey)
+      )
+    )
+    .orderBy(descNullsLast(tracks.popularity), descNullsLast(tracks.createdAt));
+
+  // One track can carry several credits for one person (producer AND composer),
+  // so the join multiplies rows and the roles are folded back per track.
+  const rolesByTrackId = new Map<string, Set<string>>();
+  const trackById = new Map<string, (typeof rows)[number]['track']>();
+  for (const row of rows) {
+    trackById.set(row.track.id, row.track);
+    const roles = rolesByTrackId.get(row.track.id) ?? new Set<string>();
+    roles.add(row.role);
+    rolesByTrackId.set(row.track.id, roles);
   }
 
-  const formatted = await formatTracksWithCoverArt(kept);
-  return formatted.map((track: Track) => ({
+  const ordered = [...trackById.values()];
+  const formatted = await toTrackDtos(ordered);
+
+  return formatted.map((track) => ({
     track,
-    roles: rolesByTrackId.get(track.id) ?? [],
+    roles: [...(rolesByTrackId.get(track.id) ?? [])],
   }));
 }
 
@@ -195,35 +235,75 @@ export async function loadCreditedOn(artist: ArtistProfileSource): Promise<Credi
  * `visibility: 'public'` would quietly hide a viewer's own collaborative playlist
  * — and would be the second place the rule lives.
  *
- * The seed is the artist's own playable track ids, so the `PlaylistTrack` query
- * runs against its indexed `trackId` and the playlist pipeline's leading `$match`
- * is a bounded `_id: { $in }` rather than the whole collection.
+ * The collaborators are loaded for exactly the candidate playlists, in ONE query.
+ * Passing `undefined` instead would make the predicate fail closed on every
+ * non-public playlist, which reads as "working" for a guest and silently hides a
+ * signed-in viewer's own collaborations.
  */
 export async function loadPlaylistsFeaturing(
   artistId: string,
   viewerOxyUserId?: string,
 ): Promise<Playlist[]> {
-  const seedTracks = await TrackModel.find(playableTrackFilter({ artistId }))
-    .select('_id')
-    .limit(PLAYLIST_SEED_TRACKS)
-    .lean();
+  const seedTracks = await getDb()
+    .select({ id: tracks.id })
+    .from(tracks)
+    .where(and(eq(tracks.artistId, artistId), playableTrackFilter()))
+    .limit(PLAYLIST_SEED_TRACKS);
   if (seedTracks.length === 0) return [];
 
-  const playlistIds = await PlaylistTrackModel.distinct('playlistId', {
-    trackId: { $in: seedTracks.map((track) => track._id.toString()) },
-  });
-  if (playlistIds.length === 0) return [];
+  const playlistIdRows = await getDb()
+    .selectDistinct({ playlistId: playlistTracks.playlistId })
+    .from(playlistTracks)
+    .where(inArray(playlistTracks.trackId, seedTracks.map((track) => track.id)));
+  if (playlistIdRows.length === 0) return [];
 
-  const playlists = await findPlaylistsWithPlayableTracks({ _id: { $in: playlistIds } }, {
-    sort: { followers: -1, createdAt: -1 },
+  const candidateIds = playlistIdRows.map((row) => row.playlistId);
+  const rows = await findPlaylistsWithPlayableTracks(inArray(playlists.id, candidateIds), {
+    orderBy: [descOrder(playlists.followers), descOrder(playlists.createdAt)],
     limit: PLAYLISTS_LIMIT,
   });
+  if (rows.length === 0) return [];
 
-  const visible = playlists.filter((playlist) =>
-    canViewPlaylist(playlist as ViewablePlaylistShape, viewerOxyUserId),
+  const collaborators = await getDb()
+    .select({
+      playlistId: playlistCollaborators.playlistId,
+      oxyUserId: playlistCollaborators.oxyUserId,
+    })
+    .from(playlistCollaborators)
+    .where(inArray(playlistCollaborators.playlistId, rows.map((row) => row.id)));
+
+  const collaboratorsByPlaylist = new Map<string, string[]>();
+  for (const entry of collaborators) {
+    const existing = collaboratorsByPlaylist.get(entry.playlistId) ?? [];
+    existing.push(entry.oxyUserId);
+    collaboratorsByPlaylist.set(entry.playlistId, existing);
+  }
+
+  const visible = rows.filter((playlist) =>
+    canViewPlaylist(
+      {
+        visibility: playlist.visibility,
+        ownerOxyUserId: playlist.ownerOxyUserId,
+        collaboratorOxyUserIds: collaboratorsByPlaylist.get(playlist.id) ?? [],
+      },
+      viewerOxyUserId
+    )
+  );
+  if (visible.length === 0) return [];
+
+  const lookup = await loadImageVariants(
+    visible.flatMap((playlist) => [
+      playlist.coverArtId,
+      playlist.coverArtSizesSmallId,
+      playlist.coverArtSizesMediumId,
+      playlist.coverArtSizesLargeId,
+      playlist.coverArtSizesXlargeId,
+      playlist.coverArtSizesXxlargeId,
+      playlist.coverArtSizesOriginalId,
+    ])
   );
 
-  return formatPlaylistsWithCoverArt(visible);
+  return visible.map((playlist) => toPlaylistDto(playlist, lookup));
 }
 
 // ── Profile state ─────────────────────────────────────────────────────────────
@@ -245,11 +325,7 @@ export async function loadProfileState(
     ...new Set((artist.sources ?? []).flatMap((source) => source.fields ?? [])),
   ];
 
-  const attestations = trackIds.length > 0
-    ? await ContributionAttestationModel.find({ trackId: { $in: trackIds } })
-      .select('trackId')
-      .lean()
-    : [];
+  const contributedTrackIds = [...(await findAttestationsByTrackIds(trackIds)).keys()];
 
   return {
     origin: artist.origin,
@@ -258,7 +334,7 @@ export async function loadProfileState(
     acceptsContributions: artist.acceptsContributions === true,
     sources: artist.sources,
     externallySourcedFields,
-    contributedTrackIds: attestations.map((attestation) => attestation.trackId),
+    contributedTrackIds,
   };
 }
 
@@ -275,15 +351,12 @@ export async function loadArtistProfileSections(
   artist: ArtistProfileSource,
   options: { trackIds: string[]; viewerOxyUserId?: string },
 ): Promise<ArtistProfileSections> {
-  const artistId = artist._id.toString();
-
-  const [discography, creditedOn, playlists, profileState] = await Promise.all([
-    loadDiscography(artistId),
+  const [discography, creditedOn, featuring, profileState] = await Promise.all([
+    loadDiscography(artist.id),
     loadCreditedOn(artist),
-    loadPlaylistsFeaturing(artistId, options.viewerOxyUserId),
+    loadPlaylistsFeaturing(artist.id, options.viewerOxyUserId),
     loadProfileState(artist, options.trackIds),
   ]);
 
-  return { discography, creditedOn, playlists, profileState };
+  return { discography, creditedOn, playlists: featuring, profileState };
 }
-

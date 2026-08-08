@@ -1,14 +1,18 @@
-import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll } from 'bun:test';
 import type { Response, NextFunction } from 'express';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
-import type { ArtistImageSuggestionsResponse } from '@syra/shared-types';
-import { connect, clear, disconnect } from '../test/mongo';
-import { ArtistModel } from '../models/CatalogEntity';
-import { TrackModel } from '../models/Track';
-import { ContributionAttestationModel } from '../models/ContributionAttestation';
-import { UserUploadModel } from '../models/UserUpload';
-import { toUploadTrackDto } from './uploads.controller';
-import { formatTracksWithCoverArt, formatArtistWithImage } from '../utils/musicHelpers';
+import type { ArtistImageSuggestion, ArtistImageSuggestionsResponse } from '@syra/shared-types';
+import { clearDb, connectDb, disconnectDb } from '../test/postgres';
+import {
+  installCatalogImageMirrorMockForTests,
+  resetCatalogImageMirror,
+} from '../test/catalogImageMirror';
+import { eq } from 'drizzle-orm';
+import { uuidv7 } from '@oxyhq/db';
+import { normalizeNameKey } from '@syra/shared-types';
+import { getDb } from '../db/postgres';
+import { catalogEntities, tracks } from '../db/schema/catalog';
+import { toUploadTrackDto } from '../db/creators/serialize';
 import { getEntityProfile } from './entityProfile.controller';
 import {
   getMyImageSuggestions,
@@ -23,18 +27,60 @@ import {
  * They must be readable ONLY by the artist whose profile they sit on, and
  * publishable only once that artist has said yes.
  *
- * THREE mechanisms guard that, and only the third holds on the catalog read
- * path: `select: false` on the Mongoose path (inert under `aggregate()`, which
- * every container helper uses), the absent `artistSchema` field (inert against
- * `formatArtistWithImage`, which is untyped and spreads the whole document), and
- * the explicit `delete` in `stripExternalCatalogFields`. `GET /api/artists/:id`
- * really did return suggestions before that third one existed — verified against
- * the handler, which is why the fixture below gives the artist a playable track.
+ * Under Mongo, THREE mechanisms claimed to guard that and only the third
+ * actually did: `select: false` on the Mongoose path (inert under `aggregate()`,
+ * which every container helper used), the absent `artistSchema` field (inert
+ * against `formatArtistWithImage`, which was untyped and spread the whole
+ * document), and the explicit `delete` in `stripExternalCatalogFields`.
+ * `GET /api/artists/:id` really did return suggestions before that third one
+ * existed — verified against the handler, which is why the fixture below gives
+ * the artist a playable track.
+ *
+ * On Postgres the guard is an ALLOWLIST and there is only one: `image_suggestions`
+ * is in `PROTECTED_COLUMNS_BY_TABLE`, so `publicColumns()` removes it from the
+ * row TYPE and `toArtistDto` cannot name it without failing `tsc`. The two
+ * Mongo formatters this file imported to make the old point were still imported
+ * here and never called; the import is deleted with the claim.
  */
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+/**
+ * This suite reaches `mirrorCatalogImage` through the accept endpoint, and used
+ * to get its double as a SIDE EFFECT of `connect()`. That install is gone — it
+ * was the trap `test/catalogImageMirror.ts` was extracted to close — so the
+ * double is requested here, explicitly, and Postgres is opened because the
+ * double writes real `image_assets` rows for the seven FK columns that now
+ * reference them.
+ *
+ * Removing the side effect is what surfaced this suite: a `grep` for
+ * `mirrorCatalogImage` in test files found three podcast suites and missed this
+ * one, which reaches it through a controller. The full run found it. That is the
+ * cost of an implicit install being paid once, visibly, instead of indefinitely.
+ */
+/**
+ * POSTGRES ONLY.
+ *
+ * This block used to say the opposite, and the reason it was wrong is worth
+ * keeping: nothing here reads a Mongoose model, but `entityProfile.controller`
+ * still GATED every handler on `isDatabaseConnected()` — Mongoose readiness —
+ * so without a Mongo connection every request answered 503 and these suites had
+ * to open one. The guard was the whole dependency.
+ *
+ * Task 15 switched that gate to `isPostgresConnected()`, and the Mongo hooks
+ * went with it. `db/__tests__/connectivityGates.test.ts` is what keeps this
+ * true: it walks this controller's whole import graph and fails if anything it
+ * reaches opens a model again.
+ */
+beforeAll(async () => {
+  await connectDb();
+});
+beforeEach(installCatalogImageMirrorMockForTests);
+afterEach(async () => {
+  resetCatalogImageMirror();
+  await clearDb();
+});
+afterAll(async () => {
+  await disconnectDb();
+});
 
 interface CapturedRes {
   _status: number;
@@ -62,7 +108,15 @@ const OWNER = 'the-artist';
 const COMMONS_URL = 'https://upload.wikimedia.org/wikipedia/commons/a/ab/Artist.jpg';
 const EMBEDDED_URL = 'https://syra.example/embedded/cover.jpg';
 
-const COMMONS_SUGGESTION = {
+/**
+ * `proposedAt` is an ISO STRING, not a `Date`.
+ *
+ * `artistImageSuggestionSchema` has always declared `z.string()`; Mongoose
+ * accepted a `Date` and handed one back, so the fixture and the DTO disagreed
+ * and nothing noticed. `jsonb().$type<ArtistImageSuggestion[]>()` is checked at
+ * compile time, which is what surfaced it.
+ */
+const COMMONS_SUGGESTION: ArtistImageSuggestion = {
   image: {
     origin: 'external' as const,
     url: COMMONS_URL,
@@ -76,44 +130,61 @@ const COMMONS_SUGGESTION = {
       sourceUrl: 'https://commons.wikimedia.org/wiki/File:Artist.jpg',
     },
   },
-  proposedAt: new Date('2026-07-01T00:00:00.000Z'),
+  proposedAt: '2026-07-01T00:00:00.000Z',
 };
 
-const EMBEDDED_SUGGESTION = {
+const EMBEDDED_SUGGESTION: ArtistImageSuggestion = {
   image: { origin: 'upload' as const, url: EMBEDDED_URL, width: 500, height: 500 },
-  proposedAt: new Date('2026-07-02T00:00:00.000Z'),
+  proposedAt: '2026-07-02T00:00:00.000Z',
   proposedByOxyUserId: 'a-stranger',
   sourceUploadId: '6a6d000000000000000000aa',
 };
 
 async function makeArtistWithSuggestions(
-  suggestions: Record<string, unknown>[] = [COMMONS_SUGGESTION, EMBEDDED_SUGGESTION],
+  suggestions: ArtistImageSuggestion[] = [COMMONS_SUGGESTION, EMBEDDED_SUGGESTION],
 ): Promise<string> {
-  const artist = await ArtistModel.create({
-    name: `Suggested ${Math.random().toString(36).slice(2)}`,
-    source: 'upload',
-    origin: 'contributed',
-    ownerOxyUserId: OWNER,
-    claimedByOxyUserId: OWNER,
-    claimable: false,
-    imageSuggestions: suggestions,
-  });
+  const name = `Suggested ${uuidv7()}`;
+  const [artist] = await getDb()
+    .insert(catalogEntities)
+    .values({
+      type: 'artist',
+      name,
+      nameKey: normalizeNameKey(name),
+      source: 'upload',
+      origin: 'contributed',
+      ownerOxyUserId: OWNER,
+      claimedByOxyUserId: OWNER,
+      claimable: false,
+      imageSuggestions: suggestions,
+    })
+    .returning({ id: catalogEntities.id, name: catalogEntities.name });
+  if (!artist) throw new Error('makeArtistWithSuggestions: insert returned no row');
   /**
    * A PLAYABLE track, and it is load-bearing rather than scenery: the public
    * artist endpoint resolves through `findOneArtistWithPlayableTracks`, so an
    * artist with no catalogue 404s — and every "the suggestion did not leak"
    * assertion below would then pass against an empty error body, proving nothing.
    */
-  await TrackModel.create({
+  await getDb().insert(tracks).values({
     title: 'Something Playable',
-    artistId: artist._id.toString(),
+    artistId: artist.id,
     artistName: artist.name,
     duration: 180,
     source: 'upload',
     status: 'ready',
     isAvailable: true,
   });
-  return artist._id.toString();
+  return artist.id;
+}
+
+/** The artist row, including the protected `imageSuggestions` column. */
+async function readArtist(id: string) {
+  const [row] = await getDb()
+    .select()
+    .from(catalogEntities)
+    .where(eq(catalogEntities.id, id))
+    .limit(1);
+  return row;
 }
 
 function body(res: CapturedRes): ArtistImageSuggestionsResponse {
@@ -177,12 +248,14 @@ describe('POST /api/artists/me/image-suggestions/accept', () => {
     );
 
     expect(res._status).toBe(200);
-    const artist = await ArtistModel.findById(artistId).select('+imageSuggestions').lean();
-    expect(artist?.image).toBeTruthy();
-    expect(artist?.imageSizes).toBeTruthy();
+    const artist = await readArtist(artistId);
+    expect(artist?.imageId).toBeTruthy();
+    // `imageSizes` is six FK columns now; the original variant is the one the
+    // mirror always writes, so it stands for "the sizes were stored".
+    expect(artist?.imageSizesOriginalId).toBeTruthy();
     // The attribution has to survive the mirror or the image may not be used.
-    expect(artist?.imageLicence?.attribution).toBe('Jane Photographer');
-    expect(artist?.imageLicence?.licence).toBe('CC-BY-SA-4.0');
+    expect(artist?.imageLicenceAttribution).toBe('Jane Photographer');
+    expect(artist?.imageLicenceLicence).toBe('CC-BY-SA-4.0');
     // The question has been answered — the alternatives are not still pending.
     expect(artist?.imageSuggestions ?? []).toEqual([]);
   });
@@ -196,9 +269,15 @@ describe('POST /api/artists/me/image-suggestions/accept', () => {
       failNext,
     );
 
-    const artist = await ArtistModel.findById(artistId).lean();
-    expect(artist?.image).toBeTruthy();
-    expect(artist?.imageLicence).toBeUndefined();
+    const artist = await readArtist(artistId);
+    expect(artist?.imageId).toBeTruthy();
+    // All four licence columns cleared, not just one — a partial licence is the
+    // shape `toImageLicence` refuses to emit, so leaving any of them set would
+    // be a row that serializes to no licence while still storing one.
+    expect(artist?.imageLicenceLicence).toBeNull();
+    expect(artist?.imageLicenceLicenceUrl).toBeNull();
+    expect(artist?.imageLicenceAttribution).toBeNull();
+    expect(artist?.imageLicenceSourceUrl).toBeNull();
   });
 
   /**
@@ -212,21 +291,21 @@ describe('POST /api/artists/me/image-suggestions/accept', () => {
       makeRes() as unknown as Response,
       failNext,
     );
-    expect((await ArtistModel.findById(artistId).lean())?.imageLicence?.attribution)
+    expect((await readArtist(artistId))?.imageLicenceAttribution)
       .toBe('Jane Photographer');
 
     // A second suggestion arrives later and is accepted.
-    await ArtistModel.updateOne(
-      { _id: artistId },
-      { $set: { imageSuggestions: [EMBEDDED_SUGGESTION] } },
-    );
+    await getDb()
+      .update(catalogEntities)
+      .set({ imageSuggestions: [EMBEDDED_SUGGESTION] })
+      .where(eq(catalogEntities.id, artistId));
     await acceptMyImageSuggestion(
       makeReq(OWNER, { url: EMBEDDED_URL }),
       makeRes() as unknown as Response,
       failNext,
     );
 
-    expect((await ArtistModel.findById(artistId).lean())?.imageLicence).toBeUndefined();
+    expect((await readArtist(artistId))?.imageLicenceAttribution).toBeNull();
   });
 
   it('404s a url that is not among the suggestions', async () => {
@@ -240,8 +319,8 @@ describe('POST /api/artists/me/image-suggestions/accept', () => {
     );
 
     expect(res._status).toBe(404);
-    const artist = await ArtistModel.findById(artistId).select('+imageSuggestions').lean();
-    expect(artist?.image).toBeUndefined();
+    const artist = await readArtist(artistId);
+    expect(artist?.imageId).toBeNull();
     expect(artist?.imageSuggestions).toHaveLength(2);
   });
 
@@ -265,7 +344,7 @@ describe('POST /api/artists/me/image-suggestions/accept', () => {
     );
 
     expect(res._status).toBe(404);
-    expect((await ArtistModel.findById(artistId).lean())?.image).toBeUndefined();
+    expect((await readArtist(artistId))?.imageId).toBeNull();
   });
 });
 
@@ -283,10 +362,10 @@ describe('POST /api/artists/me/image-suggestions/discard', () => {
     expect(res._status).toBe(200);
     expect(body(res).suggestions.map((s) => s.image.url)).toEqual([EMBEDDED_URL]);
 
-    const artist = await ArtistModel.findById(artistId).select('+imageSuggestions').lean();
+    const artist = await readArtist(artistId);
     expect(artist?.imageSuggestions).toHaveLength(1);
     // Refusing a photo must never adopt one.
-    expect(artist?.image).toBeUndefined();
+    expect(artist?.imageId).toBeNull();
   });
 
   it('404s a url that is not among the suggestions', async () => {
@@ -313,7 +392,7 @@ describe('POST /api/artists/me/image-suggestions/discard', () => {
     );
 
     expect(res._status).toBe(404);
-    const artist = await ArtistModel.findById(artistId).select('+imageSuggestions').lean();
+    const artist = await readArtist(artistId);
     expect(artist?.imageSuggestions).toHaveLength(2);
   });
 });

@@ -26,7 +26,6 @@ export type PlaylistCollaborator = z.infer<typeof playlistCollaboratorSchema>;
 
 export const playlistSchema = timestampsSchema.extend({
   id: z.string(),
-  _id: z.string().optional(),
   name: z.string(),
   description: z.string().optional(),
   ownerOxyUserId: z.string(),

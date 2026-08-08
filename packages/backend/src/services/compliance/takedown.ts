@@ -1,9 +1,18 @@
-import type mongoose from 'mongoose';
-import { TrackModel, type ITrack } from '../../models/Track';
-import { UserUploadModel, type IUserUpload } from '../../models/UserUpload';
-import { ContributionAttestationModel } from '../../models/ContributionAttestation';
-import { TrackFingerprintModel } from '../../models/TrackFingerprint';
-import { ArtistModel } from '../../models/CatalogEntity';
+import { and, eq, inArray } from 'drizzle-orm';
+import { getDb } from '../../db/postgres';
+import { catalogEntities, trackFingerprints, tracks } from '../../db/schema/catalog';
+import {
+  findAttestationUploader,
+  findContributedTrackIds,
+} from '../../db/creators/attestations';
+import {
+  deleteUploads,
+  findFingerprintCandidates,
+  findLockerStorageRefs,
+  findUploadsBySha256,
+  findUploadsMatchedToTrack,
+  type UploadStorageRef,
+} from '../../db/creators/uploads';
 import { deleteFromS3, deleteS3Prefix } from '../s3Service';
 import { addStrike } from '../strikeService';
 import { recordContributorStrike } from './contributorStrikes';
@@ -126,23 +135,11 @@ export interface TakeDownTrackResult {
 
 // ── Locker purge ──────────────────────────────────────────────────────────────
 
-/**
- * The parts of a locker file that say where its bytes are.
- *
- * A structural slice rather than the whole document — the same shape
- * `audioStorageService` uses for tracks — so a `.lean()` projection satisfies it
- * and nothing has to load a document's thousands-of-integers `fingerprint` just
- * to delete an object.
- */
-export type UploadStorageRef = Pick<IUserUpload, 'audioSource' | 'hls' | 'hlsMasterKey'> & {
-  _id: mongoose.Types.ObjectId;
-};
-
-/** A locker file the purge has decided to delete: where its bytes are, plus who loses it. */
-type PurgeCandidate = UploadStorageRef & Pick<IUserUpload, 'ownerOxyUserId' | 'sha256'>;
-
-/** Only the fields the purge reads — never the fingerprint array. */
-const STORAGE_PROJECTION = '_id ownerOxyUserId sha256 audioSource hls hlsMasterKey';
+// `UploadStorageRef` — where one locker file's bytes are — is declared by
+// `db/creators/uploads.ts` and imported above. It lived here because this module
+// owned the only reader; the sweeper needs the same shape from the same
+// projection, and two declarations of "the fields a delete reads" would drift
+// with the half that drifted leaving audio in the bucket.
 
 /**
  * Tell somebody their music is gone.
@@ -186,9 +183,9 @@ async function announceRemoval(
 /** Every stored object this locker file recorded a key for. */
 function recordedObjectKeys(upload: UploadStorageRef): string[] {
   const keys: string[] = [];
-  if (upload.audioSource?.key) keys.push(upload.audioSource.key);
+  if (upload.audioSourceKey) keys.push(upload.audioSourceKey);
   if (upload.hlsMasterKey) keys.push(upload.hlsMasterKey);
-  for (const rendition of upload.hls ?? []) {
+  for (const rendition of upload.hls) {
     if (rendition.manifestKey) keys.push(rendition.manifestKey);
   }
   return [...new Set(keys)];
@@ -221,7 +218,7 @@ function recordedObjectKeys(upload: UploadStorageRef): string[] {
  * manifest.
  */
 function hlsDirectoryPrefix(upload: UploadStorageRef): string | undefined {
-  const uploadId = upload._id.toString();
+  const uploadId = upload.id;
 
   for (const key of recordedObjectKeys(upload)) {
     const segments = key.split('/');
@@ -255,7 +252,7 @@ export async function deleteUploadStoredObjects(
 
   if (prefix) {
     deleted += await deletePrefix(prefix);
-  } else if (upload.hlsMasterKey || (upload.hls?.length ?? 0) > 0) {
+  } else if (upload.hlsMasterKey || upload.hls.length > 0) {
     /**
      * HLS output exists but no directory could be scoped to this upload alone, so
      * the manifests below are deleted and the segments are NOT. Loud on purpose:
@@ -264,7 +261,7 @@ export async function deleteUploadStoredObjects(
      * upload so the objects can be found.
      */
     logger.warn(
-      `[Takedown] Could not scope an HLS directory to upload ${upload._id.toString()} — ` +
+      `[Takedown] Could not scope an HLS directory to upload ${upload.id} — ` +
       'its segments may be orphaned. Recorded keys: ' +
       `${recordedObjectKeys(upload).join(', ') || '(none)'}`,
     );
@@ -290,13 +287,18 @@ export async function deleteUploadStoredObjects(
  */
 async function acousticMatches(
   trackId: string,
-  alreadyDoomed: mongoose.Types.ObjectId[],
-): Promise<{ matches: PurgeCandidate[]; available: boolean }> {
-  const catalog = await TrackFingerprintModel.findOne({ trackId })
-    .select('fingerprint fingerprintDurationSec')
-    .lean();
+  alreadyDoomed: string[],
+): Promise<{ matches: UploadStorageRef[]; available: boolean }> {
+  const [catalog] = await getDb()
+    .select({
+      fingerprint: trackFingerprints.fingerprint,
+      fingerprintDurationSec: trackFingerprints.fingerprintDurationSec,
+    })
+    .from(trackFingerprints)
+    .where(eq(trackFingerprints.trackId, trackId))
+    .limit(1);
 
-  if (!catalog?.fingerprint?.length) {
+  if (!catalog?.fingerprint.length) {
     /**
      * LOUD, not silent. Returning an empty list here is indistinguishable from
      * "no re-encode exists", and a takedown that could only compare hashes has
@@ -312,21 +314,17 @@ async function acousticMatches(
     return { matches: [], available: false };
   }
 
-  const candidates = await UserUploadModel.find({
-    fingerprintDurationSec: {
-      $gte: catalog.fingerprintDurationSec - FINGERPRINT_DURATION_WINDOW_SEC,
-      $lte: catalog.fingerprintDurationSec + FINGERPRINT_DURATION_WINDOW_SEC,
-    },
-    _id: { $nin: alreadyDoomed },
-  })
-    .select(`${STORAGE_PROJECTION} fingerprint`)
-    .lean();
+  const candidates = await findFingerprintCandidates(
+    catalog.fingerprintDurationSec - FINGERPRINT_DURATION_WINDOW_SEC,
+    catalog.fingerprintDurationSec + FINGERPRINT_DURATION_WINDOW_SEC,
+    alreadyDoomed,
+  );
 
   return {
     matches: candidates.filter(
       (candidate) =>
-        Boolean(candidate.fingerprint?.length) &&
-        compareFingerprints(catalog.fingerprint, candidate.fingerprint ?? []).matched,
+        candidate.fingerprint.length > 0 &&
+        compareFingerprints(catalog.fingerprint, candidate.fingerprint).matched,
     ),
     available: true,
   };
@@ -360,22 +358,16 @@ export async function purgeLockerCopiesOfTrack(
   trackId: string,
   deps: LockerPurgeDeps = {},
 ): Promise<LockerPurgeResult> {
-  const linked = await UserUploadModel.find({ matchedTrackId: trackId })
-    .select(STORAGE_PROJECTION)
-    .lean();
+  const linked = await findUploadsMatchedToTrack(trackId);
 
   const shas = [...new Set(linked.map((upload) => upload.sha256).filter(Boolean))];
-  const byHash = shas.length > 0
-    ? await UserUploadModel.find({
-        sha256: { $in: shas },
-        _id: { $nin: linked.map((upload) => upload._id) },
-      })
-      .select(STORAGE_PROJECTION)
-      .lean()
-    : [];
+  const byHash = await findUploadsBySha256(
+    shas,
+    linked.map((upload) => upload.id),
+  );
 
-  const doomed: PurgeCandidate[] = [...linked, ...byHash];
-  const acoustic = await acousticMatches(trackId, doomed.map((upload) => upload._id));
+  const doomed: UploadStorageRef[] = [...linked, ...byHash];
+  const acoustic = await acousticMatches(trackId, doomed.map((upload) => upload.id));
   doomed.push(...acoustic.matches);
 
   if (doomed.length === 0) {
@@ -392,9 +384,7 @@ export async function purgeLockerCopiesOfTrack(
     objectsDeleted += await deleteUploadStoredObjects(upload, deps);
   }
 
-  const { deletedCount } = await UserUploadModel.deleteMany({
-    _id: { $in: doomed.map((upload) => upload._id) },
-  });
+  const deletedCount = await deleteUploads(doomed.map((upload) => upload.id));
 
   const affectedOwnerIds = [...new Set(doomed.map((upload) => upload.ownerOxyUserId))];
 
@@ -439,29 +429,32 @@ type Responsible =
   | { kind: 'artist'; artistId: string }
   | { kind: 'contributor'; oxyUserId: string };
 
-async function resolveResponsible(
-  track: Pick<ITrack, 'artistId'> & { _id: unknown },
-): Promise<Responsible> {
-  const trackId = String(track._id);
-  const attestation = await ContributionAttestationModel.findOne({ trackId })
-    .select('uploaderOxyUserId')
-    .lean();
+async function resolveResponsible(track: { id: string; artistId: string }): Promise<Responsible> {
+  const uploaderOxyUserId = await findAttestationUploader(track.id);
 
-  if (!attestation) {
+  if (!uploaderOxyUserId) {
     return { kind: 'artist', artistId: track.artistId };
   }
 
-  const uploaderArtist = await ArtistModel.findOne({
-    ownerOxyUserId: attestation.uploaderOxyUserId,
-  })
-    .select('_id')
-    .lean();
+  // `type = 'artist'` is written out: `catalog_entities` holds persons in the
+  // same table and they carry no `owner_oxy_user_id`, but the condition is what
+  // makes that a property of the query rather than of the data.
+  const [uploaderArtist] = await getDb()
+    .select({ id: catalogEntities.id })
+    .from(catalogEntities)
+    .where(
+      and(
+        eq(catalogEntities.ownerOxyUserId, uploaderOxyUserId),
+        eq(catalogEntities.type, 'artist')
+      )
+    )
+    .limit(1);
 
   if (!uploaderArtist) {
-    return { kind: 'contributor', oxyUserId: attestation.uploaderOxyUserId };
+    return { kind: 'contributor', oxyUserId: uploaderOxyUserId };
   }
 
-  return { kind: 'artist', artistId: uploaderArtist._id.toString() };
+  return { kind: 'artist', artistId: uploaderArtist.id };
 }
 
 /**
@@ -488,33 +481,28 @@ async function applyContributorTermination(
   reason: string,
   deps: LockerPurgeDeps,
 ): Promise<LockerPurgeResult> {
-  const attestations = await ContributionAttestationModel.find({ uploaderOxyUserId: oxyUserId })
-    .select('trackId')
-    .lean();
-  const contributedTrackIds = attestations.map((attestation) => attestation.trackId);
+  const contributedTrackIds = await findContributedTrackIds(oxyUserId);
 
   if (contributedTrackIds.length > 0) {
-    await TrackModel.updateMany(
-      { _id: { $in: contributedTrackIds }, copyrightRemoved: { $ne: true } },
-      {
+    await getDb()
+      .update(tracks)
+      .set({
         copyrightRemoved: true,
         isAvailable: false,
         removedAt: new Date(),
         removedReason: reason,
-      },
-    );
+      })
+      .where(and(inArray(tracks.id, contributedTrackIds), eq(tracks.copyrightRemoved, false)));
   }
 
   // Their whole locker, not only the copies of the reported work.
-  const locker = await UserUploadModel.find({ ownerOxyUserId: oxyUserId })
-    .select(STORAGE_PROJECTION)
-    .lean();
+  const locker = await findLockerStorageRefs(oxyUserId);
 
   let objectsDeleted = 0;
   for (const upload of locker) {
     objectsDeleted += await deleteUploadStoredObjects(upload, deps);
   }
-  const { deletedCount } = await UserUploadModel.deleteMany({ ownerOxyUserId: oxyUserId });
+  const deletedCount = await deleteUploads(locker.map((upload) => upload.id));
 
   if (deletedCount > 0) {
     await announceRemoval(
@@ -554,18 +542,30 @@ export async function takeDownTrack(
 ): Promise<TakeDownTrackResult | null> {
   const { trackId, reason, actorOxyUserId, copyrightReportId } = input;
 
-  const track = await TrackModel.findById(trackId).exec();
+  const [track] = await getDb()
+    .select({
+      id: tracks.id,
+      artistId: tracks.artistId,
+      copyrightRemoved: tracks.copyrightRemoved,
+    })
+    .from(tracks)
+    .where(eq(tracks.id, trackId))
+    .limit(1);
   if (!track) return null;
 
-  const alreadyRemoved = track.copyrightRemoved === true;
+  const alreadyRemoved = track.copyrightRemoved;
 
-  track.copyrightRemoved = true;
-  track.isAvailable = false;
-  track.removedAt = new Date();
-  track.removedReason = reason;
-  track.removedBy = actorOxyUserId;
-  if (copyrightReportId) track.copyrightReportId = copyrightReportId;
-  await track.save();
+  await getDb()
+    .update(tracks)
+    .set({
+      copyrightRemoved: true,
+      isAvailable: false,
+      removedAt: new Date(),
+      removedReason: reason,
+      removedBy: actorOxyUserId,
+      ...(copyrightReportId ? { copyrightReportId } : {}),
+    })
+    .where(eq(tracks.id, trackId));
 
   const purge = await purgeLockerCopiesOfTrack(trackId, deps);
 
@@ -630,15 +630,13 @@ export async function takeDownTrack(
    * one reported track and quietly skipped for the rest.
    */
   if (terminated) {
-    const removed = await TrackModel.find({
-      artistId: responsible.artistId,
-      copyrightRemoved: true,
-    })
-      .select('_id')
-      .lean();
+    const removed = await getDb()
+      .select({ id: tracks.id })
+      .from(tracks)
+      .where(and(eq(tracks.artistId, responsible.artistId), eq(tracks.copyrightRemoved, true)));
 
     for (const removedTrack of removed) {
-      const id = removedTrack._id.toString();
+      const id = removedTrack.id;
       if (id === trackId) continue; // already purged above
       const extra = await purgeLockerCopiesOfTrack(id, deps);
       purge.uploadsDeleted += extra.uploadsDeleted;
@@ -656,7 +654,7 @@ export async function takeDownTrack(
       applied: true,
       against: 'artist',
       artistId: responsible.artistId,
-      strikeCount: struck.strikeCount ?? 0,
+      strikeCount: struck.strikeCount,
       terminated,
     },
     purge,

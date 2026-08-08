@@ -1,14 +1,16 @@
-import mongoose from 'mongoose';
+import { and, asc, eq } from 'drizzle-orm';
+import { isLiveEntityId } from '@oxyhq/db';
 import type { Request, Response, NextFunction } from 'express';
-import { TrackModel } from '../models/Track';
-import { isDatabaseConnected } from '../utils/database';
+import { getDb, isPostgresConnected } from '../db/postgres';
+import { trackHlsRenditions, tracks } from '../db/schema/catalog';
+import { playableTrackFilter } from '../db/catalog/visibility';
 import { getParam } from '../utils/reqParams';
-import { playableTrackFilter } from '../utils/catalogVisibility';
 import { ensurePreviewClip } from '../services/preview/previewService';
 import type { PreviewSourceRef } from '../services/preview/previewService';
 import { streamFromS3 } from '../services/s3Service';
 import { PREVIEW_CONTENT_TYPE, PREVIEW_DURATION_SEC } from '../services/ingest/previewClip';
 import { logger } from '../utils/logger';
+import { describeErrorSafely } from '../utils/error';
 
 // Preview clips are immutable for a given (trackId, startSec) → cache hard.
 const PREVIEW_CACHE_CONTROL = 'public, max-age=31536000, immutable';
@@ -37,16 +39,31 @@ function clampStart(value: unknown, max: number): number {
  */
 export const getTrackPreview = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       return res.status(503).json({ error: 'Database not available' });
     }
 
     const trackId = getParam(req, 'trackId');
-    if (!trackId || !mongoose.Types.ObjectId.isValid(trackId)) {
+    if (!trackId || !isLiveEntityId(trackId)) {
       return res.status(404).json({ error: 'Preview not available' });
     }
 
-    const track = await TrackModel.findOne(playableTrackFilter({ _id: trackId })).lean();
+    const [track] = await getDb()
+      .select({
+        id: tracks.id,
+        artistId: tracks.artistId,
+        albumId: tracks.albumId,
+        title: tracks.title,
+        duration: tracks.duration,
+        audioSourceUrl: tracks.audioSourceUrl,
+        audioSourceFormat: tracks.audioSourceFormat,
+        audioSourceBitrate: tracks.audioSourceBitrate,
+        audioSourceDuration: tracks.audioSourceDuration,
+      })
+      .from(tracks)
+      .where(and(playableTrackFilter(), eq(tracks.id, trackId)))
+      .limit(1);
+
     if (!track) {
       return res.status(404).json({ error: 'Preview not available' });
     }
@@ -55,13 +72,48 @@ export const getTrackPreview = async (req: Request, res: Response, next: NextFun
     const maxStart = Math.max(0, Math.floor(durationSec) - PREVIEW_DURATION_SEC);
     const startSec = clampStart(req.query.start, maxStart);
 
+    const hasRetainedSource = Boolean(track.audioSourceUrl && track.audioSourceFormat);
+
+    /**
+     * The ladder is the SECOND regeneration source, tried only when no original
+     * was retained — so it is read only in that case rather than on every
+     * request. `ensurePreviewClip` prefers `audioSource` and falls back to
+     * `hls`, and a cache hit needs neither.
+     */
+    const hls = hasRetainedSource
+      ? undefined
+      : await getDb()
+          .select({
+            manifestKey: trackHlsRenditions.manifestKey,
+            bitrateKbps: trackHlsRenditions.bitrateKbps,
+            encrypted: trackHlsRenditions.encrypted,
+          })
+          .from(trackHlsRenditions)
+          .where(eq(trackHlsRenditions.trackId, trackId))
+          .orderBy(asc(trackHlsRenditions.position));
+
+    /**
+     * Every optional key is spread conditionally rather than assigned a `null`.
+     * Postgres returns `null` where Mongo simply had no key, and every optional
+     * field on `PreviewSourceRef` is `?:` (undefined), not nullable — handing a
+     * `null` through would put one on a field typed `string | undefined`.
+     */
     const trackRef: PreviewSourceRef = {
-      id: track._id.toString(),
+      id: track.id,
       artistId: track.artistId,
-      albumId: track.albumId,
+      ...(track.albumId === null ? {} : { albumId: track.albumId }),
       title: track.title,
-      audioSource: track.audioSource,
-      hls: track.hls,
+      ...(track.audioSourceUrl && track.audioSourceFormat
+        ? {
+            audioSource: {
+              url: track.audioSourceUrl,
+              format: track.audioSourceFormat,
+              ...(track.audioSourceBitrate === null ? {} : { bitrate: track.audioSourceBitrate }),
+              ...(track.audioSourceDuration === null ? {} : { duration: track.audioSourceDuration }),
+            },
+          }
+        : {}),
+      ...(hls === undefined ? {} : { hls }),
     };
 
     const previewKey = await ensurePreviewClip(trackRef, startSec);
@@ -89,7 +141,7 @@ export const getTrackPreview = async (req: Request, res: Response, next: NextFun
 
     stream.pipe(res);
   } catch (error: unknown) {
-    logger.error('[PreviewController] Error serving preview', { err: error });
+    logger.error('[PreviewController] Error serving preview', { err: describeErrorSafely(error) });
     next(error);
   }
 };

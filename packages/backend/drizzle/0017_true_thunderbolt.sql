@@ -1,0 +1,23 @@
+-- oxy:deploy-phase=pre
+-- Purely additive: one new index, no drop, no narrowing. Safe while the previous
+-- image is still serving, and the new image wants it from its first request.
+--
+-- The SECOND index Mongo had and the port dropped, found by the same method as
+-- 0016's: running the planner over the shipped queries. `models/Track.ts:132`
+-- declares `artistId: { type: String, index: true }`.
+--
+-- NOT partial, unlike every other index on this table. Postgres uses a partial
+-- index only when the query's predicate implies the index's, and the two
+-- artist-wide moderation queries fail that test in opposite directions:
+--
+--   strikeService.takeDownArtistTracks  artist_id = $1 and copyright_removed = false
+--       -- no `is_available` clause, deliberately: terminating an artist must
+--          also mark their UNPUBLISHED tracks removed.
+--   takedown.takeDownTrack (cascade)    artist_id = $1 and copyright_removed = true
+--       -- the exact complement of every partial index on this table.
+--
+-- Measured with EXPLAIN (ANALYZE, BUFFERS) under `enable_seqscan = off` on
+-- 40,000 seeded tracks: both were Seq Scans reading 3,865 buffers at 48-70 ms,
+-- with cost scaling against the whole table on a write path that runs once per
+-- copyright strike. See `schema/catalog.ts`'s comment on this index.
+CREATE INDEX "tracks_artist_id_idx" ON "tracks" USING btree ("artist_id");

@@ -1,9 +1,30 @@
 import { Router, Response } from 'express';
 import multer from 'multer';
-import Series, { RecurrenceType } from '../models/Series';
-import Room, { RoomStatus, RoomType, OwnerType, SpeakerPermission } from '../models/Room';
-import House, { HouseMemberRole } from '../models/House';
+import { isLiveEntityId } from '@oxyhq/db';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
+import {
+  appendSeriesEpisode,
+  createSeries,
+  deleteSeries,
+  findSeriesById,
+  findSeriesView,
+  toSeriesView,
+  updateSeries,
+  type UpdateSeriesInput,
+} from '../db/rooms/series';
+import { findHouseWithMembers, hasRole, canAccessRooms, canSeeHouse } from '../db/rooms/houses';
+import { createRoom } from '../db/rooms/rooms';
+import { stripInternalStreamFields } from '../db/rooms/serialize';
+import {
+  HouseMemberRole,
+  OwnerType,
+  RecurrenceType,
+  RoomStatus,
+  RoomType,
+  SpeakerPermission,
+} from '../db/rooms/types';
+import { describeErrorSafely } from '../utils/error';
+import { getParam } from '../utils/reqParams';
 import { logger } from '../utils/logger';
 import { processImage } from '../utils/imageProcessor';
 import { uploadObject, deleteObject, getAgoraSeriesCoverKey, cdnUrlToKey } from '../utils/spaces';
@@ -22,6 +43,26 @@ const upload = multer({
 });
 
 const router = Router();
+
+/**
+ * Whether `userId` may modify `series` — its creator, or an admin+ of the house
+ * that owns it.
+ *
+ * A profile-owned series has no house to escalate through, so the creator is the
+ * only answer. Four routes asked this question with the same eight lines each;
+ * it is one function because a permission check copied four times is four
+ * chances to diverge, not because the expression is long.
+ */
+async function canManageSeries(
+  series: { createdBy: string; houseId: string | null },
+  userId: string,
+): Promise<boolean> {
+  if (series.createdBy === userId) return true;
+  if (!series.houseId) return false;
+
+  const owning = await findHouseWithMembers(series.houseId);
+  return owning !== undefined && hasRole(owning.members, userId, HouseMemberRole.ADMIN);
+}
 
 /**
  * Create a series
@@ -78,12 +119,12 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 
     // If houseId provided, validate house membership
     if (houseId && typeof houseId === 'string') {
-      const house = await House.findById(houseId);
-      if (!house) {
+      const owning = isLiveEntityId(houseId) ? await findHouseWithMembers(houseId) : undefined;
+      if (!owning) {
         return res.status(404).json({ message: 'House not found' });
       }
 
-      if (!house.hasRole(userId, HouseMemberRole.HOST)) {
+      if (!hasRole(owning.members, userId, HouseMemberRole.HOST)) {
         return res.status(403).json({ message: 'You must be a host or higher in this house to create series' });
       }
     }
@@ -98,11 +139,11 @@ router.post('/', async (req: AuthRequest, res: Response) => {
         ? roomTemplate.speakerPermission
         : SpeakerPermission.INVITED;
 
-    const series = new Series({
+    const row = await createSeries({
       title: title.trim(),
-      description: description ? String(description).trim() : undefined,
-      coverImage: coverImage ? String(coverImage).trim() : undefined,
-      houseId: houseId || undefined,
+      description: description ? String(description).trim() : null,
+      coverImage: coverImage ? String(coverImage).trim() : null,
+      houseId: houseId || null,
       createdBy: userId,
       recurrence: {
         type: recurrence.type,
@@ -123,24 +164,19 @@ router.post('/', async (req: AuthRequest, res: Response) => {
           ? roomTemplate.tags.map((t: unknown) => String(t).trim()).filter(Boolean)
           : [],
       },
-      episodes: [],
-      nextEpisodeNumber: 1,
-      isActive: true,
     });
 
-    await series.save();
-
-    logger.info(`Series created: ${series._id} by ${userId}${houseId ? ` (house=${houseId})` : ''}`);
+    logger.info(`Series created: ${row.id} by ${userId}${houseId ? ` (house=${houseId})` : ''}`);
 
     res.status(201).json({
       message: 'Series created successfully',
-      series,
+      series: toSeriesView(row, []),
     });
   } catch (error) {
-    logger.error('Error creating series:', { userId: req.user?.id, error });
+    logger.error('Error creating series:', { userId: req.user?.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error creating series',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -156,30 +192,30 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 router.get('/:id', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
 
-    const series = await Series.findById(id).lean();
+    const series = isLiveEntityId(id) ? await findSeriesView(id) : undefined;
 
     if (!series) {
       return res.status(404).json({ message: 'Series not found' });
     }
 
     if (series.houseId) {
-      const house = await House.findById(series.houseId);
-      if (!house || !house.canSeeHouse(userId)) {
+      const owning = await findHouseWithMembers(series.houseId);
+      if (!owning || !canSeeHouse(owning.house, owning.members, userId)) {
         return res.status(404).json({ message: 'Series not found' });
       }
-      if (!house.canAccessRooms(userId)) {
+      if (!canAccessRooms(owning.house, owning.members, userId)) {
         return res.status(403).json({ message: 'Only members can view this house\'s series' });
       }
     }
 
     res.json({ series });
   } catch (error) {
-    logger.error('Error fetching series:', { userId: req.user?.id, seriesId: req.params.id, error });
+    logger.error('Error fetching series:', { userId: req.user?.id, seriesId: req.params.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error fetching series',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -191,103 +227,100 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
 router.patch('/:id', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
     const { title, description, coverImage, recurrence, roomTemplate, isActive } = req.body;
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const series = await Series.findById(id);
+    const existing = isLiveEntityId(id) ? await findSeriesById(id) : undefined;
 
-    if (!series) {
+    if (!existing) {
       return res.status(404).json({ message: 'Series not found' });
     }
 
-    // Permission check: creator or house admin+
-    let hasPermission = series.createdBy === userId;
-
-    if (!hasPermission && series.houseId) {
-      const house = await House.findById(series.houseId);
-      if (house && house.hasRole(userId, HouseMemberRole.ADMIN)) {
-        hasPermission = true;
-      }
-    }
-
-    if (!hasPermission) {
+    if (!(await canManageSeries(existing, userId))) {
       return res.status(403).json({ message: 'You do not have permission to update this series' });
     }
 
-    // Apply updates
+    /**
+     * `null` CLEARS and `undefined` LEAVES ALONE. The Mongoose original assigned
+     * `undefined` to clear, which `save()` turned into `$unset`; drizzle DROPS an
+     * `undefined`-valued key, so carrying that spelling forward would make
+     * "remove the cover image" silently keep the old one.
+     */
+    const update: UpdateSeriesInput = {};
+
     if (title !== undefined && typeof title === 'string' && title.trim().length > 0) {
-      series.title = title.trim();
+      update.title = title.trim();
     }
     if (description !== undefined) {
-      series.description = description ? String(description).trim() : undefined;
+      update.description = description ? String(description).trim() : null;
     }
     if (coverImage !== undefined) {
-      series.coverImage = coverImage ? String(coverImage).trim() : undefined;
+      update.coverImage = coverImage ? String(coverImage).trim() : null;
     }
     if (typeof isActive === 'boolean') {
-      series.isActive = isActive;
+      update.isActive = isActive;
     }
 
     // Update recurrence if provided
     if (recurrence && typeof recurrence === 'object') {
       if (recurrence.type && Object.values(RecurrenceType).includes(recurrence.type)) {
-        series.recurrence.type = recurrence.type;
+        update.recurrenceType = recurrence.type;
       }
       if (typeof recurrence.dayOfWeek === 'number') {
-        series.recurrence.dayOfWeek = recurrence.dayOfWeek;
+        update.recurrenceDayOfWeek = recurrence.dayOfWeek;
       }
       if (typeof recurrence.dayOfMonth === 'number') {
-        series.recurrence.dayOfMonth = recurrence.dayOfMonth;
+        update.recurrenceDayOfMonth = recurrence.dayOfMonth;
       }
       if (recurrence.time && typeof recurrence.time === 'string' && /^\d{2}:\d{2}$/.test(recurrence.time)) {
-        series.recurrence.time = recurrence.time;
+        update.recurrenceTime = recurrence.time;
       }
       if (recurrence.timezone && typeof recurrence.timezone === 'string') {
-        series.recurrence.timezone = recurrence.timezone;
+        update.recurrenceTimezone = recurrence.timezone;
       }
     }
 
     // Update roomTemplate if provided
     if (roomTemplate && typeof roomTemplate === 'object') {
       if (roomTemplate.titlePattern && typeof roomTemplate.titlePattern === 'string') {
-        series.roomTemplate.titlePattern = roomTemplate.titlePattern.trim();
+        update.roomTemplateTitlePattern = roomTemplate.titlePattern.trim();
       }
       if (roomTemplate.type && Object.values(RoomType).includes(roomTemplate.type)) {
-        series.roomTemplate.type = roomTemplate.type;
+        update.roomTemplateType = roomTemplate.type;
       }
       if (roomTemplate.description !== undefined) {
-        series.roomTemplate.description = roomTemplate.description
+        update.roomTemplateDescription = roomTemplate.description
           ? String(roomTemplate.description).trim()
-          : undefined;
+          : null;
       }
       if (roomTemplate.maxParticipants && typeof roomTemplate.maxParticipants === 'number') {
-        series.roomTemplate.maxParticipants = Math.min(Math.max(roomTemplate.maxParticipants, 1), 10000);
+        update.roomTemplateMaxParticipants = Math.min(Math.max(roomTemplate.maxParticipants, 1), 10000);
       }
       if (roomTemplate.speakerPermission && Object.values(SpeakerPermission).includes(roomTemplate.speakerPermission)) {
-        series.roomTemplate.speakerPermission = roomTemplate.speakerPermission;
+        update.roomTemplateSpeakerPermission = roomTemplate.speakerPermission;
       }
       if (roomTemplate.tags !== undefined && Array.isArray(roomTemplate.tags)) {
-        series.roomTemplate.tags = roomTemplate.tags.map((t: unknown) => String(t).trim()).filter(Boolean);
+        update.roomTemplateTags = roomTemplate.tags.map((t: unknown) => String(t).trim()).filter(Boolean);
       }
     }
 
-    await series.save();
+    await updateSeries(existing.id, update);
 
     logger.info(`Series updated: ${id} by ${userId}`);
 
     res.json({
       message: 'Series updated successfully',
-      series,
+      series: await findSeriesView(existing.id),
     });
   } catch (error) {
-    logger.error('Error updating series:', { userId: req.user?.id, seriesId: req.params.id, error });
+    logger.error('Error updating series:', { userId: req.user?.id, seriesId: req.params.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error updating series',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -299,42 +332,32 @@ router.patch('/:id', async (req: AuthRequest, res: Response) => {
 router.delete('/:id', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const series = await Series.findById(id);
+    const series = isLiveEntityId(id) ? await findSeriesById(id) : undefined;
 
     if (!series) {
       return res.status(404).json({ message: 'Series not found' });
     }
 
-    // Permission check: creator or house admin+
-    let hasPermission = series.createdBy === userId;
-
-    if (!hasPermission && series.houseId) {
-      const house = await House.findById(series.houseId);
-      if (house && house.hasRole(userId, HouseMemberRole.ADMIN)) {
-        hasPermission = true;
-      }
-    }
-
-    if (!hasPermission) {
+    if (!(await canManageSeries(series, userId))) {
       return res.status(403).json({ message: 'You do not have permission to delete this series' });
     }
 
-    await Series.findByIdAndDelete(id);
+    await deleteSeries(series.id);
 
     logger.info(`Series deleted: ${id} by ${userId}`);
 
     res.json({ success: true });
   } catch (error) {
-    logger.error('Error deleting series:', { userId: req.user?.id, seriesId: req.params.id, error });
+    logger.error('Error deleting series:', { userId: req.user?.id, seriesId: req.params.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error deleting series',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -346,14 +369,14 @@ router.delete('/:id', async (req: AuthRequest, res: Response) => {
 router.post('/:id/generate-episode', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
     const { scheduledStart } = req.body;
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const series = await Series.findById(id);
+    const series = isLiveEntityId(id) ? await findSeriesById(id) : undefined;
 
     if (!series) {
       return res.status(404).json({ message: 'Series not found' });
@@ -363,17 +386,7 @@ router.post('/:id/generate-episode', async (req: AuthRequest, res: Response) => 
       return res.status(400).json({ message: 'Series is not active' });
     }
 
-    // Permission check: creator or house admin+
-    let hasPermission = series.createdBy === userId;
-
-    if (!hasPermission && series.houseId) {
-      const house = await House.findById(series.houseId);
-      if (house && house.hasRole(userId, HouseMemberRole.ADMIN)) {
-        hasPermission = true;
-      }
-    }
-
-    if (!hasPermission) {
+    if (!(await canManageSeries(series, userId))) {
       return res.status(403).json({ message: 'You do not have permission to generate episodes for this series' });
     }
 
@@ -392,56 +405,48 @@ router.post('/:id/generate-episode', async (req: AuthRequest, res: Response) => 
     const episodeNumber = series.nextEpisodeNumber;
 
     // Generate the title from the pattern (replace {n} with episode number)
-    const title = series.roomTemplate.titlePattern.replace(/\{n\}/g, String(episodeNumber));
+    const title = series.roomTemplateTitlePattern.replace(/\{n\}/g, String(episodeNumber));
 
     // Determine ownerType and houseId
     const ownerType = series.houseId ? OwnerType.HOUSE : OwnerType.PROFILE;
 
     // Create the room from the template
-    const room = new Room({
+    const room = await createRoom({
       title,
-      description: series.roomTemplate.description,
+      description: series.roomTemplateDescription,
       host: userId,
-      type: series.roomTemplate.type,
+      type: series.roomTemplateType as RoomType,
       ownerType,
-      houseId: series.houseId || undefined,
+      houseId: series.houseId,
       status: RoomStatus.SCHEDULED,
       participants: [],
       speakers: [userId],
-      maxParticipants: series.roomTemplate.maxParticipants,
+      maxParticipants: series.roomTemplateMaxParticipants,
       scheduledStart: scheduledStartDate,
-      tags: series.roomTemplate.tags,
-      speakerPermission: series.roomTemplate.speakerPermission,
-      seriesId: series._id.toString(),
-      stats: {
-        peakListeners: 0,
-        totalJoined: 0,
-      },
+      tags: series.roomTemplateTags,
+      speakerPermission: series.roomTemplateSpeakerPermission as SpeakerPermission,
+      seriesId: series.id,
     });
 
-    await room.save();
+    // Record the episode in the series and advance its counter.
+    await appendSeriesEpisode(series.id, room.id, scheduledStartDate, episodeNumber);
 
-    // Record the episode in the series
-    series.episodes.push({
-      roomId: room._id.toString(),
-      scheduledStart: scheduledStartDate,
-      episodeNumber,
-    });
-    series.nextEpisodeNumber = episodeNumber + 1;
-    await series.save();
-
-    logger.info(`Episode ${episodeNumber} generated for series ${id}: room ${room._id}`);
+    logger.info(`Episode ${episodeNumber} generated for series ${id}: room ${room.id}`);
 
     res.status(201).json({
       message: 'Episode generated successfully',
-      room,
+      // Through the allowlist rather than returned raw. The four credential
+      // columns are null on a freshly-created room, so nothing is withheld that
+      // a caller used to receive — but a create response is not a reason to
+      // bypass the one funnel every other room response goes through.
+      room: stripInternalStreamFields(room),
       episodeNumber,
     });
   } catch (error) {
-    logger.error('Error generating episode:', { userId: req.user?.id, seriesId: req.params.id, error });
+    logger.error('Error generating episode:', { userId: req.user?.id, seriesId: req.params.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error generating episode',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -457,20 +462,17 @@ router.post('/:id/generate-episode', async (req: AuthRequest, res: Response) => 
 router.post('/:id/cover', upload.single('file'), async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
 
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
     if (!req.file) return res.status(400).json({ message: 'No file provided' });
 
-    const series = await Series.findById(id);
+    const series = isLiveEntityId(id) ? await findSeriesById(id) : undefined;
     if (!series) return res.status(404).json({ message: 'Series not found' });
 
-    let hasPermission = series.createdBy === userId;
-    if (!hasPermission && series.houseId) {
-      const house = await House.findById(series.houseId);
-      if (house && house.hasRole(userId, HouseMemberRole.ADMIN)) hasPermission = true;
+    if (!(await canManageSeries(series, userId))) {
+      return res.status(403).json({ message: 'You do not have permission to update this series' });
     }
-    if (!hasPermission) return res.status(403).json({ message: 'You do not have permission to update this series' });
 
     const { buffer, contentType } = await processImage(req.file.buffer, 'cover');
     const objectKey = getAgoraSeriesCoverKey(id as string);
@@ -481,13 +483,12 @@ router.post('/:id/cover', upload.single('file'), async (req: AuthRequest, res: R
     }
 
     const cdnUrl = await uploadObject(objectKey, buffer, contentType, 'public-read');
-    series.coverImage = cdnUrl;
-    await series.save();
+    await updateSeries(series.id, { coverImage: cdnUrl });
 
     res.json({ coverImage: cdnUrl });
   } catch (error) {
-    logger.error('Error uploading series cover:', { seriesId: req.params.id, error });
-    res.status(500).json({ message: 'Error uploading cover', error: error instanceof Error ? error.message : 'Unknown error' });
+    logger.error('Error uploading series cover:', { seriesId: req.params.id, error: describeErrorSafely(error) });
+    res.status(500).json({ message: 'Error uploading cover', error: describeErrorSafely(error) });
   }
 });
 

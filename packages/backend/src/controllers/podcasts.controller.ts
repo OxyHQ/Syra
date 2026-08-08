@@ -5,13 +5,25 @@
  * RSS feed.
  *
  * Auth: writes resolve the owner via `getRequiredOxyUserId` and use explicit
- * field whitelists (never `new Model(req.body)`). ObjectId params are validated;
- * ObjectIds are serialized to strings at the API boundary.
+ * field whitelists (never a spread of `req.body`). Ids are validated with
+ * `isLiveEntityId`, which accepts BOTH shapes this schema stores — a 24-char
+ * ObjectId hex carried over from Mongo and a uuid v7 minted since. The old
+ * `mongoose.Types.ObjectId.isValid` guard accepted only the first, so every show
+ * and episode created after the cutover would have 400'd on its own detail page.
+ *
+ * ## `image` is a foreign key now, and a creator supplies it
+ *
+ * `podcasts.image_id` references `image_assets`. Mongo stored whatever string
+ * the client sent; a bogus id here is `23503`. The create/update paths resolve
+ * the asset BEFORE writing (they already read its colors) and reject an
+ * unknown id with a 400 rather than letting a constraint violation reach the
+ * client as a 500.
  */
 
-import mongoose from 'mongoose';
 import multer from 'multer';
 import type { Response } from 'express';
+import { and, eq } from 'drizzle-orm';
+import { isLiveEntityId, uuidv7 } from '@oxyhq/db';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { getRequiredOxyUserId } from '@oxyhq/core/server';
 import {
@@ -22,24 +34,47 @@ import {
   type EpisodePerson,
 } from '@syra/shared-types';
 import { env } from '../config/env';
-import { PodcastModel, type IPodcast } from '../models/Podcast';
-import { EpisodeModel } from '../models/Episode';
-import { UserLibraryModel } from '../models/Library';
-import { ArtistModel } from '../models/CatalogEntity';
+import { getDb } from '../db/postgres';
+import { catalogEntities, imageAssets } from '../db/schema/catalog';
+import {
+  browsePodcastRows,
+  findPodcastById,
+  findPodcastsByIds,
+  findPodcastsByOwner,
+  insertPodcast,
+  searchPodcastRows,
+  updatePodcast as updatePodcastRow,
+} from '../db/podcasts/podcasts';
+import {
+  countEpisodesByShow,
+  findEpisodesByShow,
+  findFeedEpisodes,
+  insertEpisode,
+} from '../db/podcasts/episodes';
+import {
+  loadPodcastPersons,
+  loadShowArtwork,
+  toEpisodeDtos,
+  toPodcastDtos,
+} from '../db/podcasts/hydrate';
+import { episodeVisibilityFilter } from '../db/podcasts/visibility';
+import {
+  listSubscribedPodcastIds,
+  subscribeToPodcast,
+  unsubscribeFromPodcast,
+} from '../db/podcasts/subscriptions';
 import { getParam, parseClampedLimit, parseOffset } from '../utils/reqParams';
 import { logger } from '../utils/logger';
 import { searchPodcasts as directorySearch } from '../services/podcasts/PodcastDirectory';
 import { importFeed } from '../services/podcasts/podcastImportService';
 import { syncPodcastSearch } from '../services/podcasts/podcastBackgroundImport';
-import { serializePodcast, serializeEpisode } from '../services/podcasts/podcastSerializers';
-import { PODCAST_ARTWORK_PROJECTION } from '../services/podcasts/episodeShowArtwork';
 import { resolvePersons, buildCreatorPersons, makeOxyUsersFetcher } from '../services/podcasts/resolvePersons';
 import { enqueueEpisodeIngest } from '../services/podcasts/ingestEpisode';
 import { generatePodcastRss } from '../services/podcasts/podcastRssGenerator';
 import { getS3PodcastEpisodeAudioKey } from '../config/s3.config';
 import { uploadToS3 } from '../services/s3Service';
-import { getImageAssetColors } from '../services/imageAssetService';
 import { oxy } from '../oxyClient';
+import { describeErrorSafely } from '../utils/error';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -47,6 +82,8 @@ const LIST_LIMIT_MIN = 1;
 const LIST_LIMIT_DEFAULT = 20;
 const LIST_LIMIT_MAX = 50;
 const RECENT_EPISODES_ON_SHOW = 20;
+/** Cap on items in a generated public RSS feed. */
+const RSS_EPISODE_CAP = 300;
 
 const AUDIO_FORMAT_BY_MIME: Record<string, AudioSource['format']> = {
   'audio/mpeg': 'mp3',
@@ -84,10 +121,6 @@ function queryString(req: AuthRequest, name: string): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 /**
  * Parse an id array from a multipart form field — accepts a real array, a JSON
  * array string (`["a","b"]`), or a comma-separated string.
@@ -108,16 +141,11 @@ function parseIdArray(raw: unknown): string[] {
   return trimmed.split(',').map((v) => v.trim()).filter((v) => v.length > 0);
 }
 
-/**
- * Episode visibility filter. The show owner sees every episode (including
- * `processing`/`failed`); everyone else sees only `ready` episodes.
- */
-function episodeVisibilityFilter(
-  ownerOxyUserId: string | undefined,
-  viewerId: string | undefined,
-): Record<string, unknown> {
-  const isOwner = !!viewerId && viewerId === ownerOxyUserId;
-  return isOwner ? {} : { status: 'ready' };
+/** Serialize one show, loading its four child collections. */
+async function serializeOne(row: Awaited<ReturnType<typeof findPodcastById>>) {
+  if (!row) return undefined;
+  const [dto] = await toPodcastDtos([row]);
+  return dto;
 }
 
 // ── Reads ──────────────────────────────────────────────────────────────────────
@@ -127,14 +155,18 @@ function episodeVisibilityFilter(
  *
  * `syncPodcastSearch` shallow-upserts the directory candidates first (bounded +
  * throttled, never hangs) so they appear in THIS response like the old discover
- * screen; the heavy feed import runs in the background. Uses a case-insensitive
- * regex (NOT `$text`) to avoid depending on a text index that is not built in
- * production (`autoIndex` is off) — that was the 502/504 cause. Wrapped so the
- * handler ALWAYS responds.
+ * screen; the heavy feed import runs in the background.
+ *
+ * Matching is `search_vector` now, not a case-insensitive regex. The regex was a
+ * deliberate choice under Mongo — its own comment named `$text` as unavailable
+ * because production runs with `autoIndex` off — and the Postgres GIN index is
+ * built by a migration, so the constraint that forced it is gone. Word and
+ * prefix matching with stemming, at a cost that does not grow with the
+ * catalogue; infix matching is the accepted loss (`db/catalog/search.ts`).
  *
  * Paginated for infinite scroll: `offset` (zero-based, clamped `>= 0`) + `limit`
  * page the result set. `hasMore` is derived by over-fetching ONE row beyond the
- * page (no second count query over the whole collection).
+ * page (no second count query over the whole table).
  */
 export async function searchPodcasts(req: AuthRequest, res: Response): Promise<void> {
   const q = (queryString(req, 'q') ?? '').trim();
@@ -149,24 +181,16 @@ export async function searchPodcasts(req: AuthRequest, res: Response): Promise<v
     // Instant enrichment (shallow upsert) before we read — bounded + throttled.
     await syncPodcastSearch(q);
 
-    const regex = new RegExp(escapeRegex(q), 'i');
     // Over-fetch one row past the page so `hasMore` is known without a separate
-    // count query against the full collection.
-    const rows = await PodcastModel.find({
-      status: 'active',
-      $or: [{ title: regex }, { author: regex }],
-    })
-      .sort({ popularity: -1, subscriberCount: -1, lastEpisodeAt: -1 })
-      .skip(offset)
-      .limit(limit + 1)
-      .lean();
+    // count query against the full table.
+    const rows = await searchPodcastRows(q, offset, limit + 1);
 
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
 
-    res.json({ data: page.map(serializePodcast), hasMore, limit, offset });
+    res.json({ data: await toPodcastDtos(page), hasMore, limit, offset });
   } catch (err) {
-    logger.error('[podcasts] search failed', { q, err });
+    logger.error('[podcasts] search failed', { q, err: describeErrorSafely(err) });
     if (!res.headersSent) res.status(500).json({ error: 'Search failed' });
   }
 }
@@ -198,9 +222,12 @@ export async function importPodcast(req: AuthRequest, res: Response): Promise<vo
 
   try {
     const result = await importFeed(parsed.data.feedUrl);
-    res.status(200).json({ data: serializePodcast(result.podcast), importedEpisodes: result.importedEpisodes });
+    res.status(200).json({
+      data: await serializeOne(result.podcast),
+      importedEpisodes: result.importedEpisodes,
+    });
   } catch (err) {
-    logger.warn('[podcasts] manual import failed', { feedUrl: parsed.data.feedUrl, err });
+    logger.warn('[podcasts] manual import failed', { feedUrl: parsed.data.feedUrl, err: describeErrorSafely(err) });
     res.status(502).json({ error: 'Failed to import feed' });
   }
 }
@@ -211,21 +238,15 @@ export async function importPodcast(req: AuthRequest, res: Response): Promise<vo
 export async function browsePodcasts(req: AuthRequest, res: Response): Promise<void> {
   const limit = parseClampedLimit(req.query.limit, { min: LIST_LIMIT_MIN, max: LIST_LIMIT_MAX, fallback: LIST_LIMIT_DEFAULT });
   const page = parsePage(req.query.page);
-  const category = queryString(req, 'category');
-  const sort = queryString(req, 'sort');
 
-  const filter: Record<string, unknown> = { status: 'active' };
-  if (category) filter.categories = category;
+  const rows = await browsePodcastRows({
+    category: queryString(req, 'category'),
+    sort: queryString(req, 'sort') === 'recent' ? 'recent' : 'popular',
+    offset: (page - 1) * limit,
+    limit,
+  });
 
-  const sortSpec: Record<string, 1 | -1> = sort === 'recent' ? { lastEpisodeAt: -1 } : { popularity: -1, subscriberCount: -1 };
-
-  const podcasts = await PodcastModel.find(filter)
-    .sort(sortSpec)
-    .skip((page - 1) * limit)
-    .limit(limit)
-    .lean();
-
-  res.json({ data: podcasts.map(serializePodcast), page, limit });
+  res.json({ data: await toPodcastDtos(rows), page, limit });
 }
 
 /**
@@ -233,35 +254,39 @@ export async function browsePodcasts(req: AuthRequest, res: Response): Promise<v
  */
 export async function getPodcast(req: AuthRequest, res: Response): Promise<void> {
   const id = getParam(req, 'id');
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  if (!isLiveEntityId(id)) {
     res.status(400).json({ error: 'Invalid podcast ID' });
     return;
   }
 
-  const podcast = await PodcastModel.findById(id).lean();
+  const podcast = await findPodcastById(id);
   if (!podcast || podcast.status === 'removed') {
     res.status(404).json({ error: 'Podcast not found' });
     return;
   }
 
-  const [episodes, persons] = await Promise.all([
-    EpisodeModel.find({
-      podcastId: podcast._id,
-      ...episodeVisibilityFilter(podcast.ownerOxyUserId, req.user?.id),
-    })
-      .sort({ pubDate: -1 })
-      .limit(RECENT_EPISODES_ON_SHOW)
-      .lean(),
-    // Show-level Hosts & Guests: resolve channel persons to Person/Artist links
-    // + enrich Oxy-linked credits with their live avatar + displayName.
-    resolvePersons(podcast.persons, makeOxyUsersFetcher(oxy)),
+  // Show-level Hosts & Guests: the credits are a child table now, so they are
+  // read here and handed to the resolver, which links them to `person` rows and
+  // enriches Oxy-linked credits with their live avatar + displayName.
+  const credits = (await loadPodcastPersons([podcast.id])).get(podcast.id) ?? [];
+
+  const [episodeRows, persons, dto] = await Promise.all([
+    findEpisodesByShow(podcast.id, {
+      visibility: episodeVisibilityFilter(podcast.ownerOxyUserId, req.user?.id),
+      limit: RECENT_EPISODES_ON_SHOW,
+    }),
+    resolvePersons(credits, makeOxyUsersFetcher(oxy)),
+    serializeOne(podcast),
   ]);
+
+  // The show is already loaded: cover-less episodes inherit its artwork from
+  // the map built here rather than from a second query per episode.
+  const artwork = await loadShowArtwork(episodeRows);
 
   res.json({
     data: {
-      podcast: serializePodcast(podcast),
-      // Show already loaded: cover-less episodes inherit its artwork directly.
-      episodes: episodes.map((episode) => serializeEpisode(episode, podcast)),
+      podcast: dto,
+      episodes: await toEpisodeDtos(episodeRows, artwork),
       persons,
     },
   });
@@ -272,15 +297,12 @@ export async function getPodcast(req: AuthRequest, res: Response): Promise<void>
  */
 export async function getPodcastEpisodes(req: AuthRequest, res: Response): Promise<void> {
   const id = getParam(req, 'id');
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  if (!isLiveEntityId(id)) {
     res.status(400).json({ error: 'Invalid podcast ID' });
     return;
   }
 
-  // Also project the show's artwork so cover-less episodes inherit it (no N+1).
-  const podcast = await PodcastModel.findById(id)
-    .select(`ownerOxyUserId status ${PODCAST_ARTWORK_PROJECTION}`)
-    .lean();
+  const podcast = await findPodcastById(id);
   if (!podcast || podcast.status === 'removed') {
     res.status(404).json({ error: 'Podcast not found' });
     return;
@@ -290,18 +312,15 @@ export async function getPodcastEpisodes(req: AuthRequest, res: Response): Promi
   const page = parsePage(req.query.page);
 
   // The owner sees processing/failed episodes too; others see only ready ones.
-  const filter = { podcastId: id, ...episodeVisibilityFilter(podcast.ownerOxyUserId, req.user?.id) };
+  const visibility = episodeVisibilityFilter(podcast.ownerOxyUserId, req.user?.id);
 
-  const [episodes, total] = await Promise.all([
-    EpisodeModel.find(filter)
-      .sort({ pubDate: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit)
-      .lean(),
-    EpisodeModel.countDocuments(filter),
+  const [episodeRows, total, artwork] = await Promise.all([
+    findEpisodesByShow(podcast.id, { visibility, offset: (page - 1) * limit, limit }),
+    countEpisodesByShow(podcast.id, visibility),
+    loadShowArtwork([{ podcastId: podcast.id }]),
   ]);
 
-  res.json({ data: episodes.map((episode) => serializeEpisode(episode, podcast)), total, page, limit });
+  res.json({ data: await toEpisodeDtos(episodeRows, artwork), total, page, limit });
 }
 
 /**
@@ -309,23 +328,31 @@ export async function getPodcastEpisodes(req: AuthRequest, res: Response): Promi
  */
 export async function getPodcastRss(req: AuthRequest, res: Response): Promise<void> {
   const id = getParam(req, 'id');
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  if (!isLiveEntityId(id)) {
     res.status(400).json({ error: 'Invalid podcast ID' });
     return;
   }
 
-  const podcast = await PodcastModel.findById(id);
+  const podcast = await findPodcastById(id);
   if (!podcast || podcast.source !== 'syra' || podcast.status === 'removed') {
     res.status(404).json({ error: 'Feed not found' });
     return;
   }
 
-  const episodes = await EpisodeModel.find({ podcastId: podcast._id, status: { $ne: 'unavailable' } })
-    .sort({ pubDate: -1 })
-    .limit(300);
+  const episodeRows = await findFeedEpisodes(podcast.id, RSS_EPISODE_CAP);
+  const artwork = await loadShowArtwork([{ podcastId: podcast.id }]);
 
-  const baseUrl = env.STREAM_KEY_BASE_URL;
-  const xml = generatePodcastRss(podcast, episodes, baseUrl);
+  const [dto] = await toPodcastDtos([podcast]);
+  if (!dto) {
+    res.status(404).json({ error: 'Feed not found' });
+    return;
+  }
+
+  const xml = generatePodcastRss(
+    dto,
+    await toEpisodeDtos(episodeRows, artwork),
+    env.STREAM_KEY_BASE_URL
+  );
 
   res.set('Content-Type', 'application/rss+xml; charset=utf-8');
   res.set('Cache-Control', 'public, max-age=900');
@@ -336,31 +363,25 @@ export async function getPodcastRss(req: AuthRequest, res: Response): Promise<vo
 
 /**
  * POST /api/podcasts/:id/subscribe — idempotent; bumps subscriberCount once.
+ *
+ * The existence check the Mongo handler ran first is gone, and nothing is lost:
+ * `user_podcast_subscriptions.podcast_id` is a foreign key, so a show that does
+ * not exist is `23503` and `subscribeToPodcast` reports it as
+ * `'missing-podcast'` — one round trip instead of two, and correct under a
+ * concurrent delete, which the read-then-write never was.
  */
 export async function subscribePodcast(req: AuthRequest, res: Response): Promise<void> {
   const userId = getRequiredOxyUserId(req);
   const id = getParam(req, 'id');
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  if (!isLiveEntityId(id)) {
     res.status(400).json({ error: 'Invalid podcast ID' });
     return;
   }
 
-  const podcast = await PodcastModel.findById(id).select('_id').lean();
-  if (!podcast) {
+  const result = await subscribeToPodcast(userId, id);
+  if (result === 'missing-podcast') {
     res.status(404).json({ error: 'Podcast not found' });
     return;
-  }
-
-  const before = await UserLibraryModel.findOne({ oxyUserId: userId }).select('subscribedPodcasts').lean();
-  const already = before?.subscribedPodcasts?.includes(id) ?? false;
-
-  await UserLibraryModel.findOneAndUpdate(
-    { oxyUserId: userId },
-    { $addToSet: { subscribedPodcasts: id } },
-    { upsert: true },
-  );
-  if (!already) {
-    await PodcastModel.updateOne({ _id: id }, { $inc: { subscriberCount: 1 } });
   }
 
   res.json({ ok: true });
@@ -372,23 +393,12 @@ export async function subscribePodcast(req: AuthRequest, res: Response): Promise
 export async function unsubscribePodcast(req: AuthRequest, res: Response): Promise<void> {
   const userId = getRequiredOxyUserId(req);
   const id = getParam(req, 'id');
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  if (!isLiveEntityId(id)) {
     res.status(400).json({ error: 'Invalid podcast ID' });
     return;
   }
 
-  const before = await UserLibraryModel.findOne({ oxyUserId: userId }).select('subscribedPodcasts').lean();
-  const wasSubscribed = before?.subscribedPodcasts?.includes(id) ?? false;
-
-  await UserLibraryModel.findOneAndUpdate(
-    { oxyUserId: userId },
-    { $pull: { subscribedPodcasts: id } },
-    { upsert: true },
-  );
-  if (wasSubscribed) {
-    await PodcastModel.updateOne({ _id: id, subscriberCount: { $gt: 0 } }, { $inc: { subscriberCount: -1 } });
-  }
-
+  await unsubscribeFromPodcast(userId, id);
   res.json({ ok: true });
 }
 
@@ -398,18 +408,15 @@ export async function unsubscribePodcast(req: AuthRequest, res: Response): Promi
 export async function getSubscriptions(req: AuthRequest, res: Response): Promise<void> {
   const userId = getRequiredOxyUserId(req);
 
-  const library = await UserLibraryModel.findOne({ oxyUserId: userId }).select('subscribedPodcasts').lean();
-  const ids = (library?.subscribedPodcasts ?? []).filter((id) => mongoose.Types.ObjectId.isValid(id));
+  const ids = await listSubscribedPodcastIds(userId);
   if (ids.length === 0) {
     res.json({ data: { subscriptions: [], total: 0, oxyUserId: userId } });
     return;
   }
 
-  const podcasts = await PodcastModel.find({ _id: { $in: ids } }).lean();
-  const subscriptions = podcasts.map((podcast) => ({
-    podcast: serializePodcast(podcast),
-    lastEpisodeAt: podcast.lastEpisodeAt ? podcast.lastEpisodeAt.toISOString() : undefined,
-  }));
+  const rows = await findPodcastsByIds(ids);
+  const dtos = await toPodcastDtos(rows);
+  const subscriptions = dtos.map((podcast) => ({ podcast, lastEpisodeAt: podcast.lastEpisodeAt }));
 
   res.json({ data: { subscriptions, total: subscriptions.length, oxyUserId: userId } });
 }
@@ -422,8 +429,43 @@ export async function getSubscriptions(req: AuthRequest, res: Response): Promise
  */
 export async function getMyPodcasts(req: AuthRequest, res: Response): Promise<void> {
   const userId = getRequiredOxyUserId(req);
-  const podcasts = await PodcastModel.find({ ownerOxyUserId: userId }).sort({ createdAt: -1 }).lean();
-  res.json({ data: podcasts.map(serializePodcast) });
+  const rows = await findPodcastsByOwner(userId);
+  res.json({ data: await toPodcastDtos(rows) });
+}
+
+/**
+ * Resolve a creator-supplied cover to its `image_assets` row, or report that it
+ * is unknown.
+ *
+ * `podcasts.image_id` is a foreign key, so an id naming no asset is a constraint
+ * violation rather than the string Mongo silently stored. Checked here, before
+ * the write, so the caller gets a 400 that names the problem.
+ *
+ * One query rather than `getImageAssetColors` plus an existence check: that
+ * helper returns `undefined` BOTH for a missing asset and for one whose palette
+ * was never extracted, so it cannot answer "does this exist" on its own — and
+ * the difference is exactly what decides between a 400 and a show with no
+ * gradient.
+ */
+async function resolveCover(
+  imageId: string
+): Promise<{ ok: true; primaryColor?: string; secondaryColor?: string } | { ok: false }> {
+  if (!isLiveEntityId(imageId)) return { ok: false };
+
+  const [asset] = await getDb()
+    .select({ primaryColor: imageAssets.primaryColor, secondaryColor: imageAssets.secondaryColor })
+    .from(imageAssets)
+    .where(eq(imageAssets.id, imageId))
+    .limit(1);
+
+  if (!asset) return { ok: false };
+  // `secondaryColor` alone is not a palette, matching `getImageAssetColors`.
+  if (!asset.primaryColor) return { ok: true };
+  return {
+    ok: true,
+    primaryColor: asset.primaryColor,
+    secondaryColor: asset.secondaryColor ?? undefined,
+  };
 }
 
 /**
@@ -438,51 +480,63 @@ export async function createPodcast(req: AuthRequest, res: Response): Promise<vo
   }
   const input = parsed.data;
 
-  const podcast = new PodcastModel({
-    title: input.title,
-    description: input.description,
-    author: input.author,
-    image: input.image,
-    language: input.language,
-    categories: input.categories ?? [],
-    explicit: input.explicit ?? false,
-    link: input.link,
-    type: input.type ?? 'episodic',
-    source: 'syra',
-    ownerOxyUserId: userId,
-    claimable: false,
-    status: 'active',
-  });
-
   // Hosts & Guests — Oxy user ids ONLY (validated; no free text).
+  let persons: EpisodePerson[] = [];
   if (input.hosts?.length || input.guests?.length) {
-    const { persons, invalidIds } = await buildCreatorPersons(
+    const built = await buildCreatorPersons(
       { hosts: input.hosts, guests: input.guests },
-      makeOxyUsersFetcher(oxy),
+      makeOxyUsersFetcher(oxy)
     );
-    if (invalidIds.length > 0) {
-      res.status(400).json({ error: 'hosts/guests must be valid Oxy user ids', invalidIds });
+    if (built.invalidIds.length > 0) {
+      res.status(400).json({ error: 'hosts/guests must be valid Oxy user ids', invalidIds: built.invalidIds });
       return;
     }
-    podcast.persons = persons;
+    persons = built.persons;
   }
 
   // Pull the gradient colors from the creator's uploaded cover (Syra image id),
-  // matching how Album/Artist carry primaryColor. Best-effort.
-  if (input.image && mongoose.Types.ObjectId.isValid(input.image)) {
-    const colors = await getImageAssetColors(input.image);
-    if (colors) {
-      podcast.primaryColor = colors.primaryColor;
-      podcast.secondaryColor = colors.secondaryColor;
+  // matching how Album/Artist carry primaryColor.
+  let imageId: string | null = null;
+  let primaryColor: string | undefined;
+  let secondaryColor: string | undefined;
+  if (input.image) {
+    const cover = await resolveCover(input.image);
+    if (!cover.ok) {
+      res.status(400).json({ error: 'Unknown cover image' });
+      return;
     }
+    imageId = input.image;
+    primaryColor = cover.primaryColor;
+    secondaryColor = cover.secondaryColor;
   }
 
-  // The public RSS URL is derivable from the id; persist it so it's queryable.
-  const base = env.STREAM_KEY_BASE_URL;
-  podcast.feedUrl = `${base}/api/podcasts/${podcast._id.toString()}/rss`;
-  await podcast.save();
+  // The public RSS URL is derivable from the id, so the id is minted here rather
+  // than left to the column default — the same reason `uploadEpisode` mints one.
+  const id = uuidv7();
 
-  res.status(201).json({ data: serializePodcast(podcast) });
+  const row = await insertPodcast(
+    {
+      id,
+      title: input.title,
+      description: input.description,
+      author: input.author,
+      imageId,
+      primaryColor,
+      secondaryColor,
+      language: input.language,
+      explicit: input.explicit ?? false,
+      link: input.link,
+      type: input.type ?? 'episodic',
+      source: 'syra',
+      ownerOxyUserId: userId,
+      claimable: false,
+      status: 'active',
+      feedUrl: `${env.STREAM_KEY_BASE_URL}/api/podcasts/${id}/rss`,
+    },
+    { categories: input.categories ?? [], persons }
+  );
+
+  res.status(201).json({ data: await serializeOne(row) });
 }
 
 /**
@@ -499,12 +553,12 @@ export async function uploadEpisode(req: AuthRequest, res: Response): Promise<vo
     try {
       const userId = getRequiredOxyUserId(req);
       const id = getParam(req, 'id');
-      if (!mongoose.Types.ObjectId.isValid(id)) {
+      if (!isLiveEntityId(id)) {
         res.status(400).json({ error: 'Invalid podcast ID' });
         return;
       }
 
-      const podcast = await PodcastModel.findById(id);
+      const podcast = await findPodcastById(id);
       if (!podcast) {
         res.status(404).json({ error: 'Podcast not found' });
         return;
@@ -531,55 +585,60 @@ export async function uploadEpisode(req: AuthRequest, res: Response): Promise<vo
       const guestIds = parseIdArray(req.body?.guests);
       let episodePersons: EpisodePerson[] = [];
       if (hostIds.length > 0 || guestIds.length > 0) {
-        const { persons, invalidIds } = await buildCreatorPersons(
+        const built = await buildCreatorPersons(
           { hosts: hostIds, guests: guestIds },
-          makeOxyUsersFetcher(oxy),
+          makeOxyUsersFetcher(oxy)
         );
-        if (invalidIds.length > 0) {
-          res.status(400).json({ error: 'hosts/guests must be valid Oxy user ids', invalidIds });
+        if (built.invalidIds.length > 0) {
+          res.status(400).json({ error: 'hosts/guests must be valid Oxy user ids', invalidIds: built.invalidIds });
           return;
         }
-        episodePersons = persons;
+        episodePersons = built.persons;
       }
 
       const format = AUDIO_FORMAT_BY_MIME[file.mimetype] ?? 'mp3';
       const durationRaw = Number(req.body?.duration);
       const duration = Number.isFinite(durationRaw) && durationRaw > 0 ? durationRaw : 0;
 
-      const episodeId = new mongoose.Types.ObjectId();
-      const episode = new EpisodeModel({
-        _id: episodeId,
-        podcastId: podcast._id,
-        podcastTitle: podcast.title,
-        title,
-        description: typeof req.body?.description === 'string' ? req.body.description : undefined,
-        summary: typeof req.body?.summary === 'string' ? req.body.summary : undefined,
-        guid: episodeId.toString(),
-        duration,
-        pubDate: new Date(),
-        episodeType: 'full',
-        explicit: req.body?.explicit === 'true' || req.body?.explicit === true,
-        source: 'syra',
-        audioSource: { url: `/api/podcasts/episodes/${episodeId.toString()}/audio`, format },
-        status: 'processing',
-        persons: episodePersons,
-      });
+      // Minted up front: it is both the S3 key and the episode's own `guid`.
+      const episodeId = uuidv7();
+      const pubDate = new Date();
 
-      const audioKey = getS3PodcastEpisodeAudioKey(episodeId.toString(), podcast._id.toString(), format);
+      const audioKey = getS3PodcastEpisodeAudioKey(episodeId, podcast.id, format);
       await uploadToS3(audioKey, file.buffer, { contentType: file.mimetype });
-      await episode.save();
 
-      await PodcastModel.updateOne(
-        { _id: podcast._id },
-        { $inc: { episodeCount: 1 }, $set: { lastEpisodeAt: episode.pubDate } },
+      const episode = await insertEpisode(
+        {
+          id: episodeId,
+          podcastId: podcast.id,
+          podcastTitle: podcast.title,
+          title,
+          description: typeof req.body?.description === 'string' ? req.body.description : undefined,
+          summary: typeof req.body?.summary === 'string' ? req.body.summary : undefined,
+          guid: episodeId,
+          duration,
+          pubDate,
+          episodeType: 'full',
+          explicit: req.body?.explicit === 'true' || req.body?.explicit === true,
+          source: 'syra',
+          audioSourceUrl: `/api/podcasts/episodes/${episodeId}/audio`,
+          audioSourceFormat: format,
+          status: 'processing',
+        },
+        { persons: episodePersons },
+        // The show's `episode_count`/`last_episode_at` move in the SAME
+        // transaction as the row they describe — see `insertEpisode`.
+        { recordOnShow: true }
       );
 
-      enqueueEpisodeIngest(episodeId.toString());
+      enqueueEpisodeIngest(episodeId);
 
       // New episode has no cover of its own yet: inherit the loaded show's art.
-      res.status(201).json({ data: serializeEpisode(episode, podcast) });
+      const artwork = await loadShowArtwork([{ podcastId: podcast.id }]);
+      const [dto] = await toEpisodeDtos([episode], artwork);
+      res.status(201).json({ data: dto });
     } catch (err) {
-      logger.error('[podcasts] episode upload failed', { err });
+      logger.error('[podcasts] episode upload failed', { err: describeErrorSafely(err) });
       if (!res.headersSent) res.status(500).json({ error: 'Failed to upload episode' });
     }
   });
@@ -592,12 +651,12 @@ export async function uploadEpisode(req: AuthRequest, res: Response): Promise<vo
 export async function claimPodcast(req: AuthRequest, res: Response): Promise<void> {
   const userId = getRequiredOxyUserId(req);
   const id = getParam(req, 'id');
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  if (!isLiveEntityId(id)) {
     res.status(400).json({ error: 'Invalid podcast ID' });
     return;
   }
 
-  const podcast = await PodcastModel.findById(id);
+  const podcast = await findPodcastById(id);
   if (!podcast) {
     res.status(404).json({ error: 'Podcast not found' });
     return;
@@ -621,29 +680,47 @@ export async function claimPodcast(req: AuthRequest, res: Response): Promise<voi
   }
 
   const linkedArtistIdRaw = typeof req.body?.linkedArtistId === 'string' ? req.body.linkedArtistId : undefined;
+  let linkedArtistId: string | undefined;
   if (linkedArtistIdRaw) {
-    if (!mongoose.Types.ObjectId.isValid(linkedArtistIdRaw)) {
+    if (!isLiveEntityId(linkedArtistIdRaw)) {
       res.status(400).json({ error: 'Invalid linkedArtistId' });
       return;
     }
-    // IDOR guard: a caller may only link an Artist they own/claimed — never
-    // trust a body-supplied id to point at someone else's artist.
-    const artist = await ArtistModel.findById(linkedArtistIdRaw)
-      .select('ownerOxyUserId claimedByOxyUserId')
-      .lean();
+    /**
+     * IDOR guard: a caller may only link an artist they own or claimed — never
+     * trust a body-supplied id to point at someone else's.
+     *
+     * `type = 'artist'` is stated. Mongoose's discriminator injected it into
+     * `ArtistModel.findById`; one table with a `type` column does not, and
+     * without it a caller could link their own PERSON row here and put it in a
+     * column whose CHECK — `linked_artist_id is null or type = 'person'` on
+     * `catalog_entities` — says nothing about what `podcasts.linked_artist_id`
+     * may reference.
+     */
+    const [artist] = await getDb()
+      .select({
+        ownerOxyUserId: catalogEntities.ownerOxyUserId,
+        claimedByOxyUserId: catalogEntities.claimedByOxyUserId,
+      })
+      .from(catalogEntities)
+      .where(and(eq(catalogEntities.id, linkedArtistIdRaw), eq(catalogEntities.type, 'artist')))
+      .limit(1);
+
     if (!artist || (artist.ownerOxyUserId !== userId && artist.claimedByOxyUserId !== userId)) {
       res.status(403).json({ error: 'You do not own the linked artist' });
       return;
     }
-    podcast.linkedArtistId = new mongoose.Types.ObjectId(linkedArtistIdRaw);
+    linkedArtistId = linkedArtistIdRaw;
   }
 
-  podcast.claimedByOxyUserId = userId;
-  podcast.ownerOxyUserId = userId;
-  podcast.claimable = false;
-  await podcast.save();
+  const updated = await updatePodcastRow(id, {
+    claimedByOxyUserId: userId,
+    ownerOxyUserId: userId,
+    claimable: false,
+    ...(linkedArtistId === undefined ? {} : { linkedArtistId }),
+  });
 
-  res.json({ data: serializePodcast(podcast) });
+  res.json({ data: await serializeOne(updated) });
 }
 
 /**
@@ -660,7 +737,7 @@ export async function updatePodcast(req: AuthRequest, res: Response): Promise<vo
   const userId = getRequiredOxyUserId(req);
   const id = getParam(req, 'id');
 
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  if (!isLiveEntityId(id)) {
     res.status(400).json({ error: 'Invalid podcast ID' });
     return;
   }
@@ -671,7 +748,7 @@ export async function updatePodcast(req: AuthRequest, res: Response): Promise<vo
     return;
   }
 
-  const podcast = await PodcastModel.findById(id);
+  const podcast = await findPodcastById(id);
   if (!podcast) {
     res.status(404).json({ error: 'Podcast not found' });
     return;
@@ -683,20 +760,53 @@ export async function updatePodcast(req: AuthRequest, res: Response): Promise<vo
 
   const updates = parsed.data;
 
-  // Explicit field-by-field assignment — the parsed object is never spread onto the doc.
-  if (updates.title !== undefined) podcast.title = updates.title;
-  if (updates.description !== undefined) podcast.description = updates.description;
-  if (updates.author !== undefined) podcast.author = updates.author;
-  if (updates.image !== undefined) podcast.image = updates.image;
-  if (updates.language !== undefined) podcast.language = updates.language;
-  if (updates.categories !== undefined) podcast.categories = updates.categories;
-  if (updates.explicit !== undefined) podcast.explicit = updates.explicit;
-  if (updates.link !== undefined) podcast.link = updates.link;
-  if (updates.type !== undefined) podcast.type = updates.type;
+  // Explicit field-by-field assignment — the parsed object is never spread onto the row.
+  const values: Parameters<typeof updatePodcastRow>[1] = {};
+  if (updates.title !== undefined) values.title = updates.title;
+  if (updates.description !== undefined) values.description = updates.description;
+  if (updates.author !== undefined) values.author = updates.author;
+  if (updates.language !== undefined) values.language = updates.language;
+  if (updates.explicit !== undefined) values.explicit = updates.explicit;
+  if (updates.link !== undefined) values.link = updates.link;
+  if (updates.type !== undefined) values.type = updates.type;
 
-  await podcast.save();
+  if (updates.image !== undefined) {
+    const cover = await resolveCover(updates.image);
+    if (!cover.ok) {
+      res.status(400).json({ error: 'Unknown cover image' });
+      return;
+    }
+    values.imageId = updates.image;
+    /**
+     * `?? null`, and this is the same ORM difference Task 13 fixed on the
+     * locker's own PATCH (`uploads.controller.ts`'s `updateUpload`).
+     *
+     * `resolveCover` answers `{ ok: true }` with NO palette for an asset that
+     * carries none, and `secondaryColor: undefined` for one that has a primary
+     * and no secondary. `definedOnly` then strips those keys, and drizzle would
+     * strip them anyway — so `undefined` means "leave this column alone", where
+     * Mongoose's `$set` builder + `save()` cleared it.
+     *
+     * "Leave alone" is right for the FEED REFRESH `definedOnly` exists for — a
+     * crawl that carries no `<podcast:funding>` must not erase creator-added
+     * links — and wrong here. This is a creator explicitly changing the cover,
+     * and the new cover decides both accents INCLUDING deciding they are
+     * absent. Without the coalesce the show keeps the previous cover's colours
+     * forever, and the client renders a palette belonging to artwork that is no
+     * longer there. Fixed at the call site rather than in `definedOnly`,
+     * because that helper's other callers want exactly the semantics it has.
+     */
+    values.primaryColor = cover.primaryColor ?? null;
+    values.secondaryColor = cover.secondaryColor ?? null;
+  }
 
-  res.json({ data: serializePodcast(podcast) });
+  const updated = await updatePodcastRow(
+    id,
+    values,
+    updates.categories === undefined ? {} : { categories: updates.categories }
+  );
+
+  res.json({ data: await serializeOne(updated) });
 }
 
 /**
@@ -708,31 +818,31 @@ export async function updatePodcast(req: AuthRequest, res: Response): Promise<vo
  */
 async function loadOwnedShowOrRespond(
   req: AuthRequest,
-  res: Response,
-): Promise<IPodcast | null> {
+  res: Response
+): Promise<Awaited<ReturnType<typeof findPodcastById>>> {
   const userId = getRequiredOxyUserId(req);
   const id = getParam(req, 'id');
 
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  if (!isLiveEntityId(id)) {
     res.status(400).json({ error: 'Invalid podcast ID' });
-    return null;
+    return undefined;
   }
 
-  const podcast = await PodcastModel.findById(id);
+  const podcast = await findPodcastById(id);
   if (!podcast) {
     res.status(404).json({ error: 'Podcast not found' });
-    return null;
+    return undefined;
   }
   if (podcast.source !== 'syra' || podcast.ownerOxyUserId !== userId) {
     res.status(403).json({ error: 'You do not own this podcast' });
-    return null;
+    return undefined;
   }
   if (podcast.status === 'removed') {
     res.status(409).json({
       error: 'Podcast removed',
       message: 'This show was removed by the platform and cannot be republished',
     });
-    return null;
+    return undefined;
   }
 
   return podcast;
@@ -741,20 +851,18 @@ async function loadOwnedShowOrRespond(
 /**
  * POST /api/podcasts/:id/unpublish — hide a show from browse, search and discovery.
  *
- * Soft by design: `status: 'unavailable'` drops the show out of the `{status:'active'}`
- * filter used by browse (podcasts.controller browse filter) and search, while leaving the
- * document, its episodes, and every subscription intact so publishing again is lossless.
- * Deliberately does NOT cascade to episodes — the show disappears from discovery but an
- * already-downloaded or directly-linked episode keeps resolving.
+ * Soft by design: `status: 'unavailable'` drops the show out of the `status = 'active'`
+ * filter used by browse and search, while leaving the row, its episodes, and every
+ * subscription intact so publishing again is lossless. Deliberately does NOT cascade to
+ * episodes — the show disappears from discovery but an already-downloaded or
+ * directly-linked episode keeps resolving.
  */
 export async function unpublishPodcast(req: AuthRequest, res: Response): Promise<void> {
   const podcast = await loadOwnedShowOrRespond(req, res);
   if (!podcast) return;
 
-  podcast.status = 'unavailable';
-  await podcast.save();
-
-  res.json({ data: serializePodcast(podcast) });
+  const updated = await updatePodcastRow(podcast.id, { status: 'unavailable' });
+  res.json({ data: await serializeOne(updated) });
 }
 
 /** POST /api/podcasts/:id/publish — undo `unpublishPodcast`. */
@@ -762,8 +870,6 @@ export async function publishPodcast(req: AuthRequest, res: Response): Promise<v
   const podcast = await loadOwnedShowOrRespond(req, res);
   if (!podcast) return;
 
-  podcast.status = 'active';
-  await podcast.save();
-
-  res.json({ data: serializePodcast(podcast) });
+  const updated = await updatePodcastRow(podcast.id, { status: 'active' });
+  res.json({ data: await serializeOne(updated) });
 }

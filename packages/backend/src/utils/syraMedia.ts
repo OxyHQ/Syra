@@ -1,14 +1,14 @@
-import mongoose from 'mongoose';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import { env } from '../config/env';
 import { logger } from './logger';
-import { TrackModel, ITrack } from '../models/Track';
+import { getDb } from '../db/postgres';
+import { albums, trackHlsRenditions, tracks } from '../db/schema/catalog';
+import { playlistTracks } from '../db/schema/library';
+import { playableTrackFilter } from '../db/catalog/visibility';
+import { normalizeImageRef } from '../db/catalog/serialize';
 import { getTrackStreamUrl } from '../services/audioStorageService';
 import { mintStreamToken } from '../services/stream/streamToken';
-import { isTrackPlayable } from '../controllers/stream.controller';
-import { playableTrackFilter } from '../utils/catalogVisibility';
-import { formatTrackWithCoverArt } from '../utils/musicHelpers';
-import { PlaylistTrackModel } from '../models/PlaylistTrack';
-import type { MediaQueueItem } from '../models/Room';
+import type { MediaQueueItem } from '../db/rooms/types';
 
 /**
  * Syra MUSIC → live-room ingress resolver — the music-shaped sibling of
@@ -23,6 +23,21 @@ import type { MediaQueueItem } from '../models/Room';
  * all carrying a permissive rights model), and the host is shown a rights
  * disclaimer in the picker before starting a listening party. Do NOT extend this
  * to arbitrary third-party catalog URLs without a broadcast license.
+ *
+ * PORTED TO DRIZZLE (Task 10a). Its exported contract is unchanged — the same
+ * three functions, the same tri-state result — so no caller moves. Three things
+ * changed inside:
+ *
+ *  - Playability is applied in the WHERE clause via `playableTrackFilter()`
+ *    rather than loading the row and re-checking it against `stream.controller`'s
+ *    `isTrackPlayable`. One authority, asked once; an unplayable track never
+ *    comes back.
+ *  - The `ObjectId.isValid` pre-checks are gone. An id of any shape is answered
+ *    by the query, and a guard that rejects a well-formed id it has not been
+ *    taught about is a fail-open bug in a new costume. "No such row" is free.
+ *  - `resolvePlaylistTracks` is one join rather than two round trips:
+ *    `playlist_tracks.track_id` is a real foreign key now, so membership and
+ *    playability are answered together.
  */
 
 // ── Audio-URL selection ────────────────────────────────────────────────────────
@@ -36,11 +51,18 @@ import type { MediaQueueItem } from '../models/Room';
 const HLS_STREAM_TOKEN_CAP_KBPS = 320;
 const HLS_STREAM_TOKEN_TTL_SEC = 3600;
 
-/** Minimal raw-track shape needed to pick a playable audio URL. */
-type PlayableTrackFields = Pick<
-  ITrack,
-  'audioSource' | 'artistId' | 'albumId' | 'title' | 'hlsMasterKey' | 'hls' | 'source' | 'status'
-> & { _id: mongoose.Types.ObjectId; isAvailable?: boolean; copyrightRemoved?: boolean };
+/** The columns picking an ingress audio URL needs. */
+interface PlayableTrackFields {
+  readonly id: string;
+  readonly title: string;
+  readonly artistId: string;
+  readonly albumId: string | null;
+  readonly status: string;
+  readonly audioSourceUrl: string | null;
+  readonly audioSourceFormat: 'mp3' | 'flac' | 'ogg' | 'm4a' | 'wav' | null;
+  readonly hlsMasterKey: string | null;
+  readonly hlsRenditionCount: number;
+}
 
 type AudioUrlOutcome =
   | { status: 'ok'; audioUrl: string }
@@ -60,24 +82,23 @@ type AudioUrlOutcome =
  * error) — a transient failure the caller maps to 503, never "not found".
  */
 async function resolveTrackAudioUrl(track: PlayableTrackFields): Promise<AudioUrlOutcome> {
-  const trackId = track._id.toString();
   let transient = false;
 
   // 1. Presigned original file (uploads / CC).
-  if (track.audioSource) {
+  if (track.audioSourceUrl && track.audioSourceFormat) {
     try {
       const audioUrl = await getTrackStreamUrl({
-        id: trackId,
+        id: track.id,
         artistId: track.artistId,
-        albumId: track.albumId,
+        albumId: track.albumId ?? undefined,
         title: track.title,
-        audioSource: track.audioSource,
+        audioSource: { url: track.audioSourceUrl, format: track.audioSourceFormat },
       });
       return { status: 'ok', audioUrl };
     } catch (err) {
       transient = true;
       logger.warn('[SyraMedia] Presigned original URL failed', {
-        trackId,
+        trackId: track.id,
         reason: err instanceof Error ? err.message : 'unknown',
       });
     }
@@ -85,17 +106,17 @@ async function resolveTrackAudioUrl(track: PlayableTrackFields): Promise<AudioUr
 
   // 2. Tokenized HLS master — only usable as an absolute, public URL.
   const base = env.STREAM_KEY_BASE_URL;
-  if (base && track.status === 'ready' && track.hlsMasterKey && Array.isArray(track.hls) && track.hls.length > 0) {
+  if (base && track.status === 'ready' && track.hlsMasterKey && track.hlsRenditionCount > 0) {
     try {
       const token = mintStreamToken(
-        { trackId, userId: '', maxBitrateKbps: HLS_STREAM_TOKEN_CAP_KBPS },
+        { trackId: track.id, userId: '', maxBitrateKbps: HLS_STREAM_TOKEN_CAP_KBPS },
         HLS_STREAM_TOKEN_TTL_SEC,
       );
-      return { status: 'ok', audioUrl: `${base}/api/stream/${trackId}/master.m3u8?t=${token}` };
+      return { status: 'ok', audioUrl: `${base}/api/stream/${track.id}/master.m3u8?t=${token}` };
     } catch (err) {
       transient = true;
       logger.warn('[SyraMedia] HLS master token mint failed', {
-        trackId,
+        trackId: track.id,
         reason: err instanceof Error ? err.message : 'unknown',
       });
     }
@@ -107,13 +128,13 @@ async function resolveTrackAudioUrl(track: PlayableTrackFields): Promise<AudioUr
 // ── Absolute cover art ─────────────────────────────────────────────────────────
 
 /**
- * `formatTrackWithCoverArt` yields a RELATIVE `/api/images/:id` cover path. The
- * "now playing" card renders on foreign clients, so promote it to an absolute
- * Syra API URL when `STREAM_KEY_BASE_URL` is configured; otherwise leave it
- * relative (local dev) or drop non-image values.
+ * Cover art resolves to a RELATIVE `/api/images/:id` path. The "now playing"
+ * card renders on foreign clients, so promote it to an absolute Syra API URL
+ * when `STREAM_KEY_BASE_URL` is configured; otherwise leave it relative (local
+ * dev) or drop it.
  */
-function toAbsoluteArtworkUrl(coverArt: unknown): string | undefined {
-  if (typeof coverArt !== 'string' || !coverArt) return undefined;
+function toAbsoluteArtworkUrl(coverArt: string | undefined): string | undefined {
+  if (!coverArt) return undefined;
   const base = env.STREAM_KEY_BASE_URL;
   if (base && coverArt.startsWith('/')) return `${base}${coverArt}`;
   return coverArt;
@@ -148,41 +169,66 @@ export type ResolveTrackResult =
  * Resolve a single Syra track by id into its playable {@link ResolvedTrack},
  * denormalized from the catalog — the client never supplies the audio URL.
  *
- *  - `not_found` — bad id, the track is missing, not playable
- *    (`isTrackPlayable`), not `ready`, or carries no usable audio source.
+ *  - `not_found` — bad id, the track is missing, not playable, not `ready`, or
+ *    carries no usable audio source.
  *  - `unavailable` — a source exists but producing its URL threw (S3 presign /
  *    token mint) — a transient failure to retry, not a missing track.
  *  - `ok` — the resolved, playable track.
  *
- * Never throws.
+ * THROWS if the database is unreachable — `getDb()` when the pool was never
+ * opened, or the driver on a failed query. The Mongoose version's doc claimed
+ * "never throws", which this deliberately does not repeat: the three outcomes
+ * above are all answers about a TRACK, and "cannot ask" is not one of them.
+ * Mapping an outage onto `not_found` would hide it behind a normal-looking 404,
+ * so it propagates and the caller answers 500.
  */
 export async function resolveTrack(trackId: string): Promise<ResolveTrackResult> {
-  if (!mongoose.Types.ObjectId.isValid(trackId)) {
-    return { status: 'not_found' };
-  }
+  const [track] = await getDb()
+    .select({
+      id: tracks.id,
+      title: tracks.title,
+      artistId: tracks.artistId,
+      artistName: tracks.artistName,
+      albumId: tracks.albumId,
+      duration: tracks.duration,
+      status: tracks.status,
+      audioSourceUrl: tracks.audioSourceUrl,
+      audioSourceFormat: tracks.audioSourceFormat,
+      hlsMasterKey: tracks.hlsMasterKey,
+      hlsRenditionCount: sql<number>`(
+        select count(*)::int from ${trackHlsRenditions}
+        where ${trackHlsRenditions.trackId} = ${tracks.id}
+      )`,
+      coverArtId: tracks.coverArtId,
+      /**
+       * The album's cover is the fallback when the track carries none of its
+       * own — the same fallback the catalog serializer applies, resolved in this
+       * query rather than as the per-track `AlbumModel.findById` behind a Map
+       * cache that the Mongo version needed.
+       */
+      albumCoverArtId: albums.coverArtId,
+    })
+    .from(tracks)
+    .leftJoin(albums, eq(albums.id, tracks.albumId))
+    .where(and(eq(tracks.id, trackId), eq(tracks.status, 'ready'), playableTrackFilter()))
+    .limit(1);
 
-  const track = await TrackModel.findById(trackId).lean();
-  if (!track || !isTrackPlayable(track) || track.status !== 'ready') {
-    return { status: 'not_found' };
-  }
+  if (!track) return { status: 'not_found' };
 
   const audio = await resolveTrackAudioUrl(track);
-  if (audio.status === 'none') {
-    return { status: 'not_found' };
-  }
-  if (audio.status === 'unavailable') {
-    return { status: 'unavailable' };
-  }
+  if (audio.status === 'none') return { status: 'not_found' };
+  if (audio.status === 'unavailable') return { status: 'unavailable' };
 
-  const formatted = await formatTrackWithCoverArt(track);
   return {
     status: 'ok',
     track: {
       audioUrl: audio.audioUrl,
-      title: typeof formatted?.title === 'string' ? formatted.title : track.title,
-      artist: typeof formatted?.artistName === 'string' ? formatted.artistName : track.artistName,
-      artworkUrl: toAbsoluteArtworkUrl(formatted?.coverArt),
-      durationSec: typeof track.duration === 'number' ? track.duration : undefined,
+      title: track.title,
+      artist: track.artistName,
+      artworkUrl: toAbsoluteArtworkUrl(
+        normalizeImageRef(track.coverArtId) ?? normalizeImageRef(track.albumCoverArtId),
+      ),
+      durationSec: track.duration,
     },
   };
 }
@@ -198,42 +244,30 @@ export async function resolveTrack(trackId: string): Promise<ResolveTrackResult>
  * tracks; the route treats an empty seed as `not_found`.
  */
 export async function resolveAlbumTracks(albumId: string): Promise<MediaQueueItem[]> {
-  if (!mongoose.Types.ObjectId.isValid(albumId)) return [];
+  const rows = await getDb()
+    .select({ id: tracks.id })
+    .from(tracks)
+    .where(and(eq(tracks.albumId, albumId), playableTrackFilter()))
+    .orderBy(asc(tracks.discNumber), asc(tracks.trackNumber));
 
-  const tracks = await TrackModel.find(playableTrackFilter({ albumId }))
-    .sort({ discNumber: 1, trackNumber: 1 })
-    .select({ _id: 1 })
-    .lean();
-
-  return tracks.map((track) => ({ kind: 'track', trackId: track._id.toString() }));
+  return rows.map((row) => ({ kind: 'track', trackId: row.id }));
 }
 
 /**
  * Ordered list of a playlist's Syra tracks as {@link MediaQueueItem} queue rows
  * (`kind: 'track'`, id only). Mirrors the public `GET /playlists/:id/tracks`
- * ordering: `PlaylistTrack.order` is authoritative, and only tracks that pass the
- * playable filter are kept (dropped rows do not shift the surviving order).
- * Returns an empty array when the playlist is empty or has no playable tracks.
+ * ordering: `playlist_tracks.position` is authoritative, and only tracks that
+ * pass the playable filter are kept (dropped rows do not shift the surviving
+ * order). Returns an empty array when the playlist is empty or has no playable
+ * tracks.
  */
 export async function resolvePlaylistTracks(playlistId: string): Promise<MediaQueueItem[]> {
-  if (!mongoose.Types.ObjectId.isValid(playlistId)) return [];
+  const rows = await getDb()
+    .select({ id: tracks.id })
+    .from(playlistTracks)
+    .innerJoin(tracks, eq(tracks.id, playlistTracks.trackId))
+    .where(and(eq(playlistTracks.playlistId, playlistId), playableTrackFilter()))
+    .orderBy(asc(playlistTracks.position));
 
-  const playlistTracks = await PlaylistTrackModel.find({ playlistId })
-    .sort({ order: 1 })
-    .lean();
-  if (playlistTracks.length === 0) return [];
-
-  const trackIds = playlistTracks.map((pt) => pt.trackId);
-  const playable = await TrackModel.find(playableTrackFilter({ _id: { $in: trackIds } }))
-    .select({ _id: 1 })
-    .lean();
-  const playableIds = new Set(playable.map((track) => track._id.toString()));
-
-  const items: MediaQueueItem[] = [];
-  for (const pt of playlistTracks) {
-    if (playableIds.has(pt.trackId)) {
-      items.push({ kind: 'track', trackId: pt.trackId });
-    }
-  }
-  return items;
+  return rows.map((row) => ({ kind: 'track', trackId: row.id }));
 }

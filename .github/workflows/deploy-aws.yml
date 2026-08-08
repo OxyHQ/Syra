@@ -148,6 +148,58 @@ jobs:
       - name: Register immutable task definition and deploy
         env:
           IMAGE_URI: ${{ env.ECR_REGISTRY }}/oxy/${{ env.APP }}@${{ steps.build.outputs.digest }}
+
+          # DATABASE_URL is injected into every revision this deploy registers.
+          #
+          # It cannot come from Terraform. `modules/app-service` in oxy-infra
+          # sets `ignore_changes = [task_definition]` on the ECS service, and
+          # deploy-ecs-image.sh derives each new revision from the revision
+          # currently RUNNING — so a `secrets` entry added to `module "syra"`
+          # lands in a revision nothing runs and nothing inherits, indefinitely
+          # and with no error. The entry is still there (it declares intent, and
+          # a from-scratch apply needs it); THIS is what puts the value in front
+          # of the service. Same mechanism Mention uses for its own
+          # deploy-injected secrets.
+          #
+          # It is also what gives the two one-shot migration tasks below their
+          # connection string: both run as container overrides on the revision
+          # this deploy registers, so they see exactly these secrets.
+          #
+          # The parameter must EXIST before the first task launches from a
+          # revision naming it, or the task dies with
+          # `ResourceInitializationError: unable to pull secrets or registry
+          # auth`. The sync step above writes it from the GitHub repo secret on
+          # this same run, before this step — Syra's sync loop enumerates
+          # nothing, it walks `toJSON(secrets)`, so a new repo secret needs no
+          # workflow edit to reach SSM. There is no allowlist to forget here.
+          TASK_SECRET_OVERRIDES_JSON: '{"DATABASE_URL":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/DATABASE_URL"}'
+
+          # The migrations, bracketing the rollout. `pre` runs while the
+          # PREVIOUS image is still serving and applies only additive
+          # migrations; `post` runs once the new image is live and applies what
+          # `pre` deferred. src/db/migrate.ts explains the marker each migration
+          # carries and why there is no default phase.
+          #
+          # `node`, not `bun`: the runtime stage of packages/backend/Dockerfile
+          # is node:22-alpine and never copies bun in.
+          # `dist/src/db/migrate.js`: tsconfig sets `rootDir: "./"`, so `src/`
+          # is preserved inside `dist/`.
+          # `--target-database=syra`: the migrator refuses to run without it,
+          # because a migration aimed at the wrong database does not fail — it
+          # reports success over an untouched one.
+          #
+          # THE FIRST PRODUCTION DEPLOY CANNOT USE `--phase=pre`. Measured
+          # against the journal as it stands: `pre` and `post` both BLOCK,
+          # because migration 0003 (`pre`) sits behind 0001 (`post`) and the
+          # ledger cannot express a hole. That is the genesis window — those
+          # migrations only ever ran against an empty database with no live
+          # predecessor to protect — and `--phase=all` is the correct and only
+          # sanctioned way to apply it. So the cutover deploy is dispatched
+          # manually with `migration_phase: all`; every deploy after it takes
+          # the default and finds nothing pending. See src/db/migrate.ts,
+          # "THE GENESIS BOOTSTRAP WINDOW".
+          PRE_DEPLOY_TASK_COMMAND_JSON: '["node","packages/backend/dist/src/db/migrate.js","--phase=pre","--target-database=syra"]'
+          POST_DEPLOY_TASK_COMMAND_JSON: '["node","packages/backend/dist/src/db/migrate.js","--phase=post","--target-database=syra"]'
         run: |
           STATUS=$(aws ecs describe-services --cluster "$CLUSTER" --services "$APP" --query 'services[0].status' --output text 2>/dev/null || echo NONE)
           if [ "$STATUS" != "ACTIVE" ]; then

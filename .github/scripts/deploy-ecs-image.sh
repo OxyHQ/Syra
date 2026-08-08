@@ -14,12 +14,24 @@ fi
 CONTAINER_NAME="${CONTAINER_NAME:-$APP}"
 MAX_WAIT_SECS="${MAX_WAIT_SECS:-1200}"
 POLL_INTERVAL="${POLL_INTERVAL:-15}"
-RUN_MIGRATIONS="${RUN_MIGRATIONS:-false}"
 INTERNAL_METRICS_PARAMETER="${INTERNAL_METRICS_PARAMETER:-}"
 TASK_SECRET_OVERRIDES_JSON="${TASK_SECRET_OVERRIDES_JSON:-}"
 AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID:-}"
 AWS_PARTITION="${AWS_PARTITION:-aws}"
 POST_DEPLOY_SMOKE_SCRIPT="${POST_DEPLOY_SMOKE_SCRIPT:-}"
+# The two one-shot commands that bracket the rollout, each a JSON string array
+# run as a container override on the NEW task definition — so both execute the
+# image this release is deploying, against the secrets that revision carries.
+#
+# This replaced a `RUN_MIGRATIONS=true|false` boolean whose command was hardcoded
+# to `["bun","packages/backend/dist/scripts/migrate.js"]`. That command was wrong
+# in three independent ways and nothing noticed, because no workflow ever set the
+# boolean: `bun` is not installed in the runtime stage (only the builder stage
+# copies it in), `dist/scripts/migrate.js` is not a path this package emits, and
+# Syra's migrator refuses to run without `--phase` and `--target-database`. A
+# configurable command is also what keeps this file convergeable with Mention's
+# copy instead of forking it — the hardcoded path was the app-specific part.
+PRE_DEPLOY_TASK_COMMAND_JSON="${PRE_DEPLOY_TASK_COMMAND_JSON:-}"
 POST_DEPLOY_TASK_COMMAND_JSON="${POST_DEPLOY_TASK_COMMAND_JSON:-}"
 # Exit code a smoke script uses to say "this failed, and rolling back cannot fix
 # it" — a check that crosses a boundary this deploy does not own (a CDN in front
@@ -41,10 +53,23 @@ if ! [[ "$POLL_INTERVAL" =~ ^[0-9]+$ ]] || (( POLL_INTERVAL < 1 )); then
   echo "::error::POLL_INTERVAL must be a positive integer."
   exit 1
 fi
-if [[ "$RUN_MIGRATIONS" != "true" && "$RUN_MIGRATIONS" != "false" ]]; then
-  echo "::error::RUN_MIGRATIONS must be either 'true' or 'false'."
-  exit 1
-fi
+require_task_command_json() {
+  local variable_name="$1"
+  local value="$2"
+
+  if [[ -z "$value" ]]; then
+    return 0
+  fi
+  if ! jq -e '
+    type == "array" and
+    length > 0 and
+    all(.[]; type == "string" and length > 0)
+  ' <<<"$value" >/dev/null; then
+    echo "::error::$variable_name must be a non-empty JSON string array."
+    return 1
+  fi
+}
+
 if [[ -n "$POST_DEPLOY_SMOKE_SCRIPT" && ! -f "$POST_DEPLOY_SMOKE_SCRIPT" ]]; then
   echo "::error::POST_DEPLOY_SMOKE_SCRIPT does not exist: $POST_DEPLOY_SMOKE_SCRIPT"
   exit 1
@@ -53,15 +78,8 @@ if [[ -n "${DEPLOY_SHA:-}" && ! -f "$DEPLOY_HEAD_GUARD_SCRIPT" ]]; then
   echo "::error::DEPLOY_HEAD_GUARD_SCRIPT does not exist: $DEPLOY_HEAD_GUARD_SCRIPT"
   exit 1
 fi
-if [[ -n "$POST_DEPLOY_TASK_COMMAND_JSON" ]] &&
-   ! jq -e '
-     type == "array" and
-     length > 0 and
-     all(.[]; type == "string" and length > 0)
-   ' <<<"$POST_DEPLOY_TASK_COMMAND_JSON" >/dev/null; then
-  echo "::error::POST_DEPLOY_TASK_COMMAND_JSON must be a non-empty JSON string array."
-  exit 1
-fi
+require_task_command_json PRE_DEPLOY_TASK_COMMAND_JSON "$PRE_DEPLOY_TASK_COMMAND_JSON" || exit 1
+require_task_command_json POST_DEPLOY_TASK_COMMAND_JSON "$POST_DEPLOY_TASK_COMMAND_JSON" || exit 1
 if [[ -z "$TASK_SECRET_OVERRIDES_JSON" ]]; then
   TASK_SECRET_OVERRIDES_JSON='{}'
 fi
@@ -452,7 +470,7 @@ new_task_definition="$(aws ecs register-task-definition \
   --output text)"
 
 one_shot_run_task_args=()
-if [[ "$RUN_MIGRATIONS" == "true" || -n "$POST_DEPLOY_TASK_COMMAND_JSON" ]]; then
+if [[ -n "$PRE_DEPLOY_TASK_COMMAND_JSON" || -n "$POST_DEPLOY_TASK_COMMAND_JSON" ]]; then
   network_configuration="$(jq -c '.services[0].networkConfiguration' <<<"$service_json")"
   if [[ -z "$network_configuration" || "$network_configuration" == "null" ]]; then
     echo "::error::ECS service $APP has no network configuration for the migration task."
@@ -480,10 +498,13 @@ if [[ "$RUN_MIGRATIONS" == "true" || -n "$POST_DEPLOY_TASK_COMMAND_JSON" ]]; the
   fi
 fi
 
-if [[ "$RUN_MIGRATIONS" == "true" ]]; then
+# Before the rollout, while the PREVIOUS image is still serving every request.
+# A failure here exits before `update-service` is ever called, so the running
+# service is untouched and there is nothing to roll back.
+if [[ -n "$PRE_DEPLOY_TASK_COMMAND_JSON" ]]; then
   if ! run_one_shot_command \
-    "Migration" \
-    '["bun","packages/backend/dist/scripts/migrate.js"]'; then
+    "Pre-deploy migration" \
+    "$PRE_DEPLOY_TASK_COMMAND_JSON"; then
     exit 1
   fi
 fi

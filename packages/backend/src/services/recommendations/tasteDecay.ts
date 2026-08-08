@@ -1,5 +1,6 @@
-import { UserTasteProfileModel } from '../../models/UserTasteProfile';
-import { isDatabaseConnected } from '../../utils/database';
+import { decayDueTasteProfiles, type TasteDecayResult } from '../../db/user/taste';
+import { isPostgresConnected } from '../../db/postgres';
+import { describeErrorSafely } from '../../utils/error';
 import { logger } from '../../utils/logger';
 
 /**
@@ -11,64 +12,50 @@ import { logger } from '../../utils/logger';
  *
  * Applying decay time-proportionally (rather than a fixed factor per tick) makes
  * the result independent of how often the scheduler happens to run.
+ *
+ * ## What moved, and what is left here
+ *
+ * The half-life, the prune threshold and the pass itself are in
+ * `db/user/taste.ts`, beside the tables they act on — five set-wise statements
+ * rather than a cursor issuing one `save()` per profile. What remains here is
+ * the scheduler's contract: a pass never throws, and an unavailable database is
+ * a no-op rather than an error, because the caller is a timer with nobody to
+ * report to.
+ *
+ * The connectivity gate now asks POSTGRES. It asked `isDatabaseConnected()`
+ * (`utils/database.ts`, `mongoose.connection.readyState`) before this port,
+ * which after it would have been a gate on the wrong database entirely —
+ * permitting the pass while Postgres was still opening, and silencing it
+ * forever once Mongo is removed.
  */
 
-/** Weights lose half their value over this period of no reinforcement. */
-const HALF_LIFE_DAYS = 45;
-
-/** Drop weights below this after decay to keep profiles compact. */
-const PRUNE_THRESHOLD = 0.05;
-
-/** Process profiles in batches to bound memory. */
-const BATCH_SIZE = 500;
-
-export interface TasteDecayResult {
-  profilesProcessed: number;
-}
+export type { TasteDecayResult } from '../../db/user/taste';
 
 /**
  * Apply recency decay to all taste profiles that are due. Idempotent and
  * time-proportional: a profile decayed twice in quick succession barely changes
- * the second time. Best-effort per profile; one failure never aborts the pass.
+ * the second time.
+ *
+ * Best-effort as a WHOLE, where the Mongo version was best-effort per profile.
+ * That difference is the transaction's doing: five set-wise statements either
+ * all commit or none do, so there is no half-decayed state for a per-profile
+ * `catch` to salvage. A failed pass costs nothing — the next tick recomputes the
+ * same factors from the same untouched `last_decay_at`, which is the property
+ * that made this pass idempotent in the first place.
  */
 export async function decayAllTasteProfiles(): Promise<TasteDecayResult> {
-  if (!isDatabaseConnected()) return { profilesProcessed: 0 };
+  if (!isPostgresConnected()) return { profilesProcessed: 0 };
 
-  const now = Date.now();
-  const halfLifeMs = HALF_LIFE_DAYS * 24 * 60 * 60 * 1000;
-
-  let processed = 0;
-  const cursor = UserTasteProfileModel.find({}).batchSize(BATCH_SIZE).cursor();
-
-  for await (const profile of cursor) {
-    try {
-      const lastDecay = profile.lastDecayAt instanceof Date ? profile.lastDecayAt.getTime() : now;
-      const elapsed = Math.max(0, now - lastDecay);
-      if (elapsed === 0) continue;
-
-      const factor = Math.pow(0.5, elapsed / halfLifeMs);
-      if (factor >= 0.999) continue; // not enough time passed to matter
-
-      let total = 0;
-      profile.genres = profile.genres
-        .map((g) => ({ key: g.key, weight: g.weight * factor }))
-        .filter((g) => g.weight >= PRUNE_THRESHOLD);
-      profile.artists = profile.artists
-        .map((a) => ({ key: a.key, weight: a.weight * factor }))
-        .filter((a) => a.weight >= PRUNE_THRESHOLD);
-      for (const a of profile.artists) total += a.weight;
-
-      profile.totalSignal = total;
-      profile.lastDecayAt = new Date(now);
-      await profile.save();
-      processed++;
-    } catch (err) {
-      logger.debug('[recommendations] taste decay skipped a profile', { err });
+  try {
+    const result = await decayDueTasteProfiles();
+    if (result.profilesProcessed > 0) {
+      logger.info('[recommendations] taste decay pass complete', {
+        profilesProcessed: result.profilesProcessed,
+      });
     }
+    return result;
+  } catch (err) {
+    logger.warn('[recommendations] taste decay pass failed', { error: describeErrorSafely(err) });
+    return { profilesProcessed: 0 };
   }
-
-  if (processed > 0) {
-    logger.info('[recommendations] taste decay pass complete', { profilesProcessed: processed });
-  }
-  return { profilesProcessed: processed };
 }

@@ -112,7 +112,7 @@ export default function LiveScreen() {
         ) : liveRooms.length > 0 ? (
           <View className="px-4 gap-3">
             {liveRooms.map((room: Room) => (
-              <RoomCard key={room._id} room={room} onPress={() => joinLiveRoom(room._id)} />
+              <RoomCard key={room.id} room={room} onPress={() => joinLiveRoom(room.id)} />
             ))}
           </View>
         ) : (

@@ -14,7 +14,7 @@
  *
  * The stored HLS is keyed by the OWNER id in place of an artist id, so every
  * object for one upload shares a directory that a takedown or expiry sweep can
- * delete as a prefix. The AES key goes into the same `TrackKey` collection under
+ * delete as a prefix. The AES key goes into the same `track_keys` table under
  * the upload's id, which is what the locker stream endpoint reads.
  */
 
@@ -22,7 +22,11 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { Readable } from 'stream';
-import { UserUploadModel } from '../../models/UserUpload';
+import { eq } from 'drizzle-orm';
+import { describeDriverError } from '@oxyhq/db';
+import { getDb, isDriverError } from '../../db/postgres';
+import { userUploads } from '../../db/schema/creators';
+import { setUploadHls } from '../../db/creators/uploads';
 import { logger } from '../../utils/logger';
 import { streamFromS3 } from '../s3Service';
 import { packageToEncryptedHls, LOCKER_HLS_BITRATES_KBPS } from './hlsPackager';
@@ -34,6 +38,7 @@ import { probeAudio } from './probeAudio';
 import type { ProbedAudio } from './probeAudio';
 import { buildStreamKeyUri } from './streamKeyUri';
 import type { FetchSourceResult } from './ingestTrack';
+import { describeErrorSafely } from '../../utils/error';
 
 export interface UploadIngestDeps {
   fetchSource?: (s3Key: string, format: string) => Promise<FetchSourceResult>;
@@ -64,27 +69,58 @@ async function defaultFetchSource(s3Key: string, format: string): Promise<FetchS
   };
 }
 
+/**
+ * Stamp a terminal `failed` status without letting the stamp itself throw.
+ *
+ * Every caller here is already on an error path: the owner's library must show
+ * a failed file rather than one stuck at "processing" forever, and a write that
+ * fails while recording a failure must not replace the real error.
+ */
+async function markFailed(uploadId: string): Promise<void> {
+  await getDb()
+    .update(userUploads)
+    .set({ status: 'failed' })
+    .where(eq(userUploads.id, uploadId))
+    .catch((saveErr: unknown) =>
+      // An UPDATE, so this is the database — and its bound parameters are the
+      // row. Redacted rather than logged whole.
+      logger.error('[locker-ingest] failed to persist failed status', {
+        uploadId,
+        ...(isDriverError(saveErr)
+          ? { driver: describeDriverError(saveErr) }
+          : { err: saveErr }),
+      }),
+    );
+}
+
 export async function ingestUserUpload(
   uploadId: string,
   deps?: UploadIngestDeps,
 ): Promise<void> {
-  const upload = await UserUploadModel.findById(uploadId);
+  const [upload] = await getDb()
+    .select({
+      ownerOxyUserId: userUploads.ownerOxyUserId,
+      audioSourceKey: userUploads.audioSourceKey,
+      audioSourceFormat: userUploads.audioSourceFormat,
+    })
+    .from(userUploads)
+    .where(eq(userUploads.id, uploadId))
+    .limit(1);
+
   if (!upload) {
     throw new Error(`ingestUserUpload: upload not found: ${uploadId}`);
   }
 
-  if (!upload.audioSource) {
-    // Persist the terminal status before throwing, so the owner's library shows
-    // a failed file rather than one stuck at "processing" forever.
-    upload.status = 'failed';
-    await upload.save().catch((saveErr) =>
-      logger.error('[locker-ingest] failed to persist failed status', { uploadId, err: saveErr }),
-    );
+  // Both halves, because `UploadAudioSource` was ONE embedded subdocument and
+  // is two flattened columns now: a row carrying a key and no format is a shape
+  // the old `if (!upload.audioSource)` could not produce and this one can.
+  if (!upload.audioSourceKey || !upload.audioSourceFormat) {
+    await markFailed(uploadId);
     throw new Error(`No source audio for upload ${uploadId}`);
   }
+  const audioSource = { key: upload.audioSourceKey, format: upload.audioSourceFormat };
 
-  upload.status = 'processing';
-  await upload.save();
+  await getDb().update(userUploads).set({ status: 'processing' }).where(eq(userUploads.id, uploadId));
 
   const fetchSource = deps?.fetchSource ?? defaultFetchSource;
   const probe = deps?.probe ?? probeAudio;
@@ -96,7 +132,7 @@ export async function ingestUserUpload(
   let outputDir: string | undefined;
 
   try {
-    const fetched = await fetchSource(upload.audioSource.key, upload.audioSource.format);
+    const fetched = await fetchSource(audioSource.key, audioSource.format);
     cleanup = fetched.cleanup;
 
     const probed = await probe(fetched.localPath);
@@ -115,28 +151,55 @@ export async function ingestUserUpload(
     // audit written against `hls/{artistId}/` silently including listener files
     // with no way to tell them apart from the key.
     const stored = await doStoreHls(result, {
+      kind: 'user_upload',
       recordId: uploadId,
       buildKey: (relPath) => getS3LockerHlsKey(upload.ownerOxyUserId, uploadId, relPath),
     });
 
-    upload.duration = probed.durationSec;
-    if (probed.bitrateKbps !== undefined) {
-      upload.bitrateKbps = probed.bitrateKbps;
-    }
-    if (probed.codec !== undefined) {
-      upload.codec = probed.codec;
-    }
-    upload.hls = stored.hls;
-    upload.hlsMasterKey = stored.hlsMasterKey;
-    upload.loudnessLufs = result.loudnessLufs;
-    upload.status = 'ready';
-    await upload.save();
+    /**
+     * The row and its HLS ladder are ONE logical result, so they land together.
+     *
+     * `hls[]` was an embedded array assigned in the same `save()` as the status;
+     * it is `user_upload_hls_renditions` now, and a failure between the two
+     * writes would leave a file reported `ready` with no ladder to play — the
+     * one state the stream endpoint reads as "not playable" AFTER telling the
+     * owner it was done.
+     *
+     * Only the measured fields are set. `bitrateKbps` and `codec` keep their
+     * stored values when `ffprobe` did not report them, which is what the two
+     * `!== undefined` guards meant on the document.
+     */
+    await getDb().transaction(async (tx) => {
+      await tx
+        .update(userUploads)
+        .set({
+          duration: probed.durationSec,
+          ...(probed.bitrateKbps !== undefined && { bitrateKbps: probed.bitrateKbps }),
+          ...(probed.codec !== undefined && { codec: probed.codec }),
+          hlsMasterKey: stored.hlsMasterKey,
+          loudnessLufs: result.loudnessLufs,
+          status: 'ready',
+        })
+        .where(eq(userUploads.id, uploadId));
+      await setUploadHls(tx, uploadId, stored.hls);
+    });
   } catch (err) {
-    upload.status = 'failed';
-    await upload.save().catch((saveErr) =>
-      logger.error('[locker-ingest] failed to persist failed status', { uploadId, err: saveErr }),
-    );
-    logger.error('[locker-ingest] ingest failed', { uploadId, err });
+    await markFailed(uploadId);
+    /**
+     * This try spans an S3 read, `ffmpeg`, an S3 write and the final
+     * transaction, so the branch decides which subsystem an operator reads
+     * about. On the database side the bound parameters include this file's
+     * whole HLS ladder and its measured loudness; on the other side the message
+     * IS the diagnosis and must survive.
+     */
+    if (isDriverError(err)) {
+      logger.error('[locker-ingest] ingest failed: the database refused the write', {
+        uploadId,
+        driver: describeDriverError(err),
+      });
+    } else {
+      logger.error('[locker-ingest] ingest failed', { uploadId, err: describeErrorSafely(err) });
+    }
     throw err;
   } finally {
     cleanup?.();

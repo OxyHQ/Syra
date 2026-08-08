@@ -1,0 +1,38 @@
+-- oxy:deploy-phase=post
+-- NARROWING: adds two CHECK constraints to `rooms`, which already exists (0011).
+--
+-- `post`, not `pre`, because an ADD CONSTRAINT can reject a write the image
+-- still serving considers legal. Both constraints port an invariant
+-- `RoomSchema.pre('validate')` (`models/Room.ts:344-360`) enforces in
+-- APPLICATION code on every save, so the previous image satisfies them for
+-- rows it writes through Mongoose -- but nothing in the database held the line,
+-- and the port must not quietly loosen validation the app still relies on.
+--
+--   rooms_broadcast_kind_requires_type_check
+--       type <> 'broadcast'  =>  broadcast_kind is null
+--       (models/Room.ts:349-351 clears the field on every non-broadcast save)
+--   rooms_broadcast_speaker_permission_check
+--       type = 'broadcast'   =>  speaker_permission = 'invited'
+--       (models/Room.ts:357-359 forces it; a broadcast is not a room anyone
+--        may speak in)
+--
+-- The hook's THIRD invariant -- owner_type = 'house' => house_id is not null --
+-- is deliberately NOT here. It is in direct tension with 0011's ON DELETE SET
+-- NULL on rooms.house_id: deleting a house would leave surviving rows at
+-- owner_type = 'house', house_id = NULL, which such a CHECK forbids, and the
+-- FK cannot null owner_type in the same action. Resolving it means deciding
+-- what happens to a house's rooms when the house is deleted, which is a product
+-- question -- recorded in task-6-report.md, not settled in a migration. See
+-- schema/rooms.ts's `houseId` column comment for why the resulting state is a
+-- dropped validation rather than a vulnerability.
+--
+-- DATA PRECONDITION, same shape as 0008's and 0010's: safe to add without a
+-- backfill or a NOT VALID/VALIDATE split only because `rooms` is EMPTY -- no
+-- production Postgres deploy exists yet (migrate.ts, "THE GENESIS BOOTSTRAP
+-- WINDOW", whose boundary this migration advances to). ADD CONSTRAINT verifies
+-- every existing row, which is free on an empty table and a lock plus a
+-- possible outright failure on a populated one.
+--
+-- Hand-split from the same generate run as 0012 -- see that file's header.
+ALTER TABLE "rooms" ADD CONSTRAINT "rooms_broadcast_kind_requires_type_check" CHECK ("rooms"."type" = 'broadcast' or "rooms"."broadcast_kind" is null);--> statement-breakpoint
+ALTER TABLE "rooms" ADD CONSTRAINT "rooms_broadcast_speaker_permission_check" CHECK ("rooms"."type" <> 'broadcast' or "rooms"."speaker_permission" = 'invited');

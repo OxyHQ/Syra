@@ -1,11 +1,14 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
-import mongoose from 'mongoose';
 import type { Response, NextFunction } from 'express';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
-import { connect, clear, disconnect } from '../test/mongo';
-import { ArtistModel } from '../models/CatalogEntity';
-import { TrackModel } from '../models/Track';
-import { CopyrightReportModel } from '../models/CopyrightReport';
+import { and, count, eq } from 'drizzle-orm';
+import { sqlStateOf, uuidv7 } from '@oxyhq/db';
+import { normalizeNameKey } from '@syra/shared-types';
+import { clearDb, connectDb, disconnectDb } from '../test/postgres';
+import { getDb } from '../db/postgres';
+import { catalogEntities, tracks } from '../db/schema/catalog';
+import { copyrightReports } from '../db/schema/creators';
+import { playableTrackFilter } from '../db/catalog/visibility';
 import {
   reportCopyrightViolation,
   listCopyrightReports,
@@ -13,11 +16,57 @@ import {
 } from './copyright.controller';
 import { requireComplianceReviewer } from '../middleware/complianceReviewer';
 import { COMPLIANCE_REVIEWERS_ENV, isComplianceReviewer } from '../services/compliance/reviewers';
-import { playableTrackFilter } from '../utils/catalogVisibility';
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+/**
+ * ONE database: the catalogue, the reports, the strike ledger and
+ * `takeDownTrack`'s safe-harbour locker purge (`user_uploads`,
+ * `contribution_attestations`) are all Postgres since Task 13. A takedown here
+ * exercises one handler across five tables, in one transaction-capable store.
+ */
+beforeAll(async () => {
+  await connectDb();
+});
+afterEach(async () => {
+  await clearDb();
+});
+afterAll(async () => {
+  await disconnectDb();
+});
+
+/** Read a track back, by id. */
+async function readTrack(trackId: string) {
+  const [row] = await getDb().select().from(tracks).where(eq(tracks.id, trackId)).limit(1);
+  return row;
+}
+
+/** Read an artist back, by id. */
+async function readArtist(artistId: string) {
+  const [row] = await getDb()
+    .select()
+    .from(catalogEntities)
+    .where(eq(catalogEntities.id, artistId))
+    .limit(1);
+  return row;
+}
+
+/** Read a report back, by id. */
+async function readReport(reportId: string) {
+  const [row] = await getDb()
+    .select()
+    .from(copyrightReports)
+    .where(eq(copyrightReports.id, reportId))
+    .limit(1);
+  return row;
+}
+
+/** How many of an artist's tracks the catalog would still list. */
+async function countPlayableTracksOf(artistId: string): Promise<number> {
+  const [row] = await getDb()
+    .select({ total: count() })
+    .from(tracks)
+    .where(and(playableTrackFilter(), eq(tracks.artistId, artistId)));
+  return row?.total ?? 0;
+}
 
 interface CapturedRes {
   _status: number;
@@ -51,19 +100,30 @@ function makeReq(
 }
 
 async function makeArtist(owner = 'creator-1'): Promise<string> {
-  const artist = await ArtistModel.create({
-    name: `Artist ${Math.random().toString(36).slice(2)}`,
-    source: 'upload',
-    ownerOxyUserId: owner,
-  });
-  return artist._id.toString();
+  const name = `Artist ${uuidv7()}`;
+  const [artist] = await getDb()
+    .insert(catalogEntities)
+    .values({
+      type: 'artist',
+      name,
+      nameKey: normalizeNameKey(name),
+      source: 'upload',
+      ownerOxyUserId: owner,
+    })
+    .returning({ id: catalogEntities.id });
+  if (!artist) throw new Error('makeArtist: insert returned no row');
+  return artist.id;
 }
 
 async function makeTrack(artistId: string, title = 'Song'): Promise<string> {
-  const track = await TrackModel.create({
-    title, artistId, artistName: 'Creator', duration: 200, source: 'upload', status: 'ready',
-  });
-  return track._id.toString();
+  const [track] = await getDb()
+    .insert(tracks)
+    .values({
+      title, artistId, artistName: 'Creator', duration: 200, source: 'upload', status: 'ready',
+    })
+    .returning({ id: tracks.id });
+  if (!track) throw new Error('makeTrack: insert returned no row');
+  return track.id;
 }
 
 async function fileReport(trackId: string, reason = 'This is my recording'): Promise<string> {
@@ -150,14 +210,14 @@ describe('POST /api/copyright/reports/:id/resolve', () => {
     );
 
     expect(res._status).toBe(200);
-    const track = await TrackModel.findById(trackId).lean();
+    const track = await readTrack(trackId);
     expect(track?.copyrightRemoved).toBe(true);
     expect(track?.isAvailable).toBe(false);
     expect(track?.removedBy).toBe('reviewer-1');
     expect(track?.copyrightReportId).toBe(reportId);
-    expect(await TrackModel.find(playableTrackFilter({ artistId })).lean()).toHaveLength(0);
+    expect(await countPlayableTracksOf(artistId)).toBe(0);
 
-    const report = await CopyrightReportModel.findById(reportId).lean();
+    const report = await readReport(reportId);
     expect(report?.status).toBe('approved');
     expect(report?.resolvedBy).toBe('reviewer-1');
   });
@@ -175,11 +235,11 @@ describe('POST /api/copyright/reports/:id/resolve', () => {
     );
 
     expect(res._status).toBe(200);
-    const track = await TrackModel.findById(trackId).lean();
+    const track = await readTrack(trackId);
     expect(track?.copyrightRemoved).toBe(false);
     expect(track?.isAvailable).toBe(true);
 
-    const artist = await ArtistModel.findById(artistId).lean();
+    const artist = await readArtist(artistId);
     expect(artist?.strikeCount ?? 0).toBe(0);
   });
 
@@ -206,16 +266,16 @@ describe('POST /api/copyright/reports/:id/resolve', () => {
       expect(res._status).toBe(200);
     }
 
-    const artist = await ArtistModel.findById(artistId).lean();
+    const artist = await readArtist(artistId);
     expect(artist?.strikeCount).toBe(3);
     expect(artist?.terminated).toBe(true);
     expect(artist?.uploadsDisabled).toBe(true);
 
     // Termination is catalog-wide, including work nobody reported.
-    const leftover = await TrackModel.findById(untouched).lean();
+    const leftover = await readTrack(untouched);
     expect(leftover?.copyrightRemoved).toBe(true);
     expect(leftover?.isAvailable).toBe(false);
-    expect(await TrackModel.find(playableTrackFilter({ artistId })).lean()).toHaveLength(0);
+    expect(await countPlayableTracksOf(artistId)).toBe(0);
   });
 
   it('does not terminate before the third strike', async () => {
@@ -230,7 +290,7 @@ describe('POST /api/copyright/reports/:id/resolve', () => {
       );
     }
 
-    const artist = await ArtistModel.findById(artistId).lean();
+    const artist = await readArtist(artistId);
     expect(artist?.strikeCount).toBe(2);
     expect(artist?.terminated).toBe(false);
     expect(artist?.uploadsDisabled).toBe(false);
@@ -255,14 +315,41 @@ describe('POST /api/copyright/reports/:id/resolve', () => {
     );
 
     expect(second._status).toBe(409);
-    expect((await TrackModel.findById(trackId).lean())?.copyrightRemoved).toBe(false);
+    expect((await readTrack(trackId))?.copyrightRemoved).toBe(false);
   });
 
-  it('404s a report whose track has since been deleted, and leaves the report pending', async () => {
+  /**
+   * Was: "404s a report whose track has since been deleted, and leaves the
+   * report pending" — it deleted the track out from under a pending report and
+   * asserted the handler's `if (!takedown) return 404` branch.
+   *
+   * That premise is UNREPRESENTABLE on Postgres, and deliberately so:
+   * `copyright_reports.track_id` is `.references(() => tracks.id, { onDelete:
+   * 'restrict' })` because a DMCA notice is evidence that must outlive the work
+   * it describes. The delete is refused with `23503`, so the state the old test
+   * constructed can no longer exist.
+   *
+   * The RESTRICT is the stronger property and the one worth pinning, so that is
+   * what this asserts instead — including that the report is still resolvable
+   * afterwards, which is what "the delete changed nothing" actually means. The
+   * handler's null branch stays: `takeDownTrack` returns `null` by contract and
+   * `artists.controller` calls it with ids this constraint does not cover.
+   */
+  it('refuses to delete a reported track, and the report is still resolvable', async () => {
     const artistId = await makeArtist();
     const trackId = await makeTrack(artistId);
     const reportId = await fileReport(trackId);
-    await TrackModel.deleteOne({ _id: trackId });
+
+    let sqlState: string | undefined;
+    try {
+      await getDb().delete(tracks).where(eq(tracks.id, trackId));
+    } catch (error) {
+      sqlState = sqlStateOf(error);
+    }
+    // Named in the assertion so a regression says WHICH error arrived — or that
+    // the delete succeeded, which is the failure that matters.
+    expect(`delete: ${sqlState ?? 'succeeded'}`).toBe('delete: 23503');
+    expect((await readTrack(trackId))?.id).toBe(trackId);
 
     const res = makeRes();
     await resolveCopyrightReport(
@@ -271,8 +358,8 @@ describe('POST /api/copyright/reports/:id/resolve', () => {
       failNext,
     );
 
-    expect(res._status).toBe(404);
-    expect((await CopyrightReportModel.findById(reportId).lean())?.status).toBe('pending');
+    expect(res._status).toBe(200);
+    expect((await readReport(reportId))?.status).toBe('approved');
   });
 
   it('rejects a body that is not a decision', async () => {
@@ -288,13 +375,13 @@ describe('POST /api/copyright/reports/:id/resolve', () => {
     );
 
     expect(res._status).toBe(400);
-    expect((await TrackModel.findById(trackId).lean())?.copyrightRemoved).toBe(false);
+    expect((await readTrack(trackId))?.copyrightRemoved).toBe(false);
   });
 
   it('404s an unknown report', async () => {
     const res = makeRes();
     await resolveCopyrightReport(
-      makeReq({ id: new mongoose.Types.ObjectId().toString() }, 'reviewer-1', { status: 'approved' }),
+      makeReq({ id: uuidv7() }, 'reviewer-1', { status: 'approved' }),
       res as unknown as Response,
       failNext,
     );

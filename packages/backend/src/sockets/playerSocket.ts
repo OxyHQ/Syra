@@ -6,6 +6,7 @@ import { registerDevice, listDevices, heartbeat } from '../services/playback/dev
 import { applyCommand, updateProgress, handleDeviceDisconnect, toConnectPlaybackState } from '../services/playback/playbackStateService';
 import type { DeviceType } from '@syra/shared-types';
 import { oxy } from '../oxyClient';
+import { describeErrorSafely } from '../utils/error';
 
 export const setupPlayerSocket = (io: SocketIOServer) => {
   const playerNamespace = io.of('/player');
@@ -38,7 +39,7 @@ export const setupPlayerSocket = (io: SocketIOServer) => {
         socketDeviceId = input.deviceId;
         playerNamespace.to(playerRoom).emit('device:list', await listDevices(userId));
       } catch (error) {
-        logger.error('Error handling device:register', { err: error, userId });
+        logger.error('Error handling device:register', { err: describeErrorSafely(error), userId });
       }
     });
 
@@ -46,7 +47,7 @@ export const setupPlayerSocket = (io: SocketIOServer) => {
       try {
         socket.emit('device:list', await listDevices(userId));
       } catch (error) {
-        logger.error('Error handling device:list', { err: error, userId });
+        logger.error('Error handling device:list', { err: describeErrorSafely(error), userId });
       }
     });
 
@@ -55,7 +56,7 @@ export const setupPlayerSocket = (io: SocketIOServer) => {
         const state = await applyCommand(userId, command);
         playerNamespace.to(playerRoom).emit('playback:state', toConnectPlaybackState(state));
       } catch (error) {
-        logger.error('Error handling playback:command', { err: error, userId });
+        logger.error('Error handling playback:command', { err: describeErrorSafely(error), userId });
       }
     });
 
@@ -65,7 +66,7 @@ export const setupPlayerSocket = (io: SocketIOServer) => {
         const state = await updateProgress(userId, socketDeviceId, data.positionMs, data.isPlaying);
         socket.to(playerRoom).emit('playback:state', toConnectPlaybackState(state));
       } catch (error) {
-        logger.error('Error handling playback:progress', { err: error, userId });
+        logger.error('Error handling playback:progress', { err: describeErrorSafely(error), userId });
       }
     });
 
@@ -73,7 +74,7 @@ export const setupPlayerSocket = (io: SocketIOServer) => {
       try {
         if (socketDeviceId) await heartbeat(userId, socketDeviceId);
       } catch (error) {
-        logger.error('Error handling heartbeat', { err: error, userId });
+        logger.error('Error handling heartbeat', { err: describeErrorSafely(error), userId });
       }
     });
 
@@ -81,7 +82,7 @@ export const setupPlayerSocket = (io: SocketIOServer) => {
       try {
         socket.to(playerRoom).emit('playback:state', update);
       } catch (error) {
-        logger.error('Error handling playback:state', { err: error });
+        logger.error('Error handling playback:state', { err: describeErrorSafely(error) });
       }
     });
 
@@ -89,7 +90,7 @@ export const setupPlayerSocket = (io: SocketIOServer) => {
       try {
         socket.to(playerRoom).emit('queue:update', queue);
       } catch (error) {
-        logger.error('Error handling queue:update', { err: error });
+        logger.error('Error handling queue:update', { err: describeErrorSafely(error) });
       }
     });
 
@@ -133,7 +134,7 @@ export const setupPlayerSocket = (io: SocketIOServer) => {
           }
         }
       } catch (error) {
-        logger.error('Error handling track:change', { err: error });
+        logger.error('Error handling track:change', { err: describeErrorSafely(error) });
       }
     });
 
@@ -141,12 +142,12 @@ export const setupPlayerSocket = (io: SocketIOServer) => {
       try {
         socket.to(playerRoom).emit('seek', { position: data.position });
       } catch (error) {
-        logger.error('Error handling seek', { err: error });
+        logger.error('Error handling seek', { err: describeErrorSafely(error) });
       }
     });
 
     socket.on('error', (error: Error) => {
-      logger.error('Player socket error', { err: error, userId });
+      logger.error('Player socket error', { err: describeErrorSafely(error), userId });
     });
 
     socket.on('disconnect', async (reason: string) => {
@@ -159,7 +160,7 @@ export const setupPlayerSocket = (io: SocketIOServer) => {
           playerNamespace.to(playerRoom).emit('playback:state', toConnectPlaybackState(state));
           playerNamespace.to(playerRoom).emit('device:list', await listDevices(userId));
         } catch (error) {
-          logger.error('Error handling disconnect failover', { err: error, userId, deviceId: socketDeviceId });
+          logger.error('Error handling disconnect failover', { err: describeErrorSafely(error), userId, deviceId: socketDeviceId });
         }
       }
     });

@@ -1,15 +1,48 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
-import mongoose from 'mongoose';
 import type { Response, NextFunction } from 'express';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
-import { connect, clear, disconnect } from '../test/mongo';
-import { ArtistModel } from '../models/CatalogEntity';
-import { ArtistClaimModel } from '../models/ArtistClaim';
+import { eq } from 'drizzle-orm';
+import { uuidv7 } from '@oxyhq/db';
+import { normalizeNameKey } from '@syra/shared-types';
+import { clearDb, connectDb, disconnectDb } from '../test/postgres';
+import { getDb } from '../db/postgres';
+import { catalogEntities } from '../db/schema/catalog';
+import { artistClaims } from '../db/schema/creators';
 import { createArtistClaim, resolveArtistClaim, listMyArtistClaims } from './artists.controller';
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+/**
+ * ONE database: the artist profile a claim GRANTS and the claim itself
+ * (`artist_claims`) are both Postgres since Task 13. The grant is still the one
+ * write that has to be atomic against a concurrent claim, and it still carries
+ * that guarantee in its `WHERE` rather than in a read before it.
+ */
+beforeAll(connectDb);
+afterEach(clearDb);
+afterAll(disconnectDb);
+
+/** The artist row a claim targets, by id. */
+/** A claim row, read back directly rather than through a production helper. */
+async function readClaim(id: string) {
+  const [claim] = await getDb().select().from(artistClaims).where(eq(artistClaims.id, id));
+  return claim;
+}
+
+async function countClaims(artistId?: string): Promise<number> {
+  const rows = await getDb()
+    .select({ id: artistClaims.id })
+    .from(artistClaims)
+    .where(artistId ? eq(artistClaims.artistId, artistId) : undefined);
+  return rows.length;
+}
+
+async function readArtist(id: string) {
+  const [row] = await getDb()
+    .select()
+    .from(catalogEntities)
+    .where(eq(catalogEntities.id, id))
+    .limit(1);
+  return row;
+}
 
 interface CapturedRes {
   _status: number;
@@ -33,15 +66,36 @@ function makeReq(params: Record<string, string>, userId: string, body: unknown =
   return { params, query: {}, body, user: { id: userId } } as unknown as AuthRequest;
 }
 
-async function makeClaimableArtist(overrides: Record<string, unknown> = {}): Promise<string> {
-  const artist = await ArtistModel.create({
-    name: `Contributed ${Math.random().toString(36).slice(2)}`,
+async function makeClaimableArtist(
+  overrides: Partial<typeof catalogEntities.$inferInsert> = {}
+): Promise<string> {
+  const name = `Contributed ${uuidv7()}`;
+  const [artist] = await getDb()
+    .insert(catalogEntities)
+    .values({
+      type: 'artist',
+      name,
+      nameKey: normalizeNameKey(name),
+      source: 'upload',
+      origin: 'contributed',
+      claimable: true,
+      ...overrides,
+    })
+    .returning({ id: catalogEntities.id });
+
+  if (!artist) throw new Error('makeClaimableArtist: insert returned no row');
+  return artist.id;
+}
+
+/** An artist already owned by someone — the conflict fixture. */
+async function makeOwnedArtist(name: string, ownerOxyUserId: string): Promise<void> {
+  await getDb().insert(catalogEntities).values({
+    type: 'artist',
+    name,
+    nameKey: normalizeNameKey(name),
     source: 'upload',
-    origin: 'contributed',
-    claimable: true,
-    ...overrides,
+    ownerOxyUserId,
   });
-  return artist._id.toString();
 }
 
 // ── Submission ────────────────────────────────────────────────────────────────
@@ -68,9 +122,12 @@ describe('POST /api/artists/:id/claim', () => {
     expect(claim.status).toBe('pending');
     expect(claim.oxyUserId).toBe('claimant-1');
 
-    const artist = await ArtistModel.findById(artistId).lean();
-    expect(artist?.ownerOxyUserId).toBeUndefined();
-    expect(artist?.claimedByOxyUserId).toBeUndefined();
+    // `null`, not `undefined`: Mongo simply had no key for an unset field and
+    // Postgres returns an explicit null. Both columns are asserted, because
+    // "nobody holds this profile" is what the grant's WHERE clause tests.
+    const artist = await readArtist(artistId);
+    expect(artist?.ownerOxyUserId).toBeNull();
+    expect(artist?.claimedByOxyUserId).toBeNull();
     expect(artist?.claimable).toBe(true);
   });
 
@@ -85,7 +142,7 @@ describe('POST /api/artists/:id/claim', () => {
     );
 
     expect(res._status).toBe(409);
-    expect(await ArtistClaimModel.countDocuments({})).toBe(0);
+    expect(await countClaims()).toBe(0);
   });
 
   it('REJECTS a claim on an artist somebody already CLAIMED', async () => {
@@ -99,11 +156,11 @@ describe('POST /api/artists/:id/claim', () => {
     );
 
     expect(res._status).toBe(409);
-    expect(await ArtistClaimModel.countDocuments({})).toBe(0);
+    expect(await countClaims()).toBe(0);
   });
 
   it('REJECTS a claimant who already has an artist profile of their own', async () => {
-    await ArtistModel.create({ name: 'Mine Already', source: 'upload', ownerOxyUserId: 'claimant-1' });
+    await makeOwnedArtist('Mine Already', 'claimant-1');
     const artistId = await makeClaimableArtist();
 
     const res = makeRes();
@@ -114,7 +171,7 @@ describe('POST /api/artists/:id/claim', () => {
     );
 
     expect(res._status).toBe(409);
-    expect(await ArtistClaimModel.countDocuments({})).toBe(0);
+    expect(await countClaims()).toBe(0);
   });
 
   it('REJECTS an empty evidence body', async () => {
@@ -128,7 +185,7 @@ describe('POST /api/artists/:id/claim', () => {
     );
 
     expect(res._status).toBe(400);
-    expect(await ArtistClaimModel.countDocuments({})).toBe(0);
+    expect(await countClaims()).toBe(0);
   });
 
   it('refuses a second OPEN claim from the same person on the same artist', async () => {
@@ -149,7 +206,7 @@ describe('POST /api/artists/:id/claim', () => {
     );
 
     expect(second._status).toBe(409);
-    expect(await ArtistClaimModel.countDocuments({ artistId })).toBe(1);
+    expect(await countClaims(artistId)).toBe(1);
   });
 });
 
@@ -157,13 +214,11 @@ describe('POST /api/artists/:id/claim', () => {
 
 describe('POST /api/artist-claims/:id/resolve', () => {
   async function openClaim(artistId: string, userId: string): Promise<string> {
-    const claim = await ArtistClaimModel.create({
-      artistId,
-      oxyUserId: userId,
-      evidence: 'proof',
-      status: 'pending',
-    });
-    return claim._id.toString();
+    const [claim] = await getDb()
+      .insert(artistClaims)
+      .values({ artistId, oxyUserId: userId, evidence: 'proof', status: 'pending' })
+      .returning({ id: artistClaims.id });
+    return claim.id;
   }
 
   it('APPROVAL is the only thing that writes ownership', async () => {
@@ -178,12 +233,12 @@ describe('POST /api/artist-claims/:id/resolve', () => {
     );
 
     expect(res._status).toBe(200);
-    const artist = await ArtistModel.findById(artistId).lean();
+    const artist = await readArtist(artistId);
     expect(artist?.ownerOxyUserId).toBe('claimant-1');
     expect(artist?.claimedByOxyUserId).toBe('claimant-1');
     expect(artist?.claimable).toBe(false);
 
-    const claim = await ArtistClaimModel.findById(claimId).lean();
+    const claim = await readClaim(claimId);
     expect(claim?.status).toBe('approved');
     expect(claim?.resolvedBy).toBe('reviewer-1');
     expect(claim?.resolvedAt).toBeInstanceOf(Date);
@@ -201,11 +256,11 @@ describe('POST /api/artist-claims/:id/resolve', () => {
     );
 
     expect(res._status).toBe(200);
-    const artist = await ArtistModel.findById(artistId).lean();
-    expect(artist?.ownerOxyUserId).toBeUndefined();
+    const artist = await readArtist(artistId);
+    expect(artist?.ownerOxyUserId).toBeNull();
     expect(artist?.claimable).toBe(true);
 
-    const claim = await ArtistClaimModel.findById(claimId).lean();
+    const claim = await readClaim(claimId);
     expect(claim?.status).toBe('rejected');
     expect(claim?.resolutionNote).toBe('no evidence');
   });
@@ -221,7 +276,7 @@ describe('POST /api/artist-claims/:id/resolve', () => {
       failNext,
     );
 
-    const other = await ArtistClaimModel.findById(loser).lean();
+    const other = await readClaim(loser);
     expect(other?.status).toBe('rejected');
     expect(other?.resolutionNote).toContain('approved');
   });
@@ -244,8 +299,8 @@ describe('POST /api/artist-claims/:id/resolve', () => {
     );
 
     expect(second._status).toBe(409);
-    const artist = await ArtistModel.findById(artistId).lean();
-    expect(artist?.ownerOxyUserId).toBeUndefined();
+    const artist = await readArtist(artistId);
+    expect(artist?.ownerOxyUserId).toBeNull();
   });
 
   /**
@@ -257,10 +312,14 @@ describe('POST /api/artist-claims/:id/resolve', () => {
     const artistId = await makeClaimableArtist();
     const claimId = await openClaim(artistId, 'claimant-1');
 
-    await ArtistModel.updateOne(
-      { _id: artistId },
-      { $set: { ownerOxyUserId: 'somebody-faster', claimedByOxyUserId: 'somebody-faster', claimable: false } },
-    );
+    await getDb()
+      .update(catalogEntities)
+      .set({
+        ownerOxyUserId: 'somebody-faster',
+        claimedByOxyUserId: 'somebody-faster',
+        claimable: false,
+      })
+      .where(eq(catalogEntities.id, artistId));
 
     const res = makeRes();
     await resolveArtistClaim(
@@ -270,16 +329,16 @@ describe('POST /api/artist-claims/:id/resolve', () => {
     );
 
     expect(res._status).toBe(409);
-    const artist = await ArtistModel.findById(artistId).lean();
+    const artist = await readArtist(artistId);
     expect(artist?.ownerOxyUserId).toBe('somebody-faster');
-    const claim = await ArtistClaimModel.findById(claimId).lean();
+    const claim = await readClaim(claimId);
     expect(claim?.status).toBe('pending');
   });
 
   it('refuses to approve when the claimant registered a profile in the meantime', async () => {
     const artistId = await makeClaimableArtist();
     const claimId = await openClaim(artistId, 'claimant-1');
-    await ArtistModel.create({ name: 'Registered Later', source: 'upload', ownerOxyUserId: 'claimant-1' });
+    await makeOwnedArtist('Registered Later', 'claimant-1');
 
     const res = makeRes();
     await resolveArtistClaim(
@@ -289,14 +348,14 @@ describe('POST /api/artist-claims/:id/resolve', () => {
     );
 
     expect(res._status).toBe(409);
-    const artist = await ArtistModel.findById(artistId).lean();
-    expect(artist?.ownerOxyUserId).toBeUndefined();
+    const artist = await readArtist(artistId);
+    expect(artist?.ownerOxyUserId).toBeNull();
   });
 
   it('404s an unknown claim', async () => {
     const res = makeRes();
     await resolveArtistClaim(
-      makeReq({ id: new mongoose.Types.ObjectId().toString() }, 'reviewer-1', { status: 'approved' }),
+      makeReq({ id: uuidv7() }, 'reviewer-1', { status: 'approved' }),
       res as unknown as Response,
       failNext,
     );
@@ -324,8 +383,10 @@ describe('GET /api/artist-claims/mine', () => {
   it('returns only the caller\'s claims', async () => {
     const artistId = await makeClaimableArtist();
     const otherArtistId = await makeClaimableArtist();
-    await ArtistClaimModel.create({ artistId, oxyUserId: 'claimant-1', evidence: 'mine', status: 'pending' });
-    await ArtistClaimModel.create({ artistId: otherArtistId, oxyUserId: 'claimant-2', evidence: 'theirs', status: 'pending' });
+    await getDb().insert(artistClaims).values([
+      { artistId, oxyUserId: 'claimant-1', evidence: 'mine', status: 'pending' },
+      { artistId: otherArtistId, oxyUserId: 'claimant-2', evidence: 'theirs', status: 'pending' },
+    ]);
 
     const res = makeRes();
     await listMyArtistClaims(makeReq({}, 'claimant-1'), res as unknown as Response, failNext);

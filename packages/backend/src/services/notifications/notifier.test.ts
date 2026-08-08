@@ -1,7 +1,8 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
-import { clear, connect, disconnect } from '../../test/mongo';
-import { NotificationPreferenceModel } from '../../models/NotificationPreference';
-import { NotificationSuppressionModel } from '../../models/NotificationSuppression';
+import { count } from 'drizzle-orm';
+import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
+import { getDb } from '../../db/postgres';
+import { notificationPreferences, notificationSuppressions } from '../../db/schema/user';
 
 import { notifyUser } from './notifier';
 
@@ -17,10 +18,10 @@ let posted: Array<Record<string, unknown>> = [];
 let failNextPost = false;
 const realFetch = globalThis.fetch;
 
-beforeAll(connect);
+beforeAll(connectDb);
 afterAll(async () => {
   globalThis.fetch = realFetch;
-  await disconnect();
+  await disconnectDb();
 });
 
 beforeEach(() => {
@@ -35,11 +36,17 @@ beforeEach(() => {
   }) as typeof fetch;
 });
 
-afterEach(clear);
+afterEach(clearDb);
 
 /** Always inject the stub token so no test reaches the real credential path. */
 function notifyUserT(input: Parameters<typeof notifyUser>[0]) {
   return notifyUser(input, testDeps);
+}
+
+/** How many suppression claims exist, of any age. */
+async function suppressionCount(): Promise<number> {
+  const [row] = await getDb().select({ value: count() }).from(notificationSuppressions);
+  return row.value;
 }
 
 function episodeInput(episodeId: string, podcastId: string) {
@@ -99,10 +106,9 @@ describe('notifyUser', () => {
   });
 
   it('does not emit an event the user turned off, and makes no network call', async () => {
-    await NotificationPreferenceModel.create({
-      oxyUserId: RECIPIENT,
-      disabledEvents: ['episode.published'],
-    });
+    await getDb()
+      .insert(notificationPreferences)
+      .values({ oxyUserId: RECIPIENT, disabledEvents: ['episode.published'] });
 
     const result = await notifyUserT(episodeInput('ep-1', 'show-1'));
 
@@ -110,16 +116,58 @@ describe('notifyUser', () => {
     expect(posted).toHaveLength(0);
     // A disabled event must not even claim a suppression key — re-enabling should not
     // leave the user silently suppressed for everything that happened while it was off.
-    expect(await NotificationSuppressionModel.countDocuments({})).toBe(0);
+    expect(await suppressionCount()).toBe(0);
   });
 
   it('emits for an event the user has NOT disabled', async () => {
-    await NotificationPreferenceModel.create({
-      oxyUserId: RECIPIENT,
-      disabledEvents: ['artist.release'],
-    });
+    await getDb()
+      .insert(notificationPreferences)
+      .values({ oxyUserId: RECIPIENT, disabledEvents: ['artist.release'] });
 
     expect(await notifyUserT(episodeInput('ep-1', 'show-1'))).toEqual({ emitted: true });
+  });
+
+  /**
+   * The behaviour `schema/user.ts` said this port owed, and the ONE input on
+   * which the ported claim and the Mongo one disagree.
+   *
+   * Mongo's `claimSuppression` never read `expiresAt` — any duplicate key meant
+   * "already notified" — so a claim past its deadline kept suppressing until the
+   * TTL monitor happened to reap it. `on conflict … where expires_at <= now()`
+   * takes an expired claim over instead, which makes the coalescing window exact
+   * and leaves the sweep as pure housekeeping.
+   *
+   * BOTH keys are expired, not just the exact one: `notifyUser` claims
+   * `<event>:<entityId>` and then `<event>:group:<groupId>`, so expiring only the
+   * first would win that claim and then collide on the group key, and the test
+   * would report `coalesced` for a reason that has nothing to do with what it is
+   * asserting.
+   *
+   * The live-claim half of the distinction is the `duplicate` and `coalesced`
+   * cases above, which is what makes this the discriminating input rather than
+   * one more emission: a claim that never expires would pass those and fail this.
+   */
+  it('re-arms once a claim has expired, rather than waiting for the sweep', async () => {
+    expect(await notifyUserT(episodeInput('ep-1', 'show-1'))).toEqual({ emitted: true });
+    expect(await suppressionCount()).toBe(2);
+
+    await getDb()
+      .update(notificationSuppressions)
+      .set({ expiresAt: new Date(Date.now() - 1_000) });
+
+    // Same user, same entity, same group — and it emits, because every claim
+    // standing in the way is past its own deadline.
+    expect(await notifyUserT(episodeInput('ep-1', 'show-1'))).toEqual({ emitted: true });
+    expect(posted).toHaveLength(2);
+
+    // Claimed, not duplicated: the rows were taken over in place.
+    expect(await suppressionCount()).toBe(2);
+
+    // And the fresh claims suppress again, so re-arming did not disable the rule.
+    expect(await notifyUserT(episodeInput('ep-1', 'show-1'))).toEqual({
+      emitted: false,
+      reason: 'duplicate',
+    });
   });
 
   it('reports failure without throwing when delivery fails', async () => {

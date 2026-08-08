@@ -18,8 +18,7 @@ export type PodcastQueueItem = z.infer<typeof ZPodcastQueueItem>;
 // --- Room (replaces Space) ---
 
 export const ZRoom = z.object({
-  _id: z.string(),
-  id: z.string().optional(),
+  id: z.string(),
   title: z.string(),
   description: z.string().nullish(),
 
@@ -118,8 +117,7 @@ export const ZHouseVisibility = z.object({
 export type HouseVisibility = z.infer<typeof ZHouseVisibility>;
 
 export const ZHouse = z.object({
-  _id: z.string(),
-  id: z.string().optional(),
+  id: z.string(),
   name: z.string(),
   description: z.string().optional(),
   avatar: z.string().optional().nullable(),
@@ -168,8 +166,7 @@ export const ZSeriesEpisode = z.object({
 export type SeriesEpisode = z.infer<typeof ZSeriesEpisode>;
 
 export const ZSeries = z.object({
-  _id: z.string(),
-  id: z.string().optional(),
+  id: z.string(),
   title: z.string(),
   description: z.string().optional(),
   coverImage: z.string().optional().nullable(),
@@ -188,7 +185,7 @@ export type Series = z.infer<typeof ZSeries>;
 // --- Recording ---
 
 export const ZRecording = z.object({
-  _id: z.string(),
+  id: z.string(),
   roomId: z.string(),
   roomTitle: z.string(),
   host: z.string(),

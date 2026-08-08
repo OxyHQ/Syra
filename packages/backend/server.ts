@@ -2,14 +2,13 @@ import { env } from './src/config/env';
 
 import express from 'express';
 import http from 'http';
-import mongoose from 'mongoose';
 import compression from 'compression';
 import cors from 'cors';
 import { Server as SocketIOServer, Socket, Namespace } from 'socket.io';
 import { createOptionalOxyAuth, createOxyRateLimit } from '@oxyhq/core/server';
 import { oxy } from './src/oxyClient';
 
-import { connectToDatabase, isDatabaseConnected, getDatabaseStats } from './src/utils/database';
+import { connectPostgres, isPostgresConnected } from './src/db/postgres';
 import { createRedisPubSub, isRedisConnected, getRedisStats } from './src/utils/redis';
 import { ensureRedisConnected, isRedisConnectionError } from './src/utils/redisHelpers';
 import { createAdapter } from '@socket.io/redis-adapter';
@@ -54,7 +53,7 @@ import recordingsRoutes from './src/routes/recordings.routes';
 import livekitWebhookRoutes from './src/routes/livekitWebhook.routes';
 import reportsRoutes from './src/routes/reports.routes';
 import { createCrowdSourceWebhookRoutes } from './src/routes/crowdsourceWebhook.routes';
-import { moderationOutboxDispatcher } from './src/moderation/dispatcher';
+import { assertModerationSchema, getModerationIntegration } from './src/moderation/integration';
 import { initializeRoomSocket } from './src/sockets/roomSocket';
 import { initializeIO } from './src/utils/socket';
 import { startRecommendationScheduler } from './src/services/recommendations/scheduler';
@@ -153,15 +152,6 @@ app.use((req, _res, next) => {
     if (Object.keys(filters).length > 0) {
       (req.query as Record<string, unknown>).filters = filters;
     }
-  }
-  next();
-});
-
-app.use(async (_req, _res, next) => {
-  try {
-    await connectToDatabase();
-  } catch {
-    logger.debug('MongoDB connection unavailable for request');
   }
   next();
 });
@@ -363,11 +353,16 @@ app.get('', async (_req, res) => {
 app.get('/health', async (_req, res) => {
   try {
     const [dbConnected, redisConnected] = await Promise.all([
-      isDatabaseConnected(),
+      Promise.resolve(isPostgresConnected()),
       isRedisConnected(),
     ]);
 
-    const dbStats = getDatabaseStats();
+    // What /health has reported as "database" since the migration finished: the
+    // POSTGRES pool, which is now the only one. It reported Mongo's
+    // `readyState` until Task 8 removed the last Mongoose model — and a health
+    // endpoint answering about a database the service no longer opens is worse
+    // than one answering nothing, because it reads as green forever.
+    const dbStats = { engine: 'postgres' as const, state: dbConnected ? 'connected' : 'disconnected' };
     const redisStats = getRedisStats();
     const perfStats = getPerformanceStats();
 
@@ -415,34 +410,26 @@ app.use((err: Error & { statusCode?: number; status?: number }, req: express.Req
   });
 });
 
-const db = mongoose.connection;
-let hasLoggedMongoError = false;
-db.on('error', (error: Error & { code?: string; syscall?: string }) => {
-  if (error.code === 'ECONNREFUSED' || error.syscall === 'querySrv') {
-    if (!hasLoggedMongoError) {
-      hasLoggedMongoError = true;
-      logger.debug('MongoDB connection error', { err: error });
-    }
-  } else {
-    logger.error('MongoDB connection error', { err: error });
-  }
-});
-
-db.once('open', () => {
-  hasLoggedMongoError = false;
-  logger.info('Connected to MongoDB successfully');
-});
-
 const bootServer = async () => {
+  /**
+   * PostgreSQL, and now the only database this service opens.
+   *
+   * Log-and-continue, which is what the Mongo connection beside it did and what
+   * every route here still expects: `withDb` answers 503 per request when the
+   * pool is down, so a boot that failed closed would trade a degraded service
+   * for an outage.
+   */
   try {
-    await connectToDatabase();
-  } catch {
-    logger.warn('MongoDB connection unavailable - server will start but database operations will fail');
+    await connectPostgres();
+  } catch (error) {
+    logger.warn('PostgreSQL connection unavailable - ported routes will fail until it is reachable', {
+      reason: error instanceof Error ? error.message : 'unknown',
+    });
   }
 
   server.listen(env.PORT, '0.0.0.0', () => {
     logger.info('Server running', { port: env.PORT });
-    if (!isDatabaseConnected()) {
+    if (!isPostgresConnected()) {
       logger.warn('Server started without database connection - some features may be unavailable');
     }
   });
@@ -468,12 +455,19 @@ const bootServer = async () => {
   startExpirySweeper();
 
   // Drain the moderation outbox. Deliberately NOT lock-guarded like the two
-  // schedulers above: every event is claimed under a Mongo lease with an owner
+  // schedulers above: every event is claimed under a Postgres lease with an owner
   // check, so N instances share the work and a dead instance's lease is reclaimed
   // rather than stranding a report. No-ops when the integration is disabled — the
   // loop is gated, never the durable record, so reports taken while it is off
   // deliver when it is switched on.
-  moderationOutboxDispatcher.start();
+  //
+  // Built here rather than at import: the integration reaches getDb(), and the
+  // pool is opened by connectPostgres() above.
+  // The four moderation tables must resolve before the first report is filed,
+  // not at the first delivery hours later. A missing one raises 42P01 and names
+  // itself here.
+  await assertModerationSchema();
+  getModerationIntegration().dispatcher.start();
 };
 
 if (require.main === module) {

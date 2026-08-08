@@ -1,11 +1,13 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'bun:test';
 import { Readable } from 'node:stream';
 import type { IncomingMessage } from 'node:http';
+import { count, eq } from 'drizzle-orm';
 import type { SafeFetchResult } from '@oxyhq/core/server';
-import { clear, connect, disconnect } from '../../test/mongo';
-import { EpisodeModel } from '../../models/Episode';
-import { UserLibraryModel } from '../../models/Library';
-import { NotificationSuppressionModel } from '../../models/NotificationSuppression';
+import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
+import { getDb } from '../../db/postgres';
+import { userPodcastSubscriptions } from '../../db/schema/library';
+import { episodes } from '../../db/schema/podcasts';
+import { notificationSuppressions } from '../../db/schema/user';
 import { setCatalogImageMirrorImplementationForTests } from '../catalog/catalogImageAssets';
 import { importFeed } from './podcastImportService';
 
@@ -14,14 +16,23 @@ import { importFeed } from './podcastImportService';
  *
  * `importedEpisodes` counts episodes PROCESSED, so every refresh re-processes the whole
  * feed — driving notifications off it would push every episode to every subscriber on
- * every refresh. The import instead reads MongoDB's `updatedExisting: false`, which is
- * true only when the upsert actually created a document.
+ * every refresh. The import instead asks the DATABASE whether the upsert actually
+ * created a row: Mongo answered with `updatedExisting: false`, Postgres answers with
+ * `xmax = 0` on the returned row (`db/podcasts/episodes.ts`). Same question, and the
+ * Postgres form is additionally correct under two concurrent crawls of one feed.
  *
  * These tests assert on NotificationSuppression rows rather than on delivered pushes:
  * the notifier claims its suppression key BEFORE attempting delivery, so a claim proves
  * the trigger genuinely ran for that episode. Delivery itself cannot succeed here — no
  * Oxy service credentials are configured in tests — which is exactly what makes the
  * second test meaningful.
+ *
+ * ## One database again
+ *
+ * This suite used to connect to BOTH, because subscriptions and episodes were Postgres
+ * from Task 12 while the suppression ledger was still Mongoose. Task 15 moved the
+ * ledger, so the whole path — feed, episodes, subscriptions, notifier — is Postgres and
+ * the Mongo hooks are gone.
  */
 
 const SUBSCRIBER = 'oxy-subscriber-1';
@@ -52,34 +63,51 @@ function fakeFetchFor(feed: string) {
   });
 }
 
-beforeAll(connect);
+beforeAll(connectDb);
 afterEach(async () => {
-  await clear();
+  await clearDb();
   setCatalogImageMirrorImplementationForTests();
 });
-afterAll(disconnect);
+afterAll(disconnectDb);
+
+/** How many suppression claims one subscriber holds — the "did the trigger run" read. */
+async function claimCount(oxyUserId: string): Promise<number> {
+  const [row] = await getDb()
+    .select({ value: count() })
+    .from(notificationSuppressions)
+    .where(eq(notificationSuppressions.oxyUserId, oxyUserId));
+  return row.value;
+}
+
+/** How many episode rows a show has — the "did the row really land" read. */
+async function episodeCount(podcastId: string): Promise<number> {
+  const rows = await getDb()
+    .select({ id: episodes.id })
+    .from(episodes)
+    .where(eq(episodes.podcastId, podcastId));
+  return rows.length;
+}
 
 describe('episode notifications are driven by the INSERT signal', () => {
   it('notifies on the first import and NOT on a re-import of the same feed', async () => {
-    await UserLibraryModel.create({ oxyUserId: SUBSCRIBER, subscribedPodcasts: [] });
     const feedUrl = 'https://feeds.example/fresh.xml';
     const fetch = fakeFetchFor(feedWithFreshEpisode('fresh-ep-1'));
 
     // First import creates the show; subscribe, then import again so the episode insert
-    // has an audience. (The very first run has no subscribers by construction.)
+    // has an audience. (The very first run has no subscribers by construction — and the
+    // subscription cannot be created before the show exists, since `podcast_id` is a real
+    // foreign key now, so this ordering is load-bearing rather than merely convenient.)
     const first = await importFeed(feedUrl, { fetch });
-    await UserLibraryModel.updateOne(
-      { oxyUserId: SUBSCRIBER },
-      { $set: { subscribedPodcasts: [String(first.podcast._id)] } },
-    );
-    await EpisodeModel.deleteMany({ podcastId: first.podcast._id });
-    await NotificationSuppressionModel.deleteMany({});
+    await getDb()
+      .insert(userPodcastSubscriptions)
+      .values({ oxyUserId: SUBSCRIBER, podcastId: first.podcast.id });
+    await getDb().delete(episodes).where(eq(episodes.podcastId, first.podcast.id));
+    await getDb().delete(notificationSuppressions);
 
     // This run genuinely INSERTS the episode → the trigger must run.
     const inserting = await importFeed(feedUrl, { fetch, force: true });
     expect(inserting.importedEpisodes).toBe(1);
-    expect(await NotificationSuppressionModel.countDocuments({ oxyUserId: SUBSCRIBER }))
-      .toBeGreaterThan(0);
+    expect(await claimCount(SUBSCRIBER)).toBeGreaterThan(0);
 
     // CRITICAL: wipe the suppression records before the re-import. Without this the test
     // has no teeth — the notifier's own exact-entity dedupe would swallow a wrong signal
@@ -87,34 +115,31 @@ describe('episode notifications are driven by the INSERT signal', () => {
     // keep the count at zero below is the import correctly deciding not to call the
     // trigger at all. (Verified by mutation: notifying on every processed episode fails
     // this assertion.)
-    await NotificationSuppressionModel.deleteMany({});
+    await getDb().delete(notificationSuppressions);
 
     // This run processes the SAME episode again — an update, not an insert.
     const reimport = await importFeed(feedUrl, { fetch, force: true });
     expect(reimport.importedEpisodes).toBe(1); // still PROCESSED one episode...
-    expect(await NotificationSuppressionModel.countDocuments({ oxyUserId: SUBSCRIBER }))
-      .toBe(0); // ...but the trigger never ran, so nothing was claimed.
+    expect(await claimCount(SUBSCRIBER)).toBe(0); // ...but the trigger never ran.
   });
 
   it('completes the import even though notification delivery fails', async () => {
-    await UserLibraryModel.create({ oxyUserId: SUBSCRIBER, subscribedPodcasts: [] });
     const feedUrl = 'https://feeds.example/fresh.xml';
     const fetch = fakeFetchFor(feedWithFreshEpisode('fresh-ep-2'));
 
     const first = await importFeed(feedUrl, { fetch });
-    await UserLibraryModel.updateOne(
-      { oxyUserId: SUBSCRIBER },
-      { $set: { subscribedPodcasts: [String(first.podcast._id)] } },
-    );
-    await EpisodeModel.deleteMany({ podcastId: first.podcast._id });
+    await getDb()
+      .insert(userPodcastSubscriptions)
+      .values({ oxyUserId: SUBSCRIBER, podcastId: first.podcast.id });
+    await getDb().delete(episodes).where(eq(episodes.podcastId, first.podcast.id));
 
     // No Oxy service credentials exist in tests, so every delivery attempt fails. The
-    // import is the only ingest Syra has — it must survive that completely.
+    // import is the only external ingest Syra has — it must survive that completely.
     const result = await importFeed(feedUrl, { fetch, force: true });
 
     expect(result.importedEpisodes).toBe(1);
     expect(result.failedEpisodes).toBe(0);
-    expect(await EpisodeModel.countDocuments({ podcastId: first.podcast._id })).toBe(1);
+    expect(await episodeCount(first.podcast.id)).toBe(1);
     // The show's bookkeeping still got persisted after the fan-out ran.
     expect(result.podcast.lastRefreshedAt).toBeDefined();
   });

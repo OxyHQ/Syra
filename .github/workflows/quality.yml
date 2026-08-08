@@ -32,6 +32,30 @@ jobs:
 
   quality:
     runs-on: ubuntu-latest
+    # `postgres:17`, not a PostGIS image — see `src/db/extensions.ts`:
+    # `REQUIRED_EXTENSIONS` is deliberately empty, Syra has no `2dsphere`
+    # index and no geospatial query to port, and `docker-compose.postgres.yml`
+    # pins the SAME image so a developer's database and CI's cannot disagree
+    # about what is installed. Keep this bare: nothing in Syra should acquire
+    # an extension dependency by accident, and this image is the thing that
+    # would let it — a schema task that starts needing PostGIS or any other
+    # extension adds it to `REQUIRED_EXTENSIONS` first, and only then here.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: syra
+          POSTGRES_PASSWORD: syra
+          POSTGRES_DB: syra_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U syra -d syra_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://syra:syra@127.0.0.1:5432/syra_ci
     steps:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
@@ -70,6 +94,53 @@ jobs:
       # name `libchromaprint-tools` is a different distribution's).
       - name: Install audio toolchain
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg libchromaprint-tools
+
+      # Schema-vs-migration drift gate (Task 4 review, Critical #2): every
+      # DB-backed test below runs against the already-MIGRATED database,
+      # which does not move when a `schema/*.ts` file changes. A committed
+      # schema edit with no matching migration was invisible to every other
+      # step in this workflow — `db:generate` reporting "no schema changes"
+      # was a line in an implementer's report, not a gate, until this step.
+      # It catches THAT gap only: `drizzle-kit generate` diffs the current
+      # `schema/*.ts` against the latest recorded snapshot, so it reports
+      # nothing to do whenever they already agree — it does not re-read an
+      # already-generated migration's SQL and re-verify it against its own
+      # snapshot, so a migration file hand-edited after generation (schema
+      # and snapshot left untouched) produces no diff here and is not caught
+      # by this step. `drizzle-kit generate` never opens a database
+      # connection (verified directly: it succeeds identically against an
+      # unreachable `DATABASE_URL`) — only `drizzle.config.ts`'s own guard
+      # requires the variable to be SET, so this can run before Postgres is
+      # migrated, or even before it is reachable.
+      - name: Check schema/migration drift
+        working-directory: packages/backend
+        run: |
+          bun run db:generate
+          if [ -n "$(git status --porcelain -- drizzle)" ]; then
+            echo "::error::db:generate produced changes under drizzle/ that are not committed. A schema/*.ts edit landed without its matching migration. Run 'bun run db:generate' locally, inspect the SQL, and commit the result in the same change as the schema edit." >&2
+            git status --porcelain -- drizzle
+            git --no-pager diff -- drizzle
+            exit 1
+          fi
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+
+      # `src/db/__tests__/gates.test.ts`'s schema-invariant and expiry-index
+      # gates only need a live, reachable Postgres to pass Task 1's floors
+      # (`minimumTables`/`minimumColumns` at 0, `EXPIRY_SWEEP_TARGETS` empty)
+      # — migrating first is not required for THEM. This step exists anyway
+      # because it is the thing Step 10 of the plan actually asks to be
+      # proven: that the real migrator, pointed at a fresh service database
+      # with a genuinely empty journal, succeeds and applies nothing.
+      # `DATABASE_URL` here (not `TEST_DATABASE_URL`): the migrator always
+      # reads `DATABASE_URL`, the same variable it reads in every other
+      # environment; `TEST_DATABASE_URL` is only the job-level name the test
+      # suite falls back to (see gates.test.ts's `beforeAll`).
+      - name: Migrate Postgres (CI service)
+        working-directory: packages/backend
+        run: bun run db:migrate --phase=all --target-database=syra_ci
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
 
       - name: Backend tests
         run: bun run --filter @syra/backend test

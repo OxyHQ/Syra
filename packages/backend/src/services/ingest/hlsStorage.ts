@@ -18,8 +18,20 @@ import fs from 'fs';
 import path from 'path';
 import type { HlsRendition } from '@syra/shared-types';
 import { uploadToS3 } from '../s3Service';
-import { TrackKeyModel } from '../../models/TrackKey';
+import { getDb } from '../../db/postgres';
+import { trackKeys } from '../../db/schema/trackKeys';
 import type { PackageResult } from './hlsPackager';
+
+/**
+ * Which of `track_keys`' three parent columns a package's key is filed under.
+ *
+ * A TypeScript-level discriminator with no column behind it: the table used to
+ * carry a `kind`, and the split into `track_id`/`user_upload_id`/`episode_id`
+ * made the database express the same thing with three real foreign keys. It
+ * stays here, at the seam that has to choose an arm, rather than in the schema
+ * module, which no longer names these three values at all.
+ */
+export type TrackKeyKind = 'track' | 'user_upload' | 'episode';
 
 // ── Content-type map ─────────────────────────────────────────────────────────
 
@@ -43,9 +55,21 @@ export interface StoredHls {
 /** What the packaged output belongs to, and where its objects go. */
 export interface StoreHlsTarget {
   /**
-   * The id of the owning document — a `Track._id` or a `UserUpload._id`. It is
-   * what the AES key is filed under in `TrackKey`, which is how the stream and
-   * locker-stream endpoints find it.
+   * Which id space {@link StoreHlsTarget.recordId} belongs to, and therefore
+   * which of `track_keys`' three parent columns the AES key is filed under.
+   *
+   * Mongo stored the key row with no discriminator at all, so "these three id
+   * spaces never collide" lived only in a comment. A caller has to say which of
+   * the three it is holding — `'track'` from `ingestTrack`, `'user_upload'`
+   * from `ingestUserUpload`, `'episode'` from `ingestEpisode` — and the column
+   * that choice selects carries a real `ON DELETE cascade` back to that row.
+   */
+  kind: TrackKeyKind;
+  /**
+   * The id of the owning row — a `tracks.id`, a `user_uploads.id` or an
+   * `episodes.id`, as {@link StoreHlsTarget.kind} says. It is what the AES key
+   * is filed under in `track_keys`, which is how the stream and locker-stream
+   * endpoints find it.
    */
   recordId: string;
   /**
@@ -90,7 +114,7 @@ export async function storePackagedHls(
   target: StoreHlsTarget,
   deps?: StoreHlsDeps,
 ): Promise<StoredHls> {
-  const { recordId, buildKey } = target;
+  const { kind, recordId, buildKey } = target;
   const doUpload = deps?.upload ?? ((key, body, opts) => uploadToS3(key, body, opts));
 
   // Upload every file in outputDir to S3
@@ -105,14 +129,48 @@ export async function storePackagedHls(
     }),
   );
 
-  // Persist the AES-128 key server-side (upsert so re-imports are idempotent).
-  // `TrackKey.trackId` holds a Track id for catalog jobs and a UserUpload id for
-  // locker jobs; the two id spaces are distinct ObjectIds, so they cannot collide.
-  await TrackKeyModel.findOneAndUpdate(
-    { trackId: recordId },
-    { keyHex: result.keyHex, keyUri: result.keyUri },
-    { upsert: true, new: true },
-  );
+  /**
+   * Persist the AES-128 key server-side (upsert so re-imports are idempotent).
+   *
+   * The two arms this record does NOT belong to are set to an explicit `null`
+   * rather than left off: `track_keys` is a discriminated union enforced by
+   * `track_keys_one_parent_check`, and this is the one place that constructs
+   * it, so it states all three columns instead of relying on the column default
+   * to mean the same thing. (Drizzle would treat `undefined` as "omit" — the
+   * same result on an INSERT, and a stale sibling on any future UPDATE.)
+   *
+   * BOTH THE VALUES AND THE CONFLICT TARGET ARE SELECTED BY `kind`, and the
+   * target has to be the arm's OWN unique constraint. A fixed
+   * `target: trackKeys.trackId` would never conflict for a locker or episode
+   * row — `track_id` is null there and Postgres treats nulls as distinct — so a
+   * re-ingest would insert a SECOND row and fail the arm's unique constraint
+   * instead of rotating the key in place.
+   */
+  await getDb()
+    .insert(trackKeys)
+    .values({
+      trackId: kind === 'track' ? recordId : null,
+      userUploadId: kind === 'user_upload' ? recordId : null,
+      episodeId: kind === 'episode' ? recordId : null,
+      keyHex: result.keyHex,
+      keyUri: result.keyUri,
+    })
+    .onConflictDoUpdate({
+      target:
+        kind === 'track'
+          ? trackKeys.trackId
+          : kind === 'user_upload'
+            ? trackKeys.userUploadId
+            : trackKeys.episodeId,
+      // `updated_at` is absent on purpose: drizzle's `onConflictDoUpdate` runs
+      // the same `buildUpdateSet` a `db.update()` does (`pg-core/dialect`), so
+      // the column's `$onUpdate` fires here too. `created_at` has no
+      // `$onUpdate` and is likewise untouched, which is what keeps the original
+      // insertion time across a re-ingest. The parent columns are absent for a
+      // different reason: they are the row's identity, and the conflict target
+      // has already matched on one of them.
+      set: { keyHex: result.keyHex, keyUri: result.keyUri },
+    });
 
   // Build typed HlsRendition[] referencing S3 keys
   const hls: HlsRendition[] = result.renditions.map((r) => ({

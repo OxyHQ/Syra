@@ -1,0 +1,48 @@
+##
+## Docker Compose — local PostgreSQL for the Mongo->Postgres migration.
+##
+## Separate from any application docker-compose file: this holds only the
+## database a developer needs running next to `bun run --cwd packages/backend
+## dev` and `bun run --cwd packages/backend test`.
+##
+## Usage:
+##   docker compose -f docker-compose.postgres.yml up -d postgres
+##   docker compose -f docker-compose.postgres.yml logs -f postgres
+##   docker compose -f docker-compose.postgres.yml down -v   # wipe (data is disposable)
+##
+## Then in packages/backend/.env:
+##   DATABASE_URL=postgres://syra:syra@127.0.0.1:5434/syra_dev
+##
+
+services:
+  postgres:
+    # Plain `postgres:17`, not a PostGIS image. Syra has no `2dsphere` Mongo
+    # index and no geospatial query to port — see `src/db/extensions.ts` for
+    # why `REQUIRED_EXTENSIONS` is deliberately empty. Pinning a heavier image
+    # here would imply an extension dependency this schema does not have.
+    #
+    # `.github/workflows/quality.yml` pins the SAME image, so a developer's
+    # database and CI's cannot disagree about what is installed.
+    image: postgres:17
+    container_name: syra-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: syra
+      POSTGRES_PASSWORD: syra
+      POSTGRES_DB: syra_dev
+    ports:
+      # 5434: oxy-api's own local Postgres binds 5432 and Mention's binds
+      # 5433, and both repos are routinely open on the same machine at once.
+      # Loopback-only — this database is never exposed off the host.
+      - "127.0.0.1:5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U syra -d syra_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    volumes:
+      - syra-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  syra-postgres-data:

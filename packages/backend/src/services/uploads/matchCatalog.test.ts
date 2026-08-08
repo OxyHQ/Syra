@@ -1,49 +1,100 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll } from 'bun:test';
-import mongoose from 'mongoose';
-import { clear, connect, disconnect } from '../../test/mongo';
-import { TrackModel } from '../../models/Track';
-import { TrackFingerprintModel } from '../../models/TrackFingerprint';
-import { UserUploadModel } from '../../models/UserUpload';
+import { eq } from 'drizzle-orm';
+import { uuidv7 } from '@oxyhq/db';
+import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
+import { getDb } from '../../db/postgres';
+import { catalogEntities, trackFingerprints, tracks } from '../../db/schema/catalog';
+import { userUploads } from '../../db/schema/creators';
 import { matchCatalog, normalizeForFuzzy, type MatchCandidate } from './matchCatalog';
 import corpus from './__fixtures__/fingerprints.json';
 
-beforeAll(connect);
+/**
+ * ONE database. Tiers 1-4 read the catalogue and tier 1's OTHER half — "is this
+ * already in the uploader's own locker" — reads `user_uploads`, which was Task
+ * 13's still-Mongoose vertical when this suite was written and is Postgres now.
+ */
+beforeAll(connectDb);
 beforeEach(async () => {
-  await UserUploadModel.createIndexes();
+  // `tracks.artist_id` is a real foreign key, so the artist has to exist
+  // before any track fixture does — and it is re-made per test because
+  // `clearDb` truncates.
+  ARTIST_ID = await seedArtist();
 });
-afterEach(clear);
-afterAll(disconnect);
+afterEach(clearDb);
+afterAll(disconnectDb);
 
 const OWNER = 'oxy-user-uploader';
 const OTHER_OWNER = 'oxy-user-someone-else';
-const ARTIST_ID = new mongoose.Types.ObjectId().toString();
+let ARTIST_ID = '';
+
+async function seedArtist(): Promise<string> {
+  const suffix = uuidv7();
+  const [artist] = await getDb()
+    .insert(catalogEntities)
+    .values({
+      type: 'artist',
+      name: 'Nadia Ortiz',
+      nameKey: `nadia-ortiz-${suffix}`,
+      source: 'upload',
+    })
+    .returning({ id: catalogEntities.id });
+  if (!artist) throw new Error('seedArtist: insert returned no row');
+  return artist.id;
+}
 
 const SHA_OF_UPLOAD = 'a'.repeat(64);
 
-async function seedTrack(overrides: Record<string, unknown> = {}) {
-  return TrackModel.create({
-    title: 'Midnight Ferry',
-    artistId: ARTIST_ID,
-    artistName: 'Nadia Ortiz',
-    duration: 180,
-    source: 'upload',
-    status: 'ready',
-    isAvailable: true,
-    ...overrides,
+async function seedTrack(
+  overrides: Partial<typeof tracks.$inferInsert> = {}
+): Promise<{ id: string }> {
+  const [track] = await getDb()
+    .insert(tracks)
+    .values({
+      title: 'Midnight Ferry',
+      artistId: ARTIST_ID,
+      artistName: 'Nadia Ortiz',
+      duration: 180,
+      source: 'upload',
+      status: 'ready',
+      isAvailable: true,
+      ...overrides,
+    })
+    .returning({ id: tracks.id });
+
+  if (!track) throw new Error('seedTrack: insert returned no row');
+  return track;
+}
+
+async function seedFingerprint(trackId: string, values: number[], durationSec: number): Promise<void> {
+  await getDb().insert(trackFingerprints).values({
+    trackId,
+    fingerprint: values,
+    fingerprintDurationSec: durationSec,
   });
 }
 
-async function seedUpload(overrides: Record<string, unknown> = {}) {
-  return UserUploadModel.create({
-    ownerOxyUserId: OWNER,
-    title: 'Midnight Ferry',
-    duration: 180,
-    sha256: SHA_OF_UPLOAD,
-    sizeBytes: 4096,
-    audioSource: { key: 'locker/x.mp3', format: 'mp3' },
-    status: 'ready',
-    ...overrides,
-  });
+async function setTrack(trackId: string, patch: Partial<typeof tracks.$inferInsert>): Promise<void> {
+  await getDb().update(tracks).set(patch).where(eq(tracks.id, trackId));
+}
+
+async function seedUpload(
+  overrides: Partial<typeof userUploads.$inferInsert> = {}
+): Promise<{ id: string }> {
+  const [upload] = await getDb()
+    .insert(userUploads)
+    .values({
+      ownerOxyUserId: OWNER,
+      title: 'Midnight Ferry',
+      duration: 180,
+      sha256: SHA_OF_UPLOAD,
+      sizeBytes: 4096,
+      audioSourceKey: 'locker/x.mp3',
+      audioSourceFormat: 'mp3',
+      status: 'ready',
+      ...overrides,
+    })
+    .returning({ id: userUploads.id });
+  return upload;
 }
 
 function candidate(overrides: Partial<MatchCandidate> = {}): MatchCandidate {
@@ -66,7 +117,7 @@ describe('matchCatalog — tier 1, identical bytes', () => {
 
     expect(result).toEqual({
       kind: 'track',
-      trackId: track._id.toString(),
+      trackId: track.id,
       tier: 'sha256',
       artistId: ARTIST_ID,
       artistName: 'Nadia Ortiz',
@@ -91,7 +142,7 @@ describe('matchCatalog — tier 1, identical bytes', () => {
     const result = await matchCatalog(candidate(), OWNER);
     expect(result.kind).toBe('track');
     if (result.kind !== 'track') throw new Error('unreachable');
-    expect(result.trackId).toBe(track._id.toString());
+    expect(result.trackId).toBe(track.id);
   });
 
   it("finds the uploader's own locker copy", async () => {
@@ -100,7 +151,7 @@ describe('matchCatalog — tier 1, identical bytes', () => {
 
     expect(result).toEqual({
       kind: 'upload',
-      uploadId: upload._id.toString(),
+      uploadId: upload.id,
       tier: 'sha256',
     });
   });
@@ -122,7 +173,7 @@ describe('matchCatalog — tier 1, identical bytes', () => {
 
 describe('matchCatalog — tier 2, ISRC', () => {
   it('matches a catalog track by ISRC', async () => {
-    const track = await seedTrack({ externalIds: { isrc: 'ESA452300137' } });
+    const track = await seedTrack({ externalIsrc: 'ESA452300137' });
     const result = await matchCatalog(
       candidate({ isrc: 'ESA452300137', title: undefined, artistName: undefined }),
       OWNER,
@@ -130,7 +181,7 @@ describe('matchCatalog — tier 2, ISRC', () => {
 
     expect(result).toEqual({
       kind: 'track',
-      trackId: track._id.toString(),
+      trackId: track.id,
       tier: 'isrc',
       artistId: ARTIST_ID,
       artistName: 'Nadia Ortiz',
@@ -138,7 +189,7 @@ describe('matchCatalog — tier 2, ISRC', () => {
   });
 
   it('normalises the ISRC to upper case before comparing', async () => {
-    await seedTrack({ externalIds: { isrc: 'ESA452300137' } });
+    await seedTrack({ externalIsrc: 'ESA452300137' });
     const result = await matchCatalog(candidate({ isrc: 'esa452300137' }), OWNER);
     expect(result.kind).toBe('track');
   });
@@ -146,7 +197,7 @@ describe('matchCatalog — tier 2, ISRC', () => {
   it('does not match a track that is not playable', async () => {
     // A takedown must not resolve to "this is already in the catalog, add it to
     // your library" — the listener would get a track they cannot play.
-    await seedTrack({ externalIds: { isrc: 'ESA452300137' }, copyrightRemoved: true });
+    await seedTrack({ externalIsrc: 'ESA452300137', copyrightRemoved: true });
     const result = await matchCatalog(
       candidate({ isrc: 'ESA452300137', title: undefined, artistName: undefined }),
       OWNER,
@@ -158,11 +209,7 @@ describe('matchCatalog — tier 2, ISRC', () => {
 describe('matchCatalog — tier 3, fingerprint', () => {
   async function seedFingerprintedTrack(values: number[], durationSec: number) {
     const track = await seedTrack({ duration: durationSec, title: 'Some Other Title' });
-    await TrackFingerprintModel.create({
-      trackId: track._id.toString(),
-      fingerprint: values,
-      fingerprintDurationSec: durationSec,
-    });
+    await seedFingerprint(track.id, values, durationSec);
     return track;
   }
 
@@ -181,7 +228,7 @@ describe('matchCatalog — tier 3, fingerprint', () => {
 
     expect(result.kind).toBe('track');
     if (result.kind !== 'track') throw new Error('unreachable');
-    expect(result.trackId).toBe(track._id.toString());
+    expect(result.trackId).toBe(track.id);
     expect(result.tier).toBe('fingerprint');
     expect(result.bitErrorRate).toBeLessThan(0.01);
   });
@@ -234,7 +281,7 @@ describe('matchCatalog — tier 3, fingerprint', () => {
    */
   it('declines to match a taken-down track but KEEPS the acoustic evidence', async () => {
     const track = await seedFingerprintedTrack(corpus.reference, 30);
-    await TrackModel.updateOne({ _id: track._id }, { copyrightRemoved: true });
+    await setTrack(track.id, { copyrightRemoved: true });
 
     const result = await matchCatalog(
       candidate({
@@ -249,7 +296,7 @@ describe('matchCatalog — tier 3, fingerprint', () => {
 
     expect(result.kind).toBe('none');
     if (result.kind !== 'none') throw new Error('unreachable');
-    expect(result.nearestFingerprint?.trackId).toBe(track._id.toString());
+    expect(result.nearestFingerprint?.trackId).toBe(track.id);
     expect(result.nearestFingerprint?.artistId).toBe(ARTIST_ID);
     expect(result.nearestFingerprint?.copyrightRemoved).toBe(true);
     expect(result.nearestFingerprint?.bitErrorRate).toBeLessThan(0.01);
@@ -259,7 +306,7 @@ describe('matchCatalog — tier 3, fingerprint', () => {
     // A creator unpublishing their own track is not a copyright judgement. The
     // neighbour still feeds artist resolution; it must not fire a blocking marker.
     const track = await seedFingerprintedTrack(corpus.reference, 30);
-    await TrackModel.updateOne({ _id: track._id }, { isAvailable: false });
+    await setTrack(track.id, { isAvailable: false });
 
     const result = await matchCatalog(
       candidate({
@@ -274,7 +321,7 @@ describe('matchCatalog — tier 3, fingerprint', () => {
 
     expect(result.kind).toBe('none');
     if (result.kind !== 'none') throw new Error('unreachable');
-    expect(result.nearestFingerprint?.trackId).toBe(track._id.toString());
+    expect(result.nearestFingerprint?.trackId).toBe(track.id);
     expect(result.nearestFingerprint?.copyrightRemoved).toBe(false);
   });
 
@@ -294,7 +341,7 @@ describe('matchCatalog — tier 3, fingerprint', () => {
     );
     expect(result.kind).toBe('track');
     if (result.kind !== 'track') throw new Error('unreachable');
-    expect(result.trackId).toBe(track._id.toString());
+    expect(result.trackId).toBe(track.id);
   });
 
   /**
@@ -304,7 +351,7 @@ describe('matchCatalog — tier 3, fingerprint', () => {
    */
   it('reports no neighbour for a candidate that never crossed the match threshold', async () => {
     const track = await seedFingerprintedTrack(corpus.closestNegativeA, 30);
-    await TrackModel.updateOne({ _id: track._id }, { copyrightRemoved: true });
+    await setTrack(track.id, { copyrightRemoved: true });
 
     const result = await matchCatalog(
       candidate({
@@ -330,7 +377,7 @@ describe('matchCatalog — tier 4, fuzzy', () => {
 
     expect(result.kind).toBe('track');
     if (result.kind !== 'track') throw new Error('unreachable');
-    expect(result.trackId).toBe(track._id.toString());
+    expect(result.trackId).toBe(track.id);
     expect(result.tier).toBe('fuzzy');
   });
 
@@ -353,20 +400,16 @@ describe('matchCatalog — tier 4, fuzzy', () => {
 describe('matchCatalog — tier precedence', () => {
   it('the own-locker byte match wins over a catalog ISRC match', async () => {
     const upload = await seedUpload();
-    await seedTrack({ externalIds: { isrc: 'ESA452300137' } });
+    await seedTrack({ externalIsrc: 'ESA452300137' });
 
     const result = await matchCatalog(candidate({ isrc: 'ESA452300137' }), OWNER);
-    expect(result).toEqual({ kind: 'upload', uploadId: upload._id.toString(), tier: 'sha256' });
+    expect(result).toEqual({ kind: 'upload', uploadId: upload.id, tier: 'sha256' });
   });
 
   it('ISRC wins over the fingerprint tier', async () => {
-    const byIsrc = await seedTrack({ externalIds: { isrc: 'ESA452300137' }, duration: 30 });
+    const byIsrc = await seedTrack({ externalIsrc: 'ESA452300137', duration: 30 });
     const byFingerprint = await seedTrack({ title: 'Other', duration: 30 });
-    await TrackFingerprintModel.create({
-      trackId: byFingerprint._id.toString(),
-      fingerprint: corpus.reference,
-      fingerprintDurationSec: 30,
-    });
+    await seedFingerprint(byFingerprint.id, corpus.reference, 30);
 
     const result = await matchCatalog(
       candidate({
@@ -380,17 +423,13 @@ describe('matchCatalog — tier precedence', () => {
 
     expect(result.kind).toBe('track');
     if (result.kind !== 'track') throw new Error('unreachable');
-    expect(result.trackId).toBe(byIsrc._id.toString());
+    expect(result.trackId).toBe(byIsrc.id);
     expect(result.tier).toBe('isrc');
   });
 
   it('the fingerprint tier wins over the fuzzy tier', async () => {
     const byFingerprint = await seedTrack({ title: 'Not The Same Title At All', duration: 30 });
-    await TrackFingerprintModel.create({
-      trackId: byFingerprint._id.toString(),
-      fingerprint: corpus.reference,
-      fingerprintDurationSec: 30,
-    });
+    await seedFingerprint(byFingerprint.id, corpus.reference, 30);
     await seedTrack({ title: 'Midnight Ferry', duration: 30 });
 
     const result = await matchCatalog(
@@ -400,7 +439,7 @@ describe('matchCatalog — tier precedence', () => {
 
     expect(result.kind).toBe('track');
     if (result.kind !== 'track') throw new Error('unreachable');
-    expect(result.trackId).toBe(byFingerprint._id.toString());
+    expect(result.trackId).toBe(byFingerprint.id);
     expect(result.tier).toBe('fingerprint');
   });
 });

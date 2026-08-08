@@ -45,7 +45,9 @@
  */
 
 import { ISRC_PATTERN, normalizeIsrc, normalizeNameKey } from '@syra/shared-types';
-import { IsrcRegistryModel } from '../../models/IsrcRegistry';
+import { eq } from 'drizzle-orm';
+import { getDb } from '../../db/postgres';
+import { isrcRegistry } from '../../db/schema/catalog';
 import { logger } from '../../utils/logger';
 import { splitArtistCredit } from './artistNames';
 
@@ -372,9 +374,16 @@ function writeCache(isrc: string, result: IsrcLookupResult): void {
 
 /** The MusicBrainz slice, which is a point query on a unique index. */
 async function resolveFromRegistry(isrc: string): Promise<IsrcRecording | undefined> {
-  const row = await IsrcRegistryModel.findOne({ isrc })
-    .select('isrc title artistCredit lengthMs')
-    .lean();
+  const [row] = await getDb()
+    .select({
+      isrc: isrcRegistry.isrc,
+      title: isrcRegistry.title,
+      artistCredit: isrcRegistry.artistCredit,
+      lengthMs: isrcRegistry.lengthMs,
+    })
+    .from(isrcRegistry)
+    .where(eq(isrcRegistry.isrc, isrc))
+    .limit(1);
   if (!row) return undefined;
 
   return {
@@ -382,8 +391,10 @@ async function resolveFromRegistry(isrc: string): Promise<IsrcRecording | undefi
     source: 'isrc-registry',
     ...(row.title && { title: row.title }),
     ...(row.artistCredit && { artistName: row.artistCredit }),
-    // Milliseconds in the dump, seconds everywhere in this pipeline.
-    ...(row.lengthMs !== undefined && row.lengthMs > 0 && { durationSec: row.lengthMs / 1000 }),
+    // Milliseconds in the dump, seconds everywhere in this pipeline. `lengthMs`
+    // is nullable in Postgres where Mongo simply omitted the key, so the guard
+    // is `!== null` as well as `> 0`.
+    ...(row.lengthMs !== null && row.lengthMs > 0 && { durationSec: row.lengthMs / 1000 }),
   };
 }
 

@@ -2,8 +2,9 @@ import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll, mock 
 import type { NextFunction, Response } from 'express';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import type { RadioPage } from '@syra/shared-types';
-import { connect, clear, disconnect } from '../test/mongo';
-import { UserMusicPreferencesModel } from '../models/UserMusicPreferences';
+import { clearDb, connectDb, disconnectDb } from '../test/postgres';
+import { getDb } from '../db/postgres';
+import { userMusicPreferences } from '../db/schema/user';
 import { makeArtist, makeTrack } from '../services/radio/radioFixtures';
 import { readRadioStation } from '../services/radio/radioStationStore';
 import { PREVIEW_DURATION_SEC } from '../services/ingest/previewClip';
@@ -38,9 +39,15 @@ const fakeRedis = {
 // here — after the static imports above — still takes effect.
 mock.module('../utils/redis', () => ({ getRedisClient: () => fakeRedis }));
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+/**
+ * One database, matching `radioFixtures`. The catalogue it seeds was already
+ * Postgres; Task 15 moved the last three things this suite touched on Mongoose
+ * — the co-listen graph, the taste weights and the listener's music preferences
+ * — so the Mongo hooks are gone.
+ */
+beforeAll(connectDb);
+afterEach(clearDb);
+afterAll(disconnectDb);
 
 beforeEach(() => {
   fakeRedis.isReady = true;
@@ -151,7 +158,7 @@ describe('GET /api/radio — catalog availability', () => {
     const res = await callRadio({ seedType: 'genre', seedId: GENRE, limit: '20' }, { userId: 'user-1' });
 
     expect(res.statusCode).toBe(200);
-    expect(trackIdsOf(res)).not.toContain(struck._id.toString());
+    expect(trackIdsOf(res)).not.toContain(struck.id);
     expect(pageOf(res).tracks.length).toBeGreaterThan(0);
   });
 
@@ -176,7 +183,9 @@ describe('GET /api/radio — explicit content preference', () => {
       popularity: MAX_POPULARITY,
       isExplicit: true,
     });
-    await UserMusicPreferencesModel.create({ oxyUserId: 'user-clean', explicitContent: false });
+    await getDb()
+      .insert(userMusicPreferences)
+      .values({ oxyUserId: 'user-clean', explicitContent: false });
 
     const res = await callRadio(
       { seedType: 'genre', seedId: GENRE, limit: '20' },
@@ -184,7 +193,7 @@ describe('GET /api/radio — explicit content preference', () => {
     );
 
     expect(res.statusCode).toBe(200);
-    expect(trackIdsOf(res)).not.toContain(explicit._id.toString());
+    expect(trackIdsOf(res)).not.toContain(explicit.id);
   });
 
   it('programmes explicit tracks for a listener who left them on', async () => {
@@ -202,7 +211,7 @@ describe('GET /api/radio — explicit content preference', () => {
       { userId: 'user-explicit-ok' }
     );
 
-    expect(trackIdsOf(res)).toContain(explicit._id.toString());
+    expect(trackIdsOf(res)).toContain(explicit.id);
   });
 });
 

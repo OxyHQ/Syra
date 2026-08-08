@@ -1,11 +1,14 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
-import mongoose from 'mongoose';
-import { connect, clear, disconnect } from '../test/mongo';
-import RoomModel, { RoomStatus, RoomType, OwnerType } from '../models/Room';
-import RecordingModel, { RecordingStatus, RecordingAccess } from '../models/Recording';
-import { PlaylistModel } from '../models/Playlist';
+import { connectDb, clearDb, disconnectDb } from '../test/postgres';
+import { createRoom, updateRoom, type CreateRoomInput } from '../db/rooms/rooms';
+import { createRecording } from '../db/rooms/recordings';
+import { RoomStatus, RoomType, OwnerType, SpeakerPermission } from '../db/rooms/types';
+import { uuidv7 } from '@oxyhq/db';
+import { getDb } from '../db/postgres';
+import { catalogEntities, tracks } from '../db/schema/catalog';
+import { playlists } from '../db/schema/library';
 import { subjectProviderFor } from './subjects/registry';
-import { ReportedType } from '../models/Report';
+import { ReportedType } from './types';
 import type { ModerationResource } from './subjects/types';
 
 /**
@@ -18,14 +21,27 @@ import type { ModerationResource } from './subjects/types';
  * change would quietly add.
  */
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+// One store now: Task 14 took rooms and recordings to Postgres, joining the
+// playlists and catalog entities this file already exercised there.
+beforeAll(connectDb);
+afterEach(clearDb);
+afterAll(disconnectDb);
 
 const HOST = 'oxy-host-1';
 
-async function makeRoom(overrides: Record<string, unknown> = {}) {
-  return await RoomModel.create({
+/**
+ * The stream fields a room only ever acquires through an ingress path, which is
+ * why `createRoom` does not accept them and this fixture applies them in a
+ * second update.
+ */
+type StreamOverrides = Partial<{
+  rtmpUrl: string;
+  rtmpStreamKey: string;
+  activeStreamUrl: string;
+}>;
+
+async function makeRoom(stream: StreamOverrides = {}, overrides: Partial<CreateRoomInput> = {}) {
+  const room = await createRoom({
     title: 'Late night talk',
     description: 'A description the host wrote',
     topic: 'music',
@@ -36,10 +52,19 @@ async function makeRoom(overrides: Record<string, unknown> = {}) {
     status: RoomStatus.LIVE,
     participants: ['listener-a', 'listener-b'],
     speakers: ['speaker-a'],
-    streamTitle: 'Stream title',
-    streamDescription: 'Stream description',
+    maxParticipants: 100,
+    speakerPermission: SpeakerPermission.INVITED,
     ...overrides,
   });
+
+  const withStream = await updateRoom(room.id, {
+    streamTitle: 'Stream title',
+    streamDescription: 'Stream description',
+    ...stream,
+  });
+
+  if (withStream === undefined) throw new Error('fixture room vanished');
+  return withStream;
 }
 
 const provider = subjectProviderFor(ReportedType.ROOM);
@@ -51,11 +76,11 @@ describe('room subject provider', () => {
 
   it('pins the host-authored text and names the host as author', async () => {
     const room = await makeRoom();
-    const snapshot = await provider?.snapshot(String(room._id));
+    const snapshot = await provider?.snapshot(room.id);
 
     expect(snapshot).not.toBeNull();
     expect(snapshot?.subject.type).toBe('custom.syra.room');
-    expect(snapshot?.subject.externalId).toBe(String(room._id));
+    expect(snapshot?.subject.externalId).toBe(room.id);
     // The host wrote the title and description, so the host is answerable for them.
     expect(snapshot?.subject.author?.oxyUserId).toBe(HOST);
 
@@ -79,7 +104,7 @@ describe('room subject provider', () => {
    */
   it('never carries the participant or speaker list', async () => {
     const room = await makeRoom();
-    const snapshot = await provider?.snapshot(String(room._id));
+    const snapshot = await provider?.snapshot(room.id);
     const serialised = JSON.stringify(snapshot);
 
     expect(serialised).not.toContain('listener-a');
@@ -100,19 +125,18 @@ describe('room subject provider', () => {
    */
   it('declares that a recording exists without attaching it', async () => {
     const room = await makeRoom();
-    await RecordingModel.create({
-      roomId: String(room._id),
+    await createRecording({
+      id: uuidv7(),
+      roomId: room.id,
       roomTitle: room.title,
       host: HOST,
-      status: RecordingStatus.READY,
       egressId: 'egress-1',
       objectKey: 'recordings/room-1.ogg',
       startedAt: new Date(),
-      access: RecordingAccess.PUBLIC,
       expiresAt: new Date(Date.now() + 1_000_000),
     });
 
-    const snapshot = await provider?.snapshot(String(room._id));
+    const snapshot = await provider?.snapshot(room.id);
     expect(snapshot?.content).toMatchObject({
       data: { recordingExists: true, recordingAttached: false },
     });
@@ -129,8 +153,10 @@ describe('room subject provider', () => {
    *
    * `rtmpStreamKey` + `rtmpUrl` are what a broadcaster authenticates with, so a
    * juror who read them could broadcast into the very room they were asked to
-   * judge. This is the test that keeps the provider's projection a whitelist: it
-   * fails if anyone widens it to a bare `findById()`.
+   * judge. The provider reads through `publicColumns`, so the four credentials
+   * are absent from the row's TYPE and reaching for one fails `tsc` — this is
+   * the behavioural half of that guard, and it fails if the provider is ever
+   * pointed at a credential-carrying read instead.
    */
   it('never carries the RTMP stream credential a juror could broadcast with', async () => {
     const room = await makeRoom({
@@ -138,8 +164,12 @@ describe('room subject provider', () => {
       rtmpStreamKey: 'sk_live_super_secret_stream_key',
       activeStreamUrl: 'https://cdn.example/stream.m3u8',
     });
+    // Not a vacuous check: the fixture really did store the credential, so the
+    // assertions below measure the provider withholding it rather than a row
+    // that never had one.
+    expect(room.rtmpStreamKey).toBe('sk_live_super_secret_stream_key');
 
-    const snapshot = await provider?.snapshot(String(room._id));
+    const snapshot = await provider?.snapshot(room.id);
     const serialised = JSON.stringify(snapshot);
 
     expect(serialised).not.toContain('sk_live_super_secret_stream_key');
@@ -151,18 +181,29 @@ describe('room subject provider', () => {
 
   it('says so plainly when there is no recording', async () => {
     const room = await makeRoom();
-    const snapshot = await provider?.snapshot(String(room._id));
+    const snapshot = await provider?.snapshot(room.id);
     expect(snapshot?.content).toMatchObject({ data: { recordingExists: false } });
   });
 
   it('returns null for a deleted room and for an id that is not one', async () => {
-    expect(await provider?.snapshot(new mongoose.Types.ObjectId().toHexString())).toBeNull();
+    // A well-formed id naming no row, and a malformed one. Both answer null, and
+    // the first is the one that matters: `isLiveEntityId` accepts a uuid v7, so
+    // it reaches the query rather than being turned away by a shape guard.
+    expect(await provider?.snapshot(uuidv7())).toBeNull();
     expect(await provider?.snapshot('not-an-object-id')).toBeNull();
   });
 });
 
 describe('playlist subject provider', () => {
   const playlistProvider = subjectProviderFor(ReportedType.PLAYLIST);
+
+  async function makePlaylist(over: Partial<typeof playlists.$inferInsert>) {
+    const [row] = await getDb()
+      .insert(playlists)
+      .values({ name: 'Mix', ownerOxyUserId: 'oxy-user-9', ownerUsername: 'owner9', ...over })
+      .returning({ id: playlists.id });
+    return row.id;
+  }
 
   /**
    * A private playlist has no audience, so a report about one either came from its
@@ -171,28 +212,102 @@ describe('playlist subject provider', () => {
    * justified.
    */
   it('declines a private playlist', async () => {
-    const playlist = await PlaylistModel.create({
-      name: 'Private mix',
-      ownerOxyUserId: 'oxy-user-9',
-      ownerUsername: 'owner9',
-      visibility: 'private',
-    });
-    expect(await playlistProvider?.snapshot(String(playlist._id))).toBeNull();
+    const id = await makePlaylist({ name: 'Private mix', visibility: 'private' });
+    expect(await playlistProvider?.snapshot(id)).toBeNull();
+  });
+
+  it('declines an unlisted playlist, which is not public either', async () => {
+    const id = await makePlaylist({ name: 'Unlisted mix', visibility: 'unlisted' });
+    expect(await playlistProvider?.snapshot(id)).toBeNull();
+  });
+
+  it('declines an id that names no playlist, without an id-shape guard', async () => {
+    // The Mongo provider opened with `mongoose.isValidObjectId`, which rejected
+    // every uuid v7 the catalogue mints today. `playlists.id` is `text`, so the
+    // query answers both cases: a malformed id and a well-formed unknown one.
+    expect(await playlistProvider?.snapshot('not-an-object-id')).toBeNull();
+    expect(await playlistProvider?.snapshot('01936f00-0000-7000-8000-000000000000')).toBeNull();
   });
 
   it('describes a public playlist and names its owner', async () => {
-    const playlist = await PlaylistModel.create({
+    const id = await makePlaylist({
       name: 'Public mix',
       description: 'Words the owner wrote',
-      ownerOxyUserId: 'oxy-user-9',
-      ownerUsername: 'owner9',
       visibility: 'public',
     });
-    const snapshot = await playlistProvider?.snapshot(String(playlist._id));
+    const snapshot = await playlistProvider?.snapshot(id);
     expect(snapshot?.subject.author?.oxyUserId).toBe('oxy-user-9');
     expect(snapshot?.content).toMatchObject({
       type: 'listing',
       data: { title: 'Public mix', description: 'Words the owner wrote' },
     });
+  });
+});
+
+describe('the catalog providers scope the discriminator', () => {
+  /**
+   * `catalog_entities` holds artists AND persons in one table. `ArtistModel` is
+   * a Mongoose discriminator, so every query through it carried `type: 'artist'`
+   * implicitly; drizzle adds nothing, so both providers that read it have to
+   * write the filter out.
+   *
+   * EVERY fixture here is a `person` behind an id an artist would be expected
+   * at, because that is the only shape that tells the scoped query from the
+   * unscoped one — a fixture set containing only artists passes either way.
+   * The Task 11 review found `trackProvider` missing the filter while
+   * `artistProvider`, 85 lines above it, had it.
+   */
+  const artistProvider = subjectProviderFor(ReportedType.ARTIST);
+  const trackProvider = subjectProviderFor(ReportedType.TRACK);
+
+  async function makeEntity(type: 'artist' | 'person', over: Partial<typeof catalogEntities.$inferInsert> = {}) {
+    const id = uuidv7();
+    await getDb().insert(catalogEntities).values({
+      id,
+      type,
+      name: `${type} name`,
+      nameKey: id,
+      source: 'upload',
+      claimedByOxyUserId: `oxy-${type}-claimant`,
+      ...over,
+    });
+    return id;
+  }
+
+  async function makeTrack(artistId: string) {
+    const id = uuidv7();
+    await getDb()
+      .insert(tracks)
+      .values({ id, title: 'A track', artistId, artistName: 'whoever', duration: 100, source: 'upload' });
+    return id;
+  }
+
+  it('artistProvider declines a person reported as an artist profile', async () => {
+    expect(await artistProvider?.snapshot(await makeEntity('person'))).toBeNull();
+  });
+
+  it('artistProvider still describes a real artist', async () => {
+    const snapshot = await artistProvider?.snapshot(await makeEntity('artist'));
+    expect(snapshot?.subject.author?.oxyUserId).toBe('oxy-artist-claimant');
+  });
+
+  /**
+   * The one the review caught. A track whose `artist_id` names a person must
+   * NOT name that person as the report's author — the whole point of an author
+   * on a moderation subject is that it is who published the thing.
+   */
+  it('trackProvider names no author when the track points at a person', async () => {
+    const snapshot = await trackProvider?.snapshot(await makeTrack(await makeEntity('person')));
+
+    expect(snapshot?.subject.author).toBeUndefined();
+    // And the person's name is not handed to the jury as context either.
+    expect(JSON.stringify(snapshot?.context ?? [])).not.toContain('person name');
+  });
+
+  it('trackProvider still names the artist when the track points at one', async () => {
+    const snapshot = await trackProvider?.snapshot(await makeTrack(await makeEntity('artist')));
+
+    expect(snapshot?.subject.author?.oxyUserId).toBe('oxy-artist-claimant');
+    expect(JSON.stringify(snapshot?.context ?? [])).toContain('artist name');
   });
 });

@@ -1,22 +1,45 @@
 import { Router, Response } from 'express';
 import multer from 'multer';
-import House, {
+import { isLiveEntityId } from '@oxyhq/db';
+import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
+import {
+  addHouseMember,
+  canAccessRooms,
+  canSeeHouse,
+  createHouse,
+  deleteHouse,
+  findHouseMembers,
+  findHouseWithMembers,
+  findMember,
+  findMembersByHouseIds,
+  getMemberRole,
+  hasRole,
+  isMember,
+  isSelfJoinable,
+  listHouses,
+  removeHouseMember,
+  updateHouse,
+  updateHouseMemberRole,
+  visibilityOf,
+} from '../db/rooms/houses';
+import { listRooms } from '../db/rooms/rooms';
+import { listActiveSeriesForHouse } from '../db/rooms/series';
+import { serializeHouseFor, stripInternalStreamFields } from '../db/rooms/serialize';
+import {
   DEFAULT_HOUSE_VISIBILITY,
   HouseDiscovery,
   HouseJoin,
   HouseMemberRole,
   HouseRooms,
-  IHouse,
-  IHouseMember,
-  IHouseVisibility,
-} from '../models/House';
-import Room, { RoomStatus } from '../models/Room';
-import Series from '../models/Series';
-import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
-import { stripInternalStreamFields } from './rooms.routes';
+  RoomStatus,
+  RoomType,
+  type HouseVisibility,
+} from '../db/rooms/types';
+import { describeErrorSafely } from '../utils/error';
+import { getParam } from '../utils/reqParams';
 import { logger } from '../utils/logger';
 import { processImage } from '../utils/imageProcessor';
-import { uploadObject, deleteObject, getAgoraHouseAvatarKey, getAgoraHouseCoverKey, getCdnUrl, cdnUrlToKey } from '../utils/spaces';
+import { uploadObject, deleteObject, getAgoraHouseAvatarKey, getAgoraHouseCoverKey, cdnUrlToKey } from '../utils/spaces';
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 const upload = multer({
@@ -55,15 +78,15 @@ function parseAxis<T extends string>(value: unknown, allowed: readonly T[]): T |
  */
 function resolveVisibility(
   input: unknown,
-  base: IHouseVisibility,
-): { visibility: IHouseVisibility } | { error: string } {
+  base: HouseVisibility,
+): { visibility: HouseVisibility } | { error: string } {
   if (input === undefined) return { visibility: base };
   if (typeof input !== 'object' || input === null || Array.isArray(input)) {
     return { error: 'visibility must be an object' };
   }
 
   const raw = input as Record<string, unknown>;
-  const result: IHouseVisibility = { ...base };
+  const result: HouseVisibility = { ...base };
 
   if (raw.discovery !== undefined) {
     const discovery = parseAxis(raw.discovery, Object.values(HouseDiscovery));
@@ -82,33 +105,6 @@ function resolveVisibility(
   }
 
   return { visibility: result };
-}
-
-/**
- * Serialize a house for a caller who has passed {@link IHouse.canSeeHouse}.
- *
- * The member roster names every user in the house, so it is withheld from
- * non-members whenever the house is content-sealed (`rooms: members`) — those
- * callers may know the house exists without learning who is in it. When
- * `rooms: anyone`, participants are visible in the rooms anyway, so the roster
- * adds no disclosure and is kept. `memberCount` replaces the withheld roster so
- * the UI can still show how big the house is.
- *
- * `createdBy` deliberately survives the withholding: a discoverable sealed house
- * is one you might ask to be let into, which requires knowing who owns it. It is
- * the one member id a non-member is meant to learn.
- */
-function serializeHouseFor(house: IHouse, userId: string | undefined): Record<string, unknown> {
-  const serialized = house.toObject();
-
-  const sealed = house.visibility.rooms === HouseRooms.MEMBERS;
-  const isMember = userId !== undefined && house.isMember(userId);
-  if (sealed && !isMember) {
-    const { members, ...withoutRoster } = serialized;
-    return { ...withoutRoster, memberCount: members.length };
-  }
-
-  return serialized;
 }
 
 /**
@@ -133,36 +129,30 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: resolvedVisibility.error });
     }
 
-    const house = new House({
+    // The creator's `owner` membership is inserted in the same transaction as
+    // the house — the roster is a second table now, so "a house always has an
+    // owner" is a property of two writes rather than one document.
+    const { house, members } = await createHouse({
       name: name.trim(),
-      description: description ? String(description).trim() : undefined,
-      avatar: avatar ? String(avatar).trim() : undefined,
-      coverImage: coverImage ? String(coverImage).trim() : undefined,
+      description: description ? String(description).trim() : null,
+      avatar: avatar ? String(avatar).trim() : null,
+      coverImage: coverImage ? String(coverImage).trim() : null,
       createdBy: userId,
       visibility: resolvedVisibility.visibility,
       tags: Array.isArray(tags) ? tags.map((t: unknown) => String(t).trim()).filter(Boolean) : [],
-      members: [
-        {
-          userId,
-          role: HouseMemberRole.OWNER,
-          joinedAt: new Date(),
-        },
-      ],
     });
 
-    await house.save();
-
-    logger.info(`House created: ${house._id} by ${userId}`);
+    logger.info(`House created: ${house.id} by ${userId}`);
 
     res.status(201).json({
       message: 'House created successfully',
-      house,
+      house: serializeHouseFor(house, members, userId),
     });
   } catch (error) {
-    logger.error('Error creating house:', { userId: req.user?.id, error });
+    logger.error('Error creating house:', { userId: req.user?.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error creating house',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -180,53 +170,38 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     const userId = req.user?.id;
     const { limit = '20', cursor, search } = req.query;
 
-    // Composed with $and so the visibility $or can never be overwritten by a
-    // later filter that also needs $or. `$nin` also matches a document with no
-    // `visibility.discovery` at all, so an untouched legacy house stays listed —
-    // the same fail-open-to-visible default a brand-new house gets.
-    const conditions: Record<string, unknown>[] = [
-      {
-        $or: [
-          { 'visibility.discovery': { $nin: [HouseDiscovery.UNLISTED, HouseDiscovery.HIDDEN] } },
-          ...(userId ? [{ 'members.userId': userId }] : []),
-        ],
-      },
-    ];
-
-    // Cursor-based pagination
-    if (cursor && typeof cursor === 'string') {
-      conditions.push({ _id: { $lt: cursor } });
-    }
-
-    // Optional text search
-    if (search && typeof search === 'string' && search.trim().length > 0) {
-      conditions.push({ $text: { $search: search.trim() } });
-    }
-
     const limitNum = Math.min(Math.max(parseInt(limit as string, 10) || 20, 1), 100);
 
-    // Not `.lean()`: serializing each house needs the schema's instance methods
-    // to decide whether this caller may see its member roster.
-    const houses = await House.find({ $and: conditions })
-      .sort({ createdAt: -1 })
-      .limit(limitNum + 1);
+    const houses = await listHouses({
+      userId,
+      cursor: typeof cursor === 'string' ? cursor : undefined,
+      search: typeof search === 'string' && search.trim().length > 0 ? search.trim() : undefined,
+      limit: limitNum + 1,
+    });
 
     const hasMore = houses.length > limitNum;
     const housesToReturn = hasMore ? houses.slice(0, limitNum) : houses;
     const nextCursor = hasMore && housesToReturn.length > 0
-      ? housesToReturn[housesToReturn.length - 1]._id.toString()
+      ? housesToReturn[housesToReturn.length - 1].id
       : undefined;
 
+    // One batched roster read for the whole page. Serializing each house needs
+    // its members — to decide whether this caller may see the roster at all —
+    // and a per-house query would be N round trips for one screen.
+    const rosters = await findMembersByHouseIds(housesToReturn.map((house) => house.id));
+
     res.json({
-      houses: housesToReturn.map((house) => serializeHouseFor(house, userId)),
+      houses: housesToReturn.map((house) =>
+        serializeHouseFor(house, rosters.get(house.id) ?? [], userId)
+      ),
       hasMore,
       nextCursor,
     });
   } catch (error) {
-    logger.error('Error fetching houses:', { userId: req.user?.id, error, query: req.query });
+    logger.error('Error fetching houses:', { userId: req.user?.id, error: describeErrorSafely(error), query: req.query });
     res.status(500).json({
       message: 'Error fetching houses',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -235,26 +210,26 @@ router.get('/', async (req: AuthRequest, res: Response) => {
  * Get house details
  * GET /api/houses/:id
  *
- * A `private` house is 404 to a non-member so its existence is never
- * confirmed; an `invite_only` house is readable but without its roster.
+ * A `hidden` house is 404 to a non-member so its existence is never confirmed;
+ * a `members` house is readable but without its roster.
  */
 router.get('/:id', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
 
-    const house = await House.findById(id);
+    const found = isLiveEntityId(id) ? await findHouseWithMembers(id) : undefined;
 
-    if (!house || !house.canSeeHouse(userId)) {
+    if (!found || !canSeeHouse(found.house, found.members, userId)) {
       return res.status(404).json({ message: 'House not found' });
     }
 
-    res.json({ house: serializeHouseFor(house, userId) });
+    res.json({ house: serializeHouseFor(found.house, found.members, userId) });
   } catch (error) {
-    logger.error('Error fetching house:', { userId: req.user?.id, houseId: req.params.id, error });
+    logger.error('Error fetching house:', { userId: req.user?.id, houseId: req.params.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error fetching house',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -266,63 +241,74 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
 router.patch('/:id', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
     const { name, description, avatar, coverImage, tags, visibility } = req.body;
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const house = await House.findById(id);
+    const found = isLiveEntityId(id) ? await findHouseWithMembers(id) : undefined;
 
-    if (!house) {
+    if (!found) {
       return res.status(404).json({ message: 'House not found' });
     }
 
     // Must be admin or owner to update
-    if (!house.hasRole(userId, HouseMemberRole.ADMIN)) {
+    if (!hasRole(found.members, userId, HouseMemberRole.ADMIN)) {
       return res.status(403).json({ message: 'Only admins or owner can update the house' });
     }
 
-    // Apply updates
+    /**
+     * `null` CLEARS and `undefined` LEAVES ALONE. The Mongoose original assigned
+     * `undefined` to clear and `save()` issued `$unset`; drizzle DROPS an
+     * `undefined`-valued key, so keeping that spelling would make "remove the
+     * avatar" silently keep the old one — the exact defect that shipped twice in
+     * earlier verticals.
+     */
+    const update: Parameters<typeof updateHouse>[1] = {};
+
     if (name !== undefined && typeof name === 'string' && name.trim().length > 0) {
-      house.name = name.trim();
+      update.name = name.trim();
     }
     if (description !== undefined) {
-      house.description = description ? String(description).trim() : undefined;
+      update.description = description ? String(description).trim() : null;
     }
     if (avatar !== undefined) {
-      house.avatar = avatar ? String(avatar).trim() : undefined;
+      update.avatar = avatar ? String(avatar).trim() : null;
     }
     if (coverImage !== undefined) {
-      house.coverImage = coverImage ? String(coverImage).trim() : undefined;
+      update.coverImage = coverImage ? String(coverImage).trim() : null;
     }
     if (tags !== undefined && Array.isArray(tags)) {
-      house.tags = tags.map((t: unknown) => String(t).trim()).filter(Boolean);
+      update.tags = tags.map((t: unknown) => String(t).trim()).filter(Boolean);
     }
     if (visibility !== undefined) {
       // Merge onto the house's CURRENT visibility so a partial update touches
       // only the axes it names.
-      const resolvedVisibility = resolveVisibility(visibility, house.visibility);
+      const resolvedVisibility = resolveVisibility(visibility, visibilityOf(found.house));
       if ('error' in resolvedVisibility) {
         return res.status(400).json({ message: resolvedVisibility.error });
       }
-      house.visibility = resolvedVisibility.visibility;
+      update.visibility = resolvedVisibility.visibility;
     }
 
-    await house.save();
+    const house = await updateHouse(found.house.id, update);
+    if (!house) {
+      return res.status(404).json({ message: 'House not found' });
+    }
 
     logger.info(`House updated: ${id} by ${userId}`);
 
     res.json({
       message: 'House updated successfully',
-      house,
+      house: serializeHouseFor(house, found.members, userId),
     });
   } catch (error) {
-    logger.error('Error updating house:', { userId: req.user?.id, houseId: req.params.id, error });
+    logger.error('Error updating house:', { userId: req.user?.id, houseId: req.params.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error updating house',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -334,33 +320,33 @@ router.patch('/:id', async (req: AuthRequest, res: Response) => {
 router.delete('/:id', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const house = await House.findById(id);
+    const found = isLiveEntityId(id) ? await findHouseWithMembers(id) : undefined;
 
-    if (!house) {
+    if (!found) {
       return res.status(404).json({ message: 'House not found' });
     }
 
     // Only the owner can delete the house
-    if (!house.hasRole(userId, HouseMemberRole.OWNER)) {
+    if (!hasRole(found.members, userId, HouseMemberRole.OWNER)) {
       return res.status(403).json({ message: 'Only the owner can delete the house' });
     }
 
-    await House.findByIdAndDelete(id);
+    await deleteHouse(found.house.id);
 
     logger.info(`House deleted: ${id} by ${userId}`);
 
     res.json({ success: true });
   } catch (error) {
-    logger.error('Error deleting house:', { userId: req.user?.id, houseId: req.params.id, error });
+    logger.error('Error deleting house:', { userId: req.user?.id, houseId: req.params.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error deleting house',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -373,7 +359,7 @@ router.delete('/:id', async (req: AuthRequest, res: Response) => {
 router.post('/:id/members', async (req: AuthRequest, res: Response) => {
   try {
     const currentUserId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
     const { userId: targetUserId, role } = req.body;
 
     if (!currentUserId) {
@@ -384,19 +370,19 @@ router.post('/:id/members', async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'userId is required' });
     }
 
-    const house = await House.findById(id);
+    const found = isLiveEntityId(id) ? await findHouseWithMembers(id) : undefined;
 
-    if (!house) {
+    if (!found) {
       return res.status(404).json({ message: 'House not found' });
     }
 
     // Must be admin or owner to add members
-    if (!house.hasRole(currentUserId, HouseMemberRole.ADMIN)) {
+    if (!hasRole(found.members, currentUserId, HouseMemberRole.ADMIN)) {
       return res.status(403).json({ message: 'Only admins or owner can add members' });
     }
 
     // Check if already a member
-    if (house.isMember(targetUserId)) {
+    if (isMember(found.members, targetUserId)) {
       return res.status(400).json({ message: 'User is already a member' });
     }
 
@@ -406,25 +392,23 @@ router.post('/:id/members', async (req: AuthRequest, res: Response) => {
       ? (role as HouseMemberRole)
       : HouseMemberRole.MEMBER;
 
-    house.members.push({
-      userId: targetUserId,
-      role: assignedRole,
-      joinedAt: new Date(),
-    } as IHouseMember);
-
-    await house.save();
+    await addHouseMember(found.house.id, targetUserId, assignedRole);
 
     logger.info(`User ${targetUserId} added to house ${id} as ${assignedRole} by ${currentUserId}`);
 
     res.json({
       message: 'Member added successfully',
-      house,
+      house: serializeHouseFor(
+        found.house,
+        await findHouseMembers(found.house.id),
+        currentUserId
+      ),
     });
   } catch (error) {
-    logger.error('Error adding member:', { userId: req.user?.id, houseId: req.params.id, error });
+    logger.error('Error adding member:', { userId: req.user?.id, houseId: req.params.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error adding member',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -437,7 +421,8 @@ router.post('/:id/members', async (req: AuthRequest, res: Response) => {
 router.patch('/:id/members/:userId', async (req: AuthRequest, res: Response) => {
   try {
     const currentUserId = req.user?.id;
-    const { id, userId: targetUserId } = req.params;
+    const id = getParam(req, 'id');
+    const targetUserId = getParam(req, 'userId');
     const { role } = req.body;
 
     if (!currentUserId) {
@@ -448,19 +433,19 @@ router.patch('/:id/members/:userId', async (req: AuthRequest, res: Response) => 
       return res.status(400).json({ message: 'role is required' });
     }
 
-    const house = await House.findById(id);
+    const found = isLiveEntityId(id) ? await findHouseWithMembers(id) : undefined;
 
-    if (!house) {
+    if (!found) {
       return res.status(404).json({ message: 'House not found' });
     }
 
     // Must be admin or owner to update member roles
-    if (!house.hasRole(currentUserId, HouseMemberRole.ADMIN)) {
+    if (!hasRole(found.members, currentUserId, HouseMemberRole.ADMIN)) {
       return res.status(403).json({ message: 'Only admins or owner can update member roles' });
     }
 
     // Find the target member
-    const targetMember = house.members.find((m: IHouseMember) => m.userId === targetUserId);
+    const targetMember = findMember(found.members, targetUserId);
     if (!targetMember) {
       return res.status(404).json({ message: 'Member not found' });
     }
@@ -482,25 +467,28 @@ router.patch('/:id/members/:userId', async (req: AuthRequest, res: Response) => 
     }
 
     // Non-owners cannot promote to admin
-    const currentMemberRole = house.getMemberRole(currentUserId);
+    const currentMemberRole = getMemberRole(found.members, currentUserId);
     if (role === HouseMemberRole.ADMIN && currentMemberRole !== HouseMemberRole.OWNER) {
       return res.status(403).json({ message: 'Only the owner can promote members to admin' });
     }
 
-    targetMember.role = role as HouseMemberRole;
-    await house.save();
+    await updateHouseMemberRole(found.house.id, targetUserId, role as HouseMemberRole);
 
     logger.info(`User ${targetUserId} role updated to ${role} in house ${id} by ${currentUserId}`);
 
     res.json({
       message: 'Member role updated successfully',
-      house,
+      house: serializeHouseFor(
+        found.house,
+        await findHouseMembers(found.house.id),
+        currentUserId
+      ),
     });
   } catch (error) {
-    logger.error('Error updating member role:', { userId: req.user?.id, houseId: req.params.id, targetUserId: req.params.userId, error });
+    logger.error('Error updating member role:', { userId: req.user?.id, houseId: req.params.id, targetUserId: req.params.userId, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error updating member role',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -512,27 +500,28 @@ router.patch('/:id/members/:userId', async (req: AuthRequest, res: Response) => 
 router.delete('/:id/members/:userId', async (req: AuthRequest, res: Response) => {
   try {
     const currentUserId = req.user?.id;
-    const { id, userId: targetUserId } = req.params;
+    const id = getParam(req, 'id');
+    const targetUserId = getParam(req, 'userId');
 
     if (!currentUserId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const house = await House.findById(id);
+    const found = isLiveEntityId(id) ? await findHouseWithMembers(id) : undefined;
 
-    if (!house) {
+    if (!found) {
       return res.status(404).json({ message: 'House not found' });
     }
 
     const isSelfLeave = currentUserId === targetUserId;
 
     // If not self-leave, must be admin or owner
-    if (!isSelfLeave && !house.hasRole(currentUserId, HouseMemberRole.ADMIN)) {
+    if (!isSelfLeave && !hasRole(found.members, currentUserId, HouseMemberRole.ADMIN)) {
       return res.status(403).json({ message: 'Only admins or owner can remove members' });
     }
 
     // Find the target member
-    const targetMember = house.members.find((m: IHouseMember) => m.userId === targetUserId);
+    const targetMember = findMember(found.members, targetUserId);
     if (!targetMember) {
       return res.status(404).json({ message: 'Member not found' });
     }
@@ -544,15 +533,13 @@ router.delete('/:id/members/:userId', async (req: AuthRequest, res: Response) =>
 
     // Non-owners cannot remove admins
     if (targetMember.role === HouseMemberRole.ADMIN && !isSelfLeave) {
-      const currentRole = house.getMemberRole(currentUserId);
+      const currentRole = getMemberRole(found.members, currentUserId);
       if (currentRole !== HouseMemberRole.OWNER) {
         return res.status(403).json({ message: 'Only the owner can remove admins' });
       }
     }
 
-    // Remove the member
-    house.members = house.members.filter((m: IHouseMember) => m.userId !== targetUserId);
-    await house.save();
+    await removeHouseMember(found.house.id, targetUserId);
 
     logger.info(`User ${targetUserId} removed from house ${id} by ${currentUserId}${isSelfLeave ? ' (self-leave)' : ''}`);
 
@@ -560,10 +547,10 @@ router.delete('/:id/members/:userId', async (req: AuthRequest, res: Response) =>
       message: isSelfLeave ? 'Left house successfully' : 'Member removed successfully',
     });
   } catch (error) {
-    logger.error('Error removing member:', { userId: req.user?.id, houseId: req.params.id, targetUserId: req.params.userId, error });
+    logger.error('Error removing member:', { userId: req.user?.id, houseId: req.params.id, targetUserId: req.params.userId, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error removing member',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -582,44 +569,38 @@ router.delete('/:id/members/:userId', async (req: AuthRequest, res: Response) =>
 router.post('/:id/join', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const house = await House.findById(id);
-    if (!house || !house.canSeeHouse(userId)) {
+    const found = isLiveEntityId(id) ? await findHouseWithMembers(id) : undefined;
+    if (!found || !canSeeHouse(found.house, found.members, userId)) {
       return res.status(404).json({ message: 'House not found' });
     }
 
-    if (house.isMember(userId)) {
+    if (isMember(found.members, userId)) {
       return res.status(400).json({ message: 'You are already a member' });
     }
 
-    if (!house.isSelfJoinable()) {
+    if (!isSelfJoinable(found.house)) {
       return res.status(403).json({ message: 'This house is invite-only' });
     }
 
-    house.members.push({
-      userId,
-      role: HouseMemberRole.MEMBER,
-      joinedAt: new Date(),
-    } as IHouseMember);
-
-    await house.save();
+    await addHouseMember(found.house.id, userId, HouseMemberRole.MEMBER);
 
     logger.info(`User ${userId} self-joined house ${id}`);
 
     res.json({
       message: 'Joined house successfully',
-      house: serializeHouseFor(house, userId),
+      house: serializeHouseFor(found.house, await findHouseMembers(found.house.id), userId),
     });
   } catch (error) {
-    logger.error('Error joining house:', { userId: req.user?.id, houseId: req.params.id, error });
+    logger.error('Error joining house:', { userId: req.user?.id, houseId: req.params.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error joining house',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -631,55 +612,39 @@ router.post('/:id/join', async (req: AuthRequest, res: Response) => {
 router.get('/:id/rooms', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
     const { status, type, limit = '20', cursor } = req.query;
 
     // Load the house rather than just probing existence: rooms carry titles,
     // hosts and participant ids, so listing them is gated on visibility.
-    const house = await House.findById(id);
-    if (!house || !house.canSeeHouse(userId)) {
+    const found = isLiveEntityId(id) ? await findHouseWithMembers(id) : undefined;
+    if (!found || !canSeeHouse(found.house, found.members, userId)) {
       return res.status(404).json({ message: 'House not found' });
     }
-    if (!house.canAccessRooms(userId)) {
+    if (!canAccessRooms(found.house, found.members, userId)) {
       return res.status(403).json({ message: 'Only members can view this house\'s rooms' });
-    }
-
-    const query: Record<string, unknown> = {
-      houseId: id,
-      archived: { $ne: true },
-    };
-
-    // Filter by status
-    if (status && typeof status === 'string') {
-      const validStatuses = Object.values(RoomStatus);
-      if (validStatuses.includes(status as RoomStatus)) {
-        query.status = status;
-      }
-    } else {
-      query.status = { $in: [RoomStatus.LIVE, RoomStatus.SCHEDULED] };
-    }
-
-    // Filter by type
-    if (type && typeof type === 'string') {
-      query.type = type;
-    }
-
-    // Cursor-based pagination
-    if (cursor && typeof cursor === 'string') {
-      query._id = { $lt: cursor };
     }
 
     const limitNum = Math.min(Math.max(parseInt(limit as string, 10) || 20, 1), 100);
 
-    const rooms = await Room.find(query)
-      .sort({ createdAt: -1 })
-      .limit(limitNum + 1)
-      .lean();
+    const rooms = await listRooms({
+      houseId: id,
+      status:
+        typeof status === 'string' && Object.values(RoomStatus).includes(status as RoomStatus)
+          ? (status as RoomStatus)
+          : undefined,
+      type:
+        typeof type === 'string' && Object.values(RoomType).includes(type as RoomType)
+          ? (type as RoomType)
+          : undefined,
+      cursor: typeof cursor === 'string' ? cursor : undefined,
+      limit: limitNum + 1,
+    });
 
     const hasMore = rooms.length > limitNum;
     const roomsToReturn = hasMore ? rooms.slice(0, limitNum) : rooms;
     const nextCursor = hasMore && roomsToReturn.length > 0
-      ? roomsToReturn[roomsToReturn.length - 1]._id.toString()
+      ? roomsToReturn[roomsToReturn.length - 1].id
       : undefined;
 
     res.json({
@@ -688,10 +653,10 @@ router.get('/:id/rooms', async (req: AuthRequest, res: Response) => {
       nextCursor,
     });
   } catch (error) {
-    logger.error('Error fetching house rooms:', { userId: req.user?.id, houseId: req.params.id, error });
+    logger.error('Error fetching house rooms:', { userId: req.user?.id, houseId: req.params.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error fetching house rooms',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -703,31 +668,24 @@ router.get('/:id/rooms', async (req: AuthRequest, res: Response) => {
 router.get('/:id/series', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
 
-    const house = await House.findById(id);
-    if (!house || !house.canSeeHouse(userId)) {
+    const found = isLiveEntityId(id) ? await findHouseWithMembers(id) : undefined;
+    if (!found || !canSeeHouse(found.house, found.members, userId)) {
       return res.status(404).json({ message: 'House not found' });
     }
-    if (!house.canAccessRooms(userId)) {
+    if (!canAccessRooms(found.house, found.members, userId)) {
       return res.status(403).json({ message: 'Only members can view this house\'s series' });
     }
 
-    const seriesList = await Series.find({
-      houseId: id,
-      isActive: true,
-    })
-      .sort({ createdAt: -1 })
-      .lean();
-
     res.json({
-      series: seriesList,
+      series: await listActiveSeriesForHouse(id),
     });
   } catch (error) {
-    logger.error('Error fetching house series:', { userId: req.user?.id, houseId: req.params.id, error });
+    logger.error('Error fetching house series:', { userId: req.user?.id, houseId: req.params.id, error: describeErrorSafely(error) });
     res.status(500).json({
       message: 'Error fetching house series',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: describeErrorSafely(error),
     });
   }
 });
@@ -743,14 +701,14 @@ router.get('/:id/series', async (req: AuthRequest, res: Response) => {
 router.post('/:id/avatar', upload.single('file'), async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
 
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
     if (!req.file) return res.status(400).json({ message: 'No file provided' });
 
-    const house = await House.findById(id);
-    if (!house) return res.status(404).json({ message: 'House not found' });
-    if (!house.hasRole(userId, HouseMemberRole.ADMIN)) {
+    const found = isLiveEntityId(id) ? await findHouseWithMembers(id) : undefined;
+    if (!found) return res.status(404).json({ message: 'House not found' });
+    if (!hasRole(found.members, userId, HouseMemberRole.ADMIN)) {
       return res.status(403).json({ message: 'Only admins or owner can update the house' });
     }
 
@@ -758,19 +716,18 @@ router.post('/:id/avatar', upload.single('file'), async (req: AuthRequest, res: 
     const objectKey = getAgoraHouseAvatarKey(id as string);
 
     // Delete old object if it was on our CDN
-    const oldAvatarKey = cdnUrlToKey(house.avatar);
+    const oldAvatarKey = cdnUrlToKey(found.house.avatar);
     if (oldAvatarKey && oldAvatarKey !== objectKey) {
       deleteObject(oldAvatarKey).catch(() => {});
     }
 
     const cdnUrl = await uploadObject(objectKey, buffer, contentType, 'public-read');
-    house.avatar = cdnUrl;
-    await house.save();
+    await updateHouse(found.house.id, { avatar: cdnUrl });
 
     res.json({ avatar: cdnUrl });
   } catch (error) {
-    logger.error('Error uploading house avatar:', { houseId: req.params.id, error });
-    res.status(500).json({ message: 'Error uploading avatar', error: error instanceof Error ? error.message : 'Unknown error' });
+    logger.error('Error uploading house avatar:', { houseId: req.params.id, error: describeErrorSafely(error) });
+    res.status(500).json({ message: 'Error uploading avatar', error: describeErrorSafely(error) });
   }
 });
 
@@ -781,33 +738,32 @@ router.post('/:id/avatar', upload.single('file'), async (req: AuthRequest, res: 
 router.post('/:id/cover', upload.single('file'), async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { id } = req.params;
+    const id = getParam(req, 'id');
 
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
     if (!req.file) return res.status(400).json({ message: 'No file provided' });
 
-    const house = await House.findById(id);
-    if (!house) return res.status(404).json({ message: 'House not found' });
-    if (!house.hasRole(userId, HouseMemberRole.ADMIN)) {
+    const found = isLiveEntityId(id) ? await findHouseWithMembers(id) : undefined;
+    if (!found) return res.status(404).json({ message: 'House not found' });
+    if (!hasRole(found.members, userId, HouseMemberRole.ADMIN)) {
       return res.status(403).json({ message: 'Only admins or owner can update the house' });
     }
 
     const { buffer, contentType } = await processImage(req.file.buffer, 'cover');
     const objectKey = getAgoraHouseCoverKey(id as string);
 
-    const oldCoverKey = cdnUrlToKey(house.coverImage);
+    const oldCoverKey = cdnUrlToKey(found.house.coverImage);
     if (oldCoverKey && oldCoverKey !== objectKey) {
       deleteObject(oldCoverKey).catch(() => {});
     }
 
     const cdnUrl = await uploadObject(objectKey, buffer, contentType, 'public-read');
-    house.coverImage = cdnUrl;
-    await house.save();
+    await updateHouse(found.house.id, { coverImage: cdnUrl });
 
     res.json({ coverImage: cdnUrl });
   } catch (error) {
-    logger.error('Error uploading house cover:', { houseId: req.params.id, error });
-    res.status(500).json({ message: 'Error uploading cover', error: error instanceof Error ? error.message : 'Unknown error' });
+    logger.error('Error uploading house cover:', { houseId: req.params.id, error: describeErrorSafely(error) });
+    res.status(500).json({ message: 'Error uploading cover', error: describeErrorSafely(error) });
   }
 });
 

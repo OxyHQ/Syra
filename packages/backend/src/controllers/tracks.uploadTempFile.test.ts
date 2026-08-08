@@ -5,8 +5,11 @@ import os from 'os';
 import path from 'path';
 import type { Server } from 'http';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
-import { clear, connect, disconnect } from '../test/mongo';
-import { ArtistModel } from '../models/CatalogEntity';
+import { uuidv7 } from '@oxyhq/db';
+import { normalizeNameKey } from '@syra/shared-types';
+import { clearDb, connectDb, disconnectDb } from '../test/postgres';
+import { getDb } from '../db/postgres';
+import { catalogEntities } from '../db/schema/catalog';
 import tracksRoutes from '../routes/tracks.routes';
 
 /**
@@ -32,9 +35,37 @@ function multerTempFiles(): Set<string> {
   return new Set(fs.readdirSync(os.tmpdir()).filter((name) => MULTER_TEMP_NAME.test(name)));
 }
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+/**
+ * BOTH databases: the catalogue is Postgres, and `connect()` stays because
+ * `tracks.routes` mounts handlers from `recommendations.controller`, whose
+ * module graph still opens Mongoose at import time.
+ */
+beforeAll(async () => {
+  await connectDb();
+});
+afterEach(async () => {
+  await clearDb();
+});
+afterAll(async () => {
+  await disconnectDb();
+});
+
+/** An artist owned by `owner`, on the Postgres side. */
+async function makeArtist(name: string, owner: string): Promise<string> {
+  const unique = `${name} ${uuidv7()}`;
+  const [artist] = await getDb()
+    .insert(catalogEntities)
+    .values({
+      type: 'artist',
+      name: unique,
+      nameKey: normalizeNameKey(unique),
+      source: 'upload',
+      ownerOxyUserId: owner,
+    })
+    .returning({ id: catalogEntities.id });
+  if (!artist) throw new Error('makeArtist: insert returned no row');
+  return artist.id;
+}
 
 /** Serve the tracks router on an ephemeral port, authenticated as `OWNER_ID`. */
 async function withUploadServer(exercise: (baseUrl: string) => Promise<void>): Promise<void> {
@@ -112,18 +143,14 @@ describe('POST /api/tracks/upload temp file lifecycle', () => {
   });
 
   it('removes the temp file when the artist is not owned by the caller', async () => {
-    const foreignArtist = await ArtistModel.create({
-      name: 'Someone Else',
-      ownerOxyUserId: 'oxy-different-user',
-      source: 'upload',
-    });
+    const foreignArtistId = await makeArtist('Someone Else', 'oxy-different-user');
 
     const before = multerTempFiles();
     await withUploadServer(async (baseUrl) => {
       const response = await fetch(`${baseUrl}/api/tracks/upload`, {
         method: 'POST',
         body: audioForm(
-          { title: 'Borrowed', artistId: foreignArtist._id.toString() },
+          { title: 'Borrowed', artistId: foreignArtistId },
           'irrelevant bytes',
         ),
       });
@@ -134,11 +161,7 @@ describe('POST /api/tracks/upload temp file lifecycle', () => {
   });
 
   it('removes the temp file when ffprobe cannot read the upload', async () => {
-    const artist = await ArtistModel.create({
-      name: 'Owned Artist',
-      ownerOxyUserId: OWNER_ID,
-      source: 'upload',
-    });
+    const artistId = await makeArtist('Owned Artist', OWNER_ID);
 
     const before = multerTempFiles();
     await withUploadServer(async (baseUrl) => {
@@ -147,7 +170,7 @@ describe('POST /api/tracks/upload temp file lifecycle', () => {
         // Declared audio/mpeg so the multer filter passes; the bytes are not audio,
         // so the probe is the thing that rejects it.
         body: audioForm(
-          { title: 'Not Really Audio', artistId: artist._id.toString() },
+          { title: 'Not Really Audio', artistId },
           'this is definitely not an mp3',
         ),
       });
