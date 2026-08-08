@@ -211,17 +211,33 @@ export const AppProviders = memo(function AppProviders({
   );
 
   return (
-    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <ErrorBoundary>
-          <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
-            <OxyProvider
-              oxyServices={oxyServices}
-              clientId={OXY_CLIENT_ID}
-              storageKeyPrefix="oxy_syra"
-            >
-              <ImageResolverProvider value={resolveImage}>
-                <I18nextProvider i18n={i18n}>
+    /**
+     * `I18nextProvider` is the OUTERMOST provider, deliberately.
+     *
+     * It used to sit below `OxyProvider` and `ImageResolverProvider`, and
+     * production logged `react-i18next:: useTranslation: You will need to pass in
+     * an i18next instance by using initReactI18next` — a caller reaching
+     * `useTranslation` outside it. The specific caller was never pinned down, and
+     * hunting it would have fixed one site while leaving the shape that produced
+     * it: any component mounted by a provider ABOVE this one is outside the
+     * context, including UI those providers render themselves.
+     *
+     * i18n depends on none of the others, so being outermost costs nothing and
+     * makes "rendered above the translation context" inexpressible rather than
+     * merely unlikely. The warning is not cosmetic: without an instance `t()`
+     * returns the key, so a screen renders its translation keys as text.
+     */
+    <I18nextProvider i18n={i18n}>
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <ErrorBoundary>
+            <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
+              <OxyProvider
+                oxyServices={oxyServices}
+                clientId={OXY_CLIENT_ID}
+                storageKeyPrefix="oxy_syra"
+              >
+                <ImageResolverProvider value={resolveImage}>
                   <AppearanceSync />
                   <QueryCacheAccountScope />
                   <StreamCacheAuthInvalidator />
@@ -244,12 +260,12 @@ export const AppProviders = memo(function AppProviders({
                       </MenuProvider>
                     </BottomSheetProvider>
                   </BottomSheetModalProvider>
-                </I18nextProvider>
-              </ImageResolverProvider>
-            </OxyProvider>
-          </PersistQueryClientProvider>
-        </ErrorBoundary>
-      </GestureHandlerRootView>
-    </SafeAreaProvider>
+                </ImageResolverProvider>
+              </OxyProvider>
+            </PersistQueryClientProvider>
+          </ErrorBoundary>
+        </GestureHandlerRootView>
+      </SafeAreaProvider>
+    </I18nextProvider>
   );
 });
