@@ -86,6 +86,8 @@ import { sql } from 'drizzle-orm';
 import { executeRows } from '@oxyhq/db';
 import { closePostgres, getDb } from '../../postgres';
 import { connectUnmanagedDb } from '../../../test/postgres';
+import { episodesByShowQuery } from '../episodes';
+import { episodeVisibilityFilter } from '../visibility';
 import { expectIndexesWithin } from '../../__tests__/explainIndexes';
 
 /** Thrown to roll the seeding transaction back once every plan is collected. */
@@ -100,6 +102,50 @@ const SEEDED_USERS = 2000;
 
 const SEED_AND_EXPLAIN_TIMEOUT_MS = 120_000;
 
+/**
+ * The show the episode probes target, and the account the seed makes its owner.
+ *
+ * Derived with the seed's own arithmetic (`'${MARKER}-u-' || (1 + (g % SEEDED_USERS))`)
+ * rather than written out, so the owner arm cannot quietly become the stranger
+ * arm if the seed's user count changes — which would make both probes measure
+ * `status = 'ready'` while still passing.
+ */
+const PROBED_SHOW_NUMBER = 7;
+const PROBED_SHOW = `${MARKER}-s-${PROBED_SHOW_NUMBER}`;
+const SEEDED_SHOW_OWNER = `${MARKER}-u-${1 + (PROBED_SHOW_NUMBER % SEEDED_USERS)}`;
+
+/**
+ * The show-episode listing, rendered from the SHIPPED builder.
+ *
+ * This is the one BOUND probe in this file, and the reason it is this one:
+ * `findEpisodesByShow`'s visibility condition is INJECTED by the caller
+ * (`episodeVisibilityFilter`, `db/podcasts/visibility.ts`), so a transcription
+ * has two independent ways to drift — the predicate and the ordering — and the
+ * ordering is the property this suite exists to measure. `descNullsLast` streams
+ * `episodes_podcast_id_pub_date_idx`; a plain `desc()` is `NULLS FIRST`, which
+ * no index on this table provides. A hand-typed `order by pub_date desc nulls
+ * last` keeps passing after the module stops saying that.
+ *
+ * `toSQL()` gives the statement drizzle would send with `$n` placeholders;
+ * `EXPLAIN` goes through `sql.raw`, so they are inlined. Every value is a marker
+ * string this file generated — nothing user-supplied reaches the statement.
+ *
+ * `viewerId` decides which arm is measured: the owner's id yields `undefined`
+ * (no status condition at all) and a stranger's yields `status = 'ready'`. Both
+ * come from the real function, so the two probes cannot disagree with it about
+ * what a viewer sees.
+ */
+function showEpisodesSql(viewerId: string | null): string {
+  const query = episodesByShowQuery(PROBED_SHOW, {
+    visibility: episodeVisibilityFilter(SEEDED_SHOW_OWNER, viewerId),
+    limit: 20,
+  }).toSQL();
+
+  return query.sql.replace(/\$(\d+)/g, (_match, index) =>
+    `'${String(query.params[Number(index) - 1])}'`
+  );
+}
+
 /** Plan text by probe name, collected once in `beforeAll`. */
 const plans = new Map<string, string>();
 
@@ -109,7 +155,12 @@ let seededEpisodeCount = 0;
 
 interface Probe {
   readonly name: string;
-  readonly sql: string;
+  /**
+   * A thunk where the statement has to be BUILT rather than written — a bound
+   * probe calls `getDb()`, which does not exist at module load. Resolved in
+   * `beforeAll`, after the connection. Same shape `rooms.explain` uses.
+   */
+  readonly sql: string | (() => string);
   /**
    * Also EXPLAIN this probe with `enable_seqscan` at its default, stored under
    * `<name>:default`. Set for the probes whose question is "which index does
@@ -256,13 +307,14 @@ const PROBES: readonly Probe[] = [
     // `db/podcasts/episodes.ts` — `findEpisodesByShow`, both the owner's view
     // (no status condition) and the public one.
     name: 'showEpisodes',
-    sql: `select * from episodes where podcast_id = '${MARKER}-s-7'
-          order by pub_date desc nulls last limit 20`,
+    // The OWNER's view: `episodeVisibilityFilter` returns `undefined`, so the
+    // statement carries no status condition at all.
+    sql: () => showEpisodesSql(SEEDED_SHOW_OWNER),
   },
   {
     name: 'showEpisodesPublic',
-    sql: `select * from episodes where podcast_id = '${MARKER}-s-7' and status = 'ready'
-          order by pub_date desc nulls last limit 20`,
+    // A STRANGER's view, from the same function: `status = 'ready'`.
+    sql: () => showEpisodesSql('someone-else'),
   },
   {
     // `db/podcasts/episodes.ts` — `episodeStats`' newest-episode read. The one
@@ -482,16 +534,18 @@ beforeAll(async () => {
       await executeRows(tx, sql.raw('set local enable_seqscan = off'));
 
       for (const probe of PROBES) {
+        const statement = typeof probe.sql === 'function' ? probe.sql() : probe.sql;
         const rows = await executeRows<{ 'QUERY PLAN': string }>(
-          tx, sql.raw(`explain (analyze, buffers) ${probe.sql}`));
+          tx, sql.raw(`explain (analyze, buffers) ${statement}`));
         plans.set(probe.name, rows.map((row) => row['QUERY PLAN']).join('\n'));
       }
 
       await executeRows(tx, sql.raw('set local enable_seqscan = on'));
 
       for (const probe of PROBES.filter((candidate) => candidate.alsoAtDefaultCosting)) {
+        const statement = typeof probe.sql === 'function' ? probe.sql() : probe.sql;
         const rows = await executeRows<{ 'QUERY PLAN': string }>(
-          tx, sql.raw(`explain (analyze, buffers) ${probe.sql}`));
+          tx, sql.raw(`explain (analyze, buffers) ${statement}`));
         plans.set(`${probe.name}:default`, rows.map((row) => row['QUERY PLAN']).join('\n'));
       }
 
@@ -704,6 +758,31 @@ describe('the episode reads reach an index', () => {
     expectIndexesWithin('owner view', indexesIn('showEpisodes'), SHOW_EPISODE_INDEXES);
     expect(plans.get('showEpisodesPublic')).not.toContain('Seq Scan on episodes');
     expectIndexesWithin('public view', indexesIn('showEpisodesPublic'), SHOW_EPISODE_INDEXES);
+  });
+
+  /**
+   * The assertion that makes BINDING these two probes worth anything.
+   *
+   * Binding was measured to work: reverting the module's `descNullsLast` to a
+   * plain `desc()` changed the probe's plan from `Sort Key: pub_date DESC NULLS
+   * LAST` to `Sort Key: pub_date DESC`, because the probe now renders the
+   * shipped builder. And every assertion above still PASSED — the index checks
+   * cannot see an ordering change, since `enable_seqscan = off` keeps the
+   * planner on the same index either way and it simply sorts.
+   *
+   * So a bound probe with an ordering-blind assertion is a transcription with
+   * extra steps. This is the sensitive half.
+   *
+   * At this seed size — one show, eight episodes — BOTH spellings sort, so the
+   * discriminator is the sort key's text rather than sorted-versus-streamed.
+   * `browseRecentNullsFirst` above covers the streamed case at 4,900 rows, where
+   * the difference is the whole page against the whole result set.
+   */
+  it('both viewers order by the spelling the index can serve', () => {
+    for (const probe of ['showEpisodes', 'showEpisodesPublic']) {
+      expect(`${probe}: ${plans.get(probe)?.includes('Sort Key: pub_date DESC NULLS LAST')}`)
+        .toBe(`${probe}: true`);
+    }
   });
 
   it('the newest episode is one row off the ordered index, not an aggregate', () => {

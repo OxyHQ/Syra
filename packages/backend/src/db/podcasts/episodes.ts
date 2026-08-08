@@ -94,10 +94,10 @@ export async function findEpisodesByIds(ids: readonly string[]): Promise<Episode
  * keeps NON-partial for exactly this: a `status = 'ready'` partial index would
  * silently stop serving the owner's own unpublished-episode view.
  */
-export async function findEpisodesByShow(
+export function episodesByShowQuery(
   podcastId: string,
   options: { visibility: SQL | undefined; offset?: number; limit: number }
-): Promise<EpisodeRow[]> {
+) {
   return getDb()
     .select()
     .from(episodes)
@@ -105,6 +105,29 @@ export async function findEpisodesByShow(
     .orderBy(descNullsLast(episodes.pubDate))
     .offset(options.offset ?? 0)
     .limit(options.limit);
+}
+
+/**
+ * Split from {@link episodesByShowQuery} so the EXPLAIN probe measures the
+ * SHIPPED statement instead of a paraphrase of it.
+ *
+ * `db/podcasts/__tests__/podcasts.explain.test.ts` renders that builder with
+ * `.toSQL()`. The alternative — the probe re-typing the `where`/`orderBy` — is
+ * what every other probe in that family still does, and it means a change here
+ * leaves the probe measuring the OLD shape while still passing. That is not
+ * hypothetical for this query in particular: the ordering is the thing under
+ * test (`descNullsLast` streams `episodes_podcast_id_pub_date_idx`, a plain
+ * `desc()` is `NULLS FIRST` and cannot), so a transcription that keeps the old
+ * spelling certifies a plan the module no longer produces.
+ *
+ * Nothing else about the query changed; this returns exactly what the body
+ * above used to build, which is why the measured plan is unchanged.
+ */
+export async function findEpisodesByShow(
+  podcastId: string,
+  options: { visibility: SQL | undefined; offset?: number; limit: number }
+): Promise<EpisodeRow[]> {
+  return episodesByShowQuery(podcastId, options);
 }
 
 export async function countEpisodesByShow(
