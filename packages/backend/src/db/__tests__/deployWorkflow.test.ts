@@ -248,7 +248,6 @@ describe('the deploy workflow syncs an explicit allowlist, never the whole conte
     'AWS_SECRET_ACCESS_KEY',
     'DATABASE_URL',
     'JWT_SECRET',
-    'MONGODB_URI',
     'REDIS_URL',
     'STREAM_TOKEN_SECRET',
   ];
