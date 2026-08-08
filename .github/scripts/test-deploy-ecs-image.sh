@@ -223,7 +223,25 @@ aws() {
       printf '{}\n'
       ;;
     "ecs run-task")
-      printf 'reconcile\n' >>"$DEPLOY_TEST_LOG"
+      # Log the COMMAND, not a fixed token. The mock previously wrote
+      # 'reconcile' for every run-task, which made the pre-deploy and
+      # post-deploy tasks indistinguishable in the expected.log diff — so the
+      # argv each one runs was asserted by nothing, and the hardcoded migration
+      # command could point at a path this package does not emit (it did) with
+      # every case still green.
+      local previous_argument=""
+      local overrides_json=""
+      local argument
+      for argument in "$@"; do
+        if [[ "$previous_argument" == "--overrides" ]]; then
+          overrides_json="$argument"
+          break
+        fi
+        previous_argument="$argument"
+      done
+      printf 'task:%s\n' \
+        "$(jq -r '.containerOverrides[0].command | join(" ")' <<<"$overrides_json")" \
+        >>"$DEPLOY_TEST_LOG"
       printf '%s\n' '{
         "failures": [],
         "tasks": [{"taskArn": "arn:aws:ecs:test:task/deploy-test-reconcile"}]
@@ -261,7 +279,10 @@ export -f aws
 run_release() {
   local case_name="$1"
   local expect_success="$2"
-  local run_migrations="${3:-false}"
+  # The pre-deploy one-shot command, as a JSON string array. Empty means the
+  # release has no pre-deploy task at all, which is what every case that is not
+  # about migrations wants.
+  local pre_deploy_command_json="${3:-}"
   local inject_internal_metrics="${4:-false}"
   local task_exit_code="${5:-0}"
   local inject_task_secret="${6:-false}"
@@ -304,9 +325,12 @@ run_release() {
     IMAGE_URI="example.invalid/deploy-test@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     MAX_WAIT_SECS=5
     POLL_INTERVAL=1
-    RUN_MIGRATIONS="$run_migrations"
+    PRE_DEPLOY_TASK_COMMAND_JSON="$pre_deploy_command_json"
     POST_DEPLOY_SMOKE_SCRIPT="$smoke_script"
-    POST_DEPLOY_TASK_COMMAND_JSON='["reconcile"]'
+    # `["reconcile"]` is a generic fixture: most cases care only that the post
+    # slot runs in the right place in the sequence, not what it runs. A case
+    # that IS about the command sets DEPLOY_TEST_POST_COMMAND.
+    POST_DEPLOY_TASK_COMMAND_JSON="${DEPLOY_TEST_POST_COMMAND:-[\"reconcile\"]}"
   )
   if [[ "$inject_internal_metrics" == "true" ]]; then
     release_environment+=(
@@ -333,12 +357,12 @@ run_release() {
   fi
 }
 
-run_release success true false true
+run_release success true '' true
 printf '%s\n' \
   metrics:arn \
   'service:arn:aws:ecs:test:task-definition/deploy-test:2:desired=1' \
   smoke \
-  reconcile \
+  'task:reconcile' \
   >"$test_directory/success/expected.log"
 diff -u \
   "$test_directory/success/expected.log" \
@@ -355,34 +379,34 @@ diff -u \
 # this pair silently stops discriminating, while the suite still passes and still
 # goes red under a mutation -- just for the wrong case.
 DEPLOY_TEST_METRICS_PARAMETER=/oxy/sample-app/INTERNAL_METRICS_TOKEN
-run_release hyphenated-metrics-parameter true false true
+run_release hyphenated-metrics-parameter true '' true
 DEPLOY_TEST_METRICS_PARAMETER=/oxy/sampleapp/INTERNAL_METRICS_TOKEN
 printf '%s\n' \
   metrics:arn \
   'service:arn:aws:ecs:test:task-definition/deploy-test:2:desired=1' \
   smoke \
-  reconcile \
+  'task:reconcile' \
   >"$test_directory/hyphenated-metrics-parameter/expected.log"
 diff -u \
   "$test_directory/hyphenated-metrics-parameter/expected.log" \
   "$test_directory/hyphenated-metrics-parameter/aws.log"
 
-run_release explicit-task-secret true false false 0 true
+run_release explicit-task-secret true '' false 0 true
 printf '%s\n' \
   task-secret:arn \
   'service:arn:aws:ecs:test:task-definition/deploy-test:2:desired=1' \
   smoke \
-  reconcile \
+  'task:reconcile' \
   >"$test_directory/explicit-task-secret/expected.log"
 diff -u \
   "$test_directory/explicit-task-secret/expected.log" \
   "$test_directory/explicit-task-secret/aws.log"
 
-run_release reconciliation-failure false false false 1
+run_release reconciliation-failure false '' false 1
 printf '%s\n' \
   'service:arn:aws:ecs:test:task-definition/deploy-test:2:desired=1' \
   smoke \
-  reconcile \
+  'task:reconcile' \
   tasklogs \
   'service:arn:aws:ecs:test:task-definition/deploy-test:1:desired=1' \
   >"$test_directory/reconciliation-failure/expected.log"
@@ -390,9 +414,89 @@ diff -u \
   "$test_directory/reconciliation-failure/expected.log" \
   "$test_directory/reconciliation-failure/aws.log"
 
-run_release migration-failure false true false 1
+# The migration cases below run the commands PRODUCTION runs, read out of
+# deploy-aws.yml rather than restated here. A second copy would let the two drift
+# in exactly the way that left `dist/scripts/migrate.js` — a path this package
+# has never emitted — wired into this script with every test green.
+workflow_file="$repository_root/.github/workflows/deploy-aws.yml"
+read_workflow_command() {
+  local variable_name="$1"
+  local value
+
+  value="$(sed -n -E "s/^[[:space:]]*${variable_name}:[[:space:]]*'(.*)'[[:space:]]*$/\1/p" \
+    "$workflow_file")"
+  if [[ -z "$value" ]]; then
+    echo "deploy-aws.yml declares no $variable_name." >&2
+    return 1
+  fi
+  if [[ "$(wc -l <<<"$value")" != "1" ]]; then
+    echo "deploy-aws.yml declares $variable_name more than once." >&2
+    return 1
+  fi
+  if ! jq -e '
+    type == "array" and
+    length > 0 and
+    all(.[]; type == "string" and length > 0)
+  ' <<<"$value" >/dev/null; then
+    echo "deploy-aws.yml's $variable_name is not a non-empty JSON string array: $value" >&2
+    return 1
+  fi
+  printf '%s\n' "$value"
+}
+
+workflow_pre_command="$(read_workflow_command PRE_DEPLOY_TASK_COMMAND_JSON)"
+workflow_post_command="$(read_workflow_command POST_DEPLOY_TASK_COMMAND_JSON)"
+
+# Every migration command must name a compiled entry point that EXISTS in
+# source. The check maps the runtime path back through tsconfig's layout
+# (rootDir "./", outDir "dist") — packages/backend/dist/src/db/migrate.js is
+# emitted from packages/backend/src/db/migrate.ts — so moving or renaming the
+# migrator fails here instead of in a production deploy. The build is not run,
+# and does not need to be: what makes a stale path detectable is the SOURCE
+# vanishing, not the artefact.
+#
+# Mutation-tested: pointing either command at dist/scripts/migrate.js (the value
+# this file shipped before) fails this check by name.
+assert_migration_command() {
+  local label="$1"
+  local command_json="$2"
+  local expected_phase="$3"
+  local runtime_path source_path
+
+  runtime_path="$(jq -r '.[1] // ""' <<<"$command_json")"
+  if [[ "$runtime_path" != packages/backend/dist/*.js ]]; then
+    echo "$label does not run a compiled backend entry point: $runtime_path" >&2
+    return 1
+  fi
+  source_path="${runtime_path/\/dist\//\/}"
+  source_path="${source_path%.js}.ts"
+  if [[ ! -f "$repository_root/$source_path" ]]; then
+    echo "$label runs $runtime_path, which is emitted from $source_path — and that file does not exist." >&2
+    return 1
+  fi
+  if ! jq -e --arg phase "--phase=$expected_phase" 'index($phase) != null' \
+    <<<"$command_json" >/dev/null; then
+    echo "$label does not pass --phase=$expected_phase." >&2
+    return 1
+  fi
+  # Named explicitly so a migration aimed at the wrong database is refused on
+  # the connection rather than reporting success over an untouched one; the
+  # migrator requires it, and `syra` is the database provisioned on
+  # oxy-postgres for this app.
+  if ! jq -e 'index("--target-database=syra") != null' <<<"$command_json" >/dev/null; then
+    echo "$label does not pass --target-database=syra." >&2
+    return 1
+  fi
+}
+
+assert_migration_command PRE_DEPLOY_TASK_COMMAND_JSON "$workflow_pre_command" pre
+assert_migration_command POST_DEPLOY_TASK_COMMAND_JSON "$workflow_post_command" post
+
+# A failing pre-deploy migration must abort the release BEFORE update-service,
+# leaving the previously deployed image serving and nothing to roll back.
+run_release migration-failure false "$workflow_pre_command" false 1
 printf '%s\n' \
-  reconcile \
+  "task:$(jq -r 'join(" ")' <<<"$workflow_pre_command")" \
   tasklogs \
   >"$test_directory/migration-failure/expected.log"
 diff -u \
@@ -407,7 +511,23 @@ if grep -q '^service:' "$test_directory/migration-failure/aws.log"; then
   exit 1
 fi
 
-run_release zero-desired-count false false false 0 false 0
+# The healthy release: pre-deploy migration, rollout, smoke, post-deploy
+# migration — in that order, and each with the argv the workflow declares.
+DEPLOY_TEST_POST_COMMAND="$workflow_post_command"
+export DEPLOY_TEST_POST_COMMAND
+run_release migration-success true "$workflow_pre_command"
+unset DEPLOY_TEST_POST_COMMAND
+printf '%s\n' \
+  "task:$(jq -r 'join(" ")' <<<"$workflow_pre_command")" \
+  'service:arn:aws:ecs:test:task-definition/deploy-test:2:desired=1' \
+  smoke \
+  "task:$(jq -r 'join(" ")' <<<"$workflow_post_command")" \
+  >"$test_directory/migration-success/expected.log"
+diff -u \
+  "$test_directory/migration-success/expected.log" \
+  "$test_directory/migration-success/aws.log"
+
+run_release zero-desired-count false '' false 0 false 0
 grep -F \
   "must have a positive desiredCount before deployment (current: 0)" \
   "$test_directory/zero-desired-count/output.log" \
@@ -417,11 +537,11 @@ if [[ -s "$test_directory/zero-desired-count/aws.log" ]]; then
   exit 1
 fi
 
-run_release transient-zero-deployment true false false 0 false 1 transient-zero-deployment
+run_release transient-zero-deployment true '' false 0 false 1 transient-zero-deployment
 printf '%s\n' \
   'service:arn:aws:ecs:test:task-definition/deploy-test:2:desired=1' \
   smoke \
-  reconcile \
+  'task:reconcile' \
   >"$test_directory/transient-zero-deployment/expected.log"
 diff -u \
   "$test_directory/transient-zero-deployment/expected.log" \
@@ -431,7 +551,7 @@ grep -F \
   "$test_directory/transient-zero-deployment/output.log" \
   >/dev/null
 
-run_release zero-service-during-deploy false false false 0 false 1 zero-service-during-deploy
+run_release zero-service-during-deploy false '' false 0 false 1 zero-service-during-deploy
 printf '%s\n' \
   'service:arn:aws:ecs:test:task-definition/deploy-test:2:desired=1' \
   'service:arn:aws:ecs:test:task-definition/deploy-test:1:desired=1' \
@@ -444,7 +564,7 @@ grep -F \
   "$test_directory/zero-service-during-deploy/output.log" \
   >/dev/null
 
-run_release completed-zero-deployment false false false 0 false 1 completed-zero-deployment
+run_release completed-zero-deployment false '' false 0 false 1 completed-zero-deployment
 printf '%s\n' \
   'service:arn:aws:ecs:test:task-definition/deploy-test:2:desired=1' \
   'service:arn:aws:ecs:test:task-definition/deploy-test:1:desired=1' \
@@ -459,7 +579,7 @@ grep -F \
 
 # A smoke failure the smoke script attributes to the new image rolls the service
 # back, and stops the release before the reconciliation task runs.
-run_release smoke-hermetic-failure false false false 0 false 1 healthy 1
+run_release smoke-hermetic-failure false '' false 0 false 1 healthy 1
 printf '%s\n' \
   'service:arn:aws:ecs:test:task-definition/deploy-test:2:desired=1' \
   smoke \
@@ -477,11 +597,11 @@ grep -F \
 # (exit 75) must NOT roll back: the service stays on the new task definition, the
 # release finishes its reconciliation task, and the job still fails so the
 # failure is paged rather than swallowed.
-run_release smoke-no-rollback-failure false false false 0 false 1 healthy 75
+run_release smoke-no-rollback-failure false '' false 0 false 1 healthy 75
 printf '%s\n' \
   'service:arn:aws:ecs:test:task-definition/deploy-test:2:desired=1' \
   smoke \
-  reconcile \
+  'task:reconcile' \
   >"$test_directory/smoke-no-rollback-failure/expected.log"
 diff -u \
   "$test_directory/smoke-no-rollback-failure/expected.log" \
