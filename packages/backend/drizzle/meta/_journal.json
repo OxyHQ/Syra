@@ -169,6 +169,13 @@
       "when": 1786152067837,
       "tag": "0023_nappy_excalibur",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1786199349792,
+      "tag": "0024_ambitious_xorn",
+      "breakpoints": true
     }
   ]
 }

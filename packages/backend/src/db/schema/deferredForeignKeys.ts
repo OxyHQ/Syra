@@ -23,6 +23,8 @@
  */
 
 import type { DeferredForeignKey } from '@oxyhq/db/assert';
+import { moderationIdColumnsWithoutForeignKey } from '@oxyhq/crowdsource-app/postgres';
+import { moderationTableSet, reports } from './moderation';
 
 /**
  * A table added ahead of its parent goes here with its `ON DELETE` and reason
@@ -347,4 +349,25 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
       'unconstrained column rather than declaring a composite FK that cannot express the correct ' +
       'ON DELETE behaviour (RELATIONS.md: PlaybackState.activeDeviceId).',
   },
+  /**
+   * The moderation vertical's eight, as a FRAGMENT the package supplies.
+   *
+   * Every one would otherwise fail this gate as `unclassified_id_column` on the
+   * day Syra adopted the package, with nothing to say whether each is a missing
+   * constraint or a decision — and `@oxyhq/crowdsource-app` is the only place
+   * that can answer, because five of the eight name rows in CROWDSOURCE's
+   * database (a decision, a case, a report as CrowdSource knows it) and the other
+   * three are opaque noun ids no single column could reference.
+   *
+   * Eight, not the six a reader counts: `findIdColumnViolations` exempts a column
+   * only when `column.primary` is set, and a composite primary key declared in a
+   * table's extra config does not set it on its members — so
+   * `moderation_enforcements.decision_id` is scanned despite being part of the
+   * key.
+   *
+   * The report table is passed in because the entries embed its name, and an
+   * entry naming a table outside the gate's `tables` list is reported as
+   * `stale_ledger_entry`.
+   */
+  ...moderationIdColumnsWithoutForeignKey({ tables: moderationTableSet, reportTable: reports }),
 ];

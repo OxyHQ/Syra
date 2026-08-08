@@ -24,6 +24,7 @@ export * from './catalog';
 export * from './creators';
 export * from './genres';
 export * from './library';
+export * from './moderation';
 export * from './podcasts';
 export * from './rooms';
 export * from './trackKeys';

@@ -121,9 +121,10 @@ import { genres } from '../schema/genres';
  * `track_hls_renditions`, correcting `tracks.hls`'s jsonb-vs-child-table
  * inconsistency with `episode_hls_renditions` — see catalog.ts's own
  * comment) + 9 (Task 5: creators.ts) + 8 (Task 6: rooms.ts) +
- * 10 (Task 7: user.ts) = 69.
+ * 10 (Task 7: user.ts) + 4 (Task 8: moderation.ts — `reports` plus the three
+ * `@oxyhq/crowdsource-app` owns) = 73.
  */
-const MINIMUM_TABLES = 69;
+const MINIMUM_TABLES = 73;
 
 /**
  * Every drizzle table the schema barrel exports, walked rather than listed by

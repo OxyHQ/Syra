@@ -83,6 +83,8 @@
  */
 
 import type { ExpirySweepTarget } from '@oxyhq/db/expiry';
+import { moderationExpirySweepTargets } from '@oxyhq/crowdsource-app/postgres';
+import { moderationTableSet } from './schema/moderation';
 import {
   LISTENING_EVENT_RETENTION_SECONDS,
   listeningEvents,
@@ -141,4 +143,22 @@ export const EXPIRY_SWEEP_TARGETS: readonly ExpirySweepTarget[] = [
       "Outside the co-occurrence job's 60-day window; the other reader does not filter by time at " +
       'all and can read an unswept row, harmlessly — see schema/user.ts.',
   },
+  /**
+   * The moderation outbox and inbound event log, as a FRAGMENT the package
+   * supplies rather than two entries written here.
+   *
+   * Same division as everywhere else in this migration: `@oxyhq/db` holds the
+   * sweep MECHANISM, the consumer holds the REGISTRY — and here the consumer's
+   * registry names tables the consumer does not own. `@oxyhq/crowdsource-app` is
+   * the only place that can say what sweeping either one COSTS (the outbox holds
+   * undelivered work; the event log holds the dedupe claim and the audit trail),
+   * so it states the reasons and Syra spreads them in. Both were
+   * `expireAfterSeconds: 0` on an `expiresAt` the writer computes, so
+   * `retentionSeconds` is 0 on both: the column already is the deadline.
+   *
+   * `models/ModerationOutbox.ts` and `models/ModerationEvent.ts` are the two TTL
+   * declarations `gates.test.ts` mapped to a deferred sentinel while this vertical
+   * was still on Mongo. This entry is what closes them.
+   */
+  ...moderationExpirySweepTargets(moderationTableSet),
 ];
