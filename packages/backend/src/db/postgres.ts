@@ -9,11 +9,13 @@
  * columns the migrations never created.
  *
  * Connect once at boot, then read the handle synchronously from anywhere via
- * `getDb()`. `server.ts`'s `bootServer` opens it alongside the Mongo
- * connection, with the same log-and-continue failure semantics: a service whose
- * routes are still mostly on Mongoose must not fail to boot because
- * `DATABASE_URL` is unset. Routes that have been ported fail on their own until
- * it is reachable, which is the narrower blast radius.
+ * `getDb()`. `server.ts`'s `bootServer` opens it log-and-continue: an
+ * unreachable database degrades to a 503 per request rather than taking the
+ * whole service down. That is the right trade for a database that is momentarily
+ * down and the wrong one for a database that was never configured, which is why
+ * `config/env.ts` refuses to boot production when `DATABASE_URL` is unset or is
+ * not a `postgres://` URL — the misconfiguration fails loudly at boot, the
+ * outage degrades.
  */
 
 import { createDatabase, type OxyDatabase } from '@oxyhq/db';
@@ -31,13 +33,22 @@ let handle: { db: OxyDatabase<typeof schema>; client: ReturnType<typeof createDa
  * Idempotent: a second call returns the existing handle rather than opening a
  * second pool.
  *
+ * Reads `process.env.DATABASE_URL` LIVE rather than `config/env.ts`'s parsed
+ * `env`, and must keep doing so: `env` is parsed once at import, while the test
+ * harness (`src/test/postgres.ts`) resolves `TEST_DATABASE_URL` and assigns
+ * `process.env.DATABASE_URL` in `beforeAll` — after that parse. Reading the
+ * frozen value would send the suite at whatever the developer's own
+ * `DATABASE_URL` names. `env.ts` declares the variable as a boot-time GATE, not
+ * as the accessor.
+ *
  * @throws {Error} When `DATABASE_URL` is unset, or the opening round trip
  *   fails. This is a REPORTING contract, not a fail-fast one: the throw names
  *   the misconfiguration precisely, and the caller decides what it costs.
  *   `server.ts`'s `bootServer` catches it, logs, and continues — deliberately,
- *   because most routes are still on Mongoose and a service that refuses to
- *   boot without `DATABASE_URL` would take them down too. A script or a test
- *   that needs the connection lets it propagate instead.
+ *   so an unreachable database costs a 503 per request instead of the whole
+ *   service. A script or a test that needs the connection lets it propagate
+ *   instead. In production an unset `DATABASE_URL` never reaches here at all:
+ *   `config/env.ts` refuses the boot first.
  */
 export async function connectPostgres(): Promise<OxyDatabase<typeof schema>> {
   if (handle) return handle.db;
@@ -81,30 +92,25 @@ export function getDb(): OxyDatabase<typeof schema> {
 }
 
 /**
- * Whether the pool is open — the Postgres counterpart of
- * `utils/database.ts`'s `isDatabaseConnected()`.
+ * Whether the pool is open. **The only connectivity question left**, and every
+ * gate in the tree asks it.
  *
- * **Every connectivity gate in the tree now calls THIS**, and none calls
- * `isDatabaseConnected()`. That sentence used to read the other way round:
- * controllers guarded on Mongoose readiness while their reads were all drizzle,
- * which is the wrong database in both directions — Mongo down and Postgres up
- * answered 503 for an endpoint that would have worked, and Postgres down with
- * Mongo up sailed past the guard and threw inside the handler.
+ * It is worth knowing why this is emphatic for a function this small. Gates here
+ * used to call `utils/database.ts`'s `isDatabaseConnected()` — Mongoose
+ * readiness — while the reads underneath them were all drizzle, which is the
+ * wrong database in both directions: Mongo down and Postgres up answered 503 for
+ * an endpoint that would have worked, and Postgres down with Mongo up sailed
+ * past the guard and threw inside the handler. `tsc` could not see it, and
+ * neither could a suite that opened both databases, which is how it survived six
+ * verticals.
  *
- * It is also the quietest thing that can break at Task 19: `readyState` never
- * reaches 1 once Mongo is removed, so a surviving Mongo gate would 503 its
- * routes permanently, with no error anywhere.
- *
- * `tsc` cannot see any of this, and neither can a suite that opens both
- * databases — which is how it survived six verticals: the ported controllers'
- * suites all called `connect()` as well as `connectDb()`.
- * `db/__tests__/connectivityGates.test.ts` is the standing check now. It walks
- * each gated entry point's whole import graph and fails if anything it reaches
- * opens a Mongoose model, so a gate cannot become wrong again without saying so.
- *
- * The rule it encodes is unchanged: this function is right only where there are
- * NO Mongoose reads left. A genuinely hybrid handler has to ask both questions,
- * because they are different questions.
+ * That whole class of bug is now closed by construction rather than by a check:
+ * Mongoose, `utils/database.ts` and the last four models are gone, so there is
+ * no second readiness flag left to ask the wrong one of. The scanner that
+ * policed it (`db/__tests__/connectivityGates.test.ts`, which walked each gated
+ * entry point's import graph looking for a Mongoose model) was retired with its
+ * subject — a gate whose violation is now unrepresentable is a gate that can
+ * only ever pass.
  */
 export function isPostgresConnected(): boolean {
   return handle !== null;

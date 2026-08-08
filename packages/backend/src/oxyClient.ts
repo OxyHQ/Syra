@@ -8,7 +8,9 @@ import { OxyServices } from '@oxyhq/core';
  * bootstrap (express/socket.io/redis) — keeping unit tests that import those
  * modules cheap and isolated. Reads `OXY_API_URL` directly (matching the
  * `env.ts` default) rather than importing the full env schema, so importing this
- * module never forces the env validation (e.g. the required `MONGODB_URI`).
+ * module never forces the env validation — `env.ts` parses at import and refuses
+ * a production boot that is missing `DATABASE_URL` or `STREAM_KEY_BASE_URL`,
+ * which has nothing to do with constructing an HTTP client.
  */
 const OXY_API_URL = process.env.OXY_API_URL || 'https://api.oxy.so';
 

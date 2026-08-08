@@ -414,10 +414,16 @@ const bootServer = async () => {
   /**
    * PostgreSQL, and now the only database this service opens.
    *
-   * Log-and-continue, which is what the Mongo connection beside it did and what
-   * every route here still expects: `withDb` answers 503 per request when the
-   * pool is down, so a boot that failed closed would trade a degraded service
-   * for an outage.
+   * Log-and-continue, which is what every route here expects: `withDb` answers
+   * 503 per request when the pool is down, so a boot that failed closed would
+   * trade a degraded service for an outage. (It is also what the Mongo
+   * connection that used to sit beside this one did, which is why the routes
+   * were written against those semantics in the first place.)
+   *
+   * This is about a database that is UNREACHABLE. An unset or non-`postgres://`
+   * `DATABASE_URL` is a different failure and never gets here: `config/env.ts`
+   * refuses the boot in production, because a service that starts and then 503s
+   * every route is the shape that hides a misconfiguration indefinitely.
    */
   try {
     await connectPostgres();
@@ -449,9 +455,10 @@ const bootServer = async () => {
   startIngestWorker();
 
   // Locker retention: warn at T-14d, hide at T0, delete bytes and document at
-  // T+30d. Lock-guarded in Mongo (not Redis like the two schedulers above)
-  // because this job deletes, and its mutual exclusion must not depend on a
-  // second store that can be down while the deletes still run.
+  // T+30d. Guarded by a session-scoped Postgres advisory lock (not Redis like
+  // the two schedulers above) because this job deletes, and its mutual exclusion
+  // must not depend on a second store that can be down while the deletes still
+  // run. See `acquireSweepLock` in services/uploads/expirySweeper.ts.
   startExpirySweeper();
 
   // Drain the moderation outbox. Deliberately NOT lock-guarded like the two
