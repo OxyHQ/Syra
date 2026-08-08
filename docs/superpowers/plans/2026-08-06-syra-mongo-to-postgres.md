@@ -588,3 +588,34 @@ something, and it is why the floor rises rather than being set once.
 Each schema task should also expect to fix something in its predecessor's tests,
 and should say so in its report rather than fixing it silently — the pattern is
 more useful than any individual fix.
+
+## Carried in from the CrowdSource port — one latent fragility in our own gate
+
+`@oxyhq/crowdsource-app`'s Task 6 measured that **`column.name` is the TypeScript
+property name for some drizzle columns and the SQL name for others, in the same
+schema** — it returns the property name for a column declared with no name
+argument (whose SQL name `DATABASE_CASING` derives) and the SQL name for one
+declared explicitly. `sqlColumnName(column)` is the only read that is correct for
+both, which is what its own doc comment says.
+
+Our gates mostly know this: `gates.test.ts` uses `sqlColumnName` with comments
+saying "never `column.name`". **One place does not** —
+`zodPathsExistInDrizzle.test.ts:380` builds its column set from `column.name`.
+
+It is correct **today, by uniformity rather than by design**: measured on this
+branch, all 667 columns across the seven schema files are declared with *no* name
+argument and zero are declared explicitly, so `column.name` is uniformly the
+camelCase property name and matches the camelCase zod fields it is compared
+against.
+
+The fragility is that the fix for a *different* known trap breaks it. Drizzle's
+casing mangles digit-adjacent capitals (`cacheS3Key` → `cache_s_3_key`), and the
+natural repair is an explicit name (`text('cache_s3_key')`) — at which point that
+one column's `column.name` becomes snake_case, stops matching its camelCase zod
+field, and the gate reports a correct schema as missing a path.
+
+**Make the invariant explicit rather than accidental:** assert in the gate that
+every column's `column.name` equals its property key, so the day someone declares
+one explicitly the gate says *why* instead of blaming the field. Cheap, and it
+converts a silent dependency into a stated one. Fold into Task 8 or Task 18's
+follow-up, not its own task.
