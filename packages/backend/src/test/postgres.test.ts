@@ -52,6 +52,21 @@ describe('assertDisposableDatabase', () => {
     }
   });
 
+  /**
+   * The two shapes named as the failure mode this guard is FOR: a rule that is
+   * easy to satisfy by accident. Each defeats one plausible cheap implementation
+   * — `syra_dev_latest` passes "contains `test`", `syra_t12` passes "is not
+   * exactly `syra_dev`" — and both are the shape of a real database somebody
+   * would actually have (a dated dev snapshot; a colleague's scratch copy).
+   *
+   * Pinned separately from the substring cases above so that neither can be
+   * deleted as a duplicate of the other: they fail different implementations.
+   */
+  it('refuses the two shapes a cheap rule would wave through', () => {
+    expect(() => assertDisposableDatabase(`${AT}/syra_dev_latest`)).toThrow(/syra_dev_latest/);
+    expect(() => assertDisposableDatabase(`${AT}/syra_t12`)).toThrow(/syra_t12/);
+  });
+
   it('refuses `task` without a counter', () => {
     expect(() => assertDisposableDatabase(`${AT}/syra_taskless`)).toThrow(/syra_taskless/);
     expect(() => assertDisposableDatabase(`${AT}/syra_task`)).toThrow(/syra_task/);
