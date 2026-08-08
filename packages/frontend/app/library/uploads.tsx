@@ -214,7 +214,7 @@ const UploadRow: React.FC<UploadRowProps> = ({ upload, isCurrent, onPlay }) => {
   }, [albumName, artistName, attestationStatement, promoteUpload, t, title, upload.id]);
 
   return (
-    <View style={[styles.row, { backgroundColor: theme.colors.backgroundTertiary }]}>
+    <View className="bg-popover" style={styles.row}>
       <Pressable
         style={styles.rowMain}
         onPress={onPlay}
@@ -236,7 +236,7 @@ const UploadRow: React.FC<UploadRowProps> = ({ upload, isCurrent, onPlay }) => {
           >
             {upload.title}
           </Text>
-          <Text style={[styles.rowSubtitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+          <Text className="text-muted-foreground" style={styles.rowSubtitle} numberOfLines={1}>
             {/* An empty artist is a valid private file, not a broken one. */}
             {upload.artistName || t('uploads.unknownArtist')}
             {upload.duration > 0 ? ` • ${formatDuration(upload.duration)}` : ''}
@@ -244,7 +244,7 @@ const UploadRow: React.FC<UploadRowProps> = ({ upload, isCurrent, onPlay }) => {
           {/* Retention, shown in the app rather than left to a notification the
               owner may never open. Playing the file pushes the date back. */}
           {expiringInDays !== null ? (
-            <Text style={[styles.rowExpiry, { color: theme.colors.error }]} numberOfLines={1}>
+            <Text className="text-error" style={styles.rowExpiry} numberOfLines={1}>
               {expiringInDays === 0
                 ? t('uploads.locker.expiringToday')
                 : t('uploads.locker.expiringIn', { count: expiringInDays })}
@@ -275,7 +275,7 @@ const UploadRow: React.FC<UploadRowProps> = ({ upload, isCurrent, onPlay }) => {
 
       {isExpanded && (
         <View style={styles.actions}>
-          <Text style={[styles.actionsHint, { color: theme.colors.textSecondary }]}>
+          <Text className="text-muted-foreground" style={styles.actionsHint}>
             {t('uploads.locker.editHint')}
           </Text>
           <TextInput
@@ -329,9 +329,9 @@ const UploadRow: React.FC<UploadRowProps> = ({ upload, isCurrent, onPlay }) => {
             </Text>
           </Pressable>
 
-          <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
+          <View className="bg-border" style={styles.divider} />
 
-          <Text style={[styles.actionsHint, { color: theme.colors.textSecondary }]}>
+          <Text className="text-muted-foreground" style={styles.actionsHint}>
             {t('uploads.locker.contributeHint')}
           </Text>
           <Pressable
@@ -345,7 +345,7 @@ const UploadRow: React.FC<UploadRowProps> = ({ upload, isCurrent, onPlay }) => {
               size={20}
               color={attestationAccepted ? theme.colors.primary : theme.colors.textSecondary}
             />
-            <Text style={[styles.attestationText, { color: theme.colors.textSecondary }]}>
+            <Text className="text-muted-foreground" style={styles.attestationText}>
               {attestationStatement}
             </Text>
           </Pressable>
@@ -378,15 +378,15 @@ const UploadRow: React.FC<UploadRowProps> = ({ upload, isCurrent, onPlay }) => {
             </Text>
           </Pressable>
 
-          <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
+          <View className="bg-border" style={styles.divider} />
 
           <Pressable
             onPress={() => void handleDelete()}
             disabled={deleteUpload.isPending}
-            style={[styles.actionButton, { backgroundColor: theme.colors.backgroundSecondary }]}
+            className="bg-surface" style={styles.actionButton}
             accessibilityRole="button"
           >
-            <Text style={[styles.actionButtonText, { color: theme.colors.error }]}>
+            <Text className="text-error" style={styles.actionButtonText}>
               {t('uploads.locker.delete')}
             </Text>
           </Pressable>
@@ -457,7 +457,7 @@ const UploadsScreen: React.FC = () => {
 
   if (gate.isResolving || (isLoading && gate.canUsePrivateApi)) {
     return (
-      <View style={[styles.centered, { backgroundColor: theme.colors.backgroundSecondary }]}>
+      <View className="bg-surface" style={styles.centered}>
         <LibraryListSkeleton count={8} />
       </View>
     );
@@ -492,24 +492,24 @@ const UploadsScreen: React.FC = () => {
     <>
       <SEO title={t('uploads.locker.seo.title')} description={t('uploads.locker.seo.description')} />
       <ScrollView
-        style={[styles.scroll, { backgroundColor: theme.colors.backgroundSecondary }]}
+        className="bg-surface" style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
           <View style={styles.headerText}>
-            <Text style={[styles.title, { color: theme.colors.text }]}>{t('uploads.locker.title')}</Text>
-            <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
+            <Text className="text-foreground" style={styles.title}>{t('uploads.locker.title')}</Text>
+            <Text className="text-muted-foreground" style={styles.subtitle}>
               {t('uploads.locker.subtitle')}
             </Text>
           </View>
           <Pressable
             onPress={() => router.push('/upload')}
-            style={[styles.uploadButton, { backgroundColor: theme.colors.primary }]}
+            className="bg-primary" style={styles.uploadButton}
             accessibilityRole="button"
           >
             <Ionicons name="cloud-upload-outline" size={16} color={theme.colors.primaryForeground} />
-            <Text style={[styles.uploadButtonText, { color: theme.colors.primaryForeground }]}>
+            <Text className="text-primary-foreground" style={styles.uploadButtonText}>
               {t('uploads.title')}
             </Text>
           </Pressable>
@@ -527,10 +527,10 @@ const UploadsScreen: React.FC = () => {
           <>
             {albums.map(({ album, tracks: albumTracks }) => (
               <View key={album.albumKey} style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: theme.colors.text }]} numberOfLines={1}>
+                <Text className="text-foreground" style={styles.sectionTitle} numberOfLines={1}>
                   {album.albumName ?? t('uploads.locker.untitledAlbum')}
                 </Text>
-                <Text style={[styles.sectionSubtitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+                <Text className="text-muted-foreground" style={styles.sectionSubtitle} numberOfLines={1}>
                   {/* The ALBUM artist, not a track's: on a compilation the track
                       artist differs per row, so a header taken from one would
                       name whichever track happened to sort first. */}
@@ -552,7 +552,7 @@ const UploadsScreen: React.FC = () => {
             {singles.length > 0 && (
               <View style={styles.section}>
                 {albums.length > 0 && (
-                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+                  <Text className="text-foreground" style={styles.sectionTitle}>
                     {t('uploads.locker.otherFiles')}
                   </Text>
                 )}

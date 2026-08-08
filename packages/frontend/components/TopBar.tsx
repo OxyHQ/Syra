@@ -370,12 +370,12 @@ export const TopBar: React.FC = () => {
         nestedScrollEnabled
       >
         {isHeaderSearchLoading && (
-          <Text style={[styles.searchOverlayStateText, { color: theme.colors.textSecondary }]}>
+          <Text className="text-muted-foreground" style={styles.searchOverlayStateText}>
             Searching...
           </Text>
         )}
         {!isHeaderSearchLoading && totalResults === 0 && (
-          <Text style={[styles.searchOverlayStateText, { color: theme.colors.textSecondary }]}>
+          <Text className="text-muted-foreground" style={styles.searchOverlayStateText}>
             No results for &quot;{debouncedSearchQuery}&quot;
           </Text>
         )}
@@ -395,7 +395,7 @@ export const TopBar: React.FC = () => {
                 pressed && { opacity: 0.9 },
               ]}
             >
-              <Text style={[styles.viewAllText, { color: theme.colors.primary }]}>{t('topbar.viewAllResults')}</Text>
+              <Text className="text-primary" style={styles.viewAllText}>{t('topbar.viewAllResults')}</Text>
               <MaterialCommunityIcons name="arrow-right" size={18} color={theme.colors.primary} />
             </Pressable>
           </>
@@ -427,7 +427,7 @@ export const TopBar: React.FC = () => {
         >
           <MaterialCommunityIcons name="magnify" size={20} color={theme.colors.textSecondary} />
           <TextInput
-            style={[styles.searchInput, { color: theme.colors.text }]}
+            className="text-foreground" style={styles.searchInput}
             placeholder={t('search.placeholder')}
             placeholderTextColor={theme.colors.textSecondary}
             value={searchQuery}
@@ -537,7 +537,7 @@ export const TopBar: React.FC = () => {
           </Pressable>
 
           {!isMobile && (
-            <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />
+            <View className="bg-border" style={styles.separator} />
           )}
 
           {renderSearchField(undefined, true)}

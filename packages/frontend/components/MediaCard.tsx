@@ -343,7 +343,7 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
             navigating, the inverse of what a listener expects. */}
         {showPlayButton && (
           <Pressable
-            style={[styles.playButton, { backgroundColor: theme.colors.primary }]}
+            className="bg-primary" style={styles.playButton}
             onPress={handlePlayPress}
             accessibilityRole="button"
             accessibilityLabel={t('common.playTitle', { title })}
@@ -357,7 +357,7 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
       <View style={styles.textContainer}>
         <View style={styles.titleRow}>
           <Text
-            style={[styles.title, { color: theme.colors.text }]}
+            className="text-foreground" style={styles.title}
             numberOfLines={2}
           >
             {title}
@@ -366,7 +366,7 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
         </View>
         {subtitle && (
           <Text 
-            style={[styles.subtitle, { color: theme.colors.textSecondary }]} 
+            className="text-muted-foreground" style={styles.subtitle} 
             numberOfLines={2}
           >
             {subtitle}

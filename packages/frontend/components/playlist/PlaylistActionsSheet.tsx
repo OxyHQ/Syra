@@ -111,7 +111,7 @@ export const PlaylistActionsSheet: React.FC<PlaylistActionsSheetProps> = ({
     <>
       <BottomSheet ref={sheetRef} onDismiss={handleDismiss} enablePanDownToClose>
         <View style={styles.sheet}>
-          <Text style={[styles.playlistName, { color: theme.colors.text }]} numberOfLines={1}>
+          <Text className="text-foreground" style={styles.playlistName} numberOfLines={1}>
             {playlist.name}
           </Text>
 
@@ -141,18 +141,18 @@ export const PlaylistActionsSheet: React.FC<PlaylistActionsSheetProps> = ({
                   onPress={() => setMode('menu')}
                   accessibilityRole="button"
                 >
-                  <Text style={[styles.secondaryButtonText, { color: theme.colors.text }]}>
+                  <Text className="text-foreground" style={styles.secondaryButtonText}>
                     {t('common.cancel')}
                   </Text>
                 </Pressable>
                 <Pressable
-                  style={[styles.primaryButton, { backgroundColor: theme.colors.primary }]}
+                  className="bg-primary" style={styles.primaryButton}
                   onPress={handleRenameSubmit}
                   disabled={updatePlaylist.isPending}
                   accessibilityRole="button"
                   accessibilityState={{ disabled: updatePlaylist.isPending }}
                 >
-                  <Text style={[styles.primaryButtonText, { color: theme.colors.primaryForeground }]}>
+                  <Text className="text-primary-foreground" style={styles.primaryButtonText}>
                     {updatePlaylist.isPending ? t('common.saving') : t('common.save')}
                   </Text>
                 </Pressable>
@@ -166,7 +166,7 @@ export const PlaylistActionsSheet: React.FC<PlaylistActionsSheetProps> = ({
                 accessibilityRole="button"
               >
                 <Ionicons name="pencil-outline" size={22} color={theme.colors.text} />
-                <Text style={[styles.actionText, { color: theme.colors.text }]}>{t('common.rename')}</Text>
+                <Text className="text-foreground" style={styles.actionText}>{t('common.rename')}</Text>
               </Pressable>
 
               {isOwner && (
@@ -178,7 +178,7 @@ export const PlaylistActionsSheet: React.FC<PlaylistActionsSheetProps> = ({
                   accessibilityState={{ disabled: deletePlaylist.isPending }}
                 >
                   <Ionicons name="trash-outline" size={22} color={theme.colors.error} />
-                  <Text style={[styles.actionText, { color: theme.colors.error }]}>
+                  <Text className="text-error" style={styles.actionText}>
                     {t('playlistActions.delete')}
                   </Text>
                 </Pressable>
@@ -196,7 +196,7 @@ export const PlaylistActionsSheet: React.FC<PlaylistActionsSheetProps> = ({
               containerStyle={styles.stateContainer}
             />
           ) : (
-            <Text style={[styles.viewerNote, { color: theme.colors.textSecondary }]}>
+            <Text className="text-muted-foreground" style={styles.viewerNote}>
               {t('playlistActions.readOnly')}
             </Text>
           )}

@@ -104,7 +104,7 @@ const GenreCardComponent: React.FC<GenreCardProps> = ({
           style={styles.playButtonContainer}
           onPress={handlePlayPress}
         >
-          <View style={[styles.playButton, { backgroundColor: theme.colors.primary }]}>
+          <View className="bg-primary" style={styles.playButton}>
             <Ionicons name="play" size={24} color={theme.colors.primaryForeground} />
           </View>
         </Pressable>

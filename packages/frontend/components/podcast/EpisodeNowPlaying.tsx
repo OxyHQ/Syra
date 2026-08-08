@@ -48,7 +48,7 @@ export const EpisodeNowPlaying: React.FC = () => {
         {artwork ? (
           <ExpoImage source={{ uri: artwork }} style={styles.artwork} contentFit="cover" />
         ) : (
-          <View style={[styles.artworkPlaceholder, { backgroundColor: theme.colors.backgroundTertiary }]}>
+          <View className="bg-popover" style={styles.artworkPlaceholder}>
             <Ionicons name="mic" size={64} color={theme.colors.textSecondary} />
           </View>
         )}
@@ -59,11 +59,11 @@ export const EpisodeNowPlaying: React.FC = () => {
         onPress={() => router.push({ pathname: '/podcasts/[id]', params: { id: episode.podcastId } })}
         accessibilityRole="link"
       >
-        <Text style={[styles.show, { color: theme.colors.primary }]} numberOfLines={1}>
+        <Text className="text-primary" style={styles.show} numberOfLines={1}>
           {episode.podcastTitle}
         </Text>
       </Pressable>
-      <Text style={[styles.title, { color: theme.colors.text }]} numberOfLines={3}>
+      <Text className="text-foreground" style={styles.title} numberOfLines={3}>
         {episode.title}
       </Text>
 
@@ -72,7 +72,7 @@ export const EpisodeNowPlaying: React.FC = () => {
         <SkipButton direction="back" seconds={15} size={26} />
         <Pressable
           onPress={() => (isPlaying ? pause() : resume())}
-          style={[styles.playButton, { backgroundColor: theme.colors.primary }]}
+          className="bg-primary" style={styles.playButton}
           accessibilityRole="button"
           accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
         >
@@ -90,8 +90,8 @@ export const EpisodeNowPlaying: React.FC = () => {
 
       {/* Chapters */}
       {chapters.length > 0 && (
-        <View style={[styles.card, { backgroundColor: theme.colors.backgroundTertiary }]}>
-          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>{t('episode.chapters')}</Text>
+        <View className="bg-popover" style={styles.card}>
+          <Text className="text-foreground" style={styles.cardTitle}>{t('episode.chapters')}</Text>
           {chapters.map((chapter, index) => {
             const isActive = index === activeChapterIndex;
             return (

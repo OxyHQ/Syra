@@ -145,7 +145,7 @@ const AlbumScreen: React.FC = () => {
   if (isCatalogLoading) {
     return (
       <ScrollView
-        style={[styles.scrollView, { backgroundColor: theme.colors.backgroundSecondary }]}
+        className="bg-surface" style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
@@ -277,7 +277,7 @@ const AlbumView: React.FC<AlbumViewProps> = ({
         description={`Listen to ${album.title} by ${album.artistName}`}
       />
       <ScrollView
-        style={[styles.scrollView, { backgroundColor: theme.colors.backgroundSecondary }]}
+        className="bg-surface" style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
@@ -297,7 +297,7 @@ const AlbumView: React.FC<AlbumViewProps> = ({
                   resizeMode="cover"
                 />
               ) : (
-                <View style={[styles.coverPlaceholder, { backgroundColor: theme.colors.backgroundSecondary }]}>
+                <View className="bg-surface" style={styles.coverPlaceholder}>
                   <Ionicons name="musical-notes" size={64} color={theme.colors.textSecondary} />
                 </View>
               )}
@@ -305,7 +305,7 @@ const AlbumView: React.FC<AlbumViewProps> = ({
 
             {/* Album Info */}
             <View style={styles.infoContainer}>
-              <Text style={[styles.albumTitle, { color: theme.colors.text }]} numberOfLines={1}>
+              <Text className="text-foreground" style={styles.albumTitle} numberOfLines={1}>
                 {album.title}
               </Text>
 
@@ -319,13 +319,13 @@ const AlbumView: React.FC<AlbumViewProps> = ({
                   size={24}
                   style={styles.artistAvatar}
                 />
-                <Text style={[styles.artistName, { color: theme.colors.text }]}>
+                <Text className="text-foreground" style={styles.artistName}>
                   {album.artistName}
                 </Text>
               </Pressable>
 
               {/* Metadata */}
-              <Text style={[styles.metadata, { color: theme.colors.textSecondary }]}>
+              <Text className="text-muted-foreground" style={styles.metadata}>
                 {new Date(album.releaseDate).getFullYear()} • {album.totalTracks} songs, {totalDurationFormatted}
               </Text>
             </View>
@@ -396,7 +396,7 @@ const AlbumView: React.FC<AlbumViewProps> = ({
             </Pressable>
 
             <View style={styles.listViewContainer}>
-              <Text style={[styles.listViewText, { color: theme.colors.text }]}>{t('common.list')}</Text>
+              <Text className="text-foreground" style={styles.listViewText}>{t('common.list')}</Text>
               <Ionicons name="list" size={20} color={theme.colors.text} />
             </View>
           </View>
@@ -408,8 +408,8 @@ const AlbumView: React.FC<AlbumViewProps> = ({
         {/* Track List Header */}
         <View style={styles.trackListHeader}>
           <View style={styles.trackListHeaderLeft}>
-            <Text style={[styles.trackListHeaderText, { color: theme.colors.textSecondary }]}>#</Text>
-            <Text style={[styles.trackListHeaderText, { color: theme.colors.textSecondary }]}>{t('common.title')}</Text>
+            <Text className="text-muted-foreground" style={styles.trackListHeaderText}>#</Text>
+            <Text className="text-muted-foreground" style={styles.trackListHeaderText}>{t('common.title')}</Text>
           </View>
           <Ionicons name="time-outline" size={16} color={theme.colors.textSecondary} />
         </View>
@@ -418,7 +418,7 @@ const AlbumView: React.FC<AlbumViewProps> = ({
         <View style={styles.trackList}>
           {tracks.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>
+              <Text className="text-muted-foreground" style={styles.emptyStateText}>
                 {t('common.noPlayableTracks')}
               </Text>
             </View>
@@ -463,12 +463,12 @@ const AlbumView: React.FC<AlbumViewProps> = ({
                     </Text>
                     <View style={styles.trackArtistRow}>
                       {track.isExplicit && (
-                        <View style={[styles.explicitBadge, { backgroundColor: theme.colors.backgroundTertiary }]}>
-                          <Text style={[styles.explicitText, { color: theme.colors.textSecondary }]}>E</Text>
+                        <View className="bg-popover" style={styles.explicitBadge}>
+                          <Text className="text-muted-foreground" style={styles.explicitText}>E</Text>
                         </View>
                       )}
                       <Text
-                        style={[styles.trackArtist, { color: theme.colors.textSecondary }]}
+                        className="text-muted-foreground" style={styles.trackArtist}
                         numberOfLines={1}
                       >
                         {track.artistName}
@@ -496,7 +496,7 @@ const AlbumView: React.FC<AlbumViewProps> = ({
                       color={isLiked ? theme.colors.primary : theme.colors.textSecondary}
                     />
                   </Pressable>
-                  <Text style={[styles.trackDuration, { color: theme.colors.textSecondary }]}>
+                  <Text className="text-muted-foreground" style={styles.trackDuration}>
                     {formatDuration(track.duration)}
                   </Text>
                   <Pressable
@@ -523,11 +523,11 @@ const AlbumView: React.FC<AlbumViewProps> = ({
         {/* Release Date & Copyright */}
         {album.releaseDate && (
           <View style={styles.footer}>
-            <Text style={[styles.footerText, { color: theme.colors.textSecondary }]}>
+            <Text className="text-muted-foreground" style={styles.footerText}>
               {releaseDateFormatted}
             </Text>
             {album.copyright && (
-              <Text style={[styles.footerText, { color: theme.colors.textSecondary }]}>
+              <Text className="text-muted-foreground" style={styles.footerText}>
                 {album.copyright}
               </Text>
             )}

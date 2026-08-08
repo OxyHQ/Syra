@@ -166,15 +166,15 @@ const CatalogTrackPreview: React.FC<{ trackId: string; showAddToLibrary: boolean
         {artworkUrl ? (
           <Image source={{ uri: artworkUrl }} style={styles.matchedArtwork} contentFit="cover" />
         ) : (
-          <View style={[styles.matchedArtwork, { backgroundColor: theme.colors.backgroundTertiary }]}>
+          <View className="bg-popover" style={styles.matchedArtwork}>
             <Ionicons name="musical-note" size={18} color={theme.colors.textSecondary} />
           </View>
         )}
         <View style={styles.matchedText}>
-          <Text style={[styles.matchedTitle, { color: theme.colors.text }]} numberOfLines={1}>
+          <Text className="text-foreground" style={styles.matchedTitle} numberOfLines={1}>
             {track.title}
           </Text>
-          <Text style={[styles.matchedArtist, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+          <Text className="text-muted-foreground" style={styles.matchedArtist} numberOfLines={1}>
             {track.artistName}
           </Text>
         </View>
@@ -213,16 +213,16 @@ export const UploadOutcomeCard: React.FC<UploadOutcomeCardProps> = ({
         { backgroundColor: theme.colors.backgroundTertiary, borderColor: accent },
       ]}
     >
-      <Text style={[styles.fileName, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+      <Text className="text-muted-foreground" style={styles.fileName} numberOfLines={1}>
         {fileName}
       </Text>
 
       {outcome.outcome === 'matched' && (
         <>
-          <Text style={[styles.outcomeTitle, { color: theme.colors.text }]}>
+          <Text className="text-foreground" style={styles.outcomeTitle}>
             {t('uploads.matched.title')}
           </Text>
-          <Text style={[styles.outcomeBody, { color: theme.colors.textSecondary }]}>
+          <Text className="text-muted-foreground" style={styles.outcomeBody}>
             {t('uploads.matched.body')}
           </Text>
           <CatalogTrackPreview trackId={outcome.trackId} showAddToLibrary />
@@ -231,19 +231,19 @@ export const UploadOutcomeCard: React.FC<UploadOutcomeCardProps> = ({
 
       {outcome.outcome === 'duplicate' && (
         <>
-          <Text style={[styles.outcomeTitle, { color: theme.colors.text }]}>
+          <Text className="text-foreground" style={styles.outcomeTitle}>
             {t('uploads.duplicate.title')}
           </Text>
-          <Text style={[styles.outcomeBody, { color: theme.colors.textSecondary }]}>
+          <Text className="text-muted-foreground" style={styles.outcomeBody}>
             {t('uploads.duplicate.body')}
           </Text>
           <Pressable
             onPress={() => router.push('/library/uploads')}
-            style={[styles.inlineAction, { backgroundColor: theme.colors.backgroundSecondary }]}
+            className="bg-surface" style={styles.inlineAction}
             accessibilityRole="button"
           >
             <Ionicons name="folder-open-outline" size={16} color={theme.colors.text} />
-            <Text style={[styles.inlineActionText, { color: theme.colors.text }]}>
+            <Text className="text-foreground" style={styles.inlineActionText}>
               {t('uploads.openLocker')}
             </Text>
           </Pressable>
@@ -256,10 +256,10 @@ export const UploadOutcomeCard: React.FC<UploadOutcomeCardProps> = ({
 
       {outcome.outcome === 'published' && (
         <>
-          <Text style={[styles.outcomeTitle, { color: theme.colors.text }]}>
+          <Text className="text-foreground" style={styles.outcomeTitle}>
             {t('uploads.published.title')}
           </Text>
-          <Text style={[styles.outcomeBody, { color: theme.colors.textSecondary }]}>
+          <Text className="text-muted-foreground" style={styles.outcomeBody}>
             {t('uploads.published.body')}
           </Text>
           <CatalogTrackPreview trackId={outcome.trackId} showAddToLibrary={false} />
@@ -268,27 +268,27 @@ export const UploadOutcomeCard: React.FC<UploadOutcomeCardProps> = ({
 
       {outcome.outcome === 'blocked' && (
         <>
-          <Text style={[styles.outcomeTitle, { color: theme.colors.error }]}>
+          <Text className="text-error" style={styles.outcomeTitle}>
             {t('uploads.blocked.title')}
           </Text>
           {/* The code's own explanation first — it says what the FILE is
               missing. The server's sentence follows as supporting detail. */}
-          <Text style={[styles.outcomeBody, { color: theme.colors.text }]}>
+          <Text className="text-foreground" style={styles.outcomeBody}>
             {t(BLOCKED_REASON_KEYS[outcome.code])}
           </Text>
-          <Text style={[styles.outcomeDetail, { color: theme.colors.textSecondary }]}>
+          <Text className="text-muted-foreground" style={styles.outcomeDetail}>
             {outcome.message}
           </Text>
 
           {outcome.markers.length > 0 && (
             <View style={styles.markers}>
-              <Text style={[styles.markersTitle, { color: theme.colors.textSecondary }]}>
+              <Text className="text-muted-foreground" style={styles.markersTitle}>
                 {t('uploads.blocked.evidence')}
               </Text>
               {outcome.markers.map((marker) => (
                 <Text
                   key={`${marker.code}-${marker.detail ?? ''}`}
-                  style={[styles.markerRow, { color: theme.colors.textSecondary }]}
+                  className="text-muted-foreground" style={styles.markerRow}
                 >
                   {marker.detail ? `${marker.code} — ${marker.detail}` : marker.code}
                 </Text>
@@ -300,7 +300,7 @@ export const UploadOutcomeCard: React.FC<UploadOutcomeCardProps> = ({
             <Pressable
               onPress={onKeepPrivate}
               disabled={isKeepingPrivate}
-              style={[styles.inlineAction, { backgroundColor: theme.colors.backgroundSecondary }]}
+              className="bg-surface" style={styles.inlineAction}
               accessibilityRole="button"
             >
               {isKeepingPrivate ? (
@@ -308,7 +308,7 @@ export const UploadOutcomeCard: React.FC<UploadOutcomeCardProps> = ({
               ) : (
                 <Ionicons name="lock-closed-outline" size={16} color={theme.colors.text} />
               )}
-              <Text style={[styles.inlineActionText, { color: theme.colors.text }]}>
+              <Text className="text-foreground" style={styles.inlineActionText}>
                 {t('uploads.blocked.keepPrivate')}
               </Text>
             </Pressable>
@@ -334,10 +334,10 @@ const StoredOutcome: React.FC<{ upload: UserUploadAsTrack }> = ({ upload }) => {
 
   return (
     <>
-      <Text style={[styles.outcomeTitle, { color: theme.colors.text }]}>
+      <Text className="text-foreground" style={styles.outcomeTitle}>
         {t('uploads.stored.title')}
       </Text>
-      <Text style={[styles.outcomeBody, { color: theme.colors.textSecondary }]}>
+      <Text className="text-muted-foreground" style={styles.outcomeBody}>
         {/* An upload with no artist is a VALID private file, never an error:
             a locker exists for exactly the material nobody catalogued. */}
         {upload.title}
@@ -359,11 +359,11 @@ const StoredOutcome: React.FC<{ upload: UserUploadAsTrack }> = ({ upload }) => {
       </View>
       <Pressable
         onPress={() => router.push('/library/uploads')}
-        style={[styles.inlineAction, { backgroundColor: theme.colors.backgroundSecondary }]}
+        className="bg-surface" style={styles.inlineAction}
         accessibilityRole="button"
       >
         <Ionicons name="folder-open-outline" size={16} color={theme.colors.text} />
-        <Text style={[styles.inlineActionText, { color: theme.colors.text }]}>
+        <Text className="text-foreground" style={styles.inlineActionText}>
           {t('uploads.openLocker')}
         </Text>
       </Pressable>

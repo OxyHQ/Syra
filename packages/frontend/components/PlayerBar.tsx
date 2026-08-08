@@ -130,7 +130,7 @@ export const PlayerBar: React.FC = () => {
     <View style={containerStyle}>
       {/* Progress Bar */}
       <Pressable
-        style={[styles.progressBarContainer, { backgroundColor: theme.colors.border }]}
+        className="bg-border" style={styles.progressBarContainer}
         onLayout={(event) => setProgressBarWidth(event.nativeEvent.layout.width)}
         onPress={(e) => {
           if (Platform.OS === 'web') {
@@ -168,14 +168,14 @@ export const PlayerBar: React.FC = () => {
                 contentFit="cover"
               />
             ) : (
-              <View style={[styles.albumArtPlaceholder, { backgroundColor: theme.colors.backgroundSecondary }]}>
+              <View className="bg-surface" style={styles.albumArtPlaceholder}>
                 <MaterialCommunityIcons name={isEpisode ? 'microphone' : 'music'} size={24} color={theme.colors.textSecondary} />
               </View>
             )}
           </Pressable>
           <View style={styles.trackDetails}>
             <Text
-              style={[styles.trackTitle, { color: theme.colors.text }]}
+              className="text-foreground" style={styles.trackTitle}
               numberOfLines={1}
             >
               {media
@@ -183,7 +183,7 @@ export const PlayerBar: React.FC = () => {
                 : (isLoading ? 'Loading...' : 'No track selected')}
             </Text>
             <Text
-              style={[styles.trackArtist, { color: theme.colors.textSecondary }]}
+              className="text-muted-foreground" style={styles.trackArtist}
               numberOfLines={1}
             >
               {media

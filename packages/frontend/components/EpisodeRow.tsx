@@ -107,7 +107,7 @@ const EpisodeRowComponent: React.FC<EpisodeRowProps> = ({
         imageUri ? (
           <Image source={{ uri: imageUri }} style={styles.artwork} contentFit="cover" />
         ) : (
-          <View style={[styles.artworkPlaceholder, { backgroundColor: theme.colors.backgroundTertiary }]}>
+          <View className="bg-popover" style={styles.artworkPlaceholder}>
             <Ionicons name="mic" size={20} color={theme.colors.textSecondary} />
           </View>
         )
@@ -123,15 +123,15 @@ const EpisodeRowComponent: React.FC<EpisodeRowProps> = ({
 
         <View style={styles.metaRow}>
           {completed && (
-            <View style={[styles.playedDot, { backgroundColor: theme.colors.primary }]} />
+            <View className="bg-primary" style={styles.playedDot} />
           )}
-          <Text style={[styles.meta, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+          <Text className="text-muted-foreground" style={styles.meta} numberOfLines={1}>
             {metaLabel}
           </Text>
         </View>
 
         {hasProgress && (
-          <View style={[styles.progressTrack, { backgroundColor: theme.colors.border }]}>
+          <View className="bg-border" style={styles.progressTrack}>
             <View
               style={[styles.progressFill, { backgroundColor: theme.colors.primary, width: `${progressPercent}%` }]}
             />
@@ -144,7 +144,7 @@ const EpisodeRowComponent: React.FC<EpisodeRowProps> = ({
           event?.stopPropagation?.();
           handlePlayPress();
         }}
-        style={[styles.playButton, { borderColor: theme.colors.border }]}
+        className="border-border" style={styles.playButton}
         accessibilityRole="button"
         accessibilityLabel={isPlaying ? 'Pause episode' : 'Play episode'}
       >

@@ -18,7 +18,7 @@ export const LibraryItemSkeleton: React.FC<LibraryItemSkeletonProps> =
     const theme = useTheme();
 
     return (
-      <View style={[styles.libraryItem, { backgroundColor: theme.colors.backgroundTertiary }]}>
+      <View className="bg-popover" style={styles.libraryItem}>
         {shape === 'circle' ? (
           <Skeleton.Circle size={48} />
         ) : (

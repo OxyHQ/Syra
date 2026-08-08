@@ -203,7 +203,7 @@ const PodcastShowView: React.FC<PodcastShowViewProps> = ({
     <>
       <SEO title={`${podcast.title} - Syra`} description={description.slice(0, 160)} />
       <ScrollView
-        style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}
+        className="bg-surface" style={styles.container}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
@@ -218,17 +218,17 @@ const PodcastShowView: React.FC<PodcastShowViewProps> = ({
             {artwork ? (
               <Image source={{ uri: artwork }} style={styles.headerArtwork} contentFit="cover" />
             ) : (
-              <View style={[styles.headerArtworkPlaceholder, { backgroundColor: theme.colors.backgroundTertiary }]}>
+              <View className="bg-popover" style={styles.headerArtworkPlaceholder}>
                 <Ionicons name="mic" size={48} color={theme.colors.textSecondary} />
               </View>
             )}
           </View>
           <View style={styles.headerInfo}>
-            <Text style={[styles.showTitle, { color: theme.colors.text }]} numberOfLines={3}>
+            <Text className="text-foreground" style={styles.showTitle} numberOfLines={3}>
               {podcast.title}
             </Text>
             {podcast.author ? (
-              <Text style={[styles.showAuthor, { color: theme.colors.textSecondary }]} numberOfLines={2}>
+              <Text className="text-muted-foreground" style={styles.showAuthor} numberOfLines={2}>
                 {podcast.author}
               </Text>
             ) : null}
@@ -265,12 +265,12 @@ const PodcastShowView: React.FC<PodcastShowViewProps> = ({
         {description ? (
           <Pressable onPress={() => setDescriptionExpanded((value) => !value)} style={styles.descriptionWrap}>
             <Text
-              style={[styles.description, { color: theme.colors.textSecondary }]}
+              className="text-muted-foreground" style={styles.description}
               numberOfLines={descriptionExpanded ? undefined : 3}
             >
               {description}
             </Text>
-            <Text style={[styles.descriptionToggle, { color: theme.colors.primary }]}>
+            <Text className="text-primary" style={styles.descriptionToggle}>
               {descriptionExpanded ? t('common.showLess') : t('common.showMore')}
             </Text>
           </Pressable>
@@ -280,7 +280,7 @@ const PodcastShowView: React.FC<PodcastShowViewProps> = ({
         <HostsAndGuests persons={persons} />
 
         {/* Episodes */}
-        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('common.episodes')}</Text>
+        <Text className="text-foreground" style={styles.sectionTitle}>{t('common.episodes')}</Text>
         {episodesLoading && episodes.length === 0 ? (
           <LibraryListSkeleton count={6} />
         ) : episodesFailed && episodes.length === 0 ? (
@@ -294,7 +294,7 @@ const PodcastShowView: React.FC<PodcastShowViewProps> = ({
             containerStyle={styles.inlineState}
           />
         ) : episodes.length === 0 ? (
-          <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
+          <Text className="text-muted-foreground" style={styles.emptyText}>
             {t('podcasts.noEpisodes')}
           </Text>
         ) : (

@@ -28,7 +28,7 @@ export const PodcastDetailSkeleton: React.FC<PodcastDetailSkeletonProps> =
 
     return (
       <ScrollView
-        style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}
+        className="bg-surface" style={styles.container}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >

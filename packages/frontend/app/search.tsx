@@ -263,7 +263,7 @@ const SearchScreen: React.FC = () => {
         description={t('search.seo.description')}
       />
       <ScrollView
-        style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}
+        className="bg-surface" style={styles.container}
         contentContainerStyle={[
           styles.contentContainer,
           !isMobile && styles.desktopContentContainer,
@@ -272,10 +272,10 @@ const SearchScreen: React.FC = () => {
       >
         {isMobile && (
           <View style={styles.header}>
-            <View style={[styles.searchContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
+            <View className="bg-surface" style={styles.searchContainer}>
               <Ionicons name="search" size={20} color={theme.colors.textSecondary} />
               <TextInput
-                style={[styles.searchInput, { color: theme.colors.text }]}
+                className="text-foreground" style={styles.searchInput}
                 placeholder={t('search.placeholder')}
                 placeholderTextColor={theme.colors.textSecondary}
                 value={searchQuery}
@@ -288,7 +288,7 @@ const SearchScreen: React.FC = () => {
                   <Ionicons name="close-circle" size={18} color={theme.colors.textSecondary} />
                 </Pressable>
               )}
-              <View style={[styles.searchActionSeparator, { backgroundColor: theme.colors.border }]} />
+              <View className="bg-border" style={styles.searchActionSeparator} />
               <Pressable onPress={handleBrowse} accessibilityRole="button" accessibilityLabel={t('search.browse')}>
                 <Ionicons name="grid-outline" size={19} color={theme.colors.textSecondary} />
               </Pressable>
@@ -340,7 +340,7 @@ const SearchScreen: React.FC = () => {
         {searchLoading && hasQuery && (
           <View style={styles.results}>
             <View style={styles.searchSkeletonSection}>
-              <Text style={[styles.searchSkeletonTitle, { color: theme.colors.text }]}>
+              <Text className="text-foreground" style={styles.searchSkeletonTitle}>
                 {t('common.tracks')}
               </Text>
               <View style={styles.trackList}>
@@ -348,7 +348,7 @@ const SearchScreen: React.FC = () => {
               </View>
             </View>
             <View style={styles.searchSkeletonSection}>
-              <Text style={[styles.searchSkeletonTitle, { color: theme.colors.text }]}>
+              <Text className="text-foreground" style={styles.searchSkeletonTitle}>
                 {t('common.albums')}
               </Text>
               <MediaCardRowSkeleton count={5} />
@@ -726,7 +726,7 @@ const SearchScreen: React.FC = () => {
             {/* Background directory import runs server-side on every podcast search. */}
             {(activeCategory === SearchCategory.ALL || activeCategory === SearchCategory.PODCASTS) &&
               searchResults.pendingPodcastImport && (
-                <Text style={[styles.podcastImportHint, { color: theme.colors.textSecondary }]}>
+                <Text className="text-muted-foreground" style={styles.podcastImportHint}>
                   {t('search.loadingMorePodcasts')}
                 </Text>
               )}
@@ -794,16 +794,16 @@ const SearchScreen: React.FC = () => {
                           ) : externalImg ? (
                             <Image source={{ uri: externalImg }} style={styles.personAvatar} contentFit="cover" />
                           ) : (
-                            <View style={[styles.personAvatarPlaceholder, { backgroundColor: theme.colors.backgroundTertiary }]}>
+                            <View className="bg-popover" style={styles.personAvatarPlaceholder}>
                               <Ionicons name="person" size={22} color={theme.colors.textSecondary} />
                             </View>
                           )}
                           <View style={styles.userInfo}>
-                            <Text style={[styles.userName, { color: theme.colors.text }]} numberOfLines={1}>
+                            <Text className="text-foreground" style={styles.userName} numberOfLines={1}>
                               {label}
                             </Text>
                             {typeof person.appearsInCount === 'number' && person.appearsInCount > 0 && (
-                              <Text style={[styles.userHandle, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+                              <Text className="text-muted-foreground" style={styles.userHandle} numberOfLines={1}>
                                 {person.appearsInCount} {person.appearsInCount === 1 ? 'appearance' : 'appearances'}
                               </Text>
                             )}
@@ -853,20 +853,20 @@ const SearchScreen: React.FC = () => {
                           />
                           <View style={styles.userInfo}>
                             <Text
-                              style={[styles.userName, { color: theme.colors.text }]}
+                              className="text-foreground" style={styles.userName}
                               numberOfLines={1}
                             >
                               {user.displayName}
                             </Text>
                             <Text
-                              style={[styles.userHandle, { color: theme.colors.textSecondary }]}
+                              className="text-muted-foreground" style={styles.userHandle}
                               numberOfLines={1}
                             >
                               @{user.username} • {followers}
                             </Text>
                             {user.bio && (
                               <Text
-                                style={[styles.userBio, { color: theme.colors.textSecondary }]}
+                                className="text-muted-foreground" style={styles.userBio}
                                 numberOfLines={2}
                               >
                                 {user.bio}
@@ -886,7 +886,7 @@ const SearchScreen: React.FC = () => {
                 search box rather than an empty catalogue. */}
             {!hasResults && (
               <View style={styles.noResultsContainer}>
-                <Text style={[styles.noResultsText, { color: theme.colors.textSecondary }]}>
+                <Text className="text-muted-foreground" style={styles.noResultsText}>
                   {t('search.noResults', { query: debouncedQuery })}
                 </Text>
               </View>

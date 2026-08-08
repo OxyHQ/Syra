@@ -69,10 +69,10 @@ export const TrackActionsSheet: React.FC<TrackActionsSheetProps> = ({
     <>
       <BottomSheet ref={sheetRef} onDismiss={onClose} enablePanDownToClose>
         <View style={styles.sheet}>
-          <Text style={[styles.trackTitle, { color: theme.colors.text }]} numberOfLines={1}>
+          <Text className="text-foreground" style={styles.trackTitle} numberOfLines={1}>
             {track.title}
           </Text>
-          <Text style={[styles.trackArtist, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+          <Text className="text-muted-foreground" style={styles.trackArtist} numberOfLines={1}>
             {track.artistName}
           </Text>
 
@@ -85,7 +85,7 @@ export const TrackActionsSheet: React.FC<TrackActionsSheetProps> = ({
             accessibilityRole="button"
           >
             <Ionicons name="radio-outline" size={22} color={theme.colors.text} />
-            <Text style={[styles.actionText, { color: theme.colors.text }]}>{t('radio.songRadio')}</Text>
+            <Text className="text-foreground" style={styles.actionText}>{t('radio.songRadio')}</Text>
           </Pressable>
 
           <Pressable
@@ -94,7 +94,7 @@ export const TrackActionsSheet: React.FC<TrackActionsSheetProps> = ({
             accessibilityRole="button"
           >
             <Ionicons name="add-circle-outline" size={22} color={theme.colors.text} />
-            <Text style={[styles.actionText, { color: theme.colors.text }]}>{t('trackActions.addToPlaylist')}</Text>
+            <Text className="text-foreground" style={styles.actionText}>{t('trackActions.addToPlaylist')}</Text>
           </Pressable>
 
           {removeFrom && (
@@ -106,7 +106,7 @@ export const TrackActionsSheet: React.FC<TrackActionsSheetProps> = ({
               accessibilityState={{ disabled: removeTracks.isPending }}
             >
               <Ionicons name="remove-circle-outline" size={22} color={theme.colors.error} />
-              <Text style={[styles.actionText, { color: theme.colors.error }]}>
+              <Text className="text-error" style={styles.actionText}>
                 {t('trackActions.removeFromPlaylist')}
               </Text>
             </Pressable>

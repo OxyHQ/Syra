@@ -127,14 +127,14 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
           </Text>
           <View style={styles.trackArtistRow}>
             {track.isExplicit && (
-              <View style={[styles.explicitBadge, { backgroundColor: theme.colors.backgroundTertiary }]}>
-                <Text style={[styles.explicitText, { color: theme.colors.textSecondary }]}>E</Text>
+              <View className="bg-popover" style={styles.explicitBadge}>
+                <Text className="text-muted-foreground" style={styles.explicitText}>E</Text>
               </View>
             )}
             {badge ? (
-              <View style={[styles.badge, { backgroundColor: theme.colors.backgroundTertiary }]}>
+              <View className="bg-popover" style={styles.badge}>
                 <Text
-                  style={[styles.badgeText, { color: theme.colors.textSecondary }]}
+                  className="text-muted-foreground" style={styles.badgeText}
                   numberOfLines={1}
                 >
                   {badge}
@@ -142,7 +142,7 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
               </View>
             ) : null}
             <Text
-              style={[styles.trackArtist, { color: theme.colors.textSecondary }]}
+              className="text-muted-foreground" style={styles.trackArtist}
               numberOfLines={1}
             >
               {track.artistName}
@@ -182,7 +182,7 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
             color={theme.colors.text}
           />
         </Pressable>
-        <Text style={[styles.trackDuration, { color: theme.colors.textSecondary }]}>
+        <Text className="text-muted-foreground" style={styles.trackDuration}>
           {formatDuration(track.duration)}
         </Text>
         {onMorePress && (

@@ -151,14 +151,14 @@ export const MobilePlayerBar: React.FC = () => {
                 contentFit="cover"
               />
             ) : (
-              <View style={[styles.albumArtPlaceholder, { backgroundColor: theme.colors.backgroundSecondary }]}>
+              <View className="bg-surface" style={styles.albumArtPlaceholder}>
                 <MaterialCommunityIcons name={isEpisode ? 'microphone' : 'music'} size={24} color={theme.colors.textSecondary} />
               </View>
             )}
           </Pressable>
           <View style={styles.trackDetails}>
             <Text
-              style={[styles.trackTitle, { color: theme.colors.primaryForeground }]}
+              className="text-primary-foreground" style={styles.trackTitle}
               numberOfLines={1}
             >
               {media

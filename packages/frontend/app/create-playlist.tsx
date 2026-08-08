@@ -131,7 +131,7 @@ const CreatePlaylistScreen: React.FC = () => {
       <SEO title={t('createPlaylist.seo.title')} description={t('createPlaylist.seo.description')} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}
+        className="bg-surface" style={styles.container}
       >
         {/* Header */}
         <View
@@ -157,7 +157,7 @@ const CreatePlaylistScreen: React.FC = () => {
               color={theme.colors.text}
             />
           </Pressable>
-          <Text style={[styles.title, { color: theme.colors.text }]}>
+          <Text className="text-foreground" style={styles.title}>
             {t('library.createPlaylist')}
           </Text>
           <Pressable
@@ -177,7 +177,7 @@ const CreatePlaylistScreen: React.FC = () => {
             {isCreating ? (
               <ActivityIndicator size="small" color={theme.colors.primaryForeground} />
             ) : (
-              <Text style={[styles.createHeaderButtonText, { color: theme.colors.primaryForeground }]}>{t('common.create')}</Text>
+              <Text className="text-primary-foreground" style={styles.createHeaderButtonText}>{t('common.create')}</Text>
             )}
           </Pressable>
         </View>
@@ -228,11 +228,11 @@ const CreatePlaylistScreen: React.FC = () => {
                 autoFocus
               />
               {errors.name && (
-                <Text style={[styles.errorText, { color: theme.colors.error }]}>
+                <Text className="text-error" style={styles.errorText}>
                   {errors.name}
                 </Text>
               )}
-              <Text style={[styles.characterCount, { color: theme.colors.textSecondary }]}>
+              <Text className="text-muted-foreground" style={styles.characterCount}>
                 {name.length}/{NAME_MAX_LENGTH}
               </Text>
             </View>
@@ -264,18 +264,18 @@ const CreatePlaylistScreen: React.FC = () => {
                 editable={!isCreating}
               />
               {errors.description && (
-                <Text style={[styles.errorText, { color: theme.colors.error }]}>
+                <Text className="text-error" style={styles.errorText}>
                   {errors.description}
                 </Text>
               )}
-              <Text style={[styles.characterCount, { color: theme.colors.textSecondary }]}>
+              <Text className="text-muted-foreground" style={styles.characterCount}>
                 {description.length}/{DESCRIPTION_MAX_LENGTH}
               </Text>
             </View>
 
             {/* Privacy/Visibility Selector */}
             <View style={styles.inputGroup}>
-              <Text style={[styles.label, { color: theme.colors.text }]}>
+              <Text className="text-foreground" style={styles.label}>
                 {t('createPlaylist.privacy')}
               </Text>
               <View style={styles.visibilityOptions}>

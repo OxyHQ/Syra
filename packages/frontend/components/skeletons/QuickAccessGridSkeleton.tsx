@@ -22,7 +22,7 @@ export const QuickAccessGridSkeleton: React.FC<QuickAccessGridSkeletonProps> =
         {Array.from({ length: count }).map((_, index) => (
           <View
             key={index}
-            style={[styles.compactGridItem, { backgroundColor: theme.colors.backgroundSecondary }]}
+            className="bg-surface" style={styles.compactGridItem}
           >
             <Skeleton.Box
               width={40}

@@ -152,7 +152,7 @@ const PlaylistScreen: React.FC = () => {
 
   if (isCatalogLoading) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}>
+      <View className="bg-surface" style={styles.container}>
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
@@ -342,7 +342,7 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
         title={`${playlist.name} - Syra`}
         description={playlist.description || `Listen to ${playlist.name}`}
       />
-      <View style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}>
+      <View className="bg-surface" style={styles.container}>
         {/* Sticky Header */}
         <Animated.View
           style={[
@@ -358,7 +358,7 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
           <View style={styles.stickyHeaderContent}>
             {/* Center - Title and cover art */}
             <View style={styles.stickyHeaderCenter}>
-              <View style={[styles.stickyHeaderImageContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
+              <View className="bg-surface" style={styles.stickyHeaderImageContainer}>
                 {playlistStickyImage ? (
                   <Image
                     source={{ uri: playlistStickyImage }}
@@ -369,7 +369,7 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
                   <Ionicons name="musical-notes" size={20} color={theme.colors.textSecondary} />
                 )}
               </View>
-              <Text style={[styles.stickyHeaderTitle, { color: theme.colors.text }]} numberOfLines={1}>
+              <Text className="text-foreground" style={styles.stickyHeaderTitle} numberOfLines={1}>
                 {playlist.name}
               </Text>
             </View>
@@ -437,7 +437,7 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
                   resizeMode="cover"
                 />
               ) : (
-                <View style={[styles.headerPlaceholder, { backgroundColor: theme.colors.backgroundSecondary }]}>
+                <View className="bg-surface" style={styles.headerPlaceholder}>
                   <Ionicons name="musical-notes" size={80} color={theme.colors.textSecondary} />
                 </View>
               )}
@@ -475,24 +475,24 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
                 )}
                 <View style={styles.infoTextContainer}>
                   {playlist.description && (
-                    <Text style={[styles.description, { color: theme.colors.textSecondary }]} numberOfLines={2}>
+                    <Text className="text-muted-foreground" style={styles.description} numberOfLines={2}>
                       {playlist.description}
                     </Text>
                   )}
                   <View style={styles.metadataRow}>
-                    <Text style={[styles.metadata, { color: theme.colors.textSecondary }]}>
+                    <Text className="text-muted-foreground" style={styles.metadata}>
                       {playlist.ownerUsername}
                     </Text>
                     {playlist.trackCount > 0 && (
                       <>
-                        <Text style={[styles.metadataSeparator, { color: theme.colors.textSecondary }]}>•</Text>
-                        <Text style={[styles.metadata, { color: theme.colors.textSecondary }]}>
+                        <Text className="text-muted-foreground" style={styles.metadataSeparator}>•</Text>
+                        <Text className="text-muted-foreground" style={styles.metadata}>
                           {playlist.trackCount} {playlist.trackCount === 1 ? 'song' : 'songs'}
                         </Text>
                         {totalDurationFormatted && (
                           <>
-                            <Text style={[styles.metadataSeparator, { color: theme.colors.textSecondary }]}>•</Text>
-                            <Text style={[styles.metadata, { color: theme.colors.textSecondary }]}>
+                            <Text className="text-muted-foreground" style={styles.metadataSeparator}>•</Text>
+                            <Text className="text-muted-foreground" style={styles.metadata}>
                               {totalDurationFormatted}
                             </Text>
                           </>
@@ -501,8 +501,8 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
                     )}
                     {playlist.followers !== undefined && playlist.followers > 0 && (
                       <>
-                        <Text style={[styles.metadataSeparator, { color: theme.colors.textSecondary }]}>•</Text>
-                        <Text style={[styles.metadata, { color: theme.colors.textSecondary }]}>
+                        <Text className="text-muted-foreground" style={styles.metadataSeparator}>•</Text>
+                        <Text className="text-muted-foreground" style={styles.metadata}>
                           {playlist.followers.toLocaleString()} {playlist.followers === 1 ? 'save' : 'saves'}
                         </Text>
                       </>
@@ -585,8 +585,8 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
             {/* Track List Header */}
             <View style={styles.trackListHeader}>
               <View style={styles.trackListHeaderLeft}>
-                <Text style={[styles.trackListHeaderText, { color: theme.colors.textSecondary }]}>#</Text>
-                <Text style={[styles.trackListHeaderText, { color: theme.colors.textSecondary }]}>{t('common.title')}</Text>
+                <Text className="text-muted-foreground" style={styles.trackListHeaderText}>#</Text>
+                <Text className="text-muted-foreground" style={styles.trackListHeaderText}>{t('common.title')}</Text>
               </View>
               <Ionicons name="time-outline" size={16} color={theme.colors.textSecondary} />
             </View>
@@ -595,7 +595,7 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
             <View style={styles.trackList}>
               {tracks.length === 0 ? (
                 <View style={styles.emptyState}>
-                  <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>
+                  <Text className="text-muted-foreground" style={styles.emptyStateText}>
                     {t('playlist.empty')}
                   </Text>
                 </View>

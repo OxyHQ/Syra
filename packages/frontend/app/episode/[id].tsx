@@ -193,7 +193,7 @@ const EpisodeView: React.FC<EpisodeViewProps> = ({
     <>
       <SEO title={`${episode.title} - Syra`} description={description.slice(0, 160)} />
       <ScrollView
-        style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}
+        className="bg-surface" style={styles.container}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
@@ -207,24 +207,24 @@ const EpisodeView: React.FC<EpisodeViewProps> = ({
             {artwork ? (
               <Image source={{ uri: artwork }} style={styles.artwork} contentFit="cover" />
             ) : (
-              <View style={[styles.artworkPlaceholder, { backgroundColor: theme.colors.backgroundTertiary }]}>
+              <View className="bg-popover" style={styles.artworkPlaceholder}>
                 <Ionicons name="mic" size={48} color={theme.colors.textSecondary} />
               </View>
             )}
           </View>
           <Pressable onPress={onOpenShow} accessibilityRole="link">
-            <Text style={[styles.showLink, { color: theme.colors.primary }]} numberOfLines={1}>
+            <Text className="text-primary" style={styles.showLink} numberOfLines={1}>
               {episode.podcastTitle}
             </Text>
           </Pressable>
-          <Text style={[styles.title, { color: theme.colors.text }]}>{episode.title}</Text>
+          <Text className="text-foreground" style={styles.title}>{episode.title}</Text>
           {metaParts.length > 0 && (
-            <Text style={[styles.meta, { color: theme.colors.textSecondary }]}>{metaParts.join(' • ')}</Text>
+            <Text className="text-muted-foreground" style={styles.meta}>{metaParts.join(' • ')}</Text>
           )}
 
           <Pressable
             onPress={onPlay}
-            style={[styles.playButton, { backgroundColor: theme.colors.primary }]}
+            className="bg-primary" style={styles.playButton}
             accessibilityRole="button"
             accessibilityLabel={playLabel}
           >
@@ -233,7 +233,7 @@ const EpisodeView: React.FC<EpisodeViewProps> = ({
               size={20}
               color={theme.colors.primaryForeground}
             />
-            <Text style={[styles.playButtonText, { color: theme.colors.primaryForeground }]}>{playLabel}</Text>
+            <Text className="text-primary-foreground" style={styles.playButtonText}>{playLabel}</Text>
           </Pressable>
         </View>
 
@@ -243,17 +243,17 @@ const EpisodeView: React.FC<EpisodeViewProps> = ({
         {/* Chapters */}
         {chapters && chapters.length > 0 && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('episode.chapters')}</Text>
+            <Text className="text-foreground" style={styles.sectionTitle}>{t('episode.chapters')}</Text>
             {chapters.map((chapter, index) => (
               <Pressable
                 key={`${chapter.startTime}-${index}`}
                 onPress={() => onChapterPress(chapter.startTime)}
                 style={styles.chapterRow}
               >
-                <Text style={[styles.chapterTime, { color: theme.colors.textSecondary }]}>
+                <Text className="text-muted-foreground" style={styles.chapterTime}>
                   {formatDuration(chapter.startTime)}
                 </Text>
-                <Text style={[styles.chapterTitle, { color: theme.colors.text }]} numberOfLines={1}>
+                <Text className="text-foreground" style={styles.chapterTitle} numberOfLines={1}>
                   {chapter.title ?? t('episode.untitledChapter')}
                 </Text>
               </Pressable>
@@ -264,7 +264,7 @@ const EpisodeView: React.FC<EpisodeViewProps> = ({
         {/* Transcripts */}
         {episode.transcripts && episode.transcripts.length > 0 && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('episode.transcript')}</Text>
+            <Text className="text-foreground" style={styles.sectionTitle}>{t('episode.transcript')}</Text>
             {episode.transcripts.map((transcript, index) => (
               <Pressable
                 key={`${transcript.url}-${index}`}
@@ -272,7 +272,7 @@ const EpisodeView: React.FC<EpisodeViewProps> = ({
                 style={styles.linkRow}
               >
                 <Ionicons name="document-text-outline" size={18} color={theme.colors.primary} />
-                <Text style={[styles.linkText, { color: theme.colors.primary }]} numberOfLines={1}>
+                <Text className="text-primary" style={styles.linkText} numberOfLines={1}>
                   {transcript.language ? `Transcript (${transcript.language})` : t('episode.viewTranscript')}
                 </Text>
               </Pressable>
@@ -283,8 +283,8 @@ const EpisodeView: React.FC<EpisodeViewProps> = ({
         {/* Description */}
         {description ? (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('common.about')}</Text>
-            <Text style={[styles.description, { color: theme.colors.textSecondary }]}>{description}</Text>
+            <Text className="text-foreground" style={styles.sectionTitle}>{t('common.about')}</Text>
+            <Text className="text-muted-foreground" style={styles.description}>{description}</Text>
           </View>
         ) : null}
       </ScrollView>

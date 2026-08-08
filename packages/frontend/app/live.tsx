@@ -72,7 +72,7 @@ export default function LiveScreen() {
   }, [closeCreateSheet, refetch]);
 
   return (
-    <View className="flex-1" style={{ backgroundColor: theme.colors.background }}>
+    <View className="flex-1 bg-background" >
       <SEO title={t('live.seo.title')} description={t('live.seo.description')} />
 
       <ScrollView
@@ -84,23 +84,23 @@ export default function LiveScreen() {
       >
         <View className="px-4 pb-3" style={{ paddingTop: insets.top + 12 }}>
           <View className="flex-row items-center gap-2">
-            <View className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: theme.colors.error }} />
-            <Text className="text-3xl font-extrabold" style={{ color: theme.colors.text }}>
+            <View className="w-2.5 h-2.5 rounded-full bg-error"  />
+            <Text className="text-3xl font-extrabold text-foreground" >
               {t('live.title')}
             </Text>
           </View>
-          <Text className="mt-1 text-base" style={{ color: theme.colors.textSecondary }}>
+          <Text className="mt-1 text-base text-muted-foreground" >
             {t('live.subtitle')}
           </Text>
         </View>
 
         <Pressable
           onPress={openCreateSheet}
-          className="mx-4 mb-4 flex-row items-center justify-center gap-2 rounded-full py-3"
-          style={{ backgroundColor: theme.colors.primary }}
+          className="mx-4 mb-4 flex-row items-center justify-center gap-2 rounded-full py-3 bg-primary"
+          
         >
           <MaterialCommunityIcons name="microphone-plus" size={20} color={theme.colors.primaryForeground} />
-          <Text className="text-base font-semibold" style={{ color: theme.colors.primaryForeground }}>
+          <Text className="text-base font-semibold text-primary-foreground" >
             {t('live.startRoom')}
           </Text>
         </Pressable>
@@ -118,10 +118,10 @@ export default function LiveScreen() {
         ) : (
           <View className="items-center justify-center px-8 py-16">
             <MaterialCommunityIcons name="broadcast-off" size={56} color={theme.colors.textTertiary} />
-            <Text className="mt-4 text-lg font-semibold" style={{ color: theme.colors.text }}>
+            <Text className="mt-4 text-lg font-semibold text-foreground" >
               {t('live.empty')}
             </Text>
-            <Text className="mt-1 text-center text-sm" style={{ color: theme.colors.textSecondary }}>
+            <Text className="mt-1 text-center text-sm text-muted-foreground" >
               {t('live.emptySubtitle')}
             </Text>
           </View>
@@ -175,7 +175,7 @@ export default function LiveScreen() {
               }}
             >
               <MaterialCommunityIcons name="calendar" size={20} color={theme.colors.text} />
-              <Text className="text-base font-semibold" style={{ color: theme.colors.text }}>
+              <Text className="text-base font-semibold text-foreground" >
                 {t('live.scheduleRoom')}
               </Text>
             </Pressable>

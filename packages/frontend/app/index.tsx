@@ -370,7 +370,7 @@ const HomeSectionBlock: React.FC<HomeSectionBlockProps> = ({
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeaderRow}>
-        <Text style={[styles.sectionHeaderTitle, { color: theme.colors.text }]}>{title}</Text>
+        <Text className="text-foreground" style={styles.sectionHeaderTitle}>{title}</Text>
         {headerAction}
       </View>
       {status === 'loading' ? (
@@ -523,7 +523,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
     podcastsStatus === 'ready';
 
   return (
-    <View style={[styles.gradientContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
+    <View className="bg-surface" style={styles.gradientContainer}>
         <ScrollView
           style={[styles.scrollView, { backgroundColor: 'transparent' }]}
           contentContainerStyle={[
@@ -534,7 +534,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
         >
           {/* Header */}
           <View style={styles.header}>
-            <Text style={[styles.title, { color: theme.colors.text }]}>
+            <Text className="text-foreground" style={styles.title}>
               {greeting}
             </Text>
           </View>
@@ -547,13 +547,13 @@ const HomeContent: React.FC<HomeContentProps> = ({
             <View style={styles.section}>
               <View style={styles.sectionHeaderRow}>
                 <View style={styles.liveHeading}>
-                  <View style={[styles.liveDot, { backgroundColor: theme.colors.error }]} />
-                  <Text style={[styles.sectionHeaderTitle, { color: theme.colors.text }]}>
+                  <View className="bg-error" style={styles.liveDot} />
+                  <Text className="text-foreground" style={styles.sectionHeaderTitle}>
                     {t('home.liveNow')}
                   </Text>
                 </View>
                 <Pressable style={styles.seeAllButton} onPress={() => router.push('/live')} hitSlop={8}>
-                  <Text style={[styles.seeAll, { color: theme.colors.textSecondary }]}>
+                  <Text className="text-muted-foreground" style={styles.seeAll}>
                     {t('common.seeAll')}
                   </Text>
                 </Pressable>
@@ -612,7 +612,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
                 return (
                   <Pressable
                     key={itemKey}
-                    style={[styles.compactGridItem, { backgroundColor: theme.colors.backgroundSecondary }]}
+                    className="bg-surface" style={styles.compactGridItem}
                     onPress={() => {
                       if (item.type === 'album') {
                         router.push(`/album/${id}`);
@@ -655,7 +655,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
                       )}
                     </View>
                     <Text
-                      style={[styles.compactTitle, { color: theme.colors.text }]}
+                      className="text-foreground" style={styles.compactTitle}
                       numberOfLines={1}
                     >
                       {title}
@@ -822,7 +822,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
                 onPress={() => router.push({ pathname: '/radio/[...seed]', params: { seed: ['user'] } })}
                 hitSlop={8}
               >
-                <Text style={[styles.seeAll, { color: theme.colors.textSecondary }]}>
+                <Text className="text-muted-foreground" style={styles.seeAll}>
                   {t('common.seeAll')}
                 </Text>
               </Pressable>
@@ -865,7 +865,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
             error={{ title: t('home.errors.podcasts'), message: t('common.retryHint') }}
             headerAction={
               <Pressable style={styles.seeAllButton} onPress={() => router.push('/podcasts')} hitSlop={8}>
-                <Text style={[styles.seeAll, { color: theme.colors.textSecondary }]}>
+                <Text className="text-muted-foreground" style={styles.seeAll}>
                   {t('common.seeAll')}
                 </Text>
               </Pressable>
@@ -1044,7 +1044,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
               accessibilityRole="link"
               accessibilityLabel={t('common.reportCopyright')}
             >
-              <Text style={[styles.footerLink, { color: theme.colors.textSecondary }]}>
+              <Text className="text-muted-foreground" style={styles.footerLink}>
                 {t('common.reportCopyright')}
               </Text>
             </Pressable>

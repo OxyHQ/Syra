@@ -44,7 +44,7 @@ const BrowseScreen: React.FC = () => {
         description={t('browse.seo.description')}
       />
       <ScrollView
-        style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}
+        className="bg-surface" style={styles.container}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >

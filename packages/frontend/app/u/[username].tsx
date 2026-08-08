@@ -24,7 +24,7 @@ const UserProfileScreen: React.FC = () => {
       <>
         <SEO title={`${username || 'User'} - Syra`} description={t('user.seo.description')} />
         <ScrollView
-          style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}
+          className="bg-surface" style={styles.container}
           showsVerticalScrollIndicator={false}
         >
           <ProfileHeaderSkeleton />
@@ -39,10 +39,10 @@ const UserProfileScreen: React.FC = () => {
         <SEO title={t('user.seo.notFoundTitle')} description={t('user.seo.notFoundDescription')} />
         <View style={[styles.container, styles.centered, { backgroundColor: theme.colors.backgroundSecondary }]}>
           <MaterialCommunityIcons name="account-off" size={64} color={theme.colors.textSecondary} />
-          <Text style={[styles.errorText, { color: theme.colors.textSecondary }]}>
+          <Text className="text-muted-foreground" style={styles.errorText}>
             {t('user.notFound')}
           </Text>
-          <Text style={[styles.errorSubtext, { color: theme.colors.textSecondary }]}>
+          <Text className="text-muted-foreground" style={styles.errorSubtext}>
             {t('user.notFoundMessage')}
           </Text>
         </View>
@@ -61,7 +61,7 @@ const UserProfileScreen: React.FC = () => {
         description={profileData.bio || `Profile page for ${displayName}`} 
       />
       <ScrollView
-        style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}
+        className="bg-surface" style={styles.container}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
@@ -75,7 +75,7 @@ const UserProfileScreen: React.FC = () => {
           />
           <View style={styles.profileInfo}>
             <View style={styles.nameRow}>
-              <Text style={[styles.displayName, { color: theme.colors.text }]}>
+              <Text className="text-foreground" style={styles.displayName}>
                 {displayName}
               </Text>
               {profileData.verified && (
@@ -87,11 +87,11 @@ const UserProfileScreen: React.FC = () => {
                 />
               )}
             </View>
-            <Text style={[styles.username, { color: theme.colors.textSecondary }]}>
+            <Text className="text-muted-foreground" style={styles.username}>
               @{profileData.username}
             </Text>
             {profileData.bio && (
-              <Text style={[styles.bio, { color: theme.colors.text }]}>
+              <Text className="text-foreground" style={styles.bio}>
                 {profileData.bio}
               </Text>
             )}
@@ -101,26 +101,26 @@ const UserProfileScreen: React.FC = () => {
         {/* Stats Section */}
         <View style={[styles.statsSection, { borderBottomColor: theme.colors.border }]}>
           <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: theme.colors.text }]}>
+            <Text className="text-foreground" style={styles.statValue}>
               {profileData.postsCount || 0}
             </Text>
-            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
+            <Text className="text-muted-foreground" style={styles.statLabel}>
               {t('common.playlists')}
             </Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: theme.colors.text }]}>
+            <Text className="text-foreground" style={styles.statValue}>
               {profileData.stats?.followers || 0}
             </Text>
-            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
+            <Text className="text-muted-foreground" style={styles.statLabel}>
               {t('common.followers')}
             </Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: theme.colors.text }]}>
+            <Text className="text-foreground" style={styles.statValue}>
               {profileData.stats?.following || 0}
             </Text>
-            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
+            <Text className="text-muted-foreground" style={styles.statLabel}>
               {t('common.following')}
             </Text>
           </View>
@@ -128,7 +128,7 @@ const UserProfileScreen: React.FC = () => {
 
         {/* Content Section */}
         <View style={styles.contentSection}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+          <Text className="text-foreground" style={styles.sectionTitle}>
             {t('user.publicPlaylists')}
           </Text>
           <View style={styles.emptyState}>
@@ -137,7 +137,7 @@ const UserProfileScreen: React.FC = () => {
               size={48} 
               color={theme.colors.textSecondary} 
             />
-            <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
+            <Text className="text-muted-foreground" style={styles.emptyText}>
               {t('user.noPublicPlaylists')}
             </Text>
           </View>

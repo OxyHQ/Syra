@@ -70,7 +70,7 @@ export const BottomSheetProvider: React.FC<{ children: ReactNode }> = ({ childre
                 enableHandlePanningGesture={true}
                 index={0}
             >
-                <BottomSheetView style={[styles.contentView, { backgroundColor: theme.colors.background }]}>
+                <BottomSheetView className="bg-background" style={styles.contentView}>
                     {bottomSheetContent}
                 </BottomSheetView>
             </BottomSheetModal>

@@ -39,7 +39,7 @@ export const HostsAndGuests: React.FC<HostsAndGuestsProps> = ({ persons, title }
 
   return (
     <View style={styles.section}>
-      <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{heading}</Text>
+      <Text className="text-foreground" style={styles.sectionTitle}>{heading}</Text>
       {persons.map((person, index) => {
         const isOxyLinked = Boolean(person.linkedOxyUserId);
         const label = person.displayName || person.name;
@@ -70,16 +70,16 @@ export const HostsAndGuests: React.FC<HostsAndGuestsProps> = ({ persons, title }
             ) : externalImg ? (
               <Image source={{ uri: externalImg }} style={styles.avatar} contentFit="cover" />
             ) : (
-              <View style={[styles.avatarPlaceholder, { backgroundColor: theme.colors.backgroundTertiary }]}>
+              <View className="bg-popover" style={styles.avatarPlaceholder}>
                 <Ionicons name="person" size={18} color={theme.colors.textSecondary} />
               </View>
             )}
             <View style={styles.info}>
-              <Text style={[styles.name, { color: theme.colors.text }]} numberOfLines={1}>
+              <Text className="text-foreground" style={styles.name} numberOfLines={1}>
                 {label}
               </Text>
               {person.role ? (
-                <Text style={[styles.role, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+                <Text className="text-muted-foreground" style={styles.role} numberOfLines={1}>
                   {person.role}
                 </Text>
               ) : null}

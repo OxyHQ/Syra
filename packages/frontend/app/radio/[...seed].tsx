@@ -97,7 +97,7 @@ const RadioStationScreen: React.FC = () => {
 
   if (gate.isResolving || station.isLoading) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}>
+      <View className="bg-surface" style={styles.container}>
         <View style={styles.list}>
           <TrackListSkeleton count={8} />
         </View>
@@ -139,7 +139,7 @@ const RadioStationScreen: React.FC = () => {
   return (
     <>
       <SEO title={t('radio.seo.title', { station: title })} description={stationInfo?.subtitle} />
-      <View style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}>
+      <View className="bg-surface" style={styles.container}>
         <FlatList
           data={tracks}
           keyExtractor={(track) => track.id}
@@ -163,7 +163,7 @@ const RadioStationScreen: React.FC = () => {
           }}
           ListHeaderComponent={
             <View style={styles.header}>
-              <View style={[styles.artwork, { backgroundColor: theme.colors.background }]}>
+              <View className="bg-background" style={styles.artwork}>
                 {stationInfo?.imageUrl ? (
                   <Image
                     source={{ uri: stationInfo.imageUrl }}
@@ -175,15 +175,15 @@ const RadioStationScreen: React.FC = () => {
                 )}
               </View>
               <View style={styles.headerText}>
-                <Text style={[styles.headerLabel, { color: theme.colors.textSecondary }]}>
+                <Text className="text-muted-foreground" style={styles.headerLabel}>
                   {t('radio.label')}
                 </Text>
-                <Text style={[styles.headerTitle, { color: theme.colors.text }]} numberOfLines={2}>
+                <Text className="text-foreground" style={styles.headerTitle} numberOfLines={2}>
                   {title}
                 </Text>
                 {stationInfo?.subtitle ? (
                   <Text
-                    style={[styles.headerSubtitle, { color: theme.colors.textSecondary }]}
+                    className="text-muted-foreground" style={styles.headerSubtitle}
                     numberOfLines={2}
                   >
                     {stationInfo.subtitle}
@@ -199,7 +199,7 @@ const RadioStationScreen: React.FC = () => {
                   hitSlop={8}
                 >
                   <Ionicons name="refresh" size={16} color={theme.colors.textSecondary} />
-                  <Text style={[styles.restartLabel, { color: theme.colors.textSecondary }]}>
+                  <Text className="text-muted-foreground" style={styles.restartLabel}>
                     {t('radio.restart')}
                   </Text>
                 </Pressable>

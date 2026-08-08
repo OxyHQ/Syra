@@ -59,13 +59,13 @@ const DeviceRow: React.FC<DeviceRowProps> = ({ device, isActive, onPress }) => {
       />
       <View style={styles.deviceInfo}>
         <Text
-          style={[styles.deviceName, { color: theme.colors.text }]}
+          className="text-foreground" style={styles.deviceName}
           numberOfLines={1}
         >
           {device.name}
         </Text>
         {isActive && (
-          <Text style={[styles.deviceStatus, { color: theme.colors.primary }]}>
+          <Text className="text-primary" style={styles.deviceStatus}>
             {t('devices.playing')}
           </Text>
         )}
@@ -154,7 +154,7 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({
         {/* Stop propagation so taps inside the sheet don't close it */}
         <Pressable style={sheetStyle} onPress={() => undefined}>
           <View style={styles.header}>
-            <Text style={[styles.title, { color: theme.colors.text }]}>
+            <Text className="text-foreground" style={styles.title}>
               {t('devices.title')}
             </Text>
             <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel={t('common.close')}>
@@ -171,7 +171,7 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({
               {Array.from({ length: 3 }).map((_, i) => (
                 <View
                   key={i}
-                  style={[styles.skeletonRow, { backgroundColor: theme.colors.backgroundSecondary }]}
+                  className="bg-surface" style={styles.skeletonRow}
                 >
                   <Skeleton.Circle size={36} />
                   <View style={styles.skeletonDeviceInfo}>
@@ -218,7 +218,7 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({
               platform/build can't cast, so no dead row is shown. */}
           {castSupported && (
             <View style={[styles.castSection, { borderTopColor: theme.colors.border }]}>
-              <Text style={[styles.sectionLabel, { color: theme.colors.textSecondary }]}>
+              <Text className="text-muted-foreground" style={styles.sectionLabel}>
                 {t('devices.castAndSpeakers')}
               </Text>
               <Pressable
@@ -240,19 +240,19 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({
                 />
                 <View style={styles.deviceInfo}>
                   <Text
-                    style={[styles.deviceName, { color: theme.colors.text }]}
+                    className="text-foreground" style={styles.deviceName}
                     numberOfLines={1}
                   >
                     {isCasting ? (castDeviceName ?? t('devices.castDevice')) : t('devices.connectToCast')}
                   </Text>
                   {isCasting && (
-                    <Text style={[styles.deviceStatus, { color: theme.colors.primary }]}>
+                    <Text className="text-primary" style={styles.deviceStatus}>
                       {t('devices.connected')}
                     </Text>
                   )}
                 </View>
                 {isCasting && (
-                  <Text style={[styles.disconnectText, { color: theme.colors.primary }]}>
+                  <Text className="text-primary" style={styles.disconnectText}>
                     {t('devices.disconnect')}
                   </Text>
                 )}

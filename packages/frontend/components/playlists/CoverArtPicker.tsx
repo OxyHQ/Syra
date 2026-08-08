@@ -117,7 +117,7 @@ export const CoverArtPicker: React.FC<CoverArtPickerProps> = ({
       {isUploading ? (
         <View style={styles.uploadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={[styles.uploadingText, { color: theme.colors.textSecondary }]}>
+          <Text className="text-muted-foreground" style={styles.uploadingText}>
             Uploading...
           </Text>
         </View>
@@ -134,7 +134,7 @@ export const CoverArtPicker: React.FC<CoverArtPickerProps> = ({
             size={size * 0.3}
             color={theme.colors.textSecondary}
           />
-          <Text style={[styles.placeholderText, { color: theme.colors.textSecondary }]}>
+          <Text className="text-muted-foreground" style={styles.placeholderText}>
             {t('coverArt.add')}
           </Text>
         </View>

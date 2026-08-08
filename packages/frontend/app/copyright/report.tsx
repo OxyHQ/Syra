@@ -126,7 +126,7 @@ const CopyrightReportScreen: React.FC = () => {
       <SEO title={t('copyright.seo.title')} description={t('common.reportCopyright')} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}
+        className="bg-surface" style={styles.container}
       >
         {/* Header */}
         <View
@@ -152,7 +152,7 @@ const CopyrightReportScreen: React.FC = () => {
               color={theme.colors.text}
             />
           </Pressable>
-          <Text style={[styles.title, { color: theme.colors.text }]}>
+          <Text className="text-foreground" style={styles.title}>
             {t('copyright.title')}
           </Text>
           <View style={{ width: 24 }} />
@@ -169,14 +169,14 @@ const CopyrightReportScreen: React.FC = () => {
         >
           {/* Instructions */}
           <View style={styles.section}>
-            <Text style={[styles.instructions, { color: theme.colors.textSecondary }]}>
+            <Text className="text-muted-foreground" style={styles.instructions}>
               {t('copyright.intro')}
             </Text>
           </View>
 
           {/* Track Search */}
           <View style={styles.section}>
-            <Text style={[styles.label, { color: theme.colors.text }]}>
+            <Text className="text-foreground" style={styles.label}>
               {t('copyright.searchLabel')}
             </Text>
             <View style={styles.searchContainer}>
@@ -204,7 +204,7 @@ const CopyrightReportScreen: React.FC = () => {
                 />
               )}
               {isSearchError && (
-                <Text style={[styles.errorText, { color: theme.colors.error }]}>
+                <Text className="text-error" style={styles.errorText}>
                   {t('copyright.searchError')}
                 </Text>
               )}
@@ -212,7 +212,7 @@ const CopyrightReportScreen: React.FC = () => {
 
             {/* Search Results */}
             {searchResults.length > 0 && !selectedTrack && (
-              <View style={[styles.resultsContainer, { backgroundColor: theme.colors.backgroundSecondary }]}>
+              <View className="bg-surface" style={styles.resultsContainer}>
                 {searchResults.map((track) => (
                   <Pressable
                     key={track.id}
@@ -220,10 +220,10 @@ const CopyrightReportScreen: React.FC = () => {
                     style={[styles.resultItem, { borderBottomColor: theme.colors.border }]}
                   >
                     <View style={styles.resultInfo}>
-                      <Text style={[styles.resultTitle, { color: theme.colors.text }]}>
+                      <Text className="text-foreground" style={styles.resultTitle}>
                         {track.title}
                       </Text>
-                      <Text style={[styles.resultArtist, { color: theme.colors.textSecondary }]}>
+                      <Text className="text-muted-foreground" style={styles.resultArtist}>
                         {track.artistName}
                       </Text>
                     </View>
@@ -247,10 +247,10 @@ const CopyrightReportScreen: React.FC = () => {
                     color={theme.colors.primary}
                   />
                   <View style={styles.selectedTrackText}>
-                    <Text style={[styles.selectedTrackTitle, { color: theme.colors.text }]}>
+                    <Text className="text-foreground" style={styles.selectedTrackTitle}>
                       {selectedTrack.title}
                     </Text>
-                    <Text style={[styles.selectedTrackArtist, { color: theme.colors.textSecondary }]}>
+                    <Text className="text-muted-foreground" style={styles.selectedTrackArtist}>
                       {selectedTrack.artistName}
                     </Text>
                   </View>
@@ -274,7 +274,7 @@ const CopyrightReportScreen: React.FC = () => {
 
           {/* Reason Input */}
           <View style={styles.section}>
-            <Text style={[styles.label, { color: theme.colors.text }]}>
+            <Text className="text-foreground" style={styles.label}>
               {t('copyright.reasonLabel')}
             </Text>
             <TextInput
@@ -295,7 +295,7 @@ const CopyrightReportScreen: React.FC = () => {
               textAlignVertical="top"
               editable={!isSubmitting}
             />
-            <Text style={[styles.characterCount, { color: theme.colors.textSecondary }]}>
+            <Text className="text-muted-foreground" style={styles.characterCount}>
               {reason.length} characters
             </Text>
           </View>
@@ -318,7 +318,7 @@ const CopyrightReportScreen: React.FC = () => {
             {isSubmitting ? (
               <ActivityIndicator size="small" color={theme.colors.primaryForeground} />
             ) : (
-              <Text style={[styles.submitButtonText, { color: theme.colors.primaryForeground }]}>{t('copyright.submit')}</Text>
+              <Text className="text-primary-foreground" style={styles.submitButtonText}>{t('copyright.submit')}</Text>
             )}
           </Pressable>
         </ScrollView>

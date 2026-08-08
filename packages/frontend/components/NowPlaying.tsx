@@ -160,7 +160,7 @@ export const NowPlaying: React.FC = () => {
               />
             </View>
           ) : (
-            <View style={[styles.backgroundPlaceholder, { backgroundColor: theme.colors.backgroundSecondary }]}>
+            <View className="bg-surface" style={styles.backgroundPlaceholder}>
               <Ionicons name="musical-notes" size={80} color={theme.colors.textSecondary} />
             </View>
           )}
@@ -220,9 +220,9 @@ export const NowPlaying: React.FC = () => {
 
                 {/* About This Artist Card */}
                 {artist && (
-                  <View style={[styles.card, { backgroundColor: theme.colors.backgroundTertiary }]}>
+                  <View className="bg-popover" style={styles.card}>
                     <View style={styles.cardHeader}>
-                      <Text style={[styles.cardTitle, { color: theme.colors.text }]}>{t('nowPlaying.aboutArtist')}</Text>
+                      <Text className="text-foreground" style={styles.cardTitle}>{t('nowPlaying.aboutArtist')}</Text>
                     </View>
                     <Pressable
                       onPress={() => router.push(`/p/${artist.id}`)}
@@ -231,16 +231,16 @@ export const NowPlaying: React.FC = () => {
                       {(artist.image || artist.images?.length) ? (
                         <Avatar source={pickCatalogImageUrl(artist.images, artist.image, 'thumbnail', artist.imageSizes)} size={80} />
                       ) : (
-                        <View style={[styles.artistImagePlaceholder, { backgroundColor: theme.colors.background }]}>
+                        <View className="bg-background" style={styles.artistImagePlaceholder}>
                           <Ionicons name="person" size={40} color={theme.colors.textSecondary} />
                         </View>
                       )}
                       <View style={styles.artistCardInfo}>
-                        <Text style={[styles.artistCardName, { color: theme.colors.text }]} numberOfLines={1}>
+                        <Text className="text-foreground" style={styles.artistCardName} numberOfLines={1}>
                           {artist.name}
                         </Text>
                         {artist.genres && artist.genres.length > 0 && (
-                          <Text style={[styles.artistCardGenre, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+                          <Text className="text-muted-foreground" style={styles.artistCardGenre} numberOfLines={1}>
                             {artist.genres[0]}
                           </Text>
                         )}
@@ -252,7 +252,7 @@ export const NowPlaying: React.FC = () => {
                 {/* Lyrics Card — catalog only: the `Lyrics` collection is keyed
                     by track id, and a locker file has no row in it. */}
                 {isCatalogTrack && (
-                <View style={[styles.card, { backgroundColor: theme.colors.backgroundTertiary }]}>
+                <View className="bg-popover" style={styles.card}>
                   <Pressable
                     style={styles.cardHeader}
                     onPress={() => setLyricsExpanded((v) => !v)}
@@ -260,7 +260,7 @@ export const NowPlaying: React.FC = () => {
                     accessibilityLabel={lyricsExpanded ? t('nowPlaying.hideLyrics') : t('nowPlaying.showLyrics')}
                   >
                     <View style={styles.cardHeaderRow}>
-                      <Text style={[styles.cardTitle, { color: theme.colors.text }]}>{t('nowPlaying.lyrics')}</Text>
+                      <Text className="text-foreground" style={styles.cardTitle}>{t('nowPlaying.lyrics')}</Text>
                       <Ionicons
                         name={lyricsExpanded ? 'chevron-up' : 'chevron-down'}
                         size={16}
@@ -276,45 +276,45 @@ export const NowPlaying: React.FC = () => {
 
                 {/* Credits Card */}
                 {album && (
-                  <View style={[styles.card, { backgroundColor: theme.colors.backgroundTertiary }]}>
+                  <View className="bg-popover" style={styles.card}>
                     <View style={styles.cardHeader}>
-                      <Text style={[styles.cardTitle, { color: theme.colors.text }]}>{t('nowPlaying.credits')}</Text>
+                      <Text className="text-foreground" style={styles.cardTitle}>{t('nowPlaying.credits')}</Text>
                     </View>
                     <View style={styles.creditsContent}>
                       <View style={styles.creditRow}>
-                        <Text style={[styles.creditLabel, { color: theme.colors.textSecondary }]}>{t('common.album')}</Text>
+                        <Text className="text-muted-foreground" style={styles.creditLabel}>{t('common.album')}</Text>
                         <Pressable
                           onPress={() => router.push(`/album/${album.id}`)}
                           style={styles.creditValuePressable}
                         >
-                          <Text style={[styles.creditValue, { color: theme.colors.text }]} numberOfLines={1}>
+                          <Text className="text-foreground" style={styles.creditValue} numberOfLines={1}>
                             {album.title}
                           </Text>
                         </Pressable>
                       </View>
                       <View style={styles.creditRow}>
-                        <Text style={[styles.creditLabel, { color: theme.colors.textSecondary }]}>{t('common.artist')}</Text>
+                        <Text className="text-muted-foreground" style={styles.creditLabel}>{t('common.artist')}</Text>
                         <Pressable
                           onPress={() => router.push(`/p/${album.artistId}`)}
                           style={styles.creditValuePressable}
                         >
-                          <Text style={[styles.creditValue, { color: theme.colors.text }]} numberOfLines={1}>
+                          <Text className="text-foreground" style={styles.creditValue} numberOfLines={1}>
                             {album.artistName}
                           </Text>
                         </Pressable>
                       </View>
                       {album.releaseDate && (
                         <View style={styles.creditRow}>
-                          <Text style={[styles.creditLabel, { color: theme.colors.textSecondary }]}>{t('nowPlaying.released')}</Text>
-                          <Text style={[styles.creditValue, { color: theme.colors.text }]}>
+                          <Text className="text-muted-foreground" style={styles.creditLabel}>{t('nowPlaying.released')}</Text>
+                          <Text className="text-foreground" style={styles.creditValue}>
                             {new Date(album.releaseDate).getFullYear()}
                           </Text>
                         </View>
                       )}
                       {album.label && (
                         <View style={styles.creditRow}>
-                          <Text style={[styles.creditLabel, { color: theme.colors.textSecondary }]}>{t('nowPlaying.label')}</Text>
-                          <Text style={[styles.creditValue, { color: theme.colors.text }]} numberOfLines={1}>
+                          <Text className="text-muted-foreground" style={styles.creditLabel}>{t('nowPlaying.label')}</Text>
+                          <Text className="text-foreground" style={styles.creditValue} numberOfLines={1}>
                             {album.label}
                           </Text>
                         </View>
@@ -324,9 +324,9 @@ export const NowPlaying: React.FC = () => {
                 )}
 
                 {/* Next in Queue Card */}
-                <View style={[styles.card, { backgroundColor: theme.colors.backgroundTertiary }]}>
+                <View className="bg-popover" style={styles.card}>
                   <View style={styles.cardHeader}>
-                    <Text style={[styles.cardTitle, { color: theme.colors.text }]}>{t('nowPlaying.nextInQueue')}</Text>
+                    <Text className="text-foreground" style={styles.cardTitle}>{t('nowPlaying.nextInQueue')}</Text>
                   </View>
                   {nextTracks.length > 0 ? (
                     <View style={styles.queueContent}>
@@ -343,15 +343,15 @@ export const NowPlaying: React.FC = () => {
                               contentFit="cover"
                             />
                           ) : (
-                            <View style={[styles.queueItemImagePlaceholder, { backgroundColor: theme.colors.background }]}>
+                            <View className="bg-background" style={styles.queueItemImagePlaceholder}>
                               <Ionicons name="musical-notes" size={16} color={theme.colors.textSecondary} />
                             </View>
                           )}
                           <View style={styles.queueItemInfo}>
-                            <Text style={[styles.queueItemTitle, { color: theme.colors.text }]} numberOfLines={1}>
+                            <Text className="text-foreground" style={styles.queueItemTitle} numberOfLines={1}>
                               {track.title}
                             </Text>
-                            <Text style={[styles.queueItemArtist, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+                            <Text className="text-muted-foreground" style={styles.queueItemArtist} numberOfLines={1}>
                               {track.artistName}
                             </Text>
                           </View>
@@ -360,7 +360,7 @@ export const NowPlaying: React.FC = () => {
                     </View>
                   ) : (
                     <View style={styles.emptyQueue}>
-                      <Text style={[styles.emptyQueueText, { color: theme.colors.textSecondary }]}>
+                      <Text className="text-muted-foreground" style={styles.emptyQueueText}>
                         {t('nowPlaying.queueEmpty')}
                       </Text>
                     </View>
@@ -370,10 +370,10 @@ export const NowPlaying: React.FC = () => {
             ) : (
               <View style={styles.placeholder}>
                 <Ionicons name="musical-notes-outline" size={48} color={theme.colors.textSecondary} style={styles.placeholderIcon} />
-                <Text style={[styles.placeholderText, { color: theme.colors.textSecondary }]}>
+                <Text className="text-muted-foreground" style={styles.placeholderText}>
                   {t('nowPlaying.empty.title')}
                 </Text>
-                <Text style={[styles.placeholderSubtext, { color: theme.colors.textSecondary }]}>
+                <Text className="text-muted-foreground" style={styles.placeholderSubtext}>
                   {t('nowPlaying.empty.subtitle')}
                 </Text>
               </View>

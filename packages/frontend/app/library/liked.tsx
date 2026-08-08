@@ -82,7 +82,7 @@ const LikedSongsScreen: React.FC = () => {
 
   if (gate.isResolving) {
     return (
-      <View style={[styles.centered, { backgroundColor: theme.colors.backgroundSecondary }]}>
+      <View className="bg-surface" style={styles.centered}>
         <LibraryListSkeleton count={8} />
       </View>
     );
@@ -90,9 +90,9 @@ const LikedSongsScreen: React.FC = () => {
 
   if (!gate.canUsePrivateApi) {
     return (
-      <View style={[styles.centered, { backgroundColor: theme.colors.backgroundSecondary }]}>
+      <View className="bg-surface" style={styles.centered}>
         <Ionicons name="lock-closed-outline" size={48} color={theme.colors.textSecondary} style={styles.centeredIcon} />
-        <Text style={[styles.centeredText, { color: theme.colors.textSecondary }]}>
+        <Text className="text-muted-foreground" style={styles.centeredText}>
           {t('liked.signedOut')}
         </Text>
       </View>
@@ -103,19 +103,19 @@ const LikedSongsScreen: React.FC = () => {
     <>
       <SEO title={t('liked.seo.title')} description={t('liked.seo.description')} />
       <ScrollView
-        style={[styles.scrollView, { backgroundColor: theme.colors.backgroundSecondary }]}
+        className="bg-surface" style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
         <View style={styles.header}>
-          <View style={[styles.coverArt, { backgroundColor: theme.colors.primary }]}>
+          <View className="bg-primary" style={styles.coverArt}>
             <Ionicons name="heart" size={64} color={theme.colors.primaryForeground} />
           </View>
           <View style={styles.headerInfo}>
-            <Text style={[styles.headerEyebrow, { color: theme.colors.textSecondary }]}>{t('common.playlist')}</Text>
-            <Text style={[styles.headerTitle, { color: theme.colors.text }]}>{t('library.likedSongs')}</Text>
-            <Text style={[styles.headerMeta, { color: theme.colors.textSecondary }]}>
+            <Text className="text-muted-foreground" style={styles.headerEyebrow}>{t('common.playlist')}</Text>
+            <Text className="text-foreground" style={styles.headerTitle}>{t('library.likedSongs')}</Text>
+            <Text className="text-muted-foreground" style={styles.headerMeta}>
               {isLoading ? '...' : `${total} ${total === 1 ? 'song' : 'songs'}`}
               {totalDurationFormatted ? ` • ${totalDurationFormatted}` : ''}
             </Text>
@@ -125,7 +125,7 @@ const LikedSongsScreen: React.FC = () => {
         {/* Controls */}
         <View style={styles.controlsContainer}>
           <Pressable
-            style={[styles.playButton, { backgroundColor: theme.colors.primary }]}
+            className="bg-primary" style={styles.playButton}
             onPress={handlePlayAll}
             disabled={tracks.length === 0}
             accessibilityRole="button"
@@ -155,14 +155,14 @@ const LikedSongsScreen: React.FC = () => {
         ) : tracks.length === 0 ? (
           <View style={styles.centered}>
             <Ionicons name="heart-outline" size={48} color={theme.colors.textSecondary} style={styles.centeredIcon} />
-            <Text style={[styles.centeredText, { color: theme.colors.textSecondary }]}>
+            <Text className="text-muted-foreground" style={styles.centeredText}>
               {t('liked.empty.title')}
             </Text>
             <Pressable
               onPress={() => router.push('/search')}
-              style={[styles.findButton, { backgroundColor: theme.colors.primary }]}
+              className="bg-primary" style={styles.findButton}
             >
-              <Text style={[styles.findButtonText, { color: theme.colors.primaryForeground }]}>{t('liked.empty.action')}</Text>
+              <Text className="text-primary-foreground" style={styles.findButtonText}>{t('liked.empty.action')}</Text>
             </Pressable>
           </View>
         ) : (

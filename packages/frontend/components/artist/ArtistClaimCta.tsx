@@ -54,14 +54,14 @@ export const ArtistClaimCta: React.FC<ArtistClaimCtaProps> = ({ artistId, artist
 
   if (isSubmitted) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.colors.backgroundTertiary }]}>
+      <View className="bg-popover" style={styles.container}>
         <View style={styles.headerRow}>
           <Ionicons name="hourglass-outline" size={18} color={theme.colors.textSecondary} />
-          <Text style={[styles.title, { color: theme.colors.text }]}>
+          <Text className="text-foreground" style={styles.title}>
             {t('artist.claim.pendingTitle')}
           </Text>
         </View>
-        <Text style={[styles.body, { color: theme.colors.textSecondary }]}>
+        <Text className="text-muted-foreground" style={styles.body}>
           {t('artist.claim.pendingBody')}
         </Text>
       </View>
@@ -69,30 +69,30 @@ export const ArtistClaimCta: React.FC<ArtistClaimCtaProps> = ({ artistId, artist
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.backgroundTertiary }]}>
+    <View className="bg-popover" style={styles.container}>
       <View style={styles.headerRow}>
         <Ionicons name="person-add-outline" size={18} color={theme.colors.primary} />
-        <Text style={[styles.title, { color: theme.colors.text }]}>
+        <Text className="text-foreground" style={styles.title}>
           {t('artist.claim.title', { name: artistName })}
         </Text>
       </View>
-      <Text style={[styles.body, { color: theme.colors.textSecondary }]}>
+      <Text className="text-muted-foreground" style={styles.body}>
         {t('artist.claim.body')}
       </Text>
 
       {!isOpen ? (
         <Pressable
           onPress={() => setIsOpen(true)}
-          style={[styles.button, { backgroundColor: theme.colors.primary }]}
+          className="bg-primary" style={styles.button}
           accessibilityRole="button"
         >
-          <Text style={[styles.buttonText, { color: theme.colors.primaryForeground }]}>
+          <Text className="text-primary-foreground" style={styles.buttonText}>
             {t('artist.claim.cta')}
           </Text>
         </Pressable>
       ) : (
         <>
-          <Text style={[styles.label, { color: theme.colors.text }]}>
+          <Text className="text-foreground" style={styles.label}>
             {t('artist.claim.evidenceLabel')}
           </Text>
           <TextInput
@@ -109,18 +109,18 @@ export const ArtistClaimCta: React.FC<ArtistClaimCtaProps> = ({ artistId, artist
             ]}
           />
           {!gate.canUsePrivateApi && (
-            <Text style={[styles.body, { color: theme.colors.error }]}>
+            <Text className="text-error" style={styles.body}>
               {t('artist.claim.signInRequired')}
             </Text>
           )}
           <View style={styles.actions}>
             <Pressable
               onPress={() => setIsOpen(false)}
-              style={[styles.button, { backgroundColor: theme.colors.backgroundSecondary }]}
+              className="bg-surface" style={styles.button}
               accessibilityRole="button"
               disabled={claim.isPending}
             >
-              <Text style={[styles.buttonText, { color: theme.colors.text }]}>
+              <Text className="text-foreground" style={styles.buttonText}>
                 {t('common.cancel')}
               </Text>
             </Pressable>

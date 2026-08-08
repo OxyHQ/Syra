@@ -47,7 +47,7 @@ export const ExploreSection: React.FC<ExploreSectionProps> = ({
   if (error) {
     return (
       <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+        <Text className="text-foreground" style={styles.sectionTitle}>
           {title}
         </Text>
         <EmptyState
@@ -66,7 +66,7 @@ export const ExploreSection: React.FC<ExploreSectionProps> = ({
   if (isLoading) {
     return (
       <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+        <Text className="text-foreground" style={styles.sectionTitle}>
           {title}
         </Text>
         {loadingSkeleton ?? <MediaCardRowSkeleton count={5} />}
@@ -84,7 +84,7 @@ export const ExploreSection: React.FC<ExploreSectionProps> = ({
 
   return (
     <View style={styles.section}>
-      <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+      <Text className="text-foreground" style={styles.sectionTitle}>
         {title}
       </Text>
       {children}
