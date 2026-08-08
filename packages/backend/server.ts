@@ -55,7 +55,7 @@ import recordingsRoutes from './src/routes/recordings.routes';
 import livekitWebhookRoutes from './src/routes/livekitWebhook.routes';
 import reportsRoutes from './src/routes/reports.routes';
 import { createCrowdSourceWebhookRoutes } from './src/routes/crowdsourceWebhook.routes';
-import { moderationOutboxDispatcher } from './src/moderation/dispatcher';
+import { assertModerationSchema, getModerationIntegration } from './src/moderation/integration';
 import { initializeRoomSocket } from './src/sockets/roomSocket';
 import { initializeIO } from './src/utils/socket';
 import { startRecommendationScheduler } from './src/services/recommendations/scheduler';
@@ -490,12 +490,19 @@ const bootServer = async () => {
   startExpirySweeper();
 
   // Drain the moderation outbox. Deliberately NOT lock-guarded like the two
-  // schedulers above: every event is claimed under a Mongo lease with an owner
+  // schedulers above: every event is claimed under a Postgres lease with an owner
   // check, so N instances share the work and a dead instance's lease is reclaimed
   // rather than stranding a report. No-ops when the integration is disabled — the
   // loop is gated, never the durable record, so reports taken while it is off
   // deliver when it is switched on.
-  moderationOutboxDispatcher.start();
+  //
+  // Built here rather than at import: the integration reaches getDb(), and the
+  // pool is opened by connectPostgres() above.
+  // The four moderation tables must resolve before the first report is filed,
+  // not at the first delivery hours later. A missing one raises 42P01 and names
+  // itself here.
+  await assertModerationSchema();
+  getModerationIntegration().dispatcher.start();
 };
 
 if (require.main === module) {

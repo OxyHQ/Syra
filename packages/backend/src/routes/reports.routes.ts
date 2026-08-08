@@ -1,7 +1,8 @@
 import { Router, type Request, type Response } from 'express';
 import { getRequiredOxyUserId, type OxyAuthRequest } from '@oxyhq/core/server';
-import { createReport, DuplicateReportError } from '../moderation/intake';
-import { ReportCategory, ReportedType } from '../models/Report';
+import { DuplicateReportError } from '@oxyhq/crowdsource-app';
+import { getModerationIntegration, type SyraReport } from '../moderation/integration';
+import { ReportCategory, ReportedType } from '../moderation/types';
 import { logger } from '../utils/logger';
 
 /**
@@ -126,7 +127,7 @@ router.post('/', async (req: Request, res: Response) => {
   }
 
   try {
-    const result = await createReport({
+    const result = await getModerationIntegration().createReport({
       reporter,
       reportedType: validated.reportedType,
       reportedId: validated.reportedId,
@@ -136,7 +137,7 @@ router.post('/', async (req: Request, res: Response) => {
 
     return res.status(201).json({
       report: {
-        id: result.report._id.toHexString(),
+        id: result.report.id,
         reportedType: result.report.reportedType,
         reportedId: result.report.reportedId,
         categories: result.report.categories,
@@ -157,14 +158,15 @@ router.post('/', async (req: Request, res: Response) => {
        * twice should learn that Syra already has it, and a client that treated a
        * duplicate as a new report would show two receipts for one action.
        */
+      const existing: SyraReport = error.existing;
       return res.status(409).json({
         error: error.message,
         report: {
-          id: String(error.existing._id),
-          reportedType: error.existing.reportedType,
-          reportedId: error.existing.reportedId,
-          status: error.existing.status,
-          createdAt: error.existing.createdAt,
+          id: existing.id,
+          reportedType: existing.reportedType,
+          reportedId: existing.reportedId,
+          status: existing.status,
+          createdAt: existing.createdAt,
         },
       });
     }
