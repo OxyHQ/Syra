@@ -1,68 +1,106 @@
 import { describe, expect, it } from 'bun:test';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
- * `GET /api/tracks/search` is public and unauthenticated, so `req.query.q`
- * is attacker-controlled. Compiling it straight into `new RegExp(...)` is a
- * ReDoS against a collection scan: measured on this machine, `(a+)+$` against
- * 28 `a`s takes ~347ms unescaped and 0ms escaped, and the cost is exponential
- * in the input length.
+ * `main`'s PR #84 escaped the track-search query before compiling it into a
+ * `RegExp`. This is that test after the PostgreSQL port, and it asserts a
+ * STRONGER property than the one it replaces.
  *
- * The check is a source assertion rather than a request test because the
- * defect is the ABSENCE of a call — a behavioural test that searches for a
- * literal string passes identically with and without the escape, which is the
- * shape that let this ship in the first place. `search.controller.ts` and
- * `podcasts.controller.ts` both carry the same helper and use it; this file
- * was the one that did not.
+ * #84's fix was `new RegExp(escapeRegex(query.trim()), 'i')` — a correct repair
+ * to a real ReDoS on a public unauthenticated endpoint (`(a+)+$` against 28
+ * `a`s: ~347ms unescaped, 0ms escaped, exponential in the input length). Its
+ * test asserted the SOURCE, deliberately, because the defect was the ABSENCE of
+ * a call and a behavioural test searching for a literal string passes
+ * identically with and without the escape.
+ *
+ * The port removes the regex ENGINE rather than escaping its input:
+ * `search_vector @@ websearch_to_tsquery(…)` has no backtracking to exploit. So
+ * asserting that one call site escapes its input would now assert something
+ * about a line that does not exist — and deleting the test outright would drop
+ * the guard along with the code it guarded.
+ *
+ * What replaces it is the repo-wide form: **no source file in this backend
+ * compiles a regular expression at all.** Measured at the time of writing, every
+ * one of the six regex search sites the port surveyed is gone, and the only
+ * `escapeRegex` left in the tree was the one this file used to define. That
+ * makes the absence assertable rather than incidental, and it fails the day
+ * somebody reintroduces one — including in a file #84 never touched.
+ *
+ * ## Comments are stripped first, and that is not hygiene
+ *
+ * Four files DISCUSS `new RegExp(…)` in prose, explaining what they no longer
+ * do — `tracks.controller.ts` and `search.controller.ts` among them. A matcher
+ * that read comments would report a regex compiler in exactly the files whose
+ * only mention of one is an explanation of its removal: a false positive on the
+ * files most likely to be checked, which is how a gate like this gets deleted by
+ * the next person who hits it.
  */
-const CONTROLLER = readFileSync(
-  join(__dirname, 'tracks.controller.ts'),
-  'utf8',
-);
 
-/** Mirrors the helper under test, so the timing assertion measures the real pattern. */
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const SRC = join(__dirname, '..');
+
+/** Files a change to this backend can add a regex compiler to. */
+function sourceFiles(dir: string): string[] {
+  const found: string[] = [];
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) {
+      if (entry === 'node_modules' || entry === '__tests__') continue;
+      found.push(...sourceFiles(full));
+      continue;
+    }
+    if (!entry.endsWith('.ts')) continue;
+    if (entry.endsWith('.test.ts')) continue;
+    found.push(full);
+  }
+  return found;
 }
 
-describe('tracks.controller search input escaping', () => {
-  it('never compiles a raw query into a RegExp', () => {
-    const rawCompiles = CONTROLLER.match(/new RegExp\(\s*query/g) ?? [];
-    expect(rawCompiles).toEqual([]);
+/** Source with block and line comments removed. */
+function code(source: string): string {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
+}
+
+describe('the backend compiles no regular expression from application source', () => {
+  const files = sourceFiles(SRC);
+
+  /**
+   * The vacuity floor. A broken traversal returns nothing and every absence
+   * assertion below passes; this is what tells "no regex anywhere" from "the
+   * walk read no files".
+   */
+  it('scanned the tree it is asserting about', () => {
+    expect(files.length).toBeGreaterThan(200);
   });
 
-  it('compiles the search pattern through escapeRegex', () => {
-    expect(CONTROLLER).toContain("new RegExp(escapeRegex(query.trim()), 'i')");
+  it('finds no `new RegExp(` outside comments', () => {
+    const offenders = files
+      .filter((file) => /new RegExp\s*\(/.test(code(readFileSync(file, 'utf8'))))
+      .map((file) => file.slice(SRC.length + 1));
+    expect(offenders).toEqual([]);
   });
 
-  it('defines escapeRegex covering every regex metacharacter it must neutralise', () => {
-    expect(CONTROLLER).toContain('function escapeRegex(');
-    // Each of these turns a search term into a pattern that is not a literal.
-    for (const meta of ['.', '*', '+', '?', '^', '$', '{', '}', '(', ')', '|', '[', ']', '\\']) {
-      expect(escapeRegex(meta)).toBe(`\\${meta}`);
-    }
+  /**
+   * The comment-stripping is itself asserted, in both directions. Without the
+   * second case the stripper could eat everything and the check above would pass
+   * by reading nothing at all.
+   */
+  it('strips a discussion of a regex but not a real one', () => {
+    expect(code('/* was new RegExp(q) */\nconst a = 1;')).not.toContain('new RegExp');
+    expect(code('// was new RegExp(q)\nconst a = 1;')).not.toContain('new RegExp');
+    expect(code('const r = new RegExp(q);')).toContain('new RegExp');
   });
 
-  it('escaping defuses a catastrophically backtracking pattern', () => {
-    const evil = '(a+)+$';
-    const subject = `${'a'.repeat(32)}b`;
-
-    const started = performance.now();
-    new RegExp(escapeRegex(evil), 'i').test(subject);
-    const escapedMs = performance.now() - started;
-
-    // The unescaped form is exponential in `subject.length`; the escaped form
-    // is a literal search and stays flat. A generous ceiling still separates
-    // them by orders of magnitude.
-    expect(escapedMs).toBeLessThan(50);
-  });
-
-  it('an escaped pattern still matches the literal text a user typed', () => {
-    // The fix must not break search for terms that legitimately contain
-    // punctuation — album and track titles routinely do.
-    for (const term of ['Ok Computer', 'Sgt. Pepper', 'Sign "O" the Times', '(What\'s the Story)']) {
-      expect(new RegExp(escapeRegex(term), 'i').test(term)).toBe(true);
-    }
+  /**
+   * The port's replacement, pinned. Without this, deleting the search handler
+   * entirely would satisfy every assertion above — an endpoint that cannot ReDoS
+   * because it no longer exists is not the property anyone wants.
+   */
+  it('still searches tracks, through the full-text index', () => {
+    const controller = readFileSync(join(SRC, 'controllers', 'tracks.controller.ts'), 'utf8');
+    expect(controller).toContain('export const searchTracks');
+    expect(code(controller)).toContain('textSearch(tracks.searchVector, query)');
   });
 });
