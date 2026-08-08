@@ -9,11 +9,28 @@ const schema = z.object({
   PORT: z.coerce.number().default(4120),
   LOG_LEVEL: z.string().optional(),
 
-  // Optional at parse time so `env` stays importable in any context (tests,
-  // tooling) without a live DB config. The connection is the real authority:
-  MONGODB_MAX_POOL_SIZE: z.coerce.number().default(100),
-  MONGODB_MIN_POOL_SIZE: z.coerce.number().default(10),
-  MONGODB_READ_PREFERENCE: z.string().default('primary'),
+  /**
+   * The Postgres connection string — the only database this service opens.
+   *
+   * Declared here so a malformed one is refused, and REQUIRED IN PRODUCTION by
+   * the refinement below rather than by `.url()` alone, for the same reason
+   * `STREAM_KEY_BASE_URL` is: the rule is conditional on `NODE_ENV`, and a
+   * per-field requirement cannot express that. It would also be wrong — `env` is
+   * parsed once at import and 15 modules import it, while the test harness
+   * (`src/test/postgres.ts`) resolves `TEST_DATABASE_URL` and assigns
+   * `process.env.DATABASE_URL` in `beforeAll`, i.e. AFTER that parse. A hard
+   * `z.string().url()` here throws at import in every one of those files.
+   * Verified, not assumed: it fails three cases in
+   * `env.productionBoot.test.ts` alone, whose child processes spawn with a
+   * pristine environment.
+   *
+   * Nothing reads `env.DATABASE_URL`. `db/postgres.ts` and `db/migrate.ts` read
+   * `process.env.DATABASE_URL` LIVE and must keep doing so, because the test
+   * harness assigns it after this module was parsed — a frozen read here would
+   * hand them the value from boot and send the suite at whatever the developer's
+   * own `DATABASE_URL` names. This entry is a boot-time GATE, not an accessor.
+   */
+  DATABASE_URL: z.string().url().optional(),
 
   REDIS_URL: z.string().optional(),
   REDIS_URI: z.string().optional(),
@@ -131,20 +148,57 @@ const schema = z.object({
    */
 }).superRefine((value, ctx) => {
   /**
-   * Production must not boot on a local-dev media origin.
+   * Both rules below are production-only, and for the same reason: each is a
+   * RELATION between `NODE_ENV` and another value rather than a property of that
+   * value on its own. Empty and unset are legitimate on a developer's machine
+   * and in tests; only production makes them wrong. A per-field validator cannot
+   * express that, which is how `STREAM_KEY_BASE_URL` stayed unset in production
+   * for as long as it did.
+   */
+  if (value.NODE_ENV !== 'production') return;
+
+  /**
+   * Production must not boot without a Postgres to serve from.
    *
-   * Checked here rather than on the field itself because the rule is a RELATION
-   * between two values — the variable is legitimately empty in development and
-   * in tests, and only `NODE_ENV === 'production'` makes an empty or relative
-   * one wrong. A per-field validator cannot express that, which is how it was
-   * unset in production for as long as it was.
+   * `DATABASE_URL` reached production unvalidated: it is read live from
+   * `process.env` by `db/postgres.ts` and `db/migrate.ts`, and until this it was
+   * not declared here at all. `bootServer` catches a failed `connectPostgres()`,
+   * logs and CONTINUES — deliberately, so a transient unreachable database
+   * degrades to per-request 503s instead of an outage. That is right for a
+   * database that is down and wrong for one that was never configured: an unset
+   * or malformed value produces a service that boots, reports healthy-ish, and
+   * 503s every route for as long as nobody looks. Refusing at boot is what
+   * separates the misconfiguration from the outage, and it is the same failure
+   * shape — one unset variable degrading silently — that the
+   * `STREAM_KEY_BASE_URL` rule below exists for.
+   *
+   * The scheme is checked, not just the URL shape: `z.string().url()` accepts
+   * `mongodb+srv://…` quite happily (verified), and a leftover Mongo connection
+   * string in this slot is the one wrong value this cutover could actually
+   * produce.
+   */
+  const databaseUrl = value.DATABASE_URL;
+  if (databaseUrl === undefined || !/^postgres(ql)?:\/\//.test(databaseUrl)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['DATABASE_URL'],
+      message:
+        `DATABASE_URL must be a postgres:// or postgresql:// connection string in production, and is ${
+          databaseUrl === undefined ? 'unset' : `'${databaseUrl.replace(/:\/\/[^@]*@/, '://***@')}'`
+        }. Postgres is the only database this service opens; without it every ` +
+        'route answers 503 while the process reports itself started. Set it on the ' +
+        'task definition from /oxy/syra/DATABASE_URL (it carries ?sslmode=require — ' +
+        'the RDS parameter group sets rds.force_ssl = 1).',
+    });
+  }
+
+  /**
+   * Production must not boot on a local-dev media origin.
    *
    * Absolute means an `http:`/`https:` origin, parsed rather than pattern-
    * matched: `//api.syra.fm` and `api.syra.fm` both LOOK addressable and neither
    * survives `${base}/api/...` on a page served from another origin.
    */
-  if (value.NODE_ENV !== 'production') return;
-
   const base = value.STREAM_KEY_BASE_URL;
   const absolute = (() => {
     if (base === '') return false;

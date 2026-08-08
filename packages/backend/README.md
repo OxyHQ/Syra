@@ -12,7 +12,7 @@ This is the **backend package** of the **Syra** monorepo. The Syra API is a robu
 
 - Node.js with TypeScript
 - Express.js for REST API
-- MongoDB with Mongoose for data storage
+- PostgreSQL with Drizzle ORM for data storage
 - Socket.IO for real-time features
 - JWT for authentication
 
@@ -21,7 +21,7 @@ This is the **backend package** of the **Syra** monorepo. The Syra API is a robu
 ### Prerequisites
 
 - Node.js 18+ and Bun
-- MongoDB instance
+- PostgreSQL 17 (`docker compose -f ../../docker-compose.postgres.yml up -d postgres`)
 - Git
 
 ### Development Setup
@@ -56,8 +56,8 @@ bun run dev
 Create a `.env` file in this package directory with the following variables:
 
 ```env
-# Database
-MONGODB_URI=your_mongodb_connection_string
+# Database — see .env.example for the full annotated list
+DATABASE_URL=postgres://syra:syra@127.0.0.1:5434/syra_dev
 
 # Authentication
 # WE USE OXY FOR AUTHENTICATION
@@ -112,16 +112,28 @@ bun run start
 
 ### Database Setup
 
-The API uses MongoDB with Mongoose. Make sure your MongoDB instance is running and accessible.
+The API uses PostgreSQL with Drizzle ORM. Start a local instance and point
+`DATABASE_URL` at it:
+
+```bash
+docker compose -f ../../docker-compose.postgres.yml up -d postgres
+```
 
 #### Running Migrations
-```bash
-# Development environment
-bun run migrate:dev
 
-# Production environment
-bun run migrate
+`--phase` and `--target-database` are both required — `src/db/migrate.ts`
+documents what each phase means and why neither has a default.
+
+```bash
+# Local / CI: nothing is serving against the database, so apply everything
+bun run db:migrate --phase=all --target-database=syra_dev
+
+# Generate a migration from a schema change (never hand-write the SQL)
+bun run db:generate
 ```
+
+Deployed environments are staged: `--phase=pre` runs while the previous image is
+still serving, `--phase=post` once the new one is live.
 
 ## API Endpoints
 
@@ -300,11 +312,22 @@ db.playlists.createIndex({ "userId": 1, "createdAt": -1 })
 GET /health
 Response: {
   "status": "healthy",
-  "version": "1.0.0",
-  "uptime": 1000,
-  "mongoStatus": "connected"
+  "timestamp": "2026-08-08T00:00:00.000Z",
+  "services": {
+    "database": { "engine": "postgres", "state": "connected", "connected": true },
+    "redis": { "connected": true }
+  },
+  "performance": { },
+  "memory": { "used": 128, "total": 256, "rss": 320 },
+  "uptime": 1000
 }
 ```
+
+`status` is `healthy` only when both are up, `degraded` when Redis is down, and
+`unhealthy` (503) when Postgres is. `services.database.engine` is what the
+cutover made worth reading: it reported Mongoose's `readyState` until the last
+model was removed, and a health endpoint answering about a database the service
+no longer opens reads as green forever.
 
 ### Logging
 - Use Winston for structured logging
@@ -319,7 +342,7 @@ Response: {
 docker build -t syra-api .
 
 # Run the container
-docker run -p 4120:3000 -e MONGODB_URI=your_mongodb_uri syra-api
+docker run -p 4120:3000 -e DATABASE_URL=your_postgres_url syra-api
 ```
 
 ### Cloud Deployment (AWS ECS)
@@ -389,8 +412,9 @@ AWS_ENDPOINT_URL=http://localhost:4566
 
 1. Connection Timeouts
 ```
-Error: MongoTimeoutError
-Solution: Check MongoDB connection string and network connectivity
+Error: CONNECT_TIMEOUT / ECONNREFUSED from postgres
+Solution: Check DATABASE_URL and network connectivity. In production the
+process refuses to boot when DATABASE_URL is unset or is not a postgres:// URL.
 ```
 
 2. Authentication Failures

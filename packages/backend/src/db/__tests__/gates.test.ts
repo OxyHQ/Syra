@@ -4074,9 +4074,17 @@ describe('deploy-phase ordering (post-genesis)', () => {
   it('holds for the real journal, past LAST_GENESIS_MIGRATION_TAG', () => {
     // The live counterpart to the three synthetic tests above — reads the
     // REAL journal and the REAL migration files, exactly what
-    // `bun run db:migrate` reads. Genesis (0000-0005) is exempt by
+    // `bun run db:migrate` reads. Genesis (0000-0024) is exempt by
     // construction (see migrate.ts); this only holds every migration that
     // lands AFTER it to the invariant a real staged rollout needs.
+    //
+    // That post-genesis window is EMPTY right now, and legitimately so: the
+    // boundary froze at the newest migration the cutover applied, so this
+    // becomes load-bearing with `0025` and every migration after it. Which is
+    // exactly why the boundary must never be advanced again — an advanced
+    // boundary would keep this window empty permanently and this test would go
+    // on passing. The three synthetic tests above keep the CHECKER honest in the
+    // meantime; the frozen-boundary pin below keeps the INPUT honest.
     const folder = findMigrationsFolder();
     const journal = readJournal(folder);
     const { phases, problems } = readMigrationPhases(
@@ -4095,56 +4103,55 @@ describe('deploy-phase ordering (post-genesis)', () => {
   });
 
   /**
-   * THE BOUNDARY MUST BE THE NEWEST MIGRATION, until cutover.
+   * THE BOUNDARY IS FROZEN, and this is what keeps it that way.
    *
-   * `migrate.ts` states the rule — every migration landing before Syra's first
-   * production Postgres deploy is genesis, because no image is serving for a
-   * `pre`/`post` split to protect, so the boundary advances with each one and
-   * FREEZES at that deploy. It calls this "routine maintenance, not a
-   * per-migration judgment call".
+   * Until cutover a test here required the opposite — that the boundary BE the
+   * newest migration — because every migration landing before Syra's first
+   * production Postgres deploy was genesis, so the tag had to advance with each
+   * one, and routinely did not (it sat at `0015` while `0016`, `0017` and `0018`
+   * landed; `migrate.ts` records the identical lapse one task earlier). Both
+   * that test and `migrate.ts` said, in place, that cutover must DELETE it
+   * rather than update it. Cutover happened on 2026-08-08 — 25 migrations
+   * applied with `--phase=all`, `oxy-syra:9` live — so it is deleted, and this
+   * stands in its place.
    *
-   * It is routine maintenance that is routinely NOT done. Measured on this
-   * branch: the tag sat at `0015` while `0016` (Task 10a), `0017` and `0018`
-   * (Task 10b) landed — three behind, across two tasks. The `0006`-`0008`
-   * paragraph in `migrate.ts` records the identical lapse one task run earlier.
+   * The two tests are opposites for a reason, and the reason is asymmetric:
+   * advancing the tag now would not weaken the ordering gate, it would SILENTLY
+   * DELETE it. `findPostGenesisPhaseOrderingViolations` inspects only
+   * `entries.slice(boundaryIndex + 1)`, so a boundary at the newest migration
+   * leaves it an empty tail — no violations possible, forever, with every test
+   * green. Nothing else in this file can notice that: "the boundary is a tag the
+   * journal contains" still passes, and so does "holds for the real journal",
+   * vacuously. A pin is the only shape that catches it.
    *
-   * Nothing failed, and that is exactly why it kept happening: the ordering gate
-   * above simply holds the drifted migrations to an invariant that has nothing
-   * to protect yet, so the drift is silent AND in the safe direction. A comment
-   * explaining that does not stop the fourth occurrence; this does.
-   *
-   * WHEN CUTOVER HAPPENS this test must be DELETED, not updated — the boundary
-   * freezes and the newest migration moves past it permanently, which is the
-   * point. That instruction is in the ASSERTION STRING below, not only here:
-   * an earlier version of this comment claimed "the failure message says so"
-   * while the message rendered a bare `boundary=X newest=Y`, from which the only
-   * available reading is "the boundary is behind" — the one thing this comment
-   * exists to forbid. A false claim about where a rule lives, in the commit
-   * whose thesis is that a rule belongs in the source rather than in anyone's
-   * head. Whoever hits this is writing migration `00NN`; they see the remedy.
+   * The tag is therefore written out here a SECOND time on purpose, which is the
+   * one place in this file where duplicating a constant is correct. Reading it
+   * from `LAST_GENESIS_MIGRATION_TAG` would compare the value to itself and pass
+   * for every value it could ever hold.
    */
-  it('LAST_GENESIS_MIGRATION_TAG is the newest migration in the journal', () => {
-    const journal = readJournal(findMigrationsFolder());
-    const newest = journal[journal.length - 1]?.tag ?? 'NO MIGRATIONS';
-
+  it('LAST_GENESIS_MIGRATION_TAG is frozen at the cutover boundary', () => {
     /**
-     * Carried in the compared VALUE so it reaches the failure output. Both
-     * remedies, because which one applies is not something the assertion can
-     * know — and picking the wrong one is silent: bumping the boundary after
-     * cutover leaves `findPostGenesisPhaseOrderingViolations` inspecting
-     * `entries.slice(boundaryIndex + 1)` of an empty tail, so the
-     * pre-behind-post invariant checks nothing, forever, with every test green.
+     * Carried in the compared VALUE so it reaches the failure output — whoever
+     * hits this is mid-way through bumping the tag out of habit, and needs to be
+     * told that the habit ended at cutover.
      */
     const remedy =
-      'BEFORE CUTOVER: advance LAST_GENESIS_MIGRATION_TAG in db/migrate.ts. ' +
-      'AFTER CUTOVER: DELETE this test — do NOT advance the tag, or the ' +
-      'post-genesis ordering gate silently checks an empty set forever.';
+      'FROZEN at cutover (2026-08-08). Do NOT advance it: the post-genesis ' +
+      'ordering gate inspects only the migrations AFTER this tag, so moving it ' +
+      'to the newest migration makes that set empty and the pre-behind-post ' +
+      'invariant checks nothing, forever, with every test green. A new migration ' +
+      'is 0025+ and is meant to sit after this boundary and be checked.';
 
-    expect(
-      `boundary=${LAST_GENESIS_MIGRATION_TAG} newest=${newest} | ${remedy}`
-    ).toBe(`boundary=${newest} newest=${newest} | ${remedy}`);
+    expect(`${LAST_GENESIS_MIGRATION_TAG} | ${remedy}`).toBe(`0024_ambitious_xorn | ${remedy}`);
   });
 
+  /**
+   * The counterpart to the pin above: the pin proves the tag has not MOVED, this
+   * proves the journal still contains what it names. A migration squashed,
+   * renamed or removed from the journal would leave the boundary dangling, and
+   * `findPostGenesisPhaseOrderingViolations` would then report it as an ordering
+   * problem rather than as a bad constant.
+   */
   it('the boundary is a tag the journal actually contains', () => {
     // A typo in the constant would otherwise satisfy nothing and be caught only
     // by `findPostGenesisPhaseOrderingViolations`'s own not-in-journal branch,

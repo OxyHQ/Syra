@@ -18,9 +18,10 @@
  *   --phase=pre    the PREVIOUS image is still serving. Applies additive
  *                  migrations only, and stops at the first destructive one.
  *   --phase=post   the NEW image is live. Applies what `pre` deferred.
- *   --phase=all    nothing to protect — a developer's database, this task's
- *                  own first migration against `syra_dev`. Applies everything
- *                  pending.
+ *   --phase=all    nothing to protect — a developer's `syra_dev`, CI's
+ *                  `syra_ci`. Applies everything pending. Since the 2026-08-08
+ *                  cutover it is no longer correct for production, which now
+ *                  has a live image to stage around.
  *
  * There is no default. A run that does not say which side it is on would have
  * to guess, and guessing "pre" silently strands a drop while guessing "all"
@@ -32,8 +33,8 @@
  * live predecessor to protect — Tasks 1 through 6 of the Mongo→Postgres port,
  * including the Task 4 review's `0007`/`0008` genres-`kind` follow-up, Task
  * 5's `0009`/`0010` creators-and-uploads pair and Task 6's `0011` rooms
- * vertical, applied so far only with
- * `--phase=all` against `syra_dev` and CI's `syra_ci`. A
+ * vertical, applied with `--phase=all` against `syra_dev`, CI's `syra_ci` and —
+ * on 2026-08-08, once the window closed at `0024` — production. A
  * `pre`/`post` review of an earlier cut of this window (Task 4 code review,
  * `task-4-review.md`, Critical #1) found it does NOT actually satisfy
  * `planMigrationRun`'s ordering invariant: `0003` (Task 3, `pre`) sits behind
@@ -41,21 +42,23 @@
  * BLOCK if run against this window — only `--phase=all` succeeds.
  *
  * The ruling: do not re-order or re-mark history to force the invariant to
- * hold retroactively. There is nothing a phase split protects yet — no image
- * is currently serving against this schema, so `pre` sequenced ahead of
- * `post` buys a real image nothing it does not already have by applying
- * everything at once. `--phase=all` is not a workaround for this window, it
- * is the CORRECT and ONLY sanctioned way to apply it, and this is where that
- * gets written down rather than left as tribal knowledge.
+ * hold retroactively. There was nothing a phase split protected — no image was
+ * serving against this schema, so `pre` sequenced ahead of `post` would have
+ * bought a real image nothing it did not already get by applying everything at
+ * once. `--phase=all` was not a workaround for this window, it was the CORRECT
+ * and ONLY sanctioned way to apply it, and this is where that got written down
+ * rather than left as tribal knowledge. It is also what the cutover actually
+ * ran, and the reason the ruling still stands unedited: re-marking `0000`-`0024`
+ * now would rewrite the phases of migrations production has already applied.
  *
- * THE BOUNDARY IS NOT A FIXED RANGE — IT ADVANCES, THEN FREEZES. The honest
- * definition of "genesis" is not "the migrations Task 1-4 happened to write"
- * but "ran, and will only ever run, against an empty database": every
- * migration that lands BEFORE Syra's first production Postgres deploy
- * qualifies, because no image is live yet for a `pre`/`post` split to
- * protect. So `LAST_GENESIS_MIGRATION_TAG` moves forward with each such
- * migration — this is routine maintenance, not a per-migration judgment call
- * — and FREEZES permanently the moment that first production deploy happens.
+ * THE BOUNDARY ADVANCED, AND IS NOW FROZEN — SEE "THE WINDOW IS CLOSED"
+ * BELOW. The honest definition of "genesis" is not "the migrations Task 1-4
+ * happened to write" but "ran, and will only ever run, against an empty
+ * database": every migration that landed BEFORE Syra's first production
+ * Postgres deploy qualifies, because no image was live yet for a `pre`/`post`
+ * split to protect. So `LAST_GENESIS_MIGRATION_TAG` moved forward with each
+ * such migration — routine maintenance, not a per-migration judgment call —
+ * until that first production deploy, at which point it froze permanently.
  * From that point on a real image is serving against this schema, and every
  * migration after the frozen boundary is a real rollout the `pre`/`post`
  * invariant has to hold for. Concretely: the boundary was set at `0005` when
@@ -75,7 +78,25 @@
  * routine maintenance that is routinely forgotten, and nothing fails when it
  * is. The post-genesis ordering gate simply holds three migrations to an
  * invariant that has nothing to protect, so the failure is silent in the safe
- * direction — which is exactly why it keeps happening.
+ * direction — which is exactly why it kept happening.
+ *
+ * THE WINDOW IS CLOSED. Syra cut over to Postgres in production on 2026-08-08:
+ * all 25 genesis migrations, `0000` through `0024`, were applied with
+ * `--phase=all` against the production database, and the image serving against
+ * them is live. So the boundary has taken its final value and
+ * `LAST_GENESIS_MIGRATION_TAG` is FROZEN at `0024_ambitious_xorn` — the last
+ * migration that ran against a database no image was reading. It must never be
+ * advanced again, for the reason spelled out on the constant itself: advancing
+ * it does not relax the ordering rule, it DELETES it, silently and with every
+ * test green.
+ *
+ * `0025` onwards are real rollouts. `--phase=pre` runs while the previous image
+ * is still serving and `--phase=post` once the new one is live, both for real
+ * now rather than as a rehearsal — and the corollary below about keeping
+ * additive DDL apart from narrowing DDL stops being advice and becomes the
+ * thing that keeps a deploy from stranding a drop. `--phase=all` remains
+ * correct for a developer database and for CI, neither of which has a live
+ * predecessor; it is no longer correct for production.
  *
  * `0011` is, notably, the FIRST migration in this window that would have been
  * correct outside it too: it is purely additive (eight new tables, their own
@@ -121,17 +142,16 @@
  * lock plus a possible outright failure on a populated one. A migration with
  * that property is exactly what "genesis" is for; it would not be safe to run
  * the same way against a database a live image had already been writing to,
- * which is precisely the case the boundary stops applying to once it freezes.
+ * which is precisely the case the boundary stopped applying to when it froze.
  *
- * `LAST_GENESIS_MIGRATION_TAG`, below, draws the (currently still moving)
- * line: every migration up to and including it is genesis (unordered,
- * `--phase=all` only). Every migration AFTER it is a REAL rollout against a
- * database with a live predecessor, and for those,
+ * `LAST_GENESIS_MIGRATION_TAG`, below, draws the (now fixed) line: every
+ * migration up to and including it is genesis (unordered, `--phase=all` only).
+ * Every migration AFTER it is a REAL rollout against a database with a live
+ * predecessor, and for those,
  * `src/db/__tests__/gates.test.ts`'s "deploy-phase ordering (post-genesis)"
  * describe block enforces the invariant this window itself does not satisfy:
  * no `pre` migration may be ordered behind a `post` one. That is what makes
- * `--phase=pre`/`--phase=post` trustworthy the first time a real rollout
- * actually needs them.
+ * `--phase=pre`/`--phase=post` trustworthy now that real rollouts need them.
  *
  * A COROLLARY FOR EVERY MIGRATION AFTER THE BOUNDARY: keep additive DDL and
  * narrowing DDL in SEPARATE migration files. `drizzle-kit generate` will
@@ -199,25 +219,29 @@ const MIGRATIONS_SEARCH_DEPTH = 6;
 
 /**
  * The journal tag of the last GENESIS migration — see this file's own doc
- * comment, "THE GENESIS BOOTSTRAP WINDOW", for what that means, why the line
- * moves rather than sits fixed, and why it freezes for good at Syra's first
- * production Postgres deploy (has not happened yet). Every migration up to
- * and including this one is exempt from the pre-behind-post ordering
- * invariant; every migration after it is held to it by `gates.test.ts`'s
- * "deploy-phase ordering (post-genesis)" describe block.
+ * comment, "THE GENESIS BOOTSTRAP WINDOW", for what that means and how the line
+ * moved before it froze. Every migration up to and including this one is exempt
+ * from the pre-behind-post ordering invariant; every migration after it is held
+ * to it by `gates.test.ts`'s "deploy-phase ordering (post-genesis)" describe
+ * block.
  *
  * Exported so that gate can read the SAME boundary this file documents,
  * rather than a second copy of the tag string that could drift from it.
  *
- * AT CUTOVER, DO NOT ADVANCE THIS. `gates.test.ts`'s
- * "LAST_GENESIS_MIGRATION_TAG is the newest migration" assertion must be
- * DELETED instead, and this constant frozen at whatever it holds when the first
- * production deploy happens. Advancing it past that point leaves
- * `findPostGenesisPhaseOrderingViolations` — which inspects only
- * `entries.slice(boundaryIndex + 1)` — with a permanently empty tail, so the
- * `pre`-behind-`post` invariant checks nothing, forever, with every test green.
- * Said here as well as in the test because this is the file somebody opens when
- * they go to bump it.
+ * **FROZEN. DO NOT ADVANCE IT — cutover happened on 2026-08-08.** This is the
+ * one edit to this file that is never correct again, and the one whose damage is
+ * invisible: `findPostGenesisPhaseOrderingViolations` inspects only
+ * `entries.slice(boundaryIndex + 1)`, so moving the boundary to the newest
+ * migration leaves it a permanently EMPTY tail. The `pre`-behind-`post`
+ * invariant then checks nothing, forever, with every test green — advancing this
+ * does not relax the rule, it deletes it. The test that used to require this to
+ * be the newest tag was deleted at cutover, exactly as it and this comment
+ * instructed; `gates.test.ts`'s "is frozen at the cutover boundary" pins the
+ * value in its place, and is the thing that will fail if somebody bumps this out
+ * of habit.
+ *
+ * A migration landing today is `0025` or later, sits AFTER this boundary, and is
+ * checked. That is the whole point of leaving the constant where it is.
  */
 export const LAST_GENESIS_MIGRATION_TAG = '0024_ambitious_xorn';
 
