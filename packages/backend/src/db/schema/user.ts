@@ -13,19 +13,21 @@
  * ## The two TTL indexes — and why they are the whole point of this file
  *
  * `db/expiry.ts`'s registry is the Postgres replacement for a Mongo TTL index,
- * and this vertical is where it stops being empty. Two of this repo's four
- * `expireAfterSeconds` declarations live here:
+ * and this vertical is where it stops being empty. Two of the repo's four
+ * `expireAfterSeconds` declarations were ported here:
  *
  *  - `NotificationSuppression.expiresAt`, `expireAfterSeconds: 0` — the column
  *    IS the deadline, so `retentionSeconds: 0`.
  *  - `ListeningEvent.playedAt`, `expireAfterSeconds: 90 days` — a retention
  *    window measured from a birth column.
  *
- * (The other two, `ModerationOutbox` and `ModerationEvent`, are Task 8's. The
- * brief's prose says this task lands three of four; `grep -rn
- * "expireAfterSeconds" packages/backend/src` returns four declarations total
- * and two of them are here, which is also what the brief's own table says.
- * Raised in this task's report.)
+ * (The other two, `ModerationOutbox` and `ModerationEvent`, were Task 8's. The
+ * brief's prose said this task lands three of four; the grep said four
+ * declarations total with two of them here, which is also what the brief's own
+ * table said. Raised in this task's report. That grep no longer reproduces —
+ * the Mongoose models it read are deleted, so `expireAfterSeconds` now survives
+ * only in prose like this; `db/expiry.ts` records what still checks the
+ * registry.)
  *
  * Each entry needs a supporting index or the sweep's `column <= now() - N`
  * predicate becomes a full table scan every time it runs — the exact cost the

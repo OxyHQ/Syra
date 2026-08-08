@@ -18,17 +18,21 @@ type AsyncHandler<R extends Request = Request> = (
  *
  * This wrapper's only consumer is `routes/playlists.routes.ts`, whose handlers
  * Task 11 moved to Postgres — verified transitively, not by grepping the routes
- * file: walking all 27 files it reaches finds no `models/` import, and
- * `db/__tests__/connectivityGates.test.ts` keeps checking that.
+ * file: walking all 27 files it reaches found no `models/` import.
+ * `db/__tests__/connectivityGates.test.ts` kept checking that until 8cd87a8
+ * retired it along with its subject; the property now holds by construction,
+ * since `mongoose` is not a dependency and `src/models/` does not exist.
  *
  * The gate it used to make was `isDatabaseConnected()`, which is
  * `mongoose.connection.readyState`.
  *
  * So the gate was asking about a database these routes do not use. That cost two
  * things, and the second is the one worth stating: Mongo down with Postgres up
- * answered 503 for playlist routes that would have worked, and once Mongo is
- * removed (Task 19) `readyState` never reaches 1 again — so **every playlist
- * route would 503 for everyone, permanently, with no error anywhere**.
+ * answered 503 for playlist routes that would have worked, and once Mongo was
+ * removed `readyState` could never reach 1 again — so **every playlist route
+ * would have 503'd for everyone, permanently, with no error anywhere**. That is
+ * no longer a live hazard; it is the reason this one-line change was worth a
+ * task of its own.
  *
  * This wrapper is Task 11's and the fix is a one-line change; Task 15 took it
  * because the sweep it was doing for its own two jobs is only meaningful if it

@@ -18,35 +18,56 @@
  * never in this code to be missed: there is no deleted call site, no orphaned
  * function, nothing a reviewer diffing the port would see go absent.
  *
- * So porting a collection is not done when its schema and migration exist. If
- * its Mongoose model declares `expireAfterSeconds`, it is done only once a
- * matching entry exists here.
+ * So porting a collection was not done when its schema and migration existed:
+ * if its Mongoose model declared `expireAfterSeconds`, it was done only once a
+ * matching entry existed here. All four such models have been ported, and the
+ * rule generalises past its origin — a table that needs rows to stop existing
+ * needs an entry here, whatever made it need one.
  *
- * THAT IS GATED, and no longer by a hand grep. `__tests__/gates.test.ts`
- * ("accounts for every Mongoose TTL index") WALKS `src/models/*.ts` for
- * `<Model>Schema.index({ field: 1 }, { … expireAfterSeconds … })` and compares
- * what it finds against a model→port map, then compares the covered half of
- * that map against the targets below. A vertical that ports a TTL-bearing
- * model without adding an entry here fails there, naming the model. Only the
- * model→column correspondence is hand-maintained — a human has to say which
- * Postgres column a Mongo field became — while the SET of declarations comes
- * from the files, which is the half that used to be a grep in somebody's
- * report.
+ * ## WHAT IS AND IS NOT GATED — read this before adding a table
  *
- * The map holds FOUR entries and only TWO are still declared in `src/models/`,
- * because a ported model's file is deleted: Task 15 removed
- * `ListeningEvent.ts` and `NotificationSuppression.ts`. The gate derives which
- * side an entry belongs on from whether its model file still EXISTS rather
- * than from a hand-kept flag, so the migration succeeding cannot be mistaken
- * for a TTL deleted by accident — and a declaration surviving a model the map
- * calls deleted fails too. `ModerationOutbox`/`ModerationEvent` are the two
- * still declared, mapped to a deferred sentinel that is deliberately NOT
- * counted as covered.
+ * A gate in `__tests__/gates.test.ts` ("accounts for every Mongoose TTL index")
+ * used to WALK `src/models/*.ts` for
+ * `<Model>Schema.index({ field: 1 }, { … expireAfterSeconds … })` and fail a
+ * vertical that ported a TTL-bearing model without adding an entry here — so the
+ * SET of declarations came from the files rather than from a grep in somebody's
+ * report. It was deleted in 8cd87a8 on its own instruction ("the next time this
+ * number moves is when Task 8 deletes those models, and at that point the right
+ * change is to DELETE this gate with them rather than lower the floor to zero").
+ * It cannot read a declaration that exists in no file.
  *
- * The gate reads one spelling of a TTL declaration — the only one this repo
- * uses, not the only one Mongoose accepts. See its own comment for the four
- * shapes it would miss and why a miss is SILENT; adding a target in an
- * unusual shape means checking that comment first.
+ * What still holds the registry, all of it against Postgres rather than against
+ * Mongoose, so none of it went with the models:
+ *
+ *  - `__tests__/gates.test.ts`, "registers every Mongo TTL index that was
+ *    ported, with its own retention" — the exact, ORDERED list of
+ *    `table.column:retentionSeconds`, not a count. A target pointed at the wrong
+ *    column or carrying the wrong retention is caught; both are mistakes that
+ *    leave rows either immortal or deleted early, and neither moves a length.
+ *  - `findUnsupportedExpiryColumns` (`@oxyhq/db/assert`), driven against a REAL
+ *    migrated database, so a target added without a supporting index fails
+ *    rather than silently costing a full scan every tick.
+ *  - `db/user/__tests__/user.explain.test.ts` — an EXPLAIN probe per target on
+ *    the sweep's own statement (an index can exist and still not be usable),
+ *    plus a length parity check against its own index map.
+ *  - `gates.test.ts`'s "keeps user_uploads.expires_at OUT of the blind expiry
+ *    sweep", the negative direction.
+ *
+ * **What nothing gates: that a NEW table which ought to be swept gets an entry.**
+ * The deleted walk never covered that either — it only ever caught a Mongoose
+ * model being ported without one — so nothing regressed when it went. But no
+ * check derives the required SET from anything now; the list below is what the
+ * assertions compare against, so a table that needs expiry and is simply never
+ * added here is invisible to all of them, which is precisely this file's own
+ * "grows FOREVER, with no symptom of any kind until disk".
+ *
+ * That gap is deliberately NOT closed with a scanner over expiry-shaped columns,
+ * and `user_uploads.expires_at` is why: it is exactly that shape and must NEVER
+ * be registered, because a blind row delete orphans the file's S3 objects and
+ * skips the T−14d warning the retention policy promises. Any such scanner has to
+ * carry an exemption list from its first commit, and an exemption list is the
+ * thing this repo has repeatedly found rots. Adding a table? Ask whether its rows
+ * must stop existing, and answer it here.
  *
  * `findUnsupportedExpiryColumns` (`@oxyhq/db/assert`) reads the real Postgres
  * catalogue against whatever lands here, so an entry added without its
