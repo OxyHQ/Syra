@@ -49,6 +49,7 @@ import { sql } from 'drizzle-orm';
 import { executeRows } from '@oxyhq/db';
 import { closePostgres, getDb } from '../../postgres';
 import { connectUnmanagedDb } from '../../../test/postgres';
+import { ARTIST_KEYED_TRACK_INDEXES, expectIndexesWithin } from '../../__tests__/explainIndexes';
 
 /** Thrown to roll the seeding transaction back once every plan is collected. */
 class Rollback extends Error {}
@@ -427,7 +428,7 @@ describe('the artist-wide moderation queries reach migration 0017 index', () => 
 describe('the service read paths reach an index', () => {
   it('the artist radio seed reads the artist through an index', () => {
     expect(plans.get('artistSeedTracks')).not.toContain('Seq Scan on tracks');
-    expect(`artist seed: ${indexesIn('artistSeedTracks')}`).toContain('tracks_');
+    expectIndexesWithin('artist seed', indexesIn('artistSeedTracks'), ARTIST_KEYED_TRACK_INDEXES);
   });
 
   it('the album radio seed reaches the standalone album index', () => {
@@ -477,7 +478,9 @@ describe('the playback read paths reach an index', () => {
 
   it('the HLS ladder read enters through the ladder unique constraint', () => {
     expect(plans.get('playbackRenditions')).not.toContain('Seq Scan on track_hls_renditions');
-    expect(`renditions: ${indexesIn('playbackRenditions')}`).toContain('track_hls_renditions_');
+    expectIndexesWithin('renditions', indexesIn('playbackRenditions'), [
+      'track_hls_renditions_track_id_position_key',
+    ]);
   });
 
   it('the content key read does not scan track_keys', () => {
@@ -505,7 +508,7 @@ describe('the artist surface reads reach an index', () => {
    */
   it('the public artist track page reads through an index', () => {
     expect(plans.get('artistTracksPage')).not.toContain('Seq Scan on tracks');
-    expect(`artist tracks: ${indexesIn('artistTracksPage')}`).toContain('tracks_');
+    expectIndexesWithin('artist tracks', indexesIn('artistTracksPage'), ARTIST_KEYED_TRACK_INDEXES);
   });
 
   it('its count does not scan the table', () => {

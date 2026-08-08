@@ -86,6 +86,7 @@ import { sql } from 'drizzle-orm';
 import { executeRows } from '@oxyhq/db';
 import { closePostgres, getDb } from '../../postgres';
 import { connectUnmanagedDb } from '../../../test/postgres';
+import { expectIndexesWithin } from '../../__tests__/explainIndexes';
 
 /** Thrown to roll the seeding transaction back once every plan is collected. */
 class Rollback extends Error {}
@@ -680,21 +681,29 @@ describe('the episode reads reach an index', () => {
    * ordered one). Five runs gave `guid_key` five times where an earlier version
    * of this file demanded `pub_date_idx`.
    *
-   * `episodes_podcast_id_` is not a loose match: exactly two indexes on this
-   * table carry that prefix, and they are exactly the two that lead with
-   * `podcast_id`. It excludes `episodes_ready_popularity_idx` and
-   * `episodes_search_gin`, which are the plans that would mean the show filter
-   * had stopped being indexed — which is the property under test.
+   * That reasoning is unchanged and still right; only the SHAPE of the check is
+   * tightened. It was `toContain('episodes_podcast_id_')`, which asks whether an
+   * acceptable index appears anywhere in the plan — so a plan that reached one
+   * of these two AND ALSO scanned `episodes_ready_popularity_idx` passed, even
+   * though that second index is precisely what the prefix was chosen to exclude.
+   * Naming the two acceptable indexes as a set asks the other question — is
+   * there anything here I did not expect — while keeping the alternation the
+   * comment above describes.
    *
    * The NON-partial index is the point of the second probe: a `status =
    * 'ready'` partial index would stop serving the owner's own
    * unpublished-episode view, which is the first probe.
    */
+  const SHOW_EPISODE_INDEXES = [
+    'episodes_podcast_id_pub_date_idx',
+    'episodes_podcast_id_guid_key',
+  ];
+
   it('a show\'s episodes are filtered through an index on the show, for both viewers', () => {
     expect(plans.get('showEpisodes')).not.toContain('Seq Scan on episodes');
-    expect(`owner view: ${indexesIn('showEpisodes')}`).toContain('episodes_podcast_id_');
+    expectIndexesWithin('owner view', indexesIn('showEpisodes'), SHOW_EPISODE_INDEXES);
     expect(plans.get('showEpisodesPublic')).not.toContain('Seq Scan on episodes');
-    expect(`public view: ${indexesIn('showEpisodesPublic')}`).toContain('episodes_podcast_id_');
+    expectIndexesWithin('public view', indexesIn('showEpisodesPublic'), SHOW_EPISODE_INDEXES);
   });
 
   it('the newest episode is one row off the ordered index, not an aggregate', () => {
@@ -765,6 +774,8 @@ describe('the resume surface and the child loads reach an index', () => {
 
   it('a child collection loads by parent id without scanning its table', () => {
     expect(plans.get('childByParent')).not.toContain('Seq Scan on podcast_funding');
-    expect(`child by parent: ${indexesIn('childByParent')}`).toContain('podcast_funding');
+    expectIndexesWithin('child by parent', indexesIn('childByParent'), [
+      'podcast_funding_podcast_id_position_key',
+    ]);
   });
 });

@@ -65,6 +65,12 @@ import {
 import { executeRows } from '@oxyhq/db';
 import { closePostgres, getDb } from '../../postgres';
 import { connectUnmanagedDb } from '../../../test/postgres';
+import {
+  ARTIST_KEYED_TRACK_INDEXES,
+  PLAYABILITY_PARTIAL_INDEX_SQL,
+  PLAYABLE_TRACK_PARTIAL_INDEXES,
+  expectIndexesWithin,
+} from '../../__tests__/explainIndexes';
 import { albums, catalogEntities, tracks } from '../../schema/catalog';
 import { playlistTracks, playlists } from '../../schema/library';
 import {
@@ -395,6 +401,35 @@ function indexesIn(name: string): string {
   return [...new Set(found)].sort().join(', ');
 }
 
+/**
+ * The gate that stops {@link PLAYABLE_TRACK_PARTIAL_INDEXES} going stale.
+ *
+ * That constant is a hand-written list of index names, and a hand-written list
+ * checked only against itself is the registry-that-does-not-discover shape: the
+ * day someone adds an eighth partial index on `tracks`, a legitimate plan starts
+ * failing and the message blames the plan. Re-deriving it from `pg_indexes` here
+ * means the list is wrong for one run, not indefinitely.
+ *
+ * It is also how I found my own first version was short by two —
+ * `tracks_album_id_idx` and `tracks_artist_id_album_id_idx` carry the same
+ * partial predicate and I had omitted both.
+ */
+describe('the playability index set matches the database', () => {
+  it('lists exactly the partial indexes whose predicate is playability', async () => {
+    const rows = await executeRows<{ indexname: string }>(
+      getDb(),
+      sql.raw(PLAYABILITY_PARTIAL_INDEX_SQL),
+    );
+    const live = rows.map((row) => row.indexname).sort();
+
+    // Vacuity floor: a query returning nothing would make the comparison below
+    // pass only if the constant were also empty, but an empty constant would
+    // make every probe using it fail — so assert the shape directly.
+    expect(live.length).toBeGreaterThanOrEqual(5);
+    expect(live).toEqual([...PLAYABLE_TRACK_PARTIAL_INDEXES].sort());
+  });
+});
+
 describe('the album path reaches the index migration 0016 restored', () => {
   it('GET /albums/:id/tracks scans album_id directly', () => {
     // Named in the assertion so a regression reports WHICH index the planner
@@ -418,7 +453,10 @@ describe('the album path reaches the index migration 0016 restored', () => {
    */
   it('the album playability probe never falls back to a table scan', () => {
     expect(plans.get('albumHasPlayable')).not.toContain('Seq Scan on tracks');
-    expect(`album exists: ${indexesIn('albumHasPlayable')}`).toContain('tracks_');
+    expectIndexesWithin('album exists', indexesIn('albumHasPlayable'), [
+      ...PLAYABLE_TRACK_PARTIAL_INDEXES,
+      'albums_pkey',
+    ]);
   });
 });
 
@@ -446,7 +484,10 @@ describe('the artist and playlist paths reach their indexes', () => {
    * the probe exists to hold.
    */
   it('the artist playability probe reads the artist through an index, not the table', () => {
-    expect(`artist exists: ${indexesIn('artistHasPlayable')}`).toContain('tracks_artist_id');
+    expectIndexesWithin('artist exists', indexesIn('artistHasPlayable'), [
+      ...ARTIST_KEYED_TRACK_INDEXES,
+      'catalog_entities_artist_name_key_key',
+    ]);
     expect(plans.get('artistHasPlayable')).not.toContain('Seq Scan on tracks');
   });
 
@@ -519,7 +560,7 @@ describe('Task 10c-3: the controller list queries reach an index', () => {
    */
   for (const probe of ['browsePopularTracks', 'browseGenreCards']) {
     it(`${probe} reads through an index and sorts, never scanning the table`, () => {
-      expect(`${probe}: ${indexesIn(probe)}`).toContain('tracks_');
+      expectIndexesWithin(probe, indexesIn(probe), PLAYABLE_TRACK_PARTIAL_INDEXES);
       expect(plans.get(probe)).not.toContain('Seq Scan on tracks');
       // The sort is the point of the weakening — assert it is really there, so
       // this test stops being weak the day an index makes it unnecessary.
@@ -629,7 +670,12 @@ describe('Task 10c-3: the controller list queries reach an index', () => {
    */
   for (const probe of ['trackSearchCount', 'trackSearch']) {
     it(`${probe} reaches an index and never scans the table`, () => {
-      expect(`${probe}: ${indexesIn(probe)}`).toContain('tracks_');
+      expectIndexesWithin(probe, indexesIn(probe), [
+        ...PLAYABLE_TRACK_PARTIAL_INDEXES,
+        // The comment above is explicit that this flips as the catalogue
+        // grows, so the winning end of that curve is accepted too.
+        'tracks_search_gin',
+      ]);
       expect(plans.get(probe)).not.toContain('Seq Scan on tracks');
     });
   }
