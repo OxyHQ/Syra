@@ -137,8 +137,8 @@ export default function LiveScreen() {
           onFormStateChange={setFormState}
         />
         <View
-          className="gap-2.5 px-4 pt-2.5 pb-3.5"
-          style={{ borderTopWidth: 0.5, borderTopColor: theme.colors.border, backgroundColor: theme.colors.background }}
+          className="gap-2.5 px-4 pt-2.5 pb-3.5 border-t-border bg-background"
+          style={{ borderTopWidth: 0.5 }}
         >
           <Pressable
             onPress={() => createRef.current?.handleCreateAndStart()}

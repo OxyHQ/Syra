@@ -37,7 +37,7 @@ const UserProfileScreen: React.FC = () => {
     return (
       <>
         <SEO title={t('user.seo.notFoundTitle')} description={t('user.seo.notFoundDescription')} />
-        <View style={[styles.container, styles.centered, { backgroundColor: theme.colors.backgroundSecondary }]}>
+        <View className="bg-surface" style={[styles.container, styles.centered]}>
           <MaterialCommunityIcons name="account-off" size={64} color={theme.colors.textSecondary} />
           <Text className="text-muted-foreground" style={styles.errorText}>
             {t('user.notFound')}

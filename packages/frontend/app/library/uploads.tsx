@@ -224,7 +224,7 @@ const UploadRow: React.FC<UploadRowProps> = ({ upload, isCurrent, onPlay }) => {
         {artworkUrl ? (
           <Image source={{ uri: artworkUrl }} style={styles.artwork} contentFit="cover" />
         ) : (
-          <View style={[styles.artwork, styles.artworkPlaceholder, { backgroundColor: theme.colors.backgroundSecondary }]}>
+          <View className="bg-surface" style={[styles.artwork, styles.artworkPlaceholder]}>
             <Ionicons name="musical-note" size={18} color={theme.colors.textSecondary} />
           </View>
         )}
@@ -283,21 +283,24 @@ const UploadRow: React.FC<UploadRowProps> = ({ upload, isCurrent, onPlay }) => {
             onChangeText={setTitle}
             placeholder={t('uploads.details.title')}
             placeholderTextColor={theme.colors.textSecondary}
-            style={[styles.input, { backgroundColor: theme.colors.backgroundSecondary, color: theme.colors.text }]}
+            className="bg-surface text-foreground"
+            style={styles.input}
           />
           <TextInput
             value={artistName}
             onChangeText={setArtistName}
             placeholder={t('uploads.details.artist')}
             placeholderTextColor={theme.colors.textSecondary}
-            style={[styles.input, { backgroundColor: theme.colors.backgroundSecondary, color: theme.colors.text }]}
+            className="bg-surface text-foreground"
+            style={styles.input}
           />
           <TextInput
             value={albumName}
             onChangeText={setAlbumName}
             placeholder={t('uploads.details.album')}
             placeholderTextColor={theme.colors.textSecondary}
-            style={[styles.input, { backgroundColor: theme.colors.backgroundSecondary, color: theme.colors.text }]}
+            className="bg-surface text-foreground"
+            style={styles.input}
           />
 
           <Pressable

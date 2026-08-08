@@ -68,12 +68,9 @@ export function OfflineBanner() {
                     paddingHorizontal: 16,
                     paddingVertical: 8,
                     borderRadius: 999,
-                    backgroundColor: theme.colors.backgroundTertiary,
                     borderWidth: StyleSheet.hairlineWidth,
-                    borderColor: theme.colors.border,
                 },
                 text: {
-                    color: theme.colors.text,
                     fontSize: 13,
                     textAlign: 'center',
                 },
@@ -89,8 +86,8 @@ export function OfflineBanner() {
     // for the content underneath it.
     return (
         <View style={styles.container} pointerEvents="none" accessibilityRole="alert">
-            <View style={styles.banner}>
-                <Text style={styles.text}>
+            <View className="bg-popover border-border" style={styles.banner}>
+                <Text className="text-foreground" style={styles.text}>
                     {t('common.offline', { defaultValue: "You're offline. Showing saved content." })}
                 </Text>
             </View>
