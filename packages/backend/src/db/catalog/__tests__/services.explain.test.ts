@@ -336,8 +336,8 @@ async function seed(tx: Tx): Promise<void> {
     from generate_series(0, 899) g`));
 
   await executeRows(tx, sql.raw(`
-    insert into track_keys (id, kind, track_id, key_hex, key_uri)
-    select '${MARKER}-k-' || g, 'track', '${MARKER}-t-' || g, repeat('ab', 16), 'key'
+    insert into track_keys (id, track_id, key_hex, key_uri)
+    select '${MARKER}-k-' || g, '${MARKER}-t-' || g, repeat('ab', 16), 'key'
     from generate_series(1, 20000) g`));
 
   await executeRows(tx, sql.raw(

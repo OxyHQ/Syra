@@ -569,11 +569,13 @@ export async function softDeleteUploads(uploadIds: readonly string[], now: Date)
  * go with them, by real `ON DELETE cascade` foreign keys rather than by two
  * deletes every caller has to remember.
  *
- * Their `track_keys` row does NOT. That column is polymorphic across three id
- * spaces and carries no foreign key (`schema/deferredForeignKeys.ts`), so a
- * caller that needs the key gone deletes it itself — `deleteUpload` does,
- * `expirySweeper` does not, and that asymmetry is a known defect this port
- * carries at parity rather than papers over. Both call sites say so.
+ * Their `track_keys` row goes too, since Task 13a — `track_keys.user_upload_id`
+ * is a third such cascade (`schema/trackKeys.ts`). It used to be the exception:
+ * one polymorphic `track_id` across three id spaces could carry no foreign key,
+ * so each caller deleted the key itself, `deleteUpload` did and `expirySweeper`
+ * did not, and every file the sweeper removed left an AES key behind forever.
+ * Neither caller has an explicit delete now, which is the point — the next one
+ * will not need to remember it either.
  */
 export async function deleteUploads(uploadIds: readonly string[]): Promise<number> {
   if (uploadIds.length === 0) return 0;

@@ -22,7 +22,7 @@ import { isLiveEntityId } from '@oxyhq/db';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { safeFetch, SsrfRejection } from '@oxyhq/core/server';
 import { getDb } from '../db/postgres';
-import { trackKeys } from '../db/schema/catalog';
+import { trackKeys } from '../db/schema/trackKeys';
 import { findEpisodeById } from '../db/podcasts/episodes';
 import { loadEpisodeHls } from '../db/podcasts/hydrate';
 import type { EpisodeRow } from '../db/podcasts/serialize';
@@ -288,12 +288,13 @@ export async function getEpisodeStreamKey(req: AuthRequest, res: Response): Prom
     return;
   }
 
-  // `track_keys` is polymorphic across three id spaces (see `schema/catalog.ts`);
-  // an episode's AES key is stored under the episode id by `storePackagedHls`.
+  // `track_keys.episode_id`, NOT `track_id`: the table carries one column per
+  // id space (see `schema/trackKeys.ts`), and this endpoint holds an episode
+  // id. `storePackagedHls` files it under the same arm from `ingestEpisode`.
   const [trackKey] = await getDb()
     .select({ keyHex: trackKeys.keyHex })
     .from(trackKeys)
-    .where(eq(trackKeys.trackId, episodeId))
+    .where(eq(trackKeys.episodeId, episodeId))
     .limit(1);
   if (!trackKey) {
     res.status(404).json({ error: 'Key not found' });

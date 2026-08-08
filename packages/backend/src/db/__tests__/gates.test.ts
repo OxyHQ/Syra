@@ -106,6 +106,8 @@ import {
   userTasteGenres,
   userTasteProfiles,
 } from '../schema/user';
+import * as trackKeysModule from '../schema/trackKeys';
+import { trackKeys } from '../schema/trackKeys';
 import { DEFERRED_FOREIGN_KEYS, ID_COLUMNS_WITHOUT_FOREIGN_KEY } from '../schema/deferredForeignKeys';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../schema/protectedColumns';
 import { EXPIRY_SWEEP_TARGETS } from '../expiry';
@@ -512,10 +514,16 @@ describe('schema gates', () => {
     // the hand-split `0012`/`0013` pair, and 16, not 15, is Task 7's for the
     // same reason: its review round added `0015`. The identifier floor did NOT
     // move with it — `0015` only re-states two constraint names `0014` already
-    // declared, so the distinct-identifier count is unchanged at 907.
-    expect(files.length).toBeGreaterThanOrEqual(16);
+    // declared, so the distinct-identifier count is unchanged at 907. Task 13a
+    // raises both again (16 -> 24 files, 850 -> 900, against 925 actual): its
+    // `0022`/`0023` pair is the eighth and ninth migration to land since Task 7
+    // set these, and eight of the nine went in without either floor moving —
+    // which is the same "routine maintenance that is routinely forgotten" lapse
+    // `migrate.ts` records for `LAST_GENESIS_MIGRATION_TAG`, and it fails just
+    // as silently, in the safe direction.
+    expect(files.length).toBeGreaterThanOrEqual(24);
     const { violations, scanned } = findOverlongIdentifiers(files);
-    expect(scanned).toBeGreaterThanOrEqual(850);
+    expect(scanned).toBeGreaterThanOrEqual(900);
 
     // Exact identity, never substring — see `findUnexemptedIdentifiers`.
     // The second half is the staleness check: an exemption that no longer
@@ -599,10 +607,13 @@ describe('catalog schema (Task 2)', () => {
   ];
 
   it('lands exactly the tables this task promises', () => {
-    // Scoped to catalog.ts + genres.ts, not the barrel-wide `tables()` — see
-    // `tablesIn`'s own doc comment for why a per-task exact-match check must
-    // never read the cumulative barrel.
-    const present = tablesIn(catalogModule, genresModule)
+    // Scoped to catalog.ts + genres.ts + trackKeys.ts, not the barrel-wide
+    // `tables()` — see `tablesIn`'s own doc comment for why a per-task
+    // exact-match check must never read the cumulative barrel. `track_keys`
+    // moved to a module of its own in Task 13a (it references three verticals;
+    // see that file), and is listed here rather than dropped from the expected
+    // set, so the table stays covered by an exact-match gate somewhere.
+    const present = tablesIn(catalogModule, genresModule, trackKeysModule)
       .map((table) => getTableConfig(table).name)
       .sort();
     expect(present).toEqual([...EXPECTED_TABLES].sort());
@@ -710,6 +721,241 @@ describe('catalog schema (Task 2)', () => {
       await db.delete(trackHlsRenditions).where(eq(trackHlsRenditions.trackId, track.id));
       await db.delete(tracks).where(eq(tracks.id, track.id));
       await db.delete(catalogEntities).where(eq(catalogEntities.id, artist.id));
+    }
+  });
+});
+
+describe('track_keys, one column per id space (Task 13a)', () => {
+  /**
+   * `track_keys` held one polymorphic `track_id` plus a `kind` naming which of
+   * `tracks`/`user_uploads`/`episodes` it meant. Postgres has no conditional
+   * foreign key, so nothing cascaded, and every caller deleting a parent had to
+   * delete the key itself — which `services/uploads/expirySweeper.ts`, the one
+   * that runs unattended, never did.
+   *
+   * The three tests below are the proof that the orphan is now structurally
+   * impossible rather than merely absent: one per arm, each deleting the parent
+   * through a plain `db.delete` (no application code involved at all) and
+   * asserting the key row went with it. Each was mutation-checked by dropping
+   * that arm's constraint on a live database and confirming the test fails
+   * naming that arm — the two other arms stay green under the same mutation,
+   * which is what makes each of the three load-bearing on its own.
+   */
+
+  async function seedTrack(marker: string): Promise<{ artistId: string; trackId: string }> {
+    const db = getDb();
+    const [artist] = await db
+      .insert(catalogEntities)
+      .values({ name: `CHECK-fixture-${marker}-artist`, type: 'artist', source: 'upload' })
+      .returning({ id: catalogEntities.id });
+    const [track] = await db
+      .insert(tracks)
+      .values({
+        title: `CHECK-fixture-${marker}-track`,
+        artistId: artist.id,
+        artistName: `CHECK-fixture-${marker}-artist`,
+        duration: 180,
+        source: 'upload',
+      })
+      .returning({ id: tracks.id });
+    return { artistId: artist.id, trackId: track.id };
+  }
+
+  it('cascades a deleted TRACK into its AES key', async () => {
+    const db = getDb();
+    const { artistId, trackId } = await seedTrack('key-track');
+
+    try {
+      await db
+        .insert(trackKeys)
+        .values({ trackId, keyHex: 'CHECK-fixture-key-hex', keyUri: 'CHECK-fixture-key-uri' });
+
+      await db.delete(tracks).where(eq(tracks.id, trackId));
+
+      expect(await db.select().from(trackKeys).where(eq(trackKeys.trackId, trackId))).toEqual([]);
+    } finally {
+      await db.delete(trackKeys).where(eq(trackKeys.trackId, trackId));
+      await db.delete(tracks).where(eq(tracks.id, trackId));
+      await db.delete(catalogEntities).where(eq(catalogEntities.id, artistId));
+    }
+  });
+
+  it('cascades a deleted USER UPLOAD into its AES key — the sweeper path', async () => {
+    // THE arm this task exists for. `services/uploads/expirySweeper.ts`
+    // hard-deletes expired locker rows on a timer and never deleted the key;
+    // this asserts the delete itself takes it, whoever issues the delete.
+    const db = getDb();
+    const [upload] = await db
+      .insert(userUploads)
+      .values({
+        ownerOxyUserId: 'CHECK-fixture-key-upload-owner',
+        title: 'CHECK-fixture-key-upload',
+        duration: 210,
+        sizeBytes: 1024,
+        sha256: 'e'.repeat(64),
+        status: 'ready',
+      })
+      .returning({ id: userUploads.id });
+
+    try {
+      await db
+        .insert(trackKeys)
+        .values({
+          userUploadId: upload.id,
+          keyHex: 'CHECK-fixture-key-hex',
+          keyUri: 'CHECK-fixture-key-uri',
+        });
+
+      await db.delete(userUploads).where(eq(userUploads.id, upload.id));
+
+      expect(
+        await db.select().from(trackKeys).where(eq(trackKeys.userUploadId, upload.id))
+      ).toEqual([]);
+    } finally {
+      await db.delete(trackKeys).where(eq(trackKeys.userUploadId, upload.id));
+      await db.delete(userUploads).where(eq(userUploads.id, upload.id));
+    }
+  });
+
+  it('cascades a deleted EPISODE into its AES key, and a deleted SHOW through it', async () => {
+    // Two levels: `episodes.podcast_id` already cascaded from `podcasts`, so
+    // once `track_keys.episode_id` cascades from `episodes` a deleted show
+    // reaches the key as well. Asserted here because a two-level cascade is
+    // exactly the kind of thing a reader assumes rather than checks.
+    const db = getDb();
+    const [podcast] = await db
+      .insert(podcasts)
+      .values({
+        title: 'CHECK-fixture-key-show',
+        feedUrl: 'https://example.test/check-fixture-key-show.xml',
+        source: 'syra',
+      })
+      .returning({ id: podcasts.id });
+
+    try {
+      const [episode] = await db
+        .insert(episodes)
+        .values({
+          podcastId: podcast.id,
+          podcastTitle: 'CHECK-fixture-key-show',
+          title: 'CHECK-fixture-key-episode',
+          guid: 'CHECK-fixture-key-episode-guid',
+          pubDate: new Date('2026-01-01T00:00:00.000Z'),
+          source: 'syra',
+        })
+        .returning({ id: episodes.id });
+
+      await db
+        .insert(trackKeys)
+        .values({
+          episodeId: episode.id,
+          keyHex: 'CHECK-fixture-key-hex',
+          keyUri: 'CHECK-fixture-key-uri',
+        });
+
+      await db.delete(episodes).where(eq(episodes.id, episode.id));
+      expect(
+        await db.select().from(trackKeys).where(eq(trackKeys.episodeId, episode.id))
+      ).toEqual([]);
+
+      // Same again, deleted one level up.
+      const [second] = await db
+        .insert(episodes)
+        .values({
+          podcastId: podcast.id,
+          podcastTitle: 'CHECK-fixture-key-show',
+          title: 'CHECK-fixture-key-episode-2',
+          guid: 'CHECK-fixture-key-episode-guid-2',
+          pubDate: new Date('2026-01-02T00:00:00.000Z'),
+          source: 'syra',
+        })
+        .returning({ id: episodes.id });
+      await db
+        .insert(trackKeys)
+        .values({
+          episodeId: second.id,
+          keyHex: 'CHECK-fixture-key-hex',
+          keyUri: 'CHECK-fixture-key-uri',
+        });
+
+      await db.delete(podcasts).where(eq(podcasts.id, podcast.id));
+      expect(
+        await db.select().from(trackKeys).where(eq(trackKeys.episodeId, second.id))
+      ).toEqual([]);
+    } finally {
+      await db.delete(podcasts).where(eq(podcasts.id, podcast.id));
+    }
+  });
+
+  it('refuses a key naming no parent, and a key naming two', async () => {
+    // The CHECK is what makes the three columns a discriminated union rather
+    // than three optional fields. Without it a row could name nothing (an
+    // orphan by construction, reachable from no reader) or two parents at once
+    // (deleting either would take a key the other still needs).
+    const db = getDb();
+    const { artistId, trackId } = await seedTrack('key-check');
+    const [upload] = await db
+      .insert(userUploads)
+      .values({
+        ownerOxyUserId: 'CHECK-fixture-key-check-owner',
+        title: 'CHECK-fixture-key-check-upload',
+        duration: 210,
+        sizeBytes: 1024,
+        sha256: 'f'.repeat(64),
+        status: 'ready',
+      })
+      .returning({ id: userUploads.id });
+
+    try {
+      await expectRefusedBy(
+        Promise.resolve(
+          db.insert(trackKeys).values({ keyHex: 'CHECK-fixture-none', keyUri: 'none' })
+        ),
+        isCheckViolation,
+        'track_keys_one_parent_check'
+      );
+
+      await expectRefusedBy(
+        Promise.resolve(
+          db.insert(trackKeys).values({
+            trackId,
+            userUploadId: upload.id,
+            keyHex: 'CHECK-fixture-two',
+            keyUri: 'two',
+          })
+        ),
+        isCheckViolation,
+        'track_keys_one_parent_check'
+      );
+    } finally {
+      await db.delete(trackKeys).where(eq(trackKeys.trackId, trackId));
+      await db.delete(userUploads).where(eq(userUploads.id, upload.id));
+      await db.delete(tracks).where(eq(tracks.id, trackId));
+      await db.delete(catalogEntities).where(eq(catalogEntities.id, artistId));
+    }
+  });
+
+  it('refuses a second key on the same parent, per arm', async () => {
+    // One unique per arm replaces the single unique the shared column carried.
+    // A duplicate would make "the key for this record" ambiguous, and the
+    // upsert in `storePackagedHls` relies on exactly this constraint to rotate
+    // a key in place on re-ingest instead of inserting a second row.
+    const db = getDb();
+    const { artistId, trackId } = await seedTrack('key-unique');
+
+    try {
+      await db.insert(trackKeys).values({ trackId, keyHex: 'CHECK-fixture-first', keyUri: 'a' });
+      await expectRefusedBy(
+        Promise.resolve(
+          db.insert(trackKeys).values({ trackId, keyHex: 'CHECK-fixture-second', keyUri: 'b' })
+        ),
+        isUniqueViolation,
+        'track_keys_track_id_key'
+      );
+    } finally {
+      await db.delete(trackKeys).where(eq(trackKeys.trackId, trackId));
+      await db.delete(tracks).where(eq(tracks.id, trackId));
+      await db.delete(catalogEntities).where(eq(catalogEntities.id, artistId));
     }
   });
 });

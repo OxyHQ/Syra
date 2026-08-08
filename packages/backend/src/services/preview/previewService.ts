@@ -29,7 +29,7 @@ import { getS3PreviewKey } from '../../config/s3.config';
 import { uploadToS3, streamFromS3, objectExists } from '../s3Service';
 import { getTrackS3Key, type TrackAudioRef } from '../audioStorageService';
 import { getDb } from '../../db/postgres';
-import { trackKeys } from '../../db/schema/catalog';
+import { trackKeys } from '../../db/schema/trackKeys';
 import {
   generatePreviewClip,
   generatePreviewClipFromHls,
@@ -237,11 +237,13 @@ export function buildWindowedHlsPlaylist(
 /**
  * The AES-128 key a preview clip has to decrypt with.
  *
- * Looked up by `track_id` alone and NOT by `kind`, deliberately: the unique
- * constraint is on `track_id`, so one id resolves to at most one key row
- * whatever id space it came from — which is what lets this one function serve
- * catalog tracks, locker uploads and episodes without the caller telling it
- * which it holds.
+ * `track_keys.track_id` — the CATALOGUE arm, and the only one this path can
+ * reach. Previews are generated for catalogue tracks alone: `ensurePreviewClip`
+ * is called from `controllers/preview.controller.ts` with a row selected from
+ * `tracks`, and nothing else calls it. An earlier comment here claimed the
+ * id-only lookup was what let one function serve locker uploads and episodes
+ * too; no caller ever passed either, and since the split each id space has its
+ * own column, so an id from one would resolve to nothing rather than to a key.
  */
 async function defaultGetKeyHex(trackId: string): Promise<string | null> {
   const [trackKey] = await getDb()

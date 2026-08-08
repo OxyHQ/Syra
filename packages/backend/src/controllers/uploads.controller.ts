@@ -59,7 +59,7 @@ import { env } from '../config/env';
 import { getS3LockerAudioKey } from '../config/s3.config';
 import { getDb, isDriverError, isPostgresConnected } from '../db/postgres';
 import { albums, catalogEntities, imageAssets, tracks } from '../db/schema/catalog';
-import { trackKeys } from '../db/schema/catalog';
+import { trackKeys } from '../db/schema/trackKeys';
 import { userUploads } from '../db/schema/creators';
 import { indexTrackAcoustically } from '../db/catalog/fingerprints';
 import { recordAttestation } from '../db/creators/attestations';
@@ -2377,25 +2377,19 @@ export const deleteUpload = async (
     await deleteUploadStoredObjects({ ...upload, hls });
 
     /**
-     * The row takes its HLS ladder and its provenance markers with it — those
-     * two are real `ON DELETE cascade` children of `user_uploads`.
+     * The row takes its HLS ladder, its provenance markers AND its AES key with
+     * it — all three are real `ON DELETE cascade` children of `user_uploads`.
      *
-     * `track_keys` is NOT, and the delete below is therefore an explicit line
-     * this handler has to remember. That is carried over from Mongo at parity,
-     * deliberately: `track_keys.track_id` is polymorphic across three id spaces
-     * and carries no foreign key at all (see
-     * `schema/deferredForeignKeys.ts`), so there is nothing for a cascade to
-     * hang off.
-     *
-     * **The known consequence, unchanged by this port:** this manual path is
-     * the ONLY one that cleans the key up. `services/uploads/expirySweeper.ts`
-     * deletes the same rows on a timer and has no equivalent line, so every
-     * file the sweeper removes leaves its AES key behind forever. The port does
-     * not fix that and does not make it worse — the fix is the `track_keys`
-     * split, which is its own task; see the ledger entry named above.
+     * `track_keys` became one of them in the split (`schema/trackKeys.ts`).
+     * This handler used to carry an explicit `delete(trackKeys)` line beside
+     * the row delete, because the polymorphic column could hold no foreign key;
+     * that line is gone rather than kept as a belt-and-braces duplicate. It was
+     * the reason the defect it worked around went unnoticed for so long — the
+     * sweeper deleted the same rows on a timer with no equivalent line, so
+     * every file it removed left its key behind, and the two paths disagreeing
+     * looked like an oversight in one caller rather than a missing constraint.
      */
     await deleteUploads([upload.id]);
-    await getDb().delete(trackKeys).where(eq(trackKeys.trackId, upload.id));
 
     res.status(204).send();
   } catch (error) {
@@ -2745,14 +2739,14 @@ export const getUploadStreamKey = async (
       return;
     }
 
-    // Looked up by `track_id` alone and not by `kind`, matching
-    // `stream.controller.ts` and `previewService.ts`: the unique constraint is
-    // on the id and the three id spaces never collide, so one id resolves to at
-    // most one key row.
+    // `track_keys.user_upload_id`, NOT `track_id`: the table carries one column
+    // per id space (see `schema/trackKeys.ts`), and this endpoint holds a
+    // locker upload id. `storePackagedHls` files it under the same arm from
+    // `ingestUserUpload`.
     const [trackKey] = await getDb()
       .select({ keyHex: trackKeys.keyHex })
       .from(trackKeys)
-      .where(eq(trackKeys.trackId, uploadId))
+      .where(eq(trackKeys.userUploadId, uploadId))
       .limit(1);
     if (!trackKey) {
       res.status(404).json({ error: 'Key not found' });

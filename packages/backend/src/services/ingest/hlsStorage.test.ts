@@ -1,11 +1,14 @@
-import { describe, it, expect, beforeAll, afterAll, afterEach } from 'bun:test';
+import { describe, it, expect, beforeAll, beforeEach, afterAll, afterEach } from 'bun:test';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { eq } from 'drizzle-orm';
 import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
 import { getDb } from '../../db/postgres';
-import { trackKeys } from '../../db/schema/catalog';
+import { catalogEntities, tracks } from '../../db/schema/catalog';
+import { userUploads } from '../../db/schema/creators';
+import { episodes, podcasts } from '../../db/schema/podcasts';
+import { trackKeys } from '../../db/schema/trackKeys';
 import { storePackagedHls } from './hlsStorage';
 import { getS3HlsKey, getS3LockerHlsKey } from '../../config/s3.config';
 import type { PackageResult } from './hlsPackager';
@@ -14,21 +17,108 @@ beforeAll(connectDb);
 afterEach(clearDb);
 afterAll(disconnectDb);
 
-/** Every `track_keys` row filed under one id. */
-function keysFor(trackId: string) {
-  return getDb().select().from(trackKeys).where(eq(trackKeys.trackId, trackId));
+/**
+ * Every `track_keys` row filed under one id, ON THE ARM THAT ID BELONGS TO.
+ *
+ * Three reads and not one `where id = ?`, because that is exactly the
+ * distinction the table now draws: each id space has its own column with its
+ * own foreign key, so a key filed under the wrong arm resolves to nothing
+ * rather than to somebody else's key.
+ */
+function catalogKeysFor(id: string) {
+  return getDb().select().from(trackKeys).where(eq(trackKeys.trackId, id));
 }
+
+function lockerKeysFor(id: string) {
+  return getDb().select().from(trackKeys).where(eq(trackKeys.userUploadId, id));
+}
+
+function episodeKeysFor(id: string) {
+  return getDb().select().from(trackKeys).where(eq(trackKeys.episodeId, id));
+}
+
+// ── Real parent rows ──────────────────────────────────────────────────────
+
+/**
+ * The ids these tests file keys under are real rows now, re-seeded per test
+ * because `clearDb` truncates between them.
+ *
+ * They used to be hard-coded 24-char hex literals naming nothing, which worked
+ * while `track_keys.track_id` carried no constraint. Each column references its
+ * parent `ON DELETE cascade` now, so an id that names no row is refused at the
+ * insert — the whole point of the change, and what would otherwise make these
+ * fixtures a test of nothing.
+ */
+let ARTIST_ID: string;
+let TRACK_ID: string;
+let UPLOAD_ID: string;
+let EPISODE_ID: string;
+let PODCAST_ID: string;
+
+const OWNER_ID = 'oxy-locker-owner';
+const FAKE_KEY_HEX = 'deadbeefdeadbeefdeadbeefdeadbeef';
+const BITRATES = [96, 160, 320] as const;
+
+let seedCounter = 0;
+
+beforeEach(async () => {
+  const db = getDb();
+  seedCounter += 1;
+
+  const [artist] = await db
+    .insert(catalogEntities)
+    .values({ name: 'HLS Storage Artist', type: 'artist', source: 'upload' })
+    .returning({ id: catalogEntities.id });
+  ARTIST_ID = artist.id;
+
+  const [track] = await db
+    .insert(tracks)
+    .values({
+      title: 'HLS Storage Track',
+      artistId: artist.id,
+      artistName: 'HLS Storage Artist',
+      duration: 180,
+      source: 'upload',
+    })
+    .returning({ id: tracks.id });
+  TRACK_ID = track.id;
+
+  const [upload] = await db
+    .insert(userUploads)
+    .values({
+      ownerOxyUserId: OWNER_ID,
+      title: 'HLS Storage Upload',
+      duration: 210,
+      sizeBytes: 5_242_880,
+      sha256: seedCounter.toString(16).padStart(64, '0'),
+      status: 'ready',
+    })
+    .returning({ id: userUploads.id });
+  UPLOAD_ID = upload.id;
+
+  const [podcast] = await db
+    .insert(podcasts)
+    .values({ title: 'HLS Storage Show', feedUrl: `https://example.test/${seedCounter}.xml`, source: 'syra' })
+    .returning({ id: podcasts.id });
+  PODCAST_ID = podcast.id;
+
+  const [episode] = await db
+    .insert(episodes)
+    .values({
+      podcastId: podcast.id,
+      podcastTitle: 'HLS Storage Show',
+      title: 'HLS Storage Episode',
+      guid: `hls-storage-episode-${seedCounter}`,
+      pubDate: new Date('2026-01-01T00:00:00.000Z'),
+      source: 'syra',
+    })
+    .returning({ id: episodes.id });
+  EPISODE_ID = episode.id;
+});
 
 // ── Synthetic package dir ─────────────────────────────────────────────────
 
 let packageDir: string;
-
-const TRACK_ID = 'aabbccddeeff001122334455';
-const ARTIST_ID = 'ffeeddccbbaa554433221100';
-const UPLOAD_ID = '0011223344556677889900aa';
-const OWNER_ID = 'oxy-locker-owner';
-const FAKE_KEY_HEX = 'deadbeefdeadbeefdeadbeefdeadbeef';
-const BITRATES = [96, 160, 320] as const;
 
 /** Catalog target: keys under the artist, AES key filed under the track id. */
 function catalogTarget() {
@@ -45,6 +135,15 @@ function lockerTarget() {
     kind: 'user_upload' as const,
     recordId: UPLOAD_ID,
     buildKey: (relPath: string) => getS3LockerHlsKey(OWNER_ID, UPLOAD_ID, relPath),
+  };
+}
+
+/** Episode target: `hls/{podcastId}/{episodeId}/`, exactly as `ingestEpisode` builds it. */
+function episodeTarget() {
+  return {
+    kind: 'episode' as const,
+    recordId: EPISODE_ID,
+    buildKey: (relPath: string) => getS3HlsKey(PODCAST_ID, EPISODE_ID, relPath),
   };
 }
 
@@ -154,14 +253,16 @@ describe('storePackagedHls', () => {
       { upload: async () => {} },
     );
 
-    const [row] = await keysFor(TRACK_ID);
+    const [row] = await catalogKeysFor(TRACK_ID);
     expect(row).toBeDefined();
     expect(row?.keyHex).toBe(FAKE_KEY_HEX);
     expect(row?.keyUri).toBe('key');
-    // The discriminator Mongo had no column for. A locker key filed as a
-    // catalog track would still be found by id, so nothing else here can tell
-    // the two apart.
-    expect(row?.kind).toBe('track');
+    // The arm, which is what `kind` used to assert and the three columns now
+    // enforce: filed on `track_id`, and the other two explicitly null rather
+    // than merely absent. `track_keys_one_parent_check` would refuse any other
+    // combination, so this is a check on the WRITER choosing the right one.
+    expect(row?.userUploadId).toBeNull();
+    expect(row?.episodeId).toBeNull();
   });
 
   it('upserts TrackKey on re-import (idempotent)', async () => {
@@ -171,7 +272,7 @@ describe('storePackagedHls', () => {
     await storePackagedHls(result, catalogTarget(), { upload: async () => {} });
     await storePackagedHls(updatedResult, catalogTarget(), { upload: async () => {} });
 
-    const rows = await keysFor(TRACK_ID);
+    const rows = await catalogKeysFor(TRACK_ID);
     expect(rows).toHaveLength(1);
     expect(rows[0]?.keyHex).toBe('cafecafecafecafecafecafecafecafe');
   });
@@ -198,8 +299,56 @@ describe('storePackagedHls', () => {
     const result = buildSyntheticPackage();
     await storePackagedHls(result, lockerTarget(), { upload: async () => {} });
 
-    expect(await keysFor(UPLOAD_ID)).toHaveLength(1);
-    expect(await keysFor(TRACK_ID)).toHaveLength(0);
+    expect(await lockerKeysFor(UPLOAD_ID)).toHaveLength(1);
+    expect(await catalogKeysFor(TRACK_ID)).toHaveLength(0);
+  });
+
+  it('an episode target files the AES key under the EPISODE id', async () => {
+    // The third arm, and the one with the least coverage elsewhere: an episode
+    // key filed on `track_id` would fail no constraint — `episodes.id` and
+    // `tracks.id` are both uuid v7 — it would simply never be found by
+    // `GET /api/podcasts/episodes/:id/stream/key`, and the episode would play
+    // back silence.
+    const result = buildSyntheticPackage();
+    await storePackagedHls(result, episodeTarget(), { upload: async () => {} });
+
+    expect(await episodeKeysFor(EPISODE_ID)).toHaveLength(1);
+    expect(await catalogKeysFor(EPISODE_ID)).toHaveLength(0);
+    expect(await lockerKeysFor(EPISODE_ID)).toHaveLength(0);
+  });
+
+  it('re-ingesting an episode rotates its key in place rather than inserting a second row', async () => {
+    // The upsert's conflict target is selected by `kind`. A fixed
+    // `target: trackKeys.trackId` would never conflict here — `track_id` is
+    // null on this row and Postgres treats nulls as distinct — so the second
+    // call would insert a SECOND row and fail `track_keys_episode_id_key`.
+    const result = buildSyntheticPackage();
+    await storePackagedHls(result, episodeTarget(), { upload: async () => {} });
+    await storePackagedHls(
+      { ...result, keyHex: 'cafecafecafecafecafecafecafecafe' },
+      episodeTarget(),
+      { upload: async () => {} },
+    );
+
+    const rows = await episodeKeysFor(EPISODE_ID);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.keyHex).toBe('cafecafecafecafecafecafecafecafe');
+  });
+
+  it('re-ingesting a locker upload rotates its key in place rather than inserting a second row', async () => {
+    // Same conflict-target reasoning as the episode case above, on the arm that
+    // actually ships today.
+    const result = buildSyntheticPackage();
+    await storePackagedHls(result, lockerTarget(), { upload: async () => {} });
+    await storePackagedHls(
+      { ...result, keyHex: 'cafecafecafecafecafecafecafecafe' },
+      lockerTarget(),
+      { upload: async () => {} },
+    );
+
+    const rows = await lockerKeysFor(UPLOAD_ID);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.keyHex).toBe('cafecafecafecafecafecafecafecafe');
   });
 
   it('every locker key keeps the upload id as a whole path segment above the manifest', async () => {

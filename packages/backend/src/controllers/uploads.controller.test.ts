@@ -7,7 +7,7 @@ import { connectDb, clearDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
 import { imageAssets } from '../db/schema/catalog';
 import { userUploadHlsRenditions, userUploads } from '../db/schema/creators';
-import { trackKeys } from '../db/schema/catalog';
+import { trackKeys } from '../db/schema/trackKeys';
 import { UPLOAD_COLUMNS } from '../db/creators/uploads';
 import { toUploadTrackDto, uploadImageIds } from '../db/creators/serialize';
 import { loadImageVariants } from '../db/catalog/hydrate';
@@ -394,7 +394,7 @@ describe('DELETE /api/uploads/:id', () => {
       hlsMasterKey: null,
       withHls: false,
     });
-    await getDb().insert(trackKeys).values({ kind: 'user_upload', trackId: upload.id, keyHex: 'ab'.repeat(16), keyUri: 'key' });
+    await getDb().insert(trackKeys).values({ userUploadId: upload.id, keyHex: 'ab'.repeat(16), keyUri: 'key' });
     const res = makeRes();
 
     await deleteUpload(makeReq({ id: upload.id }, { userId: OWNER }), res as unknown as Response, rethrow);
@@ -402,7 +402,7 @@ describe('DELETE /api/uploads/:id', () => {
     expect(res._status).toBe(204);
     expect(await reload(upload.id)).toBeUndefined();
     expect(
-      await getDb().select().from(trackKeys).where(eq(trackKeys.trackId, upload.id))
+      await getDb().select().from(trackKeys).where(eq(trackKeys.userUploadId, upload.id))
     ).toEqual([]);
   });
 
@@ -522,7 +522,7 @@ describe('GET /api/uploads/:id/stream/key', () => {
   it('serves the key to the owner', async () => {
     const upload = await seedUpload();
     const uploadId = upload.id;
-    await getDb().insert(trackKeys).values({ kind: 'user_upload', trackId: uploadId, keyHex: 'ab'.repeat(16), keyUri: 'key' });
+    await getDb().insert(trackKeys).values({ userUploadId: uploadId, keyHex: 'ab'.repeat(16), keyUri: 'key' });
     const res = makeRes();
 
     await getUploadStreamKey(makeReq({ id: uploadId }, { userId: OWNER }), res as unknown as Response, rethrow);
@@ -535,7 +535,7 @@ describe('GET /api/uploads/:id/stream/key', () => {
   it('accepts the owner’s stream token — players cannot set an Authorization header', async () => {
     const upload = await seedUpload();
     const uploadId = upload.id;
-    await getDb().insert(trackKeys).values({ kind: 'user_upload', trackId: uploadId, keyHex: 'ab'.repeat(16), keyUri: 'key' });
+    await getDb().insert(trackKeys).values({ userUploadId: uploadId, keyHex: 'ab'.repeat(16), keyUri: 'key' });
     const token = mintStreamToken({ trackId: uploadId, userId: OWNER, maxBitrateKbps: 160 }, 60);
     const res = makeRes();
 
@@ -554,7 +554,7 @@ describe('GET /api/uploads/:id/stream/key', () => {
     // that matches no document of this file's.
     const upload = await seedUpload();
     const uploadId = upload.id;
-    await getDb().insert(trackKeys).values({ kind: 'user_upload', trackId: uploadId, keyHex: 'ab'.repeat(16), keyUri: 'key' });
+    await getDb().insert(trackKeys).values({ userUploadId: uploadId, keyHex: 'ab'.repeat(16), keyUri: 'key' });
     const token = mintStreamToken({ trackId: uploadId, userId: STRANGER, maxBitrateKbps: 160 }, 60);
     const res = makeRes();
 
@@ -571,7 +571,7 @@ describe('GET /api/uploads/:id/stream/key', () => {
   it('refuses a token minted for a DIFFERENT upload', async () => {
     const mine = await seedUpload();
     const other = await seedUpload();
-    await getDb().insert(trackKeys).values({ kind: 'user_upload', trackId: mine.id, keyHex: 'ab'.repeat(16), keyUri: 'key' });
+    await getDb().insert(trackKeys).values({ userUploadId: mine.id, keyHex: 'ab'.repeat(16), keyUri: 'key' });
     const token = mintStreamToken(
       { trackId: other.id, userId: OWNER, maxBitrateKbps: 160 },
       60,
@@ -590,7 +590,7 @@ describe('GET /api/uploads/:id/stream/key', () => {
 
   it('refuses a stranger’s session', async () => {
     const upload = await seedUpload();
-    await getDb().insert(trackKeys).values({ kind: 'user_upload', trackId: upload.id, keyHex: 'ab'.repeat(16), keyUri: 'key' });
+    await getDb().insert(trackKeys).values({ userUploadId: upload.id, keyHex: 'ab'.repeat(16), keyUri: 'key' });
     const res = makeRes();
 
     await getUploadStreamKey(

@@ -155,6 +155,20 @@
       "when": 1786070864719,
       "tag": "0021_great_the_professor",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1786151944363,
+      "tag": "0022_lively_nocturne",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1786152067837,
+      "tag": "0023_nappy_excalibur",
+      "breakpoints": true
     }
   ]
 }

@@ -3,7 +3,8 @@ import { uuidv7 } from '@oxyhq/db';
 import type { HlsRendition } from '@syra/shared-types';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
-import { catalogEntities, trackHlsRenditions, trackKeys, tracks } from '../db/schema/catalog';
+import { catalogEntities, trackHlsRenditions, tracks } from '../db/schema/catalog';
+import { trackKeys } from '../db/schema/trackKeys';
 import { userMusicPreferences } from '../db/schema/user';
 import { getStream, getStreamKey, getVariantPlaylist } from './stream.controller';
 import { verifyStreamToken, mintStreamToken } from '../services/stream/streamToken';
@@ -133,7 +134,7 @@ async function seedTrack(overrides: SeedTrackOverrides = {}): Promise<string> {
 async function seedKey(trackId: string) {
   return getDb()
     .insert(trackKeys)
-    .values({ kind: 'track', trackId, keyHex: KEY_HEX, keyUri: 'key' });
+    .values({ trackId, keyHex: KEY_HEX, keyUri: 'key' });
 }
 
 function hlsTrackFields(): SeedTrackOverrides {

@@ -101,6 +101,16 @@
  * satisfies `planMigrationRun`'s invariant on its own merits, which the
  * `0000`-`0005` stretch of this window does not.
  *
+ * `0022`/`0023` (Task 13a, the `track_keys` split) are the second such pair,
+ * regenerated the same way — the intermediate schema declares the two new
+ * columns and still carries `kind`, so `0022` diffs to the additive half and
+ * `0023` to the narrowing half, each with its own snapshot. They are also the
+ * first pair where the split runs through the DATA change rather than only the
+ * DDL: copying `track_id` into the arm its `kind` names is additive and sits in
+ * `0022`, while clearing `track_id` on the two foreign arms is what would break
+ * an image still reading that column, so it opens `0023`. Both halves are
+ * defensive — nothing has ever written a row — and both files say so.
+ *
  * `0008` is also why the boundary matters for more than ordering: its
  * composite `(genre_id, kind) -> genres(id, kind)` FK is safe to add ONLY
  * because `genres`, `album_genres`, and `podcast_categories` are empty going
@@ -208,7 +218,7 @@ const MIGRATIONS_SEARCH_DEPTH = 6;
  * Said here as well as in the test because this is the file somebody opens when
  * they go to bump it.
  */
-export const LAST_GENESIS_MIGRATION_TAG = '0021_great_the_professor';
+export const LAST_GENESIS_MIGRATION_TAG = '0023_nappy_excalibur';
 
 /**
  * `packages/backend/drizzle`, found by walking UP from this module rather than

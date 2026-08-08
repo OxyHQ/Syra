@@ -358,22 +358,19 @@ async function sweepHardDeletes(
     }
 
     /**
-     * The row, its HLS ladder and its provenance markers — and NOT its AES key.
+     * The row, its HLS ladder, its provenance markers AND its AES key.
      *
-     * That last omission is a KNOWN DEFECT carried over at parity, not an
-     * oversight of the port. `track_keys.track_id` is polymorphic across three
-     * id spaces and carries no foreign key, so nothing cascades; the manual
-     * `DELETE /api/uploads/:id` path deletes the key with an explicit line and
-     * this function never had one, so every file the sweeper removes leaves its
-     * key behind forever. Both facts are unchanged by the Mongo→Postgres port.
+     * That last one is the defect this sweep used to carry: `track_keys` was
+     * polymorphic across three id spaces and could hold no foreign key, so
+     * nothing cascaded, and the AES key of every file this loop removed stayed
+     * behind forever — keyed by an id that resolved to nothing. The manual
+     * `DELETE /api/uploads/:id` path had an explicit delete for it and this one
+     * never did.
      *
-     * An explicit delete here is deliberately NOT added: it would make this
-     * sweep agree with the manual path while leaving the next caller to
-     * remember the same line, which is how the divergence arose. The fix is a
-     * real foreign key, which needs `track_keys` split into one column per id
-     * space — a schema change with its own task. See
-     * `schema/deferredForeignKeys.ts`'s `track_keys.track_id` entry, which
-     * names the owner.
+     * It is fixed by a constraint rather than by a second explicit delete here,
+     * which is why this line does not grow one: `track_keys.user_upload_id` is
+     * a real `ON DELETE cascade` reference (`schema/trackKeys.ts`), so the key
+     * goes with the row for this caller and for every caller after it.
      */
     uploadsHardDeleted += await deleteUploads([upload.id]);
   }

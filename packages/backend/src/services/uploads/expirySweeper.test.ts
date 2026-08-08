@@ -4,6 +4,7 @@ import { uuidv7 } from '@oxyhq/db';
 import { connectDb, clearDb, disconnectDb } from '../../test/postgres';
 import { getDb } from '../../db/postgres';
 import { userUploadHlsRenditions, userUploads } from '../../db/schema/creators';
+import { trackKeys } from '../../db/schema/trackKeys';
 import type { UploadStorageRef } from '../../db/creators/uploads';
 import { deleteUploadStoredObjects } from '../compliance/takedown';
 import { getS3LockerAudioKey, getS3LockerHlsKey, getS3LockerHlsPrefix } from '../../config/s3.config';
@@ -298,6 +299,40 @@ describe('expiry sweep — T+30d hard delete', () => {
     expect(result.uploadsHardDeleted).toBe(1);
     expect(result.objectsDeleted).toBe(1);
     expect(await reload(upload.id)).toBeUndefined();
+  });
+
+  it('takes the AES key with the file — the orphan this sweep used to leave', async () => {
+    /**
+     * The defect that motivated the `track_keys` split, asserted through the
+     * sweep rather than through the constraint.
+     *
+     * This loop is the path that runs unattended every hour, and it never
+     * deleted the key: `track_keys.track_id` was polymorphic across three id
+     * spaces, so it could carry no foreign key, and only the manual
+     * `DELETE /api/uploads/:id` handler had an explicit line for it. Every file
+     * this sweep removed left an AES key behind forever, keyed by an id that
+     * resolved to nothing.
+     *
+     * `sweepHardDeletes` still issues exactly one delete, of the row —
+     * `track_keys.user_upload_id` cascades from it (`schema/trackKeys.ts`), so
+     * the fix is a constraint rather than a second line here that the next
+     * caller would have to remember too.
+     */
+    const upload = await seedUpload({
+      expiresAt: at(-HARD_DELETE_GRACE_DAYS - 1),
+      deletedAt: at(-HARD_DELETE_GRACE_DAYS - 1),
+    });
+    await getDb()
+      .insert(trackKeys)
+      .values({ userUploadId: upload.id, keyHex: 'ab'.repeat(16), keyUri: 'key' });
+
+    const result = await sweepAt(T0, { deleteObjects: recordingDeleter().deleteObjects });
+
+    expect(result.uploadsHardDeleted).toBe(1);
+    expect(await reload(upload.id)).toBeUndefined();
+    expect(
+      await getDb().select().from(trackKeys).where(eq(trackKeys.userUploadId, upload.id))
+    ).toEqual([]);
   });
 
   it('waits out the full grace period', async () => {

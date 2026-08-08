@@ -5,7 +5,8 @@ import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import type { HlsRendition } from '@syra/shared-types';
 import { env } from '../config/env';
 import { getDb } from '../db/postgres';
-import { trackHlsRenditions, trackKeys, tracks } from '../db/schema/catalog';
+import { trackHlsRenditions, tracks } from '../db/schema/catalog';
+import { trackKeys } from '../db/schema/trackKeys';
 import { findMusicPreferences } from '../db/user/musicPreferences';
 import { mintStreamToken, verifyStreamToken } from '../services/stream/streamToken';
 import { buildMasterPlaylistFor, buildVariantPlaylistFor } from '../services/stream/manifestService';
@@ -281,9 +282,10 @@ export async function getStreamKey(req: AuthRequest, res: Response): Promise<voi
     return;
   }
 
-  // Looked up by `track_id` alone and not by `kind`, matching
-  // `previewService.ts`: the unique constraint is on the id, and the three id
-  // spaces never collide, so one id resolves to at most one key row.
+  // `track_keys.track_id` is the CATALOGUE arm and only that — one column per
+  // id space (see `schema/trackKeys.ts`), each with its own foreign key. A
+  // locker upload's or an episode's key lives in a different column and cannot
+  // be reached from here, which is what the shared column used to allow.
   const [trackKey] = await getDb()
     .select({ keyHex: trackKeys.keyHex })
     .from(trackKeys)

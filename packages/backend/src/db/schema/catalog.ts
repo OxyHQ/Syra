@@ -3,9 +3,11 @@
  * and every table that belongs to one of those four.
  *
  * Ported from `packages/backend/src/models/{Track,Album,CatalogEntity,
- * TrackKey,IsrcRegistry,TrackFingerprint,ImageAsset,Lyrics,MusicBrainzArtist,
+ * IsrcRegistry,TrackFingerprint,ImageAsset,Lyrics,MusicBrainzArtist,
  * DiscogsRelease}.ts`, field by field, against
  * `packages/backend/docs/db/RELATIONS.md` for every foreign key.
+ * `models/TrackKey.ts` was ported here too and moved out in Task 13a — see
+ * `trackKeys.ts`, and the note where the table used to sit.
  *
  * ## `CatalogEntity` becomes ONE table
  *
@@ -248,19 +250,6 @@ export const CATALOG_IMAGE_ENTITY_TYPES = [
 ] as const;
 
 export type CatalogImageEntityType = (typeof CATALOG_IMAGE_ENTITY_TYPES)[number];
-
-/**
- * `TrackKey.trackId` is polymorphic across three id spaces
- * (`tracks`/`user_uploads`/`episodes`) with NO discriminator column in Mongo —
- * `services/ingest/hlsStorage.ts`'s own comment is the only place that says
- * so. Added here rather than left unconstrained: a real column beats a column
- * that does not exist, even though only the `track` arm can carry an actual
- * `.references()` today (`user_uploads` and `episodes` land in later tasks —
- * see `deferredForeignKeys.ts`).
- */
-export const TRACK_KEY_KINDS = ['track', 'user_upload', 'episode'] as const;
-
-export type TrackKeyKind = (typeof TRACK_KEY_KINDS)[number];
 
 // ── image_assets ─────────────────────────────────────────────────────────
 
@@ -1028,27 +1017,9 @@ export const catalogEntitySources = pgTable(
   ]
 );
 
-// ── track_keys ────────────────────────────────────────────────────────────
-
-export const trackKeys = pgTable(
-  'track_keys',
-  {
-    id: generatedId(),
-    /** Discriminates the id space `trackId` names — see `TRACK_KEY_KINDS`'s doc comment. */
-    kind: text({ enum: TRACK_KEY_KINDS }).notNull(),
-    trackId: text().notNull(),
-    keyHex: text().notNull(),
-    keyUri: text().notNull(),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (t) => [
-    check('track_keys_kind_check', sql`${t.kind} in (${sql.raw(inList(TRACK_KEY_KINDS))})`),
-    // The three id spaces never collide (`hlsStorage.ts`'s own comment), so a
-    // single unique constraint on the id alone matches Mongo's behaviour.
-    unique('track_keys_track_id_key').on(t.trackId),
-  ]
-);
+// `track_keys` is declared in `trackKeys.ts`, not here: it references
+// `tracks`, `user_uploads` AND `episodes`, and importing `podcasts.ts` from
+// this module would close a cycle with an eager read in it. See that file.
 
 // ── isrc_registry (read-only importer mirror) ───────────────────────────────
 
