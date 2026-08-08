@@ -6,7 +6,7 @@ import {
 } from '@oxyhq/crowdsource-contracts';
 import { deliverableTypes, subjectProviderFor } from './subjects/registry';
 import { allegationsForCategories, REPORT_TAXONOMY_VERSION } from './report-taxonomy';
-import { ReportCategory, ReportedType } from '../models/Report';
+import { ReportCategory, ReportedType } from './types';
 
 describe('subject registry', () => {
   it('delivers exactly the five nouns Syra can describe', () => {

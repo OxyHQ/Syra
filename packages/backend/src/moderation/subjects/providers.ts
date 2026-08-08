@@ -5,7 +5,7 @@ import { PlaylistVisibility } from '@syra/shared-types';
 import { findHouseById } from '../../db/rooms/houses';
 import { findPublicRoomById } from '../../db/rooms/rooms';
 import { roomHasRecording } from '../../db/rooms/recordings';
-import { ReportedType } from '../../models/Report';
+import { ReportedType } from '../types';
 import { getDb } from '../../db/postgres';
 import { catalogEntities, tracks } from '../../db/schema/catalog';
 import { playlists } from '../../db/schema/library';

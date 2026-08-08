@@ -3,10 +3,12 @@ import express, { type Express } from 'express';
 import type { AddressInfo } from 'net';
 import type { Server } from 'http';
 import { caseDecidedEventFixture, signWebhookDelivery } from '@oxyhq/crowdsource-testing';
-import { connect, clear, disconnect } from '../test/mongo';
-import { ModerationEventModel } from '../models/ModerationEvent';
-import { ModerationOutboxModel } from '../models/ModerationOutbox';
+import { count, eq } from 'drizzle-orm';
+import { connectDb, clearDb, disconnectDb } from '../test/postgres';
+import { getDb } from '../db/postgres';
+import { moderationEvents, moderationOutbox } from '../db/schema/moderation';
 import { resetCrowdSourceConfig } from '../moderation/config';
+import { resetModerationIntegration } from '../moderation/integration';
 import { logger } from '../utils/logger';
 import { assertRawBody, createCrowdSourceWebhookRoutes } from './crowdsourceWebhook.routes';
 
@@ -67,28 +69,39 @@ let harness: Harness | undefined;
 
 /**
  * A real database, because the correctly-mounted path runs all the way through
- * the SDK middleware into the Mongo-backed dedupe store. Without a connection
- * mongoose buffers the insert for ten seconds and the teardown hook times out —
- * which reads as a transport failure rather than a missing connection.
+ * the SDK middleware into the Postgres-backed dedupe store — the claim is an
+ * INSERT whose primary key is the event id, so there is nothing to fake that
+ * would still prove a redelivery cannot be claimed twice.
  */
-beforeAll(connect);
-afterAll(disconnect);
+beforeAll(connectDb);
+afterAll(disconnectDb);
+
+/** How many rows a table holds, as `countDocuments` answered under Mongoose. */
+async function rowsIn(table: typeof moderationEvents | typeof moderationOutbox): Promise<number> {
+  const [row] = await getDb().select({ total: count() }).from(table);
+  return row?.total ?? 0;
+}
 
 beforeEach(() => {
   process.env.CROWDSOURCE_ENABLED = 'true';
   process.env.CROWDSOURCE_SERVICE_KEY = 'app_1:cred_1:secret';
   process.env.CROWDSOURCE_WEBHOOK_SECRET = SECRET;
   resetCrowdSourceConfig();
+  // The integration caches the config it was built from, and the webhook router
+  // is bound on first request — so resetting one without the other leaves the
+  // previous test's secret live behind a route that reads the new one.
+  resetModerationIntegration();
 });
 
 afterEach(async () => {
   await harness?.close();
-  await clear();
+  await clearDb();
   harness = undefined;
   delete process.env.CROWDSOURCE_ENABLED;
   delete process.env.CROWDSOURCE_SERVICE_KEY;
   delete process.env.CROWDSOURCE_WEBHOOK_SECRET;
   resetCrowdSourceConfig();
+  resetModerationIntegration();
 });
 
 /**
@@ -125,8 +138,16 @@ describe('CrowdSource webhook mount order', () => {
     expect(await response.json()).toMatchObject({ handled: true });
 
     // §10.8: the event is recorded and the work is queued, in one transaction.
-    expect(await ModerationEventModel.countDocuments({ state: 'queued' })).toBe(1);
-    expect(await ModerationOutboxModel.countDocuments({ kind: 'decision.apply' })).toBe(1);
+    const queued = await getDb()
+      .select({ total: count() })
+      .from(moderationEvents)
+      .where(eq(moderationEvents.state, 'queued'));
+    expect(queued[0]?.total).toBe(1);
+    const applies = await getDb()
+      .select({ total: count() })
+      .from(moderationOutbox)
+      .where(eq(moderationOutbox.kind, 'decision.apply'));
+    expect(applies[0]?.total).toBe(1);
   });
 
   /**
@@ -181,8 +202,8 @@ describe('CrowdSource webhook mount order', () => {
     // while proving the comparison never happened.
     expect(rejections).toEqual(['signature_mismatch']);
     // Nothing recorded: a forged delivery must not reach the database at all.
-    expect(await ModerationEventModel.countDocuments({})).toBe(0);
-    expect(await ModerationOutboxModel.countDocuments({})).toBe(0);
+    expect(await rowsIn(moderationEvents)).toBe(0);
+    expect(await rowsIn(moderationOutbox)).toBe(0);
   });
 
   /**
@@ -279,6 +300,7 @@ describe('CrowdSource webhook route without a secret', () => {
     delete process.env.CROWDSOURCE_ENABLED;
     delete process.env.CROWDSOURCE_WEBHOOK_SECRET;
     resetCrowdSourceConfig();
+    resetModerationIntegration();
 
     const app = express();
     app.use('/webhooks', createCrowdSourceWebhookRoutes());

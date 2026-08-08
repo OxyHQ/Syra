@@ -8,7 +8,7 @@ import { getDb } from '../db/postgres';
 import { catalogEntities, tracks } from '../db/schema/catalog';
 import { playlists } from '../db/schema/library';
 import { subjectProviderFor } from './subjects/registry';
-import { ReportedType } from '../models/Report';
+import { ReportedType } from './types';
 import type { ModerationResource } from './subjects/types';
 
 /**
