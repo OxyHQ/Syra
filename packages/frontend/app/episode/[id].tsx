@@ -108,7 +108,7 @@ const EpisodeScreen: React.FC = () => {
             await episodeQuery.refetch();
           },
         }}
-        containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
+        className="bg-surface"
       />
     );
   }
@@ -121,7 +121,7 @@ const EpisodeScreen: React.FC = () => {
         title={t('episode.notFound')}
         subtitle={t('episode.notFoundMessage')}
         action={{ label: t('podcasts.browse'), onPress: () => router.push('/podcasts'), icon: 'search-outline' }}
-        containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
+        className="bg-surface"
       />
     );
   }

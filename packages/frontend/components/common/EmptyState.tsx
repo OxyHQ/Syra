@@ -27,6 +27,13 @@ export interface EmptyStateProps {
     customIcon?: ReactNode;
     style?: ViewStyle;
     containerStyle?: ViewStyle;
+    /**
+     * Container colour, as a Bloom class. Callers used to thread this through
+     * `className="bg-surface"` —
+     * seventeen of them — which freezes the value at render and cannot follow a
+     * preset change. A class can.
+     */
+    className?: string;
     titleStyle?: TextStyle;
     subtitleStyle?: TextStyle;
     accessible?: boolean;
@@ -47,6 +54,7 @@ export const EmptyState = memo<EmptyStateProps>(
         customIcon,
         style,
         containerStyle,
+        className,
         titleStyle,
         subtitleStyle,
         accessible = true,
@@ -69,7 +77,7 @@ export const EmptyState = memo<EmptyStateProps>(
         // Error state with retry
         if (error) {
             return (
-                <View className="bg-background"
+                <View className={className ?? 'bg-background'}
                     style={flattenStyleArray([
                         styles.errorContainer,
                         containerStyle,
@@ -162,7 +170,7 @@ export const EmptyState = memo<EmptyStateProps>(
         }
 
         return (
-            <View className="bg-background"
+            <View className={className ?? 'bg-background'}
                 style={flattenStyleArray([
                     styles.emptyState,
                     containerStyle,

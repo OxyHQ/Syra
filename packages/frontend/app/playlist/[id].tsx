@@ -137,7 +137,7 @@ const PlaylistScreen: React.FC = () => {
   if (gate.isTimedOut) {
     return (
       <EmptyState
-        containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
+        className="bg-surface"
         icon={{ name: 'cloud-offline-outline' }}
         error={{
           title: t('common.sessionUnavailable'),
@@ -169,7 +169,7 @@ const PlaylistScreen: React.FC = () => {
   if ((playlistQuery.isError || tracksQuery.isError) && !isNotFoundError(playlistQuery.error)) {
     return (
       <EmptyState
-        containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
+        className="bg-surface"
         icon={{ name: 'cloud-offline-outline' }}
         error={{
           title: t('playlist.errors.load'),
@@ -185,7 +185,7 @@ const PlaylistScreen: React.FC = () => {
   if (!playlist) {
     return (
       <EmptyState
-        containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
+        className="bg-surface"
         icon={{ name: 'musical-notes-outline' }}
         title={t('playlist.notFound')}
         subtitle={t('playlist.notFoundMessage')}

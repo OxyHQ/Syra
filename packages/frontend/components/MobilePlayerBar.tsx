@@ -109,7 +109,6 @@ export const MobilePlayerBar: React.FC = () => {
     
     return {
       ...styles.container,
-      backgroundColor: theme.colors.primary,
       borderRadius: 16,
       overflow: 'hidden' as const,
       ...Platform.select({
@@ -138,7 +137,7 @@ export const MobilePlayerBar: React.FC = () => {
   }, [insets.bottom, theme.colors.primary, SPACING]);
 
   return (
-    <View style={containerStyle}>
+    <View className="bg-primary" style={containerStyle}>
       {/* Main Player Content */}
       <View style={[styles.content, { paddingHorizontal: SPACING, paddingVertical: SPACING, gap: SPACING }]}>
         {/* Left: Track Info */}
@@ -166,7 +165,8 @@ export const MobilePlayerBar: React.FC = () => {
                 : (isLoading ? 'Loading...' : 'No track selected')}
             </Text>
             <Text
-              style={[styles.trackArtist, { color: theme.colors.primaryForeground, opacity: 0.7 }]}
+              className="text-primary-foreground opacity-70"
+              style={styles.trackArtist}
               numberOfLines={1}
             >
               {media
@@ -201,13 +201,8 @@ export const MobilePlayerBar: React.FC = () => {
             </Pressable>
           ) : null}
           <Pressable
-            style={[
-              styles.playButton,
-              {
-                backgroundColor: theme.colors.primaryForeground,
-                opacity: hasMedia ? 1 : 0.5,
-              }
-            ]}
+            className={`bg-primary-foreground ${hasMedia ? 'opacity-100' : 'opacity-50'}`}
+            style={styles.playButton}
             onPress={handlePlayPause}
             disabled={isLoading || !hasMedia}
           >
@@ -248,13 +243,8 @@ export const MobilePlayerBar: React.FC = () => {
         }}
       >
         <View
-          style={[
-            styles.progressBar,
-            {
-              backgroundColor: theme.colors.primaryForeground,
-              width: progressFillWidth,
-            }
-          ]}
+          className="bg-primary-foreground"
+          style={[styles.progressBar, { width: progressFillWidth }]}
         />
       </Pressable>
     </View>

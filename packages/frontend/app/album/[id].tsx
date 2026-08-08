@@ -129,7 +129,7 @@ const AlbumScreen: React.FC = () => {
   if (gate.isTimedOut) {
     return (
       <EmptyState
-        containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
+        className="bg-surface"
         icon={{ name: 'cloud-offline-outline' }}
         error={{
           title: t('common.sessionUnavailable'),
@@ -159,7 +159,7 @@ const AlbumScreen: React.FC = () => {
   if ((albumQuery.isError || tracksQuery.isError) && !isNotFoundError(albumQuery.error)) {
     return (
       <EmptyState
-        containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
+        className="bg-surface"
         icon={{ name: 'cloud-offline-outline' }}
         error={{
           title: t('album.errors.load'),
@@ -175,7 +175,7 @@ const AlbumScreen: React.FC = () => {
   if (!album) {
     return (
       <EmptyState
-        containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
+        className="bg-surface"
         icon={{ name: 'disc-outline' }}
         title={t('album.notFound')}
         subtitle={t('album.notFoundMessage')}

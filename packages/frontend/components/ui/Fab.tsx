@@ -117,7 +117,8 @@ const FabComponent: React.FC<FabProps> = ({
         onPress={onPress}
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
-        style={[styles.fab, circleDims, { backgroundColor: theme.colors.primary }, style]}
+        className="bg-primary"
+        style={[styles.fab, circleDims, style]}
       >
         <MaterialCommunityIcons
           name={iconName}
@@ -134,10 +135,11 @@ const FabComponent: React.FC<FabProps> = ({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
+      className="bg-primary"
       style={[
         styles.fab,
         styles.extended,
-        { height: size, borderRadius: size / 2, backgroundColor: theme.colors.primary },
+        { height: size, borderRadius: size / 2 },
         containerAnimatedStyle,
         style,
       ]}
@@ -149,7 +151,8 @@ const FabComponent: React.FC<FabProps> = ({
       />
       <Animated.Text
         numberOfLines={1}
-        style={[styles.label, { color: theme.colors.primaryForeground }, labelAnimatedStyle]}
+        className="text-primary-foreground"
+        style={[styles.label, labelAnimatedStyle]}
       >
         {label}
       </Animated.Text>

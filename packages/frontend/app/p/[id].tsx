@@ -189,7 +189,7 @@ const EntityProfileScreen: React.FC = () => {
   if (gate.isTimedOut) {
     return (
       <EmptyState
-        containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
+        className="bg-surface"
         icon={{ name: 'cloud-offline-outline' }}
         error={{
           title: t('common.sessionUnavailable'),
@@ -221,7 +221,7 @@ const EntityProfileScreen: React.FC = () => {
   if (entityQuery.isError && !isNotFoundError(entityQuery.error)) {
     return (
       <EmptyState
-        containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
+        className="bg-surface"
         icon={{ name: 'cloud-offline-outline' }}
         error={{
           title: t('artist.errors.load'),
@@ -237,7 +237,7 @@ const EntityProfileScreen: React.FC = () => {
   if (!entity) {
     return (
       <EmptyState
-        containerStyle={{ backgroundColor: theme.colors.backgroundSecondary }}
+        className="bg-surface"
         icon={{ name: 'person-outline' }}
         title={t('artist.notFound')}
         subtitle={t('artist.notFoundMessage')}
