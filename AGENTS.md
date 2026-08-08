@@ -12,6 +12,22 @@
 | `@syra.fm/sdk` | `packages/sdk/` | Public SDK |
 | `@syra/shared-types` | `packages/shared-types/` | Shared TypeScript DTOs |
 
+## A type error in a test file is invisible to the suite AND to the build
+
+Only `bun run typecheck` sees it. Measured in `packages/backend` by introducing
+one TS2345 and running all three:
+
+| command | result |
+|---------|--------|
+| `bun test` | **passes** — bun strips types, it never checks them |
+| `bun run build` | **passes** — `tsconfig.build.json` excludes `**/*.test.ts` and `src/test/**` |
+| `bun run typecheck` | **1 error** — `tsc --noEmit` over the whole project |
+
+So after ANY change to a test file or a test-only helper, run `bun run
+typecheck`; a green suite and a green build together still prove nothing about
+whether it compiles. When reporting verification, name the packages typechecked
+rather than folding it into "tests pass" — the two are not the same check.
+
 ## AWS Deployment
 
 - **Port**: `3000` (deployed; ECS sets `PORT` explicitly — the local dev default is `4120`) | **Domain**: `api.syra.fm`
