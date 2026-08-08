@@ -61,7 +61,6 @@ import {
   HYBRID_MODULES,
   NON_CATALOG_MODEL_OWNERS,
   OWNING_TASKS,
-  UNPORTED_CATALOG_MODULES,
   type CatalogModel,
   type NonCatalogModel,
 } from '../hybridServices';
@@ -183,34 +182,9 @@ function sweepHybridFiles(): string[] {
  */
 const MINIMUM_HYBRID_FILES = 2;
 
-/**
- * The same floor for property 4's sweep. **Six** today, down from ten in Task
- * 11, and the drop is the gate doing its job rather than being weakened:
- * `podcastAudio.controller` (`TrackKey`), `podcasts.controller`
- * (`CatalogEntity`), `services/podcasts/resolvePersons.ts` (`CatalogEntity`) and
- * `scripts/reseedPersons.ts` (`CatalogEntity`) all stopped importing a catalog
- * model when Task 12 ported them.
- *
- * Three, down from six: Task 19a ported the three bulk loaders whose target
- * tables already had live readers (`backfillTrackFingerprints`,
- * `importIsrcRegistry`, `importMusicBrainzArtists`).
- *
- * What is left is the two bulk-load scripts that are genuinely dormant —
- * `importDiscogsReleases` and `seedMusicData`, both filling tables nothing
- * reads, both Task 19's. `uploads.controller.ts` was the third and is gone:
- * Task 13 ported it, and `TrackKey` — one of the six catalog models it held —
- * left the tree with it, since that controller was its last consumer.
- *
- * It drops further as those files port, and a sweep that suddenly finds none is
- * a broken walk, not a finished migration.
- */
-const MINIMUM_CATALOG_MODEL_IMPORTERS = 2;
 
 describe('property 3 — every hybrid file in the tree is registered', () => {
-  const REGISTERED = new Set([
-    ...HYBRID_MODULES.map((entry) => entry.file),
-    ...UNPORTED_CATALOG_MODULES.map((entry) => entry.file),
-  ]);
+  const REGISTERED = new Set(HYBRID_MODULES.map((entry) => entry.file));
 
   it('the sweep finds the hybrid files that are known to exist', () => {
     const found = sweepHybridFiles();
@@ -264,11 +238,13 @@ describe('property 3 — every hybrid file in the tree is registered', () => {
  * whole argument for having it.
  *
  * The finish line this draws is the real one — not "no file holds both sides"
- * but "no file imports a catalog model at all". {@link UNPORTED_CATALOG_MODULES}
- * shrinks to nothing when that happens, and the "still imports what it is
- * listed for" assertion below makes each entry fail the moment its file ports.
+ * but "no file imports a catalog model at all". THAT LINE IS CROSSED: Task 19a
+ * deleted the last two importers, `UNPORTED_CATALOG_MODULES` reached zero and
+ * was removed with them, and this sweep now asserts an exact empty result
+ * instead of licensing a list. The vacuity floor moved to the walk's INPUT,
+ * because an empty result is also what a broken traversal produces.
  */
-describe('property 4 — every catalog-model importer in the tree is registered', () => {
+describe('property 4 — no file in the tree imports a catalog model', () => {
   /** Every file under `src/` importing a model `schema/catalog.ts` owns. */
   function sweepCatalogModelImporters(): string[] {
     return sourceFiles(SRC)
@@ -277,27 +253,35 @@ describe('property 4 — every catalog-model importer in the tree is registered'
       .sort();
   }
 
-  it('the sweep finds the catalog-model importers that are known to exist', () => {
-    const found = sweepCatalogModelImporters();
-    // A floor AND two names, so a broken traversal says which shape it lost
-    // rather than reporting a clean tree. Both survivors are scripts — i.e.
-    // outside every directory the other sweeps in this file happen to walk —
-    // which is exactly the shape a `src/`-wide walk exists to catch.
-    // `uploads.controller` was the third and the only non-script; Task 13
-    // ported it.
-    expect(found.length).toBeGreaterThanOrEqual(MINIMUM_CATALOG_MODEL_IMPORTERS);
-    expect(found).toContain('scripts/importDiscogsReleases.ts');
-    expect(found).toContain('scripts/seedMusicData.ts');
+  it('finds NO file importing a catalog model — the finish line, not a floor', () => {
+    // This was "found >= 2, and contains these two names", licensed by
+    // `UNPORTED_CATALOG_MODULES`. Task 19a deleted that list's last two entries
+    // (`seedMusicData`, `importDiscogsReleases`) rather than porting them, so
+    // the list reached zero and went with them — and the assertion became the
+    // one the sweep's doc comment always named: not "every importer is
+    // registered" but "no file imports a catalog model at all". An exact zero
+    // is strictly stronger than a licence list and cannot go stale, since a new
+    // importer fails it immediately, by name.
+    expect(sweepCatalogModelImporters()).toEqual([]);
   });
 
-  it('registers every one of them as unported', () => {
-    // NOT `REGISTERED`: property 1 already forbids a HYBRID_MODULES entry from
-    // importing a catalog model, so the only registry that can license one is
-    // the unported list. Checking against both would let a file satisfy this
-    // sweep from an entry property 1 is simultaneously failing.
-    const unported = new Set(UNPORTED_CATALOG_MODULES.map((entry) => entry.file));
-    const unregistered = sweepCatalogModelImporters().filter((file) => !unported.has(file));
-    expect(unregistered).toEqual([]);
+  it('is not vacuous — the walk still reaches the tree it is asserting about', () => {
+    // The floor moved from the RESULT to the INPUT, because the result is now
+    // legitimately empty and an empty result is exactly what a broken walk also
+    // produces. `sourceFiles(SRC)` finding nothing, `withoutComments` eating
+    // everything, or a bad glob would each report a clean tree.
+    //
+    // The parse and the predicate are unit-tested separately in this file
+    // (`modelImportsIn` against real import strings, `isCatalogModel` against
+    // `TrackKeyRotation`), so this covers the third leg: the traversal.
+    //
+    // 250 against 261 measured. `sourceFiles` excludes `__tests__/` and every
+    // `*.test.ts`, so this counts NON-test modules only — a smaller population
+    // than a plain `.ts` count, and the one the sweep actually reads. The
+    // margin is deliberately narrow: this file shrinks as the migration deletes
+    // Mongoose modules, so a floor far below the real count would stop
+    // discriminating long before anyone noticed.
+    expect(sourceFiles(SRC).length).toBeGreaterThanOrEqual(250);
   });
 });
 
@@ -359,77 +343,6 @@ describe('property 2 — a registered file imports exactly its registered models
       ).toBe(`${entry.file} | unregistered: none | stale: none`);
     });
   }
-});
-
-describe('the unported list cannot outlive its work', () => {
-  for (const entry of UNPORTED_CATALOG_MODULES) {
-    it(`${entry.file} still imports what it is listed for`, () => {
-      const actual = new Set(modelImportsOf(entry.file));
-      const missing = entry.models.filter((model) => !actual.has(model));
-      // A file listed as unported that no longer imports the model IS ported,
-      // and the entry is stale — the same failure direction property 2 has.
-      expect(`${entry.file} no longer imports: ${missing.join(', ') || 'none'}`).toBe(
-        `${entry.file} no longer imports: none`
-      );
-    });
-  }
-
-  /**
-   * IDENTITY against the live set, not `toContain('Task ')`.
-   *
-   * The old check passed for `Task 10` — a CLOSED task — and equally for
-   * `Task 999`, and five entries named a finished task for three tasks running
-   * underneath it. That is the fifth instance of substring-where-identity-was-
-   * meant on this branch, and the first one sitting on the check that would
-   * have caught the others.
-   *
-   * What makes this DISCOVER rather than merely assert: an owner leaves
-   * `LIVE_TASK_IDS` when its task closes, because closing a task already means
-   * deleting its `OWNING_TASKS` / `CROSS_CUTTING_TASKS` entry (the convention
-   * `library` and `podcasts` already follow). Every registry entry still naming
-   * it goes red on the next run, with no separate audit to remember.
-   */
-  it('every owner is a LIVE task, compared by identity', () => {
-    for (const entry of UNPORTED_CATALOG_MODULES) {
-      expect(`${entry.file} owner: ${entry.owner}`).toBe(
-        `${entry.file} owner: ${LIVE_TASK_IDS.includes(entry.owner) ? entry.owner : `${entry.owner} (NOT a live task)`}`
-      );
-    }
-  });
-
-  /**
-   * The mutation guard for the assertion above.
-   *
-   * Without it, `LIVE_TASK_IDS.includes(...)` is a check whose failure mode is
-   * untested — and this whole finding exists because a check that could not
-   * fail was trusted for three tasks. A closed task's id must be REJECTED, and
-   * a bare `Task ` prefix must not be enough to pass.
-   */
-  it('rejects a closed task, and a prefix match is not enough', () => {
-    expect(LIVE_TASK_IDS).not.toContain('Task 10');
-    expect(LIVE_TASK_IDS).not.toContain('Task 999');
-    // The exact strings the old substring gate accepted.
-    expect(LIVE_TASK_IDS.some((id) => 'Task 10'.includes(id))).toBe(false);
-    // And a superstring of a live id is not a live id either — the shape the
-    // first re-ownership shipped, `'Task 19 — MongoDB removal (…)'`.
-    expect(LIVE_TASK_IDS).not.toContain('Task 19 — MongoDB removal (re-owned from the closed Task 10)');
-    expect(LIVE_TASK_IDS).toContain('Task 19');
-  });
-
-  /**
-   * Provenance lives in `reownedFrom`, and it must not leak back into `owner`.
-   *
-   * The container is the whole finding: accurate prose in `owner` is exactly
-   * what made the closed-task comparison impossible.
-   */
-  it('owner carries the bare id and nothing else', () => {
-    for (const entry of UNPORTED_CATALOG_MODULES) {
-      expect(`${entry.file}: ${entry.owner}`).toBe(`${entry.file}: ${entry.owner.trim()}`);
-      expect(`${entry.file} owner has no prose: ${/^Task [0-9]+[a-z]?$/.test(entry.owner)}`).toBe(
-        `${entry.file} owner has no prose: true`
-      );
-    }
-  });
 });
 
 describe('the matcher is exact — a substring or superstring never matches', () => {
@@ -543,19 +456,5 @@ describe('vacuity floor', () => {
      * exemptions is a file that can only rot.
      */
     expect(HYBRID_MODULES.length).toBe(2);
-    /**
-     * Three, down from six. Task 19a cleared the three half-connected bulk
-     * loaders — `backfillTrackFingerprints`, `importIsrcRegistry` and
-     * `importMusicBrainzArtists` — which were never dormant: each was the write
-     * half of a mechanism whose read half was already on Postgres, so its reader
-     * queried an empty table and returned a confident negative.
-     *
-     * The two that remain are genuinely dormant: `importDiscogsReleases` and
-     * `seedMusicData` fill tables nothing reads, and stay with Task 19. The
-     * third was Task 13's `uploads.controller`, ported.
-     *
-     * See `MINIMUM_CATALOG_MODEL_IMPORTERS`, which counts the same population.
-     */
-    expect(UNPORTED_CATALOG_MODULES.length).toBe(2);
   });
 });

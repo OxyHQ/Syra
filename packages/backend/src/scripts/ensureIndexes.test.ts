@@ -2,8 +2,26 @@ import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import mongoose from 'mongoose';
 import { connect, clear, disconnect } from '../test/mongo';
 import { ensureIndexes, planIndexes, loadAllModels } from './ensureIndexes';
-import { ArtistModel, CatalogEntityModel, PersonModel } from '../models/CatalogEntity';
-import { TrackModel } from '../models/Track';
+import { ReportModel, ReportCategory, ReportedType } from '../models/Report';
+
+/**
+ * The worked examples in this file are MODERATION collections.
+ *
+ * They used to be `catalogentities` and `tracks`, which was right while the
+ * catalogue was Mongoose. Task 19a ported or deleted every non-moderation
+ * model, so those two no longer exist and discovery has nothing to find but
+ * Task 8's four. Pointing the assertions at collections this script still
+ * serves is what keeps them meaningful — the alternative was keeping two dead
+ * models alive to give the test something to discover, which is circular.
+ *
+ * When Task 8 lands, this script and this file go together.
+ */
+const REPORT_FIXTURE = {
+  reportedType: ReportedType.TRACK,
+  reportedId: 'track-under-report',
+  reporter: 'reporter-1',
+  categories: [ReportCategory.SPAM],
+};
 
 beforeAll(connect);
 afterEach(clear);
@@ -50,15 +68,16 @@ describe('ensureIndexes — discovery', () => {
 
     // The point of reading the directory: a schema added later is covered with
     // no edit here. If this ever drops to a handful, discovery silently broke.
-    expect(planned.length).toBeGreaterThan(40);
-    expect(models.has('Track')).toBe(true);
-    expect(models.has('Album')).toBe(true);
-    // `UserUpload` was named here and is gone: Task 13 ported the locker and
-    // deleted the model, so `ensureIndexes` — which only ever plans MONGO
-    // indexes — has nothing to plan for it. Its Postgres constraints are
-    // declared in `schema/creators.ts` and gated by `db/__tests__/gates.test.ts`.
-    expect(models.has('artist')).toBe(true);
-    expect(models.has('person')).toBe(true);
+    //
+    // 15 against 17 measured, down from "> 40". The floor fell because the
+    // MODELS fell: Task 19a left moderation as the only vertical still on
+    // Mongoose, so 17 is the whole population rather than a sample of it. Every
+    // name below is one of Task 8's four — when they go, so does this file.
+    expect(planned.length).toBeGreaterThan(15);
+    expect(models.has('Report')).toBe(true);
+    expect(models.has('ModerationEnforcement')).toBe(true);
+    expect(models.has('ModerationEvent')).toBe(true);
+    expect(models.has('ModerationOutbox')).toBe(true);
   });
 
   it('includes the constraints this feature depends on', () => {
@@ -72,10 +91,13 @@ describe('ensureIndexes — discovery', () => {
 
     // Named explicitly because these are the ones whose ABSENCE in production is
     // silent: the code races, nothing errors, and duplicates accumulate.
-    expect(find('catalogentities', { nameKey: 1 })?.options.unique).toBe(true);
-    expect(find('catalogentities', { linkedOxyUserId: 1 })?.options.unique).toBe(true);
-    expect(find('tracks', { 'externalIds.isrc': 1 })?.options.unique).toBe(true);
-    expect(find('albums', { 'externalIds.musicbrainzReleaseId': 1 })?.options.unique).toBe(true);
+    expect(
+      find('reports', { reporter: 1, reportedType: 1, reportedId: 1 })?.options.unique
+    ).toBe(true);
+    expect(
+      find('moderation_enforcements', { decisionId: 1, decisionRevision: 1, action: 1 })?.options
+        .unique
+    ).toBe(true);
     // The two `useruploads` entries were here for the same reason and left with
     // the model. `user_uploads_owner_oxy_user_id_sha256_key` and
     // `user_uploads_fingerprint_duration_sec_idx` are the Postgres constraints
@@ -86,49 +108,53 @@ describe('ensureIndexes — discovery', () => {
 
 describe('ensureIndexes — agreement with Mongoose', () => {
   it('builds exactly what Mongoose builds itself', async () => {
-    // The script computes the discriminator `partialFilterExpression` by
-    // replicating a Mongoose internal. This is the guard on that replication: if
-    // Mongoose ever changes the rule, this fails HERE rather than production
-    // quietly getting a collection-wide unique index where dev has a
-    // discriminator-scoped one.
-    await dropAllIndexes('catalogentities');
-    await CatalogEntityModel.createIndexes();
-    await ArtistModel.createIndexes();
-    await PersonModel.createIndexes();
-    const byMongoose = await builtIndexDefinitions('catalogentities');
+    // The core property: whatever Mongoose would create, the script creates,
+    // options included. If the two ever disagree, production gets an index that
+    // differs from the one every test ran against.
+    await dropAllIndexes('reports');
+    await ReportModel.createIndexes();
+    const byMongoose = await builtIndexDefinitions('reports');
 
-    await dropAllIndexes('catalogentities');
+    await dropAllIndexes('reports');
     await ensureIndexes();
-    const byScript = await builtIndexDefinitions('catalogentities');
+    const byScript = await builtIndexDefinitions('reports');
 
-    // Full definitions, so a missing `partialFilterExpression` fails here.
+    // Full definitions, so a dropped option fails here and not in production.
     expect(byScript).toEqual(byMongoose);
     expect(byScript.length).toBeGreaterThan(5);
-    // Vacuity floor: the comparison must actually be looking at options.
-    expect(byMongoose.some((definition) => definition.includes('partialFilterExpression'))).toBe(true);
+    // Vacuity floor: the comparison must be looking at OPTIONS, not just key
+    // specs. It read `partialFilterExpression` while the worked example was
+    // `catalogentities`; `reports` has no discriminator, so it reads `unique`
+    // — the option this collection actually carries. A floor naming an option
+    // the subject does not have is a floor that fails for the wrong reason,
+    // which is how this swap was noticed.
+    expect(byMongoose.some((definition) => definition.includes('unique'))).toBe(true);
   });
 
-  it('scopes a discriminator index to its own type, as Mongoose does', async () => {
-    await dropAllIndexes('catalogentities');
-    await ensureIndexes();
-
-    const indexes = await mongoose.connection.collection('catalogentities').indexes();
-    const nameKeyIndex = indexes.find((index) => index.name === 'nameKey_1');
-
-    // Artist-only. A collection-wide unique index here would make two podcast
-    // guests of the same name impossible to store.
-    expect(nameKeyIndex?.unique).toBe(true);
-    expect(nameKeyIndex?.partialFilterExpression).toMatchObject({ type: 'artist' });
-  });
+  // DELETED WITH ITS SUBJECT: 'scopes a discriminator index to its own type'.
+  //
+  // It asserted that `nameKey_1` on `catalogentities` carries
+  // `partialFilterExpression: { type: 'artist' }`, which is how artists and
+  // persons shared one collection without a podcast guest colliding with a
+  // recording artist. Task 19a deleted `CatalogEntity`, and NO surviving
+  // Mongoose model uses a discriminator at all.
+  //
+  // The consequence is worth stating rather than leaving to be discovered:
+  // `ensureIndexes.ts` still replicates Mongoose's discriminator
+  // `partialFilterExpression` rule, and that code path is now UNEXERCISED. It
+  // is not dead — a discriminator model would need it — but nothing would catch
+  // it breaking. Task 8 deletes this script along with moderation's models, at
+  // which point the question closes; until then it is a known gap, not an
+  // oversight.
 });
 
 describe('ensureIndexes — reporting', () => {
   it('reports what it created, then reports the same indexes as already present', async () => {
-    await dropAllIndexes('tracks');
+    await dropAllIndexes('moderation_enforcements');
 
     const first = await ensureIndexes();
     const createdTrackIndexes = first.outcomes.filter(
-      (outcome) => outcome.status === 'created' && outcome.index.collectionName === 'tracks',
+      (outcome) => outcome.status === 'created' && outcome.index.collectionName === 'moderation_enforcements',
     );
     expect(createdTrackIndexes.length).toBeGreaterThan(0);
     expect(first.failed).toBe(0);
@@ -142,17 +168,17 @@ describe('ensureIndexes — reporting', () => {
   });
 
   it('dry run reports missing indexes WITHOUT building them', async () => {
-    await dropAllIndexes('tracks');
+    await dropAllIndexes('moderation_enforcements');
 
     const result = await ensureIndexes({ dryRun: true });
     const missing = result.outcomes.filter(
-      (outcome) => outcome.status === 'would-create' && outcome.index.collectionName === 'tracks',
+      (outcome) => outcome.status === 'would-create' && outcome.index.collectionName === 'moderation_enforcements',
     );
 
     expect(missing.length).toBeGreaterThan(0);
     expect(result.created).toBe(0);
     // Nothing was written — this is what makes it safe to point at production.
-    expect(await builtIndexNames('tracks')).toEqual([]);
+    expect(await builtIndexNames('moderation_enforcements')).toEqual([]);
   });
 });
 
@@ -161,16 +187,19 @@ describe('ensureIndexes — failure on existing duplicate data', () => {
     // The expected first-run failure against production: a unique index that
     // cannot build because duplicates are ALREADY there. Written through the
     // driver so the schema's own guards do not prevent the bad state.
-    await dropAllIndexes('catalogentities');
-    await mongoose.connection.collection('catalogentities').insertMany([
-      { type: 'artist', name: 'Double Trouble', nameKey: 'double trouble', source: 'upload' },
-      { type: 'artist', name: 'Double Trouble', nameKey: 'double trouble', source: 'upload' },
+    await dropAllIndexes('reports');
+    await mongoose.connection.collection('reports').insertMany([
+      { ...REPORT_FIXTURE, localStatus: 'open' },
+      { ...REPORT_FIXTURE, localStatus: 'open' },
     ]);
 
     const result = await ensureIndexes();
 
     const failure = result.outcomes.find(
-      (outcome) => outcome.status === 'failed' && JSON.stringify(outcome.index.spec) === '{"nameKey":1}',
+      (outcome) =>
+        outcome.status === 'failed' &&
+        JSON.stringify(outcome.index.spec) ===
+          JSON.stringify({ reporter: 1, reportedType: 1, reportedId: 1 }),
     );
     expect(failure).toBeDefined();
     if (failure?.status !== 'failed') throw new Error('expected a failed outcome');
@@ -178,26 +207,26 @@ describe('ensureIndexes — failure on existing duplicate data', () => {
     // "E11000" alone leaves whoever is running the deploy with no next step.
     // The offending group IS the next step.
     expect(failure.duplicates?.length).toBe(1);
-    expect(JSON.stringify(failure.duplicates)).toContain('double trouble');
+    expect(JSON.stringify(failure.duplicates)).toContain('track-under-report');
     expect(result.failed).toBeGreaterThan(0);
 
     // One bad index must not hide the state of the other forty.
     expect(result.created).toBeGreaterThan(0);
-    const trackIndexes = await builtIndexNames('tracks');
+    const trackIndexes = await builtIndexNames('moderation_enforcements');
     expect(trackIndexes.length).toBeGreaterThan(0);
   });
 
   it('does NOT drop or alter indexes it did not create', async () => {
-    // `syncIndexes()` would delete the other discriminators' indexes on this
-    // shared collection. This script only ever calls `createIndex`.
-    await dropAllIndexes('catalogentities');
+    // `syncIndexes()` would delete any index this script did not plan. It only
+    // ever calls `createIndex`, so a hand-made one survives a run.
+    await dropAllIndexes('reports');
     await mongoose.connection
-      .collection('catalogentities')
-      .createIndex({ bioLengthMarker: 1 }, { name: 'handmade_marker' });
+      .collection('reports')
+      .createIndex({ handmadeMarker: 1 }, { name: 'handmade_marker' });
 
     await ensureIndexes();
 
-    expect(await builtIndexNames('catalogentities')).toContain('handmade_marker');
+    expect(await builtIndexNames('reports')).toContain('handmade_marker');
   });
 });
 
@@ -205,19 +234,10 @@ describe('ensureIndexes — the constraints it is meant to restore actually bite
   it('a unique index built by the script rejects a duplicate afterwards', async () => {
     // Vacuity floor for the whole script: building an index that does not
     // enforce anything would satisfy every test above.
-    await dropAllIndexes('tracks');
+    await dropAllIndexes('reports');
     await ensureIndexes();
 
-    const track = {
-      title: 'A Recording',
-      artistId: 'artist-1',
-      artistName: 'An Artist',
-      duration: 210,
-      isAvailable: true,
-      source: 'upload' as const,
-      externalIds: { isrc: 'USUM71703861' },
-    };
-    await TrackModel.create(track);
-    await expect(TrackModel.create({ ...track, title: 'Same ISRC' })).rejects.toThrow();
+    await ReportModel.create(REPORT_FIXTURE);
+    await expect(ReportModel.create(REPORT_FIXTURE)).rejects.toThrow();
   });
 });

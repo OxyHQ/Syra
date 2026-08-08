@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
-import mongoose from 'mongoose';
 import type { Response, NextFunction } from 'express';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { eq } from 'drizzle-orm';
@@ -356,7 +355,7 @@ describe('POST /api/artist-claims/:id/resolve', () => {
   it('404s an unknown claim', async () => {
     const res = makeRes();
     await resolveArtistClaim(
-      makeReq({ id: new mongoose.Types.ObjectId().toString() }, 'reviewer-1', { status: 'approved' }),
+      makeReq({ id: uuidv7() }, 'reviewer-1', { status: 'approved' }),
       res as unknown as Response,
       failNext,
     );

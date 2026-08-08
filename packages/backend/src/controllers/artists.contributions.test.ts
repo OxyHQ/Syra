@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
-import mongoose from 'mongoose';
 import type { Response, NextFunction } from 'express';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { eq } from 'drizzle-orm';

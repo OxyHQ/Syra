@@ -5,7 +5,6 @@ import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { and, count, eq } from 'drizzle-orm';
 import { uuidv7 } from '@oxyhq/db';
 import { normalizeNameKey } from '@syra/shared-types';
-import { clear, connect, disconnect } from '../test/mongo';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
 import { albums, catalogEntities, imageAssets, tracks } from '../db/schema/catalog';
@@ -46,15 +45,12 @@ const INTRUDER_ID = 'oxy-intruder-2';
  * here are plain `generatedId()`s like every other fixture on the branch.
  */
 beforeAll(async () => {
-  await connect();
   await connectDb();
 });
 afterEach(async () => {
-  await clear();
   await clearDb();
 });
 afterAll(async () => {
-  await disconnect();
   await disconnectDb();
 });
 

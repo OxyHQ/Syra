@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import path from 'path';
-import { clear, connect, disconnect } from '../../test/mongo';
 import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
 import { getDb } from '../../db/postgres';
 import { isrcRegistry } from '../../db/schema/catalog';
@@ -25,7 +24,6 @@ let cdRip: ExtractedMetadata;
 let untagged: ExtractedMetadata;
 
 beforeAll(async () => {
-  await connect();
   await connectDb();
   [indie, purchased, cdRip, untagged] = await Promise.all([
     extractMetadata(INDIE_MP3),
@@ -35,11 +33,9 @@ beforeAll(async () => {
   ]);
 });
 afterEach(async () => {
-  await clear();
   await clearDb();
 });
 afterAll(async () => {
-  await disconnect();
   await disconnectDb();
 });
 

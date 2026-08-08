@@ -20,7 +20,6 @@ import path from 'path';
 import type { AddressInfo } from 'net';
 import { eq, sql } from 'drizzle-orm';
 import { uuidv7 } from '@oxyhq/db';
-import { connect, clear, disconnect } from '../test/mongo';
 import { connectDb, clearDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
 import * as realS3 from '../services/s3Service';
@@ -194,7 +193,6 @@ let currentUserId = OWNER;
  * Task 15 lands, not before.
  */
 beforeAll(async () => {
-  await connect();
   await connectDb();
   installDeezerStub();
 
@@ -215,7 +213,6 @@ beforeAll(async () => {
 });
 
 afterEach(async () => {
-  await clear();
   await clearDb();
   storedKeys.length = 0;
   deletedKeys.length = 0;
@@ -233,7 +230,6 @@ afterEach(async () => {
 afterAll(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
   setDeezerFetchForTests();
-  await disconnect();
   await disconnectDb();
 });
 

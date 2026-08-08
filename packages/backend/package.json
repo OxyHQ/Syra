@@ -12,8 +12,6 @@
     "typecheck": "tsc --noEmit",
     "ensure-indexes": "ts-node --transpile-only src/scripts/ensureIndexes.ts",
     "backfill:fingerprints": "ts-node --transpile-only src/scripts/backfillTrackFingerprints.ts",
-    "seed:music": "ts-node --transpile-only src/scripts/seedMusicData.ts",
-    "migrate:catalog-entities": "ts-node --transpile-only src/scripts/migrateArtistsToCatalogEntities.ts",
     "reseed:persons": "ts-node --transpile-only src/scripts/reseedPersons.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun run src/db/migrate.ts",

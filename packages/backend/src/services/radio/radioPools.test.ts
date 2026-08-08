@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'bun:test';
-import { connect, clear, disconnect } from '../../test/mongo';
 import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
 import type { PublicTrackRow } from '../../db/catalog/serialize';
 import { buildRadioPage, RADIO_OVERSAMPLE } from './radioPools';
@@ -17,15 +16,12 @@ import { makeArtist, makeTrack, relate } from './radioFixtures';
  * graph (`CatalogRelation`) is Task 15's vertical and still Mongoose.
  */
 beforeAll(async () => {
-  await connect();
   await connectDb();
 });
 afterEach(async () => {
-  await clear();
   await clearDb();
 });
 afterAll(async () => {
-  await disconnect();
   await disconnectDb();
 });
 

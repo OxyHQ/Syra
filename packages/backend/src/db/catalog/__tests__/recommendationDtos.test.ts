@@ -2,7 +2,6 @@ import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import type { Response, NextFunction } from 'express';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { uuidv7 } from '@oxyhq/db';
-import { connect, clear, disconnect } from '../../../test/mongo';
 import { clearDb, connectDb, disconnectDb } from '../../../test/postgres';
 import { getDb } from '../../postgres';
 import { albums, catalogEntities, imageAssets, tracks } from '../../schema/catalog';
@@ -55,15 +54,12 @@ import {
  */
 
 beforeAll(async () => {
-  await connect();
   await connectDb();
 });
 afterEach(async () => {
-  await clear();
   await clearDb();
 });
 afterAll(async () => {
-  await disconnect();
   await disconnectDb();
 });
 

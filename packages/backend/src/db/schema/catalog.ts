@@ -9,6 +9,12 @@
  * `models/TrackKey.ts` was ported here too and moved out in Task 13a — see
  * `trackKeys.ts`, and the note where the table used to sit.
  *
+ * **`models/*.ts` citations below are HISTORICAL.** They name the Mongoose
+ * source each column was ported from, and several of those files no longer
+ * exist — a port finishes by deleting the model once nothing imports it. A
+ * citation resolving to no file means that vertical is done, not that the
+ * reference is wrong.
+ *
  * ## `CatalogEntity` becomes ONE table
  *
  * Mongoose's `artist`/`person` discriminator scoped queries IMPLICITLY —

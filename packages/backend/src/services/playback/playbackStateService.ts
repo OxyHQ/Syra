@@ -1,5 +1,10 @@
 import type { PlaybackCommand, CatalogSource, ConnectPlaybackState } from '@syra/shared-types';
-import { PlaybackStateModel, IPlaybackState } from '../../models/PlaybackState';
+import {
+  findOrCreatePlaybackState,
+  updatePlaybackState,
+  type PlaybackStatePatch,
+  type PlaybackStateRow,
+} from '../../db/playback/playbackStates';
 import { listDevices, markInactive } from './deviceService';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -9,25 +14,30 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /**
- * Serialize the persisted Mongoose playback document into the wire-safe
+ * Serialize the stored playback row into the wire-safe
  * {@link ConnectPlaybackState} broadcast over the `/player` socket. Keeping this
  * the single mapping point ensures every `playback:state` emit sends the exact
  * shape Syra Connect clients parse (field names, and `updatedAt` as an ISO
  * string rather than a `Date`).
+ *
+ * Every `?? undefined` is a real conversion, not defensive noise: these columns
+ * are nullable and drizzle returns `null`, while the wire schema declares them
+ * `.optional()`. JSON would carry a `null` through to clients that were
+ * promised an absent key.
  */
-export function toConnectPlaybackState(state: IPlaybackState): ConnectPlaybackState {
+export function toConnectPlaybackState(state: PlaybackStateRow): ConnectPlaybackState {
   return {
-    trackId: state.trackId,
-    source: state.source,
+    trackId: state.trackId ?? undefined,
+    source: state.source ?? undefined,
     positionMs: state.positionMs,
     isPlaying: state.isPlaying,
     queue: state.queue,
-    contextType: state.contextType,
-    contextId: state.contextId,
+    contextType: state.contextType ?? undefined,
+    contextId: state.contextId ?? undefined,
     repeat: state.repeat,
     shuffle: state.shuffle,
     volume: state.volume,
-    activeDeviceId: state.activeDeviceId,
+    activeDeviceId: state.activeDeviceId ?? undefined,
     updatedAt: state.updatedAt.toISOString(),
   };
 }
@@ -36,13 +46,10 @@ export function toConnectPlaybackState(state: IPlaybackState): ConnectPlaybackSt
 
 /**
  * Return the user's playback state, creating it with defaults if it doesn't
- * exist yet. Idempotent — always returns a single persistent doc per user.
+ * exist yet. Idempotent — always returns a single persistent row per user.
  */
-export async function getOrCreateState(userId: string): Promise<IPlaybackState> {
-  const existing = await PlaybackStateModel.findOne({ oxyUserId: userId });
-  if (existing) return existing;
-
-  return PlaybackStateModel.create({ oxyUserId: userId });
+export async function getOrCreateState(userId: string): Promise<PlaybackStateRow> {
+  return findOrCreatePlaybackState(userId);
 }
 
 export interface SetNowPlayingInput {
@@ -57,23 +64,27 @@ export interface SetNowPlayingInput {
 /**
  * Start playing a new track. Resets position to 0 and sets isPlaying = true.
  * Preserves the existing activeDeviceId when no deviceId is provided.
+ *
+ * Each optional input is spread in only when it was supplied, which is how
+ * "leave the stored value alone" is spelled against a drizzle `set` — the
+ * literal port of `if (input.x !== undefined) state.x = input.x`.
  */
 export async function setNowPlaying(
   userId: string,
   input: SetNowPlayingInput,
-): Promise<IPlaybackState> {
-  const state = await getOrCreateState(userId);
+): Promise<PlaybackStateRow> {
+  await getOrCreateState(userId);
 
-  state.trackId = input.trackId;
-  if (input.source !== undefined) state.source = input.source;
-  if (input.queue !== undefined) state.queue = input.queue;
-  if (input.contextType !== undefined) state.contextType = input.contextType;
-  if (input.contextId !== undefined) state.contextId = input.contextId;
-  state.positionMs = 0;
-  state.isPlaying = true;
-  if (input.deviceId !== undefined) state.activeDeviceId = input.deviceId;
-
-  return state.save();
+  return updatePlaybackState(userId, {
+    trackId: input.trackId,
+    ...(input.source !== undefined && { source: input.source }),
+    ...(input.queue !== undefined && { queue: input.queue }),
+    ...(input.contextType !== undefined && { contextType: input.contextType }),
+    ...(input.contextId !== undefined && { contextId: input.contextId }),
+    positionMs: 0,
+    isPlaying: true,
+    ...(input.deviceId !== undefined && { activeDeviceId: input.deviceId }),
+  });
 }
 
 /**
@@ -81,45 +92,53 @@ export async function setNowPlaying(
  *
  * Commands are idempotent descriptions of intent; the server is the single
  * source of truth. All mutations go through this function.
+ *
+ * A command that changes nothing (an empty queue's `next`, a `volume` with no
+ * volume) leaves `patch` empty and returns the state unwritten — the Mongoose
+ * version called `.save()` regardless, which for a document with no modified
+ * paths was likewise a no-op write. What must NOT change is `updated_at`: it
+ * orders states on the client, so bumping it for a command that did nothing
+ * would make two clients disagree about which state is newer.
  */
 export async function applyCommand(
   userId: string,
   command: PlaybackCommand,
-): Promise<IPlaybackState> {
+): Promise<PlaybackStateRow> {
   const state = await getOrCreateState(userId);
+  const patch: PlaybackStatePatch = {};
 
   switch (command.type) {
     case 'play':
-      state.isPlaying = true;
+      patch.isPlaying = true;
       break;
 
     case 'pause':
-      state.isPlaying = false;
+      patch.isPlaying = false;
       break;
 
     case 'seek':
-      state.positionMs = clamp(command.positionMs ?? state.positionMs, 0, Infinity);
+      patch.positionMs = clamp(command.positionMs ?? state.positionMs, 0, Infinity);
       break;
 
     case 'volume':
       if (command.volume !== undefined) {
-        state.volume = clamp(command.volume, 0, 1);
+        patch.volume = clamp(command.volume, 0, 1);
       }
       break;
 
     case 'shuffle':
-      state.shuffle = command.shuffle !== undefined ? command.shuffle : !state.shuffle;
+      patch.shuffle = command.shuffle !== undefined ? command.shuffle : !state.shuffle;
       break;
 
     case 'repeat':
-      if (command.repeat !== undefined) state.repeat = command.repeat;
+      if (command.repeat !== undefined) patch.repeat = command.repeat;
       break;
 
     case 'transfer':
       // Spotify-Connect handoff: new device resumes at same trackId + positionMs.
       // Only update activeDeviceId if a target device was specified.
       if (command.deviceId !== undefined) {
-        state.activeDeviceId = command.deviceId;
+        patch.activeDeviceId = command.deviceId;
       }
       break;
 
@@ -130,13 +149,13 @@ export async function applyCommand(
       const atEnd = idx === queue.length - 1 || idx === -1;
       if (atEnd) {
         if (state.repeat === 'all') {
-          state.trackId = queue[0];
-          state.positionMs = 0;
+          patch.trackId = queue[0];
+          patch.positionMs = 0;
         }
         // repeat off/one: stay on last track (no crash)
       } else {
-        state.trackId = queue[idx + 1];
-        state.positionMs = 0;
+        patch.trackId = queue[idx + 1];
+        patch.positionMs = 0;
       }
       break;
     }
@@ -148,19 +167,21 @@ export async function applyCommand(
       const atStart = idx <= 0;
       if (atStart) {
         if (state.repeat === 'all') {
-          state.trackId = queue[queue.length - 1];
-          state.positionMs = 0;
+          patch.trackId = queue[queue.length - 1];
+          patch.positionMs = 0;
         }
         // repeat off/one: stay on first track
       } else {
-        state.trackId = queue[idx - 1];
-        state.positionMs = 0;
+        patch.trackId = queue[idx - 1];
+        patch.positionMs = 0;
       }
       break;
     }
   }
 
-  return state.save();
+  if (Object.keys(patch).length === 0) return state;
+
+  return updatePlaybackState(userId, patch);
 }
 
 /**
@@ -173,11 +194,17 @@ export async function applyCommand(
  *
  * If the disconnected device was not the active device the playback state is
  * left untouched (only the device registry is updated).
+ *
+ * The `activeDeviceId: null` in the no-failover branch is the one place in this
+ * vertical where the drizzle/Mongoose difference bites. The document version
+ * assigned `undefined` and `.save()` turned that into `$unset`; an `undefined`
+ * here would be dropped from the UPDATE, leaving a disconnected device named as
+ * active on a paused state forever. See `db/playback/playbackStates.ts`.
  */
 export async function handleDeviceDisconnect(
   userId: string,
   deviceId: string,
-): Promise<IPlaybackState> {
+): Promise<PlaybackStateRow> {
   await markInactive(userId, deviceId);
 
   const state = await getOrCreateState(userId);
@@ -192,14 +219,11 @@ export async function handleDeviceDisconnect(
   const other = devices.find((d) => d.isActive && d.deviceId !== deviceId);
 
   if (other) {
-    state.activeDeviceId = other.deviceId;
     // isPlaying, trackId, positionMs preserved — other device picks up seamlessly
-  } else {
-    state.isPlaying = false;
-    state.activeDeviceId = undefined;
+    return updatePlaybackState(userId, { activeDeviceId: other.deviceId });
   }
 
-  return state.save();
+  return updatePlaybackState(userId, { isPlaying: false, activeDeviceId: null });
 }
 
 /**
@@ -214,7 +238,7 @@ export async function updateProgress(
   deviceId: string,
   positionMs: number,
   isPlaying?: boolean,
-): Promise<IPlaybackState> {
+): Promise<PlaybackStateRow> {
   const state = await getOrCreateState(userId);
 
   if (deviceId !== state.activeDeviceId) {
@@ -222,8 +246,8 @@ export async function updateProgress(
     return state;
   }
 
-  state.positionMs = clamp(positionMs, 0, Infinity);
-  if (isPlaying !== undefined) state.isPlaying = isPlaying;
-
-  return state.save();
+  return updatePlaybackState(userId, {
+    positionMs: clamp(positionMs, 0, Infinity),
+    ...(isPlaying !== undefined && { isPlaying }),
+  });
 }

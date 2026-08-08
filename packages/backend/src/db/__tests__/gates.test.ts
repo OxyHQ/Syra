@@ -960,6 +960,233 @@ describe('track_keys, one column per id space (Task 13a)', () => {
   });
 });
 
+describe('catalog dedup constraints (Task 19a)', () => {
+  /**
+   * The dedup keys the upload path relies on, asserted against POSTGRES.
+   *
+   * Every one of these was covered before — by `models/{Album,CatalogEntity,
+   * Track}.test.ts`, against Mongoose. Those models' readers had all moved to
+   * drizzle, so the assertions guarded schemas nothing queried: the same shape
+   * as the `indexTrackAcoustically` twin Task 19a found next door. The
+   * constraints themselves were declared here all along and had NO test.
+   *
+   * Deleting the model tests without moving these would have quietly dropped
+   * the only statement anywhere that two releases cannot share a UPC.
+   */
+
+  /** Albums require a cover: `cover_art_id` is NOT NULL, so every fixture needs one. */
+  async function seedCoverArt(marker: string): Promise<string> {
+    const [asset] = await getDb()
+      .insert(imageAssets)
+      .values({
+        s3Key: `CHECK-fixture-${marker}-key`,
+        filename: `${marker}.jpg`,
+        contentType: 'image/jpeg',
+        byteSize: 1024,
+        ownerType: 'album',
+      })
+      .returning({ id: imageAssets.id });
+    return asset.id;
+  }
+
+  // NOT TESTED HERE, DELIBERATELY: `models/Album.test.ts` asserted "refuses to
+  // create an album with no cover art". `albums.cover_art_id` is NOT NULL, so
+  // drizzle's `$inferInsert` makes `coverArtId` a REQUIRED property — the
+  // omission this would test does not compile. That is strictly stronger than
+  // the Mongoose `required: true` it replaced (a runtime rejection), and it is
+  // why every album fixture below carries a real `image_assets` row. Writing
+  // the test would mean casting past the type that already prevents it.
+
+  it('refuses two albums sharing a MusicBrainz release id, and lets NULLs coexist', async () => {
+    const db = getDb();
+    const [artist] = await db
+      .insert(catalogEntities)
+      .values({ name: 'CHECK-fixture-dedup-artist', type: 'artist', source: 'upload' })
+      .returning({ id: catalogEntities.id });
+    const coverArtId = await seedCoverArt('dedup');
+
+    // `release_date` is NOT NULL with no default — every album fixture carries
+    // one, which the Mongoose equivalents never had to.
+    const album = (title: string, extra: Record<string, string> = {}) => ({
+      title,
+      artistId: artist.id,
+      artistName: 'CHECK-fixture-dedup-artist',
+      releaseDate: '2020-01-01',
+      coverArtId,
+      ...extra,
+    });
+
+    try {
+      await db.insert(albums).values(album('CHECK-fixture-mbid-1', { externalMusicbrainzReleaseId: 'mbid-x' }));
+      await expectRefusedBy(
+        Promise.resolve(
+          db.insert(albums).values(album('CHECK-fixture-mbid-2', { externalMusicbrainzReleaseId: 'mbid-x' }))
+        ),
+        isUniqueViolation,
+        'albums_external_musicbrainz_release_id_key'
+      );
+
+      // Dedup tier 2 is OPTIONAL: most releases carry no MBID at all, and a
+      // unique index treats each NULL as distinct. If it did not, the second
+      // album without an MBID would be refused and the catalogue would cap at
+      // one unidentified release.
+      await db.insert(albums).values(album('CHECK-fixture-no-mbid-1'));
+      await db.insert(albums).values(album('CHECK-fixture-no-mbid-2'));
+    } finally {
+      await db.delete(albums).where(eq(albums.artistId, artist.id));
+      await db.delete(catalogEntities).where(eq(catalogEntities.id, artist.id));
+      await db.delete(imageAssets).where(eq(imageAssets.id, coverArtId));
+    }
+  });
+
+  it('refuses two albums sharing a UPC — dedup tier 1', async () => {
+    const db = getDb();
+    const [artist] = await db
+      .insert(catalogEntities)
+      .values({ name: 'CHECK-fixture-upc-artist', type: 'artist', source: 'upload' })
+      .returning({ id: catalogEntities.id });
+    const coverArtId = await seedCoverArt('upc');
+
+    try {
+      await db.insert(albums).values({
+        title: 'CHECK-fixture-upc-1',
+        artistId: artist.id,
+        artistName: 'CHECK-fixture-upc-artist',
+        releaseDate: '2020-01-01',
+        coverArtId,
+        upc: 'CHECK-fixture-upc-value',
+      });
+      await expectRefusedBy(
+        Promise.resolve(
+          db.insert(albums).values({
+            title: 'CHECK-fixture-upc-2',
+            artistId: artist.id,
+            artistName: 'CHECK-fixture-upc-artist',
+            releaseDate: '2020-01-01',
+            coverArtId,
+            upc: 'CHECK-fixture-upc-value',
+          })
+        ),
+        isUniqueViolation,
+        'albums_upc_key'
+      );
+    } finally {
+      await db.delete(albums).where(eq(albums.artistId, artist.id));
+      await db.delete(catalogEntities).where(eq(catalogEntities.id, artist.id));
+      await db.delete(imageAssets).where(eq(imageAssets.id, coverArtId));
+    }
+  });
+
+  it('scopes the name_key dedup to ARTISTS — a person may share a name', async () => {
+    // The partial index (`where type = 'artist'`) is what makes this true, and
+    // it is the whole reason artists and persons can share one table: a podcast
+    // credit named "Sam Smith" must not collide with the recording artist.
+    const db = getDb();
+    const nameKey = 'check-fixture-shared-name-key';
+
+    try {
+      await db
+        .insert(catalogEntities)
+        .values({ name: 'CHECK-fixture Shared', nameKey, type: 'artist', source: 'upload' });
+
+      await expectRefusedBy(
+        Promise.resolve(
+          db
+            .insert(catalogEntities)
+            .values({ name: 'CHECK-fixture Shared Again', nameKey, type: 'artist', source: 'upload' })
+        ),
+        isUniqueViolation,
+        'catalog_entities_artist_name_key_key'
+      );
+
+      // Same key, type person — OUTSIDE the partial index, so accepted.
+      const [person] = await db
+        .insert(catalogEntities)
+        .values({ name: 'CHECK-fixture Shared Person', nameKey, type: 'person' })
+        .returning({ id: catalogEntities.id });
+      expect(person.id).toBeTruthy();
+    } finally {
+      await db.delete(catalogEntities).where(eq(catalogEntities.nameKey, nameKey));
+    }
+  });
+
+  it('refuses two entities linked to the same Oxy account, and to the same artist MBID', async () => {
+    // Both are STRONG dedup keys — an identity claim, not a name guess — so a
+    // duplicate is a merge bug rather than a coincidence.
+    const db = getDb();
+    const linkedOxyUserId = 'CHECK-fixture-linked-account';
+    const mbid = 'CHECK-fixture-artist-mbid';
+
+    try {
+      await db
+        .insert(catalogEntities)
+        .values({ name: 'CHECK-fixture Linked', type: 'person', linkedOxyUserId });
+      await expectRefusedBy(
+        Promise.resolve(
+          db
+            .insert(catalogEntities)
+            .values({ name: 'CHECK-fixture Linked 2', type: 'person', linkedOxyUserId })
+        ),
+        isUniqueViolation,
+        'catalog_entities_linked_oxy_user_id_key'
+      );
+
+      await db.insert(catalogEntities).values({
+        name: 'CHECK-fixture MBID',
+        type: 'artist',
+        source: 'upload',
+        externalMusicbrainzArtistId: mbid,
+      });
+      await expectRefusedBy(
+        Promise.resolve(
+          db.insert(catalogEntities).values({
+            name: 'CHECK-fixture MBID 2',
+            type: 'artist',
+            source: 'upload',
+            externalMusicbrainzArtistId: mbid,
+          })
+        ),
+        isUniqueViolation,
+        'catalog_entities_external_musicbrainz_artist_id_key'
+      );
+    } finally {
+      await db.delete(catalogEntities).where(eq(catalogEntities.linkedOxyUserId, linkedOxyUserId));
+      await db.delete(catalogEntities).where(eq(catalogEntities.externalMusicbrainzArtistId, mbid));
+    }
+  });
+
+  it('does NOT refuse two tracks sharing a content hash', async () => {
+    // `tracks_sha256_idx` is deliberately NON-unique. The same audio legitimately
+    // appears twice — a single and its album cut — and the hash is a dedup
+    // SIGNAL the upload path weighs, not a constraint the database enforces. A
+    // unique index here would reject the second upload outright.
+    const db = getDb();
+    const [artist] = await db
+      .insert(catalogEntities)
+      .values({ name: 'CHECK-fixture-sha-artist', type: 'artist', source: 'upload' })
+      .returning({ id: catalogEntities.id });
+
+    try {
+      const track = (title: string) => ({
+        title,
+        artistId: artist.id,
+        artistName: 'CHECK-fixture-sha-artist',
+        duration: 180,
+        source: 'upload' as const,
+        sha256: 'c'.repeat(64),
+      });
+      await db.insert(tracks).values(track('CHECK-fixture-sha-1'));
+      await db.insert(tracks).values(track('CHECK-fixture-sha-2'));
+
+      const stored = await db.select().from(tracks).where(eq(tracks.artistId, artist.id));
+      expect(stored).toHaveLength(2);
+    } finally {
+      await db.delete(tracks).where(eq(tracks.artistId, artist.id));
+      await db.delete(catalogEntities).where(eq(catalogEntities.id, artist.id));
+    }
+  });
+});
+
 describe('library and playlist schema (Task 3)', () => {
   /** Every table `schema/library.ts` promises, by SQL name. */
   const EXPECTED_TABLES = [
@@ -2919,17 +3146,27 @@ describe('user, taste and listening schema (Task 7)', () => {
      * when it was written, and Task 15's eight deletions took the directory to
      * 14 — the wolf arrived one vertical sooner than the comment expected.
      *
-     * 5 is the replacement, and it is a BACKSTOP rather than the primary check
-     * now: the `existsSync` split above fails on a broken traversal by itself,
-     * for as long as any mapped model file survives. When the last one goes,
-     * this floor and the map floor are what is left, and at that point the
-     * `registered`/`covered` equality below is carrying the gate.
+     * 5 was the replacement, and 4 is the value now — Task 19a took the
+     * directory from 6 to 4 by deleting `Album`, `CatalogEntity`, `Track` and
+     * `TrackFingerprint`, so the wolf arrived one vertical sooner AGAIN, in the
+     * same way and for the same reason the paragraph above records. That is
+     * twice, which makes it a pattern rather than a miss: any floor pinned to
+     * this directory's size is a countdown, because the directory only shrinks.
+     *
+     * It stays a BACKSTOP rather than the primary check: the `existsSync` split
+     * above fails on a broken traversal by itself, for as long as any mapped
+     * model file survives — and both mapped moderation models are still here,
+     * so it is doing that work today. 4 is now exactly the moderation vertical,
+     * so the next time this number moves is when Task 8 deletes those models,
+     * and at that point the right change is to DELETE this gate with them
+     * rather than lower the floor to zero — the same call `ensureIndexes.ts`
+     * faces in the same commit.
      *
      * The second floor is on the MAP, not on what the walk found: an emptied map
      * paired with a broken walk is the one shape where both sides go to zero and
      * an equality passes.
      */
-    expect(modelFiles.length).toBeGreaterThanOrEqual(5);
+    expect(modelFiles.length).toBeGreaterThanOrEqual(4);
     expect(MONGO_TTL_INDEXES.length).toBeGreaterThanOrEqual(1);
 
     // Only a model whose FILE still exists can still declare its TTL. A mapped

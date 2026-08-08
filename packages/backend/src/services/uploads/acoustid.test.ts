@@ -17,7 +17,6 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll } from 'bun:test';
 import fs from 'fs';
 import path from 'path';
-import { clear, connect, disconnect } from '../../test/mongo';
 import { env } from '../../config/env';
 import { sql } from 'drizzle-orm';
 import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
@@ -52,17 +51,14 @@ const groundTruth: { cases: ChromaprintCase[]; producedBy: Record<string, string
 );
 
 beforeAll(async () => {
-  await connect();
   await connectDb();
 });
 beforeEach(resetAcoustidRateLimitForTests);
 afterEach(async () => {
   setAcoustidFetchForTests();
-  await clear();
   await clearDb();
 });
 afterAll(async () => {
-  await disconnect();
   await disconnectDb();
 });
 

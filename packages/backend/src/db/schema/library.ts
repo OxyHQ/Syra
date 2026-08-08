@@ -8,6 +8,12 @@
  * RecentlyPlayed,PlaybackState,Device}.ts`, field by field, against
  * `packages/backend/docs/db/RELATIONS.md` for every foreign key.
  *
+ * **`models/*.ts` citations below are HISTORICAL.** They name the Mongoose
+ * source each column was ported from, and several of those files no longer
+ * exist — a port finishes by deleting the model once nothing imports it. A
+ * citation resolving to no file means that vertical is done, not that the
+ * reference is wrong.
+ *
  * ## `Library` ceases to exist
  *
  * `UserLibrary` (`models/Library.ts`) was five arrays on one document —

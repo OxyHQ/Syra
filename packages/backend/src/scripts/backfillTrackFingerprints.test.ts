@@ -17,7 +17,6 @@ import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import fs from 'fs';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
-import mongoose from 'mongoose';
 import { eq } from 'drizzle-orm';
 import { uuidv7 } from '@oxyhq/db';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';

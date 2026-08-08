@@ -7,7 +7,6 @@ import type { Server } from 'http';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { uuidv7 } from '@oxyhq/db';
 import { normalizeNameKey } from '@syra/shared-types';
-import { clear, connect, disconnect } from '../test/mongo';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
 import { catalogEntities } from '../db/schema/catalog';
@@ -42,15 +41,12 @@ function multerTempFiles(): Set<string> {
  * module graph still opens Mongoose at import time.
  */
 beforeAll(async () => {
-  await connect();
   await connectDb();
 });
 afterEach(async () => {
-  await clear();
   await clearDb();
 });
 afterAll(async () => {
-  await disconnect();
   await disconnectDb();
 });
 

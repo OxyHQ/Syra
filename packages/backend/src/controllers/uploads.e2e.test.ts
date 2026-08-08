@@ -4,7 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import express from 'express';
-import mongoose from 'mongoose';
+import { uuidv7 } from '@oxyhq/db';
 import type { Server } from 'http';
 import type { Response, NextFunction } from 'express';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
@@ -308,7 +308,12 @@ describeE2E('E2E upload flow (requires an S3 endpoint via AWS_ENDPOINT_URL)', ()
 
     await clearDb();
     currentUser = 'contributor-2';
-    const coverId = new mongoose.Types.ObjectId().toString();
+    // An id that names no `image_assets` row — uuid v7, the space every row is
+    // minted in since the cutover. A 24-char ObjectId hex still passes
+    // `isLiveEntityId`, so it would keep asserting the same outcome even if the
+    // guard stopped accepting live ids (the reason `stream.controller.test.ts`
+    // records for the same swap).
+    const coverId = uuidv7();
     const withCover = await upload('indie-id3v2.mp3', 'audio/mpeg',
       { destination: 'public', attestation: 'I have the right to distribute this recording', coverArt: coverId });
     const album = (await getDb().select().from(albums).limit(1))[0];

@@ -1,6 +1,9 @@
-import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
-import { connect, clear, disconnect } from '../../test/mongo';
-import { PlaybackStateModel } from '../../models/PlaybackState';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll } from 'bun:test';
+import { eq } from 'drizzle-orm';
+import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
+import { getDb } from '../../db/postgres';
+import { playbackStates } from '../../db/schema/library';
+import { catalogEntities, tracks } from '../../db/schema/catalog';
 import {
   getOrCreateState,
   setNowPlaying,
@@ -11,14 +14,62 @@ import {
 } from './playbackStateService';
 import { registerDevice } from './deviceService';
 
-beforeAll(connect);
-afterEach(clear);
-afterAll(disconnect);
+beforeAll(connectDb);
+afterEach(clearDb);
+afterAll(disconnectDb);
 
 const USER = 'user-state-test';
 
+/**
+ * Every track id this suite names, as real rows.
+ *
+ * `playback_states.track_id` is a real `.references(() => tracks.id)` — Mongo
+ * had no such constraint, so these fixtures used to be bare strings naming
+ * nothing. The ids are inserted verbatim rather than generated, because the
+ * queue-navigation assertions are written against their ORDER ("next from b
+ * goes to c"), which a generated id would make unreadable.
+ */
+const TRACK_IDS = [
+  'track-abc',
+  'track-def',
+  'track-ghi',
+  'track-t',
+  'track-1',
+  'track-2',
+  'track-a',
+  'track-b',
+  'track-c',
+] as const;
+
+beforeEach(async () => {
+  const [artist] = await getDb()
+    .insert(catalogEntities)
+    .values({ name: 'Playback Fixture Artist', type: 'artist', source: 'upload' })
+    .returning({ id: catalogEntities.id });
+
+  await getDb().insert(tracks).values(
+    TRACK_IDS.map((id) => ({
+      id,
+      title: `Fixture ${id}`,
+      artistId: artist.id,
+      artistName: 'Playback Fixture Artist',
+      duration: 180,
+      source: 'upload' as const,
+    }))
+  );
+});
+
+/** The stored row, re-read — distinct from what a writer handed back. */
+async function storedState(oxyUserId: string) {
+  const [row] = await getDb()
+    .select()
+    .from(playbackStates)
+    .where(eq(playbackStates.oxyUserId, oxyUserId));
+  return row;
+}
+
 describe('getOrCreateState', () => {
-  it('creates a state doc with defaults', async () => {
+  it('creates a state row with defaults', async () => {
     const state = await getOrCreateState(USER);
 
     expect(state.oxyUserId).toBe(USER);
@@ -30,12 +81,16 @@ describe('getOrCreateState', () => {
     expect(state.queue).toEqual([]);
   });
 
-  it('is idempotent — second call returns same doc, count stays 1', async () => {
-    await getOrCreateState(USER);
-    await getOrCreateState(USER);
+  it('is idempotent — second call returns the same row, count stays 1', async () => {
+    const first = await getOrCreateState(USER);
+    const second = await getOrCreateState(USER);
 
-    const count = await PlaybackStateModel.countDocuments({ oxyUserId: USER });
-    expect(count).toBe(1);
+    expect(second.id).toBe(first.id);
+    const rows = await getDb()
+      .select()
+      .from(playbackStates)
+      .where(eq(playbackStates.oxyUserId, USER));
+    expect(rows).toHaveLength(1);
   });
 });
 
@@ -198,9 +253,12 @@ describe('applyCommand — next/prev queue navigation', () => {
   });
 
   it('next on empty queue → no crash, state unchanged', async () => {
+    // `null`, not `undefined`: this is the stored ROW. The wire shape converts
+    // (see the `toConnectPlaybackState` block, which still expects `undefined`)
+    // — the two live on opposite sides of that mapping on purpose.
     await getOrCreateState(USER);
     const state = await applyCommand(USER, { type: 'next' });
-    expect(state.trackId).toBeUndefined();
+    expect(state.trackId).toBeNull();
     expect(state.positionMs).toBe(0);
   });
 });
@@ -227,14 +285,24 @@ describe('handleDeviceDisconnect — failover', () => {
     expect(state.positionMs).toBe(15000);
   });
 
-  it('no other active device: disconnect d1 → paused, activeDeviceId undefined', async () => {
+  it('no other active device: disconnect d1 → paused, activeDeviceId CLEARED', async () => {
+    // The one place the drizzle/Mongoose difference bites. The document version
+    // assigned `undefined` and `.save()` turned it into `$unset`; an
+    // `undefined` in a drizzle `set` is dropped from the UPDATE, which would
+    // leave the departed device named as active on a paused state forever.
+    // Asserted against the STORED row, not just the returned one.
     await registerDevice(USER, { deviceId: D1, name: 'Web', type: 'web' });
     await setNowPlaying(USER, { trackId: 'track-t', deviceId: D1 });
+    expect((await storedState(USER)).activeDeviceId).toBe(D1);
 
     const state = await handleDeviceDisconnect(USER, D1);
 
     expect(state.isPlaying).toBe(false);
-    expect(state.activeDeviceId).toBeUndefined();
+    expect(state.activeDeviceId).toBeNull();
+
+    const stored = await storedState(USER);
+    expect(stored.isPlaying).toBe(false);
+    expect(stored.activeDeviceId).toBeNull();
   });
 
   it('non-active device disconnects → activeDeviceId stays d1, isPlaying unchanged', async () => {

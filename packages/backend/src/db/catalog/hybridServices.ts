@@ -92,9 +92,9 @@ export type OwningTask = keyof typeof OWNING_TASKS;
  *
  * {@link OWNING_TASKS} is keyed by vertical, which is right for
  * {@link NON_CATALOG_MODEL_OWNERS} — every still-Mongoose model belongs to one.
- * It cannot express an owner that is cross-cutting, and
- * {@link UNPORTED_CATALOG_MODULES} has two: the MongoDB removal itself, and the
- * bulk loaders split out of it.
+ * It cannot express an owner that is cross-cutting, which
+ * `UNPORTED_CATALOG_MODULES` needed while it existed (the MongoDB removal
+ * itself, and the bulk loaders split out of it).
  *
  * Listed here so {@link LIVE_TASK_IDS} can be complete. Like `OWNING_TASKS`,
  * an entry is DELETED when its task closes — that deletion is what turns a
@@ -220,69 +220,20 @@ export const HYBRID_MODULES: readonly HybridModule[] = [
 ] as const;
 
 /**
- * Catalog services that are NOT hybrid and are NOT ported — the other residue,
- * kept beside the registry so one file answers "what is left".
+ * `UNPORTED_CATALOG_MODULES` used to live here: files that imported a catalog
+ * Mongoose model and had not been ported, each licensed with an owning task.
  *
- * These are held to a DIFFERENT property by the gate: each must still import the
- * catalog model named, so an entry cannot outlive the work it describes. They
- * are deliberately not in {@link HYBRID_MODULES}, because that registry means
- * "ported, with a licence to read another vertical" and these are unported.
+ * IT IS GONE, AT ZERO, which is the outcome this file's own vacuity-floor
+ * comment prescribed — "an exemption list with no exemptions is a file that can
+ * only rot". Task 19a emptied it by deleting its last two entries
+ * (`scripts/seedMusicData.ts` and `scripts/importDiscogsReleases.ts`) rather
+ * than porting them; see the note where they were listed.
+ *
+ * The GATE it fed did not go with it, and that is the point. `property 4` in
+ * `__tests__/hybridServices.test.ts` still sweeps every file under `src/` for a
+ * catalog-model import — it now asserts there are NONE, which is the finish
+ * line the sweep's own doc comment always named ("not 'no file holds both
+ * sides' but 'no file imports a catalog model at all'"). An exact zero is a
+ * stronger check than a licence list, and unlike the list it cannot rot,
+ * because the sweep runs against the real tree every time.
  */
-export const UNPORTED_CATALOG_MODULES: readonly {
-  readonly file: string;
-  readonly models: readonly CatalogModel[];
-  /**
-   * The task that will port or delete this file — a BARE id, exactly as it
-   * appears in {@link LIVE_TASK_IDS}, and compared by identity.
-   *
-   * Nothing else goes in here. Task 12 first recorded a re-ownership as
-   * `'Task 19 — MongoDB removal (re-owned from the closed Task 10)'`, which is
-   * accurate prose and defeats the only check that matters: an exact
-   * comparison against the live set becomes impossible the moment the field
-   * carries anything but the id. Provenance goes in {@link reownedFrom}.
-   */
-  readonly owner: string;
-  /** The task this entry was moved AWAY from, when it was moved. */
-  readonly reownedFrom?: string;
-  readonly reason: string;
-}[] = [
-  // `controllers/uploads.controller.ts` was the only entry in this list that was
-  // not a script. It is GONE: Task 13 ported all 2,779 lines of it, and with it
-  // the last consumer of `TrackKey`.
-  // ── Operational scripts ────────────────────────────────────────────────
-  //
-  // SIX scripts that read or write catalog collections whose tables moved in
-  // Task 10, found by property 4's sweep in Task 11 and registered rather than
-  // ported: none of them is on any vertical's file list, and they are not this
-  // task's to rewrite. (Counted, not remembered — the first version of this
-  // comment said five above a list of six.) They are all BROKEN today in the same way — a Mongoose
-  // read against a collection the application no longer writes returns nothing,
-  // and a Mongoose write lands where nothing looks. Named individually so
-  // whoever picks them up gets a list rather than a category.
-  {
-    file: 'scripts/seedMusicData.ts',
-    models: ['Album', 'CatalogEntity', 'Track'],
-    owner: 'Task 19',
-    reownedFrom: 'Task 10 (closed)',
-    reason:
-      'DORMANT. Seeds a development catalogue into Mongo; nothing reads that catalogue any ' +
-      'more, and the Postgres tables it would fill are written by the real upload path. No ' +
-      'reader is starved by leaving it, so it can wait for the MongoDB removal itself.',
-  },
-  {
-    file: 'scripts/importDiscogsReleases.ts',
-    models: ['DiscogsRelease'],
-    owner: 'Task 19',
-    reownedFrom: 'Task 10 (closed)',
-    reason:
-      'DORMANT. Bulk-loads the Discogs release mirror, and `discogs_releases` has NO reader at ' +
-      'all — neither database. Nothing is starved by leaving it, which is what separates it ' +
-      'from the three above rather than the fact that it is a script.',
-  },
-  // `services/uploads/{acoustid,isrcLookup,provenanceSignals}.ts` were listed
-  // here — missed by the Task 10b brief's selector, which keyed on four model
-  // names while `schema/catalog.ts` owns nineteen tables. They are ported now,
-  // and this gate is what said so: all three failed the "still imports what it
-  // is listed for" assertion the moment the imports went, which is the stale
-  // direction firing on real work rather than on a fixture.
-] as const;
