@@ -1,5 +1,5 @@
 import type { PlayableRef } from '@syra/shared-types';
-import { api } from '@/utils/api';
+import { api, getApiOrigin } from '@/utils/api';
 import { createScopedLogger } from '@/utils/logger';
 
 const logger = createScopedLogger('StreamService');
@@ -93,6 +93,47 @@ function remember(trackId: string, entry: StreamCacheEntry): void {
  * `cacheKey` namespaces the entry so track ids and episode ids never collide in
  * the shared cache.
  */
+/**
+ * A resolution whose `url` is absolute, resolved against the API origin.
+ *
+ * The backend stamps `STREAM_KEY_BASE_URL` into every media URL it hands out,
+ * and that variable is legitimately EMPTY in local development, where the app
+ * and the API share an origin — so the resolver can return a relative
+ * `/api/stream/<id>/master.m3u8?t=…` by design.
+ *
+ * In production they do not share an origin: `syra.fm` serves the app and
+ * `api.syra.fm` serves the API. A relative URL handed to `hls.loadSource()`
+ * resolves against the WEB origin, which answers the SPA's HTML — and hls.js
+ * reports `NotSupportedError: Failed to load because no supported source was
+ * found`, with nothing failing on the server and no error in any log. That is
+ * the outage this function exists to make impossible from the client side; the
+ * server now refuses to boot without an absolute origin, and these are two
+ * independent guards on purpose.
+ *
+ * `resolveAudioUrlWithFallback` has always done this for the PROGRESSIVE path.
+ * One of the two playback paths carrying it and the other not is the asymmetry
+ * that let a relative URL through, so it belongs here rather than at either call
+ * site — `resolveStream` and the episode resolver both pass through this
+ * function, and a third one added later will too.
+ *
+ * An already-absolute URL is returned unchanged, and the same object is returned
+ * when nothing needed changing so the cache is not churned.
+ */
+function absoluteResolution(resolution: StreamResolution): StreamResolution {
+  try {
+    const absolute = new URL(resolution.url, getApiOrigin()).toString();
+    return absolute === resolution.url ? resolution : { ...resolution, url: absolute };
+  } catch {
+    /**
+     * An unparseable URL is left exactly as it arrived. Rewriting it could only
+     * guess, and the player's own failure names the real value — which is more
+     * useful than a URL this function invented.
+     */
+    logger.warn('Stream resolution URL could not be made absolute', { url: resolution.url });
+    return resolution;
+  }
+}
+
 async function resolveFromEndpoint(
   cacheKey: string,
   endpoint: string,
@@ -108,7 +149,7 @@ async function resolveFromEndpoint(
 
   const promise = api.get<StreamResolution>(endpoint)
     .then((res) => {
-      const resolution = res.data;
+      const resolution = absoluteResolution(res.data);
       remember(cacheKey, {
         resolution,
         expiresAtMs: getResolutionExpiryMs(resolution),

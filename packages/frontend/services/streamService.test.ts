@@ -10,6 +10,11 @@ jest.mock('@/utils/api', () => ({
   api: {
     get: jest.fn(),
   },
+  // Mocked alongside `api` because `streamService` resolves a relative
+  // resolution URL against it. Left out, the helper would be `undefined`, the
+  // service would take its catch path, and every assertion below about absolute
+  // URLs would pass by doing nothing.
+  getApiOrigin: jest.fn(() => 'https://api.syra.fm'),
 }));
 
 const mockGet = api.get as jest.MockedFunction<typeof api.get>;
@@ -160,5 +165,81 @@ describe('resolveUploadStream', () => {
     await expect(resolveUploadStream('same')).resolves.toEqual(uploadResolution);
 
     expect(mockGet).toHaveBeenCalledTimes(2);
+  });
+});
+
+/**
+ * The production outage this guard exists for.
+ *
+ * `STREAM_KEY_BASE_URL` was unset on the live task definition, so the resolver
+ * returned a RELATIVE `/api/stream/<id>/master.m3u8?t=…`. The app is served from
+ * `syra.fm` and the API from `api.syra.fm`, so `hls.loadSource()` resolved that
+ * against the web origin, got the SPA's HTML, and failed with
+ * `NotSupportedError: Failed to load because no supported source was found` —
+ * nothing failing server-side, nothing in any log.
+ *
+ * The fixtures below are chosen so a service that did NOT resolve the URL fails
+ * every one of them. An absolute fixture alone cannot tell the two
+ * implementations apart, which is why the existing cases above — all absolute —
+ * never caught this.
+ */
+describe('stream resolution URLs are made absolute', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    clearStreamResolutionCache();
+  });
+
+  it('resolves a relative resolver URL against the API origin', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        url: '/api/stream/t9/master.m3u8?t=tok',
+        type: 'hls' as const,
+        expiresAt: null,
+      },
+    });
+
+    const result = await resolveStream('t9');
+
+    expect(result.url).toBe('https://api.syra.fm/api/stream/t9/master.m3u8?t=tok');
+  });
+
+  it('leaves an absolute URL exactly as the backend sent it', async () => {
+    const url = 'https://api.syra.fm/api/stream/t9/master.m3u8?t=tok';
+    mockGet.mockResolvedValueOnce({ data: { url, type: 'hls' as const, expiresAt: null } });
+
+    expect((await resolveStream('t9')).url).toBe(url);
+  });
+
+  /**
+   * A different host must not be rewritten to ours: a resolution can legitimately
+   * point at a CDN, and "absolute" is the property being enforced, not "ours".
+   */
+  it('does not rewrite a URL that already points somewhere else', async () => {
+    const url = 'https://cdn.example.com/x/master.m3u8?t=tok';
+    mockGet.mockResolvedValueOnce({ data: { url, type: 'hls' as const, expiresAt: null } });
+
+    expect((await resolveStream('t9')).url).toBe(url);
+  });
+
+  it('caches the ABSOLUTE url, so a cache hit cannot serve the relative one', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: { url: '/api/stream/t9/master.m3u8?t=tok', type: 'hls' as const, expiresAt: null },
+    });
+
+    await resolveStream('t9');
+    const cached = await resolveStream('t9');
+
+    expect(mockGet).toHaveBeenCalledTimes(1);
+    expect(cached.url).toBe('https://api.syra.fm/api/stream/t9/master.m3u8?t=tok');
+  });
+
+  it('applies to the locker path too, not only the catalog one', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: { url: '/api/uploads/u1/stream.m3u8?t=tok', type: 'hls' as const, expiresAt: null },
+    });
+
+    expect((await resolveUploadStream('u1')).url).toBe(
+      'https://api.syra.fm/api/uploads/u1/stream.m3u8?t=tok',
+    );
   });
 });
