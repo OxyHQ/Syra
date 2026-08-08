@@ -162,8 +162,10 @@ const PROBES: readonly { readonly name: string; readonly sql: string }[] = [
           where track_id = '${MARKER}-t-7' order by position asc`,
   },
   {
-    // `controllers/stream.controller.ts` — `getStreamKey`. By `track_id` alone,
-    // not by `kind`: the unique constraint is on the id.
+    // `controllers/stream.controller.ts` — `getStreamKey`. `track_id` is the
+    // CATALOGUE arm since Task 13a, one of three parent columns each with its
+    // own unique index — which is why the assertion below names the index
+    // rather than the `track_keys_` prefix all three now share.
     name: 'playbackTrackKey',
     sql: `select key_hex from track_keys where track_id = '${MARKER}-t-7' limit 1`,
   },
@@ -480,7 +482,7 @@ describe('the playback read paths reach an index', () => {
 
   it('the content key read does not scan track_keys', () => {
     expect(plans.get('playbackTrackKey')).not.toContain('Seq Scan on track_keys');
-    expect(`track key: ${indexesIn('playbackTrackKey')}`).toContain('track_keys_');
+    expect(`track key: ${indexesIn('playbackTrackKey')}`).toContain('track_keys_track_id_key');
   });
 
   it('the preview single-track read does not scan the table', () => {
