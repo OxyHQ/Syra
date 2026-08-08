@@ -95,7 +95,7 @@ export const ArtistClaimCta: React.FC<ArtistClaimCtaProps> = ({ artistId, artist
           <Text className="text-foreground" style={styles.label}>
             {t('artist.claim.evidenceLabel')}
           </Text>
-          <TextInput
+          <TextInput className="bg-surface text-foreground"
             value={evidence}
             onChangeText={setEvidence}
             placeholder={t('artist.claim.evidencePlaceholder')}
@@ -105,7 +105,6 @@ export const ArtistClaimCta: React.FC<ArtistClaimCtaProps> = ({ artistId, artist
             editable={!claim.isPending}
             style={[
               styles.input,
-              { backgroundColor: theme.colors.backgroundSecondary, color: theme.colors.text },
             ]}
           />
           {!gate.canUsePrivateApi && (

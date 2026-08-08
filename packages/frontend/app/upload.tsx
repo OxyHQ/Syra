@@ -502,7 +502,7 @@ const UploadScreen: React.FC = () => {
                         <Text className="text-muted-foreground" style={styles.detailsHint}>
                           {t('uploads.details.hint')}
                         </Text>
-                        <TextInput
+                        <TextInput className="bg-surface text-foreground"
                           value={file.title}
                           onChangeText={(title) => updateFile(file.key, { title })}
                           placeholder={t('uploads.details.title')}
@@ -510,10 +510,9 @@ const UploadScreen: React.FC = () => {
                           editable={!isUploading}
                           style={[
                             styles.input,
-                            { backgroundColor: theme.colors.backgroundSecondary, color: theme.colors.text },
                           ]}
                         />
-                        <TextInput
+                        <TextInput className="bg-surface text-foreground"
                           value={file.artistName}
                           onChangeText={(artistName) => updateFile(file.key, { artistName })}
                           placeholder={t('uploads.details.artist')}
@@ -521,10 +520,9 @@ const UploadScreen: React.FC = () => {
                           editable={!isUploading}
                           style={[
                             styles.input,
-                            { backgroundColor: theme.colors.backgroundSecondary, color: theme.colors.text },
                           ]}
                         />
-                        <TextInput
+                        <TextInput className="bg-surface text-foreground"
                           value={file.albumName}
                           onChangeText={(albumName) => updateFile(file.key, { albumName })}
                           placeholder={t('uploads.details.album')}
@@ -532,12 +530,11 @@ const UploadScreen: React.FC = () => {
                           editable={!isUploading}
                           style={[
                             styles.input,
-                            { backgroundColor: theme.colors.backgroundSecondary, color: theme.colors.text },
                           ]}
                         />
                         {file.destination === 'public' && (
                           <>
-                            <TextInput
+                            <TextInput className="bg-surface text-foreground"
                               value={file.isrc}
                               onChangeText={(isrc) => updateFile(file.key, { isrc })}
                               placeholder={t('uploads.details.isrc')}
@@ -547,7 +544,6 @@ const UploadScreen: React.FC = () => {
                               autoCorrect={false}
                               style={[
                                 styles.input,
-                                { backgroundColor: theme.colors.backgroundSecondary, color: theme.colors.text },
                               ]}
                             />
                             <Text className="text-muted-foreground" style={styles.detailsHint}>

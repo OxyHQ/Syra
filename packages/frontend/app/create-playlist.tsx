@@ -135,11 +135,10 @@ const CreatePlaylistScreen: React.FC = () => {
       >
         {/* Header */}
         <View
+          className="bg-surface border-b-border"
           style={[
             styles.header,
             {
-              backgroundColor: theme.colors.backgroundSecondary,
-              borderBottomColor: theme.colors.border,
               // Top safe-area is cleared by the shell's TopBar (single
               // authority); this in-panel header only needs base padding.
               paddingTop: 8,
@@ -206,14 +205,8 @@ const CreatePlaylistScreen: React.FC = () => {
             {/* Name Input */}
             <View style={styles.inputGroup}>
               <TextInput
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: theme.colors.backgroundSecondary,
-                    color: theme.colors.text,
-                    borderColor: errors.name ? theme.colors.error : theme.colors.border,
-                  },
-                ]}
+                className={`bg-surface text-foreground ${errors.name ? 'border-error' : 'border-border'}`}
+                style={styles.input}
                 placeholder={t('createPlaylist.namePlaceholder')}
                 placeholderTextColor={theme.colors.textSecondary}
                 value={name}
@@ -240,14 +233,8 @@ const CreatePlaylistScreen: React.FC = () => {
             {/* Description Input */}
             <View style={styles.inputGroup}>
               <TextInput
-                style={[
-                  styles.textArea,
-                  {
-                    backgroundColor: theme.colors.backgroundSecondary,
-                    color: theme.colors.text,
-                    borderColor: errors.description ? theme.colors.error : theme.colors.border,
-                  },
-                ]}
+                className={`bg-surface text-foreground ${errors.description ? 'border-error' : 'border-border'}`}
+                style={styles.textArea}
                 placeholder={t('createPlaylist.descriptionPlaceholder')}
                 placeholderTextColor={theme.colors.textSecondary}
                 value={description}
@@ -312,12 +299,12 @@ const CreatePlaylistScreen: React.FC = () => {
                       {option.label}
                     </Text>
                     <Text
-                      style={[
-                        styles.visibilityOptionDescription,
+                      className={
                         visibility === option.value
-                          ? { color: theme.colors.primaryForeground, opacity: 0.8 }
-                          : { color: theme.colors.textSecondary },
-                      ]}
+                          ? 'text-primary-foreground opacity-80'
+                          : 'text-muted-foreground'
+                      }
+                      style={styles.visibilityOptionDescription}
                     >
                       {option.description}
                     </Text>

@@ -130,11 +130,10 @@ const CopyrightReportScreen: React.FC = () => {
       >
         {/* Header */}
         <View
+          className="bg-surface border-b-border"
           style={[
             styles.header,
             {
-              backgroundColor: theme.colors.backgroundSecondary,
-              borderBottomColor: theme.colors.border,
               // Top safe-area is cleared by the shell's TopBar (single
               // authority); this in-panel header only needs base padding.
               paddingTop: 8,
@@ -181,14 +180,8 @@ const CopyrightReportScreen: React.FC = () => {
             </Text>
             <View style={styles.searchContainer}>
               <TextInput
-                style={[
-                  styles.searchInput,
-                  {
-                    backgroundColor: theme.colors.backgroundSecondary,
-                    color: theme.colors.text,
-                    borderColor: selectedTrack ? theme.colors.primary : theme.colors.border,
-                  },
-                ]}
+                className={`bg-surface text-foreground ${selectedTrack ? 'border-primary' : 'border-border'}`}
+                style={styles.searchInput}
                 placeholder={t('copyright.searchPlaceholder')}
                 placeholderTextColor={theme.colors.textSecondary}
                 value={searchQuery}
@@ -278,14 +271,8 @@ const CopyrightReportScreen: React.FC = () => {
               {t('copyright.reasonLabel')}
             </Text>
             <TextInput
-              style={[
-                styles.reasonInput,
-                {
-                  backgroundColor: theme.colors.backgroundSecondary,
-                  color: theme.colors.text,
-                  borderColor: theme.colors.border,
-                },
-              ]}
+              className="bg-surface text-foreground border-border"
+              style={styles.reasonInput}
               placeholder={t('copyright.reasonPlaceholder')}
               placeholderTextColor={theme.colors.textSecondary}
               value={reason}
