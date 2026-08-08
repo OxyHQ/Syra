@@ -619,3 +619,25 @@ every column's `column.name` equals its property key, so the day someone declare
 one explicitly the gate says *why* instead of blaming the field. Cheap, and it
 converts a silent dependency into a stated one. Fold into Task 8 or Task 18's
 follow-up, not its own task.
+
+### A second class carried in: an ORDER BY assertion whose fixture cannot fail it
+
+CrowdSource's Task 7 mutated `orderBy(asc(createdAt))` out of its outbox claim and
+the test stayed **green** — both fixture rows had been inserted oldest-first, so a
+sequential scan returned them in the order the assertion wanted. The fixture now
+inserts them **newest-first**, the only arrangement where physical order and
+chronological order disagree and the two implementations are distinguishable.
+
+This is AGENTS.md's "the fixtures are too tidy" rule pointed at ordering, and the
+sharp form is worth stating once: **an `ORDER BY` assertion is vacuous unless the
+fixture's insertion order differs from the asserted order.** The tidy version —
+insert in the order you expect to read — is what anybody writes by default, and it
+passes with the sort removed.
+
+Sampled on this branch and NOT found biting: the date-ordering candidates
+(`browse.controller.test.ts`, `services/catalog/artistProfile.test.ts`) each carry
+a single dated row, so there is no order to get wrong. A full sweep across ~1,873
+tests was not run — recorded as a class to check when touching an ordered read,
+not as a known defect. Postgres makes this worse than Mongo did in one specific
+way already recorded on this branch: **`desc()` is `NULLS FIRST`**, so a nullable
+sort key changes which row leads even when the sort is present.
