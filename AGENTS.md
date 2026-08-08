@@ -94,19 +94,33 @@ Mutation-test which guard is load-bearing: deleting the strip must fail the test
 deleting `select: false` will not. And never read a guard's presence from its
 comment — a guard can be removed while the comment asserting it survives.
 
-## A zod DTO field with no Mongoose path is silently discarded
+## A zod DTO field with no storage is invisible to `tsc`
 
-Mongoose strict mode drops a `$set` on an undeclared path with no throw and no
-warning. Because the zod schema is the source of the TypeScript type, the write
-still typechecks — so tsc is clean, the function returns success, the logs list
-the fields, and the database keeps none of them.
+Because the zod schema is the source of the TypeScript type, a DTO field can
+never disagree with itself — so nothing at compile time notices a field that is
+in the contract, returned to clients, asserted by a passing test, and stored
+nowhere. That was `catalog_entities.members`, which had a live reader.
 
-`src/models/zodPathsExistInMongoose.test.ts` is the standing gate: every zod DTO
-field must resolve to a real Mongoose path. When adding a field to a DTO, add the
-schema path in the same change.
+`src/db/__tests__/zodPathsExistInDrizzle.test.ts` is the standing gate: every
+zod DTO field must resolve to a drizzle column, a foreign key, a child table or
+an explicit registry entry. When adding a field to a DTO, add its storage in the
+same change.
 
-The detector that works at runtime is an **idempotency test** — a write that never
-lands is redone on the next pass, whereas asserting the return value reports
-success either way. Note `schema.path('links.wikidata')` does NOT resolve for a
-single-nested subdocument; the walk has to descend explicitly, and a check that
-misses this reports every nested field as missing.
+**Half of the original problem is gone and half is not.** Drizzle rejects an
+unknown column key at COMPILE time, where Mongoose strict mode dropped a `$set`
+on an undeclared path in silence — that direction no longer needs a runtime gate.
+The direction above still does, because nothing forces a DTO to be written
+through a table at all.
+
+Two traps the gate handles structurally, both worth knowing when reading it:
+
+- **Flattening.** The port turned subdocuments into column prefixes
+  (`links.wikidata` → `links_wikidata`, `cache.s3Key` → `cache_object_key`), and
+  replaced others with a foreign key (`imageSizes.small` → `image_sizes_small_id`
+  → `image_assets`). A naive one-to-one name match reports a correct schema as
+  broken. The rule that covers flattening, `jsonb` subdocuments and foreign keys
+  at once is **descend only into what does not already resolve**.
+- **`ZodArray.unwrap()` returns the ELEMENT type in zod 4.** An unwrap loop that
+  calls `.unwrap()` on anything that has it will walk into array items — the
+  Mongoose gate did exactly this, against its own comment saying it did not.
+  Unwrap optionality only, so an array stays one path.
