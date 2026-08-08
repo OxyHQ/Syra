@@ -57,7 +57,14 @@ interface WorkflowFile {
       'runs-on': string;
       env?: Record<string, string>;
       services?: Record<string, unknown>;
-      steps: { name?: string; if?: string; run?: string; uses?: string; with?: Record<string, string> }[];
+      steps: {
+        name?: string;
+        if?: string;
+        run?: string;
+        uses?: string;
+        with?: Record<string, string>;
+        env?: Record<string, string>;
+      }[];
     }
   >;
 }
@@ -200,5 +207,155 @@ describe('the deploy workflow can actually run its own gate', () => {
       step.uses?.startsWith('docker/setup-qemu-action@'),
     );
     expect(qemu, 'a native arm64 host does not need the QEMU emulator').toBeUndefined();
+  });
+});
+
+/**
+ * The SSM sync step names the secrets it copies, and that is what keeps deploys
+ * automated.
+ *
+ * A step that walks `${{ toJSON(secrets) }}` and pipes the lot into
+ * `aws ssm put-parameter` is structurally a secret-exfiltration payload, and
+ * GitHub's malicious-workflow detection treats it as one. That is the
+ * approval block recorded on `deploy`'s `runs-on` above: every run created as
+ * `action_required` with ZERO jobs until a human pressed "Approve and run".
+ * Measured across the org on 2026-08-08 — three repos with the pattern all held,
+ * two without it deployed unheld. Nothing in a normal CI run reports this,
+ * because the runs never start; it presents as an outage, not a workflow defect,
+ * and it already sent one investigation after the runner label instead.
+ *
+ * The assertions are deliberately paired. Checking only for the absence of
+ * `toJSON(secrets)` would pass on a step that synced nothing at all, and checking
+ * only that the names are present would pass on a step that ALSO enumerated
+ * everything. And the two spellings of the allowlist — the `env:` bindings and
+ * the shell word lists — are cross-checked against each other rather than each
+ * against a literal, because the drift that actually happens is adding one and
+ * forgetting the other: a name in `env:` but not in the loop is never synced,
+ * and a name in the loop but not in `env:` reads as empty and is skipped with a
+ * warning nobody sees until the deploy that needed it.
+ */
+describe('the deploy workflow syncs an explicit allowlist, never the whole context', () => {
+  /**
+   * Every parameter the LIVE task definition (oxy-syra:8) reads as a `secret`,
+   * plus DATABASE_URL — which that revision does NOT carry, and which the deploy
+   * step injects into every revision it registers. Minus LIVEKIT_API_KEY /
+   * LIVEKIT_API_SECRET: those live under /oxy/_shared/, this repo holds neither,
+   * and OxyHQServices is what writes them.
+   */
+  const EXPECTED_ALLOWLIST = [
+    'ACOUSTID_API_KEY',
+    'AWS_ACCESS_KEY_ID',
+    'AWS_SECRET_ACCESS_KEY',
+    'DATABASE_URL',
+    'JWT_SECRET',
+    'MONGODB_URI',
+    'REDIS_URL',
+    'STREAM_TOKEN_SECRET',
+  ];
+
+  const syncStep = workflow.jobs.deploy.steps.find((step) =>
+    step.name?.startsWith('Sync GitHub secrets'),
+  );
+
+  const boundNames = (): string[] =>
+    Object.keys(syncStep?.env ?? {})
+      .map((key) => key.replace(/^SYNC_/, ''))
+      .sort();
+
+  /** The words of a `NAME="a b c"` assignment in the step's shell body. */
+  const shellList = (variable: string): string[] => {
+    const match = new RegExp(`^\\s*${variable}="([^"]*)"`, 'm').exec(syncStep?.run ?? '');
+    expect(match, `the step no longer assigns ${variable}`).not.toBeNull();
+    return (match?.[1] ?? '').split(/\s+/).filter(Boolean);
+  };
+
+  it('has a sync step at all', () => {
+    // Vacuity floor for every assertion below: they all read this step, and an
+    // `undefined` step would make the `?.` chains silently trivially true.
+    expect(syncStep, 'the secret sync step is gone').toBeDefined();
+    expect(syncStep?.env, 'the sync step binds no secrets').toBeDefined();
+    expect(EXPECTED_ALLOWLIST.length).toBeGreaterThan(4);
+  });
+
+  it('never enumerates the whole secrets context', () => {
+    // Matched as an EXPRESSION, not as text: the step's own comment explains the
+    // block by name, so a bare substring check would fail on the explanation
+    // rather than on the payload.
+    expect(workflowSource).not.toMatch(/\$\{\{[^}]*toJSON\s*\(\s*secrets\s*\)/);
+  });
+
+  it('binds each allowlisted secret under a SYNC_ prefix, and nothing else', () => {
+    // The prefix is not cosmetic, and this repo is where it bites:
+    // AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY are real secrets here, and
+    // `aws-actions/configure-aws-credentials` exports those same two names into
+    // the job environment. Bound raw, they shadow the assumed OIDC role and fail
+    // the step with UnrecognizedClientException.
+    const env = syncStep?.env ?? {};
+    for (const [key, value] of Object.entries(env)) {
+      expect(key).toMatch(/^SYNC_/);
+      expect(value).toBe(`\${{ secrets.${key.replace(/^SYNC_/, '')} }}`);
+    }
+    expect(boundNames()).toEqual([...EXPECTED_ALLOWLIST].sort());
+  });
+
+  it('iterates exactly the secrets it binds', () => {
+    const iterated = [...shellList('SHARED_SECRETS'), ...shellList('APP_SECRETS')].sort();
+    expect(iterated).toEqual(boundNames());
+    expect(iterated).toEqual([...EXPECTED_ALLOWLIST].sort());
+  });
+
+  it('syncs every /oxy/syra/ parameter the deploy step injects into a revision', () => {
+    // The load-bearing one, and the reason it is derived rather than pinned:
+    // TASK_SECRET_OVERRIDES_JSON names parameters that every registered revision
+    // reads, and a revision naming a parameter that does not exist does not fail
+    // the deploy — it fails at TASK LAUNCH, with
+    // `ResourceInitializationError: unable to pull secrets or registry auth`.
+    // This step is the only thing that creates them, so the two lists cannot be
+    // allowed to drift apart. Adding an override without adding it here is
+    // exactly the mistake this catches.
+    const deployStep = workflow.jobs.deploy.steps.find((step) =>
+      step.name?.startsWith('Register immutable task definition'),
+    );
+    expect(deployStep, 'the deploy step is gone').toBeDefined();
+    const overrides = JSON.parse(deployStep?.env?.TASK_SECRET_OVERRIDES_JSON ?? '{}') as Record<
+      string,
+      string
+    >;
+    const injected = Object.keys(overrides);
+    expect(injected.length, 'no overrides parsed — the assertion would be vacuous').toBeGreaterThan(
+      0,
+    );
+    for (const name of injected) {
+      expect(overrides[name]).toContain(`parameter/oxy/syra/${name}`);
+      expect(boundNames(), `${name} is injected but never synced to SSM`).toContain(name);
+      expect(shellList('APP_SECRETS')).toContain(name);
+    }
+  });
+
+  it('keeps the shared secrets on the shared path and the app secrets on the app path', () => {
+    // One field decides which SSM namespace a value lands in. A shared secret
+    // written to /oxy/syra/ is invisible to the task definition, which reads it
+    // from /oxy/_shared/ — so the sync reports success and changes nothing the
+    // container sees.
+    expect(shellList('SHARED_SECRETS')).toEqual([
+      'AWS_ACCESS_KEY_ID',
+      'AWS_SECRET_ACCESS_KEY',
+      'REDIS_URL',
+    ]);
+    for (const shared of shellList('SHARED_SECRETS')) {
+      expect(shellList('APP_SECRETS')).not.toContain(shared);
+    }
+    expect(syncStep?.run).toContain('path="/oxy/_shared/$k"');
+    expect(syncStep?.run).toContain('path="/oxy/$APP/$k"');
+  });
+
+  it('still refuses placeholders and a non-us-west-2 REDIS_URL', () => {
+    // Both guards predate the allowlist and protect production from a secret
+    // that was never really set: skipping leaves the previous SSM value alone,
+    // where syncing would overwrite it with an empty string or a dash.
+    expect(syncStep?.run).toContain('[ "$v" = "-" ]');
+    // The escaped spelling, because the guard is a `grep` regex — asserting the
+    // bare hostname passes on a workflow whose dots are unescaped wildcards.
+    expect(syncStep?.run).toContain(String.raw`'\.usw2\.cache\.amazonaws\.com'`);
   });
 });

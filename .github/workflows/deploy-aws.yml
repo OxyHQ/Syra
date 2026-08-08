@@ -168,14 +168,69 @@ jobs:
           role-to-assume: arn:aws:iam::237343248947:role/oxy-github-deploy
           aws-region: ${{ env.AWS_REGION }}
 
+      # An EXPLICIT allowlist — never `toJSON(secrets)`.
+      #
+      # This step used to enumerate every secret the repo can see and pipe the
+      # lot through `jq` into `aws ssm put-parameter`. That shape is
+      # indistinguishable from a secret-exfiltration payload, and it is what
+      # GitHub's malicious-workflow detection was matching — the block recorded
+      # on `deploy`'s `runs-on` below, where every run was created as
+      # `action_required` with ZERO jobs until a human pressed "Approve and run".
+      # Measured across the org on 2026-08-08: the three repos whose deploy
+      # workflow contained `toJSON(secrets)` (Syra, Mercaria, Homiio) were all
+      # held, and the two without it (Mention, OxyHQServices) deployed unheld.
+      # The gate re-fires whenever the workflow file changes, which is what made
+      # it look like a runner-label problem in the first place.
+      #
+      # So the allowlist is not tidiness: it is the property that keeps
+      # automated deploys running at all. `src/db/__tests__/deployWorkflow.test.ts`
+      # fails if `toJSON(secrets)` comes back.
+      #
+      # The SYNC_ prefix is load-bearing for a second, unrelated reason, and this
+      # repo is where it actually bites: AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
+      # are real secrets here, and the OIDC step above exports those same two
+      # names into the job environment. Binding them under their raw names would
+      # shadow the assumed role and fail this step with
+      # UnrecognizedClientException. The old loop never bound a secret to an env
+      # var at all — values moved through `jq` into the loop variables — which is
+      # how it sidestepped that; an allowlist has to avoid it deliberately. Same
+      # reason oxy-api's sync step carries the prefix.
       - name: Sync GitHub secrets -> SSM (GitHub is the source of truth)
         env:
-          SECRETS_JSON: ${{ toJSON(secrets) }}
+          SYNC_ACOUSTID_API_KEY: ${{ secrets.ACOUSTID_API_KEY }}
+          SYNC_AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          SYNC_AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          SYNC_DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SYNC_JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          SYNC_MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          SYNC_REDIS_URL: ${{ secrets.REDIS_URL }}
+          SYNC_STREAM_TOKEN_SECRET: ${{ secrets.STREAM_TOKEN_SECRET }}
         run: |
-          SHARED="AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY REDIS_URL LIVEKIT_API_KEY LIVEKIT_API_SECRET"
-          echo "$SECRETS_JSON" | jq -r 'to_entries[] | select((.key|ascii_upcase) as $k | ($k=="GITHUB_TOKEN" or ($k|startswith("ACTIONS_")))|not) | [.key,.value]|@tsv' | \
-          while IFS=$'\t' read -r k v; do
-            [ -z "$k" ] && continue
+          # Derived from the LIVE task definition (oxy-syra:8, the revision
+          # service `syra` runs), not from a plan: these are the parameters the
+          # container actually reads as `secrets`.
+          SHARED_SECRETS="AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY REDIS_URL"
+          # DATABASE_URL is NOT in that task definition yet, and must be here
+          # anyway: the deploy step below names
+          # /oxy/syra/DATABASE_URL in TASK_SECRET_OVERRIDES_JSON, so every
+          # revision this workflow registers reads it — and a task launched from
+          # a revision naming a parameter that does not exist dies with
+          # `ResourceInitializationError: unable to pull secrets or registry
+          # auth`. This step is what puts it there, on the same run, before that
+          # step. Dropping it from this list breaks the Mongo->Postgres cutover.
+          APP_SECRETS="ACOUSTID_API_KEY DATABASE_URL JWT_SECRET MONGODB_URI STREAM_TOKEN_SECRET"
+
+          # LIVEKIT_API_KEY and LIVEKIT_API_SECRET are deliberately absent,
+          # though oxy-syra:8 reads both from /oxy/_shared/. Syra CONSUMES those
+          # two; it does not own them — OxyHQServices holds them as secrets and
+          # is what writes them. This repo holds neither, so leaving them out
+          # stops nothing that was being synced, and a value added here later
+          # would otherwise overwrite the shared credential oxy-api reads.
+          for k in $SHARED_SECRETS $APP_SECRETS; do
+            v=$(printenv "SYNC_$k" || true)
+            # A secret left empty, or set to a single dash, is a mistake — not an
+            # instruction to overwrite production with garbage. Skipping the sync
+            # preserves whatever SSM already holds.
             if [ -z "$v" ] || [ "$v" = "-" ]; then
               echo "::warning::skip empty/placeholder secret $k; SSM unchanged"
               continue
@@ -184,7 +239,7 @@ jobs:
               echo "::warning::skip REDIS_URL because it does not point at the us-west-2 Valkey endpoint; SSM unchanged"
               continue
             fi
-            case " $SHARED " in *" $k "*) path="/oxy/_shared/$k";; *) path="/oxy/$APP/$k";; esac
+            case " $SHARED_SECRETS " in *" $k "*) path="/oxy/_shared/$k";; *) path="/oxy/$APP/$k";; esac
             aws ssm put-parameter --name "$path" --value "$v" --type SecureString --overwrite >/dev/null && echo "synced -> $path"
           done
 
@@ -304,9 +359,14 @@ jobs:
           # revision naming it, or the task dies with
           # `ResourceInitializationError: unable to pull secrets or registry
           # auth`. The sync step above writes it from the GitHub repo secret on
-          # this same run, before this step — Syra's sync loop enumerates
-          # nothing, it walks `toJSON(secrets)`, so a new repo secret needs no
-          # workflow edit to reach SSM. There is no allowlist to forget here.
+          # this same run, before this step — but ONLY because DATABASE_URL is on
+          # that step's allowlist. It is an allowlist you CAN forget: adding a
+          # repo secret no longer reaches SSM by itself, and adding one here
+          # without adding it there registers a revision naming a parameter that
+          # does not exist, which fails at task launch rather than at deploy.
+          # The sync step used to walk `toJSON(secrets)` instead, which needed no
+          # workflow edit — and which is exactly what got every run of this
+          # workflow held for approval. See the note on that step.
           TASK_SECRET_OVERRIDES_JSON: '{"DATABASE_URL":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/DATABASE_URL"}'
 
           # PRE_DEPLOY_TASK_COMMAND_JSON / POST_DEPLOY_TASK_COMMAND_JSON are NOT
