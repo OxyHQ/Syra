@@ -9,6 +9,18 @@ on:
       - '**.md'
       - 'docs/**'
   workflow_dispatch:
+    inputs:
+      migration_phase:
+        description: >-
+          How to apply migrations. `pre-post` (default) applies the additive ones
+          before the rollout and the deferred ones after. `all` applies the whole
+          journal in ONE run before the rollout — what the genesis cutover needs,
+          and wrong for anything else. See the migration steps below.
+        type: choice
+        default: pre-post
+        options:
+          - pre-post
+          - all
 
 permissions:
   id-token: write
@@ -31,7 +43,48 @@ env:
 
 jobs:
   test:
-    runs-on: ubuntu-24.04-arm
+    # x86, matching `quality.yml`'s job rather than the `deploy` job below. This
+    # job now runs the SAME Postgres service container quality.yml runs, and the
+    # two are compared field-by-field by
+    # `src/db/__tests__/deployWorkflow.test.ts`; running them on the same
+    # architecture is part of keeping that comparison meaningful. Nothing here is
+    # architecture-sensitive anyway — it typechecks, migrates and runs test
+    # suites. Only `deploy` needs ARM, to build the arm64 image natively.
+    #
+    # NOT a workaround for the runner-label outage story: that theory was tested
+    # and is FALSE. See the note on `deploy`'s `runs-on` before changing either.
+    runs-on: ubuntu-latest
+
+    # `postgres:17`, not a PostGIS image — the same image `quality.yml` and
+    # `docker-compose.postgres.yml` pin, on the same version. `src/db/extensions.ts`
+    # keeps `REQUIRED_EXTENSIONS` deliberately EMPTY: Syra has no `2dsphere` index
+    # and no geospatial query to port. Keep this bare, and keep all three in
+    # agreement — a schema task that starts needing an extension adds it to
+    # `REQUIRED_EXTENSIONS` first, and only then to every image that serves a
+    # database this suite runs against.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: syra
+          POSTGRES_PASSWORD: syra
+          POSTGRES_DB: syra_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U syra -d syra_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    # The backend suite is Postgres-backed: 92 of its files reach
+    # `src/test/postgres.ts`, whose `beforeAll` throws
+    # `TEST_DATABASE_URL (or DATABASE_URL) must point at a migrated Postgres.`
+    # when this is unset. Without it every deploy fails in its first job, on a
+    # missing environment variable rather than a bad assertion.
+    env:
+      TEST_DATABASE_URL: postgres://syra:syra@127.0.0.1:5432/syra_ci
+
     steps:
       - uses: actions/checkout@v7
 
@@ -60,6 +113,20 @@ jobs:
       # Ubuntu; the runtime image uses Alpine's `chromaprint` for the same binary.
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg libchromaprint-tools
 
+      # The suite runs against a MIGRATED database — `src/test/postgres.ts` opens
+      # the schema, it does not create it. `DATABASE_URL` here, not
+      # `TEST_DATABASE_URL`: the migrator always reads the former, the same
+      # variable it reads in every other environment, while the latter is only
+      # the name the suite falls back to. `--phase=all` because CI's database is
+      # empty every run, with no live image to protect — the same call
+      # `quality.yml` makes, deliberately identical so the two cannot disagree
+      # about what the suite is tested against.
+      - name: Migrate Postgres (CI service)
+        working-directory: packages/backend
+        run: bun run db:migrate --phase=all --target-database=syra_ci
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+
       - run: cd packages/backend && bun run test
 
       - run: cd packages/frontend && bunx jest --ci
@@ -74,6 +141,23 @@ jobs:
     # workflow_dispatch can be run against arbitrary refs; only deploys from the
     # protected main branch may assume the AWS deploy role.
     if: github.ref == 'refs/heads/main'
+    # ARM, so buildx builds the linux/arm64 image NATIVELY. Do not "fix" this by
+    # moving to x86 + `docker/setup-qemu-action`: emulated arm64 builds are far
+    # slower, and the outage that change was meant to answer had a different
+    # cause entirely.
+    #
+    # THE STORY THAT SAYS OTHERWISE IS WRONG, and it is written down here so it
+    # is not re-derived. Through 2026-08-08 every run of this workflow completed
+    # as `action_required` with ZERO jobs, which was attributed to this
+    # partner-runner label. It is not the label. GitHub's run page states the
+    # actual reason: "GitHub detected that this workflow file may be malicious.
+    # It will not run until someone with write access approves it." Two
+    # measurements settle it — a dispatch of THIS workflow with both jobs on
+    # `ubuntu-latest` was blocked identically (run 31278743099, zero jobs), and
+    # Mercaria's first green deploy (run 31275312983) was created at 19:47:43Z,
+    # started at 20:05:05Z once approved, and ran its deploy job on THIS LABEL,
+    # three minutes before the commit that moved it to QEMU. The label works; the
+    # run needs a human to approve it.
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v7
@@ -145,6 +229,57 @@ jobs:
           echo "digest=$DIGEST" >>"$GITHUB_OUTPUT"
           echo "Built $COMMIT_TAG -> $DIGEST"
 
+      # ── Which migrations bracket this rollout ────────────────────────────────
+      #
+      # Exactly one of the next two steps runs — their conditions are
+      # complements of the same expression — and each writes the pair of one-shot
+      # commands `deploy-ecs-image.sh` consumes into $GITHUB_ENV. That is what
+      # makes `all` and `post` mutually exclusive: not a convention, but the fact
+      # that no run can execute both selectors, so no run can produce both
+      # commands. `src/db/__tests__/deployWorkflow.test.ts` reads this file and
+      # fails if the conditions stop being complements.
+      #
+      # `node`, not `bun`: the runtime stage of packages/backend/Dockerfile is
+      # node:22-alpine and never copies bun in.
+      # `dist/src/db/migrate.js`: tsconfig sets `rootDir: "./"`, so `src/` is
+      # preserved inside `dist/`.
+      # `--target-database=syra`: the migrator refuses to run without it, because
+      # a migration aimed at the wrong database does not fail — it reports
+      # success over an untouched one.
+
+      # THE CUTOVER, chosen by hand from workflow_dispatch, and never the
+      # default. THE FIRST PRODUCTION DEPLOY CANNOT USE `--phase=pre`. Measured
+      # against the journal as it stands: `pre` and `post` both BLOCK, because
+      # migration 0003 (`pre`) sits behind 0001 (`post`) and the ledger cannot
+      # express a hole. That is the genesis window — those migrations only ever
+      # ran against an empty database with no live predecessor to protect — and
+      # `--phase=all` is the correct and only sanctioned way to apply it. See
+      # src/db/migrate.ts, "THE GENESIS BOOTSTRAP WINDOW".
+      #
+      # The post-deploy command is deliberately EMPTY, which is how
+      # deploy-ecs-image.sh is told to skip that task: the `all` run above it has
+      # already applied everything, so a `post` task could only find nothing
+      # pending and add a way for a green cutover to end on a red step.
+      - name: Select migrations (cutover — the whole journal, before the rollout)
+        if: github.event.inputs.migration_phase == 'all'
+        run: |
+          {
+            echo 'PRE_DEPLOY_TASK_COMMAND_JSON=["node","packages/backend/dist/src/db/migrate.js","--phase=all","--target-database=syra"]'
+            echo 'POST_DEPLOY_TASK_COMMAND_JSON='
+          } >>"$GITHUB_ENV"
+
+      # Every ordinary release. `pre` runs while the PREVIOUS image is still
+      # serving and applies only additive migrations; `post` runs once the new
+      # image is live and applies what `pre` deferred. src/db/migrate.ts explains
+      # the marker each migration carries and why there is no default phase.
+      - name: Select migrations (default — additive before, deferred after)
+        if: github.event.inputs.migration_phase != 'all'
+        run: |
+          {
+            echo 'PRE_DEPLOY_TASK_COMMAND_JSON=["node","packages/backend/dist/src/db/migrate.js","--phase=pre","--target-database=syra"]'
+            echo 'POST_DEPLOY_TASK_COMMAND_JSON=["node","packages/backend/dist/src/db/migrate.js","--phase=post","--target-database=syra"]'
+          } >>"$GITHUB_ENV"
+
       - name: Register immutable task definition and deploy
         env:
           IMAGE_URI: ${{ env.ECR_REGISTRY }}/oxy/${{ env.APP }}@${{ steps.build.outputs.digest }}
@@ -161,9 +296,9 @@ jobs:
           # of the service. Same mechanism Mention uses for its own
           # deploy-injected secrets.
           #
-          # It is also what gives the two one-shot migration tasks below their
-          # connection string: both run as container overrides on the revision
-          # this deploy registers, so they see exactly these secrets.
+          # It is also what gives the one-shot migration tasks this step runs
+          # their connection string: each runs as a container override on the
+          # revision this deploy registers, so they see exactly these secrets.
           #
           # The parameter must EXIST before the first task launches from a
           # revision naming it, or the task dies with
@@ -174,32 +309,10 @@ jobs:
           # workflow edit to reach SSM. There is no allowlist to forget here.
           TASK_SECRET_OVERRIDES_JSON: '{"DATABASE_URL":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/DATABASE_URL"}'
 
-          # The migrations, bracketing the rollout. `pre` runs while the
-          # PREVIOUS image is still serving and applies only additive
-          # migrations; `post` runs once the new image is live and applies what
-          # `pre` deferred. src/db/migrate.ts explains the marker each migration
-          # carries and why there is no default phase.
-          #
-          # `node`, not `bun`: the runtime stage of packages/backend/Dockerfile
-          # is node:22-alpine and never copies bun in.
-          # `dist/src/db/migrate.js`: tsconfig sets `rootDir: "./"`, so `src/`
-          # is preserved inside `dist/`.
-          # `--target-database=syra`: the migrator refuses to run without it,
-          # because a migration aimed at the wrong database does not fail — it
-          # reports success over an untouched one.
-          #
-          # THE FIRST PRODUCTION DEPLOY CANNOT USE `--phase=pre`. Measured
-          # against the journal as it stands: `pre` and `post` both BLOCK,
-          # because migration 0003 (`pre`) sits behind 0001 (`post`) and the
-          # ledger cannot express a hole. That is the genesis window — those
-          # migrations only ever ran against an empty database with no live
-          # predecessor to protect — and `--phase=all` is the correct and only
-          # sanctioned way to apply it. So the cutover deploy is dispatched
-          # manually with `migration_phase: all`; every deploy after it takes
-          # the default and finds nothing pending. See src/db/migrate.ts,
-          # "THE GENESIS BOOTSTRAP WINDOW".
-          PRE_DEPLOY_TASK_COMMAND_JSON: '["node","packages/backend/dist/src/db/migrate.js","--phase=pre","--target-database=syra"]'
-          POST_DEPLOY_TASK_COMMAND_JSON: '["node","packages/backend/dist/src/db/migrate.js","--phase=post","--target-database=syra"]'
+          # PRE_DEPLOY_TASK_COMMAND_JSON / POST_DEPLOY_TASK_COMMAND_JSON are NOT
+          # set here: whichever selector step above ran put them in $GITHUB_ENV,
+          # so the pair this step sees is the one the chosen `migration_phase`
+          # produced. The script reads an empty POST value as "no post task".
         run: |
           STATUS=$(aws ecs describe-services --cluster "$CLUSTER" --services "$APP" --query 'services[0].status' --output text 2>/dev/null || echo NONE)
           if [ "$STATUS" != "ACTIVE" ]; then
