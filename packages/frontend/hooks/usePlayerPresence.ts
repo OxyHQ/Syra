@@ -61,7 +61,7 @@ export function usePlayerPresence(): void {
         clearInterval(heartbeat);
         heartbeat = null;
       }
-      playerSocketService.disconnect();
+      playerSocketService.releaseFromEffect();
     };
   }, [canUsePrivateApi, userId]);
 }

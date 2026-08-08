@@ -245,6 +245,26 @@ class PlayerSocketService {
   }
 
   /**
+   * Release the socket from an effect cleanup, leaving an in-flight attempt alone.
+   *
+   * `connect()` already refuses to disturb a handshaking socket — see its comment,
+   * which names the browser's exact complaint. But that guard runs on the CONNECT
+   * side, and React orders a dependency change as cleanup-then-effect: by the time
+   * `connect()` looks, an unconditional `disconnect()` has already killed the
+   * in-flight attempt, and the browser reports "WebSocket is closed before the
+   * connection is established" all the same.
+   *
+   * `usePlayerPresence` is keyed on `canUsePrivateApi` and `userId`, both of which
+   * settle during Oxy's cold boot, so a benign re-run mid-handshake is ordinary
+   * rather than exceptional. Switching users is handled where it belongs —
+   * `connect()` tears down the previous session itself when the id differs.
+   */
+  releaseFromEffect() {
+    if (this.socket?.active && !this.socket.connected) return;
+    this.disconnect();
+  }
+
+  /**
    * Disconnect from socket
    */
   disconnect() {
