@@ -1,6 +1,7 @@
 import { createClient, RedisClientType, RedisClientOptions } from 'redis';
 import { logger } from './logger';
 import { getErrorMessage } from './error';
+import { describeErrorSafely } from './error';
 
 /**
  * Shared Redis configuration options
@@ -337,7 +338,7 @@ export async function isRedisConnected(): Promise<boolean> {
     const connectionInfo = config.redisUrl 
       ? `URL: ${config.redisUrl.replace(/:[^:@]+@/, ':****@')}`
       : `Host: ${config.redisHost}, Port: ${config.redisPort}`;
-    logger.debug(`Redis health check failed (${connectionInfo}):`, error);
+    logger.debug(`Redis health check failed (${connectionInfo}):`, { error: describeErrorSafely(error) });
     return false;
   }
 }
@@ -505,7 +506,7 @@ export function createRedisPubSub(): { publisher: RedisClientType; subscriber: R
       
       // Only log unexpected errors (not connection-related)
       if (!isConnectionError) {
-        logger.error('Redis pub/sub error:', err);
+        logger.error('Redis pub/sub error:', { err: describeErrorSafely(err) });
       } else {
         // Throttle connection error logging (only log once per 10 seconds per client)
         if (now - lastConnectionErrorTime > CONNECTION_ERROR_THROTTLE_MS) {

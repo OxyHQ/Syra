@@ -34,6 +34,7 @@ import { mintStreamToken } from '../services/stream/streamToken';
 import { buildMasterPlaylistFor, buildVariantPlaylistFor } from '../services/stream/manifestService';
 import { maybeCacheEpisode } from '../services/podcasts/podcastCache';
 import { logger } from '../utils/logger';
+import { describeErrorSafely } from '../utils/error';
 
 const CONTENT_TYPE_OCTET_STREAM = 'application/octet-stream';
 const CONTENT_TYPE_HLS_PLAYLIST = 'application/vnd.apple.mpegurl';
@@ -158,7 +159,7 @@ async function proxyOrigin(req: AuthRequest, res: Response, episode: EpisodeRow)
       res.status(403).json({ error: 'Blocked enclosure host' });
       return;
     }
-    logger.warn('[podcasts] audio proxy upstream failed', { episodeId: episode.id, err });
+    logger.warn('[podcasts] audio proxy upstream failed', { episodeId: episode.id, err: describeErrorSafely(err) });
     res.status(502).json({ error: 'Upstream audio unavailable' });
     return;
   }

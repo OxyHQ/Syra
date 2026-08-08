@@ -27,6 +27,7 @@ import {
 import { logger } from '../../utils/logger';
 import { searchPodcasts as directorySearch, type PodcastDirectoryCandidate } from './PodcastDirectory';
 import { importFeed } from './podcastImportService';
+import { describeErrorSafely } from '../../utils/error';
 
 /** Minimum gap between directory syncs for the same normalized query (10 min). */
 const SEARCH_IMPORT_TTL_MS = 10 * 60 * 1000;
@@ -151,7 +152,7 @@ export async function shallowUpsertCandidates(candidates: PodcastDirectoryCandid
    * logging rather than inside the data layer.
    */
   await shallowUpsertPodcasts(rows, (feedUrl, err) =>
-    logger.warn('[podcast-import] shallow upsert failed for one candidate', { feedUrl, err })
+    logger.warn('[podcast-import] shallow upsert failed for one candidate', { feedUrl, err: describeErrorSafely(err) })
   );
 }
 
@@ -175,7 +176,7 @@ export function enqueuePodcastImport(feedUrl: string, directory?: PodcastDirecto
       try {
         await importFeed(feedUrl, directory ? { directory } : {});
       } catch (err) {
-        logger.warn('[podcast-import] deep feed import failed', { feedUrl, err });
+        logger.warn('[podcast-import] deep feed import failed', { feedUrl, err: describeErrorSafely(err) });
       } finally {
         queuedFeeds.delete(key);
       }
@@ -252,7 +253,7 @@ export async function syncPodcastSearch(
       MAX_FEEDS_PER_SEARCH,
     );
   } catch (err) {
-    logger.warn('[podcast-import] directory search failed', { query: key, err });
+    logger.warn('[podcast-import] directory search failed', { query: key, err: describeErrorSafely(err) });
     return { ...empty, skipped: false };
   }
 
@@ -263,7 +264,7 @@ export async function syncPodcastSearch(
   try {
     deepEnqueued = await enqueueDeepImports(candidates, enqueue, now);
   } catch (err) {
-    logger.warn('[podcast-import] deep-import scheduling failed', { query: key, err });
+    logger.warn('[podcast-import] deep-import scheduling failed', { query: key, err: describeErrorSafely(err) });
   }
 
   logger.info('[podcast-import] search sync', { query: key, candidates: candidates.length, deepEnqueued });

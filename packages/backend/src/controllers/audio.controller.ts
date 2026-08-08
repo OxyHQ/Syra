@@ -12,6 +12,7 @@ import {
   sendErrorResponse,
 } from './audio.controller.helpers';
 import { getParam } from '../utils/reqParams';
+import { describeErrorSafely } from '../utils/error';
 
 /**
  * Parse Range header (e.g., "bytes=0-1023" or "bytes=1024-")
@@ -43,7 +44,7 @@ function parseRange(rangeHeader: string, fileSize: number): { start: number; end
  */
 function setupStreamErrorHandler(stream: NodeJS.ReadableStream, res: Response): void {
   stream.on('error', (error) => {
-    logger.error('[AudioController] Stream error:', error);
+    logger.error('[AudioController] Stream error:', { error: describeErrorSafely(error) });
     if (!res.headersSent) {
       res.status(500).json({ error: 'Stream error' });
     }
@@ -135,7 +136,7 @@ export const streamAudio = async (req: Request, res: Response, next: NextFunctio
       setupStreamErrorHandler(stream, res);
     }
   } catch (error) {
-    logger.error('[AudioController] Error streaming audio:', error);
+    logger.error('[AudioController] Error streaming audio:', { error: describeErrorSafely(error) });
     if (!res.headersSent) {
       next(error);
     }
@@ -178,7 +179,7 @@ export const getAudioInfo = async (req: Request, res: Response, next: NextFuncti
       etag: metadata.etag,
     });
   } catch (error) {
-    logger.error('[AudioController] Error getting audio info:', error);
+    logger.error('[AudioController] Error getting audio info:', { error: describeErrorSafely(error) });
     next(error);
   }
 };
@@ -221,7 +222,7 @@ export const getAudioUrl = async (req: Request, res: Response, next: NextFunctio
       expiresIn: 3600, // 1 hour in seconds
     });
   } catch (error) {
-    logger.error('[AudioController] Error getting audio URL:', error);
+    logger.error('[AudioController] Error getting audio URL:', { error: describeErrorSafely(error) });
     next(error);
   }
 };

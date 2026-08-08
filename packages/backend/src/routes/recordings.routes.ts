@@ -156,7 +156,7 @@ router.delete('/:recordingId', async (req: AuthRequest, res: Response) => {
     try {
       await deleteRecordingFromSpaces(recording.objectKey);
     } catch (err) {
-      logger.warn(`Failed to delete recording file from Spaces (may already be gone):`, err);
+      logger.warn(`Failed to delete recording file from Spaces (may already be gone):`, { err: describeErrorSafely(err) });
     }
 
     await updateRecording(recording.id, { status: RecordingStatus.DELETED });

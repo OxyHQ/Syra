@@ -74,6 +74,7 @@ import { generatePodcastRss } from '../services/podcasts/podcastRssGenerator';
 import { getS3PodcastEpisodeAudioKey } from '../config/s3.config';
 import { uploadToS3 } from '../services/s3Service';
 import { oxy } from '../oxyClient';
+import { describeErrorSafely } from '../utils/error';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -189,7 +190,7 @@ export async function searchPodcasts(req: AuthRequest, res: Response): Promise<v
 
     res.json({ data: await toPodcastDtos(page), hasMore, limit, offset });
   } catch (err) {
-    logger.error('[podcasts] search failed', { q, err });
+    logger.error('[podcasts] search failed', { q, err: describeErrorSafely(err) });
     if (!res.headersSent) res.status(500).json({ error: 'Search failed' });
   }
 }
@@ -226,7 +227,7 @@ export async function importPodcast(req: AuthRequest, res: Response): Promise<vo
       importedEpisodes: result.importedEpisodes,
     });
   } catch (err) {
-    logger.warn('[podcasts] manual import failed', { feedUrl: parsed.data.feedUrl, err });
+    logger.warn('[podcasts] manual import failed', { feedUrl: parsed.data.feedUrl, err: describeErrorSafely(err) });
     res.status(502).json({ error: 'Failed to import feed' });
   }
 }
@@ -637,7 +638,7 @@ export async function uploadEpisode(req: AuthRequest, res: Response): Promise<vo
       const [dto] = await toEpisodeDtos([episode], artwork);
       res.status(201).json({ data: dto });
     } catch (err) {
-      logger.error('[podcasts] episode upload failed', { err });
+      logger.error('[podcasts] episode upload failed', { err: describeErrorSafely(err) });
       if (!res.headersSent) res.status(500).json({ error: 'Failed to upload episode' });
     }
   });

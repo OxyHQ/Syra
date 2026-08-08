@@ -15,6 +15,7 @@ import { findEpisodeById, setEpisodeCache } from '../../db/podcasts/episodes';
 import { getS3PodcastEpisodeCacheKey } from '../../config/s3.config';
 import { uploadToS3 } from '../s3Service';
 import { logger } from '../../utils/logger';
+import { describeErrorSafely } from '../../utils/error';
 
 /** Hard cap on a cached episode body (on-demand copy buffers in memory). */
 export const MAX_CACHE_BYTES = 250 * 1024 * 1024; // 250 MB
@@ -126,6 +127,6 @@ export function maybeCacheEpisode(episode: {
   if (!popular && !played) return;
 
   cacheEpisode(episode.id).catch((err) =>
-    logger.debug('[podcasts] background cache failed', { episodeId: episode.id, err }),
+    logger.debug('[podcasts] background cache failed', { episodeId: episode.id, err: describeErrorSafely(err) }),
   );
 }

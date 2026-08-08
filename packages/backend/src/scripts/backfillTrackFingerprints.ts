@@ -43,6 +43,7 @@ import { trackFingerprints, tracks } from '../db/schema/catalog';
 import { logger } from '../utils/logger';
 import { streamTrackAudio } from '../services/audioStorageService';
 import { fingerprintFile } from '../services/uploads/fingerprint';
+import { describeErrorSafely } from '../utils/error';
 
 dotenv.config();
 
@@ -223,7 +224,7 @@ async function fingerprintOne(
       );
     } else {
       // Staging or `fpcalc`: no statement, and the message IS the diagnosis.
-      logger.warn(`[backfill-fingerprints] could not read audio for ${track.id}`, { err });
+      logger.warn(`[backfill-fingerprints] could not read audio for ${track.id}`, { err: describeErrorSafely(err) });
     }
   } finally {
     await fs.promises.rm(stagedPath, { force: true }).catch(() => undefined);
@@ -361,7 +362,7 @@ if (require.main === module) {
     .then(() => closePostgres())
     .then(() => process.exit(0))
     .catch((err) => {
-      logger.error('[backfill-fingerprints] fatal', { err });
+      logger.error('[backfill-fingerprints] fatal', { err: describeErrorSafely(err) });
       closePostgres().finally(() => process.exit(1));
     });
 }

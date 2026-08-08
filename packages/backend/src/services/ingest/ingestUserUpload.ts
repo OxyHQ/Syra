@@ -38,6 +38,7 @@ import { probeAudio } from './probeAudio';
 import type { ProbedAudio } from './probeAudio';
 import { buildStreamKeyUri } from './streamKeyUri';
 import type { FetchSourceResult } from './ingestTrack';
+import { describeErrorSafely } from '../../utils/error';
 
 export interface UploadIngestDeps {
   fetchSource?: (s3Key: string, format: string) => Promise<FetchSourceResult>;
@@ -197,7 +198,7 @@ export async function ingestUserUpload(
         driver: describeDriverError(err),
       });
     } else {
-      logger.error('[locker-ingest] ingest failed', { uploadId, err });
+      logger.error('[locker-ingest] ingest failed', { uploadId, err: describeErrorSafely(err) });
     }
     throw err;
   } finally {

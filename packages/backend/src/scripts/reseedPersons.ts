@@ -43,6 +43,7 @@ import { catalogEntities } from '../db/schema/catalog';
 import { episodePersons, podcastPersons } from '../db/schema/podcasts';
 import { logger } from '../utils/logger';
 import { resolvePersons, type GetOxyUsers } from '../services/podcasts/resolvePersons';
+import { describeErrorSafely } from '../utils/error';
 
 const BATCH_SIZE = 200;
 
@@ -160,7 +161,7 @@ if (require.main === module) {
     .then(() => closePostgres())
     .then(() => process.exit(0))
     .catch((err) => {
-      logger.error('[reseed-persons] fatal error', { err });
+      logger.error('[reseed-persons] fatal error', { err: describeErrorSafely(err) });
       closePostgres().finally(() => process.exit(1));
     });
 }

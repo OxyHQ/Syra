@@ -38,6 +38,7 @@ import { hasTrackFingerprint, indexTrackAcoustically } from '../../db/catalog/fi
 import { buildStreamKeyUri } from './streamKeyUri';
 import { storePreviewFromSourceFile } from '../preview/previewService';
 import type { StorePreviewFromSourceParams } from '../preview/previewService';
+import { describeErrorSafely } from '../../utils/error';
 
 /** Offset of the default preview clip generated at ingest time. */
 const DEFAULT_PREVIEW_START_SEC = 0;
@@ -191,7 +192,7 @@ async function indexTrackFingerprint(
       });
     }
   } catch (err) {
-    logger.error('[ingest] acoustic indexing failed (non-fatal)', { trackId, err });
+    logger.error('[ingest] acoustic indexing failed (non-fatal)', { trackId, err: describeErrorSafely(err) });
   }
 }
 
@@ -249,7 +250,7 @@ async function setStatus(trackId: string, status: 'processing' | 'failed'): Prom
  */
 async function setStatusQuietly(trackId: string, status: 'failed'): Promise<void> {
   await setStatus(trackId, status).catch((err: unknown) =>
-    logger.error('[ingest] failed to persist failed status', { trackId, err }),
+    logger.error('[ingest] failed to persist failed status', { trackId, err: describeErrorSafely(err) }),
   );
 }
 
@@ -375,7 +376,7 @@ export async function ingestTrack(
     }
   } catch (err) {
     await setStatusQuietly(trackId, 'failed');
-    logger.error('[ingest] ingest failed', { trackId, err });
+    logger.error('[ingest] ingest failed', { trackId, err: describeErrorSafely(err) });
     throw err;
   } finally {
     cleanup?.();

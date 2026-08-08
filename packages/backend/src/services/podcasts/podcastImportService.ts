@@ -63,6 +63,7 @@ import { logger } from '../../utils/logger';
 import { fetchAndParse, type ParsedEpisode, type ParsedShow, type SafeFetchFn } from './RssConnector';
 import { rehostPodcastImage } from './podcastMedia';
 import type { PodcastDirectoryCandidate } from './PodcastDirectory';
+import { describeErrorSafely } from '../../utils/error';
 
 /** Max NEW episodes whose own artwork is re-hosted inline per import (bounds the
  * import path; the long tail is covered by the backfill script). */
@@ -301,7 +302,7 @@ export async function importFeed(
     const cover = await showCoverColumns(podcast, feedUrl, showImageUrl);
     if (cover) podcast = (await updatePodcast(podcast.id, cover)) ?? podcast;
   } catch (err) {
-    logger.warn('[podcasts] show cover re-host failed', { feedUrl, err });
+    logger.warn('[podcasts] show cover re-host failed', { feedUrl, err: describeErrorSafely(err) });
     if (showImageUrl) {
       await updatePodcast(podcast.id, { imageSourceUrl: showImageUrl }).catch((saveErr) =>
         logger.warn('[podcasts] persisting fallback image url failed', { feedUrl, err: saveErr })
@@ -380,7 +381,7 @@ export async function importFeed(
         });
       }
     } catch (err) {
-      logger.error('[podcasts] per-episode upsert failed', { feedUrl, guid: episode.guid, err });
+      logger.error('[podcasts] per-episode upsert failed', { feedUrl, guid: episode.guid, err: describeErrorSafely(err) });
       failedEpisodes += 1;
     }
   }
@@ -407,7 +408,7 @@ export async function importFeed(
       logger.error('[podcasts] episode notification fan-out failed', {
         feedUrl,
         episodeId: published.episodeId,
-        err,
+        err: describeErrorSafely(err),
       });
     }
   }

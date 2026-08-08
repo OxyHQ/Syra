@@ -10,6 +10,7 @@ import type { PreviewSourceRef } from '../services/preview/previewService';
 import { streamFromS3 } from '../services/s3Service';
 import { PREVIEW_CONTENT_TYPE, PREVIEW_DURATION_SEC } from '../services/ingest/previewClip';
 import { logger } from '../utils/logger';
+import { describeErrorSafely } from '../utils/error';
 
 // Preview clips are immutable for a given (trackId, startSec) → cache hard.
 const PREVIEW_CACHE_CONTROL = 'public, max-age=31536000, immutable';
@@ -140,7 +141,7 @@ export const getTrackPreview = async (req: Request, res: Response, next: NextFun
 
     stream.pipe(res);
   } catch (error: unknown) {
-    logger.error('[PreviewController] Error serving preview', { err: error });
+    logger.error('[PreviewController] Error serving preview', { err: describeErrorSafely(error) });
     next(error);
   }
 };

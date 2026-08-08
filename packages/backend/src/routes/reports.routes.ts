@@ -4,6 +4,7 @@ import { DuplicateReportError } from '@oxyhq/crowdsource-app';
 import { getModerationIntegration, type SyraReport } from '../moderation/integration';
 import { ReportCategory, ReportedType } from '../moderation/types';
 import { logger } from '../utils/logger';
+import { describeErrorSafely } from '../utils/error';
 
 /**
  * `POST /reports` — a user tells Syra something is wrong.
@@ -173,7 +174,7 @@ router.post('/', async (req: Request, res: Response) => {
     if (error instanceof TypeError) {
       return res.status(400).json({ error: error.message });
     }
-    logger.error('Error creating report', { err: error, reportedType: validated.reportedType });
+    logger.error('Error creating report', { err: describeErrorSafely(error), reportedType: validated.reportedType });
     return res.status(500).json({ error: 'Failed to create report' });
   }
 });

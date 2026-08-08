@@ -46,6 +46,7 @@ import type { OxyServices, User } from '@oxyhq/core';
 import { getDb } from '../../db/postgres';
 import { catalogEntities } from '../../db/schema/catalog';
 import { logger } from '../../utils/logger';
+import { describeErrorSafely } from '../../utils/error';
 
 /** Minimal Oxy identity used to enrich a linked person. */
 export interface OxyUserLite {
@@ -272,7 +273,7 @@ export async function resolvePersons(
       await ensureArtistLink(row);
       resolved.push({ credit, row });
     } catch (err) {
-      logger.debug('[podcasts] person resolution failed', { name: credit.name, err });
+      logger.debug('[podcasts] person resolution failed', { name: credit.name, err: describeErrorSafely(err) });
     }
   }
 
@@ -285,7 +286,7 @@ export async function resolvePersons(
     try {
       for (const user of await getOxyUsers(oxyIds)) oxyById.set(user.id, user);
     } catch (err) {
-      logger.debug('[podcasts] oxy person enrichment failed', { err });
+      logger.debug('[podcasts] oxy person enrichment failed', { err: describeErrorSafely(err) });
     }
   }
 
@@ -389,7 +390,7 @@ export async function enrichPersons(
     try {
       for (const user of await getOxyUsers(oxyIds)) oxyById.set(user.id, user);
     } catch (err) {
-      logger.debug('[podcasts] people enrichment failed', { err });
+      logger.debug('[podcasts] people enrichment failed', { err: describeErrorSafely(err) });
     }
   }
 

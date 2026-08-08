@@ -43,6 +43,7 @@ import { syncPodcastSearch } from '../services/podcasts/podcastBackgroundImport'
 import { parseBoundedLimit, parseOffset } from '../utils/reqParams';
 import { logger } from '../utils/logger';
 import { oxy } from '../oxyClient';
+import { describeErrorSafely } from '../utils/error';
 
 /** Shortest query worth triggering a background podcast directory import for. */
 const MIN_IMPORT_QUERY_LENGTH = 3;
@@ -134,7 +135,7 @@ async function searchOxyUsers(query: string, limit: number, offset: number): Pro
 
     return [users, response.pagination?.total ?? users.length];
   } catch (error) {
-    logger.warn('Failed searching Oxy profiles', { query, error });
+    logger.warn('Failed searching Oxy profiles', { query, error: describeErrorSafely(error) });
     return [[], 0];
   }
 }

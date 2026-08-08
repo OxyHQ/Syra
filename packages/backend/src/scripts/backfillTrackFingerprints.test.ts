@@ -410,10 +410,19 @@ describe('backfillTrackFingerprints — writing', () => {
     expect(warning?.message).toContain('could not read audio');
     expect(warning?.message).not.toContain('the database refused');
 
-    // And the reason survives — the whole diagnosis for a staging failure.
+    /**
+     * And the reason survives — the whole diagnosis for a staging failure.
+     *
+     * Asserted on the TEXT rather than on `instanceof Error`, because the field
+     * now carries `describeErrorSafely(err)`: every logger field in this backend
+     * renders a caught error to a safe string, gated by
+     * `utils/loggerErrorFields.test.ts`. The property this test is about is that
+     * the filesystem reason is not discarded, and the string is where that
+     * reason has to be — the wrapper type never was.
+     */
     const err = (warning?.meta as { err?: unknown } | undefined)?.err;
-    expect(err).toBeInstanceOf(Error);
-    expect((err as Error).message).toContain('ENOENT');
+    expect(typeof err).toBe('string');
+    expect(err).toContain('ENOENT');
     // Not the redacted shape: `describeDriverError` would have discarded that.
     expect(warning?.meta).not.toHaveProperty('driver');
   });

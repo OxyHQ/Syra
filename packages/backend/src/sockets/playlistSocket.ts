@@ -2,6 +2,7 @@ import { Server as SocketIOServer, Socket } from 'socket.io';
 import { logger } from '../utils/logger';
 import { Track, PlaylistTrack } from '@syra/shared-types';
 import { oxy } from '../oxyClient';
+import { describeErrorSafely } from '../utils/error';
 
 export const setupPlaylistSocket = (io: SocketIOServer) => {
   const playlistNamespace = io.of('/playlists');
@@ -34,7 +35,7 @@ export const setupPlaylistSocket = (io: SocketIOServer) => {
         if (!playlistId) return;
         socket.to(`playlist:${playlistId}`).emit('playlist:track:added', { playlistId, tracks, playlistTracks });
       } catch (error) {
-        logger.error('Error handling playlist:track:added', { err: error });
+        logger.error('Error handling playlist:track:added', { err: describeErrorSafely(error) });
       }
     });
 
@@ -44,7 +45,7 @@ export const setupPlaylistSocket = (io: SocketIOServer) => {
         if (!playlistId) return;
         socket.to(`playlist:${playlistId}`).emit('playlist:track:removed', { playlistId, trackIds });
       } catch (error) {
-        logger.error('Error handling playlist:track:removed', { err: error });
+        logger.error('Error handling playlist:track:removed', { err: describeErrorSafely(error) });
       }
     });
 
@@ -54,7 +55,7 @@ export const setupPlaylistSocket = (io: SocketIOServer) => {
         if (!playlistId) return;
         socket.to(`playlist:${playlistId}`).emit('playlist:track:reordered', { playlistId, trackIds });
       } catch (error) {
-        logger.error('Error handling playlist:track:reordered', { err: error });
+        logger.error('Error handling playlist:track:reordered', { err: describeErrorSafely(error) });
       }
     });
 
@@ -64,12 +65,12 @@ export const setupPlaylistSocket = (io: SocketIOServer) => {
         if (!playlistId) return;
         socket.to(`playlist:${playlistId}`).emit('playlist:updated', { playlistId, updates });
       } catch (error) {
-        logger.error('Error handling playlist:updated', { err: error });
+        logger.error('Error handling playlist:updated', { err: describeErrorSafely(error) });
       }
     });
 
     socket.on('error', (error: Error) => {
-      logger.error('Playlist socket error', { err: error, userId });
+      logger.error('Playlist socket error', { err: describeErrorSafely(error), userId });
     });
 
     socket.on('disconnect', (reason: string) => {

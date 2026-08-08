@@ -10,6 +10,7 @@ import { getRequiredOxyUserId } from '@oxyhq/core/server';
 import { getParam, parseBoundedLimit, parseOffset } from '../utils/reqParams';
 import { takeDownTrack, type TakeDownTrackResult } from '../services/compliance/takedown';
 import { logger } from '../utils/logger';
+import { describeErrorSafely } from '../utils/error';
 
 /**
  * Ported here rather than deferred with the rest of Task 13's vertical, and the
@@ -99,7 +100,7 @@ export const reportCopyrightViolation = async (req: AuthRequest, res: Response, 
       message: 'Copyright violation report submitted successfully',
     });
   } catch (error) {
-    logger.error('[CopyrightController] Error reporting copyright violation:', error);
+    logger.error('[CopyrightController] Error reporting copyright violation:', { error: describeErrorSafely(error) });
     next(error);
   }
 };

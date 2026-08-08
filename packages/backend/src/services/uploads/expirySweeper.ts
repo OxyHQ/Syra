@@ -46,6 +46,7 @@ import {
 import { deleteUploadStoredObjects } from '../compliance/takedown';
 import { notifyUser } from '../notifications/notifier';
 import { logger } from '../../utils/logger';
+import { describeErrorSafely } from '../../utils/error';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -352,7 +353,7 @@ async function sweepHardDeletes(
       // need deleting. The next tick tries again.
       logger.error('[uploads] failed to delete stored objects for expired upload', {
         uploadId: upload.id,
-        err,
+        err: describeErrorSafely(err),
       });
       continue;
     }
@@ -438,7 +439,7 @@ async function tick(): Promise<void> {
         driver: describeDriverError(err),
       });
     } else {
-      logger.error('[uploads] expiry sweep failed', { err });
+      logger.error('[uploads] expiry sweep failed', { err: describeErrorSafely(err) });
     }
   } finally {
     running = false;

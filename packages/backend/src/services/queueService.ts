@@ -1,6 +1,7 @@
 import { PlayableItem, PlayableRef, Queue } from '@syra/shared-types';
 import { getRedisClient } from '../utils/redis';
 import { logger } from '../utils/logger';
+import { describeErrorSafely } from '../utils/error';
 
 const QUEUE_KEY_PREFIX = 'queue:';
 const QUEUE_TTL_SECONDS = 24 * 60 * 60; // 24 hours
@@ -50,7 +51,7 @@ export async function getQueue(userId: string): Promise<Queue | null> {
     const queue = JSON.parse(data) as Queue;
     return queue;
   } catch (error) {
-    logger.error('[QueueService] Error getting queue:', error);
+    logger.error('[QueueService] Error getting queue:', { error: describeErrorSafely(error) });
     return null;
   }
 }
@@ -73,7 +74,7 @@ export async function setQueue(userId: string, queue: Queue): Promise<boolean> {
     await redis.setEx(key, QUEUE_TTL_SECONDS, data);
     return true;
   } catch (error) {
-    logger.error('[QueueService] Error setting queue:', error);
+    logger.error('[QueueService] Error setting queue:', { error: describeErrorSafely(error) });
     return false;
   }
 }
@@ -131,7 +132,7 @@ export async function addTracks(
     await setQueue(userId, queue);
     return queue;
   } catch (error) {
-    logger.error('[QueueService] Error adding tracks to queue:', error);
+    logger.error('[QueueService] Error adding tracks to queue:', { error: describeErrorSafely(error) });
     return null;
   }
 }
@@ -189,7 +190,7 @@ export async function removeTracks(
     await setQueue(userId, queue);
     return queue;
   } catch (error) {
-    logger.error('[QueueService] Error removing tracks from queue:', error);
+    logger.error('[QueueService] Error removing tracks from queue:', { error: describeErrorSafely(error) });
     return null;
   }
 }
@@ -250,7 +251,7 @@ export async function reorderQueue(
     await setQueue(userId, queue);
     return queue;
   } catch (error) {
-    logger.error('[QueueService] Error reordering queue:', error);
+    logger.error('[QueueService] Error reordering queue:', { error: describeErrorSafely(error) });
     return null;
   }
 }
@@ -270,7 +271,7 @@ export async function clearQueue(userId: string): Promise<boolean> {
     await redis.del(key);
     return true;
   } catch (error) {
-    logger.error('[QueueService] Error clearing queue:', error);
+    logger.error('[QueueService] Error clearing queue:', { error: describeErrorSafely(error) });
     return false;
   }
 }
@@ -293,7 +294,7 @@ export async function setCurrentIndex(userId: string, index: number): Promise<Qu
     await setQueue(userId, queue);
     return queue;
   } catch (error) {
-    logger.error('[QueueService] Error setting current index:', error);
+    logger.error('[QueueService] Error setting current index:', { error: describeErrorSafely(error) });
     return null;
   }
 }
@@ -315,7 +316,7 @@ export async function getNextTrack(userId: string): Promise<PlayableItem | null>
 
     return queue.tracks[nextIndex] || null;
   } catch (error) {
-    logger.error('[QueueService] Error getting next track:', error);
+    logger.error('[QueueService] Error getting next track:', { error: describeErrorSafely(error) });
     return null;
   }
 }
@@ -337,7 +338,7 @@ export async function getPreviousTrack(userId: string): Promise<PlayableItem | n
 
     return queue.tracks[prevIndex] || null;
   } catch (error) {
-    logger.error('[QueueService] Error getting previous track:', error);
+    logger.error('[QueueService] Error getting previous track:', { error: describeErrorSafely(error) });
     return null;
   }
 }

@@ -40,6 +40,7 @@ import { probeAudio } from '../services/ingest/probeAudio';
 import type { ProbedAudio } from '../services/ingest/probeAudio';
 import { getErrorMessage, getErrorStack, getHttpStatus } from '../utils/error';
 import { getParam, parseBoundedLimit, parseOffset } from '../utils/reqParams';
+import { describeErrorSafely } from '../utils/error';
 
 interface AudioUploadRequest extends AuthRequest {
   file?: Express.Multer.File;
@@ -286,7 +287,7 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
   // Handle file upload
   audioUpload(req, res, async (err) => {
     if (err) {
-      logger.error('[TracksController] Multer upload error:', err);
+      logger.error('[TracksController] Multer upload error:', { err: describeErrorSafely(err) });
       return res.status(400).json({ error: 'Upload error', message: err.message });
     }
 

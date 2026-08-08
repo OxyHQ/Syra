@@ -1,6 +1,7 @@
 import { getRedisClient } from './redis';
 import { ensureRedisConnected } from './redisHelpers';
 import { logger } from './logger';
+import { describeErrorSafely } from './error';
 
 /**
  * Best-effort distributed lock backed by Redis `SET NX PX`. Used so that a
@@ -36,7 +37,7 @@ export async function withLock(
     const result = await client.set(lockKey, token, { NX: true, PX: ttlMs });
     acquired = result === 'OK';
   } catch (err) {
-    logger.debug('[lock] failed to acquire', { key, err });
+    logger.debug('[lock] failed to acquire', { key, err: describeErrorSafely(err) });
     return false;
   }
 
@@ -54,7 +55,7 @@ export async function withLock(
         await client.del(lockKey);
       }
     } catch (err) {
-      logger.debug('[lock] failed to release', { key, err });
+      logger.debug('[lock] failed to release', { key, err: describeErrorSafely(err) });
     }
   }
 }

@@ -198,7 +198,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       nextCursor,
     });
   } catch (error) {
-    logger.error('Error fetching houses:', { userId: req.user?.id, error, query: req.query });
+    logger.error('Error fetching houses:', { userId: req.user?.id, error: describeErrorSafely(error), query: req.query });
     res.status(500).json({
       message: 'Error fetching houses',
       error: describeErrorSafely(error),

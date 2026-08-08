@@ -23,6 +23,7 @@ import { findOwnedArtist } from '../db/catalog/ownership';
 import { getParam, parseBoundedLimit, parseOffset } from '../utils/reqParams';
 import { getStoredImageColors } from '../utils/imageColors';
 import { logger } from '../utils/logger';
+import { describeErrorSafely } from '../utils/error';
 
 /**
  * How the public album listing is ordered.
@@ -266,7 +267,7 @@ export const createAlbum = async (req: AuthRequest, res: Response, next: NextFun
 
     res.status(201).json(await toAlbumResponse(created));
   } catch (error: unknown) {
-    logger.error('[AlbumsController] Error creating album:', error);
+    logger.error('[AlbumsController] Error creating album:', { error: describeErrorSafely(error) });
     next(error);
   }
 };

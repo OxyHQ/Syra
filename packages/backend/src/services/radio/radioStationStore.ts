@@ -1,6 +1,7 @@
 import { RadioSeedType, radioSeedTypeSchema } from '@syra/shared-types';
 import { getRedisClient } from '../../utils/redis';
 import { logger } from '../../utils/logger';
+import { describeErrorSafely } from '../../utils/error';
 
 const RADIO_STATION_KEY_PREFIX = 'radio:station:';
 
@@ -86,7 +87,7 @@ function parseStationState(
   try {
     parsed = JSON.parse(data);
   } catch (error) {
-    logger.warn('[RadioStationStore] Discarding unparseable station entry', error);
+    logger.warn('[RadioStationStore] Discarding unparseable station entry', { error: describeErrorSafely(error) });
     return null;
   }
 
@@ -209,7 +210,7 @@ export async function readRadioStation(
     await redis.expire(key, RADIO_STATION_TTL_SECONDS);
     return state;
   } catch (error) {
-    logger.error('[RadioStationStore] Error reading station:', error);
+    logger.error('[RadioStationStore] Error reading station:', { error: describeErrorSafely(error) });
     return createRadioStationState(identity);
   }
 }
@@ -230,7 +231,7 @@ export async function writeRadioStation(state: RadioStationState): Promise<boole
     await redis.setEx(key, RADIO_STATION_TTL_SECONDS, JSON.stringify(state));
     return true;
   } catch (error) {
-    logger.error('[RadioStationStore] Error writing station:', error);
+    logger.error('[RadioStationStore] Error writing station:', { error: describeErrorSafely(error) });
     return false;
   }
 }
@@ -247,7 +248,7 @@ export async function clearRadioStation(identity: RadioStationIdentity): Promise
     await redis.del(getStationKey(identity));
     return true;
   } catch (error) {
-    logger.error('[RadioStationStore] Error clearing station:', error);
+    logger.error('[RadioStationStore] Error clearing station:', { error: describeErrorSafely(error) });
     return false;
   }
 }

@@ -1,5 +1,6 @@
 import { oxy } from '../oxyClient';
 import { logger } from './logger';
+import { describeErrorSafely } from './error';
 
 /**
  * Privacy visibility constants
@@ -109,7 +110,7 @@ export async function getFollowingIdSet(viewerId: string): Promise<Set<string>> 
     const followingRes = await oxy.getUserFollowing(viewerId);
     return new Set(extractFollowingIds(followingRes));
   } catch (error) {
-    logger.error('Error fetching following list for access check:', { err: error });
+    logger.error('Error fetching following list for access check:', { err: describeErrorSafely(error) });
     return new Set();
   }
 }

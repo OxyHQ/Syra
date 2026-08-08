@@ -14,6 +14,7 @@ import { withLock } from '../../utils/distributedLock';
 import { logger } from '../../utils/logger';
 import { findRefreshCandidates } from '../../db/podcasts/podcasts';
 import { importFeed } from './podcastImportService';
+import { describeErrorSafely } from '../../utils/error';
 
 /** How often the refresh tick fires on each instance. */
 const TICK_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
@@ -44,7 +45,7 @@ async function refreshBatch(): Promise<void> {
     try {
       await importFeed(candidate.feedUrl);
     } catch (err) {
-      logger.warn('[podcasts] refresh failed for feed', { feedUrl: candidate.feedUrl, err });
+      logger.warn('[podcasts] refresh failed for feed', { feedUrl: candidate.feedUrl, err: describeErrorSafely(err) });
     }
   }
 }
@@ -57,7 +58,7 @@ async function tick(): Promise<void> {
       try {
         await refreshBatch();
       } catch (err) {
-        logger.warn('[podcasts] refresh batch failed', { err });
+        logger.warn('[podcasts] refresh batch failed', { err: describeErrorSafely(err) });
       }
     });
   } finally {

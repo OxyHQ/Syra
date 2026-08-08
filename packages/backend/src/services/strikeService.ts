@@ -3,6 +3,7 @@ import { and, count, eq } from 'drizzle-orm';
 import { getDb } from '../db/postgres';
 import { catalogEntities, catalogEntityStrikes, tracks } from '../db/schema/catalog';
 import { logger } from '../utils/logger';
+import { describeErrorSafely } from '../utils/error';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -232,7 +233,7 @@ export async function addStrike(
       return { strikeCount, terminated: alreadyTerminated };
     });
   } catch (error) {
-    logger.error(`[StrikeService] Error adding strike to artist ${artistId}:`, error);
+    logger.error(`[StrikeService] Error adding strike to artist ${artistId}:`, { error: describeErrorSafely(error) });
     throw error;
   }
 }
@@ -286,7 +287,7 @@ export async function removeStrike(
       return { strikeCount, terminated };
     });
   } catch (error) {
-    logger.error(`[StrikeService] Error removing strike from artist ${artistId}:`, error);
+    logger.error(`[StrikeService] Error removing strike from artist ${artistId}:`, { error: describeErrorSafely(error) });
     throw error;
   }
 }
@@ -315,7 +316,7 @@ export async function checkUploadPermission(artistId: string): Promise<boolean> 
   } catch (error) {
     logger.error(
       `[StrikeService] Error checking upload permission for artist ${artistId}:`,
-      error,
+      { error: describeErrorSafely(error) },
     );
     return false;
   }

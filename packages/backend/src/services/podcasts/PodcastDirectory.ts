@@ -15,6 +15,7 @@
 
 import crypto from 'node:crypto';
 import { logger } from '../../utils/logger';
+import { describeErrorSafely } from '../../utils/error';
 
 const PODCAST_INDEX_BASE = 'https://api.podcastindex.org/api/1.0';
 const APPLE_SEARCH_BASE = 'https://itunes.apple.com/search';
@@ -116,7 +117,7 @@ async function searchPodcastIndex(query: string, limit: number): Promise<Podcast
 
     return candidates;
   } catch (err) {
-    logger.debug('[podcasts] Podcast Index search failed', { err });
+    logger.debug('[podcasts] Podcast Index search failed', { err: describeErrorSafely(err) });
     return [];
   }
 }
@@ -158,7 +159,7 @@ async function searchApple(query: string, limit: number): Promise<PodcastDirecto
 
     return candidates;
   } catch (err) {
-    logger.debug('[podcasts] Apple search failed', { err });
+    logger.debug('[podcasts] Apple search failed', { err: describeErrorSafely(err) });
     return [];
   }
 }

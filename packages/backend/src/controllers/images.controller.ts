@@ -7,6 +7,7 @@ import { getParam } from '../utils/reqParams';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { extractPredominantColorsFromBuffer } from '../services/colorExtractionService';
 import { getImageAssetStream, storeImageAsset } from '../services/imageAssetService';
+import { describeErrorSafely } from '../utils/error';
 
 interface ImageUploadRequest extends AuthRequest {
   file?: Express.Multer.File;
@@ -62,7 +63,7 @@ export const uploadImage = async (req: AuthRequest, res: Response, next: NextFun
 
     res.status(201).json({ id: imageId, ...colors });
   } catch (error: unknown) {
-    logger.error('[ImagesController] Error uploading image:', error);
+    logger.error('[ImagesController] Error uploading image:', { error: describeErrorSafely(error) });
     next(error);
   }
 };
@@ -149,7 +150,7 @@ export const getImage = async (req: Request, res: Response, next: NextFunction) 
       throw error;
     }
   } catch (error: unknown) {
-    logger.error('[ImagesController] Error getting image:', error);
+    logger.error('[ImagesController] Error getting image:', { error: describeErrorSafely(error) });
     next(error);
   }
 };

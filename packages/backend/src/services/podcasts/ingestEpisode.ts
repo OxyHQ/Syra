@@ -27,6 +27,7 @@ import type { PackageOptions, PackageResult } from '../ingest/hlsPackager';
 import { storePackagedHls } from '../ingest/hlsStorage';
 import type { StoreHlsTarget, StoredHls } from '../ingest/hlsStorage';
 import { buildStreamKeyUriFor } from '../ingest/streamKeyUri';
+import { describeErrorSafely } from '../../utils/error';
 
 export interface EpisodeFetchSourceResult {
   localPath: string;
@@ -122,7 +123,7 @@ export async function ingestEpisode(episodeId: string, deps?: IngestEpisodeDeps)
     await setEpisodeStatus(episodeId, 'failed').catch((saveErr) =>
       logger.error('[podcasts] failed to persist failed episode status', { episodeId, err: saveErr }),
     );
-    logger.error('[podcasts] episode ingest failed', { episodeId, err });
+    logger.error('[podcasts] episode ingest failed', { episodeId, err: describeErrorSafely(err) });
     throw err;
   } finally {
     cleanup?.();
@@ -136,6 +137,6 @@ export async function ingestEpisode(episodeId: string, deps?: IngestEpisodeDeps)
 
 export function enqueueEpisodeIngest(episodeId: string): void {
   ingestEpisode(episodeId).catch((err) =>
-    logger.error('[podcasts] episode ingest enqueue failed', { episodeId, err }),
+    logger.error('[podcasts] episode ingest enqueue failed', { episodeId, err: describeErrorSafely(err) }),
   );
 }

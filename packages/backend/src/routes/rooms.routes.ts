@@ -781,7 +781,7 @@ function scheduleRecordingAutoStop(roomId: string, egressId: string, recordingId
 
       logger.info(`Recording auto-stopped after 1 hour for room ${roomId}`);
     } catch (error) {
-      logger.error(`Failed to auto-stop recording for room ${roomId}:`, error);
+      logger.error(`Failed to auto-stop recording for room ${roomId}:`, { error: describeErrorSafely(error) });
     } finally {
       recordingTimers.delete(roomId);
     }
@@ -856,7 +856,7 @@ async function stopRecordingForRoom(room: RoomWithCredentials, reason: string = 
   try {
     await stopRoomRecording(egressId);
   } catch (err) {
-    logger.warn(`Failed to stop egress ${egressId}, may have already stopped:`, err);
+    logger.warn(`Failed to stop egress ${egressId}, may have already stopped:`, { err: describeErrorSafely(err) });
   }
 
   const recording = await findRecordingByEgressId(egressId);
@@ -1062,7 +1062,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       nextCursor,
     });
   } catch (error) {
-    logger.error('Error fetching rooms:', { userId: req.user?.id, error, query: req.query });
+    logger.error('Error fetching rooms:', { userId: req.user?.id, error: describeErrorSafely(error), query: req.query });
     res.status(500).json({
       message: 'Error fetching rooms',
       error: describeErrorSafely(error),
@@ -1412,7 +1412,7 @@ router.post('/:id/end', async (req: AuthRequest, res: Response) => {
     let ended;
     if (room.activeIngressId) {
       deleteIngress(room.activeIngressId).catch((err) => {
-        logger.error(`Failed to delete ingress for room ${id}:`, err);
+        logger.error(`Failed to delete ingress for room ${id}:`, { err: describeErrorSafely(err) });
       });
       ended = await stopRoomStreamFields(room.id, lifecycle);
     } else {
@@ -1425,7 +1425,7 @@ router.post('/:id/end', async (req: AuthRequest, res: Response) => {
 
     // Clean up LiveKit room
     deleteLiveKitRoomForRoom(room.id).catch((err) => {
-      logger.error(`Failed to delete LiveKit room for room ${id}:`, err);
+      logger.error(`Failed to delete LiveKit room for room ${id}:`, { err: describeErrorSafely(err) });
     });
 
     logger.info(`Room ended: ${ended.id}`);
@@ -1490,7 +1490,7 @@ router.post('/:id/stop', async (req: AuthRequest, res: Response) => {
     let stopped;
     if (room.activeIngressId) {
       deleteIngress(room.activeIngressId).catch((err) => {
-        logger.error(`Failed to delete ingress for room ${id}:`, err);
+        logger.error(`Failed to delete ingress for room ${id}:`, { err: describeErrorSafely(err) });
       });
       stopped = await stopRoomStreamFields(room.id, lifecycle);
     } else {
@@ -1503,7 +1503,7 @@ router.post('/:id/stop', async (req: AuthRequest, res: Response) => {
 
     // Clean up LiveKit room
     deleteLiveKitRoomForRoom(room.id).catch((err) => {
-      logger.error(`Failed to delete LiveKit room for room ${id}:`, err);
+      logger.error(`Failed to delete LiveKit room for room ${id}:`, { err: describeErrorSafely(err) });
     });
 
     logger.info(`Room stopped (back to scheduled): ${stopped.id}`);

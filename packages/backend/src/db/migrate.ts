@@ -192,6 +192,7 @@ import { dirname, join } from 'node:path';
 import { type MigrationRun, MIGRATION_RUNS, readTargetDatabase, runMigrations } from '@oxyhq/db/migrate';
 import { logger } from '../utils/logger';
 import { REQUIRED_EXTENSIONS } from './extensions';
+import { describeErrorSafely } from '../utils/error';
 
 /** How far above this module `drizzle/` may sit before the search gives up. */
 const MIGRATIONS_SEARCH_DEPTH = 6;
@@ -326,7 +327,7 @@ async function main(): Promise<void> {
 // this file's compiled output actually is.
 if (require.main === module) {
   main().catch((error: unknown) => {
-    logger.error('Postgres migration failed', error);
+    logger.error('Postgres migration failed', { error: describeErrorSafely(error) });
     // Not `process.exit`: the pino transport used in development writes from
     // a worker thread, and exiting here would truncate the very message that
     // says what went wrong. The event loop is already free once the pool is
