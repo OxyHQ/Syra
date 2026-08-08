@@ -236,11 +236,22 @@ describe('the deploy workflow can actually run its own gate', () => {
  */
 describe('the deploy workflow syncs an explicit allowlist, never the whole context', () => {
   /**
-   * Every parameter the LIVE task definition (oxy-syra:8) reads as a `secret`,
-   * plus DATABASE_URL — which that revision does NOT carry, and which the deploy
-   * step injects into every revision it registers. Minus LIVEKIT_API_KEY /
-   * LIVEKIT_API_SECRET: those live under /oxy/_shared/, this repo holds neither,
-   * and OxyHQServices is what writes them.
+   * Every parameter the live task definition reads as a `secret`. Minus
+   * LIVEKIT_API_KEY / LIVEKIT_API_SECRET: those live under /oxy/_shared/, this
+   * repo holds neither, and OxyHQServices is what writes them.
+   *
+   * `MONGODB_URI` left in #92, with the Mongo it named. `DATABASE_URL` took its
+   * place as the database secret — it was already listed here before it reached
+   * a task definition, because the deploy step injects it into every revision it
+   * registers.
+   *
+   * This list is the THIRD leg of the cross-check, and worth knowing about as
+   * such: the two spellings in the workflow (the `env:` bindings and the shell
+   * word lists) are compared against each OTHER, which catches the drift that
+   * usually happens — adding one and forgetting the other. It does not catch
+   * removing a secret from both and forgetting this literal, which is exactly
+   * what #92 did: the workflow was correct, this list was stale, and `main` went
+   * red on these two assertions.
    */
   const EXPECTED_ALLOWLIST = [
     'ACOUSTID_API_KEY',
