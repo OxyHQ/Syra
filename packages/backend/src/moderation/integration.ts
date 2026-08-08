@@ -2,6 +2,7 @@ import {
   createModerationIntegration,
   type ModerationIntegration,
   type ModerationReportFields,
+  type ModerationTaxonomy,
 } from '@oxyhq/crowdsource-app';
 import { postgresModerationStore } from '@oxyhq/crowdsource-app/postgres';
 import type { Decision } from '@oxyhq/crowdsource-contracts';
@@ -53,6 +54,35 @@ import type { ModerationEnforcementAction, ReportStatus } from './types';
 export interface SyraReport extends ModerationReportFields {
   status: ReportStatus;
 }
+
+/**
+ * What Syra reports, as universal allegations, and what it declares about the
+ * evidence it can carry.
+ *
+ * Exported so the declaration is ASSERTABLE. It is one property of one object
+ * three layers below a request, and nothing else in Syra would notice it going
+ * absent — `moderationTaxonomy.test.ts` is what makes deleting it fail rather
+ * than ship.
+ */
+export const SYRA_TAXONOMY: ModerationTaxonomy = {
+  version: REPORT_TAXONOMY_VERSION,
+  allegationsFor: allegationsForCategories,
+  /**
+   * Declared, because it cannot yet be attached.
+   *
+   * An agent's avatar is a bare string with no digest recorded anywhere — see
+   * `subjects/providers.ts` — so a jury can see that material exists which it
+   * was not given. Saying so lets it answer `insufficient_context` for the
+   * right reason instead of guessing, and a jury guessing is a decision-quality
+   * problem that fails nothing and alerts nobody.
+   *
+   * Syra carried this before it adopted the package; 0.5.0 had no hook for it
+   * and the adoption dropped it. `taxonomy.metadata` (0.6.0) is that hook, and
+   * it merges UNDER the package's own `taxonomyVersion` and `categories`, so
+   * this cannot shadow either.
+   */
+  metadata: { evidenceAttachmentsSupported: false },
+};
 
 let integration: ModerationIntegration<SyraReport, ModerationEnforcementAction> | null = null;
 let store: ReturnType<typeof postgresModerationStore<SyraReport>> | null = null;
@@ -110,10 +140,7 @@ export function getModerationIntegration(): ModerationIntegration<
     store: getStore(),
     crowdSource: crowdSourceConfig(),
     subjects: SYRA_SUBJECT_PROVIDERS,
-    taxonomy: {
-      version: REPORT_TAXONOMY_VERSION,
-      allegationsFor: allegationsForCategories,
-    },
+    taxonomy: SYRA_TAXONOMY,
     enforcement: SYRA_ENFORCEMENT,
     logger,
     reportDecisionExtraFields,

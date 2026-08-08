@@ -21,7 +21,7 @@
     "@aws-sdk/client-s3": "^3.1087.0",
     "@aws-sdk/s3-request-presigner": "^3.1087.0",
     "@oxyhq/crowdsource": "0.4.0",
-    "@oxyhq/crowdsource-app": "0.5.0",
+    "@oxyhq/crowdsource-app": "0.6.0",
     "@oxyhq/crowdsource-contracts": "0.4.0",
     "@oxyhq/crowdsource-express": "0.4.0",
     "@oxyhq/db": "^0.1.2",
