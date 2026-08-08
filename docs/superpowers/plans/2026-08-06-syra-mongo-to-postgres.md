@@ -705,3 +705,20 @@ it means **they cannot see a production query that fails to use the index they
 prove exists** — which is precisely this defect. That reframes "bind the probes to
 the real query builders" from a deliberate deferral into the thing that would have
 caught a live regression. It stays a follow-up, but not an optional one.
+
+#### Two refinements to the ORDER BY class, from CrowdSource Task 10
+
+**An UPDATE writes a new row version, so updating a row MOVES it physically.** The
+first repair of a vacuous ordering fixture there was itself vacuous for exactly
+that reason: pinning `created_at` in ascending order via an update left the rows
+sitting on disk in precisely the answer's order, so a sequential scan returned it
+and the deleted sort was still invisible. Ordering fixtures must pin timestamps so
+the rows are out of chronological order *on disk*, which is not the same as merely
+inserting them out of order.
+
+**And the assumption is checkable, so check it.** That test now reads the unordered
+scan and asserts it differs from the expected order — physical order is the storage
+engine's business, and if a future Postgres hands rows back already sorted the test
+should say so rather than quietly losing the only property that lets it fail. Any
+ordering assertion whose ability to fail rests on physical order should carry that
+self-check.
