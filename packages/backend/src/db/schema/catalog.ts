@@ -876,6 +876,19 @@ export const trackCredits = pgTable(
     check('track_credits_position_check', sql`${t.position} >= 0`),
     unique('track_credits_track_id_position_key').on(t.trackId, t.position),
     index('track_credits_name_key_idx').on(t.nameKey),
+    /**
+     * "Is this artist credited on anything?" — the probe inside
+     * `playableArtistsWhere`, which decides whether a featured guest has a page
+     * at all. That predicate runs once per artist row on every artist LISTING,
+     * so without this index each one seq-scans `track_credits`.
+     *
+     * Partial: a credit with no entity id is a name off a file tag and can
+     * never satisfy the probe, so indexing those rows would only make the index
+     * bigger than the question it answers.
+     */
+    index('track_credits_catalog_entity_id_idx')
+      .on(t.catalogEntityId)
+      .where(sql`${t.catalogEntityId} is not null`),
   ]
 );
 

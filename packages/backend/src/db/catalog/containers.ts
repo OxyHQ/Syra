@@ -47,9 +47,9 @@
  */
 
 import { and, asc, count, desc, eq, exists, sql, type SQL } from 'drizzle-orm';
-import type { PgColumn } from 'drizzle-orm/pg-core';
+import { unionAll, type PgColumn } from 'drizzle-orm/pg-core';
 import { publicColumns } from '@oxyhq/db/assert';
-import { albums, catalogEntities, tracks } from '../schema/catalog';
+import { albums, catalogEntities, trackCredits, tracks } from '../schema/catalog';
 import { playlistTracks, playlists } from '../schema/library';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../schema/protectedColumns';
 import { getDb } from '../postgres';
@@ -180,8 +180,77 @@ export function playableAlbumsWhere(): SQL {
   return and(availableAlbum(), hasPlayableTrack(tracks.albumId, albums.id)) as SQL;
 }
 
+/**
+ * "Has a playable track CREDITING this artist", for the artists who own none.
+ *
+ * A featured guest owns nothing: the recording belongs to the principal, and
+ * the guest exists only as a `track_credits` row carrying their entity id. So
+ * `tracks.artist_id` never points at them, and an ownership-only predicate
+ * makes their page 404 — for exactly the artists a multi-artist credit exists
+ * to surface. The credit rendered their name, the name linked, and the link was
+ * dead.
+ *
+ * Matched on `catalog_entity_id`, never on the name: a credit whose id is null
+ * is a name off a file tag, which is not a claim that this artist was on the
+ * record, and letting it summon a page would be the identity guess the credits
+ * schema refuses to make.
+ *
+ * Their page is not empty either — `artistProfile`'s "credited on" section
+ * already renders precisely these tracks. It could just never be reached.
+ */
+/**
+ * "This artist OWNS a playable track, or is CREDITED on one."
+ *
+ * A featured guest owns nothing: the recording belongs to the principal, and
+ * the guest exists only as a `track_credits` row carrying their entity id. So
+ * `tracks.artist_id` never points at them, and an ownership-only predicate made
+ * their page 404 — for exactly the artists a multi-artist credit exists to
+ * surface. The credit rendered their name, the name linked, and the link was
+ * dead. Their page is not empty either: `artistProfile`'s "credited on" section
+ * already renders precisely these tracks. It could just never be reached.
+ *
+ * ## Why ONE `exists` over a `union all`, and not two joined by `or`
+ *
+ * The obvious spelling — `exists(owns) or exists(credited)` — is measurably
+ * worse, because an `or` of two correlated subqueries blocks the semi-join
+ * transformation: Postgres stops pushing `= ce.id` into either branch and
+ * evaluates both wholesale. Measured on a 200-artist / 4,000-track /
+ * 600-credit seed with `enable_seqscan = off` (the gate's setting), listing
+ * the top 20 artists:
+ *
+ *   or of two exists   0.792 ms  — ownership scans all 3,430 playable tracks
+ *                                  with NO index condition; the credit branch
+ *                                  scans `track_credits` whole
+ *   exists(union all)  0.307 ms  — `Index Cond: (artist_id = ce.id)` AND
+ *                                  `Index Cond: (catalog_entity_id = ce.id)`
+ *
+ * Under `union all` each branch keeps its own correlation, so both reach their
+ * index and the probe stops at the first matching row — the property this whole
+ * module is built around. The difference is structural, not a cost-estimate
+ * accident, which is why the spelling is load-bearing and commented here.
+ *
+ * The credit side matches on `catalog_entity_id`, never on the name: a credit
+ * whose id is null is a name off a file tag, not a claim that this artist was
+ * on the record, and letting it summon a page would be the identity guess the
+ * credits schema deliberately refuses to make.
+ */
+function hasPlayableTrackOrCredit(): SQL {
+  const owns = getDb()
+    .select({ present: sql`1` })
+    .from(tracks)
+    .where(and(eq(tracks.artistId, catalogEntities.id), playableTrackFilter()));
+
+  const credited = getDb()
+    .select({ present: sql`1` })
+    .from(trackCredits)
+    .innerJoin(tracks, eq(tracks.id, trackCredits.trackId))
+    .where(and(eq(trackCredits.catalogEntityId, catalogEntities.id), playableTrackFilter()));
+
+  return exists(unionAll(owns, credited));
+}
+
 export function playableArtistsWhere(): SQL {
-  return and(artistEntity(), hasPlayableTrack(tracks.artistId, catalogEntities.id)) as SQL;
+  return and(artistEntity(), hasPlayableTrackOrCredit()) as SQL;
 }
 
 /**

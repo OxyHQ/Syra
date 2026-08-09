@@ -177,11 +177,32 @@ async function seed(tx: Parameters<Parameters<ReturnType<typeof getDb>['transact
                now(), n
         from generate_series(1, 200) p, generate_series(0, 19) n`
   );
+  /**
+   * Credits, because the artist playability predicate reads them now: an artist
+   * is browsable if they OWN a playable track or are CREDITED on one, which is
+   * what gives a featured guest a page at all.
+   *
+   * Seeded deliberately lopsided. Every credit points at one of the last 20
+   * artists, so most of the 200 have none — an even spread would let the
+   * planner satisfy the `or` from the credit side for nearly every row and the
+   * probe would never exercise the ownership path it is really here to measure.
+   * A child table left EMPTY is worse still: the planner costs it as free, the
+   * plan it picks is not the one production runs, and the assertion below would
+   * be measuring nothing.
+   */
+  await executeRows(
+    tx,
+    sql`insert into track_credits (id, track_id, position, name, name_key, role, catalog_entity_id)
+        select ${MARKER} || '-tc-' || g, ${MARKER} || '-t-' || g, 0,
+               'Guest ' || g, 'guest' || g, 'artist',
+               ${MARKER} || '-art-' || (181 + (g % 20))
+        from generate_series(1, 600) g`
+  );
   // Statistics, not just rows: without this the planner still costs every table
   // as if it were empty and the seed changes nothing.
   await executeRows(
     tx,
-    sql`analyze tracks, albums, catalog_entities, playlists, playlist_tracks`
+    sql`analyze tracks, albums, catalog_entities, playlists, playlist_tracks, track_credits`
   );
 }
 
@@ -487,8 +508,31 @@ describe('the artist and playlist paths reach their indexes', () => {
     expectIndexesWithin('artist exists', indexesIn('artistHasPlayable'), [
       ...ARTIST_KEYED_TRACK_INDEXES,
       'catalog_entities_artist_name_key_key',
+      /**
+       * The predicate gained a second branch — an artist is browsable if they
+       * OWN a playable track or are CREDITED on one, which is what gives a
+       * featured guest a page — so the plan gained that branch's two hops: the
+       * credit keyed by artist, then its track by primary key.
+       *
+       * Both are new members with a reason, and the reason is that they are the
+       * indexes the branch is SUPPOSED to reach. The first spelling of the
+       * predicate (`exists(owns) or exists(credited)`) reached neither: an `or`
+       * of two correlated subqueries blocks the semi-join transformation, and
+       * the used set was `track_credits_track_id_position_key, tracks_mood_idx`
+       * — an unindexed scan of both tables wearing whatever index
+       * `enable_seqscan = off` made it wear. Rewriting it as one `exists` over
+       * a `union all` restored the correlation to both branches, and this gate
+       * is what caught the difference. See `containers.ts` for the measurement.
+       */
+      'track_credits_catalog_entity_id_idx',
+      'tracks_pkey',
     ]);
     expect(plans.get('artistHasPlayable')).not.toContain('Seq Scan on tracks');
+    // The ownership branch must still be CORRELATED, not a full scan the
+    // planner hashes once: that is the property the buffer counts in this
+    // file's header depend on, and an index name alone does not prove it.
+    expect(plans.get('artistHasPlayable')).toContain('Index Cond: (artist_id = ');
+    expect(plans.get('artistHasPlayable')).toContain('Index Cond: (catalog_entity_id = ');
   });
 
   it('the playlist playability probe indexes both hops', () => {
