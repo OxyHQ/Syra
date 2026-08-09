@@ -853,8 +853,24 @@ export const trackCredits = pgTable(
     role: text().notNull(),
     /** `normalizeNameKey(name)` — indexed so "everything this person is credited on" is a lookup. */
     nameKey: text().notNull(),
-    // No `catalog_entity_id` column — dead everywhere it was declared; see
-    // the file-level doc comment.
+    /**
+     * The artist this credit IS, when we can say so — and NULL when we cannot.
+     *
+     * The file-level comment explains why this column was dropped: four Mongoose
+     * paths declared it and none ever wrote it, because a name from an
+     * enrichment source is not a high-confidence identity claim. That reasoning
+     * holds and is about enrichment names. It does not cover the signal that
+     * brings this column back: when an upload's ISRC resolves, or its acoustic
+     * fingerprint matches, the registry returns artists already SEPARATED and
+     * carrying a MusicBrainz id.
+     *
+     * Nullable on purpose. A credit whose name came from a file tag has no
+     * identity behind it, and inventing one would be the exact lie the original
+     * decision refused. `set null` rather than `cascade`: deleting an artist row
+     * must not delete the credit — the person was still on the record; only our
+     * claim about which catalogue row they are goes away.
+     */
+    catalogEntityId: text().references(() => catalogEntities.id, { onDelete: 'set null' })
   },
   (t) => [
     check('track_credits_position_check', sql`${t.position} >= 0`),
