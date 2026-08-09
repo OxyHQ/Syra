@@ -53,12 +53,13 @@ import {
   type UploadBlockedReason,
   type UploadOutcome,
   type UserUploadAsTrack,
+  normalizeNameKey,
 } from '@syra/shared-types';
 
 import { env } from '../config/env';
 import { getS3LockerAudioKey } from '../config/s3.config';
 import { getDb, isDriverError, isPostgresConnected } from '../db/postgres';
-import { albums, catalogEntities, imageAssets, tracks } from '../db/schema/catalog';
+import { albums, catalogEntities, imageAssets, trackCredits, tracks } from '../db/schema/catalog';
 import { trackKeys } from '../db/schema/trackKeys';
 import { userUploads } from '../db/schema/creators';
 import { indexTrackAcoustically } from '../db/catalog/fingerprints';
@@ -85,7 +86,12 @@ import {
   type ExtractedPicture,
 } from '../services/uploads/extractMetadata';
 import { fingerprintFile, type Fingerprint } from '../services/uploads/fingerprint';
-import { identifyRecording, type AcousticIdentity } from '../services/uploads/acoustid';
+import {
+  identifyRecording,
+  type AcousticIdentity,
+  type AcoustidArtist,
+} from '../services/uploads/acoustid';
+import { buildTrackCredits } from '../services/uploads/buildTrackCredits';
 import { discoverIsrc, verifyIsrcClaim, type IsrcRecording } from '../services/uploads/isrcLookup';
 import { findArtistMbidByIsrc } from '../services/uploads/musicbrainzLookup';
 import { enqueueArtistEnrichment } from '../services/ingest/ingestQueue';
@@ -1491,8 +1497,43 @@ async function publishContribution(params: PublishParams): Promise<string> {
    * the publication back because a fingerprint write failed would lose a track
    * the uploader was told was accepted.
    */
+  /**
+   * Featured artists become REAL entities before the transaction opens.
+   *
+   * `ensureContributedArtist` is idempotent by name key — it returns the
+   * existing row when there is one — so doing this outside the transaction
+   * cannot double-create, and doing it INSIDE would hold the track's write open
+   * across however many inserts the credit needs.
+   *
+   * Only the acoustic match feeds this. Its artists arrive separated and
+   * identified; a file tag cannot be split into them, because a comma is not
+   * evidence and `Earth, Wind & Fire` is one artist.
+   */
+  const principalNameKey = normalizeNameKey(params.artistName);
+  const featured: Array<{ artist: AcoustidArtist; catalogEntityId?: string }> = [];
+  for (const artist of params.identity?.artists ?? []) {
+    if (normalizeNameKey(artist.name) === principalNameKey) continue;
+    const entity = await ensureContributedArtist({ name: artist.name });
+    featured.push({ artist, ...(entity ? { catalogEntityId: entity.id } : {}) });
+  }
+
+  const creditRows = buildTrackCredits({
+    featured,
+    tagged: metadata.credits,
+    principalNameKey,
+  });
+
   await getDb().transaction(async (tx) => {
     await tx.insert(tracks).values(trackValues);
+
+    // In the SAME transaction as the track: a published recording whose credits
+    // never landed misattributes it, and the gap is exactly the kind this
+    // transaction already exists to close.
+    if (creditRows.length > 0) {
+      await tx.insert(trackCredits).values(
+        creditRows.map((row) => ({ ...row, trackId })),
+      );
+    }
 
     if (params.requiresAttestation && params.attestation) {
       // The screening result that was current at signing time is part of the
