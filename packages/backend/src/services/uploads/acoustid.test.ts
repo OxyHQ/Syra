@@ -34,6 +34,7 @@ import {
   resetAcoustidRateLimitForTests,
   resolveAcousticIdentity,
   setAcoustidFetchForTests,
+  toAcousticIdentity,
   type AcoustidRecording,
 } from './acoustid';
 import { FINGERPRINT_MATCH_BER } from './fingerprint';
@@ -490,5 +491,44 @@ describe('resolveAcousticIdentity turns a match into identifiers', () => {
           where tablename = 'isrc_registry' and indexname = 'isrc_registry_recording_mbid_idx'`
     );
     expect(index?.indexdef ?? 'MISSING').toContain('(recording_mbid)');
+  });
+});
+
+
+describe('identifyRecording — the credit arrives SEPARATED, and stays that way', () => {
+  /**
+   * The bug this pins: AcoustID returns `artists[]` already split and each entry
+   * carrying its own MBID, and `identifyRecording` used to keep only the first.
+   * A recording credited to two people therefore reached the upload path as one
+   * name — and when the file's own tag said `benny blanco, Bb trickz`, that is
+   * the string that became a single artist row, comma and all.
+   *
+   * The fixture has TWO artists on purpose. One artist cannot tell "keeps the
+   * list" from "keeps the first", which is exactly the distinction this exists
+   * to make.
+   */
+  it('carries every credited artist, not just the principal', async () => {
+    const recording = {
+      acoustid: 'a-cluster',
+      score: 0.99,
+      recordingMbid: 'rec-mbid',
+      title: 'Joven y Salvaje',
+      artists: [
+        { name: 'benny blanco', mbid: 'mbid-benny' },
+        { name: 'Bb trickz', mbid: 'mbid-bb' },
+      ],
+      releaseMbids: ['rel-1'],
+      releaseGroupMbids: [],
+      durationSec: 180,
+    };
+
+    const identity = toAcousticIdentity(recording);
+
+    // The principal stays where every existing caller reads it …
+    expect(identity.artistName).toBe('benny blanco');
+    expect(identity.musicbrainzArtistId).toBe('mbid-benny');
+    // … and the SECOND artist is no longer lost.
+    expect(identity.artists.map((a) => a.name)).toEqual(['benny blanco', 'Bb trickz']);
+    expect(identity.artists.map((a) => a.mbid)).toEqual(['mbid-benny', 'mbid-bb']);
   });
 });

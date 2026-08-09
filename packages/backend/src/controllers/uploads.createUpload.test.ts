@@ -748,6 +748,7 @@ describe('POST /api/uploads — the recording the fingerprint resolves to', () =
       recordingMbid: RECORDING_MBID,
       artistName: 'Carlota Giró',
       musicbrainzArtistId: ARTIST_MBID,
+      artists: [{ name: 'Carlota Giró', mbid: ARTIST_MBID }],
       releaseMbid: 'r-1',
       releaseCount: 4,
     };
@@ -781,6 +782,7 @@ describe('POST /api/uploads — the recording the fingerprint resolves to', () =
       acoustid: 'e7d1b7dc-9d1e-4a1f-9f0a-2f3a1b6c8d90',
       score: 0.973,
       recordingMbid: RECORDING_MBID,
+      artists: [],
       releaseCount: 4,
     };
 
@@ -828,6 +830,7 @@ describe('POST /api/uploads — the recording the fingerprint resolves to', () =
       title: 'Midnight Ferry',
       artistName: 'Nadia Ortiz',
       musicbrainzArtistId: ARTIST_MBID,
+      artists: [{ name: 'Nadia Ortiz', mbid: ARTIST_MBID }],
       // Known to MusicBrainz, on no release: the ambiguous case, which weighs
       // heavily without blocking. A released recording would be refused instead.
       releaseCount: 0,

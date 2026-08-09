@@ -568,6 +568,19 @@ export interface AcousticIdentity {
   title?: string;
   artistName?: string;
   musicbrainzArtistId?: string;
+  /**
+   * EVERY credited artist, in MusicBrainz's order, each with its own MBID.
+   *
+   * `artistName`/`musicbrainzArtistId` above are the FIRST of these, kept because
+   * every existing caller wants exactly the principal. This array is what makes a
+   * multi-artist recording expressible at all: AcoustID already returns the
+   * credit separated and identified, and collapsing it to the first entry here
+   * is why a two-artist upload became one artist whose name contained a comma.
+   *
+   * A file tag cannot be split into this — a comma is not evidence — so this is
+   * the ONLY structured multi-artist signal the upload path has.
+   */
+  artists: AcoustidArtist[];
   releaseMbid?: string;
   releaseGroupMbid?: string;
   /**
@@ -630,6 +643,20 @@ export async function resolveAcousticIdentity(
     .where(eq(isrcRegistry.recordingMbid, recording.recordingMbid))
     .limit(1);
 
+  return toAcousticIdentity(recording, registryRow?.isrc);
+}
+
+/**
+ * The recording, reduced to the identity the upload path consumes.
+ *
+ * Split out from {@link identifyRecording} so it can be tested without a
+ * database: the only impure thing that function does is recover the ISRC from
+ * the local slice, and that arrives here as an argument.
+ */
+export function toAcousticIdentity(
+  recording: AcoustidRecording,
+  isrc?: string,
+): AcousticIdentity {
   const primaryArtist = recording.artists[0];
   const releaseMbid = recording.releaseMbids[0];
   const releaseGroupMbid = recording.releaseGroupMbids[0];
@@ -638,12 +665,13 @@ export async function resolveAcousticIdentity(
     acoustid: recording.acoustid,
     score: recording.score,
     recordingMbid: recording.recordingMbid,
-    ...(registryRow?.isrc && { isrc: registryRow.isrc }),
+    ...(isrc && { isrc }),
     ...(recording.title && { title: recording.title }),
     ...(primaryArtist && {
       artistName: primaryArtist.name,
       musicbrainzArtistId: primaryArtist.mbid,
     }),
+    artists: recording.artists,
     ...(releaseMbid && { releaseMbid }),
     ...(releaseGroupMbid && { releaseGroupMbid }),
     releaseCount: new Set([...recording.releaseMbids, ...recording.releaseGroupMbids]).size,
