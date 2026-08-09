@@ -230,6 +230,15 @@ const UploadScreen: React.FC = () => {
     const batch = pendingFiles;
     let refused = 0;
     let failed = 0;
+    /**
+     * Captured HERE, not read back from `failures`.
+     *
+     * `setFailures` is a state update: the `failures` this callback closes over
+     * is the value from the render that created it, so reading it after the loop
+     * yields the PREVIOUS run's message, or nothing on a first failure. A local
+     * is the only thing that sees what this run just produced.
+     */
+    let firstFailureMessage = '';
 
     for (const file of batch) {
       setUploadingKey(file.key);
@@ -241,6 +250,9 @@ const UploadScreen: React.FC = () => {
       } catch (error) {
         logger.error('Upload failed', { fileName: file.audioFile.name, error });
         failed += 1;
+        if (!firstFailureMessage && error instanceof Error && error.message.trim()) {
+          firstFailureMessage = error.message;
+        }
         setFailures((current) => ({
           ...current,
           [file.key]: error instanceof Error ? error.message : t('uploads.errors.upload'),
@@ -260,8 +272,24 @@ const UploadScreen: React.FC = () => {
      * that is exactly what the card is for.
      */
     if (batch.length === 1) {
-      if (failed > 0) toast.error(t('uploads.toasts.oneFailed'));
-      else if (refused > 0) toast.info(t('uploads.toasts.oneRefused'));
+      /**
+       * A FAILURE carries its reason into the toast; a refusal still does not.
+       *
+       * The distinction is not cosmetic. A refusal's card is a structured
+       * `outcome` with a `code` and an actionable explanation, and a sentence
+       * cannot carry it — that is what the card is for. A failure is a thrown
+       * error, and its message is frequently the only actionable thing in the
+       * run: `USUG12606557 belongs to a different recording — … Check the code,
+       * or keep the file in your private library instead.` names the identifier,
+       * the conflict and the two ways out.
+       *
+       * Reported after a real upload where that sentence existed only in the
+       * console: the card renders it, but inline in a list, and the uploader
+       * read the browser console before they read the card.
+       */
+      if (failed > 0) {
+        toast.error(firstFailureMessage || t('uploads.toasts.oneFailed'));
+      } else if (refused > 0) toast.info(t('uploads.toasts.oneRefused'));
       else toast.success(t('uploads.toasts.oneDone'));
       return;
     }

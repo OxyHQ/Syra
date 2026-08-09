@@ -26,10 +26,20 @@
 
 /**
  * Markers that introduce featured performers mid-credit. Matched
- * case-insensitively and only between whitespace, so `Ftour Collective` and
- * `Withered Hand` are not mistaken for markers.
+ * case-insensitively and only after whitespace or an OPENING BRACKET, so
+ * `Ftour Collective` and `Withered Hand` are still not mistaken for markers.
+ *
+ * The bracket half is not a nicety. `(feat. X)`, `(with X)` and `[feat. X]` are
+ * how every major platform writes a feature, and requiring whitespace before the
+ * marker meant the bracketed spelling — the common one — was never split:
+ * `Joven y Salvaje (with Bb trickz)` came back whole, so its name key never
+ * matched the registry's `Joven y Salvaje` and a correct upload was refused with
+ * "belongs to a different recording". Measured on a real rejected file.
+ *
+ * The closing bracket is stripped by `splitFeatured`, which already trims and
+ * drops empties, so `Bb trickz)` yields `Bb trickz`.
  */
-const FEATURE_MARKER = /\s(?:feat\.?|ft\.?|featuring|with|vs\.?|versus|w\/)\s+/i;
+const FEATURE_MARKER = /[\s([](?:feat\.?|ft\.?|featuring|with|vs\.?|versus|w\/)\s+/i;
 
 /**
  * Markers that may open a credit — `feat. Kofi Mensah`, with no primary artist
@@ -66,7 +76,9 @@ export function splitArtistCredit(raw: string): ArtistCredit {
   const splitFeatured = (remainder: string): string[] =>
     remainder
       .split(FEATURED_SEPARATOR)
-      .map((name) => name.trim())
+      // A bracketed feature carries its closing bracket into the remainder
+      // (`Bb trickz)`), and a trailing `)`/`]` is never part of a name.
+      .map((name) => name.trim().replace(/[)\]]+$/, '').trim())
       .filter((name) => name.length > 0);
 
   // A credit that is nothing but a feature (`feat. Kofi Mensah`) has no

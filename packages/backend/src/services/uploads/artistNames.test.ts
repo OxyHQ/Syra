@@ -79,3 +79,35 @@ describe('splitArtistCredit — degenerate input', () => {
     expect(splitArtistCredit('  Nadia Ortiz  ')).toEqual({ primary: 'Nadia Ortiz', featured: [] });
   });
 });
+
+describe('splitArtistCredit — the BRACKETED feature, which is how platforms write it', () => {
+  /**
+   * This block exists because a correct upload was refused in production.
+   *
+   * `Joven y Salvaje (with Bb trickz)` came back whole: the marker required
+   * whitespace before it, and the character before `with` was `(`. The title
+   * key therefore never matched the registry's `Joven y Salvaje`, and the ISRC
+   * check reported "belongs to a different recording" about a file whose
+   * provenance was never in doubt.
+   *
+   * The fixtures below are bracketed on purpose — the unbracketed spelling
+   * already passed before the fix, so a suite testing only that shape cannot
+   * tell the two implementations apart.
+   */
+  it.each([
+    ['Joven y Salvaje (with Bb trickz)', 'Joven y Salvaje', ['Bb trickz']],
+    ['Joven y Salvaje (feat. Bb trickz)', 'Joven y Salvaje', ['Bb trickz']],
+    ['Joven y Salvaje [feat. Bb trickz]', 'Joven y Salvaje', ['Bb trickz']],
+    ['Rels B (with Bb trickz, Otro)', 'Rels B', ['Bb trickz', 'Otro']],
+  ])('splits %s', (raw, primary, featured) => {
+    const credit = splitArtistCredit(raw as string);
+    expect(credit.primary).toBe(primary);
+    expect(credit.featured).toEqual(featured);
+  });
+
+  it('does not strip a closing bracket that is part of nothing', () => {
+    // The bracket cleanup applies to the FEATURED remainder only; a principal
+    // name is returned by a different path and must not be touched by it.
+    expect(splitArtistCredit('Sunn O)))').primary).toBe('Sunn O)))');
+  });
+});
