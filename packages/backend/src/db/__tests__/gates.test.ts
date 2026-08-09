@@ -4078,13 +4078,15 @@ describe('deploy-phase ordering (post-genesis)', () => {
     // construction (see migrate.ts); this only holds every migration that
     // lands AFTER it to the invariant a real staged rollout needs.
     //
-    // That post-genesis window is EMPTY right now, and legitimately so: the
-    // boundary froze at the newest migration the cutover applied, so this
-    // becomes load-bearing with `0025` and every migration after it. Which is
-    // exactly why the boundary must never be advanced again — an advanced
-    // boundary would keep this window empty permanently and this test would go
-    // on passing. The three synthetic tests above keep the CHECKER honest in the
-    // meantime; the frozen-boundary pin below keeps the INPUT honest.
+    // That post-genesis window WAS empty at cutover, because the boundary froze
+    // at the newest migration the cutover applied. It is not empty any more:
+    // `0025_powerful_famine` and `0026_supreme_hardball` landed on 2026-08-09,
+    // so this test now holds real migrations to the invariant rather than
+    // passing vacuously. Do not read the emptiness as a reason to delete it —
+    // that reading is what an advanced boundary would manufacture permanently,
+    // which is exactly why the boundary must never be advanced again. The three
+    // synthetic tests above keep the CHECKER honest; the frozen-boundary pin
+    // below keeps the INPUT honest.
     const folder = findMigrationsFolder();
     const journal = readJournal(folder);
     const { phases, problems } = readMigrationPhases(
