@@ -11,7 +11,6 @@ import { getDb, isPostgresConnected } from '../db/postgres';
 import {
   albums,
   catalogEntities,
-  trackCredits,
   trackHlsRenditions,
   trackSources,
   tracks,
@@ -19,7 +18,7 @@ import {
 import { PROTECTED_COLUMNS_BY_TABLE } from '../db/schema/protectedColumns';
 import { descNullsLast } from '../db/catalog/containers';
 import { textSearch } from '../db/catalog/search';
-import { toTrackDtos } from '../db/catalog/hydrate';
+import { loadTrackCredits, toTrackDtos } from '../db/catalog/hydrate';
 import { findOwnedArtist } from '../db/catalog/ownership';
 import type { PublicTrackRow } from '../db/catalog/serialize';
 import { playableTrackFilter } from '../db/catalog/visibility';
@@ -101,12 +100,11 @@ async function loadTrackDetail(trackId: string): Promise<{
   sources: SourceProvenance[];
   hlsRenditions: HlsRendition[];
 }> {
-  const [creditRows, sourceRows, renditionRows] = await Promise.all([
-    getDb()
-      .select({ name: trackCredits.name, role: trackCredits.role, nameKey: trackCredits.nameKey })
-      .from(trackCredits)
-      .where(eq(trackCredits.trackId, trackId))
-      .orderBy(asc(trackCredits.position)),
+  const [creditsByTrack, sourceRows, renditionRows] = await Promise.all([
+    // The SAME loader the listings use. This endpoint used to name its own
+    // three columns here and omitted `catalogEntityId`, so one credit came back
+    // linked from a listing and unlinked from the detail view.
+    loadTrackCredits([trackId]),
     getDb()
       .select({
         provider: trackSources.provider,
@@ -131,7 +129,7 @@ async function loadTrackDetail(trackId: string): Promise<{
   ]);
 
   return {
-    credits: creditRows,
+    credits: creditsByTrack.get(trackId) ?? [],
     sources: sourceRows.map((row) => ({
       provider: row.provider,
       externalId: row.externalId,

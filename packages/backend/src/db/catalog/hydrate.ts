@@ -126,8 +126,14 @@ async function loadHlsRenditionCounts(trackIds: string[]): Promise<Map<string, n
  * paths for the same table and a listing that disagrees with a detail screen
  * about what a track's credits are; the rows are few per track and the artist
  * line needs this query regardless.
+ *
+ * Exported for the same reason, and it is not hypothetical: the track DETAIL
+ * endpoint had its own credits select that named three columns and omitted
+ * `catalogEntityId`, so the same credit came back linked from a listing and
+ * unlinked from the detail view — which is indistinguishable from the data
+ * genuinely having no link, and was read that way.
  */
-async function loadTrackCredits(trackIds: string[]): Promise<Map<string, TrackCredit[]>> {
+export async function loadTrackCredits(trackIds: string[]): Promise<Map<string, TrackCredit[]>> {
   if (trackIds.length === 0) return new Map();
 
   const rows = await getDb()
