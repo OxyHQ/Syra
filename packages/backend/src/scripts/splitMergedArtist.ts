@@ -25,8 +25,10 @@
  *
  * Usage:
  *   bun run src/scripts/splitMergedArtist.ts <entityId> "First Artist" "Second" [...]
+ *   bun run src/scripts/splitMergedArtist.ts --link "Guest Artist"
+ *   bun run src/scripts/splitMergedArtist.ts --recount <artistId>
  */
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { normalizeNameKey } from '@syra/shared-types';
 import { closePostgres, connectPostgres, getDb } from '../db/postgres';
 import { albums, catalogEntities, trackCredits, tracks } from '../db/schema/catalog';
@@ -43,7 +45,7 @@ import { logger } from '../utils/logger';
  * any counter drift: it reads the truth and writes it, so it is correct from any
  * starting state and safe to repeat.
  */
-async function recount(artistId: string): Promise<void> {
+export async function recount(artistId: string): Promise<void> {
   const db = getDb();
   const [artist] = await db
     .select({ id: catalogEntities.id, name: catalogEntities.name })
@@ -68,8 +70,53 @@ async function recount(artistId: string): Promise<void> {
   logger.info(`Recounted "${artist.name}": ${after?.tracks ?? 0} track(s), ${after?.albums ?? 0} album(s)`);
 }
 
+/**
+ * Point every unlinked credit bearing this artist's name key AT this artist.
+ *
+ * Needed because the split above deletes the merged row once it is done, so a
+ * split that ran with an earlier version of this script — one that left an
+ * existing credit untouched — can no longer be re-run to repair itself: there
+ * is nothing left to split. Production reached exactly that state, with the
+ * guest credited by name on the track and linked to nobody.
+ *
+ * The artist is NAMED by the operator, like the split's own arguments, and the
+ * match is an exact `name_key` equality against the key artists already dedupe
+ * by. Nothing here parses or guesses at a name.
+ *
+ * Only fills an EMPTY id, so it cannot overwrite a link something else had a
+ * reason to make, and re-running it is a no-op.
+ */
+export async function link(name: string): Promise<void> {
+  const db = getDb();
+  const nameKey = normalizeNameKey(name);
+  if (!nameKey) throw new Error(`"${name}" does not normalise to a name key`);
+
+  const [artist] = await db
+    .select({ id: catalogEntities.id, name: catalogEntities.name })
+    .from(catalogEntities)
+    .where(and(eq(catalogEntities.type, 'artist'), eq(catalogEntities.nameKey, nameKey)))
+    .limit(1);
+
+  if (!artist) {
+    throw new Error(
+      `No artist with name key "${nameKey}". Create it first — this mode links ` +
+        'credits to an artist that exists, it does not invent one.'
+    );
+  }
+
+  const updated = await db
+    .update(trackCredits)
+    .set({ catalogEntityId: artist.id })
+    .where(and(eq(trackCredits.nameKey, nameKey), isNull(trackCredits.catalogEntityId)))
+    .returning({ id: trackCredits.id, trackId: trackCredits.trackId });
+
+  logger.info(`Linked ${updated.length} credit(s) to "${artist.name}" (${artist.id})`);
+  for (const row of updated) logger.info(`  track ${row.trackId}`);
+}
+
 async function main(): Promise<void> {
   const recountOnly = process.argv.includes('--recount');
+  const linkOnly = process.argv.includes('--link');
   const [entityId, ...names] = process.argv.slice(2).filter((arg) => !arg.startsWith('--'));
 
   if (recountOnly) {
@@ -77,6 +124,17 @@ async function main(): Promise<void> {
     await connectPostgres();
     try {
       await recount(entityId);
+    } finally {
+      await closePostgres();
+    }
+    return;
+  }
+
+  if (linkOnly) {
+    if (!entityId) throw new Error('Usage: splitMergedArtist.ts --link "<Artist Name>"');
+    await connectPostgres();
+    try {
+      await link(entityId);
     } finally {
       await closePostgres();
     }
@@ -141,7 +199,7 @@ async function main(): Promise<void> {
           // upload of the same recording; `(track, nameKey, role)` is what makes
           // it the same credit.
           const [existing] = await tx
-            .select({ id: trackCredits.id })
+            .select({ id: trackCredits.id, catalogEntityId: trackCredits.catalogEntityId })
             .from(trackCredits)
             .where(
               and(
@@ -151,7 +209,28 @@ async function main(): Promise<void> {
               ),
             )
             .limit(1);
-          if (existing) continue;
+
+          if (existing) {
+            /**
+             * Found is NOT the same as correct — the same mistake the counters
+             * made. A credit written by an earlier pass of this script, before
+             * `catalog_entity_id` was carried, names the person and links to
+             * nobody; skipping it leaves the guest's name rendering as dead
+             * text forever, which is exactly what production ended up with.
+             *
+             * Only ever fills an EMPTY id. A credit already pointing somewhere
+             * was linked by something that had a reason to, and this run's
+             * argument list is not evidence to overrule it.
+             */
+            if (!existing.catalogEntityId) {
+              await tx
+                .update(trackCredits)
+                .set({ catalogEntityId: artist.id })
+                .where(eq(trackCredits.id, existing.id));
+              logger.info(`  linked existing credit "${artist.name}" -> ${artist.id}`);
+            }
+            continue;
+          }
 
           await tx.insert(trackCredits).values({
             trackId: track.id,
@@ -233,7 +312,10 @@ async function main(): Promise<void> {
   }
 }
 
-void main().catch((error: unknown) => {
-  logger.error('Split failed', { err: describeErrorSafely(error) });
-  process.exitCode = 1;
-});
+// Guarded so the module can be imported by a test without running a repair.
+if (require.main === module) {
+  void main().catch((error: unknown) => {
+    logger.error('Split failed', { err: describeErrorSafely(error) });
+    process.exitCode = 1;
+  });
+}
