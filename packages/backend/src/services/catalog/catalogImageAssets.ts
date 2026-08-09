@@ -112,7 +112,15 @@ function downloadImage(sourceUrl: string, redirectsRemaining = MAX_REDIRECTS): P
       const contentType = String(res.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();
       if (!contentType.startsWith('image/')) {
         res.resume();
-        reject(new Error('Image response is not an image'));
+        // Naming what arrived, because the bare message cannot be acted on: a
+        // host serving an HTML challenge page, one sending
+        // `application/octet-stream` for a real JPEG, and one with no
+        // `Content-Type` at all are three different problems with three
+        // different fixes, and they all logged the same sentence. Truncated and
+        // quoted — this is a header from a remote host, so it is untrusted text
+        // going into a log line.
+        const seen = contentType ? `"${contentType.slice(0, 60)}"` : '(no Content-Type header)';
+        reject(new Error(`Image response is not an image: ${seen}`));
         return;
       }
 
