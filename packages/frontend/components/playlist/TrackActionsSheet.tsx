@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { Track } from '@syra/shared-types';
 import { useRemoveTracksFromPlaylist } from '@/hooks/usePlaylistMutations';
 import { AddToPlaylistSheet } from '@/components/playlist/AddToPlaylistSheet';
+import { TrackArtistLine } from '@/components/TrackArtistLine';
 import { toast } from '@oxyhq/bloom/toast';
 
 interface TrackActionsSheetProps {
@@ -72,9 +73,14 @@ export const TrackActionsSheet: React.FC<TrackActionsSheetProps> = ({
           <Text className="text-foreground" style={styles.trackTitle} numberOfLines={1}>
             {track.title}
           </Text>
-          <Text className="text-muted-foreground" style={styles.trackArtist} numberOfLines={1}>
-            {track.artistName}
-          </Text>
+          <TrackArtistLine
+            track={track}
+            className="text-muted-foreground"
+            style={styles.trackArtist}
+            numberOfLines={1}
+            linked={false}
+            fallback={track.artistName}
+          />
 
           <Pressable
             style={styles.action}
