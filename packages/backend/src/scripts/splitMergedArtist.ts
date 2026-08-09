@@ -26,7 +26,7 @@
  * Usage:
  *   bun run src/scripts/splitMergedArtist.ts <entityId> "First Artist" "Second" [...]
  */
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { normalizeNameKey } from '@syra/shared-types';
 import { closePostgres, connectPostgres, getDb } from '../db/postgres';
 import { albums, catalogEntities, trackCredits, tracks } from '../db/schema/catalog';
@@ -34,8 +34,54 @@ import { ensureContributedArtist } from '../services/uploads/resolveArtist';
 import { describeErrorSafely } from '../utils/error';
 import { logger } from '../utils/logger';
 
+/**
+ * Recompute one artist's denormalised counters from the rows that exist.
+ *
+ * Separate mode because a split that has ALREADY run leaves nothing to split —
+ * the merged row is gone — while its counters can still be wrong, which is
+ * exactly what the first production run left behind. Also the general repair for
+ * any counter drift: it reads the truth and writes it, so it is correct from any
+ * starting state and safe to repeat.
+ */
+async function recount(artistId: string): Promise<void> {
+  const db = getDb();
+  const [artist] = await db
+    .select({ id: catalogEntities.id, name: catalogEntities.name })
+    .from(catalogEntities)
+    .where(eq(catalogEntities.id, artistId))
+    .limit(1);
+  if (!artist) throw new Error(`No catalog entity ${artistId}`);
+
+  await db
+    .update(catalogEntities)
+    .set({
+      statsTracks: sql`(select count(*) from ${tracks} where ${tracks.artistId} = ${artistId})`,
+      statsAlbums: sql`(select count(*) from ${albums} where ${albums.artistId} = ${artistId})`,
+    })
+    .where(eq(catalogEntities.id, artistId));
+
+  const [after] = await db
+    .select({ tracks: catalogEntities.statsTracks, albums: catalogEntities.statsAlbums })
+    .from(catalogEntities)
+    .where(eq(catalogEntities.id, artistId))
+    .limit(1);
+  logger.info(`Recounted "${artist.name}": ${after?.tracks ?? 0} track(s), ${after?.albums ?? 0} album(s)`);
+}
+
 async function main(): Promise<void> {
+  const recountOnly = process.argv.includes('--recount');
   const [entityId, ...names] = process.argv.slice(2).filter((arg) => !arg.startsWith('--'));
+
+  if (recountOnly) {
+    if (!entityId) throw new Error('Usage: splitMergedArtist.ts --recount <artistId>');
+    await connectPostgres();
+    try {
+      await recount(entityId);
+    } finally {
+      await closePostgres();
+    }
+    return;
+  }
 
   if (!entityId || names.length < 2) {
     throw new Error(
@@ -126,6 +172,24 @@ async function main(): Promise<void> {
         .update(albums)
         .set({ artistId: principal.id, artistName: principal.name })
         .where(eq(albums.artistId, entityId));
+
+      /**
+       * `statsTracks`/`statsAlbums` are DENORMALISED counters, incremented once
+       * per upload — so re-pointing rows moves the tracks and leaves the counts
+       * behind. The first production run of this script did exactly that: the
+       * artist page said 0 tracks while owning one.
+       *
+       * Recomputed from the rows rather than incremented. An increment assumes
+       * it knows the previous value; a recount is correct whatever state the
+       * row was in, which is what makes re-running this safe.
+       */
+      await tx
+        .update(catalogEntities)
+        .set({
+          statsTracks: sql`(select count(*) from ${tracks} where ${tracks.artistId} = ${principal.id})`,
+          statsAlbums: sql`(select count(*) from ${albums} where ${albums.artistId} = ${principal.id})`,
+        })
+        .where(eq(catalogEntities.id, principal.id));
     });
 
     // Checked, not assumed: anything still pointing here means the split is
