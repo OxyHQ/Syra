@@ -23,6 +23,7 @@ import { useAuthGate } from '@/hooks/useAuthGate';
 import { CATALOG_QUERY_KEYS } from '@/hooks/useLibraryCollections';
 import { AddToPlaylistSheet } from '@/components/playlist/AddToPlaylistSheet';
 import { TrackActionsSheet } from '@/components/playlist/TrackActionsSheet';
+import { TrackArtistLine } from '@/components/TrackArtistLine';
 
 /**
  * Album Screen
@@ -466,12 +467,13 @@ const AlbumView: React.FC<AlbumViewProps> = ({
                           <Text className="text-muted-foreground" style={styles.explicitText}>E</Text>
                         </View>
                       )}
-                      <Text
-                        className="text-muted-foreground" style={styles.trackArtist}
+                      <TrackArtistLine
+                        track={track}
+                        className="text-muted-foreground"
+                        style={styles.trackArtist}
                         numberOfLines={1}
-                      >
-                        {track.artistName}
-                      </Text>
+                        fallback={track.artistName}
+                      />
                     </View>
                   </View>
                 </View>

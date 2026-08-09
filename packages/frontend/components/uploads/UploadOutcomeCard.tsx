@@ -15,6 +15,7 @@ import { musicService } from '@/services/musicService';
 import { useLibrary, useToggleLikeTrack } from '@/hooks/useLibrary';
 import { useAuthGate } from '@/hooks/useAuthGate';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
+import { TrackArtistLine } from '@/components/TrackArtistLine';
 
 /**
  * What happened to one uploaded file, said plainly.
@@ -174,9 +175,14 @@ const CatalogTrackPreview: React.FC<{ trackId: string; showAddToLibrary: boolean
           <Text className="text-foreground" style={styles.matchedTitle} numberOfLines={1}>
             {track.title}
           </Text>
-          <Text className="text-muted-foreground" style={styles.matchedArtist} numberOfLines={1}>
-            {track.artistName}
-          </Text>
+          <TrackArtistLine
+            track={track}
+            className="text-muted-foreground"
+            style={styles.matchedArtist}
+            numberOfLines={1}
+            linked={false}
+            fallback={track.artistName}
+          />
         </View>
       </Pressable>
 

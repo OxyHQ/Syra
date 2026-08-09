@@ -22,6 +22,7 @@ import { toast } from '@oxyhq/bloom/toast';
 import SEO from '@/components/SEO';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { TrackArtistLine } from '@/components/TrackArtistLine';
 import { z } from 'zod';
 
 const copyrightReportFormSchema = z.object({
@@ -216,9 +217,13 @@ const CopyrightReportScreen: React.FC = () => {
                       <Text className="text-foreground" style={styles.resultTitle}>
                         {track.title}
                       </Text>
-                      <Text className="text-muted-foreground" style={styles.resultArtist}>
-                        {track.artistName}
-                      </Text>
+                      <TrackArtistLine
+                        track={track}
+                        className="text-muted-foreground"
+                        style={styles.resultArtist}
+                        linked={false}
+                        fallback={track.artistName}
+                      />
                     </View>
                     <MaterialCommunityIcons
                       name="chevron-right"

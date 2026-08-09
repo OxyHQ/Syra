@@ -19,6 +19,7 @@ import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { useLibrary, useToggleLikeTrack } from '@/hooks/useLibrary';
 import { EpisodeNowPlaying } from '@/components/podcast/EpisodeNowPlaying';
 import { CastButton } from '@/components/CastButton';
+import { TrackArtistLine } from '@/components/TrackArtistLine';
 
 /**
  * Now Playing Sidebar Component
@@ -186,20 +187,16 @@ export const NowPlaying: React.FC = () => {
                     >
                       {currentTrack.title}
                     </Text>
-                    <Pressable
-                      onPress={() => router.push(`/p/${currentTrack.artistId}`)}
-                      style={styles.artistPressable}
-                      disabled={!currentTrack.artistId}
-                    >
-                      <Text
+                    <View style={styles.artistPressable}>
+                      {/* A locker file with no resolved artist is valid, not
+                          broken — it renders as unknown rather than blank. */}
+                      <TrackArtistLine
+                        track={currentTrack}
                         style={[styles.trackArtist, { color: '#fff' }]}
                         numberOfLines={1}
-                      >
-                        {/* A locker file with no resolved artist is valid, not
-                            broken — it renders as unknown rather than blank. */}
-                        {currentTrack.artistName || t('uploads.unknownArtist')}
-                      </Text>
-                    </Pressable>
+                        fallback={t('uploads.unknownArtist')}
+                      />
+                    </View>
                   </View>
                   {isCatalogTrack && (
                     <Pressable
@@ -351,9 +348,14 @@ export const NowPlaying: React.FC = () => {
                             <Text className="text-foreground" style={styles.queueItemTitle} numberOfLines={1}>
                               {track.title}
                             </Text>
-                            <Text className="text-muted-foreground" style={styles.queueItemArtist} numberOfLines={1}>
-                              {track.artistName}
-                            </Text>
+                            <TrackArtistLine
+                              track={track}
+                              className="text-muted-foreground"
+                              style={styles.queueItemArtist}
+                              numberOfLines={1}
+                              linked={false}
+                              fallback={track.artistName}
+                            />
                           </View>
                         </Pressable>
                       ))}

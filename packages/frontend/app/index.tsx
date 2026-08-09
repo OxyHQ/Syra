@@ -35,6 +35,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { pickCatalogImageUrl, resolvePodcastArtwork } from '@/utils/pickImage';
 import { authenticatedClient } from '@/utils/api';
 import { liveRoomsQueryKey } from '@/lib/liveConfig';
+import { trackArtistsText } from '@/utils/trackArtists';
 import { toast } from '@oxyhq/bloom/toast';
 
 const logger = createScopedLogger('HomeScreen');
@@ -698,7 +699,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
                 <View key={track.id}>
                   <MediaCard
                     title={track.title}
-                    subtitle={track.artistName}
+                    subtitle={trackArtistsText(track, '')}
                     type="track"
                     imageUri={track.coverArt}
                     images={track.images}
@@ -831,7 +832,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
                 <View key={track.id}>
                   <MediaCard
                     title={track.title}
-                    subtitle={track.artistName}
+                    subtitle={trackArtistsText(track, '')}
                     type="track"
                     imageUri={track.coverArt}
                     images={track.images}
@@ -1001,7 +1002,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
                 <View key={track.id}>
                   <MediaCard
                     title={track.title}
-                    subtitle={track.artistName}
+                    subtitle={trackArtistsText(track, '')}
                     type="track"
                     imageUri={track.coverArt}
                     images={track.images}

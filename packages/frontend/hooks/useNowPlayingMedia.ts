@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { usePlayerStore } from '@/stores/playerStore';
 import { pickCatalogImageUrl, resolvePodcastArtwork } from '@/utils/pickImage';
+import { trackArtistsText } from '@/utils/trackArtists';
 
 /**
  * Unified now-playing view model so the player bars and the now-playing panel
@@ -34,7 +35,9 @@ export function useNowPlayingMedia(): NowPlayingMedia | null {
         kind: 'track',
         id: currentTrack.id,
         title: currentTrack.title || currentTrack.artistName || 'Untitled track',
-        subtitle: currentTrack.artistName || '',
+        // The whole credit, not the owning artist alone — the player bars render
+        // this as one line and a record by two people must not show one name.
+        subtitle: trackArtistsText(currentTrack, ''),
         imageUri: pickCatalogImageUrl(
           currentTrack.images,
           currentTrack.coverArt,

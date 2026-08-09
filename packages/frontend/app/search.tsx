@@ -23,6 +23,7 @@ import { GenreGridSkeleton, MediaCardRowSkeleton, TrackListSkeleton } from '@/co
 import { usePlayerStore } from '@/stores/playerStore';
 import { usePlayEntity } from '@/hooks/usePlayEntity';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { trackArtistsText } from '@/utils/trackArtists';
 import { useMediaQuery } from 'react-responsive';
 
 /**
@@ -454,7 +455,7 @@ const SearchScreen: React.FC = () => {
                   <View key={track.id}>
                     <MediaCard
                       title={track.title}
-                      subtitle={track.artistName}
+                      subtitle={trackArtistsText(track, '')}
                       type="track"
                       imageUri={track.coverArt}
                       images={track.images}

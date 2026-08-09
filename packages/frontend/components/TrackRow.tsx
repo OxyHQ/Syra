@@ -7,6 +7,7 @@ import { formatDuration } from '@/utils/musicUtils';
 import { useLibrary, useToggleLikeTrack } from '@/hooks/useLibrary';
 import { usePlayerStore } from '@/stores/playerStore';
 import { webViewStyle } from '@/utils/webStyles';
+import { TrackArtistLine } from '@/components/TrackArtistLine';
 
 interface TrackRowProps {
   track: Track;
@@ -146,12 +147,13 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
                 </Text>
               </View>
             ) : null}
-            <Text
-              className="text-muted-foreground" style={styles.trackArtist}
+            <TrackArtistLine
+              track={track}
+              className="text-muted-foreground"
+              style={styles.trackArtist}
               numberOfLines={1}
-            >
-              {track.artistName}
-            </Text>
+              fallback={track.artistName}
+            />
           </View>
         </View>
       </View>

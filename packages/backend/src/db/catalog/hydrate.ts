@@ -10,8 +10,8 @@
  * had (`formatTrackWithCoverArt` issued an `AlbumModel.findById` per track,
  * behind a per-call Map).
  *
- * So this module exists, and everything in it is a BATCH: three queries for a
- * page of any size, and none at all for an empty one.
+ * So this module exists, and everything in it is a BATCH: a fixed number of
+ * queries for a page of any size, and none at all for an empty one.
  *
  * ## Why this is not in `utils/musicHelpers.ts`'s shape
  *
@@ -31,9 +31,10 @@ import type {
   Playlist,
   PlaylistCollaborator,
   Track,
+  TrackCredit,
 } from '@syra/shared-types';
 import { getDb } from '../postgres';
-import { albums, imageAssets, trackHlsRenditions } from '../schema/catalog';
+import { albums, imageAssets, trackCredits, trackHlsRenditions } from '../schema/catalog';
 import {
   imageVariantLookup,
   normalizeImageRef,
@@ -115,6 +116,49 @@ async function loadHlsRenditionCounts(trackIds: string[]): Promise<Map<string, n
   return new Map(rows.map((row) => [row.trackId, row.total]));
 }
 
+/**
+ * The credits of these tracks, keyed by track.
+ *
+ * ONE query for the page, ordered by `(trackId, position)` — which is also the
+ * unique index, so the ordering is read off the index rather than sorted.
+ *
+ * All roles, not just `artist`. Splitting the load by role would mean two read
+ * paths for the same table and a listing that disagrees with a detail screen
+ * about what a track's credits are; the rows are few per track and the artist
+ * line needs this query regardless.
+ */
+async function loadTrackCredits(trackIds: string[]): Promise<Map<string, TrackCredit[]>> {
+  if (trackIds.length === 0) return new Map();
+
+  const rows = await getDb()
+    .select({
+      trackId: trackCredits.trackId,
+      name: trackCredits.name,
+      role: trackCredits.role,
+      nameKey: trackCredits.nameKey,
+      catalogEntityId: trackCredits.catalogEntityId,
+    })
+    .from(trackCredits)
+    .where(inArray(trackCredits.trackId, trackIds))
+    .orderBy(trackCredits.trackId, trackCredits.position);
+
+  const byTrack = new Map<string, TrackCredit[]>();
+  for (const row of rows) {
+    const credits = byTrack.get(row.trackId) ?? [];
+    credits.push({
+      name: row.name,
+      role: row.role,
+      nameKey: row.nameKey,
+      // Postgres stores the absent claim as NULL; the DTO's field is optional,
+      // and a `catalogEntityId: null` would be a link to nowhere for a client
+      // that only checks presence.
+      ...(row.catalogEntityId ? { catalogEntityId: row.catalogEntityId } : {}),
+    });
+    byTrack.set(row.trackId, credits);
+  }
+  return byTrack;
+}
+
 /** The album cover a track falls back to when it carries none of its own. */
 interface AlbumCover {
   coverArt?: string;
@@ -135,13 +179,17 @@ function albumCoverSizes(row: AlbumRow, lookup: ImageVariantLookup): CatalogImag
 /**
  * Serialize a page of tracks.
  *
- * Three queries regardless of page size: the album rows a track can fall back
+ * Four queries regardless of page size: the album rows a track can fall back
  * to for cover art, the `image_assets` behind every referenced variant (track
- * AND album), and the HLS rendition counts.
+ * AND album), the HLS rendition counts, and the credits.
  *
- * `credits`, `sources` and the rendition LADDER itself are not loaded — they are
- * opt-in on `TrackDtoContext`, and no listing surface renders them. A single
- * track endpoint that does needs its own read.
+ * Credits ARE loaded here, and that is a change: a multi-artist track shows its
+ * whole credit everywhere it appears, so the artist line on a listing row is a
+ * listing surface that renders them. Loading them anywhere narrower would leave
+ * whichever screen was missed showing one name for a record by two people.
+ *
+ * `sources` and the rendition LADDER itself are still not loaded — they remain
+ * opt-in on `TrackDtoContext`, and no surface renders them.
  */
 export async function toTrackDtos(rows: readonly PublicTrackRow[]): Promise<Track[]> {
   if (rows.length === 0) return [];
@@ -155,12 +203,13 @@ export async function toTrackDtos(rows: readonly PublicTrackRow[]): Promise<Trac
       ? await getDb().select().from(albums).where(inArray(albums.id, albumIds))
       : [];
 
-  const [lookup, hlsCounts] = await Promise.all([
+  const [lookup, hlsCounts, creditsByTrack] = await Promise.all([
     loadImageVariants([
       ...rows.flatMap(trackImageIds),
       ...albumRows.flatMap(albumImageIds),
     ]),
     loadHlsRenditionCounts(rows.map((row) => row.id)),
+    loadTrackCredits(rows.map((row) => row.id)),
   ]);
 
   const coverByAlbumId = new Map<string, AlbumCover>();
@@ -175,6 +224,7 @@ export async function toTrackDtos(rows: readonly PublicTrackRow[]): Promise<Trac
     toTrackDto(row, lookup, {
       hlsRenditionCount: hlsCounts.get(row.id) ?? 0,
       albumCover: row.albumId ? coverByAlbumId.get(row.albumId) : undefined,
+      credits: creditsByTrack.get(row.id),
     })
   );
 }
