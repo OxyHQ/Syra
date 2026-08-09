@@ -56,7 +56,7 @@ function setupStreamErrorHandler(stream: NodeJS.ReadableStream, res: Response): 
  * GET /api/audio/:trackId
  * 
  * Supports HTTP Range requests for seeking and progressive loading.
- * Uses MongoDB ObjectId to identify tracks.
+ * `trackId` is an opaque `tracks.id` — never parse or order it.
  * 
  * @param req - Express request object
  * @param res - Express response object

@@ -53,62 +53,50 @@ Production: web `https://syra.fm`, API/WebSocket `https://api.syra.fm` / `wss://
 
 ## Catalog — Implementation Rules
 
-Syra is an own-catalogue platform: every track is Syra-hosted, so a track is playable iff it is available and not copyright-removed — no provider dimension, no deployment flag, no per-user variation. The single predicate lives in `playableTrackFilter()` (`packages/backend/src/utils/catalogVisibility.ts`); every catalog/playback read goes through it rather than reimplementing the check.
+Syra is an own-catalogue platform: every track is Syra-hosted, so a track is playable iff it is available and not copyright-removed — no provider dimension, no deployment flag, no per-user variation. The single predicate lives in `playableTrackFilter()` (`packages/backend/src/db/catalog/visibility.ts`); every catalog/playback read goes through it rather than reimplementing the check.
 
 **Music enters through exactly one path: creator upload.** The upload endpoint in `tracks.controller` builds the `Track` directly and calls `enqueueIngest` to start HLS transcoding (`status: processing → ready | failed`). There is no external ingest — no connector layer, no import service, no provider reconciliation, and no dormant pipeline to revive. Adding an external source means building one from scratch; do not assume a hook exists. (Podcasts are a separate vertical and DO mirror external RSS — see the podcast import services.)
 
 - Track-bearing containers (albums, artists, playlists, genre cards, search/browse) must be filtered by the same playable-track predicate. Do not show a container as playable if opening it returns zero playable tracks. An album also carries its own `isAvailable`, so a creator can unpublish the container while its tracks stay individually discoverable.
-- The catalog authority and the playback authority must agree. `playableTrackFilter` gates listing; `isTrackPlayable` (`stream.controller`) gates playback. Any field that hides a track from one MUST hide it from the other, or takedowns stay listed and searchable and then fail at play. `isPlayableTrack` is the in-memory twin of the Mongo filter — change them together.
+- The catalog authority and the playback authority must agree. `playableTrackFilter` gates listing; `isTrackPlayable` (`stream.controller`) gates playback. Any field that hides a track from one MUST hide it from the other, or takedowns stay listed and searchable and then fail at play. `isPlayableTrack` is the in-memory twin of the SQL predicate — change them together.
 - Catalog reads that vary by identity must use the linked Oxy client (`packages/frontend/utils/api.ts`), not `publicApi`.
 - Identity-sensitive catalog queries must wait until `useOxy().isPrivateApiPending` is false and must separate React Query cache keys for `guest` vs `auth`. Never let a guest cold-boot response populate the authenticated cache.
 - The player resolves playback through `GET /stream/:trackId`; the backend is the sole entitlement authority.
-- Catalog filters must compose conditions with `$and` (`andMongoFilters` in `services/recommendations/taste.ts`, or the equivalent helper in `catalogVisibility.ts`), not by spreading filter objects in a way that clobbers an existing `$or`.
-- Playlist readability DOES vary per viewer, unlike track playability: `canViewPlaylist()` (`catalogVisibility.ts`) is the single predicate — public to anyone, otherwise owner or collaborator only. Every surface that exposes a playlist asks it, so the rule cannot change in one place and miss another.
+- Catalog filters compose with drizzle's `and()` — `and(playableTrackFilter(), …)`. There is no counterpart to the old `andMongoFilters`, and none is needed: `and()` takes conditions as arguments, so it cannot lose a term the way spreading two filter objects silently dropped an earlier `$or`. A pool or query that passes an `or(...)` keeps it (`services/radio/radioPools.ts`).
+- Playlist readability DOES vary per viewer, unlike track playability: `canViewPlaylist()` (`db/catalog/visibility.ts`) is the single predicate — public to anyone, otherwise owner or collaborator only. Every surface that exposes a playlist asks it, so the rule cannot change in one place and miss another.
 
-### `$lookup` correlation — convert on the LOCAL side
+## Server-only fields — the protected-column registry is the guard
 
-When a `$lookup` sub-pipeline correlates fields of different BSON types (typically a string id on one side, an `ObjectId` on the other), convert the LOCAL value in `let` and leave the foreign field a bare path:
+A field is kept out of a response by ONE mechanism: `PROTECTED_COLUMNS_BY_TABLE`
+(`db/schema/protectedColumns.ts`). `db/catalog/serialize.ts` derives its row
+shapes from the drizzle table type MINUS that table's protected columns
+(`PublicTrackRow = Omit<typeof tracks.$inferSelect, …>`), so the registry is the
+single source of truth and **a serializer that still names a newly-protected
+column stops compiling**. That is strictly stronger than anything a serializer
+can do by hand, because it fails before the code runs rather than on the one
+route nobody exercised.
 
-```js
-// CORRECT — stays an indexable _id point lookup
-let: { trackId: { $convert: { input: '$trackId', to: 'objectId', onError: null, onNull: null } } },
-pipeline: [{ $match: { $expr: { $eq: ['$_id', '$$trackId'] } } }]
+Two rules survive from the denylist era, and both are about how you VERIFY a
+guard rather than which guard you picked:
 
-// WRONG — no index can serve a computed foreign field; every lookup degrades to a collection scan
-let: { trackId: '$trackId' },
-pipeline: [{ $match: { $expr: { $eq: [{ $toString: '$_id' }, '$$trackId'] } } }]
-```
+- **An allowlist beats a denylist, so prefer a DTO that names every key it
+  returns** (`toTrackDto`, `toAlbumDto`, `toUploadTrackDto`). A field added to
+  the table tomorrow is excluded by default. Do NOT add a `delete` beside one: it
+  can never fire, and it advertises a denylist where the real guard is an
+  allowlist.
+- **Mutation-test which guard is load-bearing** — remove it and confirm the test
+  goes red naming the field. And never read a guard's presence from its comment;
+  a guard can be removed while the comment asserting it survives.
 
-`let` is evaluated once per outer document, so the converted value is a constant the planner can use; a conversion applied to the foreign field cannot be indexed. Use `$convert` with `onError`/`onNull` rather than `$toObjectId`, so a malformed id yields `null` and matches nothing instead of throwing.
+`controllers/serverOnlyFields.leak.test.ts` is the standing gate for the whole
+class, and covers the catalogue, the locker (`user_uploads`) and attestations in
+one place. Its header records what the leak looked like when the guards were a
+Mongoose `select: false` plus an untyped spreading formatter — both of which are
+gone. Keep that history: it is why the registry exists.
 
-This matters most in `utils/playableContainers.ts`, whose pipelines run the `$lookup` BEFORE `$sort`/`$limit` — every container in the collection is evaluated on every request, so per-lookup cost must stay O(1). Prefer bare indexed fields in the leading `$match` over any computed comparison.
-
-## Server-only fields — `select: false` is not access control
-
-`select: false` on a Mongoose path is a QUERY PROJECTION, and `aggregate()`
-ignores it entirely. Syra's catalog reads ARE aggregations
-(`utils/playableContainers.ts`, `findOneArtistWithPlayableTracks`), so a field
-protected only that way is returned in full on exactly those routes. Compounding
-it, `toApiFormat` is untyped and SPREADS the document, so a field's absence from
-the zod schema does not remove it from the response either — two "independent"
-guards, both inert on the same path.
-
-Treat `select: false` as a bytes-on-the-wire optimisation. The load-bearing
-guards are:
-
-- **Catalog serializers** — an explicit `delete` in `stripExternalCatalogFields`
-  (`utils/musicHelpers.ts`), the one funnel they all pass through. Thirteen
-  modules format tracks through it, so a field left out of that strip is exposed
-  by all of them at once.
-- **Hand-written DTOs** — an explicit object literal that NAMES every key it
-  returns (`toUploadTrackDto`). An allowlist also excludes whatever gets added to
-  the model tomorrow. Do NOT add a `delete` to one: it can never fire, and it
-  advertises a denylist where the real guard is an allowlist.
-- **Aggregation output reaching a client unmapped** — an explicit `$project`.
-
-Mutation-test which guard is load-bearing: deleting the strip must fail the test;
-deleting `select: false` will not. And never read a guard's presence from its
-comment — a guard can be removed while the comment asserting it survives.
+Not a leak, and must not be "fixed" into one: `catalog_entities`' four
+`imageLicence*` columns are public on purpose. CC BY-SA is satisfied BY
+displaying the author and licence; hiding them would be the breach.
 
 ## A zod DTO field with no storage is invisible to `tsc`
 
