@@ -83,8 +83,17 @@ jobs:
       # no job executes is a comment — the moderation integration's invariants
       # (the intake transaction commits both writes or neither; the webhook
       # receiver refuses a parsed body) are enforced only by these tests, and
-      # they run against a real in-memory MongoDB replica set rather than a mock,
-      # which is what makes them worth gating on.
+      # they run against a real Postgres rather than a mock, which is what makes
+      # them worth gating on: a mocked `insert` that rejects leaves no aborted
+      # transaction behind, so a unique-violation recovery path passes in the
+      # test and fails against a server.
+      #
+      # (This said "a real in-memory MongoDB replica set" until the Postgres
+      # cutover finished. Syra opens no Mongo anywhere: the live task definition
+      # carries DATABASE_URL and no MONGODB_URI, /health reports
+      # engine=postgres, and no package.json here declares mongoose. The
+      # mongoose in node_modules is an OPTIONAL peer of @oxyhq/crowdsource-app
+      # that nothing satisfies.)
       # The upload screening suite shells out to real binaries rather than mocking
       # them: ffprobe measures a fixture's true duration/codec, ffmpeg builds the
       # fixtures and drives the HLS packager, and fpcalc produces the Chromaprint
