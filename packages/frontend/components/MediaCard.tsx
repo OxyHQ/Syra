@@ -100,7 +100,22 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
   const hasMenu = !!(onAddToQueue || onGoToArtist || onGoToAlbum);
   const isMenuOpen = 'isOpen' in menuControl ? Boolean(menuControl.isOpen) : false;
   const usesHoverActions = hideIdleActions;
-  const hoverBackground = colorWithAlpha(primaryColor, 0.26) ?? theme.colors.backgroundSecondary;
+  /**
+   * `backgroundTertiary`, not `backgroundSecondary`, when the cover has no accent.
+   *
+   * The accent is a DEEP-import product: the shallow directory upsert gives a show
+   * a title and an image but no `primaryColor`, so a freshly-seeded catalogue has
+   * cards whose hover falls back. `backgroundSecondary` is the same role the card's
+   * own art frame uses, so hovering merged the two into one flat block and read as
+   * 'hover stopped working' — which is exactly how this was reported after the
+   * Postgres cutover reseeded every show. `backgroundTertiary` is a distinct
+   * surface, so the fallback is visibly a hover rather than an absence.
+   *
+   * Note `colorWithAlpha` parses HEX only. That is right for `primaryColor`, which
+   * is server-extracted hex — but it silently returns undefined for a Bloom token,
+   * which resolves to `rgb(...)`. Never feed it one.
+   */
+  const hoverBackground = colorWithAlpha(primaryColor, 0.26) ?? theme.colors.backgroundTertiary;
 
   React.useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.matchMedia) {
