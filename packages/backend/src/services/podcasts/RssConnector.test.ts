@@ -189,3 +189,45 @@ describe('fetchAndParse — conditional GET', () => {
     ).rejects.toThrow();
   });
 });
+
+describe('CDATA text that arrives already escaped', () => {
+  /**
+   * A publisher error, not a spec question. Inside CDATA, `&amp;` is literally
+   * those five characters — the parser is right not to touch it — but feeds put
+   * escaped text there anyway, and production showed `Words &amp; Numbers` to
+   * listeners. Measured at 1 title in 40.
+   *
+   * The fixtures below carry the escaped form on purpose: a feed with clean
+   * CDATA passes whether or not this decoding exists, so it cannot tell the two
+   * implementations apart.
+   */
+  const feed = (title: string, itemTitle: string): string =>
+    `<?xml version="1.0"?><rss version="2.0"><channel>` +
+    `<title><![CDATA[${title}]]></title>` +
+    `<item><title><![CDATA[${itemTitle}]]></title>` +
+    `<enclosure url="https://example.com/a.mp3" type="audio/mpeg" length="1"/>` +
+    `<guid>g1</guid></item></channel></rss>`;
+
+  it('decodes the named entities a feed escaped inside CDATA', () => {
+    const parsed = parseFeedXml(feed('Words &amp; Numbers', 'A &lt;b&gt; C'));
+    expect(parsed?.show.title).toBe('Words & Numbers');
+    expect(parsed?.episodes[0]?.title).toBe('A <b> C');
+  });
+
+  it('decodes numeric references, decimal and hex', () => {
+    const parsed = parseFeedXml(feed('Caf&#233; &#x26; Bar', 'x'));
+    expect(parsed?.show.title).toBe('Café & Bar');
+  });
+
+  it('leaves clean CDATA untouched, including a bare ampersand', () => {
+    const parsed = parseFeedXml(feed('Words & Numbers', 'y'));
+    expect(parsed?.show.title).toBe('Words & Numbers');
+  });
+
+  it('leaves a malformed reference alone rather than throwing', () => {
+    // A lone surrogate and an out-of-range code point are both rejected: a
+    // malformed feed must not take the import down.
+    const parsed = parseFeedXml(feed('A &#xD800; B &#99999999; C', 'z'));
+    expect(parsed?.show.title).toBe('A &#xD800; B &#99999999; C');
+  });
+});

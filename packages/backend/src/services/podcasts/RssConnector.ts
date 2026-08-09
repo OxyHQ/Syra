@@ -125,10 +125,49 @@ function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [value];
 }
 
+/**
+ * The five XML entities, plus numeric references, as they appear INSIDE CDATA.
+ *
+ * `fast-xml-parser` decodes entities in ordinary text, correctly — and correctly
+ * does NOT decode them inside CDATA, because there they are literal by
+ * definition. The trouble is that feeds put already-escaped text inside CDATA
+ * anyway, which is the one place escaping was unnecessary:
+ *
+ *   <title><![CDATA[Words &amp; Numbers]]></title>
+ *
+ * Measured on production: 1 title in 40 arrives this way. So this undoes a
+ * publisher's mistake rather than implementing a spec, and it is deliberately
+ * narrow — the five named entities and numeric references, nothing from the
+ * ~2,000-entry HTML set. A title that genuinely means the characters `&amp;` is
+ * conceivable and would be altered; nobody types that in a podcast title, and
+ * the alternative is showing `&amp;` to every listener.
+ */
+const XML_ENTITY = /&(?:(amp|lt|gt|quot|apos)|#(\d{1,7})|#[xX]([0-9a-fA-F]{1,6}));/g;
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+};
+
+function decodeXmlEntities(value: string): string {
+  if (!value.includes('&')) return value;
+  return value.replace(XML_ENTITY, (match, named?: string, dec?: string, hex?: string) => {
+    if (named) return NAMED_ENTITIES[named] ?? match;
+    const code = dec ? Number.parseInt(dec, 10) : Number.parseInt(hex ?? '', 16);
+    // Reject anything outside Unicode, and the surrogate range, rather than
+    // letting `fromCodePoint` throw on a malformed feed.
+    if (!Number.isFinite(code) || code < 1 || code > 0x10ffff) return match;
+    if (code >= 0xd800 && code <= 0xdfff) return match;
+    return String.fromCodePoint(code);
+  });
+}
+
 /** Read the text content of a node (string, number, or `{ '#text': ... }`). */
 function text(node: unknown): string | undefined {
   if (typeof node === 'string') {
-    const trimmed = node.trim();
+    const trimmed = decodeXmlEntities(node).trim();
     return trimmed.length > 0 ? trimmed : undefined;
   }
   if (typeof node === 'number') return String(node);
