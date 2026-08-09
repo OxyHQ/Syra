@@ -17,6 +17,7 @@
  */
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { existsSync } from 'node:fs';
 import { connectPostgres, closePostgres } from '../db/postgres';
 import { importFeed } from '../services/podcasts/podcastImportService';
 import { describeErrorSafely } from '../utils/error';
@@ -39,11 +40,31 @@ function numericFlag(name: string, fallback: number): number {
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
+/**
+ * Find `data/` by walking UP from this module, not by counting `..`.
+ *
+ * The compiled layout is not the source layout: `tsc` emits this file to
+ * `dist/src/scripts/`, while it lives at `src/scripts/`. A fixed
+ * `join(__dirname, '..', '..', 'data')` therefore resolves correctly when run
+ * from source and lands on `dist/data` — which does not exist — inside the image.
+ * The failure surfaces only in production, after a deploy has already reported
+ * success, which is exactly the kind a local run cannot catch.
+ */
+function resolveDataDir(): string {
+  let dir = __dirname;
+  for (let depth = 0; depth < 6; depth += 1) {
+    const candidate = path.join(dir, 'data');
+    if (existsSync(candidate)) return candidate;
+    dir = path.dirname(dir);
+  }
+  throw new Error(`Could not locate a data/ directory above ${__dirname}`);
+}
+
 async function main(): Promise<void> {
   const concurrency = numericFlag('concurrency', DEFAULT_CONCURRENCY);
   const limit = numericFlag('limit', 0);
 
-  const file = path.join(__dirname, '..', '..', 'data', 'podcast-feeds.txt');
+  const file = path.join(resolveDataDir(), 'podcast-feeds.txt');
   const feeds = (await readFile(file, 'utf8'))
     .split('\n')
     .map((line) => line.trim())

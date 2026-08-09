@@ -190,6 +190,14 @@ COPY --from=builder --chown=node:node /app/packages/backend/assets ./packages/ba
 # Dockerfile's — but it fails, and it fails inside a production deploy.
 COPY --from=builder --chown=node:node /app/packages/backend/drizzle ./packages/backend/drizzle
 
+# `data/` holds the podcast feed list the re-import script reads, and the script
+# itself DOES reach the image — `tsconfig.build.json` excludes only tests, so
+# `src/scripts/**` compiles into `dist/`. Shipping the code without its input is
+# the failure this line prevents: `reimportPodcastFeeds` resolves the list as
+# `dist/scripts/../../data/podcast-feeds.txt`, so without this COPY the task
+# starts, connects, and dies on ENOENT after the deploy has already succeeded.
+COPY --from=builder --chown=node:node /app/packages/backend/data ./packages/backend/data
+
 EXPOSE 3000
 
 # Container-level health check hitting the app's /health endpoint.
