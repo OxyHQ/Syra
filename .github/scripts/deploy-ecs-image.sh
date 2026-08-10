@@ -120,10 +120,37 @@ if [[ -z "$current_task_definition" ]]; then
 fi
 
 service_desired_count="$(jq -r '.services[0].desiredCount // empty' <<<"$service_json")"
-if ! [[ "$service_desired_count" =~ ^[0-9]+$ ]] ||
-   (( service_desired_count < 1 )); then
-  echo "::error::ECS service $APP must have a positive desiredCount before deployment (current: ${service_desired_count:-missing}). Scale the service up explicitly before retrying."
+# Split from the zero check below on purpose, and the split is the safety
+# property. A non-numeric or ABSENT desiredCount is ECS declining to tell us the
+# answer — throttled, malformed, changed — and treating that as a deliberate hold
+# turns an API failure into a silent no-op deploy that exits 0. Absence is not
+# zero. Note the order matters as much as the test: `(( "" < 1 ))` is TRUE in
+# bash, so an unreadable value reaching the zero branch would take the
+# held-down-carry-on path.
+if ! [[ "$service_desired_count" =~ ^[0-9]+$ ]]; then
+  echo "::error::ECS service $APP reported a non-numeric desiredCount (${service_desired_count:-missing}); refusing to deploy."
   exit 1
+fi
+
+# desiredCount 0 is a STATE, not an error. A service is parked at zero for the
+# whole of a store cutover on purpose, and refusing the deploy there is
+# self-sealing: the image that would make the service bootable again is the image
+# the refusal blocks, so the parked state can never be left.
+#
+# What this must NOT become is a green deploy that reports a release nobody got.
+# So the release still does everything that is real at zero capacity — it runs
+# the PRE one-shot, registers the revision, and POINTS THE SERVICE AT IT — and
+# then stops at the steps that are not real, saying so loudly.
+#
+# Pointing the service is the half that is easy to leave out and expensive to
+# skip. `register-task-definition` alone does not repoint anything: ECS launches
+# whatever revision the SERVICE is configured with, so a later `desiredCount`
+# bump would start the OLD image, and this script derives its next render from
+# `services[0].taskDefinition` (see `current_task_definition` above), so every
+# subsequent deploy would keep building on the stale revision too.
+zero_capacity_deploy=false
+if (( service_desired_count < 1 )); then
+  zero_capacity_deploy=true
 fi
 
 task_definition_file="$(mktemp)"
@@ -526,10 +553,39 @@ if ! aws ecs update-service \
   }' \
   >/dev/null; then
   echo "::error::ECS rejected the service update; restoring the previous task definition defensively."
+  # At zero capacity there is nothing to restore TO: no task is running, so the
+  # "previous image" is not serving either, and rollback_service would sit in
+  # wait_for_service_rollout until MAX_WAIT_SECS waiting for a steady state that
+  # cannot arrive. Say that instead of spending twenty minutes proving it.
+  if [[ "$zero_capacity_deploy" == "true" ]]; then
+    echo "::error::$APP is at desiredCount=0, so no rollback was attempted: nothing is running to roll back from, and the service is still pointed at $current_task_definition."
+    exit 1
+  fi
   if ! rollback_service; then
     echo "::error::The defensive rollback also failed; manual intervention is required."
   fi
   exit 1
+fi
+
+# Everything real at zero capacity is now done: the PRE one-shot ran, the
+# revision is registered, and the service points at it. What follows is not real
+# — a rollout at desiredCount 0 reaches "COMPLETED" with zero running tasks,
+# which is exactly the plausible green this stops at; a smoke check measures the
+# hold rather than the image; and the POST one-shot is this repo's `post`
+# migration, which drops and narrows and has no healthy image to confirm it.
+#
+# The POST line is NOT boilerplate copied from a sibling: in Syra
+# POST_DEPLOY_TASK_COMMAND_JSON *is* `migrate.js --phase=post`, so an operator
+# who scales up later has a pending schema change and no other way to know.
+if [[ "$zero_capacity_deploy" == "true" ]]; then
+  echo "::warning::NO ROLLOUT PERFORMED: ECS service $APP is at desiredCount=0 and is running ZERO tasks."
+  echo "::warning::NO ROLLOUT PERFORMED: the task definition WAS registered and the service now points at it: $new_task_definition"
+  echo "::warning::NO ROLLOUT PERFORMED: image $IMAGE_URI is NOT live and $APP is serving NOTHING. This deploy released nothing to users."
+  if [[ -n "$POST_DEPLOY_TASK_COMMAND_JSON" ]]; then
+    echo "::warning::NO ROLLOUT PERFORMED: the post-deploy one-shot was NOT run — for this repo that is the 'post' migration phase, which drops and narrows and has no healthy image to confirm first. It applies on the first ordinary deploy after the service is scaled up, not before."
+  fi
+  echo "::warning::NO ROLLOUT PERFORMED: to run this image, raise desired_count in oxy-infra terraform and deploy again."
+  exit 0
 fi
 
 echo "Deploying immutable image $IMAGE_URI with task definition $new_task_definition"

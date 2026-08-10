@@ -64,6 +64,12 @@ aws() {
     --argjson desired "$DEPLOY_TEST_SERVICE_DESIRED_COUNT" \
     '.services[0].desiredCount = $desired' \
     <<<"$service_json")"
+  # `absent-desired-count` DELETES the key rather than passing a sentinel. A
+  # sentinel is a value the script can compare; the case under test is a field
+  # ECS did not report at all, so a sentinel would pass for the wrong reason.
+  if [[ "${DEPLOY_TEST_DELETE_DESIRED_COUNT:-false}" == "true" ]]; then
+    service_json="$(jq 'del(.services[0].desiredCount)' <<<"$service_json")"
+  fi
 
   case "$1 $2" in
     "ecs describe-services")
@@ -276,7 +282,19 @@ aws() {
 }
 export -f aws
 
+# Vacuity floor. On success this suite prints ONE line, so a traversal that
+# silently stopped after two cases is indistinguishable from a full green run --
+# and every guarantee below would read as verified while never having executed.
+# A `set -e` abort mid-file exits non-zero, but an early `return` from a helper,
+# a case list truncated by a bad merge, or a rewrite that drops cases does not.
+#
+# Raise this with the case count; lower it ONLY alongside a deletion you can
+# name. A floor quietly adjusted to match whatever ran is not a floor.
+cases_run=0
+MINIMUM_CASES=14
+
 run_release() {
+  cases_run=$((cases_run + 1))
   local case_name="$1"
   local expect_success="$2"
   # The pre-deploy one-shot command, as a JSON string array. Empty means the
@@ -330,7 +348,10 @@ run_release() {
     # `["reconcile"]` is a generic fixture: most cases care only that the post
     # slot runs in the right place in the sequence, not what it runs. A case
     # that IS about the command sets DEPLOY_TEST_POST_COMMAND.
-    POST_DEPLOY_TASK_COMMAND_JSON="${DEPLOY_TEST_POST_COMMAND:-[\"reconcile\"]}"
+    # `-` rather than `:-` on purpose: `:-` substitutes the default for an EMPTY
+    # value as well as an unset one, so no case could express "this release has
+    # no post-deploy task at all", which is a state the script branches on.
+    POST_DEPLOY_TASK_COMMAND_JSON="${DEPLOY_TEST_POST_COMMAND-[\"reconcile\"]}"
   )
   if [[ "$inject_internal_metrics" == "true" ]]; then
     release_environment+=(
@@ -552,13 +573,86 @@ diff -u \
   "$test_directory/migration-success/expected.log" \
   "$test_directory/migration-success/aws.log"
 
-run_release zero-desired-count false '' false 0 false 0
+# syra is not parked today, but the guard this replaces is the one that blocked
+# every other repo's cutover: a service held at desiredCount 0 could not land the
+# image that would make it bootable again.
+#
+# The exact log is the whole assertion, and what it does NOT contain matters more
+# than what it does. Compare `migration-success` directly above -- the SAME
+# release at desired=1 -- where `service:` is followed by `smoke` and the POST
+# task. Here the log must STOP at `service:`, because neither is real when
+# nothing is running: a smoke check measures the hold rather than the image, and
+# the POST task is this repo's `post` migration, which drops and narrows with no
+# healthy image to confirm it. `diff -u` fails if either appears.
+DEPLOY_TEST_POST_COMMAND="$workflow_post_command"
+export DEPLOY_TEST_POST_COMMAND
+run_release zero-desired-count true "$workflow_pre_command" false 0 false 0
+unset DEPLOY_TEST_POST_COMMAND
+printf '%s\n' \
+  "task:$(jq -r 'join(" ")' <<<"$workflow_pre_command")" \
+  'service:arn:aws:ecs:test:task-definition/deploy-test:2:desired=0' \
+  >"$test_directory/zero-desired-count/expected.log"
+diff -u \
+  "$test_directory/zero-desired-count/expected.log" \
+  "$test_directory/zero-desired-count/aws.log"
+# `service:...deploy-test:2:...` is the REPOINT, and it is the half that is easy
+# to drop: registering a revision does not point the service at it, so without
+# this line a later scale-up would launch the OLD image and every subsequent
+# deploy would render from the stale revision.
 grep -F \
-  "must have a positive desiredCount before deployment (current: 0)" \
+  "service:arn:aws:ecs:test:task-definition/deploy-test:2:desired=0" \
+  "$test_directory/zero-desired-count/aws.log" \
+  >/dev/null
+grep -F \
+  "NO ROLLOUT PERFORMED: ECS service deploy-test is at desiredCount=0" \
   "$test_directory/zero-desired-count/output.log" \
   >/dev/null
-if [[ -s "$test_directory/zero-desired-count/aws.log" ]]; then
-  echo "Zero-capacity service reached a mutating AWS call." >&2
+grep -F \
+  "NO ROLLOUT PERFORMED: the task definition WAS registered and the service now points at it: arn:aws:ecs:test:task-definition/deploy-test:2" \
+  "$test_directory/zero-desired-count/output.log" \
+  >/dev/null
+# Syra-specific, and the reason this case differs from the other four repos'.
+grep -F \
+  "NO ROLLOUT PERFORMED: the post-deploy one-shot was NOT run" \
+  "$test_directory/zero-desired-count/output.log" \
+  >/dev/null
+# The success line of an ordinary release. If it ever appears here, a reader of
+# the workflow log six weeks from now cannot tell this run apart from one that
+# actually shipped, which is the failure this whole case exists to prevent.
+if grep -qF \
+  "ECS rollout reached a healthy steady state" \
+  "$test_directory/zero-desired-count/output.log"; then
+  echo "A zero-capacity release claimed a healthy rollout it never performed." >&2
+  exit 1
+fi
+
+# A release with NO post-deploy task must not claim one was skipped. Without
+# this, the warning could be printed unconditionally and read as true.
+DEPLOY_TEST_POST_COMMAND="" \
+  run_release zero-desired-count-no-post true "$workflow_pre_command" false 0 false 0
+if grep -qF \
+  "the post-deploy one-shot was NOT run" \
+  "$test_directory/zero-desired-count-no-post/output.log"; then
+  echo "A release with no post-deploy task claimed one was skipped." >&2
+  exit 1
+fi
+
+# ABSENCE IS NOT ZERO, and the ORDER of the two checks is what enforces it:
+# `(( "" < 1 ))` is TRUE in bash, so an unreadable count reaching the zero branch
+# would take the held-down-carry-on path and exit 0 on an API failure. Today the
+# property holds only because the numeric test runs first -- which is exactly why
+# it needs a test that holds it deliberately.
+#
+# The key is DELETED rather than set to a sentinel: a sentinel is a value the
+# script can compare, and the case under test is a field that is not there.
+DEPLOY_TEST_DELETE_DESIRED_COUNT=true \
+  run_release absent-desired-count false '' false 0 false 0
+grep -F \
+  "reported a non-numeric desiredCount" \
+  "$test_directory/absent-desired-count/output.log" \
+  >/dev/null
+if [[ -s "$test_directory/absent-desired-count/aws.log" ]]; then
+  echo "A service with an unreadable desiredCount reached a mutating AWS call." >&2
   exit 1
 fi
 
@@ -646,4 +740,10 @@ grep -F \
   "$test_directory/smoke-no-rollback-failure/output.log" \
   >/dev/null
 
-echo "Deployment script transaction tests passed."
+if (( cases_run < MINIMUM_CASES )); then
+  echo "ASSERTION FAILED: only $cases_run release cases ran, expected at least $MINIMUM_CASES." >&2
+  echo "The suite exited green without executing everything it claims to check." >&2
+  exit 1
+fi
+
+echo "Deployment script transaction tests passed ($cases_run release cases)."
