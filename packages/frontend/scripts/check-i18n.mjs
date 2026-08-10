@@ -8,7 +8,7 @@
  *   1. UNRESOLVED KEYS — a `t('…')` call, or a key stored in a lookup map, whose
  *      key no longer exists in en.json. Renaming a key and missing one call site
  *      is the normal way this happens.
- *   2. LOCALE DRIFT — en/es/it holding different key sets. Before the trilingual
+ *   2. LOCALE DRIFT — every bundled locale holding the same key set. Before the trilingual
  *      pass es was missing 99 keys and it 100, and nothing ever said so.
  *
  * Scope note: this checks KEY INTEGRITY only. It deliberately does not police
@@ -23,7 +23,10 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 const ROOT = new URL('..', import.meta.url).pathname;
-const LOCALES = ['en', 'es', 'it'];
+const LOCALES = readdirSync(join(ROOT, 'locales'))
+  .filter((entry) => entry.endsWith('.json'))
+  .map((entry) => entry.slice(0, -'.json'.length))
+  .sort((a, b) => a === 'en' ? -1 : b === 'en' ? 1 : a.localeCompare(b));
 const SOURCE_DIRS = ['app', 'components', 'lib', 'hooks', 'utils', 'stores', 'services'];
 const SOURCE_EXTENSIONS = ['.ts', '.tsx'];
 

@@ -59,6 +59,19 @@ const LANGUAGE_OPTIONS: readonly { label: string; value: string }[] = [
   { label: 'English', value: 'en-US' },
   { label: 'Español', value: 'es-ES' },
   { label: 'Italiano', value: 'it-IT' },
+  { label: 'Français', value: 'fr-FR' },
+  { label: 'Deutsch', value: 'de-DE' },
+  { label: 'Português (Brasil)', value: 'pt-BR' },
+  { label: '简体中文', value: 'zh-CN' },
+  { label: 'हिन्दी', value: 'hi-IN' },
+  { label: 'العربية', value: 'ar-SA' },
+  { label: 'বাংলা', value: 'bn-BD' },
+  { label: 'Русский', value: 'ru-RU' },
+  { label: '日本語', value: 'ja-JP' },
+  { label: 'اردو', value: 'ur-PK' },
+  { label: 'Bahasa Indonesia', value: 'id-ID' },
+  { label: 'Türkçe', value: 'tr-TR' },
+  { label: 'Català', value: 'ca-ES' },
 ];
 
 interface SettingsControlBlockProps {

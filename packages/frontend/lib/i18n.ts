@@ -9,6 +9,19 @@ import { initReactI18next } from 'react-i18next';
 import enUS from '@/locales/en.json';
 import esES from '@/locales/es.json';
 import itIT from '@/locales/it.json';
+import ar from '@/locales/ar.json';
+import bn from '@/locales/bn.json';
+import ca from '@/locales/ca.json';
+import de from '@/locales/de.json';
+import fr from '@/locales/fr.json';
+import hi from '@/locales/hi.json';
+import id from '@/locales/id.json';
+import ja from '@/locales/ja.json';
+import ptBR from '@/locales/pt-BR.json';
+import ru from '@/locales/ru.json';
+import tr from '@/locales/tr.json';
+import ur from '@/locales/ur.json';
+import zhCN from '@/locales/zh-CN.json';
 
 import { DEFAULT_LANGUAGE, STORAGE_KEYS } from './constants';
 import { getData } from '@/utils/storage';
@@ -32,6 +45,19 @@ const i18nResources = {
   'en-US': { translation: enUS },
   'es-ES': { translation: esES },
   'it-IT': { translation: itIT },
+  'fr-FR': { translation: fr },
+  'de-DE': { translation: de },
+  'pt-BR': { translation: ptBR },
+  'zh-CN': { translation: zhCN },
+  'hi-IN': { translation: hi },
+  'ar-SA': { translation: ar },
+  'bn-BD': { translation: bn },
+  'ru-RU': { translation: ru },
+  'ja-JP': { translation: ja },
+  'ur-PK': { translation: ur },
+  'id-ID': { translation: id },
+  'tr-TR': { translation: tr },
+  'ca-ES': { translation: ca },
 } as const;
 
 /**
