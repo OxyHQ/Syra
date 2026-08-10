@@ -9,7 +9,24 @@ export const STORAGE_KEYS = {
 
 export const DEFAULT_LANGUAGE = 'en-US';
 
-export const SUPPORTED_LANGUAGES = ['en-US', 'es-ES', 'it-IT'] as const;
+export const SUPPORTED_LANGUAGES = [
+  'en-US',
+  'es-ES',
+  'it-IT',
+  'fr-FR',
+  'de-DE',
+  'pt-BR',
+  'zh-CN',
+  'hi-IN',
+  'ar-SA',
+  'bn-BD',
+  'ru-RU',
+  'ja-JP',
+  'ur-PK',
+  'id-ID',
+  'tr-TR',
+  'ca-ES',
+] as const;
 
 export const INITIALIZATION_TIMEOUT = {
   AUTH: 5000,
