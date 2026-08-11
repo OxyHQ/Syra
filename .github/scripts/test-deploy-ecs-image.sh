@@ -580,10 +580,30 @@ diff -u \
 # The exact log is the whole assertion, and what it does NOT contain matters more
 # than what it does. Compare `migration-success` directly above -- the SAME
 # release at desired=1 -- where `service:` is followed by `smoke` and the POST
-# task. Here the log must STOP at `service:`, because neither is real when
-# nothing is running: a smoke check measures the hold rather than the image, and
-# the POST task is this repo's `post` migration, which drops and narrows with no
-# healthy image to confirm it. `diff -u` fails if either appears.
+# task. Here `smoke` must be ABSENT and the POST task PRESENT.
+#
+# THE ASYMMETRY, because an earlier version of this case got it wrong: it
+# asserted the log STOPS at `service:`, excluding the post one-shot ALONG WITH
+# the smoke check, on the reasoning that "neither is real when nothing is
+# running". That is true of the smoke check and false of the one-shot.
+#
+#   - A smoke script asserts HTTP against the service's own origin. Zero tasks,
+#     so it can only fail on an empty target group or "pass" against something
+#     that is not this image. Not real. Skipped.
+#   - `run_one_shot_command` calls `ecs run-task`: its own task, on the new
+#     revision, independent of the service. The pre-phase line directly above in
+#     this same expected log is the positive control -- it launches and succeeds
+#     at desired=0 by exactly that mechanism. Real. Run.
+#
+# Excluding the one-shot DEADLOCKS a parked service: it is the `post` migration
+# phase, @oxyhq/db's ledger is a high-water mark, and the next release's `pre`
+# run is refused behind an unapplied `post` one -- so the deploy that was
+# supposed to "catch up later" fails at its migration step instead. Measured in
+# alia: four consecutive merges deployed red behind an unapplied 0016.
+#
+# In Syra POST_DEPLOY_TASK_COMMAND_JSON *is* `migrate.js --phase=post`, so the
+# expected log below names it verbatim: this case reads as the post migration
+# running, because that is exactly what it is.
 DEPLOY_TEST_POST_COMMAND="$workflow_post_command"
 export DEPLOY_TEST_POST_COMMAND
 run_release zero-desired-count true "$workflow_pre_command" false 0 false 0
@@ -591,6 +611,7 @@ unset DEPLOY_TEST_POST_COMMAND
 printf '%s\n' \
   "task:$(jq -r 'join(" ")' <<<"$workflow_pre_command")" \
   'service:arn:aws:ecs:test:task-definition/deploy-test:2:desired=0' \
+  "task:$(jq -r 'join(" ")' <<<"$workflow_post_command")" \
   >"$test_directory/zero-desired-count/expected.log"
 diff -u \
   "$test_directory/zero-desired-count/expected.log" \
@@ -611,9 +632,19 @@ grep -F \
   "NO ROLLOUT PERFORMED: the task definition WAS registered and the service now points at it: arn:aws:ecs:test:task-definition/deploy-test:2" \
   "$test_directory/zero-desired-count/output.log" \
   >/dev/null
-# Syra-specific, and the reason this case differs from the other four repos'.
+# The smoke script is skipped, and SAID to be skipped. An omitted line and a
+# deliberate skip look identical in a log, which is how the post phase went
+# missing in the first place.
+if grep -qF 'smoke' "$test_directory/zero-desired-count/aws.log"; then
+  echo "A zero-capacity release ran smoke checks against a service with no tasks." >&2
+  exit 1
+fi
 grep -F \
-  "NO ROLLOUT PERFORMED: the post-deploy one-shot was NOT run" \
+  "post-deploy smoke checks were SKIPPED" \
+  "$test_directory/zero-desired-count/output.log" \
+  >/dev/null
+grep -F \
+  "MIGRATIONS DID RUN — the pre-deploy one-shot ran before the repoint and the post-deploy one-shot after it" \
   "$test_directory/zero-desired-count/output.log" \
   >/dev/null
 # The success line of an ordinary release. If it ever appears here, a reader of
@@ -626,14 +657,20 @@ if grep -qF \
   exit 1
 fi
 
-# A release with NO post-deploy task must not claim one was skipped. Without
-# this, the warning could be printed unconditionally and read as true.
+# A release with NO post-deploy task must say so POSITIVELY rather than claim a
+# post phase ran. Asserted as a present string, not an absent one: the previous
+# form asserted the absence of a warning, which would also pass if the whole
+# summary block were deleted.
 DEPLOY_TEST_POST_COMMAND="" \
   run_release zero-desired-count-no-post true "$workflow_pre_command" false 0 false 0
+grep -F \
+  "MIGRATIONS DID RUN — the pre-deploy one-shot ran before the repoint. This release carries no post-deploy one-shot." \
+  "$test_directory/zero-desired-count-no-post/output.log" \
+  >/dev/null
 if grep -qF \
-  "the post-deploy one-shot was NOT run" \
+  "the post-deploy one-shot after it" \
   "$test_directory/zero-desired-count-no-post/output.log"; then
-  echo "A release with no post-deploy task claimed one was skipped." >&2
+  echo "A release with no post-deploy task claimed one ran." >&2
   exit 1
 fi
 
