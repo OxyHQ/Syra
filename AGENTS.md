@@ -1,5 +1,12 @@
 # Syra
 
+> **Budget: under 12 KB**, enforced by `scripts/check-agents-md-size.mjs`
+> (`bun run validate:agents-md`). It is prepended to EVERY agent session, so its
+> bytes are paid on every task forever, and it grows by accretion — one
+> reasonable paragraph at a time, invisible per-commit. An addition that pushes
+> it over is paid for in the SAME edit: compress something, or move it to
+> `docs/` and leave a pointer.
+
 > Org-wide engineering standards (TypeScript, React, naming, error handling, security, testing, git, bun) live at <https://github.com/OxyHQ/engineering/blob/main/AGENTS.md> and are not repeated here. This file holds ONLY Syra-specific content.
 
 ## Monorepo Structure

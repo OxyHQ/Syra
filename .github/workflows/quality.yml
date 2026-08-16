@@ -71,6 +71,13 @@ jobs:
       - name: Guard against MongoDB returning
         run: bun run validate:no-mongo
 
+      # AGENTS.md is prepended to EVERY agent session, so its bytes are paid on
+      # every task forever, and it grows by accretion — one reasonable paragraph
+      # at a time, invisible per-commit. Nothing breaks when it grows, which is
+      # why a gate rather than a convention. Reads the tracked file listing only.
+      - name: Guard the AGENTS.md budget
+        run: bun run validate:agents-md
+
       # shared-types and the SDK are consumed as built output (dist/lib) by the
       # apps, so their typechecks — and the apps' — need them built first, same
       # order the deploy workflows use.
