@@ -36,7 +36,7 @@ import { textSearch } from '../db/catalog/search';
 import { playableTrackFilter } from '../db/catalog/visibility';
 import { countSearchPodcasts, searchPodcastRows } from '../db/podcasts/podcasts';
 import { countSearchEpisodes, searchEpisodeRows } from '../db/podcasts/episodes';
-import { loadShowArtwork, toEpisodeDtos, toPodcastDtos } from '../db/podcasts/hydrate';
+import { loadShowContext, toEpisodeDtos, toPodcastDtos } from '../db/podcasts/hydrate';
 import { enrichPersons, makeOxyUsersFetcher } from '../services/podcasts/resolvePersons';
 import { toPersonLike } from './entityProfile.controller';
 import { syncPodcastSearch } from '../services/podcasts/podcastBackgroundImport';
@@ -309,7 +309,13 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
      * Mongo `$or` over two fields is ONE match here.
      */
     if (categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.PODCASTS) {
-      const podcastFind = searchPodcastRows(trimmed, searchOffset, searchLimit).then(toPodcastDtos);
+      // `viewerId` is `undefined`: search is a public discovery surface and
+      // `searchPodcastRows` already returns only listable (active + public)
+      // shows, so no result here can be one the viewer owns privately. Passing
+      // it would only widen the DTO for a creator searching their own catalogue.
+      const podcastFind = searchPodcastRows(trimmed, searchOffset, searchLimit).then((rows) =>
+        toPodcastDtos(rows, undefined)
+      );
       searchPromises.podcasts = isPreviewSearch
         ? podcastFind.then((found) => [found, found.length])
         : Promise.all([podcastFind, countSearchPodcasts(trimmed)]);
@@ -333,7 +339,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
      */
     if (categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.EPISODES) {
       const episodeFind = searchEpisodeRows(trimmed, searchOffset, searchLimit).then(
-        async (rows) => toEpisodeDtos(rows, await loadShowArtwork(rows))
+        async (rows) => toEpisodeDtos(rows, undefined, await loadShowContext(rows))
       );
       searchPromises.episodes = isPreviewSearch
         ? episodeFind.then((found) => [found, found.length])

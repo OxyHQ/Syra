@@ -52,7 +52,13 @@ import {
   setPodcastSources,
 } from './children';
 import { podcastCreditsPerson, type CreditIdentity } from './persons';
-import { activeShowFilter, hiddenShowFilter } from './visibility';
+import {
+  activeShowFilter,
+  hiddenShowFilter,
+  listableShowFilter,
+  publicShowFilter,
+  viewerCanReadShowFilter,
+} from './visibility';
 import type { PodcastRow } from './serialize';
 
 /** The columns a caller may write on `podcasts`. */
@@ -102,8 +108,54 @@ function definedOnly<T extends object>(values: T): Partial<T> {
 
 // ── Reads ─────────────────────────────────────────────────────────────────
 
-export async function findPodcastById(id: string): Promise<PodcastRow | undefined> {
-  const [row] = await getDb().select().from(podcasts).where(eq(podcasts.id, id)).limit(1);
+/**
+ * One show, as a given viewer may READ it by id.
+ *
+ * Reachable (active, not private) or the viewer's own — see
+ * `visibility.ts`'s `viewerCanReadShowFilter`. `undefined` covers both "no such
+ * show" and "not yours to see", which is deliberate: a handler that could tell
+ * them apart would answer 404 for one and 403/409 for the other, and the
+ * difference is exactly the existence oracle this split exists to close.
+ *
+ * There is NO unfiltered `findPodcastById` any more. Every read of a single show
+ * now goes through this or through {@link findPodcastForOwner}, so a new call
+ * site has to say which of the two it means rather than inheriting the
+ * unfiltered one by default.
+ */
+export async function findPodcastForViewer(
+  id: string,
+  viewerId: string | null | undefined
+): Promise<PodcastRow | undefined> {
+  const [row] = await getDb()
+    .select()
+    .from(podcasts)
+    .where(and(eq(podcasts.id, id), viewerCanReadShowFilter(viewerId)))
+    .limit(1);
+  return row;
+}
+
+/**
+ * One show a caller OWNS — the mutation paths' read.
+ *
+ * Filters on the owner in SQL rather than loading the row and comparing, so a
+ * show the caller does not own is indistinguishable from one that does not
+ * exist. Callers answer 403 for `undefined`: "not yours" and "no such show" get
+ * the same response, which is what stops `PATCH /api/podcasts/:id` from
+ * reporting whether a private show exists.
+ *
+ * Deliberately does NOT filter on `status` or `visibility`: the owner reaches
+ * their own show in every state, and `status = 'removed'` is a 409 those callers
+ * answer themselves rather than a 403.
+ */
+export async function findPodcastForOwner(
+  id: string,
+  ownerOxyUserId: string
+): Promise<PodcastRow | undefined> {
+  const [row] = await getDb()
+    .select()
+    .from(podcasts)
+    .where(and(eq(podcasts.id, id), eq(podcasts.ownerOxyUserId, ownerOxyUserId)))
+    .limit(1);
   return row;
 }
 
@@ -121,13 +173,32 @@ export async function findPodcastByGuid(podcastGuid: string): Promise<PodcastRow
   return row;
 }
 
-/** Shows by id, in no particular order — the subscription list's hydration read. */
-export async function findPodcastsByIds(ids: readonly string[]): Promise<PodcastRow[]> {
+/**
+ * Shows by id, in no particular order — the subscription list's hydration read.
+ *
+ * Viewer-filtered, on the same rule as {@link findPodcastForViewer}: a
+ * subscription is a saved id, not a standing grant, so a show its creator has
+ * since made private or unpublished drops out of the subscriber's list. The
+ * subscription ROW survives — nothing is deleted — so it comes back if the show
+ * does.
+ */
+export async function findPodcastsByIds(
+  ids: readonly string[],
+  viewerId: string | null | undefined
+): Promise<PodcastRow[]> {
   if (ids.length === 0) return [];
-  return getDb().select().from(podcasts).where(inArray(podcasts.id, [...ids]));
+  return getDb()
+    .select()
+    .from(podcasts)
+    .where(and(inArray(podcasts.id, [...ids]), viewerCanReadShowFilter(viewerId)));
 }
 
-/** A creator's own shows, newest first. Every status — this is their dashboard. */
+/**
+ * A creator's own shows, newest first. Every status AND every visibility — this
+ * is their dashboard, and it is the one list that is deliberately unfiltered:
+ * the owner filter IS the access control, so adding a visibility gate here would
+ * hide a creator's private shows from the only screen that can unhide them.
+ */
 export async function findPodcastsByOwner(ownerOxyUserId: string): Promise<PodcastRow[]> {
   return getDb()
     .select()
@@ -161,7 +232,7 @@ export interface BrowseOptions {
  * return an empty shelf for a category that plainly exists.
  */
 export async function browsePodcastRows(options: BrowseOptions): Promise<PodcastRow[]> {
-  const conditions: SQL[] = [activeShowFilter()];
+  const conditions: SQL[] = [listableShowFilter()];
 
   if (options.category) {
     const [genre] = await getDb()
@@ -239,7 +310,7 @@ export async function searchPodcastRows(
   return getDb()
     .select()
     .from(podcasts)
-    .where(and(activeShowFilter(), textSearch(podcasts.searchVector, query)))
+    .where(and(listableShowFilter(), textSearch(podcasts.searchVector, query)))
     .orderBy(...SEARCH_ORDER)
     .offset(offset)
     .limit(limit);
@@ -249,16 +320,26 @@ export async function countSearchPodcasts(query: string): Promise<number> {
   const [row] = await getDb()
     .select({ total: count() })
     .from(podcasts)
-    .where(and(activeShowFilter(), textSearch(podcasts.searchVector, query)));
+    .where(and(listableShowFilter(), textSearch(podcasts.searchVector, query)));
   return row?.total ?? 0;
 }
 
 /**
  * Shows crediting a person — the `appearsIn` shelf's show half.
  *
- * `status <> 'removed'` rather than `= 'active'`: a person's profile keeps
- * listing a show its creator has merely unpublished, which is what the Mongo
- * filter said. Only a platform takedown removes it.
+ * TWO axes, and they are deliberately at different strictnesses:
+ *
+ *  - `status <> 'removed'` rather than `= 'active'`. A person's profile keeps
+ *    listing a show its creator has merely unpublished, which is what the Mongo
+ *    filter said; only a platform takedown removes it. PRESERVED as-is.
+ *  - `visibility = 'public'`, which is the strictest of the three. This is a
+ *    cross-show DISCOVERY shelf — nobody asked for this show by id — so an
+ *    `unlisted` show must not appear here even though it is reachable by link,
+ *    and a `private` one certainly must not.
+ *
+ * The asymmetry is the point: relaxing `status` says "an unpublished show is
+ * still part of this person's history", which is a curation decision, while
+ * `visibility` is an access decision and does not bend for it.
  */
 export async function findPodcastsCreditingPerson(
   person: CreditIdentity,
@@ -267,7 +348,7 @@ export async function findPodcastsCreditingPerson(
   return getDb()
     .select()
     .from(podcasts)
-    .where(and(podcastCreditsPerson(person), ne(podcasts.status, 'removed')))
+    .where(and(podcastCreditsPerson(person), ne(podcasts.status, 'removed'), publicShowFilter()))
     .orderBy(descNullsLast(podcasts.popularity), descNullsLast(podcasts.lastEpisodeAt))
     .limit(limit);
 }
@@ -334,6 +415,22 @@ export async function findDeepImportTargets(
     );
 
   return rows.flatMap((row) => (row.feedUrl === null ? [] : [row.feedUrl]));
+}
+
+/**
+ * Whether a show may be ANNOUNCED — the new-episode push fan-out's own gate.
+ *
+ * LISTABLE, not merely public: a push notification is a discovery act, and one
+ * that links to a show whose detail page now 404s (unpublished, taken down) is
+ * worse than none. Both halves therefore have to hold.
+ */
+export async function showIsAnnounceable(id: string): Promise<boolean> {
+  const [row] = await getDb()
+    .select({ id: podcasts.id })
+    .from(podcasts)
+    .where(and(eq(podcasts.id, id), listableShowFilter()))
+    .limit(1);
+  return row !== undefined;
 }
 
 /** Every show id whose status is not `active` — the takedown/unpublish set. */

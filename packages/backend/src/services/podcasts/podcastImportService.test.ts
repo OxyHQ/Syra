@@ -2,14 +2,30 @@ import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import { Readable } from 'node:stream';
 import type { IncomingMessage } from 'node:http';
 import type { SafeFetchResult } from '@oxyhq/core/server';
+import { eq } from 'drizzle-orm';
 import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
 import { getDb } from '../../db/postgres';
 import { imageAssets } from '../../db/schema/catalog';
-import { findPodcastById } from '../../db/podcasts/podcasts';
+import { podcasts } from '../../db/schema/podcasts';
 import { toPodcastDtos } from '../../db/podcasts/hydrate';
 import { setCatalogImageMirrorImplementationForTests } from '../catalog/catalogImageAssets';
 import { importFeed } from './podcastImportService';
 import type { PodcastDirectoryCandidate } from './PodcastDirectory';
+
+/**
+ * The STORED row, read straight from the table.
+ *
+ * Not `findPodcastForViewer`/`findPodcastForOwner`: both apply access control,
+ * and what these assertions are about is what was written — including states
+ * (`unavailable`, `removed`, private) that an access-controlled read is supposed
+ * to hide. A test that read through the guard could not tell "the write
+ * happened" from "the guard let me see it".
+ */
+async function readShow(id: string) {
+  const [row] = await getDb().select().from(podcasts).where(eq(podcasts.id, id)).limit(1);
+  return row;
+}
+
 
 beforeAll(connectDb);
 afterEach(async () => {
@@ -112,7 +128,7 @@ describe('importFeed — cover re-host (search/bulk-import deep path)', () => {
 
     const result = await importFeed(candidate.feedUrl, { directory: candidate, fetch: fakeFetch });
 
-    const row = await findPodcastById(result.podcast.id);
+    const row = await readShow(result.podcast.id);
     expect(row).toBeDefined();
     if (!row) return;
     // The stored value is the bare asset id, NOT the external CDN url.
@@ -128,7 +144,7 @@ describe('importFeed — cover re-host (search/bulk-import deep path)', () => {
     // And on the wire the id is resolved to its `/api/images/:id` path plus the
     // rendered variant — what a client actually renders, which the raw column
     // cannot show and which the seven-FK layout has to reassemble.
-    const [dto] = await toPodcastDtos([row]);
+    const [dto] = await toPodcastDtos([row], undefined);
     expect(dto?.image).toBe(`/api/images/${SYRA_IMAGE_ID}`);
     expect(dto?.imageSizes?.large).toEqual({
       id: SYRA_IMAGE_ID,
@@ -143,7 +159,7 @@ describe('importFeed — cover re-host (search/bulk-import deep path)', () => {
 
     const result = await importFeed(candidate.feedUrl, { directory: candidate, fetch: fakeFetch });
 
-    const row = await findPodcastById(result.podcast.id);
+    const row = await readShow(result.podcast.id);
     expect(row?.imageId).toBeNull(); // never the external URL
     expect(row?.imageSourceUrl).toBe(EXTERNAL_COVER);
   });
@@ -162,7 +178,7 @@ describe('importFeed — cover re-host (search/bulk-import deep path)', () => {
      * in their own table rather than the import merely reporting that they did —
      * which is exactly what a half-ported writer looks like from the outside.
      */
-    const row = await findPodcastById(result.podcast.id);
+    const row = await readShow(result.podcast.id);
     expect(row?.episodeCount).toBe(1);
     expect(row?.lastEpisodeAt?.toISOString()).toBe('2025-01-01T08:00:00.000Z');
   });
@@ -175,11 +191,11 @@ describe('importFeed — cover re-host (search/bulk-import deep path)', () => {
       fetch: fakeFetch,
     });
 
-    const row = await findPodcastById(result.podcast.id);
+    const row = await readShow(result.podcast.id);
     expect(row).toBeDefined();
     if (!row) return;
 
-    const [dto] = await toPodcastDtos([row]);
+    const [dto] = await toPodcastDtos([row], undefined);
     // Feed order, not `['Business', 'Daily News', 'News']` — which is what an
     // ordering by name returns, and what this assertion would have got before
     // `position` existed.
@@ -205,11 +221,11 @@ describe('importFeed — cover re-host (search/bulk-import deep path)', () => {
       fetch: fakeFetch,
     });
 
-    const row = await findPodcastById(second.podcast.id);
+    const row = await readShow(second.podcast.id);
     expect(row).toBeDefined();
     if (!row) return;
 
-    const [dto] = await toPodcastDtos([row]);
+    const [dto] = await toPodcastDtos([row], undefined);
     expect(dto?.categories).toEqual(reordered);
   });
 
@@ -229,6 +245,6 @@ describe('importFeed — cover re-host (search/bulk-import deep path)', () => {
      * than incremented, so a duplicate row would show up here as `2`.
      */
     expect(second.podcast.id).toBe(first.podcast.id);
-    expect((await findPodcastById(second.podcast.id))?.episodeCount).toBe(1);
+    expect((await readShow(second.podcast.id))?.episodeCount).toBe(1);
   });
 });

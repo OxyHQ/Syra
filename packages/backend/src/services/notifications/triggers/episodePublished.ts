@@ -1,10 +1,19 @@
+import { showIsAnnounceable } from '../../../db/podcasts/podcasts';
 import { listSubscriberIds } from '../../../db/podcasts/subscriptions';
 import { notifyUser, type NotifierDeps } from '../notifier';
 
 /**
  * Trigger: a subscribed show published a new episode.
  *
- * Two suppression layers apply, and they solve different problems:
+ * Three suppression layers apply, and they solve different problems:
+ *
+ *  - The VISIBILITY GATE, first. A push notification is the loudest surface
+ *    there is and the only one that leaves the platform, so it is gated on the
+ *    strictest rule: the show must be LISTABLE (active AND public). Nobody is
+ *    told about an episode of a private show, and nobody is sent a link to a
+ *    show that now 404s. Today the only caller is the RSS import, whose shows
+ *    are always public — which is exactly why the gate belongs HERE rather than
+ *    at that call site: the next caller (a Syra-hosted upload) will not be.
  *
  *  - The AGE GATE here. A feed import surfaces a show's entire back catalogue as "new to
  *    Syra", but a five-year-old episode is not news to a subscriber. Only episodes actually
@@ -32,6 +41,8 @@ export interface PublishedEpisode {
 export interface EpisodeNotifyOutcome {
   notified: number;
   skippedAsBackfill: boolean;
+  /** The show is private, unlisted, unpublished or taken down — nobody is told. */
+  skippedAsHidden: boolean;
 }
 
 /**
@@ -44,7 +55,11 @@ export async function notifySubscribersOfNewEpisode(
   deps?: NotifierDeps,
 ): Promise<EpisodeNotifyOutcome> {
   if (isBackfill(episode.pubDate, now)) {
-    return { notified: 0, skippedAsBackfill: true };
+    return { notified: 0, skippedAsBackfill: true, skippedAsHidden: false };
+  }
+
+  if (!(await showIsAnnounceable(episode.podcastId))) {
+    return { notified: 0, skippedAsBackfill: false, skippedAsHidden: true };
   }
 
   const subscriberIds = await listSubscriberIds(episode.podcastId);
@@ -68,7 +83,7 @@ export async function notifySubscribersOfNewEpisode(
     }
   }
 
-  return { notified, skippedAsBackfill: false };
+  return { notified, skippedAsBackfill: false, skippedAsHidden: false };
 }
 
 /** An episode with no publish date is treated as backfill — unknown age is not news. */

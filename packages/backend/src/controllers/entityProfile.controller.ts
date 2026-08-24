@@ -23,7 +23,7 @@ import { loadImageVariants, toAlbumDtos, toTrackDtos } from '../db/catalog/hydra
 import { toArtistDto, type PublicCatalogEntityRow } from '../db/catalog/serialize';
 import { findPodcastsCreditingPerson } from '../db/podcasts/podcasts';
 import { findEpisodesCreditingPerson } from '../db/podcasts/episodes';
-import { loadShowArtwork, toEpisodeDtos, toPodcastDtos } from '../db/podcasts/hydrate';
+import { loadShowContext, toEpisodeDtos, toPodcastDtos } from '../db/podcasts/hydrate';
 import { getParam } from '../utils/reqParams';
 import { getRequestUserId } from '../utils/requestUser';
 import {
@@ -241,11 +241,14 @@ async function loadAppearsIn(person: PersonLike): Promise<EntityAppearsIn> {
 
   // Episodes here span many shows: resolve their parent-show artwork in ONE
   // query so cover-less episodes inherit it without an N+1.
-  const showArtwork = await loadShowArtwork(episodeRows);
+  const shows = await loadShowContext(episodeRows);
 
+  // `undefined` viewer, for the same reason as `/api/search`: both reads above
+  // are gated to PUBLIC shows, so nothing here can be the viewer's own private
+  // material and there is nothing for an owner context to unlock.
   const [podcastDtos, episodeDtos] = await Promise.all([
-    toPodcastDtos(podcastRows),
-    toEpisodeDtos(episodeRows, showArtwork),
+    toPodcastDtos(podcastRows, undefined),
+    toEpisodeDtos(episodeRows, undefined, shows),
   ]);
 
   return { podcasts: podcastDtos, episodes: episodeDtos };

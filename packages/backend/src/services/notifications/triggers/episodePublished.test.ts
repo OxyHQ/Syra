@@ -75,7 +75,7 @@ describe('notifySubscribersOfNewEpisode', () => {
     const old = new Date(Date.now() - EPISODE_NOTIFY_MAX_AGE_MS - 1000);
     const outcome = await notifySubscribersOfNewEpisode(episode(old), Date.now(), testDeps);
 
-    expect(outcome).toEqual({ notified: 0, skippedAsBackfill: true });
+    expect(outcome).toEqual({ notified: 0, skippedAsBackfill: true, skippedAsHidden: false });
     expect(posted).toBe(0);
   });
 
@@ -95,7 +95,7 @@ describe('notifySubscribersOfNewEpisode', () => {
 
     const outcome = await notifySubscribersOfNewEpisode(episode(new Date()), Date.now(), testDeps);
 
-    expect(outcome).toEqual({ notified: 2, skippedAsBackfill: false });
+    expect(outcome).toEqual({ notified: 2, skippedAsBackfill: false, skippedAsHidden: false });
     expect(posted).toBe(2);
   });
 

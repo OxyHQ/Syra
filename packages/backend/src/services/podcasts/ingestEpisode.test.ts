@@ -110,7 +110,7 @@ describe('ingestEpisode — shared-pipeline regression guards', () => {
 
     await ingestEpisode(episodeId, happyDeps);
 
-    const reloaded = await findEpisodeById(episodeId);
+    const reloaded = (await findEpisodeById(episodeId))?.episode;
     expect(reloaded?.status).toBe('ready');
     // The ladder is `episode_hls_renditions` now, and `position` is what keeps
     // the order the Mongo array had — so this asserts the ORDER too, which is
@@ -151,6 +151,6 @@ describe('ingestEpisode — shared-pipeline regression guards', () => {
       }),
     ).rejects.toThrow('ffmpeg exploded');
 
-    expect((await findEpisodeById(episodeId))?.status).toBe('failed');
+    expect((await findEpisodeById(episodeId))?.episode.status).toBe('failed');
   });
 });

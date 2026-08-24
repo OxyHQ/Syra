@@ -20,7 +20,18 @@
  * listener's resume list in whatever order it was first built.
  */
 
-import { and, count, eq, getTableColumns, inArray, ne, sql, type SQL } from 'drizzle-orm';
+import {
+  and,
+  count,
+  eq,
+  getTableColumns,
+  inArray,
+  isNotNull,
+  isNull,
+  ne,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 import type { EpisodePerson, EpisodeTranscript, HlsRendition } from '@syra/shared-types';
 import { getDb, type DbOrTransaction } from '../postgres';
 import { episodeProgress, episodes, podcasts } from '../schema/podcasts';
@@ -28,8 +39,8 @@ import { descNullsLast } from '../catalog/containers';
 import { textSearch } from '../catalog/search';
 import { setEpisodeHlsRenditions, setEpisodePersons, setEpisodeTranscripts } from './children';
 import { episodeCreditsPerson, type CreditIdentity } from './persons';
-import { publiclyPlayableEpisodeFilter } from './visibility';
-import type { EpisodeRow } from './serialize';
+import { publiclyPlayableEpisodeFilter, showIsReadableByViewer } from './visibility';
+import type { EpisodeRow, PodcastRow } from './serialize';
 
 /**
  * "This returned row was inserted, not updated."
@@ -72,17 +83,71 @@ function definedOnly<T extends object>(values: T): Partial<T> {
 
 // ── Reads ─────────────────────────────────────────────────────────────────
 
-export async function findEpisodeById(id: string): Promise<EpisodeRow | undefined> {
-  const [row] = await getDb().select().from(episodes).where(eq(episodes.id, id)).limit(1);
+/** An episode and the show it belongs to — see {@link findEpisodeById}. */
+export interface EpisodeWithShow {
+  readonly episode: EpisodeRow;
+  readonly show: PodcastRow;
+}
+
+/**
+ * One episode AND its parent show, always together.
+ *
+ * The join is the access control, not an optimisation. Every rule about who may
+ * see an episode lives on the SHOW — visibility, the publish state, the owner —
+ * so a caller holding only an episode row cannot answer any of them and, before
+ * this returned a pair, three handlers simply did not
+ * (`GET /api/episodes/:id`, `/key`, `/audio`): a show takedown never reached
+ * episode detail, and the AES-128 key was handed to any signed-in caller for any
+ * id. Returning the show beside the episode makes the unguarded read
+ * unspellable rather than merely discouraged.
+ *
+ * An `INNER JOIN` and not a left one: `episodes.podcast_id` is `NOT NULL
+ * REFERENCES podcasts(id) ON DELETE CASCADE`, so an episode with no show is not
+ * representable and a `LEFT JOIN` would only add an impossible `null` branch for
+ * every caller to handle.
+ *
+ * Deliberately UNFILTERED by viewer: it is the loader for handlers that then
+ * apply their own rule (a public `/audio` fetch, an owner's edit, the ingest
+ * job), and each of those rules is different. What it guarantees is that the
+ * rule CAN be applied.
+ */
+export async function findEpisodeById(id: string): Promise<EpisodeWithShow | undefined> {
+  const [row] = await getDb()
+    .select({ episode: getTableColumns(episodes), show: getTableColumns(podcasts) })
+    .from(episodes)
+    .innerJoin(podcasts, eq(podcasts.id, episodes.podcastId))
+    .where(eq(episodes.id, id))
+    .limit(1);
   return row;
 }
 
-export async function findEpisodesByIds(ids: readonly string[]): Promise<EpisodeRow[]> {
+/**
+ * Episodes by id, for a given viewer — the resume list's hydration read.
+ *
+ * The show gate is the change: this used to test the EPISODE's own status and
+ * nothing else, so an episode of a show that had gone private kept resolving for
+ * anyone who had ever played it. Now the show must be readable by this viewer
+ * (`showIsReadableByViewer`: reachable, or theirs).
+ *
+ * The consequence is intended and visible to listeners: a "continue listening"
+ * entry for a show that went private DISAPPEARS from their list. The
+ * `episode_progress` row is untouched, so it returns if the show does.
+ */
+export async function findEpisodesByIds(
+  ids: readonly string[],
+  viewerId: string | null | undefined
+): Promise<EpisodeRow[]> {
   if (ids.length === 0) return [];
   return getDb()
     .select()
     .from(episodes)
-    .where(and(inArray(episodes.id, [...ids]), ne(episodes.status, 'unavailable')));
+    .where(
+      and(
+        inArray(episodes.id, [...ids]),
+        ne(episodes.status, 'unavailable'),
+        showIsReadableByViewer(viewerId)
+      )
+    );
 }
 
 /**
@@ -141,14 +206,47 @@ export async function countEpisodesByShow(
   return row?.total ?? 0;
 }
 
-/** Every episode of a show, for the generated public RSS feed. */
+/**
+ * Every READY episode of a show, for the generated public RSS feed.
+ *
+ * `status = 'ready'`, not `<> 'unavailable'`. The negation admitted `processing`
+ * and `failed` episodes, so a creator's still-transcoding upload — and one whose
+ * ingest had failed outright, with no playable media at all — was published into
+ * a feed that Apple Podcasts, Overcast and Podcast Index fetch anonymously. Both
+ * are exactly the states `episodeVisibilityFilter` withholds from a non-owner on
+ * every other surface; the feed is the surface that had never been told.
+ */
 export async function findFeedEpisodes(podcastId: string, limit: number): Promise<EpisodeRow[]> {
   return getDb()
     .select()
     .from(episodes)
-    .where(and(eq(episodes.podcastId, podcastId), ne(episodes.status, 'unavailable')))
+    .where(and(eq(episodes.podcastId, podcastId), eq(episodes.status, 'ready')))
     .orderBy(descNullsLast(episodes.pubDate))
     .limit(limit);
+}
+
+/**
+ * How many READY episodes each of these shows has.
+ *
+ * `podcasts.episode_count` is a stored counter over EVERY episode, `processing`
+ * and `failed` included (`insertEpisode`'s `recordOnShow` bumps it the moment an
+ * upload lands, and `episodeStats` recomputes it from all rows), so serving it
+ * to a stranger tells them a show has unpublished episodes and how many. This is
+ * the number a non-owner is given instead — one grouped query per page, keyed on
+ * `podcast_id`, never one per show.
+ */
+export async function countReadyEpisodesByShows(
+  podcastIds: readonly string[]
+): Promise<Map<string, number>> {
+  if (podcastIds.length === 0) return new Map();
+
+  const rows = await getDb()
+    .select({ podcastId: episodes.podcastId, total: count() })
+    .from(episodes)
+    .where(and(inArray(episodes.podcastId, [...podcastIds]), eq(episodes.status, 'ready')))
+    .groupBy(episodes.podcastId);
+
+  return new Map(rows.map((row) => [row.podcastId, row.total]));
 }
 
 /**
@@ -192,6 +290,33 @@ export async function episodeStats(
     .limit(1);
 
   return { total: totals?.total ?? 0, latestPubDate: newest?.pubDate };
+}
+
+/**
+ * Syra-hosted episodes of one show that have source audio but no HLS ladder.
+ *
+ * The deferred-ingest set: while a show is `private` its episodes are not
+ * transcoded (`services/podcasts/ingestEpisode.ts` says why), so publishing it
+ * has to find the ones that were skipped. Keyed on `hls_master_key is null`
+ * rather than on `status`, because `status` is also `processing` for an episode
+ * whose transcode is genuinely still running and `failed` for one that tried and
+ * could not — and re-running ingest for the second of those is right, while
+ * distinguishing them from a deferral is not something `status` can do.
+ */
+export async function findEpisodeIdsAwaitingHls(podcastId: string): Promise<string[]> {
+  const rows = await getDb()
+    .select({ id: episodes.id })
+    .from(episodes)
+    .where(
+      and(
+        eq(episodes.podcastId, podcastId),
+        eq(episodes.source, 'syra'),
+        isNull(episodes.hlsMasterKey),
+        isNotNull(episodes.audioSourceUrl),
+        ne(episodes.status, 'unavailable')
+      )
+    );
+  return rows.map((row) => row.id);
 }
 
 export async function episodeExists(podcastId: string, guid: string): Promise<boolean> {

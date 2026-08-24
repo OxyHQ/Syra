@@ -1,12 +1,27 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import type { Response } from 'express';
+import { eq } from 'drizzle-orm';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
 import { catalogEntities } from '../db/schema/catalog';
 import { podcasts } from '../db/schema/podcasts';
-import { findPodcastById } from '../db/podcasts/podcasts';
 import { claimPodcast } from './podcasts.controller';
+
+/**
+ * The STORED row, read straight from the table.
+ *
+ * Not `findPodcastForViewer`/`findPodcastForOwner`: both apply access control,
+ * and what these assertions are about is what was written — including states
+ * (`unavailable`, `removed`, private) that an access-controlled read is supposed
+ * to hide. A test that read through the guard could not tell "the write
+ * happened" from "the guard let me see it".
+ */
+async function readShow(id: string) {
+  const [row] = await getDb().select().from(podcasts).where(eq(podcasts.id, id)).limit(1);
+  return row;
+}
+
 
 beforeAll(connectDb);
 afterEach(clearDb);
@@ -91,7 +106,7 @@ describe('claimPodcast — linkedArtistId IDOR guard', () => {
     expect(res._status).toBe(403);
 
     // The show must NOT have been claimed or linked as a side effect.
-    const after = await findPodcastById(podcastId);
+    const after = await readShow(podcastId);
     expect(after?.claimedByOxyUserId).toBeNull();
     expect(after?.linkedArtistId).toBeNull();
     expect(after?.claimable).toBe(true);
@@ -105,7 +120,7 @@ describe('claimPodcast — linkedArtistId IDOR guard', () => {
     await claimPodcast(makeReq(podcastId, 'owner-A', ownArtist), res as unknown as Response);
 
     expect(res._status).toBe(200);
-    const after = await findPodcastById(podcastId);
+    const after = await readShow(podcastId);
     expect(after?.claimedByOxyUserId).toBe('owner-A');
     expect(after?.ownerOxyUserId).toBe('owner-A');
     expect(after?.claimable).toBe(false);
@@ -119,7 +134,7 @@ describe('claimPodcast — linkedArtistId IDOR guard', () => {
     await claimPodcast(makeReq(podcastId, 'owner-A'), res as unknown as Response);
 
     expect(res._status).toBe(200);
-    const after = await findPodcastById(podcastId);
+    const after = await readShow(podcastId);
     expect(after?.claimedByOxyUserId).toBe('owner-A');
     expect(after?.linkedArtistId).toBeNull();
   });
@@ -142,7 +157,7 @@ describe('claimPodcast — linkedArtistId IDOR guard', () => {
     await claimPodcast(makeReq(podcastId, 'owner-A', ownPerson), res as unknown as Response);
 
     expect(res._status).toBe(403);
-    const after = await findPodcastById(podcastId);
+    const after = await readShow(podcastId);
     expect(after?.linkedArtistId).toBeNull();
     expect(after?.claimable).toBe(true);
   });
@@ -160,7 +175,7 @@ describe('claimPodcast — RSS shows are not claimable', () => {
     expect(res._status).toBe(403);
     expect(res._body).toEqual({ error: 'RSS podcast claims require ownership verification' });
 
-    const after = await findPodcastById(podcastId);
+    const after = await readShow(podcastId);
     expect(after?.claimedByOxyUserId).toBeNull();
     expect(after?.ownerOxyUserId).toBeNull();
     expect(after?.claimable).toBe(true);

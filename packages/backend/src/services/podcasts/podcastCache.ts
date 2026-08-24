@@ -70,8 +70,9 @@ async function readCapped(stream: IncomingMessage, maxBytes: number): Promise<Bu
  * null when the episode is not a cacheable external episode.
  */
 export async function cacheEpisode(episodeId: string): Promise<string | null> {
-  const episode = await findEpisodeById(episodeId);
-  if (!episode) return null;
+  const found = await findEpisodeById(episodeId);
+  if (!found) return null;
+  const { episode } = found;
   if (episode.source !== 'rss' || !episode.enclosureUrl) return null;
   // `cache.s3Key` is `cache_object_key` here — renamed in `schema/podcasts.ts`
   // because `cacheS3Key` tokenizes as `cache_s_3_key` under drizzle's casing.
