@@ -98,6 +98,8 @@ export const episodeSchema = timestampsSchema.extend({
   playCount: z.number().optional(),
   popularity: z.number().optional(),
   status: episodeStatusSchema,
+  /** Disclosure: this episode's content was machine-generated. Per episode, not inherited. */
+  aiGenerated: z.boolean(),
 });
 export type Episode = z.infer<typeof episodeSchema>;
 
@@ -123,6 +125,60 @@ export const createEpisodeRequestSchema = z.object({
   guests: z.array(z.string()).optional(),
 });
 export type CreateEpisodeRequest = z.infer<typeof createEpisodeRequestSchema>;
+
+/**
+ * `POST /api/podcasts/:id/episodes/draft` — reserve an episode now, attach the
+ * audio later.
+ *
+ * The same creator metadata `POST /:id/episodes` accepts, MINUS the audio: the
+ * user is authenticated here and is the one who decides the title, the artwork,
+ * the credits and the disclosure. The ticket holder can afterwards set only what
+ * it learns by making the audio — see `services/podcasts/ingestToken.ts`.
+ */
+export const createEpisodeDraftRequestSchema = z.object({
+  title: z.string(),
+  description: z.string().optional(),
+  summary: z.string().optional(),
+  season: z.number().int().nonnegative().optional(),
+  episodeNumber: z.number().int().nonnegative().optional(),
+  episodeType: episodeTypeSchema.optional(),
+  explicit: z.boolean().optional(),
+  /** Disclosure, set by the authenticated user — never by the ticket holder. */
+  aiGenerated: z.boolean().optional(),
+  /** Hosts & Guests as Oxy user ids (validated server-side; no free text). */
+  hosts: z.array(z.string()).optional(),
+  guests: z.array(z.string()).optional(),
+});
+export type CreateEpisodeDraftRequest = z.infer<typeof createEpisodeDraftRequestSchema>;
+
+/** What a draft hands back: the episode to fill, and the capability to fill it with. */
+export const createEpisodeDraftResponseSchema = z.object({
+  episodeId: z.string(),
+  ingestTicket: z.string(),
+  expiresAt: z.string(),
+});
+export type CreateEpisodeDraftResponse = z.infer<typeof createEpisodeDraftResponseSchema>;
+
+/**
+ * The multipart fields `POST /api/podcasts/episodes/:id/ingest` accepts beside
+ * the audio — an ALLOWLIST, and the security boundary of the whole capability.
+ *
+ * Every field here is something a worker knows because it produced the audio.
+ * Nothing that identifies, publishes or attributes the episode is reachable:
+ * title, artwork, `explicit`, `episodeType`, credits, `status`, `aiGenerated`
+ * and every storage column were fixed by the authenticated user at draft time.
+ *
+ * Numbers arrive as multipart strings, so each one is coerced and then
+ * validated — a coercion without a validation is how `NaN` reaches a column.
+ */
+export const ingestEpisodeAudioRequestSchema = z.object({
+  duration: z.coerce.number().nonnegative().optional(),
+  season: z.coerce.number().int().nonnegative().optional(),
+  episodeNumber: z.coerce.number().int().nonnegative().optional(),
+  description: z.string().optional(),
+  summary: z.string().optional(),
+});
+export type IngestEpisodeAudioRequest = z.infer<typeof ingestEpisodeAudioRequestSchema>;
 
 export const updateEpisodeRequestSchema = z.object({
   title: z.string().optional(),

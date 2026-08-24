@@ -244,8 +244,17 @@ export const PODCAST_SOURCES = ['rss', 'syra'] as const;
  * value set than `catalog.ts`'s `PROVENANCE_PROVIDERS`. Do not conflate the
  * two: a podcast's provenance provider is the feed/directory it came from,
  * not a music-metadata enrichment source.
+ *
+ * `'alia'` is where a show was AUTHORED, which is a different question from
+ * `podcasts.source` (`'rss' | 'syra'`) and deliberately does not touch it:
+ * `source === 'syra'` is the owner-write predicate in five places
+ * (`uploadEpisode`, `updatePodcast`, `updateEpisode`, `loadOwnedShowOrRespond`,
+ * `loadOwnedEpisodeOrRespond`), so a third value there would silently remove
+ * write access from every show carrying it. An Alia-authored show IS
+ * Syra-hosted; the provenance row records who made it, and
+ * {@link podcasts.aiGenerated} records whether a machine did.
  */
-export const PODCAST_PROVENANCE_PROVIDERS = ['rss', 'syra', 'podcastindex', 'apple'] as const;
+export const PODCAST_PROVENANCE_PROVIDERS = ['rss', 'syra', 'podcastindex', 'apple', 'alia'] as const;
 
 /** `@syra/shared-types` `podcastTypeSchema`. */
 export const PODCAST_TYPES = ['episodic', 'serial'] as const;
@@ -357,6 +366,21 @@ export const podcasts = pgTable(
      * show created through `createPodcast` chooses a value.
      */
     visibility: text({ enum: PODCAST_VISIBILITIES }).notNull().default('public'),
+    /**
+     * Whether this show's content was machine-generated — a DISCLOSURE, not a
+     * provenance record and not an authorization input.
+     *
+     * Separate from the `provider = 'alia'` row in `podcast_sources` because the
+     * two answer different questions and neither implies the other: a human
+     * hosts a show and publishes it through Alia (Alia provenance, not AI
+     * generated), or a creator generates a show elsewhere and uploads it here
+     * (AI generated, no Alia provenance). One column each.
+     *
+     * `DEFAULT false` for the same reason `visibility` defaults to `'public'`:
+     * every row that exists when this lands was made by a person, and claiming
+     * otherwise about somebody's show is the worse error.
+     */
+    aiGenerated: boolean().notNull().default(false),
     // Optional Podcasting 2.0: `funding`/`persons` are child tables below.
     // `value` stays jsonb — see the file-level doc comment.
     value: jsonb().$type<Record<string, unknown>>(),
@@ -623,6 +647,14 @@ export const episodes = pgTable(
     playCount: integer().notNull().default(0),
     popularity: integer().notNull().default(0),
     status: text({ enum: EPISODE_STATUSES }).notNull().default('ready'),
+    /**
+     * Per EPISODE, not inherited from the show — see `podcasts.aiGenerated`.
+     *
+     * A show can mix: a human-hosted series with one machine-generated recap
+     * episode has to be able to disclose exactly that episode, and a show-level
+     * flag would either over-claim or under-claim for every other one.
+     */
+    aiGenerated: boolean().notNull().default(false),
     searchVector: tsvector().generatedAlwaysAs(sql`to_tsvector('english', title)`),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -644,7 +676,41 @@ export const episodes = pgTable(
     unique('episodes_podcast_id_guid_key').on(t.podcastId, t.guid),
     // Reverse-chronological listing within a show — NON-partial; see the
     // file-level doc comment for why (the show owner sees every status).
+    //
+    // Kept even though `episodesByShowQuery` no longer orders by it: it is what
+    // `episodeStats`' newest-episode probe, `countReadyEpisodesByShows` and
+    // `findEpisodeIdsAwaitingHls` read, and it is the ONLY index that can
+    // answer "the latest episode of this show by date" as a one-row probe.
     index('episodes_podcast_id_pub_date_idx').on(t.podcastId, t.pubDate.desc()),
+    /**
+     * The show's episode LIST, in the order a numbered series needs.
+     *
+     * `episodesByShowQuery` orders by `episode_number desc nulls last, pub_date
+     * desc nulls last`, and without this index that ordering cannot be streamed.
+     * Measured on 2,000 episodes of one show
+     * (`__tests__/podcasts.explain.test.ts`, the `deepShow*` probes):
+     *
+     *   with this index      Index Scan, stops at 20      cost   63.13     5 buffers
+     *   without it           top-N heapsort of all 2,026  cost 1937.01   108 buffers
+     *
+     * So it is not a micro-optimisation: without it the cost is a function of
+     * the show's SIZE rather than of the page, which is precisely the regression
+     * `descNullsLast` exists to avoid everywhere else in this schema.
+     *
+     * `.desc()` on both keys because drizzle emits that as `DESC NULLS LAST` in
+     * an index definition, which is the spelling `descNullsLast` produces in the
+     * query — the two have to match or the index is reachable but not
+     * streamable.
+     *
+     * NON-PARTIAL, for the same reason its `pub_date` sibling is: a `status =
+     * 'ready'` predicate here would silently stop serving the owner's own
+     * unpublished-episode view, which is the one view that sees every status.
+     */
+    index('episodes_podcast_id_episode_number_pub_date_idx').on(
+      t.podcastId,
+      t.episodeNumber.desc(),
+      t.pubDate.desc()
+    ),
     // Cross-show listings (search, "appears in") — public playability gate.
     index('episodes_ready_popularity_idx')
       .on(t.popularity.desc(), t.pubDate.desc())
@@ -752,5 +818,69 @@ export const episodeProgress = pgTable(
     index('episode_progress_oxy_user_id_updated_at_idx')
       .on(t.oxyUserId, t.updatedAt.desc())
       .where(sql`${t.completed} = false`),
+  ]
+);
+
+// ── episode_ingest_tickets (single-use capability to attach audio) ─────────
+
+/**
+ * The redemption record of an episode ingest ticket.
+ *
+ * ## Why a table and not a Redis nonce
+ *
+ * The ticket is a 24-hour capability minted while a user's Oxy JWT is live and
+ * redeemed later by a background worker that has no user credential at all
+ * (service-token delegation is dead platform-wide). Its single-use property is
+ * therefore the ONLY thing standing between a leaked ticket and an overwrite of
+ * somebody's episode audio, and a nonce in Redis does not survive a restart: an
+ * eviction, a failover or a deploy would silently make every outstanding ticket
+ * replayable, with nothing anywhere reporting that it had happened. This row is
+ * the authority, and `consumed_at` is claimed with a conditional `UPDATE`, so
+ * two concurrent redemptions of the same ticket are resolved by Postgres rather
+ * than by a read-then-write.
+ *
+ * ## A MISSING row is a refusal, never a pass
+ *
+ * `redeemIngestTicket` claims `where jti = … and consumed_at is null and
+ * expires_at > now()` and treats zero rows as refused. That single rule makes
+ * three separate things safe at once: a replay, a forged `jti` that somehow
+ * carried a valid signature, and the expiry sweep below deleting a row while its
+ * JWT is technically still valid. Nothing about this table can fail OPEN.
+ *
+ * ## `jti` is UNIQUE, and `id` is still the primary key
+ *
+ * The brief called for `jti` as the primary key. It is a `unique()` column
+ * instead, which is the same guarantee, because every other table in this schema
+ * carries `generatedId()` as `id` and the schema-convention gate
+ * (`findSchemaInvariantViolations`) is written against that shape. A unique
+ * constraint is what the single-use claim actually needs — it is the thing the
+ * conditional `UPDATE` keys on.
+ */
+export const episodeIngestTickets = pgTable(
+  'episode_ingest_tickets',
+  {
+    id: generatedId(),
+    /** The JWT's `jti` claim — the capability's identity. */
+    jti: text().notNull(),
+    episodeId: text()
+      .notNull()
+      .references(() => episodes.id, { onDelete: 'cascade' }),
+    /**
+     * The deadline, stored beside the JWT's own `exp` rather than trusted from
+     * it. A token is a bearer artefact: whatever it says about its own lifetime
+     * is the holder's copy of a claim this row is the record of.
+     */
+    expiresAt: timestamptz().notNull(),
+    /** Null until redeemed. Set by the conditional claim, never by a read-then-write. */
+    consumedAt: timestamptz(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('episode_ingest_tickets_jti_key').on(t.jti),
+    // FK support — the cascade-delete lookup when an episode is removed.
+    index('episode_ingest_tickets_episode_id_idx').on(t.episodeId),
+    // The expiry sweep's leading key (`db/expiry.ts`); `gates.test.ts` fails a
+    // registered target that has no index whose FIRST key is the swept column.
+    index('episode_ingest_tickets_expires_at_idx').on(t.expiresAt),
   ]
 );

@@ -106,6 +106,7 @@
 import type { ExpirySweepTarget } from '@oxyhq/db/expiry';
 import { moderationExpirySweepTargets } from '@oxyhq/crowdsource-app/postgres';
 import { moderationTableSet } from './schema/moderation';
+import { episodeIngestTickets } from './schema/podcasts';
 import {
   LISTENING_EVENT_RETENTION_SECONDS,
   listeningEvents,
@@ -181,5 +182,16 @@ export const EXPIRY_SWEEP_TARGETS: readonly ExpirySweepTarget[] = [
    * declarations `gates.test.ts` mapped to a deferred sentinel while this vertical
    * was still on Mongo. This entry is what closes them.
    */
+  {
+    table: episodeIngestTickets,
+    column: episodeIngestTickets.expiresAt,
+    // The column IS the deadline, so nothing is retained past it.
+    retentionSeconds: 0,
+    reason:
+      'A redemption record past its own expiresAt. Pure housekeeping: the redemption claim treats a ' +
+      'MISSING row as REFUSED, so deleting one can only ever narrow access, never widen it — and the ' +
+      'JWT carrying the same deadline has expired by then anyway. Unswept, this table grows by one ' +
+      'row per episode draft forever.',
+  },
   ...moderationExpirySweepTargets(moderationTableSet),
 ];

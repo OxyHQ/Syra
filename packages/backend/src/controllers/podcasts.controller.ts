@@ -26,8 +26,11 @@ import { and, eq } from 'drizzle-orm';
 import { isLiveEntityId, uuidv7 } from '@oxyhq/db';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { getRequiredOxyUserId } from '@oxyhq/core/server';
+import { z } from 'zod';
 import {
+  createEpisodeDraftRequestSchema,
   createPodcastRequestSchema,
+  episodeTypeSchema,
   importFeedRequestSchema,
   updatePodcastRequestSchema,
   type AudioSource,
@@ -101,6 +104,21 @@ const AUDIO_FORMAT_BY_MIME: Record<string, AudioSource['format']> = {
   'audio/wav': 'wav',
   'audio/x-wav': 'wav',
 };
+
+/**
+ * The numeric/enum metadata `POST /:id/episodes` accepts, parsed from MULTIPART.
+ *
+ * Multipart values arrive as strings, so `z.coerce` is doing real work here —
+ * and the validation after it is doing more: `z.coerce.number()` maps `''` to 0
+ * and `'abc'` to NaN, and an `episodeNumber` of 0 for an empty field is exactly
+ * the silent wrong answer this fix exists to remove. An absent field stays
+ * absent; a present one has to be a real non-negative integer.
+ */
+const uploadEpisodeFieldsSchema = z.object({
+  season: z.coerce.number().int().nonnegative().optional(),
+  episodeNumber: z.coerce.number().int().nonnegative().optional(),
+  episodeType: episodeTypeSchema.optional(),
+});
 
 const episodeAudioUpload = multer({
   storage: multer.memoryStorage(),
@@ -594,9 +612,36 @@ export async function createPodcast(req: AuthRequest, res: Response): Promise<vo
        * the public internet stays public.
        */
       visibility: input.visibility ?? 'public',
+      aiGenerated: input.aiGenerated ?? false,
       feedUrl: `${env.STREAM_KEY_BASE_URL}/api/podcasts/${id}/rss`,
     },
-    { categories: input.categories ?? [], persons }
+    {
+      categories: input.categories ?? [],
+      persons,
+      /**
+       * The FIRST writer `podcast_sources` has ever had — `schema/podcasts.ts`
+       * recorded that the table was built on the brief's instruction with no
+       * writer anywhere, and this closes that.
+       *
+       * `fields: []` is a real answer rather than a placeholder: the array names
+       * which of the SHOW's fields that provider maintains, and Alia maintains
+       * none of them — the creator owns the title, the artwork and the
+       * description from the moment the show exists. What the row records is
+       * ORIGIN, which is `provider` and `externalId`.
+       */
+      ...(input.aliaSeriesId === undefined
+        ? {}
+        : {
+            sources: [
+              {
+                provider: 'alia' as const,
+                externalId: input.aliaSeriesId,
+                importedAt: new Date().toISOString(),
+                fields: [],
+              },
+            ],
+          }),
+    }
   );
 
   res.status(201).json({ data: await serializeOne(row, userId) });
@@ -661,6 +706,24 @@ export async function uploadEpisode(req: AuthRequest, res: Response): Promise<vo
       const durationRaw = Number(req.body?.duration);
       const duration = Number.isFinite(durationRaw) && durationRaw > 0 ? durationRaw : 0;
 
+      /**
+       * `season`, `episodeNumber` and `episodeType` were SILENTLY DROPPED here.
+       *
+       * Studio has been sending all three since it was written
+       * (`packages/studio/services/episodeService.ts`), this handler read none
+       * of them, and `episodeType` was hardcoded `'full'` — so a creator
+       * numbering a serial show watched every episode come back unnumbered with
+       * no error anywhere. Multipart carries strings, so each number is parsed
+       * and validated rather than coerced: `Number('')` is 0 and `Number('x')`
+       * is NaN, and both would reach an `integer` column as a lie or a crash.
+       */
+      const parsed = uploadEpisodeFieldsSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        res.status(400).json({ error: 'Invalid episode metadata', details: parsed.error.issues });
+        return;
+      }
+      const fields = parsed.data;
+
       // Minted up front: it is both the S3 key and the episode's own `guid`.
       const episodeId = uuidv7();
       const pubDate = new Date();
@@ -679,8 +742,11 @@ export async function uploadEpisode(req: AuthRequest, res: Response): Promise<vo
           guid: episodeId,
           duration,
           pubDate,
-          episodeType: 'full',
+          season: fields.season,
+          episodeNumber: fields.episodeNumber,
+          episodeType: fields.episodeType ?? 'full',
           explicit: req.body?.explicit === 'true' || req.body?.explicit === true,
+          aiGenerated: req.body?.aiGenerated === 'true' || req.body?.aiGenerated === true,
           source: 'syra',
           audioSourceUrl: `/api/podcasts/episodes/${episodeId}/audio`,
           audioSourceFormat: format,
@@ -847,6 +913,9 @@ export async function updatePodcast(req: AuthRequest, res: Response): Promise<vo
   if (updates.link !== undefined) values.link = updates.link;
   if (updates.type !== undefined) values.type = updates.type;
   if (updates.visibility !== undefined) values.visibility = updates.visibility;
+  // A disclosure the creator can correct in both directions — they are the only
+  // party who knows, and a wrong one in either direction is a real harm.
+  if (updates.aiGenerated !== undefined) values.aiGenerated = updates.aiGenerated;
 
   if (updates.image !== undefined) {
     const cover = await resolveCover(updates.image);

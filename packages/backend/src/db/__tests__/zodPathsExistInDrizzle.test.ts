@@ -135,6 +135,10 @@ const TABLES_WITHOUT_DTO: Record<string, string> = {
   podcastFunding: 'child of podcasts — podcastSchema.funding',
   podcastPersons: 'child of podcasts — podcastSchema.persons',
   podcastSources: 'child of podcasts — podcastSchema.sources',
+  episodeIngestTickets:
+    'server-internal — the redemption record of an episode ingest capability. No client ever ' +
+    'sees a row: the draft response carries the signed token and nothing else, and every column ' +
+    'here (jti, expiresAt, consumedAt) is state the SERVER keeps ABOUT that token.',
   trackCredits: 'child of tracks — trackSchema.credits',
   trackHlsRenditions: 'child of tracks — trackSchema.hls',
   trackSources: 'child of tracks — trackSchema.sources',

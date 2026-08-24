@@ -7,7 +7,19 @@ export const podcastSourceSchema = z.enum(['rss', 'syra']);
 export type PodcastSource = z.infer<typeof podcastSourceSchema>;
 
 /** Provider that contributed data to a show (the feed itself or a discovery directory). */
-export const podcastProvenanceProviderSchema = z.enum(['rss', 'syra', 'podcastindex', 'apple']);
+export const podcastProvenanceProviderSchema = z.enum([
+  'rss',
+  'syra',
+  'podcastindex',
+  'apple',
+  /**
+   * Where the show was AUTHORED. Deliberately NOT a `podcastSourceSchema` value:
+   * `source === 'syra'` is the server's owner-write predicate, so a third value
+   * there would remove write access from every show carrying it. An
+   * Alia-authored show is Syra-hosted and says so here instead.
+   */
+  'alia',
+]);
 export type PodcastProvenanceProvider = z.infer<typeof podcastProvenanceProviderSchema>;
 
 export const podcastSourceProvenanceSchema = z.object({
@@ -129,6 +141,8 @@ export const podcastSchema = timestampsSchema.extend({
   subscriberCount: z.number().optional(),
   status: podcastStatusSchema,
   visibility: podcastVisibilitySchema,
+  /** Disclosure: this show's content was machine-generated. Independent of provenance. */
+  aiGenerated: z.boolean(),
   // Optional Podcasting 2.0
   funding: z.array(podcastFundingSchema).optional(),
   persons: z.array(podcastPersonSchema).optional(),
@@ -158,6 +172,25 @@ export const createPodcastRequestSchema = z.object({
    * show created before this field existed already was.
    */
   visibility: podcastVisibilitySchema.optional(),
+  /**
+   * The Alia series this show was generated from. Present ⇒ a
+   * `{ provider: 'alia', externalId }` row is written to `podcast_sources`.
+   *
+   * A dedicated field rather than a general `sources` array on the request, and
+   * that is a trust boundary rather than a convenience: provenance is an
+   * attribution record, and a client that could post an arbitrary
+   * `{ provider, externalId }` pair could claim its show came from Apple or
+   * PodcastIndex under an id the import path dedupes on. This field can only
+   * ever assert the one provenance the caller is entitled to assert.
+   */
+  aliaSeriesId: z.string().optional(),
+  /**
+   * Disclosure, and INDEPENDENT of `aliaSeriesId`: a human can host a show
+   * published through Alia, and a machine-generated show can arrive from
+   * somewhere else entirely. Neither implies the other, so neither is derived
+   * from the other.
+   */
+  aiGenerated: z.boolean().optional(),
   /** Hosts & Guests as Oxy user ids (validated server-side; no free text). */
   hosts: z.array(z.string()).optional(),
   guests: z.array(z.string()).optional(),
@@ -175,6 +208,7 @@ export const updatePodcastRequestSchema = z.object({
   link: z.string().optional(),
   type: podcastTypeSchema.optional(),
   visibility: podcastVisibilitySchema.optional(),
+  aiGenerated: z.boolean().optional(),
 });
 export type UpdatePodcastRequest = z.infer<typeof updatePodcastRequestSchema>;
 
