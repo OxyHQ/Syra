@@ -201,6 +201,7 @@ jobs:
           SYNC_AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           SYNC_AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           SYNC_DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SYNC_INGEST_TOKEN_SECRET: ${{ secrets.INGEST_TOKEN_SECRET }}
           SYNC_JWT_SECRET: ${{ secrets.JWT_SECRET }}
           SYNC_REDIS_URL: ${{ secrets.REDIS_URL }}
           SYNC_STREAM_TOKEN_SECRET: ${{ secrets.STREAM_TOKEN_SECRET }}
@@ -217,7 +218,7 @@ jobs:
           # `ResourceInitializationError: unable to pull secrets or registry
           # auth`. This step is what puts it there, on the same run, before that
           # step. Dropping it from this list breaks the Mongo->Postgres cutover.
-          APP_SECRETS="ACOUSTID_API_KEY DATABASE_URL JWT_SECRET STREAM_TOKEN_SECRET"
+          APP_SECRETS="ACOUSTID_API_KEY DATABASE_URL INGEST_TOKEN_SECRET JWT_SECRET STREAM_TOKEN_SECRET"
 
           # LIVEKIT_API_KEY and LIVEKIT_API_SECRET are deliberately absent,
           # though oxy-syra:8 reads both from /oxy/_shared/. Syra CONSUMES those
@@ -366,7 +367,7 @@ jobs:
           # The sync step used to walk `toJSON(secrets)` instead, which needed no
           # workflow edit — and which is exactly what got every run of this
           # workflow held for approval. See the note on that step.
-          TASK_SECRET_OVERRIDES_JSON: '{"DATABASE_URL":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/DATABASE_URL"}'
+          TASK_SECRET_OVERRIDES_JSON: '{"DATABASE_URL":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/DATABASE_URL","INGEST_TOKEN_SECRET":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/INGEST_TOKEN_SECRET"}'
 
           # PRE_DEPLOY_TASK_COMMAND_JSON / POST_DEPLOY_TASK_COMMAND_JSON are NOT
           # set here: whichever selector step above ran put them in $GITHUB_ENV,
