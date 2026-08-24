@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
 import { uuidv7 } from '@oxyhq/db';
 import { clearDb, connectDb, disconnectDb } from '../../../test/postgres';
+import { eq } from 'drizzle-orm';
 import { getDb } from '../../../db/postgres';
 import { userPodcastSubscriptions } from '../../../db/schema/library';
 import { podcasts } from '../../../db/schema/podcasts';
@@ -97,6 +98,52 @@ describe('notifySubscribersOfNewEpisode', () => {
 
     expect(outcome).toEqual({ notified: 2, skippedAsBackfill: false, skippedAsHidden: false });
     expect(posted).toBe(2);
+  });
+
+  it('tells nobody about an episode of a PRIVATE or UNLISTED show', async () => {
+    /**
+     * A push notification is the loudest surface there is and the only one that
+     * leaves the platform, so it is gated on the strictest rule — LISTABLE
+     * (active AND public), the same one browse and search use. `unlisted` is
+     * refused too: its grant is its URL, and a push is not a URL somebody
+     * followed.
+     *
+     * The `notified: 2` case above is this test's positive control — same show,
+     * same subscribers, same fresh episode — so a zero here is the gate rather
+     * than a fan-out that stopped working.
+     */
+    await subscribe('u1', PODCAST_ID);
+    await subscribe('u2', PODCAST_ID);
+
+    for (const visibility of ['private', 'unlisted'] as const) {
+      await getDb()
+        .update(podcasts)
+        .set({ visibility })
+        .where(eq(podcasts.id, PODCAST_ID));
+
+      const outcome = await notifySubscribersOfNewEpisode(episode(new Date()), Date.now(), testDeps);
+
+      expect(`${visibility}: ${JSON.stringify(outcome)}`).toBe(
+        `${visibility}: ${JSON.stringify({ notified: 0, skippedAsBackfill: false, skippedAsHidden: true })}`
+      );
+      expect(`${visibility} posted: ${posted}`).toBe(`${visibility} posted: 0`);
+    }
+  });
+
+  it('tells nobody about an episode of an UNPUBLISHED show', async () => {
+    // The other axis: a push that deep-links into a show whose page now 404s is
+    // worse than no push at all, so `status` gates this as well as `visibility`.
+    await subscribe('u1', PODCAST_ID);
+
+    await getDb()
+      .update(podcasts)
+      .set({ status: 'unavailable' })
+      .where(eq(podcasts.id, PODCAST_ID));
+
+    const outcome = await notifySubscribersOfNewEpisode(episode(new Date()), Date.now(), testDeps);
+
+    expect(outcome.skippedAsHidden).toBe(true);
+    expect(posted).toBe(0);
   });
 
   it('a whole archive import notifies nobody', async () => {

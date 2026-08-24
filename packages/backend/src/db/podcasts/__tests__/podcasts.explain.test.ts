@@ -40,6 +40,18 @@
  * result set, so it degrades as the catalogue grows rather than being wrong at
  * any one size.
  *
+ * **The visibility axis moved no plan, and that is the measurement.** Adding
+ * `visibility = 'public'` to the browse and search predicates, and to the show
+ * semi-join inside the episode ones, left every pinned index unchanged — the
+ * three partial `status = 'active'` indexes still serve the browse and the GIN
+ * still serves the search, with visibility applied as a filter on rows already
+ * restricted. That is why no index on `podcasts` was narrowed to
+ * `WHERE ... and visibility = 'public'`: it would buy nothing here and would
+ * silently stop serving the owner-facing and refresh-scheduler reads, which
+ * must still see non-public shows. Re-measured after the change rather than
+ * assumed; the seed carries 804 non-public shows (384 private + 420 unlisted)
+ * so the predicate is not being measured against a table it selects entirely.
+ *
  * **The GIN indexes are reached only for a SELECTIVE term**, which is why the
  * seed plants a rare token rather than searching for one every row carries. A
  * query matching most of the catalogue is served by the ordering index with the
@@ -152,6 +164,8 @@ const plans = new Map<string, string>();
 /** Rows actually visible inside the seeding transaction. */
 let seededShowCount = 0;
 let seededEpisodeCount = 0;
+/** Shows the visibility predicate must EXCLUDE — see "the seed is real". */
+let seededNonPublicShowCount = 0;
 
 interface Probe {
   readonly name: string;
@@ -175,13 +189,13 @@ const PROBES: readonly Probe[] = [
     // `db/podcasts/podcasts.ts` — `browsePodcastRows`, the "popular" sort, and
     // the leading-column prefix `searchPodcastRows`' three-key sort also uses.
     name: 'browsePopular',
-    sql: `select * from podcasts where status = 'active'
+    sql: `select * from podcasts where status = 'active' and visibility = 'public'
           order by popularity desc nulls last, subscriber_count desc nulls last limit 20`,
   },
   {
     // `db/podcasts/podcasts.ts` — `browsePodcastRows`, the "recent" sort.
     name: 'browseRecent',
-    sql: `select * from podcasts where status = 'active'
+    sql: `select * from podcasts where status = 'active' and visibility = 'public'
           order by last_episode_at desc nulls last limit 20`,
   },
   {
@@ -194,14 +208,14 @@ const PROBES: readonly Probe[] = [
      * `descNullsLast`'s measurement mean something.
      */
     name: 'browseRecentNullsFirst',
-    sql: `select * from podcasts where status = 'active'
+    sql: `select * from podcasts where status = 'active' and visibility = 'public'
           order by last_episode_at desc limit 20`,
   },
   {
     // `db/podcasts/podcasts.ts` — `browsePodcastRows`' category filter, after
     // the name has been resolved to a genre id.
     name: 'browseCategory',
-    sql: `select * from podcasts where status = 'active'
+    sql: `select * from podcasts where status = 'active' and visibility = 'public'
             and exists (select 1 from podcast_categories
                         where podcast_id = podcasts.id and genre_id = '${MARKER}-g-3')
           order by popularity desc nulls last limit 20`,
@@ -215,7 +229,8 @@ const PROBES: readonly Probe[] = [
     // `db/podcasts/podcasts.ts` — `searchPodcastRows`, through the GIN index.
     name: 'searchPodcasts',
     sql: `select * from podcasts
-          where status = 'active' and search_vector @@ websearch_to_tsquery('english', 'zebra')
+          where status = 'active' and visibility = 'public'
+            and search_vector @@ websearch_to_tsquery('english', 'zebra')
           order by popularity desc nulls last, subscriber_count desc nulls last,
                    last_episode_at desc nulls last limit 20`,
   },
@@ -226,7 +241,8 @@ const PROBES: readonly Probe[] = [
     sql: `select * from episodes
           where status = 'ready'
             and exists (select 1 from podcasts
-                        where podcasts.id = episodes.podcast_id and podcasts.status = 'active')
+                        where podcasts.id = episodes.podcast_id
+                          and podcasts.status = 'active' and podcasts.visibility = 'public')
             and (source = 'syra' or (enclosure_url is not null and enclosure_url <> ''))
             and search_vector @@ websearch_to_tsquery('english', 'zebra')
           order by popularity desc nulls last, pub_date desc nulls last limit 20`,
@@ -241,7 +257,8 @@ const PROBES: readonly Probe[] = [
     name: 'countSearchPodcasts',
     alsoAtDefaultCosting: true,
     sql: `select count(*) from podcasts
-          where status = 'active' and search_vector @@ websearch_to_tsquery('english', 'zebra')`,
+          where status = 'active' and visibility = 'public'
+            and search_vector @@ websearch_to_tsquery('english', 'zebra')`,
   },
   {
     /**
@@ -280,7 +297,8 @@ const PROBES: readonly Probe[] = [
     sql: `select count(*) from episodes
           where status = 'ready'
             and exists (select 1 from podcasts
-                        where podcasts.id = episodes.podcast_id and podcasts.status = 'active')
+                        where podcasts.id = episodes.podcast_id
+                          and podcasts.status = 'active' and podcasts.visibility = 'public')
             and (source = 'syra' or (enclosure_url is not null and enclosure_url <> ''))
             and search_vector @@ websearch_to_tsquery('english', 'zebra')`,
   },
@@ -335,16 +353,28 @@ const PROBES: readonly Probe[] = [
     sql: `select * from podcasts
           where exists (select 1 from podcast_persons
                         where podcast_id = podcasts.id and linked_oxy_user_id = '${MARKER}-oxy-7')
-            and status <> 'removed'
+            and status <> 'removed' and visibility = 'public'
           order by popularity desc nulls last, last_episode_at desc nulls last limit 50`,
   },
   {
     // `db/podcasts/persons.ts` — `episodeCreditsPerson`, tier 1.
+    /**
+     * `db/podcasts/persons.ts` — `episodeCreditsPerson`, tier 1, composed with
+     * the FULL `publiclyPlayableEpisodeFilter`.
+     *
+     * The show semi-join and the enclosure test were missing from this
+     * transcription, which measured a strictly easier query than the module
+     * issues. Both are here now, so the plan below is the shipped one.
+     */
     name: 'episodesCreditingPerson',
     sql: `select * from episodes
           where exists (select 1 from episode_persons
                         where episode_id = episodes.id and linked_oxy_user_id = '${MARKER}-oxy-7')
             and status = 'ready'
+            and exists (select 1 from podcasts
+                        where podcasts.id = episodes.podcast_id
+                          and podcasts.status = 'active' and podcasts.visibility = 'public')
+            and (source = 'syra' or (enclosure_url is not null and enclosure_url <> ''))
           order by pub_date desc nulls last limit 50`,
   },
   {
@@ -380,6 +410,76 @@ const PROBES: readonly Probe[] = [
   },
   {
     /**
+     * `db/podcasts/podcasts.ts` — `findPodcastForViewer`, the read that replaced
+     * the bare `findPodcastById` on every single-show surface. It runs on the
+     * detail page, the episode list, the RSS feed, subscribe and claim, so it is
+     * the highest-traffic query this change introduced.
+     */
+    name: 'showForViewer',
+    sql: `select * from podcasts
+          where id = '${MARKER}-s-7'
+            and ((status = 'active' and visibility <> 'private')
+                 or owner_oxy_user_id = '${SEEDED_SHOW_OWNER}')
+          limit 1`,
+  },
+  {
+    // `db/podcasts/podcasts.ts` — `findPodcastForOwner`, the mutation paths'.
+    name: 'showForOwner',
+    sql: `select * from podcasts
+          where id = '${MARKER}-s-7' and owner_oxy_user_id = '${SEEDED_SHOW_OWNER}' limit 1`,
+  },
+  {
+    /**
+     * `db/podcasts/episodes.ts` — `findEpisodeById`, which is a JOIN now: the
+     * show travels with the episode because every rule about who may see an
+     * episode lives on the show.
+     */
+    name: 'episodeWithShow',
+    sql: `select episodes.*, podcasts.* from episodes
+          join podcasts on podcasts.id = episodes.podcast_id
+          where episodes.id = '${MARKER}-e-7' limit 1`,
+  },
+  {
+    /**
+     * `db/podcasts/episodes.ts` — `findEpisodesByIds`, the resume list's
+     * hydration read, with the viewer semi-join this change added. The `in (…)`
+     * list is what `listContinueListening` returns, so it is small and bounded.
+     */
+    name: 'episodesForViewer',
+    sql: `select * from episodes
+          where id in ('${MARKER}-e-7', '${MARKER}-e-8', '${MARKER}-e-9')
+            and status <> 'unavailable'
+            and exists (select 1 from podcasts
+                        where podcasts.id = episodes.podcast_id
+                          and ((podcasts.status = 'active' and podcasts.visibility <> 'private')
+                               or podcasts.owner_oxy_user_id = '${SEEDED_SHOW_OWNER}'))`,
+  },
+  {
+    /**
+     * `db/podcasts/episodes.ts` — `countReadyEpisodesByShows`, the replacement
+     * `episode_count` every non-owner is served. One grouped query per page of
+     * shows, so it has to be an index read per show rather than a scan.
+     */
+    name: 'readyEpisodeCounts',
+    sql: `select podcast_id, count(*) from episodes
+          where podcast_id in ('${MARKER}-s-7', '${MARKER}-s-8') and status = 'ready'
+          group by podcast_id`,
+  },
+  {
+    /**
+     * `db/podcasts/episodes.ts` — `findEpisodeIdsAwaitingHls`, the deferred
+     * transcode set a show picks up when it stops being private. Runs once per
+     * publish, not per request, so what matters is only that it stays scoped to
+     * the one show rather than scanning 40,000 episodes.
+     */
+    name: 'episodesAwaitingHls',
+    sql: `select id from episodes
+          where podcast_id = '${MARKER}-s-7' and source = 'syra'
+            and hls_master_key is null and audio_source_url is not null
+            and status <> 'unavailable'`,
+  },
+  {
+    /**
      * The control. `podcasts.link` carries no index of its own — the GIN index
      * is on `search_vector`, which an equality on `link` cannot use — so this
      * MUST still report a Seq Scan under `enable_seqscan = off`.
@@ -398,23 +498,29 @@ async function seed(tx: Tx): Promise<void> {
     from generate_series(1, 40) g`));
 
   /**
-   * One show in 50 is not `active`, and one in 7 has no `last_episode_at`.
+   * One show in 50 is not `active`, one in 13 is `private`, one in 11 is
+   * `unlisted`, and one in 7 has no `last_episode_at`.
    *
-   * Both proportions are load-bearing. A seed where every show is active cannot
-   * tell a partial `WHERE status = 'active'` index that serves the browse from
-   * one that cannot, and cannot exercise `hiddenShows` at all. A seed with no
-   * NULL `last_episode_at` cannot tell `DESC NULLS LAST` from `DESC` — the two
-   * orderings agree when the column has no nulls, which is exactly the fixture
-   * shape that would let the rejected spelling pass.
+   * Every proportion is load-bearing, and the two visibility ones for exactly
+   * the reason the `status` one already was: a seed where every show is `public`
+   * cannot tell a query carrying `visibility = 'public'` from one that dropped
+   * it, so every plan below would be measured against a predicate that selects
+   * nothing. The moduli are chosen so all combinations occur — 13, 11, 7 and 50
+   * are pairwise coprime — and so that `${MARKER}-s-7`, the show the episode
+   * probes target, stays `active` and `public`.
    */
   await executeRows(tx, sql.raw(`
-    insert into podcasts (id, title, author, source, status, popularity, subscriber_count,
-                          last_episode_at, last_refreshed_at, owner_oxy_user_id, feed_url)
+    insert into podcasts (id, title, author, source, status, visibility, popularity,
+                          subscriber_count, last_episode_at, last_refreshed_at,
+                          owner_oxy_user_id, feed_url)
     select '${MARKER}-s-' || g,
            case when g % 251 = 0 then '${MARKER} Zebra Show ' || g else '${MARKER} Show ' || g end,
            'Author ' || g,
            case when g % 5 = 0 then 'syra' else 'rss' end,
            case when g % 50 = 0 then 'unavailable' else 'active' end,
+           case when g % 13 = 0 then 'private'
+                when g % 11 = 0 then 'unlisted'
+                else 'public' end,
            g % 101, g % 997,
            case when g % 7 = 0 then null else now() - (g || ' hours')::interval end,
            case when g % 11 = 0 then null else now() - (g || ' hours')::interval end,
@@ -505,6 +611,11 @@ async function seed(tx: Tx): Promise<void> {
   const [eps] = await executeRows<{ total: number }>(
     tx, sql.raw(`select count(*)::int as total from episodes where id like '${MARKER}-%'`));
   seededEpisodeCount = eps?.total ?? 0;
+
+  const [hidden] = await executeRows<{ total: number }>(
+    tx, sql.raw(`select count(*)::int as total from podcasts
+                 where id like '${MARKER}-%' and visibility <> 'public'`));
+  seededNonPublicShowCount = hidden?.total ?? 0;
 }
 
 beforeAll(async () => {
@@ -577,6 +688,23 @@ describe('the seed is real', () => {
 
   it('the control still reports a table scan under enable_seqscan = off', () => {
     expect(plans.get('control')).toContain('Seq Scan on podcasts');
+  });
+
+  it('seeded shows the visibility predicate has to exclude', () => {
+    /**
+     * The visibility axis's own version of the `status` proportion this seed
+     * already carried. Against an all-public table `visibility = 'public'`
+     * selects every row, so every plan measured above would be the plan for a
+     * predicate that restricts nothing — and a change that dropped the condition
+     * entirely would produce identical plans and pass.
+     *
+     * 384 private (5000/13) plus 420 unlisted (5000/11, less the shows already
+     * private), = 804. The floor is below that rather than equal to it so the
+     * assertion survives a change to `SEEDED_SHOWS` without becoming a second
+     * place the seed's arithmetic has to be maintained.
+     */
+    expect(seededNonPublicShowCount).toBeGreaterThan(700);
+    expect(seededNonPublicShowCount).toBeLessThan(seededShowCount);
   });
 });
 
@@ -856,5 +984,88 @@ describe('the resume surface and the child loads reach an index', () => {
     expectIndexesWithin('child by parent', indexesIn('childByParent'), [
       'podcast_funding_podcast_id_position_key',
     ]);
+  });
+});
+
+describe('the visibility reads reach an index', () => {
+  /**
+   * Every plan here was READ off `explain (analyze, buffers)` against the seed
+   * above and then pinned, never guessed. The index names below are what the
+   * planner actually chose, and the reason each one is the RIGHT choice is
+   * stated with it — a pinned name with no argument behind it is a plan nobody
+   * would dare change and nobody can defend.
+   *
+   * All six are read from the `enable_seqscan = off` pass, which is the file's
+   * convention for "can an index serve this at all" (see `beforeAll`'s two-pass
+   * note). For the four primary-key probes that is not a costing preference at
+   * all: a point lookup on a unique index has no competitor at any costing.
+   */
+  it('a single show for a VIEWER is still a primary-key lookup', () => {
+    // The `or owner_oxy_user_id = …` arm is the part worth measuring. It could
+    // have pushed the planner off the primary key and onto
+    // `podcasts_owner_oxy_user_id_created_at_idx` + a BitmapOr, which would turn
+    // the busiest read in the vertical into two index scans. It does not: `id =`
+    // is the selective condition and the rest is a filter on one row.
+    expect(plans.get('showForViewer')).not.toContain('Seq Scan on podcasts');
+    expect(`show for viewer: ${indexesIn('showForViewer')}`).toBe(
+      'show for viewer: podcasts_pkey'
+    );
+  });
+
+  it('a single show for its OWNER is a primary-key lookup', () => {
+    expect(plans.get('showForOwner')).not.toContain('Seq Scan on podcasts');
+    expect(`show for owner: ${indexesIn('showForOwner')}`).toBe('show for owner: podcasts_pkey');
+  });
+
+  it('the episode + show join is two primary-key probes, not a join strategy', () => {
+    // `findEpisodeById` returns the pair on EVERY media request, so the join has
+    // to cost one extra index probe and nothing more. Both sides are primary
+    // keys, which is what makes that true.
+    expect(plans.get('episodeWithShow')).not.toContain('Seq Scan on episodes');
+    expect(plans.get('episodeWithShow')).not.toContain('Seq Scan on podcasts');
+    expect(`episode with show: ${indexesIn('episodeWithShow')}`).toBe(
+      'episode with show: episodes_pkey, podcasts_pkey'
+    );
+  });
+
+  it("the resume list's viewer semi-join probes the show's primary key", () => {
+    // The semi-join this change added to `findEpisodesByIds`. One probe per
+    // candidate episode against `podcasts_pkey` — the same shape, and the same
+    // argument, as `showIsActive` replacing an unbounded `$nin` id list.
+    expect(plans.get('episodesForViewer')).not.toContain('Seq Scan on episodes');
+    expect(plans.get('episodesForViewer')).not.toContain('Seq Scan on podcasts');
+    expect(`episodes for viewer: ${indexesIn('episodesForViewer')}`).toBe(
+      'episodes for viewer: episodes_pkey, podcasts_pkey'
+    );
+  });
+
+  it('the ready-episode count reads the show index, not the ready one', () => {
+    /**
+     * `episodes_podcast_id_pub_date_idx`, and NOT `episodes_ready_popularity_idx`
+     * — which is partial on `status = 'ready'` and looks like the obvious match.
+     * It cannot serve this: it leads with `popularity`, so it has no way to
+     * restrict to two shows, and the count is per-show. Leading with
+     * `podcast_id` is what makes this a bounded read rather than a scan of every
+     * ready episode in the catalogue.
+     *
+     * This is also the index the file's other comment protects: it is
+     * deliberately NON-partial so the owner's unpublished view keeps using it,
+     * and this count is a second reader that depends on the same property from
+     * the opposite direction (it supplies its own `status` filter).
+     */
+    expect(plans.get('readyEpisodeCounts')).not.toContain('Seq Scan on episodes');
+    expect(`ready counts: ${indexesIn('readyEpisodeCounts')}`).toBe(
+      'ready counts: episodes_podcast_id_pub_date_idx'
+    );
+  });
+
+  it('the deferred-transcode set stays scoped to one show', () => {
+    // Runs once per publish rather than per request, so the only property that
+    // matters is that `podcast_id` bounds it — `hls_master_key is null` has no
+    // index and is not getting one for a once-per-publish read.
+    expect(plans.get('episodesAwaitingHls')).not.toContain('Seq Scan on episodes');
+    expect(`awaiting hls: ${indexesIn('episodesAwaitingHls')}`).toBe(
+      'awaiting hls: episodes_podcast_id_pub_date_idx'
+    );
   });
 });

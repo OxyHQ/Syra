@@ -56,9 +56,12 @@ const failNext: NextFunction = (err) => { throw err; };
  * unpublished show drops out of search with it), which is why every fixture show
  * here is explicitly `active`.
  */
-async function makeShow(status: 'active' | 'unavailable' = 'active'): Promise<string> {
+async function makeShow(
+  status: 'active' | 'unavailable' = 'active',
+  visibility: 'private' | 'unlisted' | 'public' = 'public'
+): Promise<string> {
   const id = uuidv7();
-  await getDb().insert(podcasts).values({ id, title: 'Show', source: 'rss', status });
+  await getDb().insert(podcasts).values({ id, title: 'Show', source: 'rss', status, visibility });
   return id;
 }
 
@@ -119,6 +122,35 @@ describe('unified search — episodes category', () => {
 
     const body = res._body as SearchBody;
     expect(body.results.episodes.map((episode) => episode.title)).toEqual(['Rogan on air']);
+    expect(body.counts.episodes).toBe(1);
+  });
+
+  it('drops an episode whose show is private OR unlisted, and keeps the public one', async () => {
+    /**
+     * The visibility axis, beside the `status` one above. Search is a DISCOVERY
+     * surface, so the gate is LISTABLE — active AND public — which means
+     * `unlisted` is excluded here even though it is reachable by a direct link.
+     * That is the whole difference between `unlisted` and `public`, and a test
+     * covering only `private` would pass against a gate that let unlisted
+     * through.
+     *
+     * All three fixtures are `status: 'active'`, `ready`, RSS episodes WITH an
+     * enclosure, so nothing but their show's visibility can separate them.
+     */
+    const publicShow = await makeShow('active', 'public');
+    const unlistedShow = await makeShow('active', 'unlisted');
+    const privateShow = await makeShow('active', 'private');
+    await getDb().insert(episodes).values([
+      { podcastId: publicShow, podcastTitle: 'Show', title: 'Rogan in public', guid: 'v1', pubDate: new Date(), source: 'rss', enclosureUrl: 'https://x/1.mp3', status: 'ready' },
+      { podcastId: unlistedShow, podcastTitle: 'Show', title: 'Rogan unlisted', guid: 'v2', pubDate: new Date(), source: 'rss', enclosureUrl: 'https://x/2.mp3', status: 'ready' },
+      { podcastId: privateShow, podcastTitle: 'Show', title: 'Rogan private', guid: 'v3', pubDate: new Date(), source: 'rss', enclosureUrl: 'https://x/3.mp3', status: 'ready' },
+    ]);
+
+    const res = makeRes();
+    await search(makeReq({ q: 'rogan', category: 'episodes' }), res as unknown as Response, failNext);
+
+    const body = res._body as SearchBody;
+    expect(body.results.episodes.map((episode) => episode.title)).toEqual(['Rogan in public']);
     expect(body.counts.episodes).toBe(1);
   });
 });
