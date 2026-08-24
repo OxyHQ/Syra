@@ -295,6 +295,12 @@ export function toPodcastDto(
     subscriberCount: row.subscriberCount,
     status: row.status,
     visibility: row.visibility,
+    /**
+     * Public to EVERYONE, owner and stranger alike, and that is the point of a
+     * disclosure: a listener who cannot see it is the person it exists for.
+     * Deliberately not in the owner-only set beside `etag` and `feedUrl`.
+     */
+    aiGenerated: row.aiGenerated,
     funding: context.funding ? [...context.funding] : undefined,
     persons: context.persons ? [...context.persons] : undefined,
     value: optional(row.value),
@@ -430,6 +436,8 @@ export function toEpisodeDto(
     playCount: row.playCount,
     popularity: row.popularity,
     status: row.status,
+    // Public to everyone — see the show serializer above.
+    aiGenerated: row.aiGenerated,
     createdAt: iso(row.createdAt),
     updatedAt: iso(row.updatedAt),
   };

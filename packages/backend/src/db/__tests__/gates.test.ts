@@ -122,9 +122,10 @@ import { genres } from '../schema/genres';
  * inconsistency with `episode_hls_renditions` — see catalog.ts's own
  * comment) + 9 (Task 5: creators.ts) + 8 (Task 6: rooms.ts) +
  * 10 (Task 7: user.ts) + 4 (Task 8: moderation.ts — `reports` plus the three
- * `@oxyhq/crowdsource-app` owns) = 73.
+ * `@oxyhq/crowdsource-app` owns) + 1 (Task A2: podcasts.ts's
+ * `episode_ingest_tickets`) = 74.
  */
-const MINIMUM_TABLES = 73;
+const MINIMUM_TABLES = 74;
 
 /**
  * Every drizzle table the schema barrel exports, walked rather than listed by
@@ -522,16 +523,21 @@ describe('schema gates', () => {
     // which is the same "routine maintenance that is routinely forgotten" lapse
     // `migrate.ts` records for `LAST_GENESIS_MIGRATION_TAG`, and it fails just
     // as silently, in the safe direction.
-    // Raised again by the podcast-visibility task (24 -> 28 files, 900 -> 1000,
+    // Raised again by the podcast-ingest task (28 -> 30 files, 1000 -> 1010,
+    // against 1011 actual): `0028` lands a table and two columns, `0029` an
+    // index. Measured, not estimated — the first attempt guessed 1015 and the
+    // gate said 1011, which is the reason these floors are asserted at all.
+    //
+    // Raised before that by the podcast-visibility task (24 -> 28 files, 900 -> 1000,
     // against 1002 actual — four migrations landed since Task 13a set these and
     // none of them moved either floor). Same rule as MINIMUM_TABLES and for the
     // same reason the comment above gives at length: a floor that never moves is
     // a vacuity check that has stopped checking, and it fails silently in the
     // safe direction. `0027` itself adds two of those identifiers, the column
     // and its CHECK.
-    expect(files.length).toBeGreaterThanOrEqual(28);
+    expect(files.length).toBeGreaterThanOrEqual(30);
     const { violations, scanned } = findOverlongIdentifiers(files);
-    expect(scanned).toBeGreaterThanOrEqual(1000);
+    expect(scanned).toBeGreaterThanOrEqual(1010);
 
     // Exact identity, never substring — see `findUnexemptedIdentifiers`.
     // The second half is the staleness check: an exemption that no longer
@@ -1312,6 +1318,8 @@ describe('podcasts schema (Task 4)', () => {
     'episode_persons',
     'episode_hls_renditions',
     'episode_progress',
+    // Task A2: the redemption record of an episode ingest ticket.
+    'episode_ingest_tickets',
   ];
 
   it('lands exactly the tables this task promises', () => {
@@ -3123,6 +3131,21 @@ describe('user, taste and listening schema (Task 7)', () => {
       // `expireAfterSeconds: LISTENING_EVENT_TTL_SEC` — 90 days, measured from
       // a birth column.
       `listening_events.played_at:${90 * 24 * 60 * 60}`,
+      /**
+       * Task A2's, and the review this shape forces has been done.
+       *
+       * `0` because the column already IS the deadline: the ticket's JWT and its
+       * row are minted with the same 24-hour expiry, so a row past `expires_at`
+       * cannot be redeemed by anything.
+       *
+       * Sweeping it can only ever NARROW access, which is the property that
+       * makes a blind delete safe here where it was not safe for
+       * `user_uploads.expires_at` above: `claimIngestTicket` treats a MISSING
+       * row as REFUSED, so the worst a premature delete can do is refuse a
+       * ticket early. Unswept, the table grows by one row per episode draft
+       * forever and nothing ever reads the old ones.
+       */
+      'episode_ingest_tickets.expires_at:0',
       // Task 8's two, and the review this shape exists to force has been done:
       // both were `expireAfterSeconds: 0` on an `expiresAt` the WRITER computes
       // from `MODERATION_*_RETENTION_SECONDS`, so 0 here is correct — the column

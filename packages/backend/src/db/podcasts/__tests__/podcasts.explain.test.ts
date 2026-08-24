@@ -127,6 +127,19 @@ const PROBED_SHOW = `${MARKER}-s-${PROBED_SHOW_NUMBER}`;
 const SEEDED_SHOW_OWNER = `${MARKER}-u-${1 + (PROBED_SHOW_NUMBER % SEEDED_USERS)}`;
 
 /**
+ * A NUMBERED show deep enough for the ordering to cost something.
+ *
+ * The main seed spreads 40,000 episodes over 5,000 shows — eight each — and at
+ * eight rows every ordering is free, so it cannot tell a streamed index read
+ * from a sort and would certify either. `episodesByShowQuery` now orders by
+ * `episode_number desc nulls last, pub_date desc nulls last`, and whether that
+ * costs the PAGE or the whole show is exactly the question a real serial show
+ * (hundreds to thousands of episodes) asks.
+ */
+const DEEP_SHOW = `${MARKER}-deep`;
+const DEEP_SHOW_EPISODES = 2000;
+
+/**
  * The show-episode listing, rendered from the SHIPPED builder.
  *
  * This is the one BOUND probe in this file, and the reason it is this one:
@@ -158,6 +171,18 @@ function showEpisodesSql(viewerId: string | null): string {
   );
 }
 
+/** The shipped builder against the DEEP show, rendered the same way. */
+function deepShowEpisodesSql(viewerId: string | null): string {
+  const query = episodesByShowQuery(DEEP_SHOW, {
+    visibility: episodeVisibilityFilter(SEEDED_SHOW_OWNER, viewerId),
+    limit: 20,
+  }).toSQL();
+
+  return query.sql.replace(/\$(\d+)/g, (_match, index) =>
+    `'${String(query.params[Number(index) - 1])}'`
+  );
+}
+
 /** Plan text by probe name, collected once in `beforeAll`. */
 const plans = new Map<string, string>();
 
@@ -166,6 +191,9 @@ let seededShowCount = 0;
 let seededEpisodeCount = 0;
 /** Shows the visibility predicate must EXCLUDE — see "the seed is real". */
 let seededNonPublicShowCount = 0;
+/** The deep numbered show's episodes, and how many of them carry no number. */
+let seededDeepShowEpisodeCount = 0;
+let seededDeepShowUnnumbered = 0;
 
 interface Probe {
   readonly name: string;
@@ -333,6 +361,27 @@ const PROBES: readonly Probe[] = [
     name: 'showEpisodesPublic',
     // A STRANGER's view, from the same function: `status = 'ready'`.
     sql: () => showEpisodesSql('someone-else'),
+  },
+  {
+    /**
+     * The SHIPPED builder against the deep numbered show — the bound probe that
+     * measures what the ordering change actually costs.
+     */
+    name: 'deepShowEpisodes',
+    sql: () => deepShowEpisodesSql(SEEDED_SHOW_OWNER),
+  },
+  {
+    name: 'deepShowEpisodesPublic',
+    sql: () => deepShowEpisodesSql('someone-else'),
+  },
+  {
+    /**
+     * The ordering that was REPLACED, kept so the comparison is a measurement
+     * rather than a claim: `pub_date` alone over the same 2,000 rows.
+     */
+    name: 'deepShowByPubDateOnly',
+    sql: `select * from episodes where podcast_id = '${DEEP_SHOW}'
+          order by pub_date desc nulls last limit 20`,
   },
   {
     // `db/podcasts/episodes.ts` — `episodeStats`' newest-episode read. The one
@@ -570,6 +619,29 @@ async function seed(tx: Tx): Promise<void> {
            g % 101
     from generate_series(1, ${SEEDED_EPISODES}) g`));
 
+  /**
+   * The deep numbered show. One in 9 episodes carries NO number, so the
+   * `NULLS LAST` half of the ordering is exercised rather than assumed — a seed
+   * where every episode is numbered cannot tell `DESC NULLS LAST` from `DESC`
+   * on that column, the same trap the `last_episode_at` nulls avoid above.
+   */
+  await executeRows(tx, sql.raw(`
+    insert into podcasts (id, title, source, status, visibility, owner_oxy_user_id, feed_url)
+    values ('${DEEP_SHOW}', '${MARKER} Deep Show', 'syra', 'active', 'public',
+            '${SEEDED_SHOW_OWNER}', 'https://feeds.example/${MARKER}/deep.xml')`));
+
+  await executeRows(tx, sql.raw(`
+    insert into episodes (id, podcast_id, podcast_title, title, guid, pub_date, source,
+                          enclosure_url, status, popularity, episode_number)
+    select '${DEEP_SHOW}-e-' || g, '${DEEP_SHOW}', 'Deep', '${MARKER} Deep Episode ' || g,
+           '${DEEP_SHOW}-guid-' || g,
+           now() - (g || ' minutes')::interval,
+           'syra', null,
+           case when g % 17 = 0 then 'processing' else 'ready' end,
+           g % 101,
+           case when g % 9 = 0 then null else g end
+    from generate_series(1, ${DEEP_SHOW_EPISODES}) g`));
+
   await executeRows(tx, sql.raw(`
     insert into episode_persons (id, episode_id, "position", name, linked_oxy_user_id)
     select '${MARKER}-ep-' || g, '${MARKER}-e-' || g, 0, 'Guest ' || g,
@@ -611,6 +683,13 @@ async function seed(tx: Tx): Promise<void> {
   const [eps] = await executeRows<{ total: number }>(
     tx, sql.raw(`select count(*)::int as total from episodes where id like '${MARKER}-%'`));
   seededEpisodeCount = eps?.total ?? 0;
+
+  const [deep] = await executeRows<{ total: number; unnumbered: number }>(
+    tx, sql.raw(`select count(*)::int as total,
+                        count(*) filter (where episode_number is null)::int as unnumbered
+                 from episodes where podcast_id = '${DEEP_SHOW}'`));
+  seededDeepShowEpisodeCount = deep?.total ?? 0;
+  seededDeepShowUnnumbered = deep?.unnumbered ?? 0;
 
   const [hidden] = await executeRows<{ total: number }>(
     tx, sql.raw(`select count(*)::int as total from podcasts
@@ -682,12 +761,25 @@ describe('the seed is real', () => {
     // Not decoration: on a seed that inserted nothing, every plan below is a
     // measurement of an empty table and every "no Seq Scan" assertion passes
     // for the wrong reason.
-    expect(seededShowCount).toBe(SEEDED_SHOWS);
-    expect(seededEpisodeCount).toBe(SEEDED_EPISODES);
+    // `+ 1` and `+ DEEP_SHOW_EPISODES`: the deep numbered show is seeded beside
+    // the spread, and written as arithmetic rather than a new literal so the two
+    // seeds cannot drift apart silently.
+    expect(seededShowCount).toBe(SEEDED_SHOWS + 1);
+    expect(seededEpisodeCount).toBe(SEEDED_EPISODES + DEEP_SHOW_EPISODES);
   });
 
   it('the control still reports a table scan under enable_seqscan = off', () => {
     expect(plans.get('control')).toContain('Seq Scan on podcasts');
+  });
+
+  it('seeded a numbered show deep enough for the ordering to cost something', () => {
+    // At the main seed's eight episodes per show every ordering is free, so the
+    // `deepShow*` plans would certify a sort and a stream alike. This is the
+    // floor that makes those probes a measurement.
+    expect(seededDeepShowEpisodeCount).toBe(DEEP_SHOW_EPISODES);
+    // And a real share of them carry NO number, so `NULLS LAST` is exercised
+    // rather than assumed.
+    expect(seededDeepShowUnnumbered).toBeGreaterThan(200);
   });
 
   it('seeded shows the visibility predicate has to exclude', () => {
@@ -878,6 +970,7 @@ describe('the episode reads reach an index', () => {
    */
   const SHOW_EPISODE_INDEXES = [
     'episodes_podcast_id_pub_date_idx',
+    'episodes_podcast_id_episode_number_pub_date_idx',
     'episodes_podcast_id_guid_key',
   ];
 
@@ -907,10 +1000,68 @@ describe('the episode reads reach an index', () => {
    * the difference is the whole page against the whole result set.
    */
   it('both viewers order by the spelling the index can serve', () => {
+    /**
+     * At EIGHT episodes both viewers sort, so the discriminator here is the sort
+     * key's TEXT — reverting `descNullsLast` to a plain `desc()` in the module
+     * changes it, which is what makes binding these probes worth anything.
+     *
+     * The key is `episode_number DESC NULLS LAST, pub_date DESC NULLS LAST`
+     * since the ordering changed; the streamed case, where the difference is the
+     * page against the whole show, is the `deepShow*` probes below.
+     */
     for (const probe of ['showEpisodes', 'showEpisodesPublic']) {
-      expect(`${probe}: ${plans.get(probe)?.includes('Sort Key: pub_date DESC NULLS LAST')}`)
-        .toBe(`${probe}: true`);
+      const plan = plans.get(probe) ?? '';
+      expect(
+        `${probe}: ${plan.includes('Sort Key: episode_number DESC NULLS LAST, pub_date DESC NULLS LAST')}`
+      ).toBe(`${probe}: true`);
     }
+  });
+
+  describe('a NUMBERED show streams its own index instead of sorting', () => {
+    /**
+     * The measurement the ordering change rests on, on 2,000 episodes of one
+     * show. Read off `explain (analyze, buffers)`, not guessed:
+     *
+     *   ordered by episode_number, WITH the composite index
+     *       Index Scan using episodes_podcast_id_episode_number_pub_date_idx
+     *       cost 0.41..63.13, 5 buffers, no Sort node
+     *
+     *   the same query with that index DROPPED (measured by dropping it)
+     *       Index Scan using episodes_podcast_id_pub_date_idx + top-N heapsort
+     *       cost 1936.96..1937.01, 108 buffers, Sort Method: top-N heapsort
+     *
+     * 38x the cost and 20x the buffers, and both grow with the show while the
+     * page does not — the same shape as the `descNullsLast` finding this file
+     * was originally written for.
+     */
+    for (const probe of ['deepShowEpisodes', 'deepShowEpisodesPublic']) {
+      it(`${probe} streams the composite index`, () => {
+        const plan = plans.get(probe) ?? '';
+        expect(plan).not.toContain('Seq Scan on episodes');
+        expect(`${probe}: ${indexesIn(probe)}`).toBe(
+          `${probe}: episodes_podcast_id_episode_number_pub_date_idx`
+        );
+        // The load-bearing half: NO sort node at all. Asserting the index alone
+        // would pass on the plan that reaches it and then sorts 2,000 rows,
+        // which is exactly the plan this index exists to replace.
+        expect(`${probe} sorted: ${plan.includes('Sort Method:')}`).toBe(`${probe} sorted: false`);
+      });
+    }
+
+    it('the date-only ordering still streams its OWN index — both are still needed', () => {
+      /**
+       * `episodes_podcast_id_pub_date_idx` was not replaced. `episodeStats`
+       * reads the newest episode BY DATE as a one-row probe, and the composite
+       * index cannot answer that: it leads with `episode_number`, so the newest
+       * date is not at either end of it. Two orderings, two indexes, and this is
+       * what says the old one still earns its keep.
+       */
+      const plan = plans.get('deepShowByPubDateOnly') ?? '';
+      expect(`by date: ${indexesIn('deepShowByPubDateOnly')}`).toBe(
+        'by date: episodes_podcast_id_pub_date_idx'
+      );
+      expect(`by date sorted: ${plan.includes('Sort Method:')}`).toBe('by date sorted: false');
+    });
   });
 
   it('the newest episode is one row off the ordered index, not an aggregate', () => {
@@ -1052,11 +1203,20 @@ describe('the visibility reads reach an index', () => {
      * deliberately NON-partial so the owner's unpublished view keeps using it,
      * and this count is a second reader that depends on the same property from
      * the opposite direction (it supplies its own `status` filter).
+     *
+     * TWO acceptable names, not one, and the reason is the same one the
+     * show-episode probes give: `episodes_podcast_id_pub_date_idx` and
+     * `episodes_podcast_id_episode_number_pub_date_idx` BOTH lead with
+     * `podcast_id`, so both can serve a per-show count and the planner may pick
+     * either. Naming the set asks "is there anything here I did not expect"
+     * while still excluding `episodes_ready_popularity_idx`, which is what the
+     * assertion is really about.
      */
     expect(plans.get('readyEpisodeCounts')).not.toContain('Seq Scan on episodes');
-    expect(`ready counts: ${indexesIn('readyEpisodeCounts')}`).toBe(
-      'ready counts: episodes_podcast_id_pub_date_idx'
-    );
+    expectIndexesWithin('ready counts', indexesIn('readyEpisodeCounts'), [
+      'episodes_podcast_id_pub_date_idx',
+      'episodes_podcast_id_episode_number_pub_date_idx',
+    ]);
   });
 
   it('the deferred-transcode set stays scoped to one show', () => {
@@ -1064,8 +1224,10 @@ describe('the visibility reads reach an index', () => {
     // matters is that `podcast_id` bounds it — `hls_master_key is null` has no
     // index and is not getting one for a once-per-publish read.
     expect(plans.get('episodesAwaitingHls')).not.toContain('Seq Scan on episodes');
-    expect(`awaiting hls: ${indexesIn('episodesAwaitingHls')}`).toBe(
-      'awaiting hls: episodes_podcast_id_pub_date_idx'
-    );
+    // Same two-index set, same reason as the count above.
+    expectIndexesWithin('awaiting hls', indexesIn('episodesAwaitingHls'), [
+      'episodes_podcast_id_pub_date_idx',
+      'episodes_podcast_id_episode_number_pub_date_idx',
+    ]);
   });
 });

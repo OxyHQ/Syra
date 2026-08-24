@@ -151,13 +151,28 @@ export async function findEpisodesByIds(
 }
 
 /**
- * One show's episodes, newest first.
+ * One show's episodes, in the order a NUMBERED SERIES needs.
+ *
+ * `episode_number desc nulls last, pub_date desc nulls last`, not `pub_date`
+ * alone. A serial show's episodes are identified by their number, and their
+ * publish dates routinely disagree with it — a back-catalogue import stamps a
+ * crawl time, a re-upload moves it, and two episodes released in one drop share
+ * a date entirely. Ordering by date alone therefore showed a numbered show
+ * scrambled, with nothing on the screen explaining why.
+ *
+ * `NULLS LAST` on the number is what keeps this correct for the shows that do
+ * NOT number: an unnumbered episode sorts after every numbered one and then
+ * among its own kind by date, so a show with no numbers at all is byte-for-byte
+ * the old ordering. A show that numbers only some of its episodes gets the
+ * numbered ones first, which is the only answer that does not interleave two
+ * incomparable schemes.
  *
  * `visibility` is `episodeVisibilityFilter`'s output — `undefined` for the
  * show's owner, who sees every status. Served by
- * `episodes_podcast_id_pub_date_idx`, which `schema/podcasts.ts` deliberately
- * keeps NON-partial for exactly this: a `status = 'ready'` partial index would
- * silently stop serving the owner's own unpublished-episode view.
+ * `episodes_podcast_id_episode_number_pub_date_idx`, which `schema/podcasts.ts`
+ * keeps NON-partial for exactly the reason its `pub_date` sibling is: a
+ * `status = 'ready'` partial index would silently stop serving the owner's own
+ * unpublished-episode view.
  */
 export function episodesByShowQuery(
   podcastId: string,
@@ -167,7 +182,7 @@ export function episodesByShowQuery(
     .select()
     .from(episodes)
     .where(and(eq(episodes.podcastId, podcastId), options.visibility))
-    .orderBy(descNullsLast(episodes.pubDate))
+    .orderBy(descNullsLast(episodes.episodeNumber), descNullsLast(episodes.pubDate))
     .offset(options.offset ?? 0)
     .limit(options.limit);
 }
@@ -388,15 +403,26 @@ export async function findEpisodesCreditingPerson(
 export async function insertEpisode(
   values: typeof episodes.$inferInsert,
   children: EpisodeChildValues = {},
-  options: { readonly recordOnShow?: boolean } = {}
+  options: { readonly recordOnShow?: boolean } = {},
+  /**
+   * Join the CALLER's transaction instead of opening one.
+   *
+   * The draft endpoint writes an episode and its ingest ticket together: a
+   * ticket whose redemption row failed to land is a capability that can never be
+   * redeemed (the claim treats a missing row as refused), and an episode with no
+   * ticket is a row nobody can ever attach audio to. Neither half is useful
+   * alone, so neither may land alone — and that is not expressible while this
+   * function insists on being the outermost transaction.
+   */
+  tx?: DbOrTransaction
 ): Promise<EpisodeRow> {
-  return getDb().transaction(async (tx) => {
-    const [row] = await tx.insert(episodes).values(values).returning();
+  const run = async (db: DbOrTransaction): Promise<EpisodeRow> => {
+    const [row] = await db.insert(episodes).values(values).returning();
     if (!row) throw new Error('insertEpisode: insert returned no row');
-    await writeChildren(tx, row.id, children);
+    await writeChildren(db, row.id, children);
 
     if (options.recordOnShow) {
-      await tx
+      await db
         .update(podcasts)
         .set({
           episodeCount: sql`${podcasts.episodeCount} + 1`,
@@ -406,7 +432,9 @@ export async function insertEpisode(
     }
 
     return row;
-  });
+  };
+
+  return tx ? run(tx) : getDb().transaction(run);
 }
 
 export async function updateEpisode(

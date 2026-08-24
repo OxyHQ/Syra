@@ -64,7 +64,7 @@ import * as schema from '../db/schema';
  * rows in place and turning cross-test contamination into the default. Raised
  * whenever the schema grows, exactly like `db/__tests__/gates.test.ts`'s floor.
  */
-const MINIMUM_TABLES = 69;
+const MINIMUM_TABLES = 70;
 
 /**
  * Segments that mark a database name as disposable.

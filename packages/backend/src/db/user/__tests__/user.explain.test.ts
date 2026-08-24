@@ -197,6 +197,19 @@ const PROBES: readonly { readonly name: string; readonly sql: string }[] = [
   },
   {
     /**
+     * Task A2's, and a PODCAST table probed from the user vertical's suite for
+     * exactly the reason the two moderation tables above are: this file is where
+     * `EXPIRY_SWEEP_TARGETS` is walked, and a target whose supporting index
+     * disappeared would otherwise cost a full scan on every tick with nothing in
+     * the repo saying so. The registry is the thing being tested, not the
+     * vertical.
+     */
+    name: 'sweep_episode_ingest_tickets',
+    sql: `select ctid from episode_ingest_tickets
+          where expires_at <= now() - make_interval(secs => 0) limit 1000`,
+  },
+  {
+    /**
      * The control. `listening_events.listened_sec` carries no index, so this
      * MUST still report a Seq Scan under `enable_seqscan = off` — otherwise
      * "no Seq Scan" below cannot be told from "stopped reading plans".
@@ -456,6 +469,9 @@ describe('the expiry sweep is a range scan on every registered target', () => {
     // with nothing in this repo saying so.
     moderation_outbox: 'moderation_outbox_expires_at_idx',
     moderation_events: 'moderation_events_expires_at_idx',
+    // Task A2. Same reasoning as the two above: another vertical's table, swept
+    // from Syra's registry against Syra's index.
+    episode_ingest_tickets: 'episode_ingest_tickets_expires_at_idx',
   };
 
   it('probed every registered target', () => {
