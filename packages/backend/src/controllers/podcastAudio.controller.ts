@@ -78,6 +78,18 @@ async function episodeHls(episodeId: string) {
   return (await loadEpisodeHls([episodeId])).get(episodeId) ?? [];
 }
 
+/**
+ * Turn a refusal into the status code its REASON demands.
+ *
+ * `hidden` is 404 rather than 403, so a private show's episode reads exactly
+ * like an id that names nothing; `unauthenticated` keeps the 401 an HLS
+ * sub-resource has always answered a caller with no session and no token.
+ */
+function respondToRefusal(res: Response, reason: 'hidden' | 'unauthenticated'): void {
+  if (reason === 'hidden') res.status(404).json({ error: 'Episode not found' });
+  else res.status(401).json({ error: 'Unauthorized' });
+}
+
 interface ParsedRange {
   start: number;
   end: number;
@@ -290,7 +302,7 @@ export async function getEpisodeStream(req: AuthRequest, res: Response): Promise
 
   const access = await resolveEpisodeAccess(req, episodeId, show);
   if (!access.ok) {
-    res.status(401).json({ error: 'Unauthorized' });
+    respondToRefusal(res, access.reason);
     return;
   }
 
@@ -330,7 +342,7 @@ export async function getEpisodeStreamKey(req: AuthRequest, res: Response): Prom
 
   const access = await resolveEpisodeAccess(req, episodeId, found.show);
   if (!access.ok) {
-    res.status(401).json({ error: 'Unauthorized' });
+    respondToRefusal(res, access.reason);
     return;
   }
 
@@ -373,7 +385,7 @@ export async function getEpisodeMasterPlaylist(req: AuthRequest, res: Response):
 
   const access = await resolveEpisodeAccess(req, episodeId, found.show);
   if (!access.ok) {
-    res.status(401).json({ error: 'Unauthorized' });
+    respondToRefusal(res, access.reason);
     return;
   }
 
@@ -419,7 +431,7 @@ export async function getEpisodeVariantPlaylist(req: AuthRequest, res: Response)
 
   const access = await resolveEpisodeAccess(req, episodeId, found.show);
   if (!access.ok) {
-    res.status(401).json({ error: 'Unauthorized' });
+    respondToRefusal(res, access.reason);
     return;
   }
 

@@ -134,6 +134,25 @@ export function requestMayReachShowMedia(
 }
 
 /**
+ * Why an episode request was refused, because the two reasons must not share a
+ * status code.
+ *
+ * `unauthenticated` is "you brought no credentials" — 401, the same answer an
+ * anonymous caller has always had for an HLS sub-resource, and it says nothing
+ * about the episode. `hidden` is "this show is not yours to see" — 404, so a
+ * private episode is indistinguishable from an id that names nothing. Collapsing
+ * them into one `{ ok: false }` and answering 401 for both would rebuild the
+ * existence oracle at the media layer: 404 for a made-up id, 401 for a real
+ * private one, and a caller can sort ids by status code without ever being
+ * allowed to play anything. Measured — that is exactly what the first version of
+ * this function did, and the matrix suite caught it.
+ */
+export type EpisodeAccess =
+  | { ok: true; maxBitrateKbps: number }
+  | { ok: false; reason: 'hidden' }
+  | { ok: false; reason: 'unauthenticated' };
+
+/**
  * Authorization for an episode's HLS sub-resources: the show's audience gate,
  * then the same bitrate-cap resolution tracks use.
  *
@@ -143,14 +162,19 @@ export function requestMayReachShowMedia(
  * user passed it for ANY episode id. That is correct for music, where the
  * catalogue is public by construction and the cap IS the entitlement; it is not
  * correct for an episode, whose show may be private.
+ *
+ * ORDER MATTERS: the audience gate runs first, so a caller asking for a private
+ * episode gets `hidden` (404) whether or not they are signed in, rather than a
+ * 401 that confirms the id.
  */
 export async function resolveEpisodeAccess(
   req: AuthRequest,
   episodeId: string,
   show: EpisodeShowAccess,
-): Promise<StreamAccess> {
-  if (!requestMayReachShowMedia(req, episodeId, show)) return { ok: false };
-  return resolveStreamAccess(req, episodeId);
+): Promise<EpisodeAccess> {
+  if (!requestMayReachShowMedia(req, episodeId, show)) return { ok: false, reason: 'hidden' };
+  const access = await resolveStreamAccess(req, episodeId);
+  return access.ok ? access : { ok: false, reason: 'unauthenticated' };
 }
 
 // ── Track reads ───────────────────────────────────────────────────────────────
