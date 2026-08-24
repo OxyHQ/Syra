@@ -265,9 +265,25 @@ export const resolvePodcastEpisode = async (
       return { status: 'unavailable' };
     }
 
+    // A Syra-hosted episode leaves `enclosureUrl` null and carries
+    // `audioSource` instead; `episodeAudioUrl` is the one place that knows the
+    // difference. It answers `undefined` when the episode has no audio AT ALL —
+    // a drafted episode awaiting ingest is a real, listable episode with
+    // nothing to play.
+    //
+    // That is `not_found` (404) rather than `unavailable` (503): a draft is not
+    // a Syra outage, and 503 both lies about why and invites a retry loop that
+    // cannot succeed until someone ingests the audio. It is deliberately NOT
+    // cached, so the room resolves it the moment ingest lands.
+    const audioUrl = syraClient.episodeAudioUrl(episode);
+    if (!audioUrl) {
+      logger.info('[SyraPodcast] Episode has no audio yet', { episodeId });
+      return { status: 'not_found' };
+    }
+
     cached = {
       podcastId: episode.podcastId,
-      audioUrl: episode.enclosureUrl,
+      audioUrl,
       title: episode.title,
       artworkUrl: syraClient.episodeImageUrl(episode),
       durationSec: episode.duration,
