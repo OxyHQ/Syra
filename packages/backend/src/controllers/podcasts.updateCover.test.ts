@@ -25,11 +25,11 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import type { Response } from 'express';
+import { eq } from 'drizzle-orm';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
 import { imageAssets } from '../db/schema/catalog';
 import { podcasts } from '../db/schema/podcasts';
-import { findPodcastById } from '../db/podcasts/podcasts';
 import { updatePodcast } from './podcasts.controller';
 
 beforeAll(connectDb);
@@ -37,6 +37,21 @@ afterEach(clearDb);
 afterAll(disconnectDb);
 
 const OWNER = 'oxy-podcast-owner';
+
+/**
+ * The STORED row, read straight from the table.
+ *
+ * Not `findPodcastForViewer`/`findPodcastForOwner`: both apply access control,
+ * and what these assertions are about is what was written — including states
+ * (`unavailable`, `removed`, private) that an access-controlled read is supposed
+ * to hide. A test that read through the guard could not tell "the write
+ * happened" from "the guard let me see it".
+ */
+async function readShow(id: string) {
+  const [row] = await getDb().select().from(podcasts).where(eq(podcasts.id, id)).limit(1);
+  return row;
+}
+
 
 interface CapturedRes {
   _status: number;
@@ -104,7 +119,7 @@ describe('PATCH /api/podcasts/:id — cover art replaces the palette', () => {
     await updatePodcast(makeReq(id, { image: colourless }), res as unknown as Response);
 
     expect(res._status).toBe(200);
-    const after = await findPodcastById(id);
+    const after = await readShow(id);
     expect(after?.imageId).toBe(colourless);
     expect(after?.primaryColor).toBeNull();
     expect(after?.secondaryColor).toBeNull();
@@ -126,7 +141,7 @@ describe('PATCH /api/podcasts/:id — cover art replaces the palette', () => {
     await updatePodcast(makeReq(id, { image: primaryOnly }), res as unknown as Response);
 
     expect(res._status).toBe(200);
-    const after = await findPodcastById(id);
+    const after = await readShow(id);
     expect(after?.primaryColor).toBe('#0000ff');
     expect(after?.secondaryColor).toBeNull();
   });
@@ -140,7 +155,7 @@ describe('PATCH /api/podcasts/:id — cover art replaces the palette', () => {
     await updatePodcast(makeReq(id, { image: full }), res as unknown as Response);
 
     expect(res._status).toBe(200);
-    const after = await findPodcastById(id);
+    const after = await readShow(id);
     expect(after?.primaryColor).toBe('#0000ff');
     expect(after?.secondaryColor).toBe('#ffff00');
   });
@@ -154,7 +169,7 @@ describe('PATCH /api/podcasts/:id — cover art replaces the palette', () => {
     await updatePodcast(makeReq(id, { title: 'Renamed' }), res as unknown as Response);
 
     expect(res._status).toBe(200);
-    const after = await findPodcastById(id);
+    const after = await readShow(id);
     expect(after?.title).toBe('Renamed');
     expect(after?.primaryColor).toBe('#ff0000');
     expect(after?.secondaryColor).toBe('#00ff00');

@@ -522,9 +522,16 @@ describe('schema gates', () => {
     // which is the same "routine maintenance that is routinely forgotten" lapse
     // `migrate.ts` records for `LAST_GENESIS_MIGRATION_TAG`, and it fails just
     // as silently, in the safe direction.
-    expect(files.length).toBeGreaterThanOrEqual(24);
+    // Raised again by the podcast-visibility task (24 -> 28 files, 900 -> 1000,
+    // against 1002 actual — four migrations landed since Task 13a set these and
+    // none of them moved either floor). Same rule as MINIMUM_TABLES and for the
+    // same reason the comment above gives at length: a floor that never moves is
+    // a vacuity check that has stopped checking, and it fails silently in the
+    // safe direction. `0027` itself adds two of those identifiers, the column
+    // and its CHECK.
+    expect(files.length).toBeGreaterThanOrEqual(28);
     const { violations, scanned } = findOverlongIdentifiers(files);
-    expect(scanned).toBeGreaterThanOrEqual(900);
+    expect(scanned).toBeGreaterThanOrEqual(1000);
 
     // Exact identity, never substring — see `findUnexemptedIdentifiers`.
     // The second half is the staleness check: an exemption that no longer
@@ -1394,6 +1401,53 @@ describe('podcasts schema (Task 4)', () => {
       ).rejects.toThrow();
     } finally {
       await db.delete(podcasts).where(eq(podcasts.id, podcast.id));
+    }
+  });
+
+  /**
+   * `podcasts.visibility` — the CHECK, the DEFAULT, and the reason the DEFAULT
+   * is the load-bearing half.
+   *
+   * The constraint is read out of `pg_constraint` rather than off the drizzle
+   * declaration, so a migration that never created it fails here even though
+   * `schema/podcasts.ts` says it should exist — the same reason every other
+   * constraint assertion in this file goes to the catalogue.
+   *
+   * The DEFAULT is asserted because `0027` runs against a table full of
+   * world-readable shows, and the RSS import path never names this column. Any
+   * default but `'public'` hides the entire mirrored catalogue the moment the
+   * migration lands, and nothing else in the repo would say so.
+   */
+  it('constrains podcasts.visibility and defaults it to public', async () => {
+    const db = getDb();
+
+    const constraints = await executeRows<{ conname: string }>(
+      db,
+      sql`select conname from pg_constraint
+          where conrelid = 'podcasts'::regclass and contype = 'c'`
+    );
+    expect(constraints.map((row) => row.conname)).toContain('podcasts_visibility_check');
+
+    // The CHECK rejects a value outside the ladder. Raw SQL, not a drizzle
+    // insert: the column's TypeScript enum already makes an invalid literal a
+    // compile error, so a typed insert could only test the type system.
+    await expect(
+      Promise.resolve(
+        db.execute(sql`insert into podcasts (id, title, source, visibility)
+                       values ('CHECK-fixture-visibility', 'CHECK-fixture', 'syra', 'secret')`)
+      )
+    ).rejects.toThrow();
+
+    // And a row that says nothing about visibility is PUBLIC.
+    const [row] = await db
+      .insert(podcasts)
+      .values({ title: 'CHECK-fixture-visibility-default', type: 'episodic', source: 'syra' })
+      .returning({ id: podcasts.id, visibility: podcasts.visibility });
+
+    try {
+      expect(row?.visibility).toBe('public');
+    } finally {
+      if (row) await db.delete(podcasts).where(eq(podcasts.id, row.id));
     }
   });
 

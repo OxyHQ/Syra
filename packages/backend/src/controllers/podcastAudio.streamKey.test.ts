@@ -14,6 +14,17 @@
  *
  * So the assertions below are deliberately about WHICH ARM the key was filed
  * under, not merely that a 200 comes back.
+ *
+ * ## And about WHO may have it
+ *
+ * A second hazard, closed later and covered at the end of this file: this
+ * handler loaded no episode row at all. It resolved a bitrate cap — which any
+ * bearer session satisfies — and read `track_keys` by the id in the URL, so any
+ * signed-in user could obtain the AES-128 content key for any episode, including
+ * one whose show was private or taken down. The key IS the encryption; with it
+ * the segments are plaintext. The full audience matrix lives in
+ * `routes/podcastVisibility.matrix.test.ts`; the case kept HERE is the one that
+ * belongs beside the key lookup itself.
  */
 
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
@@ -63,7 +74,9 @@ function makeReq(id: string): AuthRequest {
 }
 
 /** A Syra-hosted episode, and the show it belongs to. */
-async function seedEpisode(): Promise<string> {
+async function seedEpisode(
+  visibility: 'private' | 'unlisted' | 'public' = 'public'
+): Promise<string> {
   const suffix = uuidv7();
   const [podcast] = await getDb()
     .insert(podcasts)
@@ -71,6 +84,8 @@ async function seedEpisode(): Promise<string> {
       title: 'Key Endpoint Show',
       feedUrl: `https://example.test/${suffix}.xml`,
       source: 'syra',
+      visibility,
+      ownerOxyUserId: 'oxy-key-endpoint-owner',
     })
     .returning({ id: podcasts.id });
 
@@ -158,5 +173,38 @@ describe('GET /api/podcasts/episodes/:id/key', () => {
     await getEpisodeStreamKey(makeReq('not-an-id'), res as unknown as Response);
 
     expect(res._status).toBe(400);
+  });
+
+  it('refuses a signed-in stranger the key to a PRIVATE show, and 404s rather than 403s', async () => {
+    const episodeId = await seedEpisode('private');
+    await getDb().insert(trackKeys).values({ episodeId, keyHex: KEY_HEX, keyUri: 'key' });
+
+    const res = makeRes();
+    await getEpisodeStreamKey(makeReq(episodeId), res as unknown as Response);
+
+    // 404, not 401 or 403: a private episode has to read exactly like an id that
+    // names nothing, or the status code sorts real ids from made-up ones.
+    expect(res._status).toBe(404);
+    expect(Buffer.isBuffer(res._body)).toBe(false);
+  });
+
+  it('serves the same key to the OWNER — so the refusal above is the gate, not a missing key', async () => {
+    // The positive control for the case above, on the SAME fixture shape. The
+    // key really is stored and really is servable; the only difference is who
+    // asked. Without this, "404 for a private show" would also be satisfied by a
+    // handler that had simply stopped finding keys.
+    const episodeId = await seedEpisode('private');
+    await getDb().insert(trackKeys).values({ episodeId, keyHex: KEY_HEX, keyUri: 'key' });
+
+    const res = makeRes();
+    const asOwner = {
+      params: { id: episodeId },
+      query: {},
+      user: { id: 'oxy-key-endpoint-owner' },
+    } as unknown as AuthRequest;
+    await getEpisodeStreamKey(asOwner, res as unknown as Response);
+
+    expect(res._status).toBe(200);
+    expect((res._body as Buffer).toString('hex')).toBe(KEY_HEX);
   });
 });

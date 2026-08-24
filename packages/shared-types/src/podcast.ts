@@ -24,6 +24,18 @@ export type PodcastType = z.infer<typeof podcastTypeSchema>;
 export const podcastStatusSchema = z.enum(['active', 'unavailable', 'removed']);
 export type PodcastStatus = z.infer<typeof podcastStatusSchema>;
 
+/**
+ * WHO may see a show — a different axis from `status`'s WHETHER it is published,
+ * and both are enforced.
+ *
+ *   private   owner only, on every surface.
+ *   unlisted  reachable by id (a direct link, an existing subscription) but
+ *             never listed in browse, search or any discovery shelf.
+ *   public    listed and reachable by anyone.
+ */
+export const podcastVisibilitySchema = z.enum(['private', 'unlisted', 'public']);
+export type PodcastVisibility = z.infer<typeof podcastVisibilitySchema>;
+
 /** Podcasting 2.0 `<podcast:funding>` tag. */
 export const podcastFundingSchema = z.object({
   url: z.string(),
@@ -116,6 +128,7 @@ export const podcastSchema = timestampsSchema.extend({
   popularity: z.number().optional(),
   subscriberCount: z.number().optional(),
   status: podcastStatusSchema,
+  visibility: podcastVisibilitySchema,
   // Optional Podcasting 2.0
   funding: z.array(podcastFundingSchema).optional(),
   persons: z.array(podcastPersonSchema).optional(),
@@ -140,6 +153,11 @@ export const createPodcastRequestSchema = z.object({
   explicit: z.boolean().optional(),
   link: z.string().optional(),
   type: podcastTypeSchema.optional(),
+  /**
+   * Audience for a Syra-hosted show. Absent means `public`, which is what every
+   * show created before this field existed already was.
+   */
+  visibility: podcastVisibilitySchema.optional(),
   /** Hosts & Guests as Oxy user ids (validated server-side; no free text). */
   hosts: z.array(z.string()).optional(),
   guests: z.array(z.string()).optional(),
@@ -156,6 +174,7 @@ export const updatePodcastRequestSchema = z.object({
   explicit: z.boolean().optional(),
   link: z.string().optional(),
   type: podcastTypeSchema.optional(),
+  visibility: podcastVisibilitySchema.optional(),
 });
 export type UpdatePodcastRequest = z.infer<typeof updatePodcastRequestSchema>;
 

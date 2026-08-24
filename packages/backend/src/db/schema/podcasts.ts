@@ -253,6 +253,27 @@ export const PODCAST_TYPES = ['episodic', 'serial'] as const;
 /** `@syra/shared-types` `podcastStatusSchema`. */
 export const PODCAST_STATUSES = ['active', 'unavailable', 'removed'] as const;
 
+/**
+ * `@syra/shared-types` `podcastVisibilitySchema` — WHO may see a show, which is
+ * a different axis from {@link PODCAST_STATUSES}'s WHETHER it is published.
+ *
+ * The two are orthogonal on purpose and both are enforced: `status` is the
+ * platform/creator publish state (a takedown, an unpublish, a live show), and
+ * `visibility` is the audience. A `public` show that is `unavailable` is
+ * unreachable; so is an `active` show that is `private`. Collapsing them into
+ * one column would make "unpublish" and "make private" the same verb, and
+ * republishing would have to guess which one the creator meant.
+ *
+ * Ordered least- to most-visible so the tuple reads as a ladder:
+ *
+ *   private   owner only, on every surface.
+ *   unlisted  reachable by id — a direct link, a shared URL, an already
+ *             subscribed listener — but never listed in browse, search or any
+ *             discovery shelf.
+ *   public    listed and reachable by anyone.
+ */
+export const PODCAST_VISIBILITIES = ['private', 'unlisted', 'public'] as const;
+
 /** `@syra/shared-types` `episodeTypeSchema`. */
 export const EPISODE_TYPES = ['full', 'trailer', 'bonus'] as const;
 
@@ -322,6 +343,20 @@ export const podcasts = pgTable(
     popularity: integer().notNull().default(0),
     subscriberCount: integer().notNull().default(0),
     status: text({ enum: PODCAST_STATUSES }).notNull().default('active'),
+    /**
+     * WHO may see this show — the audience axis, beside `status`'s publish
+     * axis. See {@link PODCAST_VISIBILITIES} for the ladder and why the two are
+     * separate columns.
+     *
+     * `DEFAULT 'public'` is load-bearing rather than a convenience. Every row
+     * that exists when this column lands is already world-readable, and the RSS
+     * import path (`services/podcasts/podcastImportService.ts`,
+     * `podcastBackgroundImport.ts`) writes shows mirrored from public feeds
+     * without naming this column at all — defaulting to `private` would hide
+     * the entire mirrored catalogue behind one migration. Only a Syra-hosted
+     * show created through `createPodcast` chooses a value.
+     */
+    visibility: text({ enum: PODCAST_VISIBILITIES }).notNull().default('public'),
     // Optional Podcasting 2.0: `funding`/`persons` are child tables below.
     // `value` stays jsonb — see the file-level doc comment.
     value: jsonb().$type<Record<string, unknown>>(),
@@ -337,6 +372,10 @@ export const podcasts = pgTable(
     check('podcasts_type_check', sql`${t.type} in (${sql.raw(inList(PODCAST_TYPES))})`),
     check('podcasts_source_check', sql`${t.source} in (${sql.raw(inList(PODCAST_SOURCES))})`),
     check('podcasts_status_check', sql`${t.status} in (${sql.raw(inList(PODCAST_STATUSES))})`),
+    check(
+      'podcasts_visibility_check',
+      sql`${t.visibility} in (${sql.raw(inList(PODCAST_VISIBILITIES))})`
+    ),
     check('podcasts_popularity_check', sql`${t.popularity} between 0 and 100`),
     // Sparse-unique in Mongo — a plain Postgres `unique()` already tolerates
     // any number of NULLs, the identical semantics.

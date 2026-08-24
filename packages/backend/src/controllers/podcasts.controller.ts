@@ -38,7 +38,8 @@ import { getDb } from '../db/postgres';
 import { catalogEntities, imageAssets } from '../db/schema/catalog';
 import {
   browsePodcastRows,
-  findPodcastById,
+  findPodcastForOwner,
+  findPodcastForViewer,
   findPodcastsByIds,
   findPodcastsByOwner,
   insertPodcast,
@@ -53,7 +54,7 @@ import {
 } from '../db/podcasts/episodes';
 import {
   loadPodcastPersons,
-  loadShowArtwork,
+  loadShowContext,
   toEpisodeDtos,
   toPodcastDtos,
 } from '../db/podcasts/hydrate';
@@ -69,8 +70,12 @@ import { searchPodcasts as directorySearch } from '../services/podcasts/PodcastD
 import { importFeed } from '../services/podcasts/podcastImportService';
 import { syncPodcastSearch } from '../services/podcasts/podcastBackgroundImport';
 import { resolvePersons, buildCreatorPersons, makeOxyUsersFetcher } from '../services/podcasts/resolvePersons';
-import { enqueueEpisodeIngest } from '../services/podcasts/ingestEpisode';
+import {
+  enqueueDeferredEpisodeIngests,
+  enqueueEpisodeIngest,
+} from '../services/podcasts/ingestEpisode';
 import { generatePodcastRss } from '../services/podcasts/podcastRssGenerator';
+import type { PodcastRow } from '../db/podcasts/serialize';
 import { getS3PodcastEpisodeAudioKey } from '../config/s3.config';
 import { uploadToS3 } from '../services/s3Service';
 import { oxy } from '../oxyClient';
@@ -141,10 +146,16 @@ function parseIdArray(raw: unknown): string[] {
   return trimmed.split(',').map((v) => v.trim()).filter((v) => v.length > 0);
 }
 
-/** Serialize one show, loading its four child collections. */
-async function serializeOne(row: Awaited<ReturnType<typeof findPodcastById>>) {
+/**
+ * Serialize one show, loading its four child collections, FOR ONE VIEWER.
+ *
+ * `viewerId` is required rather than defaulted: it decides whether the response
+ * carries the show's `feedUrl`, `etag`/`lastModified` and its true
+ * `episodeCount`, and a default would silently pick one of those answers.
+ */
+async function serializeOne(row: PodcastRow | undefined, viewerId: string | null | undefined) {
   if (!row) return undefined;
-  const [dto] = await toPodcastDtos([row]);
+  const [dto] = await toPodcastDtos([row], viewerId);
   return dto;
 }
 
@@ -188,7 +199,7 @@ export async function searchPodcasts(req: AuthRequest, res: Response): Promise<v
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
 
-    res.json({ data: await toPodcastDtos(page), hasMore, limit, offset });
+    res.json({ data: await toPodcastDtos(page, req.user?.id), hasMore, limit, offset });
   } catch (err) {
     logger.error('[podcasts] search failed', { q, err: describeErrorSafely(err) });
     if (!res.headersSent) res.status(500).json({ error: 'Search failed' });
@@ -223,7 +234,7 @@ export async function importPodcast(req: AuthRequest, res: Response): Promise<vo
   try {
     const result = await importFeed(parsed.data.feedUrl);
     res.status(200).json({
-      data: await serializeOne(result.podcast),
+      data: await serializeOne(result.podcast, req.user?.id),
       importedEpisodes: result.importedEpisodes,
     });
   } catch (err) {
@@ -246,11 +257,16 @@ export async function browsePodcasts(req: AuthRequest, res: Response): Promise<v
     limit,
   });
 
-  res.json({ data: await toPodcastDtos(rows), page, limit });
+  res.json({ data: await toPodcastDtos(rows, req.user?.id), page, limit });
 }
 
 /**
  * GET /api/podcasts/:id — show + most recent episodes.
+ *
+ * `findPodcastForViewer`, not a bare id read plus a `status === 'removed'` test.
+ * That test was the entire gate here, so an `unavailable` show — one its creator
+ * had explicitly unpublished — kept serving in full on its direct URL, and
+ * `visibility` had nowhere to be consulted at all.
  */
 export async function getPodcast(req: AuthRequest, res: Response): Promise<void> {
   const id = getParam(req, 'id');
@@ -259,8 +275,8 @@ export async function getPodcast(req: AuthRequest, res: Response): Promise<void>
     return;
   }
 
-  const podcast = await findPodcastById(id);
-  if (!podcast || podcast.status === 'removed') {
+  const podcast = await findPodcastForViewer(id, req.user?.id);
+  if (!podcast) {
     res.status(404).json({ error: 'Podcast not found' });
     return;
   }
@@ -276,17 +292,17 @@ export async function getPodcast(req: AuthRequest, res: Response): Promise<void>
       limit: RECENT_EPISODES_ON_SHOW,
     }),
     resolvePersons(credits, makeOxyUsersFetcher(oxy)),
-    serializeOne(podcast),
+    serializeOne(podcast, req.user?.id),
   ]);
 
   // The show is already loaded: cover-less episodes inherit its artwork from
   // the map built here rather than from a second query per episode.
-  const artwork = await loadShowArtwork(episodeRows);
+  const shows = await loadShowContext(episodeRows);
 
   res.json({
     data: {
       podcast: dto,
-      episodes: await toEpisodeDtos(episodeRows, artwork),
+      episodes: await toEpisodeDtos(episodeRows, req.user?.id, shows),
       persons,
     },
   });
@@ -302,8 +318,8 @@ export async function getPodcastEpisodes(req: AuthRequest, res: Response): Promi
     return;
   }
 
-  const podcast = await findPodcastById(id);
-  if (!podcast || podcast.status === 'removed') {
+  const podcast = await findPodcastForViewer(id, req.user?.id);
+  if (!podcast) {
     res.status(404).json({ error: 'Podcast not found' });
     return;
   }
@@ -314,17 +330,27 @@ export async function getPodcastEpisodes(req: AuthRequest, res: Response): Promi
   // The owner sees processing/failed episodes too; others see only ready ones.
   const visibility = episodeVisibilityFilter(podcast.ownerOxyUserId, req.user?.id);
 
-  const [episodeRows, total, artwork] = await Promise.all([
+  const [episodeRows, total, shows] = await Promise.all([
     findEpisodesByShow(podcast.id, { visibility, offset: (page - 1) * limit, limit }),
     countEpisodesByShow(podcast.id, visibility),
-    loadShowArtwork([{ podcastId: podcast.id }]),
+    loadShowContext([{ podcastId: podcast.id }]),
   ]);
 
-  res.json({ data: await toEpisodeDtos(episodeRows, artwork), total, page, limit });
+  res.json({ data: await toEpisodeDtos(episodeRows, req.user?.id, shows), total, page, limit });
 }
 
 /**
  * GET /api/podcasts/:id/rss — generated public RSS for a Syra-hosted show.
+ *
+ * The gate was `status === 'removed'` alone, which meant a full feed — every
+ * episode, every enclosure URL — kept being served for a show its creator had
+ * unpublished. It is reachability now, so a `private` show's feed 404s and an
+ * `unlisted` one keeps working, which is the point of `unlisted`: the URL IS the
+ * grant, and a podcast client fetches it with no credentials at all.
+ *
+ * `Cache-Control: public` is deliberately kept only for the anonymous, public
+ * case — a feed served to its owner (or for an unlisted show) is `private`, so a
+ * shared cache cannot hand one viewer's answer to the next.
  */
 export async function getPodcastRss(req: AuthRequest, res: Response): Promise<void> {
   const id = getParam(req, 'id');
@@ -333,16 +359,16 @@ export async function getPodcastRss(req: AuthRequest, res: Response): Promise<vo
     return;
   }
 
-  const podcast = await findPodcastById(id);
-  if (!podcast || podcast.source !== 'syra' || podcast.status === 'removed') {
+  const podcast = await findPodcastForViewer(id, req.user?.id);
+  if (!podcast || podcast.source !== 'syra') {
     res.status(404).json({ error: 'Feed not found' });
     return;
   }
 
   const episodeRows = await findFeedEpisodes(podcast.id, RSS_EPISODE_CAP);
-  const artwork = await loadShowArtwork([{ podcastId: podcast.id }]);
+  const shows = await loadShowContext([{ podcastId: podcast.id }]);
 
-  const [dto] = await toPodcastDtos([podcast]);
+  const [dto] = await toPodcastDtos([podcast], req.user?.id);
   if (!dto) {
     res.status(404).json({ error: 'Feed not found' });
     return;
@@ -350,12 +376,15 @@ export async function getPodcastRss(req: AuthRequest, res: Response): Promise<vo
 
   const xml = generatePodcastRss(
     dto,
-    await toEpisodeDtos(episodeRows, artwork),
+    await toEpisodeDtos(episodeRows, req.user?.id, shows),
     env.STREAM_KEY_BASE_URL
   );
 
   res.set('Content-Type', 'application/rss+xml; charset=utf-8');
-  res.set('Cache-Control', 'public, max-age=900');
+  res.set(
+    'Cache-Control',
+    podcast.visibility === 'public' ? 'public, max-age=900' : 'private, max-age=900'
+  );
   res.status(200).send(xml);
 }
 
@@ -364,17 +393,27 @@ export async function getPodcastRss(req: AuthRequest, res: Response): Promise<vo
 /**
  * POST /api/podcasts/:id/subscribe — idempotent; bumps subscriberCount once.
  *
- * The existence check the Mongo handler ran first is gone, and nothing is lost:
- * `user_podcast_subscriptions.podcast_id` is a foreign key, so a show that does
- * not exist is `23503` and `subscribeToPodcast` reports it as
- * `'missing-podcast'` — one round trip instead of two, and correct under a
- * concurrent delete, which the read-then-write never was.
+ * The visibility read is what makes this NOT an existence oracle. The foreign
+ * key alone answers "does this id name a row" — `'missing-podcast'` for `23503`,
+ * `{ ok: true }` otherwise — which tells a stranger whether a private show
+ * exists, and would have subscribed them to it. Resolving the show through the
+ * viewer's own reachability first means a private show and a nonexistent one
+ * both 404.
+ *
+ * The FK check stays behind it rather than being replaced by it: the read and
+ * the write are not one transaction, so a show deleted between them is still
+ * `23503`, and that is the case the constraint is for.
  */
 export async function subscribePodcast(req: AuthRequest, res: Response): Promise<void> {
   const userId = getRequiredOxyUserId(req);
   const id = getParam(req, 'id');
   if (!isLiveEntityId(id)) {
     res.status(400).json({ error: 'Invalid podcast ID' });
+    return;
+  }
+
+  if (!(await findPodcastForViewer(id, userId))) {
+    res.status(404).json({ error: 'Podcast not found' });
     return;
   }
 
@@ -389,6 +428,13 @@ export async function subscribePodcast(req: AuthRequest, res: Response): Promise
 
 /**
  * POST /api/podcasts/:id/unsubscribe — idempotent; decrements subscriberCount once.
+ *
+ * No visibility read, and that is not an oversight: unsubscribing from a show
+ * that does not exist has always been a successful no-op (see
+ * `db/podcasts/subscriptions.ts`), so this endpoint answers `{ ok: true }` for
+ * every well-formed id and reveals nothing. Adding a gate here would CREATE the
+ * oracle — a 404 for a private show, `{ ok: true }` for a nonexistent one — and
+ * would also strand a listener subscribed to a show that later went private.
  */
 export async function unsubscribePodcast(req: AuthRequest, res: Response): Promise<void> {
   const userId = getRequiredOxyUserId(req);
@@ -404,6 +450,12 @@ export async function unsubscribePodcast(req: AuthRequest, res: Response): Promi
 
 /**
  * GET /api/podcasts/subscriptions — subscribed shows + new-episode signals.
+ *
+ * The hydration read is viewer-filtered, so a subscribed show that has since
+ * gone private or been unpublished silently leaves this list while its
+ * subscription row survives. `total` counts what is actually returned rather
+ * than `ids.length`, which would otherwise report a count nothing in the
+ * response accounts for.
  */
 export async function getSubscriptions(req: AuthRequest, res: Response): Promise<void> {
   const userId = getRequiredOxyUserId(req);
@@ -414,8 +466,8 @@ export async function getSubscriptions(req: AuthRequest, res: Response): Promise
     return;
   }
 
-  const rows = await findPodcastsByIds(ids);
-  const dtos = await toPodcastDtos(rows);
+  const rows = await findPodcastsByIds(ids, userId);
+  const dtos = await toPodcastDtos(rows, userId);
   const subscriptions = dtos.map((podcast) => ({ podcast, lastEpisodeAt: podcast.lastEpisodeAt }));
 
   res.json({ data: { subscriptions, total: subscriptions.length, oxyUserId: userId } });
@@ -430,7 +482,7 @@ export async function getSubscriptions(req: AuthRequest, res: Response): Promise
 export async function getMyPodcasts(req: AuthRequest, res: Response): Promise<void> {
   const userId = getRequiredOxyUserId(req);
   const rows = await findPodcastsByOwner(userId);
-  res.json({ data: await toPodcastDtos(rows) });
+  res.json({ data: await toPodcastDtos(rows, userId) });
 }
 
 /**
@@ -531,12 +583,23 @@ export async function createPodcast(req: AuthRequest, res: Response): Promise<vo
       ownerOxyUserId: userId,
       claimable: false,
       status: 'active',
+      /**
+       * The one place a show's audience is CHOSEN. Validated by
+       * `createPodcastRequestSchema` (the zod enum is the same tuple as the
+       * column's CHECK), and absent means `'public'` — the column default, and
+       * what every show created before this field existed already is.
+       *
+       * Only `source: 'syra'` reaches here. RSS-mirrored shows are created by
+       * the import path, which never names this column, so a feed mirrored from
+       * the public internet stays public.
+       */
+      visibility: input.visibility ?? 'public',
       feedUrl: `${env.STREAM_KEY_BASE_URL}/api/podcasts/${id}/rss`,
     },
     { categories: input.categories ?? [], persons }
   );
 
-  res.status(201).json({ data: await serializeOne(row) });
+  res.status(201).json({ data: await serializeOne(row, userId) });
 }
 
 /**
@@ -558,12 +621,10 @@ export async function uploadEpisode(req: AuthRequest, res: Response): Promise<vo
         return;
       }
 
-      const podcast = await findPodcastById(id);
-      if (!podcast) {
-        res.status(404).json({ error: 'Podcast not found' });
-        return;
-      }
-      if (podcast.source !== 'syra' || podcast.ownerOxyUserId !== userId) {
+      // Owner-scoped in SQL: "not yours" and "no such show" are one answer here,
+      // so an upload attempt cannot be used to probe for a private show's id.
+      const podcast = await findPodcastForOwner(id, userId);
+      if (!podcast || podcast.source !== 'syra') {
         res.status(403).json({ error: 'You do not own this podcast' });
         return;
       }
@@ -631,11 +692,17 @@ export async function uploadEpisode(req: AuthRequest, res: Response): Promise<vo
         { recordOnShow: true }
       );
 
-      enqueueEpisodeIngest(episodeId);
+      /**
+       * A PRIVATE show gets no HLS ladder, and that is a security decision
+       * rather than a saving — see `services/podcasts/ingestEpisode.ts`. The
+       * episode stays `processing` until the show is published, at which point
+       * `updatePodcast` enqueues the transcode.
+       */
+      if (podcast.visibility !== 'private') enqueueEpisodeIngest(episodeId);
 
       // New episode has no cover of its own yet: inherit the loaded show's art.
-      const artwork = await loadShowArtwork([{ podcastId: podcast.id }]);
-      const [dto] = await toEpisodeDtos([episode], artwork);
+      const shows = await loadShowContext([{ podcastId: podcast.id }]);
+      const [dto] = await toEpisodeDtos([episode], userId, shows);
       res.status(201).json({ data: dto });
     } catch (err) {
       logger.error('[podcasts] episode upload failed', { err: describeErrorSafely(err) });
@@ -647,6 +714,12 @@ export async function uploadEpisode(req: AuthRequest, res: Response): Promise<vo
 /**
  * POST /api/podcasts/:id/claim — claim a claimable show; optionally link an
  * artist the caller owns. Auth + field whitelist.
+ *
+ * The load is viewer-scoped, and that is what stops this being the loudest
+ * oracle of the three: an unfiltered read answered 403 for an RSS show and 409
+ * for a non-claimable one, so a caller could sort ids into "exists" and "does
+ * not" — and learn a show's provenance — purely from the status code. A show
+ * this viewer may not reach now 404s before either branch is evaluated.
  */
 export async function claimPodcast(req: AuthRequest, res: Response): Promise<void> {
   const userId = getRequiredOxyUserId(req);
@@ -656,7 +729,7 @@ export async function claimPodcast(req: AuthRequest, res: Response): Promise<voi
     return;
   }
 
-  const podcast = await findPodcastById(id);
+  const podcast = await findPodcastForViewer(id, userId);
   if (!podcast) {
     res.status(404).json({ error: 'Podcast not found' });
     return;
@@ -720,7 +793,7 @@ export async function claimPodcast(req: AuthRequest, res: Response): Promise<voi
     ...(linkedArtistId === undefined ? {} : { linkedArtistId }),
   });
 
-  res.json({ data: await serializeOne(updated) });
+  res.json({ data: await serializeOne(updated, userId) });
 }
 
 /**
@@ -732,6 +805,12 @@ export async function claimPodcast(req: AuthRequest, res: Response): Promise<voi
  * access — it never has for episode upload either. The body is parsed against the shared
  * schema and assigned field by field, so `source`, `status`, ownership, and the feed
  * bookkeeping fields stay unreachable.
+ *
+ * `visibility` IS in the allowlist, deliberately: it is the creator's own
+ * audience decision, and the only surface that can make it after creation. It is
+ * the one field here with a side effect — publishing a show that was private
+ * enqueues the HLS transcode its episodes were denied while it was
+ * (`services/podcasts/ingestEpisode.ts` explains why they were denied).
  */
 export async function updatePodcast(req: AuthRequest, res: Response): Promise<void> {
   const userId = getRequiredOxyUserId(req);
@@ -748,12 +827,10 @@ export async function updatePodcast(req: AuthRequest, res: Response): Promise<vo
     return;
   }
 
-  const podcast = await findPodcastById(id);
-  if (!podcast) {
-    res.status(404).json({ error: 'Podcast not found' });
-    return;
-  }
-  if (podcast.source !== 'syra' || podcast.ownerOxyUserId !== userId) {
+  // Owner-scoped in SQL — same reason as `uploadEpisode`: a PATCH must not be
+  // usable to ask whether an id exists.
+  const podcast = await findPodcastForOwner(id, userId);
+  if (!podcast || podcast.source !== 'syra') {
     res.status(403).json({ error: 'You do not own this podcast' });
     return;
   }
@@ -769,6 +846,7 @@ export async function updatePodcast(req: AuthRequest, res: Response): Promise<vo
   if (updates.explicit !== undefined) values.explicit = updates.explicit;
   if (updates.link !== undefined) values.link = updates.link;
   if (updates.type !== undefined) values.type = updates.type;
+  if (updates.visibility !== undefined) values.visibility = updates.visibility;
 
   if (updates.image !== undefined) {
     const cover = await resolveCover(updates.image);
@@ -806,20 +884,40 @@ export async function updatePodcast(req: AuthRequest, res: Response): Promise<vo
     updates.categories === undefined ? {} : { categories: updates.categories }
   );
 
-  res.json({ data: await serializeOne(updated) });
+  /**
+   * Leaving `private` is what un-defers the transcode.
+   *
+   * Tested on the STORED before/after rather than on `updates.visibility` alone:
+   * a request that re-sends `visibility: 'public'` on an already-public show
+   * must not re-enqueue every episode, and one that omits the field entirely
+   * must not either. Only a real `private` -> not-private transition qualifies.
+   *
+   * The reverse transition does NOT tear an existing ladder down, and that is a
+   * considered limit rather than an omission: the manifest endpoints are gated
+   * (`resolveEpisodeAccess`), so no NEW segment URL is issued for a private
+   * show — but a presigned URL already handed out stays valid for its
+   * `SEGMENT_URL_TTL_SEC` window, and nothing can recall it. Six hours after a
+   * show goes private, nothing of it is reachable.
+   */
+  if (updated && podcast.visibility === 'private' && updated.visibility !== 'private') {
+    await enqueueDeferredEpisodeIngests(updated.id);
+  }
+
+  res.json({ data: await serializeOne(updated, userId) });
 }
 
 /**
  * Load a Syra-hosted show the caller owns, or send the matching error response.
  *
- * Returns null once a response has been sent, so callers `if (!podcast) return;`.
+ * Returns undefined once a response has been sent, so callers `if (!podcast) return;`.
  * `status: 'removed'` is a platform takedown, not a creator-reversible state, so a
- * creator cannot publish their way back out of it.
+ * creator cannot publish their way back out of it — that stays a 409, which only a
+ * show the caller DOES own can ever reach.
  */
 async function loadOwnedShowOrRespond(
   req: AuthRequest,
   res: Response
-): Promise<Awaited<ReturnType<typeof findPodcastById>>> {
+): Promise<PodcastRow | undefined> {
   const userId = getRequiredOxyUserId(req);
   const id = getParam(req, 'id');
 
@@ -828,12 +926,8 @@ async function loadOwnedShowOrRespond(
     return undefined;
   }
 
-  const podcast = await findPodcastById(id);
-  if (!podcast) {
-    res.status(404).json({ error: 'Podcast not found' });
-    return undefined;
-  }
-  if (podcast.source !== 'syra' || podcast.ownerOxyUserId !== userId) {
+  const podcast = await findPodcastForOwner(id, userId);
+  if (!podcast || podcast.source !== 'syra') {
     res.status(403).json({ error: 'You do not own this podcast' });
     return undefined;
   }
@@ -851,18 +945,26 @@ async function loadOwnedShowOrRespond(
 /**
  * POST /api/podcasts/:id/unpublish — hide a show from browse, search and discovery.
  *
- * Soft by design: `status: 'unavailable'` drops the show out of the `status = 'active'`
- * filter used by browse and search, while leaving the row, its episodes, and every
- * subscription intact so publishing again is lossless. Deliberately does NOT cascade to
- * episodes — the show disappears from discovery but an already-downloaded or
- * directly-linked episode keeps resolving.
+ * Soft by design: `status: 'unavailable'` leaves the row, its episodes, and every
+ * subscription intact so publishing again is lossless.
+ *
+ * It NOW HIDES SOMETHING. `status = 'active'` was only ever consulted by browse
+ * and search, so an unpublished show kept serving its detail page, its full
+ * episode list and its complete RSS feed on their direct URLs — this verb
+ * removed it from the shelves and from nowhere else. `active` is half of
+ * REACHABLE (`db/podcasts/visibility.ts`), so all three of those 404 now.
+ *
+ * Still deliberately does NOT cascade to episodes: their own `status` is
+ * untouched, so republishing restores exactly what was there. What changed is
+ * that the SHOW's state now reaches every episode surface through the show,
+ * rather than each episode having to carry a copy of it.
  */
 export async function unpublishPodcast(req: AuthRequest, res: Response): Promise<void> {
   const podcast = await loadOwnedShowOrRespond(req, res);
   if (!podcast) return;
 
   const updated = await updatePodcastRow(podcast.id, { status: 'unavailable' });
-  res.json({ data: await serializeOne(updated) });
+  res.json({ data: await serializeOne(updated, req.user?.id) });
 }
 
 /** POST /api/podcasts/:id/publish — undo `unpublishPodcast`. */
@@ -871,5 +973,5 @@ export async function publishPodcast(req: AuthRequest, res: Response): Promise<v
   if (!podcast) return;
 
   const updated = await updatePodcastRow(podcast.id, { status: 'active' });
-  res.json({ data: await serializeOne(updated) });
+  res.json({ data: await serializeOne(updated, req.user?.id) });
 }

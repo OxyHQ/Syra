@@ -66,6 +66,117 @@ export async function resolveStreamAccess(
   return { ok: false };
 }
 
+// ── Podcast episode access ────────────────────────────────────────────────────
+
+/**
+ * The parts of a show that decide who may reach its episodes' media.
+ *
+ * Structural rather than the `podcasts` row type, so the caller passes what it
+ * already joined and nothing here can start depending on a column it was not
+ * given.
+ */
+export interface EpisodeShowAccess {
+  readonly visibility: string;
+  readonly ownerOxyUserId: string | null;
+}
+
+/**
+ * Whether THIS request is the show owner's — by bearer session, or by a stream
+ * token minted for the owner.
+ *
+ * The token arm is what keeps a private show playable at all: a native player
+ * fetches `/master.m3u8`, `/v/:variant` and `/key` from the URL alone, with no
+ * `Authorization` header, so the only identity those requests carry is the one
+ * inside `?t=`. `mintStreamToken` stamps `userId` from the authenticated
+ * `/stream` call that issued it, and it is signed, so it cannot be edited into
+ * somebody else's.
+ *
+ * The token is checked against BOTH this episode's id and the owner's id. Either
+ * alone is not enough: an owner's token for episode A must not open episode B,
+ * and a stranger's valid token for this same episode must not open it either.
+ */
+function isShowOwnerRequest(
+  req: AuthRequest,
+  episodeId: string,
+  show: EpisodeShowAccess,
+): boolean {
+  if (show.ownerOxyUserId === null) return false;
+  if (req.user?.id === show.ownerOxyUserId) return true;
+
+  const rawToken = req.query?.t;
+  if (typeof rawToken !== 'string' || !rawToken) return false;
+  const claims = verifyStreamToken(rawToken);
+  return !!claims && claims.trackId === episodeId && claims.userId === show.ownerOxyUserId;
+}
+
+/**
+ * Whether a request may reach an episode's MEDIA at all, on the show's audience
+ * alone.
+ *
+ * `public` and `unlisted` are ANONYMOUS on purpose, and that is not an oversight
+ * to be tightened later: `/audio` is the enclosure URL published in the generated
+ * RSS feed, so Apple Podcasts, Overcast and Podcast Index fetch it with no
+ * credentials, and it is also the origin proxy for mirrored RSS episodes. An
+ * auth requirement there would break every podcast client at once. `unlisted`
+ * shares that rule because an unlisted show's whole grant IS its URL.
+ *
+ * Only `private` asks who is calling — and the answer is the owner, nobody else.
+ * Note what this deliberately does NOT do: it never widens access for a
+ * signed-in stranger. Being authenticated is not a claim on anything here.
+ */
+export function requestMayReachShowMedia(
+  req: AuthRequest,
+  episodeId: string,
+  show: EpisodeShowAccess,
+): boolean {
+  if (show.visibility !== 'private') return true;
+  return isShowOwnerRequest(req, episodeId, show);
+}
+
+/**
+ * Why an episode request was refused, because the two reasons must not share a
+ * status code.
+ *
+ * `unauthenticated` is "you brought no credentials" — 401, the same answer an
+ * anonymous caller has always had for an HLS sub-resource, and it says nothing
+ * about the episode. `hidden` is "this show is not yours to see" — 404, so a
+ * private episode is indistinguishable from an id that names nothing. Collapsing
+ * them into one `{ ok: false }` and answering 401 for both would rebuild the
+ * existence oracle at the media layer: 404 for a made-up id, 401 for a real
+ * private one, and a caller can sort ids by status code without ever being
+ * allowed to play anything. Measured — that is exactly what the first version of
+ * this function did, and the matrix suite caught it.
+ */
+export type EpisodeAccess =
+  | { ok: true; maxBitrateKbps: number }
+  | { ok: false; reason: 'hidden' }
+  | { ok: false; reason: 'unauthenticated' };
+
+/**
+ * Authorization for an episode's HLS sub-resources: the show's audience gate,
+ * then the same bitrate-cap resolution tracks use.
+ *
+ * The two halves are separate questions and both have to be asked. Before this
+ * existed, the episode endpoints called `resolveStreamAccess` directly — which
+ * answers only "does this request carry a cap I can compute", so ANY signed-in
+ * user passed it for ANY episode id. That is correct for music, where the
+ * catalogue is public by construction and the cap IS the entitlement; it is not
+ * correct for an episode, whose show may be private.
+ *
+ * ORDER MATTERS: the audience gate runs first, so a caller asking for a private
+ * episode gets `hidden` (404) whether or not they are signed in, rather than a
+ * 401 that confirms the id.
+ */
+export async function resolveEpisodeAccess(
+  req: AuthRequest,
+  episodeId: string,
+  show: EpisodeShowAccess,
+): Promise<EpisodeAccess> {
+  if (!requestMayReachShowMedia(req, episodeId, show)) return { ok: false, reason: 'hidden' };
+  const access = await resolveStreamAccess(req, episodeId);
+  return access.ok ? access : { ok: false, reason: 'unauthenticated' };
+}
+
 // ── Track reads ───────────────────────────────────────────────────────────────
 
 /**

@@ -9,8 +9,6 @@ import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
 import { albums, catalogEntities, imageAssets, tracks } from '../db/schema/catalog';
 import { episodes as episodesTable, podcasts } from '../db/schema/podcasts';
-import { findEpisodeById } from '../db/podcasts/episodes';
-import { findPodcastById } from '../db/podcasts/podcasts';
 import {
   countAlbumsWithPlayableTracks,
   findOneAlbumWithPlayableTracks,
@@ -398,6 +396,29 @@ describe('PATCH /api/artists/me', () => {
   });
 });
 
+/**
+ * The STORED rows, read straight from the tables.
+ *
+ * Not the access-controlled readers (`findPodcastForViewer`,
+ * `findPodcastForOwner`, `findEpisodeById`): several assertions below are about
+ * states an access-controlled read is SUPPOSED to hide — `unavailable`,
+ * `removed` — so reading through the guard could not tell "the write happened"
+ * from "the guard let me see it".
+ */
+async function readShow(id: string) {
+  const [row] = await getDb().select().from(podcasts).where(eq(podcasts.id, id)).limit(1);
+  return row;
+}
+
+async function readEpisode(id: string) {
+  const [row] = await getDb()
+    .select()
+    .from(episodesTable)
+    .where(eq(episodesTable.id, id))
+    .limit(1);
+  return row;
+}
+
 /** A show row; returns its id. */
 async function insertShow(values: {
   title: string;
@@ -455,7 +476,7 @@ describe('PATCH /api/podcasts/:id and /api/episodes/:id', () => {
       });
 
       expect(response.status).toBe(200);
-      expect((await findPodcastById(podcastId))?.title).toBe('Corrected Show');
+      expect((await readShow(podcastId))?.title).toBe('Corrected Show');
     });
   });
 
@@ -468,7 +489,7 @@ describe('PATCH /api/podcasts/:id and /api/episodes/:id', () => {
       });
 
       expect(response.status).toBe(403);
-      expect((await findPodcastById(podcastId))?.title).toBe('Original Show');
+      expect((await readShow(podcastId))?.title).toBe('Original Show');
     });
   });
 
@@ -487,7 +508,7 @@ describe('PATCH /api/podcasts/:id and /api/episodes/:id', () => {
       // An RSS mirror is overwritten by the next feed refresh, so edits are refused
       // rather than silently lost.
       expect(response.status).toBe(403);
-      expect((await findPodcastById(podcastId))?.title).toBe('Mirrored Show');
+      expect((await readShow(podcastId))?.title).toBe('Mirrored Show');
     });
   });
 
@@ -500,7 +521,7 @@ describe('PATCH /api/podcasts/:id and /api/episodes/:id', () => {
       });
 
       expect(response.status).toBe(200);
-      expect((await findEpisodeById(episodeId))?.title).toBe('Corrected Episode');
+      expect((await readEpisode(episodeId))?.title).toBe('Corrected Episode');
     });
   });
 
@@ -513,7 +534,7 @@ describe('PATCH /api/podcasts/:id and /api/episodes/:id', () => {
       });
 
       expect(response.status).toBe(403);
-      expect((await findEpisodeById(episodeId))?.title).toBe('Original Episode');
+      expect((await readEpisode(episodeId))?.title).toBe('Original Episode');
     });
   });
 
@@ -524,7 +545,7 @@ describe('PATCH /api/podcasts/:id and /api/episodes/:id', () => {
     await withRouter('/api/podcasts', podcastsRoutes, OWNER_ID, async (baseUrl) => {
       expect((await fetch(`${baseUrl}${podcastUrl}/unpublish`, { method: 'POST' })).status).toBe(200);
 
-      const hidden = await findPodcastById(podcastId);
+      const hidden = await readShow(podcastId);
       expect(hidden?.status).toBe('unavailable');
       // Soft: the show and its episodes survive, so republishing is lossless.
       expect(hidden?.title).toBe('Original Show');
@@ -534,10 +555,10 @@ describe('PATCH /api/podcasts/:id and /api/episodes/:id', () => {
         .where(eq(episodesTable.podcastId, podcastId));
       expect(remaining).toHaveLength(1);
       // Deliberately does NOT cascade — a directly-linked episode keeps resolving.
-      expect((await findEpisodeById(episodeId))?.status).not.toBe('unavailable');
+      expect((await readEpisode(episodeId))?.status).not.toBe('unavailable');
 
       expect((await fetch(`${baseUrl}${podcastUrl}/publish`, { method: 'POST' })).status).toBe(200);
-      expect((await findPodcastById(podcastId))?.status).toBe('active');
+      expect((await readShow(podcastId))?.status).toBe('active');
     });
   });
 
@@ -550,7 +571,7 @@ describe('PATCH /api/podcasts/:id and /api/episodes/:id', () => {
       });
 
       expect(response.status).toBe(403);
-      expect((await findPodcastById(podcastId))?.status).toBe('active');
+      expect((await readShow(podcastId))?.status).toBe('active');
     });
   });
 
@@ -569,7 +590,7 @@ describe('PATCH /api/podcasts/:id and /api/episodes/:id', () => {
 
       // A takedown is not creator-reversible.
       expect(response.status).toBe(409);
-      expect((await findPodcastById(podcastId))?.status).toBe('removed');
+      expect((await readShow(podcastId))?.status).toBe('removed');
     });
   });
 
@@ -579,10 +600,10 @@ describe('PATCH /api/podcasts/:id and /api/episodes/:id', () => {
 
     await withRouter('/api/episodes', episodesRoutes, OWNER_ID, async (baseUrl) => {
       expect((await fetch(`${baseUrl}${episodeUrl}/unpublish`, { method: 'POST' })).status).toBe(200);
-      expect((await findEpisodeById(episodeId))?.status).toBe('unavailable');
+      expect((await readEpisode(episodeId))?.status).toBe('unavailable');
 
       expect((await fetch(`${baseUrl}${episodeUrl}/publish`, { method: 'POST' })).status).toBe(200);
-      const restored = await findEpisodeById(episodeId);
+      const restored = await readEpisode(episodeId);
       expect(restored?.status).toBe('ready');
       expect(restored?.title).toBe('Original Episode');
     });
@@ -597,7 +618,7 @@ describe('PATCH /api/podcasts/:id and /api/episodes/:id', () => {
       });
 
       expect(response.status).toBe(403);
-      expect((await findEpisodeById(episodeId))?.status).not.toBe('unavailable');
+      expect((await readEpisode(episodeId))?.status).not.toBe('unavailable');
     });
   });
 });

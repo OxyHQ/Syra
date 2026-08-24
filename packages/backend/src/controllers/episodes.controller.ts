@@ -17,8 +17,8 @@ import {
   updateEpisode as updateEpisodeRow,
   upsertEpisodeProgress,
 } from '../db/podcasts/episodes';
-import { findPodcastById } from '../db/podcasts/podcasts';
-import { loadEpisodePersons, loadShowArtwork, toEpisodeDtos } from '../db/podcasts/hydrate';
+import { loadEpisodePersons, loadShowContext, toEpisodeDtos } from '../db/podcasts/hydrate';
+import { viewerCanReadShow, viewerOwnsShow } from '../db/podcasts/visibility';
 import type { EpisodeRow } from '../db/podcasts/serialize';
 import { getParam, parseClampedLimit } from '../utils/reqParams';
 import { resolvePersons, makeOxyUsersFetcher } from '../services/podcasts/resolvePersons';
@@ -31,6 +31,15 @@ const CONTINUE_LIMIT_MAX = 50;
 /**
  * GET /api/episodes/:id — episode detail, including chapters/transcripts and
  * persons resolved to person/artist links, plus the caller's saved progress.
+ *
+ * The SHOW is consulted, which it never was before: this handler read the
+ * episode row alone and tested its own `status`, so no show-level state reached
+ * episode detail at all — a takedown, an unpublish and (once it existed)
+ * `private` were all invisible here, and every episode of a hidden show kept
+ * serving its full detail page on a direct link.
+ *
+ * `viewerCanReadShow` is the same rule `findPodcastForViewer` applies in SQL,
+ * evaluated in TypeScript because the show is already in hand from the join.
  */
 export async function getEpisode(req: AuthRequest, res: Response): Promise<void> {
   const id = getParam(req, 'id');
@@ -39,8 +48,18 @@ export async function getEpisode(req: AuthRequest, res: Response): Promise<void>
     return;
   }
 
-  const episode = await findEpisodeById(id);
-  if (!episode || episode.status === 'unavailable') {
+  const found = await findEpisodeById(id);
+  if (!found || !viewerCanReadShow(found.show, req.user?.id)) {
+    res.status(404).json({ error: 'Episode not found' });
+    return;
+  }
+  const { episode, show } = found;
+
+  // The owner sees an episode in every state; everyone else sees only `ready`
+  // ones — the same rule `episodeVisibilityFilter` states for a show's list,
+  // applied to the single-episode read that never had it.
+  const isOwner = viewerOwnsShow(show, req.user?.id);
+  if (!isOwner && episode.status !== 'ready') {
     res.status(404).json({ error: 'Episode not found' });
     return;
   }
@@ -50,13 +69,13 @@ export async function getEpisode(req: AuthRequest, res: Response): Promise<void>
   // cover-less episode inherits the show's in the serialized DTO.
   const credits = (await loadEpisodePersons([episode.id])).get(episode.id) ?? [];
 
-  const [persons, artwork] = await Promise.all([
+  const [persons, shows] = await Promise.all([
     resolvePersons(credits, makeOxyUsersFetcher(oxy)),
-    loadShowArtwork([episode]),
+    loadShowContext([episode]),
   ]);
 
   const progress = req.user?.id ? await findEpisodeProgress(req.user.id, id) : undefined;
-  const [dto] = await toEpisodeDtos([episode], artwork);
+  const [dto] = await toEpisodeDtos([episode], req.user?.id, shows);
 
   res.json({
     data: {
@@ -70,6 +89,13 @@ export async function getEpisode(req: AuthRequest, res: Response): Promise<void>
 
 /**
  * PUT /api/episodes/:id/progress — upsert the caller's playback position.
+ *
+ * The existence check is new, and it closes an oracle of a different shape from
+ * the others: this handler accepted ANY well-formed id and answered `{ ok: true
+ * }`, writing an `episode_progress` row against whatever the caller sent. A
+ * foreign key made a nonexistent id a 500 while a real one — private, hidden,
+ * anyone's — was a 200, so the status code sorted ids into "exists" and "does
+ * not" without the caller ever being able to see the episode.
  */
 export async function updateEpisodeProgress(req: AuthRequest, res: Response): Promise<void> {
   const userId = getRequiredOxyUserId(req);
@@ -85,6 +111,12 @@ export async function updateEpisodeProgress(req: AuthRequest, res: Response): Pr
     return;
   }
   const { positionSec, durationSec, completed } = parsed.data;
+
+  const found = await findEpisodeById(id);
+  if (!found || !viewerCanReadShow(found.show, userId)) {
+    res.status(404).json({ error: 'Episode not found' });
+    return;
+  }
 
   const progress = await upsertEpisodeProgress(userId, id, {
     positionSec: Math.max(0, positionSec),
@@ -109,10 +141,13 @@ export async function getContinueListening(req: AuthRequest, res: Response): Pro
     return;
   }
 
-  const episodeRows = await findEpisodesByIds(progressRows.map((row) => row.episodeId));
+  // Viewer-filtered: an entry whose show has since gone private or been
+  // unpublished drops out of the list here rather than in the client. The
+  // `episode_progress` row survives, so it comes back if the show does.
+  const episodeRows = await findEpisodesByIds(progressRows.map((row) => row.episodeId), userId);
   // Distinct parent shows resolved in ONE query so cover-less episodes inherit
   // their show's artwork without an N+1.
-  const dtos = await toEpisodeDtos(episodeRows);
+  const dtos = await toEpisodeDtos(episodeRows, userId);
   const dtoById = new Map(dtos.map((dto) => [dto.id, dto]));
 
   const data = progressRows.flatMap((row) => {
@@ -155,14 +190,10 @@ export async function updateEpisode(req: AuthRequest, res: Response): Promise<vo
     return;
   }
 
-  const episode = await findEpisodeById(id);
-  if (!episode) {
-    res.status(404).json({ error: 'Episode not found' });
-    return;
-  }
-
-  const podcast = await findPodcastById(episode.podcastId);
-  if (!podcast || podcast.source !== 'syra' || podcast.ownerOxyUserId !== userId) {
+  // The show arrives WITH the episode, so ownership is answered from the row
+  // rather than from a second unfiltered read of `podcasts`.
+  const found = await findEpisodeById(id);
+  if (!found || found.show.source !== 'syra' || !viewerOwnsShow(found.show, userId)) {
     res.status(403).json({ error: 'You do not own this podcast' });
     return;
   }
@@ -199,8 +230,8 @@ export async function updateEpisode(req: AuthRequest, res: Response): Promise<vo
     return;
   }
 
-  const artwork = await loadShowArtwork([updated]);
-  const [dto] = await toEpisodeDtos([updated], artwork);
+  const shows = await loadShowContext([updated]);
+  const [dto] = await toEpisodeDtos([updated], userId, shows);
   res.json({ data: { episode: dto } });
 }
 
@@ -220,19 +251,13 @@ async function loadOwnedEpisodeOrRespond(
     return undefined;
   }
 
-  const episode = await findEpisodeById(id);
-  if (!episode) {
-    res.status(404).json({ error: 'Episode not found' });
-    return undefined;
-  }
-
-  const podcast = await findPodcastById(episode.podcastId);
-  if (!podcast || podcast.source !== 'syra' || podcast.ownerOxyUserId !== userId) {
+  const found = await findEpisodeById(id);
+  if (!found || found.show.source !== 'syra' || !viewerOwnsShow(found.show, userId)) {
     res.status(403).json({ error: 'You do not own this podcast' });
     return undefined;
   }
 
-  return episode;
+  return found.episode;
 }
 
 /**

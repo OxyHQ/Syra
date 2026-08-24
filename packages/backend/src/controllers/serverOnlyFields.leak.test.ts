@@ -46,6 +46,17 @@ import { getArtistById, getMyContributions, getMyImageSuggestions } from './arti
  * public on purpose. CC BY-SA is satisfied BY displaying the author and licence;
  * hiding it would be the breach.
  *
+ * NOT COVERED HERE, and the distinction is worth stating so nobody reads a green
+ * run as wider than it is: the podcast vertical's owner-only fields — a show's
+ * `etag`/`lastModified`/`feedUrl` and an episode's `hlsMasterKey`/`cache.s3Key`
+ * — are a DIFFERENT guard shape. They are not server-only at all: the show's
+ * owner receives every one of them, and only a non-owner does not. That cannot
+ * be expressed as a protected COLUMN, because the answer depends on who is
+ * asking rather than on which field it is, so `PROTECTED_COLUMNS_BY_TABLE` says
+ * nothing about them and neither does this file. Their gate is
+ * `routes/podcastVisibility.matrix.test.ts`, which crosses each field with three
+ * viewers.
+ *
  * Every assertion below states the value AND the field name, and every one is
  * preceded by a vacuity floor — the secret really is stored, and the endpoint
  * really answered 200 with the right entity. The first version of this file

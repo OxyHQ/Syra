@@ -72,6 +72,24 @@ export const uploadImage = async (req: AuthRequest, res: Response, next: NextFun
  * GET /api/images/:id
  * Get image by ID
  * Public endpoint
+ *
+ * DELIBERATELY UNGATED, including for a private podcast's cover art, and the
+ * reasoning is recorded here so the next reader does not have to re-derive it or
+ * "fix" it into a per-vertical guard.
+ *
+ * An `image_assets` row is shared media with no owner of its own: the same asset
+ * can be a track's cover, an artist photo and a show's artwork at once, so there
+ * is no single parent to ask about it. What makes it unreachable is that its ID
+ * is only ever published through a DTO — and every podcast DTO is now gated
+ * (`db/podcasts/serialize.ts`), so a private show's cover id never leaves the
+ * server for anyone but its owner. The id is a uuid v7, not a guessable
+ * sequence.
+ *
+ * That is protection by unlinkability rather than by authorization, which is the
+ * right strength for cover art and would NOT be for anything with real
+ * confidentiality. If an image ever carries something more sensitive than
+ * artwork, this endpoint needs a real owner check and this comment is the
+ * warning that it does not have one.
  */
 export const getImage = async (req: Request, res: Response, next: NextFunction) => {
   try {

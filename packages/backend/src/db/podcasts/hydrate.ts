@@ -57,6 +57,8 @@ import {
   podcasts,
 } from '../schema/podcasts';
 import { loadImageVariants } from '../catalog/hydrate';
+import { countReadyEpisodesByShows } from './episodes';
+import { viewerOwnsShow } from './visibility';
 import {
   episodeImageIds,
   podcastArtwork,
@@ -264,38 +266,68 @@ export async function loadEpisodeHls(
   );
 }
 
-// ── Parent-show artwork ───────────────────────────────────────────────────
+// ── Parent-show context ───────────────────────────────────────────────────
 
 /**
- * The inheritable artwork of a set of shows, keyed by show id.
+ * What a page of episodes needs to know about each parent show.
+ *
+ * `artwork` is the inheritable cover a cover-less episode falls back to;
+ * `ownerOxyUserId` is what decides whether THIS viewer is the show's owner, and
+ * therefore whether the episode DTO carries its storage keys.
+ *
+ * The two travel together because they come from the same row. This used to be
+ * artwork alone (`loadShowArtwork`), which meant an episode serializer could not
+ * answer "does the viewer own this?" without a second query over the very shows
+ * it had just read — and the answer to that question is what gates
+ * `hlsMasterKey` and `cache.s3Key`.
+ */
+export interface ShowContext {
+  readonly artwork: PodcastArtwork;
+  readonly ownerOxyUserId: string | null;
+}
+
+/**
+ * The parent-show context of a set of episodes, keyed by show id.
  *
  * The replacement for `services/podcasts/episodeShowArtwork.ts`: ONE query over
  * the DISTINCT parent ids plus one for their image assets, never one per
- * episode. Episodes whose show is missing get no inherited artwork, which leaves
- * their own absent cover unchanged — the Mongo helper's behaviour exactly.
+ * episode. Episodes whose show is missing get no entry, which leaves their own
+ * absent cover unchanged — the Mongo helper's behaviour exactly — and leaves
+ * them treated as NOT owned, which is the safe direction.
  */
-export async function loadShowArtwork(
+export async function loadShowContext(
   episodeRows: readonly { podcastId: string }[]
-): Promise<Map<string, PodcastArtwork>> {
+): Promise<Map<string, ShowContext>> {
   const podcastIds = [...new Set(episodeRows.map((row) => row.podcastId))];
   if (podcastIds.length === 0) return new Map();
 
   const rows = await getDb().select().from(podcasts).where(inArray(podcasts.id, podcastIds));
   const lookup = await loadImageVariants(rows.flatMap(podcastImageIds));
 
-  return new Map(rows.map((row) => [row.id, podcastArtwork(row, lookup)]));
+  return new Map(
+    rows.map((row) => [
+      row.id,
+      { artwork: podcastArtwork(row, lookup), ownerOxyUserId: row.ownerOxyUserId },
+    ])
+  );
 }
 
 // ── Page serialization ────────────────────────────────────────────────────
 
 /**
- * Serialize a page of shows.
+ * Serialize a page of shows FOR ONE VIEWER.
  *
- * Five queries regardless of page size: the image assets behind every referenced
- * variant, and one per child collection.
+ * Six queries regardless of page size: the image assets behind every referenced
+ * variant, one per child collection, and — only when the page holds a show the
+ * viewer does not own — one grouped count of ready episodes.
+ *
+ * Ownership is decided PER ROW, not per page: a subscriptions list can hold the
+ * viewer's own shows beside strangers', and the two must serialize differently
+ * in the same response.
  */
 export async function toPodcastDtos(
   rows: readonly PodcastRow[],
+  viewerId: string | null | undefined,
   children: PodcastChildren = {}
 ): Promise<Podcast[]> {
   if (rows.length === 0) return [];
@@ -303,7 +335,9 @@ export async function toPodcastDtos(
   const ids = rows.map((row) => row.id);
   const want = <K extends keyof PodcastChildren>(key: K): boolean => children[key] !== false;
 
-  const [lookup, categories, funding, persons, sources] = await Promise.all([
+  const notOwned = rows.filter((row) => !viewerOwnsShow(row, viewerId)).map((row) => row.id);
+
+  const [lookup, categories, funding, persons, sources, readyCounts] = await Promise.all([
     loadImageVariants(rows.flatMap(podcastImageIds)),
     want('categories') ? loadPodcastCategories(ids) : Promise.resolve(new Map<string, string[]>()),
     want('funding') ? loadPodcastFunding(ids) : Promise.resolve(new Map<string, PodcastFunding[]>()),
@@ -311,10 +345,19 @@ export async function toPodcastDtos(
     want('sources')
       ? loadPodcastSources(ids)
       : Promise.resolve(new Map<string, PodcastSourceProvenance[]>()),
+    countReadyEpisodesByShows(notOwned),
   ]);
 
   return rows.map((row) =>
     toPodcastDto(row, lookup, {
+      /**
+       * `?? 0` is a real answer, not a fallback for a missing load:
+       * `countReadyEpisodesByShows` groups, so a show with no ready episodes has
+       * no row in the result at all.
+       */
+      viewer: viewerOwnsShow(row, viewerId)
+        ? { isOwner: true }
+        : { isOwner: false, readyEpisodeCount: readyCounts.get(row.id) ?? 0 },
       /**
        * `?? []` rather than `?? undefined`, and the difference is on the wire: a
        * show with no funding rows had an EMPTY ARRAY in Mongo (the schema
@@ -331,15 +374,18 @@ export async function toPodcastDtos(
 }
 
 /**
- * Serialize a page of episodes, resolving each one's parent-show artwork.
+ * Serialize a page of episodes FOR ONE VIEWER, resolving each one's parent show.
  *
- * `showArtwork` is passed in when the caller already loaded the show (a show
+ * `showContext` is passed in when the caller already loaded the show (a show
  * detail page has it in hand and must not re-query it); omitted, this loads it
- * for the distinct parents in one batch.
+ * for the distinct parents in one batch. Either way it is what answers "does
+ * this viewer own the show", which decides whether the episode's storage keys
+ * are on the wire — an episode row alone cannot answer that.
  */
 export async function toEpisodeDtos(
   rows: readonly EpisodeRow[],
-  showArtwork?: ReadonlyMap<string, PodcastArtwork>,
+  viewerId: string | null | undefined,
+  showContext?: ReadonlyMap<string, ShowContext>,
   children: EpisodeChildren = {}
 ): Promise<Episode[]> {
   if (rows.length === 0) return [];
@@ -347,9 +393,9 @@ export async function toEpisodeDtos(
   const ids = rows.map((row) => row.id);
   const want = <K extends keyof EpisodeChildren>(key: K): boolean => children[key] !== false;
 
-  const [lookup, artwork, transcripts, persons, hls] = await Promise.all([
+  const [lookup, shows, transcripts, persons, hls] = await Promise.all([
     loadImageVariants(rows.flatMap(episodeImageIds)),
-    showArtwork ? Promise.resolve(showArtwork) : loadShowArtwork(rows),
+    showContext ? Promise.resolve(showContext) : loadShowContext(rows),
     want('transcripts')
       ? loadEpisodeTranscripts(ids)
       : Promise.resolve(new Map<string, EpisodeTranscript[]>()),
@@ -357,11 +403,16 @@ export async function toEpisodeDtos(
     want('hls') ? loadEpisodeHls(ids) : Promise.resolve(new Map<string, HlsRendition[]>()),
   ]);
 
-  return rows.map((row) =>
-    toEpisodeDto(row, lookup, artwork.get(row.podcastId), {
+  return rows.map((row) => {
+    const show = shows.get(row.podcastId);
+    return toEpisodeDto(row, lookup, show?.artwork, {
+      // An episode whose show did not load is treated as NOT owned. The FK makes
+      // that unreachable; it is stated so the safe direction is the one a future
+      // change falls into.
+      isOwner: show ? viewerOwnsShow(show, viewerId) : false,
       transcripts: want('transcripts') ? (transcripts.get(row.id) ?? []) : undefined,
       persons: want('persons') ? (persons.get(row.id) ?? []) : undefined,
       hls: want('hls') ? (hls.get(row.id) ?? []) : undefined,
-    })
-  );
+    });
+  });
 }

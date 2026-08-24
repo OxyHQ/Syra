@@ -10,9 +10,18 @@
  *
  * The encrypted HLS path (`/stream`, `/master.m3u8`, `/v/:variant`, `/key`) is
  * for Syra-hosted episodes and REUSES the shared stream primitives
- * (`resolveStreamAccess`, `mintStreamToken`, `buildMasterPlaylistFor`,
+ * (`resolveEpisodeAccess`, `mintStreamToken`, `buildMasterPlaylistFor`,
  * `buildVariantPlaylistFor`) and the `TrackKey` store keyed by the episode id —
  * no duplication of token/key logic.
+ *
+ * ## Every handler here loads the SHOW, and that is the access control
+ *
+ * `findEpisodeById` returns `{ episode, show }`, because who may reach an
+ * episode's media is decided entirely by its show — its audience, its publish
+ * state, its owner. `/key` in particular loaded NO row of any kind before this:
+ * it resolved a bitrate cap, read `track_keys` by episode id and handed the
+ * AES-128 content key to any signed-in caller for any id, which is the whole
+ * encryption defeated by one unauthenticated-in-substance request.
  */
 
 import type { Response } from 'express';
@@ -29,7 +38,7 @@ import type { EpisodeRow } from '../db/podcasts/serialize';
 import { env } from '../config/env';
 import { getS3PodcastEpisodeAudioKey } from '../config/s3.config';
 import { streamFromS3, getObjectMetadata } from '../services/s3Service';
-import { resolveStreamAccess } from './stream.controller';
+import { requestMayReachShowMedia, resolveEpisodeAccess } from './stream.controller';
 import { mintStreamToken } from '../services/stream/streamToken';
 import { buildMasterPlaylistFor, buildVariantPlaylistFor } from '../services/stream/manifestService';
 import { maybeCacheEpisode } from '../services/podcasts/podcastCache';
@@ -67,6 +76,18 @@ function isEpisodePlayable(episode: { status: string }): boolean {
  */
 async function episodeHls(episodeId: string) {
   return (await loadEpisodeHls([episodeId])).get(episodeId) ?? [];
+}
+
+/**
+ * Turn a refusal into the status code its REASON demands.
+ *
+ * `hidden` is 404 rather than 403, so a private show's episode reads exactly
+ * like an id that names nothing; `unauthenticated` keeps the 401 an HLS
+ * sub-resource has always answered a caller with no session and no token.
+ */
+function respondToRefusal(res: Response, reason: 'hidden' | 'unauthenticated'): void {
+  if (reason === 'hidden') res.status(404).json({ error: 'Episode not found' });
+  else res.status(401).json({ error: 'Unauthorized' });
 }
 
 interface ParsedRange {
@@ -188,7 +209,17 @@ async function proxyOrigin(req: AuthRequest, res: Response, episode: EpisodeRow)
 }
 
 /**
- * GET /api/podcasts/episodes/:id/audio — public progressive audio.
+ * GET /api/podcasts/episodes/:id/audio — progressive audio.
+ *
+ * ANONYMOUS for `public` and `unlisted` shows, and that is load-bearing rather
+ * than lax: this URL is the `<enclosure>` of the generated RSS feed, so Apple
+ * Podcasts, Overcast and Podcast Index fetch it with no credentials, and it is
+ * also the SSRF-safe origin proxy for mirrored RSS episodes. The gate keys on
+ * the SHOW's audience, never on who is asking — a signed-in stranger gets
+ * exactly what an anonymous one gets.
+ *
+ * `private` is the one case that asks, and the only answer it accepts is the
+ * owner.
  */
 export async function getEpisodeAudio(req: AuthRequest, res: Response): Promise<void> {
   const episodeId = getEpisodeIdParam(req);
@@ -197,8 +228,16 @@ export async function getEpisodeAudio(req: AuthRequest, res: Response): Promise<
     return;
   }
 
-  const episode = await findEpisodeById(episodeId);
-  if (!episode || !isEpisodePlayable(episode)) {
+  const found = await findEpisodeById(episodeId);
+  if (!found || !isEpisodePlayable(found.episode)) {
+    res.status(404).json({ error: 'Episode not found' });
+    return;
+  }
+  const { episode, show } = found;
+
+  // 404 rather than 403: a private show's episode must be indistinguishable from
+  // an id that names nothing.
+  if (!requestMayReachShowMedia(req, episodeId, show)) {
     res.status(404).json({ error: 'Episode not found' });
     return;
   }
@@ -234,12 +273,31 @@ export async function getEpisodeStream(req: AuthRequest, res: Response): Promise
     return;
   }
 
-  const episode = await findEpisodeById(episodeId);
-  if (!episode || !isEpisodePlayable(episode)) {
+  const found = await findEpisodeById(episodeId);
+  if (!found || !isEpisodePlayable(found.episode)) {
     res.status(404).json({ error: 'Episode not found' });
     return;
   }
+  const { episode, show } = found;
 
+  /**
+   * FIRST, before every other refusal in this handler.
+   *
+   * `409 Episode processing` and `422 no HLS stream` are both facts about an
+   * episode, so answering either one for a show the caller may not see would
+   * confirm the id and describe its state. The audience gate goes ahead of them
+   * — and it is `resolveEpisodeAccess` rather than the bare
+   * `requestMayReachShowMedia`, so the bitrate cap is resolved in the same pass
+   * instead of twice.
+   */
+  const access = await resolveEpisodeAccess(req, episodeId, show);
+  if (!access.ok) {
+    respondToRefusal(res, access.reason);
+    return;
+  }
+
+  // `/stream` MINTS the token, so unlike the sub-resources below it needs a real
+  // bearer session and not merely a valid `?t=`.
   if (!req.user?.id) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
@@ -252,12 +310,6 @@ export async function getEpisodeStream(req: AuthRequest, res: Response): Promise
 
   if (!episode.hlsMasterKey || (await episodeHls(episodeId)).length === 0) {
     res.status(422).json({ error: 'Episode has no HLS stream' });
-    return;
-  }
-
-  const access = await resolveStreamAccess(req, episodeId);
-  if (!access.ok) {
-    res.status(401).json({ error: 'Unauthorized' });
     return;
   }
 
@@ -275,6 +327,12 @@ export async function getEpisodeStream(req: AuthRequest, res: Response): Promise
 
 /**
  * GET /api/podcasts/episodes/:id/key — AES-128 key (bearer or ?t= token).
+ *
+ * This handler loaded no episode row at all. It resolved a bitrate cap — which
+ * any bearer session satisfies — and then read `track_keys` by the id in the
+ * URL, so any signed-in user could ask for the content key of any episode,
+ * including one whose show was taken down. The key IS the encryption; handing it
+ * out makes the segments plaintext to whoever holds it.
  */
 export async function getEpisodeStreamKey(req: AuthRequest, res: Response): Promise<void> {
   const episodeId = getEpisodeIdParam(req);
@@ -283,9 +341,15 @@ export async function getEpisodeStreamKey(req: AuthRequest, res: Response): Prom
     return;
   }
 
-  const access = await resolveStreamAccess(req, episodeId);
+  const found = await findEpisodeById(episodeId);
+  if (!found || !isEpisodePlayable(found.episode)) {
+    res.status(404).json({ error: 'Episode not found' });
+    return;
+  }
+
+  const access = await resolveEpisodeAccess(req, episodeId, found.show);
   if (!access.ok) {
-    res.status(401).json({ error: 'Unauthorized' });
+    respondToRefusal(res, access.reason);
     return;
   }
 
@@ -317,17 +381,21 @@ export async function getEpisodeMasterPlaylist(req: AuthRequest, res: Response):
     return;
   }
 
-  const access = await resolveStreamAccess(req, episodeId);
-  if (!access.ok) {
-    res.status(401).json({ error: 'Unauthorized' });
-    return;
-  }
-
-  const episode = await findEpisodeById(episodeId);
-  if (!episode || !isEpisodePlayable(episode)) {
+  // The episode (and its show) is loaded BEFORE the access check now: the check
+  // needs the show, and the show is what the join exists to supply.
+  const found = await findEpisodeById(episodeId);
+  if (!found || !isEpisodePlayable(found.episode)) {
     res.status(404).json({ error: 'Episode not found' });
     return;
   }
+  const { episode } = found;
+
+  const access = await resolveEpisodeAccess(req, episodeId, found.show);
+  if (!access.ok) {
+    respondToRefusal(res, access.reason);
+    return;
+  }
+
   const hls = await episodeHls(episodeId);
   if (!episode.hlsMasterKey || hls.length === 0) {
     res.status(404).json({ error: 'Master playlist not available' });
@@ -362,17 +430,18 @@ export async function getEpisodeVariantPlaylist(req: AuthRequest, res: Response)
     return;
   }
 
-  const access = await resolveStreamAccess(req, episodeId);
-  if (!access.ok) {
-    res.status(401).json({ error: 'Unauthorized' });
-    return;
-  }
-
-  const episode = await findEpisodeById(episodeId);
-  if (!episode || !isEpisodePlayable(episode)) {
+  const found = await findEpisodeById(episodeId);
+  if (!found || !isEpisodePlayable(found.episode)) {
     res.status(404).json({ error: 'Episode not found' });
     return;
   }
+
+  const access = await resolveEpisodeAccess(req, episodeId, found.show);
+  if (!access.ok) {
+    respondToRefusal(res, access.reason);
+    return;
+  }
+
   const hls = await episodeHls(episodeId);
   if (hls.length === 0) {
     res.status(404).json({ error: 'Variant playlist not available' });
