@@ -34,7 +34,9 @@
   },
   "files": [
     "src",
-    "lib"
+    "lib",
+    "!src/**/*.test.ts",
+    "!src/**/*.spec.ts"
   ],
   "keywords": [
     "syra",
