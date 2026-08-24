@@ -258,6 +258,11 @@ describe('the deploy workflow syncs an explicit allowlist, never the whole conte
     'AWS_ACCESS_KEY_ID',
     'AWS_SECRET_ACCESS_KEY',
     'DATABASE_URL',
+    // Signs the single-use episode INGEST TICKET. Deliberately NOT
+    // STREAM_TOKEN_SECRET: that one signs playback, this one signs a WRITE
+    // capability, and sharing them would let a player token attach audio to
+    // somebody's episode.
+    'INGEST_TOKEN_SECRET',
     'JWT_SECRET',
     'REDIS_URL',
     'STREAM_TOKEN_SECRET',
