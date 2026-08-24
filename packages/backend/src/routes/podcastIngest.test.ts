@@ -26,6 +26,7 @@
 
 import { afterAll, afterEach, beforeAll, describe, expect, it, mock } from 'bun:test';
 import express from 'express';
+import { join } from 'node:path';
 import type { Server } from 'http';
 import { eq } from 'drizzle-orm';
 import { uuidv7 } from '@oxyhq/db';
@@ -44,6 +45,23 @@ import podcastsRoutes from './podcasts.routes';
 process.env.INGEST_TOKEN_SECRET = 'test-secret-podcast-ingest-endpoint';
 
 // ── The two boundaries this suite must not cross ──────────────────────────────
+
+/**
+ * The real implementations, captured BY VALUE before the mocks are registered.
+ *
+ * `import * as realIngest` is a LIVE binding: once `mock.module` replaces the
+ * module, reading `realIngest.enqueueEpisodeIngest` returns THE FAKE, so a fake
+ * that "delegates to the real one" re-enters itself. Measured — a full-suite run
+ * produced a wall of `at enqueueEpisodeIngest (…test.ts)` frames and failed
+ * `ingestEpisode.test.ts`, two directories away, with a stack overflow.
+ *
+ * Copying each function into a `const` at module-init time — before the
+ * `mock.module` calls below, which run after the imports are evaluated — freezes
+ * the reference. A local `const` is the one thing the module registry cannot
+ * rewrite.
+ */
+const realUploadToS3 = realS3.uploadToS3;
+const realEnqueueEpisodeIngest = realIngest.enqueueEpisodeIngest;
 
 /** Object keys the handler asked S3 to store, so "did it upload" is observable. */
 const storedKeys: string[] = [];
@@ -64,7 +82,7 @@ mock.module('../services/s3Service', () => ({
   ...realS3,
   uploadToS3: async (key: string, body: unknown, options?: unknown) => {
     if (![...suiteEpisodeIds].some((id) => key.includes(id))) {
-      return realS3.uploadToS3(key, body as Parameters<typeof realS3.uploadToS3>[1], options as Parameters<typeof realS3.uploadToS3>[2]);
+      return realUploadToS3(key, body as Parameters<typeof realS3.uploadToS3>[1], options as Parameters<typeof realS3.uploadToS3>[2]);
     }
     storedKeys.push(key);
   },
@@ -74,7 +92,7 @@ mock.module('../services/podcasts/ingestEpisode', () => ({
   ...realIngest,
   enqueueEpisodeIngest: (episodeId: string) => {
     if (!suiteEpisodeIds.has(episodeId)) {
-      realIngest.enqueueEpisodeIngest(episodeId);
+      realEnqueueEpisodeIngest(episodeId);
       return;
     }
     enqueuedEpisodeIds.push(episodeId);
@@ -185,6 +203,50 @@ async function readEpisode(id: string) {
     .where(eq(episodesTable.id, id))
     .limit(1);
   return row;
+}
+
+/**
+ * Run one claim in a SEPARATE OS PROCESS and report what it answered.
+ *
+ * Nothing is shared with this process: not the pool, not a module-level
+ * variable, not a closure. Whatever the child sees, it read out of the database.
+ */
+async function claimInAnotherProcess(jti: string, episodeId: string): Promise<string> {
+  /**
+   * `__dirname`, not `import.meta.dir`: this package compiles to CommonJS and
+   * `tsc` covers test files, so `import.meta` is a TS1470 that fails
+   * `bun run typecheck` while `bun test` passes it happily —
+   * `shared-types/src/wireContract.test.ts` records the same trap.
+   */
+  const script = join(__dirname, '..', 'test', 'claimIngestTicketOutOfProcess.ts');
+  const child = Bun.spawn(['bun', 'run', script, jti, episodeId], {
+    env: {
+      ...process.env,
+      DATABASE_URL: process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL ?? '',
+    },
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+
+  const [out, err, code] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+    child.exited,
+  ]);
+  if (code !== 0) throw new Error(`out-of-process claim failed (${code}): ${err}`);
+
+  // The child's own startup logging shares stdout, so the answer is read off its
+  // marker rather than by trusting the whole stream.
+  const marker = /^CLAIM_RESULT=(true|false)$/m.exec(out);
+  if (!marker) throw new Error(`out-of-process claim printed no result: ${out}`);
+  return marker[1];
+}
+
+/** The `jti` inside a ticket, read off the token the way the server does. */
+function jtiOf(token: string): string {
+  const payload = token.split('.')[1];
+  if (!payload) throw new Error('malformed ticket');
+  return JSON.parse(atob(payload)).jti as string;
 }
 
 async function readTicket(jti: string) {
@@ -440,7 +502,7 @@ describe('the redemption gate refuses', () => {
      * this suite green until this case existed.
      */
     const d = await drafted();
-    const jti = JSON.parse(atob(d.ingestTicket.split('.')[1])).jti as string;
+    const jti = jtiOf(d.ingestTicket);
 
     await getDb()
       .update(episodeIngestTickets)
@@ -483,31 +545,59 @@ describe('the redemption gate refuses', () => {
     expect(`uploads: ${storedKeys.length}`).toBe('uploads: 1');
   });
 
-  it('a replay AFTER A PROCESS RESTART — the whole reason this is not in Redis', async () => {
+  it('a replay from a DIFFERENT OS PROCESS — the whole reason this is not in Redis', async () => {
+    /**
+     * The load-bearing case, and the one that decides where the single-use state
+     * is ALLOWED to live.
+     *
+     * A fresh pool in this process would not prove it: every module-level
+     * variable, closure and cache is still the same object. So the replay is
+     * attempted by a separate `bun` process (`test/claimIngestTicketOutOfProcess.ts`)
+     * that shares nothing with this one and can only have read the database.
+     *
+     * A nonce in memory dies with the process. A nonce in Redis dies with an
+     * eviction, a failover or a deploy — silently, leaving every outstanding
+     * ticket replayable. A committed row survives all three, and this is what
+     * says so.
+     */
+    const consumed = await drafted();
+    expect(`first use: ${(await ingest(consumed.episodeId, consumed.ingestTicket)).status}`).toBe(
+      'first use: 202'
+    );
+
+    // An UNUSED ticket, claimed by the same separate process. The positive
+    // control: without it, `false` below would be equally consistent with the
+    // child process being unable to claim anything at all.
+    const unused = await drafted();
+    expect(
+      `other process, unused: ${await claimInAnotherProcess(jtiOf(unused.ingestTicket), unused.episodeId)}`
+    ).toBe('other process, unused: true');
+
+    expect(
+      `other process, replay: ${await claimInAnotherProcess(jtiOf(consumed.ingestTicket), consumed.episodeId)}`
+    ).toBe('other process, replay: false');
+  });
+
+  it('a replay after this process drops and reopens its pool', async () => {
+    // The weaker sibling of the case above, kept because it exercises the whole
+    // HTTP path rather than the claim alone: connection-local state is discarded
+    // and the endpoint still refuses.
     const d = await drafted();
     expect(`first use: ${(await ingest(d.episodeId, d.ingestTicket)).status}`).toBe(
       'first use: 202'
     );
-
-    // A second episode, drafted BEFORE the restart, whose ticket is still
-    // unused. It is the control: if the restart broke redemption outright, this
-    // would fail too and the replay assertion below would mean nothing.
     const fresh = await drafted();
 
-    /**
-     * The restart. Dropping the pool and reopening it discards every scrap of
-     * connection-local and in-process state this module has — which is what a
-     * deploy, an eviction or a failover does. Only what is IN THE TABLE survives,
-     * and that is the claim.
-     */
     await disconnectDb();
     await connectDb();
 
-    expect(`replay after restart: ${(await ingest(d.episodeId, d.ingestTicket)).status}`).toBe(
-      'replay after restart: 409'
+    expect(`replay after reconnect: ${(await ingest(d.episodeId, d.ingestTicket)).status}`).toBe(
+      'replay after reconnect: 409'
     );
-    expect(`fresh after restart: ${(await ingest(fresh.episodeId, fresh.ingestTicket)).status}`).toBe(
-      'fresh after restart: 202'
+    // The control: a ticket drafted before the reconnect still works after it,
+    // so the refusal is the claim and not the reconnect breaking everything.
+    expect(`fresh after reconnect: ${(await ingest(fresh.episodeId, fresh.ingestTicket)).status}`).toBe(
+      'fresh after reconnect: 202'
     );
   });
 
@@ -529,7 +619,7 @@ describe('the redemption gate refuses', () => {
     expect(`ready: ${(await ingest(d.episodeId, d.ingestTicket)).status}`).toBe('ready: 409');
     // And the ticket was NOT spent on the refusal, so a legitimate retry after
     // the episode is put back is still possible.
-    const jti = JSON.parse(atob(d.ingestTicket.split('.')[1])).jti as string;
+    const jti = jtiOf(d.ingestTicket);
     expect(`ticket unspent: ${(await readTicket(jti))?.consumedAt}`).toBe('ticket unspent: null');
   });
 
@@ -589,7 +679,7 @@ describe('the redemption gate refuses', () => {
 
     // The ticket survives a request that never had a file — a malformed call
     // must not cost a capability.
-    const jti = JSON.parse(atob(d.ingestTicket.split('.')[1])).jti as string;
+    const jti = jtiOf(d.ingestTicket);
     expect(`ticket unspent: ${(await readTicket(jti))?.consumedAt}`).toBe('ticket unspent: null');
     expect(`retry works: ${(await ingest(d.episodeId, d.ingestTicket)).status}`).toBe(
       'retry works: 202'

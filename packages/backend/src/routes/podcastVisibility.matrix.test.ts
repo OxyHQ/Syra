@@ -95,6 +95,19 @@ process.env.STREAM_TOKEN_SECRET = 'test-secret-podcast-visibility-matrix';
 const fakeObjects = new Map<string, string>();
 const fakePrefixes = new Set<string>();
 
+/**
+ * The real S3 functions, captured BY VALUE before the mock below.
+ *
+ * `import * as realS3` is a LIVE binding, so once `mock.module` replaces the
+ * module, `realS3.getObjectMetadata` IS the fake and the delegation branch below
+ * re-enters itself. It was latent here — no later suite reached these functions
+ * with a non-suite key — and it was NOT latent in the ingest task's suites, where
+ * it recursed until the stack overflowed. Fixed in both places the same way.
+ */
+const realGetObjectMetadata = realS3.getObjectMetadata;
+const realStreamFromS3 = realS3.streamFromS3;
+const realGetPresignedUrl = realS3.getPresignedUrl;
+
 /** A byte length the range parser and `Content-Length` can both work with. */
 const AUDIO_BYTES = 'audio-bytes-for-the-visibility-matrix';
 
@@ -108,18 +121,18 @@ mock.module('../services/s3Service', () => ({
   ...realS3,
   getObjectMetadata: async (key: string) => {
     const body = fakeObjects.get(key);
-    if (body === undefined) return realS3.getObjectMetadata(key);
+    if (body === undefined) return realGetObjectMetadata(key);
     return { contentLength: Buffer.byteLength(body), contentType: 'audio/mpeg' };
   },
   streamFromS3: async (key: string, options?: { start: number; end: number }) => {
     const body = fakeObjects.get(key);
-    if (body === undefined) return realS3.streamFromS3(key, options);
+    if (body === undefined) return realStreamFromS3(key, options);
     const buffer = Buffer.from(body);
     const slice = options ? buffer.subarray(options.start, options.end + 1) : buffer;
     return { stream: Readable.from([slice]) };
   },
   getPresignedUrl: async (key: string, ttlSec?: number) => {
-    if (!isSuiteKey(key)) return realS3.getPresignedUrl(key, ttlSec);
+    if (!isSuiteKey(key)) return realGetPresignedUrl(key, ttlSec);
     return `https://s3.example.invalid/${key}?signed=1`;
   },
 }));

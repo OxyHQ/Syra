@@ -27,6 +27,23 @@ import * as realIngest from '../services/podcasts/ingestEpisode';
 import podcastsRoutes from './podcasts.routes';
 
 /**
+ * The real implementations, captured BY VALUE before the mocks are registered.
+ *
+ * `import * as realIngest` is a LIVE binding: once `mock.module` replaces the
+ * module, reading `realIngest.enqueueEpisodeIngest` returns THE FAKE, so a fake
+ * that "delegates to the real one" re-enters itself. Measured — a full-suite run
+ * produced a wall of `at enqueueEpisodeIngest (…test.ts)` frames and failed
+ * `ingestEpisode.test.ts`, two directories away, with a stack overflow.
+ *
+ * Copying each function into a `const` at module-init time — before the
+ * `mock.module` calls below, which run after the imports are evaluated — freezes
+ * the reference. A local `const` is the one thing the module registry cannot
+ * rewrite.
+ */
+const realUploadToS3 = realS3.uploadToS3;
+const realEnqueueEpisodeIngest = realIngest.enqueueEpisodeIngest;
+
+/**
  * Both fakes are ARMED only while this file's tests run.
  *
  * `mock.module` is process-global, so a fake left live would hand every later
@@ -44,7 +61,7 @@ mock.module('../services/s3Service', () => ({
   ...realS3,
   uploadToS3: async (key: string, body: unknown, options?: unknown) => {
     if (!armed) {
-      return realS3.uploadToS3(
+      return realUploadToS3(
         key,
         body as Parameters<typeof realS3.uploadToS3>[1],
         options as Parameters<typeof realS3.uploadToS3>[2]
@@ -56,7 +73,7 @@ mock.module('../services/s3Service', () => ({
 mock.module('../services/podcasts/ingestEpisode', () => ({
   ...realIngest,
   enqueueEpisodeIngest: (episodeId: string) => {
-    if (!armed) realIngest.enqueueEpisodeIngest(episodeId);
+    if (!armed) realEnqueueEpisodeIngest(episodeId);
   },
 }));
 
