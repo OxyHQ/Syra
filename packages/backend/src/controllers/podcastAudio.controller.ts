@@ -280,11 +280,24 @@ export async function getEpisodeStream(req: AuthRequest, res: Response): Promise
   }
   const { episode, show } = found;
 
-  if (!requestMayReachShowMedia(req, episodeId, show)) {
-    res.status(404).json({ error: 'Episode not found' });
+  /**
+   * FIRST, before every other refusal in this handler.
+   *
+   * `409 Episode processing` and `422 no HLS stream` are both facts about an
+   * episode, so answering either one for a show the caller may not see would
+   * confirm the id and describe its state. The audience gate goes ahead of them
+   * — and it is `resolveEpisodeAccess` rather than the bare
+   * `requestMayReachShowMedia`, so the bitrate cap is resolved in the same pass
+   * instead of twice.
+   */
+  const access = await resolveEpisodeAccess(req, episodeId, show);
+  if (!access.ok) {
+    respondToRefusal(res, access.reason);
     return;
   }
 
+  // `/stream` MINTS the token, so unlike the sub-resources below it needs a real
+  // bearer session and not merely a valid `?t=`.
   if (!req.user?.id) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
@@ -297,12 +310,6 @@ export async function getEpisodeStream(req: AuthRequest, res: Response): Promise
 
   if (!episode.hlsMasterKey || (await episodeHls(episodeId)).length === 0) {
     res.status(422).json({ error: 'Episode has no HLS stream' });
-    return;
-  }
-
-  const access = await resolveEpisodeAccess(req, episodeId, show);
-  if (!access.ok) {
-    respondToRefusal(res, access.reason);
     return;
   }
 

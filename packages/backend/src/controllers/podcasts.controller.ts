@@ -964,7 +964,7 @@ export async function unpublishPodcast(req: AuthRequest, res: Response): Promise
   if (!podcast) return;
 
   const updated = await updatePodcastRow(podcast.id, { status: 'unavailable' });
-  res.json({ data: await serializeOne(updated, podcast.ownerOxyUserId) });
+  res.json({ data: await serializeOne(updated, req.user?.id) });
 }
 
 /** POST /api/podcasts/:id/publish — undo `unpublishPodcast`. */
@@ -973,5 +973,5 @@ export async function publishPodcast(req: AuthRequest, res: Response): Promise<v
   if (!podcast) return;
 
   const updated = await updatePodcastRow(podcast.id, { status: 'active' });
-  res.json({ data: await serializeOne(updated, podcast.ownerOxyUserId) });
+  res.json({ data: await serializeOne(updated, req.user?.id) });
 }
