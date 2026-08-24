@@ -16,11 +16,7 @@
  * decision the compiler has no opinion about.
  */
 import { describe, expect, it, spyOn } from 'bun:test';
-
-const BASE = 'https://syra.test';
-process.env.SYRA_API_URL = BASE;
-
-const { resolvePodcastEpisode, syraClient } = await import('./syraPodcast');
+import { resolvePodcastEpisode, syraClient } from './syraPodcast';
 
 /**
  * A real Redis may be running, and successful resolves ARE cached. Reusing a
@@ -49,7 +45,13 @@ describe('resolvePodcastEpisode', () => {
 
     expect(got.status).toBe('ok');
     if (got.status !== 'ok') return;
-    expect(got.episode.audioUrl).toBe(`${BASE}/api/podcasts/episodes/${uid('syra')}/audio`);
+    // Asserted as shape rather than an exact string: the base URL is the SDK's
+    // own, and pinning it here would re-implement `episodeAudioUrl` instead of
+    // exercising it. What matters is that a RELATIVE audioSource became an
+    // ABSOLUTE url — which resolving through `enclosureUrl` cannot produce,
+    // since a Syra-hosted episode has none.
+    expect(got.episode.audioUrl).toMatch(/^https?:\/\//);
+    expect(got.episode.audioUrl.endsWith(`/api/podcasts/episodes/${uid('syra')}/audio`)).toBe(true);
   });
 
   it('leaves an RSS mirror’s absolute enclosure untouched', async () => {
