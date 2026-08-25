@@ -45,7 +45,7 @@ const PodcastShowScreen: React.FC = () => {
 
   const podcast = showQuery.data?.podcast;
   const episodes = useMemo(
-    () => episodesQuery.data?.episodes ?? showQuery.data?.episodes ?? [],
+    () => episodesQuery.data ?? showQuery.data?.episodes ?? [],
     [episodesQuery.data, showQuery.data],
   );
 
@@ -149,7 +149,7 @@ const PodcastShowScreen: React.FC = () => {
 
 interface PodcastShowViewProps {
   podcast: NonNullable<ReturnType<typeof usePodcast>['data']>['podcast'];
-  episodes: NonNullable<ReturnType<typeof useEpisodes>['data']>['episodes'];
+  episodes: NonNullable<ReturnType<typeof useEpisodes>['data']>;
   persons: NonNullable<ReturnType<typeof usePodcast>['data']>['persons'];
   artwork: string | undefined;
   description: string;
