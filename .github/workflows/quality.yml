@@ -160,5 +160,13 @@ jobs:
         env:
           DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
 
+      # 25 suites, 213 assertions, under two seconds — and until now CI ran none
+      # of them, so every claim the listener app made about itself was
+      # unfalsifiable here. The library sidebar bug this workflow change ships
+      # alongside is exactly the kind a frontend test catches and a backend one
+      # cannot: the data was there and the component refused to render it.
+      - name: Frontend tests
+        run: bun run --filter @syra/frontend test
+
       - name: Backend tests
         run: bun run --filter @syra/backend test
