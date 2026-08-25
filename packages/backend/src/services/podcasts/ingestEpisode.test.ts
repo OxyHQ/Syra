@@ -169,7 +169,7 @@ describe('ingestEpisode — a private show gets no HLS ladder', () => {
    * For a public or unlisted show that is the intended trade; for a private one
    * it is not a trade at all, so the ladder is never built.
    */
-  it('refuses to package, and leaves the episode ALONE rather than failing it', async () => {
+  it('refuses to package, and finishes the episode READY with no ladder', async () => {
     await createShow('private');
     const episode = await insertEpisode({
       podcastId: PODCAST_ID,
@@ -194,13 +194,59 @@ describe('ingestEpisode — a private show gets no HLS ladder', () => {
 
     expect(packaged).toBe(false);
 
-    // NOT `failed`, and that is the load-bearing half. `findEpisodeIdsAwaitingHls`
-    // finds a deferred episode by its missing `hls_master_key`, and marking it
-    // failed would be indistinguishable from a transcode that genuinely broke —
-    // but more importantly, nothing failed: it is waiting for its show.
+    /**
+     * `ready`, and BOTH halves of that are the measurement.
+     *
+     * Not `failed`: nothing failed. Not `processing` either, which is what this
+     * used to assert — a private show's episode has its source audio in S3 and
+     * is already playable on the progressive `/audio` path, so the only thing
+     * missing is a ladder it is never going to get. Leaving it `processing`
+     * meant every reader of `status` treated a finished episode as unfinished,
+     * measured in production on a private show whose two episodes sat there with
+     * their MP3s present.
+     *
+     * `hlsMasterKey` stays NULL, and that is what keeps the publish transition
+     * able to find it — see the next test, which is this one's positive control.
+     */
     const reloaded = (await findEpisodeById(episode.id))?.episode;
-    expect(reloaded?.status).toBe('processing');
+    expect(reloaded?.status).toBe('ready');
     expect(reloaded?.hlsMasterKey).toBeNull();
+
+    /**
+     * The deferral did not cost the episode its place in the deferred set. This
+     * is the assertion the old comment CLAIMED to protect by leaving the status
+     * alone — asserted directly here rather than inferred, because the two are
+     * unrelated: the predicate never read `status` at all.
+     */
+    expect(await findEpisodeIdsAwaitingHls(PODCAST_ID)).toEqual([episode.id]);
+  });
+
+  it('fails a private show’s episode that has no source audio, rather than calling it ready', async () => {
+    /**
+     * The boundary of the rule above. "A private episode is ready" is only true
+     * of one whose audio LANDED — a draft that was reserved and never ingested
+     * has an `audio_source_url` (written at draft time, before the object
+     * exists) and no format, and calling that ready would advertise an episode
+     * with nothing to play.
+     *
+     * It is also the ordering test: the source-audio check has to run before the
+     * private-show branch, and nothing else would notice if the two were swapped.
+     */
+    await createShow('private');
+    const episode = await insertEpisode({
+      podcastId: PODCAST_ID,
+      podcastTitle: 'A Show',
+      title: 'A Drafted Episode',
+      guid: `guid-${uuidv7()}`,
+      pubDate: new Date(),
+      source: 'syra',
+      status: 'processing',
+      audioSourceUrl: '/api/podcasts/episodes/fake/audio',
+    });
+
+    await expect(ingestEpisode(episode.id, happyDeps)).rejects.toThrow('no source audio');
+
+    expect((await findEpisodeById(episode.id))?.episode.status).toBe('failed');
   });
 
   it('packages the SAME episode once the show stops being private', async () => {

@@ -760,12 +760,19 @@ export async function uploadEpisode(req: AuthRequest, res: Response): Promise<vo
       );
 
       /**
-       * A PRIVATE show gets no HLS ladder, and that is a security decision
-       * rather than a saving — see `services/podcasts/ingestEpisode.ts`. The
-       * episode stays `processing` until the show is published, at which point
-       * `updatePodcast` enqueues the transcode.
+       * Enqueued for EVERY visibility, and the `!== 'private'` guard that used
+       * to stand here is gone rather than moved.
+       *
+       * A private show still gets no HLS ladder — that is a security decision,
+       * not a saving, and `ingestEpisode` is where it is made. Skipping the
+       * enqueue here made the same decision a second time, one layer up, and the
+       * two halves disagreed about the consequence: `ingestEpisode` left the
+       * episode alone, this skipped it entirely, and either way it sat at
+       * `processing` forever with its audio already in S3. The one place that
+       * decides now also finishes the episode (`ready`, no `hls_master_key`), so
+       * the call has to reach it.
        */
-      if (podcast.visibility !== 'private') enqueueEpisodeIngest(episodeId);
+      enqueueEpisodeIngest(episodeId);
 
       // New episode has no cover of its own yet: inherit the loaded show's art.
       const shows = await loadShowContext([{ podcastId: podcast.id }]);

@@ -242,6 +242,22 @@ async function claimInAnotherProcess(jti: string, episodeId: string): Promise<st
   return marker[1];
 }
 
+/** Give up a reservation with the same ticket, over the real route. */
+async function abandon(
+  episodeId: string,
+  ticket: string | undefined,
+  body?: Record<string, unknown>
+): Promise<Response> {
+  return fetch(`${baseUrl}/api/podcasts/episodes/${episodeId}/ingest/abandon`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...(ticket === undefined ? {} : { [TICKET_HEADER]: ticket }),
+    },
+    body: JSON.stringify(body ?? {}),
+  });
+}
+
 /** The `jti` inside a ticket, read off the token the way the server does. */
 function jtiOf(token: string): string {
   const payload = token.split('.')[1];
@@ -881,5 +897,290 @@ describe('the ingest ticket may name the episode', () => {
     await ingest(d.episodeId, d.ingestTicket, { title: '  Padded Name  ' });
 
     expect(`title: ${(await readEpisode(d.episodeId))?.title}`).toBe('title: Padded Name');
+  });
+});
+
+// ── The other ending ──────────────────────────────────────────────────────────
+
+/**
+ * `POST /api/podcasts/episodes/:id/ingest/abandon` — the transition that did not
+ * exist.
+ *
+ * Alia drafts an episode, generates the audio in a BullMQ worker, and redeems
+ * the ticket. When its own pipeline failed it marked its OWN row failed and told
+ * Syra nothing, so the Syra episode sat at `processing` with no audio and no
+ * state that could ever move it — measured in production on three episodes of
+ * one show, none of which had an object in S3 at all.
+ *
+ * Every refusal below is paired with its positive control, on the same rule the
+ * ingest half follows: a suite of nothing but 404s and 409s passes just as
+ * happily against a route that is simply broken.
+ */
+describe('POST /api/podcasts/episodes/:id/ingest/abandon', () => {
+  async function drafted(): Promise<Draft> {
+    const showId = await seedShow();
+    const created = await draft(showId);
+    if (!created.draft) throw new Error('no draft');
+    return created.draft;
+  }
+
+  it('marks the episode FAILED and spends the ticket', async () => {
+    const d = await drafted();
+    expect(`before: ${(await readEpisode(d.episodeId))?.status}`).toBe('before: processing');
+
+    const response = await abandon(d.episodeId, d.ingestTicket, {
+      reason: 'audio generation failed',
+    });
+    expect(`abandon: ${response.status}`).toBe('abandon: 200');
+
+    expect(`after: ${(await readEpisode(d.episodeId))?.status}`).toBe('after: failed');
+    expect(`ticket spent: ${(await readTicket(jtiOf(d.ingestTicket)))?.consumedAt !== null}`).toBe(
+      'ticket spent: true'
+    );
+    // Nothing was uploaded and nothing was queued — this ending touches neither.
+    expect(`no upload: ${storedKeys.length}`).toBe('no upload: 0');
+    expect(`no transcode: ${enqueuedEpisodeIds.length}`).toBe('no transcode: 0');
+  });
+
+  it('works with no reason at all — the field is optional, not a disguised requirement', async () => {
+    const d = await drafted();
+    expect(`no body: ${(await abandon(d.episodeId, d.ingestTicket)).status}`).toBe('no body: 200');
+    expect(`status: ${(await readEpisode(d.episodeId))?.status}`).toBe('status: failed');
+  });
+
+  it('never echoes the caller’s reason back, or stores it anywhere', async () => {
+    /**
+     * `reason` is the only free text a ticket holder may send that describes a
+     * FAILURE, so the string closest to a worker's hand is an upstream
+     * provider's own error message. It goes to the API log and to nothing else.
+     *
+     * Asserted against the whole response body and the whole episode row rather
+     * than against named fields, because the risk is a field nobody thought of:
+     * a serializer that started echoing the request, or a column added later.
+     */
+    const d = await drafted();
+    const marker = 'UPSTREAM-PROVIDER-SAID-THIS';
+
+    const response = await abandon(d.episodeId, d.ingestTicket, { reason: marker });
+    expect(`abandon: ${response.status}`).toBe('abandon: 200');
+
+    const body = JSON.stringify(await response.json());
+    expect(`in response: ${body.includes(marker)}`).toBe('in response: false');
+
+    const row = JSON.stringify(await readEpisode(d.episodeId));
+    expect(`in episode row: ${row.includes(marker)}`).toBe('in episode row: false');
+
+    /**
+     * The positive control for the two assertions above: the same marker DOES
+     * survive a round trip through a field that is meant to carry it. Without
+     * this, "the marker is absent" would be equally consistent with the marker
+     * never having reached the server, or with `includes` being asked the wrong
+     * question.
+     */
+    const other = await drafted();
+    await ingest(other.episodeId, other.ingestTicket, { title: marker });
+    expect(`control, stored title: ${(await readEpisode(other.episodeId))?.title}`).toBe(
+      `control, stored title: ${marker}`
+    );
+  });
+
+  it('refuses a reason longer than the bound, without spending the ticket', async () => {
+    /**
+     * The bound is what holds regardless of the caller: a stack trace or a JSON
+     * error envelope does not fit in 200 characters, so the worst an operator
+     * log can carry is a truncated sentence. Refused rather than truncated
+     * server-side, so a worker learns its string was too long instead of
+     * discovering it silently cut.
+     *
+     * Parsed BEFORE the claim, exactly as the ingest half parses its body first:
+     * a malformed request must not cost a capability.
+     */
+    const d = await drafted();
+
+    expect(`too long: ${(await abandon(d.episodeId, d.ingestTicket, { reason: 'x'.repeat(201) })).status}`).toBe(
+      'too long: 400'
+    );
+    expect(`blank: ${(await abandon(d.episodeId, d.ingestTicket, { reason: '   ' })).status}`).toBe(
+      'blank: 400'
+    );
+
+    expect(`untouched: ${(await readEpisode(d.episodeId))?.status}`).toBe('untouched: processing');
+    expect(`ticket unspent: ${(await readTicket(jtiOf(d.ingestTicket)))?.consumedAt}`).toBe(
+      'ticket unspent: null'
+    );
+
+    // The control, same ticket: a reason at the limit is accepted, so the two
+    // refusals are the bound and not a ticket this test had already burnt.
+    expect(
+      `at the limit: ${(await abandon(d.episodeId, d.ingestTicket, { reason: 'x'.repeat(200) })).status}`
+    ).toBe('at the limit: 200');
+  });
+
+  it('a ticket for a DIFFERENT episode', async () => {
+    /**
+     * Two episodes of ONE show, so `podcastId`, the owner and the status all
+     * match and the only thing that can separate them is the `episodeId`
+     * binding. 404, not 403: a holder pointing a valid ticket at somebody else's
+     * episode must not learn whether it exists.
+     */
+    const showId = await seedShow();
+    const one = await draft(showId);
+    const two = await draft(showId);
+    if (!one.draft || !two.draft) throw new Error('no draft');
+
+    expect(
+      `crossed: ${(await abandon(two.draft.episodeId, one.draft.ingestTicket)).status}`
+    ).toBe('crossed: 404');
+    // The episode the ticket was pointed at was not touched.
+    expect(`untouched: ${(await readEpisode(two.draft.episodeId))?.status}`).toBe(
+      'untouched: processing'
+    );
+    // And neither ticket was spent on the refusal.
+    expect(`one unspent: ${(await readTicket(jtiOf(one.draft.ingestTicket)))?.consumedAt}`).toBe(
+      'one unspent: null'
+    );
+
+    // Both tickets still work on their OWN episode, which is what says the
+    // refusal was the binding and not a broken fixture.
+    expect(`one: ${(await abandon(one.draft.episodeId, one.draft.ingestTicket)).status}`).toBe(
+      'one: 200'
+    );
+    expect(`two: ${(await abandon(two.draft.episodeId, two.draft.ingestTicket)).status}`).toBe(
+      'two: 200'
+    );
+  });
+
+  it('a ticket whose ROW has expired, though its JWT has not', async () => {
+    // The row's deadline is enforced independently of the token's — the row is
+    // ours, the token is the holder's copy, and this is the only case that can
+    // see the difference. It is also what makes the expiry sweep safe.
+    const d = await drafted();
+    const jti = jtiOf(d.ingestTicket);
+
+    await getDb()
+      .update(episodeIngestTickets)
+      .set({ expiresAt: new Date(Date.now() - 60_000) })
+      .where(eq(episodeIngestTickets.jti, jti));
+
+    expect(`stale row: ${(await abandon(d.episodeId, d.ingestTicket)).status}`).toBe(
+      'stale row: 409'
+    );
+    expect(`untouched: ${(await readEpisode(d.episodeId))?.status}`).toBe('untouched: processing');
+
+    // The control: put the deadline back and the same token works, so the
+    // refusal was the row and not the token.
+    await getDb()
+      .update(episodeIngestTickets)
+      .set({ expiresAt: new Date(Date.now() + 60_000) })
+      .where(eq(episodeIngestTickets.jti, jti));
+    expect(`revived: ${(await abandon(d.episodeId, d.ingestTicket)).status}`).toBe('revived: 200');
+  });
+
+  it('a REPLAY of an abandon that already worked', async () => {
+    const d = await drafted();
+
+    expect(`first use: ${(await abandon(d.episodeId, d.ingestTicket)).status}`).toBe(
+      'first use: 200'
+    );
+    expect(`replay: ${(await abandon(d.episodeId, d.ingestTicket)).status}`).toBe('replay: 409');
+    expect(`still failed: ${(await readEpisode(d.episodeId))?.status}`).toBe('still failed: failed');
+  });
+
+  it('spends the SAME single use the audio redemption spends, in both directions', async () => {
+    /**
+     * A ticket has one redemption and two possible endings, so choosing one must
+     * close the other. Both directions are asserted because they fail for
+     * different reasons and only one of them is the claim: after an abandon the
+     * ticket row is consumed, while after an ingest the EPISODE has moved out of
+     * the ingestible set as well.
+     */
+    const abandoned = await drafted();
+    expect(`abandon: ${(await abandon(abandoned.episodeId, abandoned.ingestTicket)).status}`).toBe(
+      'abandon: 200'
+    );
+    expect(
+      `then ingest: ${(await ingest(abandoned.episodeId, abandoned.ingestTicket)).status}`
+    ).toBe('then ingest: 409');
+    expect(`no upload: ${storedKeys.length}`).toBe('no upload: 0');
+
+    const ingested = await drafted();
+    expect(`ingest: ${(await ingest(ingested.episodeId, ingested.ingestTicket)).status}`).toBe(
+      'ingest: 202'
+    );
+    expect(
+      `then abandon: ${(await abandon(ingested.episodeId, ingested.ingestTicket)).status}`
+    ).toBe('then abandon: 409');
+    // The episode that DID get audio was not dragged to `failed` by the refusal.
+    expect(`ingested status: ${(await readEpisode(ingested.episodeId))?.status}`).toBe(
+      'ingested status: processing'
+    );
+  });
+
+  it('no ticket at all, and a ticket that is not a ticket', async () => {
+    const d = await drafted();
+
+    const missing = await abandon(d.episodeId, undefined);
+    expect(`no header: ${missing.status}`).toBe('no header: 401');
+    /**
+     * The MESSAGE, not just the status. Mutation-tested on the ingest half:
+     * removing the missing-header guard still produced a 401, because
+     * `jwt.verify(undefined)` throws and the verifier answers `null`. The status
+     * alone cannot tell whether the first guard is there at all.
+     */
+    expect(`no header reason: ${((await missing.json()) as { error?: string }).error}`).toBe(
+      'no header reason: Ingest ticket required'
+    );
+
+    const bad = await abandon(d.episodeId, 'not-a-jwt');
+    expect(`bad token reason: ${((await bad.json()) as { error?: string }).error}`).toBe(
+      'bad token reason: Invalid ingest ticket'
+    );
+
+    // Positive control: the same request WITH the ticket works.
+    expect(`with ticket: ${(await abandon(d.episodeId, d.ingestTicket)).status}`).toBe(
+      'with ticket: 200'
+    );
+  });
+
+  it('a ticket whose show has since CHANGED HANDS', async () => {
+    const d = await drafted();
+
+    await getDb()
+      .update(podcasts)
+      .set({ ownerOxyUserId: STRANGER })
+      .where(eq(podcasts.ownerOxyUserId, OWNER));
+
+    expect(`after transfer: ${(await abandon(d.episodeId, d.ingestTicket)).status}`).toBe(
+      'after transfer: 404'
+    );
+    expect(`untouched: ${(await readEpisode(d.episodeId))?.status}`).toBe('untouched: processing');
+  });
+
+  it('a ticket for an episode that is already READY', async () => {
+    /**
+     * The episode-state gate is the SAME one ingest runs, and it has to be: a
+     * ticket that cannot replace finished audio must not be able to condemn it
+     * either. Nothing else in this endpoint would stop it.
+     */
+    const d = await drafted();
+
+    // Positive control first, on a different episode, so "409" is not just what
+    // this endpoint always says.
+    const other = await drafted();
+    expect(`control: ${(await abandon(other.episodeId, other.ingestTicket)).status}`).toBe(
+      'control: 200'
+    );
+
+    await getDb()
+      .update(episodesTable)
+      .set({ status: 'ready' })
+      .where(eq(episodesTable.id, d.episodeId));
+
+    expect(`ready: ${(await abandon(d.episodeId, d.ingestTicket)).status}`).toBe('ready: 409');
+    expect(`still ready: ${(await readEpisode(d.episodeId))?.status}`).toBe('still ready: ready');
+    // The ticket was NOT spent on the refusal.
+    expect(`ticket unspent: ${(await readTicket(jtiOf(d.ingestTicket)))?.consumedAt}`).toBe(
+      'ticket unspent: null'
+    );
   });
 });
