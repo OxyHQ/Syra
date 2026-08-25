@@ -126,7 +126,7 @@
     "jest-expo": "~57.0.2",
     "react-test-renderer": "19.2.3",
     "typescript": "~5.9.2",
-    "wrangler": "3.114.0"
+    "wrangler": "3.114.17"
   },
   "private": true,
   "optionalDependencies": {
