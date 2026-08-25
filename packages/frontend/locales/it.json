@@ -305,7 +305,10 @@
     "createFirstPlaylist": "Crea la tua prima playlist",
     "errors": {
       "load": "Impossibile caricare la tua libreria",
-      "session": "Non siamo riusciti a confermare la tua sessione."
+      "session": "Non siamo riusciti a confermare la tua sessione.",
+      "podcasts": "Impossibile caricare i podcast che segui",
+      "shows": "Impossibile caricare i tuoi programmi",
+      "episodes": "Impossibile caricare ciò che stavi ascoltando"
     },
     "signedOut": "Accedi per vedere la tua libreria",
     "empty": {
