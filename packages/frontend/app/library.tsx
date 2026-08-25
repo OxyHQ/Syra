@@ -17,8 +17,9 @@ import { useRouter } from 'expo-router';
 import { Playlist, Album, Artist } from '@syra/shared-types';
 import { Image } from 'expo-image';
 import { pickCatalogImageUrl, resolvePodcastArtwork } from '@/utils/pickImage';
+import { ownedShowStateKey } from '@/utils/podcastFormat';
 import { EpisodeRow } from '@/components/EpisodeRow';
-import { useSubscriptions, useContinueListening } from '@/hooks/usePodcasts';
+import { useSubscriptions, useContinueListening, useMyPodcasts } from '@/hooks/usePodcasts';
 import { useUploads } from '@/hooks/useUploads';
 import { usePlayerStore } from '@/stores/playerStore';
 import { cn } from '@/lib/utils';
@@ -38,7 +39,7 @@ const FAB_SIDE_OFFSET = 16;
 // These stay English identifiers: they are the filter's VALUE (and the source of
 // `LibraryFilter`), not its label. The label comes from the key maps below, so a
 // translated UI never changes what the state machine compares against.
-const LIBRARY_FILTERS = ['All', 'Playlists', 'Artists', 'Albums', 'Uploads', 'Podcasts', 'Episodes'] as const;
+const LIBRARY_FILTERS = ['All', 'Playlists', 'Artists', 'Albums', 'Uploads', 'Podcasts', 'Shows', 'Episodes'] as const;
 type LibraryFilter = (typeof LIBRARY_FILTERS)[number];
 
 /** Chip label per filter. */
@@ -49,6 +50,7 @@ const LIBRARY_FILTER_KEYS: Record<LibraryFilter, string> = {
   Albums: 'common.albums',
   Uploads: 'uploads.locker.title',
   Podcasts: 'common.podcasts',
+  Shows: 'library.yourShows',
   Episodes: 'common.episodes',
 };
 
@@ -60,6 +62,7 @@ const EMPTY_LIBRARY_KEYS: Record<LibraryFilter, string> = {
   Albums: 'library.empty.albums',
   Uploads: 'uploads.locker.empty',
   Podcasts: 'library.empty.podcasts',
+  Shows: 'library.empty.shows',
   Episodes: 'library.empty.episodes',
 };
 
@@ -120,10 +123,18 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   // Filter state
   const [activeFilter, setActiveFilter] = useState<LibraryFilter>('All');
 
-  // Podcasts vertical: subscribed shows + in-progress episodes.
+  // Podcasts vertical: subscribed shows, the viewer's OWN shows, and in-progress
+  // episodes. Subscribed and owned are separate lists rather than one, because
+  // they are separate relationships — a subscription is a saved id that drops out
+  // when the show stops being readable, ownership is a property of the show row
+  // that only the platform can take away, and the server serializes them
+  // differently in the same response (an owned show carries its feed URL and its
+  // true episode count, including episodes nobody else can see).
   const subscriptionsQuery = useSubscriptions();
+  const myPodcastsQuery = useMyPodcasts();
   const continueQuery = useContinueListening();
   const subscribedPodcasts = subscriptionsQuery.data?.subscriptions ?? [];
+  const myPodcasts = myPodcastsQuery.data ?? [];
   const inProgressEpisodes = (continueQuery.data ?? []).filter((entry) => !entry.completed);
   // The listener's own uploads. Private by construction — a separate collection
   // no catalogue query reads — so they get their own entry rather than being
@@ -153,12 +164,13 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
     : isUsingProps ? (propsError ?? null) : collections.error;
 
   const isLibraryEmptyForFilter =
-    (activeFilter === 'All' && finalPlaylists.length === 0 && finalFollowedArtists.length === 0 && finalSavedAlbums.length === 0 && subscribedPodcasts.length === 0 && inProgressEpisodes.length === 0) ||
+    (activeFilter === 'All' && finalPlaylists.length === 0 && finalFollowedArtists.length === 0 && finalSavedAlbums.length === 0 && subscribedPodcasts.length === 0 && myPodcasts.length === 0 && inProgressEpisodes.length === 0) ||
     (activeFilter === 'Playlists' && finalPlaylists.length === 0) ||
     (activeFilter === 'Artists' && finalFollowedArtists.length === 0) ||
     (activeFilter === 'Albums' && finalSavedAlbums.length === 0) ||
     (activeFilter === 'Uploads' && uploads.length === 0) ||
     (activeFilter === 'Podcasts' && subscribedPodcasts.length === 0) ||
+    (activeFilter === 'Shows' && myPodcasts.length === 0) ||
     (activeFilter === 'Episodes' && inProgressEpisodes.length === 0);
 
   return (
@@ -439,6 +451,49 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                       </Text>
                       <Text className="text-[12px] text-muted-foreground" numberOfLines={1}>
                         {podcast.author ?? t('common.podcast')}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+        {/* The viewer's OWN shows.
+            Its own section rather than a row mixed into the subscriptions above,
+            for the reason the uploads locker gets its own entry: what you MADE
+            and what you FOLLOW are different relationships, and here they are
+            visibly different rows too — an owned show reports its STATE, because
+            `GET /api/podcasts/mine` is deliberately unfiltered and this is the
+            surface a creator would otherwise conclude from that their private or
+            unpublished show is live. A show you own and also subscribe to
+            appears in both lists, which is true rather than a duplicate. */}
+        {gate.isAuthenticated && (activeFilter === 'All' || activeFilter === 'Shows') && myPodcasts.length > 0 && (
+          <View className="mb-6">
+            <Text className="text-[16px] font-bold mb-3 text-foreground">{t('library.yourShows')}</Text>
+            <View className="gap-0">
+              {myPodcasts.map((podcast) => {
+                const imageUri = resolvePodcastArtwork(podcast, 'thumbnail');
+                return (
+                  <Pressable
+                    key={podcast.id}
+                    className="flex-row items-center gap-3 p-2 rounded-[6px] mb-2 bg-popover"
+                    onPress={() => router.push({ pathname: '/podcasts/[id]', params: { id: podcast.id } })}
+                  >
+                    {imageUri ? (
+                      <Image source={{ uri: imageUri }} style={styles.squareArtwork} contentFit="cover" />
+                    ) : (
+                      <View className="w-12 h-12 rounded-[4px] items-center justify-center bg-background">
+                        <MaterialCommunityIcons name="podcast" size={24} color={theme.colors.textSecondary} />
+                      </View>
+                    )}
+                    <View className="flex-1">
+                      <Text className="text-[14px] font-semibold mb-0.5 text-foreground" numberOfLines={1}>
+                        {podcast.title}
+                      </Text>
+                      <Text className="text-[12px] text-muted-foreground" numberOfLines={1}>
+                        {t(ownedShowStateKey(podcast))}
                       </Text>
                     </View>
                   </Pressable>

@@ -7,7 +7,8 @@ import { useTheme } from '@oxyhq/bloom/theme';
 import { Playlist, Album, Artist } from '@syra/shared-types';
 import { Image } from 'expo-image';
 import { useOxy } from '@oxyhq/services';
-import { pickCatalogImageUrl } from '@/utils/pickImage';
+import { useMyPodcasts, useSubscriptions } from '@/hooks/usePodcasts';
+import { pickCatalogImageUrl, resolvePodcastArtwork } from '@/utils/pickImage';
 
 interface LibrarySidebarCollapsedProps {
   onExpand: () => void;
@@ -40,6 +41,18 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
   const router = useRouter();
   const theme = useTheme();
   const { isAuthenticated } = useOxy();
+  /**
+   * Read here rather than threaded through `LibrarySidebar`, matching the
+   * expanded view: both are shared React Query keys, so a second consumer costs
+   * no second request.
+   *
+   * The rail has to carry them for the same reason the expanded view does —
+   * collapsing the sidebar must not be a way to lose your podcasts — and they
+   * count toward the "nothing saved yet" marker below, which otherwise tells a
+   * listener with subscriptions that their library is empty.
+   */
+  const subscribedPodcasts = useSubscriptions().data?.subscriptions ?? [];
+  const myPodcasts = useMyPodcasts().data ?? [];
 
   return (
     <View className="flex-1 items-center justify-start p-2">
@@ -103,7 +116,9 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
         {!loading && isAuthenticated && !error
           && playlists.length === 0
           && followedArtists.length === 0
-          && savedAlbums.length === 0 && (
+          && savedAlbums.length === 0
+          && subscribedPodcasts.length === 0
+          && myPodcasts.length === 0 && (
           <Pressable
             className="w-10 h-10 rounded-[4px] items-center justify-center"
             onPress={onExpand}
@@ -185,6 +200,59 @@ export const LibrarySidebarCollapsed: React.FC<LibrarySidebarCollapsedProps> = (
               <View className="w-10 h-10 rounded-[4px] items-center justify-center bg-popover">
                 <MaterialCommunityIcons
                   name="album"
+                  size={18}
+                  color={theme.colors.textSecondary}
+                />
+              </View>
+            )}
+          </Pressable>
+        ))}
+
+        {/* Subscribed podcasts, then the viewer's OWN shows — the same order the
+            expanded view concatenates them in, so the rail and the list do not
+            disagree about where a show sits. The keys carry the relationship
+            because a creator subscribed to their own show appears in both, and
+            two rows keyed on the id alone would collide. */}
+        {!loading && !error && isAuthenticated && subscribedPodcasts.map(({ podcast }) => (
+          <Pressable
+            key={`podcast-${podcast.id}`}
+            className="w-10 h-10 rounded-[4px] items-center justify-center"
+            onPress={() => router.push({ pathname: '/podcasts/[id]', params: { id: podcast.id } })}
+          >
+            {resolvePodcastArtwork(podcast, 'icon') ? (
+              <Image
+                source={{ uri: resolvePodcastArtwork(podcast, 'icon') }}
+                style={styles.squareIcon}
+                contentFit="cover"
+              />
+            ) : (
+              <View className="w-10 h-10 rounded-[4px] items-center justify-center bg-popover">
+                <MaterialCommunityIcons
+                  name="podcast"
+                  size={18}
+                  color={theme.colors.textSecondary}
+                />
+              </View>
+            )}
+          </Pressable>
+        ))}
+
+        {!loading && !error && isAuthenticated && myPodcasts.map((podcast) => (
+          <Pressable
+            key={`show-${podcast.id}`}
+            className="w-10 h-10 rounded-[4px] items-center justify-center"
+            onPress={() => router.push({ pathname: '/podcasts/[id]', params: { id: podcast.id } })}
+          >
+            {resolvePodcastArtwork(podcast, 'icon') ? (
+              <Image
+                source={{ uri: resolvePodcastArtwork(podcast, 'icon') }}
+                style={styles.squareIcon}
+                contentFit="cover"
+              />
+            ) : (
+              <View className="w-10 h-10 rounded-[4px] items-center justify-center bg-popover">
+                <MaterialCommunityIcons
+                  name="podcast"
                   size={18}
                   color={theme.colors.textSecondary}
                 />

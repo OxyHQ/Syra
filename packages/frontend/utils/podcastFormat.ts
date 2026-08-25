@@ -86,3 +86,29 @@ export function formatRemaining(positionSec: number, durationSec: number): strin
   }
   return `${formatEpisodeDuration(remaining)} left`;
 }
+
+/**
+ * The i18n key naming why an OWNED show is or is not fully public.
+ *
+ * `status` and `visibility` are two independent axes on the server (see the
+ * backend's `db/podcasts/visibility.ts`), and a creator can be blocked by
+ * either — so this collapses them into ONE label, most restrictive first, and
+ * `live` is reserved for the single combination where nothing is holding the
+ * show back. A creator whose show is both unpublished and private is told the
+ * harder-to-undo of the two rather than a label that hides one behind the other.
+ *
+ * The order is the point: `removed` is the platform's and cannot be undone by
+ * the creator, `unavailable` is their own unpublish, and the visibility ladder
+ * is narrowest first. Reversing any pair would report a show as reachable when
+ * it is not.
+ *
+ * Owned shows only. A subscriber never sees these — a show in a state other than
+ * active-and-not-private has already left their library.
+ */
+export function ownedShowStateKey(show: { status: string; visibility: string }): string {
+  if (show.status === 'removed') return 'library.showState.removed';
+  if (show.status !== 'active') return 'library.showState.unpublished';
+  if (show.visibility === 'private') return 'library.showState.private';
+  if (show.visibility === 'unlisted') return 'library.showState.unlisted';
+  return 'library.showState.live';
+}

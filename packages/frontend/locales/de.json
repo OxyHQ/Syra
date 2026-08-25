@@ -314,7 +314,16 @@
       "artists": "No followed artists yet",
       "albums": "No saved albums yet",
       "podcasts": "No podcast subscriptions yet",
-      "episodes": "No episodes in progress"
+      "episodes": "No episodes in progress",
+      "shows": "You haven't created a show yet"
+    },
+    "yourShows": "Your shows",
+    "showState": {
+      "live": "Live",
+      "unpublished": "Unpublished",
+      "private": "Private",
+      "unlisted": "Unlisted",
+      "removed": "Removed"
     }
   },
   "liked": {

@@ -16,6 +16,7 @@ const libraryMembershipResponseSchema = z.object({
   followedArtists: idArraySchema.optional(),
   savedPlaylists: idArraySchema.optional(),
   playlists: idArraySchema.optional(),
+  subscribedPodcasts: idArraySchema.optional(),
 }).passthrough();
 const libraryMutationResultSchema = z.object({
   ok: z.boolean(),
@@ -38,6 +39,14 @@ export interface LibraryMembership {
   savedAlbums: string[];
   followedArtists: string[];
   savedPlaylists: string[];
+  /**
+   * Subscribed podcast shows — the fifth membership, and the only one the
+   * backend filters by VISIBILITY before answering. A show its creator has since
+   * made private or unpublished is absent here even though the subscription
+   * still exists server-side, so this list means "shows in your library you can
+   * open", not "shows you ever subscribed to".
+   */
+  subscribedPodcasts: string[];
 }
 
 export interface LibraryMutationResult {
@@ -87,10 +96,10 @@ export interface PlaySignal {
  * Normalize the `GET /library` payload to a {@link LibraryMembership}.
  *
  * The backend contract returns `{ likedTracks, savedAlbums, followedArtists,
- * savedPlaylists }`. We defensively coerce each field to a string array so a
- * partial or legacy payload (e.g. the `UserLibrary` shape that exposes
- * `playlists` instead of `savedPlaylists`) never produces `undefined` Sets
- * downstream.
+ * savedPlaylists, subscribedPodcasts }`. We defensively coerce each field to a
+ * string array so a partial or legacy payload (e.g. the `UserLibrary` shape that
+ * exposes `playlists` instead of `savedPlaylists`, or a backend predating
+ * `subscribedPodcasts`) never produces `undefined` Sets downstream.
  */
 function normalizeMembership(raw: unknown): LibraryMembership {
   const parsed = libraryMembershipResponseSchema.safeParse(raw);
@@ -100,6 +109,7 @@ function normalizeMembership(raw: unknown): LibraryMembership {
       savedAlbums: [],
       followedArtists: [],
       savedPlaylists: [],
+      subscribedPodcasts: [],
     };
   }
 
@@ -110,6 +120,7 @@ function normalizeMembership(raw: unknown): LibraryMembership {
     savedAlbums: data.savedAlbums ?? [],
     followedArtists: data.followedArtists ?? [],
     savedPlaylists: data.savedPlaylists ?? data.playlists ?? [],
+    subscribedPodcasts: data.subscribedPodcasts ?? [],
   };
 }
 

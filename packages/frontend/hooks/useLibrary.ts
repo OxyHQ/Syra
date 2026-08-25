@@ -29,18 +29,40 @@ import { toast } from '@oxyhq/bloom/toast';
 export const LIBRARY_QUERY_KEY = ['library'] as const;
 export const LIBRARY_TRACKS_QUERY_KEY = ['library', 'tracks'] as const;
 
-/** Which membership collection a mutation targets. */
+/** Which membership collection a patch targets. */
 type MembershipField = keyof LibraryMembership;
+
+/**
+ * The collections a `/library` mutation echoes back, and therefore the only ones
+ * {@link useToggleMembership} can reconcile against the server's own answer.
+ *
+ * `subscribedPodcasts` is absent BY CONSTRUCTION, not by omission: its write is
+ * `POST /api/podcasts/:id/subscribe`, which moves `subscriberCount` in the same
+ * transaction and answers `{ ok: true }` with no id list at all. Deriving this
+ * from `LibraryMutationResult` rather than listing it means a future endpoint
+ * that starts returning one arrives here as a type, not as a thing to remember.
+ */
+type ReconcilableField = Exclude<keyof LibraryMutationResult, 'ok'>;
 
 const EMPTY_MEMBERSHIP: LibraryMembership = {
   likedTracks: [],
   savedAlbums: [],
   followedArtists: [],
   savedPlaylists: [],
+  subscribedPodcasts: [],
 };
 
-/** Add/remove an id within one membership array, returning a new object. */
-function withMembership(
+/**
+ * Add/remove an id within one membership array, returning a new object.
+ *
+ * Exported because podcast subscriptions are written through a route of their
+ * own (`POST /api/podcasts/:id/subscribe`, which also moves `subscriberCount`)
+ * rather than through {@link useToggleMembership}, so `useToggleSubscription`
+ * has to patch this cache itself. It is the same patch, not a second one — a
+ * private copy over there is how the two would start disagreeing about what an
+ * optimistic subscribe looks like.
+ */
+export function withMembership(
   membership: LibraryMembership,
   field: MembershipField,
   id: string,
@@ -83,11 +105,19 @@ export function useLibrary() {
   const savedAlbumIds = useMemo(() => new Set(membership.savedAlbums), [membership.savedAlbums]);
   const followedArtistIds = useMemo(() => new Set(membership.followedArtists), [membership.followedArtists]);
   const savedPlaylistIds = useMemo(() => new Set(membership.savedPlaylists), [membership.savedPlaylists]);
+  const subscribedPodcastIds = useMemo(
+    () => new Set(membership.subscribedPodcasts),
+    [membership.subscribedPodcasts],
+  );
 
   const isTrackLiked = useCallback((id: string) => likedTrackIds.has(id), [likedTrackIds]);
   const isAlbumSaved = useCallback((id: string) => savedAlbumIds.has(id), [savedAlbumIds]);
   const isArtistFollowed = useCallback((id: string) => followedArtistIds.has(id), [followedArtistIds]);
   const isPlaylistSaved = useCallback((id: string) => savedPlaylistIds.has(id), [savedPlaylistIds]);
+  const isPodcastSubscribed = useCallback(
+    (id: string) => subscribedPodcastIds.has(id),
+    [subscribedPodcastIds],
+  );
 
   return {
     membership,
@@ -97,6 +127,7 @@ export function useLibrary() {
     isAlbumSaved,
     isArtistFollowed,
     isPlaylistSaved,
+    isPodcastSubscribed,
   };
 }
 
@@ -149,7 +180,7 @@ function withLikedTracksData(
 
 function withServerMembership(
   membership: LibraryMembership,
-  field: MembershipField,
+  field: ReconcilableField,
   result: LibraryMutationResult,
 ): LibraryMembership {
   const serverIds = result[field];
@@ -172,7 +203,7 @@ function withServerMembership(
  * invalidate so the server's truth wins.
  */
 function useToggleMembership(
-  field: MembershipField,
+  field: ReconcilableField,
   on: (id: string) => Promise<LibraryMutationResult>,
   off: (id: string) => Promise<LibraryMutationResult>,
   options?: { invalidateTracks?: boolean; invalidatePlaylists?: boolean },

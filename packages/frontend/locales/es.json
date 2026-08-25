@@ -314,7 +314,16 @@
       "artists": "Aún no sigues a ningún artista",
       "albums": "Aún no has guardado álbumes",
       "podcasts": "Aún no te has suscrito a ningún podcast",
-      "episodes": "No tienes episodios a medias"
+      "episodes": "No tienes episodios a medias",
+      "shows": "Aún no has creado ningún programa"
+    },
+    "yourShows": "Tus programas",
+    "showState": {
+      "live": "Publicado",
+      "unpublished": "Sin publicar",
+      "private": "Privado",
+      "unlisted": "No listado",
+      "removed": "Retirado"
     }
   },
   "liked": {

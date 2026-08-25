@@ -117,6 +117,24 @@ export const podcastService = {
     };
   },
 
+  /**
+   * Shows the signed-in user OWNS, newest first, in every state.
+   *
+   * Deliberately unfiltered by `status` and `visibility` — the owner filter IS
+   * the access control, and a creator's private, unpublished and taken-down
+   * shows are exactly the ones they need to find. The library surfaces label
+   * each show's state rather than hiding it, since a show missing from the one
+   * screen that could unhide it is the bug this endpoint exists to avoid.
+   *
+   * The same endpoint the creator portal reads. It is not duplicated here for
+   * the listener app's sake: listing owned shows is one server behaviour, and a
+   * second route answering it is a second thing to keep in agreement.
+   */
+  async getMyPodcasts(): Promise<Podcast[]> {
+    const response = await api.get<unknown>('/podcasts/mine');
+    return parsePodcastResponse(podcastListResponseSchema, response.data, 'my podcasts').data;
+  },
+
   /** The signed-in user's subscribed shows + new-episode signals. */
   async getSubscriptions(): Promise<PodcastSubscriptions> {
     const response = await api.get<unknown>('/podcasts/subscriptions');
