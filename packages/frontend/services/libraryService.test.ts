@@ -40,6 +40,7 @@ describe('libraryService HTTP cache coherence', () => {
         savedAlbums: [],
         followedArtists: [],
         playlists: ['playlist-1'],
+        subscribedPodcasts: ['show-1', null],
       },
     });
 
@@ -51,6 +52,35 @@ describe('libraryService HTTP cache coherence', () => {
       savedAlbums: [],
       followedArtists: [],
       savedPlaylists: ['playlist-1'],
+      subscribedPodcasts: ['show-1'],
+    });
+  });
+
+  /**
+   * The field this membership snapshot did not carry until the library learned
+   * about podcasts. A client running against a backend that predates it must
+   * read "no subscriptions", never `undefined` — every consumer builds a `Set`
+   * from this array.
+   */
+  it('reads no subscriptions from a payload that carries none', async () => {
+    mockApiGet.mockResolvedValueOnce({
+      data: { likedTracks: [], savedAlbums: [], followedArtists: [], savedPlaylists: [] },
+    });
+
+    expect((await libraryService.getLibrary()).subscribedPodcasts).toEqual([]);
+  });
+
+  it('reads no subscriptions from a payload it cannot parse at all', async () => {
+    // The whole-response fallback, which has to name every field or the same
+    // `undefined` arrives by the other door.
+    mockApiGet.mockResolvedValueOnce({ data: 'not an object' });
+
+    expect(await libraryService.getLibrary()).toEqual({
+      likedTracks: [],
+      savedAlbums: [],
+      followedArtists: [],
+      savedPlaylists: [],
+      subscribedPodcasts: [],
     });
   });
 

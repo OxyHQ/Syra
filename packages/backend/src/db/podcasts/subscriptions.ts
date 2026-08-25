@@ -41,6 +41,7 @@ import { isForeignKeyViolation } from '@oxyhq/db';
 import { getDb } from '../postgres';
 import { userPodcastSubscriptions } from '../schema/library';
 import { podcasts } from '../schema/podcasts';
+import { viewerCanReadShowFilter } from './visibility';
 
 /** The foreign key that fires when the podcast id names nothing. */
 const MISSING_PODCAST_CONSTRAINT = 'user_podcast_subscriptions_podcast_id_podcasts_id_fk';
@@ -57,6 +58,67 @@ export async function listSubscribedPodcastIds(oxyUserId: string): Promise<strin
     .select({ podcastId: userPodcastSubscriptions.podcastId })
     .from(userPodcastSubscriptions)
     .where(eq(userPodcastSubscriptions.oxyUserId, oxyUserId))
+    .orderBy(asc(userPodcastSubscriptions.createdAt));
+
+  return rows.map((row) => row.podcastId);
+}
+
+/**
+ * The subset of {@link listSubscribedPodcastIds} the subscriber may still SEE —
+ * the library's read.
+ *
+ * ## Why this is a separate function and not a filter on the other one
+ *
+ * The unfiltered read has callers that must stay unfiltered: the counter
+ * arithmetic above is keyed on ROWS, and `episodePublished.ts` fans out over
+ * every subscriber of a show regardless of what any one of them may read. So
+ * "which ids exist" and "which ids resolve to something this viewer can open"
+ * are two questions, and the second one is the library's.
+ *
+ * ## Why the FLAT predicate, and why that is not an accident
+ *
+ * `podcasts` is in this statement's FROM list (joined), so
+ * {@link viewerCanReadShowFilter} — the plain column comparison — resolves
+ * against the joined table and means what it says. The correlated spelling
+ * (`showIsReadableByViewer`) would be wrong here for the reason `visibility.ts`
+ * states at length: its inner `podcasts` reference would shadow the joined one
+ * and be TRUE for every row as soon as any readable show existed anywhere, which
+ * a fixture with one show cannot see.
+ *
+ * ## What a subscriber sees when a show goes private
+ *
+ * Nothing. The show leaves this list — and therefore the library — while the
+ * subscription ROW survives untouched, so the show reappears with the
+ * subscription intact if its creator publishes it again. That is the same answer
+ * `findPodcastsByIds` already gives `GET /api/podcasts/subscriptions`, and the
+ * two agreeing is the point: a membership snapshot that claimed a subscription
+ * the hydrated list then dropped would render a library counting shows it cannot
+ * show.
+ *
+ * The row is therefore held on the subscriber's behalf rather than by them:
+ * `POST /api/podcasts/:id/unsubscribe` still accepts it (it gates on nothing —
+ * see {@link unsubscribeFromPodcast}), but no client surface offers that button
+ * any more, since the show's own page has 404'd for them too. That is the
+ * accepted cost of not leaking the show's continued existence, and it is
+ * bounded: one `(user, show)` pair, costing the subscriber nothing, cascading
+ * away with the show.
+ *
+ * `unlisted` is deliberately KEPT. The rule is REACHABLE, not LISTABLE: a
+ * library holds what its owner asked for by name, which is exactly what
+ * `unlisted` permits, and applying the discovery rule here would empty the
+ * library of every unlisted show's subscribers for no gain.
+ */
+export async function listReadableSubscribedPodcastIds(oxyUserId: string): Promise<string[]> {
+  const rows = await getDb()
+    .select({ podcastId: userPodcastSubscriptions.podcastId })
+    .from(userPodcastSubscriptions)
+    .innerJoin(podcasts, eq(podcasts.id, userPodcastSubscriptions.podcastId))
+    .where(
+      and(
+        eq(userPodcastSubscriptions.oxyUserId, oxyUserId),
+        viewerCanReadShowFilter(oxyUserId)
+      )
+    )
     .orderBy(asc(userPodcastSubscriptions.createdAt));
 
   return rows.map((row) => row.podcastId);

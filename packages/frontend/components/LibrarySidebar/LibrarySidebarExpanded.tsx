@@ -14,16 +14,37 @@ import { useTheme } from '@oxyhq/bloom/theme';
 import { Search } from '@oxyhq/bloom/search';
 import { useOxy } from '@oxyhq/services';
 import { useUploads } from '@/hooks/useUploads';
+import { useMyPodcasts, useSubscriptions } from '@/hooks/usePodcasts';
 import { Image } from 'expo-image';
 import { Playlist, Album, Artist } from '@syra/shared-types';
-import { pickCatalogImageUrl } from '@/utils/pickImage';
+import { pickCatalogImageUrl, resolvePodcastArtwork } from '@/utils/pickImage';
+import { ownedShowStateKey } from '@/utils/podcastFormat';
 import { EmptyState } from '@/components/common/EmptyState';
 import { cn } from '@/lib/utils';
 import type { LibrarySortOrder } from '@/stores/uiStore';
 
 /** Exported so the sidebar's filter state cannot drift from the chips it renders. */
-export type LibraryFilter = 'All' | 'Playlists' | 'Artists' | 'Albums' | 'Uploads' | 'Podcasts';
-type LibraryEntryKind = 'playlist' | 'liked' | 'artist' | 'album' | 'uploads';
+export type LibraryFilter = 'All' | 'Playlists' | 'Artists' | 'Albums' | 'Uploads' | 'Podcasts' | 'Shows';
+/**
+ * Every kind an entry can carry — DERIVED from {@link FILTER_KINDS} rather than
+ * declared beside it.
+ *
+ * That derivation IS the guarantee that no entry kind is unreachable: a kind
+ * exists here only because some chip admits it, so `kind: 'series'` on an entry
+ * no chip covers is a type error at the entry, naming it. Declaring the union
+ * separately would let the two drift, and a kind no chip admitted would render
+ * under `All` and vanish the moment a filter was picked.
+ *
+ * `podcast` is a show the listener SUBSCRIBES to; `show` is one they OWN. Two
+ * kinds rather than one, because they are two relationships: a subscription is a
+ * saved id the listener can drop and that disappears the moment the show stops
+ * being readable, while ownership is a property of the show row that only the
+ * platform can take away — and the server serializes them differently in the
+ * same response, an owned show carrying its feed URL and its true episode count
+ * including episodes nobody else can see. One list under one heading would put
+ * two disclosure levels and two lifecycles behind one label.
+ */
+type LibraryEntryKind = (typeof FILTER_KINDS)[keyof typeof FILTER_KINDS][number];
 
 interface LibraryEntry {
   id: string;
@@ -56,25 +77,65 @@ interface LibrarySidebarExpandedProps {
   onRetry: () => Promise<void>;
 }
 
-const FILTERS: LibraryFilter[] = ['All', 'Playlists', 'Artists', 'Albums', 'Uploads', 'Podcasts'];
+/**
+ * Which entry kinds each chip admits — the SINGLE source for both the chip row
+ * and the filtering, and a total map. The totality is the fix; a tidier spelling
+ * of the old `if` ladder would not be.
+ *
+ * `Podcasts` used to be a chip in {@link FILTERS} with no arm in that ladder, so
+ * selecting it fell through to a closing `return false` and rendered "No items"
+ * over a library that had subscriptions in it. On web, where this sidebar IS the
+ * library, that was the whole of "my podcasts do not appear in my library" — and
+ * nothing could have caught it, because a fall-through is a perfectly valid `if`
+ * chain and the empty result is indistinguishable from a listener who has no
+ * subscriptions.
+ *
+ * Three ways to reintroduce it, all now COMPILE errors — each verified by
+ * mutation, and each naming the offending member:
+ *
+ *  - a chip in `LibraryFilter` with no entry here — `satisfies Record<Exclude<
+ *    LibraryFilter, 'All'>, …>` refuses the object;
+ *  - a chip whose kinds are EMPTY — the value type is a non-empty tuple
+ *    (`readonly [string, ...string[]]`), so `[]` is rejected. This is the one
+ *    that matters most: an empty list is exactly what the broken chip behaved
+ *    like;
+ *  - an entry kind no chip admits — impossible by construction, since
+ *    `LibraryEntryKind` is DERIVED from this map rather than declared beside it.
+ *
+ * `All` is excluded from the map because it admits everything BY DEFINITION,
+ * which is a different statement from a list that happens to hold every kind.
+ * `as const` keeps the element literals, which is what lets the entry-kind union
+ * be read back off it.
+ */
+const FILTER_KINDS = {
+  Playlists: ['playlist', 'liked'],
+  Artists: ['artist'],
+  Albums: ['album'],
+  Uploads: ['uploads'],
+  Podcasts: ['podcast'],
+  Shows: ['show'],
+} as const satisfies Record<Exclude<LibraryFilter, 'All'>, readonly [string, ...string[]]>;
+
+/**
+ * Every chip, in the order they render: `All`, then {@link FILTER_KINDS}'s own
+ * declaration order.
+ *
+ * DERIVED rather than listed, so there is no second list to fall out of step
+ * with the map — which is the shape the original bug had. The cast is the one
+ * TypeScript makes unavoidable: `Object.keys` is typed `string[]` regardless of
+ * the value's type, though at runtime it returns exactly these keys.
+ */
+const FILTERS: LibraryFilter[] = [
+  'All',
+  ...(Object.keys(FILTER_KINDS) as Exclude<LibraryFilter, 'All'>[]),
+];
 
 function filterAllowsEntry(filter: LibraryFilter, kind: LibraryEntryKind): boolean {
   if (filter === 'All') {
     return true;
   }
-  if (filter === 'Playlists') {
-    return kind === 'playlist' || kind === 'liked';
-  }
-  if (filter === 'Artists') {
-    return kind === 'artist';
-  }
-  if (filter === 'Albums') {
-    return kind === 'album';
-  }
-  if (filter === 'Uploads') {
-    return kind === 'uploads';
-  }
-  return false;
+  const kinds: readonly LibraryEntryKind[] = FILTER_KINDS[filter];
+  return kinds.includes(kind);
 }
 
 function entryIcon(kind: LibraryEntryKind): keyof typeof MaterialCommunityIcons.glyphMap {
@@ -86,6 +147,9 @@ function entryIcon(kind: LibraryEntryKind): keyof typeof MaterialCommunityIcons.
   }
   if (kind === 'uploads') {
     return 'folder-music';
+  }
+  if (kind === 'podcast' || kind === 'show') {
+    return 'podcast';
   }
   return 'playlist-music';
 }
@@ -120,6 +184,14 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
   // The listener's own uploads: private by construction, so a quick-access entry
   // of their own rather than a row mixed in with saved catalogue albums.
   const { total: uploadCount } = useUploads();
+  /**
+   * The podcast vertical's two lists, read here rather than threaded down from
+   * `LibrarySidebar` for the reason `useUploads` already is: both are their own
+   * React Query keys, shared with the library screen, so a second consumer costs
+   * no second request and props would only be a place for them to drift.
+   */
+  const subscriptionsQuery = useSubscriptions();
+  const myPodcastsQuery = useMyPodcasts();
 
   const entries = useMemo<LibraryEntry[]>(() => {
     const likedSongs: LibraryEntry[] = isAuthenticated
@@ -174,10 +246,50 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
       imageShape: 'square',
     }));
 
+    const podcastEntries = (subscriptionsQuery.data?.subscriptions ?? []).map<LibraryEntry>(
+      ({ podcast }) => ({
+        id: podcast.id,
+        kind: 'podcast',
+        title: podcast.title,
+        // The show's author, which is what a subscriber recognises it by. NOT
+        // its state: a show that is not readable has already left this list
+        // server-side, so there is no state here worth reporting.
+        subtitle: podcast.author ?? t('common.podcast'),
+        href: { pathname: '/podcasts/[id]', params: { id: podcast.id } },
+        imageUrl: resolvePodcastArtwork(podcast, 'thumbnail'),
+        imageShape: 'square',
+      }),
+    );
+
+    const showEntries = (myPodcastsQuery.data ?? []).map<LibraryEntry>((podcast) => ({
+      id: podcast.id,
+      kind: 'show',
+      title: podcast.title,
+      /**
+       * The state, because `GET /api/podcasts/mine` is deliberately unfiltered:
+       * a creator's private, unpublished and taken-down shows are all here, and
+       * the one screen that can unhide a show must say which shows are hidden.
+       * A row that looked identical to a live one is how a creator concludes
+       * their show is published when it is not.
+       */
+      subtitle: t(ownedShowStateKey(podcast)),
+      href: { pathname: '/podcasts/[id]', params: { id: podcast.id } },
+      imageUrl: resolvePodcastArtwork(podcast, 'thumbnail'),
+      imageShape: 'square',
+    }));
+
     const normalizedSearch = searchQuery.trim().toLowerCase();
     // `type` order is this concatenation itself: liked songs, then playlists,
-    // artists and albums.
-    const visible = [...likedSongs, ...uploadsEntry, ...playlistEntries, ...artistEntries, ...albumEntries].filter((entry) => {
+    // artists, albums, subscribed podcasts and finally the viewer's own shows.
+    const visible = [
+      ...likedSongs,
+      ...uploadsEntry,
+      ...playlistEntries,
+      ...artistEntries,
+      ...albumEntries,
+      ...podcastEntries,
+      ...showEntries,
+    ].filter((entry) => {
       if (!filterAllowsEntry(activeFilter, entry.kind)) {
         return false;
       }
@@ -199,10 +311,12 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
     followedArtists,
     isAuthenticated,
     likedTracksCount,
+    myPodcastsQuery.data,
     playlists,
     savedAlbums,
     searchQuery,
     sortOrder,
+    subscriptionsQuery.data,
     t,
     uploadCount,
   ]);

@@ -434,6 +434,29 @@ const PROBES: readonly Probe[] = [
   },
   {
     /**
+     * `db/podcasts/subscriptions.ts` — `listReadableSubscribedPodcastIds`, the
+     * library's read: the same forward direction as `subscriptions` above, plus
+     * the join to `podcasts` that decides which of those ids the viewer may
+     * still see.
+     *
+     * Both probes are kept because they are two different questions about the
+     * same index. The bare one asks whether the unique index serves the
+     * user-scoped read at all; this one asks whether adding the join keeps that
+     * index as the DRIVING side, rather than flipping the plan to scan
+     * `podcasts` and probe the subscriptions. A user has tens of subscriptions
+     * and the catalogue has thousands of shows, so the wrong drive order is the
+     * failure mode worth pinning.
+     */
+    name: 'subscriptionsForLibrary',
+    sql: `select ups.podcast_id from user_podcast_subscriptions ups
+          join podcasts on podcasts.id = ups.podcast_id
+          where ups.oxy_user_id = '${MARKER}-u-7'
+            and ((podcasts.status = 'active' and podcasts.visibility <> 'private')
+                 or podcasts.owner_oxy_user_id = '${MARKER}-u-7')
+          order by ups.created_at asc`,
+  },
+  {
+    /**
      * `db/podcasts/subscriptions.ts` — `listSubscriberIds`, the REVERSE
      * direction. The one read `unique(oxy_user_id, podcast_id)` cannot serve,
      * and the reason `user_podcast_subscriptions_podcast_id_idx` exists.
@@ -1105,6 +1128,42 @@ describe('the subscription reads reach an index in BOTH directions', () => {
     expect(plans.get('subscriptions')).not.toContain('Seq Scan on user_podcast_subscriptions');
     expect(`subscriptions: ${indexesIn('subscriptions')}`).toBe(
       'subscriptions: user_podcast_subscriptions_oxy_user_id_podcast_id_key'
+    );
+  });
+
+  /**
+   * The library read: the same forward direction, joined to `podcasts`.
+   *
+   * Pinned from the real plan rather than from an expectation edited until it
+   * matched. Measured on this seed, `${MARKER}-u-7` holding 11 subscriptions:
+   *
+   *   Sort (created_at)
+   *     Nested Loop
+   *       Bitmap Heap Scan on user_podcast_subscriptions   11 rows
+   *         Bitmap Index Scan using …_oxy_user_id_podcast_id_key
+   *       Index Scan using podcasts_pkey                   loops=11 -> 9 rows
+   *
+   * TWO properties, and the index NAMES are what make both checkable:
+   *
+   *  - The subscriptions side DRIVES. A user has tens of subscriptions and the
+   *    catalogue has thousands of shows, so a plan that led with `podcasts` and
+   *    probed the junction would degrade with the catalogue rather than with the
+   *    library. The assertion is on the ORDER the names appear in.
+   *  - The show side is a primary-key point lookup, one per subscription. That
+   *    is what keeps the visibility predicate O(1) per row instead of a second
+   *    pass over `podcasts`, and it is why this needs no index of its own.
+   *
+   * Eleven rows in and nine out: the predicate is EXCLUDING on this seed rather
+   * than selecting everything, which is what stops the plan being the plan for a
+   * condition that restricts nothing.
+   */
+  it('the library read drives from the subscriptions index and probes shows by primary key', () => {
+    expect(plans.get('subscriptionsForLibrary')).not.toContain(
+      'Seq Scan on user_podcast_subscriptions'
+    );
+    expect(plans.get('subscriptionsForLibrary')).not.toContain('Seq Scan on podcasts');
+    expect(`library subscriptions: ${indexesIn('subscriptionsForLibrary')}`).toBe(
+      'library subscriptions: user_podcast_subscriptions_oxy_user_id_podcast_id_key, podcasts_pkey'
     );
   });
 

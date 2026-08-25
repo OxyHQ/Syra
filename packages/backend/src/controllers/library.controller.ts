@@ -20,6 +20,7 @@ import {
   recordPlayEvent,
   touchRecentPlay,
 } from '../db/library/recentlyPlayed';
+import { listReadableSubscribedPodcastIds } from '../db/podcasts/subscriptions';
 import { getParam, parseBoundedLimit } from '../utils/reqParams';
 import { recordPlay } from '../services/recommendations/recordPlay';
 import { applyLikeSignal, applyFollowSignal } from '../services/recommendations/tasteSignals';
@@ -111,7 +112,32 @@ async function removeFromLibrary(
 /**
  * GET /api/library
  * Get the user's library memberships (requires auth).
- * Returns empty arrays for a user who has liked/saved/followed nothing.
+ * Returns empty arrays for a user who has liked/saved/followed/subscribed to
+ * nothing.
+ *
+ * ## The fifth list, and why it arrives by a different door
+ *
+ * `UserLibrary` was FIVE arrays (`db/schema/library.ts` names them), and this
+ * handler answered with four: `user_podcast_subscriptions` — the fifth junction,
+ * same `(oxy_user_id, target_id)` shape as the other four — was never wired in,
+ * so nothing that reads this snapshot could tell whether a show was subscribed.
+ * That is one half of "my podcasts do not appear in my library".
+ *
+ * It is NOT `listMembership('subscribedPodcasts', …)`, and the difference is
+ * deliberate rather than an inconsistency to tidy away later:
+ *
+ *  - The WRITE stays on `POST /api/podcasts/:id/subscribe`. Subscribing bumps
+ *    `podcasts.subscriber_count` in the same transaction as the insert, and it
+ *    resolves the show through the caller's own visibility first so a private
+ *    show is not an existence oracle. A second writer here would either
+ *    duplicate both or, far more likely, quietly do neither.
+ *  - The READ is visibility-filtered, which none of the other four are. A
+ *    track, album, artist or playlist id in this response names a row anyone may
+ *    ask about; a show may have gone private or been unpublished since the
+ *    subscription was made, and reporting it here would both leak its continued
+ *    existence and disagree with `GET /api/podcasts/subscriptions`, which drops
+ *    it. See `db/podcasts/subscriptions.ts` for what a subscriber sees when that
+ *    happens, and why the subscription row is kept regardless.
  */
 export const getUserLibrary = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
@@ -121,14 +147,23 @@ export const getUserLibrary = async (req: AuthRequest, res: Response, next: Next
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const [likedTracks, savedAlbums, followedArtists, savedPlaylists] = await Promise.all([
-      listMembership('likedTracks', userId),
-      listMembership('savedAlbums', userId),
-      listMembership('followedArtists', userId),
-      listMembership('savedPlaylists', userId),
-    ]);
+    const [likedTracks, savedAlbums, followedArtists, savedPlaylists, subscribedPodcasts] =
+      await Promise.all([
+        listMembership('likedTracks', userId),
+        listMembership('savedAlbums', userId),
+        listMembership('followedArtists', userId),
+        listMembership('savedPlaylists', userId),
+        listReadableSubscribedPodcastIds(userId),
+      ]);
 
-    res.json({ oxyUserId: userId, likedTracks, savedAlbums, followedArtists, savedPlaylists });
+    res.json({
+      oxyUserId: userId,
+      likedTracks,
+      savedAlbums,
+      followedArtists,
+      savedPlaylists,
+      subscribedPodcasts,
+    });
   } catch (error) {
     next(error);
   }

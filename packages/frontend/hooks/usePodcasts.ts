@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useMemo } from 'react';
 import { z } from 'zod';
 import {
   useQuery,
@@ -18,6 +18,12 @@ import {
   type EpisodeDetail,
   type ContinueListeningEntry,
 } from '@/services/episodeService';
+import {
+  LIBRARY_QUERY_KEY,
+  useLibrary,
+  withMembership,
+} from '@/hooks/useLibrary';
+import type { LibraryMembership } from '@/services/libraryService';
 import { toast } from '@oxyhq/bloom/toast';
 
 /**
@@ -37,6 +43,7 @@ export const PODCAST_QUERY_KEYS = {
   episodes: (podcastId: string, limit: number) => ['podcasts', 'episodes', podcastId, limit] as const,
   episode: (id: string, identity: string) => ['episodes', 'detail', id, identity] as const,
   subscriptions: ['podcasts', 'subscriptions'] as const,
+  mine: ['podcasts', 'mine'] as const,
   continue: ['episodes', 'continue'] as const,
 };
 
@@ -104,14 +111,44 @@ export function useSubscriptions() {
   });
 }
 
-/** O(1) lookup of whether a show is subscribed, derived from the cache. */
+/**
+ * O(1) lookup of whether a show is subscribed.
+ *
+ * Derived from the shared `['library']` MEMBERSHIP cache, not from the hydrated
+ * subscriptions list, and the two are not interchangeable: membership is one
+ * cheap id array shared with every like/save/follow control in the app and it is
+ * already loaded by the time any screen renders, while `useSubscriptions` is a
+ * page of full show DTOs the podcast surfaces fetch for their own list. Reading
+ * button state off the heavy one meant the Subscribe button could not answer
+ * until that page arrived, and it made subscription state the one membership
+ * with a second source of truth.
+ */
 export function useIsSubscribed() {
-  const { data } = useSubscriptions();
-  const ids = useMemo(
-    () => new Set((data?.subscriptions ?? []).map((entry) => entry.podcast.id)),
-    [data],
-  );
-  return useCallback((podcastId: string) => ids.has(podcastId), [ids]);
+  const { isPodcastSubscribed } = useLibrary();
+  return isPodcastSubscribed;
+}
+
+/**
+ * The shows the signed-in user OWNS — their own library section, distinct from
+ * what they subscribe to.
+ *
+ * Not folded into {@link useSubscriptions}: a show you MADE and a show you
+ * FOLLOW are different relationships with opposite lifecycles (one is a property
+ * of the show row and cannot be removed by the viewer, the other is a saved id
+ * that drops out the moment the show stops being readable), and the backend
+ * serializes them differently in the same response — an owned show carries its
+ * `feedUrl`, its crawler bookkeeping and its TRUE `episodeCount` including
+ * unpublished episodes, where a subscribed one is served the ready-episode
+ * count. One list under one heading would silently mix the two.
+ */
+export function useMyPodcasts() {
+  const { canUsePrivateApi } = useOxy();
+  return useQuery<Podcast[]>({
+    queryKey: PODCAST_QUERY_KEYS.mine,
+    queryFn: () => podcastService.getMyPodcasts(),
+    enabled: canUsePrivateApi,
+    staleTime: 1000 * 60 * 5,
+  });
 }
 
 interface ToggleSubscriptionVariables {
@@ -122,14 +159,23 @@ interface ToggleSubscriptionVariables {
 
 interface ToggleSubscriptionContext {
   previous: PodcastSubscriptions | undefined;
+  previousMembership: LibraryMembership | undefined;
 }
 
 const EMPTY_SUBSCRIPTIONS: PodcastSubscriptions = { subscriptions: [], total: 0, oxyUserId: '' };
 
 /**
- * Subscribe / unsubscribe with an optimistic patch of the subscriptions cache,
- * so the Subscribe button and the library list flip instantly and reconcile
- * with the server on settle.
+ * Subscribe / unsubscribe with an optimistic patch of BOTH caches the answer
+ * lives in, so the Subscribe button and every library surface flip instantly and
+ * reconcile with the server on settle.
+ *
+ * Two caches because they hold two things, not because the state is mirrored:
+ * `['library']` is the id set every membership control reads (see
+ * {@link useIsSubscribed}) and `['podcasts','subscriptions']` is the page of
+ * hydrated shows the library lists render. Patching only the second one is what
+ * left the button unable to answer; patching only the first would flip the
+ * button and leave the list stale. Both are invalidated on settle, so the server
+ * is what they converge on.
  */
 export function useToggleSubscription(): UseMutationResult<void, Error, ToggleSubscriptionVariables, ToggleSubscriptionContext> {
   const queryClient = useQueryClient();
@@ -144,11 +190,22 @@ export function useToggleSubscription(): UseMutationResult<void, Error, ToggleSu
       return next ? podcastService.subscribe(podcastId) : podcastService.unsubscribe(podcastId);
     },
     onMutate: async ({ podcastId, next, podcast }) => {
+      const snapshot = (): ToggleSubscriptionContext => ({
+        previous: queryClient.getQueryData<PodcastSubscriptions>(PODCAST_QUERY_KEYS.subscriptions),
+        previousMembership: queryClient.getQueryData<LibraryMembership>(LIBRARY_QUERY_KEY),
+      });
+
       if (!canUsePrivateApi) {
-        return { previous: queryClient.getQueryData<PodcastSubscriptions>(PODCAST_QUERY_KEYS.subscriptions) };
+        return snapshot();
       }
-      await queryClient.cancelQueries({ queryKey: PODCAST_QUERY_KEYS.subscriptions });
-      const previous = queryClient.getQueryData<PodcastSubscriptions>(PODCAST_QUERY_KEYS.subscriptions);
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: PODCAST_QUERY_KEYS.subscriptions }),
+        queryClient.cancelQueries({ queryKey: LIBRARY_QUERY_KEY }),
+      ]);
+      const context = snapshot();
+      queryClient.setQueryData<LibraryMembership>(LIBRARY_QUERY_KEY, (current) =>
+        current ? withMembership(current, 'subscribedPodcasts', podcastId, next) : current,
+      );
       queryClient.setQueryData<PodcastSubscriptions>(PODCAST_QUERY_KEYS.subscriptions, (current) => {
         const base = current ?? EMPTY_SUBSCRIPTIONS;
         const without = base.subscriptions.filter((entry) => entry.podcast.id !== podcastId);
@@ -161,16 +218,20 @@ export function useToggleSubscription(): UseMutationResult<void, Error, ToggleSu
           : without;
         return { ...base, subscriptions: nextSubscriptions, total: nextSubscriptions.length };
       });
-      return { previous };
+      return context;
     },
     onError: (error, _variables, context) => {
       if (context?.previous !== undefined) {
         queryClient.setQueryData(PODCAST_QUERY_KEYS.subscriptions, context.previous);
       }
+      if (context?.previousMembership !== undefined) {
+        queryClient.setQueryData(LIBRARY_QUERY_KEY, context.previousMembership);
+      }
       toast.error(error.message || 'Could not update your subscriptions');
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: PODCAST_QUERY_KEYS.subscriptions });
+      queryClient.invalidateQueries({ queryKey: LIBRARY_QUERY_KEY });
     },
   });
 }
