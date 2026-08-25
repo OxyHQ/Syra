@@ -4,6 +4,8 @@ import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
 import { albums, catalogEntities, imageAssets, tracks } from '../db/schema/catalog';
 import { playlists, recentlyPlayed } from '../db/schema/library';
+import { podcasts } from '../db/schema/podcasts';
+import { subscribeToPodcast } from '../db/podcasts/subscriptions';
 import { findTasteWeights } from '../db/user/taste';
 import {
   followArtist,
@@ -124,6 +126,20 @@ async function makeAlbum(): Promise<string> {
   return id;
 }
 
+/**
+ * A show, with `status`/`visibility`/`ownerOxyUserId` left to the caller.
+ *
+ * Both columns default to their most permissive value (`active` / `public`), so
+ * a fixture that does not name them is the case a visibility predicate lets
+ * through — which is what the positive control below needs and what every
+ * refusal has to differ from in exactly one column.
+ */
+async function makeShow(over: Partial<typeof podcasts.$inferInsert> = {}): Promise<string> {
+  const id = uuidv7();
+  await getDb().insert(podcasts).values({ id, title: 'A Show', source: 'syra', ...over });
+  return id;
+}
+
 async function makePlaylist(): Promise<string> {
   const [row] = await getDb()
     .insert(playlists)
@@ -151,6 +167,7 @@ describe('GET /api/library', () => {
       savedAlbums: [],
       followedArtists: [],
       savedPlaylists: [],
+      subscribedPodcasts: [],
     });
   });
 
@@ -161,11 +178,17 @@ describe('GET /api/library', () => {
     const albumId = await makeAlbum();
     const artistId = await makeArtist();
     const playlistId = await makePlaylist();
+    const podcastId = await makeShow();
 
     await call(likeTrack, { params: { id: trackId }, userId: USER });
     await call(saveAlbum, { params: { id: albumId }, userId: USER });
     await call(followArtist, { params: { id: artistId }, userId: USER });
     await call(savePlaylist, { params: { id: playlistId }, userId: USER });
+    // The one membership with no `/api/library` write of its own: subscribing
+    // bumps `podcasts.subscriber_count` in the same transaction, so it stays
+    // with `POST /api/podcasts/:id/subscribe` rather than growing a second
+    // writer here. This read aggregates it; it does not own it.
+    await subscribeToPodcast(USER, podcastId);
 
     expect(await call(getUserLibrary, { userId: USER }).then((res) => res._body)).toEqual({
       oxyUserId: USER,
@@ -173,11 +196,55 @@ describe('GET /api/library', () => {
       savedAlbums: [albumId],
       followedArtists: [artistId],
       savedPlaylists: [playlistId],
+      subscribedPodcasts: [podcastId],
     });
   });
 
   it('requires auth', async () => {
     expect((await call(getUserLibrary, {}))._status).toBe(401);
+  });
+
+  /**
+   * The podcast arm, at the wire.
+   *
+   * `db/podcasts/__tests__/subscriptions.test.ts` owns the predicate itself;
+   * these assert that the HANDLER goes through it — a controller wired to
+   * `listSubscribedPodcastIds` instead would pass every other test in this file
+   * and hand a stranger the id of a private show.
+   */
+  it('omits a subscribed show whose creator made it private', async () => {
+    const visible = await makeShow();
+    const hidden = await makeShow({ visibility: 'private', ownerOxyUserId: 'someone-else' });
+    await subscribeToPodcast(USER, visible);
+    await subscribeToPodcast(USER, hidden);
+
+    // Both states in the fixture: a handler returning nothing at all, and one
+    // returning everything, each fail on one half of this.
+    expect(await call(getUserLibrary, { userId: USER }).then((res) => res._body)).toMatchObject({
+      subscribedPodcasts: [visible],
+    });
+  });
+
+  it('omits a subscribed show its creator unpublished', async () => {
+    const visible = await makeShow();
+    const hidden = await makeShow({ status: 'unavailable' });
+    await subscribeToPodcast(USER, visible);
+    await subscribeToPodcast(USER, hidden);
+
+    expect(await call(getUserLibrary, { userId: USER }).then((res) => res._body)).toMatchObject({
+      subscribedPodcasts: [visible],
+    });
+  });
+
+  it('keeps the caller\'s OWN private show in their library', async () => {
+    // The owner arm has to survive the trip through the handler, or making your
+    // own show private empties it out of your own library.
+    const mine = await makeShow({ visibility: 'private', ownerOxyUserId: USER });
+    await subscribeToPodcast(USER, mine);
+
+    expect(await call(getUserLibrary, { userId: USER }).then((res) => res._body)).toMatchObject({
+      subscribedPodcasts: [mine],
+    });
   });
 });
 
