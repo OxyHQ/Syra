@@ -28,25 +28,9 @@
  *
  * The deferral is undone by publishing: `updatePodcast` calls
  * {@link enqueueDeferredEpisodeIngests} on a real `private` -> not-private
- * transition, which finds the skipped episodes by their missing
- * `hls_master_key` — `findEpisodeIdsAwaitingHls` (`db/podcasts/episodes.ts`)
- * keys on that column and on `audio_source_url`, and admits every status but
- * `unavailable`.
- *
- * ## The deferral still finishes the episode
- *
- * This file used to leave `status` untouched, on the argument that an episode
- * left `ready` would leave nothing for the publish transition to find. That
- * argument was false — the transition finds episodes by `hls_master_key`, as the
- * paragraph above says — and the cost of it was measured in production: a
- * private show's episodes sat at `processing` with their MP3s in S3, fully
- * playable through `/audio` and reported as unfinished by every reader that asks
- * `status`.
- *
- * So a deferral is a COMPLETED ingest for everything a private show can have:
- * the source audio landed, the progressive path serves it, and the ladder is the
- * only thing missing. `status` becomes `ready` with `hls_master_key` still NULL,
- * which is precisely the pair the transition looks for.
+ * transition, which is why {@link ingestEpisode} refuses rather than silently
+ * succeeding — a refusal that left the episode `ready` would leave nothing for
+ * the transition to find.
  */
 
 import fs from 'fs';
@@ -125,36 +109,24 @@ export async function ingestEpisode(episodeId: string, deps?: IngestEpisodeDeps)
   const { episode, show } = found;
 
   /**
-   * Checked BEFORE the private-show branch below, because that branch's whole
-   * claim is "the audio landed, only the ladder is missing" — and it can only
-   * make that claim about an episode that HAS source audio. Ordered the other
-   * way round, a private show's drafted-but-never-ingested episode would be
-   * marked `ready` with nothing to play.
-   */
-  if (!episode.audioSourceUrl || !episode.audioSourceFormat) {
-    await setEpisodeStatus(episodeId, 'failed').catch((saveErr) =>
-      logger.error('[podcasts] failed to persist failed episode status', { episodeId, err: saveErr }),
-    );
-    throw new Error(`ingestEpisode: no source audio for episode ${episodeId}`);
-  }
-
-  /**
-   * The private-show deferral — see the file header for why no ladder is built.
-   *
-   * `ready`, NOT `processing` and not `failed`. Nothing failed, and nothing is
-   * still running either: for a private show this episode is as finished as it
-   * can be, and it is already playable on the progressive `/audio` path. The
-   * publish transition still finds it, because `findEpisodeIdsAwaitingHls`
-   * selects on `hls_master_key is null` — which this leaves alone — rather than
-   * on `status`.
+   * The private-show refusal. It leaves `status` alone — NOT `failed` — because
+   * nothing failed: the episode is waiting for its show to be published, and
+   * `findEpisodeIdsAwaitingHls` finds it by its missing `hls_master_key`
+   * whatever its status happens to be.
    */
   if (show.visibility === 'private') {
     logger.info('[podcasts] episode ingest deferred: show is private', {
       episodeId,
       podcastId: show.id,
     });
-    await setEpisodeStatus(episodeId, 'ready');
     return;
+  }
+
+  if (!episode.audioSourceUrl || !episode.audioSourceFormat) {
+    await setEpisodeStatus(episodeId, 'failed').catch((saveErr) =>
+      logger.error('[podcasts] failed to persist failed episode status', { episodeId, err: saveErr }),
+    );
+    throw new Error(`ingestEpisode: no source audio for episode ${episodeId}`);
   }
 
   await setEpisodeStatus(episodeId, 'processing');

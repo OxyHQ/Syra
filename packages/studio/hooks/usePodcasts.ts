@@ -63,6 +63,46 @@ export interface UploadEpisodeVariables {
   metadata: UploadEpisodeMetadata;
 }
 
+/**
+ * Permanently delete a show, then drop every studio cache that described it.
+ *
+ * `mine` is invalidated so the dashboard refetches without the show. The
+ * show's own caches are REMOVED rather than invalidated: invalidating asks the
+ * screen to refetch a row that no longer exists, which answers 404 — there is
+ * nothing left to be stale about, so the entry goes. Neither list is patched by
+ * hand; the server's answer is the one that repopulates them.
+ */
+export function useDeletePodcast() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (podcastId: string) => podcastService.deletePodcast(podcastId),
+    onSuccess: (_deletion, podcastId) => {
+      queryClient.removeQueries({ queryKey: PODCAST_QUERY_KEYS.detail(podcastId) });
+      queryClient.removeQueries({ queryKey: PODCAST_QUERY_KEYS.episodes(podcastId) });
+      queryClient.invalidateQueries({ queryKey: PODCAST_QUERY_KEYS.mine });
+    },
+  });
+}
+
+/**
+ * Permanently delete one episode, then refresh the show that listed it.
+ *
+ * The show SURVIVES this one, so all three keys are invalidated rather than
+ * removed: the detail screen stays mounted and has to re-render without the
+ * row, and `mine` carries the `episodeCount` the backend just recomputed.
+ */
+export function useDeleteEpisode() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (episodeId: string) => episodeService.deleteEpisode(episodeId),
+    onSuccess: (deletion) => {
+      queryClient.invalidateQueries({ queryKey: PODCAST_QUERY_KEYS.detail(deletion.podcastId) });
+      queryClient.invalidateQueries({ queryKey: PODCAST_QUERY_KEYS.episodes(deletion.podcastId) });
+      queryClient.invalidateQueries({ queryKey: PODCAST_QUERY_KEYS.mine });
+    },
+  });
+}
+
 /** Upload an episode, then refresh the show detail + episode list it belongs to. */
 export function useUploadEpisode() {
   const queryClient = useQueryClient();
