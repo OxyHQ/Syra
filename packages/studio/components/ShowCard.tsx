@@ -4,10 +4,11 @@ import { useTheme } from '@oxyhq/bloom/theme';
 import type { Podcast } from '@syra/shared-types';
 import { Artwork } from '@/components/Artwork';
 import { StatusBadge } from '@/components/StatusBadge';
+import { pluralEpisodes } from '@/utils/format';
 
 export function ShowCard({ podcast, onPress }: { podcast: Podcast; onPress: () => void }) {
   const theme = useTheme();
-  const episodeLabel = `${podcast.episodeCount} ${podcast.episodeCount === 1 ? 'episode' : 'episodes'}`;
+  const episodeLabel = pluralEpisodes(podcast.episodeCount);
   return (
     <Pressable
       onPress={onPress}

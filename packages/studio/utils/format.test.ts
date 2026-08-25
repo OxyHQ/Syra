@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@jest/globals';
-import { formatDate, formatDuration } from './format';
+import { formatDate, formatDuration, pluralEpisodes } from './format';
 
 describe('formatDuration', () => {
   it('renders an em dash for durations that carry no information', () => {
@@ -26,6 +26,19 @@ describe('formatDuration', () => {
   it('truncates fractional seconds rather than rounding up', () => {
     // 89.9s is still 1:29 — rounding would show a duration the track never reaches.
     expect(formatDuration(89.9)).toBe('1:29');
+  });
+});
+
+describe('pluralEpisodes', () => {
+  it('agrees the noun with the count', () => {
+    // The delete confirmation reads this to a creator about to destroy a show,
+    // so "1 episodes" is not a cosmetic slip.
+    expect(pluralEpisodes(1)).toBe('1 episode');
+    expect(pluralEpisodes(7)).toBe('7 episodes');
+  });
+
+  it('pluralises zero, which a show with no episodes yet really has', () => {
+    expect(pluralEpisodes(0)).toBe('0 episodes');
   });
 });
 

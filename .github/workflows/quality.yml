@@ -175,5 +175,16 @@ jobs:
       - name: Frontend tests
         run: bun run --filter @syra/frontend test
 
+      # The studio suite ran, but never on a PULL REQUEST. `deploy-studio.yml`
+      # has a `Test studio` step, and this workflow is the only one with a
+      # `pull_request` trigger at all — so the studio's tests could only ever
+      # fail AFTER a merge, and only when the push's paths matched that
+      # workflow's filter. A path miss skips the job, and a skipped job reports
+      # its workflow green. The creator portal is where an owner destroys a
+      # show, so its confirm-then-delete tests have to be able to fail while the
+      # change is still a proposal.
+      - name: Studio tests
+        run: bun run --filter @syra/studio test
+
       - name: Backend tests
         run: bun run --filter @syra/backend test

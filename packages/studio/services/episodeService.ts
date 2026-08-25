@@ -5,6 +5,21 @@ import { api } from '@/utils/api';
 
 const episodeResponseSchema = episodeSchema.passthrough();
 const uploadEpisodeResponseSchema = z.object({ data: episodeResponseSchema });
+const deleteEpisodeResponseSchema = z.object({
+  data: z.object({
+    id: z.string(),
+    podcastId: z.string(),
+    objectsDeleted: z.number(),
+  }),
+});
+
+/**
+ * What one episode delete actually destroyed, as the backend counted it.
+ *
+ * Derived from the schema that parses it rather than written out beside it, so
+ * the two cannot drift into disagreeing about the response.
+ */
+export type EpisodeDeletion = z.infer<typeof deleteEpisodeResponseSchema>['data'];
 
 export interface EpisodeAudioFile {
   uri: string;
@@ -75,6 +90,22 @@ export const episodeService = {
     const parsed = uploadEpisodeResponseSchema.safeParse(response.data);
     if (!parsed.success) {
       throw new Error(`Invalid upload episode response: ${parsed.error.message}`);
+    }
+    return parsed.data.data;
+  },
+
+  /**
+   * Permanently delete one episode of a show the caller owns. Takes its HLS
+   * ladder, its transcript, its credits and every listener's saved position in
+   * it, and purges the audio; the show's `episodeCount` and `lastEpisodeAt` are
+   * recomputed server-side in the same transaction. Irreversible —
+   * `unpublishEpisode` is the reversible verb, this one is not.
+   */
+  async deleteEpisode(id: string): Promise<EpisodeDeletion> {
+    const response = await api.delete<unknown>(`/episodes/${id}`);
+    const parsed = deleteEpisodeResponseSchema.safeParse(response.data);
+    if (!parsed.success) {
+      throw new Error(`Invalid delete episode response: ${parsed.error.message}`);
     }
     return parsed.data.data;
   },

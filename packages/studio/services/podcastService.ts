@@ -28,6 +28,13 @@ const episodeListSchema = z.object({
   limit: z.number().optional(),
 });
 const createPodcastResponseSchema = z.object({ data: podcastResponseSchema });
+const deletePodcastResponseSchema = z.object({
+  data: z.object({
+    id: z.string(),
+    episodesDeleted: z.number(),
+    objectsDeleted: z.number(),
+  }),
+});
 
 function parse<T>(schema: z.ZodType<T>, data: unknown, label: string): T {
   const result = schema.safeParse(data);
@@ -48,6 +55,14 @@ export interface EpisodePage {
   page: number;
   limit: number;
 }
+
+/**
+ * What one show delete actually destroyed, as the backend counted it.
+ *
+ * Derived from the schema that parses it rather than written out beside it, so
+ * the two cannot drift into disagreeing about the response.
+ */
+export type PodcastDeletion = z.infer<typeof deletePodcastResponseSchema>['data'];
 
 /**
  * Studio podcast API service. Every call goes through the linked,
@@ -83,6 +98,23 @@ export const podcastService = {
   async createPodcast(input: CreatePodcastRequest): Promise<Podcast> {
     const response = await api.post<unknown>('/podcasts', input);
     return parse(createPodcastResponseSchema, response.data, 'create podcast').data;
+  },
+
+  /**
+   * Permanently delete a Syra-hosted show the caller owns. There is no soft
+   * state to restore from afterwards: the backend deletes the row and lets the
+   * cascade take every episode, every subscription and every listener's saved
+   * position with it, then purges the audio from storage. The public RSS feed
+   * 404s from that moment on.
+   *
+   * The 403 / 409 refusals are the server's, and they are the real check — an
+   * RSS-mirrored show belongs to the catalogue and to nobody, and a show under a
+   * platform takedown keeps its row as the record of it. Hiding the control for
+   * either case only avoids offering an action that is certain to fail.
+   */
+  async deletePodcast(id: string): Promise<PodcastDeletion> {
+    const response = await api.delete<unknown>(`/podcasts/${id}`);
+    return parse(deletePodcastResponseSchema, response.data, 'delete podcast').data;
   },
 };
 
