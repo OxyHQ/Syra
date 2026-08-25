@@ -18,6 +18,7 @@ import {
   updatePodcast,
   publishPodcast,
   unpublishPodcast,
+  deletePodcast,
 } from '../controllers/podcasts.controller';
 import {
   getEpisodeAudio,
@@ -86,6 +87,14 @@ router.post('/:id/claim', requireAuth, claimPodcast);
 router.patch('/:id', requireAuth, updatePodcast);
 router.post('/:id/publish', requireAuth, publishPodcast);
 router.post('/:id/unpublish', requireAuth, unpublishPodcast);
+/**
+ * Irreversible: the row, every episode, every subscription and the audio in S3.
+ * `requireAuth` is load-bearing rather than decorative — this router is mounted
+ * under `createOptionalOxyAuth`, so a route without it serves unauthenticated
+ * callers with `req.user` undefined. Registered before the `/:id` GET resolver
+ * for the same reason every other subresource is.
+ */
+router.delete('/:id', requireAuth, deletePodcast);
 
 // Show resolver (catch-last)
 router.get('/:id', getPodcast);
