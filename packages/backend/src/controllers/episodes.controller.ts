@@ -16,7 +16,9 @@ import {
   listContinueListening,
   updateEpisode as updateEpisodeRow,
   upsertEpisodeProgress,
+  type EpisodeWithShow,
 } from '../db/podcasts/episodes';
+import { deleteEpisodeCompletely } from '../services/podcasts/deletePodcast';
 import { loadEpisodePersons, loadShowContext, toEpisodeDtos } from '../db/podcasts/hydrate';
 import { viewerCanReadShow, viewerOwnsShow } from '../db/podcasts/visibility';
 import type { EpisodeRow } from '../db/podcasts/serialize';
@@ -238,11 +240,18 @@ export async function updateEpisode(req: AuthRequest, res: Response): Promise<vo
 /**
  * Load an episode on a Syra-hosted show the caller owns, or send the matching error.
  * Returns undefined once a response has been sent.
+ *
+ * Returns the SHOW beside the episode — `findEpisodeById` already joins it, so
+ * this costs nothing — because `deleteEpisode` has to consult show-level state
+ * that the two publish verbs do not. Handing back the episode alone would force
+ * the one caller that needs the show to re-read it through a second, unfiltered
+ * query, which is the shape `findEpisodeById`'s own doc comment exists to make
+ * unspellable.
  */
 async function loadOwnedEpisodeOrRespond(
   req: AuthRequest,
   res: Response
-): Promise<EpisodeRow | undefined> {
+): Promise<EpisodeWithShow | undefined> {
   const userId = getRequiredOxyUserId(req);
   const id = getParam(req, 'id');
 
@@ -257,7 +266,7 @@ async function loadOwnedEpisodeOrRespond(
     return undefined;
   }
 
-  return found.episode;
+  return found;
 }
 
 /**
@@ -270,18 +279,68 @@ async function loadOwnedEpisodeOrRespond(
  * publishing restores it to 'ready'.
  */
 export async function unpublishEpisode(req: AuthRequest, res: Response): Promise<void> {
-  const episode = await loadOwnedEpisodeOrRespond(req, res);
-  if (!episode) return;
+  const found = await loadOwnedEpisodeOrRespond(req, res);
+  if (!found) return;
 
-  await updateEpisodeRow(episode.id, { status: 'unavailable' });
-  res.json({ data: { id: episode.id, status: 'unavailable' } });
+  await updateEpisodeRow(found.episode.id, { status: 'unavailable' });
+  res.json({ data: { id: found.episode.id, status: 'unavailable' } });
 }
 
 /** POST /api/episodes/:id/publish — undo `unpublishEpisode`. */
 export async function publishEpisode(req: AuthRequest, res: Response): Promise<void> {
-  const episode = await loadOwnedEpisodeOrRespond(req, res);
-  if (!episode) return;
+  const found = await loadOwnedEpisodeOrRespond(req, res);
+  if (!found) return;
 
-  await updateEpisodeRow(episode.id, { status: 'ready' });
-  res.json({ data: { id: episode.id, status: 'ready' } });
+  await updateEpisodeRow(found.episode.id, { status: 'ready' });
+  res.json({ data: { id: found.episode.id, status: 'ready' } });
+}
+
+/**
+ * DELETE /api/episodes/:id — permanently delete one episode of a Syra-hosted
+ * show you own.
+ *
+ * A hard delete, for the reason `deletePodcast` is one: `unpublish` already
+ * occupies the reversible half of this space, and a second verb that also only
+ * hides would leave a creator with no way to actually remove an episode. What
+ * goes with the row is its HLS ladder, its transcript, its credits, its AES key,
+ * any outstanding ingest ticket, and every listener's saved position in it — the
+ * cascade is enumerated in `db/podcasts/delete.ts`. The audio goes first; the
+ * ordering and its consequences are `services/podcasts/deletePodcast.ts`.
+ *
+ * The parent show's `episode_count` and `last_episode_at` move in the same
+ * transaction as the row, recomputed rather than decremented — see
+ * `deleteEpisodeRow`.
+ *
+ * A show under a platform takedown is a 409, matching `deletePodcast`: the
+ * takedown is a record of what was published, and a creator deleting its
+ * episodes one at a time would erase exactly what `deletePodcast` refuses to let
+ * them erase whole.
+ */
+export async function deleteEpisode(req: AuthRequest, res: Response): Promise<void> {
+  const found = await loadOwnedEpisodeOrRespond(req, res);
+  if (!found) return;
+
+  if (found.show.status === 'removed') {
+    res.status(409).json({
+      error: 'Podcast removed',
+      message: 'This show was removed by the platform and its episodes cannot be deleted',
+    });
+    return;
+  }
+
+  const result = await deleteEpisodeCompletely(found.episode.id);
+  if (!result) {
+    // The row went between the owner check and the delete. Nothing was removed
+    // by THIS request, so it does not report that it removed anything.
+    res.status(404).json({ error: 'Episode not found' });
+    return;
+  }
+
+  res.json({
+    data: {
+      id: found.episode.id,
+      podcastId: found.show.id,
+      objectsDeleted: result.objectsDeleted,
+    },
+  });
 }

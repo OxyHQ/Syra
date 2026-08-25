@@ -182,6 +182,46 @@ export function getS3PodcastEpisodeCacheKey(
   return `${S3_PODCAST_PREFIX}/cache/${podcastId}/${episodeId}${extension}`;
 }
 
+/**
+ * The directory every HLS object of ONE Syra-hosted episode lives under — what a
+ * creator's episode delete sweeps as a prefix.
+ *
+ * Expressed as `getS3HlsKey(podcastId, episodeId, '')` rather than by respelling
+ * `hls/{podcastId}/{episodeId}/` here, and that is the whole point: a prefix
+ * composed from a REMEMBERED convention sweeps nothing on the day ingest changes
+ * the layout, and it does so silently, because deleting zero objects raises no
+ * error. Deriving it from the key builder `ingestEpisode` actually writes with
+ * means the two cannot disagree — there is only one spelling of the layout.
+ *
+ * The empty `relPath` is what leaves the trailing slash, so the prefix can never
+ * match a sibling episode whose id merely starts with the same characters.
+ */
+export function getS3PodcastEpisodeHlsPrefix(podcastId: string, episodeId: string): string {
+  return getS3HlsKey(podcastId, episodeId, '');
+}
+
+/**
+ * Every directory a show's stored objects live under — the three trees a show
+ * delete sweeps once its episodes have been purged individually, to catch
+ * objects whose episode row no longer records their key.
+ *
+ * Each is scoped by the show's own id as a whole path segment with a trailing
+ * slash. `hls/{podcastId}/` shares its namespace with the catalogue's
+ * `hls/{artistId}/` — the two id spaces are distinct tables but one S3 tree — so
+ * this is safe only because `generatedId()` mints globally unique ids (uuid v7,
+ * or a 24-char ObjectId hex for pre-cutover rows) rather than per-table
+ * sequences. Stated because it is an invariant of the ID SCHEME, not of this
+ * function, and a per-table sequence would make this sweep another table's
+ * files.
+ */
+export function getS3PodcastShowPrefixes(podcastId: string): readonly string[] {
+  return [
+    `${S3_HLS_PREFIX}/${podcastId}/`,
+    `${S3_PODCAST_PREFIX}/audio/${podcastId}/`,
+    `${S3_PODCAST_PREFIX}/cache/${podcastId}/`,
+  ];
+}
+
 export function getS3ImageKey(imageId: string, filename: string): string {
   const safeFilename = filename
     .replace(/[^a-zA-Z0-9._-]+/g, '-')

@@ -78,6 +78,7 @@ import {
   enqueueEpisodeIngest,
 } from '../services/podcasts/ingestEpisode';
 import { generatePodcastRss } from '../services/podcasts/podcastRssGenerator';
+import { deletePodcastCompletely } from '../services/podcasts/deletePodcast';
 import type { PodcastRow } from '../db/podcasts/serialize';
 import { getS3PodcastEpisodeAudioKey } from '../config/s3.config';
 import { uploadToS3 } from '../services/s3Service';
@@ -982,10 +983,18 @@ export async function updatePodcast(req: AuthRequest, res: Response): Promise<vo
  * `status: 'removed'` is a platform takedown, not a creator-reversible state, so a
  * creator cannot publish their way back out of it — that stays a 409, which only a
  * show the caller DOES own can ever reach.
+ *
+ * `removedMessage` exists because `deletePodcast` reaches this same guard for a
+ * materially different reason: a takedown is a moderation RECORD, and letting the
+ * creator hard-delete the row would destroy the evidence of it along with the
+ * show. Same refusal, same status, different thing to tell the caller — which is
+ * a reason to parameterise the sentence, not to grow a second copy of the
+ * owner/`source`/status rule that could drift from this one.
  */
 async function loadOwnedShowOrRespond(
   req: AuthRequest,
-  res: Response
+  res: Response,
+  removedMessage = 'This show was removed by the platform and cannot be republished'
 ): Promise<PodcastRow | undefined> {
   const userId = getRequiredOxyUserId(req);
   const id = getParam(req, 'id');
@@ -1001,14 +1010,78 @@ async function loadOwnedShowOrRespond(
     return undefined;
   }
   if (podcast.status === 'removed') {
-    res.status(409).json({
-      error: 'Podcast removed',
-      message: 'This show was removed by the platform and cannot be republished',
-    });
+    res.status(409).json({ error: 'Podcast removed', message: removedMessage });
     return undefined;
   }
 
   return podcast;
+}
+
+/**
+ * DELETE /api/podcasts/:id — permanently delete a Syra-hosted show you own.
+ *
+ * ## A hard delete, and why it is not `status = 'removed'`
+ *
+ * The reasoning is `db/podcasts/delete.ts`'s, in full. In short: `removed` means
+ * a platform takedown and would both lie to the creator about who removed their
+ * show and leave it sitting in "My podcasts" for ever, because
+ * `findPodcastsByOwner` is deliberately unfiltered by status. A delete button
+ * whose show survives it is the bug this route exists to fix — there has to be
+ * one source of truth, and a surviving row is a second one.
+ *
+ * ## What this destroys
+ *
+ * Every episode, every listener's saved position, every subscriber's
+ * subscription, the credits, the categories, the funding links, the provenance
+ * log, the AES keys, any outstanding ingest ticket — and the audio in S3. The
+ * cascade is enumerated in `db/podcasts/delete.ts`; the bytes and their ordering
+ * are `services/podcasts/deletePodcast.ts`.
+ *
+ * ## What a subscriber sees afterwards
+ *
+ * `GET /:id/rss` 404s, because the show resolves through `findPodcastForViewer`
+ * like every other read. A podcast client polling the feed sees that 404 and
+ * eventually stops; it does NOT delete the listener's subscription on the spot,
+ * and episodes already downloaded to a device stay there — Syra cannot recall
+ * them. A tombstone would let the feed answer `410 Gone`, which is the status
+ * directories actually act on, but a hard delete keeps no row to answer from:
+ * "deleted" and "never existed" become the same 404. That is a real cost of
+ * choosing one source of truth, and it is priced deliberately rather than
+ * papered over.
+ *
+ * ## Guards
+ *
+ * `loadOwnedShowOrRespond` — `source === 'syra'` AND `ownerOxyUserId === caller`,
+ * resolved in SQL so "not yours" and "no such show" are one 403. An
+ * RSS-mirrored show belongs to the catalogue and to no user, and must not be
+ * deletable by anyone through this route; a claim (`claimedByOxyUserId`) grants
+ * no write access here, exactly as it grants none to `updatePodcast` or
+ * `uploadEpisode`. A platform-removed show is a 409: the takedown is a record,
+ * and the creator does not get to erase it.
+ */
+export async function deletePodcast(req: AuthRequest, res: Response): Promise<void> {
+  const podcast = await loadOwnedShowOrRespond(
+    req,
+    res,
+    'This show was removed by the platform and cannot be deleted'
+  );
+  if (!podcast) return;
+
+  const result = await deletePodcastCompletely(podcast.id);
+  if (!result) {
+    // The row went between the owner check and the delete. Nothing was removed
+    // by THIS request, so it does not report that it removed anything.
+    res.status(404).json({ error: 'Podcast not found' });
+    return;
+  }
+
+  res.json({
+    data: {
+      id: podcast.id,
+      episodesDeleted: result.episodesPurged,
+      objectsDeleted: result.objectsDeleted,
+    },
+  });
 }
 
 /**
