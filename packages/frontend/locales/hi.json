@@ -305,7 +305,10 @@
     "createFirstPlaylist": "Create your first playlist",
     "errors": {
       "load": "Could not load your library",
-      "session": "We could not confirm your session."
+      "session": "We could not confirm your session.",
+      "podcasts": "Could not load your subscriptions",
+      "shows": "Could not load your shows",
+      "episodes": "Could not load what you were listening to"
     },
     "signedOut": "Sign in to view your library",
     "empty": {

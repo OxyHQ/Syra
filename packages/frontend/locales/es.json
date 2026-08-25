@@ -305,7 +305,10 @@
     "createFirstPlaylist": "Crea tu primera playlist",
     "errors": {
       "load": "No se ha podido cargar tu biblioteca",
-      "session": "No hemos podido confirmar tu sesión."
+      "session": "No hemos podido confirmar tu sesión.",
+      "podcasts": "No se han podido cargar tus suscripciones",
+      "shows": "No se han podido cargar tus programas",
+      "episodes": "No se ha podido cargar lo que estabas escuchando"
     },
     "signedOut": "Inicia sesión para ver tu biblioteca",
     "empty": {

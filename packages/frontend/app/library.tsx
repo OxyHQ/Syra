@@ -139,7 +139,8 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   // The listener's own uploads. Private by construction — a separate collection
   // no catalogue query reads — so they get their own entry rather than being
   // mixed into saved albums or playlists.
-  const { uploads, total: uploadCount } = useUploads();
+  const uploadsQuery = useUploads();
+  const { uploads, total: uploadCount } = uploadsQuery;
   const currentEpisode = usePlayerStore((s) => s.currentEpisode);
   const isEpisodePlaying = usePlayerStore((s) => s.isPlaying);
   const playEpisode = usePlayerStore((s) => s.playEpisode);
@@ -163,15 +164,29 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
     ? t('library.errors.session')
     : isUsingProps ? (propsError ?? null) : collections.error;
 
+  // Each of the four sections above renders straight off `?? []`, which collapses
+  // three different situations into one empty array: the query succeeded and
+  // returned nothing, the query is still in flight, and the query REJECTED. The
+  // last one is the failure this screen shipped with — `getMyPodcasts()` throws on
+  // a 401 or on a single drifted DTO field, so a creator whose shows exist was
+  // told, in the empty state's own words, that they had never made one. A section
+  // that has not settled successfully knows nothing about whether it is empty, so
+  // it says so instead: its own error affordance with its own retry, and no vote
+  // in the "your library is empty" verdict below.
+  const subscriptionsUnresolved = subscriptionsQuery.isError || subscriptionsQuery.isPending;
+  const myPodcastsUnresolved = myPodcastsQuery.isError || myPodcastsQuery.isPending;
+  const inProgressUnresolved = continueQuery.isError || continueQuery.isPending;
+  const uploadsUnresolved = uploadsQuery.isError || uploadsQuery.isLoading;
+
   const isLibraryEmptyForFilter =
-    (activeFilter === 'All' && finalPlaylists.length === 0 && finalFollowedArtists.length === 0 && finalSavedAlbums.length === 0 && subscribedPodcasts.length === 0 && myPodcasts.length === 0 && inProgressEpisodes.length === 0) ||
+    (activeFilter === 'All' && finalPlaylists.length === 0 && finalFollowedArtists.length === 0 && finalSavedAlbums.length === 0 && !subscriptionsUnresolved && subscribedPodcasts.length === 0 && !myPodcastsUnresolved && myPodcasts.length === 0 && !inProgressUnresolved && inProgressEpisodes.length === 0 && !uploadsUnresolved && uploads.length === 0) ||
     (activeFilter === 'Playlists' && finalPlaylists.length === 0) ||
     (activeFilter === 'Artists' && finalFollowedArtists.length === 0) ||
     (activeFilter === 'Albums' && finalSavedAlbums.length === 0) ||
-    (activeFilter === 'Uploads' && uploads.length === 0) ||
-    (activeFilter === 'Podcasts' && subscribedPodcasts.length === 0) ||
-    (activeFilter === 'Shows' && myPodcasts.length === 0) ||
-    (activeFilter === 'Episodes' && inProgressEpisodes.length === 0);
+    (activeFilter === 'Uploads' && !uploadsUnresolved && uploads.length === 0) ||
+    (activeFilter === 'Podcasts' && !subscriptionsUnresolved && subscribedPodcasts.length === 0) ||
+    (activeFilter === 'Shows' && !myPodcastsUnresolved && myPodcasts.length === 0) ||
+    (activeFilter === 'Episodes' && !inProgressUnresolved && inProgressEpisodes.length === 0);
 
   return (
     <>
@@ -280,6 +295,24 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
               </Text>
             </View>
           </Pressable>
+        )}
+
+        {/* …and the locker's own failure, in its place. The same `EmptyState`
+            error shape as the collections error above, but scoped to one
+            section and retrying one query, because a failed locker says nothing
+            about whether the sections below it loaded. */}
+        {gate.isAuthenticated && (activeFilter === 'All' || activeFilter === 'Uploads') && uploadsQuery.isError && (
+          <EmptyState
+            containerStyle={styles.inlineState}
+            icon={{ name: 'cloud-offline-outline' }}
+            error={{
+              title: t('uploads.locker.loadError'),
+              message: t('common.retryHint'),
+              onRetry: async () => {
+                await uploadsQuery.refetch();
+              },
+            }}
+          />
         )}
 
         {/* Loading state */}
@@ -460,6 +493,21 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
           </View>
         )}
 
+        {/* …and the subscriptions' own failure, in their place. */}
+        {gate.isAuthenticated && (activeFilter === 'All' || activeFilter === 'Podcasts') && subscriptionsQuery.isError && (
+          <EmptyState
+            containerStyle={styles.inlineState}
+            icon={{ name: 'cloud-offline-outline' }}
+            error={{
+              title: t('library.errors.podcasts'),
+              message: t('common.retryHint'),
+              onRetry: async () => {
+                await subscriptionsQuery.refetch();
+              },
+            }}
+          />
+        )}
+
         {/* The viewer's OWN shows.
             Its own section rather than a row mixed into the subscriptions above,
             for the reason the uploads locker gets its own entry: what you MADE
@@ -503,6 +551,24 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
           </View>
         )}
 
+        {/* …and the same section when the query REJECTED — which is what the
+            reported "I can't see my podcasts" was: the rows, the API and the
+            deployed bundle were all correct, and a thrown parse removed the
+            section with nothing said in its place. */}
+        {gate.isAuthenticated && (activeFilter === 'All' || activeFilter === 'Shows') && myPodcastsQuery.isError && (
+          <EmptyState
+            containerStyle={styles.inlineState}
+            icon={{ name: 'cloud-offline-outline' }}
+            error={{
+              title: t('library.errors.shows'),
+              message: t('common.retryHint'),
+              onRetry: async () => {
+                await myPodcastsQuery.refetch();
+              },
+            }}
+          />
+        )}
+
         {/* In-progress episodes */}
         {gate.isAuthenticated && (activeFilter === 'All' || activeFilter === 'Episodes') && inProgressEpisodes.length > 0 && (
           <View className="mb-6">
@@ -521,6 +587,21 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
               ))}
             </View>
           </View>
+        )}
+
+        {/* …and the in-progress episodes' own failure, in their place. */}
+        {gate.isAuthenticated && (activeFilter === 'All' || activeFilter === 'Episodes') && continueQuery.isError && (
+          <EmptyState
+            containerStyle={styles.inlineState}
+            icon={{ name: 'cloud-offline-outline' }}
+            error={{
+              title: t('library.errors.episodes'),
+              message: t('common.retryHint'),
+              onRetry: async () => {
+                await continueQuery.refetch();
+              },
+            }}
+          />
         )}
 
         {/* Empty state — only once the session resolved AND the queries settled,
