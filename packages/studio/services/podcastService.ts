@@ -56,12 +56,13 @@ export interface EpisodePage {
   limit: number;
 }
 
-/** What one show delete actually destroyed, as the backend counted it. */
-export interface PodcastDeletion {
-  id: string;
-  episodesDeleted: number;
-  objectsDeleted: number;
-}
+/**
+ * What one show delete actually destroyed, as the backend counted it.
+ *
+ * Derived from the schema that parses it rather than written out beside it, so
+ * the two cannot drift into disagreeing about the response.
+ */
+export type PodcastDeletion = z.infer<typeof deletePodcastResponseSchema>['data'];
 
 /**
  * Studio podcast API service. Every call goes through the linked,

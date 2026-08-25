@@ -13,12 +13,13 @@ const deleteEpisodeResponseSchema = z.object({
   }),
 });
 
-/** What one episode delete actually destroyed, as the backend counted it. */
-export interface EpisodeDeletion {
-  id: string;
-  podcastId: string;
-  objectsDeleted: number;
-}
+/**
+ * What one episode delete actually destroyed, as the backend counted it.
+ *
+ * Derived from the schema that parses it rather than written out beside it, so
+ * the two cannot drift into disagreeing about the response.
+ */
+export type EpisodeDeletion = z.infer<typeof deleteEpisodeResponseSchema>['data'];
 
 export interface EpisodeAudioFile {
   uri: string;
