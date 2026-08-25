@@ -7,6 +7,7 @@ import {
   type UseMutationResult,
 } from '@tanstack/react-query';
 import { useOxy } from '@oxyhq/services';
+import { useAuthGate } from '@/hooks/useAuthGate';
 import type { Podcast, PodcastSubscriptions } from '@syra/shared-types';
 import {
   podcastService,
@@ -29,25 +30,49 @@ import { toast } from '@oxyhq/bloom/toast';
 /**
  * React Query layer for the podcasts vertical.
  *
- * Catalog reads (browse / show / episode list / directory discovery) are public
- * and run for guests too. Identity-scoped data — episode detail (carries the
- * caller's resume position), subscriptions, and "continue listening" — waits for
- * Oxy cold boot (`!isPrivateApiPending`) and keys its cache by identity so a
- * guest response never poisons the authenticated cache.
+ * Two kinds of read live here, and the difference is which of them the VIEWER
+ * can change the answer to.
+ *
+ * **Discovery** — browse and search — is genuinely public. It serves only
+ * listable shows, there is no owner arm in its predicates, and a signed-in
+ * caller sees exactly what a guest sees. It runs anonymously and its cache is
+ * shared.
+ *
+ * **Everything addressed BY ID** — a show, its episode list, an episode — is
+ * viewer-scoped. `viewerCanReadShowFilter` reads a private or unpublished show
+ * for its OWNER and for nobody else, and episode detail carries the caller's
+ * own resume position. These reads must therefore carry the caller's identity
+ * and be keyed by it.
+ *
+ * That was not true until it had to be, and the gap was a real bug: the show
+ * page read through the unauthenticated client, so the server saw an anonymous
+ * viewer, the owner arm never engaged, and a creator's own private show
+ * answered 404 on a page reached from a list that had just shown it to them.
+ * Sending no identity is not a neutral default here — it is a claim to be a
+ * stranger.
+ *
+ * Hence, for every by-id read: the linked Oxy client (which attaches a bearer
+ * when a session exists and sends none when it does not), `catalogIdentity` in
+ * the query key so a guest answer never poisons the signed-in cache or the
+ * reverse, and `enabled: isResolved` so the first fetch is never made as a
+ * guest that the session is about to stop being.
  */
 
 export const PODCAST_QUERY_KEYS = {
+  // Discovery: identity cannot change the answer, so it is not in the key.
   browse: (params?: BrowsePodcastsParams) => ['podcasts', 'browse', params ?? {}] as const,
   search: (query: string) => ['podcasts', 'search', query] as const,
-  show: (id: string) => ['podcasts', 'show', id] as const,
-  episodes: (podcastId: string, limit: number) => ['podcasts', 'episodes', podcastId, limit] as const,
-  episode: (id: string, identity: string) => ['episodes', 'detail', id, identity] as const,
+  // By id: identity leads the key, as it does in `RADIO_QUERY_KEYS.station`.
+  show: (identity: string, id: string) => ['podcasts', 'show', identity, id] as const,
+  episodes: (identity: string, podcastId: string, limit: number) =>
+    ['podcasts', 'episodes', identity, podcastId, limit] as const,
+  episode: (identity: string, id: string) => ['episodes', 'detail', identity, id] as const,
   subscriptions: ['podcasts', 'subscriptions'] as const,
   mine: ['podcasts', 'mine'] as const,
   continue: ['episodes', 'continue'] as const,
 };
 
-// ── Catalog reads (public) ───────────────────────────────────────────────────
+// ── Discovery (public) ───────────────────────────────────────────────────────
 
 export function usePodcasts(params?: BrowsePodcastsParams) {
   return useQuery({
@@ -67,34 +92,37 @@ export function usePodcastSearch(query: string) {
   });
 }
 
+// ── By id (viewer-scoped) ────────────────────────────────────────────────────
+
 export function usePodcast(id: string | undefined) {
+  const { catalogIdentity, isResolved } = useAuthGate();
+
   return useQuery({
-    queryKey: PODCAST_QUERY_KEYS.show(id ?? ''),
+    queryKey: PODCAST_QUERY_KEYS.show(catalogIdentity, id ?? ''),
     queryFn: () => podcastService.getPodcast(id as string),
-    enabled: Boolean(id),
+    enabled: isResolved && Boolean(id),
     staleTime: 1000 * 60 * 5,
   });
 }
 
 export function useEpisodes(podcastId: string | undefined, limit = 50) {
+  const { catalogIdentity, isResolved } = useAuthGate();
+
   return useQuery<PodcastEpisodesPage>({
-    queryKey: PODCAST_QUERY_KEYS.episodes(podcastId ?? '', limit),
+    queryKey: PODCAST_QUERY_KEYS.episodes(catalogIdentity, podcastId ?? '', limit),
     queryFn: () => podcastService.getPodcastEpisodes(podcastId as string, { limit }),
-    enabled: Boolean(podcastId),
+    enabled: isResolved && Boolean(podcastId),
     staleTime: 1000 * 60 * 5,
   });
 }
 
-// ── Episode detail (identity-scoped) ─────────────────────────────────────────
-
 export function useEpisode(id: string | undefined) {
-  // Episode content is public + identity-independent (read via publicApi), so it
-  // does NOT wait on the Oxy cold boot — it loads as soon as we have an id, even
-  // for guests or while a session is still settling.
+  const { catalogIdentity, isResolved } = useAuthGate();
+
   return useQuery<EpisodeDetail>({
-    queryKey: PODCAST_QUERY_KEYS.episode(id ?? '', 'public'),
+    queryKey: PODCAST_QUERY_KEYS.episode(catalogIdentity, id ?? ''),
     queryFn: () => episodeService.getEpisode(id as string),
-    enabled: Boolean(id),
+    enabled: isResolved && Boolean(id),
     staleTime: 1000 * 60,
   });
 }

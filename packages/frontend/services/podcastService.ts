@@ -14,10 +14,19 @@ import { api, publicApi } from '@/utils/api';
 /**
  * Podcast catalog + subscription service.
  *
- * Catalog reads (search / browse / show / episode list) are public and use the
- * unauthenticated `publicApi` client so guests get the same data. Subscription
- * reads/writes and the manual feed import are identity-scoped and go through the
- * linked Oxy `api` client (bearer attached when a session exists).
+ * DISCOVERY reads — search and browse — are public and use the unauthenticated
+ * `publicApi` client, so guests get the same data. They serve only listable
+ * shows and no identity can change their answer.
+ *
+ * Reads addressed BY ID go through the linked Oxy `api` client, which attaches
+ * a bearer when a session exists and sends none when it does not. They are not
+ * public: `viewerCanReadShowFilter` reads a private or unpublished show for its
+ * OWNER and for nobody else, so a request that omits the caller is a request
+ * that claims to be a stranger. Reading them anonymously answered 404 to a
+ * creator opening their own private show from their own library.
+ *
+ * Subscription reads/writes and the manual feed import are identity-scoped and
+ * have always used the linked client.
  *
  * Every response is Zod-parsed at the boundary so backend drift fails loudly in
  * the service layer instead of surfacing as `undefined` deep in the UI.
@@ -97,7 +106,7 @@ export const podcastService = {
 
   /** A single show plus its most recent episodes and resolved hosts/guests. */
   async getPodcast(id: string): Promise<{ podcast: Podcast; episodes: Episode[]; persons: ResolvedPerson[] }> {
-    const response = await publicApi.get<unknown>(`/podcasts/${id}`);
+    const response = await api.get<unknown>(`/podcasts/${id}`);
     const data = parsePodcastResponse(podcastShowResponseSchema, response.data, 'podcast').data;
     return { podcast: data.podcast, episodes: data.episodes, persons: data.persons ?? [] };
   },
@@ -107,7 +116,7 @@ export const podcastService = {
     id: string,
     params?: { page?: number; limit?: number },
   ): Promise<PodcastEpisodesPage> {
-    const response = await publicApi.get<unknown>(`/podcasts/${id}/episodes`, params);
+    const response = await api.get<unknown>(`/podcasts/${id}/episodes`, params);
     const data = parsePodcastResponse(podcastEpisodesResponseSchema, response.data, 'podcast episodes');
     return {
       episodes: data.data,

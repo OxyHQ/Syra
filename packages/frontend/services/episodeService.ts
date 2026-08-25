@@ -7,7 +7,7 @@ import {
   type ResolvedPerson,
   type UpdateEpisodeProgressRequest,
 } from '@syra/shared-types';
-import { api, publicApi } from '@/utils/api';
+import { api } from '@/utils/api';
 
 /**
  * Episode service — episode detail (with resolved hosts/guests and the caller's
@@ -74,15 +74,24 @@ export const episodeService = {
   /**
    * Episode detail + resolved persons.
    *
-   * The episode content is public and identity-independent, so it is ALWAYS
-   * read through the plain `publicApi` client. The linked `api` client can stall
-   * while it waits on an Oxy session/refresh — which would block the episode
-   * from ever loading for the caller. Per-user saved position is fetched
-   * separately via `useEpisodeProgress` (the continue-listening cache), so it
-   * is intentionally not requested here.
+   * Read through the LINKED client, because the content is not identity-
+   * independent: an episode of a private or unpublished show is readable by
+   * that show's owner and by nobody else, and the server can only apply that
+   * rule to a request that says who is asking. Reading it anonymously made a
+   * creator a stranger to their own episode.
+   *
+   * This used to go through `publicApi` to avoid the linked client stalling on
+   * an Oxy session refresh and blocking the episode from ever loading. That
+   * concern is real and is answered where it belongs: `useEpisode` is
+   * `enabled: isResolved`, so the read waits for the session to reach a
+   * terminal identity — guest or signed in — and `useAuthGate` bounds that wait
+   * with its own timeout. Dropping the identity was the wrong place to fix it.
+   *
+   * Per-user saved position is fetched separately via `useEpisodeProgress` (the
+   * continue-listening cache), so it is intentionally not requested here.
    */
   async getEpisode(id: string): Promise<EpisodeDetail> {
-    const response = await publicApi.get<unknown>(`/episodes/${id}`);
+    const response = await api.get<unknown>(`/episodes/${id}`);
     return parseEpisodeResponse(episodeDetailResponseSchema, response.data, 'episode').data;
   },
 
