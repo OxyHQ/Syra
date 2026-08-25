@@ -5,11 +5,18 @@
  * Alia generates an episode in a background worker minutes after the request.
  * Syra authenticates exactly one thing — a user's Oxy JWT — and service-token
  * delegation is dead platform-wide, so by the time the audio exists there is no
- * credential in the call. The two endpoints here are the two halves of the
- * answer:
+ * credential in the call. The endpoints here are the halves of the answer:
  *
- *   POST /api/podcasts/:id/episodes/draft      requireAuth + owner  -> a ticket
- *   POST /api/podcasts/episodes/:id/ingest     the TICKET is the auth
+ *   POST /api/podcasts/:id/episodes/draft            requireAuth + owner -> a ticket
+ *   POST /api/podcasts/episodes/:id/ingest           the TICKET is the auth
+ *   POST /api/podcasts/episodes/:id/ingest/abandon   likewise, for the other ending
+ *
+ * The third exists because a reservation needs a way to be given up. A worker
+ * whose generation failed used to have no route at all, so it marked its own row
+ * failed and left the Syra episode at `processing` with no audio and nothing
+ * that could ever move it — see {@link abandonEpisodeIngest}. It is one of the
+ * ticket's two possible uses, not an extra one: it spends the same single
+ * redemption.
  *
  * What the ticket is narrowed to, and why each narrowing exists, is
  * `services/podcasts/ingestToken.ts`. What makes it single-use is
@@ -26,6 +33,7 @@ import { isLiveEntityId, uuidv7 } from '@oxyhq/db';
 import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
 import { getRequiredOxyUserId } from '@oxyhq/core/server';
 import {
+  abandonEpisodeIngestRequestSchema,
   createEpisodeDraftRequestSchema,
   ingestEpisodeAudioRequestSchema,
   type AudioSource,
@@ -217,7 +225,7 @@ export async function createEpisodeDraft(req: AuthRequest, res: Response): Promi
 
 // ── Ingest ────────────────────────────────────────────────────────────────────
 
-/** Every refusal this endpoint can make, and the status each one answers with. */
+/** Every refusal these endpoints can make, and the status each one answers with. */
 type IngestRefusal =
   | { status: 400; error: string }
   | { status: 401; error: string }
@@ -225,18 +233,25 @@ type IngestRefusal =
   | { status: 409; error: string };
 
 /**
- * Everything that must be true before a single byte is written, in the order it
- * has to be checked.
+ * Everything that must be true before a ticket may act on its episode, in the
+ * order it has to be checked.
  *
- * Split out from the handler so the sequence is readable as a sequence — and so
+ * Split out from the handlers so the sequence is readable as a sequence — and so
  * every refusal is one `return`, rather than a nest of `if`s inside a multer
  * callback where an early `return` is easy to forget.
+ *
+ * BOTH redemptions run this, unchanged and in full. A ticket has exactly one use
+ * and two possible endings — the audio arrived, or it never will — and which
+ * ending the holder chooses cannot be allowed to change what the capability is
+ * narrowed to. Anything a ticket may not do to an episode on the way to
+ * `ingest`, it may not do on the way to `abandon` either, and one function is
+ * what makes that true by construction rather than by two lists agreeing.
  */
-async function authorizeIngest(
+async function authorizeTicket(
   req: AuthRequest,
   episodeId: string
 ): Promise<
-  | { ok: true; jti: string; podcastId: string; format: AudioSource['format']; file: Express.Multer.File }
+  | { ok: true; jti: string; podcastId: string }
   | { ok: false; refusal: IngestRefusal }
 > {
   const raw = req.headers[INGEST_TICKET_HEADER];
@@ -297,6 +312,26 @@ async function authorizeIngest(
     return { ok: false, refusal: { status: 409, error: 'Episode already has audio' } };
   }
 
+  return { ok: true, jti: claims.jti, podcastId: show.id };
+}
+
+/**
+ * {@link authorizeTicket} plus the two things only the AUDIO redemption needs:
+ * a file, in a format this API stores.
+ *
+ * Kept after the ticket checks rather than before them, so a caller holding a
+ * bad ticket learns nothing about the episode from the shape of its own upload.
+ */
+async function authorizeIngest(
+  req: AuthRequest,
+  episodeId: string
+): Promise<
+  | { ok: true; jti: string; podcastId: string; format: AudioSource['format']; file: Express.Multer.File }
+  | { ok: false; refusal: IngestRefusal }
+> {
+  const authorized = await authorizeTicket(req, episodeId);
+  if (!authorized.ok) return authorized;
+
   const file = (req as AudioUploadRequest).file;
   if (!file) {
     return { ok: false, refusal: { status: 400, error: 'Audio file is required' } };
@@ -306,7 +341,7 @@ async function authorizeIngest(
     return { ok: false, refusal: { status: 400, error: 'Unsupported audio format' } };
   }
 
-  return { ok: true, jti: claims.jti, podcastId: show.id, format, file };
+  return { ok: true, jti: authorized.jti, podcastId: authorized.podcastId, format, file };
 }
 
 /**
@@ -435,4 +470,109 @@ export async function ingestEpisodeAudio(req: AuthRequest, res: Response): Promi
       if (!res.headersSent) res.status(500).json({ error: 'Failed to ingest episode audio' });
     }
   });
+}
+
+// ── Abandon ───────────────────────────────────────────────────────────────────
+
+/**
+ * POST /api/podcasts/episodes/:id/ingest/abandon — the ticket's other ending.
+ *
+ * A draft reserves an episode and hands out one capability; the worker holding
+ * it either attaches audio or it never will. Only the first had a route, so a
+ * generation that failed on the caller's side marked its own row failed, told
+ * Syra nothing, and left the episode at `processing` with no audio and no way
+ * out of it — measured in production on three episodes of one show, none of
+ * which had an object in S3 at all.
+ *
+ * ## It is the SAME capability, spent the same way
+ *
+ * Same header, same {@link authorizeTicket} in full, same `claimIngestTicket`.
+ * The consequence of that is worth stating: abandoning is one of the two things
+ * a ticket can do, not a free extra call. A worker that abandons an episode
+ * cannot afterwards ingest it, which is the correct arithmetic — a capability
+ * with one use should not buy two outcomes — and it is also what stops abandon
+ * being a way to burn a ticket you no longer hold, since the claim is `UPDATE …
+ * where consumed_at is null` exactly as it is for audio.
+ *
+ * `releaseIngestTicket` on a handled failure, for the same reason ingest does
+ * it: a transient error must not destroy a 24-hour capability the worker cannot
+ * re-obtain without a user session.
+ */
+export async function abandonEpisodeIngest(req: AuthRequest, res: Response): Promise<void> {
+  const episodeId = getParam(req, 'id');
+  if (!isLiveEntityId(episodeId)) {
+    res.status(400).json({ error: 'Invalid episode ID' });
+    return;
+  }
+
+  const parsed = abandonEpisodeIngestRequestSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid abandon payload', details: parsed.error.issues });
+    return;
+  }
+
+  const authorized = await authorizeTicket(req, episodeId);
+  if (!authorized.ok) {
+    res.status(authorized.refusal.status).json({ error: authorized.refusal.error });
+    return;
+  }
+
+  const claimed = await claimIngestTicket(getDb(), authorized.jti, episodeId);
+  if (!claimed) {
+    res.status(409).json({ error: 'Ingest ticket already used or expired' });
+    return;
+  }
+
+  try {
+    const updated = await updateEpisode(episodeId, { status: 'failed' });
+    if (!updated) {
+      // Unreachable: `authorizeTicket` loaded this row. Treated as a failure
+      // rather than ignored, so the ticket is released instead of spent on a
+      // write that did not happen.
+      throw new Error(`abandonEpisodeIngest: episode ${episodeId} vanished mid-redemption`);
+    }
+
+    /**
+     * The caller's `reason` reaches the operator log and NOTHING else — not a
+     * column, not the DTO below, not the response body. It is the only free text
+     * a ticket holder may send that describes a FAILURE, so the string closest
+     * to a worker's hand is an upstream provider's own error message, and no
+     * Syra surface should ever repeat one.
+     *
+     * The containment that actually holds is structural and is two things: the
+     * 200-character bound on `abandonEpisodeIngestRequestSchema`, which no stack
+     * trace or JSON error envelope fits inside, and the fact that nothing reads
+     * this value back. `describeErrorSafely` is applied for the same reason
+     * every other log field in this file is — one shape for the field — and it
+     * is worth being plain that for a `string` it is the identity function: it
+     * reduces a driver-error payload, and a payload is not what arrives here.
+     *
+     * Named `reasonFromCaller` rather than `reason` so an operator reading the
+     * line cannot mistake somebody else's text for Syra's own diagnosis.
+     */
+    logger.info('[podcasts] episode ingest abandoned by its ticket holder', {
+      episodeId,
+      podcastId: authorized.podcastId,
+      reasonFromCaller:
+        parsed.data.reason === undefined ? undefined : describeErrorSafely(parsed.data.reason),
+    });
+
+    // Serialized as a NON-OWNER, exactly as the audio redemption is and for the
+    // same reason: the redeemer holds a capability, not the owner's identity.
+    const shows = await loadShowContext([updated]);
+    const [dto] = await toEpisodeDtos([updated], undefined, shows);
+    res.status(200).json({ data: dto });
+  } catch (err) {
+    await releaseIngestTicket(authorized.jti).catch((releaseErr) =>
+      logger.error('[podcasts] failed to release an ingest ticket', {
+        episodeId,
+        err: describeErrorSafely(releaseErr),
+      })
+    );
+    logger.error('[podcasts] episode ingest abandonment failed', {
+      episodeId,
+      err: describeErrorSafely(err),
+    });
+    if (!res.headersSent) res.status(500).json({ error: 'Failed to abandon episode ingest' });
+  }
 }
