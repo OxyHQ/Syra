@@ -28,6 +28,7 @@ import {
   getEpisodeVariantPlaylist,
 } from '../controllers/podcastAudio.controller';
 import {
+  abandonEpisodeIngest,
   createEpisodeDraft,
   ingestEpisodeAudio,
 } from '../controllers/podcastIngest.controller';
@@ -68,6 +69,13 @@ router.get('/episodes/:id/key', streamMediaCors, getEpisodeStreamKey);
  * `controllers/podcastIngest.controller.ts`.
  */
 router.post('/episodes/:id/ingest', ingestEpisodeAudio);
+/**
+ * The same capability's other ending, and registered BEFORE its sibling would
+ * matter if the two could collide — they cannot: `/episodes/:id/ingest` is three
+ * segments and this is four, so Express never confuses them and `abandon` is
+ * never read as an `:id`.
+ */
+router.post('/episodes/:id/ingest/abandon', abandonEpisodeIngest);
 
 // Browse + create
 router.get('/', browsePodcasts);

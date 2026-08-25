@@ -312,11 +312,15 @@ export async function episodeStats(
  *
  * The deferred-ingest set: while a show is `private` its episodes are not
  * transcoded (`services/podcasts/ingestEpisode.ts` says why), so publishing it
- * has to find the ones that were skipped. Keyed on `hls_master_key is null`
- * rather than on `status`, because `status` is also `processing` for an episode
- * whose transcode is genuinely still running and `failed` for one that tried and
- * could not — and re-running ingest for the second of those is right, while
- * distinguishing them from a deferral is not something `status` can do.
+ * has to find the ones that were skipped.
+ *
+ * Keyed on `hls_master_key is null` rather than on `status`, and that is what
+ * lets a deferred episode be `ready` — which it is, because for a private show
+ * the audio has landed and the ladder is the only thing missing. `status` could
+ * not carry the distinction anyway: it is `processing` for a transcode genuinely
+ * still running and `failed` for one that tried and could not, and re-running
+ * ingest is right for the second of those too. So every status but `unavailable`
+ * is admitted, and the missing master key is the whole predicate.
  */
 export async function findEpisodeIdsAwaitingHls(podcastId: string): Promise<string[]> {
   const rows = await getDb()

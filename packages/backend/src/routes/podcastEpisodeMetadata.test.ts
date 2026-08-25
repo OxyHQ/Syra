@@ -70,10 +70,17 @@ mock.module('../services/s3Service', () => ({
   },
 }));
 
+/** Episode ids handed to the transcode queue, so "did it enqueue" is observable. */
+const enqueuedEpisodeIds: string[] = [];
+
 mock.module('../services/podcasts/ingestEpisode', () => ({
   ...realIngest,
   enqueueEpisodeIngest: (episodeId: string) => {
-    if (!armed) realEnqueueEpisodeIngest(episodeId);
+    if (!armed) {
+      realEnqueueEpisodeIngest(episodeId);
+      return;
+    }
+    enqueuedEpisodeIds.push(episodeId);
   },
 }));
 
@@ -108,6 +115,7 @@ beforeAll(async () => {
 
 afterEach(async () => {
   await clearDb();
+  enqueuedEpisodeIds.length = 0;
 });
 
 afterAll(async () => {
@@ -116,13 +124,14 @@ afterAll(async () => {
   await disconnectDb();
 });
 
-async function seedShow(): Promise<string> {
+async function seedShow(visibility: 'public' | 'unlisted' | 'private' = 'public'): Promise<string> {
   const id = uuidv7();
   await getDb().insert(podcasts).values({
     id,
     title: 'Metadata Show',
     source: 'syra',
     status: 'active',
+    visibility,
     ownerOxyUserId: OWNER,
     feedUrl: `https://feeds.example.invalid/${id}.xml`,
   });
@@ -436,5 +445,46 @@ describe('POST /api/podcasts records Alia provenance and the AI flag', () => {
         `${viewer ?? 'anonymous'}: true`
       );
     }
+  });
+});
+
+// ── The enqueue a private show used to be skipped by ──────────────────────────
+
+describe('POST /api/podcasts/:id/episodes enqueues the transcode for every visibility', () => {
+  /**
+   * This handler used to decide, on its own, that a private show's upload gets
+   * no `enqueueEpisodeIngest` call at all — the same policy `ingestEpisode`
+   * already enforces, made a second time one layer up. The two halves then
+   * disagreed about the consequence: `ingestEpisode` left the episode alone and
+   * this skipped it outright, so either way the episode sat at `processing`
+   * forever with its MP3 already in S3. Measured in production on a private show
+   * whose two episodes were in exactly that state.
+   *
+   * The visibility decision is `ingestEpisode`'s alone now, and it FINISHES the
+   * episode (`ready`, no `hls_master_key`) — see
+   * `services/podcasts/ingestEpisode.test.ts`, which measures that half. This
+   * measures the half that has to reach it: the call is made.
+   *
+   * The public row is the positive control, and it is what makes the private one
+   * a measurement: without it, "the private show enqueued" would be
+   * indistinguishable from a handler that enqueues unconditionally because it is
+   * broken in some unrelated way.
+   */
+  it('enqueues for a PRIVATE show, exactly as it does for a public one', async () => {
+    const publicShow = await seedShow('public');
+    const publicUpload = await uploadEpisode(publicShow, { title: 'Public Episode' });
+    expect(`public upload: ${publicUpload.status}`).toBe('public upload: 201');
+    const publicId = (publicUpload.body as { data: { id: string } }).data.id;
+    expect(`public enqueued: ${enqueuedEpisodeIds.includes(publicId)}`).toBe(
+      'public enqueued: true'
+    );
+
+    const privateShow = await seedShow('private');
+    const privateUpload = await uploadEpisode(privateShow, { title: 'Private Episode' });
+    expect(`private upload: ${privateUpload.status}`).toBe('private upload: 201');
+    const privateId = (privateUpload.body as { data: { id: string } }).data.id;
+    expect(`private enqueued: ${enqueuedEpisodeIds.includes(privateId)}`).toBe(
+      'private enqueued: true'
+    );
   });
 });
