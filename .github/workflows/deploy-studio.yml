@@ -50,10 +50,28 @@ jobs:
           # VARIABLE, not a secret: the id ships inside the bundle, so it is
           # public by construction and a secret would only hide it from the UI.
           EXPO_PUBLIC_OXY_CLIENT_ID: ${{ vars.EXPO_PUBLIC_OXY_CLIENT_ID }}
+      # wrangler-action needs to know which wrangler to run, and the repo already
+      # says: `packages/frontend` declares it and bun hoists that ONE copy, which
+      # every job here resolves. Restating the version in the workflow made it a
+      # second declaration of one fact, and the two drifted — the manifest moved
+      # to 3.114.17 while this pin stayed at 3.114.0, so the action found the
+      # newer wrangler already installed, judged it incompatible, and tried to
+      # install the older one over it:
+      #
+      #     bun i wrangler@3.114.0
+      #     error: Fail extracting tarball for "wrangler"
+      #
+      # Read it instead. `jq -e` fails the job if the key ever moves, which is
+      # the loud failure a silent mismatch did not give us.
+      - name: Read the declared wrangler version
+        id: wrangler
+        run: |
+          version="$(jq -er '.devDependencies.wrangler' packages/frontend/package.json)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: '3.114.0'
+          wranglerVersion: ${{ steps.wrangler.outputs.version }}
           command: pages deploy packages/studio/dist --project-name=syra-studio --branch=main
