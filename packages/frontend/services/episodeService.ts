@@ -24,23 +24,25 @@ import { api } from '@/utils/api';
 
 const episodeResponseSchema = episodeSchema.passthrough();
 
-const episodeDetailResponseSchema = z.object({
-  data: z.object({
-    episode: episodeResponseSchema,
-    persons: z.array(resolvedPersonSchema.passthrough()),
-    progressSec: z.number().optional(),
-    completed: z.boolean().optional(),
-  }).passthrough(),
+/**
+ * Both reads below go through the LINKED client, which unwraps a `{ data: … }`
+ * body before returning it, so these describe the PAYLOAD and not the envelope.
+ * See the same note in `podcastService` — a schema that demanded the envelope
+ * here rejected every response the server actually sent.
+ */
+const episodeDetailPayloadSchema = z.object({
+  episode: episodeResponseSchema,
+  persons: z.array(resolvedPersonSchema.passthrough()),
+  progressSec: z.number().optional(),
+  completed: z.boolean().optional(),
 }).passthrough();
 
-const continueListeningResponseSchema = z.object({
-  data: z.array(z.object({
-    episode: episodeResponseSchema,
-    progressSec: z.number(),
-    durationSec: z.number(),
-    completed: z.boolean(),
-  }).passthrough()),
-}).passthrough();
+const continueListeningPayloadSchema = z.array(z.object({
+  episode: episodeResponseSchema,
+  progressSec: z.number(),
+  durationSec: z.number(),
+  completed: z.boolean(),
+}).passthrough());
 
 const progressWriteResponseSchema = z.object({
   ok: z.boolean(),
@@ -92,7 +94,7 @@ export const episodeService = {
    */
   async getEpisode(id: string): Promise<EpisodeDetail> {
     const response = await api.get<unknown>(`/episodes/${id}`);
-    return parseEpisodeResponse(episodeDetailResponseSchema, response.data, 'episode').data;
+    return parseEpisodeResponse(episodeDetailPayloadSchema, response.data, 'episode');
   },
 
   /** Upsert the caller's playback position for an episode. */
@@ -106,6 +108,6 @@ export const episodeService = {
   /** The caller's in-progress (not completed) episodes, most recent first. */
   async getContinueListening(params?: { limit?: number }): Promise<ContinueListeningEntry[]> {
     const response = await api.get<unknown>('/episodes/continue', params);
-    return parseEpisodeResponse(continueListeningResponseSchema, response.data, 'continue listening').data;
+    return parseEpisodeResponse(continueListeningPayloadSchema, response.data, 'continue listening');
   },
 };

@@ -8,12 +8,8 @@ import {
 } from '@tanstack/react-query';
 import { useOxy } from '@oxyhq/services';
 import { useAuthGate } from '@/hooks/useAuthGate';
-import type { Podcast, PodcastSubscriptions } from '@syra/shared-types';
-import {
-  podcastService,
-  type BrowsePodcastsParams,
-  type PodcastEpisodesPage,
-} from '@/services/podcastService';
+import type { Episode, Podcast, PodcastSubscriptions } from '@syra/shared-types';
+import { podcastService, type BrowsePodcastsParams } from '@/services/podcastService';
 import {
   episodeService,
   type EpisodeDetail,
@@ -108,7 +104,7 @@ export function usePodcast(id: string | undefined) {
 export function useEpisodes(podcastId: string | undefined, limit = 50) {
   const { catalogIdentity, isResolved } = useAuthGate();
 
-  return useQuery<PodcastEpisodesPage>({
+  return useQuery<Episode[]>({
     queryKey: PODCAST_QUERY_KEYS.episodes(catalogIdentity, podcastId ?? '', limit),
     queryFn: () => podcastService.getPodcastEpisodes(podcastId as string, { limit }),
     enabled: isResolved && Boolean(podcastId),

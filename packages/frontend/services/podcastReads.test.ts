@@ -1,3 +1,4 @@
+import { podcastSchema, type Podcast } from '@syra/shared-types';
 import { api, publicApi } from '@/utils/api';
 import { podcastService } from '@/services/podcastService';
 import { episodeService } from '@/services/episodeService';
@@ -74,5 +75,78 @@ describe('discovery stays anonymous, and shared', () => {
 
     expect(mockPublicGet).toHaveBeenCalled();
     expect(mockApiGet).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * WHAT SHAPE each client delivers, which is the whole of the other bug.
+ *
+ * The two clients do not return the same thing for the same response, and no
+ * type says so. `publicApi` is axios: `response.data` is the raw body. `api` is
+ * the linked Oxy client, which unwraps `{ data: … }` before returning —
+ * measured against the installed package: a body of `{"data":[{"id":"a"}]}`
+ * comes back as `[{"id":"a"}]`.
+ *
+ * `getMyPodcasts` parsed an unwrapped payload with a schema that demanded the
+ * envelope, so it threw on EVERY call, and a creator with two shows was told
+ * they had none. The suite did not catch it because it fed the hook a resolved
+ * value directly and never once fed a service what its client actually returns.
+ *
+ * So these tests hand each service exactly that, and assert what comes out.
+ */
+
+/** Parsed through the real schema, so a fixture cannot drift out of the DTO. */
+function podcast(id: string): Podcast {
+  return podcastSchema.parse({
+    id,
+    title: `Show ${id}`,
+    explicit: false,
+    type: 'episodic',
+    source: 'syra',
+    refreshIntervalMin: 60,
+    episodeCount: 1,
+    status: 'active',
+    visibility: 'private',
+    aiGenerated: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  });
+}
+
+describe('each read parses the shape its own client delivers', () => {
+  it('reads the owner\'s shows from an UNWRAPPED payload', async () => {
+    // The server sent `{ data: [...] }`; the linked client already removed it.
+    mockApiGet.mockResolvedValueOnce({ data: [podcast('a'), podcast('b')] });
+
+    await expect(podcastService.getMyPodcasts()).resolves.toHaveLength(2);
+  });
+
+  it('reads one show from an UNWRAPPED payload', async () => {
+    mockApiGet.mockResolvedValueOnce({ data: { podcast: podcast('a'), episodes: [] } });
+
+    const show = await podcastService.getPodcast('a');
+
+    expect(show.podcast.id).toBe('a');
+    // Absent `persons` is normalised rather than left undefined for the screen.
+    expect(show.persons).toEqual([]);
+  });
+
+  it('reads a show\'s episodes from an UNWRAPPED payload', async () => {
+    mockApiGet.mockResolvedValueOnce({ data: [] });
+
+    await expect(podcastService.getPodcastEpisodes('a')).resolves.toEqual([]);
+  });
+
+  it('reads the subscriptions from an UNWRAPPED payload', async () => {
+    const payload = { subscriptions: [], total: 0, oxyUserId: 'oxy-1' };
+    mockApiGet.mockResolvedValueOnce({ data: payload });
+
+    await expect(podcastService.getSubscriptions()).resolves.toEqual(payload);
+  });
+
+  it('reads discovery from the FULL envelope, because axios does not unwrap', async () => {
+    mockPublicGet.mockResolvedValueOnce({ data: { data: [podcast('a')] } });
+
+    await expect(podcastService.searchPodcasts('anything')).resolves.toHaveLength(1);
   });
 });

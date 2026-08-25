@@ -84,7 +84,7 @@ export function usePlayEntity(): PlayEntity {
     try {
       // Episodes come back reverse-chronological, so the first is the latest —
       // which is what a listener pressing play on a show expects to hear.
-      const { episodes } = await podcastService.getPodcastEpisodes(podcastId, { limit: 1 });
+      const episodes = await podcastService.getPodcastEpisodes(podcastId, { limit: 1 });
       if (episodes.length === 0) {
         toast.info(t('common.noPlayableTracks'));
         return;
