@@ -23,11 +23,32 @@
  *  - ONE use. `jti` is claimed in Postgres with a conditional `UPDATE`; see
  *    `schema/podcasts.ts`'s `episode_ingest_tickets` for why a Redis nonce is
  *    not sufficient.
- *  - AUDIO ONLY. The redemption endpoint's field allowlist is `duration`,
- *    `season`, `episodeNumber`, `description`, `summary` — the things a worker
- *    can know because it made the audio. Title, artwork, `explicit`,
- *    `episodeType`, credits, `status` and every storage field were fixed by the
- *    authenticated user at draft time and are unreachable from here.
+ *  - THE EPISODE'S OWN CONTENT ONLY. The redemption endpoint's field allowlist
+ *    is `title`, `duration`, `season`, `episodeNumber`, `description`,
+ *    `summary` — the things a worker can know because it made the episode.
+ *    Artwork, `explicit`, `episodeType`, credits, `status`, `aiGenerated` and
+ *    every storage field were fixed by the authenticated user at draft time and
+ *    are unreachable from here.
+ *
+ *    `title` is the one that names the episode rather than describing it, and
+ *    it is allowed on the argument that a capability which decides the AUDIO
+ *    may decide the label on the audio: the bytes are what listeners hear, and
+ *    they were already this ticket's to choose. Refusing the title bought no
+ *    protection — it only guaranteed the episode was named by the party that
+ *    had not read it. See `shared-types/src/episode.ts` for the full reasoning
+ *    and for the validation, which is the same trim-and-refuse-blank rule the
+ *    two authenticated doors apply.
+ *
+ *    Worth knowing before this list grows again: an episode title is read by
+ *    the generated RSS feed (XML-escaped) and by the `title` search vector,
+ *    and by nothing that treats it as an identifier — no S3 key, no filename,
+ *    no lookup. The one surface that would make it louder than the audio is
+ *    `notifications/triggers/episodePublished.ts`, which sends an episode title
+ *    to every subscriber as push text; today its ONLY caller is the RSS import,
+ *    so no Syra-hosted episode reaches it. Wiring the upload/ingest path into
+ *    that trigger is the change that would put a ticket holder's text on
+ *    strangers' lock screens, and it should be weighed there rather than
+ *    inherited silently from here.
  *  - NEVER AN OVERWRITE. Redemption is refused unless the episode is still
  *    `processing` or `failed`, so a ticket cannot replace the audio of an
  *    episode that already went `ready` even inside its 24-hour window.

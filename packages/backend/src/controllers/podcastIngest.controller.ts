@@ -366,12 +366,26 @@ export async function ingestEpisodeAudio(req: AuthRequest, res: Response): Promi
       /**
        * The field allowlist, assigned one by one and never spread — the same
        * discipline every other write in this vertical follows, and here it IS
-       * the capability's boundary. `title`, `explicit`, `episodeType`,
-       * `aiGenerated`, the credits and every storage column are absent because
-       * the authenticated user set them at draft time and the ticket holder has
-       * no standing to change them.
+       * the capability's boundary. `explicit`, `episodeType`, `aiGenerated`,
+       * the credits and every storage column are absent because the
+       * authenticated user set them at draft time and the ticket holder has no
+       * standing to change them.
+       *
+       * `title` IS present, and it is the one field here that names the episode
+       * rather than describing its audio. It is included because the draft was
+       * written before any content existed, so its title can only describe what
+       * was ASKED FOR — and the holder of this ticket is the only party that has
+       * seen what was actually made. The reasoning, and why this is not a
+       * widening of the capability, is on
+       * `ingestEpisodeAudioRequestSchema`.
+       *
+       * Every field is written only when PRESENT. For the title that is
+       * load-bearing rather than uniform: ingest is single-use, so a worker that
+       * has nothing better than the placeholder must be able to deliver the
+       * audio without the omission costing the episode its name.
        */
       const updated = await updateEpisode(episodeId, {
+        ...(fields.title === undefined ? {} : { title: fields.title }),
         audioSourceFormat: authorized.format,
         ...(fields.duration === undefined ? {} : { duration: fields.duration }),
         ...(fields.season === undefined ? {} : { season: fields.season }),
