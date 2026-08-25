@@ -93,9 +93,15 @@ export async function listSubscribedPodcastIds(oxyUserId: string): Promise<strin
  * `findPodcastsByIds` already gives `GET /api/podcasts/subscriptions`, and the
  * two agreeing is the point: a membership snapshot that claimed a subscription
  * the hydrated list then dropped would render a library counting shows it cannot
- * show. Unsubscribing still works on a show in that state
- * (`unsubscribeFromPodcast` gates on nothing), so the row is never stranded
- * beyond reach.
+ * show.
+ *
+ * The row is therefore held on the subscriber's behalf rather than by them:
+ * `POST /api/podcasts/:id/unsubscribe` still accepts it (it gates on nothing —
+ * see {@link unsubscribeFromPodcast}), but no client surface offers that button
+ * any more, since the show's own page has 404'd for them too. That is the
+ * accepted cost of not leaking the show's continued existence, and it is
+ * bounded: one `(user, show)` pair, costing the subscriber nothing, cascading
+ * away with the show.
  *
  * `unlisted` is deliberately KEPT. The rule is REACHABLE, not LISTABLE: a
  * library holds what its owner asked for by name, which is exactly what
