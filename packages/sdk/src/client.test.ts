@@ -848,6 +848,16 @@ describe('the authenticated methods refuse without a session', () => {
     ['setPodcastVisibility', (client) => client.setPodcastVisibility('p1', 'private')],
     ['createEpisodeDraft', (client) => client.createEpisodeDraft('p1', { title: 'X' })],
     ['getEpisodeStream', (client) => client.getEpisodeStream('e1')],
+    /**
+     * The two deletes belong in THIS list and nowhere near the ticket-authenticated
+     * pair. `ingestEpisode`/`abandonEpisodeIngest` are `anonymous: true` — they
+     * carry a capability instead of a session — and a capability must never be
+     * able to destroy anything. `requires` is what makes these refuse without a
+     * user's own bearer, and `calls.length: 0` is the load-bearing half: the
+     * refusal happens before any request is made.
+     */
+    ['deletePodcast', (client) => client.deletePodcast('p1')],
+    ['deleteEpisode', (client) => client.deleteEpisode('e1')],
   ];
 
   for (const [name, call] of cases) {
@@ -1176,5 +1186,123 @@ describe('createSyraClient.abandonEpisodeIngest', () => {
     await expect(
       client.abandonEpisodeIngest({ episodeId: 'ep-1', ingestTicket: 'used' }),
     ).rejects.toThrow(/already used or expired/);
+  });
+});
+
+describe('createSyraClient deletes', () => {
+  function authedDelete(handler: (url: string) => { status?: number; body: unknown }) {
+    const { fetch, calls } = fakeFetch(handler);
+    return {
+      client: createSyraClient({
+        baseURL: 'https://api.example.test',
+        fetch,
+        getAccessToken: () => 'tok',
+      }),
+      calls,
+    };
+  }
+
+  it('deletePodcast DELETEs the show URL with the session bearer and returns the receipt', async () => {
+    const { client, calls } = authedDelete(() => ({
+      body: { data: { id: 'p1', episodesDeleted: 3, objectsDeleted: 11 } },
+    }));
+
+    const receipt = await client.deletePodcast('p1');
+
+    expect(calls[0].url).toBe('https://api.example.test/api/podcasts/p1');
+    expect(calls[0].method).toBe('DELETE');
+    /**
+     * The USER's own bearer, and this is the assertion that separates a delete
+     * from the ticket-authenticated pair in this file. A capability may attach
+     * audio or give an episode up; it may never destroy a show.
+     */
+    expect(calls[0].headers.authorization).toBe('Bearer tok');
+    expect(calls[0].headers['x-ingest-ticket']).toBeUndefined();
+
+    /**
+     * Both counts are carried through rather than discarded. They are how a
+     * caller mirroring the delete elsewhere tells a real deletion from a no-op,
+     * so a client that returned only `id` would be losing the answer.
+     */
+    expect(receipt).toEqual({ id: 'p1', episodesDeleted: 3, objectsDeleted: 11 });
+  });
+
+  it('deleteEpisode uses /api/episodes/:id, not the podcast router’s episode paths', async () => {
+    /**
+     * The one thing about these two endpoints that is easy to get wrong and
+     * silent when you do: the episode WRITE routes live on their own router at
+     * `/api/episodes/:id`, while `/api/podcasts/episodes/:id/...` is the media
+     * and ingest namespace. A DELETE aimed at the second would fall through to a
+     * route that does not exist.
+     */
+    const { client, calls } = authedDelete(() => ({
+      body: { data: { id: 'e1', podcastId: 'p1', objectsDeleted: 4 } },
+    }));
+
+    const receipt = await client.deleteEpisode('e1');
+
+    expect(calls[0].url).toBe('https://api.example.test/api/episodes/e1');
+    expect(calls[0].url).not.toContain('/podcasts/');
+    expect(calls[0].method).toBe('DELETE');
+    expect(calls[0].headers.authorization).toBe('Bearer tok');
+    expect(receipt).toEqual({ id: 'e1', podcastId: 'p1', objectsDeleted: 4 });
+  });
+
+  it('encodes the id rather than pasting it into the path', async () => {
+    // The control against a path built by concatenation: an id that would change
+    // the ROUTE if left raw must not be able to.
+    const { client, calls } = authedDelete(() => ({
+      body: { data: { id: 'a/b', episodesDeleted: 0, objectsDeleted: 0 } },
+    }));
+
+    await client.deletePodcast('a/b');
+    expect(calls[0].url).toBe('https://api.example.test/api/podcasts/a%2Fb');
+  });
+
+  it('surfaces the API’s refusal of a show you do not own', async () => {
+    // 403 for "not yours" AND for an RSS-mirrored show — one status for both, so
+    // the message is the only thing that tells a caller which. It has to survive.
+    const { fetch } = fakeFetch(() => ({
+      status: 403,
+      body: { error: 'You do not own this podcast' },
+    }));
+    const client = createSyraClient({ fetch, getAccessToken: () => 'tok' });
+
+    await expect(client.deletePodcast('p1')).rejects.toThrow(/do not own this podcast/);
+    await expect(client.deleteEpisode('e1')).rejects.toThrow(/do not own this podcast/);
+  });
+
+  it('surfaces the 409 a platform takedown answers with', async () => {
+    // A takedown is a moderation RECORD; a creator does not get to erase it by
+    // deleting the show or by deleting its episodes one at a time.
+    const { fetch } = fakeFetch(() => ({
+      status: 409,
+      body: {
+        error: 'Podcast removed',
+        message: 'This show was removed by the platform and cannot be deleted',
+      },
+    }));
+    const client = createSyraClient({ fetch, getAccessToken: () => 'tok' });
+
+    await expect(client.deletePodcast('p1')).rejects.toBeInstanceOf(SyraApiError);
+    await expect(client.deletePodcast('p1')).rejects.toThrow(/Podcast removed/);
+  });
+
+  it('rejects a malformed receipt rather than handing back a half-parsed one', async () => {
+    /**
+     * `objectsDeleted` is the field a caller reads to decide whether storage was
+     * really reclaimed, so a response missing it must be an error and not
+     * `undefined` flowing onward. The positive control below is the same call
+     * with the field present.
+     */
+    const { fetch } = fakeFetch(() => ({ body: { data: { id: 'p1', episodesDeleted: 1 } } }));
+    const client = createSyraClient({ fetch, getAccessToken: () => 'tok' });
+    await expect(client.deletePodcast('p1')).rejects.toBeTruthy();
+
+    const ok = fakeFetch(() => ({
+      body: { data: { id: 'p1', episodesDeleted: 1, objectsDeleted: 2 } },
+    }));
+    const okClient = createSyraClient({ fetch: ok.fetch, getAccessToken: () => 'tok' });
+    expect((await okClient.deletePodcast('p1')).objectsDeleted).toBe(2);
   });
 });

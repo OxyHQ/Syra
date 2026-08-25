@@ -65,6 +65,23 @@ const realDeleteS3Prefix = realS3.deleteS3Prefix;
 /** What the handler asked S3 to remove, so "did the audio go" is observable. */
 const deletedKeys: string[] = [];
 const deletedPrefixes: string[] = [];
+
+/**
+ * What the fake `deleteS3Prefix` claims to have removed per sweep.
+ *
+ * NOT zero, and not 1. `objectsDeleted` in the response is a SUM of what the
+ * storage layer returned, and Alia reads it to tell a real deletion from a
+ * no-op — so a test has to be able to distinguish "the handler summed the
+ * storage layer's answers" from "the handler reported a constant" or "the
+ * handler reported a row count". With the fake returning 0 the whole field
+ * measured nothing: every delete reported 0 objects and an assertion on it
+ * passed against a handler that never asked S3 for anything.
+ *
+ * A distinctive value makes the total arithmetic instead: three swept trees
+ * report 3 x this, and an episode's narrower sweep reports one x this plus the
+ * recorded keys that lie outside it.
+ */
+const OBJECTS_PER_SWEPT_PREFIX = 7;
 /** Show ids THIS suite created — the scope of the fake below. */
 const suiteShowIds = new Set<string>();
 
@@ -88,7 +105,7 @@ mock.module('../services/s3Service', () => ({
   deleteS3Prefix: async (prefix: string) => {
     if (!isSuiteOwned(prefix)) return realDeleteS3Prefix(prefix);
     deletedPrefixes.push(prefix);
-    return 0;
+    return OBJECTS_PER_SWEPT_PREFIX;
   },
 }));
 
@@ -540,5 +557,145 @@ describe('DELETE /api/episodes/:id', () => {
     expect(touchedStorage()).toBe(0);
 
     expect((await request(`/api/episodes/${activeEpisode}`, 'DELETE', OWNER)).status).toBe(200);
+  });
+});
+
+// ── The wire contract @syra.fm/sdk publishes for these two routes ─────────────
+
+/**
+ * The SDK's own schemas, parsed against the REAL responses these handlers send.
+ *
+ * `packages/sdk` publishes `deletePodcast`/`deleteEpisode`, and Alia calls them
+ * to keep one source of truth for a show that exists in both products. Its tests
+ * assert against fixtures that its own author typed, which proves the client
+ * parses what it was told to expect and nothing about whether that is what Syra
+ * sends. This is the only place both halves are in one process.
+ *
+ * Imported from the PACKAGE, `@syra.fm/sdk`, not by a relative path into its
+ * `src/`. Two reasons, and the second is the one that bites: a relative deep
+ * import crosses this package's `rootDir`, which `bun test` resolves happily and
+ * `bun run typecheck` refuses (TS6059/TS6307) — the trap `AGENTS.md` records for
+ * every test file. And the package entry is what a consumer actually resolves,
+ * so this validates the shape Alia will receive rather than one that only exists
+ * inside this monorepo.
+ */
+import { episodeDeletedSchema, podcastDeletedSchema } from '@syra.fm/sdk';
+
+describe('the delete responses match the schemas @syra.fm/sdk parses them with', () => {
+  it('DELETE /api/podcasts/:id returns exactly what podcastDeletedSchema expects', async () => {
+    const showId = await seedShow();
+    const episodeId = await seedEpisode(showId);
+
+    const response = await request(`/api/podcasts/${showId}`, 'DELETE', OWNER);
+    expect(`status: ${response.status}`).toBe('status: 200');
+
+    const body = (await response.json()) as { data: unknown };
+    const parsed = podcastDeletedSchema.parse(body.data);
+
+    expect(`id: ${parsed.id}`).toBe(`id: ${showId}`);
+    /**
+     * The counts are asserted as NUMBERS against the fixture's real footprint,
+     * not merely as "the schema accepted it". `episodesDeleted` is what tells
+     * Alia a real deletion happened, and a handler that always sent 0 would still
+     * satisfy the schema.
+     */
+    expect(`episodesDeleted: ${parsed.episodesDeleted}`).toBe('episodesDeleted: 1');
+    expect(`episode gone: ${await episodeExists(episodeId)}`).toBe('episode gone: false');
+
+    /**
+     * `objectsDeleted` is the SUM of what the storage layer reported, and the
+     * exact number is the point: the show delete sweeps THREE trees
+     * (`hls/{id}/`, `podcasts/audio/{id}/`, `podcasts/cache/{id}/`) and this
+     * fixture records no key outside them, so the total is three sweeps and
+     * nothing else. A handler reporting a constant, a row count, or two trees
+     * instead of three all fail here.
+     */
+    expect(`objectsDeleted: ${parsed.objectsDeleted}`).toBe(
+      `objectsDeleted: ${3 * OBJECTS_PER_SWEPT_PREFIX}`
+    );
+    expect(`trees swept: ${deletedPrefixes.length}`).toBe('trees swept: 3');
+
+    /**
+     * STRICT, and this is the direction the loose parse cannot see: a field the
+     * handler adds later is silently dropped by `.parse()`, so the SDK would go
+     * on compiling while returning less than the API sends. Comparing the KEY SET
+     * makes that a red test on the day it happens.
+     */
+    expect(Object.keys(body.data as object).sort()).toEqual([
+      'episodesDeleted',
+      'id',
+      'objectsDeleted',
+    ]);
+  });
+
+  it('DELETE /api/episodes/:id returns exactly what episodeDeletedSchema expects', async () => {
+    const showId = await seedShow();
+    const episodeId = await seedEpisode(showId);
+
+    const response = await request(`/api/episodes/${episodeId}`, 'DELETE', OWNER);
+    expect(`status: ${response.status}`).toBe('status: 200');
+
+    const body = (await response.json()) as { data: unknown };
+    const parsed = episodeDeletedSchema.parse(body.data);
+
+    expect(`id: ${parsed.id}`).toBe(`id: ${episodeId}`);
+    // `podcastId` is the field that lets a caller find the show the episode came
+    // from without a second read, so it is asserted by VALUE, not by presence.
+    expect(`podcastId: ${parsed.podcastId}`).toBe(`podcastId: ${showId}`);
+
+    /**
+     * ONE sweep, of the episode's own `hls/{showId}/{episodeId}/` directory,
+     * plus the recorded keys lying outside it — here just the source audio under
+     * `podcasts/audio/`, since the master and the rendition manifest are both
+     * inside the swept directory.
+     *
+     * The narrowness is the load-bearing half: sweeping the show's `hls/{id}/`
+     * from here would take every SIBLING episode's audio with it, and the count
+     * is what tells the two apart.
+     */
+    expect(`objectsDeleted: ${parsed.objectsDeleted}`).toBe(
+      `objectsDeleted: ${OBJECTS_PER_SWEPT_PREFIX + 1}`
+    );
+    expect(`trees swept: ${deletedPrefixes.length}`).toBe('trees swept: 1');
+    expect(`swept the episode's own directory: ${deletedPrefixes[0]}`).toBe(
+      `swept the episode's own directory: hls/${showId}/${episodeId}/`
+    );
+
+    expect(Object.keys(body.data as object).sort()).toEqual([
+      'id',
+      'objectsDeleted',
+      'podcastId',
+    ]);
+  });
+
+  it('leaves the cover artwork behind — the one thing a show delete does NOT reclaim', async () => {
+    /**
+     * The claim the SDK's doc comment makes to Alia, asserted rather than
+     * described: `image_assets` is referenced `ON DELETE set null` and the
+     * artwork's objects live under `images/{imageId}/`, which is not one of the
+     * three trees a show delete sweeps.
+     *
+     * It matters because Alia is about to call this for real and needs to know
+     * what storage survives. Asserted on the SWEPT PREFIXES rather than on the
+     * asset row, because the prefixes are what decide whether bytes go: a future
+     * change that started sweeping `images/` would leave the row alone and still
+     * destroy artwork shared with another show.
+     */
+    const showId = await seedShow();
+    await seedEpisode(showId);
+
+    await request(`/api/podcasts/${showId}`, 'DELETE', OWNER);
+
+    expect(`swept an images/ tree: ${deletedPrefixes.some((p) => p.startsWith('images/'))}`).toBe(
+      'swept an images/ tree: false'
+    );
+    expect(`deleted an images/ object: ${deletedKeys.some((k) => k.startsWith('images/'))}`).toBe(
+      'deleted an images/ object: false'
+    );
+    // The positive control: the audio trees WERE swept, so "no images/ prefix"
+    // is not just this delete having touched nothing at all.
+    expect(`swept the audio tree: ${deletedPrefixes.some((p) => p.startsWith('podcasts/audio/'))}`).toBe(
+      'swept the audio tree: true'
+    );
   });
 });

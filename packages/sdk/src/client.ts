@@ -5,12 +5,16 @@ import {
   episodeDraftSchema,
   episodeStreamSchema,
   uploadedImageSchema,
+  podcastDeletedSchema,
+  episodeDeletedSchema,
   type TrackSummary,
   type PodcastSummary,
   type EpisodeSummary,
   type EpisodeDraft,
   type EpisodeStream,
   type UploadedImage,
+  type PodcastDeleted,
+  type EpisodeDeleted,
   type PodcastVisibility,
   type CoverArtSizes,
   type ArtworkSize,
@@ -314,6 +318,68 @@ export interface SyraClient {
    * there, because the API re-hosts artwork rather than hotlinking it.
    */
   uploadPodcastImage(image: UploadPayload, filename?: string): Promise<UploadedImage>;
+  /**
+   * `DELETE /api/podcasts/:id` — permanently delete a Syra-hosted show you own.
+   *
+   * IRREVERSIBLE, and it takes more than the show. Verified against the handler
+   * and against the migrated schema's own `pg_constraint` rows rather than read
+   * off a doc comment:
+   *
+   * - **Every episode row goes** (`episodes.podcast_id` is `ON DELETE CASCADE`),
+   *   and with each one its HLS renditions, transcripts, credits, AES stream
+   *   key and any outstanding ingest ticket.
+   * - **The audio in S3 goes** — the server sweeps the show's three storage
+   *   trees (`hls/{id}/`, `podcasts/audio/{id}/`, `podcasts/cache/{id}/`), so
+   *   segments that no row names are removed too. {@link PodcastDeleted.objectsDeleted}
+   *   is the count actually deleted.
+   * - **Other people's rows go with it**: every listener's saved position
+   *   (`episode_progress`) and every subscriber's subscription
+   *   (`user_podcast_subscriptions`).
+   *
+   * **What it does NOT remove: the cover artwork.** `image_assets` is referenced
+   * `ON DELETE set null`, and the artwork's S3 objects live under
+   * `images/{imageId}/`, which is not one of the three swept trees — so the
+   * image rows and their bytes are deliberately left behind. One asset may be
+   * referenced by several shows and episodes and nothing records how many, so
+   * deleting it could blank a show nobody asked to touch. Reclaiming that
+   * storage needs a sweeper that can prove non-reference; it is not this call's
+   * job and this call will not do it silently.
+   *
+   * Two more consequences worth knowing before calling it for real:
+   *
+   * - The server sets the show `unavailable` BEFORE deleting a single object, so
+   *   a delete that fails midway leaves an UNPUBLISHED show with some dead
+   *   audio — not the show as it was. Calling delete again finishes the job.
+   *   The ordering is deliberate: the failure that is possible is a show still
+   *   listed but broken, never one that is gone but still published.
+   * - Afterwards the feed 404s rather than answering `410 Gone`, because no row
+   *   survives to answer from — so a podcast client stops eventually rather than
+   *   at once, and episodes already downloaded to a device stay there.
+   *
+   * Refused (`403`) for a show you do not own and for an RSS-mirrored one, which
+   * belongs to the catalogue and to nobody; `409` for a show under a platform
+   * takedown, whose record a creator does not get to erase.
+   */
+  deletePodcast(podcastId: string): Promise<PodcastDeleted>;
+  /**
+   * `DELETE /api/episodes/:id` — permanently delete one episode of a Syra-hosted
+   * show you own.
+   *
+   * IRREVERSIBLE. Its row goes with its HLS ladder, transcript, credits, AES
+   * key, any outstanding ingest ticket and every listener's saved position in
+   * it; its audio is swept from the episode's own `hls/{showId}/{episodeId}/`
+   * directory plus the keys the row records. The parent show's `episodeCount`
+   * and `lastEpisodeAt` are recomputed in the same transaction.
+   *
+   * `unpublishEpisode` is the reversible half of this space, and it is not
+   * exposed here — reach for {@link SyraClient.updatePodcast} territory only if
+   * you want the episode BACK later. This one does not come back.
+   *
+   * Refused exactly as {@link SyraClient.deletePodcast} is: `403` for an episode
+   * on a show you do not own or that is not Syra-hosted, `409` when the show is
+   * under a platform takedown.
+   */
+  deleteEpisode(episodeId: string): Promise<EpisodeDeleted>;
   /**
    * `POST /api/podcasts/:id/episodes/draft` — reserve an episode now and get a
    * single-use ticket to attach its audio later, from a process with no session.
@@ -851,6 +917,25 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
 
     async setPodcastVisibility(podcastId, visibility) {
       return this.updatePodcast(podcastId, { visibility });
+    },
+
+    async deletePodcast(podcastId) {
+      const json = (await request(`/api/podcasts/${encodeURIComponent(podcastId)}`, {
+        method: 'DELETE',
+        requires: 'deletePodcast',
+      })) as { data?: unknown };
+      return podcastDeletedSchema.parse(json?.data);
+    },
+
+    async deleteEpisode(episodeId) {
+      // `/api/episodes/:id`, NOT `/api/podcasts/episodes/:id` — the episode
+      // write routes live on their own router, and the podcast router's
+      // `/episodes/:id/...` paths are the media and ingest ones.
+      const json = (await request(`/api/episodes/${encodeURIComponent(episodeId)}`, {
+        method: 'DELETE',
+        requires: 'deleteEpisode',
+      })) as { data?: unknown };
+      return episodeDeletedSchema.parse(json?.data);
     },
 
     async uploadPodcastImage(image, filename) {

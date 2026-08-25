@@ -171,6 +171,31 @@ export const episodeDraftSchema = z.object({
 });
 export type EpisodeDraft = z.infer<typeof episodeDraftSchema>;
 
+/**
+ * What `deletePodcast` hands back — a receipt, and it is worth reading rather
+ * than discarding.
+ *
+ * Both counts are of things that were actually removed by THIS call, so they are
+ * how a caller mirroring the delete elsewhere can tell a real deletion from a
+ * no-op. `objectsDeleted` counts stored objects (source audio, manifests and
+ * every segment beside them); a show whose episodes were never ingested reports
+ * zero for both, which is a success, not a failure.
+ */
+export const podcastDeletedSchema = z.object({
+  id: z.string(),
+  episodesDeleted: z.number(),
+  objectsDeleted: z.number(),
+});
+export type PodcastDeleted = z.infer<typeof podcastDeletedSchema>;
+
+/** What `deleteEpisode` hands back. `podcastId` names the show it was removed from. */
+export const episodeDeletedSchema = z.object({
+  id: z.string(),
+  podcastId: z.string(),
+  objectsDeleted: z.number(),
+});
+export type EpisodeDeleted = z.infer<typeof episodeDeletedSchema>;
+
 /** What `getEpisodeStream` hands back: a tokenized HLS URL with its own deadline. */
 export const episodeStreamSchema = z.object({
   url: z.string(),
