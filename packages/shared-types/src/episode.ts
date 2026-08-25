@@ -225,6 +225,37 @@ export const ingestEpisodeAudioRequestSchema = z.object({
 });
 export type IngestEpisodeAudioRequest = z.infer<typeof ingestEpisodeAudioRequestSchema>;
 
+/**
+ * `POST /api/podcasts/episodes/:id/ingest/abandon` — the other ending.
+ *
+ * A draft reserves an episode and hands out a ticket; the worker that holds it
+ * either attaches audio or it does not. Only the first of those had a route, so
+ * a pipeline that failed on its own side marked its OWN row failed, told Syra
+ * nothing, and left the episode at `processing` with no audio — measured in
+ * production on three episodes of one show, none of which had an object in S3
+ * at all. This is the transition that closes it.
+ *
+ * ## `reason` is bounded, and it is for OPERATORS only
+ *
+ * It is the only free text a ticket holder may send, and unlike `title` it
+ * describes a failure rather than the content — which means the string a worker
+ * has closest to hand is an upstream provider's own error message. That must not
+ * become a Syra surface, so `reason` is written to the API log and nowhere else:
+ * no column, no DTO, no response body. `abandonEpisodeIngest`
+ * (`controllers/podcastIngest.controller.ts`) is where that is enforced and
+ * `routes/podcastIngest.test.ts` is where it is asserted.
+ *
+ * The 200-character bound is the part that holds regardless of the caller: a
+ * stack trace, a JSON error envelope or a prompt echo does not fit in it, so the
+ * worst case is a truncated sentence in a log line rather than an upstream
+ * payload. Trimmed and refused blank on the same rule `title` follows, so a
+ * whitespace-only reason is a 400 rather than an empty log field.
+ */
+export const abandonEpisodeIngestRequestSchema = z.object({
+  reason: z.string().trim().min(1).max(200).optional(),
+});
+export type AbandonEpisodeIngestRequest = z.infer<typeof abandonEpisodeIngestRequestSchema>;
+
 export const updateEpisodeRequestSchema = z.object({
   title: z.string().optional(),
   description: z.string().optional(),

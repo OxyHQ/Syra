@@ -340,6 +340,30 @@ export interface SyraClient {
     filename?: string,
   ): Promise<EpisodeSummary>;
   /**
+   * `POST /api/podcasts/episodes/:id/ingest/abandon` — redeem a draft's ticket
+   * by giving the reservation up.
+   *
+   * The other ending of {@link SyraClient.ingestEpisode}, and the one a
+   * generation pipeline needs when it fails on its own side. Call it and the
+   * episode becomes `failed`; do not call it and the episode sits at
+   * `processing` with no audio forever, because Syra has no way to learn that
+   * the audio is never coming.
+   *
+   * It spends the SAME single use — a ticket buys one outcome, not two — so a
+   * worker that abandons an episode cannot afterwards ingest it, and vice versa.
+   *
+   * `reason` is for the Syra operator log and is capped at 200 characters. It is
+   * never stored on the episode and never returned, so do not pass an upstream
+   * provider's raw error: send a short description of what your pipeline did.
+   *
+   * Authenticated by the TICKET, not by the session, exactly as
+   * {@link SyraClient.ingestEpisode} is.
+   */
+  abandonEpisodeIngest(
+    draft: Pick<EpisodeDraft, 'episodeId' | 'ingestTicket'>,
+    reason?: string,
+  ): Promise<EpisodeSummary>;
+  /**
    * `GET /api/podcasts/episodes/:id/stream` — a tokenized HLS URL for a
    * Syra-hosted episode. Requires a session: the URL it returns embeds a stream
    * token minted for the caller.
@@ -877,6 +901,30 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
           anonymous: true,
           headers: { 'X-Ingest-Ticket': draft.ingestTicket },
           body: form,
+        },
+      )) as { data?: unknown };
+      return episodeSummarySchema.parse(json?.data);
+    },
+
+    async abandonEpisodeIngest(draft, reason) {
+      // `anonymous` for the same load-bearing reason `ingestEpisode` sets it:
+      // this request carries its OWN credential, and sending a session token
+      // beside it would leave the server's answer ambiguous about which one
+      // authorized the write.
+      const json = (await request(
+        `/api/podcasts/episodes/${encodeURIComponent(draft.episodeId)}/ingest/abandon`,
+        {
+          method: 'POST',
+          anonymous: true,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Ingest-Ticket': draft.ingestTicket,
+          },
+          // `defined`, the same filter every JSON body in this client goes
+          // through: `reason` is optional on the server, so an absent one has to
+          // reach it as an absent KEY. An empty string would be a 400 and a
+          // `null` would be one too.
+          body: JSON.stringify(defined({ reason })),
         },
       )) as { data?: unknown };
       return episodeSummarySchema.parse(json?.data);
