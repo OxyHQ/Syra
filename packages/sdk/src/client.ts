@@ -172,11 +172,23 @@ export interface CreateEpisodeDraftInput {
  *
  * Deliberately SMALLER than {@link CreateEpisodeDraftInput}, and it is not an
  * oversight: the ticket is redeemed by a process with no user session, so the
- * server accepts only what such a process can know by having produced the audio.
- * Title, artwork, `explicit`, `episodeType`, credits and the AI disclosure were
- * fixed at draft time by the authenticated user and are refused here.
+ * server accepts only what such a process can know by having produced the
+ * episode. Artwork, `explicit`, `episodeType`, credits and the AI disclosure
+ * were fixed at draft time by the authenticated user and are refused here.
+ *
+ * `title` IS accepted, and it is the reason to reach for this at all: a draft is
+ * created before the content exists, so its title can only name the topic that
+ * was requested. Send the name the FINISHED episode earned and it replaces the
+ * draft's.
+ *
+ * Omitting it keeps whatever the draft said — an absent title never clears one,
+ * so a worker that has nothing better than the placeholder can still deliver
+ * the audio. A title that is empty or only whitespace is REFUSED (400) rather
+ * than stored, the same rule the authenticated endpoints apply; the ticket
+ * survives that refusal and can be redeemed again.
  */
 export interface IngestEpisodeInput {
+  title?: string;
   duration?: number;
   season?: number;
   episodeNumber?: number;

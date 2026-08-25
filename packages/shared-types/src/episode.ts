@@ -131,9 +131,29 @@ export type CreateEpisodeRequest = z.infer<typeof createEpisodeRequestSchema>;
  * audio later.
  *
  * The same creator metadata `POST /:id/episodes` accepts, MINUS the audio: the
- * user is authenticated here and is the one who decides the title, the artwork,
- * the credits and the disclosure. The ticket holder can afterwards set only what
- * it learns by making the audio — see `services/podcasts/ingestToken.ts`.
+ * user is authenticated here and is the one who decides the artwork, the
+ * credits and the disclosure. The ticket holder can afterwards set only what it
+ * learns by making the audio — see `services/podcasts/ingestToken.ts`.
+ *
+ * ## `title` stays REQUIRED, now that the ingest may also set one
+ *
+ * The obvious follow-on is to drop it: a caller that knows the name will only
+ * be known later is being made to invent one now. It is kept anyway, because
+ * the two changes point in opposite directions and only one of them is safe.
+ *
+ * A required title means every episode has a name a HUMAN chose from the moment
+ * it exists, and the ingest can only improve on it. Drop the requirement and
+ * there is no such floor: an episode drafted and never redeemed — the ticket
+ * expired, the generation failed, the worker crashed — has no name at all, and
+ * `episodes.title` is `NOT NULL`, so the server would have to invent a
+ * placeholder instead. That placeholder is strictly worse than the caller's,
+ * because it is the same string for everyone and it survives into the public
+ * feed on any ingest that omits a title.
+ *
+ * So the cost of keeping it is one line at a call site that already knows the
+ * topic; the cost of relaxing it is an episode that nobody ever named. A
+ * working title is not a burden — it is the fallback the whole "absent means
+ * keep" rule in {@link ingestEpisodeAudioRequestSchema} depends on having.
  */
 export const createEpisodeDraftRequestSchema = z.object({
   title: z.string(),
@@ -163,15 +183,40 @@ export type CreateEpisodeDraftResponse = z.infer<typeof createEpisodeDraftRespon
  * The multipart fields `POST /api/podcasts/episodes/:id/ingest` accepts beside
  * the audio — an ALLOWLIST, and the security boundary of the whole capability.
  *
- * Every field here is something a worker knows because it produced the audio.
- * Nothing that identifies, publishes or attributes the episode is reachable:
- * title, artwork, `explicit`, `episodeType`, credits, `status`, `aiGenerated`
- * and every storage column were fixed by the authenticated user at draft time.
+ * Every field here is something a worker knows because it PRODUCED the audio,
+ * and that is the test each one has to pass. Nothing that publishes or
+ * attributes the episode is reachable: artwork, `explicit`, `episodeType`,
+ * credits, `status` and `aiGenerated` are the authenticated user's own
+ * declarations, and every storage column belongs to the server.
+ *
+ * ## Why `title` is here, and why that is not a widening of the capability
+ *
+ * A draft is written before any script exists, so its title can only ever
+ * describe the topic that was REQUESTED. The name an episode deserves is a
+ * property of its finished content, and the worker holding this ticket is the
+ * only party that has read it — so refusing the title here did not protect the
+ * episode's identity, it just guaranteed the identity was decided by whoever
+ * knew least.
+ *
+ * The ticket is already authorised to attach the AUDIO to this episode, which
+ * is the more consequential of the two by a wide margin: it decides what
+ * listeners actually hear, and the title is the label on it. A capability that
+ * may choose the contents may choose the name of the contents. It stays bound
+ * to ONE episode, single-use, owner-checked at redemption and refused once the
+ * episode has media — none of which this changes.
+ *
+ * `title` is validated exactly as the two authenticated doors validate it
+ * (`createEpisodeDraft`, `uploadEpisode`): trimmed, and a blank result refused
+ * rather than stored. The column is `NOT NULL` but not non-empty, so without
+ * the `min(1)` an episode called nothing would reach the public feed. Absent
+ * means KEEP WHAT THE DRAFT SAID — a worker with nothing better than the
+ * placeholder must still be able to deliver the audio.
  *
  * Numbers arrive as multipart strings, so each one is coerced and then
  * validated — a coercion without a validation is how `NaN` reaches a column.
  */
 export const ingestEpisodeAudioRequestSchema = z.object({
+  title: z.string().trim().min(1).optional(),
   duration: z.coerce.number().nonnegative().optional(),
   season: z.coerce.number().int().nonnegative().optional(),
   episodeNumber: z.coerce.number().int().nonnegative().optional(),

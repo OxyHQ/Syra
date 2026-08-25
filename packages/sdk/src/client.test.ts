@@ -1029,6 +1029,60 @@ describe('createSyraClient.ingestEpisode', () => {
     expect(form.get('episodeNumber')).toBe('3');
   });
 
+  it('carries the title the finished episode earned', async () => {
+    /**
+     * The reason a worker calls this with an `input` at all: the draft was named
+     * from the topic that was requested, and only this call has read the script.
+     * The field has to survive `defined()` and the `String(value)` pass that
+     * turns the input into multipart, so it is asserted on the FormData rather
+     * than on the interface.
+     */
+    const { fetch, calls } = fakeFetch(() => ({ body: { data: makeSyraEpisode() } }));
+    const client = createSyraClient({ baseURL: 'https://api.example.test', fetch });
+
+    await client.ingestEpisode(
+      { episodeId: 'ep-1', ingestTicket: 'ticket-abc' },
+      new Blob([new Uint8Array([1])], { type: 'audio/mpeg' }),
+      { title: 'Why the Moon Pays the Electricity Bill', duration: 1800 },
+    );
+
+    const form = calls[0].body as FormData;
+    expect(form.get('title')).toBe('Why the Moon Pays the Electricity Bill');
+    // The control on the same body: another field made the same trip, so a
+    // present `title` is not the only thing this could be measuring.
+    expect(form.get('duration')).toBe('1800');
+  });
+
+  it('sends NO title field when the caller has no title to send', async () => {
+    /**
+     * An omitted title must mean "keep what the draft said", and the client is
+     * the first place that can break it: `String(undefined)` is the string
+     * `'undefined'`, which the server would store as the episode's name without
+     * blinking. `defined()` strips the key before it can become one.
+     *
+     * `title: undefined` is written EXPLICITLY rather than left out, and that is
+     * the whole point of the case: a key that is absent from the object never
+     * reaches the `Object.entries` loop, so leaving it out would exercise
+     * nothing. A worker whose own title is optional — `{ title: maybe, duration }`
+     * — passes the key holding `undefined`, and that is the shape `defined()`
+     * exists for.
+     */
+    const { fetch, calls } = fakeFetch(() => ({ body: { data: makeSyraEpisode() } }));
+    const client = createSyraClient({ fetch });
+
+    await client.ingestEpisode(
+      { episodeId: 'ep-1', ingestTicket: 'ticket-abc' },
+      new Blob([new Uint8Array([1])], { type: 'audio/mpeg' }),
+      { title: undefined, duration: 1800 },
+    );
+
+    const form = calls[0].body as FormData;
+    expect(form.has('title')).toBe(false);
+    // The control: the sibling field DID make the trip, so an absent `title` is
+    // the stripping and not an input the client dropped whole.
+    expect(form.get('duration')).toBe('1800');
+  });
+
   it('still sends only the ticket when a session token IS configured', async () => {
     // The other direction of the same rule — a worker that happens to have a
     // token must not accidentally authenticate as a user here.

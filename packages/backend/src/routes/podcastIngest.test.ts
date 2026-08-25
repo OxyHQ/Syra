@@ -694,14 +694,21 @@ describe('a ticket holder can set the audio metadata and NOTHING else', () => {
     /**
      * The capability's real boundary, as a test.
      *
-     * One request carrying both halves: the five allowlisted fields AND seven
-     * that a worker must never be able to set. The allowlisted ones changing is
-     * the positive control — without it, "nothing changed" would also be true of
-     * a handler that ignored the whole body.
+     * One request carrying both halves: the six allowlisted fields AND six that
+     * a worker must never be able to set. The allowlisted ones changing is the
+     * positive control — without it, "nothing changed" would also be true of a
+     * handler that ignored the whole body.
+     *
+     * `title` moved from the second half to the first, deliberately: it is the
+     * one thing here a worker learns by MAKING the episode rather than by being
+     * told, so the name can now come from the finished script instead of from
+     * the topic that was requested. `episodeType`, `explicit`, `aiGenerated`,
+     * the credits, `guid`, `podcastId` and the storage columns did NOT move —
+     * see `services/podcasts/ingestToken.ts` for the line between them.
      */
     const showId = await seedShow();
     const created = await draft(showId, OWNER, {
-      title: 'The Title The User Chose',
+      title: 'The Working Title',
       episodeType: 'trailer',
       explicit: true,
       aiGenerated: false,
@@ -715,8 +722,8 @@ describe('a ticket holder can set the audio metadata and NOTHING else', () => {
       // Allowed.
       duration: '99',
       description: 'Set by the worker',
-      // Refused: identity, publication and attribution.
-      title: 'Hijacked Title',
+      title: 'The Name The Content Earned',
+      // Refused: publication, attribution and identity.
       episodeType: 'full',
       explicit: 'false',
       aiGenerated: 'true',
@@ -733,9 +740,9 @@ describe('a ticket holder can set the audio metadata and NOTHING else', () => {
     // The allowlist took effect.
     expect(`duration: ${after?.duration}`).toBe('duration: 99');
     expect(`description: ${after?.description}`).toBe('description: Set by the worker');
+    expect(`title: ${after?.title}`).toBe('title: The Name The Content Earned');
 
     // And nothing else moved.
-    expect(`title: ${after?.title}`).toBe('title: The Title The User Chose');
     expect(`episodeType: ${after?.episodeType}`).toBe('episodeType: trailer');
     expect(`explicit: ${after?.explicit}`).toBe('explicit: true');
     expect(`aiGenerated: ${after?.aiGenerated}`).toBe('aiGenerated: false');
@@ -767,5 +774,112 @@ describe('a ticket holder can set the audio metadata and NOTHING else', () => {
     expect(`valid: ${(await ingest(d.episodeId, d.ingestTicket, { episodeNumber: '12' })).status}`).toBe(
       'valid: 202'
     );
+  });
+});
+
+// ── The title the content earned ──────────────────────────────────────────────
+
+describe('the ingest ticket may name the episode', () => {
+  /** A drafted episode whose draft title is the one a worker should be able to beat. */
+  async function draftedWithTitle(title = 'Working Title'): Promise<Draft> {
+    const showId = await seedShow();
+    const created = await draft(showId, OWNER, { title });
+    if (!created.draft) throw new Error('no draft');
+    return created.draft;
+  }
+
+  it('stores a title the worker supplies, replacing the draft placeholder', async () => {
+    /**
+     * The point of the whole change: the draft names the episode from the topic
+     * that was REQUESTED, and only the worker that produced the audio has read
+     * the finished script. This is the assertion that fails against a five-field
+     * allowlist.
+     */
+    const d = await draftedWithTitle('Episode about tidal power');
+
+    const response = await ingest(d.episodeId, d.ingestTicket, {
+      title: 'Why the Moon Pays the Electricity Bill',
+    });
+    expect(`status: ${response.status}`).toBe('status: 202');
+
+    const episode = await readEpisode(d.episodeId);
+    expect(`title: ${episode?.title}`).toBe('title: Why the Moon Pays the Electricity Bill');
+
+    // The response a worker reads back carries the new name too, so it never has
+    // to re-fetch to learn what the episode is now called.
+    const body = (await response.json()) as { data: { title?: string } };
+    expect(`dto title: ${body.data.title}`).toBe('dto title: Why the Moon Pays the Electricity Bill');
+  });
+
+  it('keeps the draft title when the ingest carries none', async () => {
+    /**
+     * The positive control on the same field, and the case that matters most in
+     * production: ingest is single-use, so a worker with nothing better than the
+     * placeholder must be able to deliver the audio WITHOUT it costing the
+     * episode its name. An absent title means "keep", never "clear".
+     *
+     * The `description` beside it is what makes this a control rather than a
+     * tautology: a handler that ignored the entire body would also leave the
+     * title alone, and this proves the request was read.
+     */
+    const d = await draftedWithTitle('The Name The User Chose');
+
+    const response = await ingest(d.episodeId, d.ingestTicket, {
+      description: 'Generated description',
+    });
+    expect(`status: ${response.status}`).toBe('status: 202');
+
+    const episode = await readEpisode(d.episodeId);
+    expect(`title: ${episode?.title}`).toBe('title: The Name The User Chose');
+    expect(`description: ${episode?.description}`).toBe('description: Generated description');
+  });
+
+  it('refuses a blank title rather than letting one erase the name', async () => {
+    /**
+     * The rule the front doors already enforce — `createEpisodeDraft` and
+     * `uploadEpisode` both trim and refuse an empty result — applied to the same
+     * name arriving through this one. A `NOT NULL` column would happily take
+     * `''`, and an episode called nothing would reach the public feed.
+     *
+     * The ticket must survive it: a malformed field is a caller's mistake, and a
+     * capability a background worker cannot re-obtain without a user session
+     * must not be spent on a request that wrote nothing. That is why the body is
+     * parsed BEFORE the claim.
+     */
+    const d = await draftedWithTitle('Still Named');
+
+    expect(`empty: ${(await ingest(d.episodeId, d.ingestTicket, { title: '' })).status}`).toBe(
+      'empty: 400'
+    );
+    expect(`blank: ${(await ingest(d.episodeId, d.ingestTicket, { title: '   ' })).status}`).toBe(
+      'blank: 400'
+    );
+
+    const unchanged = await readEpisode(d.episodeId);
+    expect(`title: ${unchanged?.title}`).toBe('title: Still Named');
+    expect(`no upload: ${storedKeys.length}`).toBe('no upload: 0');
+    expect(`ticket unspent: ${(await readTicket(jtiOf(d.ingestTicket)))?.consumedAt}`).toBe(
+      'ticket unspent: null'
+    );
+
+    // Positive control, same ticket: a real name is accepted, so the two
+    // refusals are the validation and not a ticket this suite had already burnt.
+    expect(
+      `valid: ${(await ingest(d.episodeId, d.ingestTicket, { title: 'A Real Name' })).status}`
+    ).toBe('valid: 202');
+    expect(`stored title: ${(await readEpisode(d.episodeId))?.title}`).toBe(
+      'stored title: A Real Name'
+    );
+  });
+
+  it('trims the stored title, exactly as the draft door does', async () => {
+    // Multipart carries whatever the worker wrote. `createEpisodeDraft` stores
+    // `input.title.trim()`, so a name arriving here must not keep padding the
+    // same name would have lost coming through the front.
+    const d = await draftedWithTitle();
+
+    await ingest(d.episodeId, d.ingestTicket, { title: '  Padded Name  ' });
+
+    expect(`title: ${(await readEpisode(d.episodeId))?.title}`).toBe('title: Padded Name');
   });
 });
