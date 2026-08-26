@@ -1,10 +1,10 @@
 import { Badge } from '@oxyhq/bloom/badge';
-import type { BadgeColor } from '@oxyhq/bloom/badge';
+import type { AccentTone } from '@oxyhq/bloom/theme';
 import type { EpisodeStatus, PodcastStatus } from '@syra/shared-types';
 
 type AnyStatus = EpisodeStatus | PodcastStatus;
 
-const STATUS_COLOR: Record<AnyStatus, BadgeColor> = {
+const STATUS_COLOR: Record<AnyStatus, AccentTone> = {
   // Episode
   ready: 'success',
   processing: 'warning',
