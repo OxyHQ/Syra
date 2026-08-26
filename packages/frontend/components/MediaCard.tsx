@@ -3,7 +3,14 @@ import { StyleSheet, View, Text, Image, Pressable, Platform, GestureResponderEve
 import { webViewStyle } from '@/utils/webStyles';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
-import { Menu, MenuTrigger, MenuContent, MenuItem, MenuItemText, MenuGroup, useMenuControl } from '@oxyhq/bloom';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+} from '@oxyhq/bloom/dropdown-menu';
+import { useInteractionStates } from '@oxyhq/bloom/hooks';
 import { Ionicons } from '@expo/vector-icons';
 import type { CatalogImageSizes, TrackImage } from '@syra/shared-types';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
@@ -87,7 +94,13 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
   const resolvedImageUri = resolvedImageUriProp ?? pickCatalogImageUrl(images, imageUri, 'card', imageSizes);
   const [isHovered, setIsHovered] = React.useState(false);
   const [hideIdleActions, setHideIdleActions] = React.useState(shouldHideIdleActionsByDefault);
-  const menuControl = useMenuControl();
+  const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+  const {
+    focused: triggerFocused,
+    pressed: triggerPressed,
+    focusHandlers: triggerFocusHandlers,
+    pressHandlers: triggerPressHandlers,
+  } = useInteractionStates();
   const isHoveredRef = React.useRef(false);
   const isPointerInsideCardRef = React.useRef(false);
   const suppressNextPressRef = React.useRef(false);
@@ -98,7 +111,6 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
   
   const showPlayButton = isHovered && onPlayPress;
   const hasMenu = !!(onAddToQueue || onGoToArtist || onGoToAlbum);
-  const isMenuOpen = 'isOpen' in menuControl ? Boolean(menuControl.isOpen) : false;
   const usesHoverActions = hideIdleActions;
   /**
    * `backgroundTertiary`, not `backgroundSecondary`, when the cover has no accent.
@@ -202,8 +214,8 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
     suppressNextPressRef.current = true;
     isPointerInsideCardRef.current = true;
     setCardHoverState(true);
-    menuControl.open();
-  }, [hasMenu, menuControl, setCardHoverState, usesHoverActions]);
+    setIsMenuOpen(true);
+  }, [hasMenu, setCardHoverState, usesHoverActions]);
 
   const renderMenuIcon = (name: React.ComponentProps<typeof Ionicons>['name']) => (
     <Ionicons name={name} size={18} color={theme.colors.textSecondary} />
@@ -212,95 +224,88 @@ const MediaCardComponent: React.FC<MediaCardProps> = ({
   const renderActionsMenu = () => {
     if (!hasMenu) return null;
 
+    // The trigger fades in on hover, and must stay visible while it is focused
+    // or held so a keyboard user can still see what they are on. Bloom's
+    // anchored trigger has no render prop any more, so the two flags come from
+    // the hook the old `MenuTrigger` render prop was reading internally.
+    const hideMenuTrigger =
+      !usesHoverActions ||
+      (!isHovered && !isMenuOpen && !triggerFocused && !triggerPressed);
+
     return (
       <View style={styles.menuContainer}>
-        <Menu control={menuControl}>
-          <MenuTrigger label={`More actions for ${title}`}>
-            {({ props, state }) => {
-              const { ref: triggerRef, ...triggerProps } = props;
-              const hideMenuTrigger =
-                !usesHoverActions ||
-                (!isHovered && !isMenuOpen && !state.focused && !state.pressed);
-
-              return (
-                <Pressable
-                  ref={triggerRef as React.Ref<View>}
-                  {...triggerProps}
-                  pointerEvents={hideMenuTrigger ? 'none' : 'auto'}
-                  onPress={(event) => {
-                    event.stopPropagation?.();
-                    triggerProps.onPress?.();
-                  }}
-                  style={[
-                    styles.menuTrigger,
-                    hideMenuTrigger
-                      ? styles.menuTriggerHidden
-                      : styles.menuTriggerVisible,
-                    {
-                      backgroundColor: state.focused || state.pressed
-                        ? theme.colors.backgroundTertiary
-                        : theme.colors.backgroundSecondary,
-                    },
-                  ]}
-                >
-                  <Ionicons name="ellipsis-horizontal" size={18} color={theme.colors.textSecondary} />
-                </Pressable>
-              );
-            }}
-          </MenuTrigger>
-          <MenuContent style={styles.menuOptions}>
-            <MenuGroup>
+        <DropdownMenu open={isMenuOpen} onOpenChange={setIsMenuOpen}>
+          <DropdownMenuTrigger asChild label={`More actions for ${title}`}>
+            <Pressable
+              {...triggerFocusHandlers}
+              {...triggerPressHandlers}
+              pointerEvents={hideMenuTrigger ? 'none' : 'auto'}
+              // Composed with, not replacing, the open handler the trigger
+              // merges in: without this the same press also reaches the card
+              // underneath and navigates away from the menu being opened.
+              onPress={(event) => {
+                event.stopPropagation?.();
+              }}
+              style={[
+                styles.menuTrigger,
+                hideMenuTrigger
+                  ? styles.menuTriggerHidden
+                  : styles.menuTriggerVisible,
+                {
+                  backgroundColor: triggerFocused || triggerPressed
+                    ? theme.colors.backgroundTertiary
+                    : theme.colors.backgroundSecondary,
+                },
+              ]}
+            >
+              <Ionicons name="ellipsis-horizontal" size={18} color={theme.colors.textSecondary} />
+            </Pressable>
+          </DropdownMenuTrigger>
+          {/*
+            `align="end"` reproduces the old panel's `right: 0`; the 4px gap the
+            old `top: 32` left below a 28px trigger is Bloom's default
+            `sideOffset`. Nothing here positions the panel by hand any more — it
+            is portalled and placed by Bloom's own resolver, which also flips it
+            above the card near the bottom of the viewport, where the absolutely
+            positioned panel used to run off screen.
+          */}
+          <DropdownMenuContent align="end" label={`More actions for ${title}`}>
+            <DropdownMenuGroup>
               {onPress && (
-                <MenuItem
-                  label={t('common.open')}
-                  onPress={(event) => {
-                    event.stopPropagation?.();
-                    onPress();
-                  }}
+                <DropdownMenuItem
+                  leading={renderMenuIcon('open-outline')}
+                  onPress={onPress}
                 >
-                  {renderMenuIcon('open-outline')}
-                  <MenuItemText>{t('common.open')}</MenuItemText>
-                </MenuItem>
+                  {t('common.open')}
+                </DropdownMenuItem>
               )}
               {onAddToQueue && (
-                <MenuItem
-                  label={t('common.addToQueue')}
-                  onPress={(event) => {
-                    event.stopPropagation?.();
-                    onAddToQueue();
-                  }}
+                <DropdownMenuItem
+                  leading={renderMenuIcon('list-outline')}
+                  onPress={onAddToQueue}
                 >
-                  {renderMenuIcon('list-outline')}
-                  <MenuItemText>{t('common.addToQueue')}</MenuItemText>
-                </MenuItem>
+                  {t('common.addToQueue')}
+                </DropdownMenuItem>
               )}
               {onGoToAlbum && (
-                <MenuItem
-                  label={t('common.goToAlbum')}
-                  onPress={(event) => {
-                    event.stopPropagation?.();
-                    onGoToAlbum();
-                  }}
+                <DropdownMenuItem
+                  leading={renderMenuIcon('disc-outline')}
+                  onPress={onGoToAlbum}
                 >
-                  {renderMenuIcon('disc-outline')}
-                  <MenuItemText>{t('common.goToAlbum')}</MenuItemText>
-                </MenuItem>
+                  {t('common.goToAlbum')}
+                </DropdownMenuItem>
               )}
               {onGoToArtist && (
-                <MenuItem
-                  label={t('common.goToArtist')}
-                  onPress={(event) => {
-                    event.stopPropagation?.();
-                    onGoToArtist();
-                  }}
+                <DropdownMenuItem
+                  leading={renderMenuIcon('person-outline')}
+                  onPress={onGoToArtist}
                 >
-                  {renderMenuIcon('person-outline')}
-                  <MenuItemText>{t('common.goToArtist')}</MenuItemText>
-                </MenuItem>
+                  {t('common.goToArtist')}
+                </DropdownMenuItem>
               )}
-            </MenuGroup>
-          </MenuContent>
-        </Menu>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </View>
     );
   };
@@ -475,16 +480,6 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         transition: 'opacity 0.16s ease, transform 0.16s ease, background-color 0.16s ease',
-      },
-    }),
-  }),
-  menuOptions: webViewStyle({
-    ...Platform.select({
-      web: {
-        position: 'absolute',
-        top: 32,
-        right: 0,
-        zIndex: Z_INDEX.CARD_ACTIONS_MENU,
       },
     }),
   }),
