@@ -8,7 +8,13 @@ const logger = createScopedLogger('StreamService');
 
 export interface StreamResolution {
   url: string;
-  type: 'hls';
+  /**
+   * Which transport the resolver handed back. `hls` is the encrypted ladder;
+   * `progressive` is the same signed token on the `/audio` path, which is what
+   * an episode of a PRIVATE show gets — those never have a ladder, because the
+   * transcode is skipped so no unrevocable presigned segment URLs exist.
+   */
+  type: 'hls' | 'progressive';
   expiresAt: string | null;
 }
 
@@ -176,7 +182,7 @@ async function resolveFromEndpoint(
  * Calls `GET /api/stream/:trackId` (bearer-authenticated) which returns the
  * resolved URL along with its type and optional expiry.
  *
- * Resolutions are always `type: 'hls'` — an API-served tokenized HLS master
+ * Track resolutions are always `type: 'hls'` — an API-served tokenized HLS master
  * playlist.
  *
  * @throws Error on any network or API error, with a descriptive message
@@ -190,7 +196,8 @@ export function resolveStream(trackId: string): Promise<StreamResolution> {
  * Resolve the tokenized HLS stream for a Syra-hosted episode.
  *
  * Calls `GET /api/podcasts/episodes/:id/stream` (bearer-authenticated) which
- * mints a session token and returns the master playlist URL (`type: 'hls'`).
+ * mints a session token and returns the playlist URL (`hls`) or, for an episode
+ * with no ladder, the tokenized progressive URL (`progressive`).
  * External (rss) episodes are NOT resolved here — they play from the public
  * progressive `/audio` proxy URL built directly in the player.
  */

@@ -1009,3 +1009,78 @@ describe('continue listening', () => {
     });
   }
 });
+
+/**
+ * WHICH TRANSPORT the resolver hands the owner, which is a different question
+ * from who may reach it and is not covered by the matrix above.
+ *
+ * A private show never has an HLS ladder: `ingestEpisode` skips the transcode
+ * on purpose, because a variant playlist hands out presigned S3 segment URLs
+ * that no later visibility change can revoke. Every fixture above nonetheless
+ * seeds one, so the matrix has been asserting a shape production does not
+ * produce for a private show — which is exactly where the bug hid.
+ *
+ * Without a ladder, `/stream` used to answer `422 no HLS stream`, the web
+ * player fell back to the unauthenticated `/audio` URL, and that 404s for the
+ * one person entitled to hear it. The browser reported `NotSupportedError:
+ * Failed to load because no supported source was found`, which names neither
+ * the show nor the reason.
+ */
+describe('the resolver hands back the transport the episode actually has', () => {
+  /** The real shape of a private episode: audio in S3, no ladder. */
+  async function stripHls(fixture: ShowFixture): Promise<void> {
+    await getDb()
+      .update(episodesTable)
+      .set({ hlsMasterKey: null })
+      .where(eq(episodesTable.id, fixture.episodeId));
+    await getDb().delete(episodeHlsRenditions).where(eq(episodeHlsRenditions.episodeId, fixture.episodeId));
+  }
+
+  it('gives a private episode with no ladder a TOKENIZED progressive url', async () => {
+    const priv = await seedShow('private');
+    await stripHls(priv);
+
+    const response = await get(`/api/podcasts/episodes/${priv.episodeId}/stream`, 'owner');
+
+    expect(`status: ${response.status}`).toBe('status: 200');
+    const body = (await response.json()) as { url: string; type: string };
+    expect(`type: ${body.type}`).toBe('type: progressive');
+    // The token is the whole point: `<audio>` cannot send a header, so the
+    // capability has to travel in the URL.
+    expect(`audio path: ${body.url.includes(`/api/podcasts/episodes/${priv.episodeId}/audio`)}`)
+      .toBe('audio path: true');
+    expect(`carries a token: ${/[?&]t=[^&]+/.test(body.url)}`).toBe('carries a token: true');
+  });
+
+  it('still gives the ladder when there is one', async () => {
+    const pub = await seedShow('public');
+
+    const response = await get(`/api/podcasts/episodes/${pub.episodeId}/stream`, 'owner');
+
+    expect(`status: ${response.status}`).toBe('status: 200');
+    const body = (await response.json()) as { url: string; type: string };
+    expect(`type: ${body.type}`).toBe('type: hls');
+    expect(`master: ${body.url.includes('master.m3u8')}`).toBe('master: true');
+  });
+
+  it('refuses only when there is nothing at all to play', async () => {
+    const priv = await seedShow('private');
+    await stripHls(priv);
+    await getDb().update(episodesTable).set({ audioSourceUrl: null }).where(eq(episodesTable.id, priv.episodeId));
+
+    const response = await get(`/api/podcasts/episodes/${priv.episodeId}/stream`, 'owner');
+
+    expect(`status: ${response.status}`).toBe('status: 422');
+  });
+
+  it('does not hand a stranger anything, ladder or not', async () => {
+    const priv = await seedShow('private');
+    await stripHls(priv);
+
+    const response = await get(`/api/podcasts/episodes/${priv.episodeId}/stream`, 'stranger');
+
+    // 404, not 422: a private episode stays indistinguishable from an id that
+    // names nothing, whatever state its media is in.
+    expect(`status: ${response.status}`).toBe('status: 404');
+  });
+});

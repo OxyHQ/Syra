@@ -56,6 +56,7 @@ import { libraryService, type ListeningSource, type PlaySignal } from '@/service
 import { radioService } from '@/services/radioService';
 import { oxyServices } from '@/lib/oxyServices';
 import { attachSource } from './playback/attachSource';
+import { episodeNeedsResolvedSource } from './playback/episodeSource';
 import type { AttachResult } from './playback/attachSource.types';
 import type { PlayerEngine } from './playback/playerEngine';
 import { pickPlaybackMode, canPlayHlsNatively } from './playback/pickPlaybackMode';
@@ -987,35 +988,35 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   };
 
   /**
-   * Whether a Syra-hosted episode can be played via the encrypted HLS ladder.
-   * External (rss) episodes and processing/guest cases use the progressive proxy.
+   * The UNAUTHENTICATED progressive URL — public and unlisted shows only.
+   *
+   * It is the enclosure every podcast client fetches from the RSS feed, so it
+   * carries no credentials by design. For a private show it answers 404, which
+   * is correct and is why nothing private may be routed here.
    */
-  const episodeSupportsHls = (episode: Episode): boolean =>
-    episode.source === 'syra' &&
-    episode.status === 'ready' &&
-    Boolean(episode.hlsMasterKey) &&
-    Array.isArray(episode.hls) &&
-    episode.hls.length > 0 &&
-    oxyServices.hasValidToken();
-
-  /** Public progressive (range-proxy) audio URL for an episode. */
   const episodeProgressiveUrl = (episodeId: string): string =>
     `${getApiOrigin()}/api/podcasts/episodes/${episodeId}/audio`;
 
   /**
-   * Resolve a playable URL for an episode. Syra-hosted ready episodes use the
-   * tokenized HLS stream (falling back to the progressive proxy if that fails);
-   * everything else streams from the public `/audio` proxy.
+   * Resolve a playable URL for an episode.
+   *
+   * The fallback stays for the cases it was written for — a guest, an rss
+   * episode, a resolver that failed — but it is no longer the normal path for
+   * anything Syra hosts, because it cannot carry an identity and some episodes
+   * require one.
    */
   const resolveEpisodeAudio = async (
     episode: Episode,
   ): Promise<{ url: string; resolution: StreamResolution | null }> => {
-    if (episodeSupportsHls(episode)) {
+    if (episodeNeedsResolvedSource(episode, oxyServices.hasValidToken())) {
       try {
         const resolution = await resolveEpisodeStream(episode.id);
         return { url: resolution.url, resolution };
       } catch (error) {
-        logger.warn('Episode HLS resolve failed, using progressive proxy', { episodeId: episode.id, error });
+        logger.warn('Episode stream resolve failed, using the public proxy', {
+          episodeId: episode.id,
+          error,
+        });
       }
     }
     return { url: episodeProgressiveUrl(episode.id), resolution: null };

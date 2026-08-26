@@ -263,8 +263,26 @@ export async function getEpisodeAudio(req: AuthRequest, res: Response): Promise<
 // ── HLS stream (Syra-hosted episodes) ──────────────────────────────────────────
 
 /**
- * GET /api/podcasts/episodes/:id/stream — resolver. Requires a bearer session
- * (mints the token). HLS only; external episodes use `/audio`.
+ * GET /api/podcasts/episodes/:id/stream — the resolver. Requires a bearer
+ * session, because this is where the stream token is MINTED.
+ *
+ * It answers with whichever transport the episode actually has:
+ *
+ * - an encrypted HLS ladder, when one was built, or
+ * - the progressive `/audio` path carrying the same signed token.
+ *
+ * The second case exists because a PRIVATE show never gets an HLS ladder — the
+ * transcode is deliberately skipped, since a variant playlist hands out
+ * presigned S3 segment URLs that no later visibility change can revoke. That
+ * left its owner unable to play their own episode anywhere: `/audio` requires
+ * the caller's identity, and an `<audio>` element cannot send a header. This
+ * endpoint answered `422 no HLS stream` and the web player fell back to the
+ * bare progressive URL, which 404s for exactly the person who owns it.
+ *
+ * So the refusal is now reserved for an episode with nothing to play at all,
+ * and the token — already accepted on `/audio` by `isShowOwnerRequest` — is
+ * minted for the transport that exists. External (rss) episodes still use
+ * `/audio` directly; theirs is public.
  */
 export async function getEpisodeStream(req: AuthRequest, res: Response): Promise<void> {
   const episodeId = getEpisodeIdParam(req);
@@ -308,8 +326,9 @@ export async function getEpisodeStream(req: AuthRequest, res: Response): Promise
     return;
   }
 
-  if (!episode.hlsMasterKey || (await episodeHls(episodeId)).length === 0) {
-    res.status(422).json({ error: 'Episode has no HLS stream' });
+  const hasHls = Boolean(episode.hlsMasterKey) && (await episodeHls(episodeId)).length > 0;
+  if (!hasHls && !episode.audioSourceUrl) {
+    res.status(422).json({ error: 'Episode has no stream' });
     return;
   }
 
@@ -318,11 +337,13 @@ export async function getEpisodeStream(req: AuthRequest, res: Response): Promise
     STREAM_SESSION_TTL_SEC,
   );
   const base = env.STREAM_KEY_BASE_URL;
-  const url = `${base}/api/podcasts/episodes/${episodeId}/master.m3u8?t=${token}`;
+  const url = hasHls
+    ? `${base}/api/podcasts/episodes/${episodeId}/master.m3u8?t=${token}`
+    : `${base}/api/podcasts/episodes/${episodeId}/audio?t=${token}`;
   const expiresAt = new Date(Date.now() + STREAM_SESSION_TTL_SEC * 1000).toISOString();
 
   res.set('Vary', 'Authorization');
-  res.status(200).json({ url, type: 'hls', expiresAt });
+  res.status(200).json({ url, type: hasHls ? 'hls' : 'progressive', expiresAt });
 }
 
 /**
