@@ -14,7 +14,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@oxyhq/bloom/theme';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { toast } from '@oxyhq/bloom/toast';
 import type { UploadDestination, UploadOutcome } from '@syra/shared-types';
 import SEO from '@/components/SEO';

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, Platform } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { usePlayerStore } from '@/stores/playerStore';
 

@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import * as Skeleton from '@oxyhq/bloom/skeleton';
 import type { Device, DeviceType } from '@syra/shared-types';
 import { useConnect } from '@/hooks/useConnect';

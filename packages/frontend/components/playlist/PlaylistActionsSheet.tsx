@@ -4,7 +4,7 @@ import BottomSheet, { type BottomSheetRef } from '@oxyhq/bloom/bottom-sheet';
 import { AlertDialog } from '@oxyhq/bloom/alert-dialog';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useOxy } from '@oxyhq/services';
 import type { Playlist } from '@syra/shared-types';
 import { useDeletePlaylist, useUpdatePlaylist } from '@/hooks/usePlaylistMutations';

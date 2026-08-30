@@ -1,7 +1,7 @@
 import { type ReactNode, useCallback } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter, usePathname, type Href } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { useOxy, ProfileButton } from '@oxyhq/services';
 import { useResponsive } from '@/hooks/useResponsive';

@@ -23,7 +23,7 @@ import {
 } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMediaQuery } from 'react-responsive';
 

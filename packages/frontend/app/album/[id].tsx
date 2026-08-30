@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme, useAmbientTheme } from '@oxyhq/bloom/theme';
 import { musicService } from '@/services/musicService';
 import { Track } from '@syra/shared-types';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useQueueStore } from '@/stores/queueStore';
 import SEO from '@/components/SEO';

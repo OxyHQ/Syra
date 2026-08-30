@@ -11,7 +11,7 @@ import {
   DropdownMenuItem,
 } from '@oxyhq/bloom/dropdown-menu';
 import { useInteractionStates } from '@oxyhq/bloom/hooks';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import type { CatalogImageSizes, TrackImage } from '@syra/shared-types';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { Z_INDEX } from '@/lib/constants';

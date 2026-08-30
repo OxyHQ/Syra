@@ -186,5 +186,17 @@ jobs:
       - name: Studio tests
         run: bun run --filter @syra/studio test
 
+      - name: Guard bundle imports
+        run: bun run check:bundle-imports
+
+      - name: Export listener frontend
+        run: bun run build:frontend
+
+      - name: Enforce web bundle budget
+        run: bun run check:web-bundle-budget
+
+      - name: Mutation-test performance gates
+        run: bun run test:performance-gates
+
       - name: Backend tests
         run: bun run --filter @syra/backend test

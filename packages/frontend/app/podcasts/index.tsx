@@ -3,7 +3,7 @@ import { StyleSheet, View, Text, ScrollView, Pressable, Platform } from 'react-n
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme, useAmbientTheme } from '@oxyhq/bloom/theme';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import type { Podcast } from '@syra/shared-types';
 import SEO from '@/components/SEO';
 import { MediaCard } from '@/components/MediaCard';

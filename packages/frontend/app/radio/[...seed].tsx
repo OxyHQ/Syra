@@ -4,7 +4,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { radioSeedTypeSchema, type RadioSeed, type Track } from '@syra/shared-types';
 import SEO from '@/components/SEO';
 import { TrackRow } from '@/components/TrackRow';
