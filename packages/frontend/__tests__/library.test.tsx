@@ -53,11 +53,9 @@ jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) =>
 
 // Icons render their glyph as TEXT, which would land in every assertion below
 // and make an exact-label match impossible.
-jest.mock('@expo/vector-icons', () => ({
-  Ionicons: () => null,
-  Octicons: () => null,
-  MaterialCommunityIcons: () => null,
-}));
+jest.mock('@expo/vector-icons/Ionicons', () => () => null);
+jest.mock('@expo/vector-icons/Octicons', () => () => null);
+jest.mock('@expo/vector-icons/MaterialCommunityIcons', () => () => null);
 
 // The screen uses reanimated for `Animated.ScrollView` and nothing else; the
 // real module needs the worklets runtime.
