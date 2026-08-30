@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { useOxy } from '@oxyhq/services';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { CoverArtPicker } from '@/components/playlists/CoverArtPicker';
 import { PlaylistVisibility } from '@syra/shared-types';
 import { musicService } from '@/services/musicService';

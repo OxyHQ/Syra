@@ -7,7 +7,7 @@ import SEO from '@/components/SEO';
 import Avatar from '@/components/Avatar';
 import { ProfileHeaderSkeleton } from '@/components/skeletons';
 import { useProfileData } from '@/hooks/useProfileData';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
 /**
  * User Profile Screen

@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { useOxy, ProfileButton } from '@oxyhq/services';
 import { useQuery } from '@tanstack/react-query';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import Avatar from './Avatar';
 import { Logo } from './Logo';
 import { useMediaQuery } from 'react-responsive';

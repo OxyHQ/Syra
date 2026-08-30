@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, Pressable, Platform } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { webViewStyle } from '@/utils/webStyles';

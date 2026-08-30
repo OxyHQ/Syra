@@ -4,7 +4,7 @@ import BottomSheet, { type BottomSheetRef } from '@oxyhq/bloom/bottom-sheet';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import type { Track } from '@syra/shared-types';
 import { useRemoveTracksFromPlaylist } from '@/hooks/usePlaylistMutations';
 import { AddToPlaylistSheet } from '@/components/playlist/AddToPlaylistSheet';

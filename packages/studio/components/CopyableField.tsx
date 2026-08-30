@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { copyToClipboard } from '@/utils/clipboard';
 import { toast } from '@oxyhq/bloom/toast';

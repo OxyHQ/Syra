@@ -8,7 +8,9 @@ import {
   View,
 } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
-import { Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import Octicons from '@expo/vector-icons/Octicons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxyhq/bloom/theme';
 import { Search } from '@oxyhq/bloom/search';

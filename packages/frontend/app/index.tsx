@@ -31,7 +31,7 @@ import {
 import { usePlayEntity } from '@/hooks/usePlayEntity';
 import { createScopedLogger } from '@/utils/logger';
 import { toPlayableItem } from '@/utils/playableItem';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { pickCatalogImageUrl, resolvePodcastArtwork } from '@/utils/pickImage';
 import { authenticatedClient } from '@/utils/api';
 import { liveRoomsQueryKey } from '@/lib/liveConfig';

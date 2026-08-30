@@ -3,7 +3,7 @@ import { GestureResponderEvent, StyleSheet, View, Text, Image, Pressable, Platfo
 import { webViewStyle } from '@/utils/webStyles';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@oxyhq/bloom/theme';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 interface GenreCardProps {
   name: string;

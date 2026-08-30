@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useTheme, useAmbientTheme } from '@oxyhq/bloom/theme';
 import SEO from '@/components/SEO';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter, useLocalSearchParams, type Href } from 'expo-router';
 import { Image } from 'expo-image';
 import { SearchCategory, SearchUser, Track } from '@syra/shared-types';
