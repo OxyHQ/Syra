@@ -68,8 +68,7 @@ DATABASE_URL=postgres://syra:syra@127.0.0.1:5434/syra_dev
 PORT=4120
 NODE_ENV=development
 
-# External Services
-OPENAI_API_KEY=your_openai_api_key
+# Optional operational notifications
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 
 # S3 Configuration (for audio file storage)

@@ -105,8 +105,6 @@ const schema = z.object({
 
   TELEGRAM_BOT_TOKEN: z.string().optional(),
 
-  OPENAI_API_KEY: z.string().optional(),
-
   JAMENDO_CLIENT_ID: z.string().optional(),
   JAMENDO_API_URL: z.string().optional(),
 
