@@ -42,7 +42,7 @@
   },
   "dependencies": {},
   "overrides": {
-    "@oxyhq/bloom": "^1.8.0",
+    "@oxyhq/bloom": "^1.14.0",
     "@oxyhq/core": "^23.0.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
