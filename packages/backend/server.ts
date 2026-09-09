@@ -91,7 +91,7 @@ const ALLOWED_ORIGINS: string[] = [
 // One source of truth for the CORS allow-list so the HTTP and Socket.IO
 // configs can never drift apart. `X-Syra-Device-Id` lets a guest identify its
 // device for radio/session reads (not a security boundary — see radio.controller).
-const ALLOWED_HEADERS = ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-Requested-With', 'Accept', 'Accept-Version', 'Content-Length', 'Content-MD5', 'Date', 'X-Api-Version', 'X-Syra-Device-Id'];
+const ALLOWED_HEADERS = ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-Requested-With', 'Accept', 'Accept-Version', 'Content-Length', 'Content-MD5', 'Date', 'X-Api-Version', 'X-Syra-Device-Id', 'X-Oxy-Edge-Region'];
 
 app.use(cors({
   origin: (origin, callback) => {
