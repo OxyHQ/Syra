@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useAuth } from '@oxyhq/services';
+import { useAuth } from '@oxy.so/services';
 import { createAudioPlayer } from 'expo-audio';
 import { useLiveConfig } from '../context/LiveConfigContext';
 import type { RoomParticipant, StreamInfo } from '../types';
