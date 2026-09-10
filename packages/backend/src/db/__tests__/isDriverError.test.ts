@@ -1,7 +1,7 @@
 /**
  * `isDriverError` — the classifier that decides whether a log gets redacted.
  *
- * This is the half worth testing. `describeDriverError` (from `@oxyhq/db`) only
+ * This is the half worth testing. `describeDriverError` (from `@oxy.so/db`) only
  * formats; the branch that chooses when to call it is what decides which
  * subsystem an operator is sent to at 3am, and it is the part every vertical
  * adopting the redaction convention has to get right.
@@ -23,7 +23,7 @@ import { describe, expect, it } from 'bun:test';
 import fs from 'fs';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
-import { sqlStateOf } from '@oxyhq/db';
+import { sqlStateOf } from '@oxy.so/db';
 import { isDriverError } from '../postgres';
 
 /** The shape drizzle produces: its own wrapper carrying the statement, with the driver beneath. */
@@ -112,7 +112,7 @@ describe('isDriverError — errors that ARE the database', () => {
   });
 
   it('recognises one whose SQLSTATE lives on the cause, not the wrapper', () => {
-    // The trap `@oxyhq/db`'s own header names: drizzle wraps the driver failure,
+    // The trap `@oxy.so/db`'s own header names: drizzle wraps the driver failure,
     // so `code` is on `cause`. The walk has to descend.
     const wrapped = drizzleWrapped('23503');
     expect(Reflect.get(wrapped, 'code')).toBeUndefined();

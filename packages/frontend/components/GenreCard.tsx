@@ -2,7 +2,7 @@ import React from 'react';
 import { GestureResponderEvent, StyleSheet, View, Text, Image, Pressable, Platform } from 'react-native';
 import { webViewStyle } from '@/utils/webStyles';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
 interface GenreCardProps {

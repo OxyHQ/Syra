@@ -33,7 +33,7 @@ fun SyraGlanceTheme(content: @GlanceComposable @Composable () -> Unit) {
  * GENERATED, not authored — do not hand-edit a value here.
  *
  * Every role below is Bloom's own colour engine (`generateRoleColors` from
- * `@oxyhq/bloom/theme/color-engine`) resolving Syra's actual preset seed
+ * `@oxy.so/bloom/theme/color-engine`) resolving Syra's actual preset seed
  * `#8b5cf6` at variant `vivid` — the `purple` preset that `app/_layout.tsx`
  * passes as `defaultColorPreset` — in light and dark. Regenerate from the seed
  * rather than nudging a hex, or the widget drifts away from the app it belongs

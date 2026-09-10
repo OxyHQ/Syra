@@ -5,14 +5,14 @@
  * `bun run db:migrate` runs it; nothing else applies a migration by any other
  * route. The actual apply — journal read, ledger read, phase planning,
  * extension setup, `migrate()`, the post-apply re-check — is `runMigrations`
- * from `@oxyhq/db/migrate`; see its own doc comment for the full ordering and
+ * from `@oxy.so/db/migrate`; see its own doc comment for the full ordering and
  * why each step comes where it does. This file supplies everything that
  * mechanism needs from THIS package: its migrations folder, its required
  * extensions (`REQUIRED_EXTENSIONS`, empty today), its `--phase` argument and
  * its `--target-database` guard.
  *
  * `--phase` IS REQUIRED, and says which side of a deployment this run stands
- * on. `@oxyhq/db/migrate`'s `phases.ts` explains the marker each migration
+ * on. `@oxy.so/db/migrate`'s `phases.ts` explains the marker each migration
  * carries and the incident that put it there; the short version:
  *
  *   --phase=pre    the PREVIOUS image is still serving. Applies additive
@@ -156,7 +156,7 @@
  * A COROLLARY FOR EVERY MIGRATION AFTER THE BOUNDARY: keep additive DDL and
  * narrowing DDL in SEPARATE migration files. `drizzle-kit generate` will
  * happily emit one file mixing both — and because ONE narrowing statement
- * forces the whole file `post` (`@oxyhq/db/migrate`'s own per-file rule, and
+ * forces the whole file `post` (`@oxy.so/db/migrate`'s own per-file rule, and
  * the correct one), a single trailing `ADD CONSTRAINT`/`DROP COLUMN` in an
  * otherwise-additive generated file drags every purely-additive statement in
  * it onto the `post` side too — exactly what happened to Task 4's own `0004`
@@ -176,7 +176,7 @@
  * production deploy paths) that adopting it would have to change all at once
  * — Syra has no existing invocation to preserve. Every caller of this file
  * starts having to name the database it believes it is migrating, so the
- * wrong-database guard (`@oxyhq/db/migrate`'s `targetDatabase.ts`) costs
+ * wrong-database guard (`@oxy.so/db/migrate`'s `targetDatabase.ts`) costs
  * nothing to adopt on day one.
  *
  * WHY NOT `drizzle-kit migrate`
@@ -209,7 +209,7 @@
 
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { type MigrationRun, MIGRATION_RUNS, readTargetDatabase, runMigrations } from '@oxyhq/db/migrate';
+import { type MigrationRun, MIGRATION_RUNS, readTargetDatabase, runMigrations } from '@oxy.so/db/migrate';
 import { logger } from '../utils/logger';
 import { REQUIRED_EXTENSIONS } from './extensions';
 import { describeErrorSafely } from '../utils/error';
@@ -258,7 +258,7 @@ export const LAST_GENESIS_MIGRATION_TAG = '0024_ambitious_xorn';
  *
  * Silently is the operative word: `migrate()` against a missing folder applies
  * NOTHING and reports success, which is exactly the "clean run that migrated
- * nothing" failure `readJournal` (`@oxyhq/db/migrate`) exists to refuse. So the
+ * nothing" failure `readJournal` (`@oxy.so/db/migrate`) exists to refuse. So the
  * search targets the journal itself and throws, naming every directory it
  * looked in, when it cannot find one.
  */

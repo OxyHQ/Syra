@@ -32,7 +32,7 @@ Podcasts are a separate vertical and do mirror external RSS.
 
 ### How it fits the Oxy platform
 
-Identity and sessions come from [**oxy**](https://github.com/OxyHQ/oxy). Both apps mount one `OxyProvider` from `@oxyhq/services`, and every authenticated call goes through a single linked client built with `@oxyhq/core`, never a per screen token header. The interface is [**Bloom**](https://github.com/OxyHQ/Bloom).
+Identity and sessions come from [**oxy**](https://github.com/OxyHQ/oxy). Both apps mount one `OxyProvider` from `@oxy.so/services`, and every authenticated call goes through a single linked client built with `@oxy.so/core`, never a per screen token header. The interface is [**Bloom**](https://github.com/OxyHQ/Bloom).
 
 Syra also gives something back to the ecosystem. `@syra.fm/sdk` ships the live rooms engine that powers audio rooms in [**Mention**](https://github.com/OxyHQ/Mention), and a headless catalogue client anyone can read the public API with.
 

@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { and, asc, eq } from 'drizzle-orm';
-import { isLiveEntityId } from '@oxyhq/db';
-import { publicColumns } from '@oxyhq/db/assert';
-import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
+import { isLiveEntityId } from '@oxy.so/db';
+import { publicColumns } from '@oxy.so/db/assert';
+import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import type {
   Artist,
   EntityProfile,

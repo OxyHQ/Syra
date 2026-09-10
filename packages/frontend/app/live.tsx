@@ -3,8 +3,8 @@ import { View, Text, ScrollView, RefreshControl, Pressable, ActivityIndicator } 
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '@oxyhq/bloom/theme';
-import BottomSheet, { type BottomSheetRef } from '@oxyhq/bloom/bottom-sheet';
+import { useTheme } from '@oxy.so/bloom/theme';
+import BottomSheet, { type BottomSheetRef } from '@oxy.so/bloom/bottom-sheet';
 import { useQuery } from '@tanstack/react-query';
 import {
   RoomCard,

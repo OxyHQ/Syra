@@ -3,10 +3,10 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { Button } from '@oxyhq/bloom/button';
-import { Switch } from '@oxyhq/bloom/switch';
-import { Loading } from '@oxyhq/bloom/loading';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { Button } from '@oxy.so/bloom/button';
+import { Switch } from '@oxy.so/bloom/switch';
+import { Loading } from '@oxy.so/bloom/loading';
+import { useTheme } from '@oxy.so/bloom/theme';
 import type { Album } from '@syra/shared-types';
 import { SignInGate } from '@/components/SignInGate';
 import { ScreenContainer } from '@/components/AppShell';
@@ -16,7 +16,7 @@ import { useMyArtistProfile } from '@/hooks/useArtist';
 import { useMyAlbums, useUploadTrack } from '@/hooks/useMusic';
 import type { TrackAudioFile } from '@/services/musicService';
 import { getApiErrorMessage } from '@/utils/api';
-import { toast } from '@oxyhq/bloom/toast';
+import { toast } from '@oxy.so/bloom/toast';
 import { cn } from '@/lib/utils';
 
 function AudioPicker({ file, onPick, disabled }: { file: TrackAudioFile | null; onPick: () => void; disabled: boolean }) {

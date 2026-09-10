@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { ScrollView, Text, View } from 'react-native';
-import * as Skeleton from '@oxyhq/bloom/skeleton';
+import * as Skeleton from '@oxy.so/bloom/skeleton';
 import { useLyrics } from '@/hooks/useLyrics';
 import { usePlayerStore } from '@/stores/playerStore';
 import { activeLyricLineIndex } from '@/utils/lyrics';

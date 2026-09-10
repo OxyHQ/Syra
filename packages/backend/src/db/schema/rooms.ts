@@ -194,7 +194,7 @@ import {
   text,
   unique,
 } from 'drizzle-orm/pg-core';
-import { createdAt, generatedId, inList, timestamptz, tsvector, updatedAt } from '@oxyhq/db';
+import { createdAt, generatedId, inList, timestamptz, tsvector, updatedAt } from '@oxy.so/db';
 
 // ── Closed value sets ────────────────────────────────────────────────────
 // Same convention as catalog.ts/library.ts/podcasts.ts: one `as const` tuple

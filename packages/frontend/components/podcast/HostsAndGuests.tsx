@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
 import type { ResolvedPerson } from '@syra/shared-types';
 import Avatar from '@/components/Avatar';
 import { resolveExternalImageUri } from '@/utils/pickImage';

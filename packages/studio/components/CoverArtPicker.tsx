@@ -3,10 +3,10 @@ import { ActivityIndicator, Platform, Pressable, Text, View } from 'react-native
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
 import { api } from '@/utils/api';
 import { resolveCatalogImageUrl } from '@/utils/catalogImages';
-import { toast } from '@oxyhq/bloom/toast';
+import { toast } from '@oxy.so/bloom/toast';
 import { cn } from '@/lib/utils';
 
 interface CoverArtPickerProps {

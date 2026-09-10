@@ -69,7 +69,7 @@
 
 import { sql } from 'drizzle-orm';
 import { check, pgTable, text, unique, uniqueIndex } from 'drizzle-orm/pg-core';
-import { createdAt, generatedId, inList, updatedAt } from '@oxyhq/db';
+import { createdAt, generatedId, inList, updatedAt } from '@oxy.so/db';
 
 /** The two verticals sharing this table's vocabulary. */
 export const GENRE_KINDS = ['music', 'podcast'] as const;

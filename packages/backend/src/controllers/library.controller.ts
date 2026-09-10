@@ -1,8 +1,8 @@
 import { Response, NextFunction } from 'express';
 import { and, inArray } from 'drizzle-orm';
-import { isForeignKeyViolation, isLiveEntityId } from '@oxyhq/db';
-import { publicColumns } from '@oxyhq/db/assert';
-import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
+import { isForeignKeyViolation, isLiveEntityId } from '@oxy.so/db';
+import { publicColumns } from '@oxy.so/db/assert';
+import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import { getDb } from '../db/postgres';
 import { tracks } from '../db/schema/catalog';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../db/schema/protectedColumns';

@@ -1,5 +1,5 @@
 import { ActivityIndicator, View } from 'react-native';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
 
 /**
  * Minimal splash/loading surface shown while the app boots and Bloom loads its

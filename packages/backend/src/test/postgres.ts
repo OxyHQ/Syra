@@ -14,7 +14,7 @@
  *
  * `bun test` runs test FILES serially in one process, so a shared database
  * cannot be raced the way a parallel runner would race it. A throwaway database
- * per file (`@oxyhq/db`'s `createTestDatabase`) would re-run all 17 migrations
+ * per file (`@oxy.so/db`'s `createTestDatabase`) would re-run all 17 migrations
  * for every suite; against a serial runner that buys isolation nothing needs.
  *
  * ## Why TRUNCATE and not DELETE

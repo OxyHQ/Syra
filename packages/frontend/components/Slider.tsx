@@ -6,7 +6,7 @@ import Animated, {
   useAnimatedStyle,
   runOnJS,
 } from 'react-native-reanimated';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
 
 const THUMB_SIZE = 20;
 const THUMB_RADIUS = THUMB_SIZE / 2;

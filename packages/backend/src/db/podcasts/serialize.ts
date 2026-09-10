@@ -70,7 +70,7 @@ import type {
   PodcastPerson,
   PodcastSourceProvenance,
 } from '@syra/shared-types';
-import { isLiveEntityId } from '@oxyhq/db';
+import { isLiveEntityId } from '@oxy.so/db';
 import type { episodes, podcasts } from '../schema/podcasts';
 
 // ── Row shapes ────────────────────────────────────────────────────────────

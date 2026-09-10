@@ -220,7 +220,7 @@ import {
   unique,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
-import { createdAt, generatedId, inList, timestamptz, updatedAt } from '@oxyhq/db';
+import { createdAt, generatedId, inList, timestamptz, updatedAt } from '@oxy.so/db';
 import type { TrackCredit, UploadLyrics } from '@syra/shared-types';
 import { catalogEntities, imageAssets, tracks } from './catalog';
 

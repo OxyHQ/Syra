@@ -4,7 +4,7 @@ Syra does not call an inference provider or Kaana directly and does not hold
 inference-provider credentials. The product boundary is:
 
 - A future one-shot Syra AI operation runs on the Syra backend and calls the Oxy
-  inference edge through `@oxyhq/core`. It uses Syra's Oxy application/service
+  inference edge through `@oxy.so/core`. It uses Syra's Oxy application/service
   credential and supplies the delegated Oxy user only when the request is made
   on that user's behalf. The application credential determines billing; the
   delegated user is attribution, not a substitute credential.

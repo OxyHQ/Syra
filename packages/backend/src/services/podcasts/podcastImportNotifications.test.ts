@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'bun:test';
 import { Readable } from 'node:stream';
 import type { IncomingMessage } from 'node:http';
 import { count, eq } from 'drizzle-orm';
-import type { SafeFetchResult } from '@oxyhq/core/server';
+import type { SafeFetchResult } from '@oxy.so/core/server';
 import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
 import { getDb } from '../../db/postgres';
 import { userPodcastSubscriptions } from '../../db/schema/library';

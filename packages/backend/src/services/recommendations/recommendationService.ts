@@ -1,5 +1,5 @@
 import { and, arrayOverlaps, eq, inArray, notInArray, or, type SQL } from 'drizzle-orm';
-import { publicColumns } from '@oxyhq/db/assert';
+import { publicColumns } from '@oxy.so/db/assert';
 import { findRelatedEdges } from '../../db/user/relations';
 import { findTasteWeights } from '../../db/user/taste';
 import { findRecentTrackIds } from '../../db/user/listening';

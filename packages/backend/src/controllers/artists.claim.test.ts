@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import type { Response, NextFunction } from 'express';
-import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
+import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import { eq } from 'drizzle-orm';
-import { uuidv7 } from '@oxyhq/db';
+import { uuidv7 } from '@oxy.so/db';
 import { normalizeNameKey } from '@syra/shared-types';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';

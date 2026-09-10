@@ -3,7 +3,7 @@ import 'react-native-reanimated';
 
 import { Slot } from 'expo-router';
 import { Platform, View } from 'react-native';
-import { BloomThemeProvider } from '@oxyhq/bloom/theme';
+import { BloomThemeProvider } from '@oxy.so/bloom/theme';
 
 import { createScopedLogger } from '@/utils/logger';
 

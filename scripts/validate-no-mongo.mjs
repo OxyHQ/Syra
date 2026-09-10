@@ -206,7 +206,7 @@ const KNOWN_EXCEPTIONS = [
     reason:
       "States the evidence that Syra opens no Mongo — live task definition, /health engine, and "
       + "that the mongoose in node_modules is an UNSATISFIED optional peer of "
-      + "@oxyhq/crowdsource-app rather than a dependency (verified: bun.lock carries no mongoose "
+      + "@oxy.so/crowdsource-app rather than a dependency (verified: bun.lock carries no mongoose "
       + "resolution entry). That paragraph answers 'why is mongoose in node_modules', which is "
       + "otherwise alarming and would be re-investigated from scratch.",
   },

@@ -2,15 +2,15 @@ import React from 'react';
 import { StyleSheet, View, Text, Image, Pressable, Platform, GestureResponderEvent } from 'react-native';
 import { webViewStyle } from '@/utils/webStyles';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
-} from '@oxyhq/bloom/dropdown-menu';
-import { useInteractionStates } from '@oxyhq/bloom/hooks';
+} from '@oxy.so/bloom/dropdown-menu';
+import { useInteractionStates } from '@oxy.so/bloom/hooks';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { CatalogImageSizes, TrackImage } from '@syra/shared-types';
 import { pickCatalogImageUrl } from '@/utils/pickImage';

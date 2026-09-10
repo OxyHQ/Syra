@@ -41,8 +41,8 @@
 import { and, eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import type { EpisodePerson, ResolvedPerson, SearchPerson } from '@syra/shared-types';
 import { normalizeNameKey } from '@syra/shared-types';
-import { getAccountDisplayName } from '@oxyhq/core';
-import type { OxyServices, User } from '@oxyhq/core';
+import { getAccountDisplayName } from '@oxy.so/core';
+import type { OxyServices, User } from '@oxy.so/core';
 import { getDb } from '../../db/postgres';
 import { catalogEntities } from '../../db/schema/catalog';
 import { logger } from '../../utils/logger';

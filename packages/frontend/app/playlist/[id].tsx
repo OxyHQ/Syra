@@ -10,7 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
-import { useTheme, useAmbientTheme } from '@oxyhq/bloom/theme';
+import { useTheme, useAmbientTheme } from '@oxy.so/bloom/theme';
 import { musicService } from '@/services/musicService';
 import { Track } from '@syra/shared-types';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -25,10 +25,10 @@ import { useLibrary, useToggleSavePlaylist } from '@/hooks/useLibrary';
 import { webViewStyle } from '@/utils/webStyles';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { isNotFoundError } from '@/utils/api';
-import { toast } from '@oxyhq/bloom/toast';
+import { toast } from '@oxy.so/bloom/toast';
 import { useAuthGate } from '@/hooks/useAuthGate';
 import { CATALOG_QUERY_KEYS } from '@/hooks/useLibraryCollections';
-import { useOxy } from '@oxyhq/services';
+import { useOxy } from '@oxy.so/services';
 import { PlaylistActionsSheet } from '@/components/playlist/PlaylistActionsSheet';
 import { TrackActionsSheet } from '@/components/playlist/TrackActionsSheet';
 

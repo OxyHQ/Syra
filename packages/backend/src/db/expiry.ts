@@ -5,7 +5,7 @@
  * rather than growing its own cleanup path. The registry stays here because
  * it would name THIS schema's own tables; the mechanism that sweeps it
  * (`sweepExpiredRows`, `sweepAllExpiredRows`, `ExpirySweepTarget`) lives in
- * `@oxyhq/db/expiry` — see that module's doc comment for the full shape and
+ * `@oxy.so/db/expiry` — see that module's doc comment for the full shape and
  * for why a TTL index is a behaviour of the SOURCE that does not survive a
  * Mongo-to-Postgres port on its own.
  *
@@ -44,7 +44,7 @@
  *    `table.column:retentionSeconds`, not a count. A target pointed at the wrong
  *    column or carrying the wrong retention is caught; both are mistakes that
  *    leave rows either immortal or deleted early, and neither moves a length.
- *  - `findUnsupportedExpiryColumns` (`@oxyhq/db/assert`), driven against a REAL
+ *  - `findUnsupportedExpiryColumns` (`@oxy.so/db/assert`), driven against a REAL
  *    migrated database, so a target added without a supporting index fails
  *    rather than silently costing a full scan every tick.
  *  - `db/user/__tests__/user.explain.test.ts` — an EXPLAIN probe per target on
@@ -69,7 +69,7 @@
  * thing this repo has repeatedly found rots. Adding a table? Ask whether its rows
  * must stop existing, and answer it here.
  *
- * `findUnsupportedExpiryColumns` (`@oxyhq/db/assert`) reads the real Postgres
+ * `findUnsupportedExpiryColumns` (`@oxy.so/db/assert`) reads the real Postgres
  * catalogue against whatever lands here, so an entry added without its
  * supporting index fails the gate rather than silently costing a full table
  * scan on every sweep. `__tests__/gates.test.ts` drives it against a REAL
@@ -103,8 +103,8 @@
  * for exactly this reason, and the scheduler logs it at WARN.
  */
 
-import type { ExpirySweepTarget } from '@oxyhq/db/expiry';
-import { moderationExpirySweepTargets } from '@oxyhq/crowdsource-app/postgres';
+import type { ExpirySweepTarget } from '@oxy.so/db/expiry';
+import { moderationExpirySweepTargets } from '@oxy.so/crowdsource-app/postgres';
 import { moderationTableSet } from './schema/moderation';
 import { episodeIngestTickets } from './schema/podcasts';
 import {
@@ -117,7 +117,7 @@ import {
  * Every table that had a Mongo TTL index. A table with an expiry column but no
  * entry here is never swept.
  *
- * Both entries are checked for INTENT, not merely replicated — `@oxyhq/db`'s
+ * Both entries are checked for INTENT, not merely replicated — `@oxy.so/db`'s
  * own instruction, because a TTL index deletes unconditionally and can be
  * written to mean "mark expired":
  *
@@ -169,9 +169,9 @@ export const EXPIRY_SWEEP_TARGETS: readonly ExpirySweepTarget[] = [
    * The moderation outbox and inbound event log, as a FRAGMENT the package
    * supplies rather than two entries written here.
    *
-   * Same division as everywhere else in this migration: `@oxyhq/db` holds the
+   * Same division as everywhere else in this migration: `@oxy.so/db` holds the
    * sweep MECHANISM, the consumer holds the REGISTRY — and here the consumer's
-   * registry names tables the consumer does not own. `@oxyhq/crowdsource-app` is
+   * registry names tables the consumer does not own. `@oxy.so/crowdsource-app` is
    * the only place that can say what sweeping either one COSTS (the outbox holds
    * undelivered work; the event log holds the dedupe claim and the audit trail),
    * so it states the reasons and Syra spreads them in. Both were

@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react';
 import { Text, TextInput, View, type TextInputProps } from 'react-native';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
 import { cn } from '@/lib/utils';
 
 interface FormFieldProps extends Omit<TextInputProps, 'placeholderTextColor'> {

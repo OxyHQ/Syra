@@ -36,7 +36,7 @@ import path from 'path';
 import { pipeline } from 'stream/promises';
 import { and, asc, gt, inArray, isNotNull } from 'drizzle-orm';
 import dotenv from 'dotenv';
-import { describeDriverError, isForeignKeyViolation } from '@oxyhq/db';
+import { describeDriverError, isForeignKeyViolation } from '@oxy.so/db';
 import { closePostgres, connectPostgres, getDb, isDriverError } from '../db/postgres';
 import { indexTrackAcoustically } from '../db/catalog/fingerprints';
 import { trackFingerprints, tracks } from '../db/schema/catalog';

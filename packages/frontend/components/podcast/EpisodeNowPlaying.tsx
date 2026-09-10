@@ -6,7 +6,7 @@ import { Image as ExpoImage } from 'expo-image';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useEpisodeChapters } from '@/hooks/usePodcasts';
 import { resolvePodcastArtwork } from '@/utils/pickImage';

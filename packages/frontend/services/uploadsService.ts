@@ -126,7 +126,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /**
  * Recover a `blocked` outcome from a rejected request.
  *
- * The two body positions are the two error shapes this app produces: `@oxyhq/core`
+ * The two body positions are the two error shapes this app produces: `@oxy.so/core`
  * HttpService puts the parsed body at `data`, bare axios nests it under
  * `response.data`. Anything that does not parse as an outcome is not a refusal —
  * it is a transport or server failure and must keep travelling as one.

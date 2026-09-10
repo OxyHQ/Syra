@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
-import { useAuth } from '@oxyhq/services';
-import { useBloomTheme, hexToAppColorName, type ThemeMode } from '@oxyhq/bloom/theme';
+import { useAuth } from '@oxy.so/services';
+import { useBloomTheme, hexToAppColorName, type ThemeMode } from '@oxy.so/bloom/theme';
 import { useMyAppearanceSettings } from '@/store/appearanceStore';
 
 const VALID_THEME_MODES: ReadonlySet<ThemeMode> = new Set<ThemeMode>([

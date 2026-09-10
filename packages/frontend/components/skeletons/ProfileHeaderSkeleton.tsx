@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import * as Skeleton from '@oxyhq/bloom/skeleton';
-import { useTheme } from '@oxyhq/bloom/theme';
+import * as Skeleton from '@oxy.so/bloom/skeleton';
+import { useTheme } from '@oxy.so/bloom/theme';
 import { Repeat } from './Repeat';
 
 /**

@@ -1,9 +1,9 @@
 import { useCallback, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { AlertDialog } from '@oxyhq/bloom/alert-dialog';
-import { useTheme } from '@oxyhq/bloom/theme';
-import { toast } from '@oxyhq/bloom/toast';
+import { AlertDialog } from '@oxy.so/bloom/alert-dialog';
+import { useTheme } from '@oxy.so/bloom/theme';
+import { toast } from '@oxy.so/bloom/toast';
 import type { Episode } from '@syra/shared-types';
 import { Artwork } from '@/components/Artwork';
 import { StatusBadge } from '@/components/StatusBadge';

@@ -1,7 +1,7 @@
 import { and, asc, eq } from 'drizzle-orm';
-import { isLiveEntityId } from '@oxyhq/db';
+import { isLiveEntityId } from '@oxy.so/db';
 import type { Response } from 'express';
-import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
+import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import type { HlsRendition } from '@syra/shared-types';
 import { env } from '../config/env';
 import { getDb } from '../db/postgres';

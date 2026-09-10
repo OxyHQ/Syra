@@ -11,7 +11,7 @@
  * rather than per call site. The mechanism that reads it (`publicColumns`, the
  * implicit-whole-row-read scanner `findImplicitWholeRowReads`) is shared
  * plumbing with no opinion on which columns to protect, so it lives in
- * `@oxyhq/db/assert` instead of here; this file supplies only the DATA.
+ * `@oxy.so/db/assert` instead of here; this file supplies only the DATA.
  *
  * ## The mechanism
  *
@@ -20,7 +20,7 @@
  *    `deferredForeignKeys.ts`, and for the same reason: a rule written only
  *    in a comment is a rule nothing checks.
  * 2. **`publicColumns(table, PROTECTED_COLUMNS_BY_TABLE)`, imported from
- *    `@oxyhq/db/assert`, is the sanctioned read.**
+ *    `@oxy.so/db/assert`, is the sanctioned read.**
  *    `db.select(publicColumns(users, PROTECTED_COLUMNS_BY_TABLE)).from(users)`
  *    omits every protected column AT THE TYPE LEVEL — the resulting row type
  *    has no property for it at all, so a serializer that tries to read one
@@ -30,7 +30,7 @@
  *    There is deliberately no helper for this — the whole point is that it
  *    reads differently from an ordinary select.
  * 4. **`__tests__/gates.test.ts` is the gate.** It calls
- *    `@oxyhq/db/assert`'s `findImplicitWholeRowReads` to scan `src/` for the
+ *    `@oxy.so/db/assert`'s `findImplicitWholeRowReads` to scan `src/` for the
  *    two shapes that return every column implicitly regardless of whether
  *    `publicColumns` exists — a bare `.select()` and the relational
  *    `db.query.<table>` API — against any table in this registry.
@@ -41,13 +41,13 @@
  *
  * `PROTECTED_COLUMNS_BY_TABLE` must stay declared `as const` and be passed
  * straight through to `publicColumns` at every call site — see that
- * function's own doc comment in `@oxyhq/db/assert` for exactly what widening
+ * function's own doc comment in `@oxy.so/db/assert` for exactly what widening
  * it (an explicit `: ProtectedColumnRegistry` annotation, or passing it
  * through an intermediate parameter typed that way) would cost: the runtime
  * filter stays correct either way, but the compile-time guarantee collapses.
  *
  * Keyed here by SQL table name (`publicColumns`'s own contract — see its doc
- * comment in `@oxyhq/db/assert`), and each entry lists TypeScript PROPERTY
+ * comment in `@oxy.so/db/assert`), and each entry lists TypeScript PROPERTY
  * names, not SQL column names (`publicColumns` reads the registry against
  * `Object.entries(getTableColumns(table))`, whose keys are the drizzle
  * property names).

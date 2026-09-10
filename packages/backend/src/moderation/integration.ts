@@ -3,9 +3,9 @@ import {
   type ModerationIntegration,
   type ModerationReportFields,
   type ModerationTaxonomy,
-} from '@oxyhq/crowdsource-app';
-import { postgresModerationStore } from '@oxyhq/crowdsource-app/postgres';
-import type { Decision } from '@oxyhq/crowdsource-contracts';
+} from '@oxy.so/crowdsource-app';
+import { postgresModerationStore } from '@oxy.so/crowdsource-app/postgres';
+import type { Decision } from '@oxy.so/crowdsource-contracts';
 import { getDb } from '../db/postgres';
 import { moderationTableSet, reports } from '../db/schema/moderation';
 import { logger } from '../utils/logger';
@@ -24,7 +24,7 @@ import type { ModerationEnforcementAction, ReportStatus } from './types';
  * receiver, cross-instance deduplication, decision application with a revision
  * guard, the enforcement claim and the planning algorithm are identical in every
  * application that adopts CrowdSource, and they live in
- * `@oxyhq/crowdsource-app`. Syra supplies four things — its subject providers,
+ * `@oxy.so/crowdsource-app`. Syra supplies four things — its subject providers,
  * its category→allegation mapping, its enforcement config, and the store built
  * over its own tables — and this file hands them over.
  *

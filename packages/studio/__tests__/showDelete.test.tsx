@@ -23,14 +23,14 @@ import { podcastService } from '@/services/podcastService';
 
 const mockDialogProps: Record<string, unknown>[] = [];
 
-jest.mock('@oxyhq/bloom/alert-dialog', () => ({
+jest.mock('@oxy.so/bloom/alert-dialog', () => ({
   AlertDialog: (props: Record<string, unknown>) => {
     mockDialogProps.push(props);
     return null;
   },
 }));
 
-jest.mock('@oxyhq/bloom/button', () => {
+jest.mock('@oxy.so/bloom/button', () => {
   const { Pressable } = jest.requireActual('react-native');
   // Modelled on the real Button in the one respect this file depends on: a
   // disabled or loading button does not fire. A passthrough that always fired
@@ -56,10 +56,10 @@ jest.mock('@oxyhq/bloom/button', () => {
   };
 });
 
-jest.mock('@oxyhq/bloom/loading', () => ({ Loading: () => null }));
-jest.mock('@oxyhq/bloom/badge', () => ({ Badge: () => null }));
-jest.mock('@oxyhq/bloom/toast', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
-jest.mock('@oxyhq/bloom/theme', () => ({
+jest.mock('@oxy.so/bloom/loading', () => ({ Loading: () => null }));
+jest.mock('@oxy.so/bloom/badge', () => ({ Badge: () => null }));
+jest.mock('@oxy.so/bloom/toast', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
+jest.mock('@oxy.so/bloom/theme', () => ({
   useTheme: () => ({ colors: { error: '#f00', text: '#000', textSecondary: '#666', primary: '#00f' } }),
 }));
 
@@ -78,7 +78,7 @@ jest.mock('expo-router', () => ({
 
 let mockViewerId: string | undefined = 'owner-1';
 
-jest.mock('@oxyhq/services', () => ({
+jest.mock('@oxy.so/services', () => ({
   useOxy: () => ({
     user: mockViewerId ? { id: mockViewerId } : undefined,
     canUsePrivateApi: true,

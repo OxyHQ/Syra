@@ -12,13 +12,13 @@ import {
 } from 'react-native';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
 import { useRouter } from 'expo-router';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { copyrightService } from '@/services/copyrightService';
 import { musicService } from '@/services/musicService';
 import { Track } from '@syra/shared-types';
-import { toast } from '@oxyhq/bloom/toast';
+import { toast } from '@oxy.so/bloom/toast';
 import SEO from '@/components/SEO';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';

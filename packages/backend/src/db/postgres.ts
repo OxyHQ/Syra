@@ -2,7 +2,7 @@
  * PostgreSQL Connection
  *
  * Drizzle ORM over postgres.js (`drizzle-orm/postgres-js`), built through
- * `@oxyhq/db`'s `createDatabase()` rather than calling `drizzle()` directly —
+ * `@oxy.so/db`'s `createDatabase()` rather than calling `drizzle()` directly —
  * that is what guarantees this handle is built with `DATABASE_CASING`, so the
  * SQL queries reference matches the SQL `drizzle-kit` (via `drizzle.config.ts`)
  * generated. Two independently-derived casings would mean queries reference
@@ -18,7 +18,7 @@
  * outage degrades.
  */
 
-import { createDatabase, type OxyDatabase } from '@oxyhq/db';
+import { createDatabase, type OxyDatabase } from '@oxy.so/db';
 import { logger } from '../utils/logger';
 import * as schema from './schema';
 
@@ -122,7 +122,7 @@ export function isPostgresConnected(): boolean {
  */
 const STATEMENT_PAYLOAD_FIELDS = ['query', 'params', 'detail'] as const;
 
-/** Bounded like `@oxyhq/db`'s own walk — a cyclic chain must not hang a `catch`. */
+/** Bounded like `@oxy.so/db`'s own walk — a cyclic chain must not hang a `catch`. */
 const MAX_CAUSE_DEPTH = 8;
 
 /**

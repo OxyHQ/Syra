@@ -3,7 +3,7 @@ import { View, Animated, Platform, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { LogoIcon } from '@/assets/logo';
 import { LoadingSpinner } from '@/components/ui/Loading';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
 
 interface AppSplashScreenProps {
     onFadeComplete?: () => void;

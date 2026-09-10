@@ -1,9 +1,9 @@
 import { Router, Response } from 'express';
-import { requireOxyAuth as requireAuth, type OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
+import { requireOxyAuth as requireAuth, type OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import { logger } from '../utils/logger';
 import { describeErrorSafely } from '../utils/error';
 import { sendErrorResponse, sendSuccessResponse } from '../utils/apiHelpers';
-import { getRequiredOxyUserId as getAuthenticatedUserId } from '@oxyhq/core/server';
+import { getRequiredOxyUserId as getAuthenticatedUserId } from '@oxy.so/core/server';
 import {
   coerceMusicPreferencesPatch,
   ensureMusicPreferences,

@@ -1,8 +1,8 @@
 import React from 'react';
 import { StyleSheet, View, ScrollView } from 'react-native';
-import * as Skeleton from '@oxyhq/bloom/skeleton';
+import * as Skeleton from '@oxy.so/bloom/skeleton';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
 import { LibraryListSkeleton } from './LibraryItemSkeleton';
 
 interface PodcastDetailSkeletonProps {

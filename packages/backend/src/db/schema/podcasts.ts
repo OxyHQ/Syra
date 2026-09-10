@@ -223,7 +223,7 @@ import {
   text,
   unique,
 } from 'drizzle-orm/pg-core';
-import { createdAt, generatedId, inList, timestamptz, tsvector, updatedAt } from '@oxyhq/db';
+import { createdAt, generatedId, inList, timestamptz, tsvector, updatedAt } from '@oxy.so/db';
 import { AUDIO_FORMATS, catalogEntities, imageAssets } from './catalog';
 import { genres, GENRE_KINDS } from './genres';
 

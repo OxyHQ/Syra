@@ -29,8 +29,8 @@ import express from 'express';
 import { join } from 'node:path';
 import type { Server } from 'http';
 import { eq } from 'drizzle-orm';
-import { uuidv7 } from '@oxyhq/db';
-import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
+import { uuidv7 } from '@oxy.so/db';
+import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
 import {

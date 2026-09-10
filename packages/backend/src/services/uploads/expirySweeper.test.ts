@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import { eq, isNotNull } from 'drizzle-orm';
-import { uuidv7 } from '@oxyhq/db';
+import { uuidv7 } from '@oxy.so/db';
 import { connectDb, clearDb, disconnectDb } from '../../test/postgres';
 import { getDb } from '../../db/postgres';
 import { userUploadHlsRenditions, userUploads } from '../../db/schema/creators';

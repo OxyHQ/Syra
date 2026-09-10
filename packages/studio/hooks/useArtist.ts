@@ -1,4 +1,4 @@
-import { useOxy } from '@oxyhq/services';
+import { useOxy } from '@oxy.so/services';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CreateArtistRequest } from '@syra/shared-types';
 import { artistService, type InsightsPeriod } from '@/services/artistService';

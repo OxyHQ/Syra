@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { User } from '@oxyhq/core';
+import type { User } from '@oxy.so/core';
 import { oxyServices } from '@/lib/oxyServices';
 
 const MIN_QUERY_LENGTH = 2;

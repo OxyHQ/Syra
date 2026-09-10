@@ -7,7 +7,7 @@ import {
   uploadTrack,
 } from '../controllers/tracks.controller';
 import { getSimilarTracksHandler } from '../controllers/recommendations.controller';
-import { requireOxyAuth as requireAuth } from '@oxyhq/core/server';
+import { requireOxyAuth as requireAuth } from '@oxy.so/core/server';
 
 const router = Router();
 

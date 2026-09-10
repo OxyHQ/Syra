@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import type { Response, NextFunction } from 'express';
-import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
-import { uuidv7 } from '@oxyhq/db';
+import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
+import { uuidv7 } from '@oxy.so/db';
 import { clearDb, connectDb, disconnectDb } from '../../../test/postgres';
 import { getDb } from '../../postgres';
 import { albums, catalogEntities, imageAssets, tracks } from '../../schema/catalog';

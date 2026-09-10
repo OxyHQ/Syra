@@ -17,9 +17,9 @@ import Animated, {
   useSharedValue, 
   withTiming 
 } from 'react-native-reanimated';
-import * as Skeleton from '@oxyhq/bloom/skeleton';
+import * as Skeleton from '@oxy.so/bloom/skeleton';
 import { Loading as LoadingIcon } from '@/assets/icons/loading-icon';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
 import { SPACING } from '@/styles/spacing';
 import { FONT_SIZES } from '@/styles/typography';
 import { flattenStyleArray } from '@/styles/shared';

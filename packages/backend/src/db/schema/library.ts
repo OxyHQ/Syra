@@ -136,7 +136,7 @@
 
 import { sql } from 'drizzle-orm';
 import { boolean, check, doublePrecision, index, integer, pgTable, text, unique } from 'drizzle-orm/pg-core';
-import { createdAt, generatedId, inList, timestamptz, tsvector, updatedAt } from '@oxyhq/db';
+import { createdAt, generatedId, inList, timestamptz, tsvector, updatedAt } from '@oxy.so/db';
 import { albums, CATALOG_SOURCES, catalogEntities, imageAssets, PROVENANCE_PROVIDERS, tracks } from './catalog';
 import { podcasts } from './podcasts';
 

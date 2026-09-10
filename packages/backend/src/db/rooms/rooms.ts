@@ -35,7 +35,7 @@
 
 import { and, asc, eq, inArray, isNull, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import { descNullsLast } from '../catalog/containers';
-import { publicColumns } from '@oxyhq/db/assert';
+import { publicColumns } from '@oxy.so/db/assert';
 import { getDb, type DbOrTransaction } from '../postgres';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../schema/protectedColumns';
 import { roomMediaQueueItems, rooms } from '../schema/rooms';

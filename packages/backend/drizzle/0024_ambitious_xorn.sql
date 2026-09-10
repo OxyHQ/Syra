@@ -5,7 +5,7 @@
 -- relations exist. Nothing here needs the new image to be live first, which is
 -- what `pre` means.
 --
--- Three of the four are `@oxyhq/crowdsource-app`s own (`moderation_outbox`,
+-- Three of the four are `@oxy.so/crowdsource-app`s own (`moderation_outbox`,
 -- `moderation_events`, `moderation_enforcements`); the package ships table
 -- DEFINITIONS and deliberately no migrations, because two journals against one
 -- `drizzle.__drizzle_migrations` interleave and the loser is skipped silently

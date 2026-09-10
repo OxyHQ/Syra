@@ -23,7 +23,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
-import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
+import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import type { Response } from 'express';
 import { eq } from 'drizzle-orm';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';

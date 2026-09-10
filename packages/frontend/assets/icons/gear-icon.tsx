@@ -1,7 +1,7 @@
 import React from 'react';
 import Svg, { Path, Line, Polygon } from 'react-native-svg';
 import { ViewStyle } from 'react-native';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
 
 
 export const GearActive = ({ color: colorProp, size = 26, style }: { color?: string; size?: number; style?: ViewStyle }) => {

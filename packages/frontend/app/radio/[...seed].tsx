@@ -3,7 +3,7 @@ import { FlatList, Platform, Pressable, StyleSheet, Text, View } from 'react-nat
 import { useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { radioSeedTypeSchema, type RadioSeed, type Track } from '@syra/shared-types';
 import SEO from '@/components/SEO';

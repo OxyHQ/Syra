@@ -3,7 +3,7 @@ import { StyleSheet, View, Text, ScrollView, Pressable, Platform } from 'react-n
 import { webViewStyle, webDimension } from '@/utils/webStyles';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Octicons from '@expo/vector-icons/Octicons';
 import { useMediaQuery } from 'react-responsive';

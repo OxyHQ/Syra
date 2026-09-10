@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, View, Text, Pressable, Image, Platform, Alert, ActivityIndicator } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useImagePicker } from '@/hooks/useImagePicker';
 import { resolveCatalogImageUrl } from '@/utils/catalogImages';

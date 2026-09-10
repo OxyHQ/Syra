@@ -2,7 +2,7 @@
 
 **Status:** design, approved 2026-08-05.
 **Depends on:** [`2026-08-05-oxyhq-db-extraction-design.md`](./2026-08-05-oxyhq-db-extraction-design.md).
-Syra consumes `@oxyhq/db` from its first commit and never writes its own copy of
+Syra consumes `@oxy.so/db` from its first commit and never writes its own copy of
 the plumbing.
 
 **Ecosystem precedent:** oxy-api's `packages/api/src/db/MIGRATION-CONTRACT.md`
@@ -193,14 +193,14 @@ Syra's moderation is the adopter half of **CrowdSource**, Oxy's multi-tenant
 participatory-moderation infrastructure (`api.crowdsource.oxy.so`): applications
 send universal reports, randomly drawn juries review them blind, a consensus
 engine publishes versioned decisions, and webhooks return those decisions.
-`packages/backend/package.json` depends on `@oxyhq/crowdsource` 0.3.0,
-`@oxyhq/crowdsource-contracts` and `@oxyhq/crowdsource-express`, and
+`packages/backend/package.json` depends on `@oxy.so/crowdsource` 0.3.0,
+`@oxy.so/crowdsource-contracts` and `@oxy.so/crowdsource-express`, and
 `src/moderation/` holds nineteen files implementing intake, the transactional
 outbox, delivery, the decision worker, the processed-event store, enforcement
 planning and execution, and the subject-provider registry.
 
 **CrowdSource's own binding rule says most of that should not exist here.**
-`@oxyhq/crowdsource-app` owns the adopter's half, and an adopting application is
+`@oxy.so/crowdsource-app` owns the adopter's half, and an adopting application is
 supposed to write only four things: its subject providers, its
 category→allegation mapping, its enforcement tables plus one `apply`, and its own
 report model. The transactional outbox, delivery, the webhook receiver,
@@ -210,23 +210,23 @@ of all seven.
 
 Two facts decide what the port can and cannot do:
 
-- **`@oxyhq/crowdsource-app` is bound to Mongoose by peer dependency**
+- **`@oxy.so/crowdsource-app` is bound to Mongoose by peer dependency**
   (`"mongoose": "^8.0.0 || ^9.0.0"`), ships Mongoose models, and its suite runs
   against a real `mongodb-memory-server` replica set because transactions and
   unique indexes are load-bearing in it. It is not storage-agnostic.
 - **It is not published.** npm returns 404; it exists locally at 0.4.0. The
-  client `@oxyhq/crowdsource` IS published at 0.4.0, two minors ahead of the
+  client `@oxy.so/crowdsource` IS published at 0.4.0, two minors ahead of the
   0.3.0 Syra pins.
 
 So there are three routes, and picking one is an owner decision, not an
 implementation detail:
 
-1. **Adopt `@oxyhq/crowdsource-app` and keep MongoDB for moderation only.**
+1. **Adopt `@oxy.so/crowdsource-app` and keep MongoDB for moderation only.**
    Honours the no-copying rule and leaves the shared moderation stack alone —
    CrowdSource is on MongoDB by an explicit recorded owner decision that
    overrides its own plan's RDS PostgreSQL. Costs Syra a second database
    permanently, and requires publishing the package first.
-2. **Give `@oxyhq/crowdsource-app` a PostgreSQL implementation** (the
+2. **Give `@oxy.so/crowdsource-app` a PostgreSQL implementation** (the
    fix-upstream route). Correct in the long run and the only route that lets
    every Oxy backend move; large, because the outbox, the dedupe store, the
    enforcement claim and their transactional guarantees all need a second
@@ -235,7 +235,7 @@ implementation detail:
    migration and the worst long-term: it makes permanent exactly the duplication
    the shared package exists to end, on a copy already two minors behind.
 
-**Decided 2026-08-06: route 2.** `@oxyhq/crowdsource-app` gains a PostgreSQL
+**Decided 2026-08-06: route 2.** `@oxy.so/crowdsource-app` gains a PostgreSQL
 implementation, and Syra's moderation ports onto it like every other vertical.
 
 That makes phase 6 dependent on an upstream project rather than blocked by an
@@ -248,7 +248,7 @@ to reproduce rather than approximate, and its suite runs against a real
 `mongodb-memory-server` replica set precisely because transactions and unique
 indexes are load-bearing in it.
 
-One fact changed since this was written: `@oxyhq/crowdsource-app` **is** now
+One fact changed since this was written: `@oxy.so/crowdsource-app` **is** now
 published, at 0.4.0. It was not when the three routes were drafted, which
 removes "publish it first" from route 1's cost and does not otherwise affect
 the choice.
@@ -267,7 +267,7 @@ copyright. It stays in phase 5, where it already is.
 
 **Phase 1 — the whole schema, no call sites.** All 41 models' tables, indexes,
 CHECKs, real FKs, the relation inventory, and the convention gates from
-`@oxyhq/db/assert`. Landing the schema whole is what lets the FKs be real from
+`@oxy.so/db/assert`. Landing the schema whole is what lets the FKs be real from
 the start; slicing it forces deferred FKs and a ledger of promises.
 
 **Phases 2–8 — one vertical per pull request**, each green on its own, each
@@ -279,7 +279,7 @@ updating frontend/studio/SDK in the same PR:
 | 3 | Library and playlists | Library (→ junctions), Playlist, PlaylistTrack, RecentlyPlayed, PlaybackState, Device |
 | 4 | Podcasts | Podcast, Episode, EpisodeProgress |
 | 5 | Creators and uploads | UserUpload, ArtistClaim, ContributionAttestation, ContributorStanding, CopyrightReport |
-| 6 | Moderation — runs LAST, after `@oxyhq/crowdsource-app` gains Postgres (route 2, decided 2026-08-06) | ModerationEnforcement, ModerationEvent, ModerationOutbox, Report |
+| 6 | Moderation — runs LAST, after `@oxy.so/crowdsource-app` gains Postgres (route 2, decided 2026-08-06) | ModerationEnforcement, ModerationEvent, ModerationOutbox, Report |
 | 7 | Rooms and live | House, Room, RoomUserPreference, Recording, Series |
 | 8 | User and recommendations | UserSettings, UserMusicPreferences, UserBehavior, UserTasteProfile, ListeningEvent, CatalogRelation, NotificationPreference, NotificationSuppression |
 
@@ -315,7 +315,7 @@ updating frontend/studio/SDK in the same PR:
 
 ## Verification
 
-**Inherited gates** (`@oxyhq/db/assert`): schema invariants, `*_id`
+**Inherited gates** (`@oxy.so/db/assert`): schema invariants, `*_id`
 classification, protected columns plus the implicit-whole-row-read scanner,
 supporting index for every swept column.
 

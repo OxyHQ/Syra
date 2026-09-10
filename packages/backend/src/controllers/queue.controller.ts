@@ -1,5 +1,5 @@
 import { Response, NextFunction } from 'express';
-import { isLiveEntityId } from '@oxyhq/db';
+import { isLiveEntityId } from '@oxy.so/db';
 import {
   addToQueueRequestSchema,
   removeFromQueueRequestSchema,
@@ -13,9 +13,9 @@ import {
   type Track,
 } from '@syra/shared-types';
 import { z } from 'zod';
-import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
+import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import { and, inArray } from 'drizzle-orm';
-import { publicColumns } from '@oxyhq/db/assert';
+import { publicColumns } from '@oxy.so/db/assert';
 import { getDb, isPostgresConnected } from '../db/postgres';
 import { tracks as tracksTable } from '../db/schema/catalog';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../db/schema/protectedColumns';

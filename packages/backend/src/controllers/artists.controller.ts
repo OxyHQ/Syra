@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { and, count, eq, inArray, isNull, sql } from 'drizzle-orm';
-import { isLiveEntityId, isUniqueViolation, sqlStateOf } from '@oxyhq/db';
-import { publicColumns } from '@oxyhq/db/assert';
+import { isLiveEntityId, isUniqueViolation, sqlStateOf } from '@oxy.so/db';
+import { publicColumns } from '@oxy.so/db/assert';
 import { z } from 'zod';
 import { getDb, isPostgresConnected } from '../db/postgres';
 import { albums, catalogEntities, tracks } from '../db/schema/catalog';
@@ -34,8 +34,8 @@ import {
 import { takeDownTrack } from '../services/compliance/takedown';
 import { mirrorCatalogImage } from '../services/catalog/catalogImageAssets';
 import { logger } from '../utils/logger';
-import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
-import { getRequiredOxyUserId as getAuthenticatedUserId } from '@oxyhq/core/server';
+import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
+import { getRequiredOxyUserId as getAuthenticatedUserId } from '@oxy.so/core/server';
 import { getParam, parseBoundedLimit, parseOffset } from '../utils/reqParams';
 import {
   CreateArtistRequest,

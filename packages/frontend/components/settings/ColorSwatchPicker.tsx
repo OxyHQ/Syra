@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, Pressable } from 'react-native';
-import { APP_COLOR_PRESETS, APP_COLOR_NAMES, type AppColorName } from '@oxyhq/bloom/theme';
+import { APP_COLOR_PRESETS, APP_COLOR_NAMES, type AppColorName } from '@oxy.so/bloom/theme';
 import { cn } from '@/lib/utils';
 
 const SELECTED_SWATCH_TRANSFORM = { transform: [{ scale: 1.1 }] } as const;

@@ -6,7 +6,7 @@ import {
   useQueryClient,
   type UseMutationResult,
 } from '@tanstack/react-query';
-import { useOxy } from '@oxyhq/services';
+import { useOxy } from '@oxy.so/services';
 import { useAuthGate } from '@/hooks/useAuthGate';
 import type { Episode, Podcast, PodcastSubscriptions } from '@syra/shared-types';
 import { podcastService, type BrowsePodcastsParams } from '@/services/podcastService';
@@ -21,7 +21,7 @@ import {
   withMembership,
 } from '@/hooks/useLibrary';
 import type { LibraryMembership } from '@/services/libraryService';
-import { toast } from '@oxyhq/bloom/toast';
+import { toast } from '@oxy.so/bloom/toast';
 
 /**
  * React Query layer for the podcasts vertical.

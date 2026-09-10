@@ -1,10 +1,10 @@
 import { isPostgresConnected } from '../db/postgres';
 import { Request, Response, NextFunction } from 'express';
-import { isLiveEntityId } from '@oxyhq/db';
+import { isLiveEntityId } from '@oxy.so/db';
 import { logger } from '../utils/logger';
 import { getErrorMessage } from '../utils/error';
 import { getParam } from '../utils/reqParams';
-import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
+import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import { extractPredominantColorsFromBuffer } from '../services/colorExtractionService';
 import { getImageAssetStream, storeImageAsset } from '../services/imageAssetService';
 import { describeErrorSafely } from '../utils/error';

@@ -15,7 +15,7 @@
  * value added to one is a value added to both and there is nothing to pin.
  *
  * That is possible here and was not there because the tuples reach the schema
- * through `@oxyhq/crowdsource-app/postgres`'s `moderationReportColumnOptions`,
+ * through `@oxy.so/crowdsource-app/postgres`'s `moderationReportColumnOptions`,
  * which takes `readonly string[]` — an enum's values satisfy it directly.
  */
 
@@ -75,7 +75,7 @@ export enum ReportCategory {
 /**
  * What a jury concluded. `PENDING` until one has.
  *
- * Syra's SECOND status axis, and the one `@oxyhq/crowdsource-app` knows nothing
+ * Syra's SECOND status axis, and the one `@oxy.so/crowdsource-app` knows nothing
  * about — the package owns `localStatus` ("did it get out of here and come
  * back"), which is a different question. Both are maintained from one place:
  * `localStatus` by the package, this one by `legacyStatusForOutcome` through the

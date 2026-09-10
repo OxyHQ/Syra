@@ -1,7 +1,7 @@
 const pkg = require('./package.json')
 const fs = require('fs')
 const path = require('path')
-const { oxySplashScreenPlugin } = require('@oxyhq/expo-splash/config')
+const { oxySplashScreenPlugin } = require('@oxy.so/expo-splash/config')
 
 // FCM config lives at the monorepo root and is only present in CI / release
 // setups (or via the GOOGLE_SERVICES_JSON env, as in Mention). Local dev-client
@@ -116,7 +116,7 @@ return {
                 // OWN equalizer logo (white on transparent) centered on the shared dark
                 // brand background, with the Oxy symbol pinned to the bottom.
                 // `oxySplashScreenPlugin` builds the `expo-splash-screen` tuple with the
-                // Oxy-standard defaults; the bare `@oxyhq/expo-splash` entry (bundled Oxy
+                // Oxy-standard defaults; the bare `@oxy.so/expo-splash` entry (bundled Oxy
                 // asset) MUST follow it immediately to add the bottom branding — the
                 // ordering is load-bearing.
                 oxySplashScreenPlugin({
@@ -124,7 +124,7 @@ return {
                     imageWidth: 176,
                     backgroundColor: "#0B0B0F"
                 }),
-                "@oxyhq/expo-splash",
+                "@oxy.so/expo-splash",
                 [
                     "expo-camera",
                     {
@@ -181,7 +181,7 @@ return {
 
             // Only include expo-notifications for native builds (android/ios).
             // Insert at index 3 — AFTER the two splash entries (the
-            // `oxySplashScreenPlugin` tuple at index 1 and the `@oxyhq/expo-splash`
+            // `oxySplashScreenPlugin` tuple at index 1 and the `@oxy.so/expo-splash`
             // branding plugin at index 2) so their load-bearing adjacency is preserved.
             if (PLATFORM !== 'web') {
                 base.splice(3, 0, [

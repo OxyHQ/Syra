@@ -23,7 +23,7 @@ import os from 'os';
 import path from 'path';
 import { Readable } from 'stream';
 import { eq } from 'drizzle-orm';
-import { describeDriverError } from '@oxyhq/db';
+import { describeDriverError } from '@oxy.so/db';
 import { getDb, isDriverError } from '../../db/postgres';
 import { userUploads } from '../../db/schema/creators';
 import { setUploadHls } from '../../db/creators/uploads';

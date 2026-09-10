@@ -1,4 +1,4 @@
-import { uuidv7 } from '@oxyhq/db';
+import { uuidv7 } from '@oxy.so/db';
 import { PlaylistVisibility } from '@syra/shared-types';
 import { getDb } from '../../db/postgres';
 import { albums, catalogEntities, imageAssets, tracks } from '../../db/schema/catalog';

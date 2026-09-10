@@ -8,7 +8,7 @@ import {
   publishAlbum,
   unpublishAlbum,
 } from '../controllers/albums.controller';
-import { requireOxyAuth as requireAuth } from '@oxyhq/core/server';
+import { requireOxyAuth as requireAuth } from '@oxy.so/core/server';
 import { singleCoverArtUpload } from '../utils/imageUpload';
 
 const router = Router();

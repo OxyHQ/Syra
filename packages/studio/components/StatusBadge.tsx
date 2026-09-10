@@ -1,5 +1,5 @@
-import { Badge } from '@oxyhq/bloom/badge';
-import type { AccentTone } from '@oxyhq/bloom/theme';
+import { Badge } from '@oxy.so/bloom/badge';
+import type { AccentTone } from '@oxy.so/bloom/theme';
 import type { EpisodeStatus, PodcastStatus } from '@syra/shared-types';
 
 type AnyStatus = EpisodeStatus | PodcastStatus;

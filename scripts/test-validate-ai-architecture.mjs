@@ -14,7 +14,7 @@ function cleanTree(extra = {}) {
   return {
     "package.json": `${JSON.stringify({
       name: "fixture",
-      dependencies: { "@oxyhq/core": "^23.0.0" },
+      dependencies: { "@oxy.so/core": "^23.0.0" },
     }, null, 2)}\n`,
     "packages/backend/package.json": `${JSON.stringify({
       name: "backend",
@@ -30,7 +30,7 @@ function cleanTree(extra = {}) {
       "export const provenance = { provider: 'alia', aiGenerated: true };",
       "",
     ].join("\n"),
-    "packages/frontend/src/alia.ts": "import { OxyServices } from '@oxyhq/core';\nexport { OxyServices };\n",
+    "packages/frontend/src/alia.ts": "import { OxyServices } from '@oxy.so/core';\nexport { OxyServices };\n",
     ...extra,
   };
 }

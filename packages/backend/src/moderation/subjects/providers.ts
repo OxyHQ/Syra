@@ -1,6 +1,6 @@
-import { isLiveEntityId } from '@oxyhq/db';
+import { isLiveEntityId } from '@oxy.so/db';
 import { and, eq } from 'drizzle-orm';
-import { CONTRACT_LIMITS } from '@oxyhq/crowdsource-contracts';
+import { CONTRACT_LIMITS } from '@oxy.so/crowdsource-contracts';
 import { PlaylistVisibility } from '@syra/shared-types';
 import { findHouseById } from '../../db/rooms/houses';
 import { findPublicRoomById } from '../../db/rooms/rooms';

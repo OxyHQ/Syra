@@ -2,7 +2,7 @@
 @import "tailwindcss/preflight.css" layer(base);
 @import "tailwindcss/utilities.css";
 @import "nativewind/theme";
-@import "@oxyhq/bloom/design-tokens/theme.css";
+@import "@oxy.so/bloom/design-tokens/theme.css";
 
 @source "../app/**/*.{js,jsx,ts,tsx}";
 @source "../components/**/*.{js,jsx,ts,tsx}";
@@ -11,8 +11,8 @@
 @source "../stores/**/*.{js,jsx,ts,tsx}";
 @source "../store/**/*.{js,jsx,ts,tsx}";
 @source "../context/**/*.{js,jsx,ts,tsx}";
-@source "../../../node_modules/@oxyhq/services/lib/**/*.{js,jsx}";
-@source "../../../node_modules/@oxyhq/bloom/lib/**/*.{js,jsx}";
+@source "../../../node_modules/@oxy.so/services/lib/**/*.{js,jsx}";
+@source "../../../node_modules/@oxy.so/bloom/lib/**/*.{js,jsx}";
 
 @theme {
   /* Bloom owns the font stack: `--bloom-font-sans` is set on :root by

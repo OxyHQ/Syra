@@ -2,7 +2,7 @@ import React, { useCallback, useMemo } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
 import { useRouter } from 'expo-router';
 import SEO from '@/components/SEO';
 import { EmptyState } from '@/components/common/EmptyState';

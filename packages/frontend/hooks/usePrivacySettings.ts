@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useOxy } from '@oxyhq/services';
+import { useOxy } from '@oxy.so/services';
 import { z } from 'zod';
 import { api, isNotFoundError, isUnauthorizedError } from '@/utils/api';
 import { createScopedLogger } from '@/utils/logger';

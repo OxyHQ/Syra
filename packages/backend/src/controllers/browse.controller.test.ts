@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import { eq } from 'drizzle-orm';
-import { uuidv7 } from '@oxyhq/db';
+import { uuidv7 } from '@oxy.so/db';
 import { PlaylistVisibility, normalizeNameKey } from '@syra/shared-types';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
 import { albums, catalogEntities, imageAssets, tracks } from '../db/schema/catalog';
 import { playlistTracks, playlists } from '../db/schema/library';
 import { getGenres, getHomeBrowse, getMadeForYou, getPopularAlbums, getPopularTracks } from './browse.controller';
-import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
+import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import type { Request, Response, NextFunction } from 'express';
 
 /**

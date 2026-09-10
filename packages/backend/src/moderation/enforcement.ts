@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import type {
   EnforcementEffect,
   ModerationEnforcementConfig,
-} from '@oxyhq/crowdsource-app';
+} from '@oxy.so/crowdsource-app';
 import { PlaylistVisibility, playlistVisibilitySchema } from '@syra/shared-types';
 import { setHouseDiscovery, findHouseById } from '../db/rooms/houses';
 import { findPublicRoomById, setRoomArchived } from '../db/rooms/rooms';
@@ -21,7 +21,7 @@ import {
  * Syra's half of enforcement: what it can do about a decision, and how.
  *
  * The idempotency claim, the mode gate, the audit row, the reversal lookup and
- * the release-on-failure are `@oxyhq/crowdsource-app`'s and are not configurable
+ * the release-on-failure are `@oxy.so/crowdsource-app`'s and are not configurable
  * — they are the invariants rather than the policy. What is here is the policy:
  * four actions, the tables that map a CrowdSource recommendation onto them, and
  * one `apply` that carries them out.

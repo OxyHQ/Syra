@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import { eq } from 'drizzle-orm';
-import { uuidv7 } from '@oxyhq/db';
+import { uuidv7 } from '@oxy.so/db';
 import type { Request, Response, NextFunction } from 'express';
 import type { EntityProfile } from '@syra/shared-types';
 import { normalizeNameKey, PlaylistVisibility } from '@syra/shared-types';

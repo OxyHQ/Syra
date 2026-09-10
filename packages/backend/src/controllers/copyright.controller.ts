@@ -1,12 +1,12 @@
 import { Response, NextFunction } from 'express';
 import { and, asc, count, eq, inArray } from 'drizzle-orm';
-import { isLiveEntityId } from '@oxyhq/db';
+import { isLiveEntityId } from '@oxy.so/db';
 import { z } from 'zod';
 import { getDb, isPostgresConnected } from '../db/postgres';
 import { tracks } from '../db/schema/catalog';
 import { copyrightReports } from '../db/schema/creators';
-import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
-import { getRequiredOxyUserId } from '@oxyhq/core/server';
+import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
+import { getRequiredOxyUserId } from '@oxy.so/core/server';
 import { getParam, parseBoundedLimit, parseOffset } from '../utils/reqParams';
 import { takeDownTrack, type TakeDownTrackResult } from '../services/compliance/takedown';
 import { logger } from '../utils/logger';

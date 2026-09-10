@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
-import { uuidv7 } from '@oxyhq/db';
+import { uuidv7 } from '@oxy.so/db';
 import type { HlsRendition } from '@syra/shared-types';
 import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
@@ -8,7 +8,7 @@ import { trackKeys } from '../db/schema/trackKeys';
 import { userMusicPreferences } from '../db/schema/user';
 import { getStream, getStreamKey, getVariantPlaylist } from './stream.controller';
 import { verifyStreamToken, mintStreamToken } from '../services/stream/streamToken';
-import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
+import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import type { Response } from 'express';
 
 // Ensure STREAM_TOKEN_SECRET is set before module load

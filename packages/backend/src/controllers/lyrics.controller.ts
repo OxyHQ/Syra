@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { isLiveEntityId } from '@oxyhq/db';
+import { isLiveEntityId } from '@oxy.so/db';
 import { getLyricsForTrack } from '../services/lyrics/lyricsService';
 import { getParam } from '../utils/reqParams';
 

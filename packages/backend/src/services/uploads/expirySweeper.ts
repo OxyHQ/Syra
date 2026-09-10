@@ -31,7 +31,7 @@
  */
 
 import { and, eq, isNull, sql } from 'drizzle-orm';
-import { describeDriverError } from '@oxyhq/db';
+import { describeDriverError } from '@oxy.so/db';
 import { getDb, getPostgresClient, isDriverError } from '../../db/postgres';
 import { userUploads } from '../../db/schema/creators';
 import {

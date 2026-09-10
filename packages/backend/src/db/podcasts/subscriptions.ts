@@ -37,7 +37,7 @@
  */
 
 import { and, asc, eq, sql } from 'drizzle-orm';
-import { isForeignKeyViolation } from '@oxyhq/db';
+import { isForeignKeyViolation } from '@oxy.so/db';
 import { getDb } from '../postgres';
 import { userPodcastSubscriptions } from '../schema/library';
 import { podcasts } from '../schema/podcasts';

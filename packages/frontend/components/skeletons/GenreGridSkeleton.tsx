@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
-import * as Skeleton from '@oxyhq/bloom/skeleton';
+import * as Skeleton from '@oxy.so/bloom/skeleton';
 import { ResponsiveGrid } from '@/components/ResponsiveGrid';
 
 interface GenreGridSkeletonProps {

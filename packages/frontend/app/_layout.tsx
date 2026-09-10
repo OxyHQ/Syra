@@ -4,7 +4,7 @@ import 'react-native-reanimated';
 import NetInfo from '@react-native-community/netinfo';
 import { focusManager, onlineManager } from '@tanstack/react-query';
 import { Slot } from "expo-router";
-import { preventNativeSplashAutoHide, useHideNativeSplashWhenReady } from '@oxyhq/expo-splash';
+import { preventNativeSplashAutoHide, useHideNativeSplashWhenReady } from '@oxy.so/expo-splash';
 import React, { useCallback, useEffect, useMemo, useState, memo } from "react";
 import { AppState, Platform, StyleSheet, View, type AppStateStatus } from "react-native";
 
@@ -25,7 +25,7 @@ import { PLAYER_BAR_HEIGHT } from '@/constants/layout';
 // Hooks
 import { useKeyboardVisibility } from "@/hooks/useKeyboardVisibility";
 import { useIsScreenNotMobile, useIsDesktop } from "@/hooks/useOptimizedMediaQuery";
-import { BloomThemeProvider, useTheme } from '@oxyhq/bloom/theme';
+import { BloomThemeProvider, useTheme } from '@oxy.so/bloom/theme';
 import { LayoutScrollProvider, useLayoutScroll } from '@/context/LayoutScrollContext';
 import { usePlayerStore } from '@/stores/playerStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -46,7 +46,7 @@ import '../styles/global.css';
 // `useHideNativeSplashWhenReady` in RootLayout). This makes the native OS splash
 // the SINGLE splash on native — Syra's equalizer logo centered on the dark brand
 // background with the Oxy symbol pinned to the bottom (configured by
-// `@oxyhq/expo-splash` in app.config.js). The custom `AppSplashScreen` React
+// `@oxy.so/expo-splash` in app.config.js). The custom `AppSplashScreen` React
 // overlay is gated to web only. No-op on web (the shared helper guards
 // `Platform.OS === 'web'`).
 preventNativeSplashAutoHide();

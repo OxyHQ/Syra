@@ -23,9 +23,9 @@
 import multer from 'multer';
 import type { Response } from 'express';
 import { and, eq } from 'drizzle-orm';
-import { isLiveEntityId, uuidv7 } from '@oxyhq/db';
-import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
-import { getRequiredOxyUserId } from '@oxyhq/core/server';
+import { isLiveEntityId, uuidv7 } from '@oxy.so/db';
+import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
+import { getRequiredOxyUserId } from '@oxy.so/core/server';
 import { z } from 'zod';
 import {
   createEpisodeDraftRequestSchema,

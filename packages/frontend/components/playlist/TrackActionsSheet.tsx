@@ -1,15 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import BottomSheet, { type BottomSheetRef } from '@oxyhq/bloom/bottom-sheet';
+import BottomSheet, { type BottomSheetRef } from '@oxy.so/bloom/bottom-sheet';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { Track } from '@syra/shared-types';
 import { useRemoveTracksFromPlaylist } from '@/hooks/usePlaylistMutations';
 import { AddToPlaylistSheet } from '@/components/playlist/AddToPlaylistSheet';
 import { TrackArtistLine } from '@/components/TrackArtistLine';
-import { toast } from '@oxyhq/bloom/toast';
+import { toast } from '@oxy.so/bloom/toast';
 
 interface TrackActionsSheetProps {
   visible: boolean;

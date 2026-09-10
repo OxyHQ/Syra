@@ -10,9 +10,9 @@ import Animated, {
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
-import { useTheme, useAmbientTheme } from '@oxyhq/bloom/theme';
+import { useTheme, useAmbientTheme } from '@oxy.so/bloom/theme';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { toast } from '@oxyhq/bloom/toast';
+import { toast } from '@oxy.so/bloom/toast';
 import { Track } from '@syra/shared-types';
 import { entityService } from '@/services/entityService';
 import { ArtistClaimCta } from '@/components/artist/ArtistClaimCta';

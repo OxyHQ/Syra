@@ -37,12 +37,12 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { and, eq, sql } from 'drizzle-orm';
-import { describeDriverError, isLiveEntityId, isUniqueViolation, uuidv7 } from '@oxyhq/db';
+import { describeDriverError, isLiveEntityId, isUniqueViolation, uuidv7 } from '@oxy.so/db';
 import multer from 'multer';
 import sharp from 'sharp';
 import type { Response, NextFunction } from 'express';
-import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
-import { getRequiredOxyUserId } from '@oxyhq/core/server';
+import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
+import { getRequiredOxyUserId } from '@oxy.so/core/server';
 import {
   buildAlbumKey,
   isDenylistedAlbumName,

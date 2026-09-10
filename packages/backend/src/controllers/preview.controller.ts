@@ -1,5 +1,5 @@
 import { and, asc, eq } from 'drizzle-orm';
-import { isLiveEntityId } from '@oxyhq/db';
+import { isLiveEntityId } from '@oxy.so/db';
 import type { Request, Response, NextFunction } from 'express';
 import { getDb, isPostgresConnected } from '../db/postgres';
 import { trackHlsRenditions, tracks } from '../db/schema/catalog';

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'bun:test';
 import { Readable } from 'node:stream';
 import type { IncomingMessage } from 'node:http';
-import type { SafeFetchResult } from '@oxyhq/core/server';
+import type { SafeFetchResult } from '@oxy.so/core/server';
 import { parseFeedXml, fetchAndParse } from './RssConnector';
 
 const FEED = `<?xml version="1.0" encoding="UTF-8"?>

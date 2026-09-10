@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { and, eq, isNotNull, ne } from 'drizzle-orm';
-import { publicColumns } from '@oxyhq/db/assert';
+import { publicColumns } from '@oxy.so/db/assert';
 import { PlaylistVisibility } from '@syra/shared-types';
 import { getDb, isPostgresConnected } from '../db/postgres';
 import { albums, catalogEntities, tracks } from '../db/schema/catalog';
@@ -17,7 +17,7 @@ import { toAlbumDtos, toArtistDtos, toPlaylistDtos, toTrackDtos } from '../db/ca
 import { normalizeImageRef, type PublicTrackRow } from '../db/catalog/serialize';
 import { playableTrackFilter } from '../db/catalog/visibility';
 import { parseBoundedLimit, parseOffset } from '../utils/reqParams';
-import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
+import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import { getRequestUserId } from '../utils/requestUser';
 import { getMadeForYou as getPersonalisedMadeForYou } from '../services/recommendations/recommendationService';
 

@@ -3,9 +3,9 @@ import { Pressable, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { Button } from '@oxyhq/bloom/button';
-import { Switch } from '@oxyhq/bloom/switch';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { Button } from '@oxy.so/bloom/button';
+import { Switch } from '@oxy.so/bloom/switch';
+import { useTheme } from '@oxy.so/bloom/theme';
 import type { EpisodeType } from '@syra/shared-types';
 import { SignInGate } from '@/components/SignInGate';
 import { ScreenContainer } from '@/components/AppShell';
@@ -14,7 +14,7 @@ import { HostsGuestsPicker, type HostsGuests } from '@/components/HostsGuestsPic
 import { useUploadEpisode } from '@/hooks/usePodcasts';
 import type { EpisodeAudioFile } from '@/services/episodeService';
 import { extractInvalidIds } from '@/utils/api';
-import { toast } from '@oxyhq/bloom/toast';
+import { toast } from '@oxy.so/bloom/toast';
 import { cn } from '@/lib/utils';
 
 const EPISODE_TYPES: { value: EpisodeType; label: string }[] = [

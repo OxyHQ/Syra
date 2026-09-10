@@ -8,7 +8,7 @@ import {
   sql,
   type SQL,
 } from 'drizzle-orm';
-import { publicColumns } from '@oxyhq/db/assert';
+import { publicColumns } from '@oxy.so/db/assert';
 import { findRelatedEdges } from '../../db/user/relations';
 import { getDb } from '../../db/postgres';
 import { tracks } from '../../db/schema/catalog';

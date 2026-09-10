@@ -50,7 +50,7 @@ import type {
   Track,
   TrackCredit,
 } from '@syra/shared-types';
-import { isLiveEntityId } from '@oxyhq/db';
+import { isLiveEntityId } from '@oxy.so/db';
 import type { albums, catalogEntities, imageAssets, tracks } from '../schema/catalog';
 import type { playlists } from '../schema/library';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../schema/protectedColumns';

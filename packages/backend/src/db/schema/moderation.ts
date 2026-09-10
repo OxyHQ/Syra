@@ -1,12 +1,12 @@
 import { sql } from 'drizzle-orm';
 import { check, index, pgTable, text, uniqueIndex } from 'drizzle-orm/pg-core';
-import { inList } from '@oxyhq/db';
+import { inList } from '@oxy.so/db';
 import {
   moderationReportColumns,
   moderationReportTableExtras,
   moderationTables,
   type ModerationTables,
-} from '@oxyhq/crowdsource-app/postgres';
+} from '@oxy.so/crowdsource-app/postgres';
 import {
   MODERATION_ENFORCEMENT_ACTIONS,
   ReportCategory,
@@ -19,7 +19,7 @@ import {
  *
  * Unlike every other schema module here, most of this file is IMPORTED. The
  * outbox, the inbound event log and the enforcement ledger are
- * `@oxyhq/crowdsource-app`'s own tables, in Syra's database — their shape, their
+ * `@oxy.so/crowdsource-app`'s own tables, in Syra's database — their shape, their
  * indexes and the correctness properties those indexes carry belong to the
  * package, and Syra declaring its own copy is how seven applications end up with
  * seven subtly different outboxes. Syra supplies exactly two things: the union of
@@ -130,7 +130,7 @@ export const reports = pgTable(
  * **Annotated with `ModerationTables`, and the annotation is load-bearing.**
  * Without it every export below fails `TS2742`: the INFERRED drizzle table type
  * mentions `ModerationOutboxKind` and friends, whose declarations sit at
- * `@oxyhq/crowdsource-app/dist/types` — a path the package's `exports` map does
+ * `@oxy.so/crowdsource-app/dist/types` — a path the package's `exports` map does
  * not expose, so `composite: true` cannot write a portable declaration for it.
  * Naming the alias the package DOES export replaces the unnameable inferred type
  * with an indexed access into a public one. Nothing is asserted and nothing is

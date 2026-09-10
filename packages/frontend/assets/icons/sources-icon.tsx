@@ -1,7 +1,7 @@
 import React from 'react';
 import Svg, { Path, Rect, Circle } from 'react-native-svg';
 import { ViewStyle } from 'react-native';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
 
 export const SourcesIcon = ({ color: colorProp, size = 24, style }: { color?: string; size?: number; style?: ViewStyle }) => {
   const theme = useTheme();

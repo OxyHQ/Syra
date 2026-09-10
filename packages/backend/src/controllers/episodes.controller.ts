@@ -5,9 +5,9 @@
  */
 
 import type { Response } from 'express';
-import { isLiveEntityId } from '@oxyhq/db';
-import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
-import { getRequiredOxyUserId } from '@oxyhq/core/server';
+import { isLiveEntityId } from '@oxy.so/db';
+import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
+import { getRequiredOxyUserId } from '@oxy.so/core/server';
 import { updateEpisodeProgressRequestSchema, updateEpisodeRequestSchema } from '@syra/shared-types';
 import {
   findEpisodeById,

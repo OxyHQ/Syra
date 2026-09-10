@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
-import { useOxy } from '@oxyhq/services';
+import { useOxy } from '@oxy.so/services';
 import { playerSocketService } from '@/services/playerSocketService';
 import { oxyServices } from '@/lib/oxyServices';
 import { deviceDisplayName, deviceTypeForPlatform } from '@/utils/device';

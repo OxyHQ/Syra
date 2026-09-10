@@ -3,7 +3,7 @@
  * normalises it to Syra's model shape.
  *
  * Security: the feed URL is caller/discovery-influenced, so every fetch goes
- * through `safeFetch` from `@oxyhq/core/server` (DNS-pinned, private/metadata-IP
+ * through `safeFetch` from `@oxy.so/core/server` (DNS-pinned, private/metadata-IP
  * denylist, bounded redirects). `safeFetch` already implements the Bun
  * `{ all: true }` DNS lookup-array contract internally, so the documented Bun
  * `results.sort is not a function` gotcha does not apply here.
@@ -16,8 +16,8 @@
 
 import { XMLParser } from 'fast-xml-parser';
 import type { IncomingMessage } from 'node:http';
-import { safeFetch, SsrfRejection, UpstreamError } from '@oxyhq/core/server';
-import type { SafeFetchOptions, SafeFetchResult } from '@oxyhq/core/server';
+import { safeFetch, SsrfRejection, UpstreamError } from '@oxy.so/core/server';
+import type { SafeFetchOptions, SafeFetchResult } from '@oxy.so/core/server';
 import { logger } from '../../utils/logger';
 
 /** Injectable `safeFetch` shape — lets tests drive `fetchAndParse` offline. */

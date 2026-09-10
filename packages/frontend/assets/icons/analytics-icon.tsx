@@ -1,7 +1,7 @@
 import React from 'react';
 import Svg, { Path, Line, Polygon, Rect } from 'react-native-svg';
 import { ViewStyle } from 'react-native';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
 
 export const AnalyticsIcon = ({ color: colorProp, size = 26, style }: { color?: string; size?: number; style?: ViewStyle }) => {
   const theme = useTheme();

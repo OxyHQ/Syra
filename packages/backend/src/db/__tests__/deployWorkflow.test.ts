@@ -42,7 +42,7 @@
 import { describe, it, expect } from 'bun:test';
 import fs from 'node:fs';
 import path from 'node:path';
-import { MIGRATION_RUNS } from '@oxyhq/db/migrate';
+import { MIGRATION_RUNS } from '@oxy.so/db/migrate';
 
 /** Only the shape these assertions read — not a schema for GitHub Actions. */
 interface WorkflowFile {

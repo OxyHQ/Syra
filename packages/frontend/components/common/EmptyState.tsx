@@ -1,7 +1,7 @@
 import React, { memo, useState, ReactNode } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ViewStyle, TextStyle } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
 import { flattenStyleArray } from '@/styles/shared';
 import Ionicons from '@expo/vector-icons/Ionicons';
 

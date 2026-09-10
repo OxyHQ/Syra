@@ -3,7 +3,7 @@ import { StyleSheet, View, ScrollView, Text, Pressable, Image, Platform } from '
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { useTheme, useAmbientTheme } from '@oxyhq/bloom/theme';
+import { useTheme, useAmbientTheme } from '@oxy.so/bloom/theme';
 import { musicService } from '@/services/musicService';
 import { Track } from '@syra/shared-types';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -18,7 +18,7 @@ import { useLibrary, useToggleSaveAlbum, useToggleLikeTrack } from '@/hooks/useL
 import { LinearGradient } from 'expo-linear-gradient';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { isNotFoundError } from '@/utils/api';
-import { toast } from '@oxyhq/bloom/toast';
+import { toast } from '@oxy.so/bloom/toast';
 import { useAuthGate } from '@/hooks/useAuthGate';
 import { CATALOG_QUERY_KEYS } from '@/hooks/useLibraryCollections';
 import { AddToPlaylistSheet } from '@/components/playlist/AddToPlaylistSheet';

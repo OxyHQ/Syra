@@ -1,15 +1,15 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import BottomSheet, { type BottomSheetRef } from '@oxyhq/bloom/bottom-sheet';
-import { AlertDialog } from '@oxyhq/bloom/alert-dialog';
+import BottomSheet, { type BottomSheetRef } from '@oxy.so/bloom/bottom-sheet';
+import { AlertDialog } from '@oxy.so/bloom/alert-dialog';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useOxy } from '@oxyhq/services';
+import { useOxy } from '@oxy.so/services';
 import type { Playlist } from '@syra/shared-types';
 import { useDeletePlaylist, useUpdatePlaylist } from '@/hooks/usePlaylistMutations';
 import { EmptyState } from '@/components/common/EmptyState';
-import { toast } from '@oxyhq/bloom/toast';
+import { toast } from '@oxy.so/bloom/toast';
 
 interface PlaylistActionsSheetProps {
   visible: boolean;
