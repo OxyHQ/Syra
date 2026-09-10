@@ -1,4 +1,4 @@
-import { sweepAllExpiredRows } from '@oxyhq/db/expiry';
+import { sweepAllExpiredRows } from '@oxy.so/db/expiry';
 import { withLock } from '../../utils/distributedLock';
 import { getDb, isPostgresConnected } from '../../db/postgres';
 import { EXPIRY_SWEEP_TARGETS } from '../../db/expiry';

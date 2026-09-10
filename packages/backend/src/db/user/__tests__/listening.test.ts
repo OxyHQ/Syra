@@ -8,7 +8,7 @@
 
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'bun:test';
 import { count, eq } from 'drizzle-orm';
-import { uuidv7 } from '@oxyhq/db';
+import { uuidv7 } from '@oxy.so/db';
 import { clearDb, connectDb, disconnectDb } from '../../../test/postgres';
 import { getDb } from '../../postgres';
 import { catalogEntities, tracks } from '../../schema/catalog';

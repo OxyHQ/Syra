@@ -1,10 +1,10 @@
 import { type ReactNode, useCallback } from 'react';
 import { Text, View } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { useOxy } from '@oxyhq/services';
-import { useTheme } from '@oxyhq/bloom/theme';
-import { Button } from '@oxyhq/bloom/button';
-import { Loading } from '@oxyhq/bloom/loading';
+import { useOxy } from '@oxy.so/services';
+import { useTheme } from '@oxy.so/bloom/theme';
+import { Button } from '@oxy.so/bloom/button';
+import { Loading } from '@oxy.so/bloom/loading';
 
 /**
  * Gates creator-only content behind an authenticated Oxy session. Waits for the

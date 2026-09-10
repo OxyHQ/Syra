@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useOxy } from '@oxyhq/services';
+import { useOxy } from '@oxy.so/services';
 import type { RadioGate } from '@syra/shared-types';
 import { EmptyState } from '@/components/common/EmptyState';
 

@@ -1,5 +1,5 @@
-import { useOxy } from '@oxyhq/services';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useOxy } from '@oxy.so/services';
+import { useTheme } from '@oxy.so/bloom/theme';
 import { useQuery } from '@tanstack/react-query';
 import type { LiveConfig, LiveTheme, UserEntity } from '@syra.fm/sdk';
 
@@ -8,7 +8,7 @@ import { API_URL_SOCKET } from '@/config';
 import { useIsDesktop } from '@/hooks/useOptimizedMediaQuery';
 import { oxyServices } from '@/lib/oxyServices';
 import { queryClient } from '@/lib/queryClient';
-import { toast } from '@oxyhq/bloom/toast';
+import { toast } from '@oxy.so/bloom/toast';
 import Avatar from '@/components/Avatar';
 
 /**

@@ -13,8 +13,8 @@
 import React, { memo, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Button } from '@oxyhq/bloom/button';
-import { FollowTargetButton, useOxy } from '@oxyhq/services';
+import { Button } from '@oxy.so/bloom/button';
+import { FollowTargetButton, useOxy } from '@oxy.so/services';
 import { useAuthGate } from '@/hooks/useAuthGate';
 import { useToggleFollowArtist } from '@/hooks/useLibrary';
 import { ARTIST_FOLLOW_KIND, ensureArtistFollowTarget } from '@/lib/followGraph';
@@ -77,7 +77,7 @@ export const ArtistFollowControl = memo(function ArtistFollowControl({
   /**
    * Keep Syra's own shelf in step with the press.
    *
-   * `onChange` fires only for a write the server accepted (`@oxyhq/services`
+   * `onChange` fires only for a write the server accepted (`@oxy.so/services`
    * >= 27.1.1), so this is a plain mirror with nothing to reconcile.
    */
   const handleChange = useCallback(

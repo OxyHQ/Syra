@@ -13,7 +13,7 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { useAuth } from '@oxyhq/services';
+import { useAuth } from '@oxy.so/services';
 import * as ImagePicker from 'expo-image-picker';
 
 import { useLiveConfig } from '../context/LiveConfigContext';

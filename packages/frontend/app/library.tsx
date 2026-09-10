@@ -3,7 +3,7 @@ import { StyleSheet, View, Text, Pressable, type ViewStyle } from 'react-native'
 import Animated from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
 import SEO from '@/components/SEO';
 import { LibraryListSkeleton } from '@/components/skeletons';
 import { EmptyState } from '@/components/common/EmptyState';

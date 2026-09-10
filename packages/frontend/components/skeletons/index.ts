@@ -2,7 +2,7 @@
  * Barrel of first-party skeleton wrapper components.
  *
  * Screens import semantic skeletons from here (e.g. `MediaHeaderSkeleton`)
- * instead of reaching into `@oxyhq/bloom/skeleton` directly — the raw bloom
+ * instead of reaching into `@oxy.so/bloom/skeleton` directly — the raw bloom
  * primitives (`Box`, `Circle`, `Text`, …) are an implementation detail used
  * only inside these wrappers.
  */

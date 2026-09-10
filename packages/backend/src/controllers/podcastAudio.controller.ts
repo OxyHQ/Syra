@@ -27,9 +27,9 @@
 import type { Response } from 'express';
 import { Readable } from 'stream';
 import { eq } from 'drizzle-orm';
-import { isLiveEntityId } from '@oxyhq/db';
-import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
-import { safeFetch, SsrfRejection } from '@oxyhq/core/server';
+import { isLiveEntityId } from '@oxy.so/db';
+import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
+import { safeFetch, SsrfRejection } from '@oxy.so/core/server';
 import { getDb } from '../db/postgres';
 import { trackKeys } from '../db/schema/trackKeys';
 import { findEpisodeById } from '../db/podcasts/episodes';

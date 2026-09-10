@@ -4,7 +4,7 @@ import { ReportStatus } from './types';
  * Syra's verdict axis, derived from a decision and nowhere else.
  *
  * The OTHER axis — `localStatus`, "did the report get out of here and come
- * back" — belongs to `@oxyhq/crowdsource-app` and is written by it. This one is
+ * back" — belongs to `@oxy.so/crowdsource-app` and is written by it. This one is
  * Syra's, it existed before Syra adopted CrowdSource, and it reaches the same
  * update through the integration's `reportDecisionExtraFields` hook, which the
  * package provides for exactly this case.

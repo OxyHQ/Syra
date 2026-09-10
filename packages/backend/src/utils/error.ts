@@ -1,4 +1,4 @@
-import { describeDriverError } from '@oxyhq/db';
+import { describeDriverError } from '@oxy.so/db';
 import { isDriverError } from '../db/postgres';
 
 export class ApiError extends Error {

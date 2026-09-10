@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { useAuth } from '@oxyhq/services';
+import { useAuth } from '@oxy.so/services';
 import { useLiveConfig } from '../context/LiveConfigContext';
 import type { UserEntity } from '../types';
 

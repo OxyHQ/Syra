@@ -11,7 +11,7 @@
  *
  * ## `updated_at` has to be written by hand on an upsert
  *
- * `@oxyhq/db`'s `updatedAt()` carries `$onUpdate(() => new Date())`, which
+ * `@oxy.so/db`'s `updatedAt()` carries `$onUpdate(() => new Date())`, which
  * drizzle applies to `.update()` — and NOT to the `set` of an
  * `onConflictDoUpdate`. Mongo's `timestamps: true` moved it on every
  * `findOneAndUpdate`, upsert included. So every conflict path below sets it

@@ -1,4 +1,4 @@
-import { useOxy } from '@oxyhq/services';
+import { useOxy } from '@oxy.so/services';
 import { useQuery } from '@tanstack/react-query';
 import { recommendationService } from '@/services/recommendationService';
 

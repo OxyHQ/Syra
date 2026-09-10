@@ -33,7 +33,7 @@
  * predicate becomes a full table scan every time it runs — the exact cost the
  * Mongo TTL index hid. `listening_events_played_at_idx` and
  * `notification_suppressions_expires_at_idx` below are those indexes;
- * `findUnsupportedExpiryColumns` (`@oxyhq/db/assert`, driven from
+ * `findUnsupportedExpiryColumns` (`@oxy.so/db/assert`, driven from
  * `__tests__/gates.test.ts` against the real catalogue) fails the gate if
  * either goes away, and the planner probe in that file's Task 7 block proves
  * the index actually SERVES the sweep's own statement rather than merely
@@ -41,7 +41,7 @@
  *
  * ## The read that depends on a swept row already being gone
  *
- * `@oxyhq/db/expiry`'s own rule: a registry entry is only safe once the
+ * `@oxy.so/db/expiry`'s own rule: a registry entry is only safe once the
  * table's readers are audited for depending on absence, because Mongo's TTL
  * monitor lags ~60s while a sweep lags one scheduled call. The two tables here
  * answer that question differently, and the difference matters:
@@ -193,7 +193,7 @@ import {
   textArrayLiteral,
   timestamptz,
   updatedAt,
-} from '@oxyhq/db';
+} from '@oxy.so/db';
 import { catalogEntities, tracks } from './catalog';
 
 // ── Closed value sets ────────────────────────────────────────────────────

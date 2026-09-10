@@ -4,7 +4,7 @@
  * Two ledgers, one purpose: between them and the real `.references()`
  * constraints, every id-shaped column in this schema is expected to be
  * classified — which is what lets `__tests__/gates.test.ts` fail on a NEW one
- * nobody decided about, via `@oxyhq/db/assert`'s `findIdColumnViolations`.
+ * nobody decided about, via `@oxy.so/db/assert`'s `findIdColumnViolations`.
  *
  * `DEFERRED_FOREIGN_KEYS` is the TEMPORARY list: a constraint that is decided
  * but not yet expressible because drizzle cannot write a forward reference —
@@ -16,14 +16,14 @@
  * columns that will never carry a constraint, each with its own reason.
  *
  * Both `DeferredForeignKey` and the shape `findIdColumnViolations` expects for
- * `withoutForeignKey` come straight from `@oxyhq/db/assert` rather than being
+ * `withoutForeignKey` come straight from `@oxy.so/db/assert` rather than being
  * redeclared here — the package now owns both the gate and the types it
  * consumes, so a second local copy could only drift from the one the gate
  * actually checks against.
  */
 
-import type { DeferredForeignKey } from '@oxyhq/db/assert';
-import { moderationIdColumnsWithoutForeignKey } from '@oxyhq/crowdsource-app/postgres';
+import type { DeferredForeignKey } from '@oxy.so/db/assert';
+import { moderationIdColumnsWithoutForeignKey } from '@oxy.so/crowdsource-app/postgres';
 import { moderationTableSet, reports } from './moderation';
 
 /**
@@ -52,7 +52,7 @@ export const DEFERRED_FOREIGN_KEYS: readonly DeferredForeignKey[] = [];
 /**
  * `*_id`-shaped columns that will never carry a constraint, named by their SQL
  * identifier (`table.column`, via `sqlColumnName` — never the TypeScript
- * property name; see that function's own doc comment in `@oxyhq/db` for why).
+ * property name; see that function's own doc comment in `@oxy.so/db` for why).
  *
  * `findIdColumnViolations` itself catches a stale entry (`stale_ledger_entry`)
  * or an incomplete one, so an entry added here ahead of the column it names
@@ -354,7 +354,7 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
    *
    * Every one would otherwise fail this gate as `unclassified_id_column` on the
    * day Syra adopted the package, with nothing to say whether each is a missing
-   * constraint or a decision — and `@oxyhq/crowdsource-app` is the only place
+   * constraint or a decision — and `@oxy.so/crowdsource-app` is the only place
    * that can answer, because five of the eight name rows in CROWDSOURCE's
    * database (a decision, a case, a report as CrowdSource knows it) and the other
    * three are opaque noun ids no single column could reference.

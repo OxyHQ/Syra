@@ -1,8 +1,8 @@
 import React from 'react';
 import { StyleSheet, StyleProp, ViewStyle, ImageStyle, ImageSourcePropType } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { Avatar as BloomAvatar } from '@oxyhq/bloom/avatar';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { Avatar as BloomAvatar } from '@oxy.so/bloom/avatar';
+import { useTheme } from '@oxy.so/bloom/theme';
 import { VerifiedIcon } from '@/assets/icons/verified-icon';
 
 interface AvatarProps {

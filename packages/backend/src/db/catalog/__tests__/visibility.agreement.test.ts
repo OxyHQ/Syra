@@ -50,7 +50,7 @@
 
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { and, eq, inArray, like, sql, type SQL } from 'drizzle-orm';
-import { executeRows, sqlStateOf } from '@oxyhq/db';
+import { executeRows, sqlStateOf } from '@oxy.so/db';
 import { closePostgres, getDb } from '../../postgres';
 import { connectUnmanagedDb } from '../../../test/postgres';
 import { albums, catalogEntities, imageAssets, tracks } from '../../schema/catalog';

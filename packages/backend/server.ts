@@ -5,7 +5,7 @@ import http from 'http';
 import compression from 'compression';
 import cors from 'cors';
 import { Server as SocketIOServer, Socket, Namespace } from 'socket.io';
-import { createOptionalOxyAuth, createOxyRateLimit } from '@oxyhq/core/server';
+import { createOptionalOxyAuth, createOxyRateLimit } from '@oxy.so/core/server';
 import { oxy } from './src/oxyClient';
 
 import { connectPostgres, isPostgresConnected } from './src/db/postgres';
@@ -15,7 +15,7 @@ import { createAdapter } from '@socket.io/redis-adapter';
 import { logger } from './src/utils/logger';
 import { bruteForceProtection } from './src/middleware/security';
 import { performanceMiddleware, getPerformanceStats } from './src/middleware/performance';
-import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
+import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import { RedisStore } from './src/middleware/rateLimitStore';
 
 import { setupPlayerSocket } from './src/sockets/playerSocket';

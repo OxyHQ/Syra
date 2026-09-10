@@ -5,7 +5,7 @@
  * add a way for the test to fail for an unrelated reason.
  */
 jest.mock('expo-audio', () => ({ createAudioPlayer: jest.fn(() => ({})) }));
-// The two stores reach `@oxyhq/core`, published as untransformed ESM that
+// The two stores reach `@oxy.so/core`, published as untransformed ESM that
 // jest-expo does not put through babel. Neither store participates in socket
 // teardown, so they are stubbed at the boundary rather than transformed.
 jest.mock('../stores/playerStore', () => ({ usePlayerStore: { getState: () => ({}) } }));

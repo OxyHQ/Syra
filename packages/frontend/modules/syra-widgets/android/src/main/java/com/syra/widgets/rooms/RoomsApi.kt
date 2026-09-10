@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit
  *
  * A widget runs outside the app process with no JS runtime, so reading anything
  * authenticated needs the native device-first session (`so.oxy.session`) that
- * `@oxyhq/services` 24.0.2 ships. This app is on services 22 / core 12, where
+ * `@oxy.so/services` 24.0.2 ships. This app is on services 22 / core 12, where
  * that native session does not exist at all — so there is no supported way for
  * this file to hold a credential, and adding one would mean dragging the app
  * through an SDK major migration first.

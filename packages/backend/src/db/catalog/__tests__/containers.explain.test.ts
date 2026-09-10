@@ -62,7 +62,7 @@ import {
   sql,
   type SQLWrapper,
 } from 'drizzle-orm';
-import { executeRows } from '@oxyhq/db';
+import { executeRows } from '@oxy.so/db';
 import { closePostgres, getDb } from '../../postgres';
 import { connectUnmanagedDb } from '../../../test/postgres';
 import {

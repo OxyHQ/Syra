@@ -3,7 +3,7 @@ import { View, StyleSheet, Pressable, Platform } from "react-native";
 import { useRouter } from "expo-router";
 
 import { LogoIcon } from "@/assets/logo";
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
 
 interface LogoProps {
   color?: string;

@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, ViewStyle } from 'react-native';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
 import { useIsScreenNotMobile } from '@/hooks/useOptimizedMediaQuery';
 
 export interface PanelProps {

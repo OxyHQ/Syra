@@ -2,18 +2,18 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Move Syra's backend off MongoDB onto PostgreSQL, consuming `@oxyhq/db` rather than writing a fourth copy of the shared plumbing.
+**Goal:** Move Syra's backend off MongoDB onto PostgreSQL, consuming `@oxy.so/db` rather than writing a fourth copy of the shared plumbing.
 
 **Architecture:** Drizzle ORM over `postgres.js`, one database `syra` on the shared `oxy-postgres` RDS instance. The schema lands whole before any call site moves, so foreign keys are real from the start; call sites then port one vertical per pull request. Postgres starts empty — no backfill — so ids are uuid v7 from the first row and `_id` leaves the wire contract.
 
-**Tech Stack:** `@oxyhq/db@^0.1.1`, `drizzle-orm` 0.45.2, `postgres` 3.4.9, `drizzle-kit` 0.31.10, bun, `bun test`.
+**Tech Stack:** `@oxy.so/db@^0.1.1`, `drizzle-orm` 0.45.2, `postgres` 3.4.9, `drizzle-kit` 0.31.10, bun, `bun test`.
 
 **Spec:** [`../specs/2026-08-05-syra-mongo-to-postgres-design.md`](../specs/2026-08-05-syra-mongo-to-postgres-design.md)
 
 ## Global Constraints
 
 - **bun only.** Never `npm`, `yarn`, `npx` — use `bunx`. `bun.lock` committed in the same commit as any `package.json` change.
-- **Consume `@oxyhq/db@^0.1.1` from npm.** Never re-implement anything it exports. A missing export is a package defect to report upstream, not a call site to work around.
+- **Consume `@oxy.so/db@^0.1.1` from npm.** Never re-implement anything it exports. A missing export is a package defect to report upstream, not a call site to work around.
 - **The package holds MECHANISMS, the consumer holds REGISTRIES.** Syra owns `EXPIRY_SWEEP_TARGETS`, `REQUIRED_EXTENSIONS`, `PROTECTED_COLUMNS_BY_TABLE`, `DEFERRED_FOREIGN_KEYS` and `ID_COLUMNS_WITHOUT_FOREIGN_KEY`. The package owns the code that reads them.
 - **`SqlExecutor.execute` is NOT generic** — `execute(query: SQL): Promise<Record<string, unknown>[]>`. Row typing comes from `executeRows<TRow>(executor, query)`, which **rejects named `interface`s**: declare row shapes as `type` aliases.
 - **`oxy_user_id` never carries a foreign key.** It is a cross-service id owned by oxy-api. Every such column goes in `ID_COLUMNS_WITHOUT_FOREIGN_KEY` with its reason.
@@ -60,7 +60,7 @@
 Nothing else can land until a migration can run and the gates can fail. This task ends with an empty schema that migrates cleanly and four gates that pass vacuously **but are proven able to fail**.
 
 **Files:**
-- Modify: `packages/backend/package.json` (add `@oxyhq/db`, `drizzle-orm`, `postgres`, `drizzle-kit`; add `db:generate`, `db:migrate`)
+- Modify: `packages/backend/package.json` (add `@oxy.so/db`, `drizzle-orm`, `postgres`, `drizzle-kit`; add `db:generate`, `db:migrate`)
 - Create: `packages/backend/drizzle.config.ts`
 - Create: `packages/backend/src/db/postgres.ts`, `migrate.ts`, `extensions.ts`, `expiry.ts`
 - Create: `packages/backend/src/db/schema/index.ts`, `columns.ts`, `deferredForeignKeys.ts`, `protectedColumns.ts`
@@ -69,22 +69,22 @@ Nothing else can land until a migration can run and the gates can fail. This tas
 - Modify: `.github/workflows/*` (a `postgres:17` service and `TEST_DATABASE_URL`)
 
 **Interfaces:**
-- Consumes: `createDatabase`, `DATABASE_CASING` from `@oxyhq/db`; `runMigrations`, `type RequiredExtension` from `@oxyhq/db/migrate`; `type ExpirySweepTarget` from `@oxyhq/db/expiry`; `findSchemaInvariantViolations`, `findIdColumnViolations`, `findImplicitWholeRowReads`, `findUnsupportedExpiryColumns`, `publicColumns` from `@oxyhq/db/assert`.
+- Consumes: `createDatabase`, `DATABASE_CASING` from `@oxy.so/db`; `runMigrations`, `type RequiredExtension` from `@oxy.so/db/migrate`; `type ExpirySweepTarget` from `@oxy.so/db/expiry`; `findSchemaInvariantViolations`, `findIdColumnViolations`, `findImplicitWholeRowReads`, `findUnsupportedExpiryColumns`, `publicColumns` from `@oxy.so/db/assert`.
 - Produces: `getDb(): OxyDatabase<typeof schema>`, `closePostgres(): Promise<void>`, `REQUIRED_EXTENSIONS`, `EXPIRY_SWEEP_TARGETS`, `DEFERRED_FOREIGN_KEYS`, `ID_COLUMNS_WITHOUT_FOREIGN_KEY`, `PROTECTED_COLUMNS_BY_TABLE`.
 
 - [ ] **Step 1: Install the package and the drivers**
 
 ```bash
 cd /home/nate/Oxy/Syra
-bun add --cwd packages/backend @oxyhq/db@^0.1.1 drizzle-orm@0.45.2 postgres@3.4.9
+bun add --cwd packages/backend @oxy.so/db@^0.1.1 drizzle-orm@0.45.2 postgres@3.4.9
 bun add --cwd packages/backend --dev drizzle-kit@0.31.10
 bun install
 ```
 
-Confirm `@oxyhq/db` resolved to the published tarball, not a local path:
+Confirm `@oxy.so/db` resolved to the published tarball, not a local path:
 
 ```bash
-cat node_modules/@oxyhq/db/package.json | grep '"version"'
+cat node_modules/@oxy.so/db/package.json | grep '"version"'
 ```
 
 Expected: `0.1.1`.
@@ -95,7 +95,7 @@ Expected: `0.1.1`.
 
 ```ts
 import { describe, expect, it } from 'bun:test';
-import { findIdColumnViolations } from '@oxyhq/db/assert';
+import { findIdColumnViolations } from '@oxy.so/db/assert';
 import { DEFERRED_FOREIGN_KEYS, ID_COLUMNS_WITHOUT_FOREIGN_KEY } from '../schema/deferredForeignKeys';
 import { tables } from '../schema';
 
@@ -158,7 +158,7 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
 `extensions.ts`:
 
 ```ts
-import type { RequiredExtension } from '@oxyhq/db/migrate';
+import type { RequiredExtension } from '@oxy.so/db/migrate';
 
 /**
  * Syra requires no Postgres extensions.
@@ -178,7 +178,7 @@ export const REQUIRED_EXTENSIONS: readonly RequiredExtension[] = [];
 `db/postgres.ts`:
 
 ```ts
-import { createDatabase, type OxyDatabase } from '@oxyhq/db';
+import { createDatabase, type OxyDatabase } from '@oxy.so/db';
 import { config } from '../config/env';
 import { logger } from '../utils/logger';
 import * as schema from './schema';
@@ -210,7 +210,7 @@ Check `createDatabase`'s real option name against the installed package before w
 
 - [ ] **Step 6: Create the migrator**
 
-`db/migrate.ts` calls `runMigrations` from `@oxyhq/db/migrate`, passing `REQUIRED_EXTENSIONS`, the migrations folder resolved from this package's own root, the `--phase` argument, and a logger. **Pass `expectedDatabase`** from `readTargetDatabase(process.argv.slice(2))` — Syra starts clean, so there is no legacy invocation to preserve and no reason to ship without the wrong-database guard. Unlike oxy-api, Syra pays no migration cost for adopting it on day one.
+`db/migrate.ts` calls `runMigrations` from `@oxy.so/db/migrate`, passing `REQUIRED_EXTENSIONS`, the migrations folder resolved from this package's own root, the `--phase` argument, and a logger. **Pass `expectedDatabase`** from `readTargetDatabase(process.argv.slice(2))` — Syra starts clean, so there is no legacy invocation to preserve and no reason to ship without the wrong-database guard. Unlike oxy-api, Syra pays no migration cost for adopting it on day one.
 
 - [ ] **Step 7: Empty schema barrel**
 
@@ -245,7 +245,7 @@ The largest vertical and the one that sets the pattern every later schema task f
 - Reference (read, do not modify): `packages/backend/src/models/{Track,Album,CatalogEntity,TrackKey,IsrcRegistry,TrackFingerprint,ImageAsset,Lyrics,MusicBrainzArtist,DiscogsRelease}.ts`
 
 **Interfaces:**
-- Consumes: `timestamptz`, `createdAt`, `updatedAt`, `generatedId`, `tsvector`, `inList` from `@oxyhq/db`.
+- Consumes: `timestamptz`, `createdAt`, `updatedAt`, `generatedId`, `tsvector`, `inList` from `@oxy.so/db`.
 - Produces: `tracks`, `albums`, `catalogEntities`, `trackKeys`, `isrcRegistry`, `trackFingerprints`, `imageAssets`, `lyrics`, `lyricsLines`, `musicbrainzArtists`, `musicbrainzArtistUrls`, `discogsReleases`, `genres`, `albumGenres`, `catalogEntitySources`, `albumSources`.
 
 The decisions this vertical carries, each of which the spec argues and none of which is a judgement call left to the implementer:
@@ -420,9 +420,9 @@ Do not invent a `topics` table to satisfy the reference. One `tsvector` column: 
 
 ### Task 8: Moderation schema — **BLOCKED, do not start without a ruling**
 
-Syra's moderation is the adopter half of **CrowdSource**, Oxy's multi-tenant participatory-moderation infrastructure. `packages/backend/package.json` depends on `@oxyhq/crowdsource` 0.3.0, `-contracts` and `-express`, and `src/moderation/` holds nineteen files implementing intake, the transactional outbox, delivery, the decision worker, the processed-event store, enforcement planning and execution.
+Syra's moderation is the adopter half of **CrowdSource**, Oxy's multi-tenant participatory-moderation infrastructure. `packages/backend/package.json` depends on `@oxy.so/crowdsource` 0.3.0, `-contracts` and `-express`, and `src/moderation/` holds nineteen files implementing intake, the transactional outbox, delivery, the decision worker, the processed-event store, enforcement planning and execution.
 
-**`@oxyhq/crowdsource-app` owns most of that**, and it is bound to Mongoose by peer dependency (`"mongoose": "^8.0.0 || ^9.0.0"`), ships Mongoose models, and **is not published** — npm returns 404; 0.4.0 exists only locally.
+**`@oxy.so/crowdsource-app` owns most of that**, and it is bound to Mongoose by peer dependency (`"mongoose": "^8.0.0 || ^9.0.0"`), ships Mongoose models, and **is not published** — npm returns 404; 0.4.0 exists only locally.
 
 The three routes are in the spec. Picking one is an owner decision because route 2 changes the ecosystem's moderation stack, not just Syra's.
 
@@ -546,10 +546,10 @@ Only after every vertical except moderation has landed, and only with Task 8 res
 
 **`schema/columns.ts` is not created.** Task 1's implementer found the plan listed
 it with no defined content, and declined to invent any. Correct: every column
-helper Syra needs comes from `@oxyhq/db`, and a file created to satisfy a file
+helper Syra needs comes from `@oxy.so/db`, and a file created to satisfy a file
 list is worse than an absent one.
 
-**Task 1 exposed a defect in `@oxyhq/db`, fixed upstream rather than worked
+**Task 1 exposed a defect in `@oxy.so/db`, fixed upstream rather than worked
 around.** `readJournal` refused a journal whose `entries` array was empty, which
 made a genuinely empty schema unmigratable. Its guard is justified — *"an empty
 read must never be mistaken for nothing to do"* — but it conflated two states: a
@@ -560,7 +560,7 @@ project that wired its migrator before writing its first schema.
 
 Syra is the package's third consumer and the first to stage its schema across
 tasks; oxy-api and Mention both landed theirs in a single commit, so neither
-could have found it. Fixed as `@oxyhq/db@0.1.2`.
+could have found it. Fixed as `@oxy.so/db@0.1.2`.
 
 The rejected alternative was a permanent no-op bootstrap migration carrying the
 phase marker. It works, and it leaves in Syra's history forever a file whose only
@@ -591,7 +591,7 @@ more useful than any individual fix.
 
 ## Carried in from the CrowdSource port — one latent fragility in our own gate
 
-`@oxyhq/crowdsource-app`'s Task 6 measured that **`column.name` is the TypeScript
+`@oxy.so/crowdsource-app`'s Task 6 measured that **`column.name` is the TypeScript
 property name for some drizzle columns and the SQL name for others, in the same
 schema** — it returns the property name for a column declared with no name
 argument (whose SQL name `DATABASE_CASING` derives) and the SQL name for one

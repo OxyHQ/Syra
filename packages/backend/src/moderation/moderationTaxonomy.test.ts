@@ -14,7 +14,7 @@ import { ReportCategory } from './types';
  * saying so, which is exactly the shape that needs a gate rather than a comment.
  *
  * It has already been lost once: Syra carried it before adopting
- * `@oxyhq/crowdsource-app`, 0.5.0 had no hook for it, and the adoption dropped
+ * `@oxy.so/crowdsource-app`, 0.5.0 had no hook for it, and the adoption dropped
  * it. This file is what stops that being possible a second time.
  */
 

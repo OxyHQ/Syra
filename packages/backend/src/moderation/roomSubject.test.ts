@@ -3,7 +3,7 @@ import { connectDb, clearDb, disconnectDb } from '../test/postgres';
 import { createRoom, updateRoom, type CreateRoomInput } from '../db/rooms/rooms';
 import { createRecording } from '../db/rooms/recordings';
 import { RoomStatus, RoomType, OwnerType, SpeakerPermission } from '../db/rooms/types';
-import { uuidv7 } from '@oxyhq/db';
+import { uuidv7 } from '@oxy.so/db';
 import { getDb } from '../db/postgres';
 import { catalogEntities, tracks } from '../db/schema/catalog';
 import { playlists } from '../db/schema/library';

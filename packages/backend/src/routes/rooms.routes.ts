@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import multer from 'multer';
-import { isLiveEntityId, uuidv7 } from '@oxyhq/db';
-import { requireOxyAuth, getRequiredOxyUserId, type OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
+import { isLiveEntityId, uuidv7 } from '@oxy.so/db';
+import { requireOxyAuth, getRequiredOxyUserId, type OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import {
   createRoom,
   deleteRoom,

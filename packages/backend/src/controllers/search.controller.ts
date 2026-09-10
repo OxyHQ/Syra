@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { and, asc, count, eq } from 'drizzle-orm';
-import { publicColumns } from '@oxyhq/db/assert';
+import { publicColumns } from '@oxy.so/db/assert';
 import {
   PlaylistVisibility,
   SearchCategory,
@@ -14,8 +14,8 @@ import {
   type SearchPerson,
   type Track,
 } from '@syra/shared-types';
-import { getAccountDisplayName } from '@oxyhq/core';
-import type { User } from '@oxyhq/core';
+import { getAccountDisplayName } from '@oxy.so/core';
+import type { User } from '@oxy.so/core';
 import { env } from '../config/env';
 import { getDb, isPostgresConnected } from '../db/postgres';
 import { albums, catalogEntities, tracks } from '../db/schema/catalog';

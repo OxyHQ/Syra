@@ -3,7 +3,7 @@ import {
   useQueryClient,
   type UseMutationResult,
 } from '@tanstack/react-query';
-import { useOxy } from '@oxyhq/services';
+import { useOxy } from '@oxy.so/services';
 import type { Playlist, Track, UpdatePlaylistRequest } from '@syra/shared-types';
 import {
   playlistService,
@@ -14,7 +14,7 @@ import {
 import { CATALOG_QUERY_KEYS } from '@/hooks/useLibraryCollections';
 import { LIBRARY_QUERY_KEY } from '@/hooks/useLibrary';
 import { useAuthGate } from '@/hooks/useAuthGate';
-import { toast } from '@oxyhq/bloom/toast';
+import { toast } from '@oxy.so/bloom/toast';
 
 /**
  * Playlist edit mutations, following the optimistic pattern established by

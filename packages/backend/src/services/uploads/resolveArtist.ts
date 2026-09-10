@@ -29,7 +29,7 @@
 
 import { and, eq } from 'drizzle-orm';
 import { isDenylistedArtistName, normalizeNameKey } from '@syra/shared-types';
-import { isUniqueViolation } from '@oxyhq/db';
+import { isUniqueViolation } from '@oxy.so/db';
 import { getDb } from '../../db/postgres';
 import { catalogEntities, isrcRegistry, tracks } from '../../db/schema/catalog';
 import { enqueueArtistEnrichment } from '../ingest/ingestQueue';

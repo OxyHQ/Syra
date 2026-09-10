@@ -50,7 +50,7 @@
 
 import { sql } from 'drizzle-orm';
 import { check, pgTable, text, unique } from 'drizzle-orm/pg-core';
-import { createdAt, generatedId, updatedAt } from '@oxyhq/db';
+import { createdAt, generatedId, updatedAt } from '@oxy.so/db';
 import { tracks } from './catalog';
 import { userUploads } from './creators';
 import { episodes } from './podcasts';

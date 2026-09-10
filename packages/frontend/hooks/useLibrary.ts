@@ -6,14 +6,14 @@ import {
   type QueryClient,
   type UseMutationResult,
 } from '@tanstack/react-query';
-import { useOxy } from '@oxyhq/services';
+import { useOxy } from '@oxy.so/services';
 import type { Track } from '@syra/shared-types';
 import {
   libraryService,
   type LibraryMembership,
   type LibraryMutationResult,
 } from '@/services/libraryService';
-import { toast } from '@oxyhq/bloom/toast';
+import { toast } from '@oxy.so/bloom/toast';
 
 /**
  * Shared React Query library layer — the single source of truth for the

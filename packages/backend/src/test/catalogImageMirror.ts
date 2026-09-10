@@ -21,7 +21,7 @@
  * lookup in `db/catalog/hydrate.ts` resolve them.
  */
 
-import { uuidv7 } from '@oxyhq/db';
+import { uuidv7 } from '@oxy.so/db';
 import { setCatalogImageMirrorImplementationForTests } from '../services/catalog/catalogImageAssets';
 import { getDb } from '../db/postgres';
 import { imageAssets } from '../db/schema/catalog';

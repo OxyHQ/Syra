@@ -1,6 +1,6 @@
 import React from 'react';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 

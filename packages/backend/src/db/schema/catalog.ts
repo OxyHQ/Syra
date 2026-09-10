@@ -143,7 +143,7 @@ import {
   timestamptz,
   tsvector,
   updatedAt,
-} from '@oxyhq/db';
+} from '@oxy.so/db';
 import type {
   ArtistImageSuggestion,
   ArtistMember,

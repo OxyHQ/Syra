@@ -10,8 +10,8 @@ module.exports = {
     "./stores/**/*.{js,jsx,ts,tsx}",
     "./store/**/*.{js,jsx,ts,tsx}",
     "./context/**/*.{js,jsx,ts,tsx}",
-    "../../node_modules/@oxyhq/services/lib/**/*.{js,jsx}",
-    "../../node_modules/@oxyhq/bloom/lib/**/*.{js,jsx}",
+    "../../node_modules/@oxy.so/services/lib/**/*.{js,jsx}",
+    "../../node_modules/@oxy.so/bloom/lib/**/*.{js,jsx}",
   ],
   theme: {
     extend: {

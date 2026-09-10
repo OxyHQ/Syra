@@ -1,8 +1,8 @@
 import { useCallback, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Button } from '@oxyhq/bloom/button';
-import { Switch } from '@oxyhq/bloom/switch';
+import { Button } from '@oxy.so/bloom/button';
+import { Switch } from '@oxy.so/bloom/switch';
 import type { CreatePodcastRequest, PodcastType } from '@syra/shared-types';
 import { SignInGate } from '@/components/SignInGate';
 import { ScreenContainer } from '@/components/AppShell';
@@ -10,7 +10,7 @@ import { FormField } from '@/components/FormField';
 import { HostsGuestsPicker, type HostsGuests } from '@/components/HostsGuestsPicker';
 import { useCreatePodcast } from '@/hooks/usePodcasts';
 import { extractInvalidIds } from '@/utils/api';
-import { toast } from '@oxyhq/bloom/toast';
+import { toast } from '@oxy.so/bloom/toast';
 import { cn } from '@/lib/utils';
 
 const TYPES: { value: PodcastType; label: string; hint: string }[] = [

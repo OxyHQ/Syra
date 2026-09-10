@@ -1,10 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import { eq, sql } from 'drizzle-orm';
-import { isLiveEntityId } from '@oxyhq/db';
-import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
-import { getRequiredOxyUserId as getAuthenticatedUserId } from '@oxyhq/core/server';
+import { isLiveEntityId } from '@oxy.so/db';
+import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
+import { getRequiredOxyUserId as getAuthenticatedUserId } from '@oxy.so/core/server';
 import { CreateAlbumRequest, updateAlbumRequestSchema } from '@syra/shared-types';
-import { publicColumns } from '@oxyhq/db/assert';
+import { publicColumns } from '@oxy.so/db/assert';
 import { getDb, isPostgresConnected } from '../db/postgres';
 import { albums, catalogEntities, tracks } from '../db/schema/catalog';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../db/schema/protectedColumns';

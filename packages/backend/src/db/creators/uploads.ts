@@ -41,7 +41,7 @@ import {
   type SQL,
   type SQLWrapper,
 } from 'drizzle-orm';
-import { publicColumns } from '@oxyhq/db/assert';
+import { publicColumns } from '@oxy.so/db/assert';
 import { descNullsLast } from '../catalog/containers';
 import type { HlsRendition, ProvenanceMarker } from '@syra/shared-types';
 import { getDb, type DbOrTransaction } from '../postgres';

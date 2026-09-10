@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
-import { requireOxyAuth as requireAuth, type OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
-import { getRequiredOxyUserId as getAuthenticatedUserId } from '@oxyhq/core/server';
+import { requireOxyAuth as requireAuth, type OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
+import { getRequiredOxyUserId as getAuthenticatedUserId } from '@oxy.so/core/server';
 import { deleteUserBehavior } from '../db/user/behavior';
 import {
   ensureOwnUserSettings,

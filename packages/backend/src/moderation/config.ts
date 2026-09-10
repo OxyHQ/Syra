@@ -1,7 +1,7 @@
 import type {
   CrowdSourceConnectionConfig,
   ModerationEnforcementMode,
-} from '@oxyhq/crowdsource-app';
+} from '@oxy.so/crowdsource-app';
 import { logger } from '../utils/logger';
 
 /**

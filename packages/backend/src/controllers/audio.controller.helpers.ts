@@ -4,8 +4,8 @@
  */
 
 import { eq } from 'drizzle-orm';
-import { isLiveEntityId } from '@oxyhq/db';
-import { publicColumns } from '@oxyhq/db/assert';
+import { isLiveEntityId } from '@oxy.so/db';
+import { publicColumns } from '@oxy.so/db/assert';
 import { Response } from 'express';
 import { getDb } from '../db/postgres';
 import { tracks } from '../db/schema/catalog';

@@ -21,7 +21,7 @@
 import { eq, type SQL } from 'drizzle-orm';
 import type { Album, CatalogImageSizes, ImageLicence } from '@syra/shared-types';
 import { buildAlbumKey, isDenylistedArtistName, normalizeNameKey } from '@syra/shared-types';
-import { isUniqueViolation } from '@oxyhq/db';
+import { isUniqueViolation } from '@oxy.so/db';
 import { getDb } from '../../db/postgres';
 import { albumSources, albums } from '../../db/schema/catalog';
 import { setAlbumGenres } from '../../db/catalog/genres';

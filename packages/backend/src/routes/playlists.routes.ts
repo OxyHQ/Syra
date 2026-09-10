@@ -10,7 +10,7 @@ import {
   removeTracksFromPlaylist,
   reorderPlaylistTracks,
 } from '../controllers/playlists.controller';
-import { requireOxyAuth as requireAuth } from '@oxyhq/core/server';
+import { requireOxyAuth as requireAuth } from '@oxy.so/core/server';
 import { singleCoverArtUpload } from '../utils/imageUpload';
 import { validate } from '../middleware/validate';
 import { withDb } from '../utils/withDb';

@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import axios from 'axios';
-import type { OxyServices } from '@oxyhq/core';
+import type { OxyServices } from '@oxy.so/core';
 import { API_URL } from '@/config';
 import { oxyServices } from '@/lib/oxyServices';
 
@@ -98,7 +98,7 @@ export class ApiError extends Error {
 
 /**
  * HTTP status of a failed request, normalized across the two error shapes the app
- * produces: `@oxyhq/core` HttpService errors expose `status` at the top level,
+ * produces: `@oxy.so/core` HttpService errors expose `status` at the top level,
  * while bare axios errors (`publicApi`) nest it under `response`.
  */
 export function getErrorStatus(error: unknown): number | undefined {

@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
 import { and, inArray } from 'drizzle-orm';
-import { publicColumns } from '@oxyhq/db/assert';
+import { publicColumns } from '@oxy.so/db/assert';
 import type { Response, NextFunction } from 'express';
 import { z } from 'zod';
-import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
+import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import {
   radioSeedTypeSchema,
   type RadioGate,

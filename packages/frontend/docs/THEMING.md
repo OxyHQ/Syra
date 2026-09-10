@@ -106,7 +106,7 @@ appending a second.
 
 ## Version status
 
-`@oxyhq/bloom` is on **0.89.0** (`e1ee4b0`) — the bump needed the root `overrides`
+`@oxy.so/bloom` is on **0.89.0** (`e1ee4b0`) — the bump needed the root `overrides`
 entry moved too, because a caret on a 0.x line is minor-locked and `bun install`
 otherwise reports "no changes" while leaving the tree behind.
 

@@ -2,19 +2,19 @@ import React, { useCallback } from 'react';
 import { Alert, Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMutation } from '@tanstack/react-query';
-import { getAccountDisplayName } from '@oxyhq/core';
-import { useOxy } from '@oxyhq/services';
+import { getAccountDisplayName } from '@oxy.so/core';
+import { useOxy } from '@oxy.so/services';
 import {
   SettingsListGroup,
   SettingsListItem,
-} from '@oxyhq/bloom/settings-list';
-import { Switch } from '@oxyhq/bloom/switch';
-import { SegmentedControl, SegmentedControlItem, SegmentedControlItemText } from '@oxyhq/bloom/segmented-control';
+} from '@oxy.so/bloom/settings-list';
+import { Switch } from '@oxy.so/bloom/switch';
+import { SegmentedControl, SegmentedControlItem, SegmentedControlItemText } from '@oxy.so/bloom/segmented-control';
 import {
   APP_COLOR_PRESETS,
   useBloomTheme,
   type AppColorName,
-} from '@oxyhq/bloom/theme';
+} from '@oxy.so/bloom/theme';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import SEO from '@/components/SEO';

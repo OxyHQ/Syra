@@ -7,9 +7,9 @@ import {
   View,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import * as Skeleton from '@oxyhq/bloom/skeleton';
+import * as Skeleton from '@oxy.so/bloom/skeleton';
 import type { Device, DeviceType } from '@syra/shared-types';
 import { useConnect } from '@/hooks/useConnect';
 import { useCast } from '@/hooks/useCast';

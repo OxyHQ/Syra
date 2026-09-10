@@ -1,10 +1,10 @@
-# `@oxyhq/db` Extraction Implementation Plan
+# `@oxy.so/db` Extraction Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Extract the duplicated MongoDB→PostgreSQL plumbing out of oxy-api and Mention into a published `@oxyhq/db` package, and migrate both backends onto it, so Syra (and every backend after it) inherits the mechanism and its convention gates instead of writing a third copy.
+**Goal:** Extract the duplicated MongoDB→PostgreSQL plumbing out of oxy-api and Mention into a published `@oxy.so/db` package, and migrate both backends onto it, so Syra (and every backend after it) inherits the mechanism and its convention gates instead of writing a third copy.
 
-**Architecture:** A new workspace package `OxyHQServices/packages/db`, built like `@oxyhq/federation` (tsc → cjs + esm + types, `files: ["dist","src"]`), exposing five subpaths. It contains mechanism only — no application schema. Registries that name application tables (expiry targets, required extensions, protected columns, deferred foreign keys) become **parameters**. The convention gates ship as pure functions returning violation lists, never `expect` calls, because the three consumers run three different test runners.
+**Architecture:** A new workspace package `OxyHQServices/packages/db`, built like `@oxy.so/federation` (tsc → cjs + esm + types, `files: ["dist","src"]`), exposing five subpaths. It contains mechanism only — no application schema. Registries that name application tables (expiry targets, required extensions, protected columns, deferred foreign keys) become **parameters**. The convention gates ship as pure functions returning violation lists, never `expect` calls, because the three consumers run three different test runners.
 
 **Tech Stack:** TypeScript 5.9, Drizzle ORM 0.45.2 over `postgres.js` 3.4.9 (both peer dependencies), bun workspaces, jest inside the package, npm publish via release-it.
 
@@ -39,7 +39,7 @@
 | `src/columns.ts` | drizzle column helpers shared by every schema |
 | `src/ids.ts` | `uuidv7()` and its format validator |
 | `src/database.ts` | `SqlExecutor`, `createDatabase()` factory |
-| `src/migrate/index.ts` | barrel for `@oxyhq/db/migrate` |
+| `src/migrate/index.ts` | barrel for `@oxy.so/db/migrate` |
 | `src/migrate/ledger.ts` | journal reading, applied high-water mark, pending plan |
 | `src/migrate/phases.ts` | deploy-phase markers and the phased run planner |
 | `src/migrate/targetDatabase.ts` | the "am I pointed at the right database" guard |
@@ -51,7 +51,7 @@
 | `src/assert/idColumns.ts` | every `*_id` column classified → violations |
 | `src/assert/protectedColumns.ts` | `publicColumns()` + implicit-whole-row-read scanner |
 | `src/assert/expiryIndexes.ts` | every swept column has a supporting btree index |
-| `src/assert/index.ts` | barrel for `@oxyhq/db/assert` |
+| `src/assert/index.ts` | barrel for `@oxy.so/db/assert` |
 
 **Deleted — oxy-api** (`packages/api/src/db/`): `casing.ts`, `pgErrors.ts`, `extensions.ts`, `migrate.ts`, `migrationLedger.ts`, `migrationPhases.ts`, `expiry.ts`, and the generic half of `schema/columns.ts`. Import sites to rewrite: casing 17, pgErrors 10, expiry 6, extensions 3, migrationLedger 5, migrationPhases 2, columns 98.
 
@@ -77,7 +77,7 @@ The first module carries the scaffold because a scaffold with nothing in it has 
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: `DATABASE_CASING: Casing`, `sqlColumnName(column: Column): string`, `qualified(column: Column): SQL` — exported from `@oxyhq/db`.
+- Produces: `DATABASE_CASING: Casing`, `sqlColumnName(column: Column): string`, `qualified(column: Column): SQL` — exported from `@oxy.so/db`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -120,10 +120,10 @@ describe('casing', () => {
 - [ ] **Step 2: Run it and confirm it fails**
 
 ```bash
-cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxyhq/db test
+cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxy.so/db test
 ```
 
-Expected: the filter matches no package — `@oxyhq/db` does not exist yet.
+Expected: the filter matches no package — `@oxy.so/db` does not exist yet.
 
 - [ ] **Step 3: Create the package manifest**
 
@@ -131,7 +131,7 @@ Expected: the filter matches no package — `@oxyhq/db` does not exist yet.
 
 ```json
 {
-  "name": "@oxyhq/db",
+  "name": "@oxy.so/db",
   "version": "0.1.0",
   "description": "Oxy Postgres substrate — drizzle column and naming helpers, driver-error predicates, the migration ledger and deploy-phase planner, the TTL-replacement sweep, an ephemeral-database harness, and the schema-convention gates every Oxy backend is held to.",
   "main": "dist/cjs/index.js",
@@ -193,11 +193,11 @@ Expected: the filter matches no package — `@oxyhq/db` does not exist yet.
   },
   "release-it": {
     "git": {
-      "tagName": "@oxyhq/db@${version}",
-      "tagAnnotation": "Release @oxyhq/db@${version}",
-      "commitMessage": "chore(db): release @oxyhq/db@${version}"
+      "tagName": "@oxy.so/db@${version}",
+      "tagAnnotation": "Release @oxy.so/db@${version}",
+      "commitMessage": "chore(db): release @oxy.so/db@${version}"
     },
-    "github": { "release": true, "releaseName": "@oxyhq/db@${version}" },
+    "github": { "release": true, "releaseName": "@oxy.so/db@${version}" },
     "npm": { "publish": true }
   },
   "peerDependencies": {
@@ -218,7 +218,7 @@ Expected: the filter matches no package — `@oxyhq/db` does not exist yet.
 }
 ```
 
-**Do not skip the ESM import-extension question.** `@oxyhq/federation` runs `node scripts/fix-esm-imports.mjs` after `build:esm` because its `moduleResolution: "bundler"` emits extensionless relative imports that Node's ESM loader rejects. Verify in Step 8 whether this package needs the same; if the ESM smoke import fails with `ERR_MODULE_NOT_FOUND`, copy `packages/federation/scripts/fix-esm-imports.mjs` and append it to `build:esm` exactly as federation does.
+**Do not skip the ESM import-extension question.** `@oxy.so/federation` runs `node scripts/fix-esm-imports.mjs` after `build:esm` because its `moduleResolution: "bundler"` emits extensionless relative imports that Node's ESM loader rejects. Verify in Step 8 whether this package needs the same; if the ESM smoke import fails with `ERR_MODULE_NOT_FOUND`, copy `packages/federation/scripts/fix-esm-imports.mjs` and append it to `build:esm` exactly as federation does.
 
 - [ ] **Step 4: Create the tsconfigs**
 
@@ -256,7 +256,7 @@ cd /home/nate/Oxy/OxyHQServices && bun install
 - [ ] **Step 8: Run the tests and the build**
 
 ```bash
-cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxyhq/db test && bun run --filter @oxyhq/db build && bun run --filter @oxyhq/db typescript
+cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxy.so/db test && bun run --filter @oxy.so/db build && bun run --filter @oxy.so/db typescript
 ```
 
 Expected: 4 passing tests, `dist/{cjs,esm,types}` populated. Then prove the built ESM entry actually loads under Node's resolver, which is what the `fix-esm-imports` question in Step 3 hangs on:
@@ -271,7 +271,7 @@ Expected: `[ 'DATABASE_CASING', 'qualified', 'sqlColumnName' ]`. If it fails wit
 
 ```bash
 git add packages/db package.json bun.lock
-git commit -m "feat(db): scaffold @oxyhq/db and move the column-naming authority into it"
+git commit -m "feat(db): scaffold @oxy.so/db and move the column-naming authority into it"
 ```
 
 ---
@@ -286,7 +286,7 @@ git commit -m "feat(db): scaffold @oxyhq/db and move the column-naming authority
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces, from `@oxyhq/db`: `UNIQUE_VIOLATION`, `FOREIGN_KEY_VIOLATION`, `CHECK_VIOLATION`, `GENERATED_ALWAYS`, `SERIALIZATION_FAILURE`, `DEADLOCK_DETECTED`, `QUERY_CANCELED` (all `string`); `sqlStateOf(error: unknown): string | undefined`; `constraintNameOf(error: unknown): string | undefined`; `describeDriverError(error: unknown): { code?: string; constraint?: string; kind: string }`; `isUniqueViolation(error: unknown, constraintName?: string): boolean`; `isForeignKeyViolation(...)`, `isCheckViolation(...)` with the same signature.
+- Produces, from `@oxy.so/db`: `UNIQUE_VIOLATION`, `FOREIGN_KEY_VIOLATION`, `CHECK_VIOLATION`, `GENERATED_ALWAYS`, `SERIALIZATION_FAILURE`, `DEADLOCK_DETECTED`, `QUERY_CANCELED` (all `string`); `sqlStateOf(error: unknown): string | undefined`; `constraintNameOf(error: unknown): string | undefined`; `describeDriverError(error: unknown): { code?: string; constraint?: string; kind: string }`; `isUniqueViolation(error: unknown, constraintName?: string): boolean`; `isForeignKeyViolation(...)`, `isCheckViolation(...)` with the same signature.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -361,7 +361,7 @@ describe('pgErrors', () => {
 - [ ] **Step 2: Run it and confirm it fails**
 
 ```bash
-cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxyhq/db test
+cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxy.so/db test
 ```
 
 Expected: FAIL, `Cannot find module '../pgErrors'`.
@@ -393,7 +393,7 @@ export {
 - [ ] **Step 4: Run the tests**
 
 ```bash
-cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxyhq/db test
+cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxy.so/db test
 ```
 
 Expected: PASS, 10 tests total.
@@ -402,7 +402,7 @@ Expected: PASS, 10 tests total.
 
 ```bash
 git add packages/db/src
-git commit -m "feat(db): move the driver-error predicates into @oxyhq/db"
+git commit -m "feat(db): move the driver-error predicates into @oxy.so/db"
 ```
 
 ---
@@ -419,7 +419,7 @@ The union of both repos' helpers, because the two sides contribute independent h
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces, from `@oxyhq/db`: `timestamptz()`, `createdAt()`, `updatedAt()`, `generatedId()`, `tsvector`, `geography`, `bytea`, `inList(values: readonly string[]): string`, `numericInList(values: readonly number[]): string`, `textArrayLiteral(values: readonly string[]): string`, `type SelectedRow<T>`, `uuidv7(): string`, `isLiveEntityId(value: unknown): boolean`.
+- Produces, from `@oxy.so/db`: `timestamptz()`, `createdAt()`, `updatedAt()`, `generatedId()`, `tsvector`, `geography`, `bytea`, `inList(values: readonly string[]): string`, `numericInList(values: readonly number[]): string`, `textArrayLiteral(values: readonly string[]): string`, `type SelectedRow<T>`, `uuidv7(): string`, `isLiveEntityId(value: unknown): boolean`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -478,7 +478,7 @@ Read Mention's `inList`/`numericInList` before writing the last three assertions
 - [ ] **Step 2: Run it and confirm it fails**
 
 ```bash
-cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxyhq/db test
+cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxy.so/db test
 ```
 
 Expected: FAIL, `Cannot find module '../columns'`.
@@ -494,7 +494,7 @@ Export both modules from `src/index.ts`.
 - [ ] **Step 4: Run the tests**
 
 ```bash
-cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxyhq/db test && bun run --filter @oxyhq/db typescript
+cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxy.so/db test && bun run --filter @oxy.so/db typescript
 ```
 
 Expected: PASS.
@@ -524,7 +524,7 @@ Every later module needs to accept "a thing you can run SQL on" without importin
 
 **Interfaces:**
 - Consumes: `DATABASE_CASING` from `./casing`.
-- Produces, from `@oxyhq/db`: `type SqlExecutor` (structural: `execute(query: SQL): Promise<Record<string, unknown>[]>`), `executeRows<TRow extends Record<string, unknown>>(executor: SqlExecutor, query: SQL): Promise<TRow[]>`, `type OxyDatabase<TSchema extends Record<string, unknown>>`, `createDatabase<TSchema>(options: CreateDatabaseOptions<TSchema>): { db: OxyDatabase<TSchema>; client: postgres.Sql }`.
+- Produces, from `@oxy.so/db`: `type SqlExecutor` (structural: `execute(query: SQL): Promise<Record<string, unknown>[]>`), `executeRows<TRow extends Record<string, unknown>>(executor: SqlExecutor, query: SQL): Promise<TRow[]>`, `type OxyDatabase<TSchema extends Record<string, unknown>>`, `createDatabase<TSchema>(options: CreateDatabaseOptions<TSchema>): { db: OxyDatabase<TSchema>; client: postgres.Sql }`.
 
 **`execute` is NOT generic on the method, and that is load-bearing.** The obvious
 `execute<T>(query: SQL): Promise<T[]>` does not type-check against a real
@@ -564,7 +564,7 @@ describe('SqlExecutor', () => {
 - [ ] **Step 2: Run it and confirm it fails**
 
 ```bash
-cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxyhq/db test
+cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxy.so/db test
 ```
 
 Expected: FAIL, `Cannot find module '../database'`.
@@ -637,7 +637,7 @@ export function createDatabase<TSchema extends Record<string, unknown>>(
 - [ ] **Step 4: Run the tests**
 
 ```bash
-cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxyhq/db test && bun run --filter @oxyhq/db typescript
+cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxy.so/db test && bun run --filter @oxy.so/db typescript
 ```
 
 Expected: PASS.
@@ -655,7 +655,7 @@ git commit -m "feat(db): schema-agnostic database handle and SqlExecutor"
 
 Discovered during Task 4, verified twice: this package's Jest run does not
 type-check test files at all. Appending `const x: number = 'not a number';` to
-`packages/db/src/__tests__/casing.test.ts` leaves `bun run --filter @oxyhq/db test`
+`packages/db/src/__tests__/casing.test.ts` leaves `bun run --filter @oxy.so/db test`
 reporting 26/26 passed, exit 0.
 
 Every test file in the package has been unchecked since Task 1, so a type-level
@@ -677,7 +677,7 @@ where tests live.
 ```bash
 cd /home/nate/Oxy/OxyHQServices/packages/db
 printf '\nconst deliberateTypeError: number = "not a number";\nvoid deliberateTypeError;\n' >> src/__tests__/casing.test.ts
-bun run --filter @oxyhq/db test
+bun run --filter @oxy.so/db test
 ```
 
 Expected today: the suite PASSES. That is the defect.
@@ -698,7 +698,7 @@ transpilation, and removing it may be both wrong and insufficient.
 
 - [ ] **Step 4: Prove the restored gate can fail**
 
-With the deliberate type error still present, `bun run --filter @oxyhq/db test`
+With the deliberate type error still present, `bun run --filter @oxy.so/db test`
 must now FAIL and name `casing.test.ts`. Then remove the injected lines, confirm
 `git diff --exit-code packages/db/src/__tests__/casing.test.ts` is silent, and
 confirm the suite is green again.
@@ -727,7 +727,7 @@ git commit -m "fix(db): type-check test files, so a type error in a test fails t
 
 **Interfaces:**
 - Consumes: nothing from earlier tasks.
-- Produces, from `@oxyhq/db/migrate`: `MIGRATIONS_SCHEMA`, `MIGRATIONS_TABLE`, `type JournalEntry`, `readJournal(folder: string): JournalEntry[]`, `pendingEntries(...)`, `UnreachableMigrationError`, `highWaterMillis(appliedMillis: readonly number[]): number | null`, `unreachableEntries(...)`, `planLedgerRun(...)`, `readAppliedMillis(client: postgres.Sql): Promise<number[]>`, `readLastAppliedMillis(client: postgres.Sql): Promise<number | null>`, `assertPostgresMigrationsCurrent(...)`, `WrongMigrationTargetError`, `MissingMigrationTargetError`, `readTargetDatabase(argv: readonly string[]): string`, `assertMigrationTarget(client: Sql, expected: string): Promise<void>`.
+- Produces, from `@oxy.so/db/migrate`: `MIGRATIONS_SCHEMA`, `MIGRATIONS_TABLE`, `type JournalEntry`, `readJournal(folder: string): JournalEntry[]`, `pendingEntries(...)`, `UnreachableMigrationError`, `highWaterMillis(appliedMillis: readonly number[]): number | null`, `unreachableEntries(...)`, `planLedgerRun(...)`, `readAppliedMillis(client: postgres.Sql): Promise<number[]>`, `readLastAppliedMillis(client: postgres.Sql): Promise<number | null>`, `assertPostgresMigrationsCurrent(...)`, `WrongMigrationTargetError`, `MissingMigrationTargetError`, `readTargetDatabase(argv: readonly string[]): string`, `assertMigrationTarget(client: Sql, expected: string): Promise<void>`.
 
 **The rename:** Mention's ledger exports `planMigrationRun` and oxy-api's phases module exports a different `planMigrationRun`. Both are needed. The ledger's becomes **`planLedgerRun`**; the phases one keeps `planMigrationRun` (Task 6). Rewrite every call site in the same commit — no alias.
 
@@ -777,7 +777,7 @@ Match the fixture's journal shape to what Mention's `readJournal` actually parse
 - [ ] **Step 2: Run it and confirm it fails**
 
 ```bash
-cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxyhq/db test
+cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxy.so/db test
 ```
 
 Expected: FAIL, `Cannot find module '../migrate/ledger'`.
@@ -789,7 +789,7 @@ Copy Mention's `migrationLedger.ts` → `src/migrate/ledger.ts` and `targetDatab
 - [ ] **Step 4: Run the tests**
 
 ```bash
-cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxyhq/db test && bun run --filter @oxyhq/db typescript
+cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxy.so/db test && bun run --filter @oxy.so/db typescript
 ```
 
 Expected: PASS.
@@ -815,7 +815,7 @@ oxy-api's mechanism, which Mention has no counterpart for. It exists because of 
 
 **Interfaces:**
 - Consumes: `type JournalEntry` from `./ledger`.
-- Produces, from `@oxyhq/db/migrate`: `type DeployPhase = 'pre' | 'post'`, `DEPLOY_PHASES`, `type MigrationRun = 'pre' | 'post' | 'all'`, `MIGRATION_RUNS`, `phaseMarkerLine(phase: DeployPhase): string`, `POST_PHASE_GREP_PATTERN`, `type MigrationPhaseReadResult`, `readMigrationPhases(...)`, `type MigrationRunPlan<T>`, `planMigrationRun<T extends { tag: string }>(...)`.
+- Produces, from `@oxy.so/db/migrate`: `type DeployPhase = 'pre' | 'post'`, `DEPLOY_PHASES`, `type MigrationRun = 'pre' | 'post' | 'all'`, `MIGRATION_RUNS`, `phaseMarkerLine(phase: DeployPhase): string`, `POST_PHASE_GREP_PATTERN`, `type MigrationPhaseReadResult`, `readMigrationPhases(...)`, `type MigrationRunPlan<T>`, `planMigrationRun<T extends { tag: string }>(...)`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -850,7 +850,7 @@ Read `migrationPhases.ts` before finalising: match `planMigrationRun`'s real par
 - [ ] **Step 2: Run it and confirm it fails**
 
 ```bash
-cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxyhq/db test
+cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxy.so/db test
 ```
 
 Expected: FAIL, `Cannot find module '../migrate/phases'`.
@@ -862,7 +862,7 @@ Copy `packages/api/src/db/migrationPhases.ts` → `packages/db/src/migrate/phase
 - [ ] **Step 4: Run the tests**
 
 ```bash
-cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxyhq/db test
+cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxy.so/db test
 ```
 
 Expected: PASS.
@@ -886,7 +886,7 @@ git commit -m "feat(db): deploy-phase markers and the phased run planner"
 
 **Interfaces:**
 - Consumes: `readJournal`, `planLedgerRun`, `assertMigrationTarget`, `readTargetDatabase` from `./ledger` and `./targetDatabase`; `planMigrationRun` from `./phases`.
-- Produces, from `@oxyhq/db/migrate`: `type RequiredExtension = { readonly name: string; readonly reason: string }`, `ensureExtensions(databaseUrl: string, extensions: readonly RequiredExtension[]): Promise<void>`, `runMigrations(options: RunMigrationsOptions): Promise<void>`.
+- Produces, from `@oxy.so/db/migrate`: `type RequiredExtension = { readonly name: string; readonly reason: string }`, `ensureExtensions(databaseUrl: string, extensions: readonly RequiredExtension[]): Promise<void>`, `runMigrations(options: RunMigrationsOptions): Promise<void>`.
 
 **The signature change:** `REQUIRED_EXTENSIONS` does not travel — it names application columns. `ensureExtensions` takes the list. The `EXTENSION_NAME` guard (`/^[a-z][a-z0-9_]*$/`) stays inside, and matters more now that the list is caller-supplied.
 
@@ -919,7 +919,7 @@ The second case is the one that matters for Syra, which requires no extensions: 
 - [ ] **Step 2: Run it and confirm it fails**
 
 ```bash
-cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxyhq/db test
+cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxy.so/db test
 ```
 
 Expected: FAIL, `Cannot find module '../migrate/extensions'`.
@@ -951,7 +951,7 @@ Order inside, and it is the whole point of having a runner: `ensureExtensions` �
 - [ ] **Step 4: Run the tests**
 
 ```bash
-cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxyhq/db test && bun run --filter @oxyhq/db typescript
+cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxy.so/db test && bun run --filter @oxy.so/db typescript
 ```
 
 Expected: PASS.
@@ -974,7 +974,7 @@ git commit -m "feat(db): extension precondition and the phased migration runner"
 
 **Interfaces:**
 - Consumes: `SqlExecutor` from `./database`.
-- Produces, from `@oxyhq/db/expiry`: `type ExpirySweepTarget = { table: PgTable; column: PgColumn; retentionSeconds: number; reason: string }`, `type ExpirySweepResult = { table: string; deleted: number; truncated: boolean }`, `type ExpirySweepOptions = { batchSize?: number; maxBatches?: number }`, `sweepExpiredRows(db: SqlExecutor, target: ExpirySweepTarget, options?: ExpirySweepOptions): Promise<ExpirySweepResult>`, `sweepAllExpiredRows(db: SqlExecutor, targets: readonly ExpirySweepTarget[], options?: ExpirySweepOptions): Promise<ExpirySweepResult[]>`.
+- Produces, from `@oxy.so/db/expiry`: `type ExpirySweepTarget = { table: PgTable; column: PgColumn; retentionSeconds: number; reason: string }`, `type ExpirySweepResult = { table: string; deleted: number; truncated: boolean }`, `type ExpirySweepOptions = { batchSize?: number; maxBatches?: number }`, `sweepExpiredRows(db: SqlExecutor, target: ExpirySweepTarget, options?: ExpirySweepOptions): Promise<ExpirySweepResult>`, `sweepAllExpiredRows(db: SqlExecutor, targets: readonly ExpirySweepTarget[], options?: ExpirySweepOptions): Promise<ExpirySweepResult[]>`.
 
 **Two signature changes:** `sweepAllExpiredRows` takes the targets, and `db` is `SqlExecutor` rather than the app's `Database`. `EXPIRY_SWEEP_TARGETS` stays in each consumer.
 
@@ -1042,7 +1042,7 @@ describe('expiry sweep', () => {
 - [ ] **Step 2: Run it and confirm it fails**
 
 ```bash
-cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxyhq/db test
+cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxy.so/db test
 ```
 
 Expected: FAIL, `Cannot find module '../expiry'`.
@@ -1060,7 +1060,7 @@ not cosmetic. Keep the doc comment explaining why the column is interpolated as 
 - [ ] **Step 4: Run the tests**
 
 ```bash
-cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxyhq/db test
+cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxy.so/db test
 ```
 
 Expected: PASS.
@@ -1083,7 +1083,7 @@ git commit -m "feat(db): TTL-replacement sweep, with the target registry supplie
 
 **Interfaces:**
 - Consumes: nothing from earlier tasks.
-- Produces, from `@oxyhq/db/testing`: `createTestDatabase(options?: { adminUrl?: string }): Promise<string>`, `dropTestDatabase(databaseUrl: string): Promise<void>`.
+- Produces, from `@oxy.so/db/testing`: `createTestDatabase(options?: { adminUrl?: string }): Promise<string>`, `dropTestDatabase(databaseUrl: string): Promise<void>`.
 
 Mention's version reads its own env var names and `spawn`s its own migration command. Both become options with documented defaults, because Syra's env var and migration command differ.
 
@@ -1104,7 +1104,7 @@ describe('createTestDatabase', () => {
 - [ ] **Step 2: Run it and confirm it fails**
 
 ```bash
-cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxyhq/db test
+cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxy.so/db test
 ```
 
 Expected: FAIL, `Cannot find module '../testing'`.
@@ -1116,7 +1116,7 @@ Copy Mention's `testDatabase.ts` → `packages/db/src/testing.ts`. Replace every
 - [ ] **Step 4: Run the tests**
 
 ```bash
-cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxyhq/db test
+cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxy.so/db test
 ```
 
 Expected: PASS.
@@ -1141,7 +1141,7 @@ The gates are the highest-leverage part of the extraction: a new consumer inheri
 
 **Interfaces:**
 - Consumes: `SqlExecutor` from `../database`.
-- Produces, from `@oxyhq/db/assert`:
+- Produces, from `@oxy.so/db/assert`:
 
 ```ts
 export interface InvariantViolation {
@@ -1237,7 +1237,7 @@ The `catalogue` fake dispatches on SQL text, so the implementation's query fragm
 - [ ] **Step 2: Run it and confirm it fails**
 
 ```bash
-cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxyhq/db test
+cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxy.so/db test
 ```
 
 Expected: FAIL, `Cannot find module '../assert/schemaInvariants'`.
@@ -1249,7 +1249,7 @@ Convert each `it(...)` in the oxy-api test into a check that pushes `InvariantVi
 - [ ] **Step 4: Run the tests**
 
 ```bash
-cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxyhq/db test
+cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxy.so/db test
 ```
 
 Expected: PASS.
@@ -1279,7 +1279,7 @@ The remaining three gates, in one task: they share the same shape as Task 10 and
 
 **Interfaces:**
 - Consumes: `sqlColumnName` from `../casing`; `SqlExecutor` from `../database`; `type ExpirySweepTarget` from `../expiry`.
-- Produces, from `@oxyhq/db/assert`:
+- Produces, from `@oxy.so/db/assert`:
 
 ```ts
 export interface DeferredForeignKey {
@@ -1429,7 +1429,7 @@ describe('findUnsupportedExpiryColumns', () => {
 - [ ] **Step 2: Run it and confirm it fails**
 
 ```bash
-cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxyhq/db test
+cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxy.so/db test
 ```
 
 Expected: FAIL, `Cannot find module '../assert'` exports.
@@ -1444,7 +1444,7 @@ Convert each source test into pure functions, keeping the SQL and the traversal 
 - [ ] **Step 4: Run the tests**
 
 ```bash
-cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxyhq/db test && bun run --filter @oxyhq/db typescript
+cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxy.so/db test && bun run --filter @oxy.so/db typescript
 ```
 
 Expected: PASS.
@@ -1467,7 +1467,7 @@ git commit -m "feat(db): id-column, protected-column and expiry-index gates"
 First consumer, in-repo via `workspace:*`, so the API surface is proven before anything is published.
 
 **Files:**
-- Modify: `OxyHQServices/packages/api/package.json` (add `"@oxyhq/db": "workspace:^"`)
+- Modify: `OxyHQServices/packages/api/package.json` (add `"@oxy.so/db": "workspace:^"`)
 - Delete: `packages/api/src/db/casing.ts`, `pgErrors.ts`, `extensions.ts`, `migrate.ts`, `migrationLedger.ts`, `migrationPhases.ts`, `expiry.ts`; the generic exports in `packages/api/src/db/schema/columns.ts`
 - Modify: 141 import sites — casing 17, pgErrors 10, expiry 6, extensions 3, migrationLedger 5, migrationPhases 2, columns 98
 - Modify: `packages/api/src/db/schema/__tests__/schemaInvariants.test.ts`, `foreignKeys.test.ts`, `protectedColumns.test.ts`, `db/__tests__/expiry.test.ts` — these four DO change, because their bodies moved into the package; they become thin callers of the gate functions
@@ -1488,7 +1488,7 @@ Write the pass/fail counts down. A non-green baseline means the tree is stale, n
 - [ ] **Step 2: Add the dependency**
 
 ```bash
-cd /home/nate/Oxy/OxyHQServices && bun add --cwd packages/api @oxyhq/db@workspace:^ && bun install
+cd /home/nate/Oxy/OxyHQServices && bun add --cwd packages/api @oxy.so/db@workspace:^ && bun install
 ```
 
 - [ ] **Step 3: Rewrite the imports, module by module**
@@ -1503,14 +1503,14 @@ cd /home/nate/Oxy/OxyHQServices/packages/api && grep -rn "db/casing'" src script
 
 Expected after each module: `0`.
 
-The `columns` rewrite is the large one, and it is a **split**, not a move: `packages/api/src/db/schema/columns.ts` keeps whatever is genuinely oxy-api's and re-imports the shared helpers from `@oxyhq/db`. Do not leave it re-exporting them — that is the barrel shim the standing rules forbid; each of the 98 sites imports from `@oxyhq/db` directly.
+The `columns` rewrite is the large one, and it is a **split**, not a move: `packages/api/src/db/schema/columns.ts` keeps whatever is genuinely oxy-api's and re-imports the shared helpers from `@oxy.so/db`. Do not leave it re-exporting them — that is the barrel shim the standing rules forbid; each of the 98 sites imports from `@oxy.so/db` directly.
 
 - [ ] **Step 4: Convert the four gate tests to thin callers**
 
 `schemaInvariants.test.ts` becomes, in full:
 
 ```ts
-import { findSchemaInvariantViolations } from '@oxyhq/db/assert';
+import { findSchemaInvariantViolations } from '@oxy.so/db/assert';
 import { closePostgres, connectPostgres, getDb } from '../../../config/postgres';
 
 /** Tables landed so far. A traversal returning fewer than this is broken. */
@@ -1540,7 +1540,7 @@ Do the same for the other three. The floors and the registries stay in oxy-api �
 
 - [ ] **Step 5: Point the migration entry points at the runner**
 
-Rewrite `packages/api/src/db/migrate.ts` to call `runMigrations` from `@oxyhq/db/migrate`, passing its own `REQUIRED_EXTENSIONS`, its migrations folder resolved from its own package root, and the phase from `--phase`. Update `scripts/check-migration-phases.mjs` to import the phase helpers from the package.
+Rewrite `packages/api/src/db/migrate.ts` to call `runMigrations` from `@oxy.so/db/migrate`, passing its own `REQUIRED_EXTENSIONS`, its migrations folder resolved from its own package root, and the phase from `--phase`. Update `scripts/check-migration-phases.mjs` to import the phase helpers from the package.
 
 - [ ] **Step 6: Run everything**
 
@@ -1562,12 +1562,12 @@ Against a local Postgres, from an empty database. Expected: extensions ensured, 
 
 ```bash
 git add packages/api packages/db bun.lock
-git commit -m "refactor(api): consume @oxyhq/db instead of a local copy of the plumbing"
+git commit -m "refactor(api): consume @oxy.so/db instead of a local copy of the plumbing"
 ```
 
 ---
 
-### Task 13: Publish `@oxyhq/db@0.1.0`
+### Task 13: Publish `@oxy.so/db@0.1.0`
 
 **Files:**
 - Modify: `OxyHQServices/packages/db/package.json` (version, if it moved during development)
@@ -1606,8 +1606,8 @@ cd /home/nate/Oxy/OxyHQServices/packages/db && bun publish
 - [ ] **Step 5: Verify propagation with a clean external install**
 
 ```bash
-SP=$(mktemp -d) && cd "$SP" && bun init -y >/dev/null && bun add @oxyhq/db@0.1.0 drizzle-orm@0.45.2 postgres@3.4.9 && node -e "
-  Promise.all([import('@oxyhq/db'), import('@oxyhq/db/migrate'), import('@oxyhq/db/expiry'), import('@oxyhq/db/testing'), import('@oxyhq/db/assert')])
+SP=$(mktemp -d) && cd "$SP" && bun init -y >/dev/null && bun add @oxy.so/db@0.1.0 drizzle-orm@0.45.2 postgres@3.4.9 && node -e "
+  Promise.all([import('@oxy.so/db'), import('@oxy.so/db/migrate'), import('@oxy.so/db/expiry'), import('@oxy.so/db/testing'), import('@oxy.so/db/assert')])
     .then(mods => console.log(mods.map(m => Object.keys(m).length)))
 "
 ```
@@ -1621,13 +1621,13 @@ Expected: five non-zero counts. Outside the monorepo, so nothing resolves throug
 The real test of the package boundary: a separate repo cannot reach into the monorepo for anything the package forgot to export.
 
 **Files:**
-- Modify: `Mention/packages/backend/package.json` (add `@oxyhq/db`)
+- Modify: `Mention/packages/backend/package.json` (add `@oxy.so/db`)
 - Delete: `packages/backend/src/db/casing.ts`, `pgErrors.ts`, `extensions.ts` (mechanism), `migrate.ts`, `migrationLedger.ts`, `expiry.ts` (mechanism), `targetDatabase.ts`, `testDatabase.ts`, `ids.ts`; the generic half of `schema/columns.ts`
 - Modify: 114 import sites — casing 19, pgErrors 28, expiry 2, extensions 1, migrationLedger 3, targetDatabase 4, testDatabase 1, ids 5, columns 51
 - Modify: `packages/backend/src/db/postgres.ts` (build the handle through `createDatabase`)
 
 **Interfaces:**
-- Consumes: `@oxyhq/db@0.1.0` from npm.
+- Consumes: `@oxy.so/db@0.1.0` from npm.
 - Produces: nothing new.
 
 - [ ] **Step 1: Record the green baseline**
@@ -1641,13 +1641,13 @@ Write the counts down. Same rule as Task 12: a non-green baseline is a stale tre
 - [ ] **Step 2: Install the published package**
 
 ```bash
-cd /home/nate/Oxy/Mention && bun add --cwd packages/backend @oxyhq/db@^0.1.0 && bun install
+cd /home/nate/Oxy/Mention && bun add --cwd packages/backend @oxy.so/db@^0.1.0 && bun install
 ```
 
 Confirm it resolved to the published tarball and not to anything local:
 
 ```bash
-cd /home/nate/Oxy/Mention && cat node_modules/@oxyhq/db/package.json | grep '"version"'
+cd /home/nate/Oxy/Mention && cat node_modules/@oxy.so/db/package.json | grep '"version"'
 ```
 
 - [ ] **Step 3: Rewrite the imports, module by module**
@@ -1680,7 +1680,7 @@ Against a local `postgis/postgis:17-3.5` container, from an empty database. Post
 
 ```bash
 cd /home/nate/Oxy/Mention && git add packages/backend bun.lock
-git commit -m "refactor(backend): consume @oxyhq/db instead of a local copy of the plumbing"
+git commit -m "refactor(backend): consume @oxy.so/db instead of a local copy of the plumbing"
 ```
 
 ---
@@ -1696,7 +1696,7 @@ The extraction's whole claim is that one implementation now serves three consume
 In `packages/db/src/casing.ts`, change `sqlColumnName` to return `column.name` (the TypeScript property) instead of the cased name. Rebuild the package, then run both suites:
 
 ```bash
-cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxyhq/db build && cd packages/api && bun run test 2>&1 | tail -5
+cd /home/nate/Oxy/OxyHQServices && bun run --filter @oxy.so/db build && cd packages/api && bun run test 2>&1 | tail -5
 ```
 
 Expected: RED, naming a query that referenced a column that does not exist.
@@ -1704,7 +1704,7 @@ Expected: RED, naming a query that referenced a column that does not exist.
 - [ ] **Step 2: Restore in place and verify byte-identical**
 
 ```bash
-cd /home/nate/Oxy/OxyHQServices && git checkout packages/db/src/casing.ts && git status --porcelain packages/db && bun run --filter @oxyhq/db build
+cd /home/nate/Oxy/OxyHQServices && git checkout packages/db/src/casing.ts && git status --porcelain packages/db && bun run --filter @oxy.so/db build
 ```
 
 Expected: no output from `git status`. `node_modules` is hardlinked and shared machine-wide — never leave a mutation live.
@@ -1723,7 +1723,7 @@ Append a short section to the spec recording: which helpers were mutation-tested
 
 ```bash
 cd /home/nate/Oxy/Syra && git add docs/superpowers/specs
-git commit -m "docs(specs): record the @oxyhq/db mutation-gate findings"
+git commit -m "docs(specs): record the @oxy.so/db mutation-gate findings"
 ```
 
 ---

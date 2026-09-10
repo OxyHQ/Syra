@@ -12,12 +12,12 @@
  * shape the registries on this branch exist to prevent, so retiring it first
  * was the point.
  *
- * Distinct from `getRequiredOxyUserId` (`@oxyhq/core/server`), which THROWS on
+ * Distinct from `getRequiredOxyUserId` (`@oxy.so/core/server`), which THROWS on
  * an unauthenticated request. This one answers `undefined`, because its callers
  * are public endpoints whose behaviour merely varies with who is asking.
  */
 
-import type { OxyAuthRequest } from '@oxyhq/core/server';
+import type { OxyAuthRequest } from '@oxy.so/core/server';
 
 export function getRequestUserId(req: Pick<OxyAuthRequest, 'user'>): string | undefined {
   const id = req.user?.id || req.user?._id;

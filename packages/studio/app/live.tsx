@@ -1,9 +1,9 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { useTheme } from '@oxyhq/bloom/theme';
-import { Button } from '@oxyhq/bloom/button';
-import BottomSheet, { type BottomSheetRef } from '@oxyhq/bloom/bottom-sheet';
+import { useTheme } from '@oxy.so/bloom/theme';
+import { Button } from '@oxy.so/bloom/button';
+import BottomSheet, { type BottomSheetRef } from '@oxy.so/bloom/bottom-sheet';
 import { useQuery } from '@tanstack/react-query';
 import {
   RoomCard,

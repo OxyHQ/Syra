@@ -77,7 +77,7 @@
 
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { sql } from 'drizzle-orm';
-import { executeRows } from '@oxyhq/db';
+import { executeRows } from '@oxy.so/db';
 import { closePostgres, getDb } from '../../postgres';
 import { connectUnmanagedDb } from '../../../test/postgres';
 

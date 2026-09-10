@@ -12,7 +12,7 @@
  * never blindly overwrite. `imageId !== previousImageId` signals a change.
  */
 
-import { isLiveEntityId } from '@oxyhq/db';
+import { isLiveEntityId } from '@oxy.so/db';
 import type { CatalogImageSizes, PodcastSource } from '@syra/shared-types';
 import { mirrorCatalogImage } from '../catalog/catalogImageAssets';
 

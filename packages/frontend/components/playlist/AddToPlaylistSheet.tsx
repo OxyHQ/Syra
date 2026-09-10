@@ -1,20 +1,20 @@
 import React, { useEffect, useRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import BottomSheet, { type BottomSheetRef } from '@oxyhq/bloom/bottom-sheet';
+import BottomSheet, { type BottomSheetRef } from '@oxy.so/bloom/bottom-sheet';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { useOxy } from '@oxyhq/services';
+import { useOxy } from '@oxy.so/services';
 import type { Track } from '@syra/shared-types';
 import { musicService } from '@/services/musicService';
 import { useAddTracksToPlaylist } from '@/hooks/usePlaylistMutations';
 import { pickCatalogImageUrl } from '@/utils/pickImage';
 import { EmptyState } from '@/components/common/EmptyState';
 import { LibraryListSkeleton } from '@/components/skeletons';
-import { toast } from '@oxyhq/bloom/toast';
+import { toast } from '@oxy.so/bloom/toast';
 
 interface AddToPlaylistSheetProps {
   visible: boolean;

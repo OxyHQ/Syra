@@ -1,6 +1,6 @@
 /**
  * The four schema-convention gates every Oxy Postgres backend is held to,
- * imported from `@oxyhq/db/assert` and driven against THIS schema's own data:
+ * imported from `@oxy.so/db/assert` and driven against THIS schema's own data:
  *
  *   - `findIdColumnViolations` — every `*_id`-shaped column is classified,
  *     via `schema/deferredForeignKeys.ts`'s two ledgers plus the real
@@ -52,14 +52,14 @@ import {
   isForeignKeyViolation,
   isUniqueViolation,
   sqlColumnName,
-} from '@oxyhq/db';
+} from '@oxy.so/db';
 import {
   findIdColumnViolations,
   findImplicitWholeRowReads,
   findSchemaInvariantViolations,
   findUnsupportedExpiryColumns,
-} from '@oxyhq/db/assert';
-import { readJournal, readMigrationPhases, type DeployPhase } from '@oxyhq/db/migrate';
+} from '@oxy.so/db/assert';
+import { readJournal, readMigrationPhases, type DeployPhase } from '@oxy.so/db/migrate';
 import { closePostgres, getDb } from '../postgres';
 import { connectUnmanagedDb } from '../../test/postgres';
 import { findMigrationsFolder, LAST_GENESIS_MIGRATION_TAG } from '../migrate';
@@ -122,7 +122,7 @@ import { genres } from '../schema/genres';
  * inconsistency with `episode_hls_renditions` — see catalog.ts's own
  * comment) + 9 (Task 5: creators.ts) + 8 (Task 6: rooms.ts) +
  * 10 (Task 7: user.ts) + 4 (Task 8: moderation.ts — `reports` plus the three
- * `@oxyhq/crowdsource-app` owns) + 1 (Task A2: podcasts.ts's
+ * `@oxy.so/crowdsource-app` owns) + 1 (Task A2: podcasts.ts's
  * `episode_ingest_tickets`) = 74.
  */
 const MINIMUM_TABLES = 74;
@@ -322,7 +322,7 @@ function findUnexemptedIdentifiers(
  * Every protected-column name that does not resolve to a real drizzle
  * property, plus how many names were checked.
  *
- * `publicColumns` (`@oxyhq/db/assert`) filters by SET MEMBERSHIP —
+ * `publicColumns` (`@oxy.so/db/assert`) filters by SET MEMBERSHIP —
  * `new Set(registry[table])` — so a name matching no property is silently
  * ignored: it protects nothing, `tsc` is clean (the registry is a plain
  * `as const` string tuple), and no existing gate looks at it. A single typo
@@ -369,7 +369,7 @@ function findUnboundProtectedColumns(): { violations: string[]; scanned: number 
  * the assertion fails, and says which constraint DID fire, when the answer is
  * the wrong one.
  *
- * The predicates come from `@oxyhq/db` because drizzle WRAPS the driver error
+ * The predicates come from `@oxy.so/db` because drizzle WRAPS the driver error
  * — `code` and `constraint_name` live on `cause`, not on the error thrown, so
  * a hand-rolled `error.code === '23505'` here would match nothing and pass
  * vacuously.
@@ -1351,7 +1351,7 @@ describe('podcasts schema (Task 4)', () => {
     // `albums` left the previous version of this test green. Reads
     // `sqlColumnName(column)`, not `column.name` — the latter is the
     // TypeScript property (`podcastId`), not the SQL name (`podcast_id`);
-    // `@oxyhq/db/src/casing.ts`'s own doc comment names this exact trap, and
+    // `@oxy.so/db/src/casing.ts`'s own doc comment names this exact trap, and
     // it passed here only because no column in this schema is explicitly
     // named (`sqlColumnName` and `column.name` agree by coincidence, not by
     // correctness).
@@ -3152,7 +3152,7 @@ describe('user, taste and listening schema (Task 7)', () => {
       // already IS the deadline, and the retention window lives in the package
       // where both of its backends read it. They arrive as a FRAGMENT
       // (`moderationExpirySweepTargets`) rather than as entries written in
-      // `expiry.ts`, because `@oxyhq/crowdsource-app` is the only place that can
+      // `expiry.ts`, because `@oxy.so/crowdsource-app` is the only place that can
       // say what sweeping either one costs; the order below is that fragment's.
       'moderation_outbox.expires_at:0',
       'moderation_events.expires_at:0',

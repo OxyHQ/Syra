@@ -12,14 +12,14 @@ import {
 } from 'react-native';
 import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '@oxyhq/bloom/theme';
-import { useOxy } from '@oxyhq/services';
+import { useTheme } from '@oxy.so/bloom/theme';
+import { useOxy } from '@oxy.so/services';
 import { useRouter } from 'expo-router';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { CoverArtPicker } from '@/components/playlists/CoverArtPicker';
 import { PlaylistVisibility } from '@syra/shared-types';
 import { musicService } from '@/services/musicService';
-import { toast } from '@oxyhq/bloom/toast';
+import { toast } from '@oxy.so/bloom/toast';
 import SEO from '@/components/SEO';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { z } from 'zod';

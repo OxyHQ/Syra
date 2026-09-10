@@ -73,7 +73,7 @@ const NEW_MODULE_DIR = resolve(SOURCE_DIR, 'db', 'catalog');
 
 /**
  * Resolve one import specifier to an absolute path, or null for a package
- * import (`drizzle-orm`, `@oxyhq/db`) that can never be either side of this.
+ * import (`drizzle-orm`, `@oxy.so/db`) that can never be either side of this.
  *
  * The extension is stripped for EVERY spelling TypeScript accepts here, not
  * just `.ts`. Under `module: Node16` with `"type": "commonjs"`, TS resolves

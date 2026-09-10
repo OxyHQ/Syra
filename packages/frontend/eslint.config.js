@@ -15,7 +15,7 @@ module.exports = defineConfig([
           paths: ['sonner', 'sonner-native'].map((name) => ({
             name,
             message:
-              "Import { toast } from '@oxyhq/bloom/toast' instead. Bloom ships the toast engine for both web and native, and OxyProvider already mounts the one outlet that renders it.",
+              "Import { toast } from '@oxy.so/bloom/toast' instead. Bloom ships the toast engine for both web and native, and OxyProvider already mounts the one outlet that renders it.",
           })),
         },
       ],

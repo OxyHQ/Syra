@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireOxyAuth as requireAuth } from '@oxyhq/core/server';
+import { requireOxyAuth as requireAuth } from '@oxy.so/core/server';
 import { uploadImage } from '../controllers/images.controller';
 import { singleImageUpload } from '../utils/imageUpload';
 

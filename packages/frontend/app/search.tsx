@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { StyleSheet, View, TextInput, Text, ScrollView, Pressable } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { useTheme, useAmbientTheme } from '@oxyhq/bloom/theme';
+import { useTheme, useAmbientTheme } from '@oxy.so/bloom/theme';
 import SEO from '@/components/SEO';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter, useLocalSearchParams, type Href } from 'expo-router';

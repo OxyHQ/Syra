@@ -2,7 +2,7 @@ import React, { useMemo, useEffect } from 'react';
 import { StyleSheet, View, Text, ScrollView, Pressable, Platform, Linking } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { useTheme, useAmbientTheme } from '@oxyhq/bloom/theme';
+import { useTheme, useAmbientTheme } from '@oxy.so/bloom/theme';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import SEO from '@/components/SEO';

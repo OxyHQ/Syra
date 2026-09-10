@@ -2,7 +2,7 @@
 -- The index DROP/CREATE pairs and the new column DEFAULTs are additive on
 -- their own, but catalog_entities_source_required_for_artist_check narrows
 -- what's permitted (an artist row with a NULL source, previously accepted,
--- is now rejected) — a `post` change per @oxyhq/db/migrate's own rule, so the
+-- is now rejected) — a `post` change per @oxy.so/db/migrate's own rule, so the
 -- whole file goes on that side.
 DROP INDEX "tracks_artist_id_album_id_idx";--> statement-breakpoint
 DROP INDEX "tracks_popularity_idx";--> statement-breakpoint

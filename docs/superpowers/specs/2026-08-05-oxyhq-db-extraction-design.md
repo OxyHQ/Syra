@@ -1,4 +1,4 @@
-# `@oxyhq/db` — extracting the Postgres plumbing
+# `@oxy.so/db` — extracting the Postgres plumbing
 
 **Status:** design, approved 2026-08-05. Blocks the Syra port
 ([`2026-08-05-syra-mongo-to-postgres-design.md`](./2026-08-05-syra-mongo-to-postgres-design.md)).
@@ -76,11 +76,11 @@ out of the runtime bundle:
 
 | subpath | contents |
 |---|---|
-| `@oxyhq/db` | `casing`, `pgErrors`, `columns`, `ids` |
-| `@oxyhq/db/migrate` | ledger, deploy phases, `targetDatabase`, `extensions`, runner |
-| `@oxyhq/db/expiry` | the sweep mechanism |
-| `@oxyhq/db/testing` | `createTestDatabase` / `dropTestDatabase` |
-| `@oxyhq/db/assert` | convention-gate helpers |
+| `@oxy.so/db` | `casing`, `pgErrors`, `columns`, `ids` |
+| `@oxy.so/db/migrate` | ledger, deploy phases, `targetDatabase`, `extensions`, runner |
+| `@oxy.so/db/expiry` | the sweep mechanism |
+| `@oxy.so/db/testing` | `createTestDatabase` / `dropTestDatabase` |
+| `@oxy.so/db/assert` | convention-gate helpers |
 
 ### Modules
 
@@ -148,7 +148,7 @@ import updated, no re-export shim and no compatibility alias.
 
 - Two production backends are refactored **before** a single line of Syra runs on
   Postgres. That is the cost of extracting first, accepted knowingly.
-- `@oxyhq/db` becomes a release dependency of every backend's migrations. A bad
+- `@oxy.so/db` becomes a release dependency of every backend's migrations. A bad
   publish is an ecosystem-wide event, which is why oxy-api moves first inside the
   monorepo and Mention proves the boundary from npm.
 - The `createdAt` precision change is a real behaviour change in oxy-api. It is

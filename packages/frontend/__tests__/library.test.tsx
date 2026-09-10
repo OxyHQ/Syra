@@ -26,13 +26,13 @@ import { podcastSchema, type Podcast, type PodcastSubscriptions } from '@syra/sh
  * `check-i18n` that does not cover test files.
  */
 
-jest.mock('@oxyhq/services', () => ({
+jest.mock('@oxy.so/services', () => ({
   useOxy: () => ({ canUsePrivateApi: true, isAuthenticated: true, isPrivateApiPending: false }),
 }));
 
-jest.mock('@oxyhq/bloom/toast', () => ({ toast: { error: jest.fn(), success: jest.fn() } }));
+jest.mock('@oxy.so/bloom/toast', () => ({ toast: { error: jest.fn(), success: jest.fn() } }));
 
-jest.mock('@oxyhq/bloom/theme', () => ({
+jest.mock('@oxy.so/bloom/theme', () => ({
   useTheme: () => ({
     colors: {
       text: '#000000',

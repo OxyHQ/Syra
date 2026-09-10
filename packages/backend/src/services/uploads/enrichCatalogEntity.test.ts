@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll } from 'bun:test';
 import { count, eq } from 'drizzle-orm';
-import { isLiveEntityId, uuidv7 } from '@oxyhq/db';
+import { isLiveEntityId, uuidv7 } from '@oxy.so/db';
 import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
 import {
   installCatalogImageMirrorMockForTests,

@@ -5,7 +5,7 @@ import { logger } from '../utils/logger';
 /**
  * `POST /webhooks/crowdsource` — where decisions come back.
  *
- * The receiver itself is `@oxyhq/crowdsource-app`'s: signature verification,
+ * The receiver itself is `@oxy.so/crowdsource-app`'s: signature verification,
  * cross-instance deduplication, the three decision-bearing event types, the
  * audit row for every other type including one a newer CrowdSource introduces,
  * and answering 2xx as soon as the work is durably queued. What is left here is
@@ -17,7 +17,7 @@ import { logger } from '../utils/logger';
  * signature covers `timestamp + "." + rawBody` — the bytes that arrived — and
  * once a JSON parser has run, those bytes are gone.
  *
- * `@oxyhq/crowdsource-express` looks for a raw Buffer and refuses a parsed body,
+ * `@oxy.so/crowdsource-express` looks for a raw Buffer and refuses a parsed body,
  * so the package treats the mount order as self-enforcing. `assertRawBody` is
  * kept anyway, and the reason is worth stating precisely because the comment
  * this file used to carry was WRONG: it claimed Syra's parser keeps a Buffer

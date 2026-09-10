@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, Platform } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
 import { usePlayerStore } from '@/stores/playerStore';
 
 /** Selectable podcast speeds, cycled by the speed pill. */

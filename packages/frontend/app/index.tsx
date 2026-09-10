@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { StyleSheet, View, ScrollView, Text, Platform, Pressable } from 'react-native';
-import { useTheme, useAmbientTheme } from '@oxyhq/bloom/theme';
+import { useTheme, useAmbientTheme } from '@oxy.so/bloom/theme';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
-import { useOxy } from '@oxyhq/services';
+import { useOxy } from '@oxy.so/services';
 import { RoomCard, useLiveRoom, createRoomsService, type Room } from '@syra.fm/sdk';
 import SEO from '@/components/SEO';
 import { MediaCard } from '@/components/MediaCard';
@@ -36,7 +36,7 @@ import { pickCatalogImageUrl, resolvePodcastArtwork } from '@/utils/pickImage';
 import { authenticatedClient } from '@/utils/api';
 import { liveRoomsQueryKey } from '@/lib/liveConfig';
 import { trackArtistsText } from '@/utils/trackArtists';
-import { toast } from '@oxyhq/bloom/toast';
+import { toast } from '@oxy.so/bloom/toast';
 
 const logger = createScopedLogger('HomeScreen');
 

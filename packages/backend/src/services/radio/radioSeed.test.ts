@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'bun:test';
-import { uuidv7 } from '@oxyhq/db';
+import { uuidv7 } from '@oxy.so/db';
 import { PlaylistVisibility } from '@syra/shared-types';
 import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
 import { loadRadioTaste, resolveRadioSeed } from './radioSeed';

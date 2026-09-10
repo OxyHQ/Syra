@@ -10,7 +10,7 @@
  * Only TABLE modules belong here. `deferredForeignKeys.ts` and
  * `protectedColumns.ts` are schema support, imported directly by the code
  * that needs them; the shared column builders every table uses (`createdAt`,
- * `generatedId`, `timestamptz`, ...) live in `@oxyhq/db`, not in a local copy.
+ * `generatedId`, `timestamptz`, ...) live in `@oxy.so/db`, not in a local copy.
  *
  * `__tests__/gates.test.ts` derives its own `tables` list from
  * `Object.values(schema)`, the same way every gate in this barrel's two

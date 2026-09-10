@@ -48,7 +48,7 @@
 
 import { and, asc, count, desc, eq, exists, sql, type SQL } from 'drizzle-orm';
 import { unionAll, type PgColumn } from 'drizzle-orm/pg-core';
-import { publicColumns } from '@oxyhq/db/assert';
+import { publicColumns } from '@oxy.so/db/assert';
 import { albums, catalogEntities, trackCredits, tracks } from '../schema/catalog';
 import { playlistTracks, playlists } from '../schema/library';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../schema/protectedColumns';

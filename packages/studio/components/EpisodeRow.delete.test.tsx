@@ -19,22 +19,22 @@ import { episodeService } from '@/services/episodeService';
 
 const dialogProps: Record<string, unknown>[] = [];
 
-jest.mock('@oxyhq/bloom/alert-dialog', () => ({
+jest.mock('@oxy.so/bloom/alert-dialog', () => ({
   AlertDialog: (props: Record<string, unknown>) => {
     dialogProps.push(props);
     return null;
   },
 }));
 
-jest.mock('@oxyhq/bloom/theme', () => ({
+jest.mock('@oxy.so/bloom/theme', () => ({
   useTheme: () => ({ colors: { error: '#ff0000', text: '#000', textSecondary: '#666', primary: '#00f' } }),
 }));
 
-jest.mock('@oxyhq/bloom/toast', () => ({
+jest.mock('@oxy.so/bloom/toast', () => ({
   toast: { success: jest.fn(), error: jest.fn() },
 }));
 
-jest.mock('@oxyhq/bloom/badge', () => ({
+jest.mock('@oxy.so/bloom/badge', () => ({
   Badge: () => null,
 }));
 
@@ -45,7 +45,7 @@ jest.mock('@/components/Artwork', () => ({
 // `hooks/usePodcasts` pulls the Oxy session in for its queries. Nothing on the
 // delete path reads it, and the package ships untranspiled sources that jest
 // cannot load, so it is stubbed at the boundary.
-jest.mock('@oxyhq/services', () => ({
+jest.mock('@oxy.so/services', () => ({
   useOxy: () => ({ user: { id: 'owner-1' }, canUsePrivateApi: true, isPrivateApiPending: false }),
 }));
 

@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Button } from '@oxyhq/bloom/button';
+import { Button } from '@oxy.so/bloom/button';
 import type { CreateArtistRequest } from '@syra/shared-types';
 import { SignInGate } from '@/components/SignInGate';
 import { ScreenContainer } from '@/components/AppShell';
@@ -9,7 +9,7 @@ import { FormField } from '@/components/FormField';
 import { CoverArtPicker } from '@/components/CoverArtPicker';
 import { useRegisterArtist } from '@/hooks/useArtist';
 import { getApiErrorMessage } from '@/utils/api';
-import { toast } from '@oxyhq/bloom/toast';
+import { toast } from '@oxy.so/bloom/toast';
 
 function RegisterArtistForm() {
   const router = useRouter();

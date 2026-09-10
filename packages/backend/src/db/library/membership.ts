@@ -44,7 +44,7 @@
  */
 
 import { and, asc, eq } from 'drizzle-orm';
-import { isForeignKeyViolation } from '@oxyhq/db';
+import { isForeignKeyViolation } from '@oxy.so/db';
 import { getDb } from '../postgres';
 import {
   userFollowedArtists,
@@ -74,7 +74,7 @@ interface MembershipRelation {
   /**
    * The foreign key that fires when the target does not exist, BY NAME.
    *
-   * Named rather than matched on the bare SQLSTATE, per `@oxyhq/db`'s
+   * Named rather than matched on the bare SQLSTATE, per `@oxy.so/db`'s
    * `isForeignKeyViolation` contract: a second foreign key added to one of
    * these tables tomorrow would otherwise reach the client as "no such track".
    */

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll } from
 import express, { type Express } from 'express';
 import type { AddressInfo } from 'net';
 import type { Server } from 'http';
-import { caseDecidedEventFixture, signWebhookDelivery } from '@oxyhq/crowdsource-testing';
+import { caseDecidedEventFixture, signWebhookDelivery } from '@oxy.so/crowdsource-testing';
 import { count, eq } from 'drizzle-orm';
 import { connectDb, clearDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';

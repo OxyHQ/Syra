@@ -8,7 +8,7 @@ import Animated, {
   interpolate,
   type SharedValue,
 } from 'react-native-reanimated';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);

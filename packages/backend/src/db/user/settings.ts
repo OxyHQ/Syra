@@ -64,7 +64,7 @@
  */
 
 import { eq } from 'drizzle-orm';
-import { publicColumns } from '@oxyhq/db/assert';
+import { publicColumns } from '@oxy.so/db/assert';
 import { getDb, type DbOrTransaction } from '../postgres';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../schema/protectedColumns';
 import {

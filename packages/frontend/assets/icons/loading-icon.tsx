@@ -1,7 +1,7 @@
 import React from 'react';
 import Svg, { Rect } from 'react-native-svg';
 import { ViewStyle } from 'react-native';
-import { useTheme } from '@oxyhq/bloom/theme';
+import { useTheme } from '@oxy.so/bloom/theme';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 
 export const Loading = ({ color: colorProp, size = 26, style: styleProp }: { color?: string; size?: number; style?: ViewStyle }) => {

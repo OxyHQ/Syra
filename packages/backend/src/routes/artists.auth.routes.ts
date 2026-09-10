@@ -13,7 +13,7 @@ import {
   acceptMyImageSuggestion,
   discardMyImageSuggestion,
 } from '../controllers/artists.controller';
-import { requireOxyAuth as requireAuth } from '@oxyhq/core/server';
+import { requireOxyAuth as requireAuth } from '@oxy.so/core/server';
 import { singleImageUpload } from '../utils/imageUpload';
 
 const router = Router();

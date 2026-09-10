@@ -10,7 +10,7 @@
  */
 
 import type { IncomingMessage } from 'node:http';
-import { safeFetch, SsrfRejection, UpstreamError } from '@oxyhq/core/server';
+import { safeFetch, SsrfRejection, UpstreamError } from '@oxy.so/core/server';
 import { findEpisodeById, setEpisodeCache } from '../../db/podcasts/episodes';
 import { getS3PodcastEpisodeCacheKey } from '../../config/s3.config';
 import { uploadToS3 } from '../s3Service';

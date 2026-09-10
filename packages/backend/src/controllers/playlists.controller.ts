@@ -1,9 +1,9 @@
 import { Response, NextFunction } from 'express';
 import { and, eq, inArray } from 'drizzle-orm';
-import { isForeignKeyViolation, isLiveEntityId } from '@oxyhq/db';
-import { publicColumns } from '@oxyhq/db/assert';
+import { isForeignKeyViolation, isLiveEntityId } from '@oxy.so/db';
+import { publicColumns } from '@oxy.so/db/assert';
 import { PlaylistVisibility, playlistVisibilitySchema } from '@syra/shared-types';
-import type { OxyAuthRequest as AuthRequest } from '@oxyhq/core/server';
+import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import { getDb } from '../db/postgres';
 import { tracks } from '../db/schema/catalog';
 import { playlistTracks, playlists } from '../db/schema/library';

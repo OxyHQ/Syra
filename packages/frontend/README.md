@@ -160,7 +160,7 @@ This package is part of the Syra monorepo and integrates with:
 
 ### Shared Dependencies
 - Uses `@syra/shared-types` for type safety across packages
-- Integrates with `@oxyhq/services` for common functionality
+- Integrates with `@oxy.so/services` for common functionality
 
 ## Audio Playback
 

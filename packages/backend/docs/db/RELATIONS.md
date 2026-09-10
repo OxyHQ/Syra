@@ -71,7 +71,7 @@ mis-typed during the port.
    pipelines wrote it — **no discriminator column exists at all**, see its row).
    `TrackKey.trackId` is the one of these five no longer polymorphic in
    Postgres: Task 13a split it into three constrained columns (see its row).
-4. **CrowdSource** (`@oxyhq/crowdsource`, see `moderation/client.ts`) is a
+4. **CrowdSource** (`@oxy.so/crowdsource`, see `moderation/client.ts`) is a
    third-party moderation SaaS in its own database, exactly like Oxy is for
    `oxyUserId` — its case/decision ids are never a Syra row and never an FK. The
    report's classification list only names `oxyUserId` under CROSS-SERVICE, but
