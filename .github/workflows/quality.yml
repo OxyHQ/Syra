@@ -63,9 +63,12 @@ jobs:
           bun-version: '1.3.14'
       - run: bun install --frozen-lockfile
 
+      - name: Check Oxy dependency health
+        run: bun run doctor:oxy
+
       # Syra never owns inference-provider credentials or talks to a model
       # provider/Kaana directly. One-shot product AI belongs behind the Oxy
-      # inference edge through @oxyhq/core; conversations and agents belong in
+      # inference edge through @oxy.so/core; conversations and agents belong in
       # Alia. Metadata providers (MusicBrainz, AcoustID, LRCLIB, Podcast Index,
       # etc.) are intentionally outside this rule and remain Syra integrations.
       - name: Guard canonical AI routing
@@ -116,7 +119,7 @@ jobs:
       # cutover finished. Syra opens no Mongo anywhere: the live task definition
       # carries DATABASE_URL and no MONGODB_URI, /health reports
       # engine=postgres, and no package.json here declares mongoose. The
-      # mongoose in node_modules is an OPTIONAL peer of @oxyhq/crowdsource-app
+      # mongoose in node_modules is an OPTIONAL peer of @oxy.so/crowdsource-app
       # that nothing satisfies.)
       # The upload screening suite shells out to real binaries rather than mocking
       # them: ffprobe measures a fixture's true duration/codec, ffmpeg builds the
