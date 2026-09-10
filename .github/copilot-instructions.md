@@ -4,7 +4,7 @@ These instructions are for AI assistants to develop applications using the Oxy e
 
 ## Core Principles
 
-**We use the Oxy Services SDK (`@oxyhq/services`) for all backend integrations**, not direct API calls. Always import and use the `OxyServices` class and related components from this package when building applications that integrate with the Oxy ecosystem.
+**We use the Oxy Services SDK (`@oxy.so/services`) for all backend integrations**, not direct API calls. Always import and use the `OxyServices` class and related components from this package when building applications that integrate with the Oxy ecosystem.
 
 **User authentication and management is handled through the Oxy ecosystem**, not custom user systems. Users exist in the Oxy platform (cloud.oxy.so by default) and your app integrates with this existing user base - you don't create separate user accounts for your app.
 
@@ -14,7 +14,7 @@ These instructions are for AI assistants to develop applications using the Oxy e
 
 ```typescript
 // Always use OxyProvider to wrap your app
-import { OxyProvider } from '@oxyhq/services';
+import { OxyProvider } from '@oxy.so/services';
 
 // Users authenticate through Oxy, not your app
 const { user, login, logout, signUp, isAuthenticated } = useOxy();
@@ -35,7 +35,7 @@ if (isAuthenticated) {
 **We use double quotes and 2-space indentation** for all JavaScript/TypeScript code in Oxy projects:
 
 ```typescript
-import { OxyServices, User } from "@oxyhq/services";
+import { OxyServices, User } from "@oxy.so/services";
 
 const handleUserProfile = async (userId: string): Promise<User> => {
   const oxyServices = new OxyServices({ baseURL: "https://cloud.oxy.so" });
@@ -49,7 +49,7 @@ const handleUserProfile = async (userId: string): Promise<User> => {
 
 ```typescript
 // Initialize Oxy services
-import { OxyServices, OXY_CLOUD_URL } from '@oxyhq/services';
+import { OxyServices, OXY_CLOUD_URL } from '@oxy.so/services';
 
 const oxyServices = new OxyServices({
   baseURL: OXY_CLOUD_URL // or your custom Oxy instance
@@ -111,7 +111,7 @@ import {
   OxyLogo, 
   FollowButton,
   OxyProvider 
-} from '@oxyhq/services';
+} from '@oxy.so/services';
 
 // Always support both light and dark themes
 const isDarkTheme = theme === 'dark';
@@ -215,7 +215,7 @@ src/
 
 ```typescript
 // Complete app setup with Oxy
-import { OxyProvider, useOxy } from '@oxyhq/services';
+import { OxyProvider, useOxy } from '@oxy.so/services';
 
 function App() {
   return (
