@@ -63,6 +63,9 @@ jobs:
           bun-version: '1.3.14'
       - run: bun install --frozen-lockfile
 
+      - name: Check Oxy dependency health
+        run: bun run doctor:oxy
+
       # Syra never owns inference-provider credentials or talks to a model
       # provider/Kaana directly. One-shot product AI belongs behind the Oxy
       # inference edge through @oxyhq/core; conversations and agents belong in

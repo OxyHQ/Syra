@@ -26,6 +26,7 @@
     "validate:ai-architecture": "bun ./scripts/validate-ai-architecture.mjs && bun ./scripts/test-validate-ai-architecture.mjs",
     "validate:no-mongo": "bun ./scripts/validate-no-mongo.mjs && bun ./scripts/test-validate-no-mongo.mjs",
     "validate:agents-md": "bun ./scripts/check-agents-md-size.mjs && bun ./scripts/test-check-agents-md-size.mjs",
+    "doctor:oxy": "oxy-doctor --ci",
     "clean": "bun run --filter '*' clean && rm -rf node_modules",
     "install:all": "bun install",
     "start:frontend": "bun run --filter '@syra/frontend' start",
@@ -34,6 +35,7 @@
     "postinstall": "bun run --filter '@syra/shared-types' build"
   },
   "devDependencies": {
+    "@oxy.so/doctor": "1.0.0",
     "@types/node": "^20.0.0",
     "typescript": "~5.9.2"
   },
