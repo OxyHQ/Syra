@@ -42,7 +42,9 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@oxy.so/telemetry": "^1.1.0"
+  },
   "overrides": {
     "@oxy.so/bloom": "^1.0.1",
     "@oxy.so/core": "^1.1.0",
