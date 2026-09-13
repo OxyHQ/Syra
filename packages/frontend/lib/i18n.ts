@@ -66,13 +66,8 @@ const i18nResources = {
  * react-i18next defaults `useSuspense` to true, which makes `useTranslation`
  * throw a promise whenever an i18n instance exists but is not yet initialized
  * (useTranslation.js: `if (i18n && useSuspense && !ready) throw new Promise(...)`).
- * i18n here initializes from a layout effect, so a component mounted in the
- * providers tree that calls `t()` can suspend before any Suspense boundary
- * exists above it — a white screen with no console error.
- *
- * Today that is avoided only by accident: on the first render `getI18n()` is
- * still undefined, so the throw is skipped. That holds until someone moves
- * initialization earlier or mounts another translated component high in the tree.
+ * See the note below, beside the synchronous `i18nInit` call, for why that used
+ * to be reachable on cold boot and produce a permanent blank screen.
  *
  * Every locale is bundled synchronously — there is no namespace or backend to
  * wait on — so suspense buys nothing here. With it off, a `t()` call before
@@ -85,6 +80,50 @@ export interface I18nConfig {
   lng: string;
   fallbackLng: string;
   interpolation: { escapeValue: boolean };
+}
+
+/**
+ * Also registered SYNCHRONOUSLY, at module load, right beside `.use()` above —
+ * for the same reason, one level deeper.
+ *
+ * `.use(initReactI18next)` alone only fixes the case where `getI18n()` returns
+ * undefined. It does nothing for the case where the instance exists but isn't
+ * ready yet: `useTranslation()` resolves `i18n` from `I18nextProvider` context
+ * (not the global fallback) for anything rendered inside `<I18nextProvider
+ * i18n={i18n}>`, so that check always finds a truthy instance. Until `.init()`
+ * has actually run, `i18n.isInitialized` is false and `options.react` is unset,
+ * so react-i18next falls back to ITS OWN default of `useSuspense: true` — and
+ * `useTranslation`'s last line is `if (i18n && useSuspense && !ready) throw new
+ * Promise(...)`. Any translated component mounted inside the provider on the
+ * first render (e.g. `PlaybackFailureReporter` in AppProviders) throws that
+ * promise with no Suspense boundary above it anywhere in the tree.
+ *
+ * On a cold boot that first render is the ONLY render: `entry.js` wraps the
+ * initial `registerRootComponent` in `startTransition`, so React holds the
+ * whole tree uncommitted rather than erroring — including `RootLayout` itself,
+ * whose own `useEffect` is what calls `initializeI18n()` below. Nothing ever
+ * commits, so that effect never runs, so `.init()` never runs, so the thrown
+ * promise never resolves. The result is a permanently blank page with no
+ * console error and no network activity — indistinguishable from a hang.
+ *
+ * i18next's `init()` runs its setup SYNCHRONOUSLY when resources are passed
+ * inline with no backend to await (as here — every locale is bundled), so
+ * calling it here, synchronously, closes the window completely: by the time
+ * any component can render, `isInitialized` is already true and
+ * `useSuspense` is already false. It starts on `DEFAULT_LANGUAGE`; the saved
+ * preference is applied afterward by `initializeI18n`, via `changeLanguage`,
+ * which needs no suspense fix of its own since the instance is already ready.
+ */
+try {
+  i18nInit({
+    resources: i18nResources,
+    lng: DEFAULT_LANGUAGE,
+    fallbackLng: DEFAULT_LANGUAGE,
+    interpolation: { escapeValue: false },
+    react: REACT_I18NEXT_OPTIONS,
+  });
+} catch (error) {
+  console.error('Synchronous i18n initialization failed:', error);
 }
 
 /**
@@ -101,48 +140,18 @@ export async function loadSavedLanguage(): Promise<string> {
 }
 
 /**
- * Initializes i18n with the saved language preference
+ * Switches i18n to the saved language preference, once it has loaded from
+ * storage. `i18n` is already initialized synchronously above by the time this
+ * runs — this only ever changes the active language, it never gates readiness.
  */
 export async function initializeI18n(): Promise<void> {
   try {
     const initialLanguage = await loadSavedLanguage();
-
-    if (i18n.isInitialized) {
-      // If already initialized, just change the language
+    if (initialLanguage !== i18n.language) {
       await i18n.changeLanguage(initialLanguage);
-      return;
     }
-
-    // Initialize i18n with the saved language. `initReactI18next` is already
-    // registered at module load — see the note beside that call.
-    await i18nInit({
-      resources: i18nResources,
-      lng: initialLanguage,
-      fallbackLng: DEFAULT_LANGUAGE,
-      interpolation: { escapeValue: false },
-      react: REACT_I18NEXT_OPTIONS,
-    });
   } catch (error) {
-    console.error('i18n initialization failed:', error);
-    // Fallback to default initialization
-    if (!i18n.isInitialized) {
-      try {
-        await i18nInit({
-          resources: i18nResources,
-          lng: DEFAULT_LANGUAGE,
-          fallbackLng: DEFAULT_LANGUAGE,
-          interpolation: { escapeValue: false },
-          // Must carry the same react options as the primary init above: a
-          // boot-mounted consumer calling `useTranslation` suspends forever if
-          // this path ever runs with the library default of `useSuspense: true`,
-          // and the symptom is a white screen with no console error.
-          react: REACT_I18NEXT_OPTIONS,
-        });
-      } catch (fallbackError) {
-        console.error('i18n fallback initialization failed:', fallbackError);
-        throw fallbackError;
-      }
-    }
+    console.error('Failed to apply saved language preference:', error);
   }
 }
 
