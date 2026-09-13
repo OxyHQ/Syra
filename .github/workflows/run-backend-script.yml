@@ -1,0 +1,107 @@
+# On-demand one-off backend scripts (backfills, maintenance jobs) against the
+# CURRENTLY DEPLOYED production image — no build, no new task definition, no
+# service update. Manually triggered only; never runs on a push.
+#
+# `script` is a closed allowlist, not a free-text command: workflow_dispatch
+# already requires write access to trigger, but this still runs with write
+# access to the production database, so the blast radius of a mistake is
+# capped at "one of these two scripts, with one of these two flags" rather
+# than "any argv this trigger's caller can type."
+name: Run Backend Script
+
+on:
+  workflow_dispatch:
+    inputs:
+      script:
+        description: One-off backend script to run, as the image currently live in production.
+        type: choice
+        required: true
+        options:
+          - backfill-episode-images
+          - backfill-fingerprints
+      args:
+        description: >-
+          Optional flags, space-separated. Only --dry-run and --limit <n> are
+          accepted (both scripts support both); anything else is refused.
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  # Shares deploy-aws.yml's group deliberately: both read/act on the same ECS
+  # service and task definition via the same AWS role, and a real deploy
+  # racing this (or two of these racing each other) is exactly the
+  # describe-then-act hazard that workflow's group exists to serialize away.
+  group: deploy-syra-backend
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-west-2
+  CLUSTER: oxy-cluster
+  APP: syra
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+    # workflow_dispatch runs the workflow FILE AS IT EXISTS on whatever ref is
+    # selected, not necessarily main — so without this, dispatching against a
+    # branch that has edited run-one-shot-ecs-task.sh would still assume the
+    # real AWS deploy role and run whatever that edited script says. Same
+    # belt-and-suspenders gate deploy-aws.yml's `deploy` job uses for the same
+    # reason, restated here rather than trusted to the OIDC trust policy alone.
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Configure AWS credentials (OIDC, no stored keys)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::237343248947:role/oxy-github-deploy
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Refused as text (not shell-interpolated — `command` below is built with
+      # `jq --arg`), but still validated as a defense-in-depth boundary: this
+      # is the one place a typo in the dispatch form could otherwise smuggle an
+      # unintended flag through to a script with write access to production.
+      - name: Validate args against the allowlist
+        id: args
+        env:
+          RAW_ARGS: ${{ inputs.args }}
+        run: |
+          if [[ -n "$RAW_ARGS" && ! "$RAW_ARGS" =~ ^(--dry-run|--limit\ [0-9]+)([[:space:]](--dry-run|--limit\ [0-9]+))*$ ]]; then
+            echo "::error::args must be some combination of --dry-run and --limit <n> only, got: $RAW_ARGS"
+            exit 1
+          fi
+          json="$(jq -cn --arg a "$RAW_ARGS" '($a | select(length > 0) | split(" ")) // []')"
+          echo "json=$json" >>"$GITHUB_OUTPUT"
+
+      # The compiled entry point each choice maps to. `tsconfig.build.json` sets
+      # rootDir "./", so `src/scripts/<name>.ts` compiles to
+      # `dist/src/scripts/<name>.js` — the same layout deploy-aws.yml's own
+      # migration one-shot command relies on for `src/db/migrate.ts`.
+      - name: Resolve the script's compiled entry point
+        id: script
+        env:
+          SCRIPT: ${{ inputs.script }}
+        run: |
+          case "$SCRIPT" in
+            backfill-episode-images) path="packages/backend/dist/src/scripts/backfillEpisodeImages.js" ;;
+            backfill-fingerprints) path="packages/backend/dist/src/scripts/backfillTrackFingerprints.js" ;;
+            *) echo "::error::unknown script: $SCRIPT"; exit 1 ;;
+          esac
+          echo "path=$path" >>"$GITHUB_OUTPUT"
+
+      - name: Run as a one-off ECS task
+        env:
+          COMMAND_JSON: ${{ format('["node","{0}"]', steps.script.outputs.path) }}
+          ARGS_JSON: ${{ steps.args.outputs.json }}
+          SCRIPT_NAME: ${{ inputs.script }}
+          SCRIPT_ARGS: ${{ inputs.args }}
+        run: |
+          command_json="$(jq -c --argjson extra "$ARGS_JSON" '. + $extra' <<<"$COMMAND_JSON")"
+          echo "Running $SCRIPT_NAME $SCRIPT_ARGS"
+          COMMAND_JSON="$command_json" bash .github/scripts/run-one-shot-ecs-task.sh
