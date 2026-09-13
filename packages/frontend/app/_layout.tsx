@@ -296,10 +296,12 @@ export default function RootLayout() {
   // the transition there).
   useHideNativeSplashWhenReady(appIsReady);
 
-  // Initialize i18n once when the app mounts
+  // i18n itself is already initialized synchronously at module load (see
+  // `lib/i18n.ts`). This only applies the user's saved language preference,
+  // which requires an async storage read.
   useEffect(() => {
     AppInitializer.initializeI18n().catch((error) => {
-      layoutLogger.error('Failed to initialize i18n', { error });
+      layoutLogger.error('Failed to apply saved language preference', { error });
     });
   }, []);
 
