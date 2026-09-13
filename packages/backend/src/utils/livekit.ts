@@ -245,7 +245,7 @@ export async function deleteIngress(ingressId: string): Promise<void> {
 
 /**
  * Start a Room Composite Egress that records all room audio to an OGG file
- * on DigitalOcean Spaces. Returns the egressId.
+ * in Amazon S3. Returns the egressId.
  */
 export async function startRoomRecording(
   roomId: string,

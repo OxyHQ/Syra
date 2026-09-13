@@ -1,4 +1,5 @@
 import { env } from './src/config/env';
+import { startPlatformActivity } from './src/services/platformActivity';
 
 import express from 'express';
 import http from 'http';
@@ -61,7 +62,10 @@ import { startPodcastRefreshScheduler } from './src/services/podcasts/podcastRef
 import { startIngestWorker } from './src/services/ingest/ingestQueue';
 import { startExpirySweeper } from './src/services/uploads/expirySweeper';
 
+let activityReady = false;
+const activity = startPlatformActivity(() => activityReady && isPostgresConnected());
 const app = express();
+if (activity) app.use(activity.observeHttp);
 
 app.set('trust proxy', true);
 
@@ -216,6 +220,11 @@ const io = new SocketIOServer(server, {
 // Register the shared io singleton so main-namespace signal broadcasters
 // (e.g. `emitLiveRoomsUpdated`) can reach connected clients.
 initializeIO(io);
+const observeNamespace = (namespace: Namespace) => {
+  namespace.on('connection', socket => activity?.observeSocket(socket));
+};
+observeNamespace(io.of('/'));
+io.on('new_namespace', observeNamespace);
 
 (async () => {
   try {
@@ -447,6 +456,7 @@ const bootServer = async () => {
   }
 
   server.listen(env.PORT, '0.0.0.0', () => {
+    activityReady = true;
     logger.info('Server running', { port: env.PORT });
     if (!isPostgresConnected()) {
       logger.warn('Server started without database connection - some features may be unavailable');
@@ -496,3 +506,19 @@ if (require.main === module) {
 
 export { io, musicNamespace };
 export default server;
+
+let shuttingDown = false;
+async function shutdown() {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  activityReady = false;
+  const timeout = setTimeout(() => process.exit(1), 10_000);
+  timeout.unref();
+  const httpClosed = new Promise<void>(resolve => server.close(() => resolve()));
+  await Promise.all([httpClosed, new Promise<void>(resolve => io.close(() => resolve()))]);
+  await activity?.stop();
+  clearTimeout(timeout);
+  process.exit(0);
+}
+process.once('SIGTERM', () => void shutdown());
+process.once('SIGINT', () => void shutdown());
