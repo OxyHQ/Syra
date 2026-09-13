@@ -47,7 +47,7 @@ import {
   type PodcastValues,
 } from '../../db/podcasts/podcasts';
 import {
-  episodeExists,
+  findEpisodeArtworkState,
   episodeStats,
   upsertEpisodeFromFeed,
   type EpisodeValues,
@@ -65,8 +65,19 @@ import { rehostPodcastImage } from './podcastMedia';
 import type { PodcastDirectoryCandidate } from './PodcastDirectory';
 import { describeErrorSafely } from '../../utils/error';
 
-/** Max NEW episodes whose own artwork is re-hosted inline per import (bounds the
- * import path; the long tail is covered by the backfill script). */
+/**
+ * Max episodes whose own artwork is re-hosted inline per import — bounds the
+ * import path, which iterates the ENTIRE feed (up to `MAX_EPISODES_PER_FEED`)
+ * on every crawl.
+ *
+ * Not just NEW episodes: an existing episode still missing `imageId` (see
+ * `findEpisodeArtworkState`) counts against this cap too, so a show with a
+ * back-catalogue bigger than this constant does not finish backfilling in one
+ * crawl — it converges over several, `MAX_EPISODE_IMAGE_REHOST` at a time. For
+ * the current backlog (episodes stuck on the show's cover from before this
+ * retry existed), `bun run backfill:episode-images` catches the rest in one
+ * pass instead of waiting on the refresh schedule.
+ */
 const MAX_EPISODE_IMAGE_REHOST = 30;
 
 /**
@@ -76,7 +87,7 @@ const MAX_EPISODE_IMAGE_REHOST = 30;
  * and because `imageSizes.small?.id ?? null` repeated six times in two places is
  * how one of them ends up missing a variant.
  */
-interface ArtworkColumns {
+export interface ArtworkColumns {
   imageId: string | null;
   imageSizesSmallId: string | null;
   imageSizesMediumId: string | null;
@@ -89,7 +100,14 @@ interface ArtworkColumns {
   imageSourceUrl?: string;
 }
 
-function artworkColumns(image: string, sizes: CatalogImageSizes): ArtworkColumns {
+/**
+ * Exported for `scripts/backfillEpisodeImages.ts`, which writes the identical
+ * seven columns for the identical reason (a re-hosted episode cover) and must
+ * not re-derive the mapping from `imageSizes.<size>?.id ?? null` a second time —
+ * see this file's own doc comment on why that repetition is exactly how one
+ * of the two ends up missing a variant.
+ */
+export function artworkColumns(image: string, sizes: CatalogImageSizes): ArtworkColumns {
   return {
     imageId: image,
     imageSizesSmallId: sizes.small?.id ?? null,
@@ -318,12 +336,16 @@ export async function importFeed(
 
   for (const episode of fetched.episodes) {
     try {
-      // Re-host a NEW episode's OWN artwork (distinct from the show), bounded.
+      // Re-host an episode's OWN artwork (distinct from the show), bounded.
       let artwork: ArtworkColumns | undefined;
       const ownArtUrl = episode.image;
       if (ownArtUrl && ownArtUrl !== showImageUrl) {
-        const alreadyExists = await episodeExists(podcast.id, episode.guid);
-        if (!alreadyExists) {
+        const existingState = await findEpisodeArtworkState(podcast.id, episode.guid);
+        // Attempt a (re-)host whenever there is no row yet, OR the row exists
+        // but never got its own image — a prior crawl that inserted it beyond
+        // the per-import cap below, or before this field existed. An episode
+        // that already has `imageId` is left alone: see NO_ARTWORK's comment.
+        if (!existingState || !existingState.imageId) {
           if (rehostedEpisodeImages < MAX_EPISODE_IMAGE_REHOST) {
             const rehosted = await rehostPodcastImage(ownArtUrl, {
               source: 'rss',
@@ -340,11 +362,12 @@ export async function importFeed(
               artwork = { ...NO_ARTWORK, imageSourceUrl: ownArtUrl };
             }
           } else {
-            // Beyond the per-import cap → keep the external URL as a fallback only.
+            // Beyond the per-import cap → keep the external URL as a fallback
+            // only; the NEXT crawl retries it, since `imageId` is still null.
             artwork = { ...NO_ARTWORK, imageSourceUrl: ownArtUrl };
           }
         }
-        // Existing episode → leave its cover as-is (idempotent).
+        // Episode already has its own art → leave it as-is (idempotent).
       }
 
       const episodeSet = buildEpisodeSet(podcast.title, episode, artwork);
@@ -417,23 +440,25 @@ export async function importFeed(
 }
 
 /**
- * The seven artwork columns, all null — a NEW episode that has its own external
- * art we could not re-host keeps only `image_source_url`.
+ * The seven artwork columns, all null — an episode whose own external art we
+ * could not (yet) re-host keeps only `image_source_url`.
  *
- * Spelled out rather than `{}` for explicitness only. An earlier version of this
- * comment claimed the nulls "must be WRITTEN as null on a refresh", which the
- * Task 12 review (M1) showed the code cannot do: artwork is computed only when
- * `!alreadyExists`, so a refresh of an existing episode passes `undefined` and
- * writes none of these columns at all. On the path this constant IS reached —
- * an insert — the columns would default to null anyway.
+ * Spelled out rather than `{}` for explicitness only. Reached on three paths:
+ * a brand NEW episode whose re-host failed, an EXISTING episode still missing
+ * `imageId` (a prior crawl left it that way — see `findEpisodeArtworkState`)
+ * whose retry also failed, and either of those once `MAX_EPISODE_IMAGE_REHOST`
+ * is spent for this run. On the insert path the columns would default to null
+ * anyway; on the update path this is what makes a later crawl retry rather
+ * than reading a stale `imageId` as "already has art".
  *
- * The consequence the false comment was papering over is real and is PARITY,
- * not a defect introduced here: an episode whose own artwork is later removed
- * from the feed keeps the cover a previous crawl re-hosted, because the refresh
- * never revisits it. Mongo behaved identically and said so — "Existing episode →
- * leave its cover as-is (idempotent)". Recorded rather than fixed, because
- * re-hosting every episode's art on every crawl is what the `!alreadyExists`
- * guard and `MAX_EPISODE_IMAGE_REHOST` exist to prevent.
+ * `imageId` set is still a one-way door, deliberately: once an episode has its
+ * own re-hosted cover, a refresh never revisits it — so an episode whose own
+ * artwork is later removed from the feed keeps the cover a previous crawl
+ * re-hosted. Mongo behaved identically and said so — "Existing episode → leave
+ * its cover as-is (idempotent)". Recorded rather than fixed, because
+ * re-hosting every episode's art on every crawl is what the `imageId` guard and
+ * `MAX_EPISODE_IMAGE_REHOST` exist to prevent; only the case of NEVER having
+ * gotten one is retried.
  */
 const NO_ARTWORK: ArtworkColumns = {
   imageId: null,
