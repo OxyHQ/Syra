@@ -391,8 +391,8 @@ const PROBES: readonly Probe[] = [
           order by pub_date desc nulls last limit 1`,
   },
   {
-    // `db/podcasts/episodes.ts` — `episodeExists`, once per feed item on every
-    // crawl, so it has to be a point lookup.
+    // `db/podcasts/episodes.ts` — `findEpisodeArtworkState`, once per feed
+    // item on every crawl, so it has to be a point lookup.
     name: 'episodeByGuid',
     sql: `select id from episodes where podcast_id = '${MARKER}-s-7' and guid = '${MARKER}-guid-7' limit 1`,
   },

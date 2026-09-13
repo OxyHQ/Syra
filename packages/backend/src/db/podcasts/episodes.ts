@@ -338,13 +338,27 @@ export async function findEpisodeIdsAwaitingHls(podcastId: string): Promise<stri
   return rows.map((row) => row.id);
 }
 
-export async function episodeExists(podcastId: string, guid: string): Promise<boolean> {
+/**
+ * An existing episode's own-artwork state, keyed by the import's natural key —
+ * for deciding whether an RSS refresh needs to (re-)attempt mirroring this
+ * episode's own cover.
+ *
+ * `imageId` is the same "has its own art" signal `toEpisodeDto` reads: null
+ * means either the episode is new, or a PRIOR crawl saw it but never got past
+ * the per-import re-host cap — either way, an art URL later found in the feed
+ * is worth mirroring. Non-null means it already succeeded and must stay
+ * untouched (see `upsertEpisodeFromFeed`'s "existing episode → idempotent").
+ */
+export async function findEpisodeArtworkState(
+  podcastId: string,
+  guid: string
+): Promise<{ id: string; imageId: string | null } | undefined> {
   const [row] = await getDb()
-    .select({ id: episodes.id })
+    .select({ id: episodes.id, imageId: episodes.imageId })
     .from(episodes)
     .where(and(eq(episodes.podcastId, podcastId), eq(episodes.guid, guid)))
     .limit(1);
-  return row !== undefined;
+  return row;
 }
 
 /**
