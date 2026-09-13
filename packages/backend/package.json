@@ -11,6 +11,7 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "backfill:fingerprints": "ts-node --transpile-only src/scripts/backfillTrackFingerprints.ts",
+    "backfill:episode-images": "ts-node --transpile-only src/scripts/backfillEpisodeImages.ts",
     "reseed:persons": "ts-node --transpile-only src/scripts/reseedPersons.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun run src/db/migrate.ts",

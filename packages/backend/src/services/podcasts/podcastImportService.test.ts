@@ -2,11 +2,11 @@ import { describe, it, expect, beforeAll, afterEach, afterAll } from 'bun:test';
 import { Readable } from 'node:stream';
 import type { IncomingMessage } from 'node:http';
 import type { SafeFetchResult } from '@oxy.so/core/server';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
 import { getDb } from '../../db/postgres';
 import { imageAssets } from '../../db/schema/catalog';
-import { podcasts } from '../../db/schema/podcasts';
+import { episodes, podcasts } from '../../db/schema/podcasts';
 import { toPodcastDtos } from '../../db/podcasts/hydrate';
 import { setCatalogImageMirrorImplementationForTests } from '../catalog/catalogImageAssets';
 import { importFeed } from './podcastImportService';
@@ -23,6 +23,16 @@ import type { PodcastDirectoryCandidate } from './PodcastDirectory';
  */
 async function readShow(id: string) {
   const [row] = await getDb().select().from(podcasts).where(eq(podcasts.id, id)).limit(1);
+  return row;
+}
+
+/** The STORED episode row, by its natural key — same rationale as {@link readShow}. */
+async function readEpisode(podcastId: string, guid: string) {
+  const [row] = await getDb()
+    .select()
+    .from(episodes)
+    .where(and(eq(episodes.podcastId, podcastId), eq(episodes.guid, guid)))
+    .limit(1);
   return row;
 }
 
@@ -89,6 +99,54 @@ async function seedMirroredAsset(): Promise<void> {
       height: 640,
       primaryColor: '#123456',
       secondaryColor: '#654321',
+    })
+    .onConflictDoNothing();
+}
+
+const EPISODE_IMAGE_ID = '5f9d88b9c1f4e2a3b4c5d6e8';
+const EPISODE_COVER = 'https://image.simplecastcdn.com/episode-one-cover.jpg';
+
+/** Same feed as {@link FEED}, but the item carries its OWN `<itunes:image>`. */
+const FEED_WITH_EPISODE_ART = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>The Daily</title>
+    <itunes:author>The New York Times</itunes:author>
+    <itunes:image href="${EXTERNAL_COVER}"/>
+    <item>
+      <title>Episode One</title>
+      <guid>ep-1</guid>
+      <itunes:image href="${EPISODE_COVER}"/>
+      <enclosure url="https://cdn.example/ep1.mp3" type="audio/mpeg"/>
+      <pubDate>Wed, 01 Jan 2025 08:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>`;
+
+async function fakeFetchWithEpisodeArt(): Promise<SafeFetchResult> {
+  return {
+    status: 200,
+    headers: {},
+    finalUrl: 'https://feeds.example/daily.xml',
+    response: Readable.from([Buffer.from(FEED_WITH_EPISODE_ART, 'utf-8')]) as unknown as IncomingMessage,
+  };
+}
+
+/** Same rationale as {@link seedMirroredAsset}, for the episode's OWN cover. */
+async function seedEpisodeMirroredAsset(): Promise<void> {
+  await getDb()
+    .insert(imageAssets)
+    .values({
+      id: EPISODE_IMAGE_ID,
+      s3Key: `images/${EPISODE_IMAGE_ID}.jpg`,
+      filename: 'episode-one-cover.jpg',
+      contentType: 'image/jpeg',
+      byteSize: 1024,
+      ownerType: 'podcast',
+      width: 640,
+      height: 640,
+      primaryColor: '#abcdef',
+      secondaryColor: '#fedcba',
     })
     .onConflictDoNothing();
 }
@@ -246,5 +304,163 @@ describe('importFeed — cover re-host (search/bulk-import deep path)', () => {
      */
     expect(second.podcast.id).toBe(first.podcast.id);
     expect((await readShow(second.podcast.id))?.episodeCount).toBe(1);
+  });
+});
+
+describe('importFeed — episode-level cover re-host', () => {
+  it("mirrors a NEW episode's own cover, distinct from the show's", async () => {
+    await seedMirroredAsset();
+    await seedEpisodeMirroredAsset();
+    setCatalogImageMirrorImplementationForTests(async (_images, context) => {
+      const isEpisode = context.entityType === 'episode';
+      return {
+        imageId: isEpisode ? EPISODE_IMAGE_ID : SYRA_IMAGE_ID,
+        imageSizes: {
+          large: {
+            id: isEpisode ? EPISODE_IMAGE_ID : SYRA_IMAGE_ID,
+            url: `/api/images/${isEpisode ? EPISODE_IMAGE_ID : SYRA_IMAGE_ID}`,
+            width: 640,
+            height: 640,
+          },
+        },
+        primaryColor: isEpisode ? '#abcdef' : '#123456',
+        secondaryColor: isEpisode ? '#fedcba' : '#654321',
+        sourceUrlHash: 'u',
+        sourceContentHash: 'c',
+      };
+    });
+
+    const result = await importFeed(candidate.feedUrl, {
+      directory: candidate,
+      fetch: fakeFetchWithEpisodeArt,
+    });
+
+    const episode = await readEpisode(result.podcast.id, 'ep-1');
+    expect(episode).toBeDefined();
+    expect(episode?.imageId).toBe(EPISODE_IMAGE_ID);
+    // Its own cover, not the show's — the bug this suite exists to catch.
+    expect(episode?.imageId).not.toBe(SYRA_IMAGE_ID);
+    expect(episode?.imageSourceUrl).toBe(EPISODE_COVER);
+  });
+
+  /**
+   * This is the fix for the actual production defect: an episode whose own
+   * cover failed to mirror on the crawl that inserted it (a transient error,
+   * or — historically — every crawl beyond `MAX_EPISODE_IMAGE_REHOST`, or any
+   * crawl before this retry existed at all) used to stay on the show's cover
+   * FOREVER, because the import only ever attempted a re-host for a row it was
+   * about to insert. `findEpisodeArtworkState` is what makes a later crawl see
+   * `imageId IS NULL` on an EXISTING row and try again.
+   */
+  it('retries an EXISTING episode that never got its own image, instead of leaving it on the show cover forever', async () => {
+    await seedMirroredAsset();
+    setCatalogImageMirrorImplementationForTests(async (_images, context) =>
+      context.entityType === 'episode'
+        ? undefined // the episode's own mirror fails on this crawl
+        : {
+            imageId: SYRA_IMAGE_ID,
+            imageSizes: {
+              large: { id: SYRA_IMAGE_ID, url: `/api/images/${SYRA_IMAGE_ID}`, width: 640, height: 640 },
+            },
+            primaryColor: '#123456',
+            secondaryColor: '#654321',
+            sourceUrlHash: 'u',
+            sourceContentHash: 'c',
+          }
+    );
+
+    const first = await importFeed(candidate.feedUrl, {
+      directory: candidate,
+      fetch: fakeFetchWithEpisodeArt,
+    });
+    const afterFirstCrawl = await readEpisode(first.podcast.id, 'ep-1');
+    expect(afterFirstCrawl?.imageId).toBeNull();
+    // The raw external URL is kept even when the mirror fails, so a retry
+    // that succeeds later has something to re-host.
+    expect(afterFirstCrawl?.imageSourceUrl).toBe(EPISODE_COVER);
+
+    // Second crawl: the episode's own mirror now succeeds.
+    await seedEpisodeMirroredAsset();
+    setCatalogImageMirrorImplementationForTests(async (_images, context) =>
+      context.entityType === 'episode'
+        ? {
+            imageId: EPISODE_IMAGE_ID,
+            imageSizes: {
+              large: { id: EPISODE_IMAGE_ID, url: `/api/images/${EPISODE_IMAGE_ID}`, width: 640, height: 640 },
+            },
+            primaryColor: '#abcdef',
+            secondaryColor: '#fedcba',
+            sourceUrlHash: 'u',
+            sourceContentHash: 'c',
+          }
+        : undefined
+    );
+
+    const second = await importFeed(candidate.feedUrl, {
+      directory: candidate,
+      fetch: fakeFetchWithEpisodeArt,
+    });
+    const afterSecondCrawl = await readEpisode(second.podcast.id, 'ep-1');
+    expect(afterSecondCrawl?.imageId).toBe(EPISODE_IMAGE_ID);
+  });
+
+  it('never re-hosts an episode cover a second time once it has one (idempotent)', async () => {
+    await seedMirroredAsset();
+    await seedEpisodeMirroredAsset();
+    let episodeRehostCalls = 0;
+    setCatalogImageMirrorImplementationForTests(async (_images, context) => {
+      const isEpisode = context.entityType === 'episode';
+      if (isEpisode) episodeRehostCalls += 1;
+      return {
+        imageId: isEpisode ? EPISODE_IMAGE_ID : SYRA_IMAGE_ID,
+        imageSizes: {
+          large: {
+            id: isEpisode ? EPISODE_IMAGE_ID : SYRA_IMAGE_ID,
+            url: `/api/images/${isEpisode ? EPISODE_IMAGE_ID : SYRA_IMAGE_ID}`,
+            width: 640,
+            height: 640,
+          },
+        },
+        sourceUrlHash: 'u',
+        sourceContentHash: 'c',
+      };
+    });
+
+    await importFeed(candidate.feedUrl, { directory: candidate, fetch: fakeFetchWithEpisodeArt });
+    expect(episodeRehostCalls).toBe(1);
+
+    const second = await importFeed(candidate.feedUrl, {
+      directory: candidate,
+      fetch: fakeFetchWithEpisodeArt,
+    });
+    expect(episodeRehostCalls).toBe(1); // not re-mirrored on the second crawl
+
+    const episode = await readEpisode(second.podcast.id, 'ep-1');
+    expect(episode?.imageId).toBe(EPISODE_IMAGE_ID);
+  });
+
+  it("skips re-hosting when the episode's art is the same URL as the show's", async () => {
+    await seedMirroredAsset();
+    setCatalogImageMirrorImplementationForTests(async (_images, context) => {
+      // Only the show cover should ever be mirrored in this test.
+      expect(context.entityType).toBe('podcast');
+      return {
+        imageId: SYRA_IMAGE_ID,
+        imageSizes: {
+          large: { id: SYRA_IMAGE_ID, url: `/api/images/${SYRA_IMAGE_ID}`, width: 640, height: 640 },
+        },
+        sourceUrlHash: 'u',
+        sourceContentHash: 'c',
+      };
+    });
+
+    // `FEED` (not `FEED_WITH_EPISODE_ART`): the item has no `<itunes:image>` of
+    // its own, so `episode.image` is undefined and the show's is never compared
+    // against a value that could accidentally match it either.
+    const result = await importFeed(candidate.feedUrl, { directory: candidate, fetch: fakeFetch });
+
+    const episode = await readEpisode(result.podcast.id, 'ep-1');
+    expect(episode?.imageId).toBeNull();
+    expect(episode?.imageSourceUrl).toBeNull();
   });
 });
