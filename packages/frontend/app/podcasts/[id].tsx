@@ -23,6 +23,20 @@ import { resolvePodcastArtwork } from '@/utils/pickImage';
 import { stripHtml } from '@/utils/podcastFormat';
 import { webViewStyle } from '@/utils/webStyles';
 
+// Picks black or white text for a hex background using WCAG relative luminance.
+function contrastTextColor(hex: string): string {
+  const match = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!match) {
+    return '#ffffff';
+  }
+  const value = parseInt(match[1], 16);
+  const r = (value >> 16) & 255;
+  const g = (value >> 8) & 255;
+  const b = value & 255;
+  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return luminance > 0.6 ? '#000000' : '#ffffff';
+}
+
 /**
  * Podcast show screen — header (artwork, title, author, description), a Subscribe
  * toggle, and the full reverse-chronological episode list with resume progress.
@@ -192,12 +206,18 @@ const PodcastShowView: React.FC<PodcastShowViewProps> = ({
   const theme = useTheme();
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
 
-  // Cover-derived hero gradient, same shape as the album/artist screens.
+  // Cover-derived hero gradient: a single colour held near the top, then
+  // fading into the screen's own background (not the album/artist screens'
+  // two-colour blend) — secondaryColor is reserved for the Subscribe button.
   const gradientColors: readonly [string, string, string] = [
     podcast.primaryColor ?? theme.colors.backgroundSecondary,
-    podcast.secondaryColor ?? theme.colors.backgroundSecondary,
+    podcast.primaryColor ?? theme.colors.backgroundSecondary,
     theme.colors.backgroundSecondary,
   ];
+  const subscribeButtonColor = podcast.secondaryColor ?? theme.colors.primary;
+  const subscribeTextColor = podcast.secondaryColor
+    ? contrastTextColor(podcast.secondaryColor)
+    : theme.colors.primaryForeground;
 
   return (
     <>
@@ -234,20 +254,23 @@ const PodcastShowView: React.FC<PodcastShowViewProps> = ({
             ) : null}
             <Pressable
               onPress={onToggleSubscription}
-              className={subscribed ? 'border-border' : 'bg-primary'}
-              style={[styles.subscribeButton, subscribed && { borderWidth: 1 }]}
+              className={subscribed ? 'border-border' : undefined}
+              style={[
+                styles.subscribeButton,
+                subscribed ? { borderWidth: 1 } : { backgroundColor: subscribeButtonColor },
+              ]}
               accessibilityRole="button"
               accessibilityState={{ selected: subscribed }}
             >
               <Ionicons
                 name={subscribed ? 'checkmark' : 'add'}
                 size={18}
-                color={subscribed ? theme.colors.text : theme.colors.primaryForeground}
+                color={subscribed ? theme.colors.text : subscribeTextColor}
               />
               <Text
                 style={[
                   styles.subscribeText,
-                  { color: subscribed ? theme.colors.text : theme.colors.primaryForeground },
+                  { color: subscribed ? theme.colors.text : subscribeTextColor },
                 ]}
               >
                 {subscribed ? t('podcasts.subscribed') : t('podcasts.subscribe')}
