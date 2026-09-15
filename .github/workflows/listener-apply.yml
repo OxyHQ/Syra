@@ -1,0 +1,55 @@
+name: Apply listener implementation checkpoint
+on:
+  push:
+    branches: [feat/listener-experience-140-implementation]
+    paths: [.github/listener-change.patch]
+permissions:
+  contents: write
+concurrency:
+  group: listener-implementation-checkpoint
+  cancel-in-progress: false
+jobs:
+  apply:
+    if: github.ref == 'refs/heads/feat/listener-experience-140-implementation'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - name: Apply the reviewed source patch and commit to this branch only
+        shell: python
+        run: |
+          import pathlib
+          import re
+          import shutil
+          import subprocess
+
+          payload = pathlib.Path('.github/listener-change.patch')
+          text = payload.read_text()
+          paths = re.findall(r'^diff --git a/(\S+) b/(\S+)$', text, re.MULTILINE)
+          if not paths:
+              raise RuntimeError('The checkpoint contains no source changes')
+          for before, after in paths:
+              if before != after or not after.startswith(('packages/', 'docs/', 'patches/')) or '..' in pathlib.PurePosixPath(after).parts:
+                  raise RuntimeError(f'Unexpected checkpoint path: {after}')
+          copies = re.findall(r'^X-Syra-Copy: (\S+) => (\S+)$', text, re.MULTILINE)
+          targets = {after for _, after in paths}
+          for source, target in copies:
+              if target not in targets or not source.startswith('packages/backend/drizzle/meta/') or '..' in pathlib.PurePosixPath(source).parts:
+                  raise RuntimeError('Unexpected migration snapshot source')
+              if pathlib.Path(target).exists():
+                  raise RuntimeError('Refusing to replace an existing migration snapshot')
+              shutil.copyfile(source, target)
+          subprocess.run(['git', 'apply', '--check', str(payload)], check=True)
+          subprocess.run(['git', 'apply', str(payload)], check=True)
+          subprocess.run(['git', 'diff', '--check'], check=True)
+          subprocess.run(['git', 'add', '--', *sorted(targets)], check=True)
+          subprocess.run(['git', 'rm', '--', str(payload)], check=True)
+          subprocess.run(['git', 'config', 'user.name', 'github-actions[bot]'], check=True)
+          subprocess.run(['git', 'config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com'], check=True)
+          subject = re.search(r'^X-Syra-Subject: ([^\n]+)$', text, re.MULTILINE)
+          if not subject:
+              raise RuntimeError('Missing checkpoint commit subject')
+          subprocess.run(['git', 'commit', '-m', subject.group(1)], check=True)
+          subprocess.run(['git', 'push', 'origin', 'HEAD:refs/heads/feat/listener-experience-140-implementation'], check=True)
