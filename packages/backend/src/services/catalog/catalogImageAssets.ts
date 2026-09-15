@@ -65,6 +65,31 @@ function normalizeSourceUrl(sourceUrl: string): string {
   return new URL(sourceUrl).toString();
 }
 
+/**
+ * Whether a response's `Content-Type` is worth downloading fully to check.
+ *
+ * `application/octet-stream` (and no header at all) is what a generic
+ * S3-behind-CloudFront bucket serves when nobody set object metadata on
+ * upload — measured directly against real episode-art buckets on
+ * Anchor-hosted podbean feeds: the SAME host serves the show's own artwork as
+ * `image/jpg` and every per-episode upload as `application/octet-stream`,
+ * both real, valid PNG/JPEG bytes. Trusting the header alone rejected every
+ * one of those episodes without ever looking at what was actually sent.
+ *
+ * A host serving an HTML challenge page under `application/octet-stream` is
+ * still caught downstream: `createImageSizes` runs the downloaded bytes
+ * through `sharp(...).metadata()` right after, which throws on anything that
+ * isn't a real image, and that failure still fails this mirror attempt —
+ * just on the bytes instead of a header a remote host is free to set to
+ * whatever it wants. This function only decides whether it is worth reading
+ * the body at all; a `text/html` or `application/json` response is rejected
+ * here, before download, because the header already answers the question.
+ */
+export function isWorthDownloadingAsImage(contentTypeHeader: string): boolean {
+  const contentType = contentTypeHeader.split(';')[0].trim().toLowerCase();
+  return contentType.startsWith('image/') || contentType === '' || contentType === 'application/octet-stream';
+}
+
 function downloadImage(sourceUrl: string, redirectsRemaining = MAX_REDIRECTS): Promise<{ buffer: Buffer; contentType: string }> {
   return new Promise((resolve, reject) => {
     const security = validateUrlSecurity(sourceUrl);
@@ -109,18 +134,17 @@ function downloadImage(sourceUrl: string, redirectsRemaining = MAX_REDIRECTS): P
         return;
       }
 
-      const contentType = String(res.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();
-      if (!contentType.startsWith('image/')) {
+      const rawContentType = String(res.headers['content-type'] ?? '');
+      const contentType = rawContentType.split(';')[0].trim().toLowerCase();
+      if (!isWorthDownloadingAsImage(rawContentType)) {
         res.resume();
         // Naming what arrived, because the bare message cannot be acted on: a
-        // host serving an HTML challenge page, one sending
-        // `application/octet-stream` for a real JPEG, and one with no
-        // `Content-Type` at all are three different problems with three
-        // different fixes, and they all logged the same sentence. Truncated and
-        // quoted — this is a header from a remote host, so it is untrusted text
-        // going into a log line.
-        const seen = contentType ? `"${contentType.slice(0, 60)}"` : '(no Content-Type header)';
-        reject(new Error(`Image response is not an image: ${seen}`));
+        // host serving an HTML challenge page and one sending
+        // `application/json` are different problems with different fixes, and
+        // an unqualified message would log them identically. Truncated and
+        // quoted — this is a header from a remote host, so it is untrusted
+        // text going into a log line.
+        reject(new Error(`Image response is not an image: "${contentType.slice(0, 60)}"`));
         return;
       }
 
