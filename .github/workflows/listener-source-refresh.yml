@@ -1,0 +1,23 @@
+name: Listener integration source snapshot
+on:
+  push:
+    branches: [feat/listener-experience-140-implementation]
+    paths: [.github/workflows/listener-source-refresh.yml]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: aade87f458fce71e597c255f7fa23263c42b97e3
+          persist-credentials: false
+      - name: Archive tracked source at the pinned main commit
+        run: git archive --format=tar --output=syra-main-source.tar HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: listener-main-source
+          path: syra-main-source.tar
+          retention-days: 1
