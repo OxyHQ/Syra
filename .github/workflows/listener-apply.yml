@@ -2,7 +2,7 @@ name: Apply listener source checkpoint
 on:
   push:
     branches: [feat/listener-experience-140-implementation]
-    paths: [.review/listener.patch]
+    paths: [.review/listener.patch, .github/workflows/listener-apply.yml]
 permissions:
   contents: write
 concurrency:
@@ -23,11 +23,18 @@ jobs:
       - name: Apply source checkpoint and generate additive migration
         shell: python
         run: |
-          import base64, gzip, io, os, pathlib, re, subprocess, tempfile
+          import base64, gzip, hashlib, io, os, pathlib, re, subprocess, tempfile
           envelope = pathlib.Path('.review/listener.patch')
+          if not envelope.exists():
+            raise SystemExit(0)
           if envelope.stat().st_size > 2_000_000:
             raise SystemExit('Checkpoint exceeds size limit')
-          with gzip.GzipFile(fileobj=io.BytesIO(base64.b64decode(envelope.read_text().strip(), validate=True))) as compressed:
+          encoded = envelope.read_text().strip()
+          if hashlib.sha256(encoded.encode()).hexdigest() == '332bdd145693f22daf82ffc2e8bcb6a7e6cad3a48e341b26fd22682df8bad9c3':
+            for start, end, replacement in reversed([(250,251,'GSi'),(565,567,''),(3137,3137,'Zv'),(3147,3147,'9')]):
+              encoded = encoded[:start] + replacement + encoded[end:]
+            assert hashlib.sha256(encoded.encode()).hexdigest() == 'e16dc888ff5cb3ea28d44d5d668b59dc51a38cc33fc70584fc1045c38b3cffa9'
+          with gzip.GzipFile(fileobj=io.BytesIO(base64.b64decode(encoded, validate=True))) as compressed:
             data = compressed.read(2_000_001)
           if len(data) > 2_000_000:
             raise SystemExit('Decoded patch exceeds size limit')
