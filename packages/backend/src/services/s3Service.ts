@@ -308,6 +308,43 @@ export async function deleteS3Prefix(prefix: string): Promise<number> {
 }
 
 /**
+ * Delete an explicit list of keys, batched at S3's own limit (1000 per
+ * `DeleteObjects` call). Unlike `deleteS3Prefix`, the caller already knows
+ * every key — there is nothing to list first, and the keys need not share a
+ * prefix at all (`consolidateDuplicateCatalogImages.ts` calls this with keys
+ * spanning many different entities' image variants in one pass).
+ */
+export async function deleteFromS3Batch(keys: readonly string[]): Promise<number> {
+  const BATCH_SIZE = 1000;
+  let deleted = 0;
+
+  try {
+    for (let start = 0; start < keys.length; start += BATCH_SIZE) {
+      const batch = keys.slice(start, start + BATCH_SIZE);
+      if (batch.length === 0) continue;
+
+      await s3Client.send(new DeleteObjectsCommand({
+        Bucket: S3_BUCKET_NAME,
+        Delete: { Objects: batch.map((Key) => ({ Key })), Quiet: true },
+      }));
+      deleted += batch.length;
+    }
+
+    logger.debug(`[S3Service] Deleted ${deleted} object(s) by explicit key list`);
+    return deleted;
+  } catch (error: unknown) {
+    const e = asAwsError(error);
+    logger.error(`[S3Service] Error deleting explicit key batch:`, {
+      keyCount: keys.length,
+      bucket: S3_BUCKET_NAME,
+      errorCode: e.Code ?? e.name,
+      errorMessage: e.message,
+    }, { error: describeErrorSafely(error) });
+    throw error;
+  }
+}
+
+/**
  * Check if an object exists in S3
  */
 export async function objectExists(key: string): Promise<boolean> {
