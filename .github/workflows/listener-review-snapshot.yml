@@ -8,48 +8,16 @@ permissions:
 jobs:
   snapshot:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: bc06f78fc1de10288560a768e8461cea7a9f8570
           persist-credentials: false
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: '1.3.14'
-      - run: bun install --frozen-lockfile
-      - run: bun patch expo-audio@57.0.2
-      - name: Preserve the current AVPlayerItem when removing a consumed entry
-        shell: python
-        run: |
-          from pathlib import Path
-          path = Path('packages/frontend/node_modules/expo-audio/ios/AudioPlaylist.swift')
-          source = path.read_text()
-          old = '''    } else if index < current {
-                let resumeIndex = current - 1
-                previousTrackIndex = resumeIndex
-                rebuildPlaylist(startingAt: resumeIndex)
-                if wasPlaying {
-                  play(at: currentRate)
-                }
-          '''
-          old = '\n'.join(line[6:] if line.startswith('      ') else line for line in old.splitlines()) + '\n'
-          start = source.index('    } else if index < current {', source.index('  func remove(at index: Int)'))
-          end = source.index('    } else if index < playerItems.count {', start)
-          expected = 'rebuildPlaylist(startingAt: resumeIndex)'
-          assert expected in source[start:end]
-          source = source[:start] + '''    } else if index < current {
-                // A consumed item is no longer in AVQueuePlayer. Removing its
-                // bookkeeping must not rebuild and restart the current item.
-                previousTrackIndex = current - 1
-                playerItems.remove(at: index)
-          '''.replace('          ', '    ') + source[end:]
-          path.write_text(source)
-      - run: bun patch --commit expo-audio@57.0.2
-      - run: bun install --frozen-lockfile
-      - name: Archive the patch and matching lockfile only
-        run: tar -czf syra-audio-patch.tar.gz package.json bun.lock patches
+      - name: Archive tracked source
+        run: git archive --format=tar --output=syra-current-main.tar HEAD
       - uses: actions/upload-artifact@v4
         with:
-          name: listener-review-audio-patch
-          path: syra-audio-patch.tar.gz
+          name: syra-current-main
+          path: syra-current-main.tar
           retention-days: 1
