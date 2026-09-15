@@ -1,23 +1,76 @@
-name: Listener integration source snapshot
+name: Reconcile listener and main migrations
 on:
   push:
     branches: [feat/listener-experience-140-implementation]
     paths: [.github/workflows/listener-source-refresh.yml]
 permissions:
-  contents: read
+  contents: write
 jobs:
-  snapshot:
+  reconcile:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: aade87f458fce71e597c255f7fa23263c42b97e3
-          persist-credentials: false
-      - name: Archive tracked source at the pinned main commit
-        run: git archive --format=tar --output=syra-main-source.tar HEAD
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+      - name: Merge the pinned concurrent index change
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if ! git merge --no-commit --no-ff aade87f458fce71e597c255f7fa23263c42b97e3; then
+            python3 - <<'PY'
+          import subprocess
+          conflicts = set(subprocess.check_output(['git', 'diff', '--name-only', '--diff-filter=U'], text=True).splitlines())
+          expected = {'packages/backend/drizzle/meta/0031_snapshot.json', 'packages/backend/drizzle/meta/_journal.json', 'packages/backend/src/db/schema/catalog.ts'}
+          assert conflicts and conflicts <= expected, f'Unexpected merge conflicts: {conflicts}'
+          PY
+          fi
+          git checkout aade87f458fce71e597c255f7fa23263c42b97e3 -- packages/backend/drizzle/0031_bouncy_victor_mancha.sql packages/backend/drizzle/meta/0031_snapshot.json packages/backend/drizzle/meta/_journal.json packages/backend/src/db/schema/catalog.ts packages/backend/src/db/schema/creators.ts packages/backend/src/db/schema/library.ts packages/backend/src/db/schema/podcasts.ts
+          git rm packages/backend/drizzle/0031_listener_audience.sql packages/backend/drizzle/0032_special_proudstar.sql packages/backend/drizzle/meta/0032_snapshot.json
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('packages/backend/src/db/schema/catalog.ts')
+          source = path.read_text()
+          old = '    statsMonthlyListeners: integer().default(0),\n'
+          assert source.count(old) == 1
+          path.write_text(source.replace(old, old + '    statsMonthlyListenersComputedAt: timestamptz(),\n'))
+          PY
+      - run: bun install --frozen-lockfile
+      - name: Generate one additive migration after main's immutable 0031
+        env:
+          DATABASE_URL: postgres://syra@127.0.0.1:5432/syra_ci
+        run: bun run --cwd packages/backend db:generate --name=listener_experience
+      - name: Declare new-table foreign keys at creation and mark the additive phase
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('packages/backend/drizzle/0032_listener_experience.sql')
+          source = path.read_text()
+          for table in ('playlist_activity', 'playlist_invites'):
+            clause = f'CONSTRAINT "{table}_playlist_id_playlists_id_fk" FOREIGN KEY ("playlist_id") REFERENCES "public"."playlists"("id") ON DELETE cascade ON UPDATE no action'
+            statement = f'ALTER TABLE "{table}" ADD {clause};--> statement-breakpoint\n'
+            assert source.count(statement) == 1
+            source = source.replace(statement, '').replace(f'CREATE TABLE "{table}" (\n', f'CREATE TABLE "{table}" (\n\t{clause},\n')
+          path.write_text('-- oxy:deploy-phase=pre\n-- Additive only: nullable audience timestamp and new, initially empty collaboration tables.\n' + source)
+      - run: bun run --filter '*' typecheck
+      - name: Save the resolved merge without leaving the temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -- packages/backend/drizzle packages/backend/src/db/schema/catalog.ts packages/backend/src/db/schema/creators.ts packages/backend/src/db/schema/library.ts packages/backend/src/db/schema/podcasts.ts
+          git rm .github/workflows/listener-source-refresh.yml
+          test -z "$(git diff --name-only --diff-filter=U)"
+          git diff --cached --check
+          git commit -m 'Preserve main image indexes and regenerate the additive listener migration'
+          git push origin HEAD:feat/listener-experience-140-implementation
+          git archive --format=tar --output=syra-merged-source.tar HEAD
       - uses: actions/upload-artifact@v4
         with:
-          name: listener-main-source
-          path: syra-main-source.tar
+          name: listener-merged-source
+          path: syra-merged-source.tar
           retention-days: 1
