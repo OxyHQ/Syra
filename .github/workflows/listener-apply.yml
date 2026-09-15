@@ -1,0 +1,51 @@
+name: Apply listener source checkpoint
+on:
+  push:
+    branches: [feat/listener-experience-140-implementation]
+    paths: [.review/listener.patch]
+permissions:
+  contents: write
+concurrency:
+  group: listener-source-checkpoint
+  cancel-in-progress: false
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - name: Apply the reviewed patch to source files
+        shell: python
+        run: |
+          import pathlib, subprocess
+          patch = pathlib.Path('.review/listener.patch')
+          if patch.stat().st_size > 2_000_000:
+            raise SystemExit('Patch exceeds checkpoint size limit')
+          stats = subprocess.check_output(['git', 'apply', '--numstat', str(patch)], text=True)
+          for entry in stats.splitlines():
+            path = entry.split('\t', 2)[2]
+            parts = pathlib.PurePosixPath(path).parts
+            allowed = path.startswith(('packages/', 'docs/', 'functions/', 'patches/', 'scripts/')) or path in ('package.json', 'bun.lock')
+            if not allowed or '..' in parts or 'node_modules' in parts or '.git' in parts or pathlib.PurePosixPath(path).name == '.env':
+              raise SystemExit('Disallowed source path: ' + path)
+          subprocess.run(['git', 'apply', '--check', str(patch)], check=True)
+          subprocess.run(['git', 'apply', str(patch)], check=True)
+          patch.unlink()
+          # Include new files named in this patch, not unrelated runner files.
+          paths = [entry.split('\t', 2)[2] for entry in stats.splitlines()]
+          subprocess.run(['git', 'add', '--', *paths, str(patch)], check=True)
+          subprocess.run(['git', 'config', 'user.name', 'github-actions[bot]'], check=True)
+          subprocess.run(['git', 'config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com'], check=True)
+          subprocess.run(['git', 'commit', '-m', 'Checkpoint listener experience implementation'], check=True)
+          subprocess.run(['git', 'push', 'origin', 'HEAD:refs/heads/feat/listener-experience-140-implementation'], check=True)
+      - name: Archive committed source
+        if: always()
+        run: git archive --format=tar --output=source.tar HEAD
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: listener-checkpoint-source
+          path: source.tar
+          retention-days: 1
