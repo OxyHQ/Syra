@@ -1,3 +1,4 @@
+import { tasteMixes } from '../db/schema/listener-tools';
 import { Response, NextFunction } from 'express';
 import { lockPlaylistForEdit, PlaylistAccessError } from '../services/playlists/collaboration';
 import { playlistActivity } from '../db/schema/playlist-sharing';
@@ -379,7 +380,7 @@ export const updatePlaylist = async (req: AuthRequest, res: Response, next: Next
     // the read stands in for it, and `updated_at` correctly does not move.
     const updated =
       Object.keys(updates).length > 0
-        ? await applyPlaylistUpdate(id, updates)
+        ? await applyPlaylistUpdate(id, userId, updates)
         : await findPlaylistById(id);
 
     if (updated === 'unknown-cover-art') {
@@ -399,15 +400,19 @@ export const updatePlaylist = async (req: AuthRequest, res: Response, next: Next
 /** Apply the update, translating the one foreign key a client can break. */
 async function applyPlaylistUpdate(
   id: string,
+  userId: string,
   updates: Partial<typeof playlists.$inferInsert>
 ): Promise<PlaylistRow | undefined | 'unknown-cover-art'> {
   try {
-    const [updated] = await getDb()
-      .update(playlists)
-      .set(updates)
-      .where(eq(playlists.id, id))
-      .returning();
-    return updated;
+    return await getDb().transaction(async (tx) => {
+      await lockPlaylistForEdit(tx, id, userId);
+      if (updates.visibility && updates.visibility !== 'private') {
+        const [mix] = await tx.select({ id: tasteMixes.id }).from(tasteMixes).where(eq(tasteMixes.playlistId, id)).limit(1);
+        if (mix) throw new PlaylistAccessError(400, 'A consent-based taste mix must remain private');
+      }
+      const [updated] = await tx.update(playlists).set(updates).where(eq(playlists.id, id)).returning();
+      return updated;
+    });
   } catch (error) {
     if (isForeignKeyViolation(error, COVER_ART_FOREIGN_KEY)) return 'unknown-cover-art';
     throw error;

@@ -1,3 +1,4 @@
+import { tasteMixes } from '../../db/schema/listener-tools';
 import { createHash, randomBytes } from 'node:crypto';
 import { and, count, eq, gt, lte } from 'drizzle-orm';
 import type { DbTransaction } from '../../db/postgres';
@@ -28,6 +29,7 @@ export async function lockPlaylistForEdit(tx: DbTransaction, playlistId: string,
 export async function createPlaylistInvite(playlistId: string, userId: string, role: 'editor' | 'viewer') {
   return getDb().transaction(async (tx) => {
     await lockPlaylistForEdit(tx, playlistId, userId, true);
+    await assertNotTasteMix(tx, playlistId);
     const now = new Date();
     await tx.delete(playlistInvites).where(and(eq(playlistInvites.playlistId, playlistId), lte(playlistInvites.expiresAt, now)));
     const [total] = await tx.select({ value: count() }).from(playlistInvites).where(eq(playlistInvites.playlistId, playlistId));
@@ -74,6 +76,7 @@ export async function revokePlaylistInvites(playlistId: string, userId: string) 
 export async function changePlaylistMember(playlistId: string, userId: string, targetId: string, role: 'editor' | 'viewer' | null) {
   await getDb().transaction(async (tx) => {
     const playlist = await lockPlaylistForEdit(tx, playlistId, userId, true);
+    await assertNotTasteMix(tx, playlistId);
     if (targetId === playlist.ownerOxyUserId) throw new PlaylistAccessError(400, 'The owner cannot be changed here');
     const predicate = and(eq(playlistCollaborators.playlistId, playlistId), eq(playlistCollaborators.oxyUserId, targetId));
     const changed = role === null
@@ -94,4 +97,10 @@ export async function readPlaylistActivity(playlistId: string, userId: string) {
   const rows = await getDb().select({ id: playlistActivity.id, actorOxyUserId: playlistActivity.actorOxyUserId, action: playlistActivity.action, targetOxyUserId: playlistActivity.targetOxyUserId, createdAt: playlistActivity.createdAt })
     .from(playlistActivity).where(eq(playlistActivity.playlistId, playlistId)).orderBy(descNullsLast(playlistActivity.createdAt), descNullsLast(playlistActivity.id)).limit(50);
   return { items: rows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() })) };
+}
+
+/** A two-person consent cannot be expanded through ordinary playlist sharing. */
+async function assertNotTasteMix(tx: DbTransaction, playlistId: string) {
+  const [mix] = await tx.select({ id: tasteMixes.id }).from(tasteMixes).where(eq(tasteMixes.playlistId, playlistId)).limit(1);
+  if (mix) throw new PlaylistAccessError(400, 'Manage consent for this private mix in Taste match');
 }

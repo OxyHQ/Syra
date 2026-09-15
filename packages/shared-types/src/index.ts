@@ -23,3 +23,5 @@ export * from './connect';
 export * from './lyrics';
 
 export * from './playlist-sharing';
+
+export * from './listener-tools';
