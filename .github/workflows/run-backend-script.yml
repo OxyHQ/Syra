@@ -19,12 +19,15 @@ on:
         options:
           - backfill-episode-images
           - backfill-fingerprints
+          - consolidate-duplicate-images
       args:
         description: >-
           Optional flags, space-separated. Only --dry-run, --limit <n> and
           --concurrency <n> are accepted; anything else is refused.
           --concurrency only affects backfill-episode-images (podcasts
-          processed at once — default 4; backfill-fingerprints ignores it).
+          processed at once — default 4; the other scripts ignore it).
+          --limit bounds duplicate-hash GROUPS for consolidate-duplicate-images,
+          not rows.
         type: string
         required: false
         default: ''
@@ -94,6 +97,7 @@ jobs:
           case "$SCRIPT" in
             backfill-episode-images) path="packages/backend/dist/src/scripts/backfillEpisodeImages.js" ;;
             backfill-fingerprints) path="packages/backend/dist/src/scripts/backfillTrackFingerprints.js" ;;
+            consolidate-duplicate-images) path="packages/backend/dist/src/scripts/consolidateDuplicateCatalogImages.js" ;;
             *) echo "::error::unknown script: $SCRIPT"; exit 1 ;;
           esac
           echo "path=$path" >>"$GITHUB_OUTPUT"
