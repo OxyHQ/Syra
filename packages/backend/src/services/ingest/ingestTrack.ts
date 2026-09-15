@@ -1,3 +1,4 @@
+import { notifyFollowersOfNewRelease } from '../listener/release-notifications';
 /**
  * Ingest job orchestrator.
  *
@@ -346,6 +347,14 @@ export async function ingestTrack(
         );
       }
     });
+
+    // Notification failure cannot roll a ready recording back to failed. Oxy
+    // owns delivery, preferences and duplicate/coalescing suppression.
+    try {
+      await notifyFollowersOfNewRelease(trackId);
+    } catch (error) {
+      logger.error('[ingest] release notification failed', { trackId, error: describeErrorSafely(error) });
+    }
 
     // Acoustic index for the catalogue. Best-effort, like the preview below: a
     // track that plays is worth more than one that is perfectly indexed, and

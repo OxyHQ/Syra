@@ -24,7 +24,7 @@ export const tasteMixes = pgTable('taste_mixes', {
   hostUsername: text().notNull(),
   guestOxyUserId: text(),
   tokenHash: text().notNull(),
-  playlistId: text().references(() => playlists.id, { onDelete: 'set null' }),
+  playlistId: text().references(() => playlists.id, { onDelete: 'cascade' }),
   expiresAt: timestamptz().notNull(),
   createdAt: createdAt(),
 }, (table) => [

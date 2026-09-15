@@ -16,7 +16,7 @@ export async function readCuratedPlaylists(artistId: string) {
   // from the shelf immediately, without depending on a later cleanup job.
   const rows = await findPlaylistsWithPlayableTracks(and(
     eq(playlists.visibility, 'public'), inArray(playlists.id, selections.map((entry) => entry.playlistId)),
-  ), { limit: 10 });
+  ), { limit: 10, orderBy: [asc(playlists.id)] });
   const byId = new Map((await toPlaylistDtos(rows)).map((playlist) => [playlist.id, playlist]));
   return { items: selections.flatMap((entry) => {
     const playlist = byId.get(entry.playlistId);

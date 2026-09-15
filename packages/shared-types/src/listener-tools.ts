@@ -43,7 +43,7 @@ export const downloadGrantSchema = z.object({
   downloadExpiresAt: z.string(),
   leaseExpiresAt: z.string(),
   byteLength: z.number().int().positive().max(100 * 1024 * 1024),
-  extension: z.enum(['mp3', 'm4a', 'aac', 'ogg', 'wav', 'flac', 'opus', 'webm']),
+  extension: z.enum(['mp3', 'm4a', 'ogg', 'wav', 'flac']),
 });
 export type PlaylistImportEntry = z.infer<typeof playlistImportEntrySchema>;
 export type DownloadGrant = z.infer<typeof downloadGrantSchema>;

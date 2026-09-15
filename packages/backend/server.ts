@@ -47,6 +47,7 @@ import recommendationsRoutes from './src/routes/recommendations.routes';
 import podcastsRoutes from './src/routes/podcasts.routes';
 import episodesRoutes from './src/routes/episodes.routes';
 import entityProfileRoutes from './src/routes/entityProfile.routes';
+import listenerToolsRoutes from './src/routes/listenerTools.routes';
 import roomsRoutes from './src/routes/rooms.routes';
 import housesRoutes from './src/routes/houses.routes';
 import seriesRoutes from './src/routes/series.routes';
@@ -348,6 +349,7 @@ publicApiRouter.use('/rooms', createOptionalOxyAuth(oxy), roomsRoutes);
 publicApiRouter.use('/podcasts', createOptionalOxyAuth(oxy), podcastsRoutes);
 publicApiRouter.use('/episodes', createOptionalOxyAuth(oxy), episodesRoutes);
 publicApiRouter.use('/p', createOptionalOxyAuth(oxy), entityProfileRoutes);
+publicApiRouter.use('/listener', createOptionalOxyAuth(oxy), listenerToolsRoutes);
 
 const authenticatedApiRouter = express.Router();
 authenticatedApiRouter.use('/profile', profileSettingsRoutes);

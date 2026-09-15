@@ -92,14 +92,4 @@ export async function claimSuppression(
   return claimed.length > 0;
 }
 
-/**
- * `notification_preferences` has no writer, in this module or anywhere else.
- *
- * `isEventDisabled` above is its only production reader, and nothing in the repo
- * creates or updates a row — no route exposes the event taxonomy, so every
- * account currently has every Syra event enabled by having no row at all. That
- * is the opt-OUT design working as intended rather than a gap in this port, but
- * it does mean the table is read-only until someone builds the settings screen.
- * A `setDisabledEvents` written here now would have no caller but the test that
- * covers it, so the suite seeds rows with a plain insert instead.
- */
+// The listener release settings writer lives in services/listener/release-notifications.ts.

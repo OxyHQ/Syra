@@ -232,6 +232,13 @@
       "when": 1789464871786,
       "tag": "0032_listener_experience",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1789472849256,
+      "tag": "0033_listener_tools",
+      "breakpoints": true
     }
   ]
 }

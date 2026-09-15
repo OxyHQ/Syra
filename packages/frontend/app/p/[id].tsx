@@ -13,7 +13,9 @@ import { useTranslation } from 'react-i18next';
 import { useTheme, useAmbientTheme } from '@oxy.so/bloom/theme';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { toast } from '@oxy.so/bloom/toast';
-import { Track } from '@syra/shared-types';
+import { Track, type Playlist } from '@syra/shared-types';
+import { CuratedPlaylists } from '@/components/artist/CuratedPlaylists';
+import { listenerTools } from '@/services/listener-tools-service';
 import { entityService } from '@/services/entityService';
 import { MonthlyListeners } from '@/components/artist/MonthlyListeners';
 import { shareMedia } from '@/utils/share-media';
@@ -105,6 +107,7 @@ const EntityProfileScreen: React.FC = () => {
     ? (entity.kind === 'artist' ? entity.id : entity.linkedArtistId)
     : undefined;
 
+  const curatedQuery = useQuery({ queryKey: ['artist-curated', artistId], queryFn: () => listenerTools.curated(artistId ?? ''), enabled: !!artistId });
   const relatedArtistsQuery = useRelatedArtists(artistId);
   const relatedArtists = relatedArtistsQuery.data?.artists ?? [];
 
@@ -261,6 +264,10 @@ const EntityProfileScreen: React.FC = () => {
       asOf={entityQuery.dataUpdatedAt}
       displayName={displayName}
       artistId={artistId}
+      curatedPlaylists={curatedQuery.data ?? []}
+      curationPending={!!artistId && curatedQuery.isPending}
+      curationError={curatedQuery.isError}
+      onRetryCuration={() => { void curatedQuery.refetch(); }}
       relatedArtists={relatedArtists}
       relatedArtistsPending={relatedArtistsQuery.isPending}
       heroImage={heroImage}
@@ -300,6 +307,10 @@ interface EntityProfileViewProps {
   asOf: number;
   displayName: string;
   artistId: string | undefined;
+  curatedPlaylists: Playlist[];
+  curationPending: boolean;
+  curationError: boolean;
+  onRetryCuration: () => void;
   relatedArtists: RelatedArtist[];
   relatedArtistsPending: boolean;
   heroImage: string | undefined;
@@ -342,6 +353,10 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
   asOf,
   displayName,
   artistId,
+  curatedPlaylists,
+  curationPending,
+  curationError,
+  onRetryCuration,
   relatedArtists,
   relatedArtistsPending,
   heroImage,
@@ -852,6 +867,8 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
               </>
             )}
 
+            <CuratedPlaylists items={curatedPlaylists} isError={curationError} onRetry={onRetryCuration} />
+
             {/* Fans also listen to */}
             {relatedArtistsPending ? null : relatedArtists.length > 0 && (
               <>
@@ -889,7 +906,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
               podcasts.length === 0 &&
               episodes.length === 0 &&
               creditedOn.length === 0 &&
-              playlists.length === 0 && (
+              playlists.length === 0 && curatedPlaylists.length === 0 && !curationPending && (
               <View style={styles.emptyState}>
                 <Text className="text-muted-foreground" style={styles.emptyStateText}>
                   {/* A contributed stub is sparse BY DESIGN for a while: the
