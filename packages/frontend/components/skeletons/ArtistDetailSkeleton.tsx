@@ -45,6 +45,7 @@ export const ArtistDetailSkeleton: React.FC<ArtistDetailSkeletonProps> =
         </View>
 
         <LinearGradient colors={contentGradient} locations={[0, 0.35, 1]} style={styles.contentSection}>
+          <View className="px-6 pt-4 pb-2"><Skeleton.Box width={190} height={22} borderRadius={4} /></View>
           <View style={styles.infoContainer}>
             <View style={styles.infoHeader}>
               <Skeleton.Circle size={64} />

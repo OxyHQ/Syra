@@ -25,6 +25,7 @@ import {
 } from '@syra/shared-types';
 import { toPlayableItem, type PlayableInput } from '@/utils/playableItem';
 import { createScopedLogger } from '@/utils/logger';
+import { listenedBetween, type ListeningSample } from '@/utils/listening-time';
 import { useQueueStore } from './queueStore';
 import { musicService } from '@/services/musicService';
 import { queueService } from '@/services/queueService';
@@ -227,7 +228,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
    * told how much of THIS track was actually heard, which is what lets the
    * backend distinguish a real play from a skip and learn the user's taste.
    */
-  let activePlay: { trackId: string; source: ListeningSource; durationSec: number } | null = null;
+  let activePlay: { trackId: string; source: ListeningSource; durationSec: number; listenedSec: number; sample: ListeningSample | null } | null = null;
 
   /**
    * Position within the active radio station. The station is stateful
@@ -356,7 +357,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     if (!play) return;
     activePlay = null;
 
-    const listenedSec = finiteSeconds(listenedSecOverride ?? get().currentTime);
+    // The override marks a natural finish, not permission to count a seek as listening.
+    void listenedSecOverride;
+    const listenedSec = play.listenedSec;
     const durationSec = play.durationSec || finiteSeconds(get().duration);
     const completion = durationSec > 0 ? Math.min(1, listenedSec / durationSec) : undefined;
 
@@ -410,7 +413,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
    */
   const setupPlayerListeners = (player: PlayerEngine) => {
     player.addListener('playbackStatusUpdate', (status) => {
-      if (!status.isLoaded) return;
+      if (!status.isLoaded || (get().player && get().player !== player)) return;
+      if (activePlay) {
+        const sample = { position: status.currentTime, at: Date.now(), playing: status.playing };
+        activePlay.listenedSec += listenedBetween(activePlay.sample, sample);
+        activePlay.sample = sample;
+      }
 
       if (status.didJustFinish) {
         // Use the store's known duration as the reliable reference — stream
@@ -842,7 +850,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     // Signal-less start ping: populates "Jump back in" immediately. The
     // engagement ping (with listenedSec/completion) is sent on flush.
     submitPlaySignal(item.id, { source });
-    activePlay = { trackId: item.id, source, durationSec: finiteSeconds(item.duration) };
+    activePlay = { trackId: item.id, source, durationSec: finiteSeconds(item.duration), listenedSec: 0, sample: { position: 0, at: Date.now(), playing: true } };
   };
 
   /**
@@ -1428,7 +1436,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     seek: async (position: number) => {
       const { player } = get();
       if (player) {
+        if (activePlay) activePlay.sample = null;
         await player.seekTo(position);
+        if (activePlay) activePlay.sample = null;
         set({ currentTime: position });
         if (get().currentEpisode) {
           saveEpisodeProgress();

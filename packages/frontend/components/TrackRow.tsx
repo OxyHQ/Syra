@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { TrackActionsSheet } from '@/components/playlist/TrackActionsSheet';
 import { StyleSheet, View, Text, Pressable, Platform } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@oxy.so/bloom/theme';
@@ -37,6 +38,7 @@ interface TrackRowProps {
    * question — what IS this row — rather than being an action.
    */
   badge?: string;
+  showPlayCount?: boolean;
 }
 
 /**
@@ -53,8 +55,10 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
   showNumber = true,
   onMorePress,
   badge,
+  showPlayCount = false,
 }) => {
   const theme = useTheme();
+  const [showActions, setShowActions] = useState(false);
   const { isTrackLiked } = useLibrary();
   const toggleLike = useToggleLikeTrack();
   const isLiked = isTrackLiked(track.id);
@@ -88,6 +92,7 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
   };
 
   return (
+    <>
     <Pressable
       className={isCurrentTrack ? 'bg-surface/25' : undefined}
       style={[
@@ -131,6 +136,7 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
           >
             {track.title}
           </Text>
+          {showPlayCount ? <Text className="text-muted-foreground text-sm">{new Intl.NumberFormat().format(track.playCount ?? 0)}</Text> : null}
           <View style={styles.trackArtistRow}>
             {track.isExplicit && (
               <View className="bg-popover" style={styles.explicitBadge}>
@@ -192,11 +198,12 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
         <Text className="text-muted-foreground" style={styles.trackDuration}>
           {formatDuration(track.duration)}
         </Text>
-        {onMorePress && (
+        {(
           <Pressable
             onPress={(e) => {
               e?.stopPropagation?.();
-              onMorePress();
+              if (onMorePress) onMorePress();
+              else setShowActions(true);
             }}
             style={styles.moreButton}
             accessibilityRole="button"
@@ -207,6 +214,8 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
         )}
       </View>
     </Pressable>
+    {showActions ? <TrackActionsSheet visible onClose={() => setShowActions(false)} track={track} /> : null}
+    </>
   );
 };
 

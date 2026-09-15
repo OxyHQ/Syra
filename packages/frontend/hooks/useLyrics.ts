@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { Lyrics } from '@syra/shared-types';
+import { lyricsSchema, type Lyrics } from '@syra/shared-types';
 import { api, isNotFoundError } from '@/utils/api';
 
 /** Lyrics are fetched once and treated as immutable — 24h stale time. */
@@ -18,13 +18,14 @@ export function useLyrics(trackId?: string): {
   lyrics: Lyrics | null;
   isLoading: boolean;
   isError: boolean;
+  retry: () => void;
 } {
-  const { data, isLoading, isError } = useQuery<Lyrics | null>({
+  const { data, isLoading, isError, refetch } = useQuery<Lyrics | null>({
     queryKey: ['lyrics', trackId],
     queryFn: async () => {
       try {
         const res = await api.get<Lyrics>(`/lyrics/${trackId}`);
-        return res.data;
+        return lyricsSchema.parse(res.data);
       } catch (err) {
         if (isNotFoundError(err)) return null;
         throw err;
@@ -38,5 +39,6 @@ export function useLyrics(trackId?: string): {
     lyrics: data ?? null,
     isLoading,
     isError,
+    retry: () => { void refetch(); },
   };
 }

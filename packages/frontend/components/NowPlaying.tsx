@@ -21,6 +21,8 @@ import { useLibrary, useToggleLikeTrack } from '@/hooks/useLibrary';
 import { EpisodeNowPlaying } from '@/components/podcast/EpisodeNowPlaying';
 import { CastButton } from '@/components/CastButton';
 import { TrackArtistLine } from '@/components/TrackArtistLine';
+import { TrackCredits } from '@/components/TrackCredits';
+import { TrackActionsSheet } from '@/components/playlist/TrackActionsSheet';
 
 /**
  * Now Playing Sidebar Component
@@ -50,6 +52,7 @@ export const NowPlaying: React.FC = () => {
   const [album, setAlbum] = useState<Album | null>(null);
   const [artist, setArtist] = useState<Artist | null>(null);
   const [lyricsExpanded, setLyricsExpanded] = useState(false);
+  const [showTrackActions, setShowTrackActions] = useState(false);
   const nextTracks = queue?.tracks.slice(Math.max((queue.current ?? -1) + 1, 0)) ?? [];
 
   // Fetch album and artist details if track exists
@@ -117,6 +120,7 @@ export const NowPlaying: React.FC = () => {
           {/* Header with buttons */}
           <View style={styles.header}>
             <View style={styles.headerButtons}>
+              {isCatalogTrack ? <Pressable onPress={() => setShowTrackActions(true)} style={styles.headerButton} accessibilityRole="button" accessibilityLabel={t('listener.actions')}><Ionicons name="ellipsis-horizontal" size={20} color="#fff" /></Pressable> : null}
               {/* Wrapped so the cast glyph gets the same translucent circle as
                   its sibling header buttons (readability over the artwork). */}
               <View style={styles.headerButton}>
@@ -272,54 +276,8 @@ export const NowPlaying: React.FC = () => {
                 </View>
                 )}
 
-                {/* Credits Card */}
-                {album && (
-                  <View className="bg-popover" style={styles.card}>
-                    <View style={styles.cardHeader}>
-                      <Text className="text-foreground" style={styles.cardTitle}>{t('nowPlaying.credits')}</Text>
-                    </View>
-                    <View style={styles.creditsContent}>
-                      <View style={styles.creditRow}>
-                        <Text className="text-muted-foreground" style={styles.creditLabel}>{t('common.album')}</Text>
-                        <Pressable
-                          onPress={() => router.push(`/album/${album.id}`)}
-                          style={styles.creditValuePressable}
-                        >
-                          <Text className="text-foreground" style={styles.creditValue} numberOfLines={1}>
-                            {album.title}
-                          </Text>
-                        </Pressable>
-                      </View>
-                      <View style={styles.creditRow}>
-                        <Text className="text-muted-foreground" style={styles.creditLabel}>{t('common.artist')}</Text>
-                        <Pressable
-                          onPress={() => router.push(`/p/${album.artistId}`)}
-                          style={styles.creditValuePressable}
-                        >
-                          <Text className="text-foreground" style={styles.creditValue} numberOfLines={1}>
-                            {album.artistName}
-                          </Text>
-                        </Pressable>
-                      </View>
-                      {album.releaseDate && (
-                        <View style={styles.creditRow}>
-                          <Text className="text-muted-foreground" style={styles.creditLabel}>{t('nowPlaying.released')}</Text>
-                          <Text className="text-foreground" style={styles.creditValue}>
-                            {new Date(album.releaseDate).getFullYear()}
-                          </Text>
-                        </View>
-                      )}
-                      {album.label && (
-                        <View style={styles.creditRow}>
-                          <Text className="text-muted-foreground" style={styles.creditLabel}>{t('nowPlaying.label')}</Text>
-                          <Text className="text-foreground" style={styles.creditValue} numberOfLines={1}>
-                            {album.label}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                )}
+                {isCatalogTrack && currentTrack ? <View className="bg-popover" style={styles.card}><TrackCredits track={currentTrack} /></View> : null}
+                {isCatalogTrack && currentTrack && showTrackActions ? <TrackActionsSheet visible onClose={() => setShowTrackActions(false)} track={currentTrack} /> : null}
 
                 {/* Next in Queue Card */}
                 <View className="bg-popover" style={styles.card}>
