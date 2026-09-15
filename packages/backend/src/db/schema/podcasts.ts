@@ -441,6 +441,23 @@ export const podcasts = pgTable(
      */
     index('podcasts_inactive_idx').on(t.id).where(sql`${t.status} <> 'active'`),
     index('podcasts_search_gin').using('gin', t.searchVector),
+    /**
+     * These seven cover the `image_assets.id` FK columns. Postgres never
+     * indexes a foreign key column on its own, but `ON DELETE SET NULL` still
+     * has to find every referencing row when the referenced `image_assets`
+     * row is deleted — unindexed, that is a sequential scan of this table PER
+     * DELETED ROW. `consolidateDuplicateCatalogImages.ts` deleting a single
+     * batch of duplicate images against an unindexed `episodes` (see that
+     * table below) blocked live episode inserts for 30+ minutes before this
+     * was caught; these indexes are that fix.
+     */
+    index('podcasts_image_id_idx').on(t.imageId),
+    index('podcasts_image_sizes_small_id_idx').on(t.imageSizesSmallId),
+    index('podcasts_image_sizes_medium_id_idx').on(t.imageSizesMediumId),
+    index('podcasts_image_sizes_large_id_idx').on(t.imageSizesLargeId),
+    index('podcasts_image_sizes_xlarge_id_idx').on(t.imageSizesXlargeId),
+    index('podcasts_image_sizes_xxlarge_id_idx').on(t.imageSizesXxlargeId),
+    index('podcasts_image_sizes_original_id_idx').on(t.imageSizesOriginalId),
   ]
 );
 
@@ -716,6 +733,16 @@ export const episodes = pgTable(
       .on(t.popularity.desc(), t.pubDate.desc())
       .where(sql`${t.status} = 'ready'`),
     index('episodes_search_gin').using('gin', t.searchVector),
+    // See `podcasts_image_id_idx`'s comment — same seven `image_assets.id` FK
+    // columns, and the table where the missing index actually bit: at
+    // ~410k rows, `episodes` is the one table these seven can't be skipped on.
+    index('episodes_image_id_idx').on(t.imageId),
+    index('episodes_image_sizes_small_id_idx').on(t.imageSizesSmallId),
+    index('episodes_image_sizes_medium_id_idx').on(t.imageSizesMediumId),
+    index('episodes_image_sizes_large_id_idx').on(t.imageSizesLargeId),
+    index('episodes_image_sizes_xlarge_id_idx').on(t.imageSizesXlargeId),
+    index('episodes_image_sizes_xxlarge_id_idx').on(t.imageSizesXxlargeId),
+    index('episodes_image_sizes_original_id_idx').on(t.imageSizesOriginalId),
   ]
 );
 

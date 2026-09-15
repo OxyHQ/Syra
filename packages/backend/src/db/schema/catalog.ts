@@ -518,6 +518,23 @@ export const catalogEntities = pgTable(
     index('catalog_entities_verified_popularity_idx').on(t.verified, t.popularity.desc()),
     index('catalog_entities_linked_artist_id_idx').on(t.linkedArtistId),
     index('catalog_entities_search_gin').using('gin', t.searchVector),
+    /**
+     * These seven cover the `image_assets.id` FK columns. Postgres never
+     * indexes a foreign key column on its own, but `ON DELETE SET NULL` still
+     * has to find every referencing row when the referenced `image_assets`
+     * row is deleted — unindexed, that is a sequential scan of this table PER
+     * DELETED ROW. `consolidateDuplicateCatalogImages.ts` deleting a single
+     * batch of duplicate images against an unindexed `episodes` blocked live
+     * episode inserts for 30+ minutes before this was caught; every table
+     * `image_assets.id` can be referenced from gets the same indexes.
+     */
+    index('catalog_entities_image_id_idx').on(t.imageId),
+    index('catalog_entities_image_sizes_small_id_idx').on(t.imageSizesSmallId),
+    index('catalog_entities_image_sizes_medium_id_idx').on(t.imageSizesMediumId),
+    index('catalog_entities_image_sizes_large_id_idx').on(t.imageSizesLargeId),
+    index('catalog_entities_image_sizes_xlarge_id_idx').on(t.imageSizesXlargeId),
+    index('catalog_entities_image_sizes_xxlarge_id_idx').on(t.imageSizesXxlargeId),
+    index('catalog_entities_image_sizes_original_id_idx').on(t.imageSizesOriginalId),
   ]
 );
 
@@ -595,6 +612,14 @@ export const albums = pgTable(
     index('albums_release_date_idx').on(t.releaseDate.desc()),
     index('albums_external_isrc_idx').on(t.externalIsrc),
     index('albums_search_gin').using('gin', t.searchVector),
+    // See `catalog_entities_image_id_idx`'s comment.
+    index('albums_cover_art_id_idx').on(t.coverArtId),
+    index('albums_cover_art_sizes_small_id_idx').on(t.coverArtSizesSmallId),
+    index('albums_cover_art_sizes_medium_id_idx').on(t.coverArtSizesMediumId),
+    index('albums_cover_art_sizes_large_id_idx').on(t.coverArtSizesLargeId),
+    index('albums_cover_art_sizes_xlarge_id_idx').on(t.coverArtSizesXlargeId),
+    index('albums_cover_art_sizes_xxlarge_id_idx').on(t.coverArtSizesXxlargeId),
+    index('albums_cover_art_sizes_original_id_idx').on(t.coverArtSizesOriginalId),
   ]
 );
 
@@ -840,6 +865,14 @@ export const tracks = pgTable(
     index('tracks_sha256_idx').on(t.sha256),
     index('tracks_tags_gin').using('gin', t.tags),
     index('tracks_search_gin').using('gin', t.searchVector),
+    // See `catalog_entities_image_id_idx`'s comment.
+    index('tracks_cover_art_id_idx').on(t.coverArtId),
+    index('tracks_cover_art_sizes_small_id_idx').on(t.coverArtSizesSmallId),
+    index('tracks_cover_art_sizes_medium_id_idx').on(t.coverArtSizesMediumId),
+    index('tracks_cover_art_sizes_large_id_idx').on(t.coverArtSizesLargeId),
+    index('tracks_cover_art_sizes_xlarge_id_idx').on(t.coverArtSizesXlargeId),
+    index('tracks_cover_art_sizes_xxlarge_id_idx').on(t.coverArtSizesXxlargeId),
+    index('tracks_cover_art_sizes_original_id_idx').on(t.coverArtSizesOriginalId),
   ]
 );
 
