@@ -1,0 +1,21 @@
+name: Listener source export
+on:
+  push:
+    branches: [feat/listener-experience-140-implementation]
+    paths: [.github/workflows/listener-source-export.yml]
+permissions:
+  contents: read
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - run: git archive --format=tar --output=source.tar HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: listener-current-source
+          path: source.tar
+          retention-days: 1
