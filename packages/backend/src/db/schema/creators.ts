@@ -502,6 +502,17 @@ export const userUploads = pgTable(
      * reasoning.
      */
     index('user_uploads_matched_track_id_idx').on(t.matchedTrackId),
+    // See `catalog_entities_image_id_idx`'s comment (`catalog.ts`) for why
+    // every image_assets.id FK column gets one, `coverArtSizes*` dead-column
+    // status above notwithstanding — the FK's ON DELETE SET NULL scan cost
+    // does not care whether a column is ever actually populated.
+    index('user_uploads_cover_art_id_idx').on(t.coverArtId),
+    index('user_uploads_cover_art_sizes_small_id_idx').on(t.coverArtSizesSmallId),
+    index('user_uploads_cover_art_sizes_medium_id_idx').on(t.coverArtSizesMediumId),
+    index('user_uploads_cover_art_sizes_large_id_idx').on(t.coverArtSizesLargeId),
+    index('user_uploads_cover_art_sizes_xlarge_id_idx').on(t.coverArtSizesXlargeId),
+    index('user_uploads_cover_art_sizes_xxlarge_id_idx').on(t.coverArtSizesXxlargeId),
+    index('user_uploads_cover_art_sizes_original_id_idx').on(t.coverArtSizesOriginalId),
     // Mongo's standalone `{ albumKey: 1 }` is dropped in writing: every
     // reader of it is scoped to one owner first, and the compound index
     // above leads with `owner_oxy_user_id`.

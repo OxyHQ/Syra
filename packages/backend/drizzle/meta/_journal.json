@@ -218,6 +218,13 @@
       "when": 1789452234878,
       "tag": "0030_flawless_squadron_sinister",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1789459340256,
+      "tag": "0031_bouncy_victor_mancha",
+      "breakpoints": true
     }
   ]
 }
