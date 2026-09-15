@@ -25,11 +25,21 @@
  *   bun run backfill:episode-images                  # against DATABASE_URL
  *   bun run backfill:episode-images -- --dry-run     # report what it would do
  *   bun run backfill:episode-images -- --limit 50    # a bounded first pass (shows)
+ *   bun run backfill:episode-images -- --concurrency 8
  *
  * It re-fetches one feed per affected show and re-hosts one image per affected
  * episode, so it is long-running on a large catalogue and WILL be interrupted.
  * That is expected: re-running finds exactly the episodes still missing
  * `imageId` — the table is the checkpoint, same as `backfillTrackFingerprints`.
+ *
+ * Podcasts are processed through a bounded worker pool (`--concurrency`,
+ * default below), the same shape and citizenship rationale as
+ * `reimportPodcastFeeds.ts`'s `DEFAULT_CONCURRENCY`: each podcast is an
+ * outbound fetch to someone else's server, and different shows are
+ * overwhelmingly different hosts, so this is the safe dimension to
+ * parallelize. Episodes WITHIN one show stay sequential — they hit the same
+ * host, and that show's the dimension `reimportPodcastFeeds.ts` warns against
+ * hammering.
  */
 
 import { and, asc, eq, gt, isNull } from 'drizzle-orm';
@@ -47,6 +57,9 @@ dotenv.config();
 
 /** Keyset page size over `podcasts` — cheap per-row work, unlike the fingerprints backfill. */
 const BATCH_SIZE = 50;
+
+/** Same default and rationale as `reimportPodcastFeeds.ts`'s `DEFAULT_CONCURRENCY`. */
+const DEFAULT_CONCURRENCY = 4;
 
 export interface BackfillStats {
   podcastsScanned: number;
@@ -68,6 +81,8 @@ export interface BackfillOptions {
   dryRun?: boolean;
   /** Bounds the number of PODCASTS visited, not episodes. */
   limit?: number;
+  /** Podcasts processed at once. Defaults to `DEFAULT_CONCURRENCY`. */
+  concurrency?: number;
   /** Injectable SSRF-safe fetch (defaults to the real `safeFetch`). For tests. */
   fetch?: SafeFetchFn;
 }
@@ -211,6 +226,7 @@ export async function backfillEpisodeImages(options: BackfillOptions = {}): Prom
     episodesGoneFromFeed: 0,
     episodesFailed: 0,
   };
+  const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
   let lastId: string | undefined;
 
   for (;;) {
@@ -230,14 +246,29 @@ export async function backfillEpisodeImages(options: BackfillOptions = {}): Prom
       .limit(BATCH_SIZE);
 
     if (batch.length === 0) break;
-
-    for (const podcast of batch) {
-      if (options.limit !== undefined && stats.podcastsScanned >= options.limit) break;
-      stats.podcastsScanned += 1;
-      await backfillOnePodcast(podcast, stats, options);
-    }
-
     lastId = batch[batch.length - 1]?.id;
+
+    // Respect `--limit` by trimming the QUEUE, not by racing workers against the
+    // counter mid-batch — `reimportPodcastFeeds.ts` pre-slices its targets for
+    // the same reason: a hard stop instead of several workers overshooting it
+    // by a few podcasts each while they notice.
+    const remaining = options.limit === undefined ? batch.length : options.limit - stats.podcastsScanned;
+    const queue = batch.slice(0, Math.max(remaining, 0));
+
+    // A hand-rolled pool, not chunked `Promise.all`: chunking waits for the
+    // slowest podcast in every batch of `concurrency`, and one show with a
+    // thousand-episode backlog would stall the other workers behind it for
+    // minutes — the exact rationale `reimportPodcastFeeds.ts` documents for
+    // its own feed-import pool.
+    async function worker(): Promise<void> {
+      for (;;) {
+        const podcast = queue.shift();
+        if (podcast === undefined) return;
+        stats.podcastsScanned += 1;
+        await backfillOnePodcast(podcast, stats, options);
+      }
+    }
+    await Promise.all(Array.from({ length: concurrency }, () => worker()));
   }
 
   return stats;
@@ -260,13 +291,25 @@ async function main(): Promise<void> {
     }
   }
 
+  const concurrencyFlag = process.argv.indexOf('--concurrency');
+  let concurrency: number | undefined;
+  if (concurrencyFlag !== -1) {
+    concurrency = Number(process.argv[concurrencyFlag + 1]);
+    if (!Number.isInteger(concurrency) || concurrency < 1) {
+      throw new Error(
+        `--concurrency needs a whole number of at least 1, got ${JSON.stringify(process.argv[concurrencyFlag + 1])}.`
+      );
+    }
+  }
+
   await connectPostgres();
   logger.info(
     `[backfill-episode-images] starting${dryRun ? ' (dry run — nothing will be written)' : ''}` +
-      `${limit !== undefined ? ` (limit ${limit} podcasts)` : ''}`
+      `${limit !== undefined ? ` (limit ${limit} podcasts)` : ''}` +
+      ` (concurrency ${concurrency ?? DEFAULT_CONCURRENCY})`
   );
 
-  const stats = await backfillEpisodeImages({ dryRun, limit });
+  const stats = await backfillEpisodeImages({ dryRun, limit, concurrency });
 
   logger.info(
     `[backfill-episode-images] ${stats.podcastsScanned} podcasts scanned | ` +

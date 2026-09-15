@@ -21,8 +21,10 @@ on:
           - backfill-fingerprints
       args:
         description: >-
-          Optional flags, space-separated. Only --dry-run and --limit <n> are
-          accepted (both scripts support both); anything else is refused.
+          Optional flags, space-separated. Only --dry-run, --limit <n> and
+          --concurrency <n> are accepted; anything else is refused.
+          --concurrency only affects backfill-episode-images (podcasts
+          processed at once — default 4; backfill-fingerprints ignores it).
         type: string
         required: false
         default: ''
@@ -72,8 +74,9 @@ jobs:
         env:
           RAW_ARGS: ${{ inputs.args }}
         run: |
-          if [[ -n "$RAW_ARGS" && ! "$RAW_ARGS" =~ ^(--dry-run|--limit\ [0-9]+)([[:space:]](--dry-run|--limit\ [0-9]+))*$ ]]; then
-            echo "::error::args must be some combination of --dry-run and --limit <n> only, got: $RAW_ARGS"
+          flag='(--dry-run|--limit\ [0-9]+|--concurrency\ [0-9]+)'
+          if [[ -n "$RAW_ARGS" && ! "$RAW_ARGS" =~ ^$flag([[:space:]]$flag)*$ ]]; then
+            echo "::error::args must be some combination of --dry-run, --limit <n> and --concurrency <n> only, got: $RAW_ARGS"
             exit 1
           fi
           json="$(jq -cn --arg a "$RAW_ARGS" '($a | select(length > 0) | split(" ")) // []')"
