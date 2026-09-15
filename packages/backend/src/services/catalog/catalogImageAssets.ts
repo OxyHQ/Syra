@@ -12,7 +12,7 @@ import {
 import { extractPredominantColorsFromBuffer } from '../colorExtractionService';
 import { logger } from '../../utils/logger';
 import { validateUrlSecurity } from '../../utils/urlSecurity';
-import { getImageAssetSourceContentHash, storeImageAsset } from '../imageAssetService';
+import { findExistingCatalogImageSet, getImageAssetSourceContentHash, storeImageAsset } from '../imageAssetService';
 import type { CatalogImageEntityType, CatalogImageProvider } from '../../db/schema/catalog';
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -274,6 +274,27 @@ async function mirrorCatalogImageInternal(
     try {
       const normalizedSourceUrl = normalizeSourceUrl(sourceUrl);
       const sourceUrlHash = hashValue(normalizedSourceUrl);
+
+      // Reuse ANY prior mirror of this exact URL — from any entity, not just
+      // `context.existingImageId` — before spending a single byte on the
+      // network. Many episodes in one show's feed repeat the identical
+      // artwork URL (a season thumbnail, a network-wide default), and this
+      // is the one check that skips the download entirely for those.
+      const existingByUrl = await findExistingCatalogImageSet('sourceUrlHash', sourceUrlHash);
+      if (existingByUrl) {
+        return {
+          imageId: existingByUrl.imageId,
+          imageSizes: existingByUrl.imageSizes,
+          primaryColor: existingByUrl.primaryColor,
+          secondaryColor: existingByUrl.secondaryColor,
+          // The found set's OWN stamped hashes, not this URL's hash repeated —
+          // we never downloaded, so we have no independent content hash of
+          // our own; the reused set's is the only correct value here.
+          sourceUrlHash: existingByUrl.sourceUrlHash,
+          sourceContentHash: existingByUrl.sourceContentHash,
+        };
+      }
+
       const { buffer } = await downloadImage(normalizedSourceUrl);
       const sourceContentHash = hashValue(buffer);
 
@@ -288,6 +309,23 @@ async function mirrorCatalogImageInternal(
         return {
           imageId: context.existingImageId,
           imageSizes: existingSizes,
+          sourceUrlHash,
+          sourceContentHash,
+        };
+      }
+
+      // Same bytes, mirrored before under a DIFFERENT source URL (a CDN
+      // rehost, a redirect target that changed, a query-string cache-buster).
+      // Caught only after downloading — there is no way to know the content
+      // hash without the bytes — but still skips the resize/upload six times
+      // over.
+      const existingByContent = await findExistingCatalogImageSet('sourceContentHash', sourceContentHash);
+      if (existingByContent) {
+        return {
+          imageId: existingByContent.imageId,
+          imageSizes: existingByContent.imageSizes,
+          primaryColor: existingByContent.primaryColor,
+          secondaryColor: existingByContent.secondaryColor,
           sourceUrlHash,
           sourceContentHash,
         };

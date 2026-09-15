@@ -310,6 +310,11 @@ export const imageAssets = pgTable(
       t.catalogSize
     ),
     index('image_assets_catalog_source_content_hash_idx').on(t.catalogSourceContentHash),
+    // `findExistingCatalogImageSet` (`imageAssetService.ts`) queries this
+    // column on EVERY mirror attempt, before ever downloading — an
+    // unindexed scan here would be a full table scan of image_assets on
+    // every single catalog image mirror across the whole app.
+    index('image_assets_catalog_source_url_hash_idx').on(t.catalogSourceUrlHash),
   ]
 );
 
