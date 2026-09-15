@@ -1,0 +1,415 @@
+X-Syra-Subject: Wire lyrics, credits, queue actions and actual listening time
+
+diff --git a/packages/frontend/app/library.tsx b/packages/frontend/app/library.tsx
+index 2bb0f8c..dc995f2 100644
+--- a/packages/frontend/app/library.tsx
++++ b/packages/frontend/app/library.tsx
+@@ -236,6 +236,9 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
+           </View>
+         </View>
+ 
++        <View className="flex-row flex-wrap gap-3 px-4 py-2">
++          <Pressable accessibilityRole="link" onPress={() => router.push('/library/history')} className="px-3 py-2 rounded-full bg-surface"><Text className="text-foreground">{t('listener.history')}</Text></Pressable>
++        </View>
+         {/* Filters */}
+         <View className="flex-row gap-1.5 mb-3 items-center">
+           {LIBRARY_FILTERS.map((filter) => {
+diff --git a/packages/frontend/components/LyricsView.tsx b/packages/frontend/components/LyricsView.tsx
+index 35bcead..f3709e8 100644
+--- a/packages/frontend/components/LyricsView.tsx
++++ b/packages/frontend/components/LyricsView.tsx
+@@ -1,5 +1,5 @@
+ import React, { useMemo } from 'react';
+-import { ScrollView, Text, View } from 'react-native';
++import { Pressable, ScrollView, Text, View } from 'react-native';
+ import * as Skeleton from '@oxy.so/bloom/skeleton';
+ import { useLyrics } from '@/hooks/useLyrics';
+ import { usePlayerStore } from '@/stores/playerStore';
+@@ -26,10 +26,12 @@ interface LyricsViewProps {
+  */
+ export const LyricsView: React.FC<LyricsViewProps> = React.memo(({ trackId }) => {
+   const { t } = useTranslation();
+-  const { lyrics, isLoading } = useLyrics(trackId);
++  const { lyrics, isLoading, isError, retry } = useLyrics(trackId);
+ 
+   // currentTime is in seconds — convert to ms for the active-line computation.
+-  const currentTimeMs = usePlayerStore((state) => state.currentTime * SECONDS_TO_MS);
++  const currentTimeMs = usePlayerStore((state) => state.currentTrack?.id === trackId ? state.currentTime * SECONDS_TO_MS : 0);
++  const isCurrent = usePlayerStore((state) => state.currentTrack?.id === trackId);
++  const seek = usePlayerStore((state) => state.seek);
+ 
+   const activeIndex = useMemo(() => {
+     if (!lyrics?.synced || !lyrics.lines.length) return -1;
+@@ -51,6 +53,10 @@ export const LyricsView: React.FC<LyricsViewProps> = React.memo(({ trackId }) =>
+     );
+   }
+ 
++  if (isError) {
++    return <View className="p-6 gap-3"><Text className="text-muted-foreground">{t('listener.lyricsFailed')}</Text><Pressable accessibilityRole="button" onPress={retry}><Text className="text-primary">{t('listener.retry')}</Text></Pressable></View>;
++  }
++
+   if (!lyrics) {
+     return (
+       <View className="flex-1 items-center justify-center px-6">
+@@ -69,8 +75,9 @@ export const LyricsView: React.FC<LyricsViewProps> = React.memo(({ trackId }) =>
+         showsVerticalScrollIndicator={false}
+       >
+         {lyrics.lines.map((line, index) => (
++          <Pressable key={index} disabled={!isCurrent} accessibilityRole="button" accessibilityLabel={t('listener.seekLyric', { line: line.text })} onPress={() => void seek(line.timeMs / SECONDS_TO_MS)}>
+           <Text
+-            key={index}
++            selectable={!isCurrent}
+             className={
+               index === activeIndex
+                 ? 'text-lg font-semibold text-primary leading-relaxed'
+@@ -79,7 +86,9 @@ export const LyricsView: React.FC<LyricsViewProps> = React.memo(({ trackId }) =>
+           >
+             {line.text}
+           </Text>
++          </Pressable>
+         ))}
++        <Text className="text-sm text-muted-foreground">{t('listener.lyricsSource', { source: lyrics.source })}</Text>
+       </ScrollView>
+     );
+   }
+@@ -98,6 +107,7 @@ export const LyricsView: React.FC<LyricsViewProps> = React.memo(({ trackId }) =>
+       <Text className="text-base text-foreground leading-relaxed">
+         {plainText}
+       </Text>
++      <Text className="text-sm text-muted-foreground mt-4">{t('listener.lyricsSource', { source: lyrics.source })}</Text>
+     </ScrollView>
+   );
+ });
+diff --git a/packages/frontend/components/MobilePlayerBar.tsx b/packages/frontend/components/MobilePlayerBar.tsx
+index 8381de4..a8f61ee 100644
+--- a/packages/frontend/components/MobilePlayerBar.tsx
++++ b/packages/frontend/components/MobilePlayerBar.tsx
+@@ -1,4 +1,5 @@
+ import React, { useMemo, useState } from 'react';
++import { useRouter } from 'expo-router';
+ import { StyleSheet, View, Text, Pressable, Platform } from 'react-native';
+ import { useTranslation } from 'react-i18next';
+ import { useTheme } from '@oxy.so/bloom/theme';
+@@ -38,6 +39,7 @@ const getProgressPercent = (currentTime: number, duration: number) => {
+  */
+ export const MobilePlayerBar: React.FC = () => {
+   const { t } = useTranslation();
++  const router = useRouter();
+   const theme = useTheme();
+   const insets = useSafeAreaInsets();
+   const [progressBarWidth, setProgressBarWidth] = useState(0);
+@@ -142,7 +144,10 @@ export const MobilePlayerBar: React.FC = () => {
+       <View style={[styles.content, { paddingHorizontal: SPACING, paddingVertical: SPACING, gap: SPACING }]}>
+         {/* Left: Track Info */}
+         <View style={[styles.trackInfo, { gap: SPACING }]}>
+-          <Pressable style={styles.albumArtPressable}>
++          <Pressable style={styles.albumArtPressable} accessibilityRole="button" accessibilityLabel={t('listener.creditsLyrics')} onPress={() => {
++            if (isCatalogTrack && currentTrack) router.push({ pathname: '/track/[id]', params: { id: currentTrack.id } });
++            else if (isEpisode && media) router.push({ pathname: '/episode/[id]', params: { id: media.id } });
++          }}>
+             {media?.imageUri ? (
+               <Image
+                 source={{ uri: media.imageUri }}
+diff --git a/packages/frontend/components/NowPlaying.tsx b/packages/frontend/components/NowPlaying.tsx
+index 31220f7..edfaecd 100644
+--- a/packages/frontend/components/NowPlaying.tsx
++++ b/packages/frontend/components/NowPlaying.tsx
+@@ -21,6 +21,8 @@ import { useLibrary, useToggleLikeTrack } from '@/hooks/useLibrary';
+ import { EpisodeNowPlaying } from '@/components/podcast/EpisodeNowPlaying';
+ import { CastButton } from '@/components/CastButton';
+ import { TrackArtistLine } from '@/components/TrackArtistLine';
++import { TrackCredits } from '@/components/TrackCredits';
++import { TrackActionsSheet } from '@/components/playlist/TrackActionsSheet';
+ 
+ /**
+  * Now Playing Sidebar Component
+@@ -50,6 +52,7 @@ export const NowPlaying: React.FC = () => {
+   const [album, setAlbum] = useState<Album | null>(null);
+   const [artist, setArtist] = useState<Artist | null>(null);
+   const [lyricsExpanded, setLyricsExpanded] = useState(false);
++  const [showTrackActions, setShowTrackActions] = useState(false);
+   const nextTracks = queue?.tracks.slice(Math.max((queue.current ?? -1) + 1, 0)) ?? [];
+ 
+   // Fetch album and artist details if track exists
+@@ -117,6 +120,7 @@ export const NowPlaying: React.FC = () => {
+           {/* Header with buttons */}
+           <View style={styles.header}>
+             <View style={styles.headerButtons}>
++              {isCatalogTrack ? <Pressable onPress={() => setShowTrackActions(true)} style={styles.headerButton} accessibilityRole="button" accessibilityLabel={t('listener.actions')}><Ionicons name="ellipsis-horizontal" size={20} color="#fff" /></Pressable> : null}
+               {/* Wrapped so the cast glyph gets the same translucent circle as
+                   its sibling header buttons (readability over the artwork). */}
+               <View style={styles.headerButton}>
+@@ -272,54 +276,8 @@ export const NowPlaying: React.FC = () => {
+                 </View>
+                 )}
+ 
+-                {/* Credits Card */}
+-                {album && (
+-                  <View className="bg-popover" style={styles.card}>
+-                    <View style={styles.cardHeader}>
+-                      <Text className="text-foreground" style={styles.cardTitle}>{t('nowPlaying.credits')}</Text>
+-                    </View>
+-                    <View style={styles.creditsContent}>
+-                      <View style={styles.creditRow}>
+-                        <Text className="text-muted-foreground" style={styles.creditLabel}>{t('common.album')}</Text>
+-                        <Pressable
+-                          onPress={() => router.push(`/album/${album.id}`)}
+-                          style={styles.creditValuePressable}
+-                        >
+-                          <Text className="text-foreground" style={styles.creditValue} numberOfLines={1}>
+-                            {album.title}
+-                          </Text>
+-                        </Pressable>
+-                      </View>
+-                      <View style={styles.creditRow}>
+-                        <Text className="text-muted-foreground" style={styles.creditLabel}>{t('common.artist')}</Text>
+-                        <Pressable
+-                          onPress={() => router.push(`/p/${album.artistId}`)}
+-                          style={styles.creditValuePressable}
+-                        >
+-                          <Text className="text-foreground" style={styles.creditValue} numberOfLines={1}>
+-                            {album.artistName}
+-                          </Text>
+-                        </Pressable>
+-                      </View>
+-                      {album.releaseDate && (
+-                        <View style={styles.creditRow}>
+-                          <Text className="text-muted-foreground" style={styles.creditLabel}>{t('nowPlaying.released')}</Text>
+-                          <Text className="text-foreground" style={styles.creditValue}>
+-                            {new Date(album.releaseDate).getFullYear()}
+-                          </Text>
+-                        </View>
+-                      )}
+-                      {album.label && (
+-                        <View style={styles.creditRow}>
+-                          <Text className="text-muted-foreground" style={styles.creditLabel}>{t('nowPlaying.label')}</Text>
+-                          <Text className="text-foreground" style={styles.creditValue} numberOfLines={1}>
+-                            {album.label}
+-                          </Text>
+-                        </View>
+-                      )}
+-                    </View>
+-                  </View>
+-                )}
++                {isCatalogTrack && currentTrack ? <View className="bg-popover" style={styles.card}><TrackCredits track={currentTrack} /></View> : null}
++                {isCatalogTrack && currentTrack && showTrackActions ? <TrackActionsSheet visible onClose={() => setShowTrackActions(false)} track={currentTrack} /> : null}
+ 
+                 {/* Next in Queue Card */}
+                 <View className="bg-popover" style={styles.card}>
+diff --git a/packages/frontend/components/TrackRow.tsx b/packages/frontend/components/TrackRow.tsx
+index 1e8db83..6bd8825 100644
+--- a/packages/frontend/components/TrackRow.tsx
++++ b/packages/frontend/components/TrackRow.tsx
+@@ -1,4 +1,5 @@
+-import React from 'react';
++import React, { useState } from 'react';
++import { TrackActionsSheet } from '@/components/playlist/TrackActionsSheet';
+ import { StyleSheet, View, Text, Pressable, Platform } from 'react-native';
+ import Ionicons from '@expo/vector-icons/Ionicons';
+ import { useTheme } from '@oxy.so/bloom/theme';
+@@ -37,6 +38,7 @@ interface TrackRowProps {
+    * question — what IS this row — rather than being an action.
+    */
+   badge?: string;
++  showPlayCount?: boolean;
+ }
+ 
+ /**
+@@ -53,8 +55,10 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
+   showNumber = true,
+   onMorePress,
+   badge,
++  showPlayCount = false,
+ }) => {
+   const theme = useTheme();
++  const [showActions, setShowActions] = useState(false);
+   const { isTrackLiked } = useLibrary();
+   const toggleLike = useToggleLikeTrack();
+   const isLiked = isTrackLiked(track.id);
+@@ -88,6 +92,7 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
+   };
+ 
+   return (
++    <>
+     <Pressable
+       className={isCurrentTrack ? 'bg-surface/25' : undefined}
+       style={[
+@@ -131,6 +136,7 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
+           >
+             {track.title}
+           </Text>
++          {showPlayCount ? <Text className="text-muted-foreground text-sm">{new Intl.NumberFormat().format(track.playCount ?? 0)}</Text> : null}
+           <View style={styles.trackArtistRow}>
+             {track.isExplicit && (
+               <View className="bg-popover" style={styles.explicitBadge}>
+@@ -192,11 +198,12 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
+         <Text className="text-muted-foreground" style={styles.trackDuration}>
+           {formatDuration(track.duration)}
+         </Text>
+-        {onMorePress && (
++        {(
+           <Pressable
+             onPress={(e) => {
+               e?.stopPropagation?.();
+-              onMorePress();
++              if (onMorePress) onMorePress();
++              else setShowActions(true);
+             }}
+             style={styles.moreButton}
+             accessibilityRole="button"
+@@ -207,6 +214,8 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
+         )}
+       </View>
+     </Pressable>
++    {showActions ? <TrackActionsSheet visible onClose={() => setShowActions(false)} track={track} /> : null}
++    </>
+   );
+ };
+ 
+diff --git a/packages/frontend/components/playlist/TrackActionsSheet.tsx b/packages/frontend/components/playlist/TrackActionsSheet.tsx
+index dd43a3b..864fef7 100644
+--- a/packages/frontend/components/playlist/TrackActionsSheet.tsx
++++ b/packages/frontend/components/playlist/TrackActionsSheet.tsx
+@@ -10,6 +10,9 @@ import { useRemoveTracksFromPlaylist } from '@/hooks/usePlaylistMutations';
+ import { AddToPlaylistSheet } from '@/components/playlist/AddToPlaylistSheet';
+ import { TrackArtistLine } from '@/components/TrackArtistLine';
+ import { toast } from '@oxy.so/bloom/toast';
++import { useQueueStore } from '@/stores/queueStore';
++import { toPlayableItem } from '@/utils/playableItem';
++import { shareMedia } from '@/utils/share-media';
+ 
+ interface TrackActionsSheetProps {
+   visible: boolean;
+@@ -103,6 +106,20 @@ export const TrackActionsSheet: React.FC<TrackActionsSheetProps> = ({
+             <Text className="text-foreground" style={styles.actionText}>{t('trackActions.addToPlaylist')}</Text>
+           </Pressable>
+ 
++          {(['next', 'last'] as const).map((position) => (
++            <Pressable key={position} style={styles.action} accessibilityRole="button" onPress={() => {
++              void useQueueStore.getState().addTracksLocally([toPlayableItem(track)], position);
++              onClose();
++            }}>
++              <Ionicons name="list-outline" size={22} color={theme.colors.text} />
++              <Text className="text-foreground" style={styles.actionText}>{t(position === 'next' ? 'listener.playNext' : 'listener.addQueue')}</Text>
++            </Pressable>
++          ))}
++          <Pressable style={styles.action} accessibilityRole="button" onPress={() => { router.push({ pathname: '/track/[id]', params: { id: track.id } }); onClose(); }}>
++            <Ionicons name="information-circle-outline" size={22} color={theme.colors.text} /><Text className="text-foreground" style={styles.actionText}>{t('listener.creditsLyrics')}</Text>
++          </Pressable>
++          {track.albumId ? <Pressable style={styles.action} accessibilityRole="button" onPress={() => { router.push(`/album/${track.albumId}`); onClose(); }}><Ionicons name="albums-outline" size={22} color={theme.colors.text} /><Text className="text-foreground" style={styles.actionText}>{t('listener.goAlbum')}</Text></Pressable> : null}
++          <Pressable style={styles.action} accessibilityRole="button" onPress={() => { void shareMedia('track', track.id, track.title); onClose(); }}><Ionicons name="share-outline" size={22} color={theme.colors.text} /><Text className="text-foreground" style={styles.actionText}>{t('listener.share')}</Text></Pressable>
+           {removeFrom && (
+             <Pressable
+               style={styles.action}
+diff --git a/packages/frontend/components/skeletons/ArtistDetailSkeleton.tsx b/packages/frontend/components/skeletons/ArtistDetailSkeleton.tsx
+index db3b033..dc36038 100644
+--- a/packages/frontend/components/skeletons/ArtistDetailSkeleton.tsx
++++ b/packages/frontend/components/skeletons/ArtistDetailSkeleton.tsx
+@@ -45,6 +45,7 @@ export const ArtistDetailSkeleton: React.FC<ArtistDetailSkeletonProps> =
+         </View>
+ 
+         <LinearGradient colors={contentGradient} locations={[0, 0.35, 1]} style={styles.contentSection}>
++          <View className="px-6 pt-4 pb-2"><Skeleton.Box width={190} height={22} borderRadius={4} /></View>
+           <View style={styles.infoContainer}>
+             <View style={styles.infoHeader}>
+               <Skeleton.Circle size={64} />
+diff --git a/packages/frontend/hooks/useLyrics.ts b/packages/frontend/hooks/useLyrics.ts
+index 74596ee..0eb580a 100644
+--- a/packages/frontend/hooks/useLyrics.ts
++++ b/packages/frontend/hooks/useLyrics.ts
+@@ -1,5 +1,5 @@
+ import { useQuery } from '@tanstack/react-query';
+-import type { Lyrics } from '@syra/shared-types';
++import { lyricsSchema, type Lyrics } from '@syra/shared-types';
+ import { api, isNotFoundError } from '@/utils/api';
+ 
+ /** Lyrics are fetched once and treated as immutable — 24h stale time. */
+@@ -18,13 +18,14 @@ export function useLyrics(trackId?: string): {
+   lyrics: Lyrics | null;
+   isLoading: boolean;
+   isError: boolean;
++  retry: () => void;
+ } {
+-  const { data, isLoading, isError } = useQuery<Lyrics | null>({
++  const { data, isLoading, isError, refetch } = useQuery<Lyrics | null>({
+     queryKey: ['lyrics', trackId],
+     queryFn: async () => {
+       try {
+         const res = await api.get<Lyrics>(`/lyrics/${trackId}`);
+-        return res.data;
++        return lyricsSchema.parse(res.data);
+       } catch (err) {
+         if (isNotFoundError(err)) return null;
+         throw err;
+@@ -38,5 +39,6 @@ export function useLyrics(trackId?: string): {
+     lyrics: data ?? null,
+     isLoading,
+     isError,
++    retry: () => { void refetch(); },
+   };
+ }
+diff --git a/packages/frontend/stores/playerStore.ts b/packages/frontend/stores/playerStore.ts
+index 5cb0986..e383c50 100644
+--- a/packages/frontend/stores/playerStore.ts
++++ b/packages/frontend/stores/playerStore.ts
+@@ -25,6 +25,7 @@ import {
+ } from '@syra/shared-types';
+ import { toPlayableItem, type PlayableInput } from '@/utils/playableItem';
+ import { createScopedLogger } from '@/utils/logger';
++import { listenedBetween, type ListeningSample } from '@/utils/listening-time';
+ import { useQueueStore } from './queueStore';
+ import { musicService } from '@/services/musicService';
+ import { queueService } from '@/services/queueService';
+@@ -227,7 +228,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
+    * told how much of THIS track was actually heard, which is what lets the
+    * backend distinguish a real play from a skip and learn the user's taste.
+    */
+-  let activePlay: { trackId: string; source: ListeningSource; durationSec: number } | null = null;
++  let activePlay: { trackId: string; source: ListeningSource; durationSec: number; listenedSec: number; sample: ListeningSample | null } | null = null;
+ 
+   /**
+    * Position within the active radio station. The station is stateful
+@@ -356,7 +357,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
+     if (!play) return;
+     activePlay = null;
+ 
+-    const listenedSec = finiteSeconds(listenedSecOverride ?? get().currentTime);
++    // The override marks a natural finish, not permission to count a seek as listening.
++    void listenedSecOverride;
++    const listenedSec = play.listenedSec;
+     const durationSec = play.durationSec || finiteSeconds(get().duration);
+     const completion = durationSec > 0 ? Math.min(1, listenedSec / durationSec) : undefined;
+ 
+@@ -410,7 +413,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
+    */
+   const setupPlayerListeners = (player: PlayerEngine) => {
+     player.addListener('playbackStatusUpdate', (status) => {
+-      if (!status.isLoaded) return;
++      if (!status.isLoaded || (get().player && get().player !== player)) return;
++      if (activePlay) {
++        const sample = { position: status.currentTime, at: Date.now(), playing: status.playing };
++        activePlay.listenedSec += listenedBetween(activePlay.sample, sample);
++        activePlay.sample = sample;
++      }
+ 
+       if (status.didJustFinish) {
+         // Use the store's known duration as the reliable reference — stream
+@@ -842,7 +850,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
+     // Signal-less start ping: populates "Jump back in" immediately. The
+     // engagement ping (with listenedSec/completion) is sent on flush.
+     submitPlaySignal(item.id, { source });
+-    activePlay = { trackId: item.id, source, durationSec: finiteSeconds(item.duration) };
++    activePlay = { trackId: item.id, source, durationSec: finiteSeconds(item.duration), listenedSec: 0, sample: { position: 0, at: Date.now(), playing: true } };
+   };
+ 
+   /**
+@@ -1428,7 +1436,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
+     seek: async (position: number) => {
+       const { player } = get();
+       if (player) {
++        if (activePlay) activePlay.sample = null;
+         await player.seekTo(position);
++        if (activePlay) activePlay.sample = null;
+         set({ currentTime: position });
+         if (get().currentEpisode) {
+           saveEpisodeProgress();
