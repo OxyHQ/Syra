@@ -11,3 +11,19 @@ Anonymous previews, podcasts, live streams and private uploads do not contribute
 ## Sharing and credits
 
 Track, album, artist and playlist links use canonical Syra routes. Track links may contain a playback timestamp; seeking is performed only after an explicit play action. Lyric text is not copied into social cards. Credits preserve unknown roles and unresolved textual names instead of guessing identities.
+
+## Collaborative playlists
+
+Only the playlist owner creates or revokes invitations and manages member roles. Links expire after seven days; a playlist can have at most ten active links and fifty collaborators. Roles are `editor` or `viewer`, never `owner`. Accepting a link requires an explicit action by an authenticated account. Accepting another link does not upgrade an existing member's role.
+
+Raw invitation tokens leave the server only when issued. PostgreSQL stores their SHA-256 digests, excluded by the protected-column registry. Revocation and acceptance serialize on the same playlist row. Membership is checked after acquiring that lock for editing as well, so a queued edit cannot use permissions revoked while it was waiting. Removing a member revokes outstanding invitation links to prevent immediate rejoining through an old link.
+
+Activity reads are restricted to the owner and existing collaborators, including for public playlists. The UI displays the latest fifty events. Deleting a playlist cascades its invitations and activity. Invitation responses are private and non-cacheable.
+
+## Queue and regression coverage
+
+The library exposes history and a queue editor. Queue operations preserve occurrence identity when a recording appears twice. Invalid local operations do not invalidate an outstanding valid server write. A late response from an earlier account or queue revision cannot overwrite the active queue. Account-scoped snapshots hydrate metadata without starting audio. Seek jumps are not reported as time spent listening.
+
+Regression coverage includes monthly-window boundaries and deduplication, rendered unknown/zero/positive audience states, resolved and unresolved credits, account and queue response races, invitation expiry/revocation, repeated acceptance, member limits, and edits queued behind a role revocation. Database tests run against migrated PostgreSQL, not a mocked permission check. Type checking is a separate check for all five packages.
+
+The native audio engine and real-device playback are separate validation surfaces; a green TypeScript or Jest result does not assert that they were exercised.
