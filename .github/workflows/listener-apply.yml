@@ -2,7 +2,7 @@ name: Apply listener implementation checkpoint
 on:
   push:
     branches: [feat/listener-experience-140-implementation]
-    paths: [.github/listener-change.patch]
+    paths: [.github/listener-change.patch, .github/workflows/listener-apply.yml]
 permissions:
   contents: write
 concurrency:
@@ -38,6 +38,9 @@ jobs:
               return pathlib.Path(name)
 
           payload = pathlib.Path('.github/listener-change.patch')
+          if not payload.exists():
+              subprocess.run(['git', 'archive', '--format=tar', '--output=syra-checkpoint.tar', 'HEAD'], check=True)
+              raise SystemExit(0)
           text = payload.read_text()
           if text.startswith('X-Syra-Gzip\n'):
               encoded = ''.join(text.splitlines()[1:])
@@ -95,7 +98,7 @@ jobs:
               subject = match.group(1)
           if not targets or not isinstance(subject, str) or not subject.strip() or len(subject) > 200:
               raise RuntimeError('Empty or invalid checkpoint')
-          subprocess.run(['git', 'diff', '--check'], check=True)
+          subprocess.run(['git', 'diff', '--check', '--', *sorted(targets)], check=True)
           subprocess.run(['git', 'add', '--', *sorted(targets)], check=True)
           subprocess.run(['git', 'rm', '-f', '--', str(payload)], check=True)
           subprocess.run(['git', 'config', 'user.name', 'github-actions[bot]'], check=True)
