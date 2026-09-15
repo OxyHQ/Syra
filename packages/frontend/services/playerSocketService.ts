@@ -135,7 +135,7 @@ class PlayerSocketService {
     // Listen for queue updates from other devices
     this.socket.on('queue:update', (queue: Queue) => {
       const queueStore = useQueueStore.getState();
-      queueStore.syncQueue(queue);
+      queueStore.syncQueue(queue, 'socket');
     });
 
     // Listen for track changes from other devices
@@ -144,7 +144,7 @@ class PlayerSocketService {
 
       if (queue) {
         const queueStore = useQueueStore.getState();
-        queueStore.syncQueue(queue);
+        queueStore.syncQueue(queue, 'socket');
       }
 
       const playerStore = usePlayerStore.getState();

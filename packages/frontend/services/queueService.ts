@@ -1,6 +1,8 @@
 import { api, authenticatedClient } from '@/utils/api';
 import {
   Queue,
+  queueSchema,
+  queueWithMetadataSchema,
   QueueWithMetadata,
   AddToQueueRequest,
   PlayableRef,
@@ -41,7 +43,7 @@ export const queueService = {
    */
   async getQueue(): Promise<QueueWithMetadata> {
     const response = await api.get<QueueWithMetadata>('/queue');
-    return normalizeQueueWithMetadata(response.data);
+    return normalizeQueueWithMetadata(queueWithMetadataSchema.parse(response.data));
   },
 
   /**
@@ -56,7 +58,7 @@ export const queueService = {
       position,
     };
     const response = await api.post<{ queue: Queue; added: number }>('/queue/add', body);
-    return { ...response.data, queue: normalizeQueue(response.data.queue) };
+    return { ...response.data, queue: normalizeQueue(queueSchema.parse(response.data.queue)) };
   },
 
   /**
@@ -69,7 +71,7 @@ export const queueService = {
       context: queue.context,
     };
     const response = await api.put<{ queue: Queue }>('/queue', body);
-    return { ...response.data, queue: normalizeQueue(response.data.queue) };
+    return { ...response.data, queue: normalizeQueue(queueSchema.parse(response.data.queue)) };
   },
 
   /**
@@ -82,7 +84,7 @@ export const queueService = {
     const response = await authenticatedClient.delete<{ queue: Queue; removed: number }>('/queue/remove', {
       data: body,
     });
-    return { ...response, queue: normalizeQueue(response.queue) };
+    return { ...response, queue: normalizeQueue(queueSchema.parse(response.queue)) };
   },
 
   /**
@@ -92,7 +94,7 @@ export const queueService = {
     const response = await api.put<{ queue: Queue; reordered: number }>('/queue/reorder', {
       refs,
     });
-    return { ...response.data, queue: normalizeQueue(response.data.queue) };
+    return { ...response.data, queue: normalizeQueue(queueSchema.parse(response.data.queue)) };
   },
 
   /**
@@ -109,6 +111,6 @@ export const queueService = {
     const response = await api.put<{ queue: Queue; currentIndex: number }>('/queue/current', {
       index,
     });
-    return { ...response.data, queue: normalizeQueue(response.data.queue) };
+    return { ...response.data, queue: normalizeQueue(queueSchema.parse(response.data.queue)) };
   },
 };

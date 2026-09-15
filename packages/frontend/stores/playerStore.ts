@@ -463,6 +463,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
     const queue = queueStore.queue;
     if (queue) {
+      const active = queue.tracks[queue.current];
+      if (active?.id === item.id && active.kind === item.kind) return;
       // Matched on kind as well as id: the two collections have independent id
       // spaces, so an id alone is not an identity across them.
       const trackIndex = queue.tracks.findIndex((t) => t.id === item.id && t.kind === item.kind);
@@ -472,11 +474,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       }
     }
 
-    await queueStore.replaceQueue({
-      current: 0,
-      tracks: [item],
-      context: get().context ?? undefined,
-    });
+    if (queue?.tracks.length) {
+      const insertion = Math.max(0, queue.current + 1);
+      const tracks = [...queue.tracks];
+      tracks.splice(insertion, 0, item);
+      await queueStore.replaceQueue({ ...queue, tracks, current: insertion });
+    } else {
+      await queueStore.replaceQueue({ current: 0, tracks: [item], context: get().context ?? undefined });
+    }
   };
 
   /**

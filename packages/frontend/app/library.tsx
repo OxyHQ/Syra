@@ -238,6 +238,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
 
         <View className="flex-row flex-wrap gap-3 px-4 py-2">
           <Pressable accessibilityRole="link" onPress={() => router.push('/library/history')} className="px-3 py-2 rounded-full bg-surface"><Text className="text-foreground">{t('listener.history')}</Text></Pressable>
+<Pressable accessibilityRole="link" onPress={() => router.push('/library/queue')} className="px-3 py-2 rounded-full bg-surface"><Text className="text-foreground">{t('listener.queue')}</Text></Pressable>
         </View>
         {/* Filters */}
         <View className="flex-row gap-1.5 mb-3 items-center">
