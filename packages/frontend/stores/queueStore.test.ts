@@ -353,7 +353,7 @@ describe('queueStore', () => {
   it('a newer optimistic replacement clears loading from the superseded read', async () => {
     const old: Queue = { current: 0, tracks: [track('old')] };
     const next: Queue = { current: 0, tracks: [track('new')] };
-    let finish: ((value: Queue) => void) | undefined;
+    let finish: ((value: Awaited<ReturnType<typeof queueService.getQueue>>) => void) | undefined;
     mockedQueueService.getQueue.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
     mockedQueueService.replaceQueue.mockResolvedValueOnce({ queue: next });
     const read = useQueueStore.getState().loadQueue();
@@ -361,7 +361,7 @@ describe('queueStore', () => {
     expect(useQueueStore.getState().isLoading).toBe(true);
     const replace = useQueueStore.getState().replaceQueue(next);
     if (!finish) throw new Error('Read did not start');
-    finish(old);
+    finish({ ...old, previous: [], next: [], total: old.tracks.length });
     await Promise.all([read, replace]);
     expect(useQueueStore.getState().queue).toEqual(next);
     expect(useQueueStore.getState().isLoading).toBe(false);

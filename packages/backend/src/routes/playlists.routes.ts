@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { playlistSharing } from '../controllers/playlistSharing.controller';
 import {
   getUserPlaylists,
   getPlaylistById,
@@ -30,6 +31,12 @@ router.get('/:id/tracks', withDb(getPlaylistTracks));
 
 // Authenticated routes
 router.use(requireAuth);
+router.post('/join', withDb(playlistSharing));
+router.post('/:id/invites', withDb(playlistSharing));
+router.delete('/:id/invites', withDb(playlistSharing));
+router.put('/:id/members/:memberId', withDb(playlistSharing));
+router.delete('/:id/members/:memberId', withDb(playlistSharing));
+router.get('/:id/activity', withDb(playlistSharing));
 router.get('/', withDb(getUserPlaylists));
 router.post('/', singleCoverArtUpload, validate({ body: createPlaylistRequestSchema }), withDb(createPlaylist));
 router.put('/:id', singleCoverArtUpload, validate({ body: updatePlaylistRequestSchema }), withDb(updatePlaylist));

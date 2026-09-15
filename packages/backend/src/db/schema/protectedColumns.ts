@@ -64,6 +64,7 @@
  */
 
 export const PROTECTED_COLUMNS_BY_TABLE = {
+  playlist_invites: ['tokenHash'],
   catalog_entities: ['images', 'imageSuggestions'],
   tracks: ['images', 'sha256'],
   /**

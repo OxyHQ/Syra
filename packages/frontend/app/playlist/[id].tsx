@@ -1,3 +1,4 @@
+import { PlaylistCollaboration } from '@/components/playlist/PlaylistCollaboration';
 import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, View, Text, Pressable, Image, ScrollView, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -616,7 +617,8 @@ const PlaylistView: React.FC<PlaylistViewProps> = ({
               )}
             </View>
           </LinearGradient>
-        </Animated.ScrollView>
+        <PlaylistCollaboration playlist={playlist} />
+      </Animated.ScrollView>
       </View>
 
       <PlaylistActionsSheet

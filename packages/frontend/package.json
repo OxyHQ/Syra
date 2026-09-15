@@ -23,7 +23,8 @@
     "analyze-bundle": "bun ./scripts/analyze-bundle.js"
   },
   "jest": {
-    "preset": "jest-expo"
+    "preset": "jest-expo",
+    "setupFilesAfterEnv": ["<rootDir>/jest.setup.ts"]
   },
   "dependencies": {
     "@babel/plugin-proposal-export-namespace-from": "^7.18.9",

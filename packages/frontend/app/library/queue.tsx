@@ -14,8 +14,8 @@ export default function QueueScreen() {
     <Text className="text-2xl font-bold text-foreground">{t('listener.queue')}</Text>
     <Text className="text-muted-foreground">{queue?.context?.name ?? t('listener.savedQueue')}</Text>
     <View className="flex-row flex-wrap gap-4">
-      <Pressable accessibilityRole="button" accessibilityState={{ selected: shuffle === 'on' }} onPress={toggleShuffle}><Text className="text-primary">{t('listener.shuffle')} · {shuffle}</Text></Pressable>
-      <Pressable accessibilityRole="button" onPress={cycleRepeat}><Text className="text-primary">{t('player.repeat')} · {repeat}</Text></Pressable>
+      <Pressable accessibilityRole="button" accessibilityState={{ selected: shuffle === 'on' }} onPress={toggleShuffle}><Text className="text-primary">{t('listener.shuffleQueue')} · {t(`listener.mode_${shuffle}`)}</Text></Pressable>
+      <Pressable accessibilityRole="button" onPress={cycleRepeat}><Text className="text-primary">{t('listener.repeat')} · {t(`listener.mode_${repeat}`)}</Text></Pressable>
       <Pressable accessibilityRole="button" onPress={() => { void stop(); void clearQueue(); }}><Text className="text-primary">{t('listener.clearQueue')}</Text></Pressable>
     </View>
     {error ? <Text accessibilityRole="alert" selectable className="text-destructive">{error}</Text> : null}
