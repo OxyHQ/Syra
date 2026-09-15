@@ -27,3 +27,9 @@ The library exposes history and a queue editor. Queue operations preserve occurr
 Regression coverage includes monthly-window boundaries and deduplication, rendered unknown/zero/positive audience states, resolved and unresolved credits, account and queue response races, invitation expiry/revocation, repeated acceptance, member limits, and edits queued behind a role revocation. Database tests run against migrated PostgreSQL, not a mocked permission check. Type checking is a separate check for all five packages.
 
 The native audio engine and real-device playback are separate validation surfaces; a green TypeScript or Jest result does not assert that they were exercised.
+
+## Rollout
+
+`0032_listener_experience` adds the nullable audience timestamp and the two collaboration tables. It is a pre-deploy additive migration; new-table foreign keys are declared at creation. Main's already-published `0031_bouncy_victor_mancha` and its image indexes remain unchanged. After migration and backend rollout, the regular maintenance scheduler fills the audience timestamp; the header does not invent a zero while waiting for that first pass.
+
+This change covers profiles, credits, lyrics, history, queue persistence, canonical link sharing and explicit playlist collaboration. Offline audio downloads, new crossfade/gapless engines, taste-match generation, external playlist import, creator-selected playlist shelves, release notifications and generated social artwork are separate outstanding parts of issue #140. Existing device-connect and encoding functionality is not claimed as newly implemented here.
