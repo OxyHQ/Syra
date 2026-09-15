@@ -210,6 +210,14 @@ export const playlists = pgTable(
       .on(t.followers.desc(), t.createdAt.desc())
       .where(sql`${t.visibility} = 'public'`),
     index('playlists_search_gin').using('gin', t.searchVector),
+    // See `catalog_entities_image_id_idx`'s comment (`db/schema/catalog.ts`).
+    index('playlists_cover_art_id_idx').on(t.coverArtId),
+    index('playlists_cover_art_sizes_small_id_idx').on(t.coverArtSizesSmallId),
+    index('playlists_cover_art_sizes_medium_id_idx').on(t.coverArtSizesMediumId),
+    index('playlists_cover_art_sizes_large_id_idx').on(t.coverArtSizesLargeId),
+    index('playlists_cover_art_sizes_xlarge_id_idx').on(t.coverArtSizesXlargeId),
+    index('playlists_cover_art_sizes_xxlarge_id_idx').on(t.coverArtSizesXxlargeId),
+    index('playlists_cover_art_sizes_original_id_idx').on(t.coverArtSizesOriginalId),
   ]
 );
 

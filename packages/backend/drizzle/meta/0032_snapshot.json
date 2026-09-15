@@ -1,6 +1,6 @@
 {
-  "id": "1757a7af-99c3-4d0f-9713-b40c71d4448c",
-  "prevId": "8fabc6ec-a35b-4c2b-8c24-b5a4c9102cc1",
+  "id": "c003567e-ba44-4662-91a1-9b792513545f",
+  "prevId": "b59c637e-a8b3-450d-a43f-c8e3f146177e",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -535,6 +535,111 @@
           "isUnique": false,
           "concurrently": false,
           "method": "gin",
+          "with": {}
+        },
+        "albums_cover_art_id_idx": {
+          "name": "albums_cover_art_id_idx",
+          "columns": [
+            {
+              "expression": "cover_art_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "albums_cover_art_sizes_small_id_idx": {
+          "name": "albums_cover_art_sizes_small_id_idx",
+          "columns": [
+            {
+              "expression": "cover_art_sizes_small_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "albums_cover_art_sizes_medium_id_idx": {
+          "name": "albums_cover_art_sizes_medium_id_idx",
+          "columns": [
+            {
+              "expression": "cover_art_sizes_medium_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "albums_cover_art_sizes_large_id_idx": {
+          "name": "albums_cover_art_sizes_large_id_idx",
+          "columns": [
+            {
+              "expression": "cover_art_sizes_large_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "albums_cover_art_sizes_xlarge_id_idx": {
+          "name": "albums_cover_art_sizes_xlarge_id_idx",
+          "columns": [
+            {
+              "expression": "cover_art_sizes_xlarge_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "albums_cover_art_sizes_xxlarge_id_idx": {
+          "name": "albums_cover_art_sizes_xxlarge_id_idx",
+          "columns": [
+            {
+              "expression": "cover_art_sizes_xxlarge_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "albums_cover_art_sizes_original_id_idx": {
+          "name": "albums_cover_art_sizes_original_id_idx",
+          "columns": [
+            {
+              "expression": "cover_art_sizes_original_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
           "with": {}
         }
       },
@@ -1268,6 +1373,111 @@
           "isUnique": false,
           "concurrently": false,
           "method": "gin",
+          "with": {}
+        },
+        "catalog_entities_image_id_idx": {
+          "name": "catalog_entities_image_id_idx",
+          "columns": [
+            {
+              "expression": "image_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "catalog_entities_image_sizes_small_id_idx": {
+          "name": "catalog_entities_image_sizes_small_id_idx",
+          "columns": [
+            {
+              "expression": "image_sizes_small_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "catalog_entities_image_sizes_medium_id_idx": {
+          "name": "catalog_entities_image_sizes_medium_id_idx",
+          "columns": [
+            {
+              "expression": "image_sizes_medium_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "catalog_entities_image_sizes_large_id_idx": {
+          "name": "catalog_entities_image_sizes_large_id_idx",
+          "columns": [
+            {
+              "expression": "image_sizes_large_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "catalog_entities_image_sizes_xlarge_id_idx": {
+          "name": "catalog_entities_image_sizes_xlarge_id_idx",
+          "columns": [
+            {
+              "expression": "image_sizes_xlarge_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "catalog_entities_image_sizes_xxlarge_id_idx": {
+          "name": "catalog_entities_image_sizes_xxlarge_id_idx",
+          "columns": [
+            {
+              "expression": "image_sizes_xxlarge_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "catalog_entities_image_sizes_original_id_idx": {
+          "name": "catalog_entities_image_sizes_original_id_idx",
+          "columns": [
+            {
+              "expression": "image_sizes_original_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
           "with": {}
         }
       },
@@ -3423,6 +3633,111 @@
           "concurrently": false,
           "method": "gin",
           "with": {}
+        },
+        "tracks_cover_art_id_idx": {
+          "name": "tracks_cover_art_id_idx",
+          "columns": [
+            {
+              "expression": "cover_art_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tracks_cover_art_sizes_small_id_idx": {
+          "name": "tracks_cover_art_sizes_small_id_idx",
+          "columns": [
+            {
+              "expression": "cover_art_sizes_small_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tracks_cover_art_sizes_medium_id_idx": {
+          "name": "tracks_cover_art_sizes_medium_id_idx",
+          "columns": [
+            {
+              "expression": "cover_art_sizes_medium_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tracks_cover_art_sizes_large_id_idx": {
+          "name": "tracks_cover_art_sizes_large_id_idx",
+          "columns": [
+            {
+              "expression": "cover_art_sizes_large_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tracks_cover_art_sizes_xlarge_id_idx": {
+          "name": "tracks_cover_art_sizes_xlarge_id_idx",
+          "columns": [
+            {
+              "expression": "cover_art_sizes_xlarge_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tracks_cover_art_sizes_xxlarge_id_idx": {
+          "name": "tracks_cover_art_sizes_xxlarge_id_idx",
+          "columns": [
+            {
+              "expression": "cover_art_sizes_xxlarge_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tracks_cover_art_sizes_original_id_idx": {
+          "name": "tracks_cover_art_sizes_original_id_idx",
+          "columns": [
+            {
+              "expression": "cover_art_sizes_original_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -5000,6 +5315,111 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "user_uploads_cover_art_id_idx": {
+          "name": "user_uploads_cover_art_id_idx",
+          "columns": [
+            {
+              "expression": "cover_art_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_uploads_cover_art_sizes_small_id_idx": {
+          "name": "user_uploads_cover_art_sizes_small_id_idx",
+          "columns": [
+            {
+              "expression": "cover_art_sizes_small_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_uploads_cover_art_sizes_medium_id_idx": {
+          "name": "user_uploads_cover_art_sizes_medium_id_idx",
+          "columns": [
+            {
+              "expression": "cover_art_sizes_medium_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_uploads_cover_art_sizes_large_id_idx": {
+          "name": "user_uploads_cover_art_sizes_large_id_idx",
+          "columns": [
+            {
+              "expression": "cover_art_sizes_large_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_uploads_cover_art_sizes_xlarge_id_idx": {
+          "name": "user_uploads_cover_art_sizes_xlarge_id_idx",
+          "columns": [
+            {
+              "expression": "cover_art_sizes_xlarge_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_uploads_cover_art_sizes_xxlarge_id_idx": {
+          "name": "user_uploads_cover_art_sizes_xxlarge_id_idx",
+          "columns": [
+            {
+              "expression": "cover_art_sizes_xxlarge_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_uploads_cover_art_sizes_original_id_idx": {
+          "name": "user_uploads_cover_art_sizes_original_id_idx",
+          "columns": [
+            {
+              "expression": "cover_art_sizes_original_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -5985,6 +6405,111 @@
           "isUnique": false,
           "concurrently": false,
           "method": "gin",
+          "with": {}
+        },
+        "playlists_cover_art_id_idx": {
+          "name": "playlists_cover_art_id_idx",
+          "columns": [
+            {
+              "expression": "cover_art_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "playlists_cover_art_sizes_small_id_idx": {
+          "name": "playlists_cover_art_sizes_small_id_idx",
+          "columns": [
+            {
+              "expression": "cover_art_sizes_small_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "playlists_cover_art_sizes_medium_id_idx": {
+          "name": "playlists_cover_art_sizes_medium_id_idx",
+          "columns": [
+            {
+              "expression": "cover_art_sizes_medium_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "playlists_cover_art_sizes_large_id_idx": {
+          "name": "playlists_cover_art_sizes_large_id_idx",
+          "columns": [
+            {
+              "expression": "cover_art_sizes_large_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "playlists_cover_art_sizes_xlarge_id_idx": {
+          "name": "playlists_cover_art_sizes_xlarge_id_idx",
+          "columns": [
+            {
+              "expression": "cover_art_sizes_xlarge_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "playlists_cover_art_sizes_xxlarge_id_idx": {
+          "name": "playlists_cover_art_sizes_xxlarge_id_idx",
+          "columns": [
+            {
+              "expression": "cover_art_sizes_xxlarge_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "playlists_cover_art_sizes_original_id_idx": {
+          "name": "playlists_cover_art_sizes_original_id_idx",
+          "columns": [
+            {
+              "expression": "cover_art_sizes_original_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
           "with": {}
         }
       },
@@ -8220,6 +8745,111 @@
           "concurrently": false,
           "method": "gin",
           "with": {}
+        },
+        "episodes_image_id_idx": {
+          "name": "episodes_image_id_idx",
+          "columns": [
+            {
+              "expression": "image_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "episodes_image_sizes_small_id_idx": {
+          "name": "episodes_image_sizes_small_id_idx",
+          "columns": [
+            {
+              "expression": "image_sizes_small_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "episodes_image_sizes_medium_id_idx": {
+          "name": "episodes_image_sizes_medium_id_idx",
+          "columns": [
+            {
+              "expression": "image_sizes_medium_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "episodes_image_sizes_large_id_idx": {
+          "name": "episodes_image_sizes_large_id_idx",
+          "columns": [
+            {
+              "expression": "image_sizes_large_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "episodes_image_sizes_xlarge_id_idx": {
+          "name": "episodes_image_sizes_xlarge_id_idx",
+          "columns": [
+            {
+              "expression": "image_sizes_xlarge_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "episodes_image_sizes_xxlarge_id_idx": {
+          "name": "episodes_image_sizes_xxlarge_id_idx",
+          "columns": [
+            {
+              "expression": "image_sizes_xxlarge_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "episodes_image_sizes_original_id_idx": {
+          "name": "episodes_image_sizes_original_id_idx",
+          "columns": [
+            {
+              "expression": "image_sizes_original_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -9179,6 +9809,111 @@
           "isUnique": false,
           "concurrently": false,
           "method": "gin",
+          "with": {}
+        },
+        "podcasts_image_id_idx": {
+          "name": "podcasts_image_id_idx",
+          "columns": [
+            {
+              "expression": "image_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "podcasts_image_sizes_small_id_idx": {
+          "name": "podcasts_image_sizes_small_id_idx",
+          "columns": [
+            {
+              "expression": "image_sizes_small_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "podcasts_image_sizes_medium_id_idx": {
+          "name": "podcasts_image_sizes_medium_id_idx",
+          "columns": [
+            {
+              "expression": "image_sizes_medium_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "podcasts_image_sizes_large_id_idx": {
+          "name": "podcasts_image_sizes_large_id_idx",
+          "columns": [
+            {
+              "expression": "image_sizes_large_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "podcasts_image_sizes_xlarge_id_idx": {
+          "name": "podcasts_image_sizes_xlarge_id_idx",
+          "columns": [
+            {
+              "expression": "image_sizes_xlarge_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "podcasts_image_sizes_xxlarge_id_idx": {
+          "name": "podcasts_image_sizes_xxlarge_id_idx",
+          "columns": [
+            {
+              "expression": "image_sizes_xxlarge_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "podcasts_image_sizes_original_id_idx": {
+          "name": "podcasts_image_sizes_original_id_idx",
+          "columns": [
+            {
+              "expression": "image_sizes_original_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
           "with": {}
         }
       },
