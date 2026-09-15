@@ -11,15 +11,19 @@ concurrency:
 jobs:
   apply:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
-      - name: Apply source checkpoint
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+      - run: bun install --frozen-lockfile
+      - name: Apply source checkpoint and generate additive migration
         shell: python
         run: |
-          import base64, gzip, io, pathlib, subprocess, tempfile
+          import base64, gzip, io, os, pathlib, re, subprocess, tempfile
           envelope = pathlib.Path('.review/listener.patch')
           if envelope.stat().st_size > 2_000_000:
             raise SystemExit('Checkpoint exceeds size limit')
@@ -39,6 +43,22 @@ jobs:
                 raise SystemExit('Disallowed source path: ' + path)
             subprocess.run(['git', 'apply', '--check', patch.name], check=True)
             subprocess.run(['git', 'apply', patch.name], check=True)
+          if any(path.startswith('packages/backend/src/db/schema/') for path in paths):
+            migrations = pathlib.Path('packages/backend/drizzle')
+            previous = set(migrations.glob('*.sql'))
+            subprocess.run(['bun', 'run', 'db:generate', '--name', 'listener_tools'], cwd='packages/backend', env={**os.environ, 'DATABASE_URL': 'postgresql://local:local@127.0.0.1:5439/syra_ci'}, check=True)
+            for migration in set(migrations.glob('*.sql')) - previous:
+              source = migration.read_text()
+              for match in list(re.finditer(r'ALTER TABLE "([^"]+)" ADD (CONSTRAINT .*?);--> statement-breakpoint\n?', source)):
+                table, constraint = match.group(1, 2)
+                start = f'CREATE TABLE "{table}" (\n'
+                if start not in source:
+                  raise SystemExit('Migration is not purely additive')
+                source = source.replace(match.group(0), '').replace(start, start + '\t' + constraint + ',\n')
+              if re.search(r'\b(DROP|ALTER|TRUNCATE|DELETE|UPDATE)\s+(TABLE|INDEX|TYPE|COLUMN|FROM)\b', source, re.I):
+                raise SystemExit('Destructive migration requires manual review')
+              migration.write_text('-- oxy:deploy-phase=pre\n-- Additive listener tools. Foreign keys are declared on new empty tables.\n' + source.rstrip() + '\n')
+            subprocess.run(['git', 'add', '--', str(migrations)], check=True)
           envelope.unlink()
           subprocess.run(['git', 'add', '--', *paths, str(envelope)], check=True)
           subprocess.run(['git', 'config', 'user.name', 'github-actions[bot]'], check=True)
