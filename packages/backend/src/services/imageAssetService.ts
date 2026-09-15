@@ -19,6 +19,7 @@
 import { Readable } from 'stream';
 import { eq } from 'drizzle-orm';
 import { uuidv7 } from '@oxy.so/db';
+import type { CatalogImageSizes, CatalogImageVariant } from '@syra/shared-types';
 import { getS3ImageKey } from '../config/s3.config';
 import { getDb } from '../db/postgres';
 import {
@@ -28,6 +29,9 @@ import {
   type ImageAssetOwnerType,
 } from '../db/schema/catalog';
 import { uploadToS3, streamFromS3 } from './s3Service';
+
+/** `createImageSizes` (`catalogImageAssets.ts`) always stamps exactly these six. */
+const CATALOG_IMAGE_SIZE_NAMES = ['small', 'medium', 'large', 'xlarge', 'xxlarge', 'original'] as const;
 
 /**
  * The provenance of a mirrored catalog image.
@@ -170,4 +174,100 @@ export async function getImageAssetSourceContentHash(
     .limit(1);
 
   return asset?.sourceContentHash ?? undefined;
+}
+
+export interface ExistingCatalogImageSet {
+  imageId: string;
+  imageSizes: CatalogImageSizes;
+  primaryColor?: string;
+  secondaryColor?: string;
+  /** The found set's OWN stamped hashes — never the lookup key back verbatim: a URL-hash hit still needs the matched set's real content hash, which was never downloaded this time. */
+  sourceUrlHash: string;
+  sourceContentHash: string;
+}
+
+/**
+ * A prior mirror of the SAME source image, from ANY catalog entity — the
+ * cross-entity twin of `getImageAssetSourceContentHash` (which only ever
+ * checks one already-known row). `createImageSizes` always stamps every one
+ * of its six size variants with the SAME `sourceUrlHash`/`sourceContentHash`
+ * in one call, so a hash match reliably names one complete existing set to
+ * reuse, not six independent rows that merely happen to agree.
+ *
+ * Two different episodes pointing at the same season thumbnail — or the same
+ * bytes re-served from a different CDN URL — otherwise re-download, re-encode
+ * and re-upload six fresh objects for artwork Syra already has. Returns
+ * `undefined` on anything short of a complete set (all six sizes present):
+ * that is conservative by design, since falling through just re-mirrors the
+ * image as if this lookup never ran, while returning a partial set would ship
+ * a `CatalogImageSizes` some size keys are silently missing from.
+ */
+export async function findExistingCatalogImageSet(
+  hashColumn: 'sourceUrlHash' | 'sourceContentHash',
+  hash: string
+): Promise<ExistingCatalogImageSet | undefined> {
+  const column =
+    hashColumn === 'sourceUrlHash' ? imageAssets.catalogSourceUrlHash : imageAssets.catalogSourceContentHash;
+
+  const rows = await getDb()
+    .select({
+      id: imageAssets.id,
+      size: imageAssets.catalogSize,
+      width: imageAssets.width,
+      height: imageAssets.height,
+      primaryColor: imageAssets.primaryColor,
+      secondaryColor: imageAssets.secondaryColor,
+      sourceUrlHash: imageAssets.catalogSourceUrlHash,
+      sourceContentHash: imageAssets.catalogSourceContentHash,
+      createdAt: imageAssets.createdAt,
+    })
+    .from(imageAssets)
+    .where(eq(column, hash))
+    .orderBy(imageAssets.createdAt);
+
+  if (rows.length === 0) return undefined;
+
+  // A hash can legitimately match more than one PAST set (the same artwork
+  // mirrored independently before this lookup existed, or a rare hash
+  // collision across sets). Group by createdAt-adjacency is fragile; instead,
+  // trust the OLDEST complete set found — `orderBy(createdAt)` plus taking the
+  // first six-size match below always resolves to it deterministically.
+  const bySize = new Map<string, (typeof rows)[number]>();
+  for (const row of rows) {
+    if (row.size && CATALOG_IMAGE_SIZE_NAMES.includes(row.size as (typeof CATALOG_IMAGE_SIZE_NAMES)[number])) {
+      if (!bySize.has(row.size)) bySize.set(row.size, row);
+    }
+  }
+
+  if (!CATALOG_IMAGE_SIZE_NAMES.every((size) => bySize.has(size))) return undefined;
+
+  const imageSizes: CatalogImageSizes = {};
+  for (const size of CATALOG_IMAGE_SIZE_NAMES) {
+    const row = bySize.get(size);
+    if (!row || row.width === null || row.height === null) return undefined;
+    const variant: CatalogImageVariant = {
+      id: row.id,
+      url: `/api/images/${row.id}`,
+      width: row.width,
+      height: row.height,
+    };
+    imageSizes[size] = variant;
+  }
+
+  const large = bySize.get('large');
+  // Every row from one `createImageSizes` call carries the identical pair —
+  // if either is missing, this row predates the columns existing at all
+  // (nullable, so an old row can genuinely have neither) and is not a usable
+  // dedup source: reusing it would forward a blank hash to every future
+  // lookup keyed on it.
+  if (!large?.sourceUrlHash || !large.sourceContentHash) return undefined;
+
+  return {
+    imageId: imageSizes.large?.id ?? imageSizes.xlarge?.id ?? imageSizes.medium?.id ?? imageSizes.original?.id ?? '',
+    imageSizes,
+    primaryColor: large.primaryColor ?? undefined,
+    secondaryColor: large.secondaryColor ?? undefined,
+    sourceUrlHash: large.sourceUrlHash,
+    sourceContentHash: large.sourceContentHash,
+  };
 }
