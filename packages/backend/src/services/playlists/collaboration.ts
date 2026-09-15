@@ -1,7 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { and, count, desc, eq, gt, lte } from 'drizzle-orm';
+import { and, count, eq, gt, lte } from 'drizzle-orm';
 import type { DbTransaction } from '../../db/postgres';
 import { getDb } from '../../db/postgres';
+import { descNullsLast } from '../../db/catalog/containers';
 import { playlists, playlistCollaborators } from '../../db/schema/library';
 import { playlistActivity, playlistInvites } from '../../db/schema/playlist-sharing';
 
@@ -91,6 +92,6 @@ export async function readPlaylistActivity(playlistId: string, userId: string) {
     .where(and(eq(playlistCollaborators.playlistId, playlistId), eq(playlistCollaborators.oxyUserId, userId)));
   if (!playlist || (playlist.ownerOxyUserId !== userId && !member)) throw new PlaylistAccessError(403, 'Forbidden');
   const rows = await getDb().select({ id: playlistActivity.id, actorOxyUserId: playlistActivity.actorOxyUserId, action: playlistActivity.action, targetOxyUserId: playlistActivity.targetOxyUserId, createdAt: playlistActivity.createdAt })
-    .from(playlistActivity).where(eq(playlistActivity.playlistId, playlistId)).orderBy(desc(playlistActivity.createdAt), desc(playlistActivity.id)).limit(50);
+    .from(playlistActivity).where(eq(playlistActivity.playlistId, playlistId)).orderBy(descNullsLast(playlistActivity.createdAt), descNullsLast(playlistActivity.id)).limit(50);
   return { items: rows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() })) };
 }
