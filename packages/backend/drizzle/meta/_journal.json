@@ -225,6 +225,13 @@
       "when": 1789459340256,
       "tag": "0031_bouncy_victor_mancha",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1789464871786,
+      "tag": "0032_listener_experience",
+      "breakpoints": true
     }
   ]
 }

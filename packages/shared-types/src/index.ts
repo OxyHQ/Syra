@@ -21,3 +21,5 @@ export * from './search';
 export * from './integrations';
 export * from './connect';
 export * from './lyrics';
+
+export * from './playlist-sharing';

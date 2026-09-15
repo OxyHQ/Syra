@@ -15,7 +15,8 @@ export const artistStatsSchema = z.object({
   albums: z.number(),
   tracks: z.number(),
   totalPlays: z.number(),
-  monthlyListeners: z.number().optional(),
+  monthlyListeners: z.number().int().nonnegative().optional(),
+  monthlyListenersComputedAt: z.string().datetime().optional(),
 });
 export type ArtistStats = z.infer<typeof artistStatsSchema>;
 

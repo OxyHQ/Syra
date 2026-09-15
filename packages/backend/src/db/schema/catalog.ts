@@ -386,6 +386,7 @@ export const catalogEntities = pgTable(
     statsTracks: integer().default(0),
     statsTotalPlays: integer().default(0),
     statsMonthlyListeners: integer().default(0),
+    statsMonthlyListenersComputedAt: timestamptz(),
     strikeCount: integer().default(0),
     uploadsDisabled: boolean().default(false),
     lastStrikeAt: timestamptz(),

@@ -83,11 +83,12 @@ const EPISODE: Episode = {
  * for it.
  */
 let queryClient: QueryClient;
+const mountedTrees: ReactTestRenderer[] = [];
 let invalidateQueries: jest.SpyInstance;
 let removeQueries: jest.SpyInstance;
 
 function renderRow(deletable: boolean): ReactTestRenderer {
-  let tree!: ReactTestRenderer;
+  let tree: ReactTestRenderer | undefined;
   act(() => {
     tree = create(
       <QueryClientProvider client={queryClient}>
@@ -95,6 +96,8 @@ function renderRow(deletable: boolean): ReactTestRenderer {
       </QueryClientProvider>,
     );
   });
+  if (!tree) throw new Error('Test renderer did not mount');
+  mountedTrees.push(tree);
   return tree;
 }
 
@@ -144,17 +147,19 @@ beforeEach(() => {
   dialogProps.length = 0;
   jest.clearAllMocks();
   queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false, gcTime: Infinity } },
   });
   invalidateQueries = jest.spyOn(queryClient, 'invalidateQueries');
   removeQueries = jest.spyOn(queryClient, 'removeQueries');
   mockDeleteEpisode.mockResolvedValue({ id: 'ep-1', podcastId: 'show-1', objectsDeleted: 3 });
 });
 
-afterEach(() => {
-  // In `afterEach`, never at the end of a body: a failing assertion skips
-  // whatever follows it, so cleanup written inline leaks into the next test —
-  // and a leaked cache is exactly what makes a broken mutation look green.
+afterEach(async () => {
+  // Unmount observers before clearing Query: a still-mounted screen can
+  // refetch the cleared query and keep React's scheduler alive after the suite.
+  await act(async () => {
+    for (const tree of mountedTrees.splice(0)) tree.unmount();
+  });
   queryClient.clear();
 });
 

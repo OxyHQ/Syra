@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useRouter } from 'expo-router';
 import { StyleSheet, View, Text, Pressable, Platform } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxy.so/bloom/theme';
@@ -38,6 +39,7 @@ const getProgressPercent = (currentTime: number, duration: number) => {
  */
 export const MobilePlayerBar: React.FC = () => {
   const { t } = useTranslation();
+  const router = useRouter();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const [progressBarWidth, setProgressBarWidth] = useState(0);
@@ -142,7 +144,10 @@ export const MobilePlayerBar: React.FC = () => {
       <View style={[styles.content, { paddingHorizontal: SPACING, paddingVertical: SPACING, gap: SPACING }]}>
         {/* Left: Track Info */}
         <View style={[styles.trackInfo, { gap: SPACING }]}>
-          <Pressable style={styles.albumArtPressable}>
+          <Pressable style={styles.albumArtPressable} accessibilityRole="button" accessibilityLabel={t('listener.creditsLyrics')} onPress={() => {
+            if (isCatalogTrack && currentTrack) router.push({ pathname: '/track/[id]', params: { id: currentTrack.id } });
+            else if (isEpisode && media) router.push({ pathname: '/episode/[id]', params: { id: media.id } });
+          }}>
             {media?.imageUri ? (
               <Image
                 source={{ uri: media.imageUri }}

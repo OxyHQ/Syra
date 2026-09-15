@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, Text, Pressable, Image, ScrollView, Platform, Linking } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -15,6 +15,8 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { toast } from '@oxy.so/bloom/toast';
 import { Track } from '@syra/shared-types';
 import { entityService } from '@/services/entityService';
+import { MonthlyListeners } from '@/components/artist/MonthlyListeners';
+import { shareMedia } from '@/utils/share-media';
 import { ArtistClaimCta } from '@/components/artist/ArtistClaimCta';
 import { ArtistFollowControl } from '@/components/artist/ArtistFollowControl';
 import { usePlayerStore } from '@/stores/playerStore';
@@ -145,6 +147,11 @@ const EntityProfileScreen: React.FC = () => {
   }, [entityPrimaryColor, entitySecondaryColor, setAmbient, clearAmbient]);
 
   const handlePlayAll = () => {
+    const player = usePlayerStore.getState();
+    if (player.context?.type === 'artist' && player.context.id === artistId && player.currentTrack) {
+      void (player.isPlaying ? player.pause() : player.resume());
+      return;
+    }
     if (tracks.length === 0) {
       toast.info(t('common.noPlayableTracks'));
       return;
@@ -251,6 +258,7 @@ const EntityProfileScreen: React.FC = () => {
   return (
     <EntityProfileView
       entity={entity}
+      asOf={entityQuery.dataUpdatedAt}
       displayName={displayName}
       artistId={artistId}
       relatedArtists={relatedArtists}
@@ -262,6 +270,14 @@ const EntityProfileScreen: React.FC = () => {
       currentEpisodeId={currentEpisode?.id}
       isPlaying={isPlaying}
       onPlayAll={handlePlayAll}
+      onShuffle={() => {
+        const shuffled = [...tracks];
+        for (let index = shuffled.length - 1; index > 0; index -= 1) {
+          const target = Math.floor(Math.random() * (index + 1));
+          [shuffled[index], shuffled[target]] = [shuffled[target], shuffled[index]];
+        }
+        void playTrackList(shuffled, 0, { type: 'artist', id: artistId, name: displayName });
+      }}
       onStartRadio={handleStartRadio}
       onTrackPress={handleTrackPress}
       onPlayEpisode={playEpisode}
@@ -281,6 +297,7 @@ const EntityProfileScreen: React.FC = () => {
 
 interface EntityProfileViewProps {
   entity: EntityProfile;
+  asOf: number;
   displayName: string;
   artistId: string | undefined;
   relatedArtists: RelatedArtist[];
@@ -292,6 +309,7 @@ interface EntityProfileViewProps {
   currentEpisodeId: string | undefined;
   isPlaying: boolean;
   onPlayAll: () => void;
+  onShuffle: () => void;
   onStartRadio: () => void;
   onTrackPress: (track: Track) => void;
   onPlayEpisode: (episode: AppearsInEpisode) => void;
@@ -321,6 +339,7 @@ interface EntityProfileViewProps {
  */
 const EntityProfileView: React.FC<EntityProfileViewProps> = ({
   entity,
+  asOf,
   displayName,
   artistId,
   relatedArtists,
@@ -332,6 +351,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
   currentEpisodeId,
   isPlaying,
   onPlayAll,
+  onShuffle,
   onStartRadio,
   onTrackPress,
   onPlayEpisode,
@@ -355,6 +375,9 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
   const podcasts = entity.appearsIn?.podcasts ?? [];
   const episodes = entity.appearsIn?.episodes ?? [];
   const canPlay = tracks.length > 0;
+  const [expandedShelves, setExpandedShelves] = useState<string[]>([]);
+  const activeContext = usePlayerStore((state) => state.context);
+  const isArtistPlaying = isPlaying && activeContext?.type === 'artist' && activeContext.id === artistId;
 
   const discography = entity.discography;
   const creditedOn = entity.creditedOn ?? [];
@@ -382,6 +405,8 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
   const albums = discography
     ? [...discography.albums, ...discography.singlesAndEps, ...discography.compilations]
     : entity.music?.albums ?? [];
+  const latestRelease = albums.filter((album) => album.releaseDate && Number.isFinite(Date.parse(album.releaseDate)) && Date.parse(album.releaseDate) <= asOf)
+    .sort((first, second) => Date.parse(second.releaseDate ?? '') - Date.parse(first.releaseDate ?? ''))[0];
 
   /**
    * Recordings on this page that a third party contributed rather than the
@@ -444,9 +469,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
     if (entity.genres && entity.genres.length > 0) {
       parts.push(entity.genres.join(', '));
     }
-    if (stats?.monthlyListeners && stats.monthlyListeners > 0) {
-      parts.push(`${stats.monthlyListeners.toLocaleString()} monthly listeners`);
-    } else if (stats && stats.followers > 0) {
+    if (stats && stats.followers > 0) {
       parts.push(`${stats.followers.toLocaleString()} ${stats.followers === 1 ? 'follower' : 'followers'}`);
     }
     const albumCount = stats?.albums ?? albums.length;
@@ -491,7 +514,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                   onPress={onPlayAll}
                   accessibilityRole="button"
                 >
-                  <Ionicons name="play" size={16} color={theme.colors.primaryForeground} />
+                  <Ionicons name={isArtistPlaying ? 'pause' : 'play'} size={16} color={theme.colors.primaryForeground} />
                 </Pressable>
               )}
               {artistId && (
@@ -545,6 +568,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
 
           {/* Content Section with Gradient Background */}
           <LinearGradient colors={gradientColors} locations={[0, 0.35, 1]} style={styles.contentSection}>
+            {artistId ? <MonthlyListeners stats={entity.stats} /> : null}
             {/* Entity Info */}
             <View style={styles.infoContainer}>
               <View style={styles.infoHeader}>
@@ -630,13 +654,21 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                     accessibilityRole="button"
                   >
                     <View style={styles.playButtonInner}>
-                      <Ionicons name="play" size={24} color={theme.colors.primaryForeground} />
+                      <Ionicons name={isArtistPlaying ? 'pause' : 'play'} size={24} color={theme.colors.primaryForeground} />
                     </View>
+                  </Pressable>
+                )}
+                {canPlay && (
+                  <Pressable onPress={onShuffle} style={styles.controlButton} accessibilityRole="button" accessibilityLabel={t('listener.shuffle')}>
+                    <Ionicons name="shuffle" size={24} color={theme.colors.text} />
                   </Pressable>
                 )}
                 {artistId && (
                   <ArtistFollowControl artistId={artistId} artistName={displayName} />
                 )}
+                <Pressable onPress={() => void shareMedia('p', entity.id, displayName)} style={styles.controlButton} accessibilityRole="button" accessibilityLabel={t('listener.share')}>
+                  <Ionicons name="share-outline" size={24} color={theme.colors.text} />
+                </Pressable>
                 {artistId && (
                   <Pressable
                     style={styles.controlButton}
@@ -669,6 +701,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                         onPress={() => onTrackPress(track)}
                         onPlayPress={() => onTrackPress(track)}
                         showNumber
+                        showPlayCount
                         // Published by a listener, not by the artist. A claimed
                         // artist otherwise sees a discography containing
                         // recordings they never uploaded, with no way to tell.
@@ -680,6 +713,10 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
               </>
             )}
 
+            {latestRelease ? <>
+              <View style={styles.sectionHeader}><Text className="text-foreground" style={styles.sectionTitle}>{t('listener.latestRelease')}</Text></View>
+              <View className="px-6 pb-6 max-w-sm"><MediaCard title={latestRelease.title} subtitle={latestRelease.releaseDate} type="album" imageUri={latestRelease.coverArt} imageSizes={latestRelease.coverArtSizes} onPress={() => onNavigateAlbum(latestRelease.id)} onPlayPress={() => onPlayAlbum(latestRelease.id, latestRelease.title)} /></View>
+            </> : null}
             {/* Discography — three shelves off the release-type split the
                 backend computed. A shelf with nothing in it does not render at
                 all, rather than opening onto an empty grid. */}
@@ -688,9 +725,10 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                 <React.Fragment key={shelf.key}>
                   <View style={styles.sectionHeader}>
                     <Text className="text-foreground" style={styles.sectionTitle}>{t(shelf.titleKey)}</Text>
+                    {shelf.albums.length > 6 ? <Pressable accessibilityRole="button" onPress={() => setExpandedShelves((current) => current.includes(shelf.key) ? current.filter((key) => key !== shelf.key) : [...current, shelf.key])}><Text className="text-primary">{t(expandedShelves.includes(shelf.key) ? 'common.showLess' : 'common.seeAll', { defaultValue: expandedShelves.includes(shelf.key) ? 'Show less' : 'See all' })}</Text></Pressable> : null}
                   </View>
                   <ResponsiveGrid minItemWidth={180} gap={8} style={styles.albumsGrid}>
-                    {shelf.albums.map((album) => (
+                    {(expandedShelves.includes(shelf.key) ? shelf.albums : shelf.albums.slice(0, 6)).map((album) => (
                       <View key={album.id}>
                         <MediaCard
                           title={album.title}

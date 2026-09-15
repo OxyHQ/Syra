@@ -4,6 +4,7 @@ import { getDb, isPostgresConnected } from '../../db/postgres';
 import { EXPIRY_SWEEP_TARGETS } from '../../db/expiry';
 import { decayAllTasteProfiles } from './tasteDecay';
 import { runCoOccurrencePass } from './coOccurrenceJob';
+import { refreshMonthlyListeners } from './monthly-listeners';
 import { describeErrorSafely } from '../../utils/error';
 import { logger } from '../../utils/logger';
 
@@ -51,6 +52,16 @@ async function tick(): Promise<void> {
   if (running) return; // never overlap on the same instance
   running = true;
   try {
+    // Public audience counts use their own Postgres transaction lock. Redis
+    // downtime must not leave this visible metric stale indefinitely.
+    if (isPostgresConnected()) {
+      try {
+        await refreshMonthlyListeners();
+      } catch (error) {
+        logger.warn('[listeners] audience refresh failed', { error: describeErrorSafely(error) });
+      }
+    }
+
     // Co-occurrence graph rebuild (single instance via lock).
     await withLock('recommendations:co-occurrence', CO_OCCURRENCE_LOCK_TTL_MS, async () => {
       try {

@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import * as Skeleton from '@oxy.so/bloom/skeleton';
 import { useLyrics } from '@/hooks/useLyrics';
 import { usePlayerStore } from '@/stores/playerStore';
@@ -26,15 +26,17 @@ interface LyricsViewProps {
  */
 export const LyricsView: React.FC<LyricsViewProps> = React.memo(({ trackId }) => {
   const { t } = useTranslation();
-  const { lyrics, isLoading } = useLyrics(trackId);
+  const { lyrics, isLoading, isError, retry } = useLyrics(trackId);
 
   // currentTime is in seconds — convert to ms for the active-line computation.
-  const currentTimeMs = usePlayerStore((state) => state.currentTime * SECONDS_TO_MS);
+  const currentTimeMs = usePlayerStore((state) => state.currentTrack?.id === trackId ? state.currentTime * SECONDS_TO_MS : 0);
+  const isCurrent = usePlayerStore((state) => state.currentTrack?.id === trackId);
+  const seek = usePlayerStore((state) => state.seek);
 
   const activeIndex = useMemo(() => {
-    if (!lyrics?.synced || !lyrics.lines.length) return -1;
+    if (!isCurrent || !lyrics?.synced || !lyrics.lines.length) return -1;
     return activeLyricLineIndex(lyrics.lines, currentTimeMs);
-  }, [lyrics, currentTimeMs]);
+  }, [lyrics, currentTimeMs, isCurrent]);
 
   if (isLoading) {
     return (
@@ -49,6 +51,10 @@ export const LyricsView: React.FC<LyricsViewProps> = React.memo(({ trackId }) =>
         ))}
       </View>
     );
+  }
+
+  if (isError) {
+    return <View className="p-6 gap-3"><Text className="text-muted-foreground">{t('listener.lyricsFailed')}</Text><Pressable accessibilityRole="button" onPress={retry}><Text className="text-primary">{t('listener.retry')}</Text></Pressable></View>;
   }
 
   if (!lyrics) {
@@ -69,8 +75,9 @@ export const LyricsView: React.FC<LyricsViewProps> = React.memo(({ trackId }) =>
         showsVerticalScrollIndicator={false}
       >
         {lyrics.lines.map((line, index) => (
+          <Pressable key={index} disabled={!isCurrent} accessibilityRole="button" accessibilityLabel={t('listener.seekLyric', { line: line.text })} onPress={() => void seek(line.timeMs / SECONDS_TO_MS)}>
           <Text
-            key={index}
+            selectable={!isCurrent}
             className={
               index === activeIndex
                 ? 'text-lg font-semibold text-primary leading-relaxed'
@@ -79,7 +86,9 @@ export const LyricsView: React.FC<LyricsViewProps> = React.memo(({ trackId }) =>
           >
             {line.text}
           </Text>
+          </Pressable>
         ))}
+        <Text className="text-sm text-muted-foreground">{t('listener.lyricsSource', { source: lyrics.source })}</Text>
       </ScrollView>
     );
   }
@@ -98,6 +107,7 @@ export const LyricsView: React.FC<LyricsViewProps> = React.memo(({ trackId }) =>
       <Text className="text-base text-foreground leading-relaxed">
         {plainText}
       </Text>
+      <Text className="text-sm text-muted-foreground mt-4">{t('listener.lyricsSource', { source: lyrics.source })}</Text>
     </ScrollView>
   );
 });

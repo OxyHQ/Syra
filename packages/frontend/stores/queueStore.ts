@@ -9,6 +9,7 @@ import {
 } from '@syra/shared-types';
 import { queueService } from '../services/queueService';
 import { isUnauthorizedError } from '../utils/api';
+import { moveQueueOccurrence, removeQueueOccurrence } from '../utils/queue-occurrences';
 
 const RECOVERABLE_CURRENT_INDEX_ERRORS = new Set(['Queue not found', 'Index out of bounds']);
 
@@ -116,6 +117,12 @@ function queueWithInsertedItems(
 }
 
 interface QueueState {
+  accountId: string | null | undefined;
+  accountSession: number;
+  revision: number;
+  setAccount: (accountId: string | null) => void;
+  moveOccurrence: (from: number, to: number) => Promise<void>;
+  removeOccurrence: (index: number) => Promise<void>;
   queue: Queue | null;
   shuffle: ShuffleMode;
   repeat: RepeatMode;
@@ -142,10 +149,57 @@ interface QueueState {
   setRepeat: (repeat: RepeatMode) => void;
   toggleShuffle: () => void;
   cycleRepeat: () => void;
-  syncQueue: (queue: Queue) => void; // For socket updates
+  syncQueue: (queue: Queue, source?: 'socket') => void; // For socket updates
+}
+
+// Requests are ordered at the boundary so a slow replace cannot land after
+// a newer append. The returned promise still rejects to the action that owns
+// error reporting; the recovered tail only allows the following request to run.
+let requestTail: Promise<unknown> = Promise.resolve();
+let queuedRequests = 0;
+function orderedRequest<T>(session: number, action: () => Promise<T>): Promise<T> {
+  queuedRequests += 1;
+  const result = requestTail.then(() => {
+    if (useQueueStore.getState().accountSession !== session) throw new Error('Queue account changed');
+    return action();
+  }).finally(() => {
+    if (useQueueStore.getState().accountSession === session) queuedRequests -= 1;
+  });
+  requestTail = result.then(() => undefined, () => undefined);
+  return result;
+}
+function beginRequest() {
+  const { accountSession, revision } = useQueueStore.getState();
+  useQueueStore.setState({ revision: revision + 1 });
+  return { accountSession, revision: revision + 1 };
+}
+function isCurrent(request: { accountSession: number; revision: number }): boolean {
+  const state = useQueueStore.getState();
+  return state.accountSession === request.accountSession && state.revision === request.revision;
 }
 
 export const useQueueStore = create<QueueState>((set, get) => ({
+  accountId: undefined,
+  accountSession: 0,
+  revision: 0,
+  setAccount: (accountId) => {
+    if (get().accountId === accountId) return;
+    requestTail = Promise.resolve();
+    queuedRequests = 0;
+    set({ accountId, accountSession: get().accountSession + 1, revision: get().revision + 1, queue: null, shuffle: 'off', repeat: RepeatMode.OFF, error: null, isLoading: false });
+  },
+  moveOccurrence: async (from, to) => {
+    const queue = get().queue;
+    if (!queue) return;
+    const next = moveQueueOccurrence(queue, from, to);
+    if (next !== queue) await get().replaceQueue(next);
+  },
+  removeOccurrence: async (index) => {
+    const queue = get().queue;
+    if (!queue) return;
+    const next = removeQueueOccurrence(queue, index);
+    if (next !== queue) await get().replaceQueue(next);
+  },
   queue: null,
   shuffle: 'off',
   repeat: RepeatMode.OFF,
@@ -153,11 +207,14 @@ export const useQueueStore = create<QueueState>((set, get) => ({
   error: null,
 
   loadQueue: async () => {
+    const request = beginRequest();
     try {
       set({ isLoading: true, error: null });
-      const queueData = await queueService.getQueue();
+      const queueData = await orderedRequest(request.accountSession, () => queueService.getQueue());
+      if (!isCurrent(request)) return;
       set({ queue: queueData, isLoading: false });
     } catch (error) {
+      if (!isCurrent(request)) return;
       console.error('[QueueStore] Error loading queue:', error);
       set({
         error: error instanceof Error ? error.message : 'Failed to load queue',
@@ -167,11 +224,14 @@ export const useQueueStore = create<QueueState>((set, get) => ({
   },
 
   addToQueue: async (refs: PlayableRef[], position?: 'next' | 'last' | number) => {
+    const request = beginRequest();
     try {
       set({ isLoading: true, error: null });
-      const result = await queueService.addToQueue(refs, position);
+      const result = await orderedRequest(request.accountSession, () => queueService.addToQueue(refs, position));
+      if (!isCurrent(request)) return;
       set({ queue: result.queue, isLoading: false });
     } catch (error) {
+      if (!isCurrent(request)) return;
       console.error('[QueueStore] Error adding to queue:', error);
       set({
         error: error instanceof Error ? error.message : 'Failed to add to queue',
@@ -181,13 +241,17 @@ export const useQueueStore = create<QueueState>((set, get) => ({
   },
 
   replaceQueue: async (queue: Queue) => {
+    if (!queue.tracks.length) { await get().clearQueue(); return; }
+    const request = beginRequest();
     const previousQueue = get().queue;
-    set({ queue, error: null });
+    set({ queue, error: null, isLoading: false });
 
     try {
-      const result = await queueService.replaceQueue(queue);
+      const result = await orderedRequest(request.accountSession, () => queueService.replaceQueue(queue));
+      if (!isCurrent(request)) return;
       set({ queue: result.queue });
     } catch (error) {
+      if (!isCurrent(request)) return;
       // `PUT /queue` sits behind requireAuth, so a guest cannot have a
       // server-side queue at all — reverting would wipe the queue they just
       // started playing. Theirs is legitimately local-only. The optimistic set
@@ -208,17 +272,20 @@ export const useQueueStore = create<QueueState>((set, get) => ({
     if (items.length === 0) {
       return;
     }
+    const request = beginRequest();
 
     const previousQueue = get().queue;
-    set({ queue: queueWithInsertedItems(previousQueue, items, position), error: null });
+    set({ queue: queueWithInsertedItems(previousQueue, items, position), error: null, isLoading: false });
 
     try {
-      const result = await queueService.addToQueue(
+      const result = await orderedRequest(request.accountSession, () => queueService.addToQueue(
         items.map((item) => ({ kind: item.kind, id: item.id })),
         position,
-      );
+      ));
+      if (!isCurrent(request)) return;
       set({ queue: result.queue });
     } catch (error) {
+      if (!isCurrent(request)) return;
       // Same as replaceQueue: `POST /queue/add` requires auth, so for a guest
       // every radio append would otherwise revert and silently empty the queue.
       if (isUnauthorizedError(error)) {
@@ -234,11 +301,14 @@ export const useQueueStore = create<QueueState>((set, get) => ({
   },
 
   removeFromQueue: async (refs: PlayableRef[]) => {
+    const request = beginRequest();
     try {
       set({ isLoading: true, error: null });
-      const result = await queueService.removeFromQueue(refs);
+      const result = await orderedRequest(request.accountSession, () => queueService.removeFromQueue(refs));
+      if (!isCurrent(request)) return;
       set({ queue: result.queue, isLoading: false });
     } catch (error) {
+      if (!isCurrent(request)) return;
       console.error('[QueueStore] Error removing from queue:', error);
       set({
         error: error instanceof Error ? error.message : 'Failed to remove from queue',
@@ -248,11 +318,14 @@ export const useQueueStore = create<QueueState>((set, get) => ({
   },
 
   reorderQueue: async (refs: PlayableRef[]) => {
+    const request = beginRequest();
     try {
       set({ isLoading: true, error: null });
-      const result = await queueService.reorderQueue(refs);
+      const result = await orderedRequest(request.accountSession, () => queueService.reorderQueue(refs));
+      if (!isCurrent(request)) return;
       set({ queue: result.queue, isLoading: false });
     } catch (error) {
+      if (!isCurrent(request)) return;
       console.error('[QueueStore] Error reordering queue:', error);
       set({
         error: error instanceof Error ? error.message : 'Failed to reorder queue',
@@ -262,14 +335,19 @@ export const useQueueStore = create<QueueState>((set, get) => ({
   },
 
   clearQueue: async () => {
+    const request = beginRequest();
+    set({ queue: { current: -1, tracks: [] }, error: null });
     try {
       set({ isLoading: true, error: null });
-      await queueService.clearQueue();
+      await orderedRequest(request.accountSession, () => queueService.clearQueue());
+      if (!isCurrent(request)) return;
       set({
         queue: { current: -1, tracks: [] },
         isLoading: false,
       });
     } catch (error) {
+      if (!isCurrent(request)) return;
+      if (isUnauthorizedError(error)) { set({ isLoading: false }); return; }
       console.error('[QueueStore] Error clearing queue:', error);
       set({
         error: error instanceof Error ? error.message : 'Failed to clear queue',
@@ -280,19 +358,22 @@ export const useQueueStore = create<QueueState>((set, get) => ({
 
   setCurrentIndex: async (index: number) => {
     const { queue } = get();
-    if (!queue || index < 0 || index >= queue.tracks.length) {
+    if (!queue || !Number.isInteger(index) || index < 0 || index >= queue.tracks.length) {
       return;
     }
     if (queue.current === index) {
       return;
     }
+    const request = beginRequest();
 
-    set({ queue: { ...queue, current: index } });
+    set({ queue: { ...queue, current: index }, isLoading: false, error: null });
 
     try {
-      const result = await queueService.setCurrentIndex(index);
+      const result = await orderedRequest(request.accountSession, () => queueService.setCurrentIndex(index));
+      if (!isCurrent(request)) return;
       set({ queue: result.queue });
     } catch (error) {
+      if (!isCurrent(request)) return;
       if (isRecoverableCurrentIndexError(error)) {
         const currentQueue = get().queue;
         if (!currentQueue || index < 0 || index >= currentQueue.tracks.length) {
@@ -301,9 +382,11 @@ export const useQueueStore = create<QueueState>((set, get) => ({
 
         const repairedQueue = { ...currentQueue, current: index };
         try {
-          const result = await queueService.replaceQueue(repairedQueue);
+          const result = await orderedRequest(request.accountSession, () => queueService.replaceQueue(repairedQueue));
+          if (!isCurrent(request)) return;
           set({ queue: result.queue, error: null });
         } catch (repairError) {
+          if (!isCurrent(request)) return;
           console.error('[QueueStore] Error repairing queue current index:', repairError);
           set({ error: userFacingError(repairError, 'Failed to repair queue') });
         }
@@ -365,7 +448,8 @@ export const useQueueStore = create<QueueState>((set, get) => ({
     });
   },
 
-  syncQueue: (queue: Queue) => {
-    set({ queue });
+  syncQueue: (queue: Queue, source) => {
+    if (source === 'socket' && queuedRequests > 0) return;
+    set({ queue, revision: get().revision + 1 });
   },
 }));

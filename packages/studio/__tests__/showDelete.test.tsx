@@ -121,11 +121,12 @@ const SHOW = {
 } as Podcast;
 
 let queryClient: QueryClient;
+const mountedTrees: ReactTestRenderer[] = [];
 let invalidateQueries: jest.SpyInstance;
 let removeQueries: jest.SpyInstance;
 
 async function renderScreen(): Promise<ReactTestRenderer> {
-  let tree!: ReactTestRenderer;
+  let tree: ReactTestRenderer | undefined;
   await act(async () => {
     tree = create(
       <QueryClientProvider client={queryClient}>
@@ -133,6 +134,8 @@ async function renderScreen(): Promise<ReactTestRenderer> {
       </QueryClientProvider>,
     );
   });
+  if (!tree) throw new Error('Test renderer did not mount');
+  mountedTrees.push(tree);
 
   // React Query settles over a chain of microtasks, and one flush is not
   // reliably enough: a screen still in its loading state renders no controls at
@@ -204,7 +207,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockViewerId = 'owner-1';
   queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false, gcTime: Infinity } },
   });
   invalidateQueries = jest.spyOn(queryClient, 'invalidateQueries');
   removeQueries = jest.spyOn(queryClient, 'removeQueries');
@@ -212,9 +215,12 @@ beforeEach(() => {
   mockDeletePodcast.mockResolvedValue({ id: 'show-1', episodesDeleted: 7, objectsDeleted: 31 });
 });
 
-afterEach(() => {
-  // In `afterEach`, never at the end of a body: a failing assertion skips
-  // whatever follows it, so cleanup written inline leaks into the next test.
+afterEach(async () => {
+  // Unmount observers before clearing Query: a still-mounted screen can
+  // refetch the cleared query and keep React's scheduler alive after the suite.
+  await act(async () => {
+    for (const tree of mountedTrees.splice(0)) tree.unmount();
+  });
   queryClient.clear();
 });
 

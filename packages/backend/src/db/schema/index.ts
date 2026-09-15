@@ -29,3 +29,5 @@ export * from './podcasts';
 export * from './rooms';
 export * from './trackKeys';
 export * from './user';
+
+export * from './playlist-sharing';

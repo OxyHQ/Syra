@@ -473,6 +473,7 @@ export function toArtistDto(
     tracks: row.statsTracks ?? 0,
     totalPlays: row.statsTotalPlays ?? 0,
     monthlyListeners: optional(row.statsMonthlyListeners),
+    monthlyListenersComputedAt: row.statsMonthlyListenersComputedAt?.toISOString(),
   };
 
   return {

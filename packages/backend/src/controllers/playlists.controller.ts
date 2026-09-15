@@ -1,4 +1,6 @@
 import { Response, NextFunction } from 'express';
+import { lockPlaylistForEdit, PlaylistAccessError } from '../services/playlists/collaboration';
+import { playlistActivity } from '../db/schema/playlist-sharing';
 import { and, eq, inArray } from 'drizzle-orm';
 import { isForeignKeyViolation, isLiveEntityId } from '@oxy.so/db';
 import { publicColumns } from '@oxy.so/db/assert';
@@ -16,7 +18,6 @@ import {
   findCollaboratorOxyUserIds,
   findCollaboratorRole,
   findCollaboratorsForPlaylists,
-  findExistingPlaylistTrackIds,
   findPlayableTrackIds,
   findPlaylistById,
   findPlaylistCollaborators,
@@ -172,6 +173,7 @@ export const getUserPlaylists = async (req: AuthRequest, res: Response, next: Ne
       total: formattedPlaylists.length,
     });
   } catch (error) {
+    if (error instanceof PlaylistAccessError) return res.status(error.status).json({ error: error.message, ...error.details });
     next(error);
   }
 };
@@ -189,6 +191,7 @@ export const getPlaylistById = async (req: AuthRequest, res: Response, next: Nex
 
     res.json(await toPlaylistResponse(playlist));
   } catch (error) {
+    if (error instanceof PlaylistAccessError) return res.status(error.status).json({ error: error.message, ...error.details });
     next(error);
   }
 };
@@ -235,6 +238,7 @@ export const getPlaylistTracks = async (req: AuthRequest, res: Response, next: N
       total: ordered.length,
     });
   } catch (error) {
+    if (error instanceof PlaylistAccessError) return res.status(error.status).json({ error: error.message, ...error.details });
     next(error);
   }
 };
@@ -297,6 +301,7 @@ export const createPlaylist = async (req: PlaylistAuthRequest, res: Response, ne
 
     res.status(201).json(await toPlaylistResponse(created));
   } catch (error) {
+    if (error instanceof PlaylistAccessError) return res.status(error.status).json({ error: error.message, ...error.details });
     next(error);
   }
 };
@@ -386,6 +391,7 @@ export const updatePlaylist = async (req: AuthRequest, res: Response, next: Next
 
     res.json(await toPlaylistResponse(updated));
   } catch (error) {
+    if (error instanceof PlaylistAccessError) return res.status(error.status).json({ error: error.message, ...error.details });
     next(error);
   }
 };
@@ -440,6 +446,7 @@ export const deletePlaylist = async (req: AuthRequest, res: Response, next: Next
 
     res.status(204).send();
   } catch (error) {
+    if (error instanceof PlaylistAccessError) return res.status(error.status).json({ error: error.message, ...error.details });
     next(error);
   }
 };
@@ -480,21 +487,9 @@ export const addTracksToPlaylist = async (req: AuthRequest, res: Response, next:
       return res.status(404).json({ error: 'No valid tracks found' });
     }
 
-    const alreadyPresent = new Set(await findExistingPlaylistTrackIds(id, [...playable]));
-    // Deduped against the request as well as against the playlist: the same id
-    // twice in one body would otherwise be two rows fighting for one position.
-    // `playlist_tracks_playlist_id_track_id_idx` does not stop it — that index
-    // is deliberately not unique.
-    const newTrackIds = [
-      ...new Set(validTrackIds.filter((tid) => playable.has(tid) && !alreadyPresent.has(tid))),
-    ];
-
-    if (newTrackIds.length === 0) {
-      return res.status(400).json({ error: 'All tracks are already in the playlist' });
-    }
-
     const addedAt = new Date();
-    await getDb().transaction(async (tx) => {
+    const added = await getDb().transaction(async (tx) => {
+      await lockPlaylistForEdit(tx, id, userId);
       // Read INSIDE the transaction, like `removeTracksFromPlaylist` does. The
       // membership and the positions derived from it have to come from the same
       // snapshot the write lands on; reading first and writing later leaves a
@@ -504,6 +499,10 @@ export const addTracksToPlaylist = async (req: AuthRequest, res: Response, next:
         .from(playlistTracks)
         .where(eq(playlistTracks.playlistId, id))
         .orderBy(playlistTracks.position);
+
+      const alreadyPresent = new Set(existing.map((entry) => entry.trackId));
+      const newTrackIds = [...new Set(validTrackIds.filter((trackId) => playable.has(trackId) && !alreadyPresent.has(trackId)))];
+      if (newTrackIds.length === 0) throw new PlaylistAccessError(400, 'All tracks are already in the playlist');
 
       // Clamped into the playlist rather than used raw. The Mongo version
       // shifted by `$inc` from `position` verbatim, so a position past the end
@@ -544,13 +543,16 @@ export const addTracksToPlaylist = async (req: AuthRequest, res: Response, next:
 
       await assignPlaylistTrackPositions(tx, id, ordered);
       await refreshPlaylistStats(tx, id);
+      await tx.insert(playlistActivity).values({ playlistId: id, actorOxyUserId: userId, action: 'tracks_added' });
+      return newTrackIds.length;
     });
 
     res.status(201).json({
-      added: newTrackIds.length,
-      skipped: validTrackIds.length - newTrackIds.length,
+      added,
+      skipped: validTrackIds.length - added,
     });
   } catch (error) {
+    if (error instanceof PlaylistAccessError) return res.status(error.status).json({ error: error.message, ...error.details });
     next(error);
   }
 };
@@ -585,6 +587,7 @@ export const removeTracksFromPlaylist = async (req: AuthRequest, res: Response, 
     }
 
     const removed = await getDb().transaction(async (tx) => {
+      await lockPlaylistForEdit(tx, id, userId);
       const deleted = await tx
         .delete(playlistTracks)
         .where(and(eq(playlistTracks.playlistId, id), inArray(playlistTracks.trackId, removing)))
@@ -606,6 +609,7 @@ export const removeTracksFromPlaylist = async (req: AuthRequest, res: Response, 
           remaining.map((row) => row.trackId)
         );
         await refreshPlaylistStats(tx, id);
+        await tx.insert(playlistActivity).values({ playlistId: id, actorOxyUserId: userId, action: 'tracks_removed' });
       }
 
       return deleted.length;
@@ -613,6 +617,7 @@ export const removeTracksFromPlaylist = async (req: AuthRequest, res: Response, 
 
     res.json({ removed });
   } catch (error) {
+    if (error instanceof PlaylistAccessError) return res.status(error.status).json({ error: error.message, ...error.details });
     next(error);
   }
 };
@@ -641,35 +646,24 @@ export const reorderPlaylistTracks = async (req: AuthRequest, res: Response, nex
       return res.status(400).json({ error: 'trackIds must be a non-empty array' });
     }
 
-    // Validate all track IDs exist in playlist
-    const present = (await findPlaylistTracks(id)).map((entry) => entry.trackId);
-    const named = new Set(present);
-    const invalidTrackIds = trackIds.filter(
-      (tid: unknown) => typeof tid !== 'string' || !named.has(tid)
-    );
-    if (invalidTrackIds.length > 0) {
-      return res.status(400).json({
-        error: 'Some track IDs are not in the playlist',
-        invalidTrackIds,
-      });
-    }
-
-    const requested: string[] = [...new Set<string>(trackIds)];
-    // Any track the request did not name keeps its relative place AFTER the
-    // ones it did. The Mongo version left those rows at whatever position they
-    // already held, which is only well defined when the request names the whole
-    // playlist — and collides with a newly assigned position when it does not.
-    const unnamed = new Set(requested);
-    const ordered = [...requested, ...present.filter((trackId) => !unnamed.has(trackId))];
-
-    await getDb().transaction(async (tx) => {
+    const reordered = await getDb().transaction(async (tx) => {
+      await lockPlaylistForEdit(tx, id, userId);
+      const entries = await tx.select({ trackId: playlistTracks.trackId }).from(playlistTracks)
+        .where(eq(playlistTracks.playlistId, id)).orderBy(playlistTracks.position);
+      const present = entries.map((entry) => entry.trackId);
+      const named = new Set(present);
+      if (!trackIds.every((trackId: unknown) => typeof trackId === 'string' && named.has(trackId))) {
+        throw new PlaylistAccessError(400, 'Some track IDs are not in the playlist', { invalidTrackIds: trackIds.filter((trackId: unknown) => typeof trackId !== 'string' || !named.has(trackId)) });
+      }
+      const requested = [...new Set<string>(trackIds)];
+      const ordered = [...requested, ...present.filter((trackId) => !requested.includes(trackId))];
       await assignPlaylistTrackPositions(tx, id, ordered);
+      await tx.insert(playlistActivity).values({ playlistId: id, actorOxyUserId: userId, action: 'tracks_reordered' });
+      return requested.length;
     });
-
-    res.json({
-      reordered: requested.length,
-    });
+    res.json({ reordered });
   } catch (error) {
+    if (error instanceof PlaylistAccessError) return res.status(error.status).json({ error: error.message, ...error.details });
     next(error);
   }
 };

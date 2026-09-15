@@ -60,6 +60,8 @@ export const DEFERRED_FOREIGN_KEYS: readonly DeferredForeignKey[] = [];
  */
 export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: string }[] = [
   // ── CROSS-SERVICE: Oxy account ids, owned by oxy-api, never a Syra row ────
+  { column: 'playlist_activity.actor_oxy_user_id', reason: 'Authenticated Oxy account that performed the playlist action.' },
+  { column: 'playlist_activity.target_oxy_user_id', reason: 'Oxy account whose collaborator role was changed or revoked.' },
   {
     column: 'catalog_entities.owner_oxy_user_id',
     reason: 'The Oxy account that registered/owns this artist profile (RELATIONS.md).',
@@ -150,6 +152,8 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
     reason: 'Same provenance-log pattern as track_sources.external_id — records which EXTERNAL provider supplied a field.',
   },
   // ── CROSS-SERVICE: Oxy account ids, owned by oxy-api, never a Syra row ────
+  { column: 'playlist_activity.actor_oxy_user_id', reason: 'Authenticated Oxy account that performed the playlist action.' },
+  { column: 'playlist_activity.target_oxy_user_id', reason: 'Oxy account whose collaborator role was changed or revoked.' },
   {
     column: 'playlists.owner_oxy_user_id',
     reason: "The playlist owner's Oxy account id (RELATIONS.md: Playlist.ownerOxyUserId).",
@@ -235,6 +239,8 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
       'has zero functional consequence beyond a UI label (RELATIONS.md: PlaybackState.contextId).',
   },
   // ── CROSS-SERVICE: Oxy account ids, owned by oxy-api, never a Syra row ────
+  { column: 'playlist_activity.actor_oxy_user_id', reason: 'Authenticated Oxy account that performed the playlist action.' },
+  { column: 'playlist_activity.target_oxy_user_id', reason: 'Oxy account whose collaborator role was changed or revoked.' },
   {
     column: 'house_members.oxy_user_id',
     reason:
@@ -290,6 +296,8 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
       '(RELATIONS.md: Room.podcastQueue[].syraPodcastId).',
   },
   // ── CROSS-SERVICE: Oxy account ids, owned by oxy-api, never a Syra row ────
+  { column: 'playlist_activity.actor_oxy_user_id', reason: 'Authenticated Oxy account that performed the playlist action.' },
+  { column: 'playlist_activity.target_oxy_user_id', reason: 'Oxy account whose collaborator role was changed or revoked.' },
   {
     column: 'user_settings.oxy_user_id',
     reason: 'The Oxy account these profile settings belong to — one row per account (RELATIONS.md).',

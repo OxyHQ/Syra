@@ -40,6 +40,7 @@ import { usePlayerPresence } from '@/hooks/usePlayerPresence';
 import { clearStreamResolutionCache } from '@/services/streamService';
 import { accountScopeFor, applyAccountScope, persistOptions } from '@/lib/queryPersister';
 import { createScopedLogger } from '@/utils/logger';
+import { QueueAccountScope } from './QueueAccountScope';
 
 const providersLogger = createScopedLogger('AppProviders');
 
@@ -224,6 +225,7 @@ export const AppProviders = memo(function AppProviders({
                 <I18nextProvider i18n={i18n}>
                   <AppearanceSync />
                   <QueryCacheAccountScope />
+                  <QueueAccountScope />
                   <StreamCacheAuthInvalidator />
                   <PlaybackFailureReporter />
                   <PlayerPresence />
