@@ -23,7 +23,7 @@ export default function ListeningHistoryScreen() {
     <Text className="text-2xl font-bold text-foreground">{t('listener.history')}</Text>
     {gate.isResolving || (gate.canUsePrivateApi && query.isPending) ? <ActivityIndicator /> : null}
     {gate.status === 'guest' ? <Text className="text-muted-foreground">{t('listener.signIn')}</Text> : null}
-    {query.isError || gate.isTimedOut ? <Pressable onPress={() => { gate.retry(); void query.refetch(); }}><Text className="text-primary">{t('listener.retry')}</Text></Pressable> : null}
+    {query.isError || gate.isTimedOut ? <Pressable accessibilityRole="button" onPress={() => { if (gate.canUsePrivateApi) void query.refetch(); else gate.retry(); }}><Text className="text-primary">{t('listener.retry')}</Text></Pressable> : null}
     {query.isSuccess && !tracks.length ? <Text className="text-muted-foreground">{t('listener.historyEmpty')}</Text> : null}
     {tracks.map((track, index) => <TrackRow key={track.id} track={track} index={index} isCurrentTrack={track.id === currentId} isTrackPlaying={track.id === currentId && playing} onPress={() => void playTrackList(tracks, index, { type: 'library', name: t('listener.history') })} onPlayPress={() => void playTrackList(tracks, index, { type: 'library', name: t('listener.history') })} />)}
   </ScrollView>;
