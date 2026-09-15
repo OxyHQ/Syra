@@ -34,9 +34,9 @@ export const LyricsView: React.FC<LyricsViewProps> = React.memo(({ trackId }) =>
   const seek = usePlayerStore((state) => state.seek);
 
   const activeIndex = useMemo(() => {
-    if (!lyrics?.synced || !lyrics.lines.length) return -1;
+    if (!isCurrent || !lyrics?.synced || !lyrics.lines.length) return -1;
     return activeLyricLineIndex(lyrics.lines, currentTimeMs);
-  }, [lyrics, currentTimeMs]);
+  }, [lyrics, currentTimeMs, isCurrent]);
 
   if (isLoading) {
     return (

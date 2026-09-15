@@ -258,6 +258,7 @@ const EntityProfileScreen: React.FC = () => {
   return (
     <EntityProfileView
       entity={entity}
+      asOf={entityQuery.dataUpdatedAt}
       displayName={displayName}
       artistId={artistId}
       relatedArtists={relatedArtists}
@@ -296,6 +297,7 @@ const EntityProfileScreen: React.FC = () => {
 
 interface EntityProfileViewProps {
   entity: EntityProfile;
+  asOf: number;
   displayName: string;
   artistId: string | undefined;
   relatedArtists: RelatedArtist[];
@@ -337,6 +339,7 @@ interface EntityProfileViewProps {
  */
 const EntityProfileView: React.FC<EntityProfileViewProps> = ({
   entity,
+  asOf,
   displayName,
   artistId,
   relatedArtists,
@@ -402,7 +405,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
   const albums = discography
     ? [...discography.albums, ...discography.singlesAndEps, ...discography.compilations]
     : entity.music?.albums ?? [];
-  const latestRelease = albums.filter((album) => album.releaseDate && Number.isFinite(Date.parse(album.releaseDate)) && Date.parse(album.releaseDate) <= Date.now())
+  const latestRelease = albums.filter((album) => album.releaseDate && Number.isFinite(Date.parse(album.releaseDate)) && Date.parse(album.releaseDate) <= asOf)
     .sort((first, second) => Date.parse(second.releaseDate ?? '') - Date.parse(first.releaseDate ?? ''))[0];
 
   /**

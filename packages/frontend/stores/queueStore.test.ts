@@ -4,6 +4,7 @@ import { useQueueStore } from './queueStore';
 
 jest.mock('../services/queueService', () => ({
   queueService: {
+    getQueue: jest.fn(),
     addToQueue: jest.fn(),
     replaceQueue: jest.fn(),
     setCurrentIndex: jest.fn(),
@@ -71,6 +72,7 @@ function resetQueueStore(queue: Queue | null = null): void {
 describe('queueStore', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    useQueueStore.getState().setAccount(null);
     resetQueueStore();
   });
 
@@ -318,6 +320,51 @@ describe('queueStore', () => {
     await request;
     expect(useQueueStore.getState().queue).toBeNull();
     expect(useQueueStore.getState().accountId).toBe('account-two');
+  });
+
+  it.each([NaN, -1, 0.5, 9, 0])('ignores no-op current index %s without invalidating a pending replace', async (index) => {
+    const optimistic: Queue = { current: 0, tracks: [track('first')] };
+    const persisted: Queue = { ...optimistic, context: { type: 'album', id: 'album', name: 'Persisted' } };
+    let finish: ((value: { queue: Queue }) => void) | undefined;
+    mockedQueueService.replaceQueue.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const request = useQueueStore.getState().replaceQueue(optimistic);
+    await Promise.resolve();
+    await useQueueStore.getState().setCurrentIndex(index);
+    if (!finish) throw new Error('Request did not start');
+    finish({ queue: persisted });
+    await request;
+    expect(useQueueStore.getState().queue).toEqual(persisted);
+    expect(mockedQueueService.setCurrentIndex).not.toHaveBeenCalled();
+  });
+
+  it('an empty append leaves the current request authoritative', async () => {
+    const queue: Queue = { current: 0, tracks: [track('persisted')] };
+    let finish: ((value: { queue: Queue }) => void) | undefined;
+    mockedQueueService.replaceQueue.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const request = useQueueStore.getState().replaceQueue({ current: 0, tracks: [track('optimistic')] });
+    await Promise.resolve();
+    await useQueueStore.getState().addTracksLocally([]);
+    if (!finish) throw new Error('Request did not start');
+    finish({ queue });
+    await request;
+    expect(useQueueStore.getState().queue).toEqual(queue);
+  });
+
+  it('a newer optimistic replacement clears loading from the superseded read', async () => {
+    const old: Queue = { current: 0, tracks: [track('old')] };
+    const next: Queue = { current: 0, tracks: [track('new')] };
+    let finish: ((value: Queue) => void) | undefined;
+    mockedQueueService.getQueue.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    mockedQueueService.replaceQueue.mockResolvedValueOnce({ queue: next });
+    const read = useQueueStore.getState().loadQueue();
+    await Promise.resolve();
+    expect(useQueueStore.getState().isLoading).toBe(true);
+    const replace = useQueueStore.getState().replaceQueue(next);
+    if (!finish) throw new Error('Read did not start');
+    finish(old);
+    await Promise.all([read, replace]);
+    expect(useQueueStore.getState().queue).toEqual(next);
+    expect(useQueueStore.getState().isLoading).toBe(false);
   });
 
 });

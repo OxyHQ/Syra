@@ -244,7 +244,7 @@ export const useQueueStore = create<QueueState>((set, get) => ({
     if (!queue.tracks.length) { await get().clearQueue(); return; }
     const request = beginRequest();
     const previousQueue = get().queue;
-    set({ queue, error: null });
+    set({ queue, error: null, isLoading: false });
 
     try {
       const result = await orderedRequest(request.accountSession, () => queueService.replaceQueue(queue));
@@ -269,13 +269,13 @@ export const useQueueStore = create<QueueState>((set, get) => ({
   },
 
   addTracksLocally: async (items: PlayableItem[], position?: 'next' | 'last' | number) => {
-    const request = beginRequest();
     if (items.length === 0) {
       return;
     }
+    const request = beginRequest();
 
     const previousQueue = get().queue;
-    set({ queue: queueWithInsertedItems(previousQueue, items, position), error: null });
+    set({ queue: queueWithInsertedItems(previousQueue, items, position), error: null, isLoading: false });
 
     try {
       const result = await orderedRequest(request.accountSession, () => queueService.addToQueue(
@@ -357,16 +357,16 @@ export const useQueueStore = create<QueueState>((set, get) => ({
   },
 
   setCurrentIndex: async (index: number) => {
-    const request = beginRequest();
     const { queue } = get();
-    if (!queue || index < 0 || index >= queue.tracks.length) {
+    if (!queue || !Number.isInteger(index) || index < 0 || index >= queue.tracks.length) {
       return;
     }
     if (queue.current === index) {
       return;
     }
+    const request = beginRequest();
 
-    set({ queue: { ...queue, current: index } });
+    set({ queue: { ...queue, current: index }, isLoading: false, error: null });
 
     try {
       const result = await orderedRequest(request.accountSession, () => queueService.setCurrentIndex(index));
@@ -383,7 +383,7 @@ export const useQueueStore = create<QueueState>((set, get) => ({
         const repairedQueue = { ...currentQueue, current: index };
         try {
           const result = await orderedRequest(request.accountSession, () => queueService.replaceQueue(repairedQueue));
-      if (!isCurrent(request)) return;
+          if (!isCurrent(request)) return;
           set({ queue: result.queue, error: null });
         } catch (repairError) {
           if (!isCurrent(request)) return;
