@@ -25,8 +25,6 @@ interface EpisodeRowProps {
    * toggled by the row itself, so this never restarts what is already playing.
    */
   onPlayPress: () => void;
-  /** Hide the show artwork (e.g. when already inside that show's screen). */
-  hideArtwork?: boolean;
 }
 
 /**
@@ -40,7 +38,6 @@ const EpisodeRowComponent: React.FC<EpisodeRowProps> = ({
   isPlaying = false,
   onPress,
   onPlayPress,
-  hideArtwork = false,
 }) => {
   const theme = useTheme();
   const pause = usePlayerStore((state) => state.pause);
@@ -103,14 +100,12 @@ const EpisodeRowComponent: React.FC<EpisodeRowProps> = ({
         ...Platform.select({ web: [webViewStyle({ cursor: 'pointer' })], default: [] }),
       ]}
     >
-      {!hideArtwork && (
-        imageUri ? (
-          <Image source={{ uri: imageUri }} style={styles.artwork} contentFit="cover" />
-        ) : (
-          <View className="bg-popover" style={styles.artworkPlaceholder}>
-            <Ionicons name="mic" size={20} color={theme.colors.textSecondary} />
-          </View>
-        )
+      {imageUri ? (
+        <Image source={{ uri: imageUri }} style={styles.artwork} contentFit="cover" />
+      ) : (
+        <View className="bg-popover" style={styles.artworkPlaceholder}>
+          <Ionicons name="mic" size={20} color={theme.colors.textSecondary} />
+        </View>
       )}
 
       <View style={styles.body}>

@@ -324,7 +324,6 @@ const PodcastShowView: React.FC<PodcastShowViewProps> = ({
               progress={progressMap.get(episode.id)}
               isCurrent={currentEpisodeId === episode.id}
               isPlaying={currentEpisodeId === episode.id && isPlaying}
-              hideArtwork
               onPress={() => onOpenEpisode(episode.id)}
               onPlayPress={() => onPlayEpisode(index)}
             />
