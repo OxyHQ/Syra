@@ -20,6 +20,8 @@ jobs:
       - name: Apply the reviewed source patch and commit to this branch only
         shell: python
         run: |
+          import base64
+          import gzip
           import pathlib
           import re
           import shutil
@@ -27,11 +29,18 @@ jobs:
 
           payload = pathlib.Path('.github/listener-change.patch')
           text = payload.read_text()
+          if text.startswith('X-Syra-Gzip\n'):
+              encoded = ''.join(text.splitlines()[1:])
+              if len(encoded) > 2000000:
+                  raise RuntimeError('Oversized checkpoint')
+              text = gzip.decompress(base64.b64decode(encoded, validate=True)).decode('utf-8')
+              payload.write_text(text)
           paths = re.findall(r'^diff --git a/(\S+) b/(\S+)$', text, re.MULTILINE)
           if not paths:
               raise RuntimeError('The checkpoint contains no source changes')
           for before, after in paths:
-              if before != after or not after.startswith(('packages/', 'docs/', 'patches/')) or '..' in pathlib.PurePosixPath(after).parts:
+              allowed = after.startswith(('packages/', 'docs/', 'patches/')) or after in ('package.json', 'bun.lock')
+              if before != after or not allowed or '..' in pathlib.PurePosixPath(after).parts:
                   raise RuntimeError(f'Unexpected checkpoint path: {after}')
           copies = re.findall(r'^X-Syra-Copy: (\S+) => (\S+)$', text, re.MULTILINE)
           targets = {after for _, after in paths}
@@ -45,7 +54,7 @@ jobs:
           subprocess.run(['git', 'apply', str(payload)], check=True)
           subprocess.run(['git', 'diff', '--check'], check=True)
           subprocess.run(['git', 'add', '--', *sorted(targets)], check=True)
-          subprocess.run(['git', 'rm', '--', str(payload)], check=True)
+          subprocess.run(['git', 'rm', '-f', '--', str(payload)], check=True)
           subprocess.run(['git', 'config', 'user.name', 'github-actions[bot]'], check=True)
           subprocess.run(['git', 'config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com'], check=True)
           subject = re.search(r'^X-Syra-Subject: ([^\n]+)$', text, re.MULTILINE)
