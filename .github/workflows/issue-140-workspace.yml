@@ -1,0 +1,19 @@
+name: Issue 140 workspace
+on:
+  push:
+    branches: [fix/issue-140-listener-experience]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Package source for isolated verification
+        run: tar --exclude=.git -czf "$RUNNER_TEMP/syra-source.tgz" .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: issue-140-source
+          path: ${{ runner.temp }}/syra-source.tgz
+          retention-days: 1
