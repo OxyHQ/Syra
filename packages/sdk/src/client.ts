@@ -1,6 +1,7 @@
 import {
   trackSummarySchema,
   podcastSummarySchema,
+  podcastSubscriptionSchema,
   episodeSummarySchema,
   episodeDraftSchema,
   episodeStreamSchema,
@@ -9,6 +10,7 @@ import {
   episodeDeletedSchema,
   type TrackSummary,
   type PodcastSummary,
+  type PodcastSubscription,
   type EpisodeSummary,
   type EpisodeDraft,
   type EpisodeStream,
@@ -296,6 +298,23 @@ export interface SyraClient {
   // throw `SyraApiError(401)` from the CLIENT rather than making a request that
   // was never going to be accepted.
 
+  /**
+   * `POST /api/podcasts/:id/subscribe` — subscribe the caller to a show (what a
+   * client presents as "save" or "follow"). Idempotent: subscribing twice is one
+   * subscription. A show the caller cannot see is a 404, same as a missing one.
+   */
+  subscribeToPodcast(podcastId: string): Promise<void>;
+  /**
+   * `POST /api/podcasts/:id/unsubscribe` — idempotent, and succeeds for every
+   * well-formed id, including a show that no longer exists or went private.
+   */
+  unsubscribeFromPodcast(podcastId: string): Promise<void>;
+  /**
+   * `GET /api/podcasts/subscriptions` — every show the caller is subscribed to
+   * and can still see. A row that fails validation is dropped rather than
+   * failing the whole list.
+   */
+  listPodcastSubscriptions(): Promise<PodcastSubscription[]>;
   /** `GET /api/podcasts/mine` — every show the caller owns, in every state. */
   listMyPodcasts(): Promise<PodcastSummary[]>;
   /** `POST /api/podcasts` — create a Syra-hosted show. */
@@ -880,6 +899,34 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
       // A relative enclosure is unusual but representable; resolve it the same way.
       if (episode.enclosureUrl) return `${baseURL}${episode.enclosureUrl}`;
       return undefined;
+    },
+
+    async subscribeToPodcast(podcastId) {
+      await request(`/api/podcasts/${encodeURIComponent(podcastId)}/subscribe`, {
+        method: 'POST',
+        requires: 'subscribeToPodcast',
+      });
+    },
+
+    async unsubscribeFromPodcast(podcastId) {
+      await request(`/api/podcasts/${encodeURIComponent(podcastId)}/unsubscribe`, {
+        method: 'POST',
+        requires: 'unsubscribeFromPodcast',
+      });
+    },
+
+    async listPodcastSubscriptions() {
+      const json = (await request('/api/podcasts/subscriptions', {
+        requires: 'listPodcastSubscriptions',
+      })) as { data?: { subscriptions?: unknown } } | null;
+      const rows = Array.isArray(json?.data?.subscriptions) ? json.data.subscriptions : [];
+
+      const items: PodcastSubscription[] = [];
+      for (const raw of rows) {
+        const parsed = podcastSubscriptionSchema.safeParse(raw);
+        if (parsed.success) items.push(parsed.data);
+      }
+      return items;
     },
 
     async listMyPodcasts() {

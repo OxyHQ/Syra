@@ -27,6 +27,7 @@ export type {
 export {
   trackSummarySchema,
   podcastSummarySchema,
+  podcastSubscriptionSchema,
   podcastVisibilitySchema,
   episodeSummarySchema,
   episodeAudioSourceSchema,
@@ -42,6 +43,7 @@ export {
 export type {
   TrackSummary,
   PodcastSummary,
+  PodcastSubscription,
   PodcastVisibility,
   EpisodeSummary,
   EpisodeAudioSource,
