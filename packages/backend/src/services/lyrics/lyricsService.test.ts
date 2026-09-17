@@ -250,3 +250,15 @@ describe('getLyricsForTrack — line order survives the child table', () => {
     expect(lineCount?.total).toBe(1);
   });
 });
+
+
+it('does not cache provider errors and can recover on the next request', async () => {
+  const trackId = uuidv7();
+  await seedTrack(trackId);
+  await expect(getLyricsForTrack(trackId, throwingProvider())).rejects.toThrow('provider should not be called');
+  expect(await lyricsCount(trackId)).toBe(0);
+  const provider = makeProvider({ synced: false, lines: [{ timeMs: 0, text: 'Recovered' }], plain: 'Recovered', source: 'lrclib' });
+  expect(await getLyricsForTrack(trackId, provider)).toMatchObject({ plain: 'Recovered' });
+  expect(provider.callCount).toBe(1);
+  expect(await lyricsCount(trackId)).toBe(1);
+});

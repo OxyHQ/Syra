@@ -3,6 +3,7 @@ import type { LyricsProvider } from './LyricsProvider';
 import { parseLrc } from './lrc';
 
 export const LRCLIB_DEFAULT_API_BASE = 'https://lrclib.net';
+const LRCLIB_REQUEST_TIMEOUT_MS = 10_000;
 
 // ── Fetch abstraction ─────────────────────────────────────────────────────────
 
@@ -15,8 +16,8 @@ export interface FetchResult {
 export type FetchJson = (url: string) => Promise<FetchResult>;
 
 async function defaultFetchJson(url: string): Promise<FetchResult> {
-  const r = await fetch(url);
-  const body = r.status !== 204 ? await r.json().catch(() => null) : null;
+  const r = await fetch(url, { signal: AbortSignal.timeout(LRCLIB_REQUEST_TIMEOUT_MS) });
+  const body = r.ok && r.status !== 204 ? await r.json() : null;
   return { status: r.status, body };
 }
 
@@ -33,6 +34,7 @@ function isLrclibBody(value: unknown): value is LrclibBody {
   const synced = v['syncedLyrics'];
   const plain = v['plainLyrics'];
   return (
+    ('syncedLyrics' in v || 'plainLyrics' in v) &&
     (synced === undefined || synced === null || typeof synced === 'string') &&
     (plain === undefined || plain === null || typeof plain === 'string')
   );
@@ -80,21 +82,22 @@ export class LrclibProvider implements LyricsProvider {
 
     const { status, body } = await this.fetchJson(url);
 
-    if (status === 404) return null;
+    if (status === 404 || status === 204) return null;
     if (status < 200 || status >= 300) {
       throw new Error(`lrclib request failed with status ${status}`);
     }
 
-    if (!isLrclibBody(body)) return null;
+    if (!isLrclibBody(body)) throw new Error('Invalid lrclib response');
 
     const synced = body.syncedLyrics;
     const plain = body.plainLyrics;
 
-    // Prefer synced lyrics
-    if (synced && synced.trim()) {
+    // Prefer valid timed lyrics; malformed timestamps must not hide plain lyrics.
+    const lines = synced?.trim() ? parseLrc(synced) : [];
+    if (lines.some((line) => line.text.trim())) {
       return {
         synced: true,
-        lines: parseLrc(synced),
+        lines,
         plain: plain ?? undefined,
         source: 'lrclib',
       };
@@ -110,6 +113,7 @@ export class LrclibProvider implements LyricsProvider {
       };
     }
 
+    if (synced?.trim()) throw new Error('Invalid lrclib timed lyrics');
     return null;
   }
 }

@@ -390,6 +390,17 @@
     "released": "Released"
   },
   "artist": {
+    "activeFrom": "सक्रियता की शुरुआत",
+    "activeUntil": "सक्रियता का अंत",
+    "aliases": "इन नामों से भी जाने जाते हैं",
+    "labels": "रिकॉर्ड लेबल",
+    "members": "सदस्य",
+    "memberFrom": "{{date}} से",
+    "memberUntil": "{{date}} तक",
+    "imageCredit": "चित्र का श्रेय",
+    "imageSource": "चित्र का स्रोत",
+    "related": "संबंधित कलाकार",
+    "relatedReason": "साझा श्रोताओं या संगीत शैलियों के आधार पर।",
     "fansAlsoLike": "Fans also like",
     "popular": "Popular",
     "appearsIn": "Appears in",

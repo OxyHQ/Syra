@@ -390,6 +390,17 @@
     "released": "Released"
   },
   "artist": {
+    "activeFrom": "سرگرمی کا آغاز",
+    "activeUntil": "سرگرمی کا اختتام",
+    "aliases": "دیگر نام",
+    "labels": "ریکارڈ لیبل",
+    "members": "ارکان",
+    "memberFrom": "{{date}} سے",
+    "memberUntil": "{{date}} تک",
+    "imageCredit": "تصویر کا انتساب",
+    "imageSource": "تصویر کا ماخذ",
+    "related": "متعلقہ فنکار",
+    "relatedReason": "مشترکہ سامعین یا موسیقی کی اصناف کی بنیاد پر۔",
     "fansAlsoLike": "Fans also like",
     "popular": "Popular",
     "appearsIn": "Appears in",

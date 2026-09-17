@@ -12,7 +12,7 @@ const LYRICS_STALE_TIME_MS = 1000 * 60 * 60 * 24;
  * - A 404 response is treated as "no lyrics available" and returns `null`
  *   rather than surfacing an error. All other failures set `isError`.
  *
- * @param trackId  Catalog track ObjectId; omit to disable the query.
+ * @param trackId  Catalog track id; omit to disable the query.
  */
 export function useLyrics(trackId?: string): {
   lyrics: Lyrics | null;
@@ -24,7 +24,7 @@ export function useLyrics(trackId?: string): {
     queryKey: ['lyrics', trackId],
     queryFn: async () => {
       try {
-        const res = await api.get<Lyrics>(`/lyrics/${trackId}`);
+        const res = await api.get<Lyrics>(`/lyrics/${trackId}`, undefined, { timeout: 12_000, retry: false });
         return lyricsSchema.parse(res.data);
       } catch (err) {
         if (isNotFoundError(err)) return null;
@@ -33,6 +33,9 @@ export function useLyrics(trackId?: string): {
     },
     enabled: !!trackId,
     staleTime: LYRICS_STALE_TIME_MS,
+    gcTime: LYRICS_STALE_TIME_MS,
+    retry: 1,
+    refetchOnWindowFocus: false,
   });
 
   return {

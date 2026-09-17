@@ -2,13 +2,20 @@ import React from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import type { Track } from '@syra/shared-types';
+import { normalizeNameKey, type Track } from '@syra/shared-types';
 
 /** Preserve unfamiliar roles and unresolved names; never invent contributors. */
 export function TrackCredits({ track }: { track: Track }) {
   const { t } = useTranslation();
   const router = useRouter();
-  const credits = track.credits ?? [];
+  const credits = [...(track.credits ?? [])];
+  const hasPrimaryCredit = credits.some((credit) =>
+    credit.role.trim().toLowerCase() === 'artist' &&
+    (credit.catalogEntityId ? credit.catalogEntityId === track.artistId : normalizeNameKey(credit.name) === normalizeNameKey(track.artistName)),
+  );
+  if (track.artistName.trim() && !hasPrimaryCredit) {
+    credits.unshift({ name: track.artistName, nameKey: normalizeNameKey(track.artistName), role: 'artist', catalogEntityId: track.artistId || undefined });
+  }
   return (
     <View className="gap-4 py-4">
       <Text className="text-xl font-semibold text-foreground">{t('listener.credits')}</Text>
@@ -20,7 +27,7 @@ export function TrackCredits({ track }: { track: Track }) {
               <Text className="text-primary text-base font-medium">{credit.name}</Text>
             </Pressable>
           ) : <Text selectable className="text-foreground text-base font-medium">{credit.name}</Text>}
-          <Text selectable className="text-muted-foreground">{credit.role}</Text>
+          <Text selectable className="text-muted-foreground">{credit.role === 'artist' ? t('common.artist') : credit.role}</Text>
         </View>
       ))}
       {track.metadata?.copyright ? <Text selectable className="text-muted-foreground">{track.metadata.copyright}</Text> : null}

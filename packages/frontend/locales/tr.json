@@ -390,6 +390,17 @@
     "released": "Released"
   },
   "artist": {
+    "activeFrom": "Faaliyet başlangıcı",
+    "activeUntil": "Faaliyet bitişi",
+    "aliases": "Diğer adları",
+    "labels": "Plak şirketleri",
+    "members": "Üyeler",
+    "memberFrom": "{{date}} tarihinden itibaren",
+    "memberUntil": "{{date}} tarihine kadar",
+    "imageCredit": "Görsel atfı",
+    "imageSource": "Görsel kaynağı",
+    "related": "İlgili sanatçılar",
+    "relatedReason": "Ortak dinleyiciler veya müzik türlerine göre.",
     "fansAlsoLike": "Fans also like",
     "popular": "Popular",
     "appearsIn": "Appears in",

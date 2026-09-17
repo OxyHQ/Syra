@@ -45,8 +45,17 @@ it('renders a computed zero and formats a positive count for the listener langua
   expect(JSON.stringify(tree.toJSON())).toContain('123.456 oyentes mensuales');
 });
 
-it('shows an explicit unavailable state instead of inventing credits', () => {
-  expect(JSON.stringify(render(<TrackCredits track={track} />).toJSON())).toContain('listener.noCredits');
+it('shows an explicit unavailable state only when no primary or contributor is known', () => {
+  expect(JSON.stringify(render(<TrackCredits track={{ ...track, artistName: '', artistId: '' }} />).toJSON())).toContain('listener.noCredits');
+});
+it('includes the stored primary artist even with no child credits', () => {
+  const result = JSON.stringify(render(<TrackCredits track={track} />).toJSON());
+  expect(result).toContain('Artist');
+  expect(result).not.toContain('listener.noCredits');
+});
+it('does not duplicate an explicitly credited primary artist', () => {
+  const tree = render(<TrackCredits track={{ ...track, credits: [{ name: 'Artist', nameKey: 'artist', role: 'artist', catalogEntityId: 'artist' }] }} />);
+  expect(tree.root.findAll((node) => node.props.accessibilityRole === 'link' && typeof node.props.onPress === 'function', { deep: false })).toHaveLength(1);
 });
 
 it('links resolved credits only and preserves unfamiliar roles as factual text', () => {
@@ -55,8 +64,8 @@ it('links resolved credits only and preserves unfamiliar roles as factual text',
     { name: 'Unresolved contributor', nameKey: 'unresolved-contributor', role: 'field_recording' },
   ] }} />);
   const links = tree.root.findAll((node) => node.props.accessibilityRole === 'link' && typeof node.props.onPress === 'function', { deep: false });
-  expect(links).toHaveLength(1);
-  act(() => links[0].props.onPress());
+  expect(links).toHaveLength(2);
+  act(() => links[1].props.onPress());
   expect(mockNavigate).toHaveBeenCalledWith({ pathname: '/p/[id]', params: { id: 'resolved-artist' } });
   expect(JSON.stringify(tree.toJSON())).toContain('field_recording');
   expect(JSON.stringify(tree.toJSON())).toContain('Unresolved contributor');

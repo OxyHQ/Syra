@@ -5,7 +5,7 @@ import {
   type ArtistClaim,
   type EntityProfile,
 } from '@syra/shared-types';
-import { api, publicApi } from '@/utils/api';
+import { api } from '@/utils/api';
 import {
   normalizeAlbumImages,
   normalizePlaylistImages,
@@ -18,7 +18,7 @@ import {
  * the entity's `music` (tracks + albums) when it is/links a music artist, and
  * `appearsIn` (podcasts/episodes) when it is/links a podcast host/guest.
  *
- * Catalog read → `publicApi`. Music track/album cover ids are normalized through
+ * Viewer-sensitive playlist shelves require the linked `api` client. Music track/album cover ids are normalized through
  * the shared catalog image pipeline (same as `musicService`); podcast/episode
  * artwork resolves at render via the shared catalog picker `resolvePodcastArtwork`
  * (Syra-hosted `image`/`imageSizes` first, external `imageSourceUrl` last).
@@ -30,7 +30,7 @@ const entityProfileResponseSchema = z.object({
 
 export const entityService = {
   async getEntityProfile(id: string): Promise<EntityProfile> {
-    const response = await publicApi.get<unknown>(`/p/${id}`);
+    const response = await api.get<unknown>(`/p/${id}`);
     const parsed = entityProfileResponseSchema.safeParse(response.data);
     if (!parsed.success) {
       throw new Error(`Invalid entity profile response: ${parsed.error.message}`);

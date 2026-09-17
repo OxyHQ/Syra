@@ -4,7 +4,7 @@
 
 The artist header displays **unique signed-in Oxy accounts** that logged at least one qualified music play in the rolling **28-day** window. A qualified play uses Syra's existing rule: completion >= 0.3 and not skipped. The interval is `[computedAt - 28 days, computedAt)` in UTC. Repeated plays and different recordings by the same artist count once per account. Resolved performing credits (artist, albumartist, performer, featured, vocalist) also receive attribution; writing and production credits do not. Primary attribution uses the artist stored on the event. Historical credit attribution uses current resolved credits, so catalog corrections affect the next refresh.
 
-The 30-minute maintenance tick materializes the aggregate under a PostgreSQL transaction advisory lock. Profile requests never scan listening history. The timestamp distinguishes an uncomputed metric from a genuine zero; every refresh clears counts for artists with no audience. Failures leave the last complete snapshot and are logged. Listening-event retention already exceeds the 28-day window.
+The 30-minute maintenance tick materializes the aggregate under a PostgreSQL transaction advisory lock. Profile requests never scan listening history. The timestamp distinguishes an uncomputed metric from a genuine zero; every current refresh clears counts for artists with no audience. An older cutoff cannot overwrite an already newer snapshot, while equal-cutoff passes remain idempotent. Failures leave the last complete snapshot and are logged. Listening-event retention already exceeds the 28-day window.
 
 Anonymous previews, podcasts, live streams and private uploads do not contribute. There is no device fingerprinting. These are account counts from reported playback, not an independently audited measure of humans or a guarantee against fake accounts. Followers and lifetime plays remain separate.
 
@@ -32,4 +32,31 @@ The native audio engine and real-device playback are separate validation surface
 
 `0032_listener_experience` adds the nullable audience timestamp and the two collaboration tables. It is a pre-deploy additive migration; new-table foreign keys are declared at creation. Main's already-published `0031_bouncy_victor_mancha` and its image indexes remain unchanged. After migration and backend rollout, the regular maintenance scheduler fills the audience timestamp; the header does not invent a zero while waiting for that first pass.
 
-This change covers profiles, credits, lyrics, history, queue persistence, canonical link sharing and explicit playlist collaboration. Offline audio downloads, new crossfade/gapless engines, taste-match generation, external playlist import, creator-selected playlist shelves, release notifications and generated social artwork are separate outstanding parts of issue #140. Existing device-connect and encoding functionality is not claimed as newly implemented here.
+## Issue 140 completion audit
+
+The unified profile keeps the monthly audience immediately beneath the artist name inside one responsive hero. Its skeleton reserves that same row. Computed zero is displayed; an absent timestamp is unknown, never replaced with follower totals. Artist controls provide play/pause, shuffle and follow, with radio/share in one overflow menu and labelled touch targets. Track overflow includes queue placement, playlist addition, canonical artist/album navigation, sharing and credits/lyrics.
+
+Public popular-track ranking uses stored popularity first, creation date second and identity as a deterministic tie-breaker; artwork presence no longer outranks the score. Release lists sort newest first, not artwork first, and shelves remain bounded with explicit expansion. The existing popularity pipeline is reused rather than introducing an unreviewed second score. Related artists come only from real co-listen edges or shared genres, with that explanation shown beside the shelf. Unrelated popularity filler was removed; sparse catalogs may legitimately have no related shelf.
+
+The full About section displays stored biography, disambiguation, partial active dates, aliases, labels and members. Resolved members link to their profiles; unresolved names stay text. A displayed photo's authorship, licence and safe source link are visible. Missing dates never imply continued activity. New labels are supplied in all sixteen listener locales. Viewer-sensitive profile shelves use the linked API client, preserving permission checks for private readable playlists.
+
+Track credits include the catalog's known primary artist even when the child credit list is empty. An explicit matching primary credit is not duplicated. Other roles and unresolved contributors remain factual, and copyright/publisher metadata is preserved.
+
+Lyrics retain a track-keyed query for 24 hours of both freshness and inactive cache lifetime. Scrubbing does not change the key. A 404 is cached as unavailable; other errors remain retryable. The provider request is bounded to ten seconds, the client allows twelve seconds, and query retries are bounded. Corrupt provider responses are errors, not fabricated absence. Invalid timed content can fall back to real plain lyrics; empty plain fields can fall back to stored text lines. A genuinely empty record has an unavailable state. Highlighting/seeking is restricted to the current track, with selected/disabled accessibility states and source attribution. Lyric text sharing is not enabled.
+
+Focused regressions live in `monthly-listeners.test.ts`, `relatedArtists.test.ts`, `entityProfile.artistSections.test.ts`, `LrclibProvider.test.ts`, `lyricsService.test.ts`, `artist-profile-details.test.tsx`, `artist-listener-metadata.test.tsx`, `useLyrics.test.tsx`, `LyricsView.test.tsx` and `entityService.test.ts`. Run them through the repository's Quality workflow, including all-package typechecks, frontend/Studio tests, migrated-PostgreSQL backend tests and the listener web export. Device audio validation remains a separate surface, not implied by those checks.
+
+## Focused follow-ups from section 5
+
+As requested by #140, larger roadmap work is tracked separately rather than silently included in its completion claim:
+
+- #153: offline music downloads and storage/entitlement management.
+- #154: real gapless/crossfade behavior and truthful loudness preferences, building on existing encoding.
+- #155: cross-client Connect handoff validation and race recovery, building on existing Connect.
+- #156: artist-selected playlist shelves, distinct from playlists merely containing the artist.
+- #157: consent-aware release notifications.
+- #158: rights-aware generated social artwork; lyric sharing requires a rights review.
+- #159: mutually opted-in taste-match and shared recommendation playlists.
+- #160: permissioned external playlist metadata import.
+
+History, canonical link sharing, queue persistence and explicit playlist collaboration were already present in main before the final #140 audit and are retained, not claimed as new subsystems here. This final audit adds no database migration and does not rewrite existing migration history.

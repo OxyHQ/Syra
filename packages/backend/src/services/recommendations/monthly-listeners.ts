@@ -50,6 +50,8 @@ export async function refreshMonthlyListeners(asOf = new Date()): Promise<number
         from catalog_entities candidate
         left join counts on counts.artist_id = candidate.id
         where artist.id = candidate.id and artist.type = 'artist'
+          and (candidate.stats_monthly_listeners_computed_at is null
+            or candidate.stats_monthly_listeners_computed_at <= ${asOf.toISOString()}::timestamptz)
         returning artist.id
       ) select count(*)::integer as updated from updated
     `);

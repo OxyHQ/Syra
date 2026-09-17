@@ -88,13 +88,12 @@ describe('LrclibProvider.getLyrics — null returns', () => {
     expect(result).toBeNull();
   });
 
-  it('returns null when body is malformed (no known lyrics fields)', async () => {
+  it('rejects malformed provider data rather than caching it as missing lyrics', async () => {
     const provider = makeProvider(async () => ({
       status: 200,
       body: { something: 'unexpected' },
     }));
-    const result = await provider.getLyrics(QUERY);
-    expect(result).toBeNull();
+    await expect(provider.getLyrics(QUERY)).rejects.toThrow('Invalid lrclib response');
   });
 });
 
@@ -122,5 +121,24 @@ describe('LrclibProvider — metadata', () => {
 
     expect(capturedUrl).not.toContain('album_name');
     expect(capturedUrl).not.toContain('duration');
+  });
+});
+
+
+describe('provider fallback and failure distinctions', () => {
+  it('uses plain lyrics when the advertised timed payload has no usable timestamps', async () => {
+    const provider = makeProvider(async () => ({ status: 200, body: { syncedLyrics: 'not LRC', plainLyrics: 'A real line' } }));
+    expect(await provider.getLyrics(QUERY)).toMatchObject({ synced: false, plain: 'A real line', lines: [{ timeMs: 0, text: 'A real line' }] });
+  });
+  it('rejects corrupt timed content without a plain fallback', async () => {
+    const provider = makeProvider(async () => ({ status: 200, body: { syncedLyrics: 'not LRC' } }));
+    await expect(provider.getLyrics(QUERY)).rejects.toThrow('Invalid lrclib timed lyrics');
+  });
+  it('propagates network timeouts instead of returning not found', async () => {
+    const provider = makeProvider(async () => { throw new Error('request timeout'); });
+    await expect(provider.getLyrics(QUERY)).rejects.toThrow('request timeout');
+  });
+  it('accepts an explicit no-content response', async () => {
+    expect(await makeProvider(async () => ({ status: 204, body: null })).getLyrics(QUERY)).toBeNull();
   });
 });

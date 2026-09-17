@@ -17,7 +17,6 @@ import { playableTrackFilter } from '../db/catalog/visibility';
 import {
   descNullsLast,
   findAlbumsWithPlayableTracks,
-  imageFirst,
 } from '../db/catalog/containers';
 import { loadImageVariants, toAlbumDtos, toTrackDtos } from '../db/catalog/hydrate';
 import { toArtistDto, type PublicCatalogEntityRow } from '../db/catalog/serialize';
@@ -103,14 +102,14 @@ async function loadArtistMusic(
 ): Promise<EntityMusic> {
   const [albumRows, trackRows] = await Promise.all([
     findAlbumsWithPlayableTracks(eq(albums.artistId, artistId), {
-      orderBy: [imageFirst(albums.coverArtId), descNullsLast(albums.releaseDate)],
+      orderBy: [descNullsLast(albums.releaseDate), asc(albums.id)],
       limit: ARTIST_ALBUMS_LIMIT,
     }),
     getDb()
       .select(publicColumns(tracks, PROTECTED_COLUMNS_BY_TABLE))
       .from(tracks)
       .where(and(playableTrackFilter(), eq(tracks.artistId, artistId)))
-      .orderBy(imageFirst(tracks.coverArtId), descNullsLast(tracks.popularity), descNullsLast(tracks.createdAt))
+      .orderBy(descNullsLast(tracks.popularity), descNullsLast(tracks.createdAt), asc(tracks.id))
       .limit(ARTIST_TRACKS_LIMIT),
   ]);
 

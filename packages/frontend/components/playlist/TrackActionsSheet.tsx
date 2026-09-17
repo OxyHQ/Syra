@@ -118,6 +118,15 @@ export const TrackActionsSheet: React.FC<TrackActionsSheetProps> = ({
           <Pressable style={styles.action} accessibilityRole="button" onPress={() => { router.push({ pathname: '/track/[id]', params: { id: track.id } }); onClose(); }}>
             <Ionicons name="information-circle-outline" size={22} color={theme.colors.text} /><Text className="text-foreground" style={styles.actionText}>{t('listener.creditsLyrics')}</Text>
           </Pressable>
+          {track.artistId ? (
+            <Pressable style={styles.action} accessibilityRole="button" onPress={() => {
+              router.push({ pathname: '/p/[id]', params: { id: track.artistId } });
+              onClose();
+            }}>
+              <Ionicons name="person-outline" size={22} color={theme.colors.text} />
+              <Text className="text-foreground" style={styles.actionText}>{t('common.goToArtist')}</Text>
+            </Pressable>
+          ) : null}
           {track.albumId ? <Pressable style={styles.action} accessibilityRole="button" onPress={() => { router.push(`/album/${track.albumId}`); onClose(); }}><Ionicons name="albums-outline" size={22} color={theme.colors.text} /><Text className="text-foreground" style={styles.actionText}>{t('listener.goAlbum')}</Text></Pressable> : null}
           <Pressable style={styles.action} accessibilityRole="button" onPress={() => { void shareMedia('track', track.id, track.title); onClose(); }}><Ionicons name="share-outline" size={22} color={theme.colors.text} /><Text className="text-foreground" style={styles.actionText}>{t('listener.share')}</Text></Pressable>
           {removeFrom && (

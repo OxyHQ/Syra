@@ -390,6 +390,17 @@
     "released": "Released"
   },
   "artist": {
+    "activeFrom": "En activité depuis",
+    "activeUntil": "En activité jusqu’à",
+    "aliases": "Également connu sous le nom de",
+    "labels": "Labels",
+    "members": "Membres",
+    "memberFrom": "Depuis {{date}}",
+    "memberUntil": "Jusqu’à {{date}}",
+    "imageCredit": "Crédit de l’image",
+    "imageSource": "Source de l’image",
+    "related": "Artistes similaires",
+    "relatedReason": "Selon les auditeurs ou les genres musicaux en commun.",
     "fansAlsoLike": "Fans also like",
     "popular": "Popular",
     "appearsIn": "Appears in",

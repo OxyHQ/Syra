@@ -390,6 +390,17 @@
     "released": "Released"
   },
   "artist": {
+    "activeFrom": "Начало деятельности",
+    "activeUntil": "Окончание деятельности",
+    "aliases": "Также известен как",
+    "labels": "Лейблы",
+    "members": "Участники",
+    "memberFrom": "С {{date}}",
+    "memberUntil": "До {{date}}",
+    "imageCredit": "Авторство изображения",
+    "imageSource": "Источник изображения",
+    "related": "Похожие исполнители",
+    "relatedReason": "На основе общих слушателей или музыкальных жанров.",
     "fansAlsoLike": "Fans also like",
     "popular": "Popular",
     "appearsIn": "Appears in",

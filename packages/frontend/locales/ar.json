@@ -390,6 +390,17 @@
     "released": "Released"
   },
   "artist": {
+    "activeFrom": "نشط منذ",
+    "activeUntil": "نشط حتى",
+    "aliases": "معروف أيضًا باسم",
+    "labels": "شركات التسجيل",
+    "members": "الأعضاء",
+    "memberFrom": "منذ {{date}}",
+    "memberUntil": "حتى {{date}}",
+    "imageCredit": "حقوق الصورة",
+    "imageSource": "مصدر الصورة",
+    "related": "فنانون ذوو صلة",
+    "relatedReason": "بناءً على المستمعين أو الأنواع الموسيقية المشتركة.",
     "fansAlsoLike": "Fans also like",
     "popular": "Popular",
     "appearsIn": "Appears in",

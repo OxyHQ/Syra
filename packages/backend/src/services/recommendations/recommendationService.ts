@@ -168,19 +168,8 @@ export async function getRelatedArtists(
   const combined = [...collaborative, ...genreMatches];
   if (combined.length >= limit) return withPlayableCatalog(combined.slice(0, limit));
 
-  // Popularity fallback to fill any remainder.
-  const popular = await getDb()
-    .select(CATALOG_ARTIST_COLUMNS)
-    .from(catalogEntities)
-    .where(and(notTerminatedArtist(), notInArray(catalogEntities.id, [...exclude])))
-    .orderBy(
-      imageFirst(catalogEntities.imageId),
-      descNullsLast(catalogEntities.popularity),
-      descNullsLast(catalogEntities.statsFollowers)
-    )
-    .limit(limit - combined.length);
-
-  return withPlayableCatalog([...combined, ...popular].slice(0, limit));
+  // No unrelated popularity filler: an empty relationship is an honest empty shelf.
+  return withPlayableCatalog(combined.slice(0, limit));
 }
 
 // ── Similar tracks ──────────────────────────────────────────────────────────
