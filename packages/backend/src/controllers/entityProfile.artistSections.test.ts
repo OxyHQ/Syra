@@ -466,3 +466,20 @@ describe('GET /api/p/:id — empty sections stay empty', () => {
     expect(profile.profileState?.claimable).toBe(false);
   });
 });
+
+
+it('ranks popular tracks by their score, not whether they have artwork, with stable ties', async () => {
+  const seed = await seedRichArtist();
+  const coverArtId = await makeImageAsset('album');
+  const common = { artistId: seed.artistId, artistName: 'Rich Artist', duration: 100, source: 'upload' as const, status: 'ready' as const, createdAt: new Date('2026-09-15T00:00:00Z') };
+  const inserted = await getDb().insert(tracks).values([
+    { ...common, title: 'Most popular without cover', popularity: 100 },
+    { ...common, title: 'Less popular with cover', popularity: 1, coverArtId },
+    { ...common, title: 'Tied first', popularity: 50 },
+    { ...common, title: 'Tied second', popularity: 50 },
+  ]).returning({ id: tracks.id, popularity: tracks.popularity });
+  const expected = [...inserted].sort((first, second) => (second.popularity ?? 0) - (first.popularity ?? 0) || first.id.localeCompare(second.id)).map((track) => track.id);
+  const res = makeRes();
+  await getEntityProfile(makeReq(seed.artistId), res as unknown as Response, failNext);
+  expect(profileOf(res).music?.tracks.filter((track) => expected.includes(track.id)).map((track) => track.id)).toEqual(expected);
+});

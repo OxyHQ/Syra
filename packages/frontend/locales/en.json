@@ -390,6 +390,17 @@
     "released": "Released"
   },
   "artist": {
+    "activeFrom": "Active from",
+    "activeUntil": "Active until",
+    "aliases": "Also known as",
+    "labels": "Labels",
+    "members": "Members",
+    "memberFrom": "From {{date}}",
+    "memberUntil": "Until {{date}}",
+    "imageCredit": "Image credit",
+    "imageSource": "Image source",
+    "related": "Related artists",
+    "relatedReason": "Based on shared listeners or musical genres.",
     "fansAlsoLike": "Fans also like",
     "popular": "Popular",
     "appearsIn": "Appears in",

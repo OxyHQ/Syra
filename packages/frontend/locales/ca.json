@@ -390,6 +390,17 @@
     "released": "Released"
   },
   "artist": {
+    "activeFrom": "En actiu des de",
+    "activeUntil": "En actiu fins a",
+    "aliases": "També conegut com",
+    "labels": "Segells",
+    "members": "Membres",
+    "memberFrom": "Des de {{date}}",
+    "memberUntil": "Fins a {{date}}",
+    "imageCredit": "Crèdit de la imatge",
+    "imageSource": "Font de la imatge",
+    "related": "Artistes relacionats",
+    "relatedReason": "Segons oients o gèneres musicals compartits.",
     "fansAlsoLike": "Fans also like",
     "popular": "Popular",
     "appearsIn": "Appears in",

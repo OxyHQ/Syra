@@ -12,7 +12,7 @@ const SECONDS_TO_MS = 1000;
 const LYRICS_SKELETON_LINE_COUNT = 8;
 
 interface LyricsViewProps {
-  /** Catalog track ObjectId — lyrics are fetched for this track. */
+  /** Catalog track id — lyrics are fetched for this track. */
   trackId: string;
 }
 
@@ -57,7 +57,8 @@ export const LyricsView: React.FC<LyricsViewProps> = React.memo(({ trackId }) =>
     return <View className="p-6 gap-3"><Text className="text-muted-foreground">{t('listener.lyricsFailed')}</Text><Pressable accessibilityRole="button" onPress={retry}><Text className="text-primary">{t('listener.retry')}</Text></Pressable></View>;
   }
 
-  if (!lyrics) {
+  const plainText = lyrics?.plain?.trim() ? lyrics.plain : lyrics?.lines.map((line) => line.text).join('\n');
+  if (!lyrics || !plainText?.trim()) {
     return (
       <View className="flex-1 items-center justify-center px-6">
         <Text className="text-lg font-medium text-muted-foreground text-center">
@@ -70,12 +71,13 @@ export const LyricsView: React.FC<LyricsViewProps> = React.memo(({ trackId }) =>
   if (lyrics.synced && lyrics.lines.length > 0) {
     return (
       <ScrollView
+        key={trackId}
         className="flex-1"
         contentContainerClassName="px-6 py-4 gap-2"
         showsVerticalScrollIndicator={false}
       >
         {lyrics.lines.map((line, index) => (
-          <Pressable key={index} disabled={!isCurrent} accessibilityRole="button" accessibilityLabel={t('listener.seekLyric', { line: line.text })} onPress={() => void seek(line.timeMs / SECONDS_TO_MS)}>
+          <Pressable key={index} disabled={!isCurrent} accessibilityState={{ disabled: !isCurrent, selected: index === activeIndex }} accessibilityRole="button" accessibilityLabel={t('listener.seekLyric', { line: line.text })} onPress={() => void seek(line.timeMs / SECONDS_TO_MS)}>
           <Text
             selectable={!isCurrent}
             className={
@@ -93,13 +95,9 @@ export const LyricsView: React.FC<LyricsViewProps> = React.memo(({ trackId }) =>
     );
   }
 
-  // Plain text fallback — join lines or use the plain field.
-  const plainText =
-    lyrics.plain ??
-    lyrics.lines.map((l) => l.text).join('\n');
-
   return (
     <ScrollView
+      key={trackId}
       className="flex-1"
       contentContainerClassName="px-6 py-4"
       showsVerticalScrollIndicator={false}

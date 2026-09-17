@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne } from 'drizzle-orm';
+import { asc, and, eq, inArray, ne } from 'drizzle-orm';
 import type { Album, ArtistOrigin, Playlist, SourceProvenance, Track } from '@syra/shared-types';
 import { getDb } from '../../db/postgres';
 import { findAttestationsByTrackIds } from '../../db/creators/attestations';
@@ -9,7 +9,6 @@ import {
   desc as descOrder,
   findAlbumsWithPlayableTracks,
   findPlaylistsWithPlayableTracks,
-  imageFirst,
   descNullsLast,
 } from '../../db/catalog/containers';
 import { loadImageVariants, toAlbumDtos, toTrackDtos } from '../../db/catalog/hydrate';
@@ -125,7 +124,7 @@ export interface ArtistProfileSource {
  */
 export async function loadDiscography(artistId: string): Promise<ArtistDiscography> {
   const rows = await findAlbumsWithPlayableTracks(eq(albums.artistId, artistId), {
-    orderBy: [imageFirst(albums.coverArtId), descOrder(albums.releaseDate)],
+    orderBy: [descNullsLast(albums.releaseDate), asc(albums.id)],
     limit: DISCOGRAPHY_LIMIT,
   });
 

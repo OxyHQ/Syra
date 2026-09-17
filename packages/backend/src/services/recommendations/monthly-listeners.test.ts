@@ -81,3 +81,39 @@ describe('rolling public audience', () => {
     expect((await count(principal))?.computedAt).toEqual(CUTOFF);
   });
 });
+
+
+it('never rolls a newer audience snapshot back to an older cutoff', async () => {
+  const principal = await artist('monotonic');
+  const track = await recording(principal);
+  await listen(principal, track, 'listener');
+  await refreshMonthlyListeners(CUTOFF);
+  const newer = new Date('2026-10-15T12:00:00Z');
+  await refreshMonthlyListeners(newer);
+  expect(await refreshMonthlyListeners(CUTOFF)).toBe(0);
+  expect(await count(principal)).toEqual({ value: 0, computedAt: newer });
+});
+
+it('accepts each performing role with case/whitespace normalization but excludes writing and production', async () => {
+  const principal = await artist('roles');
+  const track = await recording(principal);
+  const roles = ['artist', 'albumartist', 'performer', 'featured', 'vocalist', 'composer', 'writer', 'producer', 'remixer'];
+  const creditedArtists: string[] = [];
+  for (const [position, role] of roles.entries()) {
+    const contributor = await artist(role);
+    creditedArtists.push(contributor);
+    await getDb().insert(trackCredits).values({ trackId: track, position, role: ` ${role.toUpperCase()} `, name: role, nameKey: role, catalogEntityId: contributor });
+  }
+  await listen(principal, track, 'listener');
+  await refreshMonthlyListeners(CUTOFF);
+  for (const [index, contributor] of creditedArtists.entries()) {
+    expect((await count(contributor))?.value).toBe(index < 5 ? 1 : 0);
+  }
+});
+
+it('rejects an invalid cutoff without touching the previous snapshot', async () => {
+  const principal = await artist('invalid');
+  await refreshMonthlyListeners(CUTOFF);
+  await expect(refreshMonthlyListeners(new Date('invalid'))).rejects.toThrow('Invalid monthly-listener cutoff');
+  expect((await count(principal))?.computedAt).toEqual(CUTOFF);
+});

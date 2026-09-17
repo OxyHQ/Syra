@@ -390,6 +390,17 @@
     "released": "Released"
   },
   "artist": {
+    "activeFrom": "সক্রিয়তার শুরু",
+    "activeUntil": "সক্রিয়তার শেষ",
+    "aliases": "অন্য নাম",
+    "labels": "রেকর্ড লেবেল",
+    "members": "সদস্য",
+    "memberFrom": "{{date}} থেকে",
+    "memberUntil": "{{date}} পর্যন্ত",
+    "imageCredit": "ছবির কৃতিত্ব",
+    "imageSource": "ছবির উৎস",
+    "related": "সম্পর্কিত শিল্পী",
+    "relatedReason": "একই শ্রোতা বা সংগীতের ধারার ভিত্তিতে।",
     "fansAlsoLike": "Fans also like",
     "popular": "Popular",
     "appearsIn": "Appears in",

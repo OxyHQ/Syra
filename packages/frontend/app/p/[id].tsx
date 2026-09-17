@@ -15,7 +15,9 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { toast } from '@oxy.so/bloom/toast';
 import { Track } from '@syra/shared-types';
 import { entityService } from '@/services/entityService';
-import { MonthlyListeners } from '@/components/artist/MonthlyListeners';
+import { ArtistProfileHeading } from '@/components/artist/ArtistProfileHeading';
+import { ArtistAbout } from '@/components/artist/ArtistAbout';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@oxy.so/bloom/dropdown-menu';
 import { shareMedia } from '@/utils/share-media';
 import { ArtistClaimCta } from '@/components/artist/ArtistClaimCta';
 import { ArtistFollowControl } from '@/components/artist/ArtistFollowControl';
@@ -176,6 +178,10 @@ const EntityProfileScreen: React.FC = () => {
   };
 
   const handleOpenLink = (url: string) => {
+    if (!/^https?:\/\//i.test(url)) {
+      toast.error(t('artist.linkFailed'));
+      return;
+    }
     void Linking.openURL(url).catch((error: unknown) => {
       toast.error(t('artist.linkFailed'));
       logger.warn('Failed to open artist link', { url, error });
@@ -257,6 +263,7 @@ const EntityProfileScreen: React.FC = () => {
   // theming — `EntityProfileView` reads the already-themed app theme.
   return (
     <EntityProfileView
+      key={entity.id}
       entity={entity}
       asOf={entityQuery.dataUpdatedAt}
       displayName={displayName}
@@ -376,6 +383,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
   const episodes = entity.appearsIn?.episodes ?? [];
   const canPlay = tracks.length > 0;
   const [expandedShelves, setExpandedShelves] = useState<string[]>([]);
+  const [isActionsOpen, setIsActionsOpen] = useState(false);
   const activeContext = usePlayerStore((state) => state.context);
   const isArtistPlaying = isPlaying && activeContext?.type === 'artist' && activeContext.id === artistId;
 
@@ -512,6 +520,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                 <Pressable
                   className="bg-primary" style={styles.stickyHeaderPlayButton}
                   onPress={onPlayAll}
+                  accessibilityLabel={t(isArtistPlaying ? 'listener.pause' : 'listener.play')}
                   accessibilityRole="button"
                 >
                   <Ionicons name={isArtistPlaying ? 'pause' : 'play'} size={16} color={theme.colors.primaryForeground} />
@@ -560,15 +569,12 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
               style={styles.headerOverlay}
             />
             <Animated.View pointerEvents="none" style={[styles.titleContainer, headerTitleAnimatedStyle]}>
-              <Text style={[styles.artistTitle, { color: '#FFFFFF' }]} numberOfLines={2}>
-                {displayName}
-              </Text>
+              <ArtistProfileHeading name={displayName} stats={artistId ? entity.stats : undefined} />
             </Animated.View>
           </Animated.View>
 
           {/* Content Section with Gradient Background */}
           <LinearGradient colors={gradientColors} locations={[0, 0.35, 1]} style={styles.contentSection}>
-            {artistId ? <MonthlyListeners stats={entity.stats} /> : null}
             {/* Entity Info */}
             <View style={styles.infoContainer}>
               <View style={styles.infoHeader}>
@@ -646,11 +652,12 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
 
             {/* Playback Controls (music) */}
             {(canPlay || artistId) && (
-              <View style={styles.controlsContainer}>
+              <View className="flex-wrap" style={styles.controlsContainer}>
                 {canPlay && (
                   <Pressable
                     className="bg-primary" style={styles.playButton}
                     onPress={onPlayAll}
+                    accessibilityLabel={t(isArtistPlaying ? 'listener.pause' : 'listener.play')}
                     accessibilityRole="button"
                   >
                     <View style={styles.playButtonInner}>
@@ -666,19 +673,17 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                 {artistId && (
                   <ArtistFollowControl artistId={artistId} artistName={displayName} />
                 )}
-                <Pressable onPress={() => void shareMedia('p', entity.id, displayName)} style={styles.controlButton} accessibilityRole="button" accessibilityLabel={t('listener.share')}>
-                  <Ionicons name="share-outline" size={24} color={theme.colors.text} />
-                </Pressable>
-                {artistId && (
-                  <Pressable
-                    style={styles.controlButton}
-                    onPress={onStartRadio}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('radio.artistRadio')}
-                  >
-                    <Ionicons name="radio-outline" size={24} color={theme.colors.text} />
-                  </Pressable>
-                )}
+                <DropdownMenu open={isActionsOpen} onOpenChange={setIsActionsOpen}>
+                  <DropdownMenuTrigger asChild label={t('listener.actions')}>
+                    <Pressable className="size-11 items-center justify-center" accessibilityRole="button" accessibilityLabel={t('listener.actions')}>
+                      <Ionicons name="ellipsis-horizontal" size={24} color={theme.colors.text} />
+                    </Pressable>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" label={t('listener.actions')}>
+                    {artistId && canPlay ? <DropdownMenuItem onPress={onStartRadio}>{t('radio.artistRadio')}</DropdownMenuItem> : null}
+                    <DropdownMenuItem onPress={() => void shareMedia('p', entity.id, displayName)}>{t('listener.share')}</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </View>
             )}
 
@@ -857,9 +862,10 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
               <>
                 <View style={styles.sectionHeader}>
                   <Text className="text-foreground" style={styles.sectionTitle}>
-                    {t('artist.fansAlsoLike')}
+                    {t('artist.related')}
                   </Text>
                 </View>
+                <Text className="text-muted-foreground px-6 pb-3">{t('artist.relatedReason')}</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.relatedArtistsRow}>
                   {relatedArtists.map((relatedArtist) => (
                     <View key={relatedArtist.id} style={styles.relatedArtistCard}>
@@ -879,6 +885,8 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                 </ScrollView>
               </>
             )}
+
+            <ArtistAbout entity={entity} hasImage={Boolean(heroImage)} onNavigateArtist={onNavigateArtist} onOpenLink={onOpenLink} />
 
             {/* Empty State — counts every shelf, including the ones added with
                 the credits work. A profile whose only content is a production
@@ -1011,15 +1019,6 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: 16,
   },
-  artistTitle: {
-    fontSize: 96,
-    fontWeight: '900',
-    letterSpacing: -2,
-    textShadowColor: 'rgba(0, 0, 0, 0.8)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 8,
-    lineHeight: 96,
-  },
   contentSection: {
     paddingTop: 0,
     minHeight: '100%',
@@ -1122,8 +1121,8 @@ const styles = StyleSheet.create({
     borderRadius: 28,
   },
   controlButton: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 20,

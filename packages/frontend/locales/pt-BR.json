@@ -390,6 +390,17 @@
     "released": "Released"
   },
   "artist": {
+    "activeFrom": "Em atividade desde",
+    "activeUntil": "Em atividade até",
+    "aliases": "Também conhecido como",
+    "labels": "Gravadoras",
+    "members": "Integrantes",
+    "memberFrom": "Desde {{date}}",
+    "memberUntil": "Até {{date}}",
+    "imageCredit": "Crédito da imagem",
+    "imageSource": "Fonte da imagem",
+    "related": "Artistas relacionados",
+    "relatedReason": "Com base em ouvintes ou gêneros musicais em comum.",
     "fansAlsoLike": "Fans also like",
     "popular": "Popular",
     "appearsIn": "Appears in",

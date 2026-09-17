@@ -390,6 +390,17 @@
     "released": "Released"
   },
   "artist": {
+    "activeFrom": "开始活动时间",
+    "activeUntil": "结束活动时间",
+    "aliases": "别名",
+    "labels": "唱片公司",
+    "members": "成员",
+    "memberFrom": "自 {{date}} 起",
+    "memberUntil": "至 {{date}}",
+    "imageCredit": "图片署名",
+    "imageSource": "图片来源",
+    "related": "相关艺人",
+    "relatedReason": "根据共同听众或音乐流派推荐。",
     "fansAlsoLike": "Fans also like",
     "popular": "Popular",
     "appearsIn": "Appears in",

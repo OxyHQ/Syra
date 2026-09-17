@@ -10,7 +10,7 @@ import { getRelatedArtists } from './recommendationService';
  * `getRelatedArtists` is the ONE reader of the artist co-listen graph — both
  * `GET /api/artists/:id/related` and the artist profile screen go through it.
  *
- * These cover the playability gate specifically, because the three sources it
+ * These cover the playability gate specifically, because both sources it
  * merges each exclude only `terminated`, which is a property of the ACCOUNT.
  * An artist whose tracks were taken down one by one, or a claimable stub created
  * from a stranger's file tags that has no tracks yet, is not terminated and used
@@ -118,7 +118,7 @@ describe('getRelatedArtists — only artists you can actually play', () => {
     expect(ids(related)).not.toContain(emptyPeer.id);
   });
 
-  it('filters the POPULARITY fallback too', async () => {
+  it('does not invent a relationship to popular but unrelated artists', async () => {
     const seed = await makeArtist();
     await makeTrack(seed.id);
     const emptyButPopular = await makeArtist({ popularity: 99 });
@@ -127,7 +127,8 @@ describe('getRelatedArtists — only artists you can actually play', () => {
 
     const related = await getRelatedArtists(seed.id, 10);
 
-    expect(ids(related)).toContain(playable.id);
+    expect(ids(related)).not.toContain(playable.id);
+    expect(related).toEqual([]);
     expect(ids(related)).not.toContain(emptyButPopular.id);
   });
 

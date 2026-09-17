@@ -390,6 +390,17 @@
     "released": "Publicado"
   },
   "artist": {
+    "activeFrom": "En activo desde",
+    "activeUntil": "En activo hasta",
+    "aliases": "También conocido como",
+    "labels": "Sellos",
+    "members": "Miembros",
+    "memberFrom": "Desde {{date}}",
+    "memberUntil": "Hasta {{date}}",
+    "imageCredit": "Crédito de la imagen",
+    "imageSource": "Fuente de la imagen",
+    "related": "Artistas relacionados",
+    "relatedReason": "Según oyentes o géneros musicales compartidos.",
     "fansAlsoLike": "A los fans también les gusta",
     "popular": "Popular",
     "appearsIn": "Aparece en",

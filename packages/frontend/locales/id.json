@@ -390,6 +390,17 @@
     "released": "Released"
   },
   "artist": {
+    "activeFrom": "Aktif sejak",
+    "activeUntil": "Aktif hingga",
+    "aliases": "Juga dikenal sebagai",
+    "labels": "Label rekaman",
+    "members": "Anggota",
+    "memberFrom": "Sejak {{date}}",
+    "memberUntil": "Hingga {{date}}",
+    "imageCredit": "Kredit gambar",
+    "imageSource": "Sumber gambar",
+    "related": "Artis terkait",
+    "relatedReason": "Berdasarkan pendengar atau genre musik yang sama.",
     "fansAlsoLike": "Fans also like",
     "popular": "Popular",
     "appearsIn": "Appears in",

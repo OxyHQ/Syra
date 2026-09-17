@@ -39,13 +39,13 @@ export const ArtistDetailSkeleton: React.FC<ArtistDetailSkeletonProps> =
             locations={[0, 0.6, 1]}
             style={styles.heroOverlay}
           />
-          <View style={styles.titleContainer}>
-            <Skeleton.Box width="55%" height={72} borderRadius={8} />
+          <View className="gap-2" style={styles.titleContainer}>
+            <View className="h-10 sm:h-16 lg:h-24"><Skeleton.Box width="55%" height="100%" borderRadius={8} /></View>
+            <Skeleton.Box width={190} height={24} borderRadius={4} />
           </View>
         </View>
 
         <LinearGradient colors={contentGradient} locations={[0, 0.35, 1]} style={styles.contentSection}>
-          <View className="px-6 pt-4 pb-2"><Skeleton.Box width={190} height={22} borderRadius={4} /></View>
           <View style={styles.infoContainer}>
             <View style={styles.infoHeader}>
               <Skeleton.Circle size={64} />

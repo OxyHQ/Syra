@@ -390,6 +390,17 @@
     "released": "Released"
   },
   "artist": {
+    "activeFrom": "活動開始",
+    "activeUntil": "活動終了",
+    "aliases": "別名",
+    "labels": "レーベル",
+    "members": "メンバー",
+    "memberFrom": "{{date}}から",
+    "memberUntil": "{{date}}まで",
+    "imageCredit": "画像クレジット",
+    "imageSource": "画像の出典",
+    "related": "関連アーティスト",
+    "relatedReason": "共通のリスナーや音楽ジャンルに基づいています。",
     "fansAlsoLike": "Fans also like",
     "popular": "Popular",
     "appearsIn": "Appears in",
