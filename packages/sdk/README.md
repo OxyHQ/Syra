@@ -70,6 +70,9 @@ authenticated transport can be layered in a future version.
 | `getPodcast(id)` | A single `PodcastSummary`, schema-validated. |
 | `podcastUrl(id)` | Syra web deep link (`/podcasts/:id`). |
 | `podcastArtworkUrl(show, size?)` | Absolute show-artwork URL, or `undefined`. |
+| `subscribeToPodcast(id)` | Subscribe the signed-in caller to a show (idempotent). Needs `getAccessToken`. |
+| `unsubscribeFromPodcast(id)` | Unsubscribe the caller (idempotent). Needs `getAccessToken`. |
+| `listPodcastSubscriptions()` | The caller's subscribed shows as `{ podcast, lastEpisodeAt? }[]`. Needs `getAccessToken`. |
 
 `hasMore` reflects the backend's pagination over the full result set, so it is
 not affected by the client-side preview filter on `searchTracks` — paginate by

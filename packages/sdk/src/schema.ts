@@ -83,6 +83,17 @@ export const podcastSummarySchema = z.object({
 export type PodcastSummary = z.infer<typeof podcastSummarySchema>;
 
 /**
+ * One show the caller is subscribed to, from `GET /api/podcasts/subscriptions`.
+ * `lastEpisodeAt` is the newest episode's publish time — what a client compares
+ * against its own last visit to badge a show with new episodes.
+ */
+export const podcastSubscriptionSchema = z.object({
+  podcast: podcastSummarySchema,
+  lastEpisodeAt: z.string().optional(),
+});
+export type PodcastSubscription = z.infer<typeof podcastSubscriptionSchema>;
+
+/**
  * The summary view of a podcast EPISODE returned by the public podcast endpoints
  * (`GET /api/podcasts/:id/episodes`, `GET /api/episodes/:id`) — just enough to
  * list an episode and stream its audio.

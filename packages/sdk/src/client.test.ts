@@ -843,6 +843,9 @@ describe('the authenticated methods refuse without a session', () => {
    */
   const cases: [string, (client: ReturnType<typeof createSyraClient>) => Promise<unknown>][] = [
     ['listMyPodcasts', (client) => client.listMyPodcasts()],
+    ['subscribeToPodcast', (client) => client.subscribeToPodcast('p1')],
+    ['unsubscribeFromPodcast', (client) => client.unsubscribeFromPodcast('p1')],
+    ['listPodcastSubscriptions', (client) => client.listPodcastSubscriptions()],
     ['createPodcast', (client) => client.createPodcast({ title: 'X' })],
     ['updatePodcast', (client) => client.updatePodcast('p1', { title: 'X' })],
     ['setPodcastVisibility', (client) => client.setPodcastVisibility('p1', 'private')],
@@ -886,6 +889,71 @@ describe('the authenticated methods refuse without a session', () => {
     const shows = await client.listMyPodcasts();
     expect(shows).toHaveLength(1);
     expect(calls[0].headers.authorization).toBe('Bearer tok');
+  });
+});
+
+// ── Podcast subscriptions ───────────────────────────────────────────────────
+
+describe('createSyraClient podcast subscriptions', () => {
+  it('subscribeToPodcast POSTs to the show with the bearer and no body', async () => {
+    const { fetch, calls } = fakeFetch(() => ({ body: { ok: true } }));
+    const client = createSyraClient({ fetch, getAccessToken: () => 'tok' });
+
+    await client.subscribeToPodcast('show/1');
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].method).toBe('POST');
+    expect(calls[0].url).toBe(`${DEFAULT_SYRA_BASE_URL}/api/podcasts/show%2F1/subscribe`);
+    expect(calls[0].headers.authorization).toBe('Bearer tok');
+    expect(calls[0].body).toBeUndefined();
+  });
+
+  it('unsubscribeFromPodcast POSTs to the unsubscribe route', async () => {
+    const { fetch, calls } = fakeFetch(() => ({ body: { ok: true } }));
+    const client = createSyraClient({ fetch, getAccessToken: () => 'tok' });
+
+    await client.unsubscribeFromPodcast('p1');
+
+    expect(calls[0].method).toBe('POST');
+    expect(calls[0].url).toBe(`${DEFAULT_SYRA_BASE_URL}/api/podcasts/p1/unsubscribe`);
+  });
+
+  it('subscribeToPodcast surfaces the API 404 as a SyraApiError', async () => {
+    const { fetch } = fakeFetch(() => ({ status: 404, body: { error: 'Podcast not found' } }));
+    const client = createSyraClient({ fetch, getAccessToken: () => 'tok' });
+
+    const error = await client.subscribeToPodcast('p1').catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(SyraApiError);
+    expect((error as SyraApiError).status).toBe(404);
+  });
+
+  it('listPodcastSubscriptions reads data.subscriptions and drops malformed rows', async () => {
+    const { fetch, calls } = fakeFetch(() => ({
+      body: {
+        data: {
+          subscriptions: [
+            { podcast: makePodcast({ id: 'a' }), lastEpisodeAt: '2026-09-01T00:00:00.000Z' },
+            { podcast: { title: 'no id' } },
+            { podcast: makePodcast({ id: 'b' }) },
+          ],
+          total: 3,
+        },
+      },
+    }));
+    const client = createSyraClient({ fetch, getAccessToken: () => 'tok' });
+
+    const subscriptions = await client.listPodcastSubscriptions();
+
+    expect(calls[0].url).toBe(`${DEFAULT_SYRA_BASE_URL}/api/podcasts/subscriptions`);
+    expect(subscriptions.map((s) => s.podcast.id)).toEqual(['a', 'b']);
+    expect(subscriptions[0].lastEpisodeAt).toBe('2026-09-01T00:00:00.000Z');
+  });
+
+  it('listPodcastSubscriptions answers an empty list for an unexpected shape', async () => {
+    const { fetch } = fakeFetch(() => ({ body: { data: [] } }));
+    const client = createSyraClient({ fetch, getAccessToken: () => 'tok' });
+
+    expect(await client.listPodcastSubscriptions()).toEqual([]);
   });
 });
 
