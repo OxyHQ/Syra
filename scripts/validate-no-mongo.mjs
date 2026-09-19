@@ -205,10 +205,10 @@ const KNOWN_EXCEPTIONS = [
     pattern: "carries DATABASE_URL and no MONGODB_URI",
     reason:
       "States the evidence that Syra opens no Mongo — live task definition, /health engine, and "
-      + "that the mongoose in node_modules is an UNSATISFIED optional peer of "
-      + "@oxy.so/crowdsource-app rather than a dependency (verified: bun.lock carries no mongoose "
-      + "resolution entry). That paragraph answers 'why is mongoose in node_modules', which is "
-      + "otherwise alarming and would be re-investigated from scratch.",
+      + "that node_modules no longer contains mongoose at all (verified: bun.lock carries no "
+      + "mongoose resolution entry). It used to, as an UNSATISFIED optional peer of the retired "
+      + "@oxy.so/crowdsource-app; that paragraph answered 'why is mongoose in node_modules', and "
+      + "now records why it is not, so neither observation is re-investigated from scratch.",
   },
 ];
 

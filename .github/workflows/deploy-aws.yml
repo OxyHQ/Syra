@@ -369,6 +369,25 @@ jobs:
           # workflow held for approval. See the note on that step.
           TASK_SECRET_OVERRIDES_JSON: '{"DATABASE_URL":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/DATABASE_URL","INGEST_TOKEN_SECRET":"arn:aws:ssm:us-west-2:237343248947:parameter/oxy/syra/INGEST_TOKEN_SECRET"}'
 
+          # The Oxy service credential Syra no longer holds.
+          #
+          # NOT SETTING SOMETHING HERE REMOVES NOTHING. Every release renders
+          # from the task definition the service is RUNNING, so a secret that was
+          # put on a revision by hand or by Terraform stays on every future
+          # revision until a deploy is told to take it out. This list is that
+          # instruction, and it is the only thing that retires
+          # OXY_SERVICE_API_KEY and OXY_SERVICE_API_SECRET from the container —
+          # Syra attests its ECS task role for an Oxy service token now (oxy ADR
+          # 0026), and @oxy.so/core >= 1.6.1 takes that path whenever no pair is
+          # present. `src/oxyClient.ts` asks whether this process can
+          # authenticate rather than whether the two variables are set, so the
+          # notifier keeps minting across the change.
+          #
+          # The SSM parameters are untouched and still exist. This removes the
+          # task definition's REFERENCE to them, which is the half a deploy owns;
+          # retiring the parameters is a separate, later, irreversible step.
+          TASK_SECRET_REMOVALS: OXY_SERVICE_API_KEY OXY_SERVICE_API_SECRET
+
           # PRE_DEPLOY_TASK_COMMAND_JSON / POST_DEPLOY_TASK_COMMAND_JSON are NOT
           # set here: whichever selector step above ran put them in $GITHUB_ENV,
           # so the pair this step sees is the one the chosen `migration_phase`

@@ -25,6 +25,10 @@ export DEPLOY_TEST_EXPECT_METRICS_ARN=false
 export DEPLOY_TEST_METRICS_PARAMETER=/oxy/sampleapp/INTERNAL_METRICS_TOKEN
 export DEPLOY_TEST_TASK_EXIT_CODE=0
 export DEPLOY_TEST_EXPECT_TASK_SECRET_ARN=false
+# The secret NAME a case expects to be gone from the registered definition, or
+# empty to assert nothing. A name rather than a boolean, so the assertion below
+# checks the one the case actually removed.
+export DEPLOY_TEST_EXPECT_SECRET_REMOVED=
 export DEPLOY_TEST_SERVICE_DESIRED_COUNT=1
 export DEPLOY_TEST_ROLLOUT_SCENARIO=healthy
 
@@ -128,6 +132,16 @@ aws() {
           "name": "deploy-test",
           "image": "example.invalid/deploy-test:old",
           "essential": true,
+          "secrets": [
+            {
+              "name": "DOOMED_TASK_SECRET",
+              "valueFrom": "arn:aws:ssm:test:123456789012:parameter/oxy/sample-app/DOOMED_TASK_SECRET"
+            },
+            {
+              "name": "KEPT_TASK_SECRET",
+              "valueFrom": "arn:aws:ssm:test:123456789012:parameter/oxy/sample-app/KEPT_TASK_SECRET"
+            }
+          ],
           "logConfiguration": {
             "logDriver": "awslogs",
             "options": {
@@ -201,6 +215,32 @@ aws() {
           printf 'task-secret:arn\n' >>"$DEPLOY_TEST_LOG"
         else
           printf 'task-secret:arn:MISMATCH\n' >>"$DEPLOY_TEST_LOG"
+        fi
+      fi
+      if [[ "$DEPLOY_TEST_EXPECT_SECRET_REMOVED" != "" ]]; then
+        local previous_argument=""
+        local input_json=""
+        local argument
+        for argument in "$@"; do
+          if [[ "$previous_argument" == "--cli-input-json" ]]; then
+            input_json="${argument#file://}"
+            break
+          fi
+          previous_argument="$argument"
+        done
+        # Two verdicts, not one. Asserting only the ABSENCE of the removed name
+        # passes just as well against a render that dropped every secret, or
+        # against a definition that never carried it -- so the surviving secret
+        # is asserted in the same breath. Both are logged, for the same reason
+        # the assertions above are: a failure in the MIDDLE of this function
+        # never reaches the caller's exit status.
+        if jq -e --arg name "$DEPLOY_TEST_EXPECT_SECRET_REMOVED" '
+          [.containerDefinitions[] | select(.name == "deploy-test") | .secrets[] | .name]
+          | (index($name) | not) and (index("KEPT_TASK_SECRET") != null)
+        ' "$input_json" >/dev/null; then
+          printf 'secret-removed\n' >>"$DEPLOY_TEST_LOG"
+        else
+          printf 'secret-removed:MISMATCH\n' >>"$DEPLOY_TEST_LOG"
         fi
       fi
       printf '%s\n' "arn:aws:ecs:test:task-definition/deploy-test:2"
@@ -291,7 +331,7 @@ export -f aws
 # Raise this with the case count; lower it ONLY alongside a deletion you can
 # name. A floor quietly adjusted to match whatever ran is not a floor.
 cases_run=0
-MINIMUM_CASES=14
+MINIMUM_CASES=16
 
 run_release() {
   cases_run=$((cases_run + 1))
@@ -316,11 +356,16 @@ run_release() {
   DEPLOY_TEST_EXPECT_METRICS_ARN="$inject_internal_metrics"
   DEPLOY_TEST_TASK_EXIT_CODE="$task_exit_code"
   DEPLOY_TEST_EXPECT_TASK_SECRET_ARN="$inject_task_secret"
+  # Not a run_release parameter: the two cases that use it set it as a prefix
+  # assignment, the same way they set TASK_SECRET_REMOVALS. Defaulted here so it
+  # cannot leak from one case into the next.
+  DEPLOY_TEST_EXPECT_SECRET_REMOVED="${DEPLOY_TEST_EXPECT_SECRET_REMOVED:-}"
   DEPLOY_TEST_SERVICE_DESIRED_COUNT="$service_desired_count"
   DEPLOY_TEST_ROLLOUT_SCENARIO="$rollout_scenario"
   export DEPLOY_TEST_LOG DEPLOY_TEST_EXPECT_METRICS_ARN
   export DEPLOY_TEST_TASK_EXIT_CODE
   export DEPLOY_TEST_EXPECT_TASK_SECRET_ARN
+  export DEPLOY_TEST_EXPECT_SECRET_REMOVED
   export DEPLOY_TEST_SERVICE_DESIRED_COUNT
   export DEPLOY_TEST_ROLLOUT_SCENARIO
 
@@ -776,6 +821,33 @@ grep -F \
   "Nothing was rolled back; this release needs a human." \
   "$test_directory/smoke-no-rollback-failure/output.log" \
   >/dev/null
+
+# A secret NAMED in TASK_SECRET_REMOVALS must leave the registered definition,
+# and the one beside it must stay. This is the only way a secret ever leaves
+# production: the render derives from the RUNNING definition, so deleting the
+# line from a workflow file leaves the secret exactly where it was. The live
+# definition the script derives from carries both, so this cannot pass by
+# removing a secret that was never there -- the mirror assertion on
+# KEPT_TASK_SECRET is what rules out a render that simply dropped them all.
+DEPLOY_TEST_EXPECT_SECRET_REMOVED=DOOMED_TASK_SECRET \
+  TASK_SECRET_REMOVALS=DOOMED_TASK_SECRET \
+  run_release secret-removal true '' false 0 false
+grep -qx 'secret-removed' "$test_directory/secret-removal/aws.log" || {
+  echo "TASK_SECRET_REMOVALS did not remove the secret from the registered definition." >&2
+  grep -n 'secret-removed' "$test_directory/secret-removal/aws.log" >&2 || true
+  exit 1
+}
+
+# A name in BOTH lists is refused rather than resolved: the render filters by
+# name and then concatenates the overrides, so the outcome would depend on the
+# order of two operations nobody reads, in a render of SECRETS.
+TASK_SECRET_REMOVALS=EXTRA_TASK_SECRET \
+  run_release secret-conflict false '' false 0 true
+grep -q 'in both TASK_SECRET_OVERRIDES_JSON and TASK_SECRET_REMOVALS' \
+  "$test_directory/secret-conflict/output.log" || {
+  echo "The conflicting-name refusal must name BOTH lists, or it is indistinguishable from any other failure." >&2
+  exit 1
+}
 
 if (( cases_run < MINIMUM_CASES )); then
   echo "ASSERTION FAILED: only $cases_run release cases ran, expected at least $MINIMUM_CASES." >&2

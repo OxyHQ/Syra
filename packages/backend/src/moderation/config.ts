@@ -1,7 +1,7 @@
 import type {
   CrowdSourceConnectionConfig,
   ModerationEnforcementMode,
-} from '@oxy.so/crowdsource-app';
+} from '@crowdsource.you/core/outbox';
 import { logger } from '../utils/logger';
 
 /**
@@ -25,6 +25,22 @@ import { logger } from '../utils/logger';
  * option through which one could be passed. A variable holding it could only ever
  * disagree with the credential — and a tenant id the caller can choose is not
  * isolation, it is an IDOR.
+ *
+ * ## Syra still holds a CrowdSource service key, and that is upstream's half
+ *
+ * `@crowdsource.you/core` exports `crowdSourceForOxyService()`, which presents
+ * the Oxy service token this process already mints and lets CrowdSource resolve
+ * the tenant from the Oxy application that token names — no key, nothing to
+ * rotate. Mention, Homiio and Allo each took it, because each held its OWN copy
+ * of the client wrapper and could swap that copy for the call.
+ *
+ * Syra never had a copy: `createModerationIntegration()` builds the client, and
+ * at 1.3.0 the outbox half still builds it from `crowdSource.serviceKey` and
+ * offers no seam through which a client could be injected. So the key stays
+ * until the package's own provider takes the same path — and it is NOT the Oxy
+ * service credential, which Syra has stopped carrying (`src/oxyClient.ts`).
+ * Removing it here before then would disable delivery, silently, in the one
+ * direction nothing fails on.
  */
 
 const ENFORCEMENT_MODES: readonly ModerationEnforcementMode[] = [

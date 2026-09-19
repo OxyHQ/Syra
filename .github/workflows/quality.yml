@@ -119,9 +119,10 @@ jobs:
       # (This said "a real in-memory MongoDB replica set" until the Postgres
       # cutover finished. Syra opens no Mongo anywhere: the live task definition
       # carries DATABASE_URL and no MONGODB_URI, /health reports
-      # engine=postgres, and no package.json here declares mongoose. The
-      # mongoose in node_modules is an OPTIONAL peer of @oxy.so/crowdsource-app
-      # that nothing satisfies.)
+      # engine=postgres, and no package.json here declares mongoose. There is no
+      # longer a mongoose in node_modules either — it was an UNSATISFIED optional
+      # peer of @oxy.so/crowdsource-app, and @crowdsource.you/core, which
+      # replaced that package, does not declare one at all.)
       # The upload screening suite shells out to real binaries rather than mocking
       # them: ffprobe measures a fixture's true duration/codec, ffmpeg builds the
       # fixtures and drives the HLS packager, and fpcalc produces the Chromaprint

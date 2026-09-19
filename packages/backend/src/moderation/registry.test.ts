@@ -3,7 +3,7 @@ import {
   SubjectTypeSchema,
   TaxonomyCodeSchema,
   UNIVERSAL_TAXONOMY_CODES,
-} from '@oxy.so/crowdsource-contracts';
+} from '@crowdsource.you/contracts';
 import { deliverableTypes, subjectProviderFor } from './subjects/registry';
 import { allegationsForCategories, REPORT_TAXONOMY_VERSION } from './report-taxonomy';
 import { ReportCategory, ReportedType } from './types';

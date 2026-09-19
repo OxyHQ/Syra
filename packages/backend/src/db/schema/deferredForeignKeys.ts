@@ -23,7 +23,7 @@
  */
 
 import type { DeferredForeignKey } from '@oxy.so/db/assert';
-import { moderationIdColumnsWithoutForeignKey } from '@oxy.so/crowdsource-app/postgres';
+import { moderationIdColumnsWithoutForeignKey } from '@crowdsource.you/core/outbox/postgres';
 import { moderationTableSet, reports } from './moderation';
 
 /**
@@ -362,7 +362,7 @@ export const ID_COLUMNS_WITHOUT_FOREIGN_KEY: readonly { column: string; reason: 
    *
    * Every one would otherwise fail this gate as `unclassified_id_column` on the
    * day Syra adopted the package, with nothing to say whether each is a missing
-   * constraint or a decision — and `@oxy.so/crowdsource-app` is the only place
+   * constraint or a decision — and `@crowdsource.you/core/outbox` is the only place
    * that can answer, because five of the eight name rows in CROWDSOURCE's
    * database (a decision, a case, a report as CrowdSource knows it) and the other
    * three are opaque noun ids no single column could reference.

@@ -96,10 +96,22 @@ const schema = z.object({
 
   PREMIUM_USER_IDS: z.string().optional(),
 
-  // Oxy service-app credentials (OAuth2 client-credentials). Exchanged at
-  // `POST /auth/service-token` for a short-lived service JWT used to create
-  // notifications server-to-server. Absent in local dev — the notifier then
-  // refuses to emit rather than pretending to deliver.
+  /**
+   * Oxy service-app credentials, and the FALLBACK identity rather than the
+   * required one.
+   *
+   * Exchanged at `POST /auth/service-token` for a short-lived service JWT used
+   * to create notifications server-to-server. Under oxy ADR 0026 a deployed
+   * first-party service proves what it IS — a signed `GetCallerIdentity` for its
+   * ECS task role — and `@oxy.so/core` mints the same token with no pair at all,
+   * so the task definition carries neither variable and a local checkout is what
+   * these two are for.
+   *
+   * Declared here and read NOWHERE through `env`: `src/oxyClient.ts` owns the
+   * one reader, because it must answer the same question the SDK does at the
+   * moment the SDK is asked. Both or neither — one alone, or either left blank,
+   * REPLACES the attestation path with a credential that cannot mint.
+   */
   OXY_SERVICE_API_KEY: z.string().optional(),
   OXY_SERVICE_API_SECRET: z.string().optional(),
 

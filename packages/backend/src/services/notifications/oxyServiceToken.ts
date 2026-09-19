@@ -1,99 +1,69 @@
-import { env } from '../../config/env';
+import { canAuthenticateAsOxyService, oxy, oxyServiceCredential } from '../../oxyClient';
 
 /**
- * Mints and caches the Oxy service JWT used for server-to-server notification writes.
+ * The Oxy service JWT used for server-to-server notification writes.
  *
- * Obtained by exchanging Syra's ApplicationCredential (`apiKey`/`apiSecret`) at
- * `POST /auth/service-token`. The returned token is a `type: 'service'` JWT valid for
- * one hour and carrying the granted scopes — `notifications:write` is the one the
- * notification create route requires.
+ * `POST /auth/service-token` returns a `type: 'service'` JWT valid for one hour
+ * and carrying the granted scopes — `notifications:write` is the one the
+ * notification create route requires. What this module owns is WHEN Syra is
+ * entitled to ask for one; the exchange, the cache and the early refresh belong
+ * to `@oxy.so/core` and are no longer re-implemented here.
  *
- * Cached in module scope and refreshed early, because minting per notification would
- * add a second network round trip to every emission.
+ * ## Syra proves what it IS, and the key pair became the fallback
+ *
+ * This used to POST the `OXY_SERVICE_API_KEY`/`OXY_SERVICE_API_SECRET` pair with
+ * `fetch` and cache the answer in module scope. Under oxy ADR 0026 a first-party
+ * service instead signs a `GetCallerIdentity` for its ECS task role, which Oxy
+ * replays to AWS; `@oxy.so/core` >= 1.6.1 takes that path inside
+ * `getServiceToken()` whenever no credential is supplied. A hand-rolled POST
+ * cannot: it has one way to authenticate, and on the day the deployment stops
+ * carrying a pair every notification Syra emits would fail with
+ * "not configured" — on a deployment that could mint perfectly well.
+ *
+ * The pair is still passed where there is one, because it is what a developer's
+ * laptop has and the SDK prefers it deliberately, so dropping the two variables
+ * from the task definition is the whole migration.
  */
 
-/** Refresh this long before expiry so an in-flight request never uses a just-expired token. */
-const REFRESH_MARGIN_MS = 60_000;
-
-interface CachedToken {
-  token: string;
-  expiresAtMs: number;
-}
-
-let cached: CachedToken | null = null;
-
-/** Thrown when Syra has no service credentials configured. */
+/** Thrown when Syra has no Oxy identity at all — neither an attestable task role nor a pair. */
 export class MissingOxyServiceCredentialsError extends Error {
   constructor() {
     super(
-      'OXY_SERVICE_API_KEY / OXY_SERVICE_API_SECRET are not configured — Syra cannot mint an Oxy service token',
+      'Syra cannot mint an Oxy service token: this process can neither attest a workload identity (oxy ADR 0026) nor present an OXY_SERVICE_API_KEY / OXY_SERVICE_API_SECRET pair',
     );
     this.name = 'MissingOxyServiceCredentialsError';
   }
 }
 
-/** Reset the cached token. Exposed for tests, which must not inherit another test's token. */
+/**
+ * Reset the cached token. Exposed for tests, which must not inherit another test's token.
+ *
+ * The cache is the SDK's now, keyed per credential pair with a constant key for
+ * the attested one, so this clears the SDK's rather than a second cache of our
+ * own that could disagree with it.
+ */
 export function resetOxyServiceTokenCache(): void {
-  cached = null;
+  oxy.invalidateServiceToken();
 }
 
 /**
- * Return a valid service JWT, minting one if the cache is empty or near expiry.
+ * Return a valid service JWT, minting one if the SDK's cache is empty or near expiry.
  *
- * Throws rather than returning null when credentials are absent: a notifier that
- * silently no-ops would look identical to one that is working, which is the failure
- * mode worth avoiding here.
+ * Throws rather than returning null when Syra has no identity: a notifier that
+ * silently no-ops would look identical to one that is working, which is the
+ * failure mode worth avoiding here. The capability is checked BEFORE the SDK is
+ * asked so the refusal names the two variables a developer can actually set,
+ * rather than the SDK's generic "credentials not provided" — which would be
+ * misleading advice on infrastructure, where the fix is a task role and not a
+ * secret.
  */
-export async function getOxyServiceToken(now: number = Date.now()): Promise<string> {
-  if (cached && cached.expiresAtMs - REFRESH_MARGIN_MS > now) {
-    return cached.token;
-  }
-
-  const apiKey = env.OXY_SERVICE_API_KEY;
-  const apiSecret = env.OXY_SERVICE_API_SECRET;
-  if (!apiKey || !apiSecret) {
+export async function getOxyServiceToken(): Promise<string> {
+  if (!canAuthenticateAsOxyService()) {
     throw new MissingOxyServiceCredentialsError();
   }
 
-  const response = await fetch(`${env.OXY_API_URL}/auth/service-token`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ apiKey, apiSecret }),
-  });
-
-  if (!response.ok) {
-    throw new Error(
-      `Failed to mint Oxy service token: ${response.status} ${await response.text()}`,
-    );
-  }
-
-  const body: unknown = await response.json();
-  const token = extractToken(body);
-  if (!token) {
-    throw new Error('Oxy service-token response did not contain a token');
-  }
-
-  // The endpoint issues a one-hour token; cache slightly under that rather than trusting
-  // an `expiresIn` field that may or may not be present.
-  cached = { token, expiresAtMs: now + 60 * 60 * 1000 };
-  return token;
-}
-
-function extractToken(body: unknown): string | null {
-  if (typeof body !== 'object' || body === null) {
-    return null;
-  }
-  const record = body as Record<string, unknown>;
-  const direct = record.accessToken ?? record.token;
-  if (typeof direct === 'string' && direct.length > 0) {
-    return direct;
-  }
-  const data = record.data;
-  if (typeof data === 'object' && data !== null) {
-    const nested = (data as Record<string, unknown>).accessToken ?? (data as Record<string, unknown>).token;
-    if (typeof nested === 'string' && nested.length > 0) {
-      return nested;
-    }
-  }
-  return null;
+  const credential = oxyServiceCredential();
+  return credential === null
+    ? oxy.getServiceToken()
+    : oxy.getServiceToken(credential.apiKey, credential.apiSecret);
 }
