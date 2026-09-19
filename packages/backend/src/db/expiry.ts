@@ -104,7 +104,7 @@
  */
 
 import type { ExpirySweepTarget } from '@oxy.so/db/expiry';
-import { moderationExpirySweepTargets } from '@oxy.so/crowdsource-app/postgres';
+import { moderationExpirySweepTargets } from '@crowdsource.you/core/outbox/postgres';
 import { moderationTableSet } from './schema/moderation';
 import { episodeIngestTickets } from './schema/podcasts';
 import {
@@ -171,7 +171,7 @@ export const EXPIRY_SWEEP_TARGETS: readonly ExpirySweepTarget[] = [
    *
    * Same division as everywhere else in this migration: `@oxy.so/db` holds the
    * sweep MECHANISM, the consumer holds the REGISTRY — and here the consumer's
-   * registry names tables the consumer does not own. `@oxy.so/crowdsource-app` is
+   * registry names tables the consumer does not own. `@crowdsource.you/core/outbox` is
    * the only place that can say what sweeping either one COSTS (the outbox holds
    * undelivered work; the event log holds the dedupe claim and the audit trail),
    * so it states the reasons and Syra spreads them in. Both were

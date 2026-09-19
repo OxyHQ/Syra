@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import { getRequiredOxyUserId, type OxyAuthRequest } from '@oxy.so/core/server';
-import { DuplicateReportError } from '@oxy.so/crowdsource-app';
+import { DuplicateReportError } from '@crowdsource.you/core/outbox';
 import { getModerationIntegration, type SyraReport } from '../moderation/integration';
 import { ReportCategory, ReportedType } from '../moderation/types';
 import { logger } from '../utils/logger';

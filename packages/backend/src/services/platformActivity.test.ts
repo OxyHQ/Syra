@@ -28,6 +28,12 @@ describe('Syra ecosystem activity', () => {
     process.env.OXY_ECOSYSTEM_ACTIVITY_ENABLED = 'true';
     process.env.AWS_REGION = 'us-west-2';
     process.env.OXY_API_URL = 'https://collector.example.test';
+    // A pair here because this test mocks `/auth/service-token`, not because a
+    // deployment carries one: `createEcosystemTraffic` accepts any of an
+    // OXY_ACTIVITY_* pair, an OXY_SERVICE_API_* pair, or an attestable task role
+    // (oxy ADR 0026), and production takes the third. Attesting instead would
+    // mean standing up a container credentials endpoint to prove a branch that
+    // belongs to @oxy.so/core's own suite.
     process.env.OXY_SERVICE_API_KEY = 'test-key';
     process.env.OXY_SERVICE_API_SECRET = 'test-secret';
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {

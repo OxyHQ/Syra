@@ -347,6 +347,42 @@ describe('the deploy workflow syncs an explicit allowlist, never the whole conte
     }
   });
 
+  /**
+   * The Oxy service credential has to LEAVE the task definition, and only a
+   * removal list can take it out.
+   *
+   * Every release renders from the definition the service is RUNNING, so a
+   * secret that reached a revision by hand or by Terraform survives every future
+   * deploy. Not naming it here is not removal — it is the status quo — which is
+   * why this asserts the presence of the instruction rather than the absence of
+   * a line. Syra attests its ECS task role for a service token now (oxy ADR
+   * 0026, `src/oxyClient.ts`).
+   *
+   * The mirror assertion is the load-bearing half: a name in BOTH lists is
+   * refused by `deploy-ecs-image.sh`, and a name that is still SYNCED to SSM by
+   * this workflow would be a parameter written on every run for a container that
+   * no longer reads it.
+   */
+  it('removes the Oxy service credential from every revision it registers', () => {
+    const deployStep = workflow.jobs.deploy.steps.find((step) =>
+      step.name?.startsWith('Register immutable task definition'),
+    );
+    expect(deployStep, 'the deploy step is gone').toBeDefined();
+    const removals = (deployStep?.env?.TASK_SECRET_REMOVALS ?? '').split(/\s+/).filter(Boolean);
+    expect(removals).toEqual(['OXY_SERVICE_API_KEY', 'OXY_SERVICE_API_SECRET']);
+
+    const overrides = JSON.parse(deployStep?.env?.TASK_SECRET_OVERRIDES_JSON ?? '{}') as Record<
+      string,
+      string
+    >;
+    for (const name of removals) {
+      expect(Object.keys(overrides), `${name} is both injected and removed`).not.toContain(name);
+      expect(boundNames(), `${name} is removed from the task but still synced to SSM`).not.toContain(
+        name,
+      );
+    }
+  });
+
   it('keeps the shared secrets on the shared path and the app secrets on the app path', () => {
     // One field decides which SSM namespace a value lands in. A shared secret
     // written to /oxy/syra/ is invisible to the task definition, which reads it

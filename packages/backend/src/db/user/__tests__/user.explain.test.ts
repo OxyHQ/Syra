@@ -184,7 +184,7 @@ const PROBES: readonly { readonly name: string; readonly sql: string }[] = [
     // Task 8's two, both `retentionSeconds: 0` for the same reason: the WRITER
     // computes `expires_at` from the package's own retention window, so the
     // column already holds the deadline. The tables are
-    // @oxy.so/crowdsource-app's; the INDEX is in Syra's migration, which is
+    // @crowdsource.you/core/outbox's; the INDEX is in Syra's migration, which is
     // what makes this Syra's probe to run.
     name: 'sweep_moderation_outbox',
     sql: `select ctid from moderation_outbox
@@ -462,7 +462,7 @@ describe('the expiry sweep is a range scan on every registered target', () => {
   const SWEEP_INDEXES: Readonly<Record<string, string>> = {
     listening_events: 'listening_events_played_at_idx',
     notification_suppressions: 'notification_suppressions_expires_at_idx',
-    // Task 8's two. They are @oxy.so/crowdsource-app's tables, but the sweep
+    // Task 8's two. They are @crowdsource.you/core/outbox's tables, but the sweep
     // runs against SYRA's catalogue and the index is in Syra's migration, so
     // the probe belongs here with the rest — a package that stopped declaring
     // the index would otherwise cost a full scan of both tables on every tick

@@ -122,7 +122,7 @@ import { genres } from '../schema/genres';
  * inconsistency with `episode_hls_renditions` — see catalog.ts's own
  * comment) + 9 (Task 5: creators.ts) + 8 (Task 6: rooms.ts) +
  * 10 (Task 7: user.ts) + 4 (Task 8: moderation.ts — `reports` plus the three
- * `@oxy.so/crowdsource-app` owns) + 1 (Task A2: podcasts.ts's
+ * `@crowdsource.you/core/outbox` owns) + 1 (Task A2: podcasts.ts's
  * `episode_ingest_tickets`) = 74.
  */
 const MINIMUM_TABLES = 74;
@@ -3152,7 +3152,7 @@ describe('user, taste and listening schema (Task 7)', () => {
       // already IS the deadline, and the retention window lives in the package
       // where both of its backends read it. They arrive as a FRAGMENT
       // (`moderationExpirySweepTargets`) rather than as entries written in
-      // `expiry.ts`, because `@oxy.so/crowdsource-app` is the only place that can
+      // `expiry.ts`, because `@crowdsource.you/core/outbox` is the only place that can
       // say what sweeping either one costs; the order below is that fragment's.
       'moderation_outbox.expires_at:0',
       'moderation_events.expires_at:0',
