@@ -8,7 +8,7 @@ import {
   ScrollView,
   type ViewStyle,
 } from 'react-native';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import MaterialCommunityIcons from '../icons/MaterialCommunityIcons';
 import { useAuth } from '@oxy.so/services';
 
 import { useLiveConfig } from '../context/LiveConfigContext';

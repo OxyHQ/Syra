@@ -97,6 +97,12 @@ jobs:
       - run: bun run build:sdk
       - name: Typecheck all packages
         run: bun run --filter '*' typecheck
+      # The SDK suite ran nowhere in CI: its live-rooms UI tests (the icon glyphs
+      # hidden from screen readers, the Create Room sheet's inline failure) are
+      # its only guard, and the SDK has no eslint config to catch a raw
+      # @expo/vector-icons import instead.
+      - name: SDK tests
+        run: bun run --filter @syra.fm/sdk test
       # Lint only the packages that carry an eslint config today (frontend,
       # studio). `expo lint` exits non-zero only on errors, not warnings, so this
       # gates real breakage without failing on the existing warning backlog.
