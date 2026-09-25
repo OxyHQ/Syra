@@ -7,12 +7,25 @@ import {
   TextInput,
   ScrollView,
   FlatList,
+  AccessibilityInfo,
 } from 'react-native';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import MaterialCommunityIcons from '../icons/MaterialCommunityIcons';
 
 import { useLiveConfig } from '../context/LiveConfigContext';
 import { useLiveRoom } from '../context/LiveRoomContext';
 import type { Room, House } from '../types';
+import { LIVE_COLOR, LIVE_TINT_COLOR } from '../colors';
+
+/**
+ * Failure copy the sheet shows INLINE. It used to go to the host `toast`, but
+ * the sheet is usually presented in a native modal window, and a toast renders
+ * in the main window underneath it: a failed create (a 401 from an expired
+ * session, a network drop) looked like a button that did nothing.
+ */
+export const CREATE_ROOM_ERRORS = {
+  createFailed: "Couldn't create the room. Check your connection and that you're signed in, then try again.",
+  scheduleMissing: 'Enter a scheduled start time to schedule the room.',
+} as const;
 
 const TOPICS = [
   'Technology',
@@ -82,6 +95,7 @@ export const CreateRoomSheet = forwardRef<CreateRoomSheetRef, CreateRoomSheetPro
   const [selectedHouse, setSelectedHouse] = useState<House | null>(null);
   const [recordingEnabled, setRecordingEnabled] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const isValid = title.trim().length > 0;
   const isBroadcast = roomType === 'broadcast';
@@ -101,9 +115,17 @@ export const CreateRoomSheet = forwardRef<CreateRoomSheetRef, CreateRoomSheetPro
     recordingEnabled,
   });
 
+  // Keep the sheet open and say what went wrong where the user is looking, so
+  // they can fix it and retry. Screen readers get it announced too.
+  const showError = (message: string) => {
+    setError(message);
+    AccessibilityInfo.announceForAccessibility?.(message);
+  };
+
   const handleCreateAndStart = async () => {
     if (!isValid || loading) return;
 
+    setError(null);
     setLoading(true);
     try {
       const room = await roomsService.createRoom(buildCreatePayload());
@@ -118,11 +140,11 @@ export const CreateRoomSheet = forwardRef<CreateRoomSheetRef, CreateRoomSheetPro
         }
         onRoomCreated?.(room);
       } else {
-        toast.error('Failed to create room');
+        showError(CREATE_ROOM_ERRORS.createFailed);
       }
-    } catch (error) {
-      console.error('Error creating room:', error);
-      toast.error('Failed to create room');
+    } catch (err) {
+      console.error('Error creating room:', err);
+      showError(CREATE_ROOM_ERRORS.createFailed);
     } finally {
       setLoading(false);
     }
@@ -132,10 +154,11 @@ export const CreateRoomSheet = forwardRef<CreateRoomSheetRef, CreateRoomSheetPro
     if (!isValid || loading) return;
 
     if (!scheduledStart.trim()) {
-      toast.error('Please enter a scheduled start time');
+      showError(CREATE_ROOM_ERRORS.scheduleMissing);
       return;
     }
 
+    setError(null);
     setLoading(true);
     try {
       const room = await roomsService.createRoom({
@@ -147,11 +170,11 @@ export const CreateRoomSheet = forwardRef<CreateRoomSheetRef, CreateRoomSheetPro
         onClose();
         onRoomCreated?.(room);
       } else {
-        toast.error('Failed to create room');
+        showError(CREATE_ROOM_ERRORS.createFailed);
       }
-    } catch (error) {
-      console.error('Error creating room:', error);
-      toast.error('Failed to create room');
+    } catch (err) {
+      console.error('Error creating room:', err);
+      showError(CREATE_ROOM_ERRORS.createFailed);
     } finally {
       setLoading(false);
     }
@@ -160,6 +183,7 @@ export const CreateRoomSheet = forwardRef<CreateRoomSheetRef, CreateRoomSheetPro
   const handleCreateForEmbed = async () => {
     if (!isValid || loading) return;
 
+    setError(null);
     setLoading(true);
     try {
       const room = await roomsService.createRoom(buildCreatePayload());
@@ -168,11 +192,11 @@ export const CreateRoomSheet = forwardRef<CreateRoomSheetRef, CreateRoomSheetPro
         onClose();
         onRoomCreated?.(room);
       } else {
-        toast.error('Failed to create room');
+        showError(CREATE_ROOM_ERRORS.createFailed);
       }
-    } catch (error) {
-      console.error('Error creating room:', error);
-      toast.error('Failed to create room');
+    } catch (err) {
+      console.error('Error creating room:', err);
+      showError(CREATE_ROOM_ERRORS.createFailed);
     } finally {
       setLoading(false);
     }
@@ -260,7 +284,12 @@ export const CreateRoomSheet = forwardRef<CreateRoomSheetRef, CreateRoomSheetPro
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
-        <TouchableOpacity onPress={onClose} style={styles.headerCloseBtn}>
+        <TouchableOpacity
+          onPress={onClose}
+          style={styles.headerCloseBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+        >
           <MaterialCommunityIcons name="close" size={20} color={theme.colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
@@ -268,6 +297,18 @@ export const CreateRoomSheet = forwardRef<CreateRoomSheetRef, CreateRoomSheetPro
         </Text>
         <View style={{ width: 28 }} />
       </View>
+
+      {error && (
+        <View
+          testID="create-room-error"
+          accessibilityRole="alert"
+          accessibilityLiveRegion="assertive"
+          style={[styles.errorBanner, { backgroundColor: LIVE_TINT_COLOR, borderColor: LIVE_COLOR }]}
+        >
+          <MaterialCommunityIcons name="alert-circle-outline" size={18} color={LIVE_COLOR} />
+          <Text style={[styles.errorText, { color: theme.colors.text }]}>{error}</Text>
+        </View>
+      )}
 
       <Scroll
         style={{ flex: 1 }}
@@ -532,6 +573,18 @@ const styles = StyleSheet.create({
   },
   headerCloseBtn: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 16, fontWeight: '600' },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  errorText: { flex: 1, fontSize: 13, lineHeight: 18 },
   scrollContent: { paddingVertical: 16, paddingBottom: 12 },
   sectionPadded: { paddingHorizontal: 16 },
   inputSection: { marginBottom: 16 },

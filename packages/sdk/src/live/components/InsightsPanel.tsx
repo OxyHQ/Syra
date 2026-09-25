@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import MaterialCommunityIcons from '../icons/MaterialCommunityIcons';
 
 import { PanelHeader } from './PanelHeader';
 import type { Room, RoomParticipant, LiveTheme } from '../types';

@@ -10,7 +10,7 @@ import {
   Linking,
 } from 'react-native';
 import type { ViewStyle } from 'react-native';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import MaterialCommunityIcons from '../icons/MaterialCommunityIcons';
 
 import { useLiveConfig, type PinnedPodcast } from '../context/LiveConfigContext';
 import type { LiveTheme } from '../types';
