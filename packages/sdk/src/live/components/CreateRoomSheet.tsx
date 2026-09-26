@@ -51,6 +51,22 @@ const ROOM_TYPES = [
   { value: 'broadcast' as const, label: 'Broadcast', icon: 'broadcast' as const, description: 'One-to-many stream' },
 ] as const;
 
+/**
+ * The accessibility props of one option in an exclusive choice — the room type,
+ * the house, the topic, who may speak. Each of those is a group of which one
+ * option is chosen, drawn as tinted cards and chips, and the tint was all that
+ * said which one: a screen reader met a row of unnamed focusable boxes with no
+ * role and no selected state (OxyHQ/Mention#1124). A radio in a radiogroup is
+ * what these are, and it announces the choice and whether it is the one made.
+ */
+function choiceProps(label: string, selected: boolean) {
+  return {
+    accessibilityRole: 'radio' as const,
+    accessibilityState: { checked: selected },
+    accessibilityLabel: label,
+  };
+}
+
 export interface CreateRoomSheetRef {
   handleCreateAndStart: () => void;
   handleSchedule: () => void;
@@ -318,7 +334,7 @@ export const CreateRoomSheet = forwardRef<CreateRoomSheetRef, CreateRoomSheetPro
         {/* Room Type Selector */}
         <View style={[styles.inputSection, styles.sectionPadded]}>
           <Text style={[styles.label, { color: theme.colors.text }]}>Room Type</Text>
-          <View style={styles.typeSelector}>
+          <View style={styles.typeSelector} accessibilityRole="radiogroup" accessibilityLabel="Room type">
             {ROOM_TYPES.map((rt) => {
               const selected = roomType === rt.value;
               return (
@@ -332,6 +348,8 @@ export const CreateRoomSheet = forwardRef<CreateRoomSheetRef, CreateRoomSheetPro
                     },
                   ]}
                   onPress={() => setRoomType(rt.value)}
+                  {...choiceProps(`${rt.label}. ${rt.description}`, selected)}
+                  testID={`create-room-type-${rt.value}`}
                 >
                   <MaterialCommunityIcons
                     name={rt.icon}
@@ -355,6 +373,8 @@ export const CreateRoomSheet = forwardRef<CreateRoomSheetRef, CreateRoomSheetPro
           <View style={styles.inputSection}>
             <Text style={[styles.label, styles.sectionPadded, { color: theme.colors.text }]}>Create for</Text>
             <FlatList
+              accessibilityRole="radiogroup"
+              accessibilityLabel="Create for"
               horizontal
               showsHorizontalScrollIndicator={false}
               data={[null, ...houses]}
@@ -371,6 +391,7 @@ export const CreateRoomSheet = forwardRef<CreateRoomSheetRef, CreateRoomSheetPro
                       },
                     ]}
                     onPress={() => setSelectedHouse(item)}
+                    {...choiceProps(item ? item.name : 'Personal', selected)}
                   >
                     {item && (
                       <MaterialCommunityIcons
@@ -408,6 +429,8 @@ export const CreateRoomSheet = forwardRef<CreateRoomSheetRef, CreateRoomSheetPro
         <View style={styles.inputSection}>
           <Text style={[styles.label, styles.sectionPadded, { color: theme.colors.text }]}>Topic</Text>
           <FlatList
+            accessibilityRole="radiogroup"
+            accessibilityLabel="Topic"
             horizontal
             showsHorizontalScrollIndicator={false}
             data={TOPICS}
@@ -424,6 +447,7 @@ export const CreateRoomSheet = forwardRef<CreateRoomSheetRef, CreateRoomSheetPro
                     },
                   ]}
                   onPress={() => setTopic(selected ? '' : item)}
+                  {...choiceProps(item, selected)}
                 >
                   <Text style={[styles.chipText, { color: selected ? '#FFFFFF' : theme.colors.text }]}>
                     {item}
@@ -452,7 +476,7 @@ export const CreateRoomSheet = forwardRef<CreateRoomSheetRef, CreateRoomSheetPro
         {!isBroadcast && (
           <View style={[styles.inputSection, styles.sectionPadded]}>
             <Text style={[styles.label, { color: theme.colors.text }]}>Who can speak?</Text>
-            <View style={styles.radioGroup}>
+            <View style={styles.radioGroup} accessibilityRole="radiogroup" accessibilityLabel="Who can speak?">
               {([
                 { value: 'everyone' as const, label: 'Everyone', icon: 'earth' as const },
                 { value: 'followers' as const, label: 'People you follow', icon: 'account-group' as const },
@@ -475,6 +499,7 @@ export const CreateRoomSheet = forwardRef<CreateRoomSheetRef, CreateRoomSheetPro
                       },
                     ]}
                     onPress={() => setSpeakerPermission(option.value)}
+                    {...choiceProps(option.label, selected)}
                   >
                     <MaterialCommunityIcons
                       name={option.icon}

@@ -148,3 +148,50 @@ describe('CreateRoomSheet failure feedback', () => {
     expect(close.props.accessibilityRole).toBe('button');
   });
 });
+
+// OxyHQ/Mention#1124: the room modes were focusable boxes with no role and no
+// selected state; only their tint said which one was chosen.
+describe('CreateRoomSheet choices', () => {
+  const modes = (renderer: Renderer) =>
+    ['talk', 'stage', 'broadcast'].map((value) =>
+      renderer.root.find((n) => n.props.testID === `create-room-type-${value}` && typeof n.type !== 'string'));
+
+  test('the room modes are a labelled exclusive group, each announcing whether it is chosen', async () => {
+    const { renderer } = await renderSheet();
+    const group = renderer.root.find(
+      (n) => n.props.accessibilityRole === 'radiogroup' && n.props.accessibilityLabel === 'Room type' && typeof n.type !== 'string',
+    );
+    expect(group).toBeDefined();
+
+    const [talk, stage, broadcast] = modes(renderer);
+    for (const mode of [talk, stage, broadcast]) {
+      expect(mode.props.accessibilityRole).toBe('radio');
+    }
+    expect(talk.props.accessibilityLabel).toBe('Talk. Open conversation');
+    expect([talk, stage, broadcast].map((m) => m.props.accessibilityState.checked)).toEqual([true, false, false]);
+  });
+
+  test('choosing a mode moves the checked state to it, and only to it', async () => {
+    const { renderer } = await renderSheet();
+    await act(async () => modes(renderer)[2].props.onPress());
+    expect(modes(renderer).map((m) => m.props.accessibilityState.checked)).toEqual([false, false, true]);
+
+    await act(async () => modes(renderer)[1].props.onPress());
+    expect(modes(renderer).map((m) => m.props.accessibilityState.checked)).toEqual([false, true, false]);
+  });
+
+  test('the other exclusive choices say which option is chosen too', async () => {
+    const { renderer } = await renderSheet();
+    const radios = renderer.root.findAll((n) => n.props.accessibilityRole === 'radio' && typeof n.type !== 'string');
+    // Three modes, the topics, and the three speaker permissions.
+    expect(radios.length).toBeGreaterThan(6);
+    for (const radio of radios) {
+      expect(typeof radio.props.accessibilityLabel).toBe('string');
+      expect(typeof radio.props.accessibilityState.checked).toBe('boolean');
+    }
+    // The default is invited speakers only, and exactly that one says so.
+    const speakers = radios.filter((r) =>
+      ['Everyone', 'People you follow', 'Only invited speakers'].includes(r.props.accessibilityLabel));
+    expect(speakers.map((r) => r.props.accessibilityState.checked)).toEqual([false, false, true]);
+  });
+});
