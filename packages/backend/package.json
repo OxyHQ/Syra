@@ -21,7 +21,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@oxy.so/core": "^1.16.0",
+    "@oxy.so/core": "^1.18.0",
     "@aws-sdk/client-s3": "^3.1087.0",
     "@aws-sdk/s3-request-presigner": "^3.1087.0",
     "@crowdsource.you/contracts": "1.1.0",
