@@ -180,6 +180,7 @@ let server: http.Server;
 let baseUrl: string;
 /** Which user the next request is made as; the test app injects it as the session. */
 let currentUserId = OWNER;
+let bulkImportWas: string | undefined;
 
 /**
  * BOTH databases, and the Mongo half is NOT this vertical's residue.
@@ -195,6 +196,16 @@ let currentUserId = OWNER;
 beforeAll(async () => {
   await connectDb();
   installDeezerStub();
+
+  /**
+   * The invisibility test calls `search`, which fires `syncPodcastSearch` in the
+   * background: a real PodcastIndex/Apple directory query and deep RSS imports
+   * that write to Postgres while `clearDb()` truncates. Measured in CI: a
+   * `deadlock detected` on that truncate. Same env kill-switch as
+   * `podcastVisibility.matrix.test.ts`, restored in `afterAll`.
+   */
+  bulkImportWas = process.env.PODCAST_BULK_IMPORT_ENABLED;
+  process.env.PODCAST_BULK_IMPORT_ENABLED = 'false';
 
   const app = express();
   // Stand in for `oxy.auth()`: the routes self-enforce with `requireOxyAuth`,
@@ -228,6 +239,8 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
+  if (bulkImportWas === undefined) delete process.env.PODCAST_BULK_IMPORT_ENABLED;
+  else process.env.PODCAST_BULK_IMPORT_ENABLED = bulkImportWas;
   await new Promise<void>((resolve) => server.close(() => resolve()));
   setDeezerFetchForTests();
   await disconnectDb();
