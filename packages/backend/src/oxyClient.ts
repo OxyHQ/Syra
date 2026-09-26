@@ -1,8 +1,7 @@
-import { OxyServices } from '@oxy.so/core';
-import { canAttestWorkloadIdentity } from '@oxy.so/core/server';
+import { OxyServer, canAttestWorkloadIdentity } from '@oxy.so/core/server';
 
 /**
- * Shared OxyServices client singleton.
+ * Shared OxyServer client singleton (auth middleware, service tokens).
  *
  * Lives in its own side-effect-free module (NOT `server.ts`) so controllers,
  * sockets, and services can import the client without pulling in the server
@@ -15,7 +14,7 @@ import { canAttestWorkloadIdentity } from '@oxy.so/core/server';
  */
 const OXY_API_URL = process.env.OXY_API_URL || 'https://api.oxy.so';
 
-export const oxy = new OxyServices({ baseURL: OXY_API_URL });
+export const oxy = new OxyServer({ baseURL: OXY_API_URL });
 
 /**
  * The service credential pair this process was given, or `null`.
@@ -26,7 +25,7 @@ export const oxy = new OxyServices({ baseURL: OXY_API_URL });
  * that cannot mint.
  *
  * Read on every call rather than captured at import, and handed to
- * `getServiceToken()` at the call site rather than installed with
+ * `serviceToken()` at the call site rather than installed with
  * `configureServiceAuth()`. One reader means the capability answer and the mint
  * can never disagree about what the environment holds — and nothing mutates the
  * shared client out from under a caller that configured it for itself.

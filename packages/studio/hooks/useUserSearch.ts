@@ -6,7 +6,7 @@ const MIN_QUERY_LENGTH = 2;
 
 /**
  * Searches Oxy users for the Hosts/Guests picker. Backed by the SDK's
- * `searchProfiles` (returns `{ data: User[], pagination }`); the picker only
+ * `users.search` (returns `{ data: User[], pagination }`); the picker only
  * ever stores real Oxy user ids, so there is no free-text path.
  */
 export function useUserSearch(query: string) {
@@ -14,7 +14,7 @@ export function useUserSearch(query: string) {
   return useQuery<User[]>({
     queryKey: ['studio', 'user-search', trimmed],
     queryFn: async () => {
-      const response = await oxyServices.searchProfiles(trimmed, { limit: 10 });
+      const response = await oxyServices.users.search(trimmed, { limit: 10 });
       return response.data;
     },
     enabled: trimmed.length >= MIN_QUERY_LENGTH,

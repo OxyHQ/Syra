@@ -107,7 +107,7 @@ export function requiresAccessCheck(profileVisibility: string | undefined): bool
  */
 export async function getFollowingIdSet(viewerId: string): Promise<Set<string>> {
   try {
-    const followingRes = await oxy.getUserFollowing(viewerId);
+    const followingRes = await oxy.follows.following(viewerId);
     return new Set(extractFollowingIds(followingRes));
   } catch (error) {
     logger.error('Error fetching following list for access check:', { err: describeErrorSafely(error) });

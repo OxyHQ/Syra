@@ -130,7 +130,7 @@ function formatOxyUser(profile: User): SearchUser {
 
 async function searchOxyUsers(query: string, limit: number, offset: number): Promise<[SearchUser[], number]> {
   try {
-    const response = await oxy.searchProfiles(query, { limit, offset });
+    const response = await oxy.users.search(query, { limit, offset });
     const users = (response.data || []).map(formatOxyUser);
 
     return [users, response.pagination?.total ?? users.length];

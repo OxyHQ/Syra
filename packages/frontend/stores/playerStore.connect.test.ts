@@ -44,10 +44,12 @@ jest.mock('@/services/streamService', () => ({
 
 jest.mock('@/lib/oxyServices', () => ({
   oxyServices: {
-    hasValidToken: jest.fn(() => true),
-    onTokensChanged: jest.fn(() => () => {}),
-    waitForAuth: jest.fn(async () => true),
-    getFileDownloadUrl: jest.fn((id: string) => `https://files/${id}`),
+    session: {
+      isAuthenticated: true,
+      onChange: jest.fn(() => () => {}),
+      waitForAuth: jest.fn(async () => true),
+    },
+    assets: { publicUrl: jest.fn((id: string) => `https://files/${id}`) },
   },
 }));
 

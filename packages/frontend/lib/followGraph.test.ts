@@ -17,9 +17,11 @@ const mockEnsureFollowTarget = jest.fn();
 
 jest.mock('@/lib/oxyServices', () => ({
   oxyServices: {
-    claimFollowNamespace: (...args: unknown[]) => mockClaimFollowNamespace(...args),
-    registerFollowKind: (...args: unknown[]) => mockRegisterFollowKind(...args),
-    ensureFollowTarget: (...args: unknown[]) => mockEnsureFollowTarget(...args),
+    follows: {
+      claimNamespace: (...args: unknown[]) => mockClaimFollowNamespace(...args),
+      registerKind: (...args: unknown[]) => mockRegisterFollowKind(...args),
+      ensureTarget: (...args: unknown[]) => mockEnsureFollowTarget(...args),
+    },
   },
 }));
 

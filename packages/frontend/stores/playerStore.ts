@@ -268,7 +268,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   };
 
   const drainPendingPlaySignals = (): void => {
-    if (pendingSignalDrainInFlight || !oxyServices.hasValidToken() || pendingPlaySignals.length === 0) {
+    if (pendingSignalDrainInFlight || !oxyServices.session.isAuthenticated || pendingPlaySignals.length === 0) {
       return;
     }
 
@@ -278,7 +278,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       signals.map((pending) => libraryService.recordRecentlyPlayed(pending.trackId, pending.signal)),
     ).finally(() => {
       pendingSignalDrainInFlight = false;
-      if (pendingPlaySignals.length > 0 && oxyServices.hasValidToken()) {
+      if (pendingPlaySignals.length > 0 && oxyServices.session.isAuthenticated) {
         drainPendingPlaySignals();
       }
     });
@@ -289,7 +289,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       return;
     }
 
-    tokenDrainUnsubscribe = oxyServices.onTokensChanged((accessToken) => {
+    tokenDrainUnsubscribe = oxyServices.session.onChange((accessToken) => {
       if (accessToken) {
         drainPendingPlaySignals();
       }
@@ -304,7 +304,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     }
 
     ensureTokenDrainSubscription();
-    void oxyServices.waitForAuth(PLAY_SIGNAL_AUTH_WAIT_MS)
+    void oxyServices.session.waitForAuth(PLAY_SIGNAL_AUTH_WAIT_MS)
       .then((authReady) => {
         if (authReady) {
           drainPendingPlaySignals();
@@ -319,7 +319,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   };
 
   const submitPlaySignal = (trackId: string, signal?: PlaySignal): void => {
-    if (oxyServices.hasValidToken()) {
+    if (oxyServices.session.isAuthenticated) {
       void libraryService.recordRecentlyPlayed(trackId, signal);
       return;
     }
@@ -891,7 +891,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     // gate their content on the resolved session (`useAuthGate`), so a button
     // cannot be pressed before the session has settled. Waiting instead would
     // put a delay in front of every genuine guest's sign-in prompt.
-    if ((item.kind === 'upload' || shouldResolveViaStreamEndpoint(item)) && !oxyServices.hasValidToken()) {
+    if ((item.kind === 'upload' || shouldResolveViaStreamEndpoint(item)) && !oxyServices.session.isAuthenticated) {
       logger.info('Play needs a session', { id: item.id, kind: item.kind });
       reportFailure('auth-required');
       return null;
@@ -1021,7 +1021,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   const resolveEpisodeAudio = async (
     episode: Episode,
   ): Promise<{ url: string; resolution: StreamResolution | null }> => {
-    if (episodeNeedsResolvedSource(episode, oxyServices.hasValidToken())) {
+    if (episodeNeedsResolvedSource(episode, oxyServices.session.isAuthenticated)) {
       try {
         const resolution = await resolveEpisodeStream(episode.id);
         return { url: resolution.url, resolution };
@@ -1041,7 +1041,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
    */
   const saveEpisodeProgress = (options?: { completed?: boolean }): void => {
     const episode = get().currentEpisode;
-    if (!episode || !oxyServices.hasValidToken()) {
+    if (!episode || !oxyServices.session.isAuthenticated) {
       return;
     }
 

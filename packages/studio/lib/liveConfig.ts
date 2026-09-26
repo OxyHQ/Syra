@@ -46,7 +46,7 @@ function useLiveUserById(id: string | undefined): UserEntity | undefined {
   const { oxyServices: oxy } = useOxy();
   const { data } = useQuery({
     queryKey: liveUserQueryKey(id ?? ''),
-    queryFn: async () => (await oxy.getUserById(id ?? '')) ?? null,
+    queryFn: async () => (await oxy.users.get(id ?? '')) ?? null,
     enabled: !!id,
     staleTime: LIVE_USER_STALE_TIME,
   });
@@ -85,8 +85,8 @@ export const liveConfig: LiveConfig = {
   useIsDesktop,
   useUserById: useLiveUserById,
   ensureUserById: ensureLiveUserById,
-  getCachedFileDownloadUrl: async (_oxy, fileId, variant) => oxyServices.getFileDownloadUrl(fileId, variant),
-  getCachedFileDownloadUrlSync: (_oxy, fileId, variant) => oxyServices.getFileDownloadUrl(fileId, variant),
+  getCachedFileDownloadUrl: async (_oxy, fileId, variant) => oxyServices.assets.publicUrl(fileId, variant),
+  getCachedFileDownloadUrlSync: (_oxy, fileId, variant) => oxyServices.assets.publicUrl(fileId, variant),
   AvatarComponent: Avatar as LiveConfig['AvatarComponent'],
   toast: liveToast,
   introSound: require('@syra.fm/sdk/src/live/assets/sounds/intro.mp3'),

@@ -13,7 +13,7 @@ const API_CONFIG = {
 // bearer token from the owning OxyServices instance before each request, so the
 // studio never hand-rolls Authorization headers, refresh, or CSRF plumbing.
 const syraApiClient = oxyServices.createLinkedClient({ baseURL: API_CONFIG.baseURL });
-const authenticatedClient: ReturnType<OxyServices['getClient']> = syraApiClient.client;
+const authenticatedClient: OxyServices['http'] = syraApiClient.client;
 
 
 export interface ApiRequestOptions {

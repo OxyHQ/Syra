@@ -270,7 +270,7 @@ const roomsNamespace = initializeRoomSocket(io);
 
 [musicNamespace, roomsNamespace, io].forEach((ns) => {
   if (ns && typeof ns.use === 'function') {
-    ns.use(oxy.authSocket());
+    ns.use(oxy.middleware.socket());
   }
 });
 
@@ -366,7 +366,7 @@ authenticatedApiRouter.use('/series', seriesRoutes);
 authenticatedApiRouter.use('/reports', reportsRoutes);
 
 app.use('/api', publicApiRouter);
-app.use('/api', oxy.auth(), authenticatedApiRouter);
+app.use('/api', oxy.middleware.auth(), authenticatedApiRouter);
 
 app.get('', async (_req, res) => {
   res.json({ message: 'Welcome to Syra API', version: '1.0.0' });

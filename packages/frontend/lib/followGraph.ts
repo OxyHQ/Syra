@@ -58,8 +58,8 @@ export function artistFollowUri(artistId: string): string {
 let registration: Promise<void> | undefined;
 
 async function register(): Promise<void> {
-  await oxyServices.claimFollowNamespace(FOLLOW_NAMESPACE);
-  await oxyServices.registerFollowKind({
+  await oxyServices.follows.claimNamespace(FOLLOW_NAMESPACE);
+  await oxyServices.follows.registerKind({
     kind: ARTIST_FOLLOW_KIND,
     label: 'Artist',
     capabilities: {
@@ -119,7 +119,7 @@ export async function ensureArtistFollowTarget({
   name,
 }: ArtistFollowTargetInput): Promise<string> {
   await ensureSyraFollowRegistry();
-  const target = await oxyServices.ensureFollowTarget({
+  const target = await oxyServices.follows.ensureTarget({
     uri: artistFollowUri(artistId),
     kind: ARTIST_FOLLOW_KIND,
     // Name only, and no `icon`, deliberately.

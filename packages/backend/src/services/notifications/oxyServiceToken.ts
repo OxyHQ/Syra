@@ -15,7 +15,7 @@ import { canAuthenticateAsOxyService, oxy, oxyServiceCredential } from '../../ox
  * `fetch` and cache the answer in module scope. Under oxy ADR 0026 a first-party
  * service instead signs a `GetCallerIdentity` for its ECS task role, which Oxy
  * replays to AWS; `@oxy.so/core` >= 1.6.1 takes that path inside
- * `getServiceToken()` whenever no credential is supplied. A hand-rolled POST
+ * `serviceToken()` whenever no credential is supplied. A hand-rolled POST
  * cannot: it has one way to authenticate, and on the day the deployment stops
  * carrying a pair every notification Syra emits would fail with
  * "not configured" — on a deployment that could mint perfectly well.
@@ -64,6 +64,6 @@ export async function getOxyServiceToken(): Promise<string> {
 
   const credential = oxyServiceCredential();
   return credential === null
-    ? oxy.getServiceToken()
-    : oxy.getServiceToken(credential.apiKey, credential.apiSecret);
+    ? oxy.serviceToken()
+    : oxy.serviceToken(credential.apiKey, credential.apiSecret);
 }

@@ -11,7 +11,7 @@ import { describeErrorSafely } from '../utils/error';
 export const setupPlayerSocket = (io: SocketIOServer) => {
   const playerNamespace = io.of('/player');
 
-  playerNamespace.use(oxy.authSocket());
+  playerNamespace.use(oxy.middleware.socket());
 
   playerNamespace.on('connection', (socket: Socket) => {
     const userId = socket.data.userId as string | undefined;
