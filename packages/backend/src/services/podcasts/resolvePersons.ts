@@ -60,10 +60,10 @@ export interface OxyUserLite {
 export type GetOxyUsers = (ids: string[]) => Promise<OxyUserLite[]>;
 
 /** Build the production Oxy fetcher from the shared client (call site supplies it). */
-export function makeOxyUsersFetcher(oxy: Pick<OxyServices, 'getUsersByIds'>): GetOxyUsers {
+export function makeOxyUsersFetcher(oxy: { users: Pick<OxyServices['users'], 'getMany'> }): GetOxyUsers {
   return async (ids: string[]) => {
     if (ids.length === 0) return [];
-    const users: User[] = await oxy.getUsersByIds(ids);
+    const users: User[] = await oxy.users.getMany(ids);
     return users.map((user) => ({
       id: user.id,
       avatar: user.avatar ?? undefined,

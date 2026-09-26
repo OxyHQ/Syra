@@ -51,7 +51,7 @@ export function useRoomConnection({
 
   useEffect(() => {
     if (!enabled || !isAuthenticated || !isReady || !userId) return;
-    const token = oxyServices?.getAccessToken() ?? undefined;
+    const token = oxyServices?.session.accessToken ?? undefined;
     if (!token) return;
     roomSocketService.connect(userId, token);
     const interval = setInterval(() => { setIsConnected(roomSocketService.isConnected); }, 500);

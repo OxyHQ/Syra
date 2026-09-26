@@ -98,9 +98,9 @@ export function StreamConfigModal({ visible, onClose, roomId, initialStreamUrl, 
           return;
         }
 
-        const uploadResponse = await oxyServices.uploadRawFile(file, 'public');
+        const uploadResponse = await oxyServices.assets.upload(file, { visibility: 'public' });
 
-        const fileId = uploadResponse?.file?.key || uploadResponse?.file?.id || uploadResponse?.id || uploadResponse?.fileId || uploadResponse?.data?.id;
+        const fileId = uploadResponse.file?.id;
 
         if (fileId) {
           setImageFileId(fileId);

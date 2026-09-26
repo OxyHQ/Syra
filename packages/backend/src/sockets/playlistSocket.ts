@@ -7,7 +7,7 @@ import { describeErrorSafely } from '../utils/error';
 export const setupPlaylistSocket = (io: SocketIOServer) => {
   const playlistNamespace = io.of('/playlists');
 
-  playlistNamespace.use(oxy.authSocket());
+  playlistNamespace.use(oxy.middleware.socket());
 
   playlistNamespace.on('connection', (socket: Socket) => {
     const userId = socket.data.userId as string | undefined;

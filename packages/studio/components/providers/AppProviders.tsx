@@ -56,7 +56,7 @@ export const AppProviders = memo(function AppProviders({
   // Bloom Avatar/Image in the tree. External podcast artwork (absolute URLs) is
   // rendered directly and never routed through this resolver.
   const resolveImage: ImageResolver = useMemo(
-    () => (id: string, variant?: string) => oxyServices.getFileDownloadUrl(id, variant),
+    () => (id: string, variant?: string) => oxyServices.assets.publicUrl(id, variant),
     [oxyServices],
   );
 

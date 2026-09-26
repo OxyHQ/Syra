@@ -124,7 +124,7 @@ const EntityProfileScreen: React.FC = () => {
       if (fromCatalog) return fromCatalog;
     }
     if (entity.avatar) {
-      return oxyServices.getFileDownloadUrl(entity.avatar, oxyImageVariantForTarget(target));
+      return oxyServices.assets.publicUrl(entity.avatar, oxyImageVariantForTarget(target));
     }
     return undefined;
   };

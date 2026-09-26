@@ -14,7 +14,7 @@ const API_CONFIG = {
 };
 
 const syraApiClient = oxyServices.createLinkedClient({ baseURL: API_CONFIG.baseURL });
-const authenticatedClient: ReturnType<OxyServices['getClient']> = syraApiClient.client;
+const authenticatedClient: OxyServices['http'] = syraApiClient.client;
 
 
 export interface ApiRequestOptions {

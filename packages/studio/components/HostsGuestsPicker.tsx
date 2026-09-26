@@ -72,7 +72,7 @@ function ChipSection({ title, people, onRemove }: { title: string; people: User[
 }
 
 /**
- * Hosts & Guests picker. Searches Oxy users (`oxyServices.searchProfiles`) and
+ * Hosts & Guests picker. Searches Oxy users (`oxyServices.users.search`) and
  * lets the creator add each result to the Hosts or Guests list. Only real Oxy
  * users can be added — there is no free-text entry — so the ids submitted always
  * pass the backend's Oxy validation.

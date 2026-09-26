@@ -33,7 +33,7 @@ export function usePlayerPresence(): void {
   useEffect(() => {
     if (!canUsePrivateApi || !userId) return;
 
-    playerSocketService.connect(userId, () => oxyServices.getAccessToken());
+    playerSocketService.connect(userId, () => oxyServices.session.accessToken);
 
     let cancelled = false;
     let heartbeat: ReturnType<typeof setInterval> | null = null;

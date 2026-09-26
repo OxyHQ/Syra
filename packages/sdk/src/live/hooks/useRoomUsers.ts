@@ -12,7 +12,7 @@ export function useRoomUsers(userIds: string[]) {
     async (id: string) => {
       if (!oxyServices) return null;
       try {
-        return await oxyServices.getUserById(id);
+        return await oxyServices.users.get(id);
       } catch {
         return null;
       }
@@ -32,7 +32,7 @@ export function useRoomUsers(userIds: string[]) {
 
 export function getDisplayName(userProfile: UserEntity | undefined, userId: string, isCurrentUser?: boolean): string {
   if (isCurrentUser) return 'You';
-  // The user source is always an Oxy user DTO (resolved via `oxyServices.getUserById`
+  // The user source is always an Oxy user DTO (resolved via `oxyServices.users.get`
   // in `useRoomUsers` → `ensureUserById`), so `name.displayName` is the canonical,
   // API-owned display string and is rendered directly. The `userId` slice is a
   // not-yet-resolved loading fallback, NOT a name recompute.

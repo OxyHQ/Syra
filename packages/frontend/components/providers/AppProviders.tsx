@@ -126,7 +126,7 @@ function StreamCacheAuthInvalidator(): null {
   const { oxyServices } = useOxy();
 
   React.useEffect(() => {
-    const unsubscribe = oxyServices.onTokensChanged(() => {
+    const unsubscribe = oxyServices.session.onChange(() => {
       clearStreamResolutionCache();
     });
 
@@ -143,7 +143,7 @@ function StreamCacheAuthInvalidator(): null {
  * account currently signed in, so one user's library can never rehydrate for
  * the next user on the same device.
  *
- * Driven by the RESOLVED identity rather than by `onTokensChanged`, which also
+ * Driven by the RESOLVED identity rather than by `session.onChange`, which also
  * fires on ordinary token refreshes — clearing the cache on those would wipe it
  * constantly. The scope only moves when the account itself changes.
  *
@@ -207,7 +207,7 @@ export const AppProviders = memo(function AppProviders({
   // Bloom Avatar/Image in the tree. Bloom's Avatar runs bare-string `source`
   // values through this resolver; passing raw file IDs to `source` requires it.
   const resolveImage: ImageResolver = useMemo(
-    () => (id: string, variant?: string) => oxyServices.getFileDownloadUrl(id, variant),
+    () => (id: string, variant?: string) => oxyServices.assets.publicUrl(id, variant),
     [oxyServices],
   );
 

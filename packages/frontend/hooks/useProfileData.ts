@@ -111,7 +111,7 @@ export function useProfileData(username?: string): {
       if (!username) {
         return null;
       }
-      const profile = await oxyServices.getProfileByUsername(username);
+      const profile = await oxyServices.users.byUsername(username);
       return profile ? normalizeProfile(profile) : null;
     },
   });
