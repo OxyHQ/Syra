@@ -236,9 +236,10 @@ describe('the deploy workflow can actually run its own gate', () => {
  */
 describe('the deploy workflow syncs an explicit allowlist, never the whole context', () => {
   /**
-   * Every parameter the live task definition reads as a `secret`. Minus
-   * LIVEKIT_API_KEY / LIVEKIT_API_SECRET: those live under /oxy/_shared/, this
-   * repo holds neither, and OxyHQServices is what writes them.
+   * Every /oxy/syra/ parameter the live task definition reads as a `secret`.
+   * The /oxy/_shared/ ones it also reads (AWS keys, REDIS_URL, LiveKit) are
+   * absent: oxy-infra owns them and rotates them centrally, and no app deploy
+   * writes them.
    *
    * `MONGODB_URI` left in #92, with the Mongo it named. `DATABASE_URL` took its
    * place as the database secret — it was already listed here before it reached
@@ -255,8 +256,6 @@ describe('the deploy workflow syncs an explicit allowlist, never the whole conte
    */
   const EXPECTED_ALLOWLIST = [
     'ACOUSTID_API_KEY',
-    'AWS_ACCESS_KEY_ID',
-    'AWS_SECRET_ACCESS_KEY',
     'DATABASE_URL',
     // Signs the single-use episode INGEST TICKET. Deliberately NOT
     // STREAM_TOKEN_SECRET: that one signs playback, this one signs a WRITE
@@ -313,7 +312,7 @@ describe('the deploy workflow syncs an explicit allowlist, never the whole conte
   });
 
   it('iterates exactly the secrets it binds', () => {
-    const iterated = [...shellList('SHARED_SECRETS'), ...shellList('APP_SECRETS')].sort();
+    const iterated = [...shellList('APP_SECRETS')].sort();
     expect(iterated).toEqual(boundNames());
     expect(iterated).toEqual([...EXPECTED_ALLOWLIST].sort());
   });
@@ -382,20 +381,29 @@ describe('the deploy workflow syncs an explicit allowlist, never the whole conte
     }
   });
 
-  it('keeps the shared secrets on the shared path and the app secrets on the app path', () => {
-    // One field decides which SSM namespace a value lands in. A shared secret
-    // written to /oxy/syra/ is invisible to the task definition, which reads it
-    // from /oxy/_shared/ — so the sync reports success and changes nothing the
-    // container sees.
-    expect(shellList('SHARED_SECRETS')).toEqual([
+  it('writes every secret to the app path and never a /oxy/_shared/ parameter', () => {
+    // Shared parameters are owned by oxy-infra and rotated once, centrally
+    // (oxy-infra docs/runbooks/45-shared-ssm-parameters.md). Several app
+    // deploys each copied their own secret into /oxy/_shared/REDIS_URL; two
+    // held different values and every deploy flipped it (incident 2026-09-27).
+    // The task definition still READS the shared parameters; only the write is
+    // gone. A task-definition ARN (`parameter/oxy/_shared/...`) is a read.
+    expect(syncStep?.run).toContain('path="/oxy/$APP/$k"');
+    expect(syncStep?.run ?? '').not.toMatch(/^\s*SHARED_SECRETS=/m);
+    const executable = workflowSource
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('#'));
+    expect(executable.filter((line) => /(?<!parameter)\/oxy\/_shared\//.test(line))).toEqual([]);
+    for (const shared of [
       'AWS_ACCESS_KEY_ID',
       'AWS_SECRET_ACCESS_KEY',
-    ]);
-    for (const shared of shellList('SHARED_SECRETS')) {
-      expect(shellList('APP_SECRETS')).not.toContain(shared);
+      'REDIS_URL',
+      'LIVEKIT_API_KEY',
+      'LIVEKIT_API_SECRET',
+    ]) {
+      expect(boundNames()).not.toContain(shared);
+      expect(workflowSource).not.toContain(`secrets.${shared} }}`);
     }
-    expect(syncStep?.run).toContain('path="/oxy/_shared/$k"');
-    expect(syncStep?.run).toContain('path="/oxy/$APP/$k"');
   });
 
   it('still refuses placeholders', () => {
@@ -403,16 +411,5 @@ describe('the deploy workflow syncs an explicit allowlist, never the whole conte
     // that was never really set: skipping leaves the previous SSM value alone,
     // where syncing would overwrite it with an empty string or a dash.
     expect(syncStep?.run).toContain('[ "$v" = "-" ]');
-  });
-
-  it('never writes /oxy/_shared/REDIS_URL, which oxy-infra Terraform owns', () => {
-    // Six app deploys each copied their own secrets.REDIS_URL into the shared
-    // parameter; two held different clusters, so every deploy flipped it and
-    // tasks came up against different Redis instances (incident 2026-09-27).
-    // The task definition still READS it; only the write is gone.
-    expect(boundNames()).not.toContain('REDIS_URL');
-    expect(shellList('SHARED_SECRETS')).not.toContain('REDIS_URL');
-    expect(shellList('APP_SECRETS')).not.toContain('REDIS_URL');
-    expect(workflowSource).not.toMatch(/\$\{\{\s*secrets\.REDIS_URL\s*\}\}/);
   });
 });
