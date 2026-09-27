@@ -203,13 +203,18 @@ jobs:
           SYNC_DATABASE_URL: ${{ secrets.DATABASE_URL }}
           SYNC_INGEST_TOKEN_SECRET: ${{ secrets.INGEST_TOKEN_SECRET }}
           SYNC_JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          SYNC_REDIS_URL: ${{ secrets.REDIS_URL }}
           SYNC_STREAM_TOKEN_SECRET: ${{ secrets.STREAM_TOKEN_SECRET }}
         run: |
           # Derived from the LIVE task definition (oxy-syra:8, the revision
           # service `syra` runs), not from a plan: these are the parameters the
           # container actually reads as `secrets`.
-          SHARED_SECRETS="AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY REDIS_URL"
+          SHARED_SECRETS="AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY"
+          # REDIS_URL is deliberately absent too, though oxy-syra reads it from
+          # /oxy/_shared/. That parameter is owned by oxy-infra Terraform
+          # (terraform-uswest2/redis.tf), and an app deploy must never write a
+          # shared parameter: six repos each copied their own secrets.REDIS_URL
+          # into it, two held different values, and every deploy flipped it
+          # between Redis clusters (incident 2026-09-27).
           # DATABASE_URL is NOT in that task definition yet, and must be here
           # anyway: the deploy step below names
           # /oxy/syra/DATABASE_URL in TASK_SECRET_OVERRIDES_JSON, so every
@@ -233,10 +238,6 @@ jobs:
             # preserves whatever SSM already holds.
             if [ -z "$v" ] || [ "$v" = "-" ]; then
               echo "::warning::skip empty/placeholder secret $k; SSM unchanged"
-              continue
-            fi
-            if [ "$k" = "REDIS_URL" ] && ! printf '%s' "$v" | grep -q '\.usw2\.cache\.amazonaws\.com'; then
-              echo "::warning::skip REDIS_URL because it does not point at the us-west-2 Valkey endpoint; SSM unchanged"
               continue
             fi
             case " $SHARED_SECRETS " in *" $k "*) path="/oxy/_shared/$k";; *) path="/oxy/$APP/$k";; esac

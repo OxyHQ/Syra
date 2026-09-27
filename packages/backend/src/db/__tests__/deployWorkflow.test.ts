@@ -264,7 +264,6 @@ describe('the deploy workflow syncs an explicit allowlist, never the whole conte
     // somebody's episode.
     'INGEST_TOKEN_SECRET',
     'JWT_SECRET',
-    'REDIS_URL',
     'STREAM_TOKEN_SECRET',
   ];
 
@@ -391,7 +390,6 @@ describe('the deploy workflow syncs an explicit allowlist, never the whole conte
     expect(shellList('SHARED_SECRETS')).toEqual([
       'AWS_ACCESS_KEY_ID',
       'AWS_SECRET_ACCESS_KEY',
-      'REDIS_URL',
     ]);
     for (const shared of shellList('SHARED_SECRETS')) {
       expect(shellList('APP_SECRETS')).not.toContain(shared);
@@ -400,13 +398,21 @@ describe('the deploy workflow syncs an explicit allowlist, never the whole conte
     expect(syncStep?.run).toContain('path="/oxy/$APP/$k"');
   });
 
-  it('still refuses placeholders and a non-us-west-2 REDIS_URL', () => {
-    // Both guards predate the allowlist and protect production from a secret
+  it('still refuses placeholders', () => {
+    // The guard predates the allowlist and protects production from a secret
     // that was never really set: skipping leaves the previous SSM value alone,
     // where syncing would overwrite it with an empty string or a dash.
     expect(syncStep?.run).toContain('[ "$v" = "-" ]');
-    // The escaped spelling, because the guard is a `grep` regex — asserting the
-    // bare hostname passes on a workflow whose dots are unescaped wildcards.
-    expect(syncStep?.run).toContain(String.raw`'\.usw2\.cache\.amazonaws\.com'`);
+  });
+
+  it('never writes /oxy/_shared/REDIS_URL, which oxy-infra Terraform owns', () => {
+    // Six app deploys each copied their own secrets.REDIS_URL into the shared
+    // parameter; two held different clusters, so every deploy flipped it and
+    // tasks came up against different Redis instances (incident 2026-09-27).
+    // The task definition still READS it; only the write is gone.
+    expect(boundNames()).not.toContain('REDIS_URL');
+    expect(shellList('SHARED_SECRETS')).not.toContain('REDIS_URL');
+    expect(shellList('APP_SECRETS')).not.toContain('REDIS_URL');
+    expect(workflowSource).not.toMatch(/\$\{\{\s*secrets\.REDIS_URL\s*\}\}/);
   });
 });
