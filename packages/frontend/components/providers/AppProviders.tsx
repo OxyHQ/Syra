@@ -14,7 +14,6 @@
 
 import React, { memo, useCallback, useMemo } from 'react';
 import { QueryClient, useQueryClient } from '@tanstack/react-query';
-import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { I18nextProvider, useTranslation } from 'react-i18next';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
@@ -38,11 +37,9 @@ import { liveConfig, liveRoomsQueryKey } from '@/lib/liveConfig';
 import { useServerAppearanceSync } from '@/hooks/useServerAppearanceSync';
 import { usePlayerPresence } from '@/hooks/usePlayerPresence';
 import { clearStreamResolutionCache } from '@/services/streamService';
-import { accountScopeFor, applyAccountScope, persistOptions } from '@/lib/queryPersister';
-import { createScopedLogger } from '@/utils/logger';
+import { SYRA_ACCOUNT_QUERIES } from '@/lib/queryClient';
+import { removeLegacyQueryCache } from '@/utils/removeLegacyQueryCache';
 import { QueueAccountScope } from './QueueAccountScope';
-
-const providersLogger = createScopedLogger('AppProviders');
 
 /**
  * Feeds the live-rooms engine and mounts its floating dock. `onRoomChanged` is
@@ -138,48 +135,6 @@ function StreamCacheAuthInvalidator(): null {
   return null;
 }
 
-/**
- * Non-rendering bridge that keeps the persisted query cache pointed at the
- * account currently signed in, so one user's library can never rehydrate for
- * the next user on the same device.
- *
- * Driven by the RESOLVED identity rather than by `session.onChange`, which also
- * fires on ordinary token refreshes — clearing the cache on those would wipe it
- * constantly. The scope only moves when the account itself changes.
- *
- * The two sources are combined deliberately. A known `user.id` wins outright,
- * even while `canUsePrivateApi` is false, so an account whose token is briefly
- * unusable keeps its own cache instead of being demoted to guest and having its
- * snapshot deleted. Only a finished resolution with no user at all — a real
- * sign-out — moves the scope to guest. While the session is still resolving,
- * nothing happens: an unknown identity must never clear anyone's cache.
- *
- * `isPrivateApiPending` is read directly rather than through `useAuthGate`
- * because the gate's `isResolved` is exactly `!isPrivateApiPending`, and its
- * time bound exists to stop screens rendering endless skeletons. This bridge
- * renders nothing, so the bound would only add a timer: an unresolved session
- * simply leaves the scope untouched, which is already the safe outcome.
- */
-function QueryCacheAccountScope(): null {
-  const { user, isPrivateApiPending } = useOxy();
-  const queryClient = useQueryClient();
-
-  const userId = user?.id ?? null;
-  const scope =
-    userId !== null ? accountScopeFor(userId) : isPrivateApiPending ? null : accountScopeFor(null);
-
-  React.useEffect(() => {
-    if (scope === null) {
-      return;
-    }
-    applyAccountScope(scope, queryClient).catch((error) => {
-      providersLogger.error('Failed to apply the account cache scope', { error });
-    });
-  }, [scope, queryClient]);
-
-  return null;
-}
-
 interface AppProvidersProps {
   children: React.ReactNode;
   oxyServices: OxyServices;
@@ -203,6 +158,10 @@ export const AppProviders = memo(function AppProviders({
   queryClient,
   isAppReady,
 }: AppProvidersProps) {
+  React.useEffect(() => {
+    void removeLegacyQueryCache();
+  }, []);
+
   // Single chokepoint that resolves Oxy file IDs to loadable URLs for every
   // Bloom Avatar/Image in the tree. Bloom's Avatar runs bare-string `source`
   // values through this resolver; passing raw file IDs to `source` requires it.
@@ -215,41 +174,40 @@ export const AppProviders = memo(function AppProviders({
     <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <ErrorBoundary>
-          <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
-            <OxyProvider
-              oxyServices={oxyServices}
-              clientId={OXY_CLIENT_ID}
-              storageKeyPrefix="oxy_syra"
-            >
-              <ImageResolverProvider value={resolveImage}>
-                <I18nextProvider i18n={i18n}>
-                  <AppearanceSync />
-                  <QueryCacheAccountScope />
-                  <QueueAccountScope />
-                  <StreamCacheAuthInvalidator />
-                  <PlaybackFailureReporter />
-                  <PlayerPresence />
-                  <BottomSheetModalProvider>
-                    <BottomSheetProvider>
-                      <MenuProvider>
-                        <HomeRefreshProvider>
-                          <LiveRoomsProvider>
-                            {children}
-                          </LiveRoomsProvider>
-                          <StatusBar style="auto" />
-                          {/* Mounted once for the whole app, after `children` so it
-                              overlays content. Toasts are rendered by the single
-                              `ToastOutlet` that `OxyProvider` already mounts, which
-                              sits above this banner. */}
-                          {isAppReady && <OfflineBanner />}
-                        </HomeRefreshProvider>
-                      </MenuProvider>
-                    </BottomSheetProvider>
-                  </BottomSheetModalProvider>
-                </I18nextProvider>
-              </ImageResolverProvider>
-            </OxyProvider>
-          </PersistQueryClientProvider>
+          <OxyProvider
+            oxyServices={oxyServices}
+            clientId={OXY_CLIENT_ID}
+            storageKeyPrefix="oxy_syra"
+            queryClient={queryClient}
+            accountQueries={SYRA_ACCOUNT_QUERIES}
+          >
+            <ImageResolverProvider value={resolveImage}>
+              <I18nextProvider i18n={i18n}>
+                <AppearanceSync />
+                <QueueAccountScope />
+                <StreamCacheAuthInvalidator />
+                <PlaybackFailureReporter />
+                <PlayerPresence />
+                <BottomSheetModalProvider>
+                  <BottomSheetProvider>
+                    <MenuProvider>
+                      <HomeRefreshProvider>
+                        <LiveRoomsProvider>
+                          {children}
+                        </LiveRoomsProvider>
+                        <StatusBar style="auto" />
+                        {/* Mounted once for the whole app, after `children` so it
+                            overlays content. Toasts are rendered by the single
+                            `ToastOutlet` that `OxyProvider` already mounts, which
+                            sits above this banner. */}
+                        {isAppReady && <OfflineBanner />}
+                      </HomeRefreshProvider>
+                    </MenuProvider>
+                  </BottomSheetProvider>
+                </BottomSheetModalProvider>
+              </I18nextProvider>
+            </ImageResolverProvider>
+          </OxyProvider>
         </ErrorBoundary>
       </GestureHandlerRootView>
     </SafeAreaProvider>
