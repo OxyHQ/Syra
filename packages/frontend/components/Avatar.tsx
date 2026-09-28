@@ -1,12 +1,13 @@
 import React from 'react';
-import { StyleSheet, StyleProp, ViewStyle, ImageStyle, ImageSourcePropType } from 'react-native';
+import { StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { Avatar as BloomAvatar } from '@oxy.so/bloom/avatar';
+import { Avatar as BloomAvatar, type AvatarProps as BloomAvatarProps } from '@oxy.so/bloom/avatar';
 import { useTheme } from '@oxy.so/bloom/theme';
 import { VerifiedIcon } from '@/assets/icons/verified-icon';
 
 interface AvatarProps {
-  source?: ImageSourcePropType | string | undefined | null;
+  /** A URL, a bare Oxy file ID, a bundled asset or a `{ uri }` — Bloom's portable image source. */
+  source?: BloomAvatarProps['source'];
   /**
    * Rendition variant forwarded to Bloom's Avatar (and the registered
    * ImageResolver) when `source` is a bare Oxy file ID. Use `"thumb"` in lists
@@ -16,7 +17,6 @@ interface AvatarProps {
   size?: number;
   verified?: boolean;
   style?: StyleProp<ViewStyle>;
-  imageStyle?: StyleProp<ImageStyle>;
   label?: string; // initials or single char to show when no image
   onPress?: () => void;
 }
@@ -39,7 +39,7 @@ const VerifiedBadge: React.FC<{ size: number }> = ({ size }) => {
   );
 };
 
-const Avatar: React.FC<AvatarProps> = ({ source, variant, size = 40, verified = false, style, imageStyle, label, onPress }) => (
+const Avatar: React.FC<AvatarProps> = ({ source, variant, size = 40, verified = false, style, label, onPress }) => (
   <BloomAvatar
     source={source}
     variant={variant}
@@ -48,7 +48,6 @@ const Avatar: React.FC<AvatarProps> = ({ source, variant, size = 40, verified = 
     verifiedIcon={verified ? <VerifiedBadge size={size} /> : undefined}
     name={label}
     style={style}
-    imageStyle={imageStyle}
     onPress={onPress}
   />
 );
