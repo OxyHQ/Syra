@@ -184,7 +184,7 @@
     },
     "packages/sdk": {
       "name": "@syra.fm/sdk",
-      "version": "0.16.0",
+      "version": "0.16.1",
       "dependencies": {
         "zod": "^4.4.3",
       },
