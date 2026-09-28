@@ -1,6 +1,6 @@
 {
   "name": "@syra.fm/sdk",
-  "version": "0.15.1",
+  "version": "0.16.0",
   "description": "Syra SDK — headless, isomorphic catalog client (Node/React-free, public reads + 30s previews) that also ships the Syra live-rooms engine (audio rooms over LiveKit) on React Native and web.",
   "source": "src/index.ts",
   "main": "lib/commonjs/index.js",
@@ -19,6 +19,18 @@
         "import": "./lib/module/index.native.js",
         "require": "./lib/commonjs/index.native.js"
       },
+      "import": {
+        "types": "./lib/typescript/module/index.d.ts",
+        "default": "./lib/module/index.js"
+      },
+      "require": {
+        "types": "./lib/typescript/commonjs/index.d.ts",
+        "default": "./lib/commonjs/index.js"
+      },
+      "default": "./lib/module/index.js"
+    },
+    "./client": {
+      "react-native": "./src/index.ts",
       "import": {
         "types": "./lib/typescript/module/index.d.ts",
         "default": "./lib/module/index.js"

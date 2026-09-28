@@ -100,3 +100,14 @@ import {
 These require the optional peer dependencies (`react-native`, `livekit-client`,
 `@livekit/react-native`, `expo-audio`, `react-native-svg`, …) — present in any
 Expo/React Native app, absent from headless Node consumers.
+
+### The client alone in an app
+
+An Expo or React Native app that only needs the API client — no rooms — imports
+`@syra.fm/sdk/client`. It is the same client, schemas and `SyraApiError` as the
+root export, under every resolution condition, without the live-rooms engine,
+so the app's bundle does not carry LiveKit for it:
+
+```ts
+import { createSyraClient } from '@syra.fm/sdk/client';
+```
