@@ -59,8 +59,8 @@ export const useUIStore = create<UIState>()(persist((set) => ({
   })),
 }), {
   name: 'syra.ui-preferences',
-  // AsyncStorage is this app's local-persistence mechanism (see
-  // `lib/queryPersister.ts`); on web it resolves to localStorage. Unlike the
+  // AsyncStorage is this app's local-persistence mechanism; on web it
+  // resolves to localStorage. Unlike the
   // appearance settings, which round-trip through `/profile/settings`, this is
   // a device preference: it must work for signed-out visitors too, so it stays
   // local and unscoped rather than server-backed and auth-gated.
