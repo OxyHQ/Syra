@@ -26,7 +26,7 @@ export interface ArtistFollowControlProps {
   artistId: string;
   /** Display name for the shared target snapshot other applications render. */
   artistName: string;
-  size?: 'small' | 'medium' | 'large';
+  size?: 'sm' | 'md' | 'lg';
   /**
    * Show the disclosure chevron. Off in the sticky header, where the row is a
    * strip of icon-sized controls and a second target is more likely to be hit by
@@ -38,7 +38,7 @@ export interface ArtistFollowControlProps {
 export const ArtistFollowControl = memo(function ArtistFollowControl({
   artistId,
   artistName,
-  size = 'medium',
+  size = 'md',
   showOptions = true,
 }: ArtistFollowControlProps) {
   const { t } = useTranslation();
@@ -116,11 +116,10 @@ export const ArtistFollowControl = memo(function ArtistFollowControl({
   // follow, and offering the press would only lose it.
   return (
     <Button
-      variant="primary"
       size={size}
       disabled={!gate.isResolved || gate.canUsePrivateApi}
       onPress={() => openAccountDialog('signin')}
-      accessibilityLabel={labels.idle}
+      accessibilityLabel={labels.idle} tone="accent" appearance="solid"
     >
       {labels.idle}
     </Button>

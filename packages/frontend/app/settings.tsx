@@ -367,7 +367,7 @@ const SettingsScreen: React.FC = () => {
                 <SegmentedControl<'system' | 'light' | 'dark'>
                   label={t('settings.preferences.colorMode')}
                   type="radio"
-                  size="small"
+                  size="sm"
                   value={themeMode}
                   onChange={handleThemeModeChange}
                 >
@@ -399,7 +399,7 @@ const SettingsScreen: React.FC = () => {
                 <SegmentedControl<string>
                   label={t('settings.preferences.language')}
                   type="radio"
-                  size="small"
+                  size="sm"
                   value={i18n.language || 'en-US'}
                   onChange={handleLanguageChange}
                 >
@@ -422,8 +422,8 @@ const SettingsScreen: React.FC = () => {
                 showChevron={false}
                 rightElement={
                   <Switch
-                    value={musicPreferences?.autoplay ?? true}
-                    onValueChange={(value) => handleMusicPreferenceUpdate({ autoplay: value })}
+                    checked={musicPreferences?.autoplay ?? true}
+                    onCheckedChange={(value) => handleMusicPreferenceUpdate({ autoplay: value })}
                   />
                 }
               />
@@ -434,8 +434,8 @@ const SettingsScreen: React.FC = () => {
                 showChevron={false}
                 rightElement={
                   <Switch
-                    value={musicPreferences?.gaplessPlayback ?? true}
-                    onValueChange={(value) => handleMusicPreferenceUpdate({ gaplessPlayback: value })}
+                    checked={musicPreferences?.gaplessPlayback ?? true}
+                    onCheckedChange={(value) => handleMusicPreferenceUpdate({ gaplessPlayback: value })}
                   />
                 }
               />
@@ -446,8 +446,8 @@ const SettingsScreen: React.FC = () => {
                 showChevron={false}
                 rightElement={
                   <Switch
-                    value={musicPreferences?.normalizeVolume ?? true}
-                    onValueChange={(value) => handleMusicPreferenceUpdate({ normalizeVolume: value })}
+                    checked={musicPreferences?.normalizeVolume ?? true}
+                    onCheckedChange={(value) => handleMusicPreferenceUpdate({ normalizeVolume: value })}
                   />
                 }
               />
@@ -458,8 +458,8 @@ const SettingsScreen: React.FC = () => {
                 showChevron={false}
                 rightElement={
                   <Switch
-                    value={musicPreferences?.explicitContent ?? true}
-                    onValueChange={(value) => handleMusicPreferenceUpdate({ explicitContent: value })}
+                    checked={musicPreferences?.explicitContent ?? true}
+                    onCheckedChange={(value) => handleMusicPreferenceUpdate({ explicitContent: value })}
                   />
                 }
               />
@@ -488,7 +488,7 @@ const SettingsScreen: React.FC = () => {
                 <SegmentedControl<AudioQuality>
                   label={t('settings.audio.streamingQuality')}
                   type="radio"
-                  size="small"
+                  size="sm"
                   value={musicPreferences?.audioQuality ?? 'normal'}
                   onChange={(value) => handleMusicPreferenceUpdate({ audioQuality: value })}
                 >
@@ -515,7 +515,7 @@ const SettingsScreen: React.FC = () => {
                 <SegmentedControl<AudioQuality>
                   label={t('settings.audio.downloadQuality')}
                   type="radio"
-                  size="small"
+                  size="sm"
                   value={musicPreferences?.downloadQuality ?? 'normal'}
                   onChange={(value) => handleMusicPreferenceUpdate({ downloadQuality: value })}
                 >
@@ -541,8 +541,8 @@ const SettingsScreen: React.FC = () => {
                 showChevron={false}
                 rightElement={
                   <Switch
-                    value={musicPreferences?.dataSaver ?? false}
-                    onValueChange={(value) => handleMusicPreferenceUpdate({ dataSaver: value })}
+                    checked={musicPreferences?.dataSaver ?? false}
+                    onCheckedChange={(value) => handleMusicPreferenceUpdate({ dataSaver: value })}
                   />
                 }
               />
@@ -558,7 +558,7 @@ const SettingsScreen: React.FC = () => {
                   <SegmentedControl<ProfileVisibility>
                     label={t('settings.privacy.profileVisibility')}
                     type="radio"
-                    size="small"
+                    size="sm"
                     value={privacySettings.profileVisibility ?? 'public'}
                     onChange={(value) => handlePrivacyUpdate({ profileVisibility: value })}
                   >
@@ -582,8 +582,8 @@ const SettingsScreen: React.FC = () => {
                   showChevron={false}
                   rightElement={
                     <Switch
-                      value={privacySettings.showContactInfo ?? true}
-                      onValueChange={(value) => handlePrivacyUpdate({ showContactInfo: value })}
+                      checked={privacySettings.showContactInfo ?? true}
+                      onCheckedChange={(value) => handlePrivacyUpdate({ showContactInfo: value })}
                     />
                   }
                 />
@@ -596,8 +596,8 @@ const SettingsScreen: React.FC = () => {
                   showChevron={false}
                   rightElement={
                     <Switch
-                      value={privacySettings.showOnlineStatus ?? true}
-                      onValueChange={(value) => handlePrivacyUpdate({ showOnlineStatus: value })}
+                      checked={privacySettings.showOnlineStatus ?? true}
+                      onCheckedChange={(value) => handlePrivacyUpdate({ showOnlineStatus: value })}
                     />
                   }
                 />

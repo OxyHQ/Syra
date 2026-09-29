@@ -72,7 +72,7 @@ function BecomeArtistEmptyState({ onRegister }: { onRegister: () => void }) {
           Register as an artist to upload songs, organize them into albums, and see how listeners are finding your
           music.
         </Text>
-        <Button variant="primary" onPress={onRegister}>Become an artist</Button>
+        <Button onPress={onRegister} tone="accent" appearance="solid">Become an artist</Button>
       </View>
     </ScreenContainer>
   );
@@ -93,10 +93,9 @@ function StudioDashboard({ artist }: { artist: Artist }) {
       subtitle="Artist studio"
       actions={
         <Button
-          variant="primary"
           size="sm"
           onPress={() => go('/music/upload')}
-          icon={<MaterialCommunityIcons name="plus" size={18} color="#fff" />}
+          icon={<MaterialCommunityIcons name="plus" size={18} color="#fff" />} tone="accent" appearance="solid"
         >
           Upload
         </Button>
@@ -148,7 +147,7 @@ function StudioDashboard({ artist }: { artist: Artist }) {
       ) : isError ? (
         <View className="py-10 items-center px-6">
           <Text className="text-base text-foreground mb-3">Couldn&apos;t load your studio.</Text>
-          <Button variant="secondary" onPress={() => refetch()}>Retry</Button>
+          <Button onPress={() => refetch()} tone="neutral" appearance="outline">Retry</Button>
         </View>
       ) : dashboard ? (
         <>
@@ -156,7 +155,7 @@ function StudioDashboard({ artist }: { artist: Artist }) {
           {dashboard.recentTracks.length === 0 ? (
             <View className="rounded-2xl border border-border bg-surface px-4 py-8 items-center mb-6">
               <Text className="text-sm text-muted-foreground mb-3">No tracks yet.</Text>
-              <Button variant="secondary" size="sm" onPress={() => go('/music/upload')}>Upload your first song</Button>
+              <Button size="sm" onPress={() => go('/music/upload')} tone="neutral" appearance="outline">Upload your first song</Button>
             </View>
           ) : (
             <View className="gap-2 mb-6">
@@ -176,7 +175,7 @@ function StudioDashboard({ artist }: { artist: Artist }) {
           {dashboard.recentAlbums.length === 0 ? (
             <View className="rounded-2xl border border-border bg-surface px-4 py-8 items-center">
               <Text className="text-sm text-muted-foreground mb-3">No albums yet.</Text>
-              <Button variant="secondary" size="sm" onPress={() => go('/music/album/new')}>Create an album</Button>
+              <Button size="sm" onPress={() => go('/music/album/new')} tone="neutral" appearance="outline">Create an album</Button>
             </View>
           ) : (
             <View className="gap-2">

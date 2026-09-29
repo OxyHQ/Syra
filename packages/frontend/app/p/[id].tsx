@@ -530,7 +530,7 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                 <ArtistFollowControl
                   artistId={artistId}
                   artistName={displayName}
-                  size="small"
+                  size="sm"
                   showOptions={false}
                 />
               )}

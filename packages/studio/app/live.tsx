@@ -69,10 +69,9 @@ function GoLive() {
             Go on air instantly, or schedule a room for later. Listeners can join, request to speak, and you can record.
           </Text>
           <Button
-            variant="primary"
             fullWidth
             onPress={openCreateSheet}
-            icon={<MaterialCommunityIcons name="microphone-plus" size={18} color={theme.colors.primaryForeground} />}
+            icon={<MaterialCommunityIcons name="microphone-plus" size={18} color={theme.colors.primaryForeground} />} tone="accent" appearance="solid"
           >
             Go Live
           </Button>
@@ -112,22 +111,20 @@ function GoLive() {
           style={{ borderTopWidth: 0.5, borderTopColor: theme.colors.border, backgroundColor: theme.colors.background }}
         >
           <Button
-            variant="primary"
             fullWidth
             disabled={!formState.isValid}
             loading={formState.loading}
             onPress={() => createRef.current?.handleCreateAndStart()}
-            icon={<MaterialCommunityIcons name="play" size={18} color={theme.colors.primaryForeground} />}
+            icon={<MaterialCommunityIcons name="play" size={18} color={theme.colors.primaryForeground} />} tone="accent" appearance="solid"
           >
             Start now
           </Button>
           {formState.hasScheduledStart && (
             <Button
-              variant="outline"
               fullWidth
               disabled={!formState.isValid || formState.loading}
               onPress={() => createRef.current?.handleSchedule()}
-              icon={<MaterialCommunityIcons name="calendar" size={18} color={theme.colors.text} />}
+              icon={<MaterialCommunityIcons name="calendar" size={18} color={theme.colors.text} />} tone="neutral" appearance="outline"
             >
               Schedule room
             </Button>

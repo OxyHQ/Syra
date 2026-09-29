@@ -164,9 +164,9 @@ function CreateShowForm() {
           <Text className="text-sm font-medium text-foreground">Explicit content</Text>
           <Text className="text-xs text-muted-foreground mt-0.5">Marks the feed as explicit in directories.</Text>
         </View>
-        <Switch value={explicit} onValueChange={setExplicit} />
+        <Switch checked={explicit} onCheckedChange={setExplicit} />
       </View>
-      <Button variant="primary" fullWidth onPress={onSubmit} loading={createPodcast.isPending} disabled={createPodcast.isPending}>
+      <Button fullWidth onPress={onSubmit} loading={createPodcast.isPending} disabled={createPodcast.isPending} tone="accent" appearance="solid">
         Create show
       </Button>
     </ScreenContainer>
