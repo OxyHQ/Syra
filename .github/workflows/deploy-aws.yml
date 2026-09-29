@@ -244,6 +244,16 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      # `--cache-from/--cache-to type=gha` below need the Actions runtime token
+      # and cache URL, which GitHub gives to JavaScript actions and NOT to `run:`
+      # steps. Without them buildx skips the cache without a word: the deploy of
+      # run 36506244300 built every layer from scratch (zero CACHED steps,
+      # including the Bento4 cmake build and every apk layer), and the repo holds
+      # no buildkit cache entry at all. Clarity, which builds through
+      # docker/build-push-action (it exports these itself), shows 22 CACHED steps.
+      - name: Expose the Actions cache to buildx
+        uses: crazy-max/ghaction-github-runtime@v4
+
       - name: Build and push (linux/arm64)
         id: build
         env:
