@@ -72,7 +72,7 @@ function Insights() {
       ) : isError || !insights ? (
         <View className="py-16 items-center px-6">
           <Text className="text-base text-foreground mb-3">Couldn&apos;t load your insights.</Text>
-          <Button variant="secondary" onPress={() => refetch()}>Retry</Button>
+          <Button onPress={() => refetch()} tone="neutral" appearance="outline">Retry</Button>
         </View>
       ) : (
         <>

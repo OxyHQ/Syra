@@ -7,9 +7,9 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc -b tsconfig.build.json && node scripts/mark-browser-module.mjs",
     "typecheck": "tsc --noEmit",
-    "dev": "tsc --watch",
+    "dev": "node scripts/mark-browser-module.mjs && tsc -b tsconfig.build.json --watch",
     "clean": "rm -rf dist",
     "test": "bun test src",
     "prepublishOnly": "bun run build"
@@ -30,5 +30,12 @@
   },
   "files": [
     "dist/**/*"
-  ]
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "browser": "./dist/browser/index.js",
+      "default": "./dist/index.js"
+    }
+  }
 }

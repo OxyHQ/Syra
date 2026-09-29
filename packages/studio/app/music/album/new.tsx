@@ -178,10 +178,10 @@ function CreateAlbumForm({ artistId, uploadsDisabled }: { artistId: string; uplo
           <Text className="text-sm font-medium text-foreground">Explicit content</Text>
           <Text className="text-xs text-muted-foreground mt-0.5">Marks this release as explicit.</Text>
         </View>
-        <Switch value={explicit} onValueChange={setExplicit} disabled={busy} />
+        <Switch checked={explicit} onCheckedChange={setExplicit} disabled={busy} />
       </View>
 
-      <Button variant="primary" fullWidth onPress={onSubmit} loading={busy} disabled={busy || uploadsDisabled}>
+      <Button fullWidth onPress={onSubmit} loading={busy} disabled={busy || uploadsDisabled} tone="accent" appearance="solid">
         Create album
       </Button>
     </ScreenContainer>
@@ -212,7 +212,7 @@ function CreateAlbumGate() {
           <Text className="text-sm text-muted-foreground text-center mb-5 max-w-[360px]">
             Create your artist profile before creating albums.
           </Text>
-          <Button variant="primary" onPress={() => router.replace('/music/register')}>
+          <Button onPress={() => router.replace('/music/register')} tone="accent" appearance="solid">
             Become an artist
           </Button>
         </View>

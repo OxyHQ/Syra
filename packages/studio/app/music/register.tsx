@@ -86,11 +86,10 @@ function RegisterArtistForm() {
       />
 
       <Button
-        variant="primary"
         fullWidth
         onPress={onSubmit}
         loading={registerArtist.isPending}
-        disabled={registerArtist.isPending}
+        disabled={registerArtist.isPending} tone="accent" appearance="solid"
       >
         Create artist profile
       </Button>

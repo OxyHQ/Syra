@@ -65,7 +65,7 @@ function ShowDetail({ id }: { id: string }) {
       <ScreenContainer title="Show" onBack={() => router.back()}>
         <View className="py-16 items-center px-6">
           <Text className="text-base text-foreground mb-3">Couldn&apos;t load this podcast.</Text>
-          <Button variant="secondary" onPress={() => refetch()}>Retry</Button>
+          <Button onPress={() => refetch()} tone="neutral" appearance="outline">Retry</Button>
         </View>
       </ScreenContainer>
     );
@@ -111,7 +111,7 @@ function ShowDetail({ id }: { id: string }) {
       subtitle={podcast.author ?? undefined}
       onBack={() => router.back()}
       actions={
-        <Button variant="primary" size="sm" onPress={goToUpload} icon={<MaterialCommunityIcons name="upload" size={18} color="#fff" />}>
+        <Button size="sm" onPress={goToUpload} icon={<MaterialCommunityIcons name="upload" size={18} color="#fff" />} tone="accent" appearance="solid">
           Upload
         </Button>
       }
@@ -144,7 +144,7 @@ function ShowDetail({ id }: { id: string }) {
         <View className="items-center py-12">
           <MaterialCommunityIcons name="playlist-music-outline" size={36} color="#9ca3af" />
           <Text className="text-sm text-muted-foreground mt-2 mb-4">No episodes yet.</Text>
-          <Button variant="secondary" onPress={goToUpload}>Upload your first episode</Button>
+          <Button onPress={goToUpload} tone="neutral" appearance="outline">Upload your first episode</Button>
         </View>
       ) : (
         <View>
@@ -164,13 +164,12 @@ function ShowDetail({ id }: { id: string }) {
             </Text>
             <View className="self-start">
               <Button
-                variant="destructive"
                 size="sm"
                 onPress={() => setConfirmingDelete(true)}
                 disabled={isDeleting}
                 loading={isDeleting}
                 testID="delete-show-button"
-                icon={<MaterialCommunityIcons name="trash-can-outline" size={16} color="#fff" />}
+                icon={<MaterialCommunityIcons name="trash-can-outline" size={16} color="#fff" />} tone="danger" appearance="solid"
               >
                 Delete show
               </Button>

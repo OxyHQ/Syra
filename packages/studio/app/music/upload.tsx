@@ -249,15 +249,14 @@ function UploadTrackForm({ artistId, uploadsDisabled }: { artistId: string; uplo
           <Text className="text-sm font-medium text-foreground">Explicit content</Text>
           <Text className="text-xs text-muted-foreground mt-0.5">Marks this track as explicit.</Text>
         </View>
-        <Switch value={explicit} onValueChange={setExplicit} disabled={busy} />
+        <Switch checked={explicit} onCheckedChange={setExplicit} disabled={busy} />
       </View>
 
       <Button
-        variant="primary"
         fullWidth
         onPress={onSubmit}
         loading={busy}
-        disabled={busy || uploadsDisabled}
+        disabled={busy || uploadsDisabled} tone="accent" appearance="solid"
       >
         Upload song
       </Button>
@@ -289,7 +288,7 @@ function UploadGate() {
           <Text className="text-sm text-muted-foreground text-center mb-5 max-w-[360px]">
             Create your artist profile before uploading music.
           </Text>
-          <Button variant="primary" onPress={() => router.replace('/music/register')}>
+          <Button onPress={() => router.replace('/music/register')} tone="accent" appearance="solid">
             Become an artist
           </Button>
         </View>

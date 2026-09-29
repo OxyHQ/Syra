@@ -37,7 +37,7 @@ export function SignInGate({ children }: { children: ReactNode }) {
         <Text className="text-base text-muted-foreground text-center mb-6 max-w-[420px]">
           Sign in with your Oxy account to manage your podcast shows, upload episodes, and get a public RSS feed.
         </Text>
-        <Button variant="primary" onPress={onSignIn} icon={<MaterialCommunityIcons name="login" size={18} color="#fff" />}>
+        <Button onPress={onSignIn} icon={<MaterialCommunityIcons name="login" size={18} color="#fff" />} tone="accent" appearance="solid">
           Sign in
         </Button>
       </View>

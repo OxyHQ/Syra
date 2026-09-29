@@ -207,14 +207,13 @@ function UploadEpisodeForm({ id }: { id: string }) {
           <Text className="text-sm font-medium text-foreground">Explicit content</Text>
           <Text className="text-xs text-muted-foreground mt-0.5">Marks this episode as explicit.</Text>
         </View>
-        <Switch value={explicit} onValueChange={setExplicit} />
+        <Switch checked={explicit} onCheckedChange={setExplicit} />
       </View>
       <Button
-        variant="primary"
         fullWidth
         onPress={onSubmit}
         loading={uploadEpisode.isPending}
-        disabled={uploadEpisode.isPending}
+        disabled={uploadEpisode.isPending} tone="accent" appearance="solid"
       >
         Upload episode
       </Button>
