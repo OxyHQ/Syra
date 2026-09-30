@@ -15,11 +15,11 @@
 #
 # Pipeline:
 #   bento4: cmake build of mp42hls, mp4fragment, mp4encrypt from source
+#   prod-deps: bun install --frozen-lockfile --production (runtime node_modules)
 #   build:  bun install --frozen-lockfile
 #           && bun run build:shared-types
 #           && bun run build:sdk
 #           && bun run build:backend
-#           && reinstall production-only deps
 #   run:    node packages/backend/dist/server.js
 
 # ---------------------------------------------------------------------------
@@ -42,13 +42,14 @@ RUN git clone --depth 1 --branch v1.6.0-641 \
  && cmake --build /src/build --target mp42hls mp4fragment mp4encrypt -j "$(nproc)"
 
 # ---------------------------------------------------------------------------
-# Stage 1: builder — install full dependency graph and compile TypeScript.
+# Stage 1: base — toolchain, bun and every workspace manifest: what an install
+# reads. `prod-deps` and `builder` below both start from it.
 # ---------------------------------------------------------------------------
 # Pinned to 22.23 (>= 22.12): see the runner stage for why the whole image is
 # held at a Node line that supports `require(<ESM>)` — the backend runtime
 # require()s the ESM-only `livekit-server-sdk`. Kept identical here so the
 # build and runtime toolchains never drift.
-FROM node:22.23-alpine AS builder
+FROM node:22.23-alpine AS base
 
 # Toolchain for any dependency that needs a node-gyp fallback (e.g. if a prebuilt
 # binary is unavailable for the target arch). Confined to the builder stage so it
@@ -76,6 +77,28 @@ COPY packages/shared-types/package.json ./packages/shared-types/package.json
 COPY packages/frontend/package.json ./packages/frontend/package.json
 COPY packages/studio/package.json ./packages/studio/package.json
 COPY packages/sdk/package.json ./packages/sdk/package.json
+
+# ---------------------------------------------------------------------------
+# Stage 1b: prod-deps — the production dependency tree the runner ships.
+#
+# This install used to be the builder's LAST step (`rm -rf node_modules && bun
+# install --production`), after `COPY packages/backend`, so every source change
+# re-ran it: 46.9s, plus 12.1s copying the fresh tree into the runner, on every
+# deploy (Deploy to AWS run 36506244300, steps #36/#37). Off the manifests and
+# lockfile alone it is cached until a dependency changes.
+#
+# Same tree, measured with bun on 2026-09-29: this stage's shape and the old
+# sequence (full install, sources copied, node_modules removed, production
+# install) produce identical node_modules — 1334 entries, every package.json
+# version and every workspace symlink target equal.
+# ---------------------------------------------------------------------------
+FROM base AS prod-deps
+RUN bun install --frozen-lockfile --production --ignore-scripts
+
+# ---------------------------------------------------------------------------
+# Stage 1c: builder — install the full dependency graph and compile TypeScript.
+# ---------------------------------------------------------------------------
+FROM base AS builder
 
 # Deterministic install from the lockfile, including devDependencies (TypeScript,
 # ts build tooling) which are required to compile the project.
@@ -110,12 +133,9 @@ RUN bun run build:shared-types \
 RUN test -f packages/backend/dist/server.js \
  || (echo "ERROR: packages/backend/dist/server.js was not produced by the build" && exit 1)
 
-# Strip devDependencies so only production modules are carried into the runtime
-# image (bun has no `prune`; a clean production install from the same lockfile
-# is the deterministic equivalent). Scripts are skipped to avoid re-running the
-# shared-types postinstall.
-RUN rm -rf node_modules \
- && bun install --frozen-lockfile --production --ignore-scripts
+# devDependencies never reach the runtime image: the runner takes node_modules
+# from `prod-deps` (bun has no `prune`; a clean production install from the same
+# lockfile is the deterministic equivalent), not from this stage.
 
 # ---------------------------------------------------------------------------
 # Stage 2: runner — minimal runtime with production deps and compiled output.
@@ -158,7 +178,7 @@ USER node
 
 # Bring over the pruned (production-only) dependency tree and the workspace
 # manifests so Node's workspace symlinks (e.g. @syra/shared-types) resolve.
-COPY --from=builder --chown=node:node /app/node_modules ./node_modules
+COPY --from=prod-deps --chown=node:node /app/node_modules ./node_modules
 COPY --from=builder --chown=node:node /app/package.json ./package.json
 COPY --from=builder --chown=node:node /app/packages/backend/package.json ./packages/backend/package.json
 COPY --from=builder --chown=node:node /app/packages/shared-types/package.json ./packages/shared-types/package.json
