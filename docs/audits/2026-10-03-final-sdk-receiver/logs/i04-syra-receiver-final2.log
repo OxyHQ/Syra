@@ -1,0 +1,358 @@
+$ tsc -p tsconfig.build.json
+$ tsc --noEmit
+$ rm -rf dist && bun test src --test-name-pattern "isolated loopback process"
+bun test v1.4.2 (744846f84)
+
+src/scripts/backfillEpisodeImages.test.ts:
+◇ injected env (0) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+
+src/scripts/splitMergedArtist.test.ts:
+[17:33:08.344] [32mINFO[39m: [36m[S3Config] No explicit S3 credentials — relying on ECS task IAM role[39m
+[17:33:08.347] [32mINFO[39m: [36m[S3Config] S3 configuration:[39m
+    [35mbucket[39m: "syra-audio"
+    [35mregion[39m: "us-west-2"
+    [35mendpoint[39m: "default (AWS)"
+    [35maudioPrefix[39m: "audio"
+    [35mimagePrefix[39m: "images"
+    [35mcredentialsConfigured[39m: false
+    [35mcredentialSource[39m: "ECS task IAM role"
+
+src/scripts/importIsrcRegistry.test.ts:
+
+src/scripts/backfillPodcastCovers.test.ts:
+◇ injected env (0) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
+
+src/scripts/reseedPersons.test.ts:
+
+src/scripts/importMusicBrainzArtists.test.ts:
+
+src/scripts/dumpImport.test.ts:
+
+src/scripts/consolidateDuplicateCatalogImages.test.ts:
+◇ injected env (0) from .env // tip: ⌘ suppress logs { quiet: true }
+
+src/scripts/backfillTrackFingerprints.test.ts:
+◇ injected env (0) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+
+src/__tests__/receiverSdk.test.ts:
+(pass) validates receiver identity and revocation in an isolated loopback process [138.37ms]
+
+src/test/postgres.test.ts:
+
+src/services/imageAssetService.test.ts:
+
+src/services/strikeService.test.ts:
+
+src/services/platformActivity.test.ts:
+
+src/services/optionalInputsAreWired.test.ts:
+
+src/routes/rooms.presence.test.ts:
+
+src/routes/complianceMount.test.ts:
+
+src/routes/houseVisibility.test.ts:
+
+src/routes/profileSettingsExposure.test.ts:
+
+src/routes/crowdsourceWebhook.mount.test.ts:
+
+src/routes/rooms.routes.test.ts:
+
+src/routes/radio.routes.test.ts:
+
+src/routes/images.routes.test.ts:
+
+src/routes/creatorEdit.test.ts:
+
+src/routes/streamCredentialExposure.test.ts:
+
+src/routes/podcastVisibility.matrix.test.ts:
+
+src/routes/podcastIngest.test.ts:
+
+src/routes/podcastDelete.test.ts:
+
+src/routes/podcastEpisodeMetadata.test.ts:
+
+src/middleware/streamMediaCors.test.ts:
+
+src/utils/syraPodcast.resolve.test.ts:
+
+src/utils/livekitErrors.test.ts:
+
+src/utils/reqParams.test.ts:
+
+src/utils/loggerErrorFields.test.ts:
+
+src/moderation/registry.test.ts:
+
+src/moderation/moderationTaxonomy.test.ts:
+
+src/moderation/roomSubject.test.ts:
+
+src/controllers/tracks.creditsAgreement.test.ts:
+
+src/controllers/tracks.search.test.ts:
+
+src/controllers/entityProfile.artistSections.test.ts:
+
+src/controllers/podcastAudio.streamKey.test.ts:
+
+src/controllers/podcastAudio.parseRange.test.ts:
+
+src/controllers/podcasts.updateCover.test.ts:
+
+src/controllers/playlists.controller.test.ts:
+
+src/controllers/artists.claim.test.ts:
+
+src/controllers/tracks.uploadTempFile.test.ts:
+
+src/controllers/uploads.controller.test.ts:
+
+src/controllers/podcasts.claim.test.ts:
+
+src/controllers/uploads.createUpload.test.ts:
+
+src/controllers/artists.imageSuggestions.test.ts:
+
+src/controllers/copyright.resolve.test.ts:
+
+src/controllers/entityProfile.controller.test.ts:
+
+src/controllers/images.controller.test.ts:
+
+src/controllers/search.people.test.ts:
+
+src/controllers/stream.controller.test.ts:
+
+src/controllers/library.controller.test.ts:
+
+src/controllers/tracks.searchEscaping.test.ts:
+
+src/controllers/queue.refs.test.ts:
+
+src/controllers/serverOnlyFields.leak.test.ts:
+
+src/controllers/lyrics.controller.test.ts:
+
+src/controllers/search.episodes.test.ts:
+
+src/controllers/uploads.e2e.test.ts:
+(skip) E2E upload flow (requires an S3 endpoint via AWS_ENDPOINT_URL) > GATE: the harness reports FAILURE when the thing under test is broken
+(skip) E2E upload flow (requires an S3 endpoint via AWS_ENDPOINT_URL) > STEP 1: bytes already in the catalogue are MATCHED and NO bytes are written
+(skip) E2E upload flow (requires an S3 endpoint via AWS_ENDPOINT_URL) > STEP 2: a private locker file is readable and streamable ONLY by its owner
+(skip) E2E upload flow (requires an S3 endpoint via AWS_ENDPOINT_URL) > STEP 3: no locker file reaches any public surface from another account
+(skip) E2E upload flow (requires an S3 endpoint via AWS_ENDPOINT_URL) > STEP 4: a no-artist file is PRIVATE-ok and PUBLIC-refused with a machine code
+(skip) E2E upload flow (requires an S3 endpoint via AWS_ENDPOINT_URL) > STEP 5: an iTunes-purchased M4A is refused on the public path, naming the marker
+(skip) E2E upload flow (requires an S3 endpoint via AWS_ENDPOINT_URL) > STEP 6: an unknown artist published publicly creates a claimable stub, and an album with cover art
+(skip) E2E upload flow (requires an S3 endpoint via AWS_ENDPOINT_URL) > STEP 7: expiry — notice at T-14d, soft delete at T0, hard delete of ALL objects at T+30d
+
+src/controllers/browse.controller.test.ts:
+
+src/controllers/artists.contributions.test.ts:
+
+src/config/env.productionBoot.test.ts:
+
+src/services/recommendations/engagement.test.ts:
+
+src/services/recommendations/monthly-listeners.test.ts:
+
+src/services/recommendations/relatedArtists.test.ts:
+
+src/services/ingest/ingestUserUpload.test.ts:
+
+src/services/ingest/ingestTrack.test.ts:
+
+src/services/ingest/hlsStorage.test.ts:
+
+src/services/ingest/probeAudio.test.ts:
+
+src/services/ingest/ingestQueue.test.ts:
+
+src/services/ingest/hlsPackager.test.ts:
+(skip) packageToEncryptedHls (requires ffmpeg + Bento4) > the fixture really does carry embedded cover art
+(skip) packageToEncryptedHls (requires ffmpeg + Bento4) > every rendition contains audio and ONLY audio — the artwork is dropped, not encoded
+(skip) packageToEncryptedHls (requires ffmpeg + Bento4) > returns 3 renditions with the expected bitrates
+(skip) packageToEncryptedHls (requires ffmpeg + Bento4) > master.m3u8 exists and contains 3 EXT-X-STREAM-INF lines and each variant URI
+(skip) packageToEncryptedHls (requires ffmpeg + Bento4) > each variant playlist exists and contains #EXT-X-KEY:METHOD=AES-128 with correct URI
+(skip) packageToEncryptedHls (requires ffmpeg + Bento4) > at least one encrypted .ts segment exists per rendition
+(skip) packageToEncryptedHls (requires ffmpeg + Bento4) > keyHex is a 32-char lowercase hex string (16 bytes AES-128)
+(skip) packageToEncryptedHls (requires ffmpeg + Bento4) > loudnessLufs is a finite number
+(skip) packageToEncryptedHls (requires ffmpeg + Bento4) > the locker ladder produces exactly one 160k rendition, still AES-128 encrypted
+(skip) packageToEncryptedHls (requires ffmpeg + Bento4) > all renditions share a single key
+
+src/services/ingest/previewClip.test.ts:
+(skip) generatePreviewClipFromHls (requires ffmpeg + Bento4) > decrypts the HLS and produces a ~30s MP3 clip from start=0
+(skip) generatePreviewClipFromHls (requires ffmpeg + Bento4) > honours the start offset on the decrypted HLS (start=15 on 40s → ~25s)
+
+src/services/notifications/oxyServiceToken.test.ts:
+
+src/services/notifications/notifier.test.ts:
+
+src/services/playlists/collaboration.test.ts:
+
+src/services/stream/manifestService.test.ts:
+
+src/services/stream/audioQuality.test.ts:
+
+src/services/stream/streamToken.test.ts:
+
+src/services/stream/playlistRewrite.test.ts:
+
+src/services/uploads/fingerprint.test.ts:
+(skip) fingerprintFile — without fpcalc installed > reports `unavailable`, never a silent empty fingerprint
+
+src/services/uploads/isrcLookup.test.ts:
+
+src/services/uploads/expirySweeper.test.ts:
+
+src/services/uploads/artistNames.test.ts:
+
+src/services/uploads/isrcLookup.genres.test.ts:
+
+src/services/uploads/provenanceSignals.test.ts:
+
+src/services/uploads/matchCatalog.test.ts:
+
+src/services/uploads/enrichment.test.ts:
+
+src/services/uploads/resolveArtist.test.ts:
+
+src/services/uploads/acoustid.test.ts:
+
+src/services/uploads/enrichCatalogEntity.test.ts:
+
+src/services/uploads/extractMetadata.test.ts:
+
+src/services/uploads/resolveAlbum.test.ts:
+
+src/services/uploads/buildTrackCredits.test.ts:
+
+src/services/compliance/takedown.test.ts:
+
+src/services/compliance/contributionPolicy.test.ts:
+
+src/services/compliance/contributorStrikes.test.ts:
+
+src/services/catalog/catalogImageAssets.test.ts:
+
+src/services/catalog/popularity.test.ts:
+
+src/services/catalog/artistProfile.test.ts:
+
+src/services/preview/previewInFlight.test.ts:
+
+src/services/preview/previewService.test.ts:
+(skip) storePreviewFromHls real decrypt (requires ffmpeg + Bento4) > produces a valid ~25s MP3 from start=15 using only the windowed segments
+
+src/services/lyrics/LrclibProvider.test.ts:
+
+src/services/lyrics/lyricsService.test.ts:
+
+src/services/lyrics/lrc.test.ts:
+
+src/services/podcasts/ingestEpisode.test.ts:
+
+src/services/podcasts/resolvePersons.test.ts:
+
+src/services/podcasts/podcastMedia.test.ts:
+
+src/services/podcasts/podcastImportService.test.ts:
+
+src/services/podcasts/podcastBackgroundImport.test.ts:
+
+src/services/podcasts/podcastImportNotifications.test.ts:
+
+src/services/podcasts/ingestToken.test.ts:
+
+src/services/podcasts/RssConnector.test.ts:
+
+src/services/premium/entitlement.test.ts:
+
+src/services/radio/radioStationStore.test.ts:
+
+src/services/radio/radioEngine.test.ts:
+
+src/services/radio/radioSeed.test.ts:
+
+src/services/radio/radioPools.test.ts:
+
+src/services/radio/radioCursor.test.ts:
+
+src/services/playback/deviceService.test.ts:
+
+src/services/playback/playbackStateService.test.ts:
+
+src/db/__tests__/gates.test.ts:
+
+src/db/__tests__/deployWorkflow.test.ts:
+
+src/db/__tests__/isDriverError.test.ts:
+
+src/db/__tests__/explainIndexes.test.ts:
+
+src/db/__tests__/zodPathsExistInDrizzle.test.ts:
+
+src/services/notifications/triggers/episodePublished.test.ts:
+
+src/db/library/__tests__/playlists.test.ts:
+
+src/db/library/__tests__/membership.test.ts:
+
+src/db/library/__tests__/recentlyPlayed.test.ts:
+
+src/db/library/__tests__/library.explain.test.ts:
+
+src/db/catalog/__tests__/halfPortedImports.test.ts:
+
+src/db/catalog/__tests__/search.test.ts:
+
+src/db/catalog/__tests__/visibility.agreement.test.ts:
+
+src/db/catalog/__tests__/fingerprints.test.ts:
+
+src/db/catalog/__tests__/genres.test.ts:
+
+src/db/catalog/__tests__/trackCreditsDto.test.ts:
+
+src/db/catalog/__tests__/containers.explain.test.ts:
+
+src/db/catalog/__tests__/services.explain.test.ts:
+
+src/db/catalog/__tests__/recommendationDtos.test.ts:
+
+src/db/catalog/__tests__/creditedArtistVisibility.test.ts:
+
+src/db/user/__tests__/taste.test.ts:
+
+src/db/user/__tests__/listening.test.ts:
+
+src/db/user/__tests__/user.explain.test.ts:
+
+src/db/user/__tests__/settings.test.ts:
+
+src/db/rooms/__tests__/roomWrites.test.ts:
+
+src/db/rooms/__tests__/rooms.explain.test.ts:
+
+src/db/rooms/__tests__/enumsMatchSchema.test.ts:
+
+src/db/podcasts/__tests__/children.test.ts:
+
+src/db/podcasts/__tests__/persons.test.ts:
+
+src/db/podcasts/__tests__/podcasts.explain.test.ts:
+
+src/db/podcasts/__tests__/subscriptions.test.ts:
+
+src/db/podcasts/__tests__/episodes.test.ts:
+
+src/db/creators/__tests__/creators.explain.test.ts:
+
+ 1 pass
+ 22 skip
+ 0 fail
+ 5 expect() calls
+Ran 23 tests across 156 files. [1474.00ms]
