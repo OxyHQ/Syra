@@ -1,0 +1,92 @@
+{
+  "repository": "Syra",
+  "sourceCommit": "42456a750aa53c59ba17a8358449cc149410cae4",
+  "sources": [
+    {
+      "path": "packages/backend/src/__tests__/fixtures/receiver-sdk-probe.ts",
+      "bytes": 4718,
+      "sha256": "b03468239189397c98634eafd45ca90041b38591e63a7f512e0b67195695f03b"
+    },
+    {
+      "path": "packages/backend/src/__tests__/receiverSdk.test.ts",
+      "bytes": 1045,
+      "sha256": "18f0ec3a7b802c92bdfef1b657d1c41cc3066dc8a289c74a9ad2833965aa0f7c"
+    }
+  ],
+  "records": [
+    {
+      "path": "docs/audits/2026-10-03-final-sdk-receiver/logs/i04-syra-candidate-install.log",
+      "bytes": 274,
+      "sha256": "2a2ea07d46a04e4c5bab49f786800618c4b5c90416ba9af41a75a325ae886348"
+    },
+    {
+      "path": "docs/audits/2026-10-03-final-sdk-receiver/logs/i04-syra-receiver-candidate.log",
+      "bytes": 1634,
+      "sha256": "6f3fe2473327877ac0bcb0621b672b408203d3fdd62c9307e8dea3338a8e27c5"
+    },
+    {
+      "path": "docs/audits/2026-10-03-final-sdk-receiver/logs/i04-syra-receiver-final.log",
+      "bytes": 340,
+      "sha256": "0769eacec80b2eae77abc639e5db5f901a04c07af50ddac4bf82bcfa45216987"
+    },
+    {
+      "path": "docs/audits/2026-10-03-final-sdk-receiver/logs/i04-syra-receiver-final2.log",
+      "bytes": 10992,
+      "sha256": "cd1b3a497851914e9f0c0ceef4b6d077eb89c5b0b99330e74a498b5e74aeb28c"
+    }
+  ],
+  "inputs": [
+    {
+      "path": "docs/audits/2026-10-03-final-sdk-receiver/inputs/package.json",
+      "bytes": 2979,
+      "sha256": "e4d213d007441676d46d34e2ba3f98f112ba1ddf356b9183ce0a2bfdb7ec5b50"
+    },
+    {
+      "path": "docs/audits/2026-10-03-final-sdk-receiver/inputs/bun.lock",
+      "bytes": 555159,
+      "sha256": "6eb72808eb5c6d7c803eb195a9ee5bc5aa6854b7fee41deb25d595bf48d72605"
+    },
+    {
+      "path": "docs/audits/2026-10-03-final-sdk-receiver/inputs/packages/backend/package.json",
+      "bytes": 2608,
+      "sha256": "6129e99ef7e7300c30053fe9eccb5009a338b7c621e8fd1a1a06ad1e0e9b5d67"
+    }
+  ],
+  "installed": [
+    {
+      "name": "@oxy.so/contracts",
+      "version": "4.9.0",
+      "path": "/home/nate/Oxy/.agent-evidence/i04-consumer-frozen-1b-packs/oxy.so-contracts-4.9.0.tgz",
+      "source": "1b50557ccfe28b382f5b219405a616b332036d42",
+      "sourceTree": "6ff8352ea7920065590dceda3fff3ca420b94b69",
+      "sha256": "6b1e6a8da92341871d2832834ad063df1a1e84a46dc367786599fdd26be6e635",
+      "published": false,
+      "resolved": "/home/nate/Oxy/Syra/.worktrees/1519-final-sdk-adoption-20261003/node_modules/@oxy.so/contracts",
+      "filesByteEqual": 198
+    },
+    {
+      "name": "@oxy.so/protocol",
+      "version": "1.2.2",
+      "path": "/home/nate/Oxy/.agent-evidence/i04-consumer-frozen-1b-packs/oxy.so-protocol-1.2.2.tgz",
+      "source": "1b50557ccfe28b382f5b219405a616b332036d42",
+      "sourceTree": "77ed4e428f59cff076fd44daf42e18a1b39f7fdb",
+      "sha256": "325b20125f1cf5159c36ca7a75f32c83a4560cf41c55526828b1718595acc843",
+      "published": false,
+      "resolved": "/home/nate/Oxy/Syra/.worktrees/1519-final-sdk-adoption-20261003/node_modules/@oxy.so/protocol",
+      "filesByteEqual": 145
+    },
+    {
+      "name": "@oxy.so/core",
+      "version": "4.2.0",
+      "path": "/home/nate/Oxy/.agent-evidence/i04-consumer-frozen-1b-packs/oxy.so-core-4.2.0.tgz",
+      "source": "1b50557ccfe28b382f5b219405a616b332036d42",
+      "sourceTree": "3937031b8c95a6b8feff65720905de1ad651689d",
+      "sha256": "83059583068cf96d8dc7e4335fe226126cb795f7c6cfba469f8cec4ef9c6a385",
+      "published": false,
+      "resolved": "/home/nate/Oxy/Syra/.worktrees/1519-final-sdk-adoption-20261003/node_modules/@oxy.so/core",
+      "filesByteEqual": 581
+    }
+  ],
+  "published": false,
+  "productionEffects": false
+}

@@ -1,0 +1,19 @@
+$ bun run --filter '@syra/shared-types' build
+@syra/shared-types build: Exited with code 0
+$ bun run --filter '@syra.fm/sdk' build
+@syra.fm/sdk build: ℹ [typescript] Cleaning up previous build at lib/typescript
+@syra.fm/sdk build: ℹ [module] Cleaning up previous build at lib/module
+@syra.fm/sdk build: ℹ [commonjs] Cleaning up previous build at lib/commonjs
+@syra.fm/sdk build: ℹ [typescript] Generating type definitions with tsc
+@syra.fm/sdk build: ⚠ [typescript] Failed to locate tsc in the workspace. Falling back to the binary found in PATH at /home/nate/Oxy/Syra/.worktrees/1519-final-sdk-adoption-20261003/node_modules/.bin/tsc. Consider adding typescript to your devDependencies or specifying the tsc option for the typescript target.
+@syra.fm/sdk build: ℹ [module] Compiling 35 files in src with babel
+@syra.fm/sdk build: ℹ [commonjs] Compiling 35 files in src with babel
+@syra.fm/sdk build: ✔ [module] Wrote files to lib/module
+@syra.fm/sdk build: ✔ [commonjs] Wrote files to lib/commonjs
+@syra.fm/sdk build: ✔ [typescript] Wrote definition files to lib/typescript
+@syra.fm/sdk build: Exited with code 0
+$ tsc -p tsconfig.build.json
+src/__tests__/fixtures/receiver-sdk-probe.ts(69,45): error TS2345: Argument of type 'Request<{}, unknown, any, Record<string, unknown> | undefined, Record<string, any>>' is not assignable to parameter of type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+  Types of property 'query' are incompatible.
+    Type 'Record<string, unknown> | undefined' is not assignable to type 'ParsedQs'.
+      Type 'undefined' is not assignable to type 'ParsedQs'.

@@ -1,0 +1,70 @@
+[
+  {
+    "name": "check-0",
+    "cwd": "packages/backend",
+    "argv": [
+      "bun",
+      "run",
+      "test",
+      "--test-name-pattern",
+      "validates receiver identity and revocation in an isolated loopback process"
+    ],
+    "exitCode": 0,
+    "seconds": 2.018
+  },
+  {
+    "name": "check-1",
+    "cwd": ".",
+    "argv": [
+      "bun",
+      "run",
+      "build:backend"
+    ],
+    "exitCode": 0,
+    "seconds": 9.286
+  },
+  {
+    "name": "check-4",
+    "cwd": "packages/backend",
+    "argv": [
+      "bun",
+      "run",
+      "typecheck"
+    ],
+    "exitCode": 0,
+    "seconds": 10.089
+  },
+  {
+    "name": "check-5",
+    "cwd": "packages/frontend",
+    "argv": [
+      "bun",
+      "run",
+      "typecheck"
+    ],
+    "exitCode": 0,
+    "seconds": 2.119
+  },
+  {
+    "name": "check-6",
+    "cwd": "packages/sdk",
+    "argv": [
+      "bun",
+      "run",
+      "typecheck"
+    ],
+    "exitCode": 0,
+    "seconds": 2.37
+  },
+  {
+    "name": "check-7",
+    "cwd": "packages/studio",
+    "argv": [
+      "bun",
+      "run",
+      "typecheck"
+    ],
+    "exitCode": 0,
+    "seconds": 1.618
+  }
+]
