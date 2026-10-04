@@ -1,0 +1,8 @@
+{
+  "beforeVersion": "6.2.0",
+  "afterVersion": "6.2.1",
+  "beforeArchiveSha256": "aa2a3c42a57f352b1a8e2ba043e0d3a4972099fe5c31462a4e56653882aacbad",
+  "translationMembers": 135,
+  "samePaths": true,
+  "differentPaths": []
+}

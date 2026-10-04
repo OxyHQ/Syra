@@ -1,0 +1,3 @@
+$ bun ./scripts/test-check-frontend-bundle-imports.mjs && bun ./scripts/test-check-web-export-budget.mjs
+Bundle-import gate mutations detected.
+Web-export budget mutations detected: initial, locale provenance, stale inventory and assets.

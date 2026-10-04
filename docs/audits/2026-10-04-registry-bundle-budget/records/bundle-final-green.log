@@ -1,0 +1,25 @@
+$ bun ./scripts/check-web-export-budget.mjs
+{
+  "metrics": {
+    "totalBytes": 12482121,
+    "initialJavaScriptBytes": 8339593,
+    "initialJavaScriptGzipBytes": 2071792,
+    "translationBytes": 1028965,
+    "translationGzipBytes": 352661,
+    "otherJavaScriptBytes": 633823,
+    "otherJavaScriptGzipBytes": 203163,
+    "nonJavaScriptBytes": 2479740,
+    "fontBytes": 2082592
+  },
+  "budget": {
+    "initialJavaScriptBytes": 8992580,
+    "initialJavaScriptGzipBytes": 2188949,
+    "translationBytes": 1028965,
+    "translationGzipBytes": 352661,
+    "otherJavaScriptBytes": 683469,
+    "otherJavaScriptGzipBytes": 205136,
+    "nonJavaScriptBytes": 2479740,
+    "fontBytes": 2105000
+  }
+}
+Web export is within its initial, deferred translation, other code and asset budgets.
