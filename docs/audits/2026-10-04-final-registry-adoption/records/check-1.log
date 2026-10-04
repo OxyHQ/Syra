@@ -1,0 +1,2 @@
+$ bun run --filter '@syra/backend' build
+@syra/backend build: Exited with code 0

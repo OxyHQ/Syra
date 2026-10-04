@@ -1,0 +1,178 @@
+{
+  "source": "2a44e7bdc1761d3586c71f3de3b66ecbb3f5ecf7",
+  "sources": [
+    {
+      "path": "bun.lock",
+      "sha256": "f2639633b497c95f6fe1ed297307096ac8324a8406b85e268a147042dd5e483c"
+    },
+    {
+      "path": "package.json",
+      "sha256": "bf19b3cca5d5bd502d83beff5ca995491adb2a0bcb5eb2533e133f715cc7d1f4"
+    },
+    {
+      "path": "packages/backend/package.json",
+      "sha256": "5a4636d3349e28e904369947ba9eb06d5a01dde179b376b0b3b90f44f0157f6c"
+    },
+    {
+      "path": "packages/frontend/package.json",
+      "sha256": "7612868354a226f65369f0807435916ce1faeb2b4dcb20e683bcec1ab9f8db69"
+    },
+    {
+      "path": "packages/sdk/package.json",
+      "sha256": "c7ce1556050a715a2c67fd3bd4f5fe703b04d47426cd3fe05fb41ac5c16a70da"
+    },
+    {
+      "path": "packages/studio/package.json",
+      "sha256": "b0484ea510e66ef3a38fc6dc9c1c49317b30eb74da4a63ee2bb2cb3f289bde25"
+    }
+  ],
+  "records": [
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/Syra-frozen.log",
+      "sha256": "ea98a14addd7afe8ef065379357b3959fb185c9b1aef8be8487299f26f3f39de",
+      "bytes": 191
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/Syra-installed.json",
+      "sha256": "cce232dcd4075a8bdf32a86d83930f7b584d7713deca66acb8c5e8e23a02536c",
+      "bytes": 1923
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/Syra-resolve.log",
+      "sha256": "461488c5794cc90d710a851a82db9d186555976ba483cd1e6fe3e8fed7f21bf8",
+      "bytes": 266
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/bloom-final-importers.json",
+      "sha256": "be868b94f665f00807c92a7e27ca0a864ca195966d8dfe31a8fc88b4f0a5f54d",
+      "bytes": 838
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/check-0.log",
+      "sha256": "681a422605f50e2e1475beba676d6f8d9ccc376d17099e6b4f4192de45291443",
+      "bytes": 10974
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/check-1.log",
+      "sha256": "50d5250341c93a85e7120574c76f4e15bddfccb36a1b9a2d68d9d37ccad9d178",
+      "bytes": 81
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/check-2.log",
+      "sha256": "fb3fa156f25e1715b04344da6549e6c949ef8cfec18197642d1df8d4020a1041",
+      "bytes": 19147
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/check-3.log",
+      "sha256": "369187f074fefd4997f46feadcb49c4f644c496b088bfe09a00221df4e1051ac",
+      "bytes": 11486
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/check-4.log",
+      "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92",
+      "bytes": 15
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/check-5.log",
+      "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92",
+      "bytes": 15
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/check-6.log",
+      "sha256": "54f37075aa6d0aec4528174d459de202d2a61eacfa5d6bbde3c3358deccefb24",
+      "bytes": 38
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/check-7.log",
+      "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92",
+      "bytes": 15
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/checks-export.json",
+      "sha256": "7ee34259276123ea3f2dbeacecab51f02330e848ae7ebf90efc19fb73cb9fe75",
+      "bytes": 501
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/checks-initial.json",
+      "sha256": "1d3c0e145b1ca64a514ad01f03c5b642a0a83f717e5f7fe3455ae8dc1fd1a0a3",
+      "bytes": 1201
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/contracts-registry.json",
+      "sha256": "fb1ded2797bdbd0ca31460f3cba087f078a86dc201365c923da9fcc23b07ed7b",
+      "bytes": 380
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/core-registry.json",
+      "sha256": "99b7f8a1cc87cf46ff54b3113a1911a938f39b4f086537e0a4138ee38dd035b7",
+      "bytes": 375
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/failed.json",
+      "sha256": "e45a08861b705a4bd04a1ac5bec7dfdc902621991070d99debf9062f9e6cfe3d",
+      "bytes": 89
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/intent.json",
+      "sha256": "81a4f4fabc3bcc8fbabf25d3348923388aac17ad0474ae6bd5d727f2016bfcd4",
+      "bytes": 148
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/local-export-checks.json",
+      "sha256": "fa2709d1e2f64e9af3da5bb498f73812b06f09d07a662aee5ee8a094cb9b42dc",
+      "bytes": 319
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/local-initial-checks.json",
+      "sha256": "64e05d959eb65c919129dfb39aa4341d94a38590945734c2aca10cda53bb3b73",
+      "bytes": 1104
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/materialization-frozen.log",
+      "sha256": "d37ce041b4275a21fb8aea143f56e7933232983b0684a77be83cacad47854824",
+      "bytes": 156
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/materialization-repair-intent.json",
+      "sha256": "0b4377c0d197b0164dfe7b5fb9f131389b4a62d3e54cc28ae5dda180bba9c2fa",
+      "bytes": 528
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/mcp-registry.json",
+      "sha256": "cc279f4f5b1ca68041f6f0d3583e4d9dc218bd7c0b77846207aa3b981086d7ac",
+      "bytes": 373
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/preflight.json",
+      "sha256": "fbc4a46decee43989bf2cc8d0929e11bfbf1e11b1058be325ff46d2266cc55d5",
+      "bytes": 249
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/protocol-registry.json",
+      "sha256": "cc0b427dca92d55ea5e1debe7e76580618a26f997b2c888b8484537b64b70bbd",
+      "bytes": 379
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/registry.json",
+      "sha256": "a39da224fafeec388f0ac27e08ea13cf666427a0177b67f7b077c65cadb59df0",
+      "bytes": 415373
+    },
+    {
+      "path": "docs/audits/2026-10-04-final-registry-adoption/records/services-registry.json",
+      "sha256": "444599f0eb56d104d64c288ed3a6544163e54430c0f275c2feec219d5f624611",
+      "bytes": 381
+    }
+  ],
+  "validation": {
+    "receiverPassed": 1,
+    "sdkImporterMembers": 8997,
+    "bloomImporterMembers": 62820,
+    "typesBuildExport": "passed"
+  },
+  "limits": [
+    "Published registry archives and all installed SDK importer members were compared byte for byte. Stale same-version candidate materializations were retained and repaired with a frozen install; their setup failures remain in the records.",
+    "Local web export proves compilation, not browser/native acceptance or deployed public-client configuration. Required PR/main CI and root image/promotion remain separate.",
+    "No production database, provider writes, grants, credentials or auth fixtures were changed. Receiver uses a loopback-only synthetic issuer in an isolated child.",
+    "Filtered receiver tests are not full-suite acceptance. Syra notifications retain their pre-existing scope denial; no permission expansion. TNP DNS/relay checks do not claim an API image was deployed."
+  ]
+}

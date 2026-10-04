@@ -1,0 +1,6 @@
+bun install v1.3.14 (0d9b296a)
+
+$ bun run --filter '@syra/shared-types' build
+@syra/shared-types build: Exited with code 0
+
+Checked 1920 installs across 1888 packages (no changes) [181.00ms]
