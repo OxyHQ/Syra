@@ -1,0 +1,11 @@
+$ jest --watchAll=false --runInBand __tests__/history-auth.test.tsx
+PASS __tests__/history-auth.test.tsx
+  history retries respect the private API gate
+    ✓ retries session resolution without calling the private endpoint while unresolved (2851 ms)
+    ✓ retries the history request once the session is authorized (2 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       2 passed, 2 total
+Snapshots:   0 total
+Time:        4.587 s
+Ran all test suites matching /__tests__\/history-auth.test.tsx/i.

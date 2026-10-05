@@ -1,0 +1,45 @@
+{
+  "source": "724f204a08c2a295cf6eff5d44b90753b65fdeff",
+  "sources": [
+    {
+      "path": "performance-budgets.json",
+      "sha256": "67bebece43a1a3b74109e807028a6a5e68bc3415c27fb15a8fc23f15939d6d6c"
+    },
+    {
+      "path": "docs/performance/web-bundle-budget.md",
+      "sha256": "f94f6492da6ee72de22bd8be21274ddb5af816b619bc6ddabdbb082f3d063e03"
+    }
+  ],
+  "records": [
+    {
+      "path": "docs/audits/2026-10-04-registry-bundle-budget/records/ci-failed.log",
+      "sha256": "2e1b85ff832d4b8e77a14bcf6db61356405bfdcbbac83d45ca49b4348aa51797"
+    },
+    {
+      "path": "docs/audits/2026-10-04-registry-bundle-budget/records/bundle-local-final.log",
+      "sha256": "44f05855cf7086e522f99026d788257406a05c64ed7bb09364f8a6f0babe79b8"
+    },
+    {
+      "path": "docs/audits/2026-10-04-registry-bundle-budget/records/bundle-final-green.log",
+      "sha256": "40e811da88dd63feb3a69d81d99399508aaacc1c4db1949278135125f2f3865d"
+    },
+    {
+      "path": "docs/audits/2026-10-04-registry-bundle-budget/records/bundle-mutations-green.log",
+      "sha256": "4d34c4da25af13590e9b1ec42a362e78e876199e6f3a05b28f33db0004d02f25"
+    },
+    {
+      "path": "docs/audits/2026-10-04-registry-bundle-budget/records/bloom620-registry-metadata.json",
+      "sha256": "ad54a3741d9c430ab3797b1d3bc1bf3a4d79cce602e6e8ff8482daf6e540d911"
+    },
+    {
+      "path": "docs/audits/2026-10-04-registry-bundle-budget/records/bloom-translation-byte-comparison.json",
+      "sha256": "fc5e4300337f22b3af23a220ae15d47277bc1ad7c244d2fdf3d420ada5a5951e"
+    }
+  ],
+  "deltaBytes": 45,
+  "unchangedRawTranslationBytes": 1028965,
+  "unchangedTranslationPackageMembers": 135,
+  "limits": [
+    "Compression delta is measured; precise per-byte compression contribution is not assigned. No product translation files or other budget ceilings changed. CI rerun remains required."
+  ]
+}

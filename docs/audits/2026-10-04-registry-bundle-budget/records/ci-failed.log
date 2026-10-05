@@ -1,0 +1,33 @@
+quality	Enforce web bundle budget	﻿2026-10-04T02:00:45.8620021Z ##[group]Run bun run check:web-bundle-budget
+quality	Enforce web bundle budget	2026-10-04T02:00:45.8620558Z [36;1mbun run check:web-bundle-budget[0m
+quality	Enforce web bundle budget	2026-10-04T02:00:45.8699806Z shell: /usr/bin/bash -e {0}
+quality	Enforce web bundle budget	2026-10-04T02:00:45.8700254Z env:
+quality	Enforce web bundle budget	2026-10-04T02:00:45.8700874Z   TEST_DATABASE_URL: ***127.0.0.1:5432/syra_ci
+quality	Enforce web bundle budget	2026-10-04T02:00:45.8701372Z ##[endgroup]
+quality	Enforce web bundle budget	2026-10-04T02:00:45.8820651Z $ bun ./scripts/check-web-export-budget.mjs
+quality	Enforce web bundle budget	2026-10-04T02:00:46.0655195Z translationGzipBytes is 352661 bytes; budget 352616.
+quality	Enforce web bundle budget	2026-10-04T02:00:46.0656182Z {
+quality	Enforce web bundle budget	2026-10-04T02:00:46.0656491Z   "metrics": {
+quality	Enforce web bundle budget	2026-10-04T02:00:46.0656803Z     "totalBytes": 12482121,
+quality	Enforce web bundle budget	2026-10-04T02:00:46.0657195Z     "initialJavaScriptBytes": 8339593,
+quality	Enforce web bundle budget	2026-10-04T02:00:46.0657645Z     "initialJavaScriptGzipBytes": 2071792,
+quality	Enforce web bundle budget	2026-10-04T02:00:46.0658089Z     "translationBytes": 1028965,
+quality	Enforce web bundle budget	2026-10-04T02:00:46.0658481Z     "translationGzipBytes": 352661,
+quality	Enforce web bundle budget	2026-10-04T02:00:46.0658888Z     "otherJavaScriptBytes": 633823,
+quality	Enforce web bundle budget	2026-10-04T02:00:46.0659329Z     "otherJavaScriptGzipBytes": 203163,
+quality	Enforce web bundle budget	2026-10-04T02:00:46.0659867Z     "nonJavaScriptBytes": 2479740,
+quality	Enforce web bundle budget	2026-10-04T02:00:46.0660223Z     "fontBytes": 2082592
+quality	Enforce web bundle budget	2026-10-04T02:00:46.0660503Z   },
+quality	Enforce web bundle budget	2026-10-04T02:00:46.0660738Z   "budget": {
+quality	Enforce web bundle budget	2026-10-04T02:00:46.0661018Z     "initialJavaScriptBytes": 8992580,
+quality	Enforce web bundle budget	2026-10-04T02:00:46.0661403Z     "initialJavaScriptGzipBytes": 2188949,
+quality	Enforce web bundle budget	2026-10-04T02:00:46.0662052Z     "translationBytes": 1028965,
+quality	Enforce web bundle budget	2026-10-04T02:00:46.0662397Z     "translationGzipBytes": 352616,
+quality	Enforce web bundle budget	2026-10-04T02:00:46.0662770Z     "otherJavaScriptBytes": 683469,
+quality	Enforce web bundle budget	2026-10-04T02:00:46.0663126Z     "otherJavaScriptGzipBytes": 205136,
+quality	Enforce web bundle budget	2026-10-04T02:00:46.0663500Z     "nonJavaScriptBytes": 2479740,
+quality	Enforce web bundle budget	2026-10-04T02:00:46.0663836Z     "fontBytes": 2105000
+quality	Enforce web bundle budget	2026-10-04T02:00:46.0664115Z   }
+quality	Enforce web bundle budget	2026-10-04T02:00:46.0664337Z }
+quality	Enforce web bundle budget	2026-10-04T02:00:46.0701525Z error: script "check:web-bundle-budget" exited with code 1
+quality	Enforce web bundle budget	2026-10-04T02:00:46.0722072Z ##[error]Process completed with exit code 1.

@@ -44,3 +44,13 @@ translation capacity, false locale classification, stale provenance and font gro
 Both shared-types builds are project references: `bun run dev` watches and refreshes
 the CommonJS and ESM outputs together. This was verified by changing a temporary
 schema module and observing both outputs before removing the probe.
+
+## Published SDK adoption (2026-10-04)
+
+The published Oxy graph with Bloom 6.2.1 measures 352,661 gzip bytes for the same
+1,028,965 raw translation bytes. All 135 translation files in the public Bloom
+6.2.0 and 6.2.1 archives are byte-identical. Metro bundle/module identifiers change
+with the dependency graph; the measured gzip total increases by 45 bytes while
+the source payload and raw ceiling remain unchanged. The gzip ceiling is adjusted
+to that exact measured total; all seven other ceilings are preserved. Local and
+CI exports agree. This does not permit added languages or larger raw payloads.

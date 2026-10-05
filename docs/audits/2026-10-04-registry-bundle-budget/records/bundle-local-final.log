@@ -1,0 +1,26 @@
+$ bun ./scripts/check-web-export-budget.mjs
+{
+  "metrics": {
+    "totalBytes": 12482121,
+    "initialJavaScriptBytes": 8339593,
+    "initialJavaScriptGzipBytes": 2071792,
+    "translationBytes": 1028965,
+    "translationGzipBytes": 352661,
+    "otherJavaScriptBytes": 633823,
+    "otherJavaScriptGzipBytes": 203163,
+    "nonJavaScriptBytes": 2479740,
+    "fontBytes": 2082592
+  },
+  "budget": {
+    "initialJavaScriptBytes": 8992580,
+    "initialJavaScriptGzipBytes": 2188949,
+    "translationBytes": 1028965,
+    "translationGzipBytes": 352616,
+    "otherJavaScriptBytes": 683469,
+    "otherJavaScriptGzipBytes": 205136,
+    "nonJavaScriptBytes": 2479740,
+    "fontBytes": 2105000
+  }
+}
+translationGzipBytes is 352661 bytes; budget 352616.
+error: script "check:web-bundle-budget" exited with code 1
