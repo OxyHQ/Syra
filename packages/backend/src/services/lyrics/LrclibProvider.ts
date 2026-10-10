@@ -31,8 +31,8 @@ interface LrclibBody {
 function isLrclibBody(value: unknown): value is LrclibBody {
   if (typeof value !== 'object' || value === null) return false;
   const v = value as Record<string, unknown>;
-  const synced = v['syncedLyrics'];
-  const plain = v['plainLyrics'];
+  const synced = v.syncedLyrics;
+  const plain = v.plainLyrics;
   return (
     ('syncedLyrics' in v || 'plainLyrics' in v) &&
     (synced === undefined || synced === null || typeof synced === 'string') &&

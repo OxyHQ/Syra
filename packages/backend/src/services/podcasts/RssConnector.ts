@@ -276,14 +276,14 @@ function normaliseShow(channel: Record<string, unknown>): ParsedShow {
   )?.toLowerCase();
 
   return {
-    title: text(channel['title']) ?? 'Untitled podcast',
-    description: text(channel['description']) ?? text(channel['itunes:summary']),
-    author: text(channel['itunes:author']) ?? text(channel['managingEditor']),
-    image: attr(channel['itunes:image'], 'href') ?? text(asRecord(channel['image'])?.['url']),
-    language: text(channel['language']),
+    title: text(channel.title) ?? 'Untitled podcast',
+    description: text(channel.description) ?? text(channel['itunes:summary']),
+    author: text(channel['itunes:author']) ?? text(channel.managingEditor),
+    image: attr(channel['itunes:image'], 'href') ?? text(asRecord(channel.image)?.url),
+    language: text(channel.language),
     categories: collectCategories(channel['itunes:category']),
     explicit: parseBool(text(channel['itunes:explicit'])),
-    link: text(channel['link']),
+    link: text(channel.link),
     type: typeValue === 'serial' ? 'serial' : 'episodic',
     podcastGuid: text(channel['podcast:guid']),
     funding,
@@ -292,15 +292,15 @@ function normaliseShow(channel: Record<string, unknown>): ParsedShow {
 }
 
 function normaliseEpisode(item: Record<string, unknown>): ParsedEpisode | null {
-  const enclosure = item['enclosure'];
+  const enclosure = item.enclosure;
   const enclosureUrl = attr(enclosure, 'url');
 
   // A stable identity is mandatory for the {podcastId, guid} unique index. Most
   // feeds carry <guid>; fall back to the enclosure URL when they don't.
-  const guid = text(item['guid']) ?? enclosureUrl;
+  const guid = text(item.guid) ?? enclosureUrl;
   if (!guid) return null;
 
-  const title = text(item['title']);
+  const title = text(item.title);
   if (!title) return null;
 
   const transcripts: ParsedTranscript[] = [];
@@ -319,13 +319,13 @@ function normaliseEpisode(item: Record<string, unknown>): ParsedEpisode | null {
   return {
     guid,
     title,
-    description: text(item['content:encoded']) ?? text(item['description']),
+    description: text(item['content:encoded']) ?? text(item.description),
     summary: text(item['itunes:summary']),
     enclosureUrl,
     enclosureType: attr(enclosure, 'type'),
     enclosureLength,
     duration: parseDuration(text(item['itunes:duration'])),
-    pubDate: parseDate(text(item['pubDate'])),
+    pubDate: parseDate(text(item.pubDate)),
     season: parseInteger(text(item['itunes:season'])),
     episodeNumber: parseInteger(text(item['itunes:episode'])),
     episodeType: parseEpisodeType(text(item['itunes:episodeType'])),
@@ -378,7 +378,7 @@ export interface FetchOptions {
  */
 export function parseFeedXml(xml: string): { show: ParsedShow; episodes: ParsedEpisode[] } {
   const parsed = parser.parse(xml) as unknown;
-  const channel = asRecord(asRecord(asRecord(parsed)?.['rss'])?.['channel']);
+  const channel = asRecord(asRecord(asRecord(parsed)?.rss)?.channel);
   if (!channel) {
     throw new Error('RssConnector: no <channel> in feed');
   }
@@ -386,7 +386,7 @@ export function parseFeedXml(xml: string): { show: ParsedShow; episodes: ParsedE
   const show = normaliseShow(channel);
 
   const episodes: ParsedEpisode[] = [];
-  for (const rawItem of asArray(channel['item'])) {
+  for (const rawItem of asArray(channel.item)) {
     if (episodes.length >= MAX_EPISODES_PER_FEED) {
       logger.warn('[podcasts] feed exceeded episode cap; truncating', {
         cap: MAX_EPISODES_PER_FEED,
@@ -434,7 +434,7 @@ export async function fetchAndParse(
 
   const body = await readCapped(result.response, MAX_FEED_BYTES);
 
-  const etagHeader = result.headers['etag'];
+  const etagHeader = result.headers.etag;
   const lastModifiedHeader = result.headers['last-modified'];
 
   const { show, episodes } = parseFeedXml(body.toString('utf-8'));

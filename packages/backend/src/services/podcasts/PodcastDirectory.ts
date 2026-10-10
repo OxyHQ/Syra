@@ -97,16 +97,16 @@ async function searchPodcastIndex(
     }
 
     const body = asRecord(await response.json());
-    const feeds = Array.isArray(body?.['feeds']) ? body['feeds'] : [];
+    const feeds = Array.isArray(body?.feeds) ? body.feeds : [];
     const candidates: PodcastDirectoryCandidate[] = [];
 
     for (const raw of feeds) {
       const feed = asRecord(raw);
-      const feedUrl = cleanString(feed?.['url']);
-      const title = cleanString(feed?.['title']);
+      const feedUrl = cleanString(feed?.url);
+      const title = cleanString(feed?.title);
       if (!feedUrl || !title) continue;
 
-      const categoriesRecord = asRecord(feed?.['categories']);
+      const categoriesRecord = asRecord(feed?.categories);
       const categories = categoriesRecord
         ? Object.values(categoriesRecord)
             .map(cleanString)
@@ -116,12 +116,12 @@ async function searchPodcastIndex(
       candidates.push({
         feedUrl,
         title,
-        author: cleanString(feed?.['author']),
-        image: cleanString(feed?.['image']) ?? cleanString(feed?.['artwork']),
+        author: cleanString(feed?.author),
+        image: cleanString(feed?.image) ?? cleanString(feed?.artwork),
         categories,
-        podcastGuid: cleanString(feed?.['podcastGuid']),
-        podcastIndexId: cleanNumber(feed?.['id']),
-        appleCollectionId: cleanNumber(feed?.['itunesId']),
+        podcastGuid: cleanString(feed?.podcastGuid),
+        podcastIndexId: cleanNumber(feed?.id),
+        appleCollectionId: cleanNumber(feed?.itunesId),
       });
     }
 
@@ -144,26 +144,26 @@ async function searchApple(query: string, limit: number): Promise<PodcastDirecto
     }
 
     const body = asRecord(await response.json());
-    const results = Array.isArray(body?.['results']) ? body['results'] : [];
+    const results = Array.isArray(body?.results) ? body.results : [];
     const candidates: PodcastDirectoryCandidate[] = [];
 
     for (const raw of results) {
       const result = asRecord(raw);
-      const feedUrl = cleanString(result?.['feedUrl']);
-      const title = cleanString(result?.['collectionName']) ?? cleanString(result?.['trackName']);
+      const feedUrl = cleanString(result?.feedUrl);
+      const title = cleanString(result?.collectionName) ?? cleanString(result?.trackName);
       if (!feedUrl || !title) continue;
 
-      const genres = Array.isArray(result?.['genres'])
-        ? result['genres'].map(cleanString).filter((g): g is string => g !== undefined)
+      const genres = Array.isArray(result?.genres)
+        ? result.genres.map(cleanString).filter((g): g is string => g !== undefined)
         : [];
 
       candidates.push({
         feedUrl,
         title,
-        author: cleanString(result?.['artistName']),
-        image: cleanString(result?.['artworkUrl600']) ?? cleanString(result?.['artworkUrl100']),
+        author: cleanString(result?.artistName),
+        image: cleanString(result?.artworkUrl600) ?? cleanString(result?.artworkUrl100),
         categories: genres,
-        appleCollectionId: cleanNumber(result?.['collectionId']),
+        appleCollectionId: cleanNumber(result?.collectionId),
       });
     }
 

@@ -66,8 +66,8 @@ export function getHttpStatus(error: unknown, fallback = 500): number {
   if (error instanceof ApiError) return error.statusCode;
   if (error !== null && typeof error === 'object') {
     const e = error as Record<string, unknown>;
-    if (typeof e['statusCode'] === 'number') return e['statusCode'];
-    if (typeof e['status'] === 'number') return e['status'];
+    if (typeof e.statusCode === 'number') return e.statusCode;
+    if (typeof e.status === 'number') return e.status;
   }
   return fallback;
 }

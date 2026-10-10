@@ -24,8 +24,8 @@ function withMongoIdFallback<T extends z.ZodTypeAny>(schema: T) {
   return z.preprocess((value) => {
     if (value === null || typeof value !== 'object') return value;
     const doc = value as Record<string, unknown>;
-    if (typeof doc['id'] === 'string' || typeof doc['_id'] !== 'string') return value;
-    return { ...doc, id: doc['_id'] };
+    if (typeof doc.id === 'string' || typeof doc._id !== 'string') return value;
+    return { ...doc, id: doc._id };
   }, schema);
 }
 
