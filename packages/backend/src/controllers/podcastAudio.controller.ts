@@ -40,7 +40,10 @@ import { getS3PodcastEpisodeAudioKey } from '../config/s3.config';
 import { streamFromS3, getObjectMetadata } from '../services/s3Service';
 import { requestMayReachShowMedia, resolveEpisodeAccess } from './stream.controller';
 import { mintStreamToken } from '../services/stream/streamToken';
-import { buildMasterPlaylistFor, buildVariantPlaylistFor } from '../services/stream/manifestService';
+import {
+  buildMasterPlaylistFor,
+  buildVariantPlaylistFor,
+} from '../services/stream/manifestService';
 import { maybeCacheEpisode } from '../services/podcasts/podcastCache';
 import { logger } from '../utils/logger';
 import { describeErrorSafely } from '../utils/error';
@@ -180,7 +183,10 @@ async function proxyOrigin(req: AuthRequest, res: Response, episode: EpisodeRow)
       res.status(403).json({ error: 'Blocked enclosure host' });
       return;
     }
-    logger.warn('[podcasts] audio proxy upstream failed', { episodeId: episode.id, err: describeErrorSafely(err) });
+    logger.warn('[podcasts] audio proxy upstream failed', {
+      episodeId: episode.id,
+      err: describeErrorSafely(err),
+    });
     res.status(502).json({ error: 'Upstream audio unavailable' });
     return;
   }
@@ -247,7 +253,11 @@ export async function getEpisodeAudio(req: AuthRequest, res: Response): Promise<
       res.status(404).json({ error: 'No audio for episode' });
       return;
     }
-    const key = getS3PodcastEpisodeAudioKey(episodeId, episode.podcastId, episode.audioSourceFormat);
+    const key = getS3PodcastEpisodeAudioKey(
+      episodeId,
+      episode.podcastId,
+      episode.audioSourceFormat,
+    );
     await serveFromS3(req, res, key);
     return;
   }
@@ -424,14 +434,23 @@ export async function getEpisodeMasterPlaylist(req: AuthRequest, res: Response):
   }
 
   const rawToken = req.query?.t;
-  const token = typeof rawToken === 'string' && rawToken
-    ? rawToken
-    : mintStreamToken({ trackId: episodeId, userId: req.user?.id ?? '', maxBitrateKbps: access.maxBitrateKbps }, STREAM_SESSION_TTL_SEC);
+  const token =
+    typeof rawToken === 'string' && rawToken
+      ? rawToken
+      : mintStreamToken(
+          { trackId: episodeId, userId: req.user?.id ?? '', maxBitrateKbps: access.maxBitrateKbps },
+          STREAM_SESSION_TTL_SEC,
+        );
 
   const baseUrl = env.STREAM_KEY_BASE_URL;
   const playlist = await buildMasterPlaylistFor(
     { id: episodeId, hls },
-    { token, baseUrl, maxBitrateKbps: access.maxBitrateKbps, basePath: `/api/podcasts/episodes/${episodeId}` },
+    {
+      token,
+      baseUrl,
+      maxBitrateKbps: access.maxBitrateKbps,
+      basePath: `/api/podcasts/episodes/${episodeId}`,
+    },
   );
 
   res.set('Content-Type', CONTENT_TYPE_HLS_PLAYLIST);
@@ -469,7 +488,9 @@ export async function getEpisodeVariantPlaylist(req: AuthRequest, res: Response)
     return;
   }
 
-  const variantParam = Array.isArray(req.params.variant) ? req.params.variant[0] : req.params.variant;
+  const variantParam = Array.isArray(req.params.variant)
+    ? req.params.variant[0]
+    : req.params.variant;
   const bitrateKbps = parseInt((variantParam ?? '').replace(/\.m3u8$/i, ''), 10);
   if (!Number.isInteger(bitrateKbps) || bitrateKbps <= 0) {
     res.status(400).json({ error: 'Invalid variant' });
@@ -485,9 +506,13 @@ export async function getEpisodeVariantPlaylist(req: AuthRequest, res: Response)
   }
 
   const rawToken = req.query?.t;
-  const token = typeof rawToken === 'string' && rawToken
-    ? rawToken
-    : mintStreamToken({ trackId: episodeId, userId: req.user?.id ?? '', maxBitrateKbps: access.maxBitrateKbps }, STREAM_SESSION_TTL_SEC);
+  const token =
+    typeof rawToken === 'string' && rawToken
+      ? rawToken
+      : mintStreamToken(
+          { trackId: episodeId, userId: req.user?.id ?? '', maxBitrateKbps: access.maxBitrateKbps },
+          STREAM_SESSION_TTL_SEC,
+        );
 
   const baseUrl = env.STREAM_KEY_BASE_URL;
   const playlist = await buildVariantPlaylistFor(

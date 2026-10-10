@@ -79,7 +79,7 @@ function absoluteImage(image: string | undefined, baseUrl: string): string | und
 export function generatePodcastRss(
   podcast: Podcast,
   episodes: readonly Episode[],
-  baseUrl: string
+  baseUrl: string,
 ): string {
   const selfUrl = `${baseUrl}/api/podcasts/${podcast.id}/rss`;
 
@@ -111,7 +111,7 @@ export function generatePodcastRss(
   }
   for (const fund of podcast.funding ?? []) {
     channelLines.push(
-      `<podcast:funding url="${escapeXml(fund.url)}">${escapeXml(fund.message ?? '')}</podcast:funding>`
+      `<podcast:funding url="${escapeXml(fund.url)}">${escapeXml(fund.message ?? '')}</podcast:funding>`,
     );
   }
 
@@ -129,7 +129,8 @@ export function generatePodcastRss(
     ];
     if (episode.description) lines.push(`<description>${cdata(episode.description)}</description>`);
     if (episode.summary) lines.push(`<itunes:summary>${cdata(episode.summary)}</itunes:summary>`);
-    if (episode.season !== undefined) lines.push(`<itunes:season>${episode.season}</itunes:season>`);
+    if (episode.season !== undefined)
+      lines.push(`<itunes:season>${episode.season}</itunes:season>`);
     if (episode.episodeNumber !== undefined) {
       lines.push(`<itunes:episode>${episode.episodeNumber}</itunes:episode>`);
     }

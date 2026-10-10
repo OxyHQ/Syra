@@ -58,9 +58,7 @@ function sourceFiles(dir: string): string[] {
 
 /** Source with block and line comments removed. */
 function code(source: string): string {
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, ' ')
-    .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
+  return source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
 }
 
 describe('the backend compiles no regular expression from application source', () => {

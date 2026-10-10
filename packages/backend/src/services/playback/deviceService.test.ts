@@ -3,12 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
 import { getDb } from '../../db/postgres';
 import { devices } from '../../db/schema/library';
-import {
-  registerDevice,
-  listDevices,
-  heartbeat,
-  markInactive,
-} from './deviceService';
+import { registerDevice, listDevices, heartbeat, markInactive } from './deviceService';
 
 beforeAll(connectDb);
 afterEach(clearDb);
@@ -115,7 +110,7 @@ describe('listDevices', () => {
 
     const [device] = await listDevices(USER_A);
     expect(Object.keys(device).sort()).toEqual(
-      ['capabilities', 'deviceId', 'id', 'isActive', 'lastSeen', 'name', 'type'].sort()
+      ['capabilities', 'deviceId', 'id', 'isActive', 'lastSeen', 'name', 'type'].sort(),
     );
     expect(typeof device.lastSeen).toBe('string');
     expect(new Date(device.lastSeen).getTime()).not.toBeNaN();

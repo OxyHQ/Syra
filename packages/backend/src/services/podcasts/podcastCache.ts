@@ -94,9 +94,10 @@ export async function cacheEpisode(episodeId: string): Promise<string | null> {
     throw new Error(`podcastCache: origin returned ${result.status} for episode ${episodeId}`);
   }
 
-  const contentType = typeof result.headers['content-type'] === 'string'
-    ? result.headers['content-type']
-    : episode.enclosureType ?? 'audio/mpeg';
+  const contentType =
+    typeof result.headers['content-type'] === 'string'
+      ? result.headers['content-type']
+      : (episode.enclosureType ?? 'audio/mpeg');
 
   const buffer = await readCapped(result.response, MAX_CACHE_BYTES);
   await uploadToS3(s3Key, buffer, { contentType });
@@ -128,6 +129,9 @@ export function maybeCacheEpisode(episode: {
   if (!popular && !played) return;
 
   cacheEpisode(episode.id).catch((err) =>
-    logger.debug('[podcasts] background cache failed', { episodeId: episode.id, err: describeErrorSafely(err) }),
+    logger.debug('[podcasts] background cache failed', {
+      episodeId: episode.id,
+      err: describeErrorSafely(err),
+    }),
   );
 }

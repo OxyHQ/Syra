@@ -55,7 +55,11 @@ export const ExploreSection: React.FC<ExploreSectionProps> = ({
           error={{
             title: t('explore.errorTitle'),
             message: t('explore.errorMessage'),
-            onRetry: onRetry ? async () => { await onRetry(); } : undefined,
+            onRetry: onRetry
+              ? async () => {
+                  await onRetry();
+                }
+              : undefined,
           }}
           containerStyle={styles.stateContainer}
         />

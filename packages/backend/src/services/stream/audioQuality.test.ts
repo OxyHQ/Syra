@@ -61,10 +61,18 @@ describe('computeMaxBitrateKbps', () => {
   });
 
   it('dataSaver forces DATASAVER_MAX_KBPS (96) regardless of tier + quality', () => {
-    expect(computeMaxBitrateKbps({ audioQuality: 'very_high', dataSaver: true }, PREMIUM)).toBe(DATASAVER_MAX_KBPS);
-    expect(computeMaxBitrateKbps({ audioQuality: 'high', dataSaver: true }, PREMIUM)).toBe(DATASAVER_MAX_KBPS);
-    expect(computeMaxBitrateKbps({ audioQuality: 'normal', dataSaver: true }, FREE)).toBe(DATASAVER_MAX_KBPS);
-    expect(computeMaxBitrateKbps({ audioQuality: 'normal', dataSaver: true }, PREMIUM)).toBe(DATASAVER_MAX_KBPS);
+    expect(computeMaxBitrateKbps({ audioQuality: 'very_high', dataSaver: true }, PREMIUM)).toBe(
+      DATASAVER_MAX_KBPS,
+    );
+    expect(computeMaxBitrateKbps({ audioQuality: 'high', dataSaver: true }, PREMIUM)).toBe(
+      DATASAVER_MAX_KBPS,
+    );
+    expect(computeMaxBitrateKbps({ audioQuality: 'normal', dataSaver: true }, FREE)).toBe(
+      DATASAVER_MAX_KBPS,
+    );
+    expect(computeMaxBitrateKbps({ audioQuality: 'normal', dataSaver: true }, PREMIUM)).toBe(
+      DATASAVER_MAX_KBPS,
+    );
   });
 
   it('no audioQuality defaults to normal (160 free, 160 premium)', () => {

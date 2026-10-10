@@ -99,9 +99,11 @@ export type ReorderPlaylistTracksRequest = z.infer<typeof reorderPlaylistTracksR
  * path param rather than a body field. Used by the backend `validate()`
  * middleware so controllers can trust `req.body`.
  */
-export const addTracksToPlaylistBodySchema = addTracksToPlaylistRequestSchema.omit({ playlistId: true }).extend({
-  trackIds: z.array(z.string()).min(1),
-});
+export const addTracksToPlaylistBodySchema = addTracksToPlaylistRequestSchema
+  .omit({ playlistId: true })
+  .extend({
+    trackIds: z.array(z.string()).min(1),
+  });
 export type AddTracksToPlaylistBody = z.infer<typeof addTracksToPlaylistBodySchema>;
 
 export const removeTracksFromPlaylistBodySchema = z.object({

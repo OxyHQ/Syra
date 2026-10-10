@@ -22,12 +22,16 @@ describe('imageLicenceSchema', () => {
 
   it('rejects a missing or empty attribution', () => {
     // CC BY-SA is discharged by NAMING the author; an empty string names nobody.
-    expect(imageLicenceSchema.safeParse({ ...validLicence, attribution: undefined }).success).toBe(false);
+    expect(imageLicenceSchema.safeParse({ ...validLicence, attribution: undefined }).success).toBe(
+      false,
+    );
     expect(imageLicenceSchema.safeParse({ ...validLicence, attribution: '' }).success).toBe(false);
   });
 
   it('rejects a missing licence identifier', () => {
-    expect(imageLicenceSchema.safeParse({ ...validLicence, licence: undefined }).success).toBe(false);
+    expect(imageLicenceSchema.safeParse({ ...validLicence, licence: undefined }).success).toBe(
+      false,
+    );
   });
 
   it('rejects the raw Commons bytes host as the sourceUrl', () => {
@@ -110,7 +114,9 @@ describe('attributableImageSchema', () => {
 
   it('rejects an unknown origin rather than defaulting to the unlicensed arm', () => {
     // Failing open here would mean a typo'd origin skips the licence check.
-    expect(attributableImageSchema.safeParse({ origin: 'cc', url: 'https://x/y.jpg' }).success).toBe(false);
+    expect(
+      attributableImageSchema.safeParse({ origin: 'cc', url: 'https://x/y.jpg' }).success,
+    ).toBe(false);
     expect(attributableImageSchema.safeParse({ url: 'https://x/y.jpg' }).success).toBe(false);
   });
 });

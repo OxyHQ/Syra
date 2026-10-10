@@ -1,7 +1,7 @@
 /**
  * Unified Loading Component System
  * Consolidates all loading states for consistency and maintainability
- * 
+ *
  * Supports:
  * - Spinner (default, inline, centered)
  * - Top spinner (animated, for feeds/lists)
@@ -11,11 +11,11 @@
 
 import React, { useMemo, useEffect, memo } from 'react';
 import { View, Text, StyleSheet, ViewStyle, TextStyle, DimensionValue } from 'react-native';
-import Animated, { 
-  Easing, 
-  useAnimatedStyle, 
-  useSharedValue, 
-  withTiming 
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
 } from 'react-native-reanimated';
 import * as Skeleton from '@oxy.so/bloom/skeleton';
 import { Loading as LoadingIcon } from '@/assets/icons/loading-icon';
@@ -78,10 +78,10 @@ interface InlineLoadingProps extends BaseLoadingProps {
   textStyle?: TextStyle;
 }
 
-export type LoadingProps = 
-  | SpinnerLoadingProps 
-  | TopLoadingProps 
-  | SkeletonLoadingProps 
+export type LoadingProps =
+  | SpinnerLoadingProps
+  | TopLoadingProps
+  | SkeletonLoadingProps
   | InlineLoadingProps;
 
 const SIZE_CONFIG = {
@@ -114,44 +114,43 @@ const SpinnerLoading: React.FC<SpinnerLoadingProps> = ({
   const theme = useTheme();
   const sizeConfig = SIZE_CONFIG[size];
   const effectiveIconSize = iconSize ?? sizeConfig.spinner;
-  
+
   // Extract theme values first to avoid optional chaining in dependency arrays
   const themePrimary = theme && theme.colors ? theme.colors.primary : undefined;
   const themeTextSecondary = theme && theme.colors ? theme.colors.textSecondary : undefined;
   const themeText = theme && theme.colors ? theme.colors.text : undefined;
-  
+
   const spinnerColor = useMemo(() => {
     if (color) return color;
     if (themePrimary) return themePrimary;
     return '#000000';
   }, [color, themePrimary]);
-  
+
   const textColor = useMemo(() => {
     if (color) return color;
     if (themeTextSecondary) return themeTextSecondary;
     if (themeText) return themeText;
     return '#666666';
   }, [color, themeTextSecondary, themeText]);
-  
+
   const computedTextStyle = useMemo(
-    () => flattenStyleArray([
-      styles.text,
-      { 
-        color: textColor,
-        fontSize: sizeConfig.text,
-        marginTop: SPACING.sm,
-      },
-      textStyle,
-    ]),
-    [textColor, sizeConfig.text, textStyle]
+    () =>
+      flattenStyleArray([
+        styles.text,
+        {
+          color: textColor,
+          fontSize: sizeConfig.text,
+          marginTop: SPACING.sm,
+        },
+        textStyle,
+      ]),
+    [textColor, sizeConfig.text, textStyle],
   );
-  
+
   return (
     <View style={flattenStyleArray([styles.container, style])}>
       <LoadingIcon size={effectiveIconSize} color={spinnerColor} />
-      {showText && text && (
-        <Text style={computedTextStyle}>{text}</Text>
-      )}
+      {showText && text && <Text style={computedTextStyle}>{text}</Text>}
     </View>
   );
 };
@@ -171,52 +170,44 @@ const TopLoading: React.FC<TopLoadingProps> = ({
   const sizeConfig = SIZE_CONFIG[size];
   const effectiveIconSize = iconSize ?? sizeConfig.spinner;
   const targetHeight = Math.max(0, effectiveIconSize + sizeConfig.spinner + heightOffset);
-  
+
   // Extract theme value to avoid optional chaining in dependency arrays
   const themePrimary = theme && theme.colors ? theme.colors.primary : undefined;
-  
-  const spinnerColor = useMemo(
-    () => color ?? themePrimary ?? '#000000',
-    [color, themePrimary]
-  );
-  
+
+  const spinnerColor = useMemo(() => color ?? themePrimary ?? '#000000', [color, themePrimary]);
+
   const height = useSharedValue(showLoading ? targetHeight : 0);
   const opacity = useSharedValue(showLoading ? 1 : 0);
   const translateY = useSharedValue(showLoading ? 0 : -targetHeight);
-  
+
   useEffect(() => {
-    height.value = withTiming(
-      showLoading ? targetHeight : 0,
-      { duration: 250, easing: Easing.out(Easing.cubic) }
-    );
-    opacity.value = withTiming(
-      showLoading ? 1 : 0,
-      { duration: 250, easing: Easing.out(Easing.cubic) }
-    );
-    translateY.value = withTiming(
-      showLoading ? 0 : -targetHeight,
-      { duration: 250, easing: Easing.out(Easing.cubic) }
-    );
+    height.value = withTiming(showLoading ? targetHeight : 0, {
+      duration: 250,
+      easing: Easing.out(Easing.cubic),
+    });
+    opacity.value = withTiming(showLoading ? 1 : 0, {
+      duration: 250,
+      easing: Easing.out(Easing.cubic),
+    });
+    translateY.value = withTiming(showLoading ? 0 : -targetHeight, {
+      duration: 250,
+      easing: Easing.out(Easing.cubic),
+    });
   }, [showLoading, targetHeight, height, opacity, translateY]);
-  
+
   const containerAnimated = useAnimatedStyle(() => ({
     height: height.value,
   }));
-  
+
   const innerAnimated = useAnimatedStyle(() => ({
     opacity: opacity.value,
     transform: [{ translateY: translateY.value }],
   }));
-  
+
   return (
     <Animated.View style={[styles.topContainer, containerAnimated]}>
       <Animated.View
-        style={[
-          styles.topLoadingView,
-          { height: targetHeight },
-          innerAnimated,
-          style,
-        ]}
+        style={[styles.topLoadingView, { height: targetHeight }, innerAnimated, style]}
       >
         <LoadingIcon size={effectiveIconSize} color={spinnerColor} />
       </Animated.View>
@@ -233,7 +224,8 @@ const SkeletonLoading: React.FC<SkeletonLoadingProps> = ({
   lineHeight = 16,
   style,
 }) => {
-  const skeletonWidth: DimensionValue = typeof width === 'string' ? (width as DimensionValue) : `${width}%`;
+  const skeletonWidth: DimensionValue =
+    typeof width === 'string' ? (width as DimensionValue) : `${width}%`;
   const skeletonLines = Array.from({ length: lines }, (_, index) => (
     <Skeleton.Box
       key={index}
@@ -243,12 +235,8 @@ const SkeletonLoading: React.FC<SkeletonLoadingProps> = ({
       style={index < lines - 1 ? styles.skeletonLineGap : undefined}
     />
   ));
-  
-  return (
-    <View style={flattenStyleArray([styles.skeletonContainer, style])}>
-      {skeletonLines}
-    </View>
-  );
+
+  return <View style={flattenStyleArray([styles.skeletonContainer, style])}>{skeletonLines}</View>;
 };
 
 /**
@@ -263,27 +251,24 @@ const InlineLoading: React.FC<InlineLoadingProps> = ({
 }) => {
   const theme = useTheme();
   const sizeConfig = SIZE_CONFIG[size];
-  
+
   // Extract theme values first to avoid optional chaining issues
   const themePrimary = theme && theme.colors ? theme.colors.primary : undefined;
   const themeTextSecondary = theme && theme.colors ? theme.colors.textSecondary : undefined;
   const themeText = theme && theme.colors ? theme.colors.text : undefined;
-  
-  const spinnerColor = useMemo(
-    () => color ?? themePrimary ?? '#000000',
-    [color, themePrimary]
-  );
-  
+
+  const spinnerColor = useMemo(() => color ?? themePrimary ?? '#000000', [color, themePrimary]);
+
   const textColor = themeTextSecondary ?? themeText ?? '#666666';
-  
+
   return (
     <View style={flattenStyleArray([styles.inlineContainer, style])}>
       <LoadingIcon size={sizeConfig.spinner} color={spinnerColor} />
       {text && (
-        <Text 
+        <Text
           style={flattenStyleArray([
             styles.inlineText,
-            { 
+            {
               color: textColor,
               fontSize: sizeConfig.text,
               marginLeft: SPACING.sm,
@@ -303,7 +288,7 @@ const InlineLoading: React.FC<InlineLoadingProps> = ({
  */
 const LoadingComponent: React.FC<LoadingProps> = (props) => {
   const variant = props.variant ?? 'spinner';
-  
+
   switch (variant) {
     case 'top':
       return <TopLoading {...props} variant="top" />;
@@ -334,28 +319,30 @@ interface LegacyLoadingTopSpinnerProps {
   showLoading?: boolean;
 }
 
-export const LoadingTopSpinner = memo((props: Omit<TopLoadingProps, 'variant'> | LegacyLoadingTopSpinnerProps) => {
-  // Handle legacy numeric size prop
-  let sizeProp: LoadingSize = 'medium';
-  if ('size' in props && typeof props.size === 'number') {
-    if (props.size <= 20) sizeProp = 'small';
-    else if (props.size <= 24) sizeProp = 'medium';
-    else sizeProp = 'large';
-  } else if ('size' in props) {
-    sizeProp = props.size as LoadingSize;
-  }
-  
-  const { size: _, ...restProps } = props;
-  
-  return (
-    <Loading 
-      {...restProps} 
-      variant="top" 
-      size={sizeProp}
-      showLoading={props.showLoading ?? true} 
-    />
-  );
-});
+export const LoadingTopSpinner = memo(
+  (props: Omit<TopLoadingProps, 'variant'> | LegacyLoadingTopSpinnerProps) => {
+    // Handle legacy numeric size prop
+    let sizeProp: LoadingSize = 'medium';
+    if ('size' in props && typeof props.size === 'number') {
+      if (props.size <= 20) sizeProp = 'small';
+      else if (props.size <= 24) sizeProp = 'medium';
+      else sizeProp = 'large';
+    } else if ('size' in props) {
+      sizeProp = props.size as LoadingSize;
+    }
+
+    const { size: _, ...restProps } = props;
+
+    return (
+      <Loading
+        {...restProps}
+        variant="top"
+        size={sizeProp}
+        showLoading={props.showLoading ?? true}
+      />
+    );
+  },
+);
 
 LoadingSpinner.displayName = 'LoadingSpinner';
 LoadingTopSpinner.displayName = 'LoadingTopSpinner';

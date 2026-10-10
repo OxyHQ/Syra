@@ -51,7 +51,7 @@ export const queueService = {
    */
   async addToQueue(
     refs: PlayableRef[],
-    position?: 'next' | 'last' | number
+    position?: 'next' | 'last' | number,
   ): Promise<{ queue: Queue; added: number }> {
     const body: AddToQueueRequest = {
       refs,
@@ -81,9 +81,12 @@ export const queueService = {
     // Express delete routes can accept body via req.body.
     // authenticatedClient (HttpService) resolves to the parsed body directly.
     const body: RemoveFromQueueRequest = { refs };
-    const response = await authenticatedClient.delete<{ queue: Queue; removed: number }>('/queue/remove', {
-      data: body,
-    });
+    const response = await authenticatedClient.delete<{ queue: Queue; removed: number }>(
+      '/queue/remove',
+      {
+        data: body,
+      },
+    );
     return { ...response, queue: normalizeQueue(queueSchema.parse(response.queue)) };
   },
 

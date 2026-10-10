@@ -52,9 +52,13 @@ describe('reseedPersons', () => {
     // Credits to re-derive from — child rows on a real show and a real episode,
     // because both credit tables carry a foreign key to their parent.
     const showId = uuidv7();
-    await getDb()
-      .insert(podcasts)
-      .values({ id: showId, title: 'Show', source: 'rss', feedUrl: 'https://f/s.xml', status: 'active' });
+    await getDb().insert(podcasts).values({
+      id: showId,
+      title: 'Show',
+      source: 'rss',
+      feedUrl: 'https://f/s.xml',
+      status: 'active',
+    });
     await getDb()
       .insert(podcastPersons)
       .values({ podcastId: showId, position: 0, name: 'Channel Host', role: 'host' });

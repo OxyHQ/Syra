@@ -75,7 +75,8 @@ jest.mock('@/components/EpisodeRow', () => ({ EpisodeRow: () => null }));
 
 const mockPlayerState = { currentEpisode: null, isPlaying: false, playEpisode: jest.fn() };
 jest.mock('@/stores/playerStore', () => ({
-  usePlayerStore: (selector: (state: typeof mockPlayerState) => unknown) => selector(mockPlayerState),
+  usePlayerStore: (selector: (state: typeof mockPlayerState) => unknown) =>
+    selector(mockPlayerState),
 }));
 
 jest.mock('@/hooks/useLibrary', () => ({
@@ -138,7 +139,9 @@ const getMyPodcasts = podcastService.getMyPodcasts as jest.MockedFunction<
 const getContinueListening = episodeService.getContinueListening as jest.MockedFunction<
   typeof episodeService.getContinueListening
 >;
-const listUploads = uploadsService.listUploads as jest.MockedFunction<typeof uploadsService.listUploads>;
+const listUploads = uploadsService.listUploads as jest.MockedFunction<
+  typeof uploadsService.listUploads
+>;
 
 /** What `parsePodcastResponse` throws when the DTO drifts or the request 401s. */
 const REJECTION = new Error('Invalid my podcasts response: expected string, received undefined');
@@ -219,7 +222,10 @@ async function renderLibrary(): Promise<TestRenderer.ReactTestInstance> {
  * the render that shows it — and any one of them alone returns early and loses
  * the assertions a race.
  */
-async function settle(queryClient: QueryClient, root: TestRenderer.ReactTestInstance): Promise<void> {
+async function settle(
+  queryClient: QueryClient,
+  root: TestRenderer.ReactTestInstance,
+): Promise<void> {
   const cache = queryClient.getQueryCache();
   let previous = '';
   for (let flush = 0; flush < 50; flush += 1) {

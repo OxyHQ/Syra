@@ -145,7 +145,6 @@ mock.module('../services/uploads/acoustid', () => ({
   },
 }));
 
-
 /**
  * Deezer, stubbed for the WHOLE file rather than per test.
  *
@@ -255,7 +254,7 @@ afterAll(async () => {
  * reason.
  */
 async function captureErrors(
-  run: () => Promise<void>
+  run: () => Promise<void>,
 ): Promise<Array<{ message: string; meta: unknown }>> {
   const captured: Array<{ message: string; meta: unknown }> = [];
   const originalError = logger.error;
@@ -402,16 +401,29 @@ interface CapturedRes {
 }
 
 /** Rethrows whatever a handler passes to `next`, so a swallowed error fails loudly. */
-const rethrow = (error: unknown): void => { if (error) throw error; };
+const rethrow = (error: unknown): void => {
+  if (error) throw error;
+};
 
 function makeRes(): CapturedRes {
   const res: CapturedRes = {
     _status: 200,
     _body: undefined,
-    status(code) { this._status = code; return this; },
-    set() { return this; },
-    json(body) { this._body = body; return this; },
-    send(body) { this._body = body; return this; },
+    status(code) {
+      this._status = code;
+      return this;
+    },
+    set() {
+      return this;
+    },
+    json(body) {
+      this._body = body;
+      return this;
+    },
+    send(body) {
+      this._body = body;
+      return this;
+    },
   };
   return res;
 }
@@ -435,7 +447,10 @@ describe('POST /api/uploads — private destination', () => {
     // ffprobe measured this, nobody typed it.
     expect(upload.duration).toBeGreaterThan(0);
 
-    const rows = await getDb().select().from(userUploads).where(eq(userUploads.ownerOxyUserId, OWNER));
+    const rows = await getDb()
+      .select()
+      .from(userUploads)
+      .where(eq(userUploads.ownerOxyUserId, OWNER));
     expect(rows).toHaveLength(1);
     expect(rows[0].status).toBe('processing');
     expect(ingestedUploadIds).toEqual([String(upload.id)]);
@@ -537,7 +552,9 @@ describe('POST /api/uploads — private destination', () => {
   it('never returns a storage key to the client', async () => {
     const { body } = await postUpload('indie-id3v2.mp3', { destination: 'private' });
 
-    const stored = (await getDb().select().from(userUploads).where(eq(userUploads.ownerOxyUserId, OWNER)).limit(1))[0];
+    const stored = (
+      await getDb().select().from(userUploads).where(eq(userUploads.ownerOxyUserId, OWNER)).limit(1)
+    )[0];
     const audioKey = stored?.audioSourceKey;
     if (!audioKey) throw new Error('the stored locker row recorded no audio key');
 
@@ -777,9 +794,9 @@ describe('POST /api/uploads — the recording the fingerprint resolves to', () =
 
     const markers = body.markers as Array<{ code: string; weight: string }>;
     expect(markers.map((marker) => marker.code)).toContain('acoustid.commercial-release');
-    expect(
-      markers.find((marker) => marker.code === 'acoustid.commercial-release')?.weight,
-    ).toBe('blocking');
+    expect(markers.find((marker) => marker.code === 'acoustid.commercial-release')?.weight).toBe(
+      'blocking',
+    );
 
     // Nothing was published and no claimable artist was left behind — the
     // refusal happens before resolution, so a blocked upload seeds nothing.
@@ -921,13 +938,15 @@ describe('POST /api/uploads — the ISRC the uploader supplies', () => {
     artistCredit: string;
     lengthMs?: number;
   }): Promise<void> {
-    await getDb().insert(isrcRegistry).values({
-      isrc: CLAIMED,
-      recordingMbid: 'd9e8f7a6-5b4c-4d3e-9f10-2a3b4c5d6e7f',
-      artistCreditNameKey: fields.artistCredit.toLowerCase(),
-      releaseCount: 1,
-      ...fields,
-    });
+    await getDb()
+      .insert(isrcRegistry)
+      .values({
+        isrc: CLAIMED,
+        recordingMbid: 'd9e8f7a6-5b4c-4d3e-9f10-2a3b4c5d6e7f',
+        artistCreditNameKey: fields.artistCredit.toLowerCase(),
+        releaseCount: 1,
+        ...fields,
+      });
   }
 
   it('publishes a file whose only missing piece was the code', async () => {
@@ -987,9 +1006,7 @@ describe('POST /api/uploads — the ISRC the uploader supplies', () => {
     });
 
     expect(status).toBe(201);
-    expect(
-      (await readTrack(String(body.trackId)))?.externalIsrc,
-    ).toBe(CLAIMED);
+    expect((await readTrack(String(body.trackId)))?.externalIsrc).toBe(CLAIMED);
   });
 
   it('REFUSES a well-formed code that belongs to a different recording', async () => {
@@ -1080,9 +1097,7 @@ describe('POST /api/uploads — the ISRC the uploader supplies', () => {
     expect(status).toBe(201);
     // `ESA452300137` is the fixture's `TSRC`. The typed code would have verified
     // against the slice row above — it is simply never consulted.
-    expect(
-      (await readTrack(String(body.trackId)))?.externalIsrc,
-    ).toBe('ESA452300137');
+    expect((await readTrack(String(body.trackId)))?.externalIsrc).toBe('ESA452300137');
   });
 
   it('fills the release facts the file left blank, and never the one it declared', async () => {
@@ -1124,9 +1139,7 @@ describe('POST /api/uploads — the ISRC the uploader supplies', () => {
     // reads "under thirty minutes" as EP-shaped without it.
     expect(album?.totalTracks).toBe(9);
     expect(album?.type).toBe('album');
-    expect((await readTrack(String(body.trackId)))?.albumId).toBe(
-      album?.id,
-    );
+    expect((await readTrack(String(body.trackId)))?.albumId).toBe(album?.id);
   });
 
   it('stores the audio at the key ingest will read it back from', async () => {
@@ -1347,7 +1360,12 @@ describe('embedded cover art', () => {
     const coverArt = (await firstUpload())?.coverArtId;
     if (!coverArt) throw new Error('no cover art was stored for a file that carries one');
 
-    const asset = (await getDb().select().from(imageAssets).where(eq(imageAssets.id, coverArt ?? '')))[0];
+    const asset = (
+      await getDb()
+        .select()
+        .from(imageAssets)
+        .where(eq(imageAssets.id, coverArt ?? ''))
+    )[0];
     expect(asset?.ownerType).toBe('upload');
     expect(asset?.width).toBe(96);
     expect((body.upload as { coverArt?: string }).coverArt).toBe(`/api/images/${coverArt}`);
@@ -1439,7 +1457,9 @@ describe('album containers', () => {
 
     // The fingerprint row only exists where `fpcalc` is installed; the assertion
     // adapts rather than pretending, so this test is honest on both machines.
-    const indexed = (await getDb().select().from(trackFingerprints).where(eq(trackFingerprints.trackId, trackId)))[0];
+    const indexed = (
+      await getDb().select().from(trackFingerprints).where(eq(trackFingerprints.trackId, trackId))
+    )[0];
     const acoustic = await fingerprintFile(path.join(FIXTURES, 'indie-id3v2.mp3'));
     if (acoustic.status === 'ok') {
       expect(indexed?.fingerprint.length).toBeGreaterThan(0);
@@ -1475,9 +1495,7 @@ describe('album containers', () => {
 
     expect(body.outcome).toBe('published');
     expect(await countRows(albums)).toBe(1);
-    expect((await readTrack(String(body.trackId)))?.albumId).toBe(
-      existing.id,
-    );
+    expect((await readTrack(String(body.trackId)))?.albumId).toBe(existing.id);
   });
 });
 
@@ -1551,13 +1569,22 @@ describe('GET /api/uploads/albums', () => {
 
     const response = await fetch(`${baseUrl}/api/uploads/albums`);
     const body = (await response.json()) as {
-      albums: Array<{ albumKey: string; albumName?: string; albumArtistName?: string; trackCount: number; trackIds: string[] }>;
+      albums: Array<{
+        albumKey: string;
+        albumName?: string;
+        albumArtistName?: string;
+        trackCount: number;
+        trackIds: string[];
+      }>;
       total: number;
     };
 
     expect(response.status).toBe(200);
     expect(body.total).toBe(2);
-    expect(body.albums.map((a) => a.albumName).sort()).toEqual(['Harbour Lights', 'The Longest Winter']);
+    expect(body.albums.map((a) => a.albumName).sort()).toEqual([
+      'Harbour Lights',
+      'The Longest Winter',
+    ]);
     // Titled from the ALBUM artist, not the track artist — the fixture's track
     // artist is "Nadia Ortiz feat. Kofi Mensah".
     const harbour = body.albums.find((a) => a.albumName === 'Harbour Lights');
@@ -1626,61 +1653,77 @@ describe('GET /api/uploads/albums', () => {
 const INVISIBILITY_TIMEOUT_MS = 30_000;
 
 describe('a private upload is invisible to everybody else', () => {
-  it('never appears in search, browse, charts or the home feed for another user', async () => {
-    const { body } = await postUpload('indie-id3v2.mp3', { destination: 'private' });
-    const stored = await firstUpload();
-    const title = stored?.title ?? '';
-    expect(title.length).toBeGreaterThan(0); // vacuity floor: there IS something to find
+  it(
+    'never appears in search, browse, charts or the home feed for another user',
+    async () => {
+      const { body } = await postUpload('indie-id3v2.mp3', { destination: 'private' });
+      const stored = await firstUpload();
+      const title = stored?.title ?? '';
+      expect(title.length).toBeGreaterThan(0); // vacuity floor: there IS something to find
 
-    // Every catalog surface reads `tracks` through `playableTrackFilter`, which
-    // has no owner dimension and must never gain one. The locker being a separate
-    // collection is what makes that safe — so the assertion is not merely "the
-    // stranger sees nothing", it is "the catalogue never held it".
-    expect(await countRows(tracks)).toBe(0);
+      // Every catalog surface reads `tracks` through `playableTrackFilter`, which
+      // has no owner dimension and must never gain one. The locker being a separate
+      // collection is what makes that safe — so the assertion is not merely "the
+      // stranger sees nothing", it is "the catalogue never held it".
+      expect(await countRows(tracks)).toBe(0);
 
-    const uploadId = String((body.upload as { id: string }).id);
-    currentUserId = STRANGER;
+      const uploadId = String((body.upload as { id: string }).id);
+      currentUserId = STRANGER;
 
-    const surfaces: Array<[string, (res: CapturedRes) => Promise<void>]> = [
-      ['search', async (res) => {
-        const req = { query: { q: title }, params: {}, user: { id: STRANGER } };
-        await search(req as never, res as never, rethrow);
-      }],
-      ['popular tracks', async (res) => {
-        const req = { query: {}, params: {}, user: { id: STRANGER } };
-        await getPopularTracks(req as never, res as never, rethrow);
-      }],
-      ['charts', async (res) => {
-        const req = { query: {}, params: {}, user: { id: STRANGER } };
-        await getCharts(req as never, res as never, rethrow);
-      }],
-      ['home browse', async (res) => {
-        const req = { query: {}, params: {}, user: { id: STRANGER } };
-        await getHomeBrowse(req as never, res as never, rethrow);
-      }],
-    ];
+      const surfaces: Array<[string, (res: CapturedRes) => Promise<void>]> = [
+        [
+          'search',
+          async (res) => {
+            const req = { query: { q: title }, params: {}, user: { id: STRANGER } };
+            await search(req as never, res as never, rethrow);
+          },
+        ],
+        [
+          'popular tracks',
+          async (res) => {
+            const req = { query: {}, params: {}, user: { id: STRANGER } };
+            await getPopularTracks(req as never, res as never, rethrow);
+          },
+        ],
+        [
+          'charts',
+          async (res) => {
+            const req = { query: {}, params: {}, user: { id: STRANGER } };
+            await getCharts(req as never, res as never, rethrow);
+          },
+        ],
+        [
+          'home browse',
+          async (res) => {
+            const req = { query: {}, params: {}, user: { id: STRANGER } };
+            await getHomeBrowse(req as never, res as never, rethrow);
+          },
+        ],
+      ];
 
-    // The id, not the title. Searching for a title makes the response contain
-    // that title whatever the results are — `search` echoes `query` back — so a
-    // substring check on the title cannot tell a leak from an echo. The upload id
-    // appears nowhere except in an actual result.
-    for (const [name, run] of surfaces) {
-      const res = makeRes();
-      await run(res);
-      const serialised = JSON.stringify(res._body ?? {});
-      expect(`${name} leaked the id: ${serialised.includes(uploadId)}`).toBe(
-        `${name} leaked the id: false`,
+      // The id, not the title. Searching for a title makes the response contain
+      // that title whatever the results are — `search` echoes `query` back — so a
+      // substring check on the title cannot tell a leak from an echo. The upload id
+      // appears nowhere except in an actual result.
+      for (const [name, run] of surfaces) {
+        const res = makeRes();
+        await run(res);
+        const serialised = JSON.stringify(res._body ?? {});
+        expect(`${name} leaked the id: ${serialised.includes(uploadId)}`).toBe(
+          `${name} leaked the id: false`,
+        );
+      }
+
+      const searchRes = makeRes();
+      await search(
+        { query: { q: title }, params: {}, user: { id: STRANGER } } as never,
+        searchRes as never,
+        rethrow,
       );
-    }
-
-    const searchRes = makeRes();
-    await search(
-      { query: { q: title }, params: {}, user: { id: STRANGER } } as never,
-      searchRes as never,
-      rethrow,
-    );
-    expect((searchRes._body as { counts: { total: number } }).counts.total).toBe(0);
-  }, INVISIBILITY_TIMEOUT_MS);
+      expect((searchRes._body as { counts: { total: number } }).counts.total).toBe(0);
+    },
+    INVISIBILITY_TIMEOUT_MS,
+  );
 
   it('positive control: the same search DOES find a catalogue track', async () => {
     // Without this, the assertions above pass just as happily against a search
@@ -1711,7 +1754,10 @@ describe('a private upload is invisible to everybody else', () => {
       rethrow,
     );
 
-    const body = res._body as { counts: { total: number }; results: { tracks: Array<{ id: string }> } };
+    const body = res._body as {
+      counts: { total: number };
+      results: { tracks: Array<{ id: string }> };
+    };
     expect(body.counts.total).toBeGreaterThan(0);
     expect(body.results.tracks.map((found) => found.id)).toEqual([track.id]);
     // Same title, same search, same viewer — the catalogue copy is found and the

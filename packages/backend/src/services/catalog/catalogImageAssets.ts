@@ -12,7 +12,11 @@ import {
 import { extractPredominantColorsFromBuffer } from '../colorExtractionService';
 import { logger } from '../../utils/logger';
 import { validateUrlSecurity } from '../../utils/urlSecurity';
-import { findExistingCatalogImageSet, getImageAssetSourceContentHash, storeImageAsset } from '../imageAssetService';
+import {
+  findExistingCatalogImageSet,
+  getImageAssetSourceContentHash,
+  storeImageAsset,
+} from '../imageAssetService';
 import type { CatalogImageEntityType, CatalogImageProvider } from '../../db/schema/catalog';
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -87,10 +91,17 @@ function normalizeSourceUrl(sourceUrl: string): string {
  */
 export function isWorthDownloadingAsImage(contentTypeHeader: string): boolean {
   const contentType = contentTypeHeader.split(';')[0].trim().toLowerCase();
-  return contentType.startsWith('image/') || contentType === '' || contentType === 'application/octet-stream';
+  return (
+    contentType.startsWith('image/') ||
+    contentType === '' ||
+    contentType === 'application/octet-stream'
+  );
 }
 
-function downloadImage(sourceUrl: string, redirectsRemaining = MAX_REDIRECTS): Promise<{ buffer: Buffer; contentType: string }> {
+function downloadImage(
+  sourceUrl: string,
+  redirectsRemaining = MAX_REDIRECTS,
+): Promise<{ buffer: Buffer; contentType: string }> {
   return new Promise((resolve, reject) => {
     const security = validateUrlSecurity(sourceUrl);
     if (!security.valid) {
@@ -101,72 +112,77 @@ function downloadImage(sourceUrl: string, redirectsRemaining = MAX_REDIRECTS): P
     const parsed = new URL(sourceUrl);
     const isHttps = parsed.protocol === 'https:';
     const client = isHttps ? https : http;
-    const req = client.request({
-      hostname: parsed.hostname,
-      port: parsed.port || (isHttps ? 443 : 80),
-      path: `${parsed.pathname}${parsed.search}`,
-      method: 'GET',
-      headers: {
-        Accept: 'image/*',
-        'User-Agent': USER_AGENT,
+    const req = client.request(
+      {
+        hostname: parsed.hostname,
+        port: parsed.port || (isHttps ? 443 : 80),
+        path: `${parsed.pathname}${parsed.search}`,
+        method: 'GET',
+        headers: {
+          Accept: 'image/*',
+          'User-Agent': USER_AGENT,
+        },
+        timeout: REQUEST_TIMEOUT_MS,
       },
-      timeout: REQUEST_TIMEOUT_MS,
-    }, (res) => {
-      const statusCode = res.statusCode ?? 0;
-      if (statusCode >= 300 && statusCode < 400) {
-        res.resume();
-        if (!res.headers.location) {
-          reject(new Error(`Image redirect missing location (${statusCode})`));
+      (res) => {
+        const statusCode = res.statusCode ?? 0;
+        if (statusCode >= 300 && statusCode < 400) {
+          res.resume();
+          if (!res.headers.location) {
+            reject(new Error(`Image redirect missing location (${statusCode})`));
+            return;
+          }
+          if (redirectsRemaining <= 0) {
+            reject(new Error('Too many image redirects'));
+            return;
+          }
+          const redirectedUrl = new URL(res.headers.location, parsed).toString();
+          downloadImage(redirectedUrl, redirectsRemaining - 1)
+            .then(resolve)
+            .catch(reject);
           return;
         }
-        if (redirectsRemaining <= 0) {
-          reject(new Error('Too many image redirects'));
+
+        if (statusCode < 200 || statusCode >= 300) {
+          res.resume();
+          reject(new Error(`Image request failed with status ${statusCode}`));
           return;
         }
-        const redirectedUrl = new URL(res.headers.location, parsed).toString();
-        downloadImage(redirectedUrl, redirectsRemaining - 1).then(resolve).catch(reject);
-        return;
-      }
 
-      if (statusCode < 200 || statusCode >= 300) {
-        res.resume();
-        reject(new Error(`Image request failed with status ${statusCode}`));
-        return;
-      }
-
-      const rawContentType = String(res.headers['content-type'] ?? '');
-      const contentType = rawContentType.split(';')[0].trim().toLowerCase();
-      if (!isWorthDownloadingAsImage(rawContentType)) {
-        res.resume();
-        // Naming what arrived, because the bare message cannot be acted on: a
-        // host serving an HTML challenge page and one sending
-        // `application/json` are different problems with different fixes, and
-        // an unqualified message would log them identically. Truncated and
-        // quoted — this is a header from a remote host, so it is untrusted
-        // text going into a log line.
-        reject(new Error(`Image response is not an image: "${contentType.slice(0, 60)}"`));
-        return;
-      }
-
-      const contentLength = Number.parseInt(String(res.headers['content-length'] ?? '0'), 10);
-      if (contentLength > MAX_IMAGE_BYTES) {
-        res.resume();
-        reject(new Error('Image is too large'));
-        return;
-      }
-
-      const chunks: Buffer[] = [];
-      let totalSize = 0;
-      res.on('data', (chunk: Buffer) => {
-        totalSize += chunk.length;
-        if (totalSize > MAX_IMAGE_BYTES) {
-          res.destroy(new Error('Image is too large'));
+        const rawContentType = String(res.headers['content-type'] ?? '');
+        const contentType = rawContentType.split(';')[0].trim().toLowerCase();
+        if (!isWorthDownloadingAsImage(rawContentType)) {
+          res.resume();
+          // Naming what arrived, because the bare message cannot be acted on: a
+          // host serving an HTML challenge page and one sending
+          // `application/json` are different problems with different fixes, and
+          // an unqualified message would log them identically. Truncated and
+          // quoted — this is a header from a remote host, so it is untrusted
+          // text going into a log line.
+          reject(new Error(`Image response is not an image: "${contentType.slice(0, 60)}"`));
           return;
         }
-        chunks.push(chunk);
-      });
-      res.on('end', () => resolve({ buffer: Buffer.concat(chunks), contentType }));
-    });
+
+        const contentLength = Number.parseInt(String(res.headers['content-length'] ?? '0'), 10);
+        if (contentLength > MAX_IMAGE_BYTES) {
+          res.resume();
+          reject(new Error('Image is too large'));
+          return;
+        }
+
+        const chunks: Buffer[] = [];
+        let totalSize = 0;
+        res.on('data', (chunk: Buffer) => {
+          totalSize += chunk.length;
+          if (totalSize > MAX_IMAGE_BYTES) {
+            res.destroy(new Error('Image is too large'));
+            return;
+          }
+          chunks.push(chunk);
+        });
+        res.on('end', () => resolve({ buffer: Buffer.concat(chunks), contentType }));
+      },
+    );
 
     req.on('timeout', () => {
       req.destroy(new Error('Image request timeout'));
@@ -298,8 +314,9 @@ async function mirrorCatalogImageInternal(
       const { buffer } = await downloadImage(normalizedSourceUrl);
       const sourceContentHash = hashValue(buffer);
 
-      const existingSourceContentHash = context.existingSourceContentHash
-        ?? await getImageAssetSourceContentHash(context.existingImageId);
+      const existingSourceContentHash =
+        context.existingSourceContentHash ??
+        (await getImageAssetSourceContentHash(context.existingImageId));
       if (
         context.existingImageId &&
         context.existingImageSizes &&
@@ -319,7 +336,10 @@ async function mirrorCatalogImageInternal(
       // Caught only after downloading — there is no way to know the content
       // hash without the bytes — but still skips the resize/upload six times
       // over.
-      const existingByContent = await findExistingCatalogImageSet('sourceContentHash', sourceContentHash);
+      const existingByContent = await findExistingCatalogImageSet(
+        'sourceContentHash',
+        sourceContentHash,
+      );
       if (existingByContent) {
         return {
           imageId: existingByContent.imageId,
@@ -343,10 +363,11 @@ async function mirrorCatalogImageInternal(
         sourceContentHash,
         colors,
       );
-      const imageId = imageSizes.large?.id
-        ?? imageSizes.xlarge?.id
-        ?? imageSizes.medium?.id
-        ?? imageSizes.original?.id;
+      const imageId =
+        imageSizes.large?.id ??
+        imageSizes.xlarge?.id ??
+        imageSizes.medium?.id ??
+        imageSizes.original?.id;
 
       if (!imageId) {
         throw new Error('No image variants were created');

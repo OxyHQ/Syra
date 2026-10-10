@@ -1,7 +1,7 @@
 /**
  * Unified Button Component System
  * Consolidates all button implementations across the app for consistency and maintainability
- * 
+ *
  * Supports:
  * - Primary/Secondary variants
  * - Icon buttons
@@ -13,14 +13,7 @@
  */
 
 import React, { useMemo, useCallback, memo } from 'react';
-import {
-  TouchableOpacity,
-  Text,
-  ViewStyle,
-  TextStyle,
-  Platform,
-  Pressable,
-} from 'react-native';
+import { TouchableOpacity, Text, ViewStyle, TextStyle, Platform, Pressable } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -97,18 +90,18 @@ const ButtonComponent: React.FC<ButtonProps> = ({
   const isScreenNotMobile = useIsScreenNotMobile();
   const keyboardVisible = useKeyboardVisibility();
   const isDesktop = useMediaQuery({ minWidth: 1266 });
-  
+
   // Determine if this is a responsive button (SideBar pattern)
   const isResponsive = Boolean(renderText || renderIcon || containerStyle);
   const responsiveState = isDesktop ? 'desktop' : 'tablet';
-  
+
   // Determine effective variant
   const effectiveVariant = floating ? 'floating' : variant;
-  
+
   // Size configuration
   const sizeConfig = SIZE_CONFIG[size];
   const effectiveIconSize = customIconSize ?? sizeConfig.iconSize;
-  
+
   // Handle link navigation
   const handlePress = useCallback(() => {
     if (disabled) return;
@@ -118,12 +111,13 @@ const ButtonComponent: React.FC<ButtonProps> = ({
     }
     onPress?.();
   }, [disabled, href, as, router, onPress]);
-  
+
   // Floating button positioning
   const floatingStyles = useMemo(() => {
     if (!floating) return {};
-    
-    const hasCustomPosition = style && typeof style === 'object' && 'position' in (style as ViewStyle);
+
+    const hasCustomPosition =
+      style && typeof style === 'object' && 'position' in (style as ViewStyle);
     if (hasCustomPosition && style) {
       const flatStyle = flattenStyleArray([style]);
       return {
@@ -135,12 +129,12 @@ const ButtonComponent: React.FC<ButtonProps> = ({
         zIndex: flatStyle.zIndex || Z_INDEX.FLOATING_ACTION_BUTTON,
       };
     }
-    
+
     const bottomBarVisible = !isScreenNotMobile && !keyboardVisible;
     const bottomBarHeight = bottomBarVisible ? 60 : 0;
     const marginFromBottom = 16;
-    const defaultBottom = bottomOffset ?? (bottomBarHeight + insets.bottom + marginFromBottom);
-    
+    const defaultBottom = bottomOffset ?? bottomBarHeight + insets.bottom + marginFromBottom;
+
     return {
       position: 'absolute' as const,
       bottom: defaultBottom,
@@ -148,7 +142,7 @@ const ButtonComponent: React.FC<ButtonProps> = ({
       zIndex: Z_INDEX.FLOATING_ACTION_BUTTON,
     };
   }, [floating, style, bottomOffset, isScreenNotMobile, keyboardVisible, insets.bottom]);
-  
+
   // Base button styles
   const baseStyles = useMemo(() => {
     const styles: ViewStyle = {
@@ -157,14 +151,14 @@ const ButtonComponent: React.FC<ButtonProps> = ({
       flexDirection: 'row',
       overflow: 'hidden' as const,
     };
-    
+
     // Size-based styles
     if (!floating && effectiveVariant !== 'icon') {
       styles.paddingVertical = sizeConfig.paddingVertical;
       styles.paddingHorizontal = sizeConfig.paddingHorizontal;
       styles.minHeight = sizeConfig.minHeight;
     }
-    
+
     // Variant-specific styles
     switch (effectiveVariant) {
       case 'primary':
@@ -205,17 +199,17 @@ const ButtonComponent: React.FC<ButtonProps> = ({
         styles.paddingHorizontal = 8;
         break;
     }
-    
+
     return styles;
   }, [effectiveVariant, floating, sizeConfig, theme]);
-  
+
   // Text styles
   const textStyles = useMemo(() => {
     const styles: TextStyle = {
       fontSize: sizeConfig.fontSize,
       fontWeight: Platform.OS === 'web' ? 'bold' : '600',
     };
-    
+
     switch (effectiveVariant) {
       case 'primary':
       case 'floating':
@@ -233,51 +227,50 @@ const ButtonComponent: React.FC<ButtonProps> = ({
         styles.color = theme.colors.primary;
         break;
     }
-    
+
     return styles;
   }, [effectiveVariant, sizeConfig, theme]);
-  
+
   // Disabled styles
   const disabledStyles = disabled ? { opacity: 0.5 } : {};
-  
+
   // Combined styles
   const combinedStyles = useMemo(
-    () => flattenStyleArray([
-      baseStyles,
-      floating && floatingStyles,
-      style,
-      disabledStyles,
-      contentStyle,
-    ]),
-    [baseStyles, floating, floatingStyles, style, disabledStyles, contentStyle]
+    () =>
+      flattenStyleArray([
+        baseStyles,
+        floating && floatingStyles,
+        style,
+        disabledStyles,
+        contentStyle,
+      ]),
+    [baseStyles, floating, floatingStyles, style, disabledStyles, contentStyle],
   );
-  
+
   // Animation styles
   // useAnimatedStyle must be called at top level, not inside useMemo
   const animatedStyle = useAnimatedStyle(() => {
     if (!animatedTranslateY && !animatedOpacity) return {};
-    
+
     return {
-      transform: animatedTranslateY 
-        ? [{ translateY: animatedTranslateY.value }] 
-        : undefined,
+      transform: animatedTranslateY ? [{ translateY: animatedTranslateY.value }] : undefined,
       opacity: animatedOpacity ? animatedOpacity.value : undefined,
     };
   }, [animatedTranslateY, animatedOpacity]);
-  
+
   // Icon component
   const iconElement = useMemo(() => {
     if (customIcon) return customIcon;
     if (icon) {
       return (
-        <Ionicons 
-          name={icon} 
-          size={effectiveIconSize} 
+        <Ionicons
+          name={icon}
+          size={effectiveIconSize}
           color={
             effectiveVariant === 'primary' || effectiveVariant === 'floating'
               ? theme.colors.card
               : theme.colors.text
-          } 
+          }
         />
       );
     }
@@ -286,7 +279,7 @@ const ButtonComponent: React.FC<ButtonProps> = ({
     }
     return null;
   }, [customIcon, icon, effectiveIconSize, effectiveVariant, theme, renderIcon, responsiveState]);
-  
+
   // Content component
   const contentElement = useMemo(() => {
     if (isResponsive && renderText) {
@@ -297,7 +290,7 @@ const ButtonComponent: React.FC<ButtonProps> = ({
     }
     return null;
   }, [isResponsive, renderText, responsiveState, children, textStyles, textStyle]);
-  
+
   // Container style for responsive buttons
   const responsiveContainerStyle = useMemo(() => {
     if (isResponsive && containerStyle) {
@@ -305,17 +298,17 @@ const ButtonComponent: React.FC<ButtonProps> = ({
     }
     return undefined;
   }, [isResponsive, containerStyle, responsiveState]);
-  
+
   // Final combined style
-  const finalStyle = isResponsive && responsiveContainerStyle
-    ? flattenStyleArray([combinedStyles, responsiveContainerStyle])
-    : combinedStyles;
-  
+  const finalStyle =
+    isResponsive && responsiveContainerStyle
+      ? flattenStyleArray([combinedStyles, responsiveContainerStyle])
+      : combinedStyles;
+
   // Default hit slop for icon buttons
-  const defaultHitSlop = effectiveVariant === 'icon' 
-    ? { top: 10, bottom: 10, left: 10, right: 10 }
-    : undefined;
-  
+  const defaultHitSlop =
+    effectiveVariant === 'icon' ? { top: 10, bottom: 10, left: 10, right: 10 } : undefined;
+
   // Button content
   const buttonContent = (
     <>
@@ -324,29 +317,26 @@ const ButtonComponent: React.FC<ButtonProps> = ({
       {iconPosition === 'right' && iconElement}
     </>
   );
-  
+
   // If animated, wrap in Animated.View
-  const animatedWrapperStyle = animatedOpacity && !floating
-    ? { elevation: 0, boxShadow: 'none' as const }
-    : undefined;
-  
+  const animatedWrapperStyle =
+    animatedOpacity && !floating ? { elevation: 0, boxShadow: 'none' as const } : undefined;
+
   // Handle link vs button rendering. Link renders as Text, so its own `style` only
   // accepts TextStyle; wrap a Pressable via `asChild` to carry the (View) button style.
   if (href && as === 'link' && !isResponsive) {
     return (
       <Link href={href} asChild>
-        <Pressable style={finalStyle}>
-          {buttonContent}
-        </Pressable>
+        <Pressable style={finalStyle}>{buttonContent}</Pressable>
       </Link>
     );
   }
-  
+
   // Responsive button (SideBar pattern)
   if (isResponsive) {
     const PressableComponent = Pressable;
     return (
-      <PressableComponent 
+      <PressableComponent
         style={responsiveContainerStyle || finalStyle}
         onPress={href ? undefined : handlePress}
       >
@@ -354,7 +344,7 @@ const ButtonComponent: React.FC<ButtonProps> = ({
       </PressableComponent>
     );
   }
-  
+
   // Regular button
   const TouchableComponent = (
     <TouchableOpacity
@@ -371,16 +361,12 @@ const ButtonComponent: React.FC<ButtonProps> = ({
       {buttonContent}
     </TouchableOpacity>
   );
-  
+
   // Wrap in Animated.View if animations are provided
   if (animatedTranslateY || animatedOpacity) {
-    return (
-      <Animated.View style={animatedStyle}>
-        {TouchableComponent}
-      </Animated.View>
-    );
+    return <Animated.View style={animatedStyle}>{TouchableComponent}</Animated.View>;
   }
-  
+
   return TouchableComponent;
 };
 
@@ -416,4 +402,3 @@ FloatingActionButton.displayName = 'FloatingActionButton';
 LinkButton.displayName = 'LinkButton';
 
 export default Button;
-

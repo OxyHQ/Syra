@@ -53,7 +53,7 @@ export const ROOM_PUBLIC_COLUMNS = publicColumns(rooms, PROTECTED_COLUMNS_BY_TAB
 
 /** A room as a client-facing path sees it — the four credentials absent. */
 export type RoomRow = {
-  -readonly [K in keyof typeof ROOM_PUBLIC_COLUMNS]: typeof rooms.$inferSelect[K];
+  -readonly [K in keyof typeof ROOM_PUBLIC_COLUMNS]: (typeof rooms.$inferSelect)[K];
 };
 
 /**
@@ -157,7 +157,7 @@ export async function listRooms(
   conditions.push(
     options.status !== undefined
       ? eq(rooms.status, options.status)
-      : inArray(rooms.status, [RoomStatus.LIVE, RoomStatus.SCHEDULED])
+      : inArray(rooms.status, [RoomStatus.LIVE, RoomStatus.SCHEDULED]),
   );
 
   if (options.host !== undefined) conditions.push(eq(rooms.host, options.host));
@@ -174,7 +174,7 @@ export async function listRooms(
      * the `isNull` arm is what reproduces it.
      */
     conditions.push(
-      or(isNull(rooms.houseId), notInArray(rooms.houseId, [...options.excludeHouseIds])) as SQL
+      or(isNull(rooms.houseId), notInArray(rooms.houseId, [...options.excludeHouseIds])) as SQL,
     );
   }
 
@@ -455,7 +455,7 @@ export async function replaceRoomStreamAndQueue(
           syraPodcastId: item.syraPodcastId ?? null,
           episodeId: item.episodeId ?? null,
           trackId: item.trackId ?? null,
-        }))
+        })),
       );
     }
 

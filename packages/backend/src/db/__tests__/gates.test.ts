@@ -65,12 +65,30 @@ import { connectUnmanagedDb } from '../../test/postgres';
 import { findMigrationsFolder, LAST_GENESIS_MIGRATION_TAG } from '../migrate';
 import * as schema from '../schema';
 import * as catalogModule from '../schema/catalog';
-import { albumGenres, albums, catalogEntities, imageAssets, trackHlsRenditions, tracks } from '../schema/catalog';
+import {
+  albumGenres,
+  albums,
+  catalogEntities,
+  imageAssets,
+  trackHlsRenditions,
+  tracks,
+} from '../schema/catalog';
 import * as genresModule from '../schema/genres';
 import * as libraryModule from '../schema/library';
-import { playbackStates, playlists, userPodcastSubscriptions, userSavedPlaylists } from '../schema/library';
+import {
+  playbackStates,
+  playlists,
+  userPodcastSubscriptions,
+  userSavedPlaylists,
+} from '../schema/library';
 import * as podcastsModule from '../schema/podcasts';
-import { episodeHlsRenditions, episodeProgress, episodes, podcastCategories, podcasts } from '../schema/podcasts';
+import {
+  episodeHlsRenditions,
+  episodeProgress,
+  episodes,
+  podcastCategories,
+  podcasts,
+} from '../schema/podcasts';
 import * as creatorsModule from '../schema/creators';
 import {
   artistClaims,
@@ -109,7 +127,10 @@ import {
 } from '../schema/user';
 import * as trackKeysModule from '../schema/trackKeys';
 import { trackKeys } from '../schema/trackKeys';
-import { DEFERRED_FOREIGN_KEYS, ID_COLUMNS_WITHOUT_FOREIGN_KEY } from '../schema/deferredForeignKeys';
+import {
+  DEFERRED_FOREIGN_KEYS,
+  ID_COLUMNS_WITHOUT_FOREIGN_KEY,
+} from '../schema/deferredForeignKeys';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../schema/protectedColumns';
 import { EXPIRY_SWEEP_TARGETS } from '../expiry';
 import { genres } from '../schema/genres';
@@ -161,7 +182,7 @@ function tables(): PgTable[] {
  */
 function tablesIn(...modules: readonly Record<string, unknown>[]): PgTable[] {
   return modules.flatMap((module) =>
-    (Object.values(module) as unknown[]).filter((value): value is PgTable => isTable(value))
+    (Object.values(module) as unknown[]).filter((value): value is PgTable => isTable(value)),
   );
 }
 
@@ -184,7 +205,7 @@ function tablesIn(...modules: readonly Record<string, unknown>[]): PgTable[] {
  */
 function findPostGenesisPhaseOrderingViolations(
   entries: readonly { tag: string; phase: DeployPhase }[],
-  boundaryTag: string
+  boundaryTag: string,
 ): string[] {
   const boundaryIndex = entries.findIndex((entry) => entry.tag === boundaryTag);
   if (boundaryIndex === -1) {
@@ -230,7 +251,7 @@ const OVERLONG_IDENTIFIER_EXEMPTIONS: readonly { identifier: string; reason: str
   {
     identifier: 'musicbrainz_artist_urls_musicbrainz_artist_id_musicbrainz_artists_id_fk',
     reason:
-      "Pre-existing: declared by 0000 (Task 2) at 71 bytes, so `syra_dev` holds it as " +
+      'Pre-existing: declared by 0000 (Task 2) at 71 bytes, so `syra_dev` holds it as ' +
       '`musicbrainz_artist_urls_musicbrainz_artist_id_musicbrainz_artis`. Verified against ' +
       'pg_constraint — it is the ONLY declared identifier in eleven migrations that does not exist ' +
       'in the database under its declared name. Fixing it needs a hand-written migration (DROP by ' +
@@ -269,9 +290,10 @@ interface OverlongIdentifier {
   readonly bytes: number;
 }
 
-function findOverlongIdentifiers(
-  files: readonly { file: string; text: string }[]
-): { violations: OverlongIdentifier[]; scanned: number } {
+function findOverlongIdentifiers(files: readonly { file: string; text: string }[]): {
+  violations: OverlongIdentifier[];
+  scanned: number;
+} {
   const seen = new Map<string, string>();
   for (const { file, text } of files) {
     // Identifiers are double-quoted in generated DDL; string literals are
@@ -306,7 +328,7 @@ function findOverlongIdentifiers(
  */
 function findUnexemptedIdentifiers(
   violations: readonly OverlongIdentifier[],
-  exemptions: readonly { identifier: string; reason: string }[]
+  exemptions: readonly { identifier: string; reason: string }[],
 ): { unexempted: OverlongIdentifier[]; stale: string[] } {
   const exempt = new Set(exemptions.map((entry) => entry.identifier));
   const found = new Set(violations.map((violation) => violation.identifier));
@@ -377,7 +399,7 @@ function findUnboundProtectedColumns(): { violations: string[]; scanned: number 
 async function expectRefusedBy(
   query: Promise<unknown>,
   predicate: (error: unknown, constraintName?: string) => boolean,
-  constraintName: string
+  constraintName: string,
 ): Promise<void> {
   let caught: unknown;
   let succeeded = false;
@@ -416,10 +438,10 @@ function expectForeignKey(
   // `UpdateDeleteAction`, not `string`: drizzle's closed union is what makes a
   // typo'd `'set-null'` a compile error here rather than a test that can never
   // pass and is only discovered at runtime.
-  onDelete: UpdateDeleteAction
+  onDelete: UpdateDeleteAction,
 ): void {
   const fk = getTableConfig(table).foreignKeys.find((foreignKey) =>
-    foreignKey.reference().columns.some((column) => sqlColumnName(column) === sqlColumn)
+    foreignKey.reference().columns.some((column) => sqlColumnName(column) === sqlColumn),
   );
   expect(fk).toBeDefined();
   // `toBeDefined()` does not narrow for TypeScript, and this repo bans `!`.
@@ -491,7 +513,7 @@ describe('schema gates', () => {
     // holds, not merely "found nothing wrong".
     const declared = Object.values(PROTECTED_COLUMNS_BY_TABLE).reduce(
       (total, properties) => total + properties.length,
-      0
+      0,
     );
     expect(scanned).toBe(declared);
     // Raised from 14 by Task 6, which registered `rooms`' four internal
@@ -544,7 +566,10 @@ describe('schema gates', () => {
     // names an over-limit identifier is debt paid without anyone removing the
     // note, the same check `findIdColumnViolations` runs against its own two
     // ledgers.
-    const { unexempted, stale } = findUnexemptedIdentifiers(violations, OVERLONG_IDENTIFIER_EXEMPTIONS);
+    const { unexempted, stale } = findUnexemptedIdentifiers(
+      violations,
+      OVERLONG_IDENTIFIER_EXEMPTIONS,
+    );
     expect(unexempted).toEqual([]);
     expect(stale).toEqual([]);
   });
@@ -581,13 +606,16 @@ describe('schema gates', () => {
 
     // The exempt name itself still passes, and nothing is reported stale.
     expect(
-      findUnexemptedIdentifiers([{ identifier: exempt, file: 'a.sql', bytes: 70 }], exemptions)
+      findUnexemptedIdentifiers([{ identifier: exempt, file: 'a.sql', bytes: 70 }], exemptions),
     ).toEqual({ unexempted: [], stale: [] });
 
     // A superstring is a DIFFERENT identifier: it must be reported, and it
     // must not stand in for the exemption either.
     expect(
-      findUnexemptedIdentifiers([{ identifier: superstring, file: 'b.sql', bytes: 74 }], exemptions)
+      findUnexemptedIdentifiers(
+        [{ identifier: superstring, file: 'b.sql', bytes: 74 }],
+        exemptions,
+      ),
     ).toEqual({
       unexempted: [{ identifier: superstring, file: 'b.sql', bytes: 74 }],
       stale: [`stale_identifier_exemption: ${exempt}`],
@@ -658,8 +686,8 @@ describe('catalog schema (Task 2)', () => {
             type: 'artist',
             source: 'upload',
             linkedArtistId: artist.id,
-          })
-        )
+          }),
+        ),
       ).rejects.toThrow();
     } finally {
       // `syra_dev` is a shared dev database other tasks also run migrations
@@ -675,8 +703,10 @@ describe('catalog schema (Task 2)', () => {
     // Artist, no source: rejected.
     await expect(
       Promise.resolve(
-        db.insert(catalogEntities).values({ name: 'CHECK-fixture-artist-no-source', type: 'artist' })
-      )
+        db
+          .insert(catalogEntities)
+          .values({ name: 'CHECK-fixture-artist-no-source', type: 'artist' }),
+      ),
     ).rejects.toThrow();
 
     // Person, no source: accepted — the CHECK must not tighten anything
@@ -812,18 +842,16 @@ describe('track_keys, one column per id space (Task 13a)', () => {
       .returning({ id: userUploads.id });
 
     try {
-      await db
-        .insert(trackKeys)
-        .values({
-          userUploadId: upload.id,
-          keyHex: 'CHECK-fixture-key-hex',
-          keyUri: 'CHECK-fixture-key-uri',
-        });
+      await db.insert(trackKeys).values({
+        userUploadId: upload.id,
+        keyHex: 'CHECK-fixture-key-hex',
+        keyUri: 'CHECK-fixture-key-uri',
+      });
 
       await db.delete(userUploads).where(eq(userUploads.id, upload.id));
 
       expect(
-        await db.select().from(trackKeys).where(eq(trackKeys.userUploadId, upload.id))
+        await db.select().from(trackKeys).where(eq(trackKeys.userUploadId, upload.id)),
       ).toEqual([]);
     } finally {
       await db.delete(trackKeys).where(eq(trackKeys.userUploadId, upload.id));
@@ -859,18 +887,16 @@ describe('track_keys, one column per id space (Task 13a)', () => {
         })
         .returning({ id: episodes.id });
 
-      await db
-        .insert(trackKeys)
-        .values({
-          episodeId: episode.id,
-          keyHex: 'CHECK-fixture-key-hex',
-          keyUri: 'CHECK-fixture-key-uri',
-        });
+      await db.insert(trackKeys).values({
+        episodeId: episode.id,
+        keyHex: 'CHECK-fixture-key-hex',
+        keyUri: 'CHECK-fixture-key-uri',
+      });
 
       await db.delete(episodes).where(eq(episodes.id, episode.id));
-      expect(
-        await db.select().from(trackKeys).where(eq(trackKeys.episodeId, episode.id))
-      ).toEqual([]);
+      expect(await db.select().from(trackKeys).where(eq(trackKeys.episodeId, episode.id))).toEqual(
+        [],
+      );
 
       // Same again, deleted one level up.
       const [second] = await db
@@ -884,18 +910,16 @@ describe('track_keys, one column per id space (Task 13a)', () => {
           source: 'syra',
         })
         .returning({ id: episodes.id });
-      await db
-        .insert(trackKeys)
-        .values({
-          episodeId: second.id,
-          keyHex: 'CHECK-fixture-key-hex',
-          keyUri: 'CHECK-fixture-key-uri',
-        });
+      await db.insert(trackKeys).values({
+        episodeId: second.id,
+        keyHex: 'CHECK-fixture-key-hex',
+        keyUri: 'CHECK-fixture-key-uri',
+      });
 
       await db.delete(podcasts).where(eq(podcasts.id, podcast.id));
-      expect(
-        await db.select().from(trackKeys).where(eq(trackKeys.episodeId, second.id))
-      ).toEqual([]);
+      expect(await db.select().from(trackKeys).where(eq(trackKeys.episodeId, second.id))).toEqual(
+        [],
+      );
     } finally {
       await db.delete(podcasts).where(eq(podcasts.id, podcast.id));
     }
@@ -923,10 +947,10 @@ describe('track_keys, one column per id space (Task 13a)', () => {
     try {
       await expectRefusedBy(
         Promise.resolve(
-          db.insert(trackKeys).values({ keyHex: 'CHECK-fixture-none', keyUri: 'none' })
+          db.insert(trackKeys).values({ keyHex: 'CHECK-fixture-none', keyUri: 'none' }),
         ),
         isCheckViolation,
-        'track_keys_one_parent_check'
+        'track_keys_one_parent_check',
       );
 
       await expectRefusedBy(
@@ -936,10 +960,10 @@ describe('track_keys, one column per id space (Task 13a)', () => {
             userUploadId: upload.id,
             keyHex: 'CHECK-fixture-two',
             keyUri: 'two',
-          })
+          }),
         ),
         isCheckViolation,
-        'track_keys_one_parent_check'
+        'track_keys_one_parent_check',
       );
     } finally {
       await db.delete(trackKeys).where(eq(trackKeys.trackId, trackId));
@@ -961,10 +985,10 @@ describe('track_keys, one column per id space (Task 13a)', () => {
       await db.insert(trackKeys).values({ trackId, keyHex: 'CHECK-fixture-first', keyUri: 'a' });
       await expectRefusedBy(
         Promise.resolve(
-          db.insert(trackKeys).values({ trackId, keyHex: 'CHECK-fixture-second', keyUri: 'b' })
+          db.insert(trackKeys).values({ trackId, keyHex: 'CHECK-fixture-second', keyUri: 'b' }),
         ),
         isUniqueViolation,
-        'track_keys_track_id_key'
+        'track_keys_track_id_key',
       );
     } finally {
       await db.delete(trackKeys).where(eq(trackKeys.trackId, trackId));
@@ -1031,13 +1055,17 @@ describe('catalog dedup constraints (Task 19a)', () => {
     });
 
     try {
-      await db.insert(albums).values(album('CHECK-fixture-mbid-1', { externalMusicbrainzReleaseId: 'mbid-x' }));
+      await db
+        .insert(albums)
+        .values(album('CHECK-fixture-mbid-1', { externalMusicbrainzReleaseId: 'mbid-x' }));
       await expectRefusedBy(
         Promise.resolve(
-          db.insert(albums).values(album('CHECK-fixture-mbid-2', { externalMusicbrainzReleaseId: 'mbid-x' }))
+          db
+            .insert(albums)
+            .values(album('CHECK-fixture-mbid-2', { externalMusicbrainzReleaseId: 'mbid-x' })),
         ),
         isUniqueViolation,
-        'albums_external_musicbrainz_release_id_key'
+        'albums_external_musicbrainz_release_id_key',
       );
 
       // Dedup tier 2 is OPTIONAL: most releases carry no MBID at all, and a
@@ -1079,10 +1107,10 @@ describe('catalog dedup constraints (Task 19a)', () => {
             releaseDate: '2020-01-01',
             coverArtId,
             upc: 'CHECK-fixture-upc-value',
-          })
+          }),
         ),
         isUniqueViolation,
-        'albums_upc_key'
+        'albums_upc_key',
       );
     } finally {
       await db.delete(albums).where(eq(albums.artistId, artist.id));
@@ -1105,12 +1133,15 @@ describe('catalog dedup constraints (Task 19a)', () => {
 
       await expectRefusedBy(
         Promise.resolve(
-          db
-            .insert(catalogEntities)
-            .values({ name: 'CHECK-fixture Shared Again', nameKey, type: 'artist', source: 'upload' })
+          db.insert(catalogEntities).values({
+            name: 'CHECK-fixture Shared Again',
+            nameKey,
+            type: 'artist',
+            source: 'upload',
+          }),
         ),
         isUniqueViolation,
-        'catalog_entities_artist_name_key_key'
+        'catalog_entities_artist_name_key_key',
       );
 
       // Same key, type person — OUTSIDE the partial index, so accepted.
@@ -1139,10 +1170,10 @@ describe('catalog dedup constraints (Task 19a)', () => {
         Promise.resolve(
           db
             .insert(catalogEntities)
-            .values({ name: 'CHECK-fixture Linked 2', type: 'person', linkedOxyUserId })
+            .values({ name: 'CHECK-fixture Linked 2', type: 'person', linkedOxyUserId }),
         ),
         isUniqueViolation,
-        'catalog_entities_linked_oxy_user_id_key'
+        'catalog_entities_linked_oxy_user_id_key',
       );
 
       await db.insert(catalogEntities).values({
@@ -1158,10 +1189,10 @@ describe('catalog dedup constraints (Task 19a)', () => {
             type: 'artist',
             source: 'upload',
             externalMusicbrainzArtistId: mbid,
-          })
+          }),
         ),
         isUniqueViolation,
-        'catalog_entities_external_musicbrainz_artist_id_key'
+        'catalog_entities_external_musicbrainz_artist_id_key',
       );
     } finally {
       await db.delete(catalogEntities).where(eq(catalogEntities.linkedOxyUserId, linkedOxyUserId));
@@ -1219,7 +1250,9 @@ describe('library and playlist schema (Task 3)', () => {
   ];
 
   it('lands exactly the tables this task promises', () => {
-    const present = tablesIn(libraryModule).map((table) => getTableConfig(table).name).sort();
+    const present = tablesIn(libraryModule)
+      .map((table) => getTableConfig(table).name)
+      .sort();
     expect(present).toEqual([...EXPECTED_TABLES].sort());
   });
 
@@ -1239,7 +1272,7 @@ describe('library and playlist schema (Task 3)', () => {
         'user_followed_artists',
         'user_saved_playlists',
         'user_podcast_subscriptions',
-      ])
+      ]),
     );
   });
 
@@ -1247,8 +1280,10 @@ describe('library and playlist schema (Task 3)', () => {
     const db = getDb();
     await expect(
       Promise.resolve(
-        db.insert(playbackStates).values({ oxyUserId: 'CHECK-fixture-position-user', positionMs: -1 })
-      )
+        db
+          .insert(playbackStates)
+          .values({ oxyUserId: 'CHECK-fixture-position-user', positionMs: -1 }),
+      ),
     ).rejects.toThrow();
   });
 
@@ -1256,8 +1291,8 @@ describe('library and playlist schema (Task 3)', () => {
     const db = getDb();
     await expect(
       Promise.resolve(
-        db.insert(playbackStates).values({ oxyUserId: 'CHECK-fixture-volume-user', volume: 1.5 })
-      )
+        db.insert(playbackStates).values({ oxyUserId: 'CHECK-fixture-volume-user', volume: 1.5 }),
+      ),
     ).rejects.toThrow();
   });
 
@@ -1291,13 +1326,13 @@ describe('library and playlist schema (Task 3)', () => {
     expect(remaining).toEqual([]);
   });
 
-  it('indexes playlist_collaborators.oxy_user_id — the reverse direction getUserPlaylists\' $or needs', async () => {
+  it("indexes playlist_collaborators.oxy_user_id — the reverse direction getUserPlaylists' $or needs", async () => {
     const db = getDb();
     // Verified against the MIGRATED catalogue, not the drizzle declaration —
     // a migration that dropped the index would fail this too.
     const rows = await executeRows<{ indexname: string }>(
       db,
-      sql`select indexname from pg_indexes where tablename = 'playlist_collaborators'`
+      sql`select indexname from pg_indexes where tablename = 'playlist_collaborators'`,
     );
     const names = rows.map((row) => row.indexname);
     expect(names).toContain('playlist_collaborators_oxy_user_id_idx');
@@ -1323,7 +1358,9 @@ describe('podcasts schema (Task 4)', () => {
   ];
 
   it('lands exactly the tables this task promises', () => {
-    const present = tablesIn(podcastsModule).map((table) => getTableConfig(table).name).sort();
+    const present = tablesIn(podcastsModule)
+      .map((table) => getTableConfig(table).name)
+      .sort();
     expect(present).toEqual([...EXPECTED_TABLES].sort());
   });
 
@@ -1356,7 +1393,7 @@ describe('podcasts schema (Task 4)', () => {
     // named (`sqlColumnName` and `column.name` agree by coincidence, not by
     // correctness).
     const fk = getTableConfig(userPodcastSubscriptions).foreignKeys.find((foreignKey) =>
-      foreignKey.reference().columns.some((column) => sqlColumnName(column) === 'podcast_id')
+      foreignKey.reference().columns.some((column) => sqlColumnName(column) === 'podcast_id'),
     );
     expect(fk).toBeDefined();
     // Non-null assertion would violate this repo's own ban on `!` — narrow
@@ -1377,8 +1414,8 @@ describe('podcasts schema (Task 4)', () => {
           source: 'syra',
           status: 'active',
           popularity: 101,
-        })
-      )
+        }),
+      ),
     ).rejects.toThrow();
 
     // The episodes half of this test's own name: a schema that never
@@ -1388,7 +1425,12 @@ describe('podcasts schema (Task 4)', () => {
     // NOT NULL), so wrap in try/finally like this block's other tests.
     const [podcast] = await db
       .insert(podcasts)
-      .values({ title: 'CHECK-fixture-popularity-podcast', type: 'episodic', source: 'syra', status: 'active' })
+      .values({
+        title: 'CHECK-fixture-popularity-podcast',
+        type: 'episodic',
+        source: 'syra',
+        status: 'active',
+      })
       .returning({ id: podcasts.id });
 
     try {
@@ -1404,8 +1446,8 @@ describe('podcasts schema (Task 4)', () => {
             source: 'syra',
             status: 'ready',
             popularity: 101,
-          })
-        )
+          }),
+        ),
       ).rejects.toThrow();
     } finally {
       await db.delete(podcasts).where(eq(podcasts.id, podcast.id));
@@ -1432,7 +1474,7 @@ describe('podcasts schema (Task 4)', () => {
     const constraints = await executeRows<{ conname: string }>(
       db,
       sql`select conname from pg_constraint
-          where conrelid = 'podcasts'::regclass and contype = 'c'`
+          where conrelid = 'podcasts'::regclass and contype = 'c'`,
     );
     expect(constraints.map((row) => row.conname)).toContain('podcasts_visibility_check');
 
@@ -1442,8 +1484,8 @@ describe('podcasts schema (Task 4)', () => {
     await expect(
       Promise.resolve(
         db.execute(sql`insert into podcasts (id, title, source, visibility)
-                       values ('CHECK-fixture-visibility', 'CHECK-fixture', 'syra', 'secret')`)
-      )
+                       values ('CHECK-fixture-visibility', 'CHECK-fixture', 'syra', 'secret')`),
+      ),
     ).rejects.toThrow();
 
     // And a row that says nothing about visibility is PUBLIC.
@@ -1464,7 +1506,12 @@ describe('podcasts schema (Task 4)', () => {
 
     const [podcast] = await db
       .insert(podcasts)
-      .values({ title: 'CHECK-fixture-cascade-podcast', type: 'episodic', source: 'syra', status: 'active' })
+      .values({
+        title: 'CHECK-fixture-cascade-podcast',
+        type: 'episodic',
+        source: 'syra',
+        status: 'active',
+      })
       .returning({ id: podcasts.id });
 
     await db
@@ -1489,15 +1536,24 @@ describe('podcasts schema (Task 4)', () => {
       .returning({ id: genres.id });
     const [podcast] = await db
       .insert(podcasts)
-      .values({ title: 'CHECK-fixture-genre-podcast', type: 'episodic', source: 'syra', status: 'active' })
+      .values({
+        title: 'CHECK-fixture-genre-podcast',
+        type: 'episodic',
+        source: 'syra',
+        status: 'active',
+      })
       .returning({ id: podcasts.id });
 
     try {
-      await db.insert(podcastCategories).values({ podcastId: podcast.id, genreId: genre.id, position: 0 });
+      await db
+        .insert(podcastCategories)
+        .values({ podcastId: podcast.id, genreId: genre.id, position: 0 });
 
       // RESTRICT — the genre cannot be deleted while a podcast still
       // references it, matching album_genres' own treatment in catalog.ts.
-      await expect(Promise.resolve(db.delete(genres).where(eq(genres.id, genre.id)))).rejects.toThrow();
+      await expect(
+        Promise.resolve(db.delete(genres).where(eq(genres.id, genre.id))),
+      ).rejects.toThrow();
     } finally {
       await db.delete(podcastCategories).where(eq(podcastCategories.podcastId, podcast.id));
       await db.delete(podcasts).where(eq(podcasts.id, podcast.id));
@@ -1549,7 +1605,7 @@ describe('podcasts schema (Task 4)', () => {
       // produce: an album genre insert that never mentions `kind` at all,
       // pointed at a genre row that is `kind = 'podcast'`.
       await expect(
-        Promise.resolve(db.insert(albumGenres).values({ albumId: album.id, genreId: genre.id }))
+        Promise.resolve(db.insert(albumGenres).values({ albumId: album.id, genreId: genre.id })),
       ).rejects.toThrow();
     } finally {
       await db.delete(albumGenres).where(eq(albumGenres.albumId, album.id));
@@ -1565,7 +1621,12 @@ describe('podcasts schema (Task 4)', () => {
 
     const [podcast] = await db
       .insert(podcasts)
-      .values({ title: 'CHECK-fixture-guid-podcast', type: 'episodic', source: 'syra', status: 'active' })
+      .values({
+        title: 'CHECK-fixture-guid-podcast',
+        type: 'episodic',
+        source: 'syra',
+        status: 'active',
+      })
       .returning({ id: podcasts.id });
 
     try {
@@ -1591,8 +1652,8 @@ describe('podcasts schema (Task 4)', () => {
             episodeType: 'full',
             source: 'syra',
             status: 'ready',
-          })
-        )
+          }),
+        ),
       ).rejects.toThrow();
     } finally {
       await db.delete(episodes).where(eq(episodes.podcastId, podcast.id));
@@ -1605,7 +1666,12 @@ describe('podcasts schema (Task 4)', () => {
 
     const [podcast] = await db
       .insert(podcasts)
-      .values({ title: 'CHECK-fixture-progress-podcast', type: 'episodic', source: 'syra', status: 'active' })
+      .values({
+        title: 'CHECK-fixture-progress-podcast',
+        type: 'episodic',
+        source: 'syra',
+        status: 'active',
+      })
       .returning({ id: podcasts.id });
     const [episode] = await db
       .insert(episodes)
@@ -1621,7 +1687,9 @@ describe('podcasts schema (Task 4)', () => {
       })
       .returning({ id: episodes.id });
 
-    await db.insert(episodeProgress).values({ oxyUserId: 'CHECK-fixture-listener', episodeId: episode.id });
+    await db
+      .insert(episodeProgress)
+      .values({ oxyUserId: 'CHECK-fixture-listener', episodeId: episode.id });
 
     await db.delete(podcasts).where(eq(podcasts.id, podcast.id));
 
@@ -1643,7 +1711,12 @@ describe('podcasts schema (Task 4)', () => {
 
     const [podcast] = await db
       .insert(podcasts)
-      .values({ title: 'CHECK-fixture-hls-podcast', type: 'episodic', source: 'syra', status: 'active' })
+      .values({
+        title: 'CHECK-fixture-hls-podcast',
+        type: 'episodic',
+        source: 'syra',
+        status: 'active',
+      })
       .returning({ id: podcasts.id });
     const [episode] = await db
       .insert(episodes)
@@ -1698,7 +1771,9 @@ describe('creators and uploads schema (Task 5)', () => {
   ];
 
   it('lands exactly the tables this task promises', () => {
-    const present = tablesIn(creatorsModule).map((table) => getTableConfig(table).name).sort();
+    const present = tablesIn(creatorsModule)
+      .map((table) => getTableConfig(table).name)
+      .sort();
     expect(present).toEqual([...EXPECTED_TABLES].sort());
   });
 
@@ -1719,7 +1794,9 @@ describe('creators and uploads schema (Task 5)', () => {
     // `sqlColumnName(column)`, never `column.name`: the latter is the
     // TypeScript property (`copyrightReportId`), not the SQL name.
     const fk = getTableConfig(tracks).foreignKeys.find((foreignKey) =>
-      foreignKey.reference().columns.some((column) => sqlColumnName(column) === 'copyright_report_id')
+      foreignKey
+        .reference()
+        .columns.some((column) => sqlColumnName(column) === 'copyright_report_id'),
     );
     expect(fk).toBeDefined();
     if (!fk) throw new Error('unreachable: asserted toBeDefined() above');
@@ -1759,15 +1836,12 @@ describe('creators and uploads schema (Task 5)', () => {
       await expectRefusedBy(
         Promise.resolve(db.delete(tracks).where(eq(tracks.id, track.id))),
         isForeignKeyViolation,
-        'copyright_reports_track_id_tracks_id_fk'
+        'copyright_reports_track_id_tracks_id_fk',
       );
 
       // And the report is what `tracks.copyright_report_id` points at, with
       // the SET NULL that closed the deferred ledger entry above.
-      await db
-        .update(tracks)
-        .set({ copyrightReportId: report.id })
-        .where(eq(tracks.id, track.id));
+      await db.update(tracks).set({ copyrightReportId: report.id }).where(eq(tracks.id, track.id));
       await db.delete(copyrightReports).where(eq(copyrightReports.id, report.id));
       const [after] = await db
         .select({ copyrightReportId: tracks.copyrightReportId })
@@ -1812,7 +1886,7 @@ describe('creators and uploads schema (Task 5)', () => {
       await expectRefusedBy(
         Promise.resolve(db.delete(tracks).where(eq(tracks.id, track.id))),
         isForeignKeyViolation,
-        'contribution_attestations_track_id_tracks_id_fk'
+        'contribution_attestations_track_id_tracks_id_fk',
       );
 
       // The markers child table cascades from the attestation, so the
@@ -1823,17 +1897,25 @@ describe('creators and uploads schema (Task 5)', () => {
         code: 'CHECK-fixture-marker',
         weight: 'blocking',
       });
-      await db.delete(contributionAttestations).where(eq(contributionAttestations.id, attestation.id));
+      await db
+        .delete(contributionAttestations)
+        .where(eq(contributionAttestations.id, attestation.id));
       const remaining = await db
         .select()
         .from(contributionAttestationProvenanceMarkers)
-        .where(eq(contributionAttestationProvenanceMarkers.contributionAttestationId, attestation.id));
+        .where(
+          eq(contributionAttestationProvenanceMarkers.contributionAttestationId, attestation.id),
+        );
       expect(remaining).toEqual([]);
     } finally {
       await db
         .delete(contributionAttestationProvenanceMarkers)
-        .where(eq(contributionAttestationProvenanceMarkers.contributionAttestationId, attestation.id));
-      await db.delete(contributionAttestations).where(eq(contributionAttestations.id, attestation.id));
+        .where(
+          eq(contributionAttestationProvenanceMarkers.contributionAttestationId, attestation.id),
+        );
+      await db
+        .delete(contributionAttestations)
+        .where(eq(contributionAttestations.id, attestation.id));
       await db.delete(tracks).where(eq(tracks.id, track.id));
       await db.delete(catalogEntities).where(eq(catalogEntities.id, artist.id));
     }
@@ -1888,10 +1970,10 @@ describe('creators and uploads schema (Task 5)', () => {
             uploaderOxyUserId: 'CHECK-fixture-unique-uploader-2',
             statement: 'CHECK-fixture-unique-statement-2',
             acceptedAt: new Date(),
-          })
+          }),
         ),
         isUniqueViolation,
-        'contribution_attestations_track_id_key'
+        'contribution_attestations_track_id_key',
       );
 
       // `position` is what preserves the Mongo array's ORDER in both markers
@@ -1910,10 +1992,10 @@ describe('creators and uploads schema (Task 5)', () => {
             position: 0,
             code: 'CHECK-fixture-marker-again',
             weight: 'low',
-          })
+          }),
         ),
         isUniqueViolation,
-        'contribution_attestation_provenance_markers_position_key'
+        'contribution_attestation_provenance_markers_position_key',
       );
 
       await db.insert(userUploadProvenanceMarkers).values({
@@ -1929,18 +2011,24 @@ describe('creators and uploads schema (Task 5)', () => {
             position: 0,
             code: 'CHECK-fixture-marker-again',
             weight: 'low',
-          })
+          }),
         ),
         isUniqueViolation,
-        'user_upload_provenance_markers_user_upload_id_position_key'
+        'user_upload_provenance_markers_user_upload_id_position_key',
       );
     } finally {
-      await db.delete(userUploadProvenanceMarkers).where(eq(userUploadProvenanceMarkers.userUploadId, upload.id));
+      await db
+        .delete(userUploadProvenanceMarkers)
+        .where(eq(userUploadProvenanceMarkers.userUploadId, upload.id));
       await db.delete(userUploads).where(eq(userUploads.id, upload.id));
       await db
         .delete(contributionAttestationProvenanceMarkers)
-        .where(eq(contributionAttestationProvenanceMarkers.contributionAttestationId, attestation.id));
-      await db.delete(contributionAttestations).where(eq(contributionAttestations.trackId, track.id));
+        .where(
+          eq(contributionAttestationProvenanceMarkers.contributionAttestationId, attestation.id),
+        );
+      await db
+        .delete(contributionAttestations)
+        .where(eq(contributionAttestations.trackId, track.id));
       await db.delete(tracks).where(eq(tracks.id, track.id));
       await db.delete(catalogEntities).where(eq(catalogEntities.id, artist.id));
     }
@@ -1995,7 +2083,9 @@ describe('creators and uploads schema (Task 5)', () => {
         .where(eq(contributorStrikes.id, strike.id));
       expect(remaining).toEqual([]);
     } finally {
-      await db.delete(contributorStrikes).where(eq(contributorStrikes.contributorStandingId, standing.id));
+      await db
+        .delete(contributorStrikes)
+        .where(eq(contributorStrikes.contributorStandingId, standing.id));
       await db.delete(contributorStandings).where(eq(contributorStandings.id, standing.id));
       await db.delete(tracks).where(eq(tracks.id, track.id));
       await db.delete(catalogEntities).where(eq(catalogEntities.id, artist.id));
@@ -2025,17 +2115,20 @@ describe('creators and uploads schema (Task 5)', () => {
             artistId: artist.id,
             oxyUserId: 'CHECK-fixture-claimant',
             evidence: 'CHECK-fixture-evidence-again',
-          })
+          }),
         ),
         isUniqueViolation,
-        'artist_claims_artist_id_oxy_user_id_pending_key'
+        'artist_claims_artist_id_oxy_user_id_pending_key',
       );
 
       // Resolved rows are OUTSIDE the index, so a claimant who was rejected
       // may come back with better evidence. This is the half a plain
       // `unique(artist_id, oxy_user_id)` would have silently forbidden, and
       // the reason the index is partial.
-      await db.update(artistClaims).set({ status: 'rejected' }).where(eq(artistClaims.artistId, artist.id));
+      await db
+        .update(artistClaims)
+        .set({ status: 'rejected' })
+        .where(eq(artistClaims.artistId, artist.id));
       const [reopened] = await db
         .insert(artistClaims)
         .values({
@@ -2048,7 +2141,10 @@ describe('creators and uploads schema (Task 5)', () => {
 
       // A claim has no meaning without the artist it claims — CASCADE.
       await db.delete(catalogEntities).where(eq(catalogEntities.id, artist.id));
-      const remaining = await db.select().from(artistClaims).where(eq(artistClaims.artistId, artist.id));
+      const remaining = await db
+        .select()
+        .from(artistClaims)
+        .where(eq(artistClaims.artistId, artist.id));
       expect(remaining).toEqual([]);
     } finally {
       await db.delete(artistClaims).where(eq(artistClaims.artistId, artist.id));
@@ -2071,10 +2167,10 @@ describe('creators and uploads schema (Task 5)', () => {
             artistId: artist.id,
             oxyUserId: 'CHECK-fixture-long-claimant',
             evidence: 'x'.repeat(4001),
-          })
+          }),
         ),
         isCheckViolation,
-        'artist_claims_evidence_length_check'
+        'artist_claims_evidence_length_check',
       );
 
       // 4000 exactly is accepted — the boundary is `<=`, not `<`, so a CHECK
@@ -2121,10 +2217,10 @@ describe('creators and uploads schema (Task 5)', () => {
             duration: 200,
             sizeBytes: 1024,
             sha256: 'CHECK-fixture-sha256',
-          })
+          }),
         ),
         isUniqueViolation,
-        'user_uploads_owner_oxy_user_id_sha256_key'
+        'user_uploads_owner_oxy_user_id_sha256_key',
       );
 
       // Another owner's copy of the same bytes is a different row — the
@@ -2162,22 +2258,26 @@ describe('creators and uploads schema (Task 5)', () => {
         await db
           .select()
           .from(userUploadHlsRenditions)
-          .where(eq(userUploadHlsRenditions.userUploadId, upload.id))
+          .where(eq(userUploadHlsRenditions.userUploadId, upload.id)),
       ).toEqual([]);
       expect(
         await db
           .select()
           .from(userUploadProvenanceMarkers)
-          .where(eq(userUploadProvenanceMarkers.userUploadId, upload.id))
+          .where(eq(userUploadProvenanceMarkers.userUploadId, upload.id)),
       ).toEqual([]);
     } finally {
-      await db.delete(userUploadHlsRenditions).where(eq(userUploadHlsRenditions.userUploadId, upload.id));
-      await db.delete(userUploadProvenanceMarkers).where(eq(userUploadProvenanceMarkers.userUploadId, upload.id));
+      await db
+        .delete(userUploadHlsRenditions)
+        .where(eq(userUploadHlsRenditions.userUploadId, upload.id));
+      await db
+        .delete(userUploadProvenanceMarkers)
+        .where(eq(userUploadProvenanceMarkers.userUploadId, upload.id));
       await db.delete(userUploads).where(eq(userUploads.id, upload.id));
     }
   });
 
-  it('nulls a locker file\'s matched_track_id when the catalog track goes, keeping the file', async () => {
+  it("nulls a locker file's matched_track_id when the catalog track goes, keeping the file", async () => {
     const db = getDb();
 
     const [artist] = await db
@@ -2212,7 +2312,10 @@ describe('creators and uploads schema (Task 5)', () => {
       // the track must not take the owner's own file with it.
       await db.delete(tracks).where(eq(tracks.id, track.id));
       const [after] = await db
-        .select({ matchedTrackId: userUploads.matchedTrackId, resolvedArtistId: userUploads.resolvedArtistId })
+        .select({
+          matchedTrackId: userUploads.matchedTrackId,
+          resolvedArtistId: userUploads.resolvedArtistId,
+        })
         .from(userUploads)
         .where(eq(userUploads.id, upload.id));
       expect(after.matchedTrackId).toBeNull();
@@ -2233,7 +2336,7 @@ describe('creators and uploads schema (Task 5)', () => {
     // collection this design expects to reach millions of rows.
     const rows = await executeRows<{ indexname: string }>(
       db,
-      sql`select indexname from pg_indexes where tablename = 'user_uploads'`
+      sql`select indexname from pg_indexes where tablename = 'user_uploads'`,
     );
     const names = rows.map((row) => row.indexname);
     expect(names).toContain('user_uploads_deleted_at_idx');
@@ -2256,7 +2359,7 @@ describe('creators and uploads schema (Task 5)', () => {
    */
   it('keeps user_uploads.expires_at OUT of the blind expiry sweep', () => {
     const swept = EXPIRY_SWEEP_TARGETS.map(
-      (target) => `${getTableConfig(target.table).name}.${sqlColumnName(target.column)}`
+      (target) => `${getTableConfig(target.table).name}.${sqlColumnName(target.column)}`,
     );
     expect(swept).not.toContain('user_uploads.expires_at');
     // Vacuity floor: an empty registry would satisfy the line above for the
@@ -2280,7 +2383,7 @@ describe('creators and uploads schema (Task 5)', () => {
     // phases that read it filter `deletedAt: null`.
     const rows = await executeRows<{ indexname: string; indexdef: string }>(
       db,
-      sql`select indexname, indexdef from pg_indexes where tablename = 'user_uploads'`
+      sql`select indexname, indexdef from pg_indexes where tablename = 'user_uploads'`,
     );
     const definitions = new Map(rows.map((row) => [row.indexname, row.indexdef]));
 
@@ -2329,7 +2432,9 @@ describe('rooms and live schema (Task 6)', () => {
   ];
 
   it('lands exactly the tables this task promises', () => {
-    const present = tablesIn(roomsModule).map((table) => getTableConfig(table).name).sort();
+    const present = tablesIn(roomsModule)
+      .map((table) => getTableConfig(table).name)
+      .sort();
     expect(present).toEqual([...EXPECTED_TABLES].sort());
   });
 
@@ -2339,7 +2444,9 @@ describe('rooms and live schema (Task 6)', () => {
     // halves are asserted, because either alone would pass while the other
     // was wrong: no `topic_id` column survived the port, AND no `topics`
     // table was invented to give it something to point at.
-    const roomColumns = Object.values(getTableColumns(rooms)).map((column) => sqlColumnName(column));
+    const roomColumns = Object.values(getTableColumns(rooms)).map((column) =>
+      sqlColumnName(column),
+    );
     expect(roomColumns).not.toContain('topic_id');
     // `topic`, the free-text field, is a DIFFERENT and genuinely-used column
     // and must survive — without this the test would also pass against a port
@@ -2353,8 +2460,8 @@ describe('rooms and live schema (Task 6)', () => {
     // parent, which a rooms-only check could not see.
     const everyColumn = tables().flatMap((table) =>
       Object.values(getTableColumns(table)).map(
-        (column) => `${getTableConfig(table).name}.${sqlColumnName(column)}`
-      )
+        (column) => `${getTableConfig(table).name}.${sqlColumnName(column)}`,
+      ),
     );
     expect(everyColumn.filter((name) => name.endsWith('.topic_id'))).toEqual([]);
   });
@@ -2463,7 +2570,7 @@ describe('rooms and live schema (Task 6)', () => {
 
       // A membership in a house that no longer exists is nothing — CASCADE.
       expect(
-        await db.select().from(houseMembers).where(eq(houseMembers.houseId, house.id))
+        await db.select().from(houseMembers).where(eq(houseMembers.houseId, house.id)),
       ).toEqual([]);
 
       /**
@@ -2520,13 +2627,23 @@ describe('rooms and live schema (Task 6)', () => {
       .returning({ id: series.id });
     const [room] = await db
       .insert(rooms)
-      .values({ title: 'CHECK-fixture-generated-room', host: 'CHECK-fixture-host', seriesId: show.id })
+      .values({
+        title: 'CHECK-fixture-generated-room',
+        host: 'CHECK-fixture-host',
+        seriesId: show.id,
+      })
       .returning({ id: rooms.id });
 
     try {
       const [episode] = await db
         .insert(seriesEpisodes)
-        .values({ seriesId: show.id, position: 0, roomId: room.id, scheduledStart: new Date(), episodeNumber: 1 })
+        .values({
+          seriesId: show.id,
+          position: 0,
+          roomId: room.id,
+          scheduledStart: new Date(),
+          episodeNumber: 1,
+        })
         .returning({ id: seriesEpisodes.id });
 
       // RELATIONS.md: an append-only history of what the series scheduled.
@@ -2542,7 +2659,7 @@ describe('rooms and live schema (Task 6)', () => {
       // The series itself owns the log, though — CASCADE from that side.
       await db.delete(series).where(eq(series.id, show.id));
       expect(
-        await db.select().from(seriesEpisodes).where(eq(seriesEpisodes.id, episode.id))
+        await db.select().from(seriesEpisodes).where(eq(seriesEpisodes.id, episode.id)),
       ).toEqual([]);
     } finally {
       await db.delete(seriesEpisodes).where(eq(seriesEpisodes.seriesId, show.id));
@@ -2590,10 +2707,10 @@ describe('rooms and live schema (Task 6)', () => {
       // Refused: a podcast row with no episode to play.
       await expectRefusedBy(
         Promise.resolve(
-          db.insert(roomMediaQueueItems).values({ roomId: room.id, position: 2, kind: 'podcast' })
+          db.insert(roomMediaQueueItems).values({ roomId: room.id, position: 2, kind: 'podcast' }),
         ),
         isCheckViolation,
-        'room_media_queue_items_kind_ids_check'
+        'room_media_queue_items_kind_ids_check',
       );
 
       // Refused: a track row carrying podcast fields. This is the half a
@@ -2606,10 +2723,10 @@ describe('rooms and live schema (Task 6)', () => {
             kind: 'track',
             trackId: 'CHECK-fixture-track-2',
             episodeId: 'CHECK-fixture-smuggled-episode',
-          })
+          }),
         ),
         isCheckViolation,
-        'room_media_queue_items_kind_ids_check'
+        'room_media_queue_items_kind_ids_check',
       );
 
       // Refused: the MIRROR — a podcast row smuggling a track_id. This is the
@@ -2624,10 +2741,10 @@ describe('rooms and live schema (Task 6)', () => {
             kind: 'podcast',
             episodeId: 'CHECK-fixture-episode-2',
             trackId: 'CHECK-fixture-smuggled-track',
-          })
+          }),
         ),
         isCheckViolation,
-        'room_media_queue_items_kind_ids_check'
+        'room_media_queue_items_kind_ids_check',
       );
 
       // And the queue order is a real constraint, not a convention: two rows
@@ -2637,10 +2754,10 @@ describe('rooms and live schema (Task 6)', () => {
         Promise.resolve(
           db
             .insert(roomMediaQueueItems)
-            .values({ roomId: room.id, position: 0, kind: 'track', trackId: 'CHECK-fixture-dup' })
+            .values({ roomId: room.id, position: 0, kind: 'track', trackId: 'CHECK-fixture-dup' }),
         ),
         isUniqueViolation,
-        'room_media_queue_items_room_id_position_key'
+        'room_media_queue_items_room_id_position_key',
       );
     } finally {
       await db.delete(roomMediaQueueItems).where(eq(roomMediaQueueItems.roomId, room.id));
@@ -2664,10 +2781,10 @@ describe('rooms and live schema (Task 6)', () => {
         Promise.resolve(
           db
             .insert(houseMembers)
-            .values({ houseId: house.id, oxyUserId: 'CHECK-fixture-dup-member', role: 'admin' })
+            .values({ houseId: house.id, oxyUserId: 'CHECK-fixture-dup-member', role: 'admin' }),
         ),
         isUniqueViolation,
-        'house_members_house_id_oxy_user_id_key'
+        'house_members_house_id_oxy_user_id_key',
       );
 
       await db.insert(roomUserPreferences).values({ oxyUserId: 'CHECK-fixture-pref-user' });
@@ -2675,10 +2792,10 @@ describe('rooms and live schema (Task 6)', () => {
         Promise.resolve(
           db
             .insert(roomUserPreferences)
-            .values({ oxyUserId: 'CHECK-fixture-pref-user', liveVisibility: 'speaking' })
+            .values({ oxyUserId: 'CHECK-fixture-pref-user', liveVisibility: 'speaking' }),
         ),
         isUniqueViolation,
-        'room_user_preferences_oxy_user_id_key'
+        'room_user_preferences_oxy_user_id_key',
       );
     } finally {
       await db.delete(houseMembers).where(eq(houseMembers.houseId, house.id));
@@ -2717,10 +2834,10 @@ describe('rooms and live schema (Task 6)', () => {
             objectKey: 'CHECK-fixture-object-key-2',
             startedAt: new Date(),
             expiresAt: new Date(Date.now() + 1000),
-          })
+          }),
         ),
         isUniqueViolation,
-        'recordings_egress_id_key'
+        'recordings_egress_id_key',
       );
     } finally {
       await db.delete(recordings).where(eq(recordings.id, recording.id));
@@ -2734,25 +2851,33 @@ describe('rooms and live schema (Task 6)', () => {
     // `<= 10000`) would pass a rejection-only test and still be wrong.
     await expectRefusedBy(
       Promise.resolve(
-        db
-          .insert(rooms)
-          .values({ title: 'CHECK-fixture-bounds', host: 'CHECK-fixture-host', maxParticipants: 10001 })
+        db.insert(rooms).values({
+          title: 'CHECK-fixture-bounds',
+          host: 'CHECK-fixture-host',
+          maxParticipants: 10001,
+        }),
       ),
       isCheckViolation,
-      'rooms_max_participants_check'
+      'rooms_max_participants_check',
     );
     await expectRefusedBy(
       Promise.resolve(
-        db
-          .insert(rooms)
-          .values({ title: 'CHECK-fixture-bounds', host: 'CHECK-fixture-host', maxParticipants: 0 })
+        db.insert(rooms).values({
+          title: 'CHECK-fixture-bounds',
+          host: 'CHECK-fixture-host',
+          maxParticipants: 0,
+        }),
       ),
       isCheckViolation,
-      'rooms_max_participants_check'
+      'rooms_max_participants_check',
     );
     const [accepted] = await db
       .insert(rooms)
-      .values({ title: 'CHECK-fixture-bounds-ok', host: 'CHECK-fixture-host', maxParticipants: 10000 })
+      .values({
+        title: 'CHECK-fixture-bounds-ok',
+        host: 'CHECK-fixture-host',
+        maxParticipants: 10000,
+      })
       .returning({ id: rooms.id });
 
     try {
@@ -2771,10 +2896,10 @@ describe('rooms and live schema (Task 6)', () => {
             recurrenceTime: '09:30',
             roomTemplateTitlePattern: 'CHECK-fixture {n}',
             roomTemplateMaxParticipants: 10001,
-          })
+          }),
         ),
         isCheckViolation,
-        'series_room_template_max_participants_check'
+        'series_room_template_max_participants_check',
       );
 
       // `models/Series.ts:84`'s own `match: /^\d{2}:\d{2}$/`. Mongoose enforces
@@ -2788,10 +2913,10 @@ describe('rooms and live schema (Task 6)', () => {
             recurrenceType: 'weekly',
             recurrenceTime: '9:30',
             roomTemplateTitlePattern: 'CHECK-fixture {n}',
-          })
+          }),
         ),
         isCheckViolation,
-        'series_recurrence_time_check'
+        'series_recurrence_time_check',
       );
     } finally {
       await db.delete(rooms).where(eq(rooms.id, accepted.id));
@@ -2818,10 +2943,10 @@ describe('rooms and live schema (Task 6)', () => {
           host: 'CHECK-fixture-host',
           type: 'talk',
           broadcastKind: 'user',
-        })
+        }),
       ),
       isCheckViolation,
-      'rooms_broadcast_kind_requires_type_check'
+      'rooms_broadcast_kind_requires_type_check',
     );
 
     // (2) A broadcast room's speaker permission is forced to 'invited'
@@ -2834,10 +2959,10 @@ describe('rooms and live schema (Task 6)', () => {
           type: 'broadcast',
           broadcastKind: 'user',
           speakerPermission: 'everyone',
-        })
+        }),
       ),
       isCheckViolation,
-      'rooms_broadcast_speaker_permission_check'
+      'rooms_broadcast_speaker_permission_check',
     );
 
     // Two ACCEPTED shapes, so the CHECKs cannot be passing by forbidding
@@ -2888,7 +3013,7 @@ describe('rooms and live schema (Task 6)', () => {
     const rows = await executeRows<{ indexname: string; indexdef: string }>(
       db,
       sql`select indexname, indexdef from pg_indexes
-          where tablename in ('rooms', 'recordings', 'series', 'series_episodes')`
+          where tablename in ('rooms', 'recordings', 'series', 'series_episodes')`,
     );
     const definitions = new Map(rows.map((row) => [row.indexname, row.indexdef]));
 
@@ -2952,8 +3077,12 @@ describe('rooms and live schema (Task 6)', () => {
     // The one partial index Mongo had no counterpart for at all: every LiveKit
     // webhook delivery does `findOne({ activeIngressId })` against an
     // unindexed column today.
-    expect(definitions.get('rooms_active_ingress_id_idx')).toContain('WHERE (active_ingress_id IS NOT NULL)');
-    expect(definitions.get('series_house_id_active_created_at_idx')).toContain('WHERE (is_active = true)');
+    expect(definitions.get('rooms_active_ingress_id_idx')).toContain(
+      'WHERE (active_ingress_id IS NOT NULL)',
+    );
+    expect(definitions.get('series_house_id_active_created_at_idx')).toContain(
+      'WHERE (is_active = true)',
+    );
   });
 
   it('lets every ON DELETE SET NULL find its rows by index, not by scanning', async () => {
@@ -2988,23 +3117,20 @@ describe('rooms and live schema (Task 6)', () => {
      */
     await db.transaction(async (tx) => {
       await executeRows(tx, sql`set local enable_seqscan = off`);
-      const [setting] = await executeRows<{ enable_seqscan: string }>(
-        tx,
-        sql`show enable_seqscan`
-      );
+      const [setting] = await executeRows<{ enable_seqscan: string }>(tx, sql`show enable_seqscan`);
       expect(setting.enable_seqscan).toBe('off');
 
       for (const [table, column] of SET_NULL_CHILDREN) {
         const plan = await executeRows<{ 'QUERY PLAN': string }>(
           tx,
           sql`explain select 1 from only ${sql.identifier(table)} x
-              where ${sql.identifier(column)} = 'probe' for key share of x`
+              where ${sql.identifier(column)} = 'probe' for key share of x`,
         );
         const text = plan.map((row) => row['QUERY PLAN']).join('\n');
         // Named in the failure message, so a regression says WHICH deletion
         // path started scanning rather than just "expected false to be true".
         expect(`${table}.${column}: ${text.includes('Seq Scan') ? 'SEQ SCAN' : 'index'}`).toBe(
-          `${table}.${column}: index`
+          `${table}.${column}: index`,
         );
       }
     });
@@ -3019,7 +3145,7 @@ describe('rooms and live schema (Task 6)', () => {
     // catalogue so a dropped index fails here too.
     const rows = await executeRows<{ tablename: string; indexname: string }>(
       db,
-      sql`select tablename, indexname from pg_indexes where tablename in ('rooms', 'recordings', 'houses')`
+      sql`select tablename, indexname from pg_indexes where tablename in ('rooms', 'recordings', 'houses')`,
     );
     const names = rows.map((row) => row.indexname);
     expect(names).toContain('recordings_participant_ids_gin');
@@ -3096,7 +3222,9 @@ describe('user, taste and listening schema (Task 7)', () => {
   ];
 
   it('lands exactly the tables this task promises', () => {
-    const present = tablesIn(userModule).map((table) => getTableConfig(table).name).sort();
+    const present = tablesIn(userModule)
+      .map((table) => getTableConfig(table).name)
+      .sort();
     expect(present).toEqual([...EXPECTED_TABLES].sort());
   });
 
@@ -3123,7 +3251,7 @@ describe('user, taste and listening schema (Task 7)', () => {
     // about.
     const registered = EXPIRY_SWEEP_TARGETS.map(
       (target) =>
-        `${getTableConfig(target.table).name}.${sqlColumnName(target.column)}:${target.retentionSeconds}`
+        `${getTableConfig(target.table).name}.${sqlColumnName(target.column)}:${target.retentionSeconds}`,
     );
     expect(registered).toEqual([
       // `expireAfterSeconds: 0` on a column that already holds the deadline.
@@ -3171,7 +3299,7 @@ describe('user, taste and listening schema (Task 7)', () => {
     const rows = await executeRows<{ indexname: string }>(
       db,
       sql`select indexname from pg_indexes
-          where tablename in ('listening_events', 'notification_suppressions')`
+          where tablename in ('listening_events', 'notification_suppressions')`,
     );
     const names = rows.map((row) => row.indexname);
     expect(names).toContain('listening_events_played_at_idx');
@@ -3230,15 +3358,18 @@ describe('user, taste and listening schema (Task 7)', () => {
      * planner setting can leak onto a shared dev database even if this throws.
      */
     const usedIndexes = (plan: readonly { 'QUERY PLAN': string }[]): string[] =>
-      [...plan.map((row) => row['QUERY PLAN']).join('\n').matchAll(/Index (?:Only )?Scan (?:using|on) (\w+)/g)].map(
-        (match) => match[1]
-      );
+      [
+        ...plan
+          .map((row) => row['QUERY PLAN'])
+          .join('\n')
+          .matchAll(/Index (?:Only )?Scan (?:using|on) (\w+)/g),
+      ].map((match) => match[1]);
 
     /** Every btree index whose FIRST key is `table.column` — `indkey[0]`, the same test the expiry gate makes. */
     const leadingKeyIndexes = async (
       executor: Parameters<typeof executeRows>[0],
       table: string,
-      column: string
+      column: string,
     ): Promise<string[]> => {
       const rows = await executeRows<{ indexname: string }>(
         executor,
@@ -3248,7 +3379,7 @@ describe('user, taste and listening schema (Task 7)', () => {
             join pg_class t on t.oid = x.indrelid
             join pg_am am on am.oid = i.relam
             join pg_attribute a on a.attrelid = t.oid and a.attnum = x.indkey[0]
-            where am.amname = 'btree' and t.relname = ${table} and a.attname = ${column}`
+            where am.amname = 'btree' and t.relname = ${table} and a.attname = ${column}`,
       );
       return rows.map((row) => row.indexname);
     };
@@ -3264,14 +3395,14 @@ describe('user, taste and listening schema (Task 7)', () => {
         const plan = await executeRows<{ 'QUERY PLAN': string }>(
           tx,
           sql`explain select 1 from only ${sql.identifier(name)} x
-              where ${sql.identifier(column)} = 'probe' for key share of x`
+              where ${sql.identifier(column)} = 'probe' for key share of x`,
         );
         const used = usedIndexes(plan).filter((index) => expected.includes(index));
         // Named in the message, so a regression says WHICH deletion path
         // started scanning rather than "expected [] to have length 1".
-        expect(`${name}.${column} served by: ${used.join(', ') || 'NO LEADING-KEY INDEX'}`).not.toContain(
-          'NO LEADING-KEY INDEX'
-        );
+        expect(
+          `${name}.${column} served by: ${used.join(', ') || 'NO LEADING-KEY INDEX'}`,
+        ).not.toContain('NO LEADING-KEY INDEX');
       }
 
       for (const target of EXPIRY_SWEEP_TARGETS) {
@@ -3282,14 +3413,14 @@ describe('user, taste and listening schema (Task 7)', () => {
           tx,
           sql`explain select ctid from ${sql.identifier(name)}
               where ${sql.identifier(column)} <= now() - make_interval(secs => ${sql.raw(
-                String(target.retentionSeconds)
+                String(target.retentionSeconds),
               )})
-              limit 1000`
+              limit 1000`,
         );
         const used = usedIndexes(plan).filter((index) => expected.includes(index));
-        expect(`sweep ${name}.${column} served by: ${used.join(', ') || 'NO LEADING-KEY INDEX'}`).not.toContain(
-          'NO LEADING-KEY INDEX'
-        );
+        expect(
+          `sweep ${name}.${column} served by: ${used.join(', ') || 'NO LEADING-KEY INDEX'}`,
+        ).not.toContain('NO LEADING-KEY INDEX');
       }
     });
   });
@@ -3325,12 +3456,16 @@ describe('user, taste and listening schema (Task 7)', () => {
     try {
       const [viaArtist] = await db
         .insert(listeningEvents)
-        .values({ oxyUserId: 'CHECK-fixture-listener', trackId: track.id, artistId: otherArtist.id })
+        .values({
+          oxyUserId: 'CHECK-fixture-listener',
+          trackId: track.id,
+          artistId: otherArtist.id,
+        })
         .returning({ id: listeningEvents.id });
 
       await db.delete(catalogEntities).where(eq(catalogEntities.id, otherArtist.id));
       expect(
-        await db.select().from(listeningEvents).where(eq(listeningEvents.id, viaArtist.id))
+        await db.select().from(listeningEvents).where(eq(listeningEvents.id, viaArtist.id)),
       ).toEqual([]);
 
       const [viaTrack] = await db
@@ -3340,7 +3475,7 @@ describe('user, taste and listening schema (Task 7)', () => {
 
       await db.delete(tracks).where(eq(tracks.id, track.id));
       expect(
-        await db.select().from(listeningEvents).where(eq(listeningEvents.id, viaTrack.id))
+        await db.select().from(listeningEvents).where(eq(listeningEvents.id, viaTrack.id)),
       ).toEqual([]);
     } finally {
       await db.delete(listeningEvents).where(eq(listeningEvents.trackId, track.id));
@@ -3377,17 +3512,17 @@ describe('user, taste and listening schema (Task 7)', () => {
       await expectRefusedBy(
         Promise.resolve(db.insert(listeningEvents).values({ ...event, completion: 1.5 })),
         isCheckViolation,
-        'listening_events_completion_check'
+        'listening_events_completion_check',
       );
       await expectRefusedBy(
         Promise.resolve(db.insert(listeningEvents).values({ ...event, completion: -0.1 })),
         isCheckViolation,
-        'listening_events_completion_check'
+        'listening_events_completion_check',
       );
       await expectRefusedBy(
         Promise.resolve(db.insert(listeningEvents).values({ ...event, listenedSec: -1 })),
         isCheckViolation,
-        'listening_events_listened_sec_check'
+        'listening_events_listened_sec_check',
       );
 
       // The two boundary values are LEGAL — a full play and a zero-completion
@@ -3425,7 +3560,9 @@ describe('user, taste and listening schema (Task 7)', () => {
       .returning({ id: userTasteProfiles.id });
 
     try {
-      await db.insert(userTasteGenres).values({ tasteProfileId: profile.id, genre: 'jazz', weight: 2 });
+      await db
+        .insert(userTasteGenres)
+        .values({ tasteProfileId: profile.id, genre: 'jazz', weight: 2 });
       await db
         .insert(userTasteArtists)
         .values({ tasteProfileId: profile.id, artistId: artist.id, weight: 3 });
@@ -3436,17 +3573,21 @@ describe('user, taste and listening schema (Task 7)', () => {
       // tables have to hold for real.
       await expectRefusedBy(
         Promise.resolve(
-          db.insert(userTasteGenres).values({ tasteProfileId: profile.id, genre: 'jazz', weight: 1 })
+          db
+            .insert(userTasteGenres)
+            .values({ tasteProfileId: profile.id, genre: 'jazz', weight: 1 }),
         ),
         isUniqueViolation,
-        'user_taste_genres_taste_profile_id_genre_key'
+        'user_taste_genres_taste_profile_id_genre_key',
       );
       await expectRefusedBy(
         Promise.resolve(
-          db.insert(userTasteArtists).values({ tasteProfileId: profile.id, artistId: artist.id, weight: 1 })
+          db
+            .insert(userTasteArtists)
+            .values({ tasteProfileId: profile.id, artistId: artist.id, weight: 1 }),
         ),
         isUniqueViolation,
-        'user_taste_artists_taste_profile_id_artist_id_key'
+        'user_taste_artists_taste_profile_id_artist_id_key',
       );
 
       // The fixture that tells the composite key from a unique on the KEY
@@ -3470,16 +3611,22 @@ describe('user, taste and listening schema (Task 7)', () => {
       // at all.
       await db.delete(catalogEntities).where(eq(catalogEntities.id, artist.id));
       expect(
-        await db.select().from(userTasteArtists).where(eq(userTasteArtists.artistId, artist.id))
+        await db.select().from(userTasteArtists).where(eq(userTasteArtists.artistId, artist.id)),
       ).toEqual([]);
       expect(
-        await db.select().from(userTasteGenres).where(eq(userTasteGenres.tasteProfileId, profile.id))
+        await db
+          .select()
+          .from(userTasteGenres)
+          .where(eq(userTasteGenres.tasteProfileId, profile.id)),
       ).toHaveLength(1);
 
       // And the profile owns both children.
       await db.delete(userTasteProfiles).where(eq(userTasteProfiles.id, profile.id));
       expect(
-        await db.select().from(userTasteGenres).where(eq(userTasteGenres.tasteProfileId, profile.id))
+        await db
+          .select()
+          .from(userTasteGenres)
+          .where(eq(userTasteGenres.tasteProfileId, profile.id)),
       ).toEqual([]);
     } finally {
       await db.delete(userTasteGenres).where(eq(userTasteGenres.tasteProfileId, profile.id));
@@ -3514,26 +3661,30 @@ describe('user, taste and listening schema (Task 7)', () => {
       // is a bug in a writer rather than a value anything should store.
       await expectRefusedBy(
         Promise.resolve(
-          db.insert(userTasteGenres).values({ tasteProfileId: profile.id, genre: 'jazz', weight: -1 })
+          db
+            .insert(userTasteGenres)
+            .values({ tasteProfileId: profile.id, genre: 'jazz', weight: -1 }),
         ),
         isCheckViolation,
-        'user_taste_genres_weight_check'
+        'user_taste_genres_weight_check',
       );
       await expectRefusedBy(
         Promise.resolve(
           db
             .insert(userTasteArtists)
-            .values({ tasteProfileId: profile.id, artistId: artist.id, weight: -1 })
+            .values({ tasteProfileId: profile.id, artistId: artist.id, weight: -1 }),
         ),
         isCheckViolation,
-        'user_taste_artists_weight_check'
+        'user_taste_artists_weight_check',
       );
       await expectRefusedBy(
         Promise.resolve(
-          db.insert(userTasteProfiles).values({ oxyUserId: 'CHECK-fixture-total', totalSignal: -1 })
+          db
+            .insert(userTasteProfiles)
+            .values({ oxyUserId: 'CHECK-fixture-total', totalSignal: -1 }),
         ),
         isCheckViolation,
-        'user_taste_profiles_total_signal_check'
+        'user_taste_profiles_total_signal_check',
       );
     } finally {
       await db.delete(userTasteProfiles).where(eq(userTasteProfiles.id, profile.id));
@@ -3548,9 +3699,11 @@ describe('user, taste and listening schema (Task 7)', () => {
     try {
       await db.insert(catalogRelations).values({ ...edge, kind: 'artist' });
       await expectRefusedBy(
-        Promise.resolve(db.insert(catalogRelations).values({ ...edge, kind: 'artist', score: 0.9 })),
+        Promise.resolve(
+          db.insert(catalogRelations).values({ ...edge, kind: 'artist', score: 0.9 }),
+        ),
         isUniqueViolation,
-        'catalog_relations_kind_source_id_target_id_key'
+        'catalog_relations_kind_source_id_target_id_key',
       );
 
       // The fixture that distinguishes the three-column key from a
@@ -3574,15 +3727,15 @@ describe('user, taste and listening schema (Task 7)', () => {
         executeRows(
           db,
           sql`insert into catalog_relations (id, kind, source_id, target_id, score)
-              values ('CHECK-fixture-bad-kind', 'podcast', ${edge.sourceId}, ${edge.targetId}, 0.5)`
+              values ('CHECK-fixture-bad-kind', 'podcast', ${edge.sourceId}, ${edge.targetId}, 0.5)`,
         ),
         isCheckViolation,
-        'catalog_relations_kind_check'
+        'catalog_relations_kind_check',
       );
       await expectRefusedBy(
         Promise.resolve(db.insert(catalogRelations).values({ ...edge, kind: 'artist', score: -1 })),
         isCheckViolation,
-        'catalog_relations_score_check'
+        'catalog_relations_score_check',
       );
     } finally {
       await db.delete(catalogRelations).where(eq(catalogRelations.sourceId, edge.sourceId));
@@ -3603,12 +3756,14 @@ describe('user, taste and listening schema (Task 7)', () => {
         .values({ oxyUserId: 'CHECK-fixture-recipient', key: 'episode.published:abc', expiresAt });
       await expectRefusedBy(
         Promise.resolve(
-          db
-            .insert(notificationSuppressions)
-            .values({ oxyUserId: 'CHECK-fixture-recipient', key: 'episode.published:abc', expiresAt })
+          db.insert(notificationSuppressions).values({
+            oxyUserId: 'CHECK-fixture-recipient',
+            key: 'episode.published:abc',
+            expiresAt,
+          }),
         ),
         isUniqueViolation,
-        'notification_suppressions_oxy_user_id_key_key'
+        'notification_suppressions_oxy_user_id_key_key',
       );
 
       // Every subscriber of a show is suppressed under the SAME key — a
@@ -3640,10 +3795,10 @@ describe('user, taste and listening schema (Task 7)', () => {
           db,
           sql`insert into notification_preferences (id, oxy_user_id, disabled_events)
               values ('CHECK-fixture-bad-event', 'CHECK-fixture-prefs',
-                      array['episode.published', 'not.an.event']::text[])`
+                      array['episode.published', 'not.an.event']::text[])`,
         ),
         isCheckViolation,
-        'notification_preferences_disabled_events_check'
+        'notification_preferences_disabled_events_check',
       );
 
       // Two accepted shapes, so the CHECK cannot be passing by forbidding
@@ -3660,7 +3815,12 @@ describe('user, taste and listening schema (Task 7)', () => {
     } finally {
       await db
         .delete(notificationPreferences)
-        .where(inArray(notificationPreferences.oxyUserId, ['CHECK-fixture-prefs', 'CHECK-fixture-prefs-2']));
+        .where(
+          inArray(notificationPreferences.oxyUserId, [
+            'CHECK-fixture-prefs',
+            'CHECK-fixture-prefs-2',
+          ]),
+        );
     }
   });
 
@@ -3673,17 +3833,21 @@ describe('user, taste and listening schema (Task 7)', () => {
       // pass a 24-only test.
       await expectRefusedBy(
         Promise.resolve(
-          db.insert(userBehavior).values({ oxyUserId: 'CHECK-fixture-behavior', activeHours: [24] })
+          db
+            .insert(userBehavior)
+            .values({ oxyUserId: 'CHECK-fixture-behavior', activeHours: [24] }),
         ),
         isCheckViolation,
-        'user_behavior_active_hours_check'
+        'user_behavior_active_hours_check',
       );
       await expectRefusedBy(
         Promise.resolve(
-          db.insert(userBehavior).values({ oxyUserId: 'CHECK-fixture-behavior', activeHours: [-1] })
+          db
+            .insert(userBehavior)
+            .values({ oxyUserId: 'CHECK-fixture-behavior', activeHours: [-1] }),
         ),
         isCheckViolation,
-        'user_behavior_active_hours_check'
+        'user_behavior_active_hours_check',
       );
 
       const [accepted] = await db
@@ -3813,10 +3977,13 @@ describe('user, taste and listening schema (Task 7)', () => {
         for (const value of bound.refuse) {
           await expectRefusedBy(
             Promise.resolve(
-              db.update(userSettings).set(bound.build(value)).where(eq(userSettings.oxyUserId, settingsUser))
+              db
+                .update(userSettings)
+                .set(bound.build(value))
+                .where(eq(userSettings.oxyUserId, settingsUser)),
             ),
             isCheckViolation,
-            bound.constraint
+            bound.constraint,
           );
         }
         for (const value of bound.accept) {
@@ -3834,10 +4001,10 @@ describe('user, taste and listening schema (Task 7)', () => {
               db
                 .update(userMusicPreferences)
                 .set(bound.build(value))
-                .where(eq(userMusicPreferences.oxyUserId, playerUser))
+                .where(eq(userMusicPreferences.oxyUserId, playerUser)),
             ),
             isCheckViolation,
-            bound.constraint
+            bound.constraint,
           );
         }
         for (const value of bound.accept) {
@@ -3886,8 +4053,8 @@ describe('user, taste and listening schema (Task 7)', () => {
       expect(SETTINGS_BOUNDS.length + PLAYER_BOUNDS.length).toBe(8);
       expect(
         [...SETTINGS_BOUNDS, ...PLAYER_BOUNDS].every(
-          (bound) => bound.refuse.length === 2 && bound.accept.length === 2
-        )
+          (bound) => bound.refuse.length === 2 && bound.accept.length === 2,
+        ),
       ).toBe(true);
     } finally {
       await db.delete(userSettings).where(eq(userSettings.oxyUserId, settingsUser));
@@ -3929,28 +4096,28 @@ describe('user, taste and listening schema (Task 7)', () => {
         executeRows(
           db,
           sql`insert into user_settings (id, oxy_user_id, appearance_theme_mode)
-              values ('CHECK-fixture-theme', 'CHECK-fixture-enum-user', 'neon')`
+              values ('CHECK-fixture-theme', 'CHECK-fixture-enum-user', 'neon')`,
         ),
         isCheckViolation,
-        'user_settings_theme_mode_check'
+        'user_settings_theme_mode_check',
       );
       await expectRefusedBy(
         executeRows(
           db,
           sql`insert into user_settings (id, oxy_user_id, privacy_profile_visibility)
-              values ('CHECK-fixture-visibility', 'CHECK-fixture-enum-user', 'secret')`
+              values ('CHECK-fixture-visibility', 'CHECK-fixture-enum-user', 'secret')`,
         ),
         isCheckViolation,
-        'user_settings_profile_visibility_check'
+        'user_settings_profile_visibility_check',
       );
       await expectRefusedBy(
         executeRows(
           db,
           sql`insert into user_music_preferences (id, oxy_user_id, audio_quality)
-              values ('CHECK-fixture-audio', 'CHECK-fixture-enum-user', 'lossless')`
+              values ('CHECK-fixture-audio', 'CHECK-fixture-enum-user', 'lossless')`,
         ),
         isCheckViolation,
-        'user_music_preferences_audio_quality_check'
+        'user_music_preferences_audio_quality_check',
       );
       // `download_quality` is a SEPARATE constraint over the same value set —
       // one CHECK covering both columns is a plausible mistake that a fixture
@@ -3959,19 +4126,19 @@ describe('user, taste and listening schema (Task 7)', () => {
         executeRows(
           db,
           sql`insert into user_music_preferences (id, oxy_user_id, download_quality)
-              values ('CHECK-fixture-download', 'CHECK-fixture-enum-user', 'lossless')`
+              values ('CHECK-fixture-download', 'CHECK-fixture-enum-user', 'lossless')`,
         ),
         isCheckViolation,
-        'user_music_preferences_download_quality_check'
+        'user_music_preferences_download_quality_check',
       );
       await expectRefusedBy(
         executeRows(
           db,
           sql`insert into listening_events (id, oxy_user_id, track_id, artist_id, source)
-              values ('CHECK-fixture-source', 'CHECK-fixture-enum-user', ${track.id}, ${artist.id}, 'telepathy')`
+              values ('CHECK-fixture-source', 'CHECK-fixture-enum-user', ${track.id}, ${artist.id}, 'telepathy')`,
         ),
         isCheckViolation,
-        'listening_events_source_check'
+        'listening_events_source_check',
       );
       await expectRefusedBy(
         Promise.resolve(
@@ -3981,10 +4148,10 @@ describe('user, taste and listening schema (Task 7)', () => {
             targetId: 'CHECK-fixture-co-count-target',
             score: 0.5,
             coCount: -1,
-          })
+          }),
         ),
         isCheckViolation,
-        'catalog_relations_co_count_check'
+        'catalog_relations_co_count_check',
       );
 
       // One accepted row per enum, so none of the six CHECKs can be passing by
@@ -3999,7 +4166,11 @@ describe('user, taste and listening schema (Task 7)', () => {
         .returning({ id: userSettings.id });
       const [player] = await db
         .insert(userMusicPreferences)
-        .values({ oxyUserId: 'CHECK-fixture-enum-user', audioQuality: 'very_high', downloadQuality: 'low' })
+        .values({
+          oxyUserId: 'CHECK-fixture-enum-user',
+          audioQuality: 'very_high',
+          downloadQuality: 'low',
+        })
         .returning({ id: userMusicPreferences.id });
       const [event] = await db
         .insert(listeningEvents)
@@ -4049,42 +4220,44 @@ describe('user, taste and listening schema (Task 7)', () => {
       await expectRefusedBy(
         Promise.resolve(db.insert(userSettings).values({ oxyUserId })),
         isUniqueViolation,
-        'user_settings_oxy_user_id_key'
+        'user_settings_oxy_user_id_key',
       );
 
       await db.insert(userMusicPreferences).values({ oxyUserId });
       await expectRefusedBy(
         Promise.resolve(db.insert(userMusicPreferences).values({ oxyUserId })),
         isUniqueViolation,
-        'user_music_preferences_oxy_user_id_key'
+        'user_music_preferences_oxy_user_id_key',
       );
 
       await db.insert(userBehavior).values({ oxyUserId });
       await expectRefusedBy(
         Promise.resolve(db.insert(userBehavior).values({ oxyUserId })),
         isUniqueViolation,
-        'user_behavior_oxy_user_id_key'
+        'user_behavior_oxy_user_id_key',
       );
 
       await db.insert(userTasteProfiles).values({ oxyUserId });
       await expectRefusedBy(
         Promise.resolve(db.insert(userTasteProfiles).values({ oxyUserId })),
         isUniqueViolation,
-        'user_taste_profiles_oxy_user_id_key'
+        'user_taste_profiles_oxy_user_id_key',
       );
 
       await db.insert(notificationPreferences).values({ oxyUserId });
       await expectRefusedBy(
         Promise.resolve(db.insert(notificationPreferences).values({ oxyUserId })),
         isUniqueViolation,
-        'notification_preferences_oxy_user_id_key'
+        'notification_preferences_oxy_user_id_key',
       );
     } finally {
       await db.delete(userSettings).where(eq(userSettings.oxyUserId, oxyUserId));
       await db.delete(userMusicPreferences).where(eq(userMusicPreferences.oxyUserId, oxyUserId));
       await db.delete(userBehavior).where(eq(userBehavior.oxyUserId, oxyUserId));
       await db.delete(userTasteProfiles).where(eq(userTasteProfiles.oxyUserId, oxyUserId));
-      await db.delete(notificationPreferences).where(eq(notificationPreferences.oxyUserId, oxyUserId));
+      await db
+        .delete(notificationPreferences)
+        .where(eq(notificationPreferences.oxyUserId, oxyUserId));
     }
   });
 
@@ -4168,13 +4341,14 @@ describe('deploy-phase ordering (post-genesis)', () => {
     const journal = readJournal(folder);
     const { phases, problems } = readMigrationPhases(
       journal.map((entry) => entry.tag),
-      folder
+      folder,
     );
     expect(problems).toEqual([]);
 
     const entries = journal.map((entry) => {
       const phase = phases.get(entry.tag);
-      if (!phase) throw new Error(`unreachable: readMigrationPhases reported no problems for ${entry.tag}`);
+      if (!phase)
+        throw new Error(`unreachable: readMigrationPhases reported no problems for ${entry.tag}`);
       return { tag: entry.tag, phase };
     });
 
@@ -4236,7 +4410,8 @@ describe('deploy-phase ordering (post-genesis)', () => {
     // by `findPostGenesisPhaseOrderingViolations`'s own not-in-journal branch,
     // which reports it as an ordering problem rather than as a bad constant.
     const tags = readJournal(findMigrationsFolder()).map((entry) => entry.tag);
-    expect(`${LAST_GENESIS_MIGRATION_TAG} in journal: ${tags.includes(LAST_GENESIS_MIGRATION_TAG)}`)
-      .toBe(`${LAST_GENESIS_MIGRATION_TAG} in journal: true`);
+    expect(
+      `${LAST_GENESIS_MIGRATION_TAG} in journal: ${tags.includes(LAST_GENESIS_MIGRATION_TAG)}`,
+    ).toBe(`${LAST_GENESIS_MIGRATION_TAG} in journal: true`);
   });
 });

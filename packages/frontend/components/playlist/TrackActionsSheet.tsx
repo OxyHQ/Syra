@@ -94,7 +94,9 @@ export const TrackActionsSheet: React.FC<TrackActionsSheetProps> = ({
             accessibilityRole="button"
           >
             <Ionicons name="radio-outline" size={22} color={theme.colors.text} />
-            <Text className="text-foreground" style={styles.actionText}>{t('radio.songRadio')}</Text>
+            <Text className="text-foreground" style={styles.actionText}>
+              {t('radio.songRadio')}
+            </Text>
           </Pressable>
 
           <Pressable
@@ -103,32 +105,83 @@ export const TrackActionsSheet: React.FC<TrackActionsSheetProps> = ({
             accessibilityRole="button"
           >
             <Ionicons name="add-circle-outline" size={22} color={theme.colors.text} />
-            <Text className="text-foreground" style={styles.actionText}>{t('trackActions.addToPlaylist')}</Text>
+            <Text className="text-foreground" style={styles.actionText}>
+              {t('trackActions.addToPlaylist')}
+            </Text>
           </Pressable>
 
           {(['next', 'last'] as const).map((position) => (
-            <Pressable key={position} style={styles.action} accessibilityRole="button" onPress={() => {
-              void useQueueStore.getState().addTracksLocally([toPlayableItem(track)], position);
-              onClose();
-            }}>
+            <Pressable
+              key={position}
+              style={styles.action}
+              accessibilityRole="button"
+              onPress={() => {
+                void useQueueStore.getState().addTracksLocally([toPlayableItem(track)], position);
+                onClose();
+              }}
+            >
               <Ionicons name="list-outline" size={22} color={theme.colors.text} />
-              <Text className="text-foreground" style={styles.actionText}>{t(position === 'next' ? 'listener.playNext' : 'listener.addQueue')}</Text>
+              <Text className="text-foreground" style={styles.actionText}>
+                {t(position === 'next' ? 'listener.playNext' : 'listener.addQueue')}
+              </Text>
             </Pressable>
           ))}
-          <Pressable style={styles.action} accessibilityRole="button" onPress={() => { router.push({ pathname: '/track/[id]', params: { id: track.id } }); onClose(); }}>
-            <Ionicons name="information-circle-outline" size={22} color={theme.colors.text} /><Text className="text-foreground" style={styles.actionText}>{t('listener.creditsLyrics')}</Text>
+          <Pressable
+            style={styles.action}
+            accessibilityRole="button"
+            onPress={() => {
+              router.push({ pathname: '/track/[id]', params: { id: track.id } });
+              onClose();
+            }}
+          >
+            <Ionicons name="information-circle-outline" size={22} color={theme.colors.text} />
+            <Text className="text-foreground" style={styles.actionText}>
+              {t('listener.creditsLyrics')}
+            </Text>
           </Pressable>
           {track.artistId ? (
-            <Pressable style={styles.action} accessibilityRole="button" onPress={() => {
-              router.push({ pathname: '/p/[id]', params: { id: track.artistId } });
-              onClose();
-            }}>
+            <Pressable
+              style={styles.action}
+              accessibilityRole="button"
+              onPress={() => {
+                router.push({ pathname: '/p/[id]', params: { id: track.artistId } });
+                onClose();
+              }}
+            >
               <Ionicons name="person-outline" size={22} color={theme.colors.text} />
-              <Text className="text-foreground" style={styles.actionText}>{t('common.goToArtist')}</Text>
+              <Text className="text-foreground" style={styles.actionText}>
+                {t('common.goToArtist')}
+              </Text>
             </Pressable>
           ) : null}
-          {track.albumId ? <Pressable style={styles.action} accessibilityRole="button" onPress={() => { router.push(`/album/${track.albumId}`); onClose(); }}><Ionicons name="albums-outline" size={22} color={theme.colors.text} /><Text className="text-foreground" style={styles.actionText}>{t('listener.goAlbum')}</Text></Pressable> : null}
-          <Pressable style={styles.action} accessibilityRole="button" onPress={() => { void shareMedia('track', track.id, track.title); onClose(); }}><Ionicons name="share-outline" size={22} color={theme.colors.text} /><Text className="text-foreground" style={styles.actionText}>{t('listener.share')}</Text></Pressable>
+          {track.albumId ? (
+            <Pressable
+              style={styles.action}
+              accessibilityRole="button"
+              onPress={() => {
+                router.push(`/album/${track.albumId}`);
+                onClose();
+              }}
+            >
+              <Ionicons name="albums-outline" size={22} color={theme.colors.text} />
+              <Text className="text-foreground" style={styles.actionText}>
+                {t('listener.goAlbum')}
+              </Text>
+            </Pressable>
+          ) : null}
+          <Pressable
+            style={styles.action}
+            accessibilityRole="button"
+            onPress={() => {
+              void shareMedia('track', track.id, track.title);
+              onClose();
+            }}
+          >
+            <Ionicons name="share-outline" size={22} color={theme.colors.text} />
+            <Text className="text-foreground" style={styles.actionText}>
+              {t('listener.share')}
+            </Text>
+          </Pressable>
           {removeFrom && (
             <Pressable
               style={styles.action}

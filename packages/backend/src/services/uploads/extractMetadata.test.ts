@@ -75,7 +75,7 @@ describe('extractMetadata — technical facts come from the stream, not the tags
    * surprising, and because anything that string-compared it against `'m4a'`
    * would silently never match.
    */
-  it('reports ffmpeg\'s demuxer family as the container, verbatim', async () => {
+  it("reports ffmpeg's demuxer family as the container, verbatim", async () => {
     const mp3 = await extractMetadata(INDIE_MP3);
     expect(mp3.technical.container).toBe('mp3');
 
@@ -280,7 +280,9 @@ describe('buildRawTagDump', () => {
 
   it('caps the dump written for a real fixture', async () => {
     const extracted = await extractMetadata(INDIE_MP3);
-    expect(Buffer.byteLength(extracted.rawTags.json, 'utf8')).toBeLessThanOrEqual(RAW_TAGS_MAX_BYTES);
+    expect(Buffer.byteLength(extracted.rawTags.json, 'utf8')).toBeLessThanOrEqual(
+      RAW_TAGS_MAX_BYTES,
+    );
     // Embedded artwork must be a descriptor, not 6 KB of base64 per picture.
     expect(extracted.rawTags.json).toContain('[binary');
     expect(extracted.rawTags.truncated).toBe(false);

@@ -1,11 +1,5 @@
 import React, { useMemo } from 'react';
-import {
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxy.so/bloom/theme';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -57,10 +51,7 @@ const DeviceRow: React.FC<DeviceRowProps> = ({ device, isActive, onPress }) => {
         style={styles.deviceIcon}
       />
       <View style={styles.deviceInfo}>
-        <Text
-          className="text-foreground" style={styles.deviceName}
-          numberOfLines={1}
-        >
+        <Text className="text-foreground" style={styles.deviceName} numberOfLines={1}>
           {device.name}
         </Text>
         {isActive && (
@@ -70,11 +61,7 @@ const DeviceRow: React.FC<DeviceRowProps> = ({ device, isActive, onPress }) => {
         )}
       </View>
       {isActive && (
-        <MaterialCommunityIcons
-          name="volume-high"
-          size={18}
-          color={theme.colors.primary}
-        />
+        <MaterialCommunityIcons name="volume-high" size={18} color={theme.colors.primary} />
       )}
     </Pressable>
   );
@@ -99,11 +86,7 @@ interface DevicePickerProps {
  * since PlayerBar uses theme-coloured inline styles and this sheet is tightly
  * coupled to that component's styling layer).
  */
-export const DevicePicker: React.FC<DevicePickerProps> = ({
-  visible,
-  activeDeviceId,
-  onClose,
-}) => {
+export const DevicePicker: React.FC<DevicePickerProps> = ({ visible, activeDeviceId, onClose }) => {
   const { t } = useTranslation();
   const theme = useTheme();
   const { devices, status, error, retry, transferTo } = useConnect();
@@ -115,15 +98,9 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({
     endSession: endCast,
   } = useCast();
 
-  const backdropStyle = useMemo(
-    () => [styles.backdrop],
-    [],
-  );
+  const backdropStyle = useMemo(() => [styles.backdrop], []);
 
-  const sheetStyle = useMemo(
-    () => [styles.sheet],
-    [theme.colors.card, theme.colors.border],
-  );
+  const sheetStyle = useMemo(() => [styles.sheet], [theme.colors.card, theme.colors.border]);
 
   const handleTransfer = (deviceId: string) => {
     transferTo(deviceId);
@@ -143,12 +120,7 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({
   };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={backdropStyle} onPress={onClose}>
         {/* Stop propagation so taps inside the sheet don't close it */}
         <Pressable className="bg-card border-border" style={sheetStyle} onPress={() => undefined}>
@@ -156,22 +128,19 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({
             <Text className="text-foreground" style={styles.title}>
               {t('devices.title')}
             </Text>
-            <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel={t('common.close')}>
-              <MaterialCommunityIcons
-                name="close"
-                size={20}
-                color={theme.colors.textSecondary}
-              />
+            <Pressable
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel={t('common.close')}
+            >
+              <MaterialCommunityIcons name="close" size={20} color={theme.colors.textSecondary} />
             </Pressable>
           </View>
 
           {status === 'loading' ? (
             <View style={styles.skeletonList}>
               {Array.from({ length: 3 }).map((_, i) => (
-                <View
-                  key={i}
-                  className="bg-surface" style={styles.skeletonRow}
-                >
+                <View key={i} className="bg-surface" style={styles.skeletonRow}>
                   <Skeleton.Circle size={36} />
                   <View style={styles.skeletonDeviceInfo}>
                     <Skeleton.Box width="55%" height={14} borderRadius={4} />
@@ -192,7 +161,9 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({
               error={{
                 title: t('devices.unavailable'),
                 message: error ?? t('devices.unreachable'),
-                onRetry: async () => { retry(); },
+                onRetry: async () => {
+                  retry();
+                },
               }}
               containerStyle={styles.stateContainer}
             />
@@ -238,11 +209,10 @@ export const DevicePicker: React.FC<DevicePickerProps> = ({
                   style={styles.deviceIcon}
                 />
                 <View style={styles.deviceInfo}>
-                  <Text
-                    className="text-foreground" style={styles.deviceName}
-                    numberOfLines={1}
-                  >
-                    {isCasting ? (castDeviceName ?? t('devices.castDevice')) : t('devices.connectToCast')}
+                  <Text className="text-foreground" style={styles.deviceName} numberOfLines={1}>
+                    {isCasting
+                      ? (castDeviceName ?? t('devices.castDevice'))
+                      : t('devices.connectToCast')}
                   </Text>
                   {isCasting && (
                     <Text className="text-primary" style={styles.deviceStatus}>

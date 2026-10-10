@@ -8,14 +8,14 @@ export const API_URL =
     ? 'https://api.syra.fm/api'
     : (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:4120/api');
 export const SOCKET_URL =
-  process.env.NODE_ENV === "production"
-    ? "wss://api.syra.fm"
-    : (process.env.API_URL_SOCKET ?? "ws://localhost:4120");
+  process.env.NODE_ENV === 'production'
+    ? 'wss://api.syra.fm'
+    : (process.env.API_URL_SOCKET ?? 'ws://localhost:4120');
 
 export const API_URL_SOCKET =
-  process.env.NODE_ENV === "production"
-    ? "wss://api.syra.fm"
-    : (process.env.API_URL_SOCKET ?? "ws://localhost:4120");
+  process.env.NODE_ENV === 'production'
+    ? 'wss://api.syra.fm'
+    : (process.env.API_URL_SOCKET ?? 'ws://localhost:4120');
 
 export const API_URL_SOCKET_CHAT = process.env.API_URL_SOCKET_CHAT || 'http://localhost:4120';
 export const API_OXY_CHAT = process.env.API_OXY_CHAT || 'http://localhost:4120';

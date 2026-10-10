@@ -89,12 +89,17 @@ const CATALOG_ARTIST_COLUMNS = publicColumns(catalogEntities, PROTECTED_COLUMNS_
  * The list can come back shorter than `limit`. That is the intended trade: a
  * short shelf is honest, a padded one sends listeners to dead ends.
  */
-async function withPlayableCatalog(artists: PublicCatalogEntityRow[]): Promise<PublicCatalogEntityRow[]> {
+async function withPlayableCatalog(
+  artists: PublicCatalogEntityRow[],
+): Promise<PublicCatalogEntityRow[]> {
   if (artists.length === 0) return artists;
 
   const playable = await findArtistsWithPlayableTracks(
-    inArray(catalogEntities.id, artists.map((artist) => artist.id)),
-    { orderBy: [descNullsLast(catalogEntities.popularity)], limit: artists.length }
+    inArray(
+      catalogEntities.id,
+      artists.map((artist) => artist.id),
+    ),
+    { orderBy: [descNullsLast(catalogEntities.popularity)], limit: artists.length },
   );
   const keep = new Set(playable.map((artist) => artist.id));
 
@@ -125,7 +130,7 @@ async function artistsByIds(ids: string[]): Promise<PublicCatalogEntityRow[]> {
  */
 export async function getRelatedArtists(
   artistId: string,
-  limit = DEFAULT_RELATED_LIMIT
+  limit = DEFAULT_RELATED_LIMIT,
 ): Promise<PublicCatalogEntityRow[]> {
   const edges = await findRelatedEdges('artist', [artistId], limit);
 
@@ -153,13 +158,13 @@ export async function getRelatedArtists(
             notTerminatedArtist(),
             notInArray(catalogEntities.id, [...exclude]),
             // `&&` — array overlap, the direct translation of `{ genres: { $in } }`.
-            arrayOverlaps(catalogEntities.genres, seed.genres)
-          )
+            arrayOverlaps(catalogEntities.genres, seed.genres),
+          ),
         )
         .orderBy(
           imageFirst(catalogEntities.imageId),
           descNullsLast(catalogEntities.popularity),
-          descNullsLast(catalogEntities.statsFollowers)
+          descNullsLast(catalogEntities.statsFollowers),
         )
         .limit(limit - collaborative.length)
     : [];
@@ -218,7 +223,11 @@ export async function getSimilarTracks(
     .select(CATALOG_TRACK_COLUMNS)
     .from(tracks)
     .where(and(playableTrackFilter(), notInArray(tracks.id, exclude), similarity))
-    .orderBy(imageFirst(tracks.coverArtId), descNullsLast(tracks.popularity), descNullsLast(tracks.playCount))
+    .orderBy(
+      imageFirst(tracks.coverArtId),
+      descNullsLast(tracks.popularity),
+      descNullsLast(tracks.playCount),
+    )
     .limit(limit - collaborative.length);
 
   return [...collaborative, ...contentMatches].slice(0, limit);
@@ -240,10 +249,7 @@ export interface MadeForYou {
  * meaningful taste signal yet (cold start), returns globally popular content
  * flagged `personalized: false` so the caller can label it honestly.
  */
-export async function getMadeForYou(
-  oxyUserId: string,
-  limit = 20,
-): Promise<MadeForYou> {
+export async function getMadeForYou(oxyUserId: string, limit = 20): Promise<MadeForYou> {
   const [profile, likedTracks, followedArtists] = await Promise.all([
     findTasteWeights(oxyUserId),
     listMembership('likedTracks', oxyUserId),
@@ -277,7 +283,7 @@ export async function getMadeForYou(
           imageFirst(tracks.coverArtId),
           descNullsLast(tracks.popularity),
           descNullsLast(tracks.playCount),
-          descNullsLast(tracks.createdAt)
+          descNullsLast(tracks.createdAt),
         )
         .limit(limit),
       getDb()
@@ -287,7 +293,7 @@ export async function getMadeForYou(
         .orderBy(
           imageFirst(catalogEntities.imageId),
           descNullsLast(catalogEntities.popularity),
-          descNullsLast(catalogEntities.statsFollowers)
+          descNullsLast(catalogEntities.statsFollowers),
         )
         .limit(limit),
     ]);
@@ -308,17 +314,21 @@ export async function getMadeForYou(
       and(
         playableTrackFilter(),
         excludeTrackIds.length > 0 ? notInArray(tracks.id, excludeTrackIds) : undefined,
-        affinity
-      )
+        affinity,
+      ),
     )
-    .orderBy(imageFirst(tracks.coverArtId), descNullsLast(tracks.popularity), descNullsLast(tracks.playCount))
+    .orderBy(
+      imageFirst(tracks.coverArtId),
+      descNullsLast(tracks.popularity),
+      descNullsLast(tracks.playCount),
+    )
     .limit(limit * 3);
 
   // Re-rank candidates by taste affinity so the user's strongest genres/artists
   // surface first, not just whatever is globally most popular within the filter.
   const ranked = rankByTaste(candidateTracks, profile?.genres ?? [], profile?.artists ?? []).slice(
     0,
-    limit
+    limit,
   );
 
   // Artists: related to the user's top artists (collaborative graph), excluding
@@ -331,7 +341,7 @@ export async function getMadeForYou(
 
   if (artists.length < limit && topGenres.length) {
     const exclude = [...new Set<string>([...followed, ...artists.map((a) => a.id)])].filter(
-      (id) => id.length > 0
+      (id) => id.length > 0,
     );
     const genreArtists = await getDb()
       .select(CATALOG_ARTIST_COLUMNS)
@@ -340,13 +350,13 @@ export async function getMadeForYou(
         and(
           notTerminatedArtist(),
           exclude.length > 0 ? notInArray(catalogEntities.id, exclude) : undefined,
-          arrayOverlaps(catalogEntities.genres, topGenres)
-        )
+          arrayOverlaps(catalogEntities.genres, topGenres),
+        ),
       )
       .orderBy(
         imageFirst(catalogEntities.imageId),
         descNullsLast(catalogEntities.popularity),
-        descNullsLast(catalogEntities.statsFollowers)
+        descNullsLast(catalogEntities.statsFollowers),
       )
       .limit(limit - artists.length);
     artists = [...artists, ...genreArtists];

@@ -38,12 +38,33 @@ router.put('/:id/members/:memberId', withDb(playlistSharing));
 router.delete('/:id/members/:memberId', withDb(playlistSharing));
 router.get('/:id/activity', withDb(playlistSharing));
 router.get('/', withDb(getUserPlaylists));
-router.post('/', singleCoverArtUpload, validate({ body: createPlaylistRequestSchema }), withDb(createPlaylist));
-router.put('/:id', singleCoverArtUpload, validate({ body: updatePlaylistRequestSchema }), withDb(updatePlaylist));
+router.post(
+  '/',
+  singleCoverArtUpload,
+  validate({ body: createPlaylistRequestSchema }),
+  withDb(createPlaylist),
+);
+router.put(
+  '/:id',
+  singleCoverArtUpload,
+  validate({ body: updatePlaylistRequestSchema }),
+  withDb(updatePlaylist),
+);
 router.delete('/:id', withDb(deletePlaylist));
-router.post('/:id/tracks', validate({ body: addTracksToPlaylistBodySchema }), withDb(addTracksToPlaylist));
-router.delete('/:id/tracks', validate({ body: removeTracksFromPlaylistBodySchema }), withDb(removeTracksFromPlaylist));
-router.put('/:id/tracks/reorder', validate({ body: reorderPlaylistTracksBodySchema }), withDb(reorderPlaylistTracks));
+router.post(
+  '/:id/tracks',
+  validate({ body: addTracksToPlaylistBodySchema }),
+  withDb(addTracksToPlaylist),
+);
+router.delete(
+  '/:id/tracks',
+  validate({ body: removeTracksFromPlaylistBodySchema }),
+  withDb(removeTracksFromPlaylist),
+);
+router.put(
+  '/:id/tracks/reorder',
+  validate({ body: reorderPlaylistTracksBodySchema }),
+  withDb(reorderPlaylistTracks),
+);
 
 export default router;
-

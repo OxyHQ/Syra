@@ -52,7 +52,6 @@ async function readShow(id: string) {
   return row;
 }
 
-
 interface CapturedRes {
   _status: number;
   _body: unknown;
@@ -64,8 +63,14 @@ function makeRes(): CapturedRes {
   return {
     _status: 200,
     _body: undefined,
-    status(code) { this._status = code; return this; },
-    json(body) { this._body = body; return this; },
+    status(code) {
+      this._status = code;
+      return this;
+    },
+    json(body) {
+      this._body = body;
+      return this;
+    },
   };
 }
 
@@ -74,7 +79,10 @@ function makeReq(podcastId: string, body: Record<string, unknown>): AuthRequest 
 }
 
 /** A show this owner may edit: `source: 'syra'` and owned, which the guard requires. */
-async function makeOwnedShow(colors: { primaryColor: string; secondaryColor: string }): Promise<string> {
+async function makeOwnedShow(colors: {
+  primaryColor: string;
+  secondaryColor: string;
+}): Promise<string> {
   const [row] = await getDb()
     .insert(podcasts)
     .values({
@@ -91,7 +99,10 @@ async function makeOwnedShow(colors: { primaryColor: string; secondaryColor: str
 }
 
 /** `image_assets.primary_color` is nullable and `storeImageAsset` takes the palette as OPTIONAL input. */
-async function makeImage(colors?: { primaryColor: string; secondaryColor?: string }): Promise<string> {
+async function makeImage(colors?: {
+  primaryColor: string;
+  secondaryColor?: string;
+}): Promise<string> {
   const [row] = await getDb()
     .insert(imageAssets)
     .values({

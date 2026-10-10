@@ -28,7 +28,7 @@ export type ContributorStrikeRow = typeof contributorStrikes.$inferSelect;
  */
 export async function ensureContributorStanding(
   db: DbOrTransaction,
-  oxyUserId: string
+  oxyUserId: string,
 ): Promise<ContributorStandingRow> {
   const [standing] = await db
     .insert(contributorStandings)
@@ -44,7 +44,7 @@ export async function ensureContributorStanding(
 
 /** The account's current standing, or undefined when it has never been struck. */
 export async function findContributorStanding(
-  oxyUserId: string
+  oxyUserId: string,
 ): Promise<ContributorStandingRow | undefined> {
   const [standing] = await getDb()
     .select()
@@ -56,22 +56,22 @@ export async function findContributorStanding(
 }
 
 /** One account's strikes, newest first — the record a reviewer or an appeal reads. */
-export async function listContributorStrikes(
-  standingId: string
-): Promise<ContributorStrikeRow[]> {
-  return getDb()
-    .select()
-    .from(contributorStrikes)
-    .where(eq(contributorStrikes.contributorStandingId, standingId))
-    // `descNullsLast`, matching `contributor_strikes_contributor_standing_id_idx`'s
-    // own `created_at DESC NULLS LAST` — see `db/catalog/containers.ts`'s helper
-    // for why a NOT NULL column still needs the explicit spelling.
-    .orderBy(descNullsLast(contributorStrikes.createdAt));
+export async function listContributorStrikes(standingId: string): Promise<ContributorStrikeRow[]> {
+  return (
+    getDb()
+      .select()
+      .from(contributorStrikes)
+      .where(eq(contributorStrikes.contributorStandingId, standingId))
+      // `descNullsLast`, matching `contributor_strikes_contributor_standing_id_idx`'s
+      // own `created_at DESC NULLS LAST` — see `db/catalog/containers.ts`'s helper
+      // for why a NOT NULL column still needs the explicit spelling.
+      .orderBy(descNullsLast(contributorStrikes.createdAt))
+  );
 }
 
 export async function insertContributorStrike(
   db: DbOrTransaction,
-  input: { contributorStandingId: string; reason: string; trackId?: string; createdAt: Date }
+  input: { contributorStandingId: string; reason: string; trackId?: string; createdAt: Date },
 ): Promise<void> {
   await db.insert(contributorStrikes).values({
     contributorStandingId: input.contributorStandingId,
@@ -93,7 +93,7 @@ export async function insertContributorStrike(
 export async function incrementStrikeCount(
   db: DbOrTransaction,
   standingId: string,
-  now: Date
+  now: Date,
 ): Promise<number> {
   const [updated] = await db
     .update(contributorStandings)
@@ -114,7 +114,7 @@ export async function incrementStrikeCount(
 /** Block the PUBLIC contribution path. The private locker is a separate question. */
 export async function disableContributorUploads(
   db: DbOrTransaction,
-  standingId: string
+  standingId: string,
 ): Promise<void> {
   await db
     .update(contributorStandings)
@@ -134,14 +134,12 @@ export async function terminateContributor(
   db: DbOrTransaction,
   standingId: string,
   reason: string,
-  now: Date
+  now: Date,
 ): Promise<boolean> {
   const terminated = await db
     .update(contributorStandings)
     .set({ terminated: true, terminatedAt: now, terminationReason: reason, uploadsDisabled: true })
-    .where(
-      and(eq(contributorStandings.id, standingId), eq(contributorStandings.terminated, false))
-    )
+    .where(and(eq(contributorStandings.id, standingId), eq(contributorStandings.terminated, false)))
     .returning({ id: contributorStandings.id });
 
   return terminated.length === 1;

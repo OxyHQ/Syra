@@ -119,10 +119,11 @@ export const HOME_QUERY_KEYS = {
 
 const HOME_BROWSE_QUERY_OPTIONS = {
   queryKey: [...HOME_QUERY_KEYS.browse, 'guest'] as const,
-  queryFn: () => browseService.getHome({
-    sectionLimit: HOME_LIMITS.madeForYou,
-    tracksLimit: HOME_LIMITS.tracks,
-  }),
+  queryFn: () =>
+    browseService.getHome({
+      sectionLimit: HOME_LIMITS.madeForYou,
+      tracksLimit: HOME_LIMITS.tracks,
+    }),
   staleTime: 1000 * 60 * 10,
 } as const;
 
@@ -133,10 +134,11 @@ export function prefetchHomeBrowse(queryClient: QueryClient): void {
 function homeBrowseQueryOptions(identity: CatalogIdentity) {
   return {
     queryKey: [...HOME_QUERY_KEYS.browse, identity] as const,
-    queryFn: () => browseService.getHome({
-      sectionLimit: HOME_LIMITS.madeForYou,
-      tracksLimit: HOME_LIMITS.tracks,
-    }),
+    queryFn: () =>
+      browseService.getHome({
+        sectionLimit: HOME_LIMITS.madeForYou,
+        tracksLimit: HOME_LIMITS.tracks,
+      }),
     staleTime: 1000 * 60 * 10,
   };
 }

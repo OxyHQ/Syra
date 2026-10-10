@@ -14,10 +14,7 @@ import { getDb, isPostgresConnected } from '../db/postgres';
 import { albums, catalogEntities, catalogEntitySources, tracks } from '../db/schema/catalog';
 import { PROTECTED_COLUMNS_BY_TABLE } from '../db/schema/protectedColumns';
 import { playableTrackFilter } from '../db/catalog/visibility';
-import {
-  descNullsLast,
-  findAlbumsWithPlayableTracks,
-} from '../db/catalog/containers';
+import { descNullsLast, findAlbumsWithPlayableTracks } from '../db/catalog/containers';
 import { loadImageVariants, toAlbumDtos, toTrackDtos } from '../db/catalog/hydrate';
 import { toArtistDto, type PublicCatalogEntityRow } from '../db/catalog/serialize';
 import { findPodcastsCreditingPerson } from '../db/podcasts/podcasts';
@@ -57,10 +54,25 @@ const APPEARS_IN_CAP = 50;
 /** The display fields shared by the old artist screen — pulled from the artist DTO. */
 type ArtistDisplayFields = Pick<
   EntityProfile,
-  | 'image' | 'imageSizes' | 'primaryColor' | 'secondaryColor' | 'bio' | 'genres'
-  | 'verified' | 'stats' | 'links' | 'country' | 'imageLicence' | 'sortName'
-  | 'disambiguation' | 'artistType' | 'activeFrom' | 'activeUntil' | 'aliases'
-  | 'labels' | 'members'
+  | 'image'
+  | 'imageSizes'
+  | 'primaryColor'
+  | 'secondaryColor'
+  | 'bio'
+  | 'genres'
+  | 'verified'
+  | 'stats'
+  | 'links'
+  | 'country'
+  | 'imageLicence'
+  | 'sortName'
+  | 'disambiguation'
+  | 'artistType'
+  | 'activeFrom'
+  | 'activeUntil'
+  | 'aliases'
+  | 'labels'
+  | 'members'
 >;
 
 function artistDisplayFields(formatted: Artist | null): ArtistDisplayFields {
@@ -97,9 +109,7 @@ function artistDisplayFields(formatted: Artist | null): ArtistDisplayFields {
  * (REUSE of the same helpers `/api/artists/:id/albums|tracks` compose). Empty
  * arrays when the artist has no playable catalog.
  */
-async function loadArtistMusic(
-  artistId: string,
-): Promise<EntityMusic> {
+async function loadArtistMusic(artistId: string): Promise<EntityMusic> {
   const [albumRows, trackRows] = await Promise.all([
     findAlbumsWithPlayableTracks(eq(albums.artistId, artistId), {
       orderBy: [descNullsLast(albums.releaseDate), asc(albums.id)],
@@ -365,7 +375,11 @@ export const getEntityProfile = async (req: Request, res: Response, next: NextFu
         linkedOxyUserId: person?.linkedOxyUserId ?? undefined,
         music,
         appearsIn: person ? await loadAppearsIn(toPersonLike(person)) : undefined,
-        ...await loadArtistSections(toArtistProfileSource(entity, sources), music, viewerOxyUserId),
+        ...(await loadArtistSections(
+          toArtistProfileSource(entity, sources),
+          music,
+          viewerOxyUserId,
+        )),
       };
       return res.json({ data: profile });
     }

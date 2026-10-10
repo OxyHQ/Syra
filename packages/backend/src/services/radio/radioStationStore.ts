@@ -79,15 +79,14 @@ export function createRadioStationState(identity: RadioStationIdentity): RadioSt
   };
 }
 
-function parseStationState(
-  data: string,
-  identity: RadioStationIdentity
-): RadioStationState | null {
+function parseStationState(data: string, identity: RadioStationIdentity): RadioStationState | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(data);
   } catch (error) {
-    logger.warn('[RadioStationStore] Discarding unparseable station entry', { error: describeErrorSafely(error) });
+    logger.warn('[RadioStationStore] Discarding unparseable station entry', {
+      error: describeErrorSafely(error),
+    });
     return null;
   }
 
@@ -185,9 +184,7 @@ function parseStationState(
  * designed property, not a fallback bug: radio degrades into "may repeat
  * tracks", never into a 503. The listener keeps hearing music.
  */
-export async function readRadioStation(
-  identity: RadioStationIdentity
-): Promise<RadioStationState> {
+export async function readRadioStation(identity: RadioStationIdentity): Promise<RadioStationState> {
   try {
     const redis = getRedisClient();
     if (!redis.isReady) {
@@ -210,7 +207,9 @@ export async function readRadioStation(
     await redis.expire(key, RADIO_STATION_TTL_SECONDS);
     return state;
   } catch (error) {
-    logger.error('[RadioStationStore] Error reading station:', { error: describeErrorSafely(error) });
+    logger.error('[RadioStationStore] Error reading station:', {
+      error: describeErrorSafely(error),
+    });
     return createRadioStationState(identity);
   }
 }
@@ -231,7 +230,9 @@ export async function writeRadioStation(state: RadioStationState): Promise<boole
     await redis.setEx(key, RADIO_STATION_TTL_SECONDS, JSON.stringify(state));
     return true;
   } catch (error) {
-    logger.error('[RadioStationStore] Error writing station:', { error: describeErrorSafely(error) });
+    logger.error('[RadioStationStore] Error writing station:', {
+      error: describeErrorSafely(error),
+    });
     return false;
   }
 }
@@ -248,7 +249,9 @@ export async function clearRadioStation(identity: RadioStationIdentity): Promise
     await redis.del(getStationKey(identity));
     return true;
   } catch (error) {
-    logger.error('[RadioStationStore] Error clearing station:', { error: describeErrorSafely(error) });
+    logger.error('[RadioStationStore] Error clearing station:', {
+      error: describeErrorSafely(error),
+    });
     return false;
   }
 }
@@ -263,7 +266,7 @@ export function recordServedPage(
   state: RadioStationState,
   page: number,
   trackIds: string[],
-  options: { guest: boolean; wrapped: boolean }
+  options: { guest: boolean; wrapped: boolean },
 ): RadioStationState {
   const servedTrackIds = [...state.servedTrackIds, ...trackIds];
   const overflow = servedTrackIds.length - MAX_SERVED_TRACK_IDS;

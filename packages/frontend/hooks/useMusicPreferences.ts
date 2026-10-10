@@ -18,7 +18,9 @@ export function useMusicPreferences() {
   return {
     preferences: preferencesQuery.data ?? null,
     loading: preferencesQuery.isLoading || updatePreferencesMutation.isPending,
-    error: getMusicPreferencesErrorMessage(preferencesQuery.error ?? updatePreferencesMutation.error),
+    error: getMusicPreferencesErrorMessage(
+      preferencesQuery.error ?? updatePreferencesMutation.error,
+    ),
     updatePreferences: updatePreferencesMutation.mutateAsync,
     refreshPreferences: preferencesQuery.refetch,
   };
@@ -30,6 +32,3 @@ export function useMusicPreferences() {
 export function useCurrentMusicPreferences(): MusicPreferences | null {
   return useMusicPreferences().preferences;
 }
-
-
-

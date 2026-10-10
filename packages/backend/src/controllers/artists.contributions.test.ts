@@ -67,18 +67,22 @@ function makeRes(): CapturedRes {
   return {
     _status: 200,
     _body: undefined,
-    status(code) { this._status = code; return this; },
-    json(body) { this._body = body; return this; },
+    status(code) {
+      this._status = code;
+      return this;
+    },
+    json(body) {
+      this._body = body;
+      return this;
+    },
   };
 }
 
-const failNext: NextFunction = (err) => { throw err; };
+const failNext: NextFunction = (err) => {
+  throw err;
+};
 
-function makeReq(
-  params: Record<string, string>,
-  userId: string,
-  body: unknown = {},
-): AuthRequest {
+function makeReq(params: Record<string, string>, userId: string, body: unknown = {}): AuthRequest {
   return { params, query: {}, body, user: { id: userId } } as unknown as AuthRequest;
 }
 
@@ -152,7 +156,7 @@ describe('GET /api/artists/me/contributions', () => {
     expect(body.contributions[0]?.uploaderOxyUserId).toBe('a-stranger');
   });
 
-  it('never leaks another artist\'s contributions', async () => {
+  it("never leaks another artist's contributions", async () => {
     const mine = await makeOwnedArtist();
     const theirs = await makeArtistOwnedBy('Other Artist', 'somebody-else');
     const theirTrack = await makeTrack(theirs, 'Their Contributed Song');
@@ -258,7 +262,7 @@ describe('PATCH /api/artists/me/contributions/:trackId', () => {
     expect((await readTrack(trackId))?.isAvailable).toBe(false);
   });
 
-  it('404s a track on the profile that nobody contributed — that is the creator\'s own catalog', async () => {
+  it("404s a track on the profile that nobody contributed — that is the creator's own catalog", async () => {
     const artistId = await makeOwnedArtist();
     const trackId = await makeTrack(artistId, 'My Own Upload');
 
@@ -373,7 +377,7 @@ describe('contribution lookup vacuity floor', () => {
       await getDb()
         .select({ id: contributionAttestations.id })
         .from(contributionAttestations)
-        .where(eq(contributionAttestations.trackId, trackId))
+        .where(eq(contributionAttestations.trackId, trackId)),
     ).toHaveLength(1);
 
     const res = makeRes();
@@ -394,7 +398,7 @@ describe('contribution lookup vacuity floor', () => {
     const body = res._body as { total: number };
     expect(body.total).toBe(0);
     expect(
-      await getDb().select({ id: contributionAttestations.id }).from(contributionAttestations)
+      await getDb().select({ id: contributionAttestations.id }).from(contributionAttestations),
     ).toHaveLength(1);
   });
 });

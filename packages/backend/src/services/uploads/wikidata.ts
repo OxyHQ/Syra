@@ -17,12 +17,7 @@
  * absent field, never a guess.
  */
 
-import {
-  asArray,
-  asRecord,
-  asString,
-  fetchEnrichmentJson,
-} from './enrichmentHttp';
+import { asArray, asRecord, asString, fetchEnrichmentJson } from './enrichmentHttp';
 
 // ── Wikidata property ids ───────────────────────────────────────────────────
 
@@ -102,15 +97,17 @@ export interface WikidataArtistFacts {
 type Claims = Record<string, unknown>;
 
 function claimValues(claims: Claims, property: string): unknown[] {
-  return asArray(claims[property])
-    .map((claim) => asRecord(claim)?.mainsnak)
-    .map((snak) => asRecord(snak))
-    .filter((snak): snak is Record<string, unknown> => snak !== undefined)
-    // A `novalue`/`somevalue` snak has no datavalue: Wikidata's way of saying
-    // "known to be absent" or "known to exist but unknown". Both mean we have
-    // nothing to write.
-    .map((snak) => asRecord(snak.datavalue)?.value)
-    .filter((value) => value !== undefined);
+  return (
+    asArray(claims[property])
+      .map((claim) => asRecord(claim)?.mainsnak)
+      .map((snak) => asRecord(snak))
+      .filter((snak): snak is Record<string, unknown> => snak !== undefined)
+      // A `novalue`/`somevalue` snak has no datavalue: Wikidata's way of saying
+      // "known to be absent" or "known to exist but unknown". Both mean we have
+      // nothing to write.
+      .map((snak) => asRecord(snak.datavalue)?.value)
+      .filter((value) => value !== undefined)
+  );
 }
 
 function firstStringClaim(claims: Claims, property: string): string | undefined {
@@ -249,7 +246,11 @@ export async function fetchWikidataArtistFacts(
     itemIdClaims(claims, PROPERTY.countryOfOrigin)[0] ??
     itemIdClaims(claims, PROPERTY.countryOfCitizenship)[0];
 
-  const named = await resolveWikidataLabels([...memberIds, ...labelIds, ...(countryId ? [countryId] : [])]);
+  const named = await resolveWikidataLabels([
+    ...memberIds,
+    ...labelIds,
+    ...(countryId ? [countryId] : []),
+  ]);
   const toNamedItem = (id: string): WikidataNamedItem => {
     const name = named.get(id);
     return name === undefined ? { id } : { id, name };

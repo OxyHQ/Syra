@@ -46,7 +46,9 @@ function codes(report: ScreeningReport): ProvenanceMarkerCode[] {
 function detailOf(report: ScreeningReport, code: ProvenanceMarkerCode): string {
   const marker = report.markers.find((entry) => entry.code === code);
   if (!marker) {
-    throw new Error(`expected marker ${code}; report carried ${codes(report).join(', ') || 'none'}`);
+    throw new Error(
+      `expected marker ${code}; report carried ${codes(report).join(', ') || 'none'}`,
+    );
   }
   return marker.detail;
 }

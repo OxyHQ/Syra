@@ -22,7 +22,6 @@ async function readShow(id: string) {
   return row;
 }
 
-
 beforeAll(connectDb);
 afterEach(clearDb);
 afterAll(disconnectDb);
@@ -38,8 +37,14 @@ function makeRes(): CapturedRes {
   return {
     _status: 200,
     _body: undefined,
-    status(code) { this._status = code; return this; },
-    json(body) { this._body = body; return this; },
+    status(code) {
+      this._status = code;
+      return this;
+    },
+    json(body) {
+      this._body = body;
+      return this;
+    },
   };
 }
 
@@ -78,7 +83,7 @@ async function makeClaimablePodcast(source: 'rss' | 'syra' = 'syra'): Promise<st
 async function makeArtist(
   name: string,
   ownerOxyUserId: string,
-  type: 'artist' | 'person' = 'artist'
+  type: 'artist' | 'person' = 'artist',
 ): Promise<string> {
   const [row] = await getDb()
     .insert(catalogEntities)

@@ -30,9 +30,8 @@ const candidate = (over: Partial<RadioCandidate> & { trackId: string }): RadioCa
 });
 
 const ranked = (
-  entries: (Partial<RadioCandidate> & { trackId: string; score: number })[]
-): RankedRadioCandidate[] =>
-  entries.map(({ score, ...rest }) => ({ ...candidate(rest), score }));
+  entries: (Partial<RadioCandidate> & { trackId: string; score: number })[],
+): RankedRadioCandidate[] => entries.map(({ score, ...rest }) => ({ ...candidate(rest), score }));
 
 describe('scoreCandidate — blend ordering', () => {
   it('scores a zero-signal candidate at zero', () => {
@@ -52,7 +51,7 @@ describe('scoreCandidate — blend ordering', () => {
 
     const content = scoreCandidate(
       candidate({ trackId: 't', genre: 'jazz', mood: 'calm', tags: ['x'] }),
-      { ...BASE_CTX, seedGenre: 'jazz', seedMood: 'calm', seedTags: ['x'] }
+      { ...BASE_CTX, seedGenre: 'jazz', seedMood: 'calm', seedTags: ['x'] },
     );
     expect(content).toBeCloseTo(CONTENT_AFFINITY_WEIGHT, 10);
 
@@ -72,7 +71,10 @@ describe('scoreCandidate — blend ordering', () => {
 
   it('penalises the seed artist so a station is not just a discography', () => {
     const ctx: RadioScoringContext = { ...BASE_CTX, seedArtistId: 'seed-artist' };
-    const bySeed = scoreCandidate(candidate({ trackId: 'a', artistId: 'seed-artist', cfScore: 1 }), ctx);
+    const bySeed = scoreCandidate(
+      candidate({ trackId: 'a', artistId: 'seed-artist', cfScore: 1 }),
+      ctx,
+    );
     const byOther = scoreCandidate(candidate({ trackId: 'b', artistId: 'other', cfScore: 1 }), ctx);
 
     expect(byOther).toBeGreaterThan(bySeed);
@@ -87,7 +89,10 @@ describe('scoreCandidate — blend ordering', () => {
   });
 
   it('normalises cfScore and popularity against the pool maxima', () => {
-    const half = scoreCandidate(candidate({ trackId: 'a', cfScore: 5 }), { ...BASE_CTX, maxCfScore: 10 });
+    const half = scoreCandidate(candidate({ trackId: 'a', cfScore: 5 }), {
+      ...BASE_CTX,
+      maxCfScore: 10,
+    });
     expect(half).toBeCloseTo(CF_SCORE_WEIGHT * 0.5, 10);
   });
 
@@ -115,9 +120,12 @@ describe('scoreCandidate — blend ordering', () => {
     };
     const strong = scoreCandidate(
       candidate({ trackId: 'a', artistId: 'loved', genre: 'jazz', cfScore: 1, popularity: 90 }),
-      ctx
+      ctx,
     );
-    const weak = scoreCandidate(candidate({ trackId: 'b', artistId: 'unknown', genre: 'polka' }), ctx);
+    const weak = scoreCandidate(
+      candidate({ trackId: 'b', artistId: 'unknown', genre: 'polka' }),
+      ctx,
+    );
     expect(strong).toBeGreaterThan(weak);
   });
 });
@@ -172,7 +180,7 @@ describe('applyRadioDiversity — hard constraints', () => {
       trackId: `t${i}`,
       artistId: `artist-${i % 3}`,
       score: 0.5,
-    }))
+    })),
   );
 
   it('never emits two consecutive tracks by the same artist', () => {
@@ -207,7 +215,7 @@ describe('applyRadioDiversity — hard constraints', () => {
 
     const page = applyRadioDiversity(flooded, 10, BASE_OPTS);
     expect(page.filter((t) => t.artistId === 'artist-loud')).toHaveLength(
-      MAX_TRACKS_PER_ARTIST_PER_PAGE
+      MAX_TRACKS_PER_ARTIST_PER_PAGE,
     );
     for (let i = 1; i < page.length; i += 1) {
       expect(page[i].artistId).not.toBe(page[i - 1].artistId);
@@ -319,12 +327,7 @@ describe('applyRadioDiversity — explicit content is a listener preference', ()
       page: 0,
       allowExplicit: true,
     });
-    expect(page.map((t) => t.trackId)).toEqual([
-      'clean-1',
-      'explicit-1',
-      'clean-2',
-      'explicit-2',
-    ]);
+    expect(page.map((t) => t.trackId)).toEqual(['clean-1', 'explicit-1', 'clean-2', 'explicit-2']);
   });
 
   it('treats an unknown explicit flag as not explicit', () => {
@@ -360,7 +363,7 @@ describe('applyRadioDiversity — seeded shuffle determinism', () => {
       trackId: `t${i}`,
       artistId: `artist-${i}`,
       score: 0.5,
-    }))
+    })),
   );
 
   const idsFor = (stationKey: string, page: number): string[] =>

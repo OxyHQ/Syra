@@ -1,5 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, View, Text, Pressable, Image, ScrollView, Platform, Linking } from 'react-native';
+import {
+  StyleSheet,
+  View,
+  Text,
+  Pressable,
+  Image,
+  ScrollView,
+  Platform,
+  Linking,
+} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import Animated, {
@@ -17,7 +26,12 @@ import { Track } from '@syra/shared-types';
 import { entityService } from '@/services/entityService';
 import { ArtistProfileHeading } from '@/components/artist/ArtistProfileHeading';
 import { ArtistAbout } from '@/components/artist/ArtistAbout';
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@oxy.so/bloom/dropdown-menu';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@oxy.so/bloom/dropdown-menu';
 import { shareMedia } from '@/utils/share-media';
 import { ArtistClaimCta } from '@/components/artist/ArtistClaimCta';
 import { ArtistFollowControl } from '@/components/artist/ArtistFollowControl';
@@ -30,7 +44,12 @@ import { MediaCard } from '@/components/MediaCard';
 import { ResponsiveGrid } from '@/components/ResponsiveGrid';
 import { ArtistDetailSkeleton } from '@/components/skeletons';
 import { EmptyState } from '@/components/common/EmptyState';
-import { oxyImageVariantForTarget, pickCatalogImageUrl, resolvePodcastArtwork, type CatalogImageTarget } from '@/utils/pickImage';
+import {
+  oxyImageVariantForTarget,
+  pickCatalogImageUrl,
+  resolvePodcastArtwork,
+  type CatalogImageTarget,
+} from '@/utils/pickImage';
 import { oxyServices } from '@/lib/oxyServices';
 import { useRelatedArtists } from '@/hooks/useRecommendations';
 import { useAuthGate } from '@/hooks/useAuthGate';
@@ -61,7 +80,11 @@ interface AlbumShelf {
  * it pairs each key with its icon at the point the key is named, so a link added
  * to the contract cannot appear here without someone choosing how it looks.
  */
-const ARTIST_LINKS: { key: keyof NonNullable<EntityProfile['links']>; icon: keyof typeof Ionicons.glyphMap; label: string }[] = [
+const ARTIST_LINKS: {
+  key: keyof NonNullable<EntityProfile['links']>;
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+}[] = [
   { key: 'website', icon: 'globe-outline', label: 'Website' },
   { key: 'instagram', icon: 'logo-instagram', label: 'Instagram' },
   { key: 'x', icon: 'logo-twitter', label: 'X' },
@@ -85,7 +108,8 @@ const EntityProfileScreen: React.FC = () => {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const theme = useTheme();
-  const { playTrackList, playEpisode, startRadio, currentTrack, currentEpisode, isPlaying } = usePlayerStore();
+  const { playTrackList, playEpisode, startRadio, currentTrack, currentEpisode, isPlaying } =
+    usePlayerStore();
   // The albums, shows and related artists on this profile are all playable, so
   // their cards get real play buttons from the one shared hook.
   const { playAlbum, playPodcast, playArtist } = usePlayEntity();
@@ -104,7 +128,9 @@ const EntityProfileScreen: React.FC = () => {
   // The follow + related-artist features key off the music artist id: the entity
   // id when this is an artist, else its linked artist.
   const artistId = entity
-    ? (entity.kind === 'artist' ? entity.id : entity.linkedArtistId)
+    ? entity.kind === 'artist'
+      ? entity.id
+      : entity.linkedArtistId
     : undefined;
 
   const relatedArtistsQuery = useRelatedArtists(artistId);
@@ -129,7 +155,7 @@ const EntityProfileScreen: React.FC = () => {
     return undefined;
   };
 
-  const displayName = entity ? (entity.displayName || entity.name) : '';
+  const displayName = entity ? entity.displayName || entity.name : '';
 
   const heroImage = entityImage('hero');
 
@@ -150,7 +176,11 @@ const EntityProfileScreen: React.FC = () => {
 
   const handlePlayAll = () => {
     const player = usePlayerStore.getState();
-    if (player.context?.type === 'artist' && player.context.id === artistId && player.currentTrack) {
+    if (
+      player.context?.type === 'artist' &&
+      player.context.id === artistId &&
+      player.currentTrack
+    ) {
       void (player.isPlaying ? player.pause() : player.resume());
       return;
     }
@@ -162,7 +192,10 @@ const EntityProfileScreen: React.FC = () => {
   };
 
   const handleTrackPress = (track: Track) => {
-    const index = Math.max(0, tracks.findIndex((item) => item.id === track.id));
+    const index = Math.max(
+      0,
+      tracks.findIndex((item) => item.id === track.id),
+    );
     playTrackList(tracks, index, { type: 'artist', id: artistId, name: displayName });
   };
 
@@ -293,9 +326,15 @@ const EntityProfileScreen: React.FC = () => {
       onPlayArtist={playArtist}
       onNavigateArtist={(artist) => router.push({ pathname: '/p/[id]', params: { id: artist } })}
       onNavigateAlbum={(album) => router.push(`/album/${album}`)}
-      onNavigatePodcast={(podcast) => router.push({ pathname: '/podcasts/[id]', params: { id: podcast } })}
-      onNavigateEpisode={(episode) => router.push({ pathname: '/episode/[id]', params: { id: episode } })}
-      onNavigatePlaylist={(playlist) => router.push({ pathname: '/playlist/[id]', params: { id: playlist } })}
+      onNavigatePodcast={(podcast) =>
+        router.push({ pathname: '/podcasts/[id]', params: { id: podcast } })
+      }
+      onNavigateEpisode={(episode) =>
+        router.push({ pathname: '/episode/[id]', params: { id: episode } })
+      }
+      onNavigatePlaylist={(playlist) =>
+        router.push({ pathname: '/playlist/[id]', params: { id: playlist } })
+      }
       onCreditedTrackPress={handleCreditedTrackPress}
       onOpenLink={handleOpenLink}
     />
@@ -385,7 +424,8 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
   const [expandedShelves, setExpandedShelves] = useState<string[]>([]);
   const [isActionsOpen, setIsActionsOpen] = useState(false);
   const activeContext = usePlayerStore((state) => state.context);
-  const isArtistPlaying = isPlaying && activeContext?.type === 'artist' && activeContext.id === artistId;
+  const isArtistPlaying =
+    isPlaying && activeContext?.type === 'artist' && activeContext.id === artistId;
 
   const discography = entity.discography;
   const creditedOn = entity.creditedOn ?? [];
@@ -404,7 +444,11 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
   const albumShelves: AlbumShelf[] = discography
     ? [
         { key: 'albums', titleKey: 'common.albums', albums: discography.albums },
-        { key: 'singlesAndEps', titleKey: 'artist.singlesAndEps', albums: discography.singlesAndEps },
+        {
+          key: 'singlesAndEps',
+          titleKey: 'artist.singlesAndEps',
+          albums: discography.singlesAndEps,
+        },
         { key: 'compilations', titleKey: 'artist.compilations', albums: discography.compilations },
       ]
     : [{ key: 'albums', titleKey: 'common.albums', albums: entity.music?.albums ?? [] }];
@@ -412,9 +456,17 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
   // Only for the count in the metadata line; the shelves render themselves.
   const albums = discography
     ? [...discography.albums, ...discography.singlesAndEps, ...discography.compilations]
-    : entity.music?.albums ?? [];
-  const latestRelease = albums.filter((album) => album.releaseDate && Number.isFinite(Date.parse(album.releaseDate)) && Date.parse(album.releaseDate) <= asOf)
-    .sort((first, second) => Date.parse(second.releaseDate ?? '') - Date.parse(first.releaseDate ?? ''))[0];
+    : (entity.music?.albums ?? []);
+  const latestRelease = albums
+    .filter(
+      (album) =>
+        album.releaseDate &&
+        Number.isFinite(Date.parse(album.releaseDate)) &&
+        Date.parse(album.releaseDate) <= asOf,
+    )
+    .sort(
+      (first, second) => Date.parse(second.releaseDate ?? '') - Date.parse(first.releaseDate ?? ''),
+    )[0];
 
   /**
    * Recordings on this page that a third party contributed rather than the
@@ -456,8 +508,18 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
   }));
 
   const stickyHeaderAnimatedStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(scrollOffset.value, [HEADER_HEIGHT - 100, HEADER_HEIGHT - 50], [0, 1], 'clamp');
-    const translateY = interpolate(scrollOffset.value, [HEADER_HEIGHT - 100, HEADER_HEIGHT - 50], [-20, 0], 'clamp');
+    const opacity = interpolate(
+      scrollOffset.value,
+      [HEADER_HEIGHT - 100, HEADER_HEIGHT - 50],
+      [0, 1],
+      'clamp',
+    );
+    const translateY = interpolate(
+      scrollOffset.value,
+      [HEADER_HEIGHT - 100, HEADER_HEIGHT - 50],
+      [-20, 0],
+      'clamp',
+    );
     return { opacity, transform: [{ translateY }] };
   });
 
@@ -478,13 +540,16 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
       parts.push(entity.genres.join(', '));
     }
     if (stats && stats.followers > 0) {
-      parts.push(`${stats.followers.toLocaleString()} ${stats.followers === 1 ? 'follower' : 'followers'}`);
+      parts.push(
+        `${stats.followers.toLocaleString()} ${stats.followers === 1 ? 'follower' : 'followers'}`,
+      );
     }
     const albumCount = stats?.albums ?? albums.length;
     const trackCount = stats?.tracks ?? tracks.length;
     if (albumCount > 0) parts.push(`${albumCount} ${albumCount === 1 ? 'album' : 'albums'}`);
     if (trackCount > 0) parts.push(`${trackCount} ${trackCount === 1 ? 'track' : 'tracks'}`);
-    if (podcasts.length > 0) parts.push(`${podcasts.length} ${podcasts.length === 1 ? 'show' : 'shows'}`);
+    if (podcasts.length > 0)
+      parts.push(`${podcasts.length} ${podcasts.length === 1 ? 'show' : 'shows'}`);
     return parts.join('  •  ');
   })();
 
@@ -502,7 +567,11 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
             <View style={styles.stickyHeaderCenter}>
               <View className="bg-surface" style={styles.stickyHeaderImageContainer}>
                 {iconImage ? (
-                  <Image source={{ uri: iconImage }} style={styles.stickyHeaderImage} resizeMode="cover" />
+                  <Image
+                    source={{ uri: iconImage }}
+                    style={styles.stickyHeaderImage}
+                    resizeMode="cover"
+                  />
                 ) : (
                   <Ionicons name="person" size={20} color={theme.colors.textSecondary} />
                 )}
@@ -518,12 +587,17 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
             <View style={styles.stickyHeaderControls}>
               {canPlay && (
                 <Pressable
-                  className="bg-primary" style={styles.stickyHeaderPlayButton}
+                  className="bg-primary"
+                  style={styles.stickyHeaderPlayButton}
                   onPress={onPlayAll}
                   accessibilityLabel={t(isArtistPlaying ? 'listener.pause' : 'listener.play')}
                   accessibilityRole="button"
                 >
-                  <Ionicons name={isArtistPlaying ? 'pause' : 'play'} size={16} color={theme.colors.primaryForeground} />
+                  <Ionicons
+                    name={isArtistPlaying ? 'pause' : 'play'}
+                    size={16}
+                    color={theme.colors.primaryForeground}
+                  />
                 </Pressable>
               )}
               {artistId && (
@@ -563,18 +637,34 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
               )}
             </View>
             <LinearGradient
-              colors={['transparent', 'rgba(0, 0, 0, 0.3)', 'rgba(0, 0, 0, 0.7)'] as readonly [string, string, string]}
+              colors={
+                ['transparent', 'rgba(0, 0, 0, 0.3)', 'rgba(0, 0, 0, 0.7)'] as readonly [
+                  string,
+                  string,
+                  string,
+                ]
+              }
               locations={[0, 0.6, 1] as readonly [number, number, number]}
               pointerEvents="none"
               style={styles.headerOverlay}
             />
-            <Animated.View pointerEvents="none" style={[styles.titleContainer, headerTitleAnimatedStyle]}>
-              <ArtistProfileHeading name={displayName} stats={artistId ? entity.stats : undefined} />
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.titleContainer, headerTitleAnimatedStyle]}
+            >
+              <ArtistProfileHeading
+                name={displayName}
+                stats={artistId ? entity.stats : undefined}
+              />
             </Animated.View>
           </Animated.View>
 
           {/* Content Section with Gradient Background */}
-          <LinearGradient colors={gradientColors} locations={[0, 0.35, 1]} style={styles.contentSection}>
+          <LinearGradient
+            colors={gradientColors}
+            locations={[0, 0.35, 1]}
+            style={styles.contentSection}
+          >
             {/* Entity Info */}
             <View style={styles.infoContainer}>
               <View style={styles.infoHeader}>
@@ -585,7 +675,9 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                   {entity.verified ? (
                     <View style={styles.verifiedRow}>
                       <Ionicons name="checkmark-circle" size={18} color={theme.colors.primary} />
-                      <Text className="text-foreground" style={styles.verifiedText}>{t('artist.verified')}</Text>
+                      <Text className="text-foreground" style={styles.verifiedText}>
+                        {t('artist.verified')}
+                      </Text>
                     </View>
                   ) : null}
                   {entity.bio ? (
@@ -595,12 +687,18 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                   ) : null}
                   {metadata ? (
                     <View style={styles.metadataRow}>
-                      <Text className="text-muted-foreground" style={styles.metadata}>{metadata}</Text>
+                      <Text className="text-muted-foreground" style={styles.metadata}>
+                        {metadata}
+                      </Text>
                     </View>
                   ) : null}
                   {entity.country ? (
                     <View style={styles.metadataRow}>
-                      <Ionicons name="location-outline" size={14} color={theme.colors.textSecondary} />
+                      <Ionicons
+                        name="location-outline"
+                        size={14}
+                        color={theme.colors.textSecondary}
+                      />
                       <Text className="text-muted-foreground" style={styles.metadata}>
                         {entity.country}
                       </Text>
@@ -621,12 +719,15 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                           <Pressable
                             key={key}
                             onPress={() => onOpenLink(href)}
-                            className="bg-popover" style={styles.linkChip}
+                            className="bg-popover"
+                            style={styles.linkChip}
                             accessibilityRole="link"
                             accessibilityLabel={label}
                           >
                             <Ionicons name={icon} size={14} color={theme.colors.text} />
-                            <Text className="text-foreground" style={styles.linkChipText}>{label}</Text>
+                            <Text className="text-foreground" style={styles.linkChipText}>
+                              {label}
+                            </Text>
                           </Pressable>
                         );
                       })}
@@ -655,33 +756,51 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
               <View className="flex-wrap" style={styles.controlsContainer}>
                 {canPlay && (
                   <Pressable
-                    className="bg-primary" style={styles.playButton}
+                    className="bg-primary"
+                    style={styles.playButton}
                     onPress={onPlayAll}
                     accessibilityLabel={t(isArtistPlaying ? 'listener.pause' : 'listener.play')}
                     accessibilityRole="button"
                   >
                     <View style={styles.playButtonInner}>
-                      <Ionicons name={isArtistPlaying ? 'pause' : 'play'} size={24} color={theme.colors.primaryForeground} />
+                      <Ionicons
+                        name={isArtistPlaying ? 'pause' : 'play'}
+                        size={24}
+                        color={theme.colors.primaryForeground}
+                      />
                     </View>
                   </Pressable>
                 )}
                 {canPlay && (
-                  <Pressable onPress={onShuffle} style={styles.controlButton} accessibilityRole="button" accessibilityLabel={t('listener.shuffle')}>
+                  <Pressable
+                    onPress={onShuffle}
+                    style={styles.controlButton}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('listener.shuffle')}
+                  >
                     <Ionicons name="shuffle" size={24} color={theme.colors.text} />
                   </Pressable>
                 )}
-                {artistId && (
-                  <ArtistFollowControl artistId={artistId} artistName={displayName} />
-                )}
+                {artistId && <ArtistFollowControl artistId={artistId} artistName={displayName} />}
                 <DropdownMenu open={isActionsOpen} onOpenChange={setIsActionsOpen}>
                   <DropdownMenuTrigger asChild label={t('listener.actions')}>
-                    <Pressable className="size-11 items-center justify-center" accessibilityRole="button" accessibilityLabel={t('listener.actions')}>
+                    <Pressable
+                      className="size-11 items-center justify-center"
+                      accessibilityRole="button"
+                      accessibilityLabel={t('listener.actions')}
+                    >
                       <Ionicons name="ellipsis-horizontal" size={24} color={theme.colors.text} />
                     </Pressable>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" label={t('listener.actions')}>
-                    {artistId && canPlay ? <DropdownMenuItem onPress={onStartRadio}>{t('radio.artistRadio')}</DropdownMenuItem> : null}
-                    <DropdownMenuItem onPress={() => void shareMedia('p', entity.id, displayName)}>{t('listener.share')}</DropdownMenuItem>
+                    {artistId && canPlay ? (
+                      <DropdownMenuItem onPress={onStartRadio}>
+                        {t('radio.artistRadio')}
+                      </DropdownMenuItem>
+                    ) : null}
+                    <DropdownMenuItem onPress={() => void shareMedia('p', entity.id, displayName)}>
+                      {t('listener.share')}
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </View>
@@ -691,7 +810,9 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
             {tracks.length > 0 && (
               <>
                 <View style={styles.sectionHeader}>
-                  <Text className="text-foreground" style={styles.sectionTitle}>{t('artist.popular')}</Text>
+                  <Text className="text-foreground" style={styles.sectionTitle}>
+                    {t('artist.popular')}
+                  </Text>
                 </View>
                 <View style={styles.trackList}>
                   {tracks.slice(0, 10).map((track, index) => {
@@ -710,7 +831,11 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
                         // Published by a listener, not by the artist. A claimed
                         // artist otherwise sees a discography containing
                         // recordings they never uploaded, with no way to tell.
-                        badge={contributedTrackIds.has(track.id) ? t('artist.contributedBadge') : undefined}
+                        badge={
+                          contributedTrackIds.has(track.id)
+                            ? t('artist.contributedBadge')
+                            : undefined
+                        }
                       />
                     );
                   })}
@@ -718,10 +843,26 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
               </>
             )}
 
-            {latestRelease ? <>
-              <View style={styles.sectionHeader}><Text className="text-foreground" style={styles.sectionTitle}>{t('listener.latestRelease')}</Text></View>
-              <View className="px-6 pb-6 max-w-sm"><MediaCard title={latestRelease.title} subtitle={latestRelease.releaseDate} type="album" imageUri={latestRelease.coverArt} imageSizes={latestRelease.coverArtSizes} onPress={() => onNavigateAlbum(latestRelease.id)} onPlayPress={() => onPlayAlbum(latestRelease.id, latestRelease.title)} /></View>
-            </> : null}
+            {latestRelease ? (
+              <>
+                <View style={styles.sectionHeader}>
+                  <Text className="text-foreground" style={styles.sectionTitle}>
+                    {t('listener.latestRelease')}
+                  </Text>
+                </View>
+                <View className="px-6 pb-6 max-w-sm">
+                  <MediaCard
+                    title={latestRelease.title}
+                    subtitle={latestRelease.releaseDate}
+                    type="album"
+                    imageUri={latestRelease.coverArt}
+                    imageSizes={latestRelease.coverArtSizes}
+                    onPress={() => onNavigateAlbum(latestRelease.id)}
+                    onPlayPress={() => onPlayAlbum(latestRelease.id, latestRelease.title)}
+                  />
+                </View>
+              </>
+            ) : null}
             {/* Discography — three shelves off the release-type split the
                 backend computed. A shelf with nothing in it does not render at
                 all, rather than opening onto an empty grid. */}
@@ -729,11 +870,40 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
               shelf.albums.length === 0 ? null : (
                 <React.Fragment key={shelf.key}>
                   <View style={styles.sectionHeader}>
-                    <Text className="text-foreground" style={styles.sectionTitle}>{t(shelf.titleKey)}</Text>
-                    {shelf.albums.length > 6 ? <Pressable accessibilityRole="button" onPress={() => setExpandedShelves((current) => current.includes(shelf.key) ? current.filter((key) => key !== shelf.key) : [...current, shelf.key])}><Text className="text-primary">{t(expandedShelves.includes(shelf.key) ? 'common.showLess' : 'common.seeAll', { defaultValue: expandedShelves.includes(shelf.key) ? 'Show less' : 'See all' })}</Text></Pressable> : null}
+                    <Text className="text-foreground" style={styles.sectionTitle}>
+                      {t(shelf.titleKey)}
+                    </Text>
+                    {shelf.albums.length > 6 ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() =>
+                          setExpandedShelves((current) =>
+                            current.includes(shelf.key)
+                              ? current.filter((key) => key !== shelf.key)
+                              : [...current, shelf.key],
+                          )
+                        }
+                      >
+                        <Text className="text-primary">
+                          {t(
+                            expandedShelves.includes(shelf.key)
+                              ? 'common.showLess'
+                              : 'common.seeAll',
+                            {
+                              defaultValue: expandedShelves.includes(shelf.key)
+                                ? 'Show less'
+                                : 'See all',
+                            },
+                          )}
+                        </Text>
+                      </Pressable>
+                    ) : null}
                   </View>
                   <ResponsiveGrid minItemWidth={180} gap={8} style={styles.albumsGrid}>
-                    {(expandedShelves.includes(shelf.key) ? shelf.albums : shelf.albums.slice(0, 6)).map((album) => (
+                    {(expandedShelves.includes(shelf.key)
+                      ? shelf.albums
+                      : shelf.albums.slice(0, 6)
+                    ).map((album) => (
                       <View key={album.id}>
                         <MediaCard
                           title={album.title}
@@ -816,7 +986,9 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
             {podcasts.length > 0 && (
               <>
                 <View style={styles.sectionHeader}>
-                  <Text className="text-foreground" style={styles.sectionTitle}>{t('artist.appearsIn')}</Text>
+                  <Text className="text-foreground" style={styles.sectionTitle}>
+                    {t('artist.appearsIn')}
+                  </Text>
                 </View>
                 <ResponsiveGrid minItemWidth={160} gap={8} style={styles.albumsGrid}>
                   {podcasts.map((podcast) => (
@@ -840,7 +1012,9 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
             {episodes.length > 0 && (
               <>
                 <View style={styles.sectionHeader}>
-                  <Text className="text-foreground" style={styles.sectionTitle}>{t('common.episodes')}</Text>
+                  <Text className="text-foreground" style={styles.sectionTitle}>
+                    {t('common.episodes')}
+                  </Text>
                 </View>
                 <View style={styles.trackList}>
                   {episodes.map((episode) => (
@@ -858,35 +1032,48 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
             )}
 
             {/* Fans also listen to */}
-            {relatedArtistsPending ? null : relatedArtists.length > 0 && (
-              <>
-                <View style={styles.sectionHeader}>
-                  <Text className="text-foreground" style={styles.sectionTitle}>
-                    {t('artist.related')}
-                  </Text>
-                </View>
-                <Text className="text-muted-foreground px-6 pb-3">{t('artist.relatedReason')}</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.relatedArtistsRow}>
-                  {relatedArtists.map((relatedArtist) => (
-                    <View key={relatedArtist.id} style={styles.relatedArtistCard}>
-                      <MediaCard
-                        title={relatedArtist.name}
-                        subtitle={t('common.artist')}
-                        type="artist"
-                        imageUri={relatedArtist.image}
-                        images={relatedArtist.images}
-                        imageSizes={relatedArtist.imageSizes}
-                        primaryColor={relatedArtist.primaryColor}
-                        onPress={() => onNavigateArtist(relatedArtist.id)}
-                        onPlayPress={() => onPlayArtist(relatedArtist.id, relatedArtist.name)}
-                      />
+            {relatedArtistsPending
+              ? null
+              : relatedArtists.length > 0 && (
+                  <>
+                    <View style={styles.sectionHeader}>
+                      <Text className="text-foreground" style={styles.sectionTitle}>
+                        {t('artist.related')}
+                      </Text>
                     </View>
-                  ))}
-                </ScrollView>
-              </>
-            )}
+                    <Text className="text-muted-foreground px-6 pb-3">
+                      {t('artist.relatedReason')}
+                    </Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.relatedArtistsRow}
+                    >
+                      {relatedArtists.map((relatedArtist) => (
+                        <View key={relatedArtist.id} style={styles.relatedArtistCard}>
+                          <MediaCard
+                            title={relatedArtist.name}
+                            subtitle={t('common.artist')}
+                            type="artist"
+                            imageUri={relatedArtist.image}
+                            images={relatedArtist.images}
+                            imageSizes={relatedArtist.imageSizes}
+                            primaryColor={relatedArtist.primaryColor}
+                            onPress={() => onNavigateArtist(relatedArtist.id)}
+                            onPlayPress={() => onPlayArtist(relatedArtist.id, relatedArtist.name)}
+                          />
+                        </View>
+                      ))}
+                    </ScrollView>
+                  </>
+                )}
 
-            <ArtistAbout entity={entity} hasImage={Boolean(heroImage)} onNavigateArtist={onNavigateArtist} onOpenLink={onOpenLink} />
+            <ArtistAbout
+              entity={entity}
+              hasImage={Boolean(heroImage)}
+              onNavigateArtist={onNavigateArtist}
+              onOpenLink={onOpenLink}
+            />
 
             {/* Empty State — counts every shelf, including the ones added with
                 the credits work. A profile whose only content is a production
@@ -898,20 +1085,20 @@ const EntityProfileView: React.FC<EntityProfileViewProps> = ({
               episodes.length === 0 &&
               creditedOn.length === 0 &&
               playlists.length === 0 && (
-              <View style={styles.emptyState}>
-                <Text className="text-muted-foreground" style={styles.emptyStateText}>
-                  {/* A contributed stub is sparse BY DESIGN for a while: the
+                <View style={styles.emptyState}>
+                  <Text className="text-muted-foreground" style={styles.emptyStateText}>
+                    {/* A contributed stub is sparse BY DESIGN for a while: the
                       profile is created from one file's tags and enrichment is
                       queued behind a rate-limited external source, so it can be
                       minutes or hours before anything else lands. Saying that is
                       the difference between a page that looks unfinished and one
                       that looks broken. */}
-                  {profileState?.origin === 'contributed'
-                    ? t('artist.emptyContributed')
-                    : t('artist.empty')}
-                </Text>
-              </View>
-            )}
+                    {profileState?.origin === 'contributed'
+                      ? t('artist.emptyContributed')
+                      : t('artist.empty')}
+                  </Text>
+                </View>
+              )}
           </LinearGradient>
         </Animated.ScrollView>
       </View>

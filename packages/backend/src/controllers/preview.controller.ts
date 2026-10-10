@@ -109,7 +109,9 @@ export const getTrackPreview = async (req: Request, res: Response, next: NextFun
               url: track.audioSourceUrl,
               format: track.audioSourceFormat,
               ...(track.audioSourceBitrate === null ? {} : { bitrate: track.audioSourceBitrate }),
-              ...(track.audioSourceDuration === null ? {} : { duration: track.audioSourceDuration }),
+              ...(track.audioSourceDuration === null
+                ? {}
+                : { duration: track.audioSourceDuration }),
             },
           }
         : {}),
@@ -124,7 +126,10 @@ export const getTrackPreview = async (req: Request, res: Response, next: NextFun
     const { stream, contentLength } = await streamFromS3(previewKey);
 
     stream.on('error', (streamError: Error) => {
-      logger.error('[PreviewController] Error reading preview stream', { trackId, err: streamError });
+      logger.error('[PreviewController] Error reading preview stream', {
+        trackId,
+        err: streamError,
+      });
       if (!res.headersSent) {
         res.status(404).json({ error: 'Preview not available' });
       } else {

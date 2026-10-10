@@ -43,7 +43,10 @@ export const CastButton: React.FC<CastButtonProps> = ({ size = 20, color }) => {
         await requestSession();
       }
     } catch (error) {
-      logger.error(isCasting ? 'Failed to end cast session' : 'Failed to start cast session', error);
+      logger.error(
+        isCasting ? 'Failed to end cast session' : 'Failed to start cast session',
+        error,
+      );
     }
   };
 

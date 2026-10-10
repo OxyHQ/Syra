@@ -62,16 +62,11 @@ export function MiniRoomBar({
     transform: [{ scale: pulseScale.value }],
   }));
 
-  const subtitleText = activeSpeakerCount > 0
-    ? `${activeSpeakerCount} speaking`
-    : `${participantCount} listening`;
+  const subtitleText =
+    activeSpeakerCount > 0 ? `${activeSpeakerCount} speaking` : `${participantCount} listening`;
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.9}
-      onPress={onExpand}
-      style={styles.container}
-    >
+    <TouchableOpacity activeOpacity={0.9} onPress={onExpand} style={styles.container}>
       <Animated.View style={[styles.liveIndicator, indicatorStyle]}>
         <View style={styles.liveDot} />
       </Animated.View>
@@ -80,9 +75,7 @@ export function MiniRoomBar({
         <Text style={[styles.title, { color: theme.colors.text }]} numberOfLines={1}>
           {title || 'Room'}
         </Text>
-        <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-          {subtitleText}
-        </Text>
+        <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>{subtitleText}</Text>
       </View>
 
       <View style={styles.controls}>
@@ -92,9 +85,7 @@ export function MiniRoomBar({
             style={[
               styles.controlButton,
               {
-                backgroundColor: isMuted
-                  ? theme.colors.backgroundSecondary
-                  : theme.colors.primary,
+                backgroundColor: isMuted ? theme.colors.backgroundSecondary : theme.colors.primary,
               },
             ]}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}

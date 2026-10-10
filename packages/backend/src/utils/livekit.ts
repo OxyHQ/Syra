@@ -1,7 +1,13 @@
 import {
-  AccessToken, RoomServiceClient, TrackSource,
-  IngressClient, IngressInput, IngressInfo,
-  EgressClient, EncodedFileOutput, EncodedFileType,
+  AccessToken,
+  RoomServiceClient,
+  TrackSource,
+  IngressClient,
+  IngressInput,
+  IngressInfo,
+  EgressClient,
+  EncodedFileOutput,
+  EncodedFileType,
 } from 'livekit-server-sdk';
 import { getS3UploadConfig } from './spaces';
 import { logger } from './logger';
@@ -56,7 +62,7 @@ function getIngressClient(): IngressClient {
 export async function generateRoomToken(
   roomId: string,
   userId: string,
-  role: 'host' | 'speaker' | 'listener'
+  role: 'host' | 'speaker' | 'listener',
 ): Promise<string> {
   const canPublish = role !== 'listener';
 
@@ -86,7 +92,7 @@ export async function generateRoomToken(
 export async function generateBroadcastToken(
   roomId: string,
   userId: string,
-  isHost: boolean
+  isHost: boolean,
 ): Promise<string> {
   const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
     identity: userId,
@@ -133,7 +139,9 @@ export async function ensureLiveKitRoomForRoom(roomId: string, maxParticipants: 
       return null;
     }
 
-    logger.error(`Failed to create LiveKit room for room ${roomId}:`, { error: describeErrorSafely(error) });
+    logger.error(`Failed to create LiveKit room for room ${roomId}:`, {
+      error: describeErrorSafely(error),
+    });
     throw error;
   }
 }
@@ -147,7 +155,9 @@ export async function deleteLiveKitRoomForRoom(roomId: string) {
     logger.info(`LiveKit room deleted: room_${roomId}`);
   } catch (error) {
     // Room may already be gone -- not critical
-    logger.warn(`Failed to delete LiveKit room for room ${roomId}:`, { error: describeErrorSafely(error) });
+    logger.warn(`Failed to delete LiveKit room for room ${roomId}:`, {
+      error: describeErrorSafely(error),
+    });
   }
 }
 
@@ -158,7 +168,7 @@ export async function deleteLiveKitRoomForRoom(roomId: string) {
 export async function updateRoomParticipantPermissions(
   roomId: string,
   userId: string,
-  canPublish: boolean
+  canPublish: boolean,
 ) {
   try {
     await getRoomService().updateParticipant(`room_${roomId}`, userId, undefined, {
@@ -166,20 +176,21 @@ export async function updateRoomParticipantPermissions(
       canPublishSources: canPublish ? [TrackSource.MICROPHONE] : [],
       canSubscribe: true,
     });
-    logger.debug(`Updated LiveKit permissions for ${userId} in room ${roomId}: canPublish=${canPublish}`);
+    logger.debug(
+      `Updated LiveKit permissions for ${userId} in room ${roomId}: canPublish=${canPublish}`,
+    );
   } catch (error) {
     // Participant may not be in the LiveKit room yet -- not critical
-    logger.warn(`Failed to update LiveKit permissions for ${userId} in room ${roomId}:`, { error: describeErrorSafely(error) });
+    logger.warn(`Failed to update LiveKit permissions for ${userId} in room ${roomId}:`, {
+      error: describeErrorSafely(error),
+    });
   }
 }
 
 /**
  * Create a URL-type ingress for a room.
  */
-export async function createRoomUrlIngress(
-  roomId: string,
-  url: string
-): Promise<IngressInfo> {
+export async function createRoomUrlIngress(roomId: string, url: string): Promise<IngressInfo> {
   try {
     const ingress = await getIngressClient().createIngress(IngressInput.URL_INPUT, {
       roomName: `room_${roomId}`,
@@ -191,7 +202,9 @@ export async function createRoomUrlIngress(
     logger.info(`URL ingress created for room ${roomId}: ${ingress.ingressId}`);
     return ingress;
   } catch (error) {
-    logger.error(`Failed to create URL ingress for room ${roomId}:`, { error: describeErrorSafely(error) });
+    logger.error(`Failed to create URL ingress for room ${roomId}:`, {
+      error: describeErrorSafely(error),
+    });
     throw error;
   }
 }
@@ -210,7 +223,9 @@ export async function createRoomRtmpIngress(roomId: string): Promise<IngressInfo
     logger.info(`RTMP ingress created for room ${roomId}: ${ingress.ingressId}`);
     return ingress;
   } catch (error) {
-    logger.error(`Failed to create RTMP ingress for room ${roomId}:`, { error: describeErrorSafely(error) });
+    logger.error(`Failed to create RTMP ingress for room ${roomId}:`, {
+      error: describeErrorSafely(error),
+    });
     throw error;
   }
 }
@@ -222,7 +237,9 @@ export async function listRoomIngresses(roomId: string): Promise<IngressInfo[]> 
   try {
     return await getIngressClient().listIngress({ roomName: `room_${roomId}` });
   } catch (error) {
-    logger.warn(`Failed to list ingresses for room ${roomId}:`, { error: describeErrorSafely(error) });
+    logger.warn(`Failed to list ingresses for room ${roomId}:`, {
+      error: describeErrorSafely(error),
+    });
     return [];
   }
 }
@@ -247,10 +264,7 @@ export async function deleteIngress(ingressId: string): Promise<void> {
  * Start a Room Composite Egress that records all room audio to an OGG file
  * in Amazon S3. Returns the egressId.
  */
-export async function startRoomRecording(
-  roomId: string,
-  objectKey: string
-): Promise<string> {
+export async function startRoomRecording(roomId: string, objectKey: string): Promise<string> {
   try {
     const s3Config = getS3UploadConfig(objectKey);
 
@@ -267,13 +281,15 @@ export async function startRoomRecording(
     const info = await getEgressClient().startRoomCompositeEgress(
       `room_${roomId}`,
       { file: output },
-      { audioOnly: true }
+      { audioOnly: true },
     );
 
     logger.info(`Recording started for room ${roomId}, egressId: ${info.egressId}`);
     return info.egressId;
   } catch (error) {
-    logger.error(`Failed to start recording for room ${roomId}:`, { error: describeErrorSafely(error) });
+    logger.error(`Failed to start recording for room ${roomId}:`, {
+      error: describeErrorSafely(error),
+    });
     throw error;
   }
 }
@@ -286,7 +302,9 @@ export async function stopRoomRecording(egressId: string): Promise<void> {
     await getEgressClient().stopEgress(egressId);
     logger.info(`Recording stopped: egressId ${egressId}`);
   } catch (error) {
-    logger.error(`Failed to stop recording (egressId: ${egressId}):`, { error: describeErrorSafely(error) });
+    logger.error(`Failed to stop recording (egressId: ${egressId}):`, {
+      error: describeErrorSafely(error),
+    });
     throw error;
   }
 }

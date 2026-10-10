@@ -60,7 +60,9 @@ export interface OxyUserLite {
 export type GetOxyUsers = (ids: string[]) => Promise<OxyUserLite[]>;
 
 /** Build the production Oxy fetcher from the shared client (call site supplies it). */
-export function makeOxyUsersFetcher(oxy: { users: Pick<OxyServices['users'], 'getMany'> }): GetOxyUsers {
+export function makeOxyUsersFetcher(oxy: {
+  users: Pick<OxyServices['users'], 'getMany'>;
+}): GetOxyUsers {
   return async (ids: string[]) => {
     if (ids.length === 0) return [];
     const users: User[] = await oxy.users.getMany(ids);
@@ -141,9 +143,7 @@ async function findOrCreatePerson(credit: EpisodePerson): Promise<PersonRow | nu
       })
       .onConflictDoNothing();
 
-    return (
-      (await findPerson(eq(catalogEntities.linkedOxyUserId, credit.linkedOxyUserId))) ?? null
-    );
+    return (await findPerson(eq(catalogEntities.linkedOxyUserId, credit.linkedOxyUserId))) ?? null;
   }
 
   // Strong key 2 — podcast:person href (stable URL identity).
@@ -188,8 +188,8 @@ async function findOrCreatePerson(credit: EpisodePerson): Promise<PersonRow | nu
     and(
       eq(catalogEntities.nameKey, nameKey),
       isNull(catalogEntities.linkedOxyUserId),
-      isNull(catalogEntities.href)
-    )
+      isNull(catalogEntities.href),
+    ),
   );
   if (existing) {
     if (credit.img && !existing.img) {
@@ -240,9 +240,9 @@ async function ensureArtistLink(person: PersonRow): Promise<void> {
         sql`lower(${catalogEntities.name}) = lower(${person.name})`,
         or(
           isNotNull(catalogEntities.ownerOxyUserId),
-          isNotNull(catalogEntities.claimedByOxyUserId)
-        )
-      )
+          isNotNull(catalogEntities.claimedByOxyUserId),
+        ),
+      ),
     )
     .limit(1);
 
@@ -261,7 +261,7 @@ async function ensureArtistLink(person: PersonRow): Promise<void> {
  */
 export async function resolvePersons(
   credits: readonly EpisodePerson[] | undefined,
-  getOxyUsers: GetOxyUsers
+  getOxyUsers: GetOxyUsers,
 ): Promise<ResolvedPerson[]> {
   if (!credits || credits.length === 0) return [];
 
@@ -273,13 +273,16 @@ export async function resolvePersons(
       await ensureArtistLink(row);
       resolved.push({ credit, row });
     } catch (err) {
-      logger.debug('[podcasts] person resolution failed', { name: credit.name, err: describeErrorSafely(err) });
+      logger.debug('[podcasts] person resolution failed', {
+        name: credit.name,
+        err: describeErrorSafely(err),
+      });
     }
   }
 
   // Enrich Oxy-linked persons with their live avatar + displayName (one batch).
   const oxyIds = Array.from(
-    new Set(resolved.map(({ row }) => row.linkedOxyUserId).filter((id): id is string => !!id))
+    new Set(resolved.map(({ row }) => row.linkedOxyUserId).filter((id): id is string => !!id)),
   );
   const oxyById = new Map<string, OxyUserLite>();
   if (oxyIds.length > 0) {
@@ -323,7 +326,7 @@ export interface CreatorPersonsResult {
  */
 export async function buildCreatorPersons(
   input: { hosts?: string[]; guests?: string[] },
-  getOxyUsers: GetOxyUsers
+  getOxyUsers: GetOxyUsers,
 ): Promise<CreatorPersonsResult> {
   const roleById = new Map<string, 'host' | 'guest'>();
   for (const id of input.guests ?? []) if (id) roleById.set(id, 'guest');
@@ -380,10 +383,10 @@ export interface PersonLike {
  */
 export async function enrichPersons(
   persons: PersonLike[],
-  getOxyUsers: GetOxyUsers
+  getOxyUsers: GetOxyUsers,
 ): Promise<SearchPerson[]> {
   const oxyIds = Array.from(
-    new Set(persons.map((person) => person.linkedOxyUserId).filter((id): id is string => !!id))
+    new Set(persons.map((person) => person.linkedOxyUserId).filter((id): id is string => !!id)),
   );
   const oxyById = new Map<string, OxyUserLite>();
   if (oxyIds.length > 0) {

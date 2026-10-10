@@ -23,46 +23,62 @@ const albumResponseSchema = albumSchema.passthrough();
 const artistResponseSchema = artistSchema.passthrough();
 const playlistResponseSchema = playlistSchema.passthrough();
 
-const popularTracksResponseSchema = z.object({
-  tracks: z.array(trackResponseSchema),
-  total: z.number(),
-  hasMore: z.boolean(),
-}).passthrough();
-const popularAlbumsResponseSchema = z.object({
-  albums: z.array(albumResponseSchema),
-  total: z.number(),
-  hasMore: z.boolean(),
-}).passthrough();
-const popularArtistsResponseSchema = z.object({
-  artists: z.array(artistResponseSchema),
-  total: z.number(),
-  hasMore: z.boolean(),
-}).passthrough();
-const madeForYouResponseSchema = z.object({
-  albums: z.array(albumResponseSchema),
-  playlists: z.array(playlistResponseSchema),
-  tracks: z.array(trackResponseSchema).optional(),
-  artists: z.array(artistResponseSchema).optional(),
-  personalized: z.boolean().optional(),
-}).passthrough();
-const homeBrowseResponseSchema = z.object({
-  madeForYou: madeForYouResponseSchema,
-  popularAlbums: popularAlbumsResponseSchema,
-  popularArtists: popularArtistsResponseSchema,
-  tracks: popularTracksResponseSchema,
-}).passthrough();
-const genreResponseSchema = z.object({
-  name: z.string(),
-  color: z.string(),
-  coverArt: z.string().nullable(),
-}).passthrough();
-const genresResponseSchema = z.object({
-  genres: z.array(genreResponseSchema),
-}).passthrough();
-const chartsResponseSchema = z.object({
-  tracks: z.array(trackResponseSchema),
-  total: z.number(),
-}).passthrough();
+const popularTracksResponseSchema = z
+  .object({
+    tracks: z.array(trackResponseSchema),
+    total: z.number(),
+    hasMore: z.boolean(),
+  })
+  .passthrough();
+const popularAlbumsResponseSchema = z
+  .object({
+    albums: z.array(albumResponseSchema),
+    total: z.number(),
+    hasMore: z.boolean(),
+  })
+  .passthrough();
+const popularArtistsResponseSchema = z
+  .object({
+    artists: z.array(artistResponseSchema),
+    total: z.number(),
+    hasMore: z.boolean(),
+  })
+  .passthrough();
+const madeForYouResponseSchema = z
+  .object({
+    albums: z.array(albumResponseSchema),
+    playlists: z.array(playlistResponseSchema),
+    tracks: z.array(trackResponseSchema).optional(),
+    artists: z.array(artistResponseSchema).optional(),
+    personalized: z.boolean().optional(),
+  })
+  .passthrough();
+const homeBrowseResponseSchema = z
+  .object({
+    madeForYou: madeForYouResponseSchema,
+    popularAlbums: popularAlbumsResponseSchema,
+    popularArtists: popularArtistsResponseSchema,
+    tracks: popularTracksResponseSchema,
+  })
+  .passthrough();
+const genreResponseSchema = z
+  .object({
+    name: z.string(),
+    color: z.string(),
+    coverArt: z.string().nullable(),
+  })
+  .passthrough();
+const genresResponseSchema = z
+  .object({
+    genres: z.array(genreResponseSchema),
+  })
+  .passthrough();
+const chartsResponseSchema = z
+  .object({
+    tracks: z.array(trackResponseSchema),
+    total: z.number(),
+  })
+  .passthrough();
 
 function parseBrowseResponse<T>(schema: z.ZodType<T>, data: unknown, label: string): T {
   const parsed = schema.safeParse(data);
@@ -134,7 +150,10 @@ export const browseService = {
   /**
    * Get the home discovery payload in one round-trip.
    */
-  async getHome(params?: { sectionLimit?: number; tracksLimit?: number }): Promise<HomeBrowseResponse> {
+  async getHome(params?: {
+    sectionLimit?: number;
+    tracksLimit?: number;
+  }): Promise<HomeBrowseResponse> {
     const response = await api.get<unknown>('/browse/home', params);
     const data = parseBrowseResponse(homeBrowseResponseSchema, response.data, 'browse home');
     return {
@@ -192,7 +211,10 @@ export const browseService = {
   /**
    * Get popular/trending tracks
    */
-  async getPopularTracks(params?: { limit?: number; offset?: number }): Promise<PopularTracksResponse> {
+  async getPopularTracks(params?: {
+    limit?: number;
+    offset?: number;
+  }): Promise<PopularTracksResponse> {
     const response = await api.get<unknown>('/browse/popular/tracks', params);
     const data = parseBrowseResponse(popularTracksResponseSchema, response.data, 'popular tracks');
     return { ...data, tracks: data.tracks.map(normalizeTrackImages) };
@@ -201,7 +223,10 @@ export const browseService = {
   /**
    * Get popular/trending albums
    */
-  async getPopularAlbums(params?: { limit?: number; offset?: number }): Promise<PopularAlbumsResponse> {
+  async getPopularAlbums(params?: {
+    limit?: number;
+    offset?: number;
+  }): Promise<PopularAlbumsResponse> {
     const response = await api.get<unknown>('/browse/popular/albums', params);
     const data = parseBrowseResponse(popularAlbumsResponseSchema, response.data, 'popular albums');
     return { ...data, albums: data.albums.map(normalizeAlbumImages) };
@@ -210,9 +235,16 @@ export const browseService = {
   /**
    * Get popular/trending artists
    */
-  async getPopularArtists(params?: { limit?: number; offset?: number }): Promise<PopularArtistsResponse> {
+  async getPopularArtists(params?: {
+    limit?: number;
+    offset?: number;
+  }): Promise<PopularArtistsResponse> {
     const response = await api.get<unknown>('/browse/popular/artists', params);
-    const data = parseBrowseResponse(popularArtistsResponseSchema, response.data, 'popular artists');
+    const data = parseBrowseResponse(
+      popularArtistsResponseSchema,
+      response.data,
+      'popular artists',
+    );
     return { ...data, artists: data.artists.map(normalizeArtistImages) };
   },
 

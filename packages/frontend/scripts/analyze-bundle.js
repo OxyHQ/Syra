@@ -94,7 +94,7 @@ function formatBytes(bytes) {
   const k = 1024;
   const sizes = ['Bytes', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
 }
 
 /**
@@ -111,7 +111,9 @@ function printAnalysis(analysis) {
     .sort(([, a], [, b]) => b.totalSize - a.totalSize)
     .forEach(([ext, data]) => {
       const percentage = ((data.totalSize / analysis.totalSize) * 100).toFixed(1);
-      console.log(`  ${ext || '(no extension)'}: ${formatBytes(data.totalSize)} (${data.count} files, ${percentage}%)`);
+      console.log(
+        `  ${ext || '(no extension)'}: ${formatBytes(data.totalSize)} (${data.count} files, ${percentage}%)`,
+      );
     });
 
   console.log('\n🔝 Top 10 Largest Files:');
@@ -178,4 +180,3 @@ try {
   console.error('❌ Analysis failed:', error.message);
   process.exit(1);
 }
-

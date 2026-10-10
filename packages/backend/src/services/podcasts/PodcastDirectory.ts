@@ -35,7 +35,9 @@ export interface PodcastDirectoryCandidate {
 // ── Shared helpers ───────────────────────────────────────────────────────────
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined;
+  return typeof value === 'object' && value !== null
+    ? (value as Record<string, unknown>)
+    : undefined;
 }
 
 function cleanString(value: unknown): string | undefined {
@@ -66,7 +68,10 @@ function podcastIndexHeaders(): Record<string, string> | null {
   if (!key || !secret) return null;
 
   const authDate = Math.floor(Date.now() / 1000).toString();
-  const authorization = crypto.createHash('sha1').update(key + secret + authDate).digest('hex');
+  const authorization = crypto
+    .createHash('sha1')
+    .update(key + secret + authDate)
+    .digest('hex');
 
   return {
     'User-Agent': USER_AGENT,
@@ -76,7 +81,10 @@ function podcastIndexHeaders(): Record<string, string> | null {
   };
 }
 
-async function searchPodcastIndex(query: string, limit: number): Promise<PodcastDirectoryCandidate[]> {
+async function searchPodcastIndex(
+  query: string,
+  limit: number,
+): Promise<PodcastDirectoryCandidate[]> {
   const headers = podcastIndexHeaders();
   if (!headers) return [];
 
@@ -100,7 +108,9 @@ async function searchPodcastIndex(query: string, limit: number): Promise<Podcast
 
       const categoriesRecord = asRecord(feed?.['categories']);
       const categories = categoriesRecord
-        ? Object.values(categoriesRecord).map(cleanString).filter((c): c is string => c !== undefined)
+        ? Object.values(categoriesRecord)
+            .map(cleanString)
+            .filter((c): c is string => c !== undefined)
         : [];
 
       candidates.push({

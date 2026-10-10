@@ -58,10 +58,10 @@ const SearchScreen: React.FC = () => {
   // and optionally preselect a `?category=` tab (e.g. the podcasts home search entry).
   const { q, category } = useLocalSearchParams<{ q?: string; category?: string }>();
   const searchQuery = typeof q === 'string' ? q : '';
-  const initialCategory = typeof category === 'string'
-    && (Object.values(SearchCategory) as string[]).includes(category)
-    ? (category as SearchCategory)
-    : SearchCategory.ALL;
+  const initialCategory =
+    typeof category === 'string' && (Object.values(SearchCategory) as string[]).includes(category)
+      ? (category as SearchCategory)
+      : SearchCategory.ALL;
   const [activeCategory, setActiveCategory] = useState<SearchCategory>(initialCategory);
 
   // Debounce search query
@@ -150,11 +150,12 @@ const SearchScreen: React.FC = () => {
     refetch: refetchSearch,
   } = useQuery({
     queryKey: ['search', debouncedQuery, activeCategory],
-    queryFn: () => searchService.search(debouncedQuery, {
-      category: activeCategory,
-      limit: 20,
-      offset: 0,
-    }),
+    queryFn: () =>
+      searchService.search(debouncedQuery, {
+        category: activeCategory,
+        limit: 20,
+        offset: 0,
+      }),
     enabled: hasQuery,
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
@@ -174,10 +175,18 @@ const SearchScreen: React.FC = () => {
   // stands in for the whole view; a section still loading or still reporting a
   // failure is drawing something of its own, and pre-empts it.
   const exploreSettled =
-    !genresLoading && !madeForYouLoading && !popularTracksLoading &&
-    !popularAlbumsLoading && !popularArtistsLoading && !chartsLoading &&
-    !genresError && !madeForYouError && !popularTracksError &&
-    !popularAlbumsError && !popularArtistsError && !chartsError;
+    !genresLoading &&
+    !madeForYouLoading &&
+    !popularTracksLoading &&
+    !popularAlbumsLoading &&
+    !popularArtistsLoading &&
+    !chartsLoading &&
+    !genresError &&
+    !madeForYouError &&
+    !popularTracksError &&
+    !popularAlbumsError &&
+    !popularArtistsError &&
+    !chartsError;
   const exploreIsEmpty =
     genres.length === 0 &&
     madeForYouAlbums.length === 0 &&
@@ -188,45 +197,63 @@ const SearchScreen: React.FC = () => {
     chartsTracks.length === 0;
 
   // Memoized event handlers
-  const playTrackFromList = useCallback((
-    track: Track,
-    list: Track[],
-    context: { type: 'search' | 'track'; id?: string; name?: string },
-  ) => {
-    const source = list.length > 0 ? list : [track];
-    const index = Math.max(0, source.findIndex((item) => item.id === track.id));
-    playTrackList(source, index, context);
-  }, [playTrackList]);
+  const playTrackFromList = useCallback(
+    (
+      track: Track,
+      list: Track[],
+      context: { type: 'search' | 'track'; id?: string; name?: string },
+    ) => {
+      const source = list.length > 0 ? list : [track];
+      const index = Math.max(
+        0,
+        source.findIndex((item) => item.id === track.id),
+      );
+      playTrackList(source, index, context);
+    },
+    [playTrackList],
+  );
 
-  const handleGenrePlay = useCallback(async (genreName: string) => {
-    const { tracks } = await browseService.getGenreTracks(genreName, { limit: 50 });
-    if (tracks.length > 0) {
-      playTrackList(tracks, 0, { type: 'search', id: genreName, name: genreName });
-    }
-  }, [playTrackList]);
+  const handleGenrePlay = useCallback(
+    async (genreName: string) => {
+      const { tracks } = await browseService.getGenreTracks(genreName, { limit: 50 });
+      if (tracks.length > 0) {
+        playTrackList(tracks, 0, { type: 'search', id: genreName, name: genreName });
+      }
+    },
+    [playTrackList],
+  );
 
-  const handleTrackRowPress = useCallback((track: Track, list: Track[], contextName: string) => {
-    if (track.albumId) {
-      router.push(`/album/${track.albumId}`);
-    } else {
-      playTrackFromList(track, list, { type: 'search', name: contextName });
-    }
-  }, [router, playTrackFromList]);
+  const handleTrackRowPress = useCallback(
+    (track: Track, list: Track[], contextName: string) => {
+      if (track.albumId) {
+        router.push(`/album/${track.albumId}`);
+      } else {
+        playTrackFromList(track, list, { type: 'search', name: contextName });
+      }
+    },
+    [router, playTrackFromList],
+  );
 
-  const handleGenreClick = useCallback((genreName: string) => {
-    router.replace({ pathname: '/search', params: { q: genreName } });
-  }, [router]);
+  const handleGenreClick = useCallback(
+    (genreName: string) => {
+      router.replace({ pathname: '/search', params: { q: genreName } });
+    },
+    [router],
+  );
 
   const handleCategoryChange = useCallback((category: SearchCategory) => {
     setActiveCategory(category);
   }, []);
 
-  const handleSearchQueryChange = useCallback((query: string) => {
-    router.replace({
-      pathname: '/search',
-      params: query.trim() ? { q: query } : {},
-    });
-  }, [router]);
+  const handleSearchQueryChange = useCallback(
+    (query: string) => {
+      router.replace({
+        pathname: '/search',
+        params: query.trim() ? { q: query } : {},
+      });
+    },
+    [router],
+  );
 
   const handleClearSearch = useCallback(() => {
     router.replace('/search');
@@ -236,35 +263,42 @@ const SearchScreen: React.FC = () => {
     router.push('/browse');
   }, [router]);
 
-  const handleUserPress = useCallback((user: SearchUser) => {
-    router.push({ pathname: '/u/[username]', params: { username: user.username } });
-  }, [router]);
+  const handleUserPress = useCallback(
+    (user: SearchUser) => {
+      router.push({ pathname: '/u/[username]', params: { username: user.username } });
+    },
+    [router],
+  );
 
   // Memoized categories
-  const categories: { value: SearchCategory; label: string }[] = useMemo(() => [
-    { value: SearchCategory.ALL, label: t('common.all') },
-    { value: SearchCategory.TRACKS, label: t('common.tracks') },
-    { value: SearchCategory.ALBUMS, label: t('common.albums') },
-    { value: SearchCategory.ARTISTS, label: t('common.artists') },
-    { value: SearchCategory.PLAYLISTS, label: t('common.playlists') },
-    { value: SearchCategory.PODCASTS, label: t('common.podcasts') },
-    { value: SearchCategory.EPISODES, label: t('common.episodes') },
-    { value: SearchCategory.PEOPLE, label: t('common.people') },
-    { value: SearchCategory.USERS, label: t('common.users') },
-  ], []);
+  const categories: { value: SearchCategory; label: string }[] = useMemo(
+    () => [
+      { value: SearchCategory.ALL, label: t('common.all') },
+      { value: SearchCategory.TRACKS, label: t('common.tracks') },
+      { value: SearchCategory.ALBUMS, label: t('common.albums') },
+      { value: SearchCategory.ARTISTS, label: t('common.artists') },
+      { value: SearchCategory.PLAYLISTS, label: t('common.playlists') },
+      { value: SearchCategory.PODCASTS, label: t('common.podcasts') },
+      { value: SearchCategory.EPISODES, label: t('common.episodes') },
+      { value: SearchCategory.PEOPLE, label: t('common.people') },
+      { value: SearchCategory.USERS, label: t('common.users') },
+    ],
+    [],
+  );
 
   // Memoized computed values
   const showResults = useMemo(() => searchResults && hasQuery, [searchResults, hasQuery]);
-  const hasResults = useMemo(() => searchResults && searchResults.counts.total > 0, [searchResults]);
+  const hasResults = useMemo(
+    () => searchResults && searchResults.counts.total > 0,
+    [searchResults],
+  );
 
   return (
     <>
-      <SEO
-        title={t('search.seo.title')}
-        description={t('search.seo.description')}
-      />
+      <SEO title={t('search.seo.title')} description={t('search.seo.description')} />
       <ScrollView
-        className="bg-surface" style={styles.container}
+        className="bg-surface"
+        style={styles.container}
         contentContainerStyle={[
           styles.contentContainer,
           !isMobile && styles.desktopContentContainer,
@@ -276,7 +310,8 @@ const SearchScreen: React.FC = () => {
             <View className="bg-surface" style={styles.searchContainer}>
               <Ionicons name="search" size={20} color={theme.colors.textSecondary} />
               <TextInput
-                className="text-foreground" style={styles.searchInput}
+                className="text-foreground"
+                style={styles.searchInput}
                 placeholder={t('search.placeholder')}
                 placeholderTextColor={theme.colors.textSecondary}
                 value={searchQuery}
@@ -285,12 +320,20 @@ const SearchScreen: React.FC = () => {
                 autoFocus
               />
               {searchQuery.length > 0 && (
-                <Pressable onPress={handleClearSearch} accessibilityRole="button" accessibilityLabel={t('search.clear')}>
+                <Pressable
+                  onPress={handleClearSearch}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('search.clear')}
+                >
                   <Ionicons name="close-circle" size={18} color={theme.colors.textSecondary} />
                 </Pressable>
               )}
               <View className="bg-border" style={styles.searchActionSeparator} />
-              <Pressable onPress={handleBrowse} accessibilityRole="button" accessibilityLabel={t('search.browse')}>
+              <Pressable
+                onPress={handleBrowse}
+                accessibilityRole="button"
+                accessibilityLabel={t('search.browse')}
+              >
                 <Ionicons name="grid-outline" size={19} color={theme.colors.textSecondary} />
               </Pressable>
             </View>
@@ -320,9 +363,10 @@ const SearchScreen: React.FC = () => {
                   style={[
                     styles.categoryTabText,
                     {
-                      color: activeCategory === category.value
-                        ? theme.colors.primary
-                        : theme.colors.text,
+                      color:
+                        activeCategory === category.value
+                          ? theme.colors.primary
+                          : theme.colors.text,
                     },
                   ]}
                 >
@@ -362,7 +406,9 @@ const SearchScreen: React.FC = () => {
               error={{
                 title: t('search.errors.title'),
                 message: t('search.errors.message'),
-                onRetry: async () => { await refetchSearch(); },
+                onRetry: async () => {
+                  await refetchSearch();
+                },
               }}
               containerStyle={styles.searchStateContainer}
             />
@@ -432,7 +478,12 @@ const SearchScreen: React.FC = () => {
                       imageSizes={playlist.coverArtSizes}
                       primaryColor={playlist.primaryColor}
                       secondaryColor={playlist.secondaryColor}
-                      onPress={() => router.push({ pathname: '/playlist/[id]', params: { id: playlist.id } } satisfies Href)}
+                      onPress={() =>
+                        router.push({
+                          pathname: '/playlist/[id]',
+                          params: { id: playlist.id },
+                        } satisfies Href)
+                      }
                       onPlayPress={() => playPlaylist(playlist.id, playlist.name)}
                       onHoverIn={handleHoverIn}
                       onHoverOut={handleHoverOut}
@@ -463,7 +514,12 @@ const SearchScreen: React.FC = () => {
                       primaryColor={track.primaryColor}
                       secondaryColor={track.secondaryColor}
                       onPress={() => handleTrackRowPress(track, popularTracks, 'Popular Tracks')}
-                      onPlayPress={() => playTrackFromList(track, popularTracks, { type: 'search', name: 'Popular Tracks' })}
+                      onPlayPress={() =>
+                        playTrackFromList(track, popularTracks, {
+                          type: 'search',
+                          name: 'Popular Tracks',
+                        })
+                      }
                       onHoverIn={handleHoverIn}
                       onHoverOut={handleHoverOut}
                     />
@@ -522,7 +578,12 @@ const SearchScreen: React.FC = () => {
                       imageSizes={artist.imageSizes}
                       primaryColor={artist.primaryColor}
                       secondaryColor={artist.secondaryColor}
-                      onPress={() => router.push({ pathname: '/p/[id]', params: { id: artist.id } } satisfies Href)}
+                      onPress={() =>
+                        router.push({
+                          pathname: '/p/[id]',
+                          params: { id: artist.id },
+                        } satisfies Href)
+                      }
                       onPlayPress={() => playArtist(artist.id, artist.name)}
                       onHoverIn={handleHoverIn}
                       onHoverOut={handleHoverOut}
@@ -550,7 +611,9 @@ const SearchScreen: React.FC = () => {
                     isCurrentTrack={currentTrack?.id === track.id}
                     isTrackPlaying={currentTrack?.id === track.id && isPlaying}
                     onPress={() => handleTrackRowPress(track, chartsTracks, 'Charts')}
-                    onPlayPress={() => playTrackFromList(track, chartsTracks, { type: 'search', name: 'Charts' })}
+                    onPlayPress={() =>
+                      playTrackFromList(track, chartsTracks, { type: 'search', name: 'Charts' })
+                    }
                   />
                 ))}
               </View>
@@ -575,7 +638,10 @@ const SearchScreen: React.FC = () => {
               searchResults.results.tracks &&
               searchResults.results.tracks.length > 0 && (
                 <ExploreSection
-                  title={t('search.resultCount', { label: t('common.tracks'), count: searchResults.counts.tracks })}
+                  title={t('search.resultCount', {
+                    label: t('common.tracks'),
+                    count: searchResults.counts.tracks,
+                  })}
                   isLoading={false}
                   isEmpty={false}
                 >
@@ -587,8 +653,19 @@ const SearchScreen: React.FC = () => {
                         index={index}
                         isCurrentTrack={currentTrack?.id === track.id}
                         isTrackPlaying={currentTrack?.id === track.id && isPlaying}
-                        onPress={() => handleTrackRowPress(track, searchResults.results.tracks ?? [], debouncedQuery)}
-                        onPlayPress={() => playTrackFromList(track, searchResults.results.tracks ?? [], { type: 'search', name: debouncedQuery })}
+                        onPress={() =>
+                          handleTrackRowPress(
+                            track,
+                            searchResults.results.tracks ?? [],
+                            debouncedQuery,
+                          )
+                        }
+                        onPlayPress={() =>
+                          playTrackFromList(track, searchResults.results.tracks ?? [], {
+                            type: 'search',
+                            name: debouncedQuery,
+                          })
+                        }
                       />
                     ))}
                   </View>
@@ -600,7 +677,10 @@ const SearchScreen: React.FC = () => {
               searchResults.results.albums &&
               searchResults.results.albums.length > 0 && (
                 <ExploreSection
-                  title={t('search.resultCount', { label: t('common.albums'), count: searchResults.counts.albums })}
+                  title={t('search.resultCount', {
+                    label: t('common.albums'),
+                    count: searchResults.counts.albums,
+                  })}
                   isLoading={false}
                   isEmpty={false}
                 >
@@ -631,7 +711,10 @@ const SearchScreen: React.FC = () => {
               searchResults.results.artists &&
               searchResults.results.artists.length > 0 && (
                 <ExploreSection
-                  title={t('search.resultCount', { label: t('common.artists'), count: searchResults.counts.artists })}
+                  title={t('search.resultCount', {
+                    label: t('common.artists'),
+                    count: searchResults.counts.artists,
+                  })}
                   isLoading={false}
                   isEmpty={false}
                 >
@@ -648,7 +731,12 @@ const SearchScreen: React.FC = () => {
                           imageSizes={artist.imageSizes}
                           primaryColor={artist.primaryColor}
                           secondaryColor={artist.secondaryColor}
-                          onPress={() => router.push({ pathname: '/p/[id]', params: { id: artist.id } } satisfies Href)}
+                          onPress={() =>
+                            router.push({
+                              pathname: '/p/[id]',
+                              params: { id: artist.id },
+                            } satisfies Href)
+                          }
                           onPlayPress={() => playArtist(artist.id, artist.name)}
                           onHoverIn={handleHoverIn}
                           onHoverOut={handleHoverOut}
@@ -660,11 +748,15 @@ const SearchScreen: React.FC = () => {
               )}
 
             {/* Playlists Section */}
-            {(activeCategory === SearchCategory.ALL || activeCategory === SearchCategory.PLAYLISTS) &&
+            {(activeCategory === SearchCategory.ALL ||
+              activeCategory === SearchCategory.PLAYLISTS) &&
               searchResults.results.playlists &&
               searchResults.results.playlists.length > 0 && (
                 <ExploreSection
-                  title={t('search.resultCount', { label: t('common.playlists'), count: searchResults.counts.playlists })}
+                  title={t('search.resultCount', {
+                    label: t('common.playlists'),
+                    count: searchResults.counts.playlists,
+                  })}
                   isLoading={false}
                   isEmpty={false}
                 >
@@ -679,7 +771,12 @@ const SearchScreen: React.FC = () => {
                           imageSizes={playlist.coverArtSizes}
                           primaryColor={playlist.primaryColor}
                           secondaryColor={playlist.secondaryColor}
-                          onPress={() => router.push({ pathname: '/playlist/[id]', params: { id: playlist.id } } satisfies Href)}
+                          onPress={() =>
+                            router.push({
+                              pathname: '/playlist/[id]',
+                              params: { id: playlist.id },
+                            } satisfies Href)
+                          }
                           onPlayPress={() => playPlaylist(playlist.id, playlist.name)}
                           onHoverIn={handleHoverIn}
                           onHoverOut={handleHoverOut}
@@ -691,11 +788,15 @@ const SearchScreen: React.FC = () => {
               )}
 
             {/* Podcasts Section */}
-            {(activeCategory === SearchCategory.ALL || activeCategory === SearchCategory.PODCASTS) &&
+            {(activeCategory === SearchCategory.ALL ||
+              activeCategory === SearchCategory.PODCASTS) &&
               searchResults.results.podcasts &&
               searchResults.results.podcasts.length > 0 && (
                 <ExploreSection
-                  title={t('search.resultCount', { label: t('common.podcasts'), count: searchResults.counts.podcasts })}
+                  title={t('search.resultCount', {
+                    label: t('common.podcasts'),
+                    count: searchResults.counts.podcasts,
+                  })}
                   isLoading={false}
                   isEmpty={false}
                 >
@@ -709,7 +810,12 @@ const SearchScreen: React.FC = () => {
                           resolvedImageUri={resolvePodcastArtwork(podcast, 'card')}
                           primaryColor={podcast.primaryColor}
                           secondaryColor={podcast.secondaryColor}
-                          onPress={() => router.push({ pathname: '/podcasts/[id]', params: { id: podcast.id } } satisfies Href)}
+                          onPress={() =>
+                            router.push({
+                              pathname: '/podcasts/[id]',
+                              params: { id: podcast.id },
+                            } satisfies Href)
+                          }
                           onPlayPress={() => playPodcast(podcast.id, podcast.title)}
                           onHoverIn={handleHoverIn}
                           onHoverOut={handleHoverOut}
@@ -721,7 +827,8 @@ const SearchScreen: React.FC = () => {
               )}
 
             {/* Background directory import runs server-side on every podcast search. */}
-            {(activeCategory === SearchCategory.ALL || activeCategory === SearchCategory.PODCASTS) &&
+            {(activeCategory === SearchCategory.ALL ||
+              activeCategory === SearchCategory.PODCASTS) &&
               searchResults.pendingPodcastImport && (
                 <Text className="text-muted-foreground" style={styles.podcastImportHint}>
                   {t('search.loadingMorePodcasts')}
@@ -729,11 +836,15 @@ const SearchScreen: React.FC = () => {
               )}
 
             {/* Episodes Section */}
-            {(activeCategory === SearchCategory.ALL || activeCategory === SearchCategory.EPISODES) &&
+            {(activeCategory === SearchCategory.ALL ||
+              activeCategory === SearchCategory.EPISODES) &&
               searchResults.results.episodes &&
               searchResults.results.episodes.length > 0 && (
                 <ExploreSection
-                  title={t('search.resultCount', { label: t('common.episodes'), count: searchResults.counts.episodes })}
+                  title={t('search.resultCount', {
+                    label: t('common.episodes'),
+                    count: searchResults.counts.episodes,
+                  })}
                   isLoading={false}
                   isEmpty={false}
                 >
@@ -744,7 +855,12 @@ const SearchScreen: React.FC = () => {
                         episode={episode}
                         isCurrent={currentEpisode?.id === episode.id}
                         isPlaying={currentEpisode?.id === episode.id && isPlaying}
-                        onPress={() => router.push({ pathname: '/episode/[id]', params: { id: episode.id } } satisfies Href)}
+                        onPress={() =>
+                          router.push({
+                            pathname: '/episode/[id]',
+                            params: { id: episode.id },
+                          } satisfies Href)
+                        }
                         onPlayPress={() => playEpisode(episode)}
                       />
                     ))}
@@ -757,7 +873,10 @@ const SearchScreen: React.FC = () => {
               searchResults.results.people &&
               searchResults.results.people.length > 0 && (
                 <ExploreSection
-                  title={t('search.resultCount', { label: t('common.people'), count: searchResults.counts.people })}
+                  title={t('search.resultCount', {
+                    label: t('common.people'),
+                    count: searchResults.counts.people,
+                  })}
                   isLoading={false}
                   isEmpty={false}
                 >
@@ -767,11 +886,20 @@ const SearchScreen: React.FC = () => {
                       const label = person.displayName || person.name;
                       const onPress = () => {
                         if (person.username) {
-                          router.push({ pathname: '/u/[username]', params: { username: person.username } } satisfies Href);
+                          router.push({
+                            pathname: '/u/[username]',
+                            params: { username: person.username },
+                          } satisfies Href);
                         } else if (person.linkedArtistId) {
-                          router.push({ pathname: '/p/[id]', params: { id: person.linkedArtistId } } satisfies Href);
+                          router.push({
+                            pathname: '/p/[id]',
+                            params: { id: person.linkedArtistId },
+                          } satisfies Href);
                         } else {
-                          router.push({ pathname: '/p/[id]', params: { id: person.personId } } satisfies Href);
+                          router.push({
+                            pathname: '/p/[id]',
+                            params: { id: person.personId },
+                          } satisfies Href);
                         }
                       };
                       return (
@@ -782,25 +910,52 @@ const SearchScreen: React.FC = () => {
                           style={styles.userRow}
                         >
                           {person.oxyAvatar ? (
-                            <Avatar source={person.oxyAvatar} variant="thumb" size={48} label={label} />
+                            <Avatar
+                              source={person.oxyAvatar}
+                              variant="thumb"
+                              size={48}
+                              label={label}
+                            />
                           ) : externalImg ? (
-                            <Image source={{ uri: externalImg }} style={styles.personAvatar} contentFit="cover" />
+                            <Image
+                              source={{ uri: externalImg }}
+                              style={styles.personAvatar}
+                              contentFit="cover"
+                            />
                           ) : (
                             <View className="bg-popover" style={styles.personAvatarPlaceholder}>
-                              <Ionicons name="person" size={22} color={theme.colors.textSecondary} />
+                              <Ionicons
+                                name="person"
+                                size={22}
+                                color={theme.colors.textSecondary}
+                              />
                             </View>
                           )}
                           <View style={styles.userInfo}>
-                            <Text className="text-foreground" style={styles.userName} numberOfLines={1}>
+                            <Text
+                              className="text-foreground"
+                              style={styles.userName}
+                              numberOfLines={1}
+                            >
                               {label}
                             </Text>
-                            {typeof person.appearsInCount === 'number' && person.appearsInCount > 0 && (
-                              <Text className="text-muted-foreground" style={styles.userHandle} numberOfLines={1}>
-                                {person.appearsInCount} {person.appearsInCount === 1 ? 'appearance' : 'appearances'}
-                              </Text>
-                            )}
+                            {typeof person.appearsInCount === 'number' &&
+                              person.appearsInCount > 0 && (
+                                <Text
+                                  className="text-muted-foreground"
+                                  style={styles.userHandle}
+                                  numberOfLines={1}
+                                >
+                                  {person.appearsInCount}{' '}
+                                  {person.appearsInCount === 1 ? 'appearance' : 'appearances'}
+                                </Text>
+                              )}
                           </View>
-                          <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
+                          <Ionicons
+                            name="chevron-forward"
+                            size={18}
+                            color={theme.colors.textSecondary}
+                          />
                         </Pressable>
                       );
                     })}
@@ -812,15 +967,19 @@ const SearchScreen: React.FC = () => {
               searchResults.results.users &&
               searchResults.results.users.length > 0 && (
                 <ExploreSection
-                  title={t('search.resultCount', { label: t('common.users'), count: searchResults.counts.users })}
+                  title={t('search.resultCount', {
+                    label: t('common.users'),
+                    count: searchResults.counts.users,
+                  })}
                   isLoading={false}
                   isEmpty={false}
                 >
                   <View style={styles.userList}>
                     {searchResults.results.users.map((user) => {
-                      const followers = typeof user.followers === 'number'
-                        ? t('common.followerCount', { count: user.followers })
-                        : t('search.userFallback');
+                      const followers =
+                        typeof user.followers === 'number'
+                          ? t('common.followerCount', { count: user.followers })
+                          : t('search.userFallback');
 
                       return (
                         <Pressable
@@ -838,27 +997,34 @@ const SearchScreen: React.FC = () => {
                           />
                           <View style={styles.userInfo}>
                             <Text
-                              className="text-foreground" style={styles.userName}
+                              className="text-foreground"
+                              style={styles.userName}
                               numberOfLines={1}
                             >
                               {user.displayName}
                             </Text>
                             <Text
-                              className="text-muted-foreground" style={styles.userHandle}
+                              className="text-muted-foreground"
+                              style={styles.userHandle}
                               numberOfLines={1}
                             >
                               @{user.username} • {followers}
                             </Text>
                             {user.bio && (
                               <Text
-                                className="text-muted-foreground" style={styles.userBio}
+                                className="text-muted-foreground"
+                                style={styles.userBio}
                                 numberOfLines={2}
                               >
                                 {user.bio}
                               </Text>
                             )}
                           </View>
-                          <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
+                          <Ionicons
+                            name="chevron-forward"
+                            size={18}
+                            color={theme.colors.textSecondary}
+                          />
                         </Pressable>
                       );
                     })}

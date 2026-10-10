@@ -40,10 +40,22 @@ function makeRes(): CapturedRes {
     _status: 200,
     _body: undefined,
     _headers: {},
-    status(code) { this._status = code; return this; },
-    set(name, value) { this._headers[name] = value; return this; },
-    send(body) { this._body = body; return this; },
-    json(body) { this._body = body; return this; },
+    status(code) {
+      this._status = code;
+      return this;
+    },
+    set(name, value) {
+      this._headers[name] = value;
+      return this;
+    },
+    send(body) {
+      this._body = body;
+      return this;
+    },
+    json(body) {
+      this._body = body;
+      return this;
+    },
   };
   return res;
 }
@@ -123,18 +135,16 @@ async function seedTrack(overrides: SeedTrackOverrides = {}): Promise<string> {
   if (!track) throw new Error('seedTrack: track insert returned no row');
 
   if (hls.length > 0) {
-    await getDb().insert(trackHlsRenditions).values(
-      hls.map((rendition, position) => ({ trackId: track.id, position, ...rendition }))
-    );
+    await getDb()
+      .insert(trackHlsRenditions)
+      .values(hls.map((rendition, position) => ({ trackId: track.id, position, ...rendition })));
   }
 
   return track.id;
 }
 
 async function seedKey(trackId: string) {
-  return getDb()
-    .insert(trackKeys)
-    .values({ trackId, keyHex: KEY_HEX, keyUri: 'key' });
+  return getDb().insert(trackKeys).values({ trackId, keyHex: KEY_HEX, keyUri: 'key' });
 }
 
 function hlsTrackFields(): SeedTrackOverrides {
@@ -152,9 +162,6 @@ function hlsTrackFields(): SeedTrackOverrides {
 // ── getStream — existing tests ────────────────────────────────────────────────
 
 describe('getStream', () => {
-
-
-
   it('200 hls: mints stream token and returns master.m3u8 url', async () => {
     const trackId = await seedTrack({
       status: 'ready',
@@ -184,8 +191,6 @@ describe('getStream', () => {
     expect(res._headers['Cache-Control']).toBe('private, max-age=300');
     expect(res._headers.Vary).toBe('Authorization');
   });
-
-
 
   it('401: HLS track with no auth returns 401', async () => {
     const trackId = await seedTrack({

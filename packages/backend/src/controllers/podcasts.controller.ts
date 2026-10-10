@@ -72,7 +72,11 @@ import { logger } from '../utils/logger';
 import { searchPodcasts as directorySearch } from '../services/podcasts/PodcastDirectory';
 import { importFeed } from '../services/podcasts/podcastImportService';
 import { syncPodcastSearch } from '../services/podcasts/podcastBackgroundImport';
-import { resolvePersons, buildCreatorPersons, makeOxyUsersFetcher } from '../services/podcasts/resolvePersons';
+import {
+  resolvePersons,
+  buildCreatorPersons,
+  makeOxyUsersFetcher,
+} from '../services/podcasts/resolvePersons';
 import {
   enqueueDeferredEpisodeIngests,
   enqueueEpisodeIngest,
@@ -162,7 +166,10 @@ function parseIdArray(raw: unknown): string[] {
       return [];
     }
   }
-  return trimmed.split(',').map((v) => v.trim()).filter((v) => v.length > 0);
+  return trimmed
+    .split(',')
+    .map((v) => v.trim())
+    .filter((v) => v.length > 0);
 }
 
 /**
@@ -204,7 +211,11 @@ export async function searchPodcasts(req: AuthRequest, res: Response): Promise<v
     res.status(400).json({ error: 'Query parameter q is required' });
     return;
   }
-  const limit = parseClampedLimit(req.query.limit, { min: LIST_LIMIT_MIN, max: LIST_LIMIT_MAX, fallback: LIST_LIMIT_DEFAULT });
+  const limit = parseClampedLimit(req.query.limit, {
+    min: LIST_LIMIT_MIN,
+    max: LIST_LIMIT_MAX,
+    fallback: LIST_LIMIT_DEFAULT,
+  });
   const offset = parseOffset(req.query.offset);
 
   try {
@@ -235,7 +246,14 @@ export async function discoverPodcasts(req: AuthRequest, res: Response): Promise
     res.status(400).json({ error: 'Query parameter q is required' });
     return;
   }
-  const candidates = await directorySearch(q, parseClampedLimit(req.query.limit, { min: LIST_LIMIT_MIN, max: LIST_LIMIT_MAX, fallback: LIST_LIMIT_DEFAULT }));
+  const candidates = await directorySearch(
+    q,
+    parseClampedLimit(req.query.limit, {
+      min: LIST_LIMIT_MIN,
+      max: LIST_LIMIT_MAX,
+      fallback: LIST_LIMIT_DEFAULT,
+    }),
+  );
   res.json({ data: candidates });
 }
 
@@ -257,7 +275,10 @@ export async function importPodcast(req: AuthRequest, res: Response): Promise<vo
       importedEpisodes: result.importedEpisodes,
     });
   } catch (err) {
-    logger.warn('[podcasts] manual import failed', { feedUrl: parsed.data.feedUrl, err: describeErrorSafely(err) });
+    logger.warn('[podcasts] manual import failed', {
+      feedUrl: parsed.data.feedUrl,
+      err: describeErrorSafely(err),
+    });
     res.status(502).json({ error: 'Failed to import feed' });
   }
 }
@@ -266,7 +287,11 @@ export async function importPodcast(req: AuthRequest, res: Response): Promise<vo
  * GET /api/podcasts?category=&sort=popular|recent — DB browse.
  */
 export async function browsePodcasts(req: AuthRequest, res: Response): Promise<void> {
-  const limit = parseClampedLimit(req.query.limit, { min: LIST_LIMIT_MIN, max: LIST_LIMIT_MAX, fallback: LIST_LIMIT_DEFAULT });
+  const limit = parseClampedLimit(req.query.limit, {
+    min: LIST_LIMIT_MIN,
+    max: LIST_LIMIT_MAX,
+    fallback: LIST_LIMIT_DEFAULT,
+  });
   const page = parsePage(req.query.page);
 
   const rows = await browsePodcastRows({
@@ -343,7 +368,11 @@ export async function getPodcastEpisodes(req: AuthRequest, res: Response): Promi
     return;
   }
 
-  const limit = parseClampedLimit(req.query.limit, { min: LIST_LIMIT_MIN, max: LIST_LIMIT_MAX, fallback: LIST_LIMIT_DEFAULT });
+  const limit = parseClampedLimit(req.query.limit, {
+    min: LIST_LIMIT_MIN,
+    max: LIST_LIMIT_MAX,
+    fallback: LIST_LIMIT_DEFAULT,
+  });
   const page = parsePage(req.query.page);
 
   // The owner sees processing/failed episodes too; others see only ready ones.
@@ -396,13 +425,13 @@ export async function getPodcastRss(req: AuthRequest, res: Response): Promise<vo
   const xml = generatePodcastRss(
     dto,
     await toEpisodeDtos(episodeRows, req.user?.id, shows),
-    env.STREAM_KEY_BASE_URL
+    env.STREAM_KEY_BASE_URL,
   );
 
   res.set('Content-Type', 'application/rss+xml; charset=utf-8');
   res.set(
     'Cache-Control',
-    podcast.visibility === 'public' ? 'public, max-age=900' : 'private, max-age=900'
+    podcast.visibility === 'public' ? 'public, max-age=900' : 'private, max-age=900',
   );
   res.status(200).send(xml);
 }
@@ -519,7 +548,7 @@ export async function getMyPodcasts(req: AuthRequest, res: Response): Promise<vo
  * gradient.
  */
 async function resolveCover(
-  imageId: string
+  imageId: string,
 ): Promise<{ ok: true; primaryColor?: string; secondaryColor?: string } | { ok: false }> {
   if (!isLiveEntityId(imageId)) return { ok: false };
 
@@ -556,10 +585,12 @@ export async function createPodcast(req: AuthRequest, res: Response): Promise<vo
   if (input.hosts?.length || input.guests?.length) {
     const built = await buildCreatorPersons(
       { hosts: input.hosts, guests: input.guests },
-      makeOxyUsersFetcher(oxy)
+      makeOxyUsersFetcher(oxy),
     );
     if (built.invalidIds.length > 0) {
-      res.status(400).json({ error: 'hosts/guests must be valid Oxy user ids', invalidIds: built.invalidIds });
+      res
+        .status(400)
+        .json({ error: 'hosts/guests must be valid Oxy user ids', invalidIds: built.invalidIds });
       return;
     }
     persons = built.persons;
@@ -642,7 +673,7 @@ export async function createPodcast(req: AuthRequest, res: Response): Promise<vo
               },
             ],
           }),
-    }
+    },
   );
 
   res.status(201).json({ data: await serializeOne(row, userId) });
@@ -694,10 +725,13 @@ export async function uploadEpisode(req: AuthRequest, res: Response): Promise<vo
       if (hostIds.length > 0 || guestIds.length > 0) {
         const built = await buildCreatorPersons(
           { hosts: hostIds, guests: guestIds },
-          makeOxyUsersFetcher(oxy)
+          makeOxyUsersFetcher(oxy),
         );
         if (built.invalidIds.length > 0) {
-          res.status(400).json({ error: 'hosts/guests must be valid Oxy user ids', invalidIds: built.invalidIds });
+          res.status(400).json({
+            error: 'hosts/guests must be valid Oxy user ids',
+            invalidIds: built.invalidIds,
+          });
           return;
         }
         episodePersons = built.persons;
@@ -756,7 +790,7 @@ export async function uploadEpisode(req: AuthRequest, res: Response): Promise<vo
         { persons: episodePersons },
         // The show's `episode_count`/`last_episode_at` move in the SAME
         // transaction as the row they describe — see `insertEpisode`.
-        { recordOnShow: true }
+        { recordOnShow: true },
       );
 
       /**
@@ -826,7 +860,8 @@ export async function claimPodcast(req: AuthRequest, res: Response): Promise<voi
     return;
   }
 
-  const linkedArtistIdRaw = typeof req.body?.linkedArtistId === 'string' ? req.body.linkedArtistId : undefined;
+  const linkedArtistIdRaw =
+    typeof req.body?.linkedArtistId === 'string' ? req.body.linkedArtistId : undefined;
   let linkedArtistId: string | undefined;
   if (linkedArtistIdRaw) {
     if (!isLiveEntityId(linkedArtistIdRaw)) {
@@ -958,7 +993,7 @@ export async function updatePodcast(req: AuthRequest, res: Response): Promise<vo
   const updated = await updatePodcastRow(
     id,
     values,
-    updates.categories === undefined ? {} : { categories: updates.categories }
+    updates.categories === undefined ? {} : { categories: updates.categories },
   );
 
   /**
@@ -1001,7 +1036,7 @@ export async function updatePodcast(req: AuthRequest, res: Response): Promise<vo
 async function loadOwnedShowOrRespond(
   req: AuthRequest,
   res: Response,
-  removedMessage = 'This show was removed by the platform and cannot be republished'
+  removedMessage = 'This show was removed by the platform and cannot be republished',
 ): Promise<PodcastRow | undefined> {
   const userId = getRequiredOxyUserId(req);
   const id = getParam(req, 'id');
@@ -1070,7 +1105,7 @@ export async function deletePodcast(req: AuthRequest, res: Response): Promise<vo
   const podcast = await loadOwnedShowOrRespond(
     req,
     res,
-    'This show was removed by the platform and cannot be deleted'
+    'This show was removed by the platform and cannot be deleted',
   );
   if (!podcast) return;
 

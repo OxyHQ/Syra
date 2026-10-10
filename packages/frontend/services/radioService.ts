@@ -22,9 +22,11 @@ const FRESH_RADIO_READ = { cache: false } as const;
  * name survive into the objects the player consumes — same tolerance
  * {@link file://./browseService.ts} applies to every catalog read.
  */
-const radioPageResponseSchema = radioPageSchema.extend({
-  tracks: z.array(trackSchema.passthrough()),
-}).passthrough();
+const radioPageResponseSchema = radioPageSchema
+  .extend({
+    tracks: z.array(trackSchema.passthrough()),
+  })
+  .passthrough();
 
 export interface RadioPageParams {
   seedType: RadioSeedType;

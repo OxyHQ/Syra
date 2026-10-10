@@ -103,14 +103,16 @@ function patch(url: string, body: Record<string, unknown>): Promise<globalThis.R
 /** A stored image asset, because `albums.cover_art_id` is a NOT NULL foreign key. */
 async function seedCoverArt(): Promise<string> {
   const id = uuidv7();
-  await getDb().insert(imageAssets).values({
-    id,
-    s3Key: `covers/${id}.jpg`,
-    filename: 'cover.jpg',
-    contentType: 'image/jpeg',
-    byteSize: 1000,
-    ownerType: 'album',
-  });
+  await getDb()
+    .insert(imageAssets)
+    .values({
+      id,
+      s3Key: `covers/${id}.jpg`,
+      filename: 'cover.jpg',
+      contentType: 'image/jpeg',
+      byteSize: 1000,
+      ownerType: 'album',
+    });
   return id;
 }
 
@@ -286,10 +288,9 @@ describe('album unpublish (container-only)', () => {
     expect(await countAlbumsWithPlayableTracks(eq(albums.artistId, artistId))).toBe(1);
 
     await withRouter('/api/albums', albumsRoutes, OWNER_ID, async (baseUrl) => {
-      const response = await fetch(
-        `${baseUrl}/api/albums/${album.id}/unpublish`,
-        { method: 'POST' },
-      );
+      const response = await fetch(`${baseUrl}/api/albums/${album.id}/unpublish`, {
+        method: 'POST',
+      });
       expect(response.status).toBe(200);
     });
 
@@ -322,10 +323,9 @@ describe('album unpublish (container-only)', () => {
     const { album } = await seedOwnedCatalog();
 
     await withRouter('/api/albums', albumsRoutes, INTRUDER_ID, async (baseUrl) => {
-      const response = await fetch(
-        `${baseUrl}/api/albums/${album.id}/unpublish`,
-        { method: 'POST' },
-      );
+      const response = await fetch(`${baseUrl}/api/albums/${album.id}/unpublish`, {
+        method: 'POST',
+      });
 
       expect(response.status).toBe(403);
       expect((await readAlbum(album.id))?.isAvailable).not.toBe(false);
@@ -411,11 +411,7 @@ async function readShow(id: string) {
 }
 
 async function readEpisode(id: string) {
-  const [row] = await getDb()
-    .select()
-    .from(episodesTable)
-    .where(eq(episodesTable.id, id))
-    .limit(1);
+  const [row] = await getDb().select().from(episodesTable).where(eq(episodesTable.id, id)).limit(1);
   return row;
 }
 
@@ -543,7 +539,9 @@ describe('PATCH /api/podcasts/:id and /api/episodes/:id', () => {
     const podcastUrl = `/api/podcasts/${podcastId}`;
 
     await withRouter('/api/podcasts', podcastsRoutes, OWNER_ID, async (baseUrl) => {
-      expect((await fetch(`${baseUrl}${podcastUrl}/unpublish`, { method: 'POST' })).status).toBe(200);
+      expect((await fetch(`${baseUrl}${podcastUrl}/unpublish`, { method: 'POST' })).status).toBe(
+        200,
+      );
 
       const hidden = await readShow(podcastId);
       expect(hidden?.status).toBe('unavailable');
@@ -599,7 +597,9 @@ describe('PATCH /api/podcasts/:id and /api/episodes/:id', () => {
     const episodeUrl = `/api/episodes/${episodeId}`;
 
     await withRouter('/api/episodes', episodesRoutes, OWNER_ID, async (baseUrl) => {
-      expect((await fetch(`${baseUrl}${episodeUrl}/unpublish`, { method: 'POST' })).status).toBe(200);
+      expect((await fetch(`${baseUrl}${episodeUrl}/unpublish`, { method: 'POST' })).status).toBe(
+        200,
+      );
       expect((await readEpisode(episodeId))?.status).toBe('unavailable');
 
       expect((await fetch(`${baseUrl}${episodeUrl}/publish`, { method: 'POST' })).status).toBe(200);
@@ -622,7 +622,6 @@ describe('PATCH /api/podcasts/:id and /api/episodes/:id', () => {
     });
   });
 });
-
 
 describe('episode discovery follows the show', () => {
   async function seedShowWithEpisode(status: 'active' | 'unavailable') {

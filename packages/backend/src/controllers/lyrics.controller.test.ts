@@ -61,9 +61,18 @@ function makeRes(): CapturedRes {
     _status: 200,
     _body: undefined,
     _headers: {},
-    status(code) { this._status = code; return this; },
-    set(name, value) { this._headers[name] = value; return this; },
-    json(body) { this._body = body; return this; },
+    status(code) {
+      this._status = code;
+      return this;
+    },
+    set(name, value) {
+      this._headers[name] = value;
+      return this;
+    },
+    json(body) {
+      this._body = body;
+      return this;
+    },
   };
   return res;
 }

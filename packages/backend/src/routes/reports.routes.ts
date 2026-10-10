@@ -32,7 +32,13 @@ interface ValidationFailure {
 }
 
 type Validated =
-  | { ok: true; reportedType: ReportedType; reportedId: string; categories: ReportCategory[]; details?: string }
+  | {
+      ok: true;
+      reportedType: ReportedType;
+      reportedId: string;
+      categories: ReportCategory[];
+      details?: string;
+    }
   | { ok: false; failure: ValidationFailure };
 
 /**
@@ -174,7 +180,10 @@ router.post('/', async (req: Request, res: Response) => {
     if (error instanceof TypeError) {
       return res.status(400).json({ error: error.message });
     }
-    logger.error('Error creating report', { err: describeErrorSafely(error), reportedType: validated.reportedType });
+    logger.error('Error creating report', {
+      err: describeErrorSafely(error),
+      reportedType: validated.reportedType,
+    });
     return res.status(500).json({ error: 'Failed to create report' });
   }
 });

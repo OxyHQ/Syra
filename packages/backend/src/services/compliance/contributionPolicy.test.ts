@@ -3,10 +3,7 @@ import { uuidv7 } from '@oxy.so/db';
 import { clearDb, connectDb, disconnectDb } from '../../test/postgres';
 import { getDb } from '../../db/postgres';
 import { catalogEntities } from '../../db/schema/catalog';
-import {
-  evaluatePublicContribution,
-  CONTRIBUTION_REJECTION_CODES,
-} from './contributionPolicy';
+import { evaluatePublicContribution, CONTRIBUTION_REJECTION_CODES } from './contributionPolicy';
 import { recordContributorStrike } from './contributorStrikes';
 import { STRIKE_TERMINATION_THRESHOLD } from '../strikeService';
 
@@ -28,7 +25,7 @@ const UPLOADER = 'oxy-uploader';
 const SOMEONE_ELSE = 'oxy-other';
 
 async function makeArtist(
-  overrides: Partial<typeof catalogEntities.$inferInsert> = {}
+  overrides: Partial<typeof catalogEntities.$inferInsert> = {},
 ): Promise<string> {
   const suffix = uuidv7();
   const [artist] = await getDb()

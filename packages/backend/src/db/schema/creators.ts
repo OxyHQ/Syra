@@ -427,11 +427,11 @@ export const userUploads = pgTable(
     check('user_uploads_status_check', sql`${t.status} in (${sql.raw(inList(UPLOAD_STATUSES))})`),
     check(
       'user_uploads_audio_source_format_check',
-      sql`${t.audioSourceFormat} is null or ${t.audioSourceFormat} in (${sql.raw(inList(UPLOAD_AUDIO_FORMATS))})`
+      sql`${t.audioSourceFormat} is null or ${t.audioSourceFormat} in (${sql.raw(inList(UPLOAD_AUDIO_FORMATS))})`,
     ),
     check(
       'user_uploads_provenance_verdict_check',
-      sql`${t.provenanceVerdict} is null or ${t.provenanceVerdict} in (${sql.raw(inList(PROVENANCE_VERDICTS))})`
+      sql`${t.provenanceVerdict} is null or ${t.provenanceVerdict} in (${sql.raw(inList(PROVENANCE_VERDICTS))})`,
     ),
     check('user_uploads_play_count_check', sql`${t.playCount} >= 0`),
     check('user_uploads_size_bytes_check', sql`${t.sizeBytes} >= 0`),
@@ -464,7 +464,7 @@ export const userUploads = pgTable(
       t.ownerOxyUserId,
       t.albumKey,
       t.discNumber,
-      t.trackNumber
+      t.trackNumber,
     ),
     /**
      * The takedown purge's second leg (`takedown.ts:369`, `sha256: { $in }`),
@@ -485,9 +485,7 @@ export const userUploads = pgTable(
      * index, the same treatment `catalog.ts` gives `playableTrackFilter()`.
      * A soft-deleted row is exactly the row these two never want.
      */
-    index('user_uploads_expires_at_idx')
-      .on(t.expiresAt)
-      .where(sql`${t.deletedAt} is null`),
+    index('user_uploads_expires_at_idx').on(t.expiresAt).where(sql`${t.deletedAt} is null`),
     /**
      * The sweeper's phase 3 (`deletedAt <= graceCutoff`), which had NO Mongo
      * index at all: it runs on every tick, unattended, over the one
@@ -523,7 +521,7 @@ export const userUploads = pgTable(
     // btree prefix serves an owner-only lookup on its own. Same convention
     // `library.ts` used for `devices.oxy_user_id` — recorded here because a
     // drop nobody wrote down is indistinguishable from a drop nobody noticed.
-  ]
+  ],
 );
 
 // ── user_upload_hls_renditions (child of user_uploads) ──────────────────────
@@ -549,7 +547,7 @@ export const userUploadHlsRenditions = pgTable(
   (t) => [
     check('user_upload_hls_renditions_position_check', sql`${t.position} >= 0`),
     unique('user_upload_hls_renditions_user_upload_id_position_key').on(t.userUploadId, t.position),
-  ]
+  ],
 );
 
 // ── user_upload_provenance_markers (child of user_uploads) ──────────────────
@@ -579,16 +577,19 @@ export const userUploadProvenanceMarkers = pgTable(
   (t) => [
     check(
       'user_upload_provenance_markers_weight_check',
-      sql`${t.weight} in (${sql.raw(inList(PROVENANCE_MARKER_WEIGHTS))})`
+      sql`${t.weight} in (${sql.raw(inList(PROVENANCE_MARKER_WEIGHTS))})`,
     ),
     check('user_upload_provenance_markers_position_check', sql`${t.position} >= 0`),
-    unique('user_upload_provenance_markers_user_upload_id_position_key').on(t.userUploadId, t.position),
+    unique('user_upload_provenance_markers_user_upload_id_position_key').on(
+      t.userUploadId,
+      t.position,
+    ),
     foreignKey({
       name: 'user_upload_provenance_markers_user_upload_id_fk',
       columns: [t.userUploadId],
       foreignColumns: [userUploads.id],
     }).onDelete('cascade'),
-  ]
+  ],
 );
 
 // ── artist_claims ──────────────────────────────────────────────────────────
@@ -614,7 +615,10 @@ export const artistClaims = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [
-    check('artist_claims_status_check', sql`${t.status} in (${sql.raw(inList(ARTIST_CLAIM_STATUSES))})`),
+    check(
+      'artist_claims_status_check',
+      sql`${t.status} in (${sql.raw(inList(ARTIST_CLAIM_STATUSES))})`,
+    ),
     /**
      * Mongoose's `maxlength` on both text fields, expressed where it is
      * actually enforced. The first `maxlength` any task has had to port —
@@ -626,11 +630,11 @@ export const artistClaims = pgTable(
      */
     check(
       'artist_claims_evidence_length_check',
-      sql`char_length(${t.evidence}) <= ${sql.raw(String(CLAIM_EVIDENCE_MAX_LENGTH))}`
+      sql`char_length(${t.evidence}) <= ${sql.raw(String(CLAIM_EVIDENCE_MAX_LENGTH))}`,
     ),
     check(
       'artist_claims_resolution_note_length_check',
-      sql`${t.resolutionNote} is null or char_length(${t.resolutionNote}) <= ${sql.raw(String(CLAIM_RESOLUTION_NOTE_MAX_LENGTH))}`
+      sql`${t.resolutionNote} is null or char_length(${t.resolutionNote}) <= ${sql.raw(String(CLAIM_RESOLUTION_NOTE_MAX_LENGTH))}`,
     ),
     /**
      * ONE OPEN claim per claimant per artist — partial, not plain, because
@@ -658,7 +662,7 @@ export const artistClaims = pgTable(
     // `listMyArtistClaims` filters `oxyUserId` and sorts `createdAt`, and
     // `listArtistClaims` filters `status` and sorts `createdAt`, so each
     // compound index already serves its own column alone.
-  ]
+  ],
 );
 
 // ── contribution_attestations ──────────────────────────────────────────────
@@ -706,7 +710,7 @@ export const contributionAttestations = pgTable(
   (t) => [
     check(
       'contribution_attestations_provenance_report_verdict_check',
-      sql`${t.provenanceReportVerdict} is null or ${t.provenanceReportVerdict} in (${sql.raw(inList(PROVENANCE_VERDICTS))})`
+      sql`${t.provenanceReportVerdict} is null or ${t.provenanceReportVerdict} in (${sql.raw(inList(PROVENANCE_VERDICTS))})`,
     ),
     unique('contribution_attestations_track_id_key').on(t.trackId),
     /**
@@ -714,7 +718,7 @@ export const contributionAttestations = pgTable(
      * cascade (`takedown.ts:491`).
      */
     index('contribution_attestations_uploader_oxy_user_id_idx').on(t.uploaderOxyUserId),
-  ]
+  ],
 );
 
 // ── contribution_attestation_provenance_markers (child of contribution_attestations) ──
@@ -736,7 +740,7 @@ export const contributionAttestationProvenanceMarkers = pgTable(
   (t) => [
     check(
       'contribution_attestation_provenance_markers_weight_check',
-      sql`${t.weight} in (${sql.raw(inList(PROVENANCE_MARKER_WEIGHTS))})`
+      sql`${t.weight} in (${sql.raw(inList(PROVENANCE_MARKER_WEIGHTS))})`,
     ),
     check('contribution_attestation_provenance_markers_position_check', sql`${t.position} >= 0`),
     /**
@@ -747,14 +751,14 @@ export const contributionAttestationProvenanceMarkers = pgTable(
      */
     unique('contribution_attestation_provenance_markers_position_key').on(
       t.contributionAttestationId,
-      t.position
+      t.position,
     ),
     foreignKey({
       name: 'contribution_attestation_provenance_markers_attestation_id_fk',
       columns: [t.contributionAttestationId],
       foreignColumns: [contributionAttestations.id],
     }).onDelete('cascade'),
-  ]
+  ],
 );
 
 // ── contributor_standings ──────────────────────────────────────────────────
@@ -801,7 +805,7 @@ export const contributorStandings = pgTable(
     // Mongo's standalone `{ oxyUserId: 1 }` is dropped as redundant with the
     // unique constraint above, which Postgres backs with its own btree —
     // every lookup in this file's three call sites is by that column.
-  ]
+  ],
 );
 
 // ── contributor_strikes (child of contributor_standings) ────────────────────
@@ -830,14 +834,14 @@ export const contributorStrikes = pgTable(
   (t) => [
     index('contributor_strikes_contributor_standing_id_idx').on(
       t.contributorStandingId,
-      t.createdAt.desc()
+      t.createdAt.desc(),
     ),
     foreignKey({
       name: 'contributor_strikes_contributor_standing_id_fk',
       columns: [t.contributorStandingId],
       foreignColumns: [contributorStandings.id],
     }).onDelete('cascade'),
-  ]
+  ],
 );
 
 // ── copyright_reports ──────────────────────────────────────────────────────
@@ -872,7 +876,7 @@ export const copyrightReports = pgTable(
   (t) => [
     check(
       'copyright_reports_status_check',
-      sql`${t.status} in (${sql.raw(inList(COPYRIGHT_REPORT_STATUSES))})`
+      sql`${t.status} in (${sql.raw(inList(COPYRIGHT_REPORT_STATUSES))})`,
     ),
     /** "Has this track already been reported" (`reportCopyrightViolation`). */
     index('copyright_reports_track_id_status_idx').on(t.trackId, t.status),
@@ -894,5 +898,5 @@ export const copyrightReports = pgTable(
     // Mongo's standalone `{ trackId: 1 }` and `{ status: 1 }` are dropped as
     // leading-column prefixes of the two compound indexes above, which serve
     // `{ trackId }` and `{ status }` alone as well as the pairs.
-  ]
+  ],
 );

@@ -63,7 +63,9 @@ const FIXTURES = path.join(__dirname, '..', 'services', 'uploads', '__fixtures__
 const describeE2E = S3_ENDPOINT ? describe : describe.skip;
 
 const s3 = new S3Client({
-  endpoint: S3_ENDPOINT, region: 'us-east-1', forcePathStyle: true,
+  endpoint: S3_ENDPOINT,
+  region: 'us-east-1',
+  forcePathStyle: true,
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID ?? '',
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? '',
@@ -74,7 +76,9 @@ async function listKeys(prefix = ''): Promise<string[]> {
   const out: string[] = [];
   let token: string | undefined;
   do {
-    const r = await s3.send(new ListObjectsV2Command({ Bucket: BUCKET, Prefix: prefix, ContinuationToken: token }));
+    const r = await s3.send(
+      new ListObjectsV2Command({ Bucket: BUCKET, Prefix: prefix, ContinuationToken: token }),
+    );
     for (const o of r.Contents ?? []) if (o.Key) out.push(o.Key);
     token = r.IsTruncated ? r.NextContinuationToken : undefined;
   } while (token);
@@ -91,9 +95,16 @@ const noop: NextFunction = () => {};
 
 function capture() {
   const c = {
-    _s: 200, _b: undefined as unknown,
-    status(n: number) { c._s = n; return c; },
-    json(b: unknown) { c._b = b; return c; },
+    _s: 200,
+    _b: undefined as unknown,
+    status(n: number) {
+      c._s = n;
+      return c;
+    },
+    json(b: unknown) {
+      c._b = b;
+      return c;
+    },
   };
   return c;
 }
@@ -101,17 +112,35 @@ function capture() {
 beforeAll(async () => {
   await connectDb();
   const app = express();
-  app.use((req, _res, nx) => { (req as AuthRequest).user = { id: currentUser }; nx(); });
+  app.use((req, _res, nx) => {
+    (req as AuthRequest).user = { id: currentUser };
+    nx();
+  });
   app.use('/api/uploads', uploadsRoutes);
-  server = await new Promise<Server>((r) => { const s = app.listen(0, () => r(s)); });
+  server = await new Promise<Server>((r) => {
+    const s = app.listen(0, () => r(s));
+  });
   const a = server.address();
   if (a === null || typeof a === 'string') throw new Error('the test server did not bind a port');
   baseUrl = `http://127.0.0.1:${a.port}`;
 
   // A small untagged WAV, generated rather than committed — see the Bun note above.
   smallUntaggedWav = path.join(os.tmpdir(), `syra-e2e-small-${process.pid}.wav`);
-  execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi',
-    '-i', 'sine=frequency=440:duration=1', '-ac', '1', '-ar', '8000', smallUntaggedWav, '-y']);
+  execFileSync('ffmpeg', [
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-f',
+    'lavfi',
+    '-i',
+    'sine=frequency=440:duration=1',
+    '-ac',
+    '1',
+    '-ar',
+    '8000',
+    smallUntaggedWav,
+    '-y',
+  ]);
 });
 
 afterAll(async () => {
@@ -121,7 +150,12 @@ afterAll(async () => {
   await disconnectDb();
 });
 
-async function postAudio(absPath: string, filename: string, mime: string, fields: Record<string, string>) {
+async function postAudio(
+  absPath: string,
+  filename: string,
+  mime: string,
+  fields: Record<string, string>,
+) {
   const buf = fs.readFileSync(absPath);
   const fd = new FormData();
   fd.append('audioFile', new Blob([new Uint8Array(buf)], { type: mime }), filename);
@@ -129,14 +163,20 @@ async function postAudio(absPath: string, filename: string, mime: string, fields
   const res = await fetch(`${baseUrl}/api/uploads`, { method: 'POST', body: fd });
   const text = await res.text();
   let body: unknown;
-  try { body = JSON.parse(text); } catch { body = text; }
+  try {
+    body = JSON.parse(text);
+  } catch {
+    body = text;
+  }
   return { status: res.status, body: body as Record<string, unknown> };
 }
 const upload = (fx: string, mime: string, fields: Record<string, string>) =>
   postAudio(path.join(FIXTURES, fx), fx, mime, fields);
 
 /** `countDocuments({})`, one table at a time. */
-async function countRows(table: typeof userUploads | typeof tracks | typeof albums | typeof contributionAttestations): Promise<number> {
+async function countRows(
+  table: typeof userUploads | typeof tracks | typeof albums | typeof contributionAttestations,
+): Promise<number> {
   const [counted] = await getDb().select({ total: sql<number>`count(*)::int` }).from(table);
   return counted.total;
 }
@@ -179,8 +219,14 @@ describeE2E('E2E upload flow (requires an S3 endpoint via AWS_ENDPOINT_URL)', ()
       .values({ name: 'Catalogue Owner', type: 'artist', source: 'upload' })
       .returning({ id: catalogEntities.id });
     await getDb().insert(tracks).values({
-      title: 'Already Here', artistId: artist.id, artistName: 'Catalogue Owner',
-      duration: 200, source: 'upload', status: 'ready', isAvailable: true, sha256: seeded?.sha256,
+      title: 'Already Here',
+      artistId: artist.id,
+      artistName: 'Catalogue Owner',
+      duration: 200,
+      source: 'upload',
+      status: 'ready',
+      isAvailable: true,
+      sha256: seeded?.sha256,
     });
     await getDb().delete(userUploads);
 
@@ -190,8 +236,12 @@ describeE2E('E2E upload flow (requires an S3 endpoint via AWS_ENDPOINT_URL)', ()
     const after = await listKeys();
     const added = after.filter((k) => !before.includes(k));
 
-    log(`STEP1 -> ${r.status} outcome=${(r.body as { outcome?: string }).outcome} trackId=${(r.body as { trackId?: string }).trackId}`);
-    log(`STEP1 S3 before=${before.length} after=${after.length} ADDED=${added.length} ${added.join(',')}`);
+    log(
+      `STEP1 -> ${r.status} outcome=${(r.body as { outcome?: string }).outcome} trackId=${(r.body as { trackId?: string }).trackId}`,
+    );
+    log(
+      `STEP1 S3 before=${before.length} after=${after.length} ADDED=${added.length} ${added.join(',')}`,
+    );
     expect((r.body as { outcome?: string }).outcome).toBe('matched');
     expect(added).toEqual([]);
     expect(await countRows(userUploads)).toBe(0);
@@ -232,10 +282,27 @@ describeE2E('E2E upload flow (requires an S3 endpoint via AWS_ENDPOINT_URL)', ()
     expect(up).not.toBeNull();
 
     const q = (e: Record<string, unknown> = {}) =>
-      ({ params: {}, query: {}, user: { id: 'a-different-account' }, ...e }) as unknown as AuthRequest;
+      ({
+        params: {},
+        query: {},
+        user: { id: 'a-different-account' },
+        ...e,
+      }) as unknown as AuthRequest;
     const probes: [string, (c: ReturnType<typeof capture>) => Promise<unknown>][] = [
-      ['search', (c) => searchCtl.search(q({ query: { q: 'Midnight Ferry' } }), c as unknown as Response, noop)],
-      ['searchTracks', (c) => tracksCtl.searchTracks(q({ query: { q: 'Midnight Ferry' } }), c as unknown as Response, noop)],
+      [
+        'search',
+        (c) =>
+          searchCtl.search(q({ query: { q: 'Midnight Ferry' } }), c as unknown as Response, noop),
+      ],
+      [
+        'searchTracks',
+        (c) =>
+          tracksCtl.searchTracks(
+            q({ query: { q: 'Midnight Ferry' } }),
+            c as unknown as Response,
+            noop,
+          ),
+      ],
       ['getTracks', (c) => tracksCtl.getTracks(q(), c as unknown as Response, noop)],
       ['getPopularTracks', (c) => browseCtl.getPopularTracks(q(), c as unknown as Response, noop)],
       ['getCharts', (c) => browseCtl.getCharts(q(), c as unknown as Response, noop)],
@@ -251,10 +318,18 @@ describeE2E('E2E upload flow (requires an S3 endpoint via AWS_ENDPOINT_URL)', ()
        * and reports a leak that is not there. It did exactly that on the first
        * run of this suite.
        */
-      const body = (c._b ?? {}) as { results?: Record<string, unknown[]>; counts?: { total?: number }; tracks?: unknown[] };
-      const payload = body.results ? JSON.stringify(body.results) : JSON.stringify({ tracks: body.tracks ?? [] });
+      const body = (c._b ?? {}) as {
+        results?: Record<string, unknown[]>;
+        counts?: { total?: number };
+        tracks?: unknown[];
+      };
+      const payload = body.results
+        ? JSON.stringify(body.results)
+        : JSON.stringify({ tracks: body.tracks ?? [] });
       const leaked = payload.includes(String(up?.id)) || payload.includes('Midnight Ferry');
-      log(`STEP3 ${label} status=${c._s} resultTotal=${body.counts?.total ?? body.tracks?.length ?? 0} ${leaked ? '*** LEAKED' : 'clean'}`);
+      log(
+        `STEP3 ${label} status=${c._s} resultTotal=${body.counts?.total ?? body.tracks?.length ?? 0} ${leaked ? '*** LEAKED' : 'clean'}`,
+      );
       expect(leaked).toBe(false);
     }
   });
@@ -262,18 +337,26 @@ describeE2E('E2E upload flow (requires an S3 endpoint via AWS_ENDPOINT_URL)', ()
   it('STEP 4: a no-artist file is PRIVATE-ok and PUBLIC-refused with a machine code', async () => {
     await clearDb();
     currentUser = 'untagged-private';
-    const priv = await postAudio(smallUntaggedWav, 'small-untagged.wav', 'audio/wav', { destination: 'private' });
+    const priv = await postAudio(smallUntaggedWav, 'small-untagged.wav', 'audio/wav', {
+      destination: 'private',
+    });
     const stored = await firstUpload();
-    log(`STEP4 private -> ${priv.status} outcome=${(priv.body as { outcome?: string }).outcome} artistName=${JSON.stringify(stored?.artistName)}`);
+    log(
+      `STEP4 private -> ${priv.status} outcome=${(priv.body as { outcome?: string }).outcome} artistName=${JSON.stringify(stored?.artistName)}`,
+    );
     expect(priv.status).toBeLessThan(400);
     expect(await countRows(userUploads)).toBe(1);
 
     await clearDb();
     currentUser = 'untagged-public';
-    const pub = await postAudio(smallUntaggedWav, 'small-untagged.wav', 'audio/wav',
-      { destination: 'public', attestation: 'I may distribute this' });
+    const pub = await postAudio(smallUntaggedWav, 'small-untagged.wav', 'audio/wav', {
+      destination: 'public',
+      attestation: 'I may distribute this',
+    });
     const code = (pub.body as { code?: string }).code;
-    log(`STEP4 public  -> ${pub.status} code=${code} message=${String((pub.body as { message?: string }).message).slice(0, 80)}`);
+    log(
+      `STEP4 public  -> ${pub.status} code=${code} message=${String((pub.body as { message?: string }).message).slice(0, 80)}`,
+    );
     expect(pub.status).toBeGreaterThanOrEqual(400);
     expect(code).toBe('artist_unresolved');
     // No silent downgrade to the locker — the user must see what the file lacks.
@@ -283,24 +366,36 @@ describeE2E('E2E upload flow (requires an S3 endpoint via AWS_ENDPOINT_URL)', ()
   it('STEP 5: an iTunes-purchased M4A is refused on the public path, naming the marker', async () => {
     await clearDb();
     currentUser = 'purchaser';
-    const r = await upload('purchased-itunes.m4a', 'audio/mp4',
-      { destination: 'public', attestation: 'I may distribute this' });
+    const r = await upload('purchased-itunes.m4a', 'audio/mp4', {
+      destination: 'public',
+      attestation: 'I may distribute this',
+    });
     const markers = (r.body as { markers?: { code: string; weight: string }[] }).markers ?? [];
-    log(`STEP5 -> ${r.status} code=${(r.body as { code?: string }).code} markers=${markers.map((m) => `${m.code}/${m.weight}`).join(',')}`);
+    log(
+      `STEP5 -> ${r.status} code=${(r.body as { code?: string }).code} markers=${markers.map((m) => `${m.code}/${m.weight}`).join(',')}`,
+    );
     expect(r.status).toBeGreaterThanOrEqual(400);
-    expect(markers.some((m) => m.code === 'itunes.purchase-atoms' && m.weight === 'blocking')).toBe(true);
+    expect(markers.some((m) => m.code === 'itunes.purchase-atoms' && m.weight === 'blocking')).toBe(
+      true,
+    );
     expect(await countRows(tracks)).toBe(0);
   });
 
   it('STEP 6: an unknown artist published publicly creates a claimable stub, and an album with cover art', async () => {
     await clearDb();
     currentUser = 'contributor-1';
-    const noCover = await upload('indie-id3v2.mp3', 'audio/mpeg',
-      { destination: 'public', attestation: 'I have the right to distribute this recording' });
+    const noCover = await upload('indie-id3v2.mp3', 'audio/mpeg', {
+      destination: 'public',
+      attestation: 'I have the right to distribute this recording',
+    });
     const artists = await getDb().select().from(catalogEntities);
     const attestations = await countRows(contributionAttestations);
-    log(`STEP6a -> ${noCover.status} outcome=${(noCover.body as { outcome?: string }).outcome} artists=${artists.length} claimable=${artists.filter((a) => a.claimable).length} origin=${artists.map((a) => a.origin).join(',')} attestations=${attestations}`);
-    log(`STEP6a albums=${await countRows(albums)} (0 expected: the embedded cover is under the 500px catalogue threshold and the code refuses to invent artwork)`);
+    log(
+      `STEP6a -> ${noCover.status} outcome=${(noCover.body as { outcome?: string }).outcome} artists=${artists.length} claimable=${artists.filter((a) => a.claimable).length} origin=${artists.map((a) => a.origin).join(',')} attestations=${attestations}`,
+    );
+    log(
+      `STEP6a albums=${await countRows(albums)} (0 expected: the embedded cover is under the 500px catalogue threshold and the code refuses to invent artwork)`,
+    );
     expect(artists.length).toBe(1);
     expect(artists[0]?.claimable).toBe(true);
     expect(artists[0]?.origin).toBe('contributed');
@@ -314,11 +409,16 @@ describeE2E('E2E upload flow (requires an S3 endpoint via AWS_ENDPOINT_URL)', ()
     // guard stopped accepting live ids (the reason `stream.controller.test.ts`
     // records for the same swap).
     const coverId = uuidv7();
-    const withCover = await upload('indie-id3v2.mp3', 'audio/mpeg',
-      { destination: 'public', attestation: 'I have the right to distribute this recording', coverArt: coverId });
+    const withCover = await upload('indie-id3v2.mp3', 'audio/mpeg', {
+      destination: 'public',
+      attestation: 'I have the right to distribute this recording',
+      coverArt: coverId,
+    });
     const album = (await getDb().select().from(albums).limit(1))[0];
     const track = (await getDb().select().from(tracks).limit(1))[0];
-    log(`STEP6b -> ${withCover.status} albums=${await countRows(albums)} title=${album?.title} type=${album?.type} releaseDate=${album?.releaseDate}`);
+    log(
+      `STEP6b -> ${withCover.status} albums=${await countRows(albums)} title=${album?.title} type=${album?.type} releaseDate=${album?.releaseDate}`,
+    );
     log(`STEP6b track.albumId linked=${Boolean(track?.albumId)} albumName=${track?.albumName}`);
     expect(album).not.toBeNull();
     expect(track?.albumId).toBe(album?.id);
@@ -337,23 +437,34 @@ describeE2E('E2E upload flow (requires an S3 endpoint via AWS_ENDPOINT_URL)', ()
     const purged: string[] = [];
     const at = (d: Date) => ({
       now: () => d,
-      notify: async (n: { ownerOxyUserId: string; uploadCount: number }) => { notices.push(`${n.ownerOxyUserId}:${n.uploadCount}`); },
-      deleteObjects: async (u: { id: string }) => { purged.push(u.id); return 1; },
+      notify: async (n: { ownerOxyUserId: string; uploadCount: number }) => {
+        notices.push(`${n.ownerOxyUserId}:${n.uploadCount}`);
+      },
+      deleteObjects: async (u: { id: string }) => {
+        purged.push(u.id);
+        return 1;
+      },
     });
 
     const r1 = await runExpirySweep(at(new Date(expiresAt.getTime() - 13 * 864e5)));
-    log(`STEP7 T-13d -> noticed=${r1.uploadsNoticed} notified=${r1.ownersNotified} notices=${JSON.stringify(notices)}`);
+    log(
+      `STEP7 T-13d -> noticed=${r1.uploadsNoticed} notified=${r1.ownersNotified} notices=${JSON.stringify(notices)}`,
+    );
     expect(r1.uploadsNoticed).toBe(1);
 
     const r2 = await runExpirySweep(at(new Date(expiresAt.getTime() + 1000)));
     const soft = id ? await readUpload(id) : undefined;
-    log(`STEP7 T0    -> softDeleted=${r2.uploadsSoftDeleted} deletedAt=${soft?.deletedAt ? 'SET' : 'unset'} rowStillPresent=${Boolean(soft)}`);
+    log(
+      `STEP7 T0    -> softDeleted=${r2.uploadsSoftDeleted} deletedAt=${soft?.deletedAt ? 'SET' : 'unset'} rowStillPresent=${Boolean(soft)}`,
+    );
     expect(r2.uploadsSoftDeleted).toBe(1);
     expect(soft?.deletedAt).toBeTruthy();
 
     const r3 = await runExpirySweep(at(new Date(expiresAt.getTime() + 31 * 864e5)));
     const hard = id ? await readUpload(id) : undefined;
-    log(`STEP7 T+31d -> hardDeleted=${r3.uploadsHardDeleted} objectsDeleted=${r3.objectsDeleted} rowGone=${hard === undefined} purgedFor=${JSON.stringify(purged)}`);
+    log(
+      `STEP7 T+31d -> hardDeleted=${r3.uploadsHardDeleted} objectsDeleted=${r3.objectsDeleted} rowGone=${hard === undefined} purgedFor=${JSON.stringify(purged)}`,
+    );
     expect(r3.uploadsHardDeleted).toBe(1);
     expect(hard).toBeUndefined();
     expect(purged).toEqual([String(id)]);

@@ -100,7 +100,9 @@ describe('uploadsService.listUploadAlbums', () => {
   it('rejects a response whose shape does not match the endpoint', async () => {
     mockApiGet.mockResolvedValueOnce({ data: { albums: [{ albumKey: 'x' }], total: 1 } });
 
-    await expect(uploadsService.listUploadAlbums()).rejects.toThrow('Invalid upload albums response');
+    await expect(uploadsService.listUploadAlbums()).rejects.toThrow(
+      'Invalid upload albums response',
+    );
   });
 });
 

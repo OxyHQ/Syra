@@ -116,7 +116,10 @@ import { uploadTrackAudio } from '../services/audioStorageService';
 import { enqueueIngest, enqueueUploadIngest } from '../services/ingest/ingestQueue';
 import { LOCKER_HLS_BITRATES_KBPS } from '../services/ingest/hlsPackager';
 import { mintStreamToken, verifyStreamToken } from '../services/stream/streamToken';
-import { buildMasterPlaylistFor, buildVariantPlaylistFor } from '../services/stream/manifestService';
+import {
+  buildMasterPlaylistFor,
+  buildVariantPlaylistFor,
+} from '../services/stream/manifestService';
 
 import { logger } from '../utils/logger';
 import { getErrorMessage, getErrorStack } from '../utils/error';
@@ -231,7 +234,10 @@ function normalizeMultipartFields(body: Record<string, unknown>): Record<string,
 }
 
 /** An uploader-supplied override wins over the file's tags; absent keeps the tag. */
-function preferOverride(override: string | undefined, extracted: string | undefined): string | undefined {
+function preferOverride(
+  override: string | undefined,
+  extracted: string | undefined,
+): string | undefined {
   const trimmed = override?.trim();
   return trimmed ? trimmed : extracted;
 }
@@ -615,9 +621,7 @@ async function storeEmbeddedCoverArt(
 
 // ── Access ───────────────────────────────────────────────────────────────────
 
-type UploadAccess =
-  | { ok: true; ownerOxyUserId: string; maxBitrateKbps: number }
-  | { ok: false };
+type UploadAccess = { ok: true; ownerOxyUserId: string; maxBitrateKbps: number } | { ok: false };
 
 /**
  * Who is asking for this locker file's media, by session or by stream token.
@@ -1045,8 +1049,7 @@ async function screenPublicContribution(params: {
    * refusal, not "no artist": a `Various Artists` stub is how a catalog fills with
    * rubbish that no later write can merge away.
    */
-  let artistId =
-    resolution.confidence === 'high' ? resolution.linkedArtistId : undefined;
+  let artistId = resolution.confidence === 'high' ? resolution.linkedArtistId : undefined;
 
   if (!artistId) {
     const name =
@@ -1129,7 +1132,6 @@ async function screenPublicContribution(params: {
           .where(eq(catalogEntities.id, artistId));
       }
       if (storedMbid ?? resolvedArtistMbid) void enqueueArtistEnrichment(artistId);
-
     }
   }
 
@@ -1530,9 +1532,7 @@ async function publishContribution(params: PublishParams): Promise<string> {
     // never landed misattributes it, and the gap is exactly the kind this
     // transaction already exists to close.
     if (creditRows.length > 0) {
-      await tx.insert(trackCredits).values(
-        creditRows.map((row) => ({ ...row, trackId })),
-      );
+      await tx.insert(trackCredits).values(creditRows.map((row) => ({ ...row, trackId })));
     }
 
     if (params.requiresAttestation && params.attestation) {
@@ -1663,8 +1663,7 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
       if (request.coverArt && !isLiveEntityId(request.coverArt)) {
         res.status(400).json({
           error: 'Invalid coverArt',
-          message:
-            'coverArt must be an image id. Upload the image first via /api/images/upload.',
+          message: 'coverArt must be an image id. Upload the image first via /api/images/upload.',
         });
         return;
       }
@@ -1854,7 +1853,7 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
           outcome: 'stored',
           upload: toUploadTrackDto(
             result.stored,
-            await loadImageVariants(uploadImageIds(result.stored))
+            await loadImageVariants(uploadImageIds(result.stored)),
           ),
         };
         res.status(201).json(outcome);
@@ -2020,9 +2019,7 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
         return;
       }
 
-      const hasCatalogCover = request.coverArt
-        ? true
-        : embeddedCover?.catalogEligible === true;
+      const hasCatalogCover = request.coverArt ? true : embeddedCover?.catalogEligible === true;
       /**
        * Two refusals outrank this one and must keep their own codes, because
        * telling someone to attach artwork when the real problem is "this is a
@@ -2039,9 +2036,7 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
        * resolvable artist plus no cover, where the stub would be created and
        * then stranded.
        */
-      const wouldResolveArtist = Boolean(
-        request.artistName?.trim() || metadata.artistName?.trim(),
-      );
+      const wouldResolveArtist = Boolean(request.artistName?.trim() || metadata.artistName?.trim());
       if (report.verdict !== 'commercial' && wouldResolveArtist && !hasCatalogCover) {
         res.status(422).json({
           outcome: 'blocked',
@@ -2090,7 +2085,8 @@ export const createUpload = (req: AuthRequest, res: Response, _next: NextFunctio
           // page every listener sees, so the catalogue only takes artwork that
           // cleared the size floor.
           coverArt:
-            request.coverArt ?? (embeddedCover?.catalogEligible ? embeddedCover.imageId : undefined),
+            request.coverArt ??
+            (embeddedCover?.catalogEligible ? embeddedCover.imageId : undefined),
           isExplicit: request.isExplicit,
         },
         format,
@@ -2368,13 +2364,14 @@ export const updateUpload = async (
      * `save()` on an unmodified document simply did nothing — so a PATCH with
      * no recognised fields would 500 instead of echoing the row back.
      */
-    const [updated] = Object.keys(changes).length > 0
-      ? await getDb()
-          .update(userUploads)
-          .set(changes)
-          .where(eq(userUploads.id, upload.id))
-          .returning(UPLOAD_COLUMNS)
-      : [upload];
+    const [updated] =
+      Object.keys(changes).length > 0
+        ? await getDb()
+            .update(userUploads)
+            .set(changes)
+            .where(eq(userUploads.id, upload.id))
+            .returning(UPLOAD_COLUMNS)
+        : [upload];
 
     res.json(toUploadTrackDto(updated, await loadImageVariants(uploadImageIds(updated))));
   } catch (error) {
@@ -2654,7 +2651,8 @@ export const promoteUpload = async (
         // takes it only if it cleared the floor. Read from the stored asset's
         // recorded dimensions rather than re-measuring — and re-uploading — the
         // same image.
-        coverArt: request.coverArt ?? (catalogCoverEligible ? (upload.coverArtId ?? undefined) : undefined),
+        coverArt:
+          request.coverArt ?? (catalogCoverEligible ? (upload.coverArtId ?? undefined) : undefined),
         isExplicit: request.isExplicit,
       },
       format: audioSource.format,

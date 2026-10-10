@@ -15,8 +15,8 @@ interface MediaHeaderSkeletonProps {
  * a large cover, title, artist row and metadata, a control bar, and a track
  * list. Mirrors `album/[id]` and `playlist/[id]` header layout.
  */
-export const MediaHeaderSkeleton: React.FC<MediaHeaderSkeletonProps> =
-  React.memo(({ trackCount = 8 }) => {
+export const MediaHeaderSkeleton: React.FC<MediaHeaderSkeletonProps> = React.memo(
+  ({ trackCount = 8 }) => {
     const theme = useTheme();
     const gradientColors: readonly [string, string, string] = [
       theme.colors.backgroundSecondary,
@@ -33,12 +33,7 @@ export const MediaHeaderSkeleton: React.FC<MediaHeaderSkeletonProps> =
               <Skeleton.Box width="100%" height="100%" borderRadius={8} />
             </View>
             <View style={styles.infoContainer}>
-              <Skeleton.Box
-                width="80%"
-                height={42}
-                borderRadius={6}
-                style={styles.title}
-              />
+              <Skeleton.Box width="80%" height={42} borderRadius={6} style={styles.title} />
               <View style={styles.artistRow}>
                 <Skeleton.Circle size={24} />
                 <Skeleton.Box width={120} height={16} borderRadius={4} />
@@ -71,7 +66,8 @@ export const MediaHeaderSkeleton: React.FC<MediaHeaderSkeletonProps> =
         </View>
       </View>
     );
-  });
+  },
+);
 MediaHeaderSkeleton.displayName = 'MediaHeaderSkeleton';
 
 const styles = StyleSheet.create({

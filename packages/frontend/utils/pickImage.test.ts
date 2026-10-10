@@ -66,15 +66,27 @@ describe('pickImageUrl — size selection', () => {
   });
 
   it('uses catalog size variants before the single coverArt fallback', () => {
-    expect(pickImageUrl(undefined, FALLBACK, 64, SIZES)).toBe(`${API_IMAGES}/444444444444444444444444`);
-    expect(pickImageUrl(undefined, FALLBACK, 240, SIZES)).toBe(`${API_IMAGES}/555555555555555555555555`);
-    expect(pickImageUrl(undefined, FALLBACK, 500, SIZES)).toBe(`${API_IMAGES}/666666666666666666666666`);
+    expect(pickImageUrl(undefined, FALLBACK, 64, SIZES)).toBe(
+      `${API_IMAGES}/444444444444444444444444`,
+    );
+    expect(pickImageUrl(undefined, FALLBACK, 240, SIZES)).toBe(
+      `${API_IMAGES}/555555555555555555555555`,
+    );
+    expect(pickImageUrl(undefined, FALLBACK, 500, SIZES)).toBe(
+      `${API_IMAGES}/666666666666666666666666`,
+    );
   });
 
   it('supports semantic render targets backed by catalog variants', () => {
-    expect(pickCatalogImageUrl(undefined, FALLBACK, 'icon', SIZES)).toBe(`${API_IMAGES}/444444444444444444444444`);
-    expect(pickCatalogImageUrl(undefined, FALLBACK, 'card', SIZES)).toBe(`${API_IMAGES}/555555555555555555555555`);
-    expect(pickCatalogImageUrl(undefined, FALLBACK, 'hero', SIZES)).toBe(`${API_IMAGES}/666666666666666666666666`);
+    expect(pickCatalogImageUrl(undefined, FALLBACK, 'icon', SIZES)).toBe(
+      `${API_IMAGES}/444444444444444444444444`,
+    );
+    expect(pickCatalogImageUrl(undefined, FALLBACK, 'card', SIZES)).toBe(
+      `${API_IMAGES}/555555555555555555555555`,
+    );
+    expect(pickCatalogImageUrl(undefined, FALLBACK, 'hero', SIZES)).toBe(
+      `${API_IMAGES}/666666666666666666666666`,
+    );
   });
 });
 
@@ -100,7 +112,12 @@ describe('pickImageUrl — robustness', () => {
   it('entry with missing width treated as 0, does not crash', () => {
     const imgs = [
       { url: 'no-width', source: 'upload' } as unknown as TrackImage,
-      { url: '/api/images/bbbbbbbbbbbbbbbbbbbbbbbb', width: 480, height: 480, source: 'upload' } as TrackImage,
+      {
+        url: '/api/images/bbbbbbbbbbbbbbbbbbbbbbbb',
+        width: 480,
+        height: 480,
+        source: 'upload',
+      } as TrackImage,
     ];
     // preferredWidth 200 → only 480 qualifies
     expect(pickImageUrl(imgs, FALLBACK, 200)).toBe(`${API_IMAGES}/bbbbbbbbbbbbbbbbbbbbbbbb`);
@@ -123,13 +140,17 @@ describe('pickImageUrl — robustness', () => {
   });
 
   it('single image, any preferredWidth → returns that image url', () => {
-    const single: TrackImage[] = [{ url: '/api/images/eeeeeeeeeeeeeeeeeeeeeeee', width: 480, height: 480, source: 'upload' }];
+    const single: TrackImage[] = [
+      { url: '/api/images/eeeeeeeeeeeeeeeeeeeeeeee', width: 480, height: 480, source: 'upload' },
+    ];
     expect(pickImageUrl(single, FALLBACK, 80)).toBe(`${API_IMAGES}/eeeeeeeeeeeeeeeeeeeeeeee`);
     expect(pickImageUrl(single, FALLBACK, 800)).toBe(`${API_IMAGES}/eeeeeeeeeeeeeeeeeeeeeeee`);
   });
 
   it('does not return external catalog URLs', () => {
-    const external: TrackImage[] = [{ url: 'https://cdn.example.com/cover.jpg', width: 480, height: 480, source: 'upload' }];
+    const external: TrackImage[] = [
+      { url: 'https://cdn.example.com/cover.jpg', width: 480, height: 480, source: 'upload' },
+    ];
     expect(pickImageUrl(external, undefined, 300)).toBeUndefined();
   });
 
@@ -157,7 +178,14 @@ describe('oxyImageVariantForTarget', () => {
     // their assertions would pass without ever running.
     expect(targets).toHaveLength(6);
     expect(targets).toEqual(
-      expect.arrayContaining(['icon', 'thumbnail', 'smallArtwork', 'card', 'detailArtwork', 'hero']),
+      expect.arrayContaining([
+        'icon',
+        'thumbnail',
+        'smallArtwork',
+        'card',
+        'detailArtwork',
+        'hero',
+      ]),
     );
   });
 

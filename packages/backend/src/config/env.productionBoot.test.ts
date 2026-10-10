@@ -56,19 +56,14 @@ import { join } from 'node:path';
 const ENV_MODULE = join(__dirname, 'env.ts');
 
 /** Import `config/env.ts` under a given environment, and report how it went. */
-async function boot(
-  overrides: Record<string, string>,
-): Promise<{ ok: boolean; output: string }> {
-  const proc = Bun.spawn(
-    [process.execPath, '-e', `await import(${JSON.stringify(ENV_MODULE)});`],
-    {
-      // A pristine base: inheriting the developer's own environment would let a
-      // locally-exported STREAM_KEY_BASE_URL decide the result of these tests.
-      env: { PATH: process.env.PATH ?? '', ...overrides },
-      stdout: 'pipe',
-      stderr: 'pipe',
-    },
-  );
+async function boot(overrides: Record<string, string>): Promise<{ ok: boolean; output: string }> {
+  const proc = Bun.spawn([process.execPath, '-e', `await import(${JSON.stringify(ENV_MODULE)});`], {
+    // A pristine base: inheriting the developer's own environment would let a
+    // locally-exported STREAM_KEY_BASE_URL decide the result of these tests.
+    env: { PATH: process.env.PATH ?? '', ...overrides },
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(proc.stdout).text(),
     new Response(proc.stderr).text(),
@@ -154,10 +149,7 @@ describe('STREAM_KEY_BASE_URL', () => {
         stderr: 'pipe',
       },
     );
-    const [stdout, exitCode] = await Promise.all([
-      new Response(proc.stdout).text(),
-      proc.exited,
-    ]);
+    const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
 
     expect(exitCode).toBe(0);
     expect(stdout.trim()).toBe('https://api.syra.fm');

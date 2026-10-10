@@ -58,50 +58,56 @@ export function useImagePicker(options: UseImagePickerOptions = {}) {
     aspect = [1, 1], // Square aspect ratio for playlist covers
   } = options;
 
-  const pickImage = useCallback(async (source: 'library' | 'camera' = 'library'): Promise<ImagePickerResult | null> => {
-    try {
-      // Request permissions
-      if (source === 'camera') {
-        const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
-        if (!cameraPermission.granted) {
-          Alert.alert('Permission Required', 'Camera permission is required to take photos.');
+  const pickImage = useCallback(
+    async (source: 'library' | 'camera' = 'library'): Promise<ImagePickerResult | null> => {
+      try {
+        // Request permissions
+        if (source === 'camera') {
+          const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
+          if (!cameraPermission.granted) {
+            Alert.alert('Permission Required', 'Camera permission is required to take photos.');
+            return null;
+          }
+        } else {
+          const mediaLibraryPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (!mediaLibraryPermission.granted) {
+            Alert.alert(
+              'Permission Required',
+              'Media library permission is required to select images.',
+            );
+            return null;
+          }
+        }
+
+        // Launch image picker
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: 'images',
+          allowsEditing,
+          aspect,
+          quality,
+          allowsMultipleSelection: false,
+        });
+
+        if (result.canceled || !result.assets || result.assets.length === 0) {
           return null;
         }
-      } else {
-        const mediaLibraryPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!mediaLibraryPermission.granted) {
-          Alert.alert('Permission Required', 'Media library permission is required to select images.');
-          return null;
-        }
-      }
 
-      // Launch image picker
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: 'images',
-        allowsEditing,
-        aspect,
-        quality,
-        allowsMultipleSelection: false,
-      });
-
-      if (result.canceled || !result.assets || result.assets.length === 0) {
+        const asset = result.assets[0];
+        return {
+          uri: asset.uri,
+          width: asset.width,
+          height: asset.height,
+          type: asset.type ?? undefined,
+          base64: asset.base64 || undefined,
+        };
+      } catch (error) {
+        console.error('Image picker error:', error);
+        Alert.alert('Error', 'Failed to pick image. Please try again.');
         return null;
       }
-
-      const asset = result.assets[0];
-      return {
-        uri: asset.uri,
-        width: asset.width,
-        height: asset.height,
-        type: asset.type ?? undefined,
-        base64: asset.base64 || undefined,
-      };
-    } catch (error) {
-      console.error('Image picker error:', error);
-      Alert.alert('Error', 'Failed to pick image. Please try again.');
-      return null;
-    }
-  }, [allowsEditing, aspect, quality]);
+    },
+    [allowsEditing, aspect, quality],
+  );
 
   const takePhoto = useCallback(async (): Promise<ImagePickerResult | null> => {
     try {
@@ -141,34 +147,37 @@ export function useImagePicker(options: UseImagePickerOptions = {}) {
    * Upload image to backend and return image ID (MongoDB ObjectId string)
    * Uses authenticated client from oxyServices with current user's token
    */
-  const uploadImage = useCallback(async (imageResult: ImagePickerResult): Promise<string | undefined> => {
-    try {
-      setIsUploading(true);
-      
-      const formData = new FormData();
-      const fileName = imageResult.uri.split('/').pop() || `image-${Date.now()}.jpg`;
-      
-      // Expo 54 handles platform differences automatically
-      const uploadFile: ReactNativeFormDataFile = {
-        uri: imageResult.uri,
-        name: fileName,
-        type: imageResult.type || 'image/jpeg',
-      };
-      formData.append('image', uploadFile as unknown as Blob);
+  const uploadImage = useCallback(
+    async (imageResult: ImagePickerResult): Promise<string | undefined> => {
+      try {
+        setIsUploading(true);
 
-      // Upload to backend - the linked Syra API client includes the active Oxy token.
-      // The app API wrapper returns an axios-style `{ data }` envelope.
-      const response = await api.post<{ id: string }>('/images/upload', formData);
+        const formData = new FormData();
+        const fileName = imageResult.uri.split('/').pop() || `image-${Date.now()}.jpg`;
 
-      return response.data.id;
-    } catch (error: unknown) {
-      console.error('Image upload error:', error);
-      Alert.alert('Error', getUploadErrorMessage(error));
-      return undefined;
-    } finally {
-      setIsUploading(false);
-    }
-  }, []);
+        // Expo 54 handles platform differences automatically
+        const uploadFile: ReactNativeFormDataFile = {
+          uri: imageResult.uri,
+          name: fileName,
+          type: imageResult.type || 'image/jpeg',
+        };
+        formData.append('image', uploadFile as unknown as Blob);
+
+        // Upload to backend - the linked Syra API client includes the active Oxy token.
+        // The app API wrapper returns an axios-style `{ data }` envelope.
+        const response = await api.post<{ id: string }>('/images/upload', formData);
+
+        return response.data.id;
+      } catch (error: unknown) {
+        console.error('Image upload error:', error);
+        Alert.alert('Error', getUploadErrorMessage(error));
+        return undefined;
+      } finally {
+        setIsUploading(false);
+      }
+    },
+    [],
+  );
 
   return {
     pickImage,

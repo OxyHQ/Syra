@@ -31,7 +31,9 @@ describe('episodeNeedsResolvedSource', () => {
   });
 
   it('resolves one that does have a ladder, as it always did', () => {
-    const withLadder = episode({ hlsMasterKey: 'hls/show-1/episode-1/master.m3u8' } as Partial<Episode>);
+    const withLadder = episode({
+      hlsMasterKey: 'hls/show-1/episode-1/master.m3u8',
+    } as Partial<Episode>);
 
     expect(episodeNeedsResolvedSource(withLadder, true)).toBe(true);
   });

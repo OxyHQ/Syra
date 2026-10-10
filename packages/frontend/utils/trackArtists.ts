@@ -25,7 +25,9 @@ export interface TrackArtist {
 }
 
 /** The performing credit, principal first. */
-export function trackArtists(track: Pick<Track, 'artistId' | 'artistName' | 'credits'>): TrackArtist[] {
+export function trackArtists(
+  track: Pick<Track, 'artistId' | 'artistName' | 'credits'>,
+): TrackArtist[] {
   const artists: TrackArtist[] = [];
   const seen = new Set<string>();
 
@@ -56,7 +58,7 @@ export function trackArtists(track: Pick<Track, 'artistId' | 'artistName' | 'cre
  */
 export function trackArtistsText(
   track: Pick<Track, 'artistId' | 'artistName' | 'credits'>,
-  fallback: string
+  fallback: string,
 ): string {
   const names = trackArtists(track).map((artist) => artist.name);
   return names.length > 0 ? names.join(', ') : fallback;

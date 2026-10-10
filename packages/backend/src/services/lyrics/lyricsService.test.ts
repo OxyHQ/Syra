@@ -46,7 +46,9 @@ function makeProvider(
 function throwingProvider(): LyricsProvider {
   return {
     source: 'lrclib',
-    async getLyrics() { throw new Error('provider should not be called'); },
+    async getLyrics() {
+      throw new Error('provider should not be called');
+    },
   };
 }
 
@@ -90,18 +92,20 @@ async function seedTrack(trackId: string): Promise<void> {
     })
     .returning({ id: catalogEntities.id });
 
-  await getDb().insert(tracks).values({
-    id: trackId,
-    title: 'Open Road',
-    artistName: 'Free Artist',
-    artistId: artist?.id ?? '',
-    duration: 210,
-    albumName: 'Open Album',
-    source: 'cc',
-    status: 'ready',
-    isExplicit: false,
-    isAvailable: true,
-  });
+  await getDb()
+    .insert(tracks)
+    .values({
+      id: trackId,
+      title: 'Open Road',
+      artistName: 'Free Artist',
+      artistId: artist?.id ?? '',
+      duration: 210,
+      albumName: 'Open Album',
+      source: 'cc',
+      status: 'ready',
+      isExplicit: false,
+      isAvailable: true,
+    });
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -219,11 +223,13 @@ describe('getLyricsForTrack — line order survives the child table', () => {
     if (!row) throw new Error('expected a lyrics row');
 
     // Inserted 2, 0, 1 — so an unordered scan yields "third, first, second".
-    await getDb().insert(lyricsLines).values([
-      { lyricsId: row.id, position: 2, timeMs: 3000, text: 'third' },
-      { lyricsId: row.id, position: 0, timeMs: 1000, text: 'first' },
-      { lyricsId: row.id, position: 1, timeMs: 2000, text: 'second' },
-    ]);
+    await getDb()
+      .insert(lyricsLines)
+      .values([
+        { lyricsId: row.id, position: 2, timeMs: 3000, text: 'third' },
+        { lyricsId: row.id, position: 0, timeMs: 1000, text: 'first' },
+        { lyricsId: row.id, position: 1, timeMs: 2000, text: 'second' },
+      ]);
 
     const cached = await getLyricsForTrack(TRACK_ID, throwingProvider());
 
@@ -234,7 +240,7 @@ describe('getLyricsForTrack — line order survives the child table', () => {
     await seedTrack(TRACK_ID);
     await getLyricsForTrack(
       TRACK_ID,
-      makeProvider({ synced: false, lines: [{ timeMs: 0, text: 'v1' }], source: 'lrclib' })
+      makeProvider({ synced: false, lines: [{ timeMs: 0, text: 'v1' }], source: 'lrclib' }),
     );
 
     const [parent] = await getDb()
@@ -251,13 +257,19 @@ describe('getLyricsForTrack — line order survives the child table', () => {
   });
 });
 
-
 it('does not cache provider errors and can recover on the next request', async () => {
   const trackId = uuidv7();
   await seedTrack(trackId);
-  await expect(getLyricsForTrack(trackId, throwingProvider())).rejects.toThrow('provider should not be called');
+  await expect(getLyricsForTrack(trackId, throwingProvider())).rejects.toThrow(
+    'provider should not be called',
+  );
   expect(await lyricsCount(trackId)).toBe(0);
-  const provider = makeProvider({ synced: false, lines: [{ timeMs: 0, text: 'Recovered' }], plain: 'Recovered', source: 'lrclib' });
+  const provider = makeProvider({
+    synced: false,
+    lines: [{ timeMs: 0, text: 'Recovered' }],
+    plain: 'Recovered',
+    source: 'lrclib',
+  });
   expect(await getLyricsForTrack(trackId, provider)).toMatchObject({ plain: 'Recovered' });
   expect(provider.callCount).toBe(1);
   expect(await lyricsCount(trackId)).toBe(1);

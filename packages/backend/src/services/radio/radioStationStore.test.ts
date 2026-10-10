@@ -184,7 +184,11 @@ describe('readRadioStation / writeRadioStation / clearRadioStation', () => {
   });
 
   it('refuses an entry whose ownerKey does not match the caller', async () => {
-    const foreign = { ...createRadioStationState(IDENTITY), ownerKey: 'user:someone-else', page: 9 };
+    const foreign = {
+      ...createRadioStationState(IDENTITY),
+      ownerKey: 'user:someone-else',
+      page: 9,
+    };
     fakeRedis.entries.set(STATION_KEY, JSON.stringify(foreign));
 
     const state = await readRadioStation(IDENTITY);

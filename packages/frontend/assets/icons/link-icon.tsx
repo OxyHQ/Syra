@@ -3,7 +3,15 @@ import Svg, { Path } from 'react-native-svg';
 import { ViewStyle } from 'react-native';
 import { useTheme } from '@oxy.so/bloom/theme';
 
-export const LinkIcon = ({ color: colorProp, size = 24, style }: { color?: string; size?: number; style?: ViewStyle }) => {
+export const LinkIcon = ({
+  color: colorProp,
+  size = 24,
+  style,
+}: {
+  color?: string;
+  size?: number;
+  style?: ViewStyle;
+}) => {
   const theme = useTheme();
   const color = colorProp ?? theme.colors.icon;
   return (
@@ -15,4 +23,3 @@ export const LinkIcon = ({ color: colorProp, size = 24, style }: { color?: strin
     </Svg>
   );
 };
-

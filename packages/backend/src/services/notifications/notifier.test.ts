@@ -182,7 +182,8 @@ describe('notifyUser', () => {
 
   it('treats Oxy 409 duplicate as delivered, not as an error', async () => {
     globalThis.fetch = Object.assign(
-      async () => new Response(JSON.stringify({ error: 'Duplicate notification' }), { status: 409 }),
+      async () =>
+        new Response(JSON.stringify({ error: 'Duplicate notification' }), { status: 409 }),
       { preconnect: globalThis.fetch.preconnect },
     );
 

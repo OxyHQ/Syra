@@ -55,7 +55,10 @@ interface SkipButtonProps {
   tint?: string;
 }
 
-const SKIP_ICONS: Record<SkipDirection, Record<number, keyof typeof MaterialCommunityIcons.glyphMap>> = {
+const SKIP_ICONS: Record<
+  SkipDirection,
+  Record<number, keyof typeof MaterialCommunityIcons.glyphMap>
+> = {
   back: { 15: 'rewind-15', 30: 'rewind-30' },
   forward: { 15: 'fast-forward-15', 30: 'fast-forward-30' },
 };
@@ -63,10 +66,16 @@ const SKIP_ICONS: Record<SkipDirection, Record<number, keyof typeof MaterialComm
 /**
  * Relative skip control (±15s / ±30s) wired to the player store's `skipBy`.
  */
-export const SkipButton: React.FC<SkipButtonProps> = ({ direction, seconds = direction === 'back' ? 15 : 30, size = 24, tint }) => {
+export const SkipButton: React.FC<SkipButtonProps> = ({
+  direction,
+  seconds = direction === 'back' ? 15 : 30,
+  size = 24,
+  tint,
+}) => {
   const theme = useTheme();
   const skipBy = usePlayerStore((s) => s.skipBy);
-  const icon = SKIP_ICONS[direction][seconds] ?? (direction === 'back' ? 'rewind-15' : 'fast-forward-30');
+  const icon =
+    SKIP_ICONS[direction][seconds] ?? (direction === 'back' ? 'rewind-15' : 'fast-forward-30');
   const delta = direction === 'back' ? -seconds : seconds;
 
   return (

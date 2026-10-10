@@ -65,7 +65,7 @@ export function toDevice(row: DeviceRow): Device {
  */
 export async function upsertDevice(
   oxyUserId: string,
-  input: RegisterDeviceInput
+  input: RegisterDeviceInput,
 ): Promise<DeviceRow> {
   const values = {
     name: input.name,
@@ -111,7 +111,7 @@ export async function touchDevice(oxyUserId: string, deviceId: string): Promise<
 export async function setDeviceActive(
   oxyUserId: string,
   deviceId: string,
-  isActive: boolean
+  isActive: boolean,
 ): Promise<void> {
   await getDb()
     .update(devices)

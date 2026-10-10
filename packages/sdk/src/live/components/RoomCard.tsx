@@ -152,13 +152,15 @@ export const RoomCard: React.FC<RoomCardProps> = ({
   // canonical API-owned `name.displayName` from the Oxy user DTO (never a
   // recompute from name parts), then a not-yet-resolved userId fallback.
   const hostProfileName = hostProfile?.name;
-  const hostName = hostNameProp
-    ?? (hostProfile?.username
+  const hostName =
+    hostNameProp ??
+    (hostProfile?.username
       ? `@${hostProfile.username}`
-      : (typeof hostProfileName === 'object' ? hostProfileName?.displayName : null)
-        || room.host?.slice(0, 10)
-        || 'Unknown');
-  const hostAvatarUri = hostAvatarUriProp ?? getAvatarUrl(hostProfile, oxyServices, getCachedFileDownloadUrlSync);
+      : (typeof hostProfileName === 'object' ? hostProfileName?.displayName : null) ||
+        room.host?.slice(0, 10) ||
+        'Unknown');
+  const hostAvatarUri =
+    hostAvatarUriProp ?? getAvatarUrl(hostProfile, oxyServices, getCachedFileDownloadUrlSync);
 
   // Speaker faces only earn their space on the featured (live) card.
   const speakerIds = useMemo(() => {
@@ -298,7 +300,9 @@ export const RoomCard: React.FC<RoomCardProps> = ({
         </Text>
       </View>
 
-      {onSave && <SaveAction onSave={onSave} isSaved={isSaved} isScheduled={isScheduled} theme={theme} />}
+      {onSave && (
+        <SaveAction onSave={onSave} isSaved={isSaved} isScheduled={isScheduled} theme={theme} />
+      )}
       {onMenuPress && <MenuAction onMenuPress={onMenuPress} theme={theme} />}
     </TouchableOpacity>
   );
@@ -340,8 +344,12 @@ function SaveAction({
   theme: LiveTheme;
 }) {
   const icon = isScheduled
-    ? (isSaved ? 'bell' : 'bell-outline')
-    : (isSaved ? 'bookmark' : 'bookmark-outline');
+    ? isSaved
+      ? 'bell'
+      : 'bell-outline'
+    : isSaved
+      ? 'bookmark'
+      : 'bookmark-outline';
 
   return (
     <TouchableOpacity

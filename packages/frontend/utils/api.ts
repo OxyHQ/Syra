@@ -16,7 +16,6 @@ const API_CONFIG = {
 const syraApiClient = oxyServices.createLinkedClient({ baseURL: API_CONFIG.baseURL });
 const authenticatedClient: OxyServices['http'] = syraApiClient.client;
 
-
 export interface ApiRequestOptions {
   cache?: boolean;
   cacheTTL?: number;
@@ -58,12 +57,20 @@ export const api = {
     return { data };
   },
 
-  async post<T = unknown>(endpoint: string, body?: unknown, options?: ApiRequestOptions): Promise<{ data: T }> {
+  async post<T = unknown>(
+    endpoint: string,
+    body?: unknown,
+    options?: ApiRequestOptions,
+  ): Promise<{ data: T }> {
     const data = await authenticatedClient.post<T>(endpoint, body, options);
     return { data };
   },
 
-  async put<T = unknown>(endpoint: string, body?: unknown, options?: ApiRequestOptions): Promise<{ data: T }> {
+  async put<T = unknown>(
+    endpoint: string,
+    body?: unknown,
+    options?: ApiRequestOptions,
+  ): Promise<{ data: T }> {
     const data = await authenticatedClient.put<T>(endpoint, body, options);
     return { data };
   },
@@ -73,7 +80,11 @@ export const api = {
     return { data };
   },
 
-  async patch<T = unknown>(endpoint: string, body?: unknown, options?: ApiRequestOptions): Promise<{ data: T }> {
+  async patch<T = unknown>(
+    endpoint: string,
+    body?: unknown,
+    options?: ApiRequestOptions,
+  ): Promise<{ data: T }> {
     const data = await authenticatedClient.patch<T>(endpoint, body, options);
     return { data };
   },
@@ -88,7 +99,11 @@ export const api = {
 };
 
 export class ApiError extends Error {
-  constructor(message: string, public status?: number, public response?: unknown) {
+  constructor(
+    message: string,
+    public status?: number,
+    public response?: unknown,
+  ) {
     super(message);
     this.name = 'ApiError';
   }
@@ -124,16 +139,20 @@ export function isAuthError(error: unknown): boolean {
 export function webAlert(
   title: string,
   message: string,
-  buttons?: Array<{ text: string; style?: 'default' | 'cancel' | 'destructive'; onPress?: () => void }>
+  buttons?: Array<{
+    text: string;
+    style?: 'default' | 'cancel' | 'destructive';
+    onPress?: () => void;
+  }>,
 ) {
   if (Platform.OS === 'web') {
     if (buttons && buttons.length > 1) {
       const result = window.confirm(`${title}\n\n${message}`);
       if (result) {
-        const confirmButton = buttons.find(btn => btn.style !== 'cancel');
+        const confirmButton = buttons.find((btn) => btn.style !== 'cancel');
         confirmButton?.onPress?.();
       } else {
-        const cancelButton = buttons.find(btn => btn.style === 'cancel');
+        const cancelButton = buttons.find((btn) => btn.style === 'cancel');
         cancelButton?.onPress?.();
       }
     } else {
@@ -179,7 +198,7 @@ export function getApiOrigin(): string {
     const match = API_CONFIG.baseURL.match(/^(https?:\/\/)([^\/:]+)(:\d+)?/);
     if (match) {
       const [, protocol, hostname] = match;
-      return (hostname === 'localhost' || hostname === '127.0.0.1')
+      return hostname === 'localhost' || hostname === '127.0.0.1'
         ? `${protocol}${hostname}:4120`
         : match[0] || `${protocol}${hostname}`;
     }

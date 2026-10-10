@@ -41,7 +41,7 @@ export const PADDING = {
   large: SPACING.xl,
   /** Extra large padding: 32px */
   xlarge: SPACING['2xl'],
-  
+
   // Horizontal/vertical specific
   horizontal: {
     small: SPACING.sm,
@@ -136,8 +136,7 @@ export const COMPONENT_SPACING = {
   },
 } as const;
 
-export type SpacingValue = typeof SPACING[keyof typeof SPACING];
+export type SpacingValue = (typeof SPACING)[keyof typeof SPACING];
 export type PaddingPreset = keyof typeof PADDING;
 export type GapPreset = keyof typeof GAP;
 export type MarginPreset = keyof typeof MARGIN;
-

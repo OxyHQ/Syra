@@ -1,10 +1,7 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { getDb } from '../../db/postgres';
 import { catalogEntities, trackFingerprints, tracks } from '../../db/schema/catalog';
-import {
-  findAttestationUploader,
-  findContributedTrackIds,
-} from '../../db/creators/attestations';
+import { findAttestationUploader, findContributedTrackIds } from '../../db/creators/attestations';
 import {
   deleteUploads,
   findFingerprintCandidates,
@@ -102,7 +99,13 @@ export interface LockerPurgeResult {
  */
 export type StrikeOutcome =
   | { applied: true; against: 'artist'; artistId: string; strikeCount: number; terminated: boolean }
-  | { applied: true; against: 'contributor'; oxyUserId: string; strikeCount: number; terminated: boolean }
+  | {
+      applied: true;
+      against: 'contributor';
+      oxyUserId: string;
+      strikeCount: number;
+      terminated: boolean;
+    }
   | {
       applied: false;
       /**
@@ -153,10 +156,7 @@ export interface TakeDownTrackResult {
  * notifier swallows its own failures by design; a notice that cannot be sent must
  * never leave an infringing file in place.
  */
-async function announceRemoval(
-  notice: LockerRemovalNotice,
-  deps: LockerPurgeDeps,
-): Promise<void> {
+async function announceRemoval(notice: LockerRemovalNotice, deps: LockerPurgeDeps): Promise<void> {
   if (deps.notifyRemoval) {
     await deps.notifyRemoval(notice);
     return;
@@ -170,11 +170,12 @@ async function announceRemoval(
     entityId: `${notice.cause}:${notice.ownerOxyUserId}:${Date.now()}`,
     entityType: 'upload',
     title: `${notice.fileCount} ${plural} removed from your library`,
-    message: notice.cause === 'termination'
-      ? `${notice.fileCount} ${plural} were removed and your account can no longer publish ` +
-        'to the public catalogue, following repeated copyright complaints.'
-      : `${notice.fileCount} ${plural} were removed from your library after a copyright ` +
-        'complaint about that recording.',
+    message:
+      notice.cause === 'termination'
+        ? `${notice.fileCount} ${plural} were removed and your account can no longer publish ` +
+          'to the public catalogue, following repeated copyright complaints.'
+        : `${notice.fileCount} ${plural} were removed from your library after a copyright ` +
+          'complaint about that recording.',
     data: { cause: notice.cause, fileCount: notice.fileCount },
     coalesceGroupId: `upload-removed:${notice.ownerOxyUserId}`,
   });
@@ -262,8 +263,8 @@ export async function deleteUploadStoredObjects(
      */
     logger.warn(
       `[Takedown] Could not scope an HLS directory to upload ${upload.id} — ` +
-      'its segments may be orphaned. Recorded keys: ' +
-      `${recordedObjectKeys(upload).join(', ') || '(none)'}`,
+        'its segments may be orphaned. Recorded keys: ' +
+        `${recordedObjectKeys(upload).join(', ') || '(none)'}`,
     );
   }
 
@@ -308,8 +309,8 @@ async function acousticMatches(
      */
     logger.warn(
       `[Takedown] No acoustic index for track ${trackId} — the locker purge could ` +
-      'match byte-identical copies ONLY. A re-encode of this recording will survive ' +
-      'in any locker holding one.',
+        'match byte-identical copies ONLY. A re-encode of this recording will survive ' +
+        'in any locker holding one.',
     );
     return { matches: [], available: false };
   }
@@ -367,7 +368,10 @@ export async function purgeLockerCopiesOfTrack(
   );
 
   const doomed: UploadStorageRef[] = [...linked, ...byHash];
-  const acoustic = await acousticMatches(trackId, doomed.map((upload) => upload.id));
+  const acoustic = await acousticMatches(
+    trackId,
+    doomed.map((upload) => upload.id),
+  );
   doomed.push(...acoustic.matches);
 
   if (doomed.length === 0) {
@@ -395,7 +399,7 @@ export async function purgeLockerCopiesOfTrack(
 
   logger.info(
     `[Takedown] Purged ${deletedCount} locker file(s) and ${objectsDeleted} stored ` +
-    `object(s) for track ${trackId} across ${affectedOwnerIds.length} owner(s)`,
+      `object(s) for track ${trackId} across ${affectedOwnerIds.length} owner(s)`,
   );
 
   return {
@@ -445,8 +449,8 @@ async function resolveResponsible(track: { id: string; artistId: string }): Prom
     .where(
       and(
         eq(catalogEntities.ownerOxyUserId, uploaderOxyUserId),
-        eq(catalogEntities.type, 'artist')
-      )
+        eq(catalogEntities.type, 'artist'),
+      ),
     )
     .limit(1);
 
@@ -513,8 +517,8 @@ async function applyContributorTermination(
 
   logger.info(
     `[Takedown] Terminated contributor ${oxyUserId}: ${contributedTrackIds.length} ` +
-    `contributed track(s) removed, ${deletedCount} locker file(s) and ` +
-    `${objectsDeleted} stored object(s) purged`,
+      `contributed track(s) removed, ${deletedCount} locker file(s) and ` +
+      `${objectsDeleted} stored object(s) purged`,
   );
 
   return {

@@ -81,7 +81,14 @@ export const PROTECTED_COLUMNS_BY_TABLE = {
    * and the hand-written `toUploadTrackDto` allowlist is the guard for both
    * verticals. See `schema/creators.ts`'s file-level doc comment.
    */
-  user_uploads: ['rawTagsFormat', 'rawTagsJson', 'rawTagsTruncated', 'rawTagsOriginalByteLength', 'fingerprint', 'sha256'],
+  user_uploads: [
+    'rawTagsFormat',
+    'rawTagsJson',
+    'rawTagsTruncated',
+    'rawTagsOriginalByteLength',
+    'fingerprint',
+    'sha256',
+  ],
   /**
    * The same `select: false` `rawTags` block, duplicated onto the
    * attestation because the upload can be deleted and the evidence for a
@@ -90,7 +97,14 @@ export const PROTECTED_COLUMNS_BY_TABLE = {
    * person, held as legal evidence; no client has ever been served them and
    * none should be.
    */
-  contribution_attestations: ['rawTagsFormat', 'rawTagsJson', 'rawTagsTruncated', 'rawTagsOriginalByteLength', 'ip', 'userAgent'],
+  contribution_attestations: [
+    'rawTagsFormat',
+    'rawTagsJson',
+    'rawTagsTruncated',
+    'rawTagsOriginalByteLength',
+    'ip',
+    'userAgent',
+  ],
   /**
    * The four internal stream credentials `PUBLIC_ROOM_FIELDS`
    * (`routes/rooms.routes.ts:70-104`) exists to withhold. Mongoose never

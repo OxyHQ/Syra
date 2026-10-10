@@ -46,7 +46,7 @@ function fakeFetchOf(body: string) {
 }
 
 async function makeCoverlessPodcast(
-  overrides: Partial<typeof podcasts.$inferInsert> = {}
+  overrides: Partial<typeof podcasts.$inferInsert> = {},
 ): Promise<string> {
   const [row] = await getDb()
     .insert(podcasts)
@@ -91,7 +91,12 @@ describe('backfillPodcastCovers', () => {
     setCatalogImageMirrorImplementationForTests(async () => ({
       imageId: REHOSTED_IMAGE_ID,
       imageSizes: {
-        large: { id: REHOSTED_IMAGE_ID, url: `/api/images/${REHOSTED_IMAGE_ID}`, width: 640, height: 640 },
+        large: {
+          id: REHOSTED_IMAGE_ID,
+          url: `/api/images/${REHOSTED_IMAGE_ID}`,
+          width: 640,
+          height: 640,
+        },
       },
       primaryColor: '#abcdef',
       secondaryColor: '#fedcba',
@@ -174,7 +179,10 @@ describe('backfillPodcastCovers', () => {
 
     const podcastId = await makeCoverlessPodcast();
 
-    const stats = await backfillPodcastCovers({ dryRun: true, fetch: fakeFetchOf(feed(SHOW_COVER)) });
+    const stats = await backfillPodcastCovers({
+      dryRun: true,
+      fetch: fakeFetchOf(feed(SHOW_COVER)),
+    });
 
     expect(stats.podcastsScanned).toBe(1);
     expect(stats.podcastsFixed).toBe(0);
@@ -188,7 +196,12 @@ describe('backfillPodcastCovers', () => {
     setCatalogImageMirrorImplementationForTests(async () => ({
       imageId: REHOSTED_IMAGE_ID,
       imageSizes: {
-        large: { id: REHOSTED_IMAGE_ID, url: `/api/images/${REHOSTED_IMAGE_ID}`, width: 640, height: 640 },
+        large: {
+          id: REHOSTED_IMAGE_ID,
+          url: `/api/images/${REHOSTED_IMAGE_ID}`,
+          width: 640,
+          height: 640,
+        },
       },
       sourceUrlHash: 'u',
       sourceContentHash: 'c',

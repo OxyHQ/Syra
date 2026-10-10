@@ -52,10 +52,7 @@ interface ResolvedRefs {
   missing: PlayableRef[];
 }
 
-async function resolvePlayableRefs(
-  refs: PlayableRef[],
-  userId: string,
-): Promise<ResolvedRefs> {
+async function resolvePlayableRefs(refs: PlayableRef[], userId: string): Promise<ResolvedRefs> {
   const trackIds = [...new Set(refs.filter((ref) => ref.kind === 'track').map((ref) => ref.id))];
   const uploadIds = [...new Set(refs.filter((ref) => ref.kind === 'upload').map((ref) => ref.id))];
 
@@ -149,9 +146,10 @@ export const getQueueHandler = async (req: AuthRequest, res: Response, next: Nex
     // Split tracks into previous, current, and next
     const previous: typeof queue.tracks = [];
     const next: typeof queue.tracks = [];
-    const currentTrack = queue.current >= 0 && queue.current < queue.tracks.length
-      ? queue.tracks[queue.current]
-      : null;
+    const currentTrack =
+      queue.current >= 0 && queue.current < queue.tracks.length
+        ? queue.tracks[queue.current]
+        : null;
 
     if (queue.current >= 0) {
       previous.push(...queue.tracks.slice(0, queue.current));

@@ -138,7 +138,7 @@ async function canEditPlaylist(playlistId: string, userId: string): Promise<bool
  */
 async function readablePlaylist(
   playlistId: string,
-  userId?: string
+  userId?: string,
 ): Promise<PlaylistRow | 'forbidden'> {
   const playlist = await findPlaylistById(playlistId);
   if (!playlist) return 'forbidden';
@@ -165,7 +165,7 @@ export const getUserPlaylists = async (req: AuthRequest, res: Response, next: Ne
     const rows = await findPlaylistsForUser(userId);
     const formattedPlaylists = await toPlaylistDtos(
       rows,
-      await findCollaboratorsForPlaylists(rows.map((row) => row.id))
+      await findCollaboratorsForPlaylists(rows.map((row) => row.id)),
     );
 
     res.json({
@@ -173,7 +173,8 @@ export const getUserPlaylists = async (req: AuthRequest, res: Response, next: Ne
       total: formattedPlaylists.length,
     });
   } catch (error) {
-    if (error instanceof PlaylistAccessError) return res.status(error.status).json({ error: error.message, ...error.details });
+    if (error instanceof PlaylistAccessError)
+      return res.status(error.status).json({ error: error.message, ...error.details });
     next(error);
   }
 };
@@ -191,7 +192,8 @@ export const getPlaylistById = async (req: AuthRequest, res: Response, next: Nex
 
     res.json(await toPlaylistResponse(playlist));
   } catch (error) {
-    if (error instanceof PlaylistAccessError) return res.status(error.status).json({ error: error.message, ...error.details });
+    if (error instanceof PlaylistAccessError)
+      return res.status(error.status).json({ error: error.message, ...error.details });
     next(error);
   }
 };
@@ -216,7 +218,7 @@ export const getPlaylistTracks = async (req: AuthRequest, res: Response, next: N
       (await findPlayableTracks(membership.map((entry) => entry.trackId))).map((row) => [
         row.id,
         row,
-      ])
+      ]),
     );
 
     const ordered = membership.flatMap((entry) => {
@@ -238,7 +240,8 @@ export const getPlaylistTracks = async (req: AuthRequest, res: Response, next: N
       total: ordered.length,
     });
   } catch (error) {
-    if (error instanceof PlaylistAccessError) return res.status(error.status).json({ error: error.message, ...error.details });
+    if (error instanceof PlaylistAccessError)
+      return res.status(error.status).json({ error: error.message, ...error.details });
     next(error);
   }
 };
@@ -247,7 +250,11 @@ export const getPlaylistTracks = async (req: AuthRequest, res: Response, next: N
  * POST /api/playlists
  * Create playlist (requires auth)
  */
-export const createPlaylist = async (req: PlaylistAuthRequest, res: Response, next: NextFunction) => {
+export const createPlaylist = async (
+  req: PlaylistAuthRequest,
+  res: Response,
+  next: NextFunction,
+) => {
   try {
     const userId = req.user?.id;
 
@@ -301,14 +308,15 @@ export const createPlaylist = async (req: PlaylistAuthRequest, res: Response, ne
 
     res.status(201).json(await toPlaylistResponse(created));
   } catch (error) {
-    if (error instanceof PlaylistAccessError) return res.status(error.status).json({ error: error.message, ...error.details });
+    if (error instanceof PlaylistAccessError)
+      return res.status(error.status).json({ error: error.message, ...error.details });
     next(error);
   }
 };
 
 /** Insert the row, translating the one foreign key a client can break. */
 async function insertPlaylist(
-  values: typeof playlists.$inferInsert
+  values: typeof playlists.$inferInsert,
 ): Promise<PlaylistRow | 'unknown-cover-art'> {
   try {
     const [created] = await getDb().insert(playlists).values(values).returning();
@@ -391,7 +399,8 @@ export const updatePlaylist = async (req: AuthRequest, res: Response, next: Next
 
     res.json(await toPlaylistResponse(updated));
   } catch (error) {
-    if (error instanceof PlaylistAccessError) return res.status(error.status).json({ error: error.message, ...error.details });
+    if (error instanceof PlaylistAccessError)
+      return res.status(error.status).json({ error: error.message, ...error.details });
     next(error);
   }
 };
@@ -399,7 +408,7 @@ export const updatePlaylist = async (req: AuthRequest, res: Response, next: Next
 /** Apply the update, translating the one foreign key a client can break. */
 async function applyPlaylistUpdate(
   id: string,
-  updates: Partial<typeof playlists.$inferInsert>
+  updates: Partial<typeof playlists.$inferInsert>,
 ): Promise<PlaylistRow | undefined | 'unknown-cover-art'> {
   try {
     const [updated] = await getDb()
@@ -446,7 +455,8 @@ export const deletePlaylist = async (req: AuthRequest, res: Response, next: Next
 
     res.status(204).send();
   } catch (error) {
-    if (error instanceof PlaylistAccessError) return res.status(error.status).json({ error: error.message, ...error.details });
+    if (error instanceof PlaylistAccessError)
+      return res.status(error.status).json({ error: error.message, ...error.details });
     next(error);
   }
 };
@@ -501,8 +511,13 @@ export const addTracksToPlaylist = async (req: AuthRequest, res: Response, next:
         .orderBy(playlistTracks.position);
 
       const alreadyPresent = new Set(existing.map((entry) => entry.trackId));
-      const newTrackIds = [...new Set(validTrackIds.filter((trackId) => playable.has(trackId) && !alreadyPresent.has(trackId)))];
-      if (newTrackIds.length === 0) throw new PlaylistAccessError(400, 'All tracks are already in the playlist');
+      const newTrackIds = [
+        ...new Set(
+          validTrackIds.filter((trackId) => playable.has(trackId) && !alreadyPresent.has(trackId)),
+        ),
+      ];
+      if (newTrackIds.length === 0)
+        throw new PlaylistAccessError(400, 'All tracks are already in the playlist');
 
       // Clamped into the playlist rather than used raw. The Mongo version
       // shifted by `$inc` from `position` verbatim, so a position past the end
@@ -529,7 +544,8 @@ export const addTracksToPlaylist = async (req: AuthRequest, res: Response, next:
       // contiguous on every path here, but nothing in the schema says so
       // (`playlist_tracks_position_check` only requires `>= 0`), and against a
       // gapped playlist a count-based offset lands on an occupied slot.
-      const nextFree = existing.reduce((highest, entry) => Math.max(highest, entry.position), -1) + 1;
+      const nextFree =
+        existing.reduce((highest, entry) => Math.max(highest, entry.position), -1) + 1;
 
       await tx.insert(playlistTracks).values(
         newTrackIds.map((trackId, index) => ({
@@ -538,12 +554,14 @@ export const addTracksToPlaylist = async (req: AuthRequest, res: Response, next:
           addedAt,
           addedBy: userId,
           position: nextFree + index,
-        }))
+        })),
       );
 
       await assignPlaylistTrackPositions(tx, id, ordered);
       await refreshPlaylistStats(tx, id);
-      await tx.insert(playlistActivity).values({ playlistId: id, actorOxyUserId: userId, action: 'tracks_added' });
+      await tx
+        .insert(playlistActivity)
+        .values({ playlistId: id, actorOxyUserId: userId, action: 'tracks_added' });
       return newTrackIds.length;
     });
 
@@ -552,7 +570,8 @@ export const addTracksToPlaylist = async (req: AuthRequest, res: Response, next:
       skipped: validTrackIds.length - added,
     });
   } catch (error) {
-    if (error instanceof PlaylistAccessError) return res.status(error.status).json({ error: error.message, ...error.details });
+    if (error instanceof PlaylistAccessError)
+      return res.status(error.status).json({ error: error.message, ...error.details });
     next(error);
   }
 };
@@ -561,7 +580,11 @@ export const addTracksToPlaylist = async (req: AuthRequest, res: Response, next:
  * DELETE /api/playlists/:id/tracks
  * Remove tracks from playlist (requires auth and edit permission)
  */
-export const removeTracksFromPlaylist = async (req: AuthRequest, res: Response, next: NextFunction) => {
+export const removeTracksFromPlaylist = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+) => {
   try {
     const id = getParam(req, 'id');
     const userId = req.user?.id;
@@ -606,10 +629,12 @@ export const removeTracksFromPlaylist = async (req: AuthRequest, res: Response, 
         await assignPlaylistTrackPositions(
           tx,
           id,
-          remaining.map((row) => row.trackId)
+          remaining.map((row) => row.trackId),
         );
         await refreshPlaylistStats(tx, id);
-        await tx.insert(playlistActivity).values({ playlistId: id, actorOxyUserId: userId, action: 'tracks_removed' });
+        await tx
+          .insert(playlistActivity)
+          .values({ playlistId: id, actorOxyUserId: userId, action: 'tracks_removed' });
       }
 
       return deleted.length;
@@ -617,7 +642,8 @@ export const removeTracksFromPlaylist = async (req: AuthRequest, res: Response, 
 
     res.json({ removed });
   } catch (error) {
-    if (error instanceof PlaylistAccessError) return res.status(error.status).json({ error: error.message, ...error.details });
+    if (error instanceof PlaylistAccessError)
+      return res.status(error.status).json({ error: error.message, ...error.details });
     next(error);
   }
 };
@@ -626,7 +652,11 @@ export const removeTracksFromPlaylist = async (req: AuthRequest, res: Response, 
  * PUT /api/playlists/:id/tracks/reorder
  * Reorder tracks in playlist (requires auth and edit permission)
  */
-export const reorderPlaylistTracks = async (req: AuthRequest, res: Response, next: NextFunction) => {
+export const reorderPlaylistTracks = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+) => {
   try {
     const id = getParam(req, 'id');
     const userId = req.user?.id;
@@ -648,22 +678,34 @@ export const reorderPlaylistTracks = async (req: AuthRequest, res: Response, nex
 
     const reordered = await getDb().transaction(async (tx) => {
       await lockPlaylistForEdit(tx, id, userId);
-      const entries = await tx.select({ trackId: playlistTracks.trackId }).from(playlistTracks)
-        .where(eq(playlistTracks.playlistId, id)).orderBy(playlistTracks.position);
+      const entries = await tx
+        .select({ trackId: playlistTracks.trackId })
+        .from(playlistTracks)
+        .where(eq(playlistTracks.playlistId, id))
+        .orderBy(playlistTracks.position);
       const present = entries.map((entry) => entry.trackId);
       const named = new Set(present);
-      if (!trackIds.every((trackId: unknown) => typeof trackId === 'string' && named.has(trackId))) {
-        throw new PlaylistAccessError(400, 'Some track IDs are not in the playlist', { invalidTrackIds: trackIds.filter((trackId: unknown) => typeof trackId !== 'string' || !named.has(trackId)) });
+      if (
+        !trackIds.every((trackId: unknown) => typeof trackId === 'string' && named.has(trackId))
+      ) {
+        throw new PlaylistAccessError(400, 'Some track IDs are not in the playlist', {
+          invalidTrackIds: trackIds.filter(
+            (trackId: unknown) => typeof trackId !== 'string' || !named.has(trackId),
+          ),
+        });
       }
       const requested = [...new Set<string>(trackIds)];
       const ordered = [...requested, ...present.filter((trackId) => !requested.includes(trackId))];
       await assignPlaylistTrackPositions(tx, id, ordered);
-      await tx.insert(playlistActivity).values({ playlistId: id, actorOxyUserId: userId, action: 'tracks_reordered' });
+      await tx
+        .insert(playlistActivity)
+        .values({ playlistId: id, actorOxyUserId: userId, action: 'tracks_reordered' });
       return requested.length;
     });
     res.json({ reordered });
   } catch (error) {
-    if (error instanceof PlaylistAccessError) return res.status(error.status).json({ error: error.message, ...error.details });
+    if (error instanceof PlaylistAccessError)
+      return res.status(error.status).json({ error: error.message, ...error.details });
     next(error);
   }
 };

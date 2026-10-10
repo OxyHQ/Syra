@@ -1,8 +1,8 @@
-import React from "react";
-import { View, StyleSheet, Pressable, Platform } from "react-native";
-import { useRouter } from "expo-router";
+import React from 'react';
+import { View, StyleSheet, Pressable, Platform } from 'react-native';
+import { useRouter } from 'expo-router';
 
-import { LogoIcon } from "@/assets/logo";
+import { LogoIcon } from '@/assets/logo';
 import { useTheme } from '@oxy.so/bloom/theme';
 
 interface LogoProps {
@@ -16,14 +16,14 @@ export const Logo = ({ color }: LogoProps) => {
 
   return (
     <Pressable
-      onPress={() => router.push("/")}
+      onPress={() => router.push('/')}
       style={({ pressed }) => [
         pressed ? { backgroundColor: `${logoColor}33` } : {},
         styles.container,
-      ]}>
+      ]}
+    >
       <View style={styles.logo}>
-        <LogoIcon style={styles.logoSvg} size={27}
-          color={logoColor} />
+        <LogoIcon style={styles.logoSvg} size={27} color={logoColor} />
       </View>
     </Pressable>
   );
@@ -31,8 +31,8 @@ export const Logo = ({ color }: LogoProps) => {
 
 const styles = StyleSheet.create({
   container: {
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
     width: 'auto',
     minWidth: 0,
     margin: 0,
@@ -48,6 +48,5 @@ const styles = StyleSheet.create({
     padding: 0,
     margin: 0,
   },
-  logoSvg: {
-  },
+  logoSvg: {},
 });

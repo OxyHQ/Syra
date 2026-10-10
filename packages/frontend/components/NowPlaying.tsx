@@ -34,13 +34,13 @@ export const NowPlaying: React.FC = () => {
   const theme = useTheme();
   const router = useRouter();
   const isDesktop = useMediaQuery({ minWidth: 1024 });
-  const setNowPlayingVisible = useUIStore(s => s.setNowPlayingVisible);
-  const fullscreenPanel = useUIStore(s => s.fullscreenPanel);
-  const toggleFullscreen = useUIStore(s => s.toggleFullscreen);
-  const currentTrack = usePlayerStore(s => s.currentTrack);
-  const currentEpisode = usePlayerStore(s => s.currentEpisode);
-  const playFromQueue = usePlayerStore(s => s.playFromQueue);
-  const queue = useQueueStore(s => s.queue);
+  const setNowPlayingVisible = useUIStore((s) => s.setNowPlayingVisible);
+  const fullscreenPanel = useUIStore((s) => s.fullscreenPanel);
+  const toggleFullscreen = useUIStore((s) => s.toggleFullscreen);
+  const currentTrack = usePlayerStore((s) => s.currentTrack);
+  const currentEpisode = usePlayerStore((s) => s.currentEpisode);
+  const playFromQueue = usePlayerStore((s) => s.playFromQueue);
+  const queue = useQueueStore((s) => s.queue);
   const { isTrackLiked } = useLibrary();
   const toggleLike = useToggleLikeTrack();
   // Liking, lyrics and artist pages are CATALOG features: they address the
@@ -61,19 +61,23 @@ export const NowPlaying: React.FC = () => {
       if (currentTrack) {
         try {
           const promises: Promise<void>[] = [];
-          
+
           if (currentTrack.albumId) {
-            promises.push(musicService.getAlbumById(currentTrack.albumId).then((data) => {
-              setAlbum(data);
-            }));
+            promises.push(
+              musicService.getAlbumById(currentTrack.albumId).then((data) => {
+                setAlbum(data);
+              }),
+            );
           }
-          
+
           if (currentTrack.artistId) {
-            promises.push(musicService.getArtistById(currentTrack.artistId).then((data) => {
-              setArtist(data);
-            }));
+            promises.push(
+              musicService.getArtistById(currentTrack.artistId).then((data) => {
+                setArtist(data);
+              }),
+            );
           }
-          
+
           await Promise.all(promises);
         } catch (error) {
           console.error('[NowPlaying] Error fetching details:', error);
@@ -96,7 +100,12 @@ export const NowPlaying: React.FC = () => {
 
   // Use album cover or artist image as background
   const backgroundImage =
-    pickCatalogImageUrl(currentTrack?.images, currentTrack?.coverArt, 'hero', currentTrack?.coverArtSizes) ||
+    pickCatalogImageUrl(
+      currentTrack?.images,
+      currentTrack?.coverArt,
+      'hero',
+      currentTrack?.coverArtSizes,
+    ) ||
     pickCatalogImageUrl(undefined, album?.coverArt, 'hero', album?.coverArtSizes) ||
     pickCatalogImageUrl(artist?.images, artist?.image, 'hero', artist?.imageSizes);
 
@@ -117,152 +126,168 @@ export const NowPlaying: React.FC = () => {
   return (
     <View style={styles.container}>
       <View style={styles.wrapper}>
-          {/* Header with buttons */}
-          <View style={styles.header}>
-            <View style={styles.headerButtons}>
-              {isCatalogTrack ? <Pressable onPress={() => setShowTrackActions(true)} style={styles.headerButton} accessibilityRole="button" accessibilityLabel={t('listener.actions')}><Ionicons name="ellipsis-horizontal" size={20} color="#fff" /></Pressable> : null}
-              {/* Wrapped so the cast glyph gets the same translucent circle as
-                  its sibling header buttons (readability over the artwork). */}
-              <View style={styles.headerButton}>
-                <CastButton size={20} color="#fff" />
-              </View>
+        {/* Header with buttons */}
+        <View style={styles.header}>
+          <View style={styles.headerButtons}>
+            {isCatalogTrack ? (
               <Pressable
-                onPress={() => toggleFullscreen('nowPlaying')}
+                onPress={() => setShowTrackActions(true)}
                 style={styles.headerButton}
+                accessibilityRole="button"
+                accessibilityLabel={t('listener.actions')}
               >
-                <Ionicons
-                  name={isFullscreen ? 'contract' : 'expand'}
-                  size={20}
-                  color="#fff"
-                />
+                <Ionicons name="ellipsis-horizontal" size={20} color="#fff" />
               </Pressable>
-              {!isFullscreen && (
-                <Pressable
-                  onPress={() => setNowPlayingVisible(false)}
-                  style={styles.headerButton}
-                >
-                  <Octicons
-                    name="sidebar-collapse"
-                    size={20}
-                    color="#fff"
-                  />
-                </Pressable>
-              )}
+            ) : null}
+            {/* Wrapped so the cast glyph gets the same translucent circle as
+                  its sibling header buttons (readability over the artwork). */}
+            <View style={styles.headerButton}>
+              <CastButton size={20} color="#fff" />
             </View>
+            <Pressable onPress={() => toggleFullscreen('nowPlaying')} style={styles.headerButton}>
+              <Ionicons name={isFullscreen ? 'contract' : 'expand'} size={20} color="#fff" />
+            </Pressable>
+            {!isFullscreen && (
+              <Pressable onPress={() => setNowPlayingVisible(false)} style={styles.headerButton}>
+                <Octicons name="sidebar-collapse" size={20} color="#fff" />
+              </Pressable>
+            )}
           </View>
+        </View>
 
-          {/* Fixed Background Image */}
-          {backgroundImage ? (
-            <View style={styles.backgroundContainer}>
-              <ExpoImage
-                source={{ uri: backgroundImage }}
-                style={styles.backgroundImage}
-                contentFit="cover"
-              />
-              <LinearGradient
-                colors={['transparent', 'rgba(0,0,0,0.8)']}
-                locations={[0.4, 1]}
-                style={styles.gradientOverlay}
-              />
-            </View>
-          ) : (
-            <View className="bg-surface" style={styles.backgroundPlaceholder}>
-              <Ionicons name="musical-notes" size={80} color={theme.colors.textSecondary} />
-            </View>
-          )}
+        {/* Fixed Background Image */}
+        {backgroundImage ? (
+          <View style={styles.backgroundContainer}>
+            <ExpoImage
+              source={{ uri: backgroundImage }}
+              style={styles.backgroundImage}
+              contentFit="cover"
+            />
+            <LinearGradient
+              colors={['transparent', 'rgba(0,0,0,0.8)']}
+              locations={[0.4, 1]}
+              style={styles.gradientOverlay}
+            />
+          </View>
+        ) : (
+          <View className="bg-surface" style={styles.backgroundPlaceholder}>
+            <Ionicons name="musical-notes" size={80} color={theme.colors.textSecondary} />
+          </View>
+        )}
 
-          {/* Scrollable Content Overlay */}
-          <ScrollView 
-            style={styles.scrollView} 
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.scrollContent}
-          >
-            {/* Spacer to push content down initially */}
-            <View style={styles.topSpacer} />
-            
-            {/* Now Playing Content */}
-            {currentTrack ? (
-              <View style={styles.nowPlayingContainer}>
-                {/* Track Info at Bottom */}
-                <View style={styles.trackInfoSection}>
-                  <View style={styles.trackInfoText}>
-                    <Text
-                      style={[styles.trackTitle, { color: '#fff' }]}
-                      numberOfLines={2}
-                    >
-                      {currentTrack.title}
-                    </Text>
-                    <View style={styles.artistPressable}>
-                      {/* A locker file with no resolved artist is valid, not
+        {/* Scrollable Content Overlay */}
+        <ScrollView
+          style={styles.scrollView}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {/* Spacer to push content down initially */}
+          <View style={styles.topSpacer} />
+
+          {/* Now Playing Content */}
+          {currentTrack ? (
+            <View style={styles.nowPlayingContainer}>
+              {/* Track Info at Bottom */}
+              <View style={styles.trackInfoSection}>
+                <View style={styles.trackInfoText}>
+                  <Text style={[styles.trackTitle, { color: '#fff' }]} numberOfLines={2}>
+                    {currentTrack.title}
+                  </Text>
+                  <View style={styles.artistPressable}>
+                    {/* A locker file with no resolved artist is valid, not
                           broken — it renders as unknown rather than blank. */}
-                      <TrackArtistLine
-                        track={currentTrack}
-                        style={[styles.trackArtist, { color: '#fff' }]}
-                        numberOfLines={1}
-                        fallback={t('uploads.unknownArtist')}
-                      />
-                    </View>
+                    <TrackArtistLine
+                      track={currentTrack}
+                      style={[styles.trackArtist, { color: '#fff' }]}
+                      numberOfLines={1}
+                      fallback={t('uploads.unknownArtist')}
+                    />
                   </View>
-                  {isCatalogTrack && (
-                    <Pressable
-                      onPress={handleToggleLike}
-                      style={styles.likeButton}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: isLiked }}
-                      accessibilityLabel={isLiked ? t('common.removeFromLiked') : t('common.saveToLiked')}
-                    >
-                      <Ionicons
-                        name={isLiked ? 'heart' : 'heart-outline'}
-                        size={28}
-                        color={isLiked ? theme.colors.primary : '#fff'}
-                      />
-                    </Pressable>
-                  )}
                 </View>
-
-                {/* About This Artist Card */}
-                {artist && (
-                  <View className="bg-popover" style={styles.card}>
-                    <View style={styles.cardHeader}>
-                      <Text className="text-foreground" style={styles.cardTitle}>{t('nowPlaying.aboutArtist')}</Text>
-                    </View>
-                    <Pressable
-                      onPress={() => router.push(`/p/${artist.id}`)}
-                      style={styles.artistCard}
-                    >
-                      {(artist.image || artist.images?.length) ? (
-                        <Avatar source={pickCatalogImageUrl(artist.images, artist.image, 'thumbnail', artist.imageSizes)} size={80} />
-                      ) : (
-                        <View className="bg-background" style={styles.artistImagePlaceholder}>
-                          <Ionicons name="person" size={40} color={theme.colors.textSecondary} />
-                        </View>
-                      )}
-                      <View style={styles.artistCardInfo}>
-                        <Text className="text-foreground" style={styles.artistCardName} numberOfLines={1}>
-                          {artist.name}
-                        </Text>
-                        {artist.genres && artist.genres.length > 0 && (
-                          <Text className="text-muted-foreground" style={styles.artistCardGenre} numberOfLines={1}>
-                            {artist.genres[0]}
-                          </Text>
-                        )}
-                      </View>
-                    </Pressable>
-                  </View>
-                )}
-
-                {/* Lyrics Card — catalog only: the `Lyrics` collection is keyed
-                    by track id, and a locker file has no row in it. */}
                 {isCatalogTrack && (
+                  <Pressable
+                    onPress={handleToggleLike}
+                    style={styles.likeButton}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isLiked }}
+                    accessibilityLabel={
+                      isLiked ? t('common.removeFromLiked') : t('common.saveToLiked')
+                    }
+                  >
+                    <Ionicons
+                      name={isLiked ? 'heart' : 'heart-outline'}
+                      size={28}
+                      color={isLiked ? theme.colors.primary : '#fff'}
+                    />
+                  </Pressable>
+                )}
+              </View>
+
+              {/* About This Artist Card */}
+              {artist && (
+                <View className="bg-popover" style={styles.card}>
+                  <View style={styles.cardHeader}>
+                    <Text className="text-foreground" style={styles.cardTitle}>
+                      {t('nowPlaying.aboutArtist')}
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={() => router.push(`/p/${artist.id}`)}
+                    style={styles.artistCard}
+                  >
+                    {artist.image || artist.images?.length ? (
+                      <Avatar
+                        source={pickCatalogImageUrl(
+                          artist.images,
+                          artist.image,
+                          'thumbnail',
+                          artist.imageSizes,
+                        )}
+                        size={80}
+                      />
+                    ) : (
+                      <View className="bg-background" style={styles.artistImagePlaceholder}>
+                        <Ionicons name="person" size={40} color={theme.colors.textSecondary} />
+                      </View>
+                    )}
+                    <View style={styles.artistCardInfo}>
+                      <Text
+                        className="text-foreground"
+                        style={styles.artistCardName}
+                        numberOfLines={1}
+                      >
+                        {artist.name}
+                      </Text>
+                      {artist.genres && artist.genres.length > 0 && (
+                        <Text
+                          className="text-muted-foreground"
+                          style={styles.artistCardGenre}
+                          numberOfLines={1}
+                        >
+                          {artist.genres[0]}
+                        </Text>
+                      )}
+                    </View>
+                  </Pressable>
+                </View>
+              )}
+
+              {/* Lyrics Card — catalog only: the `Lyrics` collection is keyed
+                    by track id, and a locker file has no row in it. */}
+              {isCatalogTrack && (
                 <View className="bg-popover" style={styles.card}>
                   <Pressable
                     style={styles.cardHeader}
                     onPress={() => setLyricsExpanded((v) => !v)}
                     accessibilityRole="button"
-                    accessibilityLabel={lyricsExpanded ? t('nowPlaying.hideLyrics') : t('nowPlaying.showLyrics')}
+                    accessibilityLabel={
+                      lyricsExpanded ? t('nowPlaying.hideLyrics') : t('nowPlaying.showLyrics')
+                    }
                   >
                     <View style={styles.cardHeaderRow}>
-                      <Text className="text-foreground" style={styles.cardTitle}>{t('nowPlaying.lyrics')}</Text>
+                      <Text className="text-foreground" style={styles.cardTitle}>
+                        {t('nowPlaying.lyrics')}
+                      </Text>
                       <Ionicons
                         name={lyricsExpanded ? 'chevron-up' : 'chevron-down'}
                         size={16}
@@ -270,76 +295,106 @@ export const NowPlaying: React.FC = () => {
                       />
                     </View>
                   </Pressable>
-                  {lyricsExpanded && (
-                    <LyricsView trackId={currentTrack.id} />
-                  )}
+                  {lyricsExpanded && <LyricsView trackId={currentTrack.id} />}
                 </View>
-                )}
+              )}
 
-                {isCatalogTrack && currentTrack ? <View className="bg-popover" style={styles.card}><TrackCredits track={currentTrack} /></View> : null}
-                {isCatalogTrack && currentTrack && showTrackActions ? <TrackActionsSheet visible onClose={() => setShowTrackActions(false)} track={currentTrack} /> : null}
-
-                {/* Next in Queue Card */}
+              {isCatalogTrack && currentTrack ? (
                 <View className="bg-popover" style={styles.card}>
-                  <View style={styles.cardHeader}>
-                    <Text className="text-foreground" style={styles.cardTitle}>{t('nowPlaying.nextInQueue')}</Text>
-                  </View>
-                  {nextTracks.length > 0 ? (
-                    <View style={styles.queueContent}>
-                      {nextTracks.slice(0, 5).map((track, index) => (
-                        <Pressable
-                          key={track.id}
-                          onPress={() => playFromQueue((queue?.current ?? -1) + index + 1)}
-                          style={styles.queueItem}
-                        >
-                          {(track.coverArt || track.images?.length) ? (
-                            <ExpoImage
-                              source={{ uri: pickCatalogImageUrl(track.images, track.coverArt, 'thumbnail', track.coverArtSizes) }}
-                              style={styles.queueItemImage}
-                              contentFit="cover"
-                            />
-                          ) : (
-                            <View className="bg-background" style={styles.queueItemImagePlaceholder}>
-                              <Ionicons name="musical-notes" size={16} color={theme.colors.textSecondary} />
-                            </View>
-                          )}
-                          <View style={styles.queueItemInfo}>
-                            <Text className="text-foreground" style={styles.queueItemTitle} numberOfLines={1}>
-                              {track.title}
-                            </Text>
-                            <TrackArtistLine
-                              track={track}
-                              className="text-muted-foreground"
-                              style={styles.queueItemArtist}
-                              numberOfLines={1}
-                              linked={false}
-                              fallback={track.artistName}
+                  <TrackCredits track={currentTrack} />
+                </View>
+              ) : null}
+              {isCatalogTrack && currentTrack && showTrackActions ? (
+                <TrackActionsSheet
+                  visible
+                  onClose={() => setShowTrackActions(false)}
+                  track={currentTrack}
+                />
+              ) : null}
+
+              {/* Next in Queue Card */}
+              <View className="bg-popover" style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <Text className="text-foreground" style={styles.cardTitle}>
+                    {t('nowPlaying.nextInQueue')}
+                  </Text>
+                </View>
+                {nextTracks.length > 0 ? (
+                  <View style={styles.queueContent}>
+                    {nextTracks.slice(0, 5).map((track, index) => (
+                      <Pressable
+                        key={track.id}
+                        onPress={() => playFromQueue((queue?.current ?? -1) + index + 1)}
+                        style={styles.queueItem}
+                      >
+                        {track.coverArt || track.images?.length ? (
+                          <ExpoImage
+                            source={{
+                              uri: pickCatalogImageUrl(
+                                track.images,
+                                track.coverArt,
+                                'thumbnail',
+                                track.coverArtSizes,
+                              ),
+                            }}
+                            style={styles.queueItemImage}
+                            contentFit="cover"
+                          />
+                        ) : (
+                          <View className="bg-background" style={styles.queueItemImagePlaceholder}>
+                            <Ionicons
+                              name="musical-notes"
+                              size={16}
+                              color={theme.colors.textSecondary}
                             />
                           </View>
-                        </Pressable>
-                      ))}
-                    </View>
-                  ) : (
-                    <View style={styles.emptyQueue}>
-                      <Text className="text-muted-foreground" style={styles.emptyQueueText}>
-                        {t('nowPlaying.queueEmpty')}
-                      </Text>
-                    </View>
-                  )}
-                </View>
+                        )}
+                        <View style={styles.queueItemInfo}>
+                          <Text
+                            className="text-foreground"
+                            style={styles.queueItemTitle}
+                            numberOfLines={1}
+                          >
+                            {track.title}
+                          </Text>
+                          <TrackArtistLine
+                            track={track}
+                            className="text-muted-foreground"
+                            style={styles.queueItemArtist}
+                            numberOfLines={1}
+                            linked={false}
+                            fallback={track.artistName}
+                          />
+                        </View>
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : (
+                  <View style={styles.emptyQueue}>
+                    <Text className="text-muted-foreground" style={styles.emptyQueueText}>
+                      {t('nowPlaying.queueEmpty')}
+                    </Text>
+                  </View>
+                )}
               </View>
-            ) : (
-              <View style={styles.placeholder}>
-                <Ionicons name="musical-notes-outline" size={48} color={theme.colors.textSecondary} style={styles.placeholderIcon} />
-                <Text className="text-muted-foreground" style={styles.placeholderText}>
-                  {t('nowPlaying.empty.title')}
-                </Text>
-                <Text className="text-muted-foreground" style={styles.placeholderSubtext}>
-                  {t('nowPlaying.empty.subtitle')}
-                </Text>
-              </View>
-            )}
-          </ScrollView>
+            </View>
+          ) : (
+            <View style={styles.placeholder}>
+              <Ionicons
+                name="musical-notes-outline"
+                size={48}
+                color={theme.colors.textSecondary}
+                style={styles.placeholderIcon}
+              />
+              <Text className="text-muted-foreground" style={styles.placeholderText}>
+                {t('nowPlaying.empty.title')}
+              </Text>
+              <Text className="text-muted-foreground" style={styles.placeholderSubtext}>
+                {t('nowPlaying.empty.subtitle')}
+              </Text>
+            </View>
+          )}
+        </ScrollView>
       </View>
     </View>
   );

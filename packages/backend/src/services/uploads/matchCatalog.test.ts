@@ -45,7 +45,7 @@ async function seedArtist(): Promise<string> {
 const SHA_OF_UPLOAD = 'a'.repeat(64);
 
 async function seedTrack(
-  overrides: Partial<typeof tracks.$inferInsert> = {}
+  overrides: Partial<typeof tracks.$inferInsert> = {},
 ): Promise<{ id: string }> {
   const [track] = await getDb()
     .insert(tracks)
@@ -65,7 +65,11 @@ async function seedTrack(
   return track;
 }
 
-async function seedFingerprint(trackId: string, values: number[], durationSec: number): Promise<void> {
+async function seedFingerprint(
+  trackId: string,
+  values: number[],
+  durationSec: number,
+): Promise<void> {
   await getDb().insert(trackFingerprints).values({
     trackId,
     fingerprint: values,
@@ -73,12 +77,15 @@ async function seedFingerprint(trackId: string, values: number[], durationSec: n
   });
 }
 
-async function setTrack(trackId: string, patch: Partial<typeof tracks.$inferInsert>): Promise<void> {
+async function setTrack(
+  trackId: string,
+  patch: Partial<typeof tracks.$inferInsert>,
+): Promise<void> {
   await getDb().update(tracks).set(patch).where(eq(tracks.id, trackId));
 }
 
 async function seedUpload(
-  overrides: Partial<typeof userUploads.$inferInsert> = {}
+  overrides: Partial<typeof userUploads.$inferInsert> = {},
 ): Promise<{ id: string }> {
   const [upload] = await getDb()
     .insert(userUploads)
@@ -160,13 +167,19 @@ describe('matchCatalog — tier 1, identical bytes', () => {
     await seedUpload({ ownerOxyUserId: OTHER_OWNER });
     // Same bytes, different owner: matching would both leak that they hold the
     // file and hand this uploader an id they may not read.
-    const result = await matchCatalog(candidate({ title: undefined, artistName: undefined }), OWNER);
+    const result = await matchCatalog(
+      candidate({ title: undefined, artistName: undefined }),
+      OWNER,
+    );
     expect(result).toEqual({ kind: 'none' });
   });
 
   it('ignores a soft-deleted locker row', async () => {
     await seedUpload({ deletedAt: new Date() });
-    const result = await matchCatalog(candidate({ title: undefined, artistName: undefined }), OWNER);
+    const result = await matchCatalog(
+      candidate({ title: undefined, artistName: undefined }),
+      OWNER,
+    );
     expect(result).toEqual({ kind: 'none' });
   });
 });
@@ -267,7 +280,12 @@ describe('matchCatalog — tier 3, fingerprint', () => {
     // fpcalc unavailable. The tier must not silently report "no match".
     await seedFingerprintedTrack(corpus.reference, 30);
     const result = await matchCatalog(
-      candidate({ sha256: 'b'.repeat(64), durationSec: 30, title: undefined, artistName: undefined }),
+      candidate({
+        sha256: 'b'.repeat(64),
+        durationSec: 30,
+        title: undefined,
+        artistName: undefined,
+      }),
       OWNER,
     );
     expect(result).toEqual({ kind: 'none' });

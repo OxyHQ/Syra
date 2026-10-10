@@ -65,7 +65,9 @@ function ShowDetail({ id }: { id: string }) {
       <ScreenContainer title="Show" onBack={() => router.back()}>
         <View className="py-16 items-center px-6">
           <Text className="text-base text-foreground mb-3">Couldn&apos;t load this podcast.</Text>
-          <Button onPress={() => refetch()} tone="neutral" appearance="outline">Retry</Button>
+          <Button onPress={() => refetch()} tone="neutral" appearance="outline">
+            Retry
+          </Button>
         </View>
       </ScreenContainer>
     );
@@ -111,7 +113,13 @@ function ShowDetail({ id }: { id: string }) {
       subtitle={podcast.author ?? undefined}
       onBack={() => router.back()}
       actions={
-        <Button size="sm" onPress={goToUpload} icon={<MaterialCommunityIcons name="upload" size={18} color="#fff" />} tone="accent" appearance="solid">
+        <Button
+          size="sm"
+          onPress={goToUpload}
+          icon={<MaterialCommunityIcons name="upload" size={18} color="#fff" />}
+          tone="accent"
+          appearance="solid"
+        >
           Upload
         </Button>
       }
@@ -123,7 +131,9 @@ function ShowDetail({ id }: { id: string }) {
             <StatusBadge status={podcast.status} />
             <Text className="text-xs text-muted-foreground capitalize">{podcast.type}</Text>
           </View>
-          <Text className="text-sm text-muted-foreground">{pluralEpisodes(podcast.episodeCount)}</Text>
+          <Text className="text-sm text-muted-foreground">
+            {pluralEpisodes(podcast.episodeCount)}
+          </Text>
           {podcast.description ? (
             <Text numberOfLines={3} className="text-sm text-foreground/80">
               {podcast.description}
@@ -144,7 +154,9 @@ function ShowDetail({ id }: { id: string }) {
         <View className="items-center py-12">
           <MaterialCommunityIcons name="playlist-music-outline" size={36} color="#9ca3af" />
           <Text className="text-sm text-muted-foreground mt-2 mb-4">No episodes yet.</Text>
-          <Button onPress={goToUpload} tone="neutral" appearance="outline">Upload your first episode</Button>
+          <Button onPress={goToUpload} tone="neutral" appearance="outline">
+            Upload your first episode
+          </Button>
         </View>
       ) : (
         <View>
@@ -169,7 +181,9 @@ function ShowDetail({ id }: { id: string }) {
                 disabled={isDeleting}
                 loading={isDeleting}
                 testID="delete-show-button"
-                icon={<MaterialCommunityIcons name="trash-can-outline" size={16} color="#fff" />} tone="danger" appearance="solid"
+                icon={<MaterialCommunityIcons name="trash-can-outline" size={16} color="#fff" />}
+                tone="danger"
+                appearance="solid"
               >
                 Delete show
               </Button>
@@ -195,9 +209,5 @@ function ShowDetail({ id }: { id: string }) {
 
 export default function ShowDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  return (
-    <SignInGate>
-      {id ? <ShowDetail id={id} /> : null}
-    </SignInGate>
-  );
+  return <SignInGate>{id ? <ShowDetail id={id} /> : null}</SignInGate>;
 }

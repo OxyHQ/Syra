@@ -19,7 +19,15 @@ import { getApiErrorMessage } from '@/utils/api';
 import { toast } from '@oxy.so/bloom/toast';
 import { cn } from '@/lib/utils';
 
-function AudioPicker({ file, onPick, disabled }: { file: TrackAudioFile | null; onPick: () => void; disabled: boolean }) {
+function AudioPicker({
+  file,
+  onPick,
+  disabled,
+}: {
+  file: TrackAudioFile | null;
+  onPick: () => void;
+  disabled: boolean;
+}) {
   const theme = useTheme();
   return (
     <View className="mb-4">
@@ -33,7 +41,11 @@ function AudioPicker({ file, onPick, disabled }: { file: TrackAudioFile | null; 
         )}
       >
         <View className="w-10 h-10 rounded-lg bg-primary/10 items-center justify-center">
-          <MaterialCommunityIcons name={file ? 'music-box' : 'cloud-upload-outline'} size={22} color={theme.colors.primary} />
+          <MaterialCommunityIcons
+            name={file ? 'music-box' : 'cloud-upload-outline'}
+            size={22}
+            color={theme.colors.primary}
+          />
         </View>
         <View className="flex-1">
           <Text numberOfLines={1} className="text-sm font-medium text-foreground">
@@ -62,7 +74,11 @@ function AlbumPicker({
   return (
     <View className="mb-4">
       <Text className="text-sm font-medium text-foreground mb-1.5">Album (optional)</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2">
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerClassName="gap-2"
+      >
         <Pressable
           onPress={() => onSelect(null)}
           disabled={disabled}
@@ -71,7 +87,11 @@ function AlbumPicker({
             !selectedId ? 'border-primary bg-primary/10' : 'border-border bg-surface',
           )}
         >
-          <Text className={cn('text-sm font-medium', !selectedId ? 'text-primary' : 'text-foreground')}>None</Text>
+          <Text
+            className={cn('text-sm font-medium', !selectedId ? 'text-primary' : 'text-foreground')}
+          >
+            None
+          </Text>
         </Pressable>
         {albums.map((album) => {
           const active = selectedId === album.id;
@@ -85,7 +105,10 @@ function AlbumPicker({
                 active ? 'border-primary bg-primary/10' : 'border-border bg-surface',
               )}
             >
-              <Text numberOfLines={1} className={cn('text-sm font-medium', active ? 'text-primary' : 'text-foreground')}>
+              <Text
+                numberOfLines={1}
+                className={cn('text-sm font-medium', active ? 'text-primary' : 'text-foreground')}
+              >
                 {album.title}
               </Text>
             </Pressable>
@@ -98,7 +121,9 @@ function AlbumPicker({
 
 function UploadProgress({ phase }: { phase: 'uploading' | 'processing' }) {
   const label =
-    phase === 'uploading' ? 'Uploading your track…' : 'Processing audio (transcoding for streaming)…';
+    phase === 'uploading'
+      ? 'Uploading your track…'
+      : 'Processing audio (transcoding for streaming)…';
   return (
     <View className="flex-row items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3 mb-4">
       <Loading />
@@ -122,7 +147,13 @@ function UploadDisabledNotice() {
   );
 }
 
-function UploadTrackForm({ artistId, uploadsDisabled }: { artistId: string; uploadsDisabled: boolean }) {
+function UploadTrackForm({
+  artistId,
+  uploadsDisabled,
+}: {
+  artistId: string;
+  uploadsDisabled: boolean;
+}) {
   const router = useRouter();
   const uploadTrack = useUploadTrack();
   const { data: albums } = useMyAlbums(artistId);
@@ -207,14 +238,20 @@ function UploadTrackForm({ artistId, uploadsDisabled }: { artistId: string; uplo
   }, [title, audioFile, genres, artistId, albumId, coverArt, explicit, uploadTrack, router]);
 
   return (
-    <ScreenContainer title="Upload song" subtitle="Add a track to your catalog" onBack={() => router.back()}>
+    <ScreenContainer
+      title="Upload song"
+      subtitle="Add a track to your catalog"
+      onBack={() => router.back()}
+    >
       {uploadsDisabled ? <UploadDisabledNotice /> : null}
       {uploadTrack.phase === 'uploading' || uploadTrack.phase === 'processing' ? (
         <UploadProgress phase={uploadTrack.phase} />
       ) : null}
 
       <AudioPicker file={audioFile} onPick={pickAudio} disabled={busy || uploadsDisabled} />
-      {audioError ? <Text className="text-xs text-destructive -mt-2 mb-3">{audioError}</Text> : null}
+      {audioError ? (
+        <Text className="text-xs text-destructive -mt-2 mb-3">{audioError}</Text>
+      ) : null}
 
       <FormField
         label="Title"
@@ -247,7 +284,9 @@ function UploadTrackForm({ artistId, uploadsDisabled }: { artistId: string; uplo
       <View className="flex-row items-center justify-between rounded-xl border border-border bg-surface px-4 py-3 mb-6">
         <View className="flex-1 pr-3">
           <Text className="text-sm font-medium text-foreground">Explicit content</Text>
-          <Text className="text-xs text-muted-foreground mt-0.5">Marks this track as explicit.</Text>
+          <Text className="text-xs text-muted-foreground mt-0.5">
+            Marks this track as explicit.
+          </Text>
         </View>
         <Switch checked={explicit} onCheckedChange={setExplicit} disabled={busy} />
       </View>
@@ -256,7 +295,9 @@ function UploadTrackForm({ artistId, uploadsDisabled }: { artistId: string; uplo
         fullWidth
         onPress={onSubmit}
         loading={busy}
-        disabled={busy || uploadsDisabled} tone="accent" appearance="solid"
+        disabled={busy || uploadsDisabled}
+        tone="accent"
+        appearance="solid"
       >
         Upload song
       </Button>
@@ -284,11 +325,17 @@ function UploadGate() {
           <View className="w-16 h-16 rounded-2xl bg-primary/10 items-center justify-center mb-4">
             <MaterialCommunityIcons name="account-music" size={30} color={theme.colors.primary} />
           </View>
-          <Text className="text-lg font-semibold text-foreground mb-1">Register as an artist first</Text>
+          <Text className="text-lg font-semibold text-foreground mb-1">
+            Register as an artist first
+          </Text>
           <Text className="text-sm text-muted-foreground text-center mb-5 max-w-[360px]">
             Create your artist profile before uploading music.
           </Text>
-          <Button onPress={() => router.replace('/music/register')} tone="accent" appearance="solid">
+          <Button
+            onPress={() => router.replace('/music/register')}
+            tone="accent"
+            appearance="solid"
+          >
             Become an artist
           </Button>
         </View>

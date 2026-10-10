@@ -145,40 +145,39 @@ export type ImageProvider = z.infer<typeof imageProviderSchema>;
  * the image" — expressed here as a type that cannot be constructed without one,
  * rather than as a sentence someone in a hurry will skip.
  */
-export const imageLicenceSchema = z.object({
-  /** Short identifier — `CC0-1.0`, `CC-BY-SA-4.0`, `PD`. */
-  licence: z.string().min(1),
-  /** The licence deed. Optional only because `PD` has no canonical deed URL. */
-  licenceUrl: z.string().optional(),
-  /** The author to credit, exactly as the source states it. */
-  attribution: z.string().min(1),
-  /**
-   * The FILE PAGE, never the raw image URL.
-   *
-   * A direct link to the bytes provides neither the author nor the licence, so
-   * it does not discharge attribution — the file page is what carries both.
-   * `commons.wikimedia.org/wiki/File:Foo.jpg` is the page;
-   * `upload.wikimedia.org/.../Foo.jpg` is the raw file.
-   *
-   * The refinement below checks the HOST, deliberately, and not the file
-   * extension. A page URL legitimately ends in `.jpg` — that is the Commons
-   * naming convention — so an extension rule rejects the CORRECT value, which is
-   * the worst possible direction to fail in: it would push whoever hit it to
-   * "fix" the error by supplying the raw URL instead. (An earlier version of
-   * this file made exactly that mistake; the test that accepts a valid licence
-   * is what caught it.) So the rule stays narrow: it refuses the raw-bytes host
-   * it can actually prove is wrong, and does not guess for providers where the
-   * URL alone cannot tell you.
-   */
-  sourceUrl: z.string().min(1),
-}).refine(
-  (licence) => !/^https?:\/\/upload\.wikimedia\.org\//i.test(licence.sourceUrl),
-  {
+export const imageLicenceSchema = z
+  .object({
+    /** Short identifier — `CC0-1.0`, `CC-BY-SA-4.0`, `PD`. */
+    licence: z.string().min(1),
+    /** The licence deed. Optional only because `PD` has no canonical deed URL. */
+    licenceUrl: z.string().optional(),
+    /** The author to credit, exactly as the source states it. */
+    attribution: z.string().min(1),
+    /**
+     * The FILE PAGE, never the raw image URL.
+     *
+     * A direct link to the bytes provides neither the author nor the licence, so
+     * it does not discharge attribution — the file page is what carries both.
+     * `commons.wikimedia.org/wiki/File:Foo.jpg` is the page;
+     * `upload.wikimedia.org/.../Foo.jpg` is the raw file.
+     *
+     * The refinement below checks the HOST, deliberately, and not the file
+     * extension. A page URL legitimately ends in `.jpg` — that is the Commons
+     * naming convention — so an extension rule rejects the CORRECT value, which is
+     * the worst possible direction to fail in: it would push whoever hit it to
+     * "fix" the error by supplying the raw URL instead. (An earlier version of
+     * this file made exactly that mistake; the test that accepts a valid licence
+     * is what caught it.) So the rule stays narrow: it refuses the raw-bytes host
+     * it can actually prove is wrong, and does not guess for providers where the
+     * URL alone cannot tell you.
+     */
+    sourceUrl: z.string().min(1),
+  })
+  .refine((licence) => !/^https?:\/\/upload\.wikimedia\.org\//i.test(licence.sourceUrl), {
     path: ['sourceUrl'],
     message:
       'sourceUrl must be the Commons file page (commons.wikimedia.org/wiki/File:…) that states the author and licence, not the raw upload.wikimedia.org image URL.',
-  },
-);
+  });
 export type ImageLicence = z.infer<typeof imageLicenceSchema>;
 
 /**

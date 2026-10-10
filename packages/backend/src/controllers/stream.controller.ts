@@ -9,7 +9,10 @@ import { trackHlsRenditions, tracks } from '../db/schema/catalog';
 import { trackKeys } from '../db/schema/trackKeys';
 import { findMusicPreferences } from '../db/user/musicPreferences';
 import { mintStreamToken, verifyStreamToken } from '../services/stream/streamToken';
-import { buildMasterPlaylistFor, buildVariantPlaylistFor } from '../services/stream/manifestService';
+import {
+  buildMasterPlaylistFor,
+  buildVariantPlaylistFor,
+} from '../services/stream/manifestService';
 import { getUserEntitlement } from '../services/premium/entitlement';
 import { computeMaxBitrateKbps } from '../services/stream/audioQuality';
 
@@ -27,9 +30,7 @@ const STREAM_SESSION_TTL_SEC = 3600;
 
 // ── Access helper ─────────────────────────────────────────────────────────────
 
-export type StreamAccess =
-  | { ok: true; maxBitrateKbps: number }
-  | { ok: false };
+export type StreamAccess = { ok: true; maxBitrateKbps: number } | { ok: false };
 
 /**
  * Resolve authorization for a stream sub-resource request and return the
@@ -95,11 +96,7 @@ export interface EpisodeShowAccess {
  * alone is not enough: an owner's token for episode A must not open episode B,
  * and a stranger's valid token for this same episode must not open it either.
  */
-function isShowOwnerRequest(
-  req: AuthRequest,
-  episodeId: string,
-  show: EpisodeShowAccess,
-): boolean {
+function isShowOwnerRequest(req: AuthRequest, episodeId: string, show: EpisodeShowAccess): boolean {
   if (show.ownerOxyUserId === null) return false;
   if (req.user?.id === show.ownerOxyUserId) return true;
 
@@ -195,10 +192,7 @@ const PLAYBACK_TRACK_COLUMNS = {
 } as const;
 
 /** Picked off the schema type, so a column changing shape fails here. */
-type PlaybackTrackRow = Pick<
-  typeof tracks.$inferSelect,
-  keyof typeof PLAYBACK_TRACK_COLUMNS
->;
+type PlaybackTrackRow = Pick<typeof tracks.$inferSelect, keyof typeof PLAYBACK_TRACK_COLUMNS>;
 
 async function findPlaybackTrack(trackId: string): Promise<PlaybackTrackRow | undefined> {
   const [track] = await getDb()
@@ -248,7 +242,10 @@ async function findHlsRenditions(trackId: string): Promise<HlsRendition[]> {
  * direction. `__tests__/visibility.agreement.test.ts` holds all three to that
  * over real rows rather than to a comment.
  */
-export function isTrackPlayable(track: { isAvailable: boolean; copyrightRemoved: boolean }): boolean {
+export function isTrackPlayable(track: {
+  isAvailable: boolean;
+  copyrightRemoved: boolean;
+}): boolean {
   return track.isAvailable === true && track.copyrightRemoved === false;
 }
 
@@ -259,11 +256,7 @@ export function isTrackPlayable(track: { isAvailable: boolean; copyrightRemoved:
  * Reuses `?t=` for token-only requests (native players); otherwise mints a
  * fresh token with the given cap for bearer requests.
  */
-function resolveManifestToken(
-  req: AuthRequest,
-  trackId: string,
-  maxBitrateKbps: number,
-): string {
+function resolveManifestToken(req: AuthRequest, trackId: string, maxBitrateKbps: number): string {
   const rawToken = req.query?.t;
   if (typeof rawToken === 'string' && rawToken) return rawToken;
   return mintStreamToken(
@@ -292,9 +285,7 @@ function resolveManifestToken(
  */
 export async function getStream(req: AuthRequest, res: Response): Promise<void> {
   // 1. Validate the track ID before touching auth (400 is auth-agnostic).
-  const trackId = Array.isArray(req.params.trackId)
-    ? req.params.trackId[0]
-    : req.params.trackId;
+  const trackId = Array.isArray(req.params.trackId) ? req.params.trackId[0] : req.params.trackId;
   if (!trackId || !isLiveEntityId(trackId)) {
     res.status(400).json({ error: 'Invalid track ID' });
     return;
@@ -367,9 +358,7 @@ export async function getStream(req: AuthRequest, res: Response): Promise<void> 
  * Guards: ObjectId(1) → auth(2) → track(3) → availability(4) → key(5) → 200.
  */
 export async function getStreamKey(req: AuthRequest, res: Response): Promise<void> {
-  const trackId = Array.isArray(req.params.trackId)
-    ? req.params.trackId[0]
-    : req.params.trackId;
+  const trackId = Array.isArray(req.params.trackId) ? req.params.trackId[0] : req.params.trackId;
 
   if (!trackId || !isLiveEntityId(trackId)) {
     res.status(400).json({ error: 'Invalid track ID' });
@@ -426,9 +415,7 @@ export async function getStreamKey(req: AuthRequest, res: Response): Promise<voi
  * Guards: ObjectId(1) → auth(2) → track(3) → availability(4) → readiness(5) → 200.
  */
 export async function getMasterPlaylist(req: AuthRequest, res: Response): Promise<void> {
-  const trackId = Array.isArray(req.params.trackId)
-    ? req.params.trackId[0]
-    : req.params.trackId;
+  const trackId = Array.isArray(req.params.trackId) ? req.params.trackId[0] : req.params.trackId;
 
   if (!trackId || !isLiveEntityId(trackId)) {
     res.status(400).json({ error: 'Invalid track ID' });
@@ -491,9 +478,7 @@ export async function getMasterPlaylist(req: AuthRequest, res: Response): Promis
  *         variant parse(6) → cap enforcement(7) → 200.
  */
 export async function getVariantPlaylist(req: AuthRequest, res: Response): Promise<void> {
-  const trackId = Array.isArray(req.params.trackId)
-    ? req.params.trackId[0]
-    : req.params.trackId;
+  const trackId = Array.isArray(req.params.trackId) ? req.params.trackId[0] : req.params.trackId;
 
   if (!trackId || !isLiveEntityId(trackId)) {
     res.status(400).json({ error: 'Invalid track ID' });

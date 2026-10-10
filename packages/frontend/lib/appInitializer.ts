@@ -7,10 +7,7 @@ import { Platform } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 
 import { useVideoMuteStore } from '@/stores/videoMuteStore';
-import {
-  hasNotificationPermission,
-  setupNotifications,
-} from '@/utils/notifications';
+import { hasNotificationPermission, setupNotifications } from '@/utils/notifications';
 import { initializeI18n } from './i18n';
 
 export interface InitializationResult {
@@ -86,10 +83,7 @@ export class AppInitializer {
     }
 
     try {
-      await Promise.allSettled([
-        setupNotificationsIfNeeded(),
-        loadVideoMuteState(),
-      ]);
+      await Promise.allSettled([setupNotificationsIfNeeded(), loadVideoMuteState()]);
 
       // Hide splash screen
       try {
@@ -111,8 +105,6 @@ export class AppInitializer {
    * Loads eager settings that don't block app initialization
    */
   static async loadEagerSettings(): Promise<void> {
-    await Promise.allSettled([
-      loadVideoMuteState(),
-    ]);
+    await Promise.allSettled([loadVideoMuteState()]);
   }
 }

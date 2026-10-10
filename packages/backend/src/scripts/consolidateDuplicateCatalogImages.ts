@@ -127,7 +127,10 @@ export interface ConsolidationOptions {
  * progress in both modes regardless of whether the batch's rows were actually
  * consolidated.
  */
-async function nextDuplicatedHashes(batchSize: number, afterHash: string | undefined): Promise<string[]> {
+async function nextDuplicatedHashes(
+  batchSize: number,
+  afterHash: string | undefined,
+): Promise<string[]> {
   const rows = await getDb().execute<{ hash: string }>(sql`
     select catalog_source_content_hash as hash
     from image_assets
@@ -151,14 +154,14 @@ async function nextDuplicatedHashes(batchSize: number, afterHash: string | undef
 function hashInList(hashes: readonly string[]) {
   return sql.join(
     hashes.map((hash) => sql`${hash}`),
-    sql`, `
+    sql`, `,
   );
 }
 
 async function consolidateBatch(
   hashes: readonly string[],
   stats: ConsolidationStats,
-  dryRun: boolean
+  dryRun: boolean,
 ): Promise<void> {
   const dupMapQuery = sql`
     select dup.id as old_id, canon.id as canonical_id
@@ -181,67 +184,74 @@ async function consolidateBatch(
     return;
   }
 
-  const s3KeysToDelete = await getDb().transaction(async (tx) => {
-    await tx.execute(sql`create temp table image_asset_dedup_map on commit drop as ${dupMapQuery}`);
+  const s3KeysToDelete = await getDb()
+    .transaction(async (tx) => {
+      await tx.execute(
+        sql`create temp table image_asset_dedup_map on commit drop as ${dupMapQuery}`,
+      );
 
-    const [{ count: mappedCount }] = await tx.execute<{ count: number }>(
-      sql`select count(*)::int as count from image_asset_dedup_map`
-    );
-    if (mappedCount === 0) return [];
+      const [{ count: mappedCount }] = await tx.execute<{ count: number }>(
+        sql`select count(*)::int as count from image_asset_dedup_map`,
+      );
+      if (mappedCount === 0) return [];
 
-    for (const { table, column } of referencingColumns()) {
-      await tx.execute(sql`
+      for (const { table, column } of referencingColumns()) {
+        await tx.execute(sql`
         update ${sql.identifier(table)}
         set ${sql.identifier(column)} = m.canonical_id
         from image_asset_dedup_map m
         where ${sql.identifier(table)}.${sql.identifier(column)} = m.old_id
       `);
-    }
+      }
 
-    // Real verification, not an assumption: every column just rewritten, checked
-    // again. A hit here means a table has an image reference this script's
-    // REFERENCING_TABLES list does not know about — abort rather than delete a
-    // row something still points at.
-    const remainingReferenceChecks = referencingColumns().map(
-      ({ table, column }) => sql`
+      // Real verification, not an assumption: every column just rewritten, checked
+      // again. A hit here means a table has an image reference this script's
+      // REFERENCING_TABLES list does not know about — abort rather than delete a
+      // row something still points at.
+      const remainingReferenceChecks = referencingColumns().map(
+        ({ table, column }) => sql`
         select ${`${table}.${column}`} as location, count(*)::int as remaining
         from ${sql.identifier(table)}
         where ${sql.identifier(column)} in (select old_id from image_asset_dedup_map)
-      `
-    );
-    const remaining = await tx.execute<{ location: string; remaining: number }>(
-      sql.join(remainingReferenceChecks, sql` union all `)
-    );
-    const stillReferenced = remaining.filter((row) => row.remaining > 0);
-    if (stillReferenced.length > 0) {
-      logger.error('[consolidate-duplicate-catalog-images] aborting batch: lingering references after rewrite', {
-        hashes,
-        stillReferenced,
-      });
-      throw new Error(
-        `Lingering references after rewrite: ${stillReferenced.map((row) => `${row.location} (${row.remaining})`).join(', ')}`
+      `,
       );
-    }
+      const remaining = await tx.execute<{ location: string; remaining: number }>(
+        sql.join(remainingReferenceChecks, sql` union all `),
+      );
+      const stillReferenced = remaining.filter((row) => row.remaining > 0);
+      if (stillReferenced.length > 0) {
+        logger.error(
+          '[consolidate-duplicate-catalog-images] aborting batch: lingering references after rewrite',
+          {
+            hashes,
+            stillReferenced,
+          },
+        );
+        throw new Error(
+          `Lingering references after rewrite: ${stillReferenced.map((row) => `${row.location} (${row.remaining})`).join(', ')}`,
+        );
+      }
 
-    const deleted = await tx.execute<{ s3_key: string; byte_size: number }>(sql`
+      const deleted = await tx.execute<{ s3_key: string; byte_size: number }>(sql`
       delete from image_assets
       where id in (select old_id from image_asset_dedup_map)
       returning s3_key, byte_size
     `);
 
-    stats.hashGroupsProcessed += hashes.length;
-    stats.rowsDeleted += deleted.length;
-    stats.bytesReclaimed += deleted.reduce((sum, row) => sum + row.byte_size, 0);
+      stats.hashGroupsProcessed += hashes.length;
+      stats.rowsDeleted += deleted.length;
+      stats.bytesReclaimed += deleted.reduce((sum, row) => sum + row.byte_size, 0);
 
-    return deleted.map((row) => row.s3_key);
-  }).catch((err) => {
-    logger.error('[consolidate-duplicate-catalog-images] batch failed, skipping', {
-      hashes,
-      err: describeErrorSafely(err),
+      return deleted.map((row) => row.s3_key);
+    })
+    .catch((err) => {
+      logger.error('[consolidate-duplicate-catalog-images] batch failed, skipping', {
+        hashes,
+        err: describeErrorSafely(err),
+      });
+      stats.hashGroupsSkipped += hashes.length;
+      return [] as string[];
     });
-    stats.hashGroupsSkipped += hashes.length;
-    return [] as string[];
-  });
 
   if (s3KeysToDelete.length > 0) {
     const deletedCount = await deleteFromS3Batch(s3KeysToDelete);
@@ -250,7 +260,7 @@ async function consolidateBatch(
 }
 
 export async function consolidateDuplicateCatalogImages(
-  options: ConsolidationOptions = {}
+  options: ConsolidationOptions = {},
 ): Promise<ConsolidationStats> {
   const stats: ConsolidationStats = {
     hashGroupsProcessed: 0,
@@ -263,7 +273,11 @@ export async function consolidateDuplicateCatalogImages(
   let cursor: string | undefined;
 
   for (;;) {
-    if (options.limit !== undefined && stats.hashGroupsProcessed + stats.hashGroupsSkipped >= options.limit) break;
+    if (
+      options.limit !== undefined &&
+      stats.hashGroupsProcessed + stats.hashGroupsSkipped >= options.limit
+    )
+      break;
 
     const hashes = await nextDuplicatedHashes(HASH_BATCH_SIZE, cursor);
     if (hashes.length === 0) break;
@@ -292,7 +306,7 @@ async function main(): Promise<void> {
     if (!Number.isInteger(limit) || limit < 0) {
       throw new Error(
         `--limit needs a non-negative whole number, got ${JSON.stringify(process.argv[limitFlag + 1])}. ` +
-          'Refusing to run: an unparseable limit would otherwise mean no limit at all.'
+          'Refusing to run: an unparseable limit would otherwise mean no limit at all.',
       );
     }
   }
@@ -300,7 +314,7 @@ async function main(): Promise<void> {
   await connectPostgres();
   logger.info(
     `[consolidate-duplicate-catalog-images] starting${dryRun ? ' (dry run — nothing will be written)' : ''}` +
-      `${limit !== undefined ? ` (limit ${limit} duplicate hash groups)` : ''}`
+      `${limit !== undefined ? ` (limit ${limit} duplicate hash groups)` : ''}`,
   );
 
   const stats = await consolidateDuplicateCatalogImages({ dryRun, limit });
@@ -310,14 +324,14 @@ async function main(): Promise<void> {
       `${stats.hashGroupsSkipped} skipped (lingering reference found) | ` +
       `${stats.rowsDeleted} image_assets row(s) removed | ` +
       `${(stats.bytesReclaimed / 1024 / 1024 / 1024).toFixed(2)} GB reclaimed | ` +
-      `${stats.s3ObjectsDeleted} S3 object(s) deleted`
+      `${stats.s3ObjectsDeleted} S3 object(s) deleted`,
   );
 
   if (stats.hashGroupsSkipped > 0) {
     logger.warn(
       `[consolidate-duplicate-catalog-images] ${stats.hashGroupsSkipped} hash group(s) were skipped — ` +
         're-running will retry them, but a group that keeps failing means a table with an image ' +
-        'reference not listed in REFERENCING_TABLES.'
+        'reference not listed in REFERENCING_TABLES.',
     );
   }
 }
@@ -327,7 +341,9 @@ if (require.main === module) {
     .then(() => closePostgres())
     .then(() => process.exit(0))
     .catch((err) => {
-      logger.error('[consolidate-duplicate-catalog-images] fatal', { err: describeErrorSafely(err) });
+      logger.error('[consolidate-duplicate-catalog-images] fatal', {
+        err: describeErrorSafely(err),
+      });
       closePostgres().finally(() => process.exit(1));
     });
 }

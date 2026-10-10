@@ -60,7 +60,7 @@ interface StrikeSubject {
  */
 async function lockArtist(
   tx: Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0],
-  artistId: string
+  artistId: string,
 ): Promise<StrikeSubject | null> {
   const [artist] = await tx
     .select({ id: catalogEntities.id, terminated: catalogEntities.terminated })
@@ -83,7 +83,7 @@ async function lockArtist(
  */
 async function countStrikes(
   tx: Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0],
-  artistId: string
+  artistId: string,
 ): Promise<number> {
   const [row] = await tx
     .select({ total: count() })
@@ -96,7 +96,7 @@ async function countStrikes(
 /** The most recent remaining strike's timestamp, or null when none is left. */
 async function latestStrikeAt(
   tx: Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0],
-  artistId: string
+  artistId: string,
 ): Promise<Date | null> {
   const [row] = await tx
     .select({ createdAt: catalogEntityStrikes.createdAt })
@@ -121,7 +121,7 @@ async function latestStrikeAt(
 async function takeDownArtistTracks(
   tx: Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0],
   artistId: string,
-  reason: string
+  reason: string,
 ): Promise<void> {
   await tx
     .update(tracks)
@@ -144,8 +144,7 @@ function terminationFields(): {
   return {
     terminated: true,
     terminatedAt: new Date(),
-    terminationReason:
-      `Repeat-infringer termination: ${STRIKE_TERMINATION_THRESHOLD} or more copyright strikes`,
+    terminationReason: `Repeat-infringer termination: ${STRIKE_TERMINATION_THRESHOLD} or more copyright strikes`,
     uploadsDisabled: true,
   };
 }
@@ -200,7 +199,7 @@ export async function addStrike(
 
           logger.info(
             `[StrikeService] Artist ${artistId} terminated as repeat infringer ` +
-            `(${strikeCount} strikes)`,
+              `(${strikeCount} strikes)`,
           );
           return { strikeCount, terminated: true };
         }
@@ -211,9 +210,7 @@ export async function addStrike(
           .set({ strikeCount, lastStrikeAt: new Date(), uploadsDisabled: true })
           .where(eq(catalogEntities.id, artistId));
 
-        logger.info(
-          `[StrikeService] Added strike to artist ${artistId}. Total: ${strikeCount}`,
-        );
+        logger.info(`[StrikeService] Added strike to artist ${artistId}. Total: ${strikeCount}`);
         return { strikeCount, terminated: true };
       }
 
@@ -227,13 +224,13 @@ export async function addStrike(
         })
         .where(eq(catalogEntities.id, artistId));
 
-      logger.info(
-        `[StrikeService] Added strike to artist ${artistId}. Total: ${strikeCount}`,
-      );
+      logger.info(`[StrikeService] Added strike to artist ${artistId}. Total: ${strikeCount}`);
       return { strikeCount, terminated: alreadyTerminated };
     });
   } catch (error) {
-    logger.error(`[StrikeService] Error adding strike to artist ${artistId}:`, { error: describeErrorSafely(error) });
+    logger.error(`[StrikeService] Error adding strike to artist ${artistId}:`, {
+      error: describeErrorSafely(error),
+    });
     throw error;
   }
 }
@@ -264,8 +261,8 @@ export async function removeStrike(
         .where(
           and(
             eq(catalogEntityStrikes.id, strikeId),
-            eq(catalogEntityStrikes.catalogEntityId, artistId)
-          )
+            eq(catalogEntityStrikes.catalogEntityId, artistId),
+          ),
         );
 
       const strikeCount = await countStrikes(tx, artistId);
@@ -281,13 +278,13 @@ export async function removeStrike(
         })
         .where(eq(catalogEntities.id, artistId));
 
-      logger.info(
-        `[StrikeService] Removed strike from artist ${artistId}. Total: ${strikeCount}`,
-      );
+      logger.info(`[StrikeService] Removed strike from artist ${artistId}. Total: ${strikeCount}`);
       return { strikeCount, terminated };
     });
   } catch (error) {
-    logger.error(`[StrikeService] Error removing strike from artist ${artistId}:`, { error: describeErrorSafely(error) });
+    logger.error(`[StrikeService] Error removing strike from artist ${artistId}:`, {
+      error: describeErrorSafely(error),
+    });
     throw error;
   }
 }
@@ -314,10 +311,9 @@ export async function checkUploadPermission(artistId: string): Promise<boolean> 
     if (artist.uploadsDisabled === true) return false;
     return true;
   } catch (error) {
-    logger.error(
-      `[StrikeService] Error checking upload permission for artist ${artistId}:`,
-      { error: describeErrorSafely(error) },
-    );
+    logger.error(`[StrikeService] Error checking upload permission for artist ${artistId}:`, {
+      error: describeErrorSafely(error),
+    });
     return false;
   }
 }

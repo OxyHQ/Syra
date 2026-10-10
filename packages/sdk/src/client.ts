@@ -210,9 +210,7 @@ export interface IngestEpisodeInput {
  * is named here so an RN caller does not have to cast, and so this SDK never has
  * to import anything from React Native to support it.
  */
-export type UploadPayload =
-  | Blob
-  | { uri: string; name?: string; type?: string };
+export type UploadPayload = Blob | { uri: string; name?: string; type?: string };
 
 export interface SyraClient {
   /**
@@ -236,7 +234,10 @@ export interface SyraClient {
    * paginated page: rows are validated against the podcast-summary schema and
    * malformed rows are dropped. `hasMore` comes from the backend's pagination.
    */
-  searchPodcasts(query: string, options?: SearchPodcastsOptions): Promise<SearchPage<PodcastSummary>>;
+  searchPodcasts(
+    query: string,
+    options?: SearchPodcastsOptions,
+  ): Promise<SearchPage<PodcastSummary>>;
   /**
    * Fetch a single podcast show by id, validated against the podcast-summary
    * schema. The by-id endpoint also returns episodes and resolved persons; this
@@ -639,7 +640,12 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
    * confined to this function — rather than every call site, or a `declare
    * module` shim that would shadow the real DOM types in every consumer.
    */
-  function appendUpload(form: FormData, field: string, payload: UploadPayload, filename?: string): void {
+  function appendUpload(
+    form: FormData,
+    field: string,
+    payload: UploadPayload,
+    filename?: string,
+  ): void {
     if (typeof Blob !== 'undefined' && payload instanceof Blob) {
       form.append(field, payload, filename);
       return;
@@ -944,11 +950,9 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
     },
 
     async createPodcast(input) {
-      const json = (await postJson(
-        '/api/podcasts',
-        defined({ ...input }),
-        'createPodcast',
-      )) as { data?: unknown };
+      const json = (await postJson('/api/podcasts', defined({ ...input }), 'createPodcast')) as {
+        data?: unknown;
+      };
       return podcastSummarySchema.parse(json?.data);
     },
 
@@ -1063,10 +1067,9 @@ export function createSyraClient(options: SyraClientOptions = {}): SyraClient {
     },
 
     async getEpisodeStream(episodeId) {
-      const json = await request(
-        `/api/podcasts/episodes/${encodeURIComponent(episodeId)}/stream`,
-        { requires: 'getEpisodeStream' },
-      );
+      const json = await request(`/api/podcasts/episodes/${encodeURIComponent(episodeId)}/stream`, {
+        requires: 'getEpisodeStream',
+      });
       return episodeStreamSchema.parse(json);
     },
   };

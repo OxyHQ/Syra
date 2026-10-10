@@ -1,7 +1,11 @@
 import { Router, Response } from 'express';
 import multer from 'multer';
 import { isLiveEntityId, uuidv7 } from '@oxy.so/db';
-import { requireOxyAuth, getRequiredOxyUserId, type OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
+import {
+  requireOxyAuth,
+  getRequiredOxyUserId,
+  type OxyAuthRequest as AuthRequest,
+} from '@oxy.so/core/server';
 import {
   createRoom,
   deleteRoom,
@@ -32,7 +36,11 @@ import {
   listRoomRecordings,
   updateRecording,
 } from '../db/rooms/recordings';
-import { findLiveVisibilities, findLiveVisibility, setLiveVisibility } from '../db/rooms/preferences';
+import {
+  findLiveVisibilities,
+  findLiveVisibility,
+  setLiveVisibility,
+} from '../db/rooms/preferences';
 import { stripInternalStreamFields, roomWithInternalStreamFields } from '../db/rooms/serialize';
 import {
   BroadcastKind,
@@ -65,7 +73,13 @@ import {
   mapLiveKitIngressError,
   shouldRetryIngressAfterDeletingExisting,
 } from '../utils/livekitErrors';
-import { getRecordingObjectKey, uploadObject, deleteObject, getAgoraRoomImageKey, cdnUrlToKey } from '../utils/spaces';
+import {
+  getRecordingObjectKey,
+  uploadObject,
+  deleteObject,
+  getAgoraRoomImageKey,
+  cdnUrlToKey,
+} from '../utils/spaces';
 import { processImage } from '../utils/imageProcessor';
 import { emitLiveRoomsUpdated } from '../utils/socket';
 import { resolvePodcastEpisode } from '../utils/syraPodcast';
@@ -84,9 +98,13 @@ const uploadMiddleware = multer({
     if (ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error(`File type ${file.mimetype} not allowed. Allowed: ${ALLOWED_IMAGE_TYPES.join(', ')}`));
+      cb(
+        new Error(
+          `File type ${file.mimetype} not allowed. Allowed: ${ALLOWED_IMAGE_TYPES.join(', ')}`,
+        ),
+      );
     }
-  }
+  },
 });
 
 const router = Router();
@@ -140,7 +158,7 @@ async function sendForbiddenUnlessRoomManager(
   room: RoomOwnershipFields,
   userId: string,
   res: Response,
-  message: string
+  message: string,
 ): Promise<boolean> {
   if (await canManageRoom(room, userId)) {
     return true;
@@ -152,7 +170,10 @@ async function sendForbiddenUnlessRoomManager(
 
 function emitStreamStarted(
   roomId: string,
-  room: Pick<RoomWithCredentials, 'streamTitle' | 'streamImage' | 'streamDescription' | 'streamStartedAt' | 'streamDurationSec'>,
+  room: Pick<
+    RoomWithCredentials,
+    'streamTitle' | 'streamImage' | 'streamDescription' | 'streamStartedAt' | 'streamDurationSec'
+  >,
 ) {
   const io = global.io;
   if (!io) return;
@@ -189,7 +210,7 @@ function sendLiveKitIngressError(
   res: Response,
   error: unknown,
   operation: string,
-  context: { roomId: string; userId?: string }
+  context: { roomId: string; userId?: string },
 ) {
   const mapped = mapLiveKitIngressError(error);
   logger.warn('LiveKit stream ingress operation failed', {
@@ -211,7 +232,7 @@ function sendLiveKitIngressError(
 async function createIngressReplacingExisting(
   room: RoomWithCredentials,
   roomId: string,
-  createIngress: () => Promise<CreatedIngress>
+  createIngress: () => Promise<CreatedIngress>,
 ): Promise<IngressReplacementResult> {
   const previousIngressId = room.activeIngressId || undefined;
 
@@ -240,7 +261,10 @@ async function createIngressReplacingExisting(
   }
 }
 
-async function cleanupPreviousIngressAfterReplacement(roomId: string, result: IngressReplacementResult) {
+async function cleanupPreviousIngressAfterReplacement(
+  roomId: string,
+  result: IngressReplacementResult,
+) {
   if (
     result.previousIngressId &&
     !result.previousDeletedBeforeCreate &&
@@ -302,7 +326,7 @@ async function applyUrlIngressToRoom(
   try {
     await ensureLiveKitRoomForRoom(id, room.maxParticipants);
     ingressResult = await createIngressReplacingExisting(room, id, () =>
-      createRoomUrlIngress(id, meta.url)
+      createRoomUrlIngress(id, meta.url),
     );
     await cleanupPreviousIngressAfterReplacement(id, ingressResult);
   } catch (liveKitError) {
@@ -440,7 +464,11 @@ async function validatePlayableAudioUrl(url: string): Promise<AudioUrlValidation
       return { ok: false, status: 400, message: 'Podcast episode audio is not available' };
     }
     if (status < 200 || status >= 300) {
-      return { ok: false, status: 502, message: 'Podcast episode audio is temporarily unreachable' };
+      return {
+        ok: false,
+        status: 502,
+        message: 'Podcast episode audio is temporarily unreachable',
+      };
     }
     if (!isPlayableAudioContentType(family)) {
       return { ok: false, status: 400, message: 'Resolved URL is not playable audio' };
@@ -498,7 +526,11 @@ async function startResolvedMediaStream(
       code: mapped.liveKit.code,
       message: mapped.liveKit.message,
     });
-    return { ok: false, status: mapped.statusCode, body: { message: mapped.message, code: mapped.code } };
+    return {
+      ok: false,
+      status: mapped.statusCode,
+      body: { message: mapped.message, code: mapped.code },
+    };
   }
 
   return { ok: true, ingressId: outcome.ingressId, url: outcome.url };
@@ -527,7 +559,11 @@ async function startPodcastEpisodeStream(
     return { ok: false, status: 404, body: { message: 'Podcast episode not found' } };
   }
   if (resolved.status === 'unavailable') {
-    return { ok: false, status: 503, body: { message: 'Podcast service is temporarily unavailable' } };
+    return {
+      ok: false,
+      status: 503,
+      body: { message: 'Podcast service is temporarily unavailable' },
+    };
   }
 
   return startResolvedMediaStream(
@@ -614,9 +650,7 @@ async function startMediaQueueItem(
 /** Upper bound on media items queued behind the current one (DoS / abuse guard). */
 const MAX_MEDIA_QUEUE_LENGTH = 100;
 
-type ParsedMediaQueue =
-  | { ok: true; queue: MediaQueueItem[] }
-  | { ok: false; message: string };
+type ParsedMediaQueue = { ok: true; queue: MediaQueueItem[] } | { ok: false; message: string };
 
 /**
  * Validate + normalize an optional client-supplied podcast queue into
@@ -647,7 +681,9 @@ function parsePodcastQueue(input: unknown): ParsedMediaQueue {
       return { ok: false, message: 'each queue item requires an episodeId' };
     }
     const syraPodcastId =
-      typeof obj.syraPodcastId === 'string' && obj.syraPodcastId.trim() ? obj.syraPodcastId.trim() : undefined;
+      typeof obj.syraPodcastId === 'string' && obj.syraPodcastId.trim()
+        ? obj.syraPodcastId.trim()
+        : undefined;
     queue.push({ kind: 'podcast', episodeId, ...(syraPodcastId ? { syraPodcastId } : {}) });
   }
   return { ok: true, queue };
@@ -675,9 +711,10 @@ function parseTrackQueue(input: unknown): ParsedMediaQueue {
     if (!item || typeof item !== 'object') {
       return { ok: false, message: 'each queue item must be an object' };
     }
-    const trackId = typeof (item as Record<string, unknown>).trackId === 'string'
-      ? String((item as Record<string, unknown>).trackId).trim()
-      : '';
+    const trackId =
+      typeof (item as Record<string, unknown>).trackId === 'string'
+        ? String((item as Record<string, unknown>).trackId).trim()
+        : '';
     if (!trackId) {
       return { ok: false, message: 'each queue item requires a trackId' };
     }
@@ -781,7 +818,9 @@ function scheduleRecordingAutoStop(roomId: string, egressId: string, recordingId
 
       logger.info(`Recording auto-stopped after 1 hour for room ${roomId}`);
     } catch (error) {
-      logger.error(`Failed to auto-stop recording for room ${roomId}:`, { error: describeErrorSafely(error) });
+      logger.error(`Failed to auto-stop recording for room ${roomId}:`, {
+        error: describeErrorSafely(error),
+      });
     } finally {
       recordingTimers.delete(roomId);
     }
@@ -856,7 +895,9 @@ async function stopRecordingForRoom(room: RoomWithCredentials, reason: string = 
   try {
     await stopRoomRecording(egressId);
   } catch (err) {
-    logger.warn(`Failed to stop egress ${egressId}, may have already stopped:`, { err: describeErrorSafely(err) });
+    logger.warn(`Failed to stop egress ${egressId}, may have already stopped:`, {
+      err: describeErrorSafely(err),
+    });
   }
 
   const recording = await findRecordingByEgressId(egressId);
@@ -875,12 +916,14 @@ async function stopRecordingForRoom(room: RoomWithCredentials, reason: string = 
 
   const io = global.io;
   if (io) {
-    io.of('/rooms').to(`room:${room.id}`).emit('room:recording:stopped', {
-      roomId: room.id,
-      recordingId: recording ? recording.id : undefined,
-      reason,
-      timestamp: new Date().toISOString(),
-    });
+    io.of('/rooms')
+      .to(`room:${room.id}`)
+      .emit('room:recording:stopped', {
+        roomId: room.id,
+        recordingId: recording ? recording.id : undefined,
+        reason,
+        timestamp: new Date().toISOString(),
+      });
   }
 }
 
@@ -915,18 +958,19 @@ router.post('/', async (req: AuthRequest, res: Response) => {
     }
 
     // Validate type
-    const roomType: RoomType = type && Object.values(RoomType).includes(type)
-      ? type
-      : RoomType.TALK;
+    const roomType: RoomType =
+      type && Object.values(RoomType).includes(type) ? type : RoomType.TALK;
 
     // Validate ownerType
-    const roomOwnerType: OwnerType = ownerType && Object.values(OwnerType).includes(ownerType)
-      ? ownerType
-      : OwnerType.PROFILE;
+    const roomOwnerType: OwnerType =
+      ownerType && Object.values(OwnerType).includes(ownerType) ? ownerType : OwnerType.PROFILE;
 
     // Platform-owned rooms are provisioned server-side, not through this endpoint.
     if (roomOwnerType === OwnerType.AGORA) {
-      return res.status(403).json({ message: 'Agora-owned rooms are created server-side by the platform, not through this endpoint' });
+      return res.status(403).json({
+        message:
+          'Agora-owned rooms are created server-side by the platform, not through this endpoint',
+      });
     }
 
     // Validate house ownership permission
@@ -942,7 +986,9 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 
       // User must have HOST role or higher in the house
       if (!hasRole(owning.members, userId, HouseMemberRole.HOST)) {
-        return res.status(403).json({ message: 'You must be a host or higher in this house to create rooms' });
+        return res
+          .status(403)
+          .json({ message: 'You must be a host or higher in this house to create rooms' });
       }
     }
 
@@ -961,18 +1007,18 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 
     const roomSpeakerPermission = isBroadcast
       ? SpeakerPermission.INVITED
-      : (speakerPermission && Object.values(SpeakerPermission).includes(speakerPermission)
+      : speakerPermission && Object.values(SpeakerPermission).includes(speakerPermission)
         ? speakerPermission
-        : SpeakerPermission.INVITED);
+        : SpeakerPermission.INVITED;
 
     // Resolve broadcastKind for broadcast rooms. `null` for a non-broadcast room
     // rather than `undefined`: `rooms_broadcast_kind_requires_type_check`
     // enforces that pairing, which is the constraint the Mongoose
     // `pre('validate')` hook only ever asserted in application code.
     const resolvedBroadcastKind = isBroadcast
-      ? (broadcastKind && Object.values(BroadcastKind).includes(broadcastKind)
+      ? broadcastKind && Object.values(BroadcastKind).includes(broadcastKind)
         ? (broadcastKind as BroadcastKind)
-        : BroadcastKind.USER)
+        : BroadcastKind.USER
       : null;
 
     const room = await createRoom({
@@ -986,9 +1032,10 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       status: RoomStatus.SCHEDULED,
       participants: [],
       speakers: [userId], // Host is automatically a speaker
-      maxParticipants: maxParticipants && typeof maxParticipants === 'number'
-        ? Math.min(Math.max(maxParticipants, 1), 10000)
-        : 100,
+      maxParticipants:
+        maxParticipants && typeof maxParticipants === 'number'
+          ? Math.min(Math.max(maxParticipants, 1), 10000)
+          : 100,
       scheduledStart: scheduledStartDate ?? null,
       topic: topic ? String(topic).trim() : null,
       tags: Array.isArray(tags) ? tags.map((t: unknown) => String(t).trim()).filter(Boolean) : [],
@@ -996,14 +1043,19 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       recordingEnabled: recordingEnabled !== false, // default true
     });
 
-    logger.info(`Room created: ${room.id} by ${userId} (type=${roomType}, ownerType=${roomOwnerType})`);
+    logger.info(
+      `Room created: ${room.id} by ${userId} (type=${roomType}, ownerType=${roomOwnerType})`,
+    );
 
     res.status(201).json({
       message: 'Room created successfully',
       room: stripInternalStreamFields(room),
     });
   } catch (error) {
-    logger.error('Error creating room:', { userId: req.user?.id, error: describeErrorSafely(error) });
+    logger.error('Error creating room:', {
+      userId: req.user?.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error creating room',
       error: describeErrorSafely(error),
@@ -1052,9 +1104,8 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     // Check if there are more results
     const hasMore = rooms.length > limitNum;
     const roomsToReturn = hasMore ? rooms.slice(0, limitNum) : rooms;
-    const nextCursor = hasMore && roomsToReturn.length > 0
-      ? roomsToReturn[roomsToReturn.length - 1].id
-      : undefined;
+    const nextCursor =
+      hasMore && roomsToReturn.length > 0 ? roomsToReturn[roomsToReturn.length - 1].id : undefined;
 
     res.json({
       rooms: roomsToReturn.map((room) => stripInternalStreamFields(room)),
@@ -1062,7 +1113,11 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       nextCursor,
     });
   } catch (error) {
-    logger.error('Error fetching rooms:', { userId: req.user?.id, error: describeErrorSafely(error), query: req.query });
+    logger.error('Error fetching rooms:', {
+      userId: req.user?.id,
+      error: describeErrorSafely(error),
+      query: req.query,
+    });
     res.status(500).json({
       message: 'Error fetching rooms',
       error: describeErrorSafely(error),
@@ -1082,7 +1137,10 @@ router.get('/top-hosts', async (req: AuthRequest, res: Response) => {
 
     res.json({ hosts: await findTopHosts(limitNum) });
   } catch (error) {
-    logger.error('Error fetching top hosts:', { userId: req.user?.id, error: describeErrorSafely(error) });
+    logger.error('Error fetching top hosts:', {
+      userId: req.user?.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error fetching top hosts',
       error: describeErrorSafely(error),
@@ -1192,7 +1250,10 @@ router.get('/me/presence-preference', requireOxyAuth, async (req: AuthRequest, r
     const userId = getRequiredOxyUserId(req);
     res.json({ liveVisibility: await findLiveVisibility(userId) });
   } catch (error) {
-    logger.error('Error fetching presence preference:', { userId: req.user?.id, error: describeErrorSafely(error) });
+    logger.error('Error fetching presence preference:', {
+      userId: req.user?.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error fetching presence preference',
       error: describeErrorSafely(error),
@@ -1217,7 +1278,10 @@ router.put('/me/presence-preference', requireOxyAuth, async (req: AuthRequest, r
 
     res.json({ liveVisibility: await setLiveVisibility(userId, liveVisibility) });
   } catch (error) {
-    logger.error('Error updating presence preference:', { userId: req.user?.id, error: describeErrorSafely(error) });
+    logger.error('Error updating presence preference:', {
+      userId: req.user?.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error updating presence preference',
       error: describeErrorSafely(error),
@@ -1251,13 +1315,11 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
         return res.status(404).json({ message: 'Room not found' });
       }
       if (!canAccessRooms(owning.house, owning.members, userId)) {
-        return res.status(403).json({ message: 'Only members can view this house\'s rooms' });
+        return res.status(403).json({ message: "Only members can view this house's rooms" });
       }
     }
 
-    const canViewInternalStreamFields = userId
-      ? await canManageRoom(room, userId)
-      : false;
+    const canViewInternalStreamFields = userId ? await canManageRoom(room, userId) : false;
 
     const queue = await findRoomQueue(room.id);
 
@@ -1267,7 +1329,11 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
         : stripInternalStreamFields(room, queue),
     });
   } catch (error) {
-    logger.error('Error fetching room:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error fetching room:', {
+      userId: req.user?.id,
+      roomId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error fetching room',
       error: describeErrorSafely(error),
@@ -1294,7 +1360,14 @@ router.post('/:id/start', async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Room not found' });
     }
 
-    if (!(await sendForbiddenUnlessRoomManager(room, userId, res, 'Only a room manager can start the room'))) {
+    if (
+      !(await sendForbiddenUnlessRoomManager(
+        room,
+        userId,
+        res,
+        'Only a room manager can start the room',
+      ))
+    ) {
       return;
     }
 
@@ -1335,7 +1408,9 @@ router.post('/:id/start', async (req: AuthRequest, res: Response) => {
     if (started.recordingEnabled) {
       try {
         recordingDoc = await startRecordingForRoom(started);
-        logger.info(`Auto-started recording for room ${started.id}, egressId: ${recordingDoc.egressId}`);
+        logger.info(
+          `Auto-started recording for room ${started.id}, egressId: ${recordingDoc.egressId}`,
+        );
       } catch (recErr) {
         logger.error(`Failed to auto-start recording for room ${started.id}:`, recErr);
         // Non-fatal: room goes live even if recording fails
@@ -1360,7 +1435,11 @@ router.post('/:id/start', async (req: AuthRequest, res: Response) => {
       room: stripInternalStreamFields(started),
     });
   } catch (error) {
-    logger.error('Error starting room:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error starting room:', {
+      userId: req.user?.id,
+      roomId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error starting room',
       error: describeErrorSafely(error),
@@ -1387,7 +1466,14 @@ router.post('/:id/end', async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Room not found' });
     }
 
-    if (!(await sendForbiddenUnlessRoomManager(room, userId, res, 'Only a room manager can end the room'))) {
+    if (
+      !(await sendForbiddenUnlessRoomManager(
+        room,
+        userId,
+        res,
+        'Only a room manager can end the room',
+      ))
+    ) {
       return;
     }
 
@@ -1425,7 +1511,9 @@ router.post('/:id/end', async (req: AuthRequest, res: Response) => {
 
     // Clean up LiveKit room
     deleteLiveKitRoomForRoom(room.id).catch((err) => {
-      logger.error(`Failed to delete LiveKit room for room ${id}:`, { err: describeErrorSafely(err) });
+      logger.error(`Failed to delete LiveKit room for room ${id}:`, {
+        err: describeErrorSafely(err),
+      });
     });
 
     logger.info(`Room ended: ${ended.id}`);
@@ -1438,7 +1526,11 @@ router.post('/:id/end', async (req: AuthRequest, res: Response) => {
       room: stripInternalStreamFields(ended),
     });
   } catch (error) {
-    logger.error('Error ending room:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error ending room:', {
+      userId: req.user?.id,
+      roomId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error ending room',
       error: describeErrorSafely(error),
@@ -1467,7 +1559,14 @@ router.post('/:id/stop', async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Room not found' });
     }
 
-    if (!(await sendForbiddenUnlessRoomManager(room, userId, res, 'Only a room manager can stop the room'))) {
+    if (
+      !(await sendForbiddenUnlessRoomManager(
+        room,
+        userId,
+        res,
+        'Only a room manager can stop the room',
+      ))
+    ) {
       return;
     }
 
@@ -1503,7 +1602,9 @@ router.post('/:id/stop', async (req: AuthRequest, res: Response) => {
 
     // Clean up LiveKit room
     deleteLiveKitRoomForRoom(room.id).catch((err) => {
-      logger.error(`Failed to delete LiveKit room for room ${id}:`, { err: describeErrorSafely(err) });
+      logger.error(`Failed to delete LiveKit room for room ${id}:`, {
+        err: describeErrorSafely(err),
+      });
     });
 
     logger.info(`Room stopped (back to scheduled): ${stopped.id}`);
@@ -1516,7 +1617,11 @@ router.post('/:id/stop', async (req: AuthRequest, res: Response) => {
       room: stripInternalStreamFields(stopped),
     });
   } catch (error) {
-    logger.error('Error stopping room:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error stopping room:', {
+      userId: req.user?.id,
+      roomId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error stopping room',
       error: describeErrorSafely(error),
@@ -1549,7 +1654,7 @@ router.post('/:id/join', async (req: AuthRequest, res: Response) => {
     if (room.houseId) {
       const owning = await findHouseWithMembers(room.houseId);
       if (owning && !canAccessRooms(owning.house, owning.members, userId)) {
-        return res.status(403).json({ message: 'Only members can join this house\'s rooms' });
+        return res.status(403).json({ message: "Only members can join this house's rooms" });
       }
     }
 
@@ -1598,7 +1703,11 @@ router.post('/:id/join', async (req: AuthRequest, res: Response) => {
       room: stripInternalStreamFields(joined),
     });
   } catch (error) {
-    logger.error('Error joining room:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error joining room:', {
+      userId: req.user?.id,
+      roomId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error joining room',
       error: describeErrorSafely(error),
@@ -1644,7 +1753,11 @@ router.post('/:id/leave', async (req: AuthRequest, res: Response) => {
       message: 'Left room successfully',
     });
   } catch (error) {
-    logger.error('Error leaving room:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error leaving room:', {
+      userId: req.user?.id,
+      roomId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error leaving room',
       error: describeErrorSafely(error),
@@ -1676,7 +1789,14 @@ router.post('/:id/speakers', async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Room not found' });
     }
 
-    if (!(await sendForbiddenUnlessRoomManager(room, userId, res, 'Only a room manager can add speakers'))) {
+    if (
+      !(await sendForbiddenUnlessRoomManager(
+        room,
+        userId,
+        res,
+        'Only a room manager can add speakers',
+      ))
+    ) {
       return;
     }
 
@@ -1705,7 +1825,12 @@ router.post('/:id/speakers', async (req: AuthRequest, res: Response) => {
       room: stripInternalStreamFields(updated),
     });
   } catch (error) {
-    logger.error('Error adding speaker:', { userId: req.user?.id, roomId: req.params.id, speakerId: req.body.userId, error: describeErrorSafely(error) });
+    logger.error('Error adding speaker:', {
+      userId: req.user?.id,
+      roomId: req.params.id,
+      speakerId: req.body.userId,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error adding speaker',
       error: describeErrorSafely(error),
@@ -1733,7 +1858,14 @@ router.delete('/:id/speakers/:userId', async (req: AuthRequest, res: Response) =
       return res.status(404).json({ message: 'Room not found' });
     }
 
-    if (!(await sendForbiddenUnlessRoomManager(room, currentUserId, res, 'Only a room manager can remove speakers'))) {
+    if (
+      !(await sendForbiddenUnlessRoomManager(
+        room,
+        currentUserId,
+        res,
+        'Only a room manager can remove speakers',
+      ))
+    ) {
       return;
     }
 
@@ -1761,7 +1893,12 @@ router.delete('/:id/speakers/:userId', async (req: AuthRequest, res: Response) =
       room: stripInternalStreamFields(updated),
     });
   } catch (error) {
-    logger.error('Error removing speaker:', { userId: req.user?.id, roomId: req.params.id, speakerId: req.params.userId, error: describeErrorSafely(error) });
+    logger.error('Error removing speaker:', {
+      userId: req.user?.id,
+      roomId: req.params.id,
+      speakerId: req.params.userId,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error removing speaker',
       error: describeErrorSafely(error),
@@ -1815,7 +1952,11 @@ router.post('/:id/token', async (req: AuthRequest, res: Response) => {
       url: process.env.LIVEKIT_URL || '',
     });
   } catch (error) {
-    logger.error('Error generating room token:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error generating room token:', {
+      userId: req.user?.id,
+      roomId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error generating token',
       error: describeErrorSafely(error),
@@ -1858,7 +1999,14 @@ router.post('/:id/stream', async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Room not found' });
     }
 
-    if (!(await sendForbiddenUnlessRoomManager(room, userId, res, 'Only a room manager can add a live stream'))) {
+    if (
+      !(await sendForbiddenUnlessRoomManager(
+        room,
+        userId,
+        res,
+        'Only a room manager can add a live stream',
+      ))
+    ) {
       return;
     }
 
@@ -1879,7 +2027,11 @@ router.post('/:id/stream', async (req: AuthRequest, res: Response) => {
       userId,
     );
   } catch (error) {
-    logger.error('Error starting stream:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error starting stream:', {
+      userId: req.user?.id,
+      roomId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error starting stream',
       error: describeErrorSafely(error),
@@ -1940,7 +2092,14 @@ router.post('/:id/stream/podcast', async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Room not found' });
     }
 
-    if (!(await sendForbiddenUnlessRoomManager(room, userId, res, 'Only a room manager can add a live stream'))) {
+    if (
+      !(await sendForbiddenUnlessRoomManager(
+        room,
+        userId,
+        res,
+        'Only a room manager can add a live stream',
+      ))
+    ) {
       return;
     }
 
@@ -1969,7 +2128,11 @@ router.post('/:id/stream/podcast', async (req: AuthRequest, res: Response) => {
       url: outcome.url,
     });
   } catch (error) {
-    logger.error('Error starting podcast stream:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error starting podcast stream:', {
+      userId: req.user?.id,
+      roomId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error starting stream',
       error: describeErrorSafely(error),
@@ -2058,7 +2221,14 @@ router.post('/:id/stream/track', async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Room not found' });
     }
 
-    if (!(await sendForbiddenUnlessRoomManager(room, userId, res, 'Only a room manager can add a live stream'))) {
+    if (
+      !(await sendForbiddenUnlessRoomManager(
+        room,
+        userId,
+        res,
+        'Only a room manager can add a live stream',
+      ))
+    ) {
       return;
     }
 
@@ -2076,9 +2246,10 @@ router.post('/:id/stream/track', async (req: AuthRequest, res: Response) => {
       firstTrackId = parsed.trackId;
       queue = parsed.queue;
     } else {
-      const items = parsed.kind === 'album'
-        ? await resolveAlbumTracks(parsed.albumId)
-        : await resolvePlaylistTracks(parsed.playlistId);
+      const items =
+        parsed.kind === 'album'
+          ? await resolveAlbumTracks(parsed.albumId)
+          : await resolvePlaylistTracks(parsed.playlistId);
       const [head, ...rest] = items;
       if (!head?.trackId) {
         return res.status(404).json({ message: 'No playable tracks found' });
@@ -2098,7 +2269,11 @@ router.post('/:id/stream/track', async (req: AuthRequest, res: Response) => {
       url: outcome.url,
     });
   } catch (error) {
-    logger.error('Error starting track stream:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error starting track stream:', {
+      userId: req.user?.id,
+      roomId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error starting stream',
       error: describeErrorSafely(error),
@@ -2130,7 +2305,14 @@ router.post('/:id/stream/podcast/next', async (req: AuthRequest, res: Response) 
       return res.status(404).json({ message: 'Room not found' });
     }
 
-    if (!(await sendForbiddenUnlessRoomManager(room, userId, res, 'Only a room manager can control the stream'))) {
+    if (
+      !(await sendForbiddenUnlessRoomManager(
+        room,
+        userId,
+        res,
+        'Only a room manager can control the stream',
+      ))
+    ) {
       return;
     }
 
@@ -2152,7 +2334,11 @@ router.post('/:id/stream/podcast/next', async (req: AuthRequest, res: Response) 
       url: result.url,
     });
   } catch (error) {
-    logger.error('Error advancing podcast stream:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error advancing podcast stream:', {
+      userId: req.user?.id,
+      roomId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error advancing stream',
       error: describeErrorSafely(error),
@@ -2178,7 +2364,14 @@ router.delete('/:id/stream', async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Room not found' });
     }
 
-    if (!(await sendForbiddenUnlessRoomManager(room, userId, res, 'Only a room manager can remove the stream'))) {
+    if (
+      !(await sendForbiddenUnlessRoomManager(
+        room,
+        userId,
+        res,
+        'Only a room manager can remove the stream',
+      ))
+    ) {
       return;
     }
 
@@ -2199,7 +2392,11 @@ router.delete('/:id/stream', async (req: AuthRequest, res: Response) => {
 
     res.json({ message: 'Stream stopped successfully' });
   } catch (error) {
-    logger.error('Error stopping stream:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error stopping stream:', {
+      userId: req.user?.id,
+      roomId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error stopping stream',
       error: describeErrorSafely(error),
@@ -2214,9 +2411,7 @@ type UpdateStreamMetadataBody = {
   description?: unknown;
 };
 
-type ParsedOptionalText =
-  | { ok: true; value: string | null }
-  | { ok: false; message: string };
+type ParsedOptionalText = { ok: true; value: string | null } | { ok: false; message: string };
 
 /**
  * An optional stream text field: a non-empty trimmed string, or `null` to CLEAR.
@@ -2298,7 +2493,14 @@ router.patch('/:id/stream', async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Room not found' });
     }
 
-    if (!(await sendForbiddenUnlessRoomManager(room, userId, res, 'Only a room manager can update stream info'))) {
+    if (
+      !(await sendForbiddenUnlessRoomManager(
+        room,
+        userId,
+        res,
+        'Only a room manager can update stream info',
+      ))
+    ) {
       return;
     }
 
@@ -2326,7 +2528,7 @@ router.patch('/:id/stream', async (req: AuthRequest, res: Response) => {
       try {
         await ensureLiveKitRoomForRoom(room.id, room.maxParticipants);
         ingressResult = await createIngressReplacingExisting(room, room.id, () =>
-          createRoomUrlIngress(room.id, nextStreamUrl)
+          createRoomUrlIngress(room.id, nextStreamUrl),
         );
         await cleanupPreviousIngressAfterReplacement(room.id, ingressResult);
       } catch (liveKitError) {
@@ -2361,7 +2563,11 @@ router.patch('/:id/stream', async (req: AuthRequest, res: Response) => {
 
     res.json({ message: 'Stream info updated', url: updated.activeStreamUrl || null });
   } catch (error) {
-    logger.error('Error updating stream metadata:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error updating stream metadata:', {
+      userId: req.user?.id,
+      roomId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error updating stream info',
       error: describeErrorSafely(error),
@@ -2389,7 +2595,14 @@ router.post('/:id/stream/rtmp', async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Room not found' });
     }
 
-    if (!(await sendForbiddenUnlessRoomManager(room, userId, res, 'Only a room manager can configure streaming'))) {
+    if (
+      !(await sendForbiddenUnlessRoomManager(
+        room,
+        userId,
+        res,
+        'Only a room manager can configure streaming',
+      ))
+    ) {
       return;
     }
 
@@ -2401,7 +2614,7 @@ router.post('/:id/stream/rtmp', async (req: AuthRequest, res: Response) => {
     try {
       await ensureLiveKitRoomForRoom(room.id, room.maxParticipants);
       ingressResult = await createIngressReplacingExisting(room, room.id, () =>
-        createRoomRtmpIngress(room.id)
+        createRoomRtmpIngress(room.id),
       );
       await cleanupPreviousIngressAfterReplacement(room.id, ingressResult);
     } catch (liveKitError) {
@@ -2415,9 +2628,7 @@ router.post('/:id/stream/rtmp', async (req: AuthRequest, res: Response) => {
     // public URL configured.  Derive a fallback from LIVEKIT_URL.
     let rtmpUrl = ingressResult.ingress.url || '';
     if (!rtmpUrl) {
-      const host = (process.env.LIVEKIT_URL || '')
-        .replace(/^wss?:\/\//, '')
-        .replace(/\/+$/, '');
+      const host = (process.env.LIVEKIT_URL || '').replace(/^wss?:\/\//, '').replace(/\/+$/, '');
       if (host) rtmpUrl = `rtmp://${host}:1935/live`;
     }
 
@@ -2449,7 +2660,11 @@ router.post('/:id/stream/rtmp', async (req: AuthRequest, res: Response) => {
       streamKey: ingressResult.ingress.streamKey,
     });
   } catch (error) {
-    logger.error('Error generating RTMP key:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error generating RTMP key:', {
+      userId: req.user?.id,
+      roomId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error generating stream key',
       error: describeErrorSafely(error),
@@ -2476,7 +2691,14 @@ router.delete('/:id', async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Room not found' });
     }
 
-    if (!(await sendForbiddenUnlessRoomManager(room, userId, res, 'Only a room manager can delete the room'))) {
+    if (
+      !(await sendForbiddenUnlessRoomManager(
+        room,
+        userId,
+        res,
+        'Only a room manager can delete the room',
+      ))
+    ) {
       return;
     }
 
@@ -2494,7 +2716,11 @@ router.delete('/:id', async (req: AuthRequest, res: Response) => {
 
     res.json({ success: true });
   } catch (error) {
-    logger.error('Error deleting room:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error deleting room:', {
+      userId: req.user?.id,
+      roomId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error deleting room',
       error: describeErrorSafely(error),
@@ -2521,7 +2747,14 @@ router.patch('/:id/archive', async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Room not found' });
     }
 
-    if (!(await sendForbiddenUnlessRoomManager(room, userId, res, 'Only a room manager can archive the room'))) {
+    if (
+      !(await sendForbiddenUnlessRoomManager(
+        room,
+        userId,
+        res,
+        'Only a room manager can archive the room',
+      ))
+    ) {
       return;
     }
 
@@ -2540,7 +2773,11 @@ router.patch('/:id/archive', async (req: AuthRequest, res: Response) => {
 
     res.json({ success: true, archived: updated.archived });
   } catch (error) {
-    logger.error('Error archiving room:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error archiving room:', {
+      userId: req.user?.id,
+      roomId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error archiving room',
       error: describeErrorSafely(error),
@@ -2570,7 +2807,14 @@ router.post('/:id/recording/start', async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Room not found' });
     }
 
-    if (!(await sendForbiddenUnlessRoomManager(room, userId, res, 'Only a room manager can start recording'))) {
+    if (
+      !(await sendForbiddenUnlessRoomManager(
+        room,
+        userId,
+        res,
+        'Only a room manager can start recording',
+      ))
+    ) {
       return;
     }
 
@@ -2600,7 +2844,11 @@ router.post('/:id/recording/start', async (req: AuthRequest, res: Response) => {
       recording,
     });
   } catch (error) {
-    logger.error('Error starting recording:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error starting recording:', {
+      userId: req.user?.id,
+      roomId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error starting recording',
       error: describeErrorSafely(error),
@@ -2626,7 +2874,14 @@ router.post('/:id/recording/stop', async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Room not found' });
     }
 
-    if (!(await sendForbiddenUnlessRoomManager(room, userId, res, 'Only a room manager can stop recording'))) {
+    if (
+      !(await sendForbiddenUnlessRoomManager(
+        room,
+        userId,
+        res,
+        'Only a room manager can stop recording',
+      ))
+    ) {
       return;
     }
 
@@ -2643,7 +2898,11 @@ router.post('/:id/recording/stop', async (req: AuthRequest, res: Response) => {
 
     res.json({ message: 'Recording stopped' });
   } catch (error) {
-    logger.error('Error stopping recording:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error stopping recording:', {
+      userId: req.user?.id,
+      roomId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error stopping recording',
       error: describeErrorSafely(error),
@@ -2666,9 +2925,7 @@ router.get('/:id/recordings', async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Room not found' });
     }
 
-    const canManage = userId
-      ? await canManageRoom(room, userId)
-      : false;
+    const canManage = userId ? await canManageRoom(room, userId) : false;
 
     const limitNum = Math.min(Math.max(parseInt(limit as string, 10) || 20, 1), 100);
 
@@ -2682,9 +2939,10 @@ router.get('/:id/recordings', async (req: AuthRequest, res: Response) => {
 
     const hasMore = recordings.length > limitNum;
     const recordingsToReturn = hasMore ? recordings.slice(0, limitNum) : recordings;
-    const nextCursor = hasMore && recordingsToReturn.length > 0
-      ? recordingsToReturn[recordingsToReturn.length - 1].id
-      : undefined;
+    const nextCursor =
+      hasMore && recordingsToReturn.length > 0
+        ? recordingsToReturn[recordingsToReturn.length - 1].id
+        : undefined;
 
     res.json({
       recordings: recordingsToReturn,
@@ -2692,7 +2950,11 @@ router.get('/:id/recordings', async (req: AuthRequest, res: Response) => {
       nextCursor,
     });
   } catch (error) {
-    logger.error('Error fetching recordings:', { userId: req.user?.id, roomId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error fetching recordings:', {
+      userId: req.user?.id,
+      roomId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error fetching recordings',
       error: describeErrorSafely(error),
@@ -2708,36 +2970,50 @@ router.get('/:id/recordings', async (req: AuthRequest, res: Response) => {
  * Upload room/stream image
  * POST /api/rooms/:id/image
  */
-router.post('/:id/image', uploadMiddleware.single('file'), async (req: AuthRequest, res: Response) => {
-  try {
-    const userId = req.user?.id;
-    const id = getParam(req, 'id');
+router.post(
+  '/:id/image',
+  uploadMiddleware.single('file'),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      const id = getParam(req, 'id');
 
-    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
-    if (!req.file) return res.status(400).json({ message: 'No file provided' });
+      if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+      if (!req.file) return res.status(400).json({ message: 'No file provided' });
 
-    const room = await loadRoom(id);
-    if (!room) return res.status(404).json({ message: 'Room not found' });
-    if (!(await sendForbiddenUnlessRoomManager(room, userId, res, 'Only a room manager can upload a room image'))) {
-      return;
+      const room = await loadRoom(id);
+      if (!room) return res.status(404).json({ message: 'Room not found' });
+      if (
+        !(await sendForbiddenUnlessRoomManager(
+          room,
+          userId,
+          res,
+          'Only a room manager can upload a room image',
+        ))
+      ) {
+        return;
+      }
+
+      const { buffer, contentType } = await processImage(req.file.buffer, 'roomImage');
+      const objectKey = getAgoraRoomImageKey(id as string);
+
+      const oldStreamImageKey = cdnUrlToKey(room.streamImage);
+      if (oldStreamImageKey && oldStreamImageKey !== objectKey) {
+        deleteObject(oldStreamImageKey).catch(() => {});
+      }
+
+      const cdnUrl = await uploadObject(objectKey, buffer, contentType, 'public-read');
+      await updateRoom(room.id, { streamImage: cdnUrl });
+
+      res.json({ streamImage: cdnUrl });
+    } catch (error) {
+      logger.error('Error uploading room image:', {
+        roomId: req.params.id,
+        error: describeErrorSafely(error),
+      });
+      res.status(500).json({ message: 'Error uploading image', error: describeErrorSafely(error) });
     }
-
-    const { buffer, contentType } = await processImage(req.file.buffer, 'roomImage');
-    const objectKey = getAgoraRoomImageKey(id as string);
-
-    const oldStreamImageKey = cdnUrlToKey(room.streamImage);
-    if (oldStreamImageKey && oldStreamImageKey !== objectKey) {
-      deleteObject(oldStreamImageKey).catch(() => {});
-    }
-
-    const cdnUrl = await uploadObject(objectKey, buffer, contentType, 'public-read');
-    await updateRoom(room.id, { streamImage: cdnUrl });
-
-    res.json({ streamImage: cdnUrl });
-  } catch (error) {
-    logger.error('Error uploading room image:', { roomId: req.params.id, error: describeErrorSafely(error) });
-    res.status(500).json({ message: 'Error uploading image', error: describeErrorSafely(error) });
-  }
-});
+  },
+);
 
 export default router;

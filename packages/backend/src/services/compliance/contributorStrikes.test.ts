@@ -73,7 +73,10 @@ describe('recordContributorStrike', () => {
     const outcome = await recordContributorStrike(UPLOADER, 'first complaint', trackId);
 
     expect(outcome).toEqual({
-      oxyUserId: UPLOADER, strikeCount: 1, terminated: false, alreadyTerminated: false,
+      oxyUserId: UPLOADER,
+      strikeCount: 1,
+      terminated: false,
+      alreadyTerminated: false,
     });
     const standing = await storedStanding(UPLOADER);
     expect(standing?.strikeCount).toBe(1);

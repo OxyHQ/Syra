@@ -50,7 +50,8 @@ function getErrorMessage(error: unknown): string {
     const data = responseRecord.data;
     if (data && typeof data === 'object') {
       const dataRecord = data as Record<string, unknown>;
-      if (typeof dataRecord.message === 'string' && dataRecord.message.trim()) return dataRecord.message;
+      if (typeof dataRecord.message === 'string' && dataRecord.message.trim())
+        return dataRecord.message;
       if (typeof dataRecord.error === 'string' && dataRecord.error.trim()) return dataRecord.error;
     }
     if (typeof responseRecord.status === 'number') {
@@ -153,7 +154,8 @@ async function resolveFromEndpoint(
     return cached.promise;
   }
 
-  const promise = api.get<StreamResolution>(endpoint)
+  const promise = api
+    .get<StreamResolution>(endpoint)
     .then((res) => {
       const resolution = absoluteResolution(res.data);
       remember(cacheKey, {
@@ -164,9 +166,7 @@ async function resolveFromEndpoint(
     })
     .catch((error) => {
       streamCache.delete(cacheKey);
-      throw new Error(
-        `Failed to resolve stream for ${label}: ${getErrorMessage(error)}`,
-      );
+      throw new Error(`Failed to resolve stream for ${label}: ${getErrorMessage(error)}`);
     });
 
   remember(cacheKey, {

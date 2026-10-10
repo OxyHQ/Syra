@@ -67,7 +67,10 @@ export function oxyImageVariantForTarget(target: CatalogImageTarget): string {
   return (rung ?? WIDEST_OXY_IMAGE_VARIANT).variant;
 }
 
-function normalizeCandidate(urlValue: string | undefined, widthValue: number | undefined): ImageCandidate | null {
+function normalizeCandidate(
+  urlValue: string | undefined,
+  widthValue: number | undefined,
+): ImageCandidate | null {
   if (!urlValue) return null;
   const url = resolveCatalogImageUrl(urlValue);
   if (!url) return null;
@@ -80,7 +83,9 @@ function normalizeCandidate(urlValue: string | undefined, widthValue: number | u
 
 function candidateFromVariant(variant: CatalogImageVariant | undefined): ImageCandidate | null {
   if (!variant) return null;
-  return normalizeCandidate(variant.url, variant.width) ?? normalizeCandidate(variant.id, variant.width);
+  return (
+    normalizeCandidate(variant.url, variant.width) ?? normalizeCandidate(variant.id, variant.width)
+  );
 }
 
 /**
@@ -154,7 +159,13 @@ export function pickCatalogImageUrl(
   sizes?: CatalogImageSizes,
   externalFallback?: string,
 ): string | undefined {
-  return pickImageUrl(images, fallback, CATALOG_IMAGE_TARGET_WIDTH[target], sizes, externalFallback);
+  return pickImageUrl(
+    images,
+    fallback,
+    CATALOG_IMAGE_TARGET_WIDTH[target],
+    sizes,
+    externalFallback,
+  );
 }
 
 /** The subset of a podcast or episode needed to resolve its artwork. */
@@ -181,5 +192,11 @@ export function resolvePodcastArtwork(
   if (!source) {
     return undefined;
   }
-  return pickCatalogImageUrl(undefined, source.image, target, source.imageSizes, source.imageSourceUrl);
+  return pickCatalogImageUrl(
+    undefined,
+    source.image,
+    target,
+    source.imageSizes,
+    source.imageSourceUrl,
+  );
 }

@@ -209,7 +209,12 @@
 
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { type MigrationRun, MIGRATION_RUNS, readTargetDatabase, runMigrations } from '@oxy.so/db/migrate';
+import {
+  type MigrationRun,
+  MIGRATION_RUNS,
+  readTargetDatabase,
+  runMigrations,
+} from '@oxy.so/db/migrate';
 import { logger } from '../utils/logger';
 import { REQUIRED_EXTENSIONS } from './extensions';
 import { describeErrorSafely } from '../utils/error';
@@ -277,8 +282,8 @@ export function findMigrationsFolder(): string {
   }
   throw new Error(
     'Cannot locate the drizzle/ migrations directory. Looked in:\n' +
-    `${attempted.map((path) => `  ${path}`).join('\n')}\n` +
-    'It must ship next to the compiled migrator.'
+      `${attempted.map((path) => `  ${path}`).join('\n')}\n` +
+      'It must ship next to the compiled migrator.',
   );
 }
 
@@ -295,7 +300,7 @@ function readRun(argv: readonly string[]): MigrationRun {
   if (flags.length === 0) {
     throw new Error(
       `--phase is required. Use one of: ${MIGRATION_RUNS.map((run) => `--phase=${run}`).join(', ')}. ` +
-      '`--phase=all` is the right answer for a developer database or a manual dispatch.'
+        '`--phase=all` is the right answer for a developer database or a manual dispatch.',
     );
   }
   if (flags.length > 1) {
@@ -320,7 +325,7 @@ async function main(): Promise<void> {
   if (!url) {
     throw new Error(
       'DATABASE_URL is not set. Start a local Postgres with: ' +
-      'docker compose -f docker-compose.postgres.yml up -d postgres'
+        'docker compose -f docker-compose.postgres.yml up -d postgres',
     );
   }
 

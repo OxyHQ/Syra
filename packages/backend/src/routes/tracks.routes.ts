@@ -22,4 +22,3 @@ router.post('/upload', requireAuth, uploadTrack);
 router.patch('/:id', requireAuth, updateTrack);
 
 export default router;
-

@@ -1,11 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import {
-  LayoutChangeEvent,
-  StyleProp,
-  StyleSheet,
-  View,
-  ViewStyle,
-} from 'react-native';
+import { LayoutChangeEvent, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 
 interface ResponsiveGridProps {
   children: React.ReactNode;
@@ -37,10 +31,7 @@ export function getResponsiveGridLayout({
     minimumColumns,
     Math.floor((containerWidth + gap) / (minItemWidth + gap)),
   );
-  const itemWidth = Math.max(
-    1,
-    Math.floor((containerWidth - gap * (columns - 1)) / columns),
-  );
+  const itemWidth = Math.max(1, Math.floor((containerWidth - gap * (columns - 1)) / columns));
 
   return { columns, itemWidth };
 }
@@ -62,9 +53,9 @@ export function ResponsiveGrid({
 
   const handleLayout = (event: LayoutChangeEvent) => {
     const nextWidth = Math.floor(event.nativeEvent.layout.width);
-    setContainerWidth((currentWidth) => (
-      Math.abs(currentWidth - nextWidth) > 1 ? nextWidth : currentWidth
-    ));
+    setContainerWidth((currentWidth) =>
+      Math.abs(currentWidth - nextWidth) > 1 ? nextWidth : currentWidth,
+    );
   };
 
   return (
@@ -73,7 +64,7 @@ export function ResponsiveGrid({
         const isLastColumn = (index + 1) % layout.columns === 0;
         return (
           <View
-            key={React.isValidElement(child) ? child.key ?? index : index}
+            key={React.isValidElement(child) ? (child.key ?? index) : index}
             style={[
               styles.item,
               {

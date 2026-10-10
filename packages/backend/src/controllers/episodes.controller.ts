@@ -135,7 +135,11 @@ export async function updateEpisodeProgress(req: AuthRequest, res: Response): Pr
  */
 export async function getContinueListening(req: AuthRequest, res: Response): Promise<void> {
   const userId = getRequiredOxyUserId(req);
-  const limit = parseClampedLimit(req.query.limit, { min: CONTINUE_LIMIT_MIN, max: CONTINUE_LIMIT_MAX, fallback: CONTINUE_LIMIT_DEFAULT });
+  const limit = parseClampedLimit(req.query.limit, {
+    min: CONTINUE_LIMIT_MIN,
+    max: CONTINUE_LIMIT_MAX,
+    fallback: CONTINUE_LIMIT_DEFAULT,
+  });
 
   const progressRows = await listContinueListening(userId, limit);
   if (progressRows.length === 0) {
@@ -146,7 +150,10 @@ export async function getContinueListening(req: AuthRequest, res: Response): Pro
   // Viewer-filtered: an entry whose show has since gone private or been
   // unpublished drops out of the list here rather than in the client. The
   // `episode_progress` row survives, so it comes back if the show does.
-  const episodeRows = await findEpisodesByIds(progressRows.map((row) => row.episodeId), userId);
+  const episodeRows = await findEpisodesByIds(
+    progressRows.map((row) => row.episodeId),
+    userId,
+  );
   // Distinct parent shows resolved in ONE query so cover-less episodes inherit
   // their show's artwork without an N+1.
   const dtos = await toEpisodeDtos(episodeRows, userId);
@@ -250,7 +257,7 @@ export async function updateEpisode(req: AuthRequest, res: Response): Promise<vo
  */
 async function loadOwnedEpisodeOrRespond(
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<EpisodeWithShow | undefined> {
   const userId = getRequiredOxyUserId(req);
   const id = getParam(req, 'id');

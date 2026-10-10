@@ -228,7 +228,7 @@ describe('discovery axis — GET /api/houses/:id (see the house exists)', () => 
 });
 
 describe('discovery axis — GET /api/houses (listing)', () => {
-  it('lists only `listed` houses to a non-member, plus that member\'s own hidden/unlisted', async () => {
+  it("lists only `listed` houses to a non-member, plus that member's own hidden/unlisted", async () => {
     await houseWith({ discovery: HouseDiscovery.LISTED });
     await houseWith({ discovery: HouseDiscovery.UNLISTED });
     await houseWith({ discovery: HouseDiscovery.HIDDEN });
@@ -321,7 +321,7 @@ describe('rooms axis — GET /api/houses/:id/rooms and /series', () => {
  * non-member — so this is a confidentiality gap, not an access-control one.
  */
 describe('rooms axis — GET /api/rooms (global listing)', () => {
-  it('omits a sealed house\'s room, for a non-member and anonymous alike', async () => {
+  it("omits a sealed house's room, for a non-member and anonymous alike", async () => {
     const sealed = await houseWith({ discovery: HouseDiscovery.LISTED, rooms: HouseRooms.MEMBERS });
     await roomIn(sealed.id);
 
@@ -339,7 +339,7 @@ describe('rooms axis — GET /api/rooms (global listing)', () => {
     }
   });
 
-  it('omits a hidden house\'s room even when its rooms axis is open', async () => {
+  it("omits a hidden house's room even when its rooms axis is open", async () => {
     const hidden = await houseWith({ discovery: HouseDiscovery.HIDDEN, rooms: HouseRooms.ANYONE });
     await roomIn(hidden.id);
 
@@ -350,7 +350,7 @@ describe('rooms axis — GET /api/rooms (global listing)', () => {
     }
   });
 
-  it('?houseId= cannot enumerate a sealed house\'s rooms', async () => {
+  it("?houseId= cannot enumerate a sealed house's rooms", async () => {
     const sealed = await houseWith({ rooms: HouseRooms.MEMBERS });
     const id = sealed.id;
     await roomIn(id);
@@ -451,8 +451,9 @@ describe('rooms axis — the query filter agrees with the predicates', () => {
           canAccessRooms(fresh.house, fresh.members, caller);
         const filterAllows = !hidden.has(house.id);
 
-        expect(`${discovery}/${rooms} as ${caller ?? 'anonymous'} → ${filterAllows}`)
-          .toBe(`${discovery}/${rooms} as ${caller ?? 'anonymous'} → ${predicatesAllow}`);
+        expect(`${discovery}/${rooms} as ${caller ?? 'anonymous'} → ${filterAllows}`).toBe(
+          `${discovery}/${rooms} as ${caller ?? 'anonymous'} → ${predicatesAllow}`,
+        );
       }
     }
   });
@@ -502,7 +503,9 @@ describe('join axis — POST /api/houses/:id/join', () => {
     const house = await houseWith({ join: HouseJoin.ANYONE });
     const id = house.id;
 
-    const joined = await request('/api/houses', housesRoutes, `/${id}/join`, OUTSIDER_ID, { method: 'POST' });
+    const joined = await request('/api/houses', housesRoutes, `/${id}/join`, OUTSIDER_ID, {
+      method: 'POST',
+    });
     expect(joined.status).toBe(200);
 
     // Persisted as a real MEMBER.
@@ -510,13 +513,17 @@ describe('join axis — POST /api/houses/:id/join', () => {
     expect(isMember(after.members, OUTSIDER_ID)).toBe(true);
     expect(getMemberRole(after.members, OUTSIDER_ID)).toBe(HouseMemberRole.MEMBER);
 
-    const again = await request('/api/houses', housesRoutes, `/${id}/join`, OUTSIDER_ID, { method: 'POST' });
+    const again = await request('/api/houses', housesRoutes, `/${id}/join`, OUTSIDER_ID, {
+      method: 'POST',
+    });
     expect(again.status).toBe(400);
   });
 
   it('invite: a non-member is refused with 403', async () => {
     const house = await houseWith({ join: HouseJoin.INVITE });
-    const result = await request('/api/houses', housesRoutes, `/${house.id}/join`, OUTSIDER_ID, { method: 'POST' });
+    const result = await request('/api/houses', housesRoutes, `/${house.id}/join`, OUTSIDER_ID, {
+      method: 'POST',
+    });
     expect(result.status).toBe(403);
     const after = await loadHouse(house.id);
     expect(isMember(after.members, OUTSIDER_ID)).toBe(false);
@@ -524,7 +531,9 @@ describe('join axis — POST /api/houses/:id/join', () => {
 
   it('hidden + anyone: a stranger 404s (cannot join what they cannot see)', async () => {
     const house = await houseWith({ discovery: HouseDiscovery.HIDDEN, join: HouseJoin.ANYONE });
-    const result = await request('/api/houses', housesRoutes, `/${house.id}/join`, OUTSIDER_ID, { method: 'POST' });
+    const result = await request('/api/houses', housesRoutes, `/${house.id}/join`, OUTSIDER_ID, {
+      method: 'POST',
+    });
     expect(result.status).toBe(404);
     const after = await loadHouse(house.id);
     expect(isMember(after.members, OUTSIDER_ID)).toBe(false);
@@ -532,7 +541,9 @@ describe('join axis — POST /api/houses/:id/join', () => {
 
   it('rejects an unauthenticated caller with 401', async () => {
     const house = await houseWith({ join: HouseJoin.ANYONE });
-    const result = await request('/api/houses', housesRoutes, `/${house.id}/join`, undefined, { method: 'POST' });
+    const result = await request('/api/houses', housesRoutes, `/${house.id}/join`, undefined, {
+      method: 'POST',
+    });
     expect(result.status).toBe(401);
   });
 });
@@ -543,10 +554,14 @@ describe('room-entry gate — POST /api/rooms/:id/join inherits the house rooms 
     const room = await roomIn(house.id);
     const roomPath = `/${room.id}/join`;
 
-    const outsider = await request('/api/rooms', roomsRoutes, roomPath, OUTSIDER_ID, { method: 'POST' });
+    const outsider = await request('/api/rooms', roomsRoutes, roomPath, OUTSIDER_ID, {
+      method: 'POST',
+    });
     expect(outsider.status).toBe(403);
 
-    const member = await request('/api/rooms', roomsRoutes, roomPath, MEMBER_ID, { method: 'POST' });
+    const member = await request('/api/rooms', roomsRoutes, roomPath, MEMBER_ID, {
+      method: 'POST',
+    });
     expect(member.status).toBe(200);
     expect(member.body).toContain('Joined room successfully');
   });
@@ -554,7 +569,9 @@ describe('room-entry gate — POST /api/rooms/:id/join inherits the house rooms 
   it('open house: a non-member may enter', async () => {
     const house = await houseWith({ rooms: HouseRooms.ANYONE });
     const room = await roomIn(house.id);
-    const result = await request('/api/rooms', roomsRoutes, `/${room.id}/join`, OUTSIDER_ID, { method: 'POST' });
+    const result = await request('/api/rooms', roomsRoutes, `/${room.id}/join`, OUTSIDER_ID, {
+      method: 'POST',
+    });
     expect(result.status).toBe(200);
   });
 });

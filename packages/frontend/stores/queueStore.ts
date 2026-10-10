@@ -80,7 +80,9 @@ function getErrorMessage(error: unknown): string | null {
 function isRecoverableCurrentIndexError(error: unknown): boolean {
   const status = getStatus(error);
   const message = getErrorMessage(error);
-  return status === 400 && typeof message === 'string' && RECOVERABLE_CURRENT_INDEX_ERRORS.has(message);
+  return (
+    status === 400 && typeof message === 'string' && RECOVERABLE_CURRENT_INDEX_ERRORS.has(message)
+  );
 }
 
 function userFacingError(error: unknown, fallback: string): string {
@@ -111,7 +113,8 @@ function queueWithInsertedItems(
 
   return {
     ...baseQueue,
-    current: baseQueue.current >= insertIndex ? baseQueue.current + items.length : baseQueue.current,
+    current:
+      baseQueue.current >= insertIndex ? baseQueue.current + items.length : baseQueue.current,
     tracks: nextTracks,
   };
 }
@@ -159,13 +162,19 @@ let requestTail: Promise<unknown> = Promise.resolve();
 let queuedRequests = 0;
 function orderedRequest<T>(session: number, action: () => Promise<T>): Promise<T> {
   queuedRequests += 1;
-  const result = requestTail.then(() => {
-    if (useQueueStore.getState().accountSession !== session) throw new Error('Queue account changed');
-    return action();
-  }).finally(() => {
-    if (useQueueStore.getState().accountSession === session) queuedRequests -= 1;
-  });
-  requestTail = result.then(() => undefined, () => undefined);
+  const result = requestTail
+    .then(() => {
+      if (useQueueStore.getState().accountSession !== session)
+        throw new Error('Queue account changed');
+      return action();
+    })
+    .finally(() => {
+      if (useQueueStore.getState().accountSession === session) queuedRequests -= 1;
+    });
+  requestTail = result.then(
+    () => undefined,
+    () => undefined,
+  );
   return result;
 }
 function beginRequest() {
@@ -186,7 +195,16 @@ export const useQueueStore = create<QueueState>((set, get) => ({
     if (get().accountId === accountId) return;
     requestTail = Promise.resolve();
     queuedRequests = 0;
-    set({ accountId, accountSession: get().accountSession + 1, revision: get().revision + 1, queue: null, shuffle: 'off', repeat: RepeatMode.OFF, error: null, isLoading: false });
+    set({
+      accountId,
+      accountSession: get().accountSession + 1,
+      revision: get().revision + 1,
+      queue: null,
+      shuffle: 'off',
+      repeat: RepeatMode.OFF,
+      error: null,
+      isLoading: false,
+    });
   },
   moveOccurrence: async (from, to) => {
     const queue = get().queue;
@@ -227,7 +245,9 @@ export const useQueueStore = create<QueueState>((set, get) => ({
     const request = beginRequest();
     try {
       set({ isLoading: true, error: null });
-      const result = await orderedRequest(request.accountSession, () => queueService.addToQueue(refs, position));
+      const result = await orderedRequest(request.accountSession, () =>
+        queueService.addToQueue(refs, position),
+      );
       if (!isCurrent(request)) return;
       set({ queue: result.queue, isLoading: false });
     } catch (error) {
@@ -241,13 +261,18 @@ export const useQueueStore = create<QueueState>((set, get) => ({
   },
 
   replaceQueue: async (queue: Queue) => {
-    if (!queue.tracks.length) { await get().clearQueue(); return; }
+    if (!queue.tracks.length) {
+      await get().clearQueue();
+      return;
+    }
     const request = beginRequest();
     const previousQueue = get().queue;
     set({ queue, error: null, isLoading: false });
 
     try {
-      const result = await orderedRequest(request.accountSession, () => queueService.replaceQueue(queue));
+      const result = await orderedRequest(request.accountSession, () =>
+        queueService.replaceQueue(queue),
+      );
       if (!isCurrent(request)) return;
       set({ queue: result.queue });
     } catch (error) {
@@ -275,13 +300,19 @@ export const useQueueStore = create<QueueState>((set, get) => ({
     const request = beginRequest();
 
     const previousQueue = get().queue;
-    set({ queue: queueWithInsertedItems(previousQueue, items, position), error: null, isLoading: false });
+    set({
+      queue: queueWithInsertedItems(previousQueue, items, position),
+      error: null,
+      isLoading: false,
+    });
 
     try {
-      const result = await orderedRequest(request.accountSession, () => queueService.addToQueue(
-        items.map((item) => ({ kind: item.kind, id: item.id })),
-        position,
-      ));
+      const result = await orderedRequest(request.accountSession, () =>
+        queueService.addToQueue(
+          items.map((item) => ({ kind: item.kind, id: item.id })),
+          position,
+        ),
+      );
       if (!isCurrent(request)) return;
       set({ queue: result.queue });
     } catch (error) {
@@ -304,7 +335,9 @@ export const useQueueStore = create<QueueState>((set, get) => ({
     const request = beginRequest();
     try {
       set({ isLoading: true, error: null });
-      const result = await orderedRequest(request.accountSession, () => queueService.removeFromQueue(refs));
+      const result = await orderedRequest(request.accountSession, () =>
+        queueService.removeFromQueue(refs),
+      );
       if (!isCurrent(request)) return;
       set({ queue: result.queue, isLoading: false });
     } catch (error) {
@@ -321,7 +354,9 @@ export const useQueueStore = create<QueueState>((set, get) => ({
     const request = beginRequest();
     try {
       set({ isLoading: true, error: null });
-      const result = await orderedRequest(request.accountSession, () => queueService.reorderQueue(refs));
+      const result = await orderedRequest(request.accountSession, () =>
+        queueService.reorderQueue(refs),
+      );
       if (!isCurrent(request)) return;
       set({ queue: result.queue, isLoading: false });
     } catch (error) {
@@ -347,7 +382,10 @@ export const useQueueStore = create<QueueState>((set, get) => ({
       });
     } catch (error) {
       if (!isCurrent(request)) return;
-      if (isUnauthorizedError(error)) { set({ isLoading: false }); return; }
+      if (isUnauthorizedError(error)) {
+        set({ isLoading: false });
+        return;
+      }
       console.error('[QueueStore] Error clearing queue:', error);
       set({
         error: error instanceof Error ? error.message : 'Failed to clear queue',
@@ -369,7 +407,9 @@ export const useQueueStore = create<QueueState>((set, get) => ({
     set({ queue: { ...queue, current: index }, isLoading: false, error: null });
 
     try {
-      const result = await orderedRequest(request.accountSession, () => queueService.setCurrentIndex(index));
+      const result = await orderedRequest(request.accountSession, () =>
+        queueService.setCurrentIndex(index),
+      );
       if (!isCurrent(request)) return;
       set({ queue: result.queue });
     } catch (error) {
@@ -382,7 +422,9 @@ export const useQueueStore = create<QueueState>((set, get) => ({
 
         const repairedQueue = { ...currentQueue, current: index };
         try {
-          const result = await orderedRequest(request.accountSession, () => queueService.replaceQueue(repairedQueue));
+          const result = await orderedRequest(request.accountSession, () =>
+            queueService.replaceQueue(repairedQueue),
+          );
           if (!isCurrent(request)) return;
           set({ queue: result.queue, error: null });
         } catch (repairError) {

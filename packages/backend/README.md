@@ -246,7 +246,7 @@ erDiagram
 - `bun run dev` — Start development server with hot reload
 - `bun run build` — Build the project
 - `bun run start` — Start production server
-- `bun run lint` — Lint codebase
+- `bun run lint` (from the repo root) — Biome lint and format check
 - `bun run clean` — Clean build artifacts
 - `bun run migrate` — Run database migrations
 - `bun run migrate:dev` — Run database migrations in development

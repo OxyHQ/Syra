@@ -87,7 +87,8 @@ async function measureLoudness(
       'ffmpeg',
       [
         '-nostdin',
-        '-i', inputPath,
+        '-i',
+        inputPath,
         // `-f null` tolerates a cover-art video stream where the MP4 muxer does
         // not, so this pass was never the one that failed. Kept in step with the
         // transcode anyway: all three ffmpeg call sites should only ever see
@@ -95,8 +96,10 @@ async function measureLoudness(
         // would otherwise decode it here for nothing. Verified not to change the
         // measurement — the same file reports input_i "-24.33" either way.
         '-vn',
-        '-af', 'loudnorm=I=-14:TP=-1:LRA=11:print_format=json',
-        '-f', 'null',
+        '-af',
+        'loudnorm=I=-14:TP=-1:LRA=11:print_format=json',
+        '-f',
+        'null',
         '-',
       ],
       EXEC_OPTS,
@@ -148,7 +151,8 @@ async function transcodeRendition(
     'ffmpeg',
     [
       '-nostdin',
-      '-i', inputPath,
+      '-i',
+      inputPath,
       // Drop every video stream. ffmpeg exposes embedded cover art (ID3 APIC,
       // FLAC PICTURE, MP4 covr) as a VIDEO stream, so default stream selection
       // picks one up and tries to encode it to H.264 alongside the audio — which
@@ -156,18 +160,20 @@ async function transcodeRendition(
       // the whole transcode. Most real music files carry artwork, so without this
       // the pipeline fails for the common case and succeeds only for bare audio.
       '-vn',
-      '-af', loudnormFilter,
-      '-c:a', 'aac',
-      '-b:a', `${bitrateKbps}k`,
-      '-movflags', '+faststart',
+      '-af',
+      loudnormFilter,
+      '-c:a',
+      'aac',
+      '-b:a',
+      `${bitrateKbps}k`,
+      '-movflags',
+      '+faststart',
       mp4Path,
       '-y',
     ],
     EXEC_OPTS,
   ).catch((err: { stderr?: string }) => {
-    throw new Error(
-      `ffmpeg transcode ${bitrateKbps}kbps failed: ${err.stderr ?? String(err)}`,
-    );
+    throw new Error(`ffmpeg transcode ${bitrateKbps}kbps failed: ${err.stderr ?? String(err)}`);
   });
 
   void stderr; // ffmpeg progress goes to stderr; we don't need it after success
@@ -198,9 +204,12 @@ async function packageRendition(
   await execFile(
     'mp42hls',
     [
-      '--encryption-mode', 'AES-128',
-      '--encryption-key', keyHex,
-      '--encryption-key-uri', keyUri,
+      '--encryption-mode',
+      'AES-128',
+      '--encryption-key',
+      keyHex,
+      '--encryption-key-uri',
+      keyUri,
       fragPath,
     ],
     { ...EXEC_OPTS, cwd: renditionDir },

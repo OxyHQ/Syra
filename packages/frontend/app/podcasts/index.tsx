@@ -136,137 +136,157 @@ const PodcastsContent: React.FC<PodcastsContentProps> = ({
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
-        <View style={styles.header}>
-          <Text className="text-foreground" style={styles.title}>{t('common.podcasts')}</Text>
-          <Pressable
-            onPress={onFindPodcast}
-            className="bg-popover" style={styles.discoverButton}
-            accessibilityRole="button"
-            accessibilityLabel={t('podcasts.findAccessibility')}
-          >
-            <Ionicons name="search" size={16} color={theme.colors.text} />
-            <Text className="text-foreground" style={styles.discoverText}>{t('podcasts.find')}</Text>
-          </Pressable>
-        </View>
-
-        {/* Continue listening rail */}
-        {inProgress.length > 0 && (
-          <View style={styles.section}>
-            <Text className="text-foreground" style={styles.sectionTitle}>{t('podcasts.continueListening')}</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.rail}
-            >
-              {inProgress.map((entry) => (
-                <View key={entry.episode.id} style={styles.railItem}>
-                  <MediaCard
-                    title={entry.episode.title}
-                    subtitle={formatRemaining(entry.progressSec, entry.durationSec)}
-                    type="podcast"
-                    resolvedImageUri={resolvePodcastArtwork(entry.episode, 'card')}
-                    primaryColor={entry.episode.primaryColor}
-                    secondaryColor={entry.episode.secondaryColor}
-                    onPress={() => onOpenEpisode(entry.episode.id)}
-                    onPlayPress={() => onPlayEpisode(entry)}
-                    onHoverIn={onSeedHoverIn}
-                    onHoverOut={onSeedHoverOut}
-                  />
-                </View>
-              ))}
-            </ScrollView>
-          </View>
-        )}
-
-        {/* Category chips */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chips}
-        >
-          <Pressable
-            onPress={() => onSelectCategory(null)}
-            style={[
-              styles.chip,
-              { backgroundColor: activeCategory === null ? theme.colors.primary : theme.colors.backgroundTertiary },
-            ]}
-          >
-            <Text
-              style={[
-                styles.chipText,
-                { color: activeCategory === null ? theme.colors.primaryForeground : theme.colors.text },
-              ]}
-            >
-              {t('common.all')}
+          <View style={styles.header}>
+            <Text className="text-foreground" style={styles.title}>
+              {t('common.podcasts')}
             </Text>
-          </Pressable>
-          {PODCAST_CATEGORIES.map((category) => {
-            const isActive = activeCategory === category;
-            return (
-              <Pressable
-                key={category}
-                onPress={() => onSelectCategory(isActive ? null : category)}
-                style={[
-                  styles.chip,
-                  { backgroundColor: isActive ? theme.colors.primary : theme.colors.backgroundTertiary },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.chipText,
-                    { color: isActive ? theme.colors.primaryForeground : theme.colors.text },
-                  ]}
-                >
-                  {category}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-
-        {/* Browse grid */}
-        <View style={styles.section}>
-          <Text className="text-foreground" style={styles.sectionTitle}>
-            {activeCategory ?? t('podcasts.popularShows')}
-          </Text>
-          {podcastsPending ? (
-            <MediaCardRowSkeleton count={8} />
-          ) : podcasts.length > 0 ? (
-            <ResponsiveGrid minItemWidth={160} gap={12}>
-              {podcasts.map((podcast) => (
-                <View key={podcast.id}>
-                  <MediaCard
-                    title={podcast.title}
-                    subtitle={podcast.author ?? 'Podcast'}
-                    type="podcast"
-                    resolvedImageUri={resolvePodcastArtwork(podcast, 'card')}
-                    primaryColor={podcast.primaryColor}
-                    secondaryColor={podcast.secondaryColor}
-                    onPress={() => onOpenShow(podcast.id)}
-                    onPlayPress={() => onPlayShow(podcast)}
-                    onHoverIn={onSeedHoverIn}
-                    onHoverOut={onSeedHoverOut}
-                  />
-                </View>
-              ))}
-            </ResponsiveGrid>
-          ) : (
-            <View style={styles.empty}>
-              <Ionicons name="mic-outline" size={48} color={theme.colors.textSecondary} />
-              <Text className="text-muted-foreground" style={styles.emptyText}>
-                {t('podcasts.empty')}
+            <Pressable
+              onPress={onFindPodcast}
+              className="bg-popover"
+              style={styles.discoverButton}
+              accessibilityRole="button"
+              accessibilityLabel={t('podcasts.findAccessibility')}
+            >
+              <Ionicons name="search" size={16} color={theme.colors.text} />
+              <Text className="text-foreground" style={styles.discoverText}>
+                {t('podcasts.find')}
               </Text>
-              <Pressable
-                onPress={onFindPodcast}
-                className="bg-primary" style={styles.emptyButton}
+            </Pressable>
+          </View>
+
+          {/* Continue listening rail */}
+          {inProgress.length > 0 && (
+            <View style={styles.section}>
+              <Text className="text-foreground" style={styles.sectionTitle}>
+                {t('podcasts.continueListening')}
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.rail}
               >
-                <Text className="text-primary-foreground" style={styles.emptyButtonText}>
-                  {t('podcasts.find')}
-                </Text>
-              </Pressable>
+                {inProgress.map((entry) => (
+                  <View key={entry.episode.id} style={styles.railItem}>
+                    <MediaCard
+                      title={entry.episode.title}
+                      subtitle={formatRemaining(entry.progressSec, entry.durationSec)}
+                      type="podcast"
+                      resolvedImageUri={resolvePodcastArtwork(entry.episode, 'card')}
+                      primaryColor={entry.episode.primaryColor}
+                      secondaryColor={entry.episode.secondaryColor}
+                      onPress={() => onOpenEpisode(entry.episode.id)}
+                      onPlayPress={() => onPlayEpisode(entry)}
+                      onHoverIn={onSeedHoverIn}
+                      onHoverOut={onSeedHoverOut}
+                    />
+                  </View>
+                ))}
+              </ScrollView>
             </View>
           )}
-        </View>
+
+          {/* Category chips */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chips}
+          >
+            <Pressable
+              onPress={() => onSelectCategory(null)}
+              style={[
+                styles.chip,
+                {
+                  backgroundColor:
+                    activeCategory === null
+                      ? theme.colors.primary
+                      : theme.colors.backgroundTertiary,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.chipText,
+                  {
+                    color:
+                      activeCategory === null ? theme.colors.primaryForeground : theme.colors.text,
+                  },
+                ]}
+              >
+                {t('common.all')}
+              </Text>
+            </Pressable>
+            {PODCAST_CATEGORIES.map((category) => {
+              const isActive = activeCategory === category;
+              return (
+                <Pressable
+                  key={category}
+                  onPress={() => onSelectCategory(isActive ? null : category)}
+                  style={[
+                    styles.chip,
+                    {
+                      backgroundColor: isActive
+                        ? theme.colors.primary
+                        : theme.colors.backgroundTertiary,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      { color: isActive ? theme.colors.primaryForeground : theme.colors.text },
+                    ]}
+                  >
+                    {category}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+
+          {/* Browse grid */}
+          <View style={styles.section}>
+            <Text className="text-foreground" style={styles.sectionTitle}>
+              {activeCategory ?? t('podcasts.popularShows')}
+            </Text>
+            {podcastsPending ? (
+              <MediaCardRowSkeleton count={8} />
+            ) : podcasts.length > 0 ? (
+              <ResponsiveGrid minItemWidth={160} gap={12}>
+                {podcasts.map((podcast) => (
+                  <View key={podcast.id}>
+                    <MediaCard
+                      title={podcast.title}
+                      subtitle={podcast.author ?? 'Podcast'}
+                      type="podcast"
+                      resolvedImageUri={resolvePodcastArtwork(podcast, 'card')}
+                      primaryColor={podcast.primaryColor}
+                      secondaryColor={podcast.secondaryColor}
+                      onPress={() => onOpenShow(podcast.id)}
+                      onPlayPress={() => onPlayShow(podcast)}
+                      onHoverIn={onSeedHoverIn}
+                      onHoverOut={onSeedHoverOut}
+                    />
+                  </View>
+                ))}
+              </ResponsiveGrid>
+            ) : (
+              <View style={styles.empty}>
+                <Ionicons name="mic-outline" size={48} color={theme.colors.textSecondary} />
+                <Text className="text-muted-foreground" style={styles.emptyText}>
+                  {t('podcasts.empty')}
+                </Text>
+                <Pressable
+                  onPress={onFindPodcast}
+                  className="bg-primary"
+                  style={styles.emptyButton}
+                >
+                  <Text className="text-primary-foreground" style={styles.emptyButtonText}>
+                    {t('podcasts.find')}
+                  </Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
         </ScrollView>
       </View>
     </>

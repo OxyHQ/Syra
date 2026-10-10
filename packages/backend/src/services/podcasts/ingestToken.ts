@@ -132,7 +132,7 @@ function getSecretOrNull(): string | null {
  */
 export function mintIngestTicket(
   claims: Omit<IngestTicketClaims, 'jti' | 'purpose'>,
-  ttlSec: number = INGEST_TICKET_TTL_SEC
+  ttlSec: number = INGEST_TICKET_TTL_SEC,
 ): { token: string; claims: IngestTicketClaims; expiresAt: Date } {
   const secret = getSecret();
   const full: IngestTicketClaims = {
@@ -152,7 +152,7 @@ export function mintIngestTicket(
       purpose: full.purpose,
     },
     secret,
-    { algorithm: ALGORITHM, expiresIn: ttlSec }
+    { algorithm: ALGORITHM, expiresIn: ttlSec },
   );
 
   return { token, claims: full, expiresAt: new Date(Date.now() + ttlSec * 1000) };

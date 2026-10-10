@@ -79,8 +79,7 @@ const ACOUSTID_USER_AGENT = 'SyraCatalogEnrichment/1.0 (+https://syra.fm)';
  *  - `compress`: response compression. Free, and these payloads are mostly
  *    repeated MBIDs.
  */
-const ACOUSTID_META =
-  'recordings+releaseids+releasegroupids+releases+releasegroups+compress';
+const ACOUSTID_META = 'recordings+releaseids+releasegroupids+releases+releasegroups+compress';
 
 /**
  * A score at or above this is the same recording.
@@ -609,7 +608,9 @@ export async function identifyRecording(
   if (result.status !== 'match') {
     logger.debug('[acoustid] no acoustic identification', {
       status: result.status,
-      ...(result.status === 'unavailable' ? { reason: result.reason } : { bestScore: result.bestScore }),
+      ...(result.status === 'unavailable'
+        ? { reason: result.reason }
+        : { bestScore: result.bestScore }),
     });
     return undefined;
   }
@@ -653,10 +654,7 @@ export async function resolveAcousticIdentity(
  * database: the only impure thing that function does is recover the ISRC from
  * the local slice, and that arrives here as an argument.
  */
-export function toAcousticIdentity(
-  recording: AcoustidRecording,
-  isrc?: string,
-): AcousticIdentity {
+export function toAcousticIdentity(recording: AcoustidRecording, isrc?: string): AcousticIdentity {
   const primaryArtist = recording.artists[0];
   const releaseMbid = recording.releaseMbids[0];
   const releaseGroupMbid = recording.releaseGroupMbids[0];

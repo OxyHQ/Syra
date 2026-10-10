@@ -1,10 +1,10 @@
-const pkg = require('./package.json')
+const pkg = require('./package.json');
 
 module.exports = function (_config) {
   /**
    * App version number. Should be incremented as part of a release cycle.
    */
-  const VERSION = pkg.version
+  const VERSION = pkg.version;
 
   return {
     expo: {
@@ -53,8 +53,7 @@ module.exports = function (_config) {
         output: 'single',
         favicon: './assets/images/favicon.png',
         meta: {
-          viewport:
-            'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no',
+          viewport: 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no',
           themeColor: '#72184D',
           appleMobileWebAppCapable: 'yes',
           appleMobileWebAppStatusBarStyle: 'default',
@@ -85,8 +84,7 @@ module.exports = function (_config) {
           'expo-secure-store',
           {
             configureAndroidBackup: true,
-            faceIDPermission:
-              'Allow $(PRODUCT_NAME) to access your Face ID biometric data.',
+            faceIDPermission: 'Allow $(PRODUCT_NAME) to access your Face ID biometric data.',
           },
         ],
         [
@@ -114,5 +112,5 @@ module.exports = function (_config) {
       },
       owner: 'oxyhq',
     },
-  }
-}
+  };
+};

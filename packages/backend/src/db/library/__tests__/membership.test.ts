@@ -38,37 +38,43 @@ async function makeArtist(): Promise<string> {
 
 async function makeTrack(): Promise<string> {
   const id = uuidv7();
-  await getDb().insert(tracks).values({
-    id,
-    title: 'Track',
-    artistId: await makeArtist(),
-    artistName: 'Artist',
-    duration: 200,
-    source: 'upload',
-  });
+  await getDb()
+    .insert(tracks)
+    .values({
+      id,
+      title: 'Track',
+      artistId: await makeArtist(),
+      artistName: 'Artist',
+      duration: 200,
+      source: 'upload',
+    });
   return id;
 }
 
 async function makeAlbum(): Promise<string> {
   const coverArtId = uuidv7();
-  await getDb().insert(imageAssets).values({
-    id: coverArtId,
-    s3Key: `k/${coverArtId}`,
-    filename: 'c.jpg',
-    contentType: 'image/jpeg',
-    byteSize: 1,
-    ownerType: 'album',
-  });
+  await getDb()
+    .insert(imageAssets)
+    .values({
+      id: coverArtId,
+      s3Key: `k/${coverArtId}`,
+      filename: 'c.jpg',
+      contentType: 'image/jpeg',
+      byteSize: 1,
+      ownerType: 'album',
+    });
 
   const id = uuidv7();
-  await getDb().insert(albums).values({
-    id,
-    title: 'Album',
-    artistId: await makeArtist(),
-    artistName: 'Artist',
-    releaseDate: '2020-01-01',
-    coverArtId,
-  });
+  await getDb()
+    .insert(albums)
+    .values({
+      id,
+      title: 'Album',
+      artistId: await makeArtist(),
+      artistName: 'Artist',
+      releaseDate: '2020-01-01',
+      coverArtId,
+    });
   return id;
 }
 
@@ -122,11 +128,13 @@ describe('the list is ordered by when the membership was added', () => {
 
     // Inserted first/second/third — ids ascend in that order — while the
     // timestamps say the opposite.
-    await getDb().insert(userLikedTracks).values([
-      { oxyUserId: USER, trackId: first, createdAt: new Date('2026-03-01T00:00:00Z') },
-      { oxyUserId: USER, trackId: second, createdAt: new Date('2026-02-01T00:00:00Z') },
-      { oxyUserId: USER, trackId: third, createdAt: new Date('2026-01-01T00:00:00Z') },
-    ]);
+    await getDb()
+      .insert(userLikedTracks)
+      .values([
+        { oxyUserId: USER, trackId: first, createdAt: new Date('2026-03-01T00:00:00Z') },
+        { oxyUserId: USER, trackId: second, createdAt: new Date('2026-02-01T00:00:00Z') },
+        { oxyUserId: USER, trackId: third, createdAt: new Date('2026-01-01T00:00:00Z') },
+      ]);
 
     expect(await listMembership('likedTracks', USER)).toEqual([third, second, first]);
   });

@@ -1,5 +1,13 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@oxy.so/bloom/theme';
@@ -83,7 +91,8 @@ export const ArtistClaimCta: React.FC<ArtistClaimCtaProps> = ({ artistId, artist
       {!isOpen ? (
         <Pressable
           onPress={() => setIsOpen(true)}
-          className="bg-primary" style={styles.button}
+          className="bg-primary"
+          style={styles.button}
           accessibilityRole="button"
         >
           <Text className="text-primary-foreground" style={styles.buttonText}>
@@ -95,7 +104,8 @@ export const ArtistClaimCta: React.FC<ArtistClaimCtaProps> = ({ artistId, artist
           <Text className="text-foreground" style={styles.label}>
             {t('artist.claim.evidenceLabel')}
           </Text>
-          <TextInput className="bg-surface text-foreground"
+          <TextInput
+            className="bg-surface text-foreground"
             value={evidence}
             onChangeText={setEvidence}
             placeholder={t('artist.claim.evidencePlaceholder')}
@@ -103,9 +113,7 @@ export const ArtistClaimCta: React.FC<ArtistClaimCtaProps> = ({ artistId, artist
             multiline
             numberOfLines={4}
             editable={!claim.isPending}
-            style={[
-              styles.input,
-            ]}
+            style={[styles.input]}
           />
           {!gate.canUsePrivateApi && (
             <Text className="text-error" style={styles.body}>
@@ -115,7 +123,8 @@ export const ArtistClaimCta: React.FC<ArtistClaimCtaProps> = ({ artistId, artist
           <View style={styles.actions}>
             <Pressable
               onPress={() => setIsOpen(false)}
-              className="bg-surface" style={styles.button}
+              className="bg-surface"
+              style={styles.button}
               accessibilityRole="button"
               disabled={claim.isPending}
             >

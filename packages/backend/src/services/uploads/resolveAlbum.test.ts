@@ -57,7 +57,7 @@ async function readAlbum(id: string) {
 }
 
 async function seedAlbum(
-  overrides: Partial<typeof albums.$inferInsert> = {}
+  overrides: Partial<typeof albums.$inferInsert> = {},
 ): Promise<{ id: string }> {
   const [album] = await getDb()
     .insert(albums)

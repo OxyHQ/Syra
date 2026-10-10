@@ -45,12 +45,20 @@ function makeRes(): CapturedRes {
   return {
     _status: 200,
     _body: undefined,
-    status(code) { this._status = code; return this; },
-    json(body) { this._body = body; return this; },
+    status(code) {
+      this._status = code;
+      return this;
+    },
+    json(body) {
+      this._body = body;
+      return this;
+    },
   };
 }
 
-const failNext: NextFunction = (err) => { throw err; };
+const failNext: NextFunction = (err) => {
+  throw err;
+};
 
 function makeReq(query: Record<string, string> = {}, params: Record<string, string> = {}): Request {
   return { query, params } as unknown as Request;
@@ -74,9 +82,7 @@ afterEach(() => {
   artistId = undefined;
 });
 
-async function seedTrack(
-  overrides: Partial<typeof tracks.$inferInsert> = {}
-): Promise<string> {
+async function seedTrack(overrides: Partial<typeof tracks.$inferInsert> = {}): Promise<string> {
   const [track] = await getDb()
     .insert(tracks)
     .values({
@@ -181,22 +187,52 @@ describe('GET /api/tracks/:id', () => {
       title: 'Detailed',
       hlsMasterKey: 'hls/detailed/master.m3u8',
     });
-    await getDb().insert(trackCredits).values([
-      { trackId, position: 0, name: 'A Producer', role: 'producer', nameKey: normalizeNameKey('A Producer') },
-      { trackId, position: 1, name: 'A Writer', role: 'writer', nameKey: normalizeNameKey('A Writer') },
-    ]);
-    await getDb().insert(trackSources).values({
-      trackId,
-      position: 0,
-      provider: 'musicbrainz',
-      externalId: 'mbid-123',
-      importedAt: new Date('2026-01-01T00:00:00.000Z'),
-      fields: ['title'],
-    });
-    await getDb().insert(trackHlsRenditions).values([
-      { trackId, position: 0, manifestKey: 'hls/detailed/64/index.m3u8', bitrateKbps: 64, encrypted: true },
-      { trackId, position: 1, manifestKey: 'hls/detailed/160/index.m3u8', bitrateKbps: 160, encrypted: true },
-    ]);
+    await getDb()
+      .insert(trackCredits)
+      .values([
+        {
+          trackId,
+          position: 0,
+          name: 'A Producer',
+          role: 'producer',
+          nameKey: normalizeNameKey('A Producer'),
+        },
+        {
+          trackId,
+          position: 1,
+          name: 'A Writer',
+          role: 'writer',
+          nameKey: normalizeNameKey('A Writer'),
+        },
+      ]);
+    await getDb()
+      .insert(trackSources)
+      .values({
+        trackId,
+        position: 0,
+        provider: 'musicbrainz',
+        externalId: 'mbid-123',
+        importedAt: new Date('2026-01-01T00:00:00.000Z'),
+        fields: ['title'],
+      });
+    await getDb()
+      .insert(trackHlsRenditions)
+      .values([
+        {
+          trackId,
+          position: 0,
+          manifestKey: 'hls/detailed/64/index.m3u8',
+          bitrateKbps: 64,
+          encrypted: true,
+        },
+        {
+          trackId,
+          position: 1,
+          manifestKey: 'hls/detailed/160/index.m3u8',
+          bitrateKbps: 160,
+          encrypted: true,
+        },
+      ]);
 
     const res = makeRes();
     await getTrackById(makeReq({}, { id: trackId }), res as unknown as Response, failNext);

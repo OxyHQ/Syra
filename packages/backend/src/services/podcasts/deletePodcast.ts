@@ -90,7 +90,9 @@ function recordedObjectKeys(episode: EpisodeStorageRef): string[] {
   const keys: string[] = [];
 
   if (episode.audioSourceFormat) {
-    keys.push(getS3PodcastEpisodeAudioKey(episode.id, episode.podcastId, episode.audioSourceFormat));
+    keys.push(
+      getS3PodcastEpisodeAudioKey(episode.id, episode.podcastId, episode.audioSourceFormat),
+    );
   }
   if (episode.hlsMasterKey) keys.push(episode.hlsMasterKey);
   if (episode.cacheObjectKey) keys.push(episode.cacheObjectKey);
@@ -118,7 +120,7 @@ function recordedObjectKeys(episode: EpisodeStorageRef): string[] {
  */
 export async function deleteEpisodeStoredObjects(
   episode: EpisodeStorageRef,
-  deps: PodcastPurgeDeps = {}
+  deps: PodcastPurgeDeps = {},
 ): Promise<number> {
   const deletePrefix = deps.deletePrefix ?? deleteS3Prefix;
   const prefix = getS3PodcastEpisodeHlsPrefix(episode.podcastId, episode.id);
@@ -138,7 +140,7 @@ export async function deleteEpisodeStoredObjects(
 async function deleteRecordedKeysOutside(
   episode: EpisodeStorageRef,
   sweptPrefixes: readonly string[],
-  deps: PodcastPurgeDeps
+  deps: PodcastPurgeDeps,
 ): Promise<number> {
   const deleteObject = deps.deleteObject ?? deleteFromS3;
   let deleted = 0;
@@ -164,7 +166,7 @@ async function deleteRecordedKeysOutside(
  */
 export async function deleteEpisodeCompletely(
   episodeId: string,
-  deps: PodcastPurgeDeps = {}
+  deps: PodcastPurgeDeps = {},
 ): Promise<PodcastDeleteResult | undefined> {
   const episode = await findEpisodeStorageRef(episodeId);
   if (!episode) return undefined;
@@ -204,7 +206,7 @@ export async function deleteEpisodeCompletely(
  */
 export async function deletePodcastCompletely(
   podcastId: string,
-  deps: PodcastPurgeDeps = {}
+  deps: PodcastPurgeDeps = {},
 ): Promise<PodcastDeleteResult | undefined> {
   const deletePrefix = deps.deletePrefix ?? deleteS3Prefix;
 

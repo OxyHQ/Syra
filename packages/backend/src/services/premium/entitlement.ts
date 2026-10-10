@@ -18,9 +18,7 @@ export interface Entitlement {
  * Derive premium status from an Oxy user object.
  * Returns false for null/undefined users or missing premium field.
  */
-export function isPremium(
-  user: { premium?: { isPremium?: boolean } } | null | undefined,
-): boolean {
+export function isPremium(user: { premium?: { isPremium?: boolean } } | null | undefined): boolean {
   return user?.premium?.isPremium === true;
 }
 

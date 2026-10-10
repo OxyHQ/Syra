@@ -3,7 +3,11 @@ import { eq } from 'drizzle-orm';
 import { connectDb, clearDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
 import { roomUserPreferences } from '../db/schema/rooms';
-import { findLiveVisibilities, findLiveVisibility, setLiveVisibility } from '../db/rooms/preferences';
+import {
+  findLiveVisibilities,
+  findLiveVisibility,
+  setLiveVisibility,
+} from '../db/rooms/preferences';
 import { DEFAULT_LIVE_VISIBILITY, type LiveVisibility } from '../db/rooms/types';
 import { selectLiveUsers } from './rooms.routes';
 
@@ -15,9 +19,7 @@ afterAll(disconnectDb);
 
 describe('selectLiveUsers', () => {
   it('includes host + speakers for the default (active) preference and never listeners', () => {
-    const rooms = [
-      { id: 'r1', host: 'host1', speakers: ['host1', 'speaker1'] },
-    ];
+    const rooms = [{ id: 'r1', host: 'host1', speakers: ['host1', 'speaker1'] }];
 
     const result = selectLiveUsers(rooms, new Map());
 
@@ -29,9 +31,7 @@ describe('selectLiveUsers', () => {
 
   it("with 'speaking' includes only active speakers (members of the speakers list)", () => {
     // host2 is NOT in its room's speakers list — an inactive broadcaster.
-    const rooms = [
-      { id: 'r2', host: 'host2', speakers: ['speakerX'] },
-    ];
+    const rooms = [{ id: 'r2', host: 'host2', speakers: ['speakerX'] }];
     const prefs = new Map<string, LiveVisibility>([
       ['host2', 'speaking'],
       ['speakerX', 'speaking'],
@@ -44,9 +44,7 @@ describe('selectLiveUsers', () => {
   });
 
   it("keeps a 'speaking' host when the host is a speaker (the common case)", () => {
-    const rooms = [
-      { id: 'r3', host: 'host3', speakers: ['host3'] },
-    ];
+    const rooms = [{ id: 'r3', host: 'host3', speakers: ['host3'] }];
     const prefs = new Map<string, LiveVisibility>([['host3', 'speaking']]);
 
     expect(selectLiveUsers(rooms, prefs)).toEqual([{ userId: 'host3', roomId: 'r3' }]);

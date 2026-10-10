@@ -24,11 +24,14 @@ const queues = new Map<string, string>();
 const fakeRedis = {
   isReady: true,
   get: async (key: string) => queues.get(key) ?? null,
-  setEx: async (key: string, _ttl: number, value: string) => { queues.set(key, value); },
-  del: async (key: string) => { queues.delete(key); },
+  setEx: async (key: string, _ttl: number, value: string) => {
+    queues.set(key, value);
+  },
+  del: async (key: string) => {
+    queues.delete(key);
+  },
 };
 mock.module('../utils/redis', () => ({ getRedisClient: () => fakeRedis }));
-
 
 /**
  * ONE database since Task 13 ported the locker — but the split this suite is
@@ -61,10 +64,21 @@ function makeRes(): CapturedRes {
   const res: CapturedRes = {
     _status: 200,
     _body: undefined,
-    status(code) { this._status = code; return this; },
-    json(body) { this._body = body; return this; },
-    send(body) { this._body = body; return this; },
-    set() { return this; },
+    status(code) {
+      this._status = code;
+      return this;
+    },
+    json(body) {
+      this._body = body;
+      return this;
+    },
+    send(body) {
+      this._body = body;
+      return this;
+    },
+    set() {
+      return this;
+    },
   };
   return res;
 }
@@ -73,7 +87,9 @@ function makeReq(userId: string, body: unknown): AuthRequest {
   return { params: {}, query: {}, body, user: { id: userId } } as unknown as AuthRequest;
 }
 
-const rethrow = (error: unknown): void => { if (error) throw error; };
+const rethrow = (error: unknown): void => {
+  if (error) throw error;
+};
 
 let shaCounter = 0;
 
@@ -96,13 +112,15 @@ async function seedUpload(ownerOxyUserId = OWNER): Promise<{ id: string }> {
     })
     .returning({ id: userUploads.id });
   // The ladder is a child table now.
-  await getDb().insert(userUploadHlsRenditions).values({
-    userUploadId: upload.id,
-    position: 0,
-    manifestKey: `hls/${ownerOxyUserId}/x/160/index.m3u8`,
-    bitrateKbps: 160,
-    encrypted: true,
-  });
+  await getDb()
+    .insert(userUploadHlsRenditions)
+    .values({
+      userUploadId: upload.id,
+      position: 0,
+      manifestKey: `hls/${ownerOxyUserId}/x/160/index.m3u8`,
+      bitrateKbps: 160,
+      encrypted: true,
+    });
   return upload;
 }
 
@@ -159,10 +177,7 @@ describe('PUT /api/queue — resolving refs', () => {
     expect(res._status).toBe(200);
     const queue = (res._body as { queue: { tracks: Array<{ id: string; kind: string }> } }).queue;
     expect(queue.tracks.map((item) => item.kind)).toEqual(['track', 'upload']);
-    expect(queue.tracks.map((item) => item.id)).toEqual([
-      trackId,
-      upload.id,
-    ]);
+    expect(queue.tracks.map((item) => item.id)).toEqual([trackId, upload.id]);
   });
 
   it('refuses somebody ELSE’s locker file', async () => {

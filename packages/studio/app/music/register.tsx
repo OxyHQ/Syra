@@ -46,7 +46,9 @@ function RegisterArtistForm() {
       toast.success('Artist profile created');
       router.replace('/music');
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Could not create your artist profile. Please try again.'));
+      toast.error(
+        getApiErrorMessage(error, 'Could not create your artist profile. Please try again.'),
+      );
     }
   }, [name, bio, genres, image, registerArtist, router]);
 
@@ -57,7 +59,12 @@ function RegisterArtistForm() {
       onBack={() => router.back()}
     >
       <View className="items-center mb-6">
-        <CoverArtPicker value={image} onChange={setImage} size={140} disabled={registerArtist.isPending} />
+        <CoverArtPicker
+          value={image}
+          onChange={setImage}
+          size={140}
+          disabled={registerArtist.isPending}
+        />
         <Text className="text-xs text-muted-foreground mt-2">Artist photo (optional)</Text>
       </View>
 
@@ -89,7 +96,9 @@ function RegisterArtistForm() {
         fullWidth
         onPress={onSubmit}
         loading={registerArtist.isPending}
-        disabled={registerArtist.isPending} tone="accent" appearance="solid"
+        disabled={registerArtist.isPending}
+        tone="accent"
+        appearance="solid"
       >
         Create artist profile
       </Button>

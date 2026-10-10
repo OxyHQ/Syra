@@ -132,7 +132,7 @@ describe('resolvePodcastCategoryIds — scoped to kind = podcast', () => {
     expect(await genreNames('podcast')).toEqual(['News']);
   });
 
-  it('returns ids in the CALLER\'s order, not the planner\'s', async () => {
+  it("returns ids in the CALLER's order, not the planner's", async () => {
     /**
      * The defect this function was fixed for, gated at its own level rather
      * than only through the import path. The names are deliberately not in
@@ -217,8 +217,13 @@ describe('the composite foreign key', () => {
       Promise.resolve(
         getDb()
           .insert(podcastCategories)
-          .values({ podcastId: showId, genreId: musicGenre?.id ?? '', position: 0, kind: 'podcast' })
-      )
+          .values({
+            podcastId: showId,
+            genreId: musicGenre?.id ?? '',
+            position: 0,
+            kind: 'podcast',
+          }),
+      ),
     ).rejects.toThrow();
 
     expect(await storedCategories(showId)).toEqual([]);
@@ -234,7 +239,11 @@ describe('the composite foreign key', () => {
       .where(and(eq(genres.name, 'News'), eq(genres.kind, 'podcast')));
 
     await expect(
-      Promise.resolve(getDb().delete(genres).where(eq(genres.id, genre?.id ?? '')))
+      Promise.resolve(
+        getDb()
+          .delete(genres)
+          .where(eq(genres.id, genre?.id ?? '')),
+      ),
     ).rejects.toThrow();
   });
 

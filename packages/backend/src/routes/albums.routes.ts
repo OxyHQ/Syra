@@ -26,4 +26,3 @@ router.post('/:id/publish', requireAuth, publishAlbum);
 router.post('/:id/unpublish', requireAuth, unpublishAlbum);
 
 export default router;
-

@@ -14,8 +14,8 @@ interface MediaCardRowSkeletonProps {
  * (home "Recently played" / "Made for you" / "Tracks", search result grids).
  * Matches the screens' `grid` / `gridItem` 5-up desktop / 2-up mobile layout.
  */
-export const MediaCardRowSkeleton: React.FC<MediaCardRowSkeletonProps> =
-  React.memo(({ count = 5, shape = 'square' }) => {
+export const MediaCardRowSkeleton: React.FC<MediaCardRowSkeletonProps> = React.memo(
+  ({ count = 5, shape = 'square' }) => {
     return (
       <ResponsiveGrid minItemWidth={180} gap={8}>
         {Array.from({ length: count }).map((_, index) => (
@@ -23,5 +23,6 @@ export const MediaCardRowSkeleton: React.FC<MediaCardRowSkeletonProps> =
         ))}
       </ResponsiveGrid>
     );
-  });
+  },
+);
 MediaCardRowSkeleton.displayName = 'MediaCardRowSkeleton';

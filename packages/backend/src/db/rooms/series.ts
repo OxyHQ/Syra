@@ -69,10 +69,7 @@ export interface SeriesView {
 }
 
 /** Reassemble a flattened row plus its episode log into {@link SeriesView}. */
-export function toSeriesView(
-  row: SeriesRow,
-  episodes: readonly SeriesEpisodeRow[],
-): SeriesView {
+export function toSeriesView(row: SeriesRow, episodes: readonly SeriesEpisodeRow[]): SeriesView {
   return {
     id: row.id,
     title: row.title,
@@ -90,9 +87,7 @@ export function toSeriesView(
     roomTemplate: {
       titlePattern: row.roomTemplateTitlePattern,
       type: row.roomTemplateType as RoomType,
-      ...(row.roomTemplateDescription === null
-        ? {}
-        : { description: row.roomTemplateDescription }),
+      ...(row.roomTemplateDescription === null ? {} : { description: row.roomTemplateDescription }),
       maxParticipants: row.roomTemplateMaxParticipants,
       speakerPermission: row.roomTemplateSpeakerPermission as SpeakerPermission,
       tags: row.roomTemplateTags,
@@ -161,7 +156,12 @@ export async function listActiveSeriesForHouse(
   const episodes = await db
     .select()
     .from(seriesEpisodes)
-    .where(inArray(seriesEpisodes.seriesId, rows.map((row) => row.id)))
+    .where(
+      inArray(
+        seriesEpisodes.seriesId,
+        rows.map((row) => row.id),
+      ),
+    )
     .orderBy(asc(seriesEpisodes.position));
 
   const byId = new Map<string, SeriesEpisodeRow[]>();

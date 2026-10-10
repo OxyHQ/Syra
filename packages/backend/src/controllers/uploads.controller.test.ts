@@ -49,10 +49,22 @@ function makeRes(): CapturedRes {
     _status: 200,
     _body: undefined,
     _headers: {},
-    status(code) { this._status = code; return this; },
-    set(name, value) { this._headers[name] = value; return this; },
-    send(body) { this._body = body; return this; },
-    json(body) { this._body = body; return this; },
+    status(code) {
+      this._status = code;
+      return this;
+    },
+    set(name, value) {
+      this._headers[name] = value;
+      return this;
+    },
+    send(body) {
+      this._body = body;
+      return this;
+    },
+    json(body) {
+      this._body = body;
+      return this;
+    },
   };
   return res;
 }
@@ -81,7 +93,7 @@ let shaCounter = 0;
 type UploadOverrides = Partial<typeof userUploads.$inferInsert> & { withHls?: boolean };
 
 async function seedUpload(
-  overrides: UploadOverrides = {}
+  overrides: UploadOverrides = {},
 ): Promise<{ id: string; sha256: string }> {
   shaCounter += 1;
   const { withHls = true, ...columns } = overrides;
@@ -183,7 +195,11 @@ describe('GET /api/uploads/:id', () => {
     const upload = await seedUpload();
     const res = makeRes();
 
-    await getUpload(makeReq({ id: upload.id }, { userId: OWNER }), res as unknown as Response, rethrow);
+    await getUpload(
+      makeReq({ id: upload.id }, { userId: OWNER }),
+      res as unknown as Response,
+      rethrow,
+    );
 
     expect(res._status).toBe(200);
     expect((res._body as { id: string }).id).toBe(upload.id);
@@ -196,7 +212,11 @@ describe('GET /api/uploads/:id', () => {
     const upload = await seedUpload();
     const res = makeRes();
 
-    await getUpload(makeReq({ id: upload.id }, { userId: STRANGER }), res as unknown as Response, rethrow);
+    await getUpload(
+      makeReq({ id: upload.id }, { userId: STRANGER }),
+      res as unknown as Response,
+      rethrow,
+    );
 
     expect(res._status).toBe(404);
   });
@@ -205,7 +225,11 @@ describe('GET /api/uploads/:id', () => {
     const upload = await seedUpload({ deletedAt: new Date() });
     const res = makeRes();
 
-    await getUpload(makeReq({ id: upload.id }, { userId: OWNER }), res as unknown as Response, rethrow);
+    await getUpload(
+      makeReq({ id: upload.id }, { userId: OWNER }),
+      res as unknown as Response,
+      rethrow,
+    );
 
     expect(res._status).toBe(404);
   });
@@ -231,7 +255,9 @@ describe('GET /api/uploads', () => {
 
     await listUploads(makeReq({}, { userId: OWNER }), res as unknown as Response, rethrow);
 
-    expect((res._body as { uploads: Array<{ title: string }> }).uploads.map((u) => u.title)).toEqual(['Live']);
+    expect(
+      (res._body as { uploads: Array<{ title: string }> }).uploads.map((u) => u.title),
+    ).toEqual(['Live']);
   });
 });
 
@@ -394,15 +420,21 @@ describe('DELETE /api/uploads/:id', () => {
       hlsMasterKey: null,
       withHls: false,
     });
-    await getDb().insert(trackKeys).values({ userUploadId: upload.id, keyHex: 'ab'.repeat(16), keyUri: 'key' });
+    await getDb()
+      .insert(trackKeys)
+      .values({ userUploadId: upload.id, keyHex: 'ab'.repeat(16), keyUri: 'key' });
     const res = makeRes();
 
-    await deleteUpload(makeReq({ id: upload.id }, { userId: OWNER }), res as unknown as Response, rethrow);
+    await deleteUpload(
+      makeReq({ id: upload.id }, { userId: OWNER }),
+      res as unknown as Response,
+      rethrow,
+    );
 
     expect(res._status).toBe(204);
     expect(await reload(upload.id)).toBeUndefined();
     expect(
-      await getDb().select().from(trackKeys).where(eq(trackKeys.userUploadId, upload.id))
+      await getDb().select().from(trackKeys).where(eq(trackKeys.userUploadId, upload.id)),
     ).toEqual([]);
   });
 
@@ -415,7 +447,11 @@ describe('DELETE /api/uploads/:id', () => {
     });
     const res = makeRes();
 
-    await deleteUpload(makeReq({ id: upload.id }, { userId: STRANGER }), res as unknown as Response, rethrow);
+    await deleteUpload(
+      makeReq({ id: upload.id }, { userId: STRANGER }),
+      res as unknown as Response,
+      rethrow,
+    );
 
     expect(res._status).toBe(404);
     expect(await reload(upload.id)).toBeDefined();
@@ -430,7 +466,11 @@ describe('GET /api/uploads/:id/stream', () => {
     const uploadId = upload.id;
     const res = makeRes();
 
-    await getUploadStream(makeReq({ id: uploadId }, { userId: OWNER }), res as unknown as Response, rethrow);
+    await getUploadStream(
+      makeReq({ id: uploadId }, { userId: OWNER }),
+      res as unknown as Response,
+      rethrow,
+    );
 
     expect(res._status).toBe(200);
     const body = res._body as { url: string; type: string };
@@ -448,7 +488,11 @@ describe('GET /api/uploads/:id/stream', () => {
     const upload = await seedUpload({ expiresAt: soon });
     const res = makeRes();
 
-    await getUploadStream(makeReq({ id: upload.id }, { userId: OWNER }), res as unknown as Response, rethrow);
+    await getUploadStream(
+      makeReq({ id: upload.id }, { userId: OWNER }),
+      res as unknown as Response,
+      rethrow,
+    );
 
     const after = await reload(upload.id);
     expect(after?.playCount).toBe(1);
@@ -460,7 +504,11 @@ describe('GET /api/uploads/:id/stream', () => {
     const upload = await seedUpload();
     const res = makeRes();
 
-    await getUploadStream(makeReq({ id: upload.id }, { userId: STRANGER }), res as unknown as Response, rethrow);
+    await getUploadStream(
+      makeReq({ id: upload.id }, { userId: STRANGER }),
+      res as unknown as Response,
+      rethrow,
+    );
 
     expect(res._status).toBe(404);
     expect(res._body).not.toHaveProperty('url');
@@ -470,7 +518,11 @@ describe('GET /api/uploads/:id/stream', () => {
     const upload = await seedUpload();
     const res = makeRes();
 
-    await getUploadStream(makeReq({ id: upload.id }, { userId: STRANGER }), res as unknown as Response, rethrow);
+    await getUploadStream(
+      makeReq({ id: upload.id }, { userId: STRANGER }),
+      res as unknown as Response,
+      rethrow,
+    );
 
     expect((await reload(upload.id))?.playCount).toBe(0);
   });
@@ -503,7 +555,11 @@ describe('GET /api/uploads/:id/stream', () => {
     const upload = await seedUpload({ status: 'processing', hlsMasterKey: null, withHls: false });
     const res = makeRes();
 
-    await getUploadStream(makeReq({ id: upload.id }, { userId: OWNER }), res as unknown as Response, rethrow);
+    await getUploadStream(
+      makeReq({ id: upload.id }, { userId: OWNER }),
+      res as unknown as Response,
+      rethrow,
+    );
 
     expect(res._status).toBe(409);
   });
@@ -512,7 +568,11 @@ describe('GET /api/uploads/:id/stream', () => {
     const upload = await seedUpload({ status: 'failed', hlsMasterKey: null, withHls: false });
     const res = makeRes();
 
-    await getUploadStream(makeReq({ id: upload.id }, { userId: OWNER }), res as unknown as Response, rethrow);
+    await getUploadStream(
+      makeReq({ id: upload.id }, { userId: OWNER }),
+      res as unknown as Response,
+      rethrow,
+    );
 
     expect(res._status).toBe(422);
   });
@@ -522,10 +582,16 @@ describe('GET /api/uploads/:id/stream/key', () => {
   it('serves the key to the owner', async () => {
     const upload = await seedUpload();
     const uploadId = upload.id;
-    await getDb().insert(trackKeys).values({ userUploadId: uploadId, keyHex: 'ab'.repeat(16), keyUri: 'key' });
+    await getDb()
+      .insert(trackKeys)
+      .values({ userUploadId: uploadId, keyHex: 'ab'.repeat(16), keyUri: 'key' });
     const res = makeRes();
 
-    await getUploadStreamKey(makeReq({ id: uploadId }, { userId: OWNER }), res as unknown as Response, rethrow);
+    await getUploadStreamKey(
+      makeReq({ id: uploadId }, { userId: OWNER }),
+      res as unknown as Response,
+      rethrow,
+    );
 
     expect(res._status).toBe(200);
     expect(Buffer.isBuffer(res._body)).toBe(true);
@@ -535,7 +601,9 @@ describe('GET /api/uploads/:id/stream/key', () => {
   it('accepts the owner’s stream token — players cannot set an Authorization header', async () => {
     const upload = await seedUpload();
     const uploadId = upload.id;
-    await getDb().insert(trackKeys).values({ userUploadId: uploadId, keyHex: 'ab'.repeat(16), keyUri: 'key' });
+    await getDb()
+      .insert(trackKeys)
+      .values({ userUploadId: uploadId, keyHex: 'ab'.repeat(16), keyUri: 'key' });
     const token = mintStreamToken({ trackId: uploadId, userId: OWNER, maxBitrateKbps: 160 }, 60);
     const res = makeRes();
 
@@ -554,7 +622,9 @@ describe('GET /api/uploads/:id/stream/key', () => {
     // that matches no document of this file's.
     const upload = await seedUpload();
     const uploadId = upload.id;
-    await getDb().insert(trackKeys).values({ userUploadId: uploadId, keyHex: 'ab'.repeat(16), keyUri: 'key' });
+    await getDb()
+      .insert(trackKeys)
+      .values({ userUploadId: uploadId, keyHex: 'ab'.repeat(16), keyUri: 'key' });
     const token = mintStreamToken({ trackId: uploadId, userId: STRANGER, maxBitrateKbps: 160 }, 60);
     const res = makeRes();
 
@@ -571,11 +641,10 @@ describe('GET /api/uploads/:id/stream/key', () => {
   it('refuses a token minted for a DIFFERENT upload', async () => {
     const mine = await seedUpload();
     const other = await seedUpload();
-    await getDb().insert(trackKeys).values({ userUploadId: mine.id, keyHex: 'ab'.repeat(16), keyUri: 'key' });
-    const token = mintStreamToken(
-      { trackId: other.id, userId: OWNER, maxBitrateKbps: 160 },
-      60,
-    );
+    await getDb()
+      .insert(trackKeys)
+      .values({ userUploadId: mine.id, keyHex: 'ab'.repeat(16), keyUri: 'key' });
+    const token = mintStreamToken({ trackId: other.id, userId: OWNER, maxBitrateKbps: 160 }, 60);
     const res = makeRes();
 
     await getUploadStreamKey(
@@ -590,7 +659,9 @@ describe('GET /api/uploads/:id/stream/key', () => {
 
   it('refuses a stranger’s session', async () => {
     const upload = await seedUpload();
-    await getDb().insert(trackKeys).values({ userUploadId: upload.id, keyHex: 'ab'.repeat(16), keyUri: 'key' });
+    await getDb()
+      .insert(trackKeys)
+      .values({ userUploadId: upload.id, keyHex: 'ab'.repeat(16), keyUri: 'key' });
     const res = makeRes();
 
     await getUploadStreamKey(

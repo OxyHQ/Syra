@@ -5,7 +5,11 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { logger } from '../utils/logger';
-import { streamTrackAudio, getTrackAudioMetadata, getTrackStreamUrl } from '../services/audioStorageService';
+import {
+  streamTrackAudio,
+  getTrackAudioMetadata,
+  getTrackStreamUrl,
+} from '../services/audioStorageService';
 import {
   fetchAndValidateTrack,
   validateAudioFileExists,
@@ -54,10 +58,10 @@ function setupStreamErrorHandler(stream: NodeJS.ReadableStream, res: Response): 
 /**
  * Stream audio file with Range Request support (Spotify-style)
  * GET /api/audio/:trackId
- * 
+ *
  * Supports HTTP Range requests for seeking and progressive loading.
  * `trackId` is an opaque `tracks.id` — never parse or order it.
- * 
+ *
  * @param req - Express request object
  * @param res - Express response object
  * @param next - Express next function
@@ -65,11 +69,15 @@ function setupStreamErrorHandler(stream: NodeJS.ReadableStream, res: Response): 
 export const streamAudio = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const trackId = getParam(req, 'trackId');
-    
+
     // Validate and fetch track
     const validation = await fetchAndValidateTrack(trackId);
     if (!validation.isValid || !validation.track) {
-      return sendErrorResponse(res, validation.statusCode || 400, validation.error || 'Invalid request');
+      return sendErrorResponse(
+        res,
+        validation.statusCode || 400,
+        validation.error || 'Invalid request',
+      );
     }
 
     const track = validation.track;
@@ -77,7 +85,11 @@ export const streamAudio = async (req: Request, res: Response, next: NextFunctio
     // Validate audio file exists
     const fileValidation = await validateAudioFileExists(track);
     if (!fileValidation.isValid) {
-      return sendErrorResponse(res, fileValidation.statusCode || 404, fileValidation.error || 'Audio file not found');
+      return sendErrorResponse(
+        res,
+        fileValidation.statusCode || 404,
+        fileValidation.error || 'Audio file not found',
+      );
     }
 
     // Get audio metadata
@@ -98,7 +110,7 @@ export const streamAudio = async (req: Request, res: Response, next: NextFunctio
     // Handle Range Request (for seeking/streaming)
     if (rangeHeader) {
       const range = parseRange(rangeHeader, fileSize);
-      
+
       if (!range) {
         // Invalid range, return 416 Range Not Satisfiable
         res.setHeader('Content-Range', `bytes */${fileSize}`);
@@ -128,7 +140,7 @@ export const streamAudio = async (req: Request, res: Response, next: NextFunctio
     } else {
       // No range header - send entire file
       const { stream, contentLength } = await streamTrackAudio(track);
-      
+
       res.status(200);
       res.setHeader('Content-Length', contentLength);
 
@@ -146,9 +158,9 @@ export const streamAudio = async (req: Request, res: Response, next: NextFunctio
 /**
  * Get audio file metadata
  * GET /api/audio/:trackId/info
- * 
+ *
  * Returns metadata about the audio file including size, MIME type, and modification date.
- * 
+ *
  * @param req - Express request object
  * @param res - Express response object
  * @param next - Express next function
@@ -156,11 +168,15 @@ export const streamAudio = async (req: Request, res: Response, next: NextFunctio
 export const getAudioInfo = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const trackId = getParam(req, 'trackId');
-    
+
     // Validate and fetch track
     const validation = await fetchAndValidateTrack(trackId);
     if (!validation.isValid || !validation.track) {
-      return sendErrorResponse(res, validation.statusCode || 400, validation.error || 'Invalid request');
+      return sendErrorResponse(
+        res,
+        validation.statusCode || 400,
+        validation.error || 'Invalid request',
+      );
     }
 
     const track = validation.track;
@@ -179,7 +195,9 @@ export const getAudioInfo = async (req: Request, res: Response, next: NextFuncti
       etag: metadata.etag,
     });
   } catch (error) {
-    logger.error('[AudioController] Error getting audio info:', { error: describeErrorSafely(error) });
+    logger.error('[AudioController] Error getting audio info:', {
+      error: describeErrorSafely(error),
+    });
     next(error);
   }
 };
@@ -187,10 +205,10 @@ export const getAudioInfo = async (req: Request, res: Response, next: NextFuncti
 /**
  * Get authenticated audio URL (pre-signed S3 URL)
  * GET /api/audio/:trackId/url
- * 
+ *
  * Returns a pre-signed URL that can be used directly by audio players
  * without authentication headers. The URL is valid for 1 hour.
- * 
+ *
  * @param req - Express request object
  * @param res - Express response object
  * @param next - Express next function
@@ -198,11 +216,15 @@ export const getAudioInfo = async (req: Request, res: Response, next: NextFuncti
 export const getAudioUrl = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const trackId = getParam(req, 'trackId');
-    
+
     // Validate and fetch track
     const validation = await fetchAndValidateTrack(trackId);
     if (!validation.isValid || !validation.track) {
-      return sendErrorResponse(res, validation.statusCode || 400, validation.error || 'Invalid request');
+      return sendErrorResponse(
+        res,
+        validation.statusCode || 400,
+        validation.error || 'Invalid request',
+      );
     }
 
     const track = validation.track;
@@ -210,7 +232,11 @@ export const getAudioUrl = async (req: Request, res: Response, next: NextFunctio
     // Verify audio file exists in S3
     const fileValidation = await validateAudioFileExists(track);
     if (!fileValidation.isValid) {
-      return sendErrorResponse(res, fileValidation.statusCode || 404, fileValidation.error || 'Audio file not found');
+      return sendErrorResponse(
+        res,
+        fileValidation.statusCode || 404,
+        fileValidation.error || 'Audio file not found',
+      );
     }
 
     // Get pre-signed S3 URL (valid for 1 hour)
@@ -222,7 +248,9 @@ export const getAudioUrl = async (req: Request, res: Response, next: NextFunctio
       expiresIn: 3600, // 1 hour in seconds
     });
   } catch (error) {
-    logger.error('[AudioController] Error getting audio URL:', { error: describeErrorSafely(error) });
+    logger.error('[AudioController] Error getting audio URL:', {
+      error: describeErrorSafely(error),
+    });
     next(error);
   }
 };

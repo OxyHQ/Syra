@@ -29,7 +29,13 @@ import { CloseIcon } from '@/assets/icons/close-icon';
 import { LogoIcon } from '@/assets/logo';
 import { Portal } from '@/components/Portal';
 import { Z_INDEX } from '@/lib/constants';
-import Svg, { Defs, LinearGradient as SvgLinearGradient, Stop, Text as SvgText, TSpan } from 'react-native-svg';
+import Svg, {
+  Defs,
+  LinearGradient as SvgLinearGradient,
+  Stop,
+  Text as SvgText,
+  TSpan,
+} from 'react-native-svg';
 
 const AnimatedBlurView = Animated.createAnimatedComponent(BlurView);
 
@@ -65,14 +71,19 @@ const GradientText: React.FC<{
   const gradientId = useId();
   const lineHeight = fontSize * 1.25; // Slightly reduced gap between lines
   const totalHeight = lines.length * lineHeight;
-  
+
   // Estimate text width based on longest line
   const longestLine = lines.reduce((a, b) => (a.length > b.length ? a : b), '');
   const estimatedWidth = Math.max(longestLine.length * fontSize * 0.7, 300);
 
   // Use SVG with gradient applied to all lines together
   return (
-    <View style={[{ alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: 4 }, style]}>
+    <View
+      style={[
+        { alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: 4 },
+        style,
+      ]}
+    >
       <Svg width={estimatedWidth} height={totalHeight}>
         <Defs>
           {/* Gradient from top 10% to bottom 90%: 80% opacity to 20% opacity */}
@@ -91,11 +102,7 @@ const GradientText: React.FC<{
           textAnchor="middle"
         >
           {lines.map((line, index) => (
-            <TSpan
-              key={index}
-              x="50%"
-              dy={index === 0 ? 0 : lineHeight}
-            >
+            <TSpan key={index} x="50%" dy={index === 0 ? 0 : lineHeight}>
               {line}
             </TSpan>
           ))}
@@ -105,10 +112,7 @@ const GradientText: React.FC<{
   );
 };
 
-const WelcomeModal: React.FC<WelcomeModalProps> = ({
-  visible,
-  onClose,
-}) => {
+const WelcomeModal: React.FC<WelcomeModalProps> = ({ visible, onClose }) => {
   const { t } = useTranslation();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -158,33 +162,33 @@ const WelcomeModal: React.FC<WelcomeModalProps> = ({
   }, [onClose, openAccountDialog]);
 
   // Animated styles
-  const backdropAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-  }), []);
+  const backdropAnimatedStyle = useAnimatedStyle(
+    () => ({
+      opacity: opacity.value,
+    }),
+    [],
+  );
 
-  const contentAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [
-      { scale: scale.value },
-      { translateY: translateY.value },
-    ],
-  }), []);
+  const contentAnimatedStyle = useAnimatedStyle(
+    () => ({
+      opacity: opacity.value,
+      transform: [{ scale: scale.value }, { translateY: translateY.value }],
+    }),
+    [],
+  );
 
   // Memoize styles
-  const blurTint = useMemo(
-    () => (theme.isDark ? 'dark' : 'light'),
-    [theme.isDark]
-  );
+  const blurTint = useMemo(() => (theme.isDark ? 'dark' : 'light'), [theme.isDark]);
 
   const overlayColor = useMemo(
     () => theme.colors.overlay || 'rgba(0, 0, 0, 0.5)',
-    [theme.colors.overlay]
+    [theme.colors.overlay],
   );
 
   // Load background image
   const backgroundImage: ImageSourcePropType = useMemo(
     () => require('@/assets/images/welcome-modal-bg.jpg'),
-    []
+    [],
   );
 
   // Early return if not visible
@@ -194,10 +198,7 @@ const WelcomeModal: React.FC<WelcomeModalProps> = ({
 
   const modalContent = (
     <GestureHandlerRootView style={styles.modalContainer}>
-      <Pressable
-        style={StyleSheet.absoluteFill}
-        onPress={handleBackdropPress}
-      >
+      <Pressable style={StyleSheet.absoluteFill} onPress={handleBackdropPress}>
         <AnimatedBlurView
           intensity={80}
           tint={blurTint}
@@ -242,21 +243,13 @@ const WelcomeModal: React.FC<WelcomeModalProps> = ({
 
             {/* Logo */}
             <View style={styles.logoContainer}>
-              <LogoIcon
-                color={theme.colors.primary}
-                size={40}
-                style={styles.logoIcon}
-              />
+              <LogoIcon color={theme.colors.primary} size={40} style={styles.logoIcon} />
             </View>
 
             {/* Tagline with single gradient for all lines */}
             <View style={styles.taglineContainer}>
               <GradientText
-                lines={[
-                  'Real people.',
-                  'Real conversations.',
-                  'Social media you control.',
-                ]}
+                lines={['Real people.', 'Real conversations.', 'Social media you control.']}
                 fontSize={32}
                 fontWeight="600"
               />
@@ -267,9 +260,12 @@ const WelcomeModal: React.FC<WelcomeModalProps> = ({
               {/* Create Account Button */}
               <Pressable
                 onPress={handleCreateAccount}
-                className="bg-primary" style={styles.createAccountButton}
+                className="bg-primary"
+                style={styles.createAccountButton}
               >
-                <Text className="text-primary-foreground" style={styles.createAccountButtonText}>{t('common.createAccount')}</Text>
+                <Text className="text-primary-foreground" style={styles.createAccountButtonText}>
+                  {t('common.createAccount')}
+                </Text>
               </Pressable>
 
               {/* Explore the app link */}
@@ -418,7 +414,3 @@ const styles = StyleSheet.create({
 
 // Memoize component to prevent unnecessary re-renders
 export default memo(WelcomeModal);
-
-
-
-

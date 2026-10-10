@@ -392,11 +392,14 @@ const UploadScreen: React.FC = () => {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
-          className="bg-surface" style={styles.scroll}
+          className="bg-surface"
+          style={styles.scroll}
           contentContainerStyle={[styles.content, { paddingBottom: 120 + insets.bottom }]}
           showsVerticalScrollIndicator={false}
         >
-          <Text className="text-foreground" style={styles.title}>{t('uploads.title')}</Text>
+          <Text className="text-foreground" style={styles.title}>
+            {t('uploads.title')}
+          </Text>
           <Text className="text-muted-foreground" style={styles.subtitle}>
             {t('uploads.subtitle')}
           </Text>
@@ -404,7 +407,8 @@ const UploadScreen: React.FC = () => {
           <Pressable
             onPress={handlePick}
             disabled={isUploading}
-            className="border-border" style={styles.pickButton}
+            className="border-border"
+            style={styles.pickButton}
             accessibilityRole="button"
           >
             <Ionicons name="cloud-upload-outline" size={22} color={theme.colors.text} />
@@ -425,10 +429,7 @@ const UploadScreen: React.FC = () => {
             const isThisUploading = uploadingKey === file.key;
 
             return (
-              <View
-                key={file.key}
-                className="bg-popover" style={styles.fileCard}
-              >
+              <View key={file.key} className="bg-popover" style={styles.fileCard}>
                 <View style={styles.fileHeader}>
                   <View style={styles.fileHeaderText}>
                     <Text className="text-foreground" style={styles.fileName} numberOfLines={1}>
@@ -530,39 +531,37 @@ const UploadScreen: React.FC = () => {
                         <Text className="text-muted-foreground" style={styles.detailsHint}>
                           {t('uploads.details.hint')}
                         </Text>
-                        <TextInput className="bg-surface text-foreground"
+                        <TextInput
+                          className="bg-surface text-foreground"
                           value={file.title}
                           onChangeText={(title) => updateFile(file.key, { title })}
                           placeholder={t('uploads.details.title')}
                           placeholderTextColor={theme.colors.textSecondary}
                           editable={!isUploading}
-                          style={[
-                            styles.input,
-                          ]}
+                          style={[styles.input]}
                         />
-                        <TextInput className="bg-surface text-foreground"
+                        <TextInput
+                          className="bg-surface text-foreground"
                           value={file.artistName}
                           onChangeText={(artistName) => updateFile(file.key, { artistName })}
                           placeholder={t('uploads.details.artist')}
                           placeholderTextColor={theme.colors.textSecondary}
                           editable={!isUploading}
-                          style={[
-                            styles.input,
-                          ]}
+                          style={[styles.input]}
                         />
-                        <TextInput className="bg-surface text-foreground"
+                        <TextInput
+                          className="bg-surface text-foreground"
                           value={file.albumName}
                           onChangeText={(albumName) => updateFile(file.key, { albumName })}
                           placeholder={t('uploads.details.album')}
                           placeholderTextColor={theme.colors.textSecondary}
                           editable={!isUploading}
-                          style={[
-                            styles.input,
-                          ]}
+                          style={[styles.input]}
                         />
                         {file.destination === 'public' && (
                           <>
-                            <TextInput className="bg-surface text-foreground"
+                            <TextInput
+                              className="bg-surface text-foreground"
                               value={file.isrc}
                               onChangeText={(isrc) => updateFile(file.key, { isrc })}
                               placeholder={t('uploads.details.isrc')}
@@ -570,9 +569,7 @@ const UploadScreen: React.FC = () => {
                               editable={!isUploading}
                               autoCapitalize="characters"
                               autoCorrect={false}
-                              style={[
-                                styles.input,
-                              ]}
+                              style={[styles.input]}
                             />
                             <Text className="text-muted-foreground" style={styles.detailsHint}>
                               {t('uploads.details.isrcHint')}
@@ -600,7 +597,9 @@ const UploadScreen: React.FC = () => {
                 )}
 
                 {failure && !outcome && (
-                  <Text className="text-error" style={styles.failureText}>{failure}</Text>
+                  <Text className="text-error" style={styles.failureText}>
+                    {failure}
+                  </Text>
                 )}
 
                 {outcome && (
@@ -624,7 +623,8 @@ const UploadScreen: React.FC = () => {
             <Pressable
               onPress={() => setAttestationAccepted((accepted) => !accepted)}
               disabled={isUploading}
-              className="bg-popover" style={styles.attestation}
+              className="bg-popover"
+              style={styles.attestation}
               accessibilityRole="checkbox"
               accessibilityState={{ checked: attestationAccepted }}
             >
@@ -661,7 +661,11 @@ const UploadScreen: React.FC = () => {
               disabled={!canUpload}
               style={[
                 styles.submitButton,
-                { backgroundColor: canUpload ? theme.colors.primary : theme.colors.backgroundTertiary },
+                {
+                  backgroundColor: canUpload
+                    ? theme.colors.primary
+                    : theme.colors.backgroundTertiary,
+                },
               ]}
               accessibilityRole="button"
             >
@@ -672,7 +676,9 @@ const UploadScreen: React.FC = () => {
                   style={[
                     styles.submitButtonText,
                     {
-                      color: canUpload ? theme.colors.primaryForeground : theme.colors.textSecondary,
+                      color: canUpload
+                        ? theme.colors.primaryForeground
+                        : theme.colors.textSecondary,
                     },
                   ]}
                 >

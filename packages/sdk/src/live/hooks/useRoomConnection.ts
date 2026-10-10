@@ -39,7 +39,9 @@ export function useRoomConnection({
   const [isConnected, setIsConnected] = useState(false);
   const [participants, setParticipants] = useState<RoomParticipant[]>([]);
   const [isMuted, setIsMuted] = useState(true);
-  const [speakerRequests, setSpeakerRequests] = useState<Array<{ userId: string; requestedAt: string }>>([]);
+  const [speakerRequests, setSpeakerRequests] = useState<
+    Array<{ userId: string; requestedAt: string }>
+  >([]);
   const [isRoomEnded, setIsRoomEnded] = useState(false);
   const [activeStream, setActiveStream] = useState<StreamInfo | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -54,55 +56,91 @@ export function useRoomConnection({
     const token = oxyServices?.session.accessToken ?? undefined;
     if (!token) return;
     roomSocketService.connect(userId, token);
-    const interval = setInterval(() => { setIsConnected(roomSocketService.isConnected); }, 500);
-    return () => { clearInterval(interval); };
+    const interval = setInterval(() => {
+      setIsConnected(roomSocketService.isConnected);
+    }, 500);
+    return () => {
+      clearInterval(interval);
+    };
   }, [enabled, isAuthenticated, isReady, userId, roomSocketService, oxyServices]);
 
   useEffect(() => {
     if (!enabled) return;
     const unsubs: Array<() => void> = [];
 
-    unsubs.push(roomSocketService.onParticipantsUpdate((data) => {
-      if (data.roomId === roomId) setParticipants(data.participants);
-    }));
-    unsubs.push(roomSocketService.onParticipantMute((data) => {
-      setParticipants((prev) => prev.map((p) => p.userId === data.userId ? { ...p, isMuted: data.isMuted } : p));
-      if (data.userId === userId) setIsMuted(data.isMuted);
-    }));
-    unsubs.push(roomSocketService.onSpeakerRequestReceived((data) => {
-      if (data.roomId === roomId) {
-        setSpeakerRequests((prev) => {
-          if (prev.some((r) => r.userId === data.userId)) return prev;
-          return [...prev, { userId: data.userId, requestedAt: data.timestamp }];
-        });
-      }
-    }));
-    unsubs.push(roomSocketService.onRoomEnded((data) => {
-      if (data.roomId === roomId) { setIsRoomEnded(true); setActiveStream(null); }
-    }));
-    unsubs.push(roomSocketService.onSpeakerRemoved((data) => {
-      if (data.roomId === roomId) setIsMuted(true);
-    }));
-    unsubs.push(roomSocketService.onStreamStarted((data) => {
-      if (data.roomId === roomId) setActiveStream({ title: data.title, image: data.image, description: data.description, startedAt: data.startedAt, durationSec: data.durationSec });
-    }));
-    unsubs.push(roomSocketService.onStreamStopped((data) => {
-      if (data.roomId === roomId) setActiveStream(null);
-    }));
-    unsubs.push(roomSocketService.onRecordingStarted((data) => {
-      if (data.roomId === roomId) {
-        setIsRecording(true);
-        setActiveRecordingId(data.recordingId);
-      }
-    }));
-    unsubs.push(roomSocketService.onRecordingStopped((data) => {
-      if (data.roomId === roomId) {
-        setIsRecording(false);
-        setActiveRecordingId(null);
-      }
-    }));
+    unsubs.push(
+      roomSocketService.onParticipantsUpdate((data) => {
+        if (data.roomId === roomId) setParticipants(data.participants);
+      }),
+    );
+    unsubs.push(
+      roomSocketService.onParticipantMute((data) => {
+        setParticipants((prev) =>
+          prev.map((p) => (p.userId === data.userId ? { ...p, isMuted: data.isMuted } : p)),
+        );
+        if (data.userId === userId) setIsMuted(data.isMuted);
+      }),
+    );
+    unsubs.push(
+      roomSocketService.onSpeakerRequestReceived((data) => {
+        if (data.roomId === roomId) {
+          setSpeakerRequests((prev) => {
+            if (prev.some((r) => r.userId === data.userId)) return prev;
+            return [...prev, { userId: data.userId, requestedAt: data.timestamp }];
+          });
+        }
+      }),
+    );
+    unsubs.push(
+      roomSocketService.onRoomEnded((data) => {
+        if (data.roomId === roomId) {
+          setIsRoomEnded(true);
+          setActiveStream(null);
+        }
+      }),
+    );
+    unsubs.push(
+      roomSocketService.onSpeakerRemoved((data) => {
+        if (data.roomId === roomId) setIsMuted(true);
+      }),
+    );
+    unsubs.push(
+      roomSocketService.onStreamStarted((data) => {
+        if (data.roomId === roomId)
+          setActiveStream({
+            title: data.title,
+            image: data.image,
+            description: data.description,
+            startedAt: data.startedAt,
+            durationSec: data.durationSec,
+          });
+      }),
+    );
+    unsubs.push(
+      roomSocketService.onStreamStopped((data) => {
+        if (data.roomId === roomId) setActiveStream(null);
+      }),
+    );
+    unsubs.push(
+      roomSocketService.onRecordingStarted((data) => {
+        if (data.roomId === roomId) {
+          setIsRecording(true);
+          setActiveRecordingId(data.recordingId);
+        }
+      }),
+    );
+    unsubs.push(
+      roomSocketService.onRecordingStopped((data) => {
+        if (data.roomId === roomId) {
+          setIsRecording(false);
+          setActiveRecordingId(null);
+        }
+      }),
+    );
 
-    return () => { unsubs.forEach((fn) => fn()); };
+    return () => {
+      unsubs.forEach((fn) => fn());
+    };
   }, [enabled, roomId, userId, roomSocketService]);
 
   const join = useCallback(() => {
@@ -140,19 +178,28 @@ export function useRoomConnection({
     roomSocketService.requestToSpeak(roomId);
   }, [roomId, myRole, roomSocketService]);
 
-  const approveSpeaker = useCallback((targetUserId: string) => {
-    roomSocketService.approveSpeaker(roomId, targetUserId);
-    setSpeakerRequests((prev) => prev.filter((r) => r.userId !== targetUserId));
-  }, [roomId, roomSocketService]);
+  const approveSpeaker = useCallback(
+    (targetUserId: string) => {
+      roomSocketService.approveSpeaker(roomId, targetUserId);
+      setSpeakerRequests((prev) => prev.filter((r) => r.userId !== targetUserId));
+    },
+    [roomId, roomSocketService],
+  );
 
-  const denySpeaker = useCallback((targetUserId: string) => {
-    roomSocketService.denySpeaker(roomId, targetUserId);
-    setSpeakerRequests((prev) => prev.filter((r) => r.userId !== targetUserId));
-  }, [roomId, roomSocketService]);
+  const denySpeaker = useCallback(
+    (targetUserId: string) => {
+      roomSocketService.denySpeaker(roomId, targetUserId);
+      setSpeakerRequests((prev) => prev.filter((r) => r.userId !== targetUserId));
+    },
+    [roomId, roomSocketService],
+  );
 
-  const removeSpeaker = useCallback((targetUserId: string) => {
-    roomSocketService.removeSpeaker(roomId, targetUserId);
-  }, [roomId, roomSocketService]);
+  const removeSpeaker = useCallback(
+    (targetUserId: string) => {
+      roomSocketService.removeSpeaker(roomId, targetUserId);
+    },
+    [roomId, roomSocketService],
+  );
 
   useEffect(() => {
     return () => {
@@ -163,5 +210,22 @@ export function useRoomConnection({
     };
   }, [roomId, roomSocketService]);
 
-  return { isConnected, participants, myRole, isMuted, speakerRequests, activeStream, isRecording, activeRecordingId, join, leave, toggleMute, requestToSpeak, approveSpeaker, denySpeaker, removeSpeaker, isRoomEnded };
+  return {
+    isConnected,
+    participants,
+    myRole,
+    isMuted,
+    speakerRequests,
+    activeStream,
+    isRecording,
+    activeRecordingId,
+    join,
+    leave,
+    toggleMute,
+    requestToSpeak,
+    approveSpeaker,
+    denySpeaker,
+    removeSpeaker,
+    isRoomEnded,
+  };
 }

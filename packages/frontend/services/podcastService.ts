@@ -58,18 +58,22 @@ const episodeResponseSchema = episodeSchema.passthrough();
 
 /** A list of shows. `publicApi` sees the envelope; `api` sees the payload. */
 const podcastListPayloadSchema = z.array(podcastResponseSchema);
-const podcastListEnvelopeSchema = z.object({
-  data: podcastListPayloadSchema,
-}).passthrough();
+const podcastListEnvelopeSchema = z
+  .object({
+    data: podcastListPayloadSchema,
+  })
+  .passthrough();
 
 /** One show with its first page of episodes. Read by id, so `api` only. */
-const podcastShowPayloadSchema = z.object({
-  podcast: podcastResponseSchema,
-  episodes: z.array(episodeResponseSchema),
-  // Show-level Hosts & Guests (resolved Person/Artist + Oxy links). Optional
-  // so the client stays resilient across the backend rollout.
-  persons: z.array(resolvedPersonSchema.passthrough()).optional(),
-}).passthrough();
+const podcastShowPayloadSchema = z
+  .object({
+    podcast: podcastResponseSchema,
+    episodes: z.array(episodeResponseSchema),
+    // Show-level Hosts & Guests (resolved Person/Artist + Oxy links). Optional
+    // so the client stays resilient across the backend rollout.
+    persons: z.array(resolvedPersonSchema.passthrough()).optional(),
+  })
+  .passthrough();
 
 /**
  * A show's episodes. The server sends `{ data: [...], total, page, limit }` and
@@ -83,9 +87,11 @@ const podcastEpisodesPayloadSchema = z.array(episodeResponseSchema);
 /** The caller's subscriptions. Identity-scoped, so `api` only. */
 const subscriptionsPayloadSchema = podcastSubscriptionsSchema;
 
-const okResponseSchema = z.object({
-  ok: z.boolean(),
-}).passthrough();
+const okResponseSchema = z
+  .object({
+    ok: z.boolean(),
+  })
+  .passthrough();
 
 function parsePodcastResponse<T>(schema: z.ZodType<T>, data: unknown, label: string): T {
   const parsed = schema.safeParse(data);
@@ -116,14 +122,19 @@ export const podcastService = {
   },
 
   /** A single show plus its most recent episodes and resolved hosts/guests. */
-  async getPodcast(id: string): Promise<{ podcast: Podcast; episodes: Episode[]; persons: ResolvedPerson[] }> {
+  async getPodcast(
+    id: string,
+  ): Promise<{ podcast: Podcast; episodes: Episode[]; persons: ResolvedPerson[] }> {
     const response = await api.get<unknown>(`/podcasts/${id}`);
     const data = parsePodcastResponse(podcastShowPayloadSchema, response.data, 'podcast');
     return { podcast: data.podcast, episodes: data.episodes, persons: data.persons ?? [] };
   },
 
   /** One page of a show's episodes, newest first. */
-  async getPodcastEpisodes(id: string, params?: { page?: number; limit?: number }): Promise<Episode[]> {
+  async getPodcastEpisodes(
+    id: string,
+    params?: { page?: number; limit?: number },
+  ): Promise<Episode[]> {
     const response = await api.get<unknown>(`/podcasts/${id}/episodes`, params);
     return parsePodcastResponse(podcastEpisodesPayloadSchema, response.data, 'podcast episodes');
   },

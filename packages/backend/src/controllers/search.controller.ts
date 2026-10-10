@@ -79,9 +79,7 @@ async function findPeople(query: string, offset: number, limit: number) {
   return getDb()
     .select(publicColumns(catalogEntities, PROTECTED_COLUMNS_BY_TABLE))
     .from(catalogEntities)
-    .where(
-      and(eq(catalogEntities.type, 'person'), textSearch(catalogEntities.searchVector, query))
-    )
+    .where(and(eq(catalogEntities.type, 'person'), textSearch(catalogEntities.searchVector, query)))
     .orderBy(asc(catalogEntities.name))
     .offset(offset)
     .limit(limit);
@@ -92,7 +90,7 @@ async function countPeople(query: string): Promise<number> {
     .select({ total: count() })
     .from(catalogEntities)
     .where(
-      and(eq(catalogEntities.type, 'person'), textSearch(catalogEntities.searchVector, query))
+      and(eq(catalogEntities.type, 'person'), textSearch(catalogEntities.searchVector, query)),
     );
   return row?.total ?? 0;
 }
@@ -128,7 +126,11 @@ function formatOxyUser(profile: User): SearchUser {
   };
 }
 
-async function searchOxyUsers(query: string, limit: number, offset: number): Promise<[SearchUser[], number]> {
+async function searchOxyUsers(
+  query: string,
+  limit: number,
+  offset: number,
+): Promise<[SearchUser[], number]> {
   try {
     const response = await oxy.users.search(query, { limit, offset });
     const users = (response.data || []).map(formatOxyUser);
@@ -267,7 +269,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
        */
       const playlistMatches = and(
         eq(playlists.visibility, PlaylistVisibility.PUBLIC),
-        textSearch(playlists.searchVector, trimmed)
+        textSearch(playlists.searchVector, trimmed),
       );
       const playlistFind = findPlaylistsWithPlayableTracks(playlistMatches, {
         orderBy: PLAYLIST_ORDER,
@@ -314,7 +316,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
       // shows, so no result here can be one the viewer owns privately. Passing
       // it would only widen the DTO for a creator searching their own catalogue.
       const podcastFind = searchPodcastRows(trimmed, searchOffset, searchLimit).then((rows) =>
-        toPodcastDtos(rows, undefined)
+        toPodcastDtos(rows, undefined),
       );
       searchPromises.podcasts = isPreviewSearch
         ? podcastFind.then((found) => [found, found.length])
@@ -338,8 +340,8 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
      * an empty list.
      */
     if (categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.EPISODES) {
-      const episodeFind = searchEpisodeRows(trimmed, searchOffset, searchLimit).then(
-        async (rows) => toEpisodeDtos(rows, undefined, await loadShowContext(rows))
+      const episodeFind = searchEpisodeRows(trimmed, searchOffset, searchLimit).then(async (rows) =>
+        toEpisodeDtos(rows, undefined, await loadShowContext(rows)),
       );
       searchPromises.episodes = isPreviewSearch
         ? episodeFind.then((found) => [found, found.length])
@@ -351,7 +353,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
     // live Oxy identity below.
     if (categoryValue === SearchCategory.ALL || categoryValue === SearchCategory.PEOPLE) {
       const personFind = findPeople(trimmed, searchOffset, searchLimit).then((rows) =>
-        enrichPersons(rows.map(toPersonLike), makeOxyUsersFetcher(oxy))
+        enrichPersons(rows.map(toPersonLike), makeOxyUsersFetcher(oxy)),
       );
       searchPromises.people = isPreviewSearch
         ? personFind.then((found) => [found, found.length])
@@ -401,9 +403,7 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
     const formattedPodcasts = podcastsResult[0];
     const formattedEpisodes = episodesResult[0];
     const formattedPeople = peopleResult[0];
-    const formattedUsers = includeUsers
-      ? usersResult[0]
-      : [];
+    const formattedUsers = includeUsers ? usersResult[0] : [];
 
     // Calculate counts and totals
     const tracksCount = tracksResult[1];
@@ -414,19 +414,31 @@ export const search = async (req: Request, res: Response, next: NextFunction) =>
     const episodesCount = episodesResult[1];
     const peopleCount = peopleResult[1];
     const usersCount = usersResult[1];
-    const totalCount = tracksCount + albumsCount + artistsCount + playlistsCount + podcastsCount + episodesCount + peopleCount + usersCount;
+    const totalCount =
+      tracksCount +
+      albumsCount +
+      artistsCount +
+      playlistsCount +
+      podcastsCount +
+      episodesCount +
+      peopleCount +
+      usersCount;
 
     // Determine if there are more results
-    const hasMore = categoryValue === SearchCategory.ALL
-      ? totalCount > searchOffset + searchLimit
-      : (categoryValue === SearchCategory.TRACKS && tracksCount > searchOffset + searchLimit) ||
-        (categoryValue === SearchCategory.ALBUMS && albumsCount > searchOffset + searchLimit) ||
-        (categoryValue === SearchCategory.ARTISTS && artistsCount > searchOffset + searchLimit) ||
-        (categoryValue === SearchCategory.PLAYLISTS && playlistsCount > searchOffset + searchLimit) ||
-        (categoryValue === SearchCategory.PODCASTS && podcastsCount > searchOffset + searchLimit) ||
-        (categoryValue === SearchCategory.EPISODES && episodesCount > searchOffset + searchLimit) ||
-        (categoryValue === SearchCategory.PEOPLE && peopleCount > searchOffset + searchLimit) ||
-        (categoryValue === SearchCategory.USERS && usersCount > searchOffset + searchLimit);
+    const hasMore =
+      categoryValue === SearchCategory.ALL
+        ? totalCount > searchOffset + searchLimit
+        : (categoryValue === SearchCategory.TRACKS && tracksCount > searchOffset + searchLimit) ||
+          (categoryValue === SearchCategory.ALBUMS && albumsCount > searchOffset + searchLimit) ||
+          (categoryValue === SearchCategory.ARTISTS && artistsCount > searchOffset + searchLimit) ||
+          (categoryValue === SearchCategory.PLAYLISTS &&
+            playlistsCount > searchOffset + searchLimit) ||
+          (categoryValue === SearchCategory.PODCASTS &&
+            podcastsCount > searchOffset + searchLimit) ||
+          (categoryValue === SearchCategory.EPISODES &&
+            episodesCount > searchOffset + searchLimit) ||
+          (categoryValue === SearchCategory.PEOPLE && peopleCount > searchOffset + searchLimit) ||
+          (categoryValue === SearchCategory.USERS && usersCount > searchOffset + searchLimit);
 
     const results: SearchResult = {
       query,

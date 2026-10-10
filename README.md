@@ -88,7 +88,9 @@ bun run build:frontend
 bun run build:studio
 bun run build:backend
 bun run test                 # every package
-bun run lint                 # every package
+bun run lint                 # Biome (every package) + the Expo apps' minimal ESLint
+bun run lint:fix             # Biome safe fixes and formatting
+bun run format               # Biome formatter only
 bun run clean
 ```
 

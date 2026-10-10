@@ -60,7 +60,9 @@ jest.mock('@oxy.so/bloom/loading', () => ({ Loading: () => null }));
 jest.mock('@oxy.so/bloom/badge', () => ({ Badge: () => null }));
 jest.mock('@oxy.so/bloom/toast', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 jest.mock('@oxy.so/bloom/theme', () => ({
-  useTheme: () => ({ colors: { error: '#f00', text: '#000', textSecondary: '#666', primary: '#00f' } }),
+  useTheme: () => ({
+    colors: { error: '#f00', text: '#000', textSecondary: '#666', primary: '#00f' },
+  }),
 }));
 
 jest.mock('@/components/Artwork', () => ({ Artwork: () => null }));
@@ -100,7 +102,9 @@ jest.mock('@/services/episodeService', () => ({
   episodeService: { deleteEpisode: jest.fn() },
 }));
 
-const mockGetPodcast = podcastService.getPodcast as jest.MockedFunction<typeof podcastService.getPodcast>;
+const mockGetPodcast = podcastService.getPodcast as jest.MockedFunction<
+  typeof podcastService.getPodcast
+>;
 const mockDeletePodcast = podcastService.deletePodcast as jest.MockedFunction<
   typeof podcastService.deletePodcast
 >;
@@ -149,7 +153,9 @@ async function renderScreen(): Promise<ReactTestRenderer> {
   // title, so its absence means the screen never got past loading — and every
   // "no delete control was offered" assertion below would be vacuous.
   const showedTitle = tree.root.findAll(
-    (node) => typeof node.props?.children === 'string' && node.props.children.includes('The Wednesday Musk'),
+    (node) =>
+      typeof node.props?.children === 'string' &&
+      node.props.children.includes('The Wednesday Musk'),
   );
   if (showedTitle.length === 0) {
     throw new Error('the show never loaded — the screen is still in its loading state');
@@ -169,7 +175,8 @@ function deleteButtons(tree: ReactTestRenderer) {
   // and the Pressable it renders both carry the testID, so one control counts
   // as two.
   return tree.root.findAll(
-    (node) => node.props?.testID === 'delete-show-button' && typeof node.props?.onPress === 'function',
+    (node) =>
+      node.props?.testID === 'delete-show-button' && typeof node.props?.onPress === 'function',
     { deep: false },
   );
 }
@@ -207,7 +214,10 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockViewerId = 'owner-1';
   queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false, gcTime: Infinity } },
+    defaultOptions: {
+      queries: { retry: false, gcTime: Infinity },
+      mutations: { retry: false, gcTime: Infinity },
+    },
   });
   invalidateQueries = jest.spyOn(queryClient, 'invalidateQueries');
   removeQueries = jest.spyOn(queryClient, 'removeQueries');
@@ -239,8 +249,16 @@ describe('who the show screen offers a delete to', () => {
   it.each([
     ['a viewer who is not the owner', { podcast: SHOW }, 'someone-else'],
     ['a signed-out viewer', { podcast: SHOW }, undefined],
-    ['an RSS-mirrored show that belongs to nobody', { podcast: { ...SHOW, source: 'rss' as const } }, 'owner-1'],
-    ['a show under a platform takedown', { podcast: { ...SHOW, status: 'removed' as const } }, 'owner-1'],
+    [
+      'an RSS-mirrored show that belongs to nobody',
+      { podcast: { ...SHOW, source: 'rss' as const } },
+      'owner-1',
+    ],
+    [
+      'a show under a platform takedown',
+      { podcast: { ...SHOW, status: 'removed' as const } },
+      'owner-1',
+    ],
     [
       'an unowned show seen by a viewer with no id — two undefineds must not compare into a grant',
       { podcast: { ...SHOW, ownerOxyUserId: undefined } },

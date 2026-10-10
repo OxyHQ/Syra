@@ -35,62 +35,67 @@ import { TOP_BAR_HEIGHT } from '@/components/TopBar';
  * `t()` would otherwise render the raw key.
  */
 
-const subscribeToOnlineManager = (onStoreChange: () => void) => onlineManager.subscribe(onStoreChange);
+const subscribeToOnlineManager = (onStoreChange: () => void) =>
+  onlineManager.subscribe(onStoreChange);
 const getIsOnline = () => onlineManager.isOnline();
 // Static web renders have no connectivity signal; assume online so the banner
 // never flashes into the markup before hydration corrects it.
 const getIsOnlineForServer = () => true;
 
 export function OfflineBanner() {
-    const { t } = useTranslation();
-    const isOnline = useSyncExternalStore(subscribeToOnlineManager, getIsOnline, getIsOnlineForServer);
-    const insets = useSafeAreaInsets();
-    const theme = useTheme();
+  const { t } = useTranslation();
+  const isOnline = useSyncExternalStore(
+    subscribeToOnlineManager,
+    getIsOnline,
+    getIsOnlineForServer,
+  );
+  const insets = useSafeAreaInsets();
+  const theme = useTheme();
 
-    const styles = useMemo(
-        () =>
-            StyleSheet.create({
-                container: {
-                    position: 'absolute',
-                    // Sits directly below the TopBar, which is `TOP_BAR_HEIGHT + insets.top`
-                    // tall (web insets are 0, so this collapses to the base height there).
-                    // Anchoring to the top keeps it clear of the player bar and the mobile
-                    // bottom nav.
-                    top: insets.top + TOP_BAR_HEIGHT,
-                    left: 0,
-                    right: 0,
-                    alignItems: 'center',
-                    // Below the TopBar's own z-index (1000) so navigation always wins.
-                    zIndex: 900,
-                },
-                banner: {
-                    marginHorizontal: 12,
-                    paddingHorizontal: 16,
-                    paddingVertical: 8,
-                    borderRadius: 999,
-                    borderWidth: StyleSheet.hairlineWidth,
-                },
-                text: {
-                    fontSize: 13,
-                    textAlign: 'center',
-                },
-            }),
-        [insets.top, theme.colors.backgroundTertiary, theme.colors.border, theme.colors.text],
-    );
+  const styles = useMemo(
+    () =>
+      StyleSheet.create({
+        container: {
+          position: 'absolute',
+          // Sits directly below the TopBar, which is `TOP_BAR_HEIGHT + insets.top`
+          // tall (web insets are 0, so this collapses to the base height there).
+          // Anchoring to the top keeps it clear of the player bar and the mobile
+          // bottom nav.
+          top: insets.top + TOP_BAR_HEIGHT,
+          left: 0,
+          right: 0,
+          alignItems: 'center',
+          // Below the TopBar's own z-index (1000) so navigation always wins.
+          zIndex: 900,
+        },
+        banner: {
+          marginHorizontal: 12,
+          paddingHorizontal: 16,
+          paddingVertical: 8,
+          borderRadius: 999,
+          borderWidth: StyleSheet.hairlineWidth,
+        },
+        text: {
+          fontSize: 13,
+          textAlign: 'center',
+        },
+      }),
+    [insets.top, theme.colors.backgroundTertiary, theme.colors.border, theme.colors.text],
+  );
 
-    if (isOnline) {
-        return null;
-    }
+  if (isOnline) {
+    return null;
+  }
 
-    // `pointerEvents="none"` guarantees the banner can never swallow a tap meant
-    // for the content underneath it.
-    return (
-        <View style={styles.container} pointerEvents="none" accessibilityRole="alert">
-            <View className="bg-popover border-border" style={styles.banner}>
-                <Text className="text-foreground" style={styles.text}>
-                    {t('common.offline', { defaultValue: "You're offline. Showing saved content." })}
-                </Text>
-            </View>
-        </View>
-    );
+  // `pointerEvents="none"` guarantees the banner can never swallow a tap meant
+  // for the content underneath it.
+  return (
+    <View style={styles.container} pointerEvents="none" accessibilityRole="alert">
+      <View className="bg-popover border-border" style={styles.banner}>
+        <Text className="text-foreground" style={styles.text}>
+          {t('common.offline', { defaultValue: "You're offline. Showing saved content." })}
+        </Text>
+      </View>
+    </View>
+  );
 }

@@ -171,7 +171,7 @@ async function main(): Promise<void> {
 
   logger.info(
     `Restoring ${data.images.length} image(s), ${data.entities.length} artist(s), ` +
-      `${data.albums.length} album(s), ${data.tracks.length} track(s)`
+      `${data.albums.length} album(s), ${data.tracks.length} track(s)`,
   );
 
   await connectPostgres();
@@ -184,89 +184,97 @@ async function main(): Promise<void> {
     for (const image of data.images) {
       await db
         .insert(imageAssets)
-        .values([{
-          id: image._id,
-          s3Key: image.s3Key,
-          filename: image.filename,
-          contentType: image.contentType,
-          byteSize: image.byteSize,
-          width: image.width,
-          height: image.height,
-          ownerType: image.ownerType,
-          uploadedBy: image.uploadedBy,
-        }])
+        .values([
+          {
+            id: image._id,
+            s3Key: image.s3Key,
+            filename: image.filename,
+            contentType: image.contentType,
+            byteSize: image.byteSize,
+            width: image.width,
+            height: image.height,
+            ownerType: image.ownerType,
+            uploadedBy: image.uploadedBy,
+          },
+        ])
         .onConflictDoNothing();
     }
 
     for (const entity of data.entities) {
       await db
         .insert(catalogEntities)
-        .values([{
-          id: entity._id,
-          type: entity.type,
-          name: entity.name,
-          nameKey: entity.nameKey,
-          source: entity.source,
-          popularity: entity.popularity ?? 0,
-          verified: entity.verified ?? false,
-          claimable: entity.claimable ?? false,
-        }])
+        .values([
+          {
+            id: entity._id,
+            type: entity.type,
+            name: entity.name,
+            nameKey: entity.nameKey,
+            source: entity.source,
+            popularity: entity.popularity ?? 0,
+            verified: entity.verified ?? false,
+            claimable: entity.claimable ?? false,
+          },
+        ])
         .onConflictDoNothing();
     }
 
     for (const album of data.albums) {
       await db
         .insert(albums)
-        .values([{
-          id: album._id,
-          title: album.title,
-          artistId: album.artistId,
-          artistName: album.artistName,
-          coverArtId: album.coverArt,
-          releaseDate: album.releaseDate,
-          // `albums.artistId` is a real foreign key now, so the artist above must
-          // already exist — which is why entities are inserted first.
-          type: album.type,
-          totalTracks: album.totalTracks,
-          isAvailable: album.isAvailable ?? true,
-          source: album.source,
-        }])
+        .values([
+          {
+            id: album._id,
+            title: album.title,
+            artistId: album.artistId,
+            artistName: album.artistName,
+            coverArtId: album.coverArt,
+            releaseDate: album.releaseDate,
+            // `albums.artistId` is a real foreign key now, so the artist above must
+            // already exist — which is why entities are inserted first.
+            type: album.type,
+            totalTracks: album.totalTracks,
+            isAvailable: album.isAvailable ?? true,
+            source: album.source,
+          },
+        ])
         .onConflictDoNothing();
     }
 
     for (const track of data.tracks) {
       await db
         .insert(tracks)
-        .values([{
-          id: track._id,
-          title: track.title,
-          artistId: track.artistId,
-          artistName: track.artistName,
-          albumId: track.albumId,
-          albumName: track.albumName,
-          duration: track.duration,
-          audioSourceUrl: track.audioSource?.url,
-          audioSourceFormat: track.audioSource?.format,
-          audioSourceBitrate: track.audioSource?.bitrate,
-          audioSourceDuration: track.audioSource?.duration,
-          coverArtId: track.coverArt,
-          metadataGenre: track.metadata?.genre,
-          metadataExplicit: track.metadata?.explicit,
-          tags: track.tags ?? [],
-          isExplicit: track.isExplicit ?? false,
-          popularity: track.popularity ?? 0,
-          playCount: track.playCount ?? 0,
-          favoriteCount: track.favoriteCount ?? 0,
-          repostCount: track.repostCount ?? 0,
-          isAvailable: track.isAvailable ?? true,
-          copyrightRemoved: track.copyrightRemoved ?? false,
-          source: track.source,
-          status: track.status,
-          hlsMasterKey: track.hlsMasterKey,
-          loudnessLufs: track.loudnessLufs,
-          createdAt: toDate(track.createdAt),
-          updatedAt: toDate(track.updatedAt),
-        }])
+        .values([
+          {
+            id: track._id,
+            title: track.title,
+            artistId: track.artistId,
+            artistName: track.artistName,
+            albumId: track.albumId,
+            albumName: track.albumName,
+            duration: track.duration,
+            audioSourceUrl: track.audioSource?.url,
+            audioSourceFormat: track.audioSource?.format,
+            audioSourceBitrate: track.audioSource?.bitrate,
+            audioSourceDuration: track.audioSource?.duration,
+            coverArtId: track.coverArt,
+            metadataGenre: track.metadata?.genre,
+            metadataExplicit: track.metadata?.explicit,
+            tags: track.tags ?? [],
+            isExplicit: track.isExplicit ?? false,
+            popularity: track.popularity ?? 0,
+            playCount: track.playCount ?? 0,
+            favoriteCount: track.favoriteCount ?? 0,
+            repostCount: track.repostCount ?? 0,
+            isAvailable: track.isAvailable ?? true,
+            copyrightRemoved: track.copyrightRemoved ?? false,
+            source: track.source,
+            status: track.status,
+            hlsMasterKey: track.hlsMasterKey,
+            loudnessLufs: track.loudnessLufs,
+            createdAt: toDate(track.createdAt),
+            updatedAt: toDate(track.updatedAt),
+          },
+        ])
         .onConflictDoNothing();
 
       // The ladder, in ladder order — `position` is what orders it, and the
@@ -275,13 +283,15 @@ async function main(): Promise<void> {
       for (const [position, rendition] of ladder.entries()) {
         await db
           .insert(trackHlsRenditions)
-          .values([{
-            trackId: track._id,
-            position,
-            manifestKey: rendition.manifestKey,
-            bitrateKbps: rendition.bitrateKbps,
-            encrypted: rendition.encrypted ?? true,
-          }])
+          .values([
+            {
+              trackId: track._id,
+              position,
+              manifestKey: rendition.manifestKey,
+              bitrateKbps: rendition.bitrateKbps,
+              encrypted: rendition.encrypted ?? true,
+            },
+          ])
           .onConflictDoNothing();
       }
       logger.info(`restored "${track.title}" with ${ladder.length} rendition(s)`);

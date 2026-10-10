@@ -151,7 +151,12 @@ const UploadRow: React.FC<UploadRowProps> = ({ upload, isCurrent, onPlay }) => {
   const promoteUpload = usePromoteUpload();
 
   const attestationStatement = t('uploads.attestation.statement');
-  const artworkUrl = pickCatalogImageUrl(upload.images, upload.coverArt, 'thumbnail', upload.coverArtSizes);
+  const artworkUrl = pickCatalogImageUrl(
+    upload.images,
+    upload.coverArt,
+    'thumbnail',
+    upload.coverArtSizes,
+  );
   const isPlayable = upload.status === 'ready';
   const expiringInDays = daysUntilExpiry(upload.expiresAt);
   const hasEdits =
@@ -231,7 +236,10 @@ const UploadRow: React.FC<UploadRowProps> = ({ upload, isCurrent, onPlay }) => {
 
         <View style={styles.rowText}>
           <Text
-            style={[styles.rowTitle, { color: isCurrent ? theme.colors.primary : theme.colors.text }]}
+            style={[
+              styles.rowTitle,
+              { color: isCurrent ? theme.colors.primary : theme.colors.text },
+            ]}
             numberOfLines={1}
           >
             {upload.title}
@@ -386,7 +394,8 @@ const UploadRow: React.FC<UploadRowProps> = ({ upload, isCurrent, onPlay }) => {
           <Pressable
             onPress={() => void handleDelete()}
             disabled={deleteUpload.isPending}
-            className="bg-surface" style={styles.actionButton}
+            className="bg-surface"
+            style={styles.actionButton}
             accessibilityRole="button"
           >
             <Text className="text-error" style={styles.actionButtonText}>
@@ -438,8 +447,7 @@ const UploadsScreen: React.FC = () => {
   // comparison has to include the kind or an unlucky collision would highlight
   // the wrong row.
   const isCurrent = useCallback(
-    (upload: UserUploadAsTrack) =>
-      currentTrack?.kind === 'upload' && currentTrack.id === upload.id,
+    (upload: UserUploadAsTrack) => currentTrack?.kind === 'upload' && currentTrack.id === upload.id,
     [currentTrack],
   );
 
@@ -493,25 +501,36 @@ const UploadsScreen: React.FC = () => {
 
   return (
     <>
-      <SEO title={t('uploads.locker.seo.title')} description={t('uploads.locker.seo.description')} />
+      <SEO
+        title={t('uploads.locker.seo.title')}
+        description={t('uploads.locker.seo.description')}
+      />
       <ScrollView
-        className="bg-surface" style={styles.scroll}
+        className="bg-surface"
+        style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
           <View style={styles.headerText}>
-            <Text className="text-foreground" style={styles.title}>{t('uploads.locker.title')}</Text>
+            <Text className="text-foreground" style={styles.title}>
+              {t('uploads.locker.title')}
+            </Text>
             <Text className="text-muted-foreground" style={styles.subtitle}>
               {t('uploads.locker.subtitle')}
             </Text>
           </View>
           <Pressable
             onPress={() => router.push('/upload')}
-            className="bg-primary" style={styles.uploadButton}
+            className="bg-primary"
+            style={styles.uploadButton}
             accessibilityRole="button"
           >
-            <Ionicons name="cloud-upload-outline" size={16} color={theme.colors.primaryForeground} />
+            <Ionicons
+              name="cloud-upload-outline"
+              size={16}
+              color={theme.colors.primaryForeground}
+            />
             <Text className="text-primary-foreground" style={styles.uploadButtonText}>
               {t('uploads.title')}
             </Text>
@@ -533,7 +552,11 @@ const UploadsScreen: React.FC = () => {
                 <Text className="text-foreground" style={styles.sectionTitle} numberOfLines={1}>
                   {album.albumName ?? t('uploads.locker.untitledAlbum')}
                 </Text>
-                <Text className="text-muted-foreground" style={styles.sectionSubtitle} numberOfLines={1}>
+                <Text
+                  className="text-muted-foreground"
+                  style={styles.sectionSubtitle}
+                  numberOfLines={1}
+                >
                   {/* The ALBUM artist, not a track's: on a compilation the track
                       artist differs per row, so a header taken from one would
                       name whichever track happened to sort first. */}

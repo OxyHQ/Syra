@@ -12,8 +12,12 @@ import {
 } from './previewClip';
 
 function hasBinary(name: string): boolean {
-  try { execFileSync('which', [name], { stdio: 'ignore' }); return true; }
-  catch { return false; }
+  try {
+    execFileSync('which', [name], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
 }
 const MEDIA_TOOLS_AVAILABLE = ['ffmpeg', 'ffprobe'].every(hasBinary);
 // Bento4 (mp42hls/mp4fragment) is needed to package a real encrypted HLS source.
@@ -23,9 +27,12 @@ const execFile = promisify(execFileCb);
 
 async function probeDurationSec(file: string): Promise<number> {
   const { stdout } = await execFile('ffprobe', [
-    '-v', 'error',
-    '-show_entries', 'format=duration',
-    '-of', 'csv=p=0',
+    '-v',
+    'error',
+    '-show_entries',
+    'format=duration',
+    '-of',
+    'csv=p=0',
     file,
   ]);
   return Number(stdout.trim());
@@ -33,10 +40,14 @@ async function probeDurationSec(file: string): Promise<number> {
 
 async function probeCodec(file: string): Promise<string> {
   const { stdout } = await execFile('ffprobe', [
-    '-v', 'error',
-    '-select_streams', 'a:0',
-    '-show_entries', 'stream=codec_name',
-    '-of', 'csv=p=0',
+    '-v',
+    'error',
+    '-select_streams',
+    'a:0',
+    '-show_entries',
+    'stream=codec_name',
+    '-of',
+    'csv=p=0',
     file,
   ]);
   return stdout.trim();
@@ -51,15 +62,23 @@ beforeAll(async () => {
   inputPath = path.join(tmpDir, 'input.mp3');
 
   // Synthesize a real 40-second audio file so a 30s clip is fully exercised.
-  await execFile('ffmpeg', [
-    '-nostdin',
-    '-f', 'lavfi',
-    '-i', 'sine=frequency=440:duration=40',
-    '-c:a', 'libmp3lame',
-    '-b:a', '192k',
-    inputPath,
-    '-y',
-  ], { maxBuffer: 8 * 1024 * 1024 });
+  await execFile(
+    'ffmpeg',
+    [
+      '-nostdin',
+      '-f',
+      'lavfi',
+      '-i',
+      'sine=frequency=440:duration=40',
+      '-c:a',
+      'libmp3lame',
+      '-b:a',
+      '192k',
+      inputPath,
+      '-y',
+    ],
+    { maxBuffer: 8 * 1024 * 1024 },
+  );
 }, 60_000);
 
 afterAll(() => {
@@ -102,66 +121,91 @@ describe.skipIf(!MEDIA_TOOLS_AVAILABLE)('generatePreviewClip (requires ffmpeg)',
 
 // ── HLS-source path (encrypted, mirrors the real ingest packaging) ──────────────
 
-describe.skipIf(!HLS_TOOLS_AVAILABLE)('generatePreviewClipFromHls (requires ffmpeg + Bento4)', () => {
-  let hlsDir: string;
-  let playlistPath: string;
+describe.skipIf(!HLS_TOOLS_AVAILABLE)(
+  'generatePreviewClipFromHls (requires ffmpeg + Bento4)',
+  () => {
+    let hlsDir: string;
+    let playlistPath: string;
 
-  beforeAll(async () => {
-    if (!HLS_TOOLS_AVAILABLE) return;
-    hlsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'preview-hls-test-'));
-    const srcMp4 = path.join(hlsDir, 'src.mp4');
-    const fragMp4 = path.join(hlsDir, 'frag.mp4');
-    const renditionDir = path.join(hlsDir, '96');
-    fs.mkdirSync(renditionDir, { recursive: true });
+    beforeAll(async () => {
+      if (!HLS_TOOLS_AVAILABLE) return;
+      hlsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'preview-hls-test-'));
+      const srcMp4 = path.join(hlsDir, 'src.mp4');
+      const fragMp4 = path.join(hlsDir, 'frag.mp4');
+      const renditionDir = path.join(hlsDir, '96');
+      fs.mkdirSync(renditionDir, { recursive: true });
 
-    // 1. Synthesize 40s aac mp4, 2. fragment (same chain as hlsPackager).
-    await execFile('ffmpeg', [
-      '-nostdin', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=40',
-      '-c:a', 'aac', '-b:a', '96k', '-movflags', '+faststart', srcMp4, '-y',
-    ], { maxBuffer: 8 * 1024 * 1024 });
-    await execFile('mp4fragment', [srcMp4, fragMp4]);
+      // 1. Synthesize 40s aac mp4, 2. fragment (same chain as hlsPackager).
+      await execFile(
+        'ffmpeg',
+        [
+          '-nostdin',
+          '-f',
+          'lavfi',
+          '-i',
+          'sine=frequency=440:duration=40',
+          '-c:a',
+          'aac',
+          '-b:a',
+          '96k',
+          '-movflags',
+          '+faststart',
+          srcMp4,
+          '-y',
+        ],
+        { maxBuffer: 8 * 1024 * 1024 },
+      );
+      await execFile('mp4fragment', [srcMp4, fragMp4]);
 
-    // 3. Package encrypted AES-128 HLS (same flags as hlsPackager.packageRendition).
-    const keyHex = crypto.randomBytes(16).toString('hex');
-    await execFile('mp42hls', [
-      '--encryption-mode', 'AES-128',
-      '--encryption-key', keyHex,
-      '--encryption-key-uri', 'key',
-      fragMp4,
-    ], { cwd: renditionDir });
+      // 3. Package encrypted AES-128 HLS (same flags as hlsPackager.packageRendition).
+      const keyHex = crypto.randomBytes(16).toString('hex');
+      await execFile(
+        'mp42hls',
+        [
+          '--encryption-mode',
+          'AES-128',
+          '--encryption-key',
+          keyHex,
+          '--encryption-key-uri',
+          'key',
+          fragMp4,
+        ],
+        { cwd: renditionDir },
+      );
 
-    // 4. Materialize exactly like previewService.storePreviewFromHls: write the key
-    //    bytes locally and rewrite the EXT-X-KEY URI to point at it.
-    fs.writeFileSync(path.join(renditionDir, 'key.bin'), Buffer.from(keyHex, 'hex'));
-    const stored = fs.readFileSync(path.join(renditionDir, 'stream.m3u8'), 'utf8');
-    playlistPath = path.join(renditionDir, 'index.m3u8');
-    fs.writeFileSync(playlistPath, stored.replace(/URI="[^"]*"/, 'URI="key.bin"'));
-  }, 120_000);
+      // 4. Materialize exactly like previewService.storePreviewFromHls: write the key
+      //    bytes locally and rewrite the EXT-X-KEY URI to point at it.
+      fs.writeFileSync(path.join(renditionDir, 'key.bin'), Buffer.from(keyHex, 'hex'));
+      const stored = fs.readFileSync(path.join(renditionDir, 'stream.m3u8'), 'utf8');
+      playlistPath = path.join(renditionDir, 'index.m3u8');
+      fs.writeFileSync(playlistPath, stored.replace(/URI="[^"]*"/, 'URI="key.bin"'));
+    }, 120_000);
 
-  afterAll(() => {
-    if (!HLS_TOOLS_AVAILABLE) return;
-    fs.rmSync(hlsDir, { recursive: true, force: true });
-  });
+    afterAll(() => {
+      if (!HLS_TOOLS_AVAILABLE) return;
+      fs.rmSync(hlsDir, { recursive: true, force: true });
+    });
 
-  it('decrypts the HLS and produces a ~30s MP3 clip from start=0', async () => {
-    const outPath = path.join(hlsDir, 'hls-clip-0.mp3');
-    const result = await generatePreviewClipFromHls({ playlistPath, startSec: 0, outPath });
+    it('decrypts the HLS and produces a ~30s MP3 clip from start=0', async () => {
+      const outPath = path.join(hlsDir, 'hls-clip-0.mp3');
+      const result = await generatePreviewClipFromHls({ playlistPath, startSec: 0, outPath });
 
-    expect(result).toBe(outPath);
-    expect(fs.existsSync(outPath)).toBe(true);
-    expect(await probeCodec(outPath)).toBe('mp3');
+      expect(result).toBe(outPath);
+      expect(fs.existsSync(outPath)).toBe(true);
+      expect(await probeCodec(outPath)).toBe('mp3');
 
-    const duration = await probeDurationSec(outPath);
-    expect(duration).toBeGreaterThan(PREVIEW_DURATION_SEC - 1);
-    expect(duration).toBeLessThan(PREVIEW_DURATION_SEC + 1);
-  }, 60_000);
+      const duration = await probeDurationSec(outPath);
+      expect(duration).toBeGreaterThan(PREVIEW_DURATION_SEC - 1);
+      expect(duration).toBeLessThan(PREVIEW_DURATION_SEC + 1);
+    }, 60_000);
 
-  it('honours the start offset on the decrypted HLS (start=15 on 40s → ~25s)', async () => {
-    const outPath = path.join(hlsDir, 'hls-clip-15.mp3');
-    await generatePreviewClipFromHls({ playlistPath, startSec: 15, outPath });
+    it('honours the start offset on the decrypted HLS (start=15 on 40s → ~25s)', async () => {
+      const outPath = path.join(hlsDir, 'hls-clip-15.mp3');
+      await generatePreviewClipFromHls({ playlistPath, startSec: 15, outPath });
 
-    const duration = await probeDurationSec(outPath);
-    expect(duration).toBeGreaterThan(23);
-    expect(duration).toBeLessThan(27);
-  }, 60_000);
-});
+      const duration = await probeDurationSec(outPath);
+      expect(duration).toBeGreaterThan(23);
+      expect(duration).toBeLessThan(27);
+    }, 60_000);
+  },
+);

@@ -283,16 +283,22 @@ const PROBES: readonly { readonly name: string; readonly sql: string }[] = [
 type Tx = Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0];
 
 async function seed(tx: Tx): Promise<void> {
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into catalog_entities (id, type, name, name_key, source, popularity)
     select '${MARKER}-art-' || g, 'artist', '${MARKER} artist ' || g, '${MARKER}-artist' || g, 'upload', g % 101
-    from generate_series(1, 400) g`));
+    from generate_series(1, 400) g`),
+  );
 
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into tracks (id, title, artist_id, artist_name, duration, source, status, popularity)
     select '${MARKER}-t-' || g, 'Track ' || g, '${MARKER}-art-' || (1 + (g % 400)), 'Artist',
            150 + (g % 120), 'upload', 'ready', g % 101
-    from generate_series(1, ${SEEDED_TRACKS}) g`));
+    from generate_series(1, ${SEEDED_TRACKS}) g`),
+  );
 
   /**
    * The locker, with every dimension the probes narrow on actually varying.
@@ -318,7 +324,9 @@ async function seed(tx: Tx): Promise<void> {
    * the probe measured a locker nobody has rather than the one the index exists
    * for. At ~4,300 files it is the real question again.
    */
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into user_uploads (id, owner_oxy_user_id, title, album_key, album_name,
                               disc_number, track_number, duration, size_bytes, sha256,
                               fingerprint_duration_sec, status, matched_track_id,
@@ -339,13 +347,17 @@ async function seed(tx: Tx): Promise<void> {
            case when g % 5 = 0 then now() - interval '1 day' else null end,
            case when g % 17 = 0 then now() - ((g % 90) || ' days')::interval else null end,
            now() - (g || ' seconds')::interval
-    from generate_series(1, ${SEEDED_UPLOADS}) g`));
+    from generate_series(1, ${SEEDED_UPLOADS}) g`),
+  );
 
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into user_upload_hls_renditions (id, user_upload_id, position, manifest_key, bitrate_kbps, encrypted)
     select '${MARKER}-hls-' || g, '${MARKER}-up-' || (1 + (g % ${SEEDED_UPLOADS})), 0,
            'hls/' || g || '/index.m3u8', 160, true
-    from generate_series(1, ${SEEDED_UPLOADS}) g`));
+    from generate_series(1, ${SEEDED_UPLOADS}) g`),
+  );
 
   /**
    * Claims, one in three still pending.
@@ -355,7 +367,9 @@ async function seed(tx: Tx): Promise<void> {
    * rows for the same pair — which is precisely the constraint
    * `otherPendingClaims` reads through.
    */
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into artist_claims (id, artist_id, oxy_user_id, evidence, status, created_at)
     select '${MARKER}-cl-' || g,
            '${MARKER}-art-' || (1 + (g % 400)),
@@ -363,39 +377,56 @@ async function seed(tx: Tx): Promise<void> {
            'evidence ' || g,
            case when g % 3 = 0 then 'pending' when g % 3 = 1 then 'approved' else 'rejected' end,
            now() - (g || ' seconds')::interval
-    from generate_series(1, ${SEEDED_CLAIMS}) g`));
+    from generate_series(1, ${SEEDED_CLAIMS}) g`),
+  );
 
   // One attestation per contributed track — `contribution_attestations_track_id_key`
   // is unique, so the generator walks the track ids directly.
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into contribution_attestations (id, track_id, uploader_oxy_user_id, statement, accepted_at)
     select '${MARKER}-at-' || g, '${MARKER}-t-' || g,
            '${MARKER}-u-' || (1 + (g % ${SEEDED_OWNERS})),
            'I may distribute this recording', now()
-    from generate_series(1, ${SEEDED_ATTESTATIONS}) g`));
+    from generate_series(1, ${SEEDED_ATTESTATIONS}) g`),
+  );
 
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into contributor_standings (id, oxy_user_id, strike_count)
     select '${MARKER}-st-' || g, '${MARKER}-u-' || g, g % 3
-    from generate_series(1, ${SEEDED_STANDINGS}) g`));
+    from generate_series(1, ${SEEDED_STANDINGS}) g`),
+  );
 
-  await executeRows(tx, sql.raw(`
+  await executeRows(
+    tx,
+    sql.raw(`
     insert into contributor_strikes (id, contributor_standing_id, reason, created_at)
     select '${MARKER}-sk-' || g, '${MARKER}-st-' || (1 + (g % ${SEEDED_STANDINGS})),
            'notice ' || g, now() - (g || ' seconds')::interval
-    from generate_series(1, 6000) g`));
+    from generate_series(1, 6000) g`),
+  );
 
-  await executeRows(tx, sql.raw(
-    'analyze catalog_entities, tracks, user_uploads, user_upload_hls_renditions, ' +
-    'artist_claims, contribution_attestations, contributor_standings, contributor_strikes'
-  ));
+  await executeRows(
+    tx,
+    sql.raw(
+      'analyze catalog_entities, tracks, user_uploads, user_upload_hls_renditions, ' +
+        'artist_claims, contribution_attestations, contributor_standings, contributor_strikes',
+    ),
+  );
 
   const [uploads] = await executeRows<{ total: number }>(
-    tx, sql.raw(`select count(*)::int as total from user_uploads where id like '${MARKER}-%'`));
+    tx,
+    sql.raw(`select count(*)::int as total from user_uploads where id like '${MARKER}-%'`),
+  );
   seededUploadCount = uploads?.total ?? 0;
 
   const [claims] = await executeRows<{ total: number }>(
-    tx, sql.raw(`select count(*)::int as total from artist_claims where id like '${MARKER}-%'`));
+    tx,
+    sql.raw(`select count(*)::int as total from artist_claims where id like '${MARKER}-%'`),
+  );
   seededClaimCount = claims?.total ?? 0;
 }
 
@@ -412,7 +443,9 @@ beforeAll(async () => {
 
       for (const probe of PROBES) {
         const rows = await executeRows<{ 'QUERY PLAN': string }>(
-          tx, sql.raw(`explain (analyze, buffers) ${probe.sql}`));
+          tx,
+          sql.raw(`explain (analyze, buffers) ${probe.sql}`),
+        );
         plans.set(probe.name, rows.map((row) => row['QUERY PLAN']).join('\n'));
       }
 
@@ -428,15 +461,16 @@ afterAll(closePostgres);
 /** Index names the planner actually used, in the order they appear. */
 function indexesIn(probe: string): string {
   const plan = plans.get(probe) ?? '';
-  const names = [...plan.matchAll(/Index (?:Only )?Scan using (\w+)|Bitmap Index Scan on (\w+)/g)]
-    .map((match) => match[1] ?? match[2]);
+  const names = [
+    ...plan.matchAll(/Index (?:Only )?Scan using (\w+)|Bitmap Index Scan on (\w+)/g),
+  ].map((match) => match[1] ?? match[2]);
   return [...new Set(names)].join(', ');
 }
 
 /** Assert one probe reached an index at all, naming the table it must not scan. */
 function expectIndexed(probe: string, table: string): void {
   expect(`${probe}: ${plans.get(probe)?.includes(`Seq Scan on ${table}`) ?? 'NO PLAN'}`).toBe(
-    `${probe}: false`
+    `${probe}: false`,
   );
 }
 
@@ -461,7 +495,7 @@ function expectOwnerLeadingIndex(probe: string): void {
   const used = indexesIn(probe).split(', ').filter(Boolean);
   const offenders = used.filter((name) => !OWNER_LEADING_UPLOAD_INDEXES.includes(name));
   expect(`${probe} used non-owner-leading: ${offenders.join(', ') || 'none'}`).toBe(
-    `${probe} used non-owner-leading: none`
+    `${probe} used non-owner-leading: none`,
   );
   // Vacuity floor: an empty list would satisfy the filter above trivially.
   expect(`${probe} used any index: ${used.length > 0}`).toBe(`${probe} used any index: true`);
@@ -477,7 +511,7 @@ function expectOwnerLeadingIndex(probe: string): void {
  */
 function expectNoSort(probe: string): void {
   expect(`${probe} sorts: ${plans.get(probe)?.includes('Sort Key:') ?? 'NO PLAN'}`).toBe(
-    `${probe} sorts: false`
+    `${probe} sorts: false`,
   );
 }
 
@@ -506,7 +540,7 @@ describe('the locker reads reach an index', () => {
     expectIndexed('listUploads', 'user_uploads');
     expectNoSort('listUploads');
     expect(`listing: ${indexesIn('listUploads')}`).toBe(
-      'listing: user_uploads_owner_oxy_user_id_created_at_idx'
+      'listing: user_uploads_owner_oxy_user_id_created_at_idx',
     );
   });
 
@@ -514,7 +548,7 @@ describe('the locker reads reach an index', () => {
     // The control for the finding above: same index available, same rows, and
     // the plan degrades to a sort purely on the nulls placement.
     expect(`rejected sorts: ${plans.get('listUploadsNullsFirst')?.includes('Sort Key:')}`).toBe(
-      'rejected sorts: true'
+      'rejected sorts: true',
     );
   });
 
@@ -556,14 +590,14 @@ describe('the locker reads reach an index', () => {
     expectIndexed('uploadByHash', 'user_uploads');
     const used = indexesIn('uploadByHash');
     expect(`dedup used a hash index: ${used.includes('sha256')}`).toBe(
-      'dedup used a hash index: true'
+      'dedup used a hash index: true',
     );
   });
 
   it('the HLS ladder is read through its own unique constraint', () => {
     expectIndexed('uploadHls', 'user_upload_hls_renditions');
     expect(`hls: ${indexesIn('uploadHls')}`).toBe(
-      'hls: user_upload_hls_renditions_user_upload_id_position_key'
+      'hls: user_upload_hls_renditions_user_upload_id_position_key',
     );
   });
 });
@@ -577,7 +611,7 @@ describe("compliance's three purge legs reach an index", () => {
   it('the matched-track leg uses the index Mongo did not have', () => {
     expectIndexed('purgeByMatchedTrack', 'user_uploads');
     expect(`matched: ${indexesIn('purgeByMatchedTrack')}`).toBe(
-      'matched: user_uploads_matched_track_id_idx'
+      'matched: user_uploads_matched_track_id_idx',
     );
   });
 
@@ -592,7 +626,7 @@ describe("compliance's three purge legs reach an index", () => {
   it('the acoustic leg narrows by the fingerprint duration bucket', () => {
     expectIndexed('purgeByFingerprintBucket', 'user_uploads');
     expect(`acoustic: ${indexesIn('purgeByFingerprintBucket')}`).toBe(
-      'acoustic: user_uploads_fingerprint_duration_sec_idx'
+      'acoustic: user_uploads_fingerprint_duration_sec_idx',
     );
   });
 
@@ -614,15 +648,13 @@ describe("compliance's three purge legs reach an index", () => {
 describe("the expiry sweeper's three phases reach an index", () => {
   it('phase 1 narrows the notice window through the partial expiry index', () => {
     expectIndexed('sweepNotices', 'user_uploads');
-    expect(`notices: ${indexesIn('sweepNotices')}`).toBe(
-      'notices: user_uploads_expires_at_idx'
-    );
+    expect(`notices: ${indexesIn('sweepNotices')}`).toBe('notices: user_uploads_expires_at_idx');
   });
 
   it('phase 2 uses the same partial index for the expired set', () => {
     expectIndexed('sweepSoftDeletes', 'user_uploads');
     expect(`soft deletes: ${indexesIn('sweepSoftDeletes')}`).toBe(
-      'soft deletes: user_uploads_expires_at_idx'
+      'soft deletes: user_uploads_expires_at_idx',
     );
   });
 
@@ -634,7 +666,7 @@ describe("the expiry sweeper's three phases reach an index", () => {
   it('phase 3 reaches the deleted_at index Mongo lacked entirely', () => {
     expectIndexed('sweepHardDeletes', 'user_uploads');
     expect(`hard deletes: ${indexesIn('sweepHardDeletes')}`).toBe(
-      'hard deletes: user_uploads_deleted_at_idx'
+      'hard deletes: user_uploads_deleted_at_idx',
     );
   });
 });
@@ -651,7 +683,7 @@ describe('the moderation records reach an index', () => {
      */
     expectIndexed('myClaims', 'artist_claims');
     expect(`my claims: ${indexesIn('myClaims')}`).toBe(
-      'my claims: artist_claims_oxy_user_id_created_at_idx'
+      'my claims: artist_claims_oxy_user_id_created_at_idx',
     );
   });
 
@@ -660,43 +692,41 @@ describe('the moderation records reach an index', () => {
     // ASCENDING needs no `nullsLast` spelling: Postgres's `ASC` default IS
     // NULLS LAST, which is what drizzle's plain `.on(column)` declares.
     expectNoSort('claimQueue');
-    expect(`queue: ${indexesIn('claimQueue')}`).toBe(
-      'queue: artist_claims_status_created_at_idx'
-    );
+    expect(`queue: ${indexesIn('claimQueue')}`).toBe('queue: artist_claims_status_created_at_idx');
   });
 
   it('closing the other open claims on a granted artist reaches the partial unique index', () => {
     expectIndexed('otherPendingClaims', 'artist_claims');
     expect(`other claims: ${indexesIn('otherPendingClaims')}`).toBe(
-      'other claims: artist_claims_artist_id_oxy_user_id_pending_key'
+      'other claims: artist_claims_artist_id_oxy_user_id_pending_key',
     );
   });
 
   it('an attestation is found by its track through the unique constraint', () => {
     expectIndexed('attestationByTrack', 'contribution_attestations');
     expect(`by track: ${indexesIn('attestationByTrack')}`).toBe(
-      'by track: contribution_attestations_track_id_key'
+      'by track: contribution_attestations_track_id_key',
     );
   });
 
   it("the termination cascade reads one account's contributions from an index", () => {
     expectIndexed('contributedTracks', 'contribution_attestations');
     expect(`contributed: ${indexesIn('contributedTracks')}`).toBe(
-      'contributed: contribution_attestations_uploader_oxy_user_id_idx'
+      'contributed: contribution_attestations_uploader_oxy_user_id_idx',
     );
   });
 
   it('the contribution panel resolves a page of track ids through the unique constraint', () => {
     expectIndexed('attestationsByTrackIds', 'contribution_attestations');
     expect(`panel: ${indexesIn('attestationsByTrackIds')}`).toBe(
-      'panel: contribution_attestations_track_id_key'
+      'panel: contribution_attestations_track_id_key',
     );
   });
 
   it('a contributor standing is a point lookup on every public upload', () => {
     expectIndexed('contributorStanding', 'contributor_standings');
     expect(`standing: ${indexesIn('contributorStanding')}`).toBe(
-      'standing: contributor_standings_oxy_user_id_key'
+      'standing: contributor_standings_oxy_user_id_key',
     );
   });
 
@@ -705,7 +735,7 @@ describe('the moderation records reach an index', () => {
     // strikes, so the sort is over a handful of rows.
     expectIndexed('contributorStrikes', 'contributor_strikes');
     expect(`strikes: ${indexesIn('contributorStrikes')}`).toBe(
-      'strikes: contributor_strikes_contributor_standing_id_idx'
+      'strikes: contributor_strikes_contributor_standing_id_idx',
     );
   });
 });

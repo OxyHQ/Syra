@@ -28,7 +28,13 @@ interface StreamConfigModalProps {
 
 type StreamMode = 'url' | 'rtmp';
 
-export function StreamConfigModal({ visible, onClose, roomId, initialStreamUrl, onStreamStarted }: StreamConfigModalProps) {
+export function StreamConfigModal({
+  visible,
+  onClose,
+  roomId,
+  initialStreamUrl,
+  onStreamStarted,
+}: StreamConfigModalProps) {
   const { useTheme, roomsService, toast } = useLiveConfig();
   const theme = useTheme();
   const { oxyServices } = useAuth();
@@ -105,7 +111,10 @@ export function StreamConfigModal({ visible, onClose, roomId, initialStreamUrl, 
         if (fileId) {
           setImageFileId(fileId);
         } else {
-          console.error('Upload response missing file ID:', JSON.stringify(uploadResponse, null, 2));
+          console.error(
+            'Upload response missing file ID:',
+            JSON.stringify(uploadResponse, null, 2),
+          );
           toast.error('Failed to upload image');
           setImagePreviewUri(null);
         }
@@ -241,12 +250,24 @@ export function StreamConfigModal({ visible, onClose, roomId, initialStreamUrl, 
               style={[
                 styles.modeTab,
                 { borderColor: theme.colors.border },
-                mode === 'url' && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+                mode === 'url' && {
+                  backgroundColor: theme.colors.primary,
+                  borderColor: theme.colors.primary,
+                },
               ]}
               onPress={() => setMode('url')}
             >
-              <MaterialCommunityIcons name="link" size={16} color={mode === 'url' ? '#FFFFFF' : theme.colors.text} />
-              <Text style={[styles.modeTabText, { color: mode === 'url' ? '#FFFFFF' : theme.colors.text }]}>
+              <MaterialCommunityIcons
+                name="link"
+                size={16}
+                color={mode === 'url' ? '#FFFFFF' : theme.colors.text}
+              />
+              <Text
+                style={[
+                  styles.modeTabText,
+                  { color: mode === 'url' ? '#FFFFFF' : theme.colors.text },
+                ]}
+              >
                 Stream URL
               </Text>
             </TouchableOpacity>
@@ -254,12 +275,24 @@ export function StreamConfigModal({ visible, onClose, roomId, initialStreamUrl, 
               style={[
                 styles.modeTab,
                 { borderColor: theme.colors.border },
-                mode === 'rtmp' && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+                mode === 'rtmp' && {
+                  backgroundColor: theme.colors.primary,
+                  borderColor: theme.colors.primary,
+                },
               ]}
               onPress={() => setMode('rtmp')}
             >
-              <MaterialCommunityIcons name="key" size={16} color={mode === 'rtmp' ? '#FFFFFF' : theme.colors.text} />
-              <Text style={[styles.modeTabText, { color: mode === 'rtmp' ? '#FFFFFF' : theme.colors.text }]}>
+              <MaterialCommunityIcons
+                name="key"
+                size={16}
+                color={mode === 'rtmp' ? '#FFFFFF' : theme.colors.text}
+              />
+              <Text
+                style={[
+                  styles.modeTabText,
+                  { color: mode === 'rtmp' ? '#FFFFFF' : theme.colors.text },
+                ]}
+              >
                 External App
               </Text>
             </TouchableOpacity>
@@ -268,7 +301,14 @@ export function StreamConfigModal({ visible, onClose, roomId, initialStreamUrl, 
           {mode === 'url' && (
             <View style={styles.section}>
               <TextInput
-                style={[styles.input, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, color: theme.colors.text }]}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: theme.colors.card,
+                    borderColor: theme.colors.border,
+                    color: theme.colors.text,
+                  },
+                ]}
                 placeholder="Stream URL (m3u8, Icecast, etc.)"
                 placeholderTextColor={theme.colors.textSecondary}
                 value={streamUrl}
@@ -284,7 +324,10 @@ export function StreamConfigModal({ visible, onClose, roomId, initialStreamUrl, 
             <View style={styles.section}>
               {!rtmpUrl ? (
                 <TouchableOpacity
-                  style={[styles.generateBtn, { backgroundColor: theme.colors.primary, opacity: generatingKey ? 0.6 : 1 }]}
+                  style={[
+                    styles.generateBtn,
+                    { backgroundColor: theme.colors.primary, opacity: generatingKey ? 0.6 : 1 },
+                  ]}
                   onPress={handleGenerateKey}
                   disabled={generatingKey}
                 >
@@ -299,19 +342,48 @@ export function StreamConfigModal({ visible, onClose, roomId, initialStreamUrl, 
                 </TouchableOpacity>
               ) : (
                 <View style={styles.credentialsBox}>
-                  <Text style={[styles.credLabel, { color: theme.colors.textSecondary }]}>RTMP URL</Text>
-                  <View style={[styles.credRow, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-                    <Text style={[styles.credValue, { color: theme.colors.text }]} numberOfLines={1}>
+                  <Text style={[styles.credLabel, { color: theme.colors.textSecondary }]}>
+                    RTMP URL
+                  </Text>
+                  <View
+                    style={[
+                      styles.credRow,
+                      { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
+                    ]}
+                  >
+                    <Text
+                      style={[styles.credValue, { color: theme.colors.text }]}
+                      numberOfLines={1}
+                    >
                       {rtmpUrl}
                     </Text>
-                    <TouchableOpacity onPress={() => copyToClipboard(rtmpUrl, 'RTMP URL')} style={styles.copyBtn}>
-                      <MaterialCommunityIcons name="content-copy" size={18} color={theme.colors.primary} />
+                    <TouchableOpacity
+                      onPress={() => copyToClipboard(rtmpUrl, 'RTMP URL')}
+                      style={styles.copyBtn}
+                    >
+                      <MaterialCommunityIcons
+                        name="content-copy"
+                        size={18}
+                        color={theme.colors.primary}
+                      />
                     </TouchableOpacity>
                   </View>
 
-                  <Text style={[styles.credLabel, { color: theme.colors.textSecondary, marginTop: 12 }]}>Stream Key</Text>
-                  <View style={[styles.credRow, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-                    <Text style={[styles.credValue, { color: theme.colors.text }]} numberOfLines={1}>
+                  <Text
+                    style={[styles.credLabel, { color: theme.colors.textSecondary, marginTop: 12 }]}
+                  >
+                    Stream Key
+                  </Text>
+                  <View
+                    style={[
+                      styles.credRow,
+                      { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
+                    ]}
+                  >
+                    <Text
+                      style={[styles.credValue, { color: theme.colors.text }]}
+                      numberOfLines={1}
+                    >
                       {streamKey}
                     </Text>
                     <TouchableOpacity
@@ -320,14 +392,23 @@ export function StreamConfigModal({ visible, onClose, roomId, initialStreamUrl, 
                       }}
                       style={styles.copyBtn}
                     >
-                      <MaterialCommunityIcons name="content-copy" size={18} color={theme.colors.primary} />
+                      <MaterialCommunityIcons
+                        name="content-copy"
+                        size={18}
+                        color={theme.colors.primary}
+                      />
                     </TouchableOpacity>
                   </View>
 
                   <View style={styles.infoRow}>
-                    <MaterialCommunityIcons name="information" size={16} color={theme.colors.textSecondary} />
+                    <MaterialCommunityIcons
+                      name="information"
+                      size={16}
+                      color={theme.colors.textSecondary}
+                    />
                     <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
-                      Use these in OBS or your streaming app. Audio will play in the room once you start streaming.
+                      Use these in OBS or your streaming app. Audio will play in the room once you
+                      start streaming.
                     </Text>
                   </View>
                 </View>
@@ -341,7 +422,14 @@ export function StreamConfigModal({ visible, onClose, roomId, initialStreamUrl, 
             </Text>
 
             <TextInput
-              style={[styles.input, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, color: theme.colors.text }]}
+              style={[
+                styles.input,
+                {
+                  backgroundColor: theme.colors.card,
+                  borderColor: theme.colors.border,
+                  color: theme.colors.text,
+                },
+              ]}
               placeholder="Title"
               placeholderTextColor={theme.colors.textSecondary}
               value={title}
@@ -350,7 +438,10 @@ export function StreamConfigModal({ visible, onClose, roomId, initialStreamUrl, 
             />
 
             <TouchableOpacity
-              style={[styles.imagePicker, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
+              style={[
+                styles.imagePicker,
+                { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
+              ]}
               onPress={handlePickImage}
               disabled={uploadingImage}
             >
@@ -358,7 +449,11 @@ export function StreamConfigModal({ visible, onClose, roomId, initialStreamUrl, 
                 <Image source={{ uri: imagePreviewUri }} style={styles.imagePreview} />
               ) : (
                 <View style={styles.imagePickerPlaceholder}>
-                  <MaterialCommunityIcons name="image" size={24} color={theme.colors.textSecondary} />
+                  <MaterialCommunityIcons
+                    name="image"
+                    size={24}
+                    color={theme.colors.textSecondary}
+                  />
                   <Text style={[styles.imagePickerText, { color: theme.colors.textSecondary }]}>
                     Cover image
                   </Text>
@@ -372,7 +467,15 @@ export function StreamConfigModal({ visible, onClose, roomId, initialStreamUrl, 
             </TouchableOpacity>
 
             <TextInput
-              style={[styles.input, styles.inputMultiline, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, color: theme.colors.text }]}
+              style={[
+                styles.input,
+                styles.inputMultiline,
+                {
+                  backgroundColor: theme.colors.card,
+                  borderColor: theme.colors.border,
+                  color: theme.colors.text,
+                },
+              ]}
               placeholder="Description"
               placeholderTextColor={theme.colors.textSecondary}
               value={description}
@@ -389,7 +492,9 @@ export function StreamConfigModal({ visible, onClose, roomId, initialStreamUrl, 
                 style={[
                   styles.startBtn,
                   {
-                    backgroundColor: streamUrl.trim() ? theme.colors.primary : theme.colors.backgroundSecondary,
+                    backgroundColor: streamUrl.trim()
+                      ? theme.colors.primary
+                      : theme.colors.backgroundSecondary,
                     opacity: loading ? 0.6 : 1,
                   },
                 ]}
@@ -411,7 +516,13 @@ export function StreamConfigModal({ visible, onClose, roomId, initialStreamUrl, 
                     color={streamUrl.trim() ? '#FFFFFF' : theme.colors.textSecondary}
                   />
                 )}
-                <Text style={{ color: streamUrl.trim() ? '#FFFFFF' : theme.colors.textSecondary, fontWeight: '600', fontSize: 16 }}>
+                <Text
+                  style={{
+                    color: streamUrl.trim() ? '#FFFFFF' : theme.colors.textSecondary,
+                    fontWeight: '600',
+                    fontSize: 16,
+                  }}
+                >
                   {isEditingUrlStream ? 'Save Stream Info' : 'Start Stream'}
                 </Text>
               </TouchableOpacity>
@@ -419,7 +530,10 @@ export function StreamConfigModal({ visible, onClose, roomId, initialStreamUrl, 
 
             {mode === 'rtmp' && rtmpUrl && (
               <TouchableOpacity
-                style={[styles.startBtn, { backgroundColor: theme.colors.primary, opacity: loading ? 0.6 : 1 }]}
+                style={[
+                  styles.startBtn,
+                  { backgroundColor: theme.colors.primary, opacity: loading ? 0.6 : 1 },
+                ]}
                 onPress={handleUpdateMetadata}
                 disabled={loading}
               >

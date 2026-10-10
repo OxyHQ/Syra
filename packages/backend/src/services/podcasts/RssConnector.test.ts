@@ -58,7 +58,11 @@ const FEED = `<?xml version="1.0" encoding="UTF-8"?>
 </rss>`;
 
 /** Build a fake SafeFetchResult whose `response` is a real readable stream. */
-function fakeResult(status: number, body: string, headers: Record<string, string> = {}): SafeFetchResult {
+function fakeResult(
+  status: number,
+  body: string,
+  headers: Record<string, string> = {},
+): SafeFetchResult {
   return {
     status,
     headers,
@@ -132,8 +136,13 @@ describe('parseFeedXml — episodes', () => {
     expect(ep.episodeType).toBe('full');
     expect(ep.explicit).toBe(false);
     expect(ep.image).toBe('https://img.example/ep1.jpg');
-    expect(ep.chapters).toEqual({ url: 'https://cdn.example/ep1-chapters.json', type: 'application/json+chapters' });
-    expect(ep.transcripts).toEqual([{ url: 'https://cdn.example/ep1.vtt', type: 'text/vtt', language: 'en' }]);
+    expect(ep.chapters).toEqual({
+      url: 'https://cdn.example/ep1-chapters.json',
+      type: 'application/json+chapters',
+    });
+    expect(ep.transcripts).toEqual([
+      { url: 'https://cdn.example/ep1.vtt', type: 'text/vtt', language: 'en' },
+    ]);
     expect(ep.persons).toHaveLength(2);
     expect(ep.persons[0]).toEqual({
       name: 'Jane Host',
@@ -164,18 +173,27 @@ describe('parseFeedXml — episodes', () => {
 
 describe('fetchAndParse — conditional GET', () => {
   it('returns notModified on a 304 without parsing', async () => {
-    const result = await fetchAndParse('https://feed.example/rss', { etag: 'abc' }, {
-      fetch: async () => fakeResult(304, ''),
-    });
+    const result = await fetchAndParse(
+      'https://feed.example/rss',
+      { etag: 'abc' },
+      {
+        fetch: async () => fakeResult(304, ''),
+      },
+    );
     expect(result.notModified).toBe(true);
     expect(result.etag).toBe('abc');
     expect(result.show).toBeUndefined();
   });
 
   it('parses a 200 body and surfaces etag/last-modified headers', async () => {
-    const result = await fetchAndParse('https://feed.example/rss', {}, {
-      fetch: async () => fakeResult(200, FEED, { etag: '"v2"', 'last-modified': 'Thu, 02 Jan 2025 08:00:00 GMT' }),
-    });
+    const result = await fetchAndParse(
+      'https://feed.example/rss',
+      {},
+      {
+        fetch: async () =>
+          fakeResult(200, FEED, { etag: '"v2"', 'last-modified': 'Thu, 02 Jan 2025 08:00:00 GMT' }),
+      },
+    );
     expect(result.notModified).toBe(false);
     expect(result.show?.title).toBe('Test Show');
     expect(result.episodes).toHaveLength(2);

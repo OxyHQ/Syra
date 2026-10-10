@@ -38,7 +38,20 @@
  * are the same ordering.
  */
 
-import { and, asc, count, eq, exists, inArray, isNull, lt, ne, or, sql, type SQL } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  eq,
+  exists,
+  inArray,
+  isNull,
+  lt,
+  ne,
+  or,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 import type { PodcastFunding, PodcastPerson, PodcastSourceProvenance } from '@syra/shared-types';
 import { getDb, type DbOrTransaction } from '../postgres';
 import { genres } from '../schema/genres';
@@ -83,7 +96,7 @@ export interface PodcastChildValues {
 async function writeChildren(
   tx: DbOrTransaction,
   podcastId: string,
-  children: PodcastChildValues
+  children: PodcastChildValues,
 ): Promise<void> {
   if (children.categories !== undefined) {
     await setPodcastCategories(tx, podcastId, children.categories);
@@ -102,7 +115,7 @@ async function writeChildren(
  */
 function definedOnly<T extends object>(values: T): Partial<T> {
   return Object.fromEntries(
-    Object.entries(values).filter(([, value]) => value !== undefined)
+    Object.entries(values).filter(([, value]) => value !== undefined),
   ) as Partial<T>;
 }
 
@@ -124,7 +137,7 @@ function definedOnly<T extends object>(values: T): Partial<T> {
  */
 export async function findPodcastForViewer(
   id: string,
-  viewerId: string | null | undefined
+  viewerId: string | null | undefined,
 ): Promise<PodcastRow | undefined> {
   const [row] = await getDb()
     .select()
@@ -149,7 +162,7 @@ export async function findPodcastForViewer(
  */
 export async function findPodcastForOwner(
   id: string,
-  ownerOxyUserId: string
+  ownerOxyUserId: string,
 ): Promise<PodcastRow | undefined> {
   const [row] = await getDb()
     .select()
@@ -184,7 +197,7 @@ export async function findPodcastByGuid(podcastGuid: string): Promise<PodcastRow
  */
 export async function findPodcastsByIds(
   ids: readonly string[],
-  viewerId: string | null | undefined
+  viewerId: string | null | undefined,
 ): Promise<PodcastRow[]> {
   if (ids.length === 0) return [];
   return getDb()
@@ -238,7 +251,9 @@ export async function browsePodcastRows(options: BrowseOptions): Promise<Podcast
     const [genre] = await getDb()
       .select({ id: genres.id })
       .from(genres)
-      .where(and(sql`lower(${genres.name}) = lower(${options.category})`, eq(genres.kind, 'podcast')))
+      .where(
+        and(sql`lower(${genres.name}) = lower(${options.category})`, eq(genres.kind, 'podcast')),
+      )
       .limit(1);
 
     // A category nobody has ever been filed under matches no show. Returning
@@ -269,11 +284,8 @@ function hasCategory(genreId: string): SQL {
       .select({ one: sql`1` })
       .from(podcastCategories)
       .where(
-        and(
-          eq(podcastCategories.podcastId, podcasts.id),
-          eq(podcastCategories.genreId, genreId)
-        )
-      )
+        and(eq(podcastCategories.podcastId, podcasts.id), eq(podcastCategories.genreId, genreId)),
+      ),
   );
 }
 
@@ -305,7 +317,7 @@ const SEARCH_ORDER = [
 export async function searchPodcastRows(
   query: string,
   offset: number,
-  limit: number
+  limit: number,
 ): Promise<PodcastRow[]> {
   return getDb()
     .select()
@@ -343,7 +355,7 @@ export async function countSearchPodcasts(query: string): Promise<number> {
  */
 export async function findPodcastsCreditingPerson(
   person: CreditIdentity,
-  limit: number
+  limit: number,
 ): Promise<PodcastRow[]> {
   return getDb()
     .select()
@@ -359,9 +371,9 @@ export async function findPodcastsCreditingPerson(
  * Served by `podcasts_rss_active_subscriber_count_idx`, whose partial predicate
  * is this exact pair of conditions.
  */
-export async function findRefreshCandidates(limit: number): Promise<
-  { feedUrl: string | null; lastRefreshedAt: Date | null; refreshIntervalMin: number }[]
-> {
+export async function findRefreshCandidates(
+  limit: number,
+): Promise<{ feedUrl: string | null; lastRefreshedAt: Date | null; refreshIntervalMin: number }[]> {
   return getDb()
     .select({
       feedUrl: podcasts.feedUrl,
@@ -384,7 +396,7 @@ export async function findRefreshCandidates(limit: number): Promise<
  */
 export async function findDeepImportTargets(
   feedUrls: readonly string[],
-  staleBefore: Date
+  staleBefore: Date,
 ): Promise<string[]> {
   if (feedUrls.length === 0) return [];
 
@@ -409,9 +421,9 @@ export async function findDeepImportTargets(
         or(
           eq(podcasts.needsDeepImport, true),
           isNull(podcasts.lastRefreshedAt),
-          lt(podcasts.lastRefreshedAt, staleBefore)
-        )
-      )
+          lt(podcasts.lastRefreshedAt, staleBefore),
+        ),
+      ),
     );
 
   return rows.flatMap((row) => (row.feedUrl === null ? [] : [row.feedUrl]));
@@ -444,7 +456,7 @@ export async function findHiddenShowIds(): Promise<string[]> {
 /** Insert a show and its child collections in one transaction. */
 export async function insertPodcast(
   values: typeof podcasts.$inferInsert,
-  children: PodcastChildValues = {}
+  children: PodcastChildValues = {},
 ): Promise<PodcastRow> {
   return getDb().transaction(async (tx) => {
     const [row] = await tx.insert(podcasts).values(values).returning();
@@ -463,7 +475,7 @@ export async function insertPodcast(
 export async function updatePodcast(
   id: string,
   values: PodcastValues,
-  children: PodcastChildValues = {}
+  children: PodcastChildValues = {},
 ): Promise<PodcastRow | undefined> {
   return getDb().transaction(async (tx) => {
     const set = definedOnly(values);
@@ -531,7 +543,10 @@ export async function upsertPodcastFromFeed(input: {
           // `set` only. A show that already exists keeps the `source`,
           // `status` and `claimable` it was created with — a refresh must not
           // silently re-open a claimed show or resurrect a takedown.
-          set: Object.keys(set).length > 0 ? { ...set, updatedAt: new Date() } : { updatedAt: new Date() },
+          set:
+            Object.keys(set).length > 0
+              ? { ...set, updatedAt: new Date() }
+              : { updatedAt: new Date() },
         })
         .returning();
     }
@@ -567,7 +582,7 @@ export interface ShallowCandidate {
  */
 export async function shallowUpsertPodcasts(
   candidates: readonly ShallowCandidate[],
-  onError: (feedUrl: string, error: unknown) => void
+  onError: (feedUrl: string, error: unknown) => void,
 ): Promise<number> {
   let written = 0;
 
@@ -609,8 +624,13 @@ export async function setPodcastRefreshState(
   id: string,
   values: Pick<
     PodcastValues,
-    'episodeCount' | 'lastEpisodeAt' | 'lastRefreshedAt' | 'needsDeepImport' | 'etag' | 'lastModified'
-  >
+    | 'episodeCount'
+    | 'lastEpisodeAt'
+    | 'lastRefreshedAt'
+    | 'needsDeepImport'
+    | 'etag'
+    | 'lastModified'
+  >,
 ): Promise<void> {
   const set = definedOnly(values);
   if (Object.keys(set).length === 0) return;

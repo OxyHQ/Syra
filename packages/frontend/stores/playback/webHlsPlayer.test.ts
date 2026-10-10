@@ -11,7 +11,6 @@ import type Hls from 'hls.js';
 
 // Dynamic import of the .web.ts file directly (jest-expo defaults to 'ios';
 // we need the web implementation explicitly).
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { createWebHlsPlayer } = require('./webHlsPlayer.web') as typeof import('./webHlsPlayer.web');
 
 // ── Fakes ─────────────────────────────────────────────────────────────────────
@@ -81,8 +80,12 @@ function makePlayer(url = 'https://cdn/master.m3u8') {
   const hls = new FakeHls();
 
   const deps = {
-    AudioCtor: function() { return audio; } as unknown as typeof Audio,
-    HlsCtor: function() { return hls; } as unknown as typeof Hls,
+    AudioCtor: function () {
+      return audio;
+    } as unknown as typeof Audio,
+    HlsCtor: function () {
+      return hls;
+    } as unknown as typeof Hls,
   };
 
   const player = createWebHlsPlayer(url, deps);

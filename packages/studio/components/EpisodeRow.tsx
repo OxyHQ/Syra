@@ -21,12 +21,20 @@ import { formatDate, formatDuration } from '@/utils/format';
  * whether to OFFER the control — `DELETE /episodes/:id` re-derives ownership
  * from the parent show in SQL and answers 403 regardless of what was rendered.
  */
-export function EpisodeRow({ episode, deletable = false }: { episode: Episode; deletable?: boolean }) {
+export function EpisodeRow({
+  episode,
+  deletable = false,
+}: {
+  episode: Episode;
+  deletable?: boolean;
+}) {
   const theme = useTheme();
   const [confirming, setConfirming] = useState(false);
   const { mutate: deleteEpisode, isPending } = useDeleteEpisode();
 
-  const meta = [formatDate(episode.pubDate), formatDuration(episode.duration)].filter(Boolean).join(' · ');
+  const meta = [formatDate(episode.pubDate), formatDuration(episode.duration)]
+    .filter(Boolean)
+    .join(' · ');
 
   const onConfirmDelete = useCallback(() => {
     setConfirming(false);

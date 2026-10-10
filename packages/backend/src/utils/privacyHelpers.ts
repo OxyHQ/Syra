@@ -11,7 +11,7 @@ export const ProfileVisibility = {
   FOLLOWERS_ONLY: 'followers_only',
 } as const;
 
-export type ProfileVisibilityType = typeof ProfileVisibility[keyof typeof ProfileVisibility];
+export type ProfileVisibilityType = (typeof ProfileVisibility)[keyof typeof ProfileVisibility];
 
 type UnknownRecord = Record<string, unknown>;
 function isRecord(value: unknown): value is UnknownRecord {
@@ -37,14 +37,16 @@ function extractPrivacyList(response: unknown, key: 'following' | 'followers'): 
  */
 export function extractUserIdFromBlockedRestricted(entry: unknown): string | undefined {
   if (!isRecord(entry)) return undefined;
-  
+
   if (entry.blockedId) {
     return toUserId(entry.blockedId);
   }
   if (entry.restrictedId) {
     return toUserId(entry.restrictedId);
   }
-  return toUserId(entry.id) ?? toUserId(entry._id) ?? toUserId(entry.userId) ?? toUserId(entry.targetId);
+  return (
+    toUserId(entry.id) ?? toUserId(entry._id) ?? toUserId(entry.userId) ?? toUserId(entry.targetId)
+  );
 }
 
 /**
@@ -53,17 +55,19 @@ export function extractUserIdFromBlockedRestricted(entry: unknown): string | und
  */
 export function extractFollowingIds(followingRes: unknown): string[] {
   const followingList = extractPrivacyList(followingRes, 'following');
-  
+
   return followingList
     .map((u: unknown) => {
       if (typeof u === 'string') return u;
       if (!isRecord(u)) return undefined;
-      return toUserId(u.id)
-        ?? toUserId(u._id)
-        ?? toUserId(u.userId)
-        ?? toUserId(isRecord(u.user) ? u.user.id : undefined)
-        ?? toUserId(isRecord(u.profile) ? u.profile.id : undefined)
-        ?? toUserId(u.targetId);
+      return (
+        toUserId(u.id) ??
+        toUserId(u._id) ??
+        toUserId(u.userId) ??
+        toUserId(isRecord(u.user) ? u.user.id : undefined) ??
+        toUserId(isRecord(u.profile) ? u.profile.id : undefined) ??
+        toUserId(u.targetId)
+      );
     })
     .filter((id): id is string => Boolean(id));
 }
@@ -74,20 +78,22 @@ export function extractFollowingIds(followingRes: unknown): string[] {
  */
 export function extractFollowersIds(followersRes: unknown): string[] {
   const followersList = extractPrivacyList(followersRes, 'followers');
-  
+
   return followersList
     .map((entry: unknown) => {
       if (typeof entry === 'string') {
         return entry;
       }
       if (!isRecord(entry)) return undefined;
-      return toUserId(entry.id)
-        ?? toUserId(entry._id)
-        ?? toUserId(entry.userId)
-        ?? toUserId(entry.oxyUserId)
-        ?? toUserId(isRecord(entry.user) ? entry.user.id : undefined)
-        ?? toUserId(isRecord(entry.profile) ? entry.profile.id : undefined)
-        ?? toUserId(entry.targetId);
+      return (
+        toUserId(entry.id) ??
+        toUserId(entry._id) ??
+        toUserId(entry.userId) ??
+        toUserId(entry.oxyUserId) ??
+        toUserId(isRecord(entry.user) ? entry.user.id : undefined) ??
+        toUserId(isRecord(entry.profile) ? entry.profile.id : undefined) ??
+        toUserId(entry.targetId)
+      );
     })
     .filter((id): id is string => Boolean(id));
 }
@@ -96,8 +102,10 @@ export function extractFollowersIds(followersRes: unknown): string[] {
  * Check if a profile requires access check (private or followers_only)
  */
 export function requiresAccessCheck(profileVisibility: string | undefined): boolean {
-  return profileVisibility === ProfileVisibility.PRIVATE ||
-         profileVisibility === ProfileVisibility.FOLLOWERS_ONLY;
+  return (
+    profileVisibility === ProfileVisibility.PRIVATE ||
+    profileVisibility === ProfileVisibility.FOLLOWERS_ONLY
+  );
 }
 
 /**
@@ -110,7 +118,9 @@ export async function getFollowingIdSet(viewerId: string): Promise<Set<string>> 
     const followingRes = await oxy.follows.following(viewerId);
     return new Set(extractFollowingIds(followingRes));
   } catch (error) {
-    logger.error('Error fetching following list for access check:', { err: describeErrorSafely(error) });
+    logger.error('Error fetching following list for access check:', {
+      err: describeErrorSafely(error),
+    });
     return new Set();
   }
 }

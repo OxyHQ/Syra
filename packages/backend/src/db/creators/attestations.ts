@@ -62,7 +62,7 @@ export interface AttestationSummary {
  * which is the whole reason this is a named projection rather than a row read.
  */
 export async function findAttestationsByTrackIds(
-  trackIds: readonly string[]
+  trackIds: readonly string[],
 ): Promise<Map<string, AttestationSummary>> {
   if (trackIds.length === 0) return new Map();
 
@@ -79,7 +79,7 @@ export async function findAttestationsByTrackIds(
     rows.map((row) => [
       row.trackId,
       { uploaderOxyUserId: row.uploaderOxyUserId, acceptedAt: row.acceptedAt },
-    ])
+    ]),
   );
 }
 
@@ -117,7 +117,7 @@ export interface RecordAttestationInput {
  */
 export async function recordAttestation(
   db: DbOrTransaction,
-  input: RecordAttestationInput
+  input: RecordAttestationInput,
 ): Promise<string> {
   const [attestation] = await db
     .insert(contributionAttestations)
@@ -145,7 +145,7 @@ export async function recordAttestation(
         code: marker.code,
         weight: marker.weight,
         detail: marker.detail,
-      }))
+      })),
     );
   }
 

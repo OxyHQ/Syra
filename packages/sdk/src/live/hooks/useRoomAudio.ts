@@ -9,7 +9,10 @@ if (Platform.OS !== 'web') {
   try {
     AudioSession = require('@livekit/react-native').AudioSession;
   } catch (err) {
-    console.warn('[RoomAudio] @livekit/react-native AudioSession unavailable; continuing without explicit audio session management:', err);
+    console.warn(
+      '[RoomAudio] @livekit/react-native AudioSession unavailable; continuing without explicit audio session management:',
+      err,
+    );
   }
 }
 
@@ -27,7 +30,12 @@ interface UseRoomAudioReturn {
   livekitRoom: Room | null;
 }
 
-export function useRoomAudio({ roomId, isSpeaker, isMuted, isConnected }: UseRoomAudioOptions): UseRoomAudioReturn {
+export function useRoomAudio({
+  roomId,
+  isSpeaker,
+  isMuted,
+  isConnected,
+}: UseRoomAudioOptions): UseRoomAudioReturn {
   const { getRoomToken } = useLiveConfig();
   const [isLiveKitConnected, setIsLiveKitConnected] = useState(false);
   const [localAudioEnabled, setLocalAudioEnabled] = useState(false);
@@ -40,13 +48,19 @@ export function useRoomAudio({ roomId, isSpeaker, isMuted, isConnected }: UseRoo
     if (!isConnected || Platform.OS === 'web') return;
     (async () => {
       try {
-        await setAudioModeAsync({ shouldPlayInBackground: true, playsInSilentMode: true, interruptionMode: 'duckOthers' });
+        await setAudioModeAsync({
+          shouldPlayInBackground: true,
+          playsInSilentMode: true,
+          interruptionMode: 'duckOthers',
+        });
       } catch (err) {
         console.warn('[RoomAudio] Failed to set audio mode:', err);
       }
       if (AudioSession) AudioSession.startAudioSession();
     })();
-    return () => { if (AudioSession) AudioSession.stopAudioSession(); };
+    return () => {
+      if (AudioSession) AudioSession.stopAudioSession();
+    };
   }, [isConnected]);
 
   useEffect(() => {
@@ -56,16 +70,33 @@ export function useRoomAudio({ roomId, isSpeaker, isMuted, isConnected }: UseRoo
     roomRef.current = room;
     setLivekitRoom(room);
 
-    room.on(RoomEvent.Connected, () => { if (!cancelled) { setIsLiveKitConnected(true); } });
-    room.on(RoomEvent.Disconnected, () => { if (!cancelled) { setIsLiveKitConnected(false); setLocalAudioEnabled(false); } });
+    room.on(RoomEvent.Connected, () => {
+      if (!cancelled) {
+        setIsLiveKitConnected(true);
+      }
+    });
+    room.on(RoomEvent.Disconnected, () => {
+      if (!cancelled) {
+        setIsLiveKitConnected(false);
+        setLocalAudioEnabled(false);
+      }
+    });
     room.on(RoomEvent.TrackSubscribed, (track, _pub, _participant) => {
-      if (track.kind === Track.Kind.Audio && Platform.OS === 'web' && typeof track.attach === 'function') {
+      if (
+        track.kind === Track.Kind.Audio &&
+        Platform.OS === 'web' &&
+        typeof track.attach === 'function'
+      ) {
         const el = track.attach();
         audioElementsRef.current.set(track.sid ?? '', el);
       }
     });
     room.on(RoomEvent.TrackUnsubscribed, (track) => {
-      if (track.kind === Track.Kind.Audio && Platform.OS === 'web' && typeof track.detach === 'function') {
+      if (
+        track.kind === Track.Kind.Audio &&
+        Platform.OS === 'web' &&
+        typeof track.detach === 'function'
+      ) {
         track.detach();
         audioElementsRef.current.delete(track.sid ?? '');
       }
@@ -76,13 +107,19 @@ export function useRoomAudio({ roomId, isSpeaker, isMuted, isConnected }: UseRoo
         const { token, url } = await getRoomToken(roomId);
         if (cancelled || !url) return;
         await room.connect(url, token);
-      } catch (err) { console.warn('[RoomAudio] LiveKit connection error:', err); }
+      } catch (err) {
+        console.warn('[RoomAudio] LiveKit connection error:', err);
+      }
     })();
 
     return () => {
       cancelled = true;
       if (Platform.OS === 'web') {
-        audioElementsRef.current.forEach((el) => { el.pause(); el.srcObject = null; el.remove(); });
+        audioElementsRef.current.forEach((el) => {
+          el.pause();
+          el.srcObject = null;
+          el.remove();
+        });
         audioElementsRef.current.clear();
       }
       room.disconnect();
@@ -97,8 +134,12 @@ export function useRoomAudio({ roomId, isSpeaker, isMuted, isConnected }: UseRoo
     const room = roomRef.current;
     if (!room || room.state !== ConnectionState.Connected) return;
     const shouldPublish = isSpeaker && !isMuted;
-    room.localParticipant.setMicrophoneEnabled(shouldPublish)
-      .then(() => { setLocalAudioEnabled(shouldPublish); setMicPermissionDenied(false); })
+    room.localParticipant
+      .setMicrophoneEnabled(shouldPublish)
+      .then(() => {
+        setLocalAudioEnabled(shouldPublish);
+        setMicPermissionDenied(false);
+      })
       .catch((err) => {
         console.warn('[RoomAudio] Failed to toggle mic:', err);
         if (err instanceof Error && err.name === 'NotAllowedError') setMicPermissionDenied(true);

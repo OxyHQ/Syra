@@ -60,7 +60,7 @@ async function readCachedLyrics(trackId: string): Promise<Lyrics | null> {
  */
 async function cacheLyrics(
   trackId: string,
-  result: { synced: boolean; lines: LyricsLine[]; plain?: string; source: string }
+  result: { synced: boolean; lines: LyricsLine[]; plain?: string; source: string },
 ): Promise<Lyrics> {
   return getDb().transaction(async (tx) => {
     const [row] = await tx
@@ -90,7 +90,7 @@ async function cacheLyrics(
           position,
           timeMs: line.timeMs,
           text: line.text,
-        }))
+        })),
       );
     }
 

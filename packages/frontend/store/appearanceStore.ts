@@ -104,7 +104,9 @@ export function useMyAppearanceSettings(enabled: boolean) {
 
 export function useUserAppearance(userId?: string | null) {
   return useQuery<UserAppearance | null, Error>({
-    queryKey: userId ? appearanceQueryKeys.user(userId) : [...appearanceQueryKeys.all, 'user', 'missing'],
+    queryKey: userId
+      ? appearanceQueryKeys.user(userId)
+      : [...appearanceQueryKeys.all, 'user', 'missing'],
     enabled: Boolean(userId),
     queryFn: () => (userId ? fetchUserAppearance(userId) : Promise.resolve(null)),
   });
@@ -113,7 +115,12 @@ export function useUserAppearance(userId?: string | null) {
 export function useUpdateMyAppearanceSettings() {
   const queryClient = useQueryClient();
 
-  return useMutation<UserAppearance | null, Error, Partial<UserAppearance>, { previous?: UserAppearance | null }>({
+  return useMutation<
+    UserAppearance | null,
+    Error,
+    Partial<UserAppearance>,
+    { previous?: UserAppearance | null }
+  >({
     mutationFn: updateMyAppearanceSettings,
     onMutate: async (partial) => {
       await queryClient.cancelQueries({ queryKey: appearanceQueryKeys.me });

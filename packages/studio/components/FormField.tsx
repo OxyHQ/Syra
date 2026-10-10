@@ -16,7 +16,15 @@ interface FormFieldProps extends Omit<TextInputProps, 'placeholderTextColor'> {
  * Labeled text input themed with NativeWind tokens. `placeholderTextColor` has
  * no NativeWind equivalent, so it reads the Bloom theme color directly.
  */
-export function FormField({ label, hint, error, trailing, className, multiline, ...rest }: FormFieldProps) {
+export function FormField({
+  label,
+  hint,
+  error,
+  trailing,
+  className,
+  multiline,
+  ...rest
+}: FormFieldProps) {
   const theme = useTheme();
   return (
     <View className="mb-4">

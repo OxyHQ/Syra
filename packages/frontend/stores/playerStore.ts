@@ -1,7 +1,7 @@
 /**
  * PlayerStore
  * Centralized state management for audio playback
- * 
+ *
  * Handles:
  * - Track playback and control
  * - Queue management integration
@@ -112,7 +112,6 @@ interface ResolvedSource {
   resolution: StreamResolution | null;
 }
 
-
 /**
  * Minimal metadata both `Track` and `Episode` satisfy — all the engine setup
  * helpers need is an id (for logging) and an optional known duration.
@@ -181,12 +180,25 @@ interface PlayerState {
   connectActiveDeviceId: string | null;
 
   // Actions
-  playTrack: (track: PlayableInput, context?: PlaybackContext, addToQueue?: boolean) => Promise<void>;
-  playTrackList: (tracks: PlayableInput[], startIndex?: number, context?: PlaybackContext) => Promise<void>;
+  playTrack: (
+    track: PlayableInput,
+    context?: PlaybackContext,
+    addToQueue?: boolean,
+  ) => Promise<void>;
+  playTrackList: (
+    tracks: PlayableInput[],
+    startIndex?: number,
+    context?: PlaybackContext,
+  ) => Promise<void>;
   /** Start a Syra Radio station: play its first page and make it the queue. */
   startRadio: (seed: RadioSeed) => Promise<void>;
   playEpisode: (episode: Episode, options?: PlayEpisodeOptions) => Promise<void>;
-  playEpisodeList: (episodes: Episode[], startIndex?: number, context?: PlaybackContext, resumeFromSec?: number) => Promise<void>;
+  playEpisodeList: (
+    episodes: Episode[],
+    startIndex?: number,
+    context?: PlaybackContext,
+    resumeFromSec?: number,
+  ) => Promise<void>;
   playFromQueue: (index: number) => Promise<void>;
   playNext: () => Promise<void>;
   playPrevious: () => Promise<void>;
@@ -206,7 +218,10 @@ interface PlayerState {
    * to match; when playback has just moved to another device it releases the
    * local audio engine.
    */
-  applyRemotePlaybackState: (state: ConnectPlaybackState, localDeviceId: string | null) => Promise<void>;
+  applyRemotePlaybackState: (
+    state: ConnectPlaybackState,
+    localDeviceId: string | null,
+  ) => Promise<void>;
 }
 
 export const usePlayerStore = create<PlayerState>((set, get) => {
@@ -228,7 +243,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
    * told how much of THIS track was actually heard, which is what lets the
    * backend distinguish a real play from a skip and learn the user's taste.
    */
-  let activePlay: { trackId: string; source: ListeningSource; durationSec: number; listenedSec: number; sample: ListeningSample | null } | null = null;
+  let activePlay: {
+    trackId: string;
+    source: ListeningSource;
+    durationSec: number;
+    listenedSec: number;
+    sample: ListeningSample | null;
+  } | null = null;
 
   /**
    * Position within the active radio station. The station is stateful
@@ -268,14 +289,20 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   };
 
   const drainPendingPlaySignals = (): void => {
-    if (pendingSignalDrainInFlight || !oxyServices.session.isAuthenticated || pendingPlaySignals.length === 0) {
+    if (
+      pendingSignalDrainInFlight ||
+      !oxyServices.session.isAuthenticated ||
+      pendingPlaySignals.length === 0
+    ) {
       return;
     }
 
     pendingSignalDrainInFlight = true;
     const signals = pendingPlaySignals.splice(0, pendingPlaySignals.length);
     void Promise.all(
-      signals.map((pending) => libraryService.recordRecentlyPlayed(pending.trackId, pending.signal)),
+      signals.map((pending) =>
+        libraryService.recordRecentlyPlayed(pending.trackId, pending.signal),
+      ),
     ).finally(() => {
       pendingSignalDrainInFlight = false;
       if (pendingPlaySignals.length > 0 && oxyServices.session.isAuthenticated) {
@@ -304,7 +331,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     }
 
     ensureTokenDrainSubscription();
-    void oxyServices.session.waitForAuth(PLAY_SIGNAL_AUTH_WAIT_MS)
+    void oxyServices.session
+      .waitForAuth(PLAY_SIGNAL_AUTH_WAIT_MS)
       .then((authReady) => {
         if (authReady) {
           drainPendingPlaySignals();
@@ -381,11 +409,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     if (positionUpdateInterval) {
       clearInterval(positionUpdateInterval);
     }
-    
+
     positionUpdateInterval = setInterval(() => {
       try {
         if (player.isLoaded) {
-          set({ 
+          set({
             currentTime: player.currentTime || 0,
             duration: player.duration || get().duration,
             isPlaying: player.playing || false,
@@ -480,7 +508,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       tracks.splice(insertion, 0, item);
       await queueStore.replaceQueue({ ...queue, tracks, current: insertion });
     } else {
-      await queueStore.replaceQueue({ current: 0, tracks: [item], context: get().context ?? undefined });
+      await queueStore.replaceQueue({
+        current: 0,
+        tracks: [item],
+        context: get().context ?? undefined,
+      });
     }
   };
 
@@ -536,7 +568,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       return current;
     }
 
-    const candidates = Array.from({ length }, (_value, index) => index).filter((index) => index !== current);
+    const candidates = Array.from({ length }, (_value, index) => index).filter(
+      (index) => index !== current,
+    );
     return candidates[Math.floor(Math.random() * candidates.length)] ?? current;
   };
 
@@ -776,15 +810,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     player.play();
 
     // Wait for player to initialize
-    await new Promise(resolve => setTimeout(resolve, PLAYBACK_INIT_DELAY_MS));
+    await new Promise((resolve) => setTimeout(resolve, PLAYBACK_INIT_DELAY_MS));
 
-    const duration = calculateTrackDuration(
-      media.duration ?? 0,
-      player.duration,
-      player.isLoaded
-    );
+    const duration = calculateTrackDuration(media.duration ?? 0, player.duration, player.isLoaded);
 
-    set({ 
+    set({
       isPlaying: player.playing,
       isLoading: false,
       duration,
@@ -855,7 +885,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     // Signal-less start ping: populates "Jump back in" immediately. The
     // engagement ping (with listenedSec/completion) is sent on flush.
     submitPlaySignal(item.id, { source });
-    activePlay = { trackId: item.id, source, durationSec: finiteSeconds(item.duration), listenedSec: 0, sample: { position: 0, at: Date.now(), playing: true } };
+    activePlay = {
+      trackId: item.id,
+      source,
+      durationSec: finiteSeconds(item.duration),
+      listenedSec: 0,
+      sample: { position: 0, at: Date.now(), playing: true },
+    };
   };
 
   /**
@@ -891,7 +927,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     // gate their content on the resolved session (`useAuthGate`), so a button
     // cannot be pressed before the session has settled. Waiting instead would
     // put a delay in front of every genuine guest's sign-in prompt.
-    if ((item.kind === 'upload' || shouldResolveViaStreamEndpoint(item)) && !oxyServices.session.isAuthenticated) {
+    if (
+      (item.kind === 'upload' || shouldResolveViaStreamEndpoint(item)) &&
+      !oxyServices.session.isAuthenticated
+    ) {
       logger.info('Play needs a session', { id: item.id, kind: item.kind });
       reportFailure('auth-required');
       return null;
@@ -1242,7 +1281,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
      * @param context - Optional playback context
      * @param addToQueue - Whether to add track to queue
      */
-    playTrack: async (track: PlayableInput, context?: PlaybackContext, addToQueue: boolean = false) => {
+    playTrack: async (
+      track: PlayableInput,
+      context?: PlaybackContext,
+      addToQueue: boolean = false,
+    ) => {
       const item = toPlayableItem(track);
       const source = await resolvePlayableSource(item);
       if (!source) {
@@ -1256,7 +1299,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
      * active queue. Album, playlist, liked songs, and search screens should use
      * this instead of playing an isolated track.
      */
-    playTrackList: async (tracks: PlayableInput[], startIndex: number = 0, context?: PlaybackContext) => {
+    playTrackList: async (
+      tracks: PlayableInput[],
+      startIndex: number = 0,
+      context?: PlaybackContext,
+    ) => {
       const playableTracks = tracks.filter((track) => track?.id).map(toPlayableItem);
       if (playableTracks.length === 0) {
         return;
@@ -1347,7 +1394,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           currentEpisode: episode,
           episodeQueue: nextQueue,
           episodeIndex: resolvedIndex >= 0 ? resolvedIndex : 0,
-          context: options?.context ?? { type: 'episode', id: episode.id, name: episode.podcastTitle },
+          context: options?.context ?? {
+            type: 'episode',
+            id: episode.id,
+            name: episode.podcastTitle,
+          },
           currentTime: 0,
           duration: episode.duration || 0,
         });
@@ -1477,7 +1528,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     setVolume: (volume: number) => {
       const clampedVolume = clampVolume(volume, MIN_VOLUME, MAX_VOLUME);
       set({ volume: clampedVolume });
-      
+
       const { player } = get();
       if (player) {
         player.volume = clampedVolume;
@@ -1559,7 +1610,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     playFromQueue: async (index: number) => {
       const queueStore = useQueueStore.getState();
       const queue = queueStore.queue;
-      
+
       if (!queue || index < 0 || index >= queue.tracks.length) {
         logger.error('Invalid queue index', { index, queueLength: queue?.tracks.length });
         return;
@@ -1598,7 +1649,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
       let nextIndex = chooseNextIndex(false);
 
-      if (nextIndex === null && await extendQueueForAutoplay()) {
+      if (nextIndex === null && (await extendQueueForAutoplay())) {
         nextIndex = chooseNextIndex(false);
       }
 
@@ -1671,7 +1722,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
       let nextIndex = chooseNextIndex(true);
 
-      if (nextIndex === null && await extendQueueForAutoplay(finishedTrack)) {
+      if (nextIndex === null && (await extendQueueForAutoplay(finishedTrack))) {
         nextIndex = chooseNextIndex(true);
       }
 
@@ -1701,8 +1752,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             return;
           }
 
-          const needsFreshLoad =
-            get().currentTrack?.id !== state.trackId || !get().player;
+          const needsFreshLoad = get().currentTrack?.id !== state.trackId || !get().player;
           if (needsFreshLoad) {
             const track = await musicService.getTrackById(state.trackId);
             await get().playTrack(track, undefined, false);

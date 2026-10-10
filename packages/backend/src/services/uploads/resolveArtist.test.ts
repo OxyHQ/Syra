@@ -31,7 +31,7 @@ async function artistCount(): Promise<number> {
 }
 
 async function seedArtist(
-  overrides: Partial<typeof catalogEntities.$inferInsert> = {}
+  overrides: Partial<typeof catalogEntities.$inferInsert> = {},
 ): Promise<{ id: string }> {
   const [artist] = await getDb()
     .insert(catalogEntities)
@@ -135,7 +135,7 @@ describe('resolveArtist — high confidence links an id', () => {
     expect(resolution.linkedArtistId).toBe(artist.id);
   });
 
-  it('tier 4 upgrades the file\'s own name when nobody carries the id yet', async () => {
+  it("tier 4 upgrades the file's own name when nobody carries the id yet", async () => {
     const resolution = await resolveArtist({
       musicbrainzArtistId: '0b6c9f77-2e5a-4d6c-83a1-91b2f4c7d5e8',
       artistName: 'Kestrel Lane',
@@ -170,7 +170,9 @@ describe('resolveArtist — medium confidence never links', () => {
   });
 
   it('splits featured performers out of the credit and keeps them as text', async () => {
-    const resolution = await resolveArtist({ artistName: 'Nadia Ortiz feat. Kofi Mensah & Ana Gil' });
+    const resolution = await resolveArtist({
+      artistName: 'Nadia Ortiz feat. Kofi Mensah & Ana Gil',
+    });
 
     expect(resolution.name).toBe('Nadia Ortiz');
     expect(resolution.featured).toEqual(['Kofi Mensah', 'Ana Gil']);

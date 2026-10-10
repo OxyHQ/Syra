@@ -108,7 +108,7 @@ async function streamingRoom() {
   for (const field of STREAM_FIELDS) {
     const value = row[field];
     expect(`${field} was set: ${value !== null && value !== undefined}`).toBe(
-      `${field} was set: true`
+      `${field} was set: true`,
     );
   }
   // Vacuity floor: the loop above proves nothing if the list is short or empty.
@@ -151,7 +151,7 @@ describe('stopRoomStreamFields', () => {
     expect(await findRoomQueue(room.id)).toEqual([]);
   });
 
-  it('folds a caller\'s own lifecycle change into the same update', async () => {
+  it("folds a caller's own lifecycle change into the same update", async () => {
     const room = await streamingRoom();
 
     const ended = await stopRoomStreamFields(room.id, {
@@ -167,7 +167,7 @@ describe('stopRoomStreamFields', () => {
 });
 
 describe('replaceRoomStreamAndQueue', () => {
-  it('stores the queue in order, preserving each item\'s kind and ids', async () => {
+  it("stores the queue in order, preserving each item's kind and ids", async () => {
     const room = await streamingRoom();
 
     await replaceRoomStreamAndQueue(room.id, { streamTitle: 'First' }, QUEUE);

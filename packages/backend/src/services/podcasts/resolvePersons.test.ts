@@ -17,7 +17,12 @@ afterAll(disconnectDb);
 
 const noOxy: GetOxyUsers = async () => [];
 const echoOxy: GetOxyUsers = async (ids) =>
-  ids.map((id) => ({ id, avatar: `avatar-${id}`, displayName: `User ${id}`, username: `user_${id}` }));
+  ids.map((id) => ({
+    id,
+    avatar: `avatar-${id}`,
+    displayName: `User ${id}`,
+    username: `user_${id}`,
+  }));
 
 /**
  * How many `type = 'person'` rows exist.
@@ -40,7 +45,7 @@ async function findPersonByOxyId(linkedOxyUserId: string) {
     .select({ id: catalogEntities.id })
     .from(catalogEntities)
     .where(
-      and(eq(catalogEntities.type, 'person'), eq(catalogEntities.linkedOxyUserId, linkedOxyUserId))
+      and(eq(catalogEntities.type, 'person'), eq(catalogEntities.linkedOxyUserId, linkedOxyUserId)),
     )
     .limit(1);
   return row;
@@ -55,8 +60,14 @@ async function makeArtist(name: string, extra: { claimedByOxyUserId?: string } =
 
 describe('resolvePersons — strong-key dedup', () => {
   it('dedupes by linkedOxyUserId and enriches with the live Oxy identity', async () => {
-    const r1 = await resolvePersons([{ name: 'A', role: 'host', linkedOxyUserId: 'oxy1' }], echoOxy);
-    const r2 = await resolvePersons([{ name: 'totally different', role: 'guest', linkedOxyUserId: 'oxy1' }], echoOxy);
+    const r1 = await resolvePersons(
+      [{ name: 'A', role: 'host', linkedOxyUserId: 'oxy1' }],
+      echoOxy,
+    );
+    const r2 = await resolvePersons(
+      [{ name: 'totally different', role: 'guest', linkedOxyUserId: 'oxy1' }],
+      echoOxy,
+    );
 
     expect(r1[0].personId).toBe(r2[0].personId); // one global person
     expect(await personCount()).toBe(1);
@@ -77,7 +88,8 @@ describe('resolvePersons — strong-key dedup', () => {
   });
 
   it('NEVER merges a name-only credit into a strong-key person of the same name', async () => {
-    const strongOxy: GetOxyUsers = async (ids) => ids.map((id) => ({ id, displayName: 'Joe Rogan' }));
+    const strongOxy: GetOxyUsers = async (ids) =>
+      ids.map((id) => ({ id, displayName: 'Joe Rogan' }));
     await resolvePersons([{ name: 'Joe Rogan', linkedOxyUserId: 'oxyJoe' }], strongOxy);
 
     const r = await resolvePersons([{ name: 'Joe Rogan' }], noOxy); // name-only RSS credit
@@ -129,7 +141,10 @@ describe('resolvePersons — strong-key dedup', () => {
 
 describe('buildCreatorPersons — Oxy-only validation', () => {
   it('builds host/guest credits for valid Oxy ids', async () => {
-    const { persons, invalidIds } = await buildCreatorPersons({ hosts: ['h1'], guests: ['g1'] }, echoOxy);
+    const { persons, invalidIds } = await buildCreatorPersons(
+      { hosts: ['h1'], guests: ['g1'] },
+      echoOxy,
+    );
 
     expect(invalidIds).toHaveLength(0);
     expect(persons).toHaveLength(2);
@@ -142,7 +157,10 @@ describe('buildCreatorPersons — Oxy-only validation', () => {
   it('rejects ids that are not real Oxy users (no free text)', async () => {
     const onlyReal: GetOxyUsers = async (ids) =>
       ids.filter((id) => id === 'real').map((id) => ({ id, displayName: 'Real' }));
-    const { persons, invalidIds } = await buildCreatorPersons({ hosts: ['real', 'fake'] }, onlyReal);
+    const { persons, invalidIds } = await buildCreatorPersons(
+      { hosts: ['real', 'fake'] },
+      onlyReal,
+    );
 
     expect(invalidIds).toEqual(['fake']);
     expect(persons).toHaveLength(0);

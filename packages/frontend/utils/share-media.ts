@@ -16,7 +16,12 @@ export function mediaShareUrl(kind: ShareKind, id: string, seconds?: number): st
 }
 
 /** Share a link and metadata, not licensed lyric text or audio bytes. */
-export async function shareMedia(kind: ShareKind, id: string, title: string, seconds?: number): Promise<void> {
+export async function shareMedia(
+  kind: ShareKind,
+  id: string,
+  title: string,
+  seconds?: number,
+): Promise<void> {
   await shareUrl(title, mediaShareUrl(kind, id, seconds));
 }
 

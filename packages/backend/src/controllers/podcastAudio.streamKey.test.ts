@@ -61,10 +61,22 @@ function makeRes(): CapturedRes {
     _status: 200,
     _body: undefined,
     _headers: {},
-    status(code) { this._status = code; return this; },
-    set(name, value) { this._headers[name] = value; return this; },
-    send(body) { this._body = body; return this; },
-    json(body) { this._body = body; return this; },
+    status(code) {
+      this._status = code;
+      return this;
+    },
+    set(name, value) {
+      this._headers[name] = value;
+      return this;
+    },
+    send(body) {
+      this._body = body;
+      return this;
+    },
+    json(body) {
+      this._body = body;
+      return this;
+    },
   };
   return res;
 }
@@ -75,7 +87,7 @@ function makeReq(id: string): AuthRequest {
 
 /** A Syra-hosted episode, and the show it belongs to. */
 async function seedEpisode(
-  visibility: 'private' | 'unlisted' | 'public' = 'public'
+  visibility: 'private' | 'unlisted' | 'public' = 'public',
 ): Promise<string> {
   const suffix = uuidv7();
   const [podcast] = await getDb()
@@ -107,9 +119,7 @@ async function seedEpisode(
 describe('GET /api/podcasts/episodes/:id/key', () => {
   it('serves the key filed under the EPISODE arm', async () => {
     const episodeId = await seedEpisode();
-    await getDb()
-      .insert(trackKeys)
-      .values({ episodeId, keyHex: KEY_HEX, keyUri: 'key' });
+    await getDb().insert(trackKeys).values({ episodeId, keyHex: KEY_HEX, keyUri: 'key' });
     const res = makeRes();
 
     await getEpisodeStreamKey(makeReq(episodeId), res as unknown as Response);
@@ -147,9 +157,7 @@ describe('GET /api/podcasts/episodes/:id/key', () => {
         source: 'upload',
       })
       .returning({ id: tracks.id });
-    await getDb()
-      .insert(trackKeys)
-      .values({ trackId: track.id, keyHex: KEY_HEX, keyUri: 'key' });
+    await getDb().insert(trackKeys).values({ trackId: track.id, keyHex: KEY_HEX, keyUri: 'key' });
 
     const res = makeRes();
     await getEpisodeStreamKey(makeReq(episodeId), res as unknown as Response);

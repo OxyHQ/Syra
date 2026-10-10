@@ -54,11 +54,7 @@ import {
 } from '../schema/library';
 
 /** The four memberships `controllers/library.controller.ts` exposes. */
-export type MembershipKind =
-  | 'likedTracks'
-  | 'savedAlbums'
-  | 'followedArtists'
-  | 'savedPlaylists';
+export type MembershipKind = 'likedTracks' | 'savedAlbums' | 'followedArtists' | 'savedPlaylists';
 
 interface MembershipRelation {
   /**
@@ -127,8 +123,8 @@ const RELATIONS: Readonly<Record<MembershipKind, MembershipRelation>> = {
         .where(
           and(
             eq(userFollowedArtists.oxyUserId, oxyUserId),
-            eq(userFollowedArtists.artistId, artistId)
-          )
+            eq(userFollowedArtists.artistId, artistId),
+          ),
         ),
     missingTargetConstraint: 'user_followed_artists_artist_id_catalog_entities_id_fk',
   },
@@ -147,18 +143,15 @@ const RELATIONS: Readonly<Record<MembershipKind, MembershipRelation>> = {
         .where(
           and(
             eq(userSavedPlaylists.oxyUserId, oxyUserId),
-            eq(userSavedPlaylists.playlistId, playlistId)
-          )
+            eq(userSavedPlaylists.playlistId, playlistId),
+          ),
         ),
     missingTargetConstraint: 'user_saved_playlists_playlist_id_playlists_id_fk',
   },
 };
 
 /** One user's membership ids, oldest first. */
-export async function listMembership(
-  kind: MembershipKind,
-  oxyUserId: string
-): Promise<string[]> {
+export async function listMembership(kind: MembershipKind, oxyUserId: string): Promise<string[]> {
   const rows = await RELATIONS[kind].list(oxyUserId);
   return rows.map((row) => row.targetId);
 }
@@ -175,7 +168,7 @@ export type AddMembershipResult = 'added' | 'missing-target';
 export async function addMembership(
   kind: MembershipKind,
   oxyUserId: string,
-  targetId: string
+  targetId: string,
 ): Promise<AddMembershipResult> {
   const relation = RELATIONS[kind];
   try {
@@ -193,7 +186,7 @@ export async function addMembership(
 export async function removeMembership(
   kind: MembershipKind,
   oxyUserId: string,
-  targetId: string
+  targetId: string,
 ): Promise<void> {
   await RELATIONS[kind].remove(oxyUserId, targetId);
 }

@@ -184,8 +184,8 @@ export async function loadCreditedOn(artist: ArtistProfileSource): Promise<Credi
         eq(trackCredits.nameKey, nameKey),
         // Their own releases are the discography above; this section is everything else.
         ne(tracks.artistId, artist.id),
-        playableTrackFilter()
-      )
+        playableTrackFilter(),
+      ),
     )
     .orderBy(descNullsLast(tracks.popularity), descNullsLast(tracks.createdAt))
     .limit(CREDITED_ON_LIMIT);
@@ -198,9 +198,12 @@ export async function loadCreditedOn(artist: ArtistProfileSource): Promise<Credi
     .innerJoin(trackCredits, eq(trackCredits.trackId, tracks.id))
     .where(
       and(
-        inArray(tracks.id, trackIdRows.map((row) => row.id)),
-        eq(trackCredits.nameKey, nameKey)
-      )
+        inArray(
+          tracks.id,
+          trackIdRows.map((row) => row.id),
+        ),
+        eq(trackCredits.nameKey, nameKey),
+      ),
     )
     .orderBy(descNullsLast(tracks.popularity), descNullsLast(tracks.createdAt));
 
@@ -253,7 +256,12 @@ export async function loadPlaylistsFeaturing(
   const playlistIdRows = await getDb()
     .selectDistinct({ playlistId: playlistTracks.playlistId })
     .from(playlistTracks)
-    .where(inArray(playlistTracks.trackId, seedTracks.map((track) => track.id)));
+    .where(
+      inArray(
+        playlistTracks.trackId,
+        seedTracks.map((track) => track.id),
+      ),
+    );
   if (playlistIdRows.length === 0) return [];
 
   const candidateIds = playlistIdRows.map((row) => row.playlistId);
@@ -269,7 +277,12 @@ export async function loadPlaylistsFeaturing(
       oxyUserId: playlistCollaborators.oxyUserId,
     })
     .from(playlistCollaborators)
-    .where(inArray(playlistCollaborators.playlistId, rows.map((row) => row.id)));
+    .where(
+      inArray(
+        playlistCollaborators.playlistId,
+        rows.map((row) => row.id),
+      ),
+    );
 
   const collaboratorsByPlaylist = new Map<string, string[]>();
   for (const entry of collaborators) {
@@ -285,8 +298,8 @@ export async function loadPlaylistsFeaturing(
         ownerOxyUserId: playlist.ownerOxyUserId,
         collaboratorOxyUserIds: collaboratorsByPlaylist.get(playlist.id) ?? [],
       },
-      viewerOxyUserId
-    )
+      viewerOxyUserId,
+    ),
   );
   if (visible.length === 0) return [];
 
@@ -299,7 +312,7 @@ export async function loadPlaylistsFeaturing(
       playlist.coverArtSizesXlargeId,
       playlist.coverArtSizesXxlargeId,
       playlist.coverArtSizesOriginalId,
-    ])
+    ]),
   );
 
   return visible.map((playlist) => toPlaylistDto(playlist, lookup));

@@ -39,7 +39,13 @@ import { describeErrorSafely } from '../utils/error';
 import { getParam } from '../utils/reqParams';
 import { logger } from '../utils/logger';
 import { processImage } from '../utils/imageProcessor';
-import { uploadObject, deleteObject, getAgoraHouseAvatarKey, getAgoraHouseCoverKey, cdnUrlToKey } from '../utils/spaces';
+import {
+  uploadObject,
+  deleteObject,
+  getAgoraHouseAvatarKey,
+  getAgoraHouseCoverKey,
+  cdnUrlToKey,
+} from '../utils/spaces';
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 const upload = multer({
@@ -49,9 +55,13 @@ const upload = multer({
     if (ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error(`File type ${file.mimetype} not allowed. Allowed: ${ALLOWED_IMAGE_TYPES.join(', ')}`));
+      cb(
+        new Error(
+          `File type ${file.mimetype} not allowed. Allowed: ${ALLOWED_IMAGE_TYPES.join(', ')}`,
+        ),
+      );
     }
-  }
+  },
 });
 
 const router = Router();
@@ -149,7 +159,10 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       house: serializeHouseFor(house, members, userId),
     });
   } catch (error) {
-    logger.error('Error creating house:', { userId: req.user?.id, error: describeErrorSafely(error) });
+    logger.error('Error creating house:', {
+      userId: req.user?.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error creating house',
       error: describeErrorSafely(error),
@@ -181,9 +194,10 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 
     const hasMore = houses.length > limitNum;
     const housesToReturn = hasMore ? houses.slice(0, limitNum) : houses;
-    const nextCursor = hasMore && housesToReturn.length > 0
-      ? housesToReturn[housesToReturn.length - 1].id
-      : undefined;
+    const nextCursor =
+      hasMore && housesToReturn.length > 0
+        ? housesToReturn[housesToReturn.length - 1].id
+        : undefined;
 
     // One batched roster read for the whole page. Serializing each house needs
     // its members — to decide whether this caller may see the roster at all —
@@ -192,13 +206,17 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 
     res.json({
       houses: housesToReturn.map((house) =>
-        serializeHouseFor(house, rosters.get(house.id) ?? [], userId)
+        serializeHouseFor(house, rosters.get(house.id) ?? [], userId),
       ),
       hasMore,
       nextCursor,
     });
   } catch (error) {
-    logger.error('Error fetching houses:', { userId: req.user?.id, error: describeErrorSafely(error), query: req.query });
+    logger.error('Error fetching houses:', {
+      userId: req.user?.id,
+      error: describeErrorSafely(error),
+      query: req.query,
+    });
     res.status(500).json({
       message: 'Error fetching houses',
       error: describeErrorSafely(error),
@@ -226,7 +244,11 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
 
     res.json({ house: serializeHouseFor(found.house, found.members, userId) });
   } catch (error) {
-    logger.error('Error fetching house:', { userId: req.user?.id, houseId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error fetching house:', {
+      userId: req.user?.id,
+      houseId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error fetching house',
       error: describeErrorSafely(error),
@@ -305,7 +327,11 @@ router.patch('/:id', async (req: AuthRequest, res: Response) => {
       house: serializeHouseFor(house, found.members, userId),
     });
   } catch (error) {
-    logger.error('Error updating house:', { userId: req.user?.id, houseId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error updating house:', {
+      userId: req.user?.id,
+      houseId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error updating house',
       error: describeErrorSafely(error),
@@ -343,7 +369,11 @@ router.delete('/:id', async (req: AuthRequest, res: Response) => {
 
     res.json({ success: true });
   } catch (error) {
-    logger.error('Error deleting house:', { userId: req.user?.id, houseId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error deleting house:', {
+      userId: req.user?.id,
+      houseId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error deleting house',
       error: describeErrorSafely(error),
@@ -387,10 +417,15 @@ router.post('/:id/members', async (req: AuthRequest, res: Response) => {
     }
 
     // Validate role (cannot assign owner role)
-    const validRoles: HouseMemberRole[] = [HouseMemberRole.MEMBER, HouseMemberRole.HOST, HouseMemberRole.ADMIN];
-    const assignedRole: HouseMemberRole = role && validRoles.includes(role as HouseMemberRole)
-      ? (role as HouseMemberRole)
-      : HouseMemberRole.MEMBER;
+    const validRoles: HouseMemberRole[] = [
+      HouseMemberRole.MEMBER,
+      HouseMemberRole.HOST,
+      HouseMemberRole.ADMIN,
+    ];
+    const assignedRole: HouseMemberRole =
+      role && validRoles.includes(role as HouseMemberRole)
+        ? (role as HouseMemberRole)
+        : HouseMemberRole.MEMBER;
 
     await addHouseMember(found.house.id, targetUserId, assignedRole);
 
@@ -398,14 +433,14 @@ router.post('/:id/members', async (req: AuthRequest, res: Response) => {
 
     res.json({
       message: 'Member added successfully',
-      house: serializeHouseFor(
-        found.house,
-        await findHouseMembers(found.house.id),
-        currentUserId
-      ),
+      house: serializeHouseFor(found.house, await findHouseMembers(found.house.id), currentUserId),
     });
   } catch (error) {
-    logger.error('Error adding member:', { userId: req.user?.id, houseId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error adding member:', {
+      userId: req.user?.id,
+      houseId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error adding member',
       error: describeErrorSafely(error),
@@ -452,7 +487,7 @@ router.patch('/:id/members/:userId', async (req: AuthRequest, res: Response) => 
 
     // Cannot demote or change the owner's role
     if (targetMember.role === HouseMemberRole.OWNER) {
-      return res.status(403).json({ message: 'Cannot change the owner\'s role' });
+      return res.status(403).json({ message: "Cannot change the owner's role" });
     }
 
     // Cannot assign owner role through this endpoint
@@ -461,7 +496,11 @@ router.patch('/:id/members/:userId', async (req: AuthRequest, res: Response) => 
     }
 
     // Validate the new role
-    const validRoles: HouseMemberRole[] = [HouseMemberRole.MEMBER, HouseMemberRole.HOST, HouseMemberRole.ADMIN];
+    const validRoles: HouseMemberRole[] = [
+      HouseMemberRole.MEMBER,
+      HouseMemberRole.HOST,
+      HouseMemberRole.ADMIN,
+    ];
     if (!validRoles.includes(role as HouseMemberRole)) {
       return res.status(400).json({ message: 'Invalid role' });
     }
@@ -478,14 +517,15 @@ router.patch('/:id/members/:userId', async (req: AuthRequest, res: Response) => 
 
     res.json({
       message: 'Member role updated successfully',
-      house: serializeHouseFor(
-        found.house,
-        await findHouseMembers(found.house.id),
-        currentUserId
-      ),
+      house: serializeHouseFor(found.house, await findHouseMembers(found.house.id), currentUserId),
     });
   } catch (error) {
-    logger.error('Error updating member role:', { userId: req.user?.id, houseId: req.params.id, targetUserId: req.params.userId, error: describeErrorSafely(error) });
+    logger.error('Error updating member role:', {
+      userId: req.user?.id,
+      houseId: req.params.id,
+      targetUserId: req.params.userId,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error updating member role',
       error: describeErrorSafely(error),
@@ -541,13 +581,20 @@ router.delete('/:id/members/:userId', async (req: AuthRequest, res: Response) =>
 
     await removeHouseMember(found.house.id, targetUserId);
 
-    logger.info(`User ${targetUserId} removed from house ${id} by ${currentUserId}${isSelfLeave ? ' (self-leave)' : ''}`);
+    logger.info(
+      `User ${targetUserId} removed from house ${id} by ${currentUserId}${isSelfLeave ? ' (self-leave)' : ''}`,
+    );
 
     res.json({
       message: isSelfLeave ? 'Left house successfully' : 'Member removed successfully',
     });
   } catch (error) {
-    logger.error('Error removing member:', { userId: req.user?.id, houseId: req.params.id, targetUserId: req.params.userId, error: describeErrorSafely(error) });
+    logger.error('Error removing member:', {
+      userId: req.user?.id,
+      houseId: req.params.id,
+      targetUserId: req.params.userId,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error removing member',
       error: describeErrorSafely(error),
@@ -597,7 +644,11 @@ router.post('/:id/join', async (req: AuthRequest, res: Response) => {
       house: serializeHouseFor(found.house, await findHouseMembers(found.house.id), userId),
     });
   } catch (error) {
-    logger.error('Error joining house:', { userId: req.user?.id, houseId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error joining house:', {
+      userId: req.user?.id,
+      houseId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error joining house',
       error: describeErrorSafely(error),
@@ -622,7 +673,7 @@ router.get('/:id/rooms', async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'House not found' });
     }
     if (!canAccessRooms(found.house, found.members, userId)) {
-      return res.status(403).json({ message: 'Only members can view this house\'s rooms' });
+      return res.status(403).json({ message: "Only members can view this house's rooms" });
     }
 
     const limitNum = Math.min(Math.max(parseInt(limit as string, 10) || 20, 1), 100);
@@ -643,9 +694,8 @@ router.get('/:id/rooms', async (req: AuthRequest, res: Response) => {
 
     const hasMore = rooms.length > limitNum;
     const roomsToReturn = hasMore ? rooms.slice(0, limitNum) : rooms;
-    const nextCursor = hasMore && roomsToReturn.length > 0
-      ? roomsToReturn[roomsToReturn.length - 1].id
-      : undefined;
+    const nextCursor =
+      hasMore && roomsToReturn.length > 0 ? roomsToReturn[roomsToReturn.length - 1].id : undefined;
 
     res.json({
       rooms: roomsToReturn.map((room) => stripInternalStreamFields(room)),
@@ -653,7 +703,11 @@ router.get('/:id/rooms', async (req: AuthRequest, res: Response) => {
       nextCursor,
     });
   } catch (error) {
-    logger.error('Error fetching house rooms:', { userId: req.user?.id, houseId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error fetching house rooms:', {
+      userId: req.user?.id,
+      houseId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error fetching house rooms',
       error: describeErrorSafely(error),
@@ -675,14 +729,18 @@ router.get('/:id/series', async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'House not found' });
     }
     if (!canAccessRooms(found.house, found.members, userId)) {
-      return res.status(403).json({ message: 'Only members can view this house\'s series' });
+      return res.status(403).json({ message: "Only members can view this house's series" });
     }
 
     res.json({
       series: await listActiveSeriesForHouse(id),
     });
   } catch (error) {
-    logger.error('Error fetching house series:', { userId: req.user?.id, houseId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error fetching house series:', {
+      userId: req.user?.id,
+      houseId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error fetching house series',
       error: describeErrorSafely(error),
@@ -726,7 +784,10 @@ router.post('/:id/avatar', upload.single('file'), async (req: AuthRequest, res: 
 
     res.json({ avatar: cdnUrl });
   } catch (error) {
-    logger.error('Error uploading house avatar:', { houseId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error uploading house avatar:', {
+      houseId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({ message: 'Error uploading avatar', error: describeErrorSafely(error) });
   }
 });
@@ -762,7 +823,10 @@ router.post('/:id/cover', upload.single('file'), async (req: AuthRequest, res: R
 
     res.json({ coverImage: cdnUrl });
   } catch (error) {
-    logger.error('Error uploading house cover:', { houseId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error uploading house cover:', {
+      houseId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({ message: 'Error uploading cover', error: describeErrorSafely(error) });
   }
 });

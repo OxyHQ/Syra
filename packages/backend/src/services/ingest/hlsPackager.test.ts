@@ -4,15 +4,15 @@ import { promisify } from 'util';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import {
-  packageToEncryptedHls,
-  HLS_BITRATES_KBPS,
-  LOCKER_HLS_BITRATES_KBPS,
-} from './hlsPackager';
+import { packageToEncryptedHls, HLS_BITRATES_KBPS, LOCKER_HLS_BITRATES_KBPS } from './hlsPackager';
 
 function hasBinary(name: string): boolean {
-  try { execFileSync('which', [name], { stdio: 'ignore' }); return true; }
-  catch { return false; }
+  try {
+    execFileSync('which', [name], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
 }
 const MEDIA_TOOLS_AVAILABLE = ['ffmpeg', 'mp42hls', 'mp4fragment'].every(hasBinary);
 
@@ -42,38 +42,51 @@ beforeAll(async () => {
    * the majority of real music files. Whatever else changes here, the input must
    * keep its picture stream; `attached picture` below is the guard for that.
    */
-  await execFile('ffmpeg', [
-    '-nostdin',
-    '-f', 'lavfi',
-    '-i', 'color=c=red:s=64x64:d=1',
-    '-frames:v', '1',
-    coverPath,
-    '-y',
-  ], { maxBuffer: 8 * 1024 * 1024 });
+  await execFile(
+    'ffmpeg',
+    ['-nostdin', '-f', 'lavfi', '-i', 'color=c=red:s=64x64:d=1', '-frames:v', '1', coverPath, '-y'],
+    { maxBuffer: 8 * 1024 * 1024 },
+  );
 
-  await execFile('ffmpeg', [
-    '-nostdin',
-    '-f', 'lavfi',
-    '-i', 'sine=frequency=440:duration=5',
-    '-i', coverPath,
-    '-map', '0:a',
-    '-map', '1:v',
-    '-c:a', 'aac',
-    '-b:a', '192k',
-    '-c:v', 'mjpeg',
-    '-disposition:v', 'attached_pic',
-    inputPath,
-    '-y',
-  ], { maxBuffer: 8 * 1024 * 1024 });
+  await execFile(
+    'ffmpeg',
+    [
+      '-nostdin',
+      '-f',
+      'lavfi',
+      '-i',
+      'sine=frequency=440:duration=5',
+      '-i',
+      coverPath,
+      '-map',
+      '0:a',
+      '-map',
+      '1:v',
+      '-c:a',
+      'aac',
+      '-b:a',
+      '192k',
+      '-c:v',
+      'mjpeg',
+      '-disposition:v',
+      'attached_pic',
+      inputPath,
+      '-y',
+    ],
+    { maxBuffer: 8 * 1024 * 1024 },
+  );
 }, 60_000);
 
 /** The distinct codec types ffprobe reports for `file`, e.g. `['audio']`. */
 async function streamTypes(file: string, extraArgs: string[] = []): Promise<string[]> {
   const { stdout } = await execFile('ffprobe', [
-    '-v', 'error',
+    '-v',
+    'error',
     ...extraArgs,
-    '-show_entries', 'stream=codec_type',
-    '-of', 'csv=p=0',
+    '-show_entries',
+    'stream=codec_type',
+    '-of',
+    'csv=p=0',
     file,
   ]);
   const types = stdout
@@ -102,8 +115,10 @@ async function renditionStreamTypes(
   const renditionDir = path.join(outputDir, path.dirname(playlistPath));
   fs.writeFileSync(path.join(renditionDir, 'key'), Buffer.from(keyHex, 'hex'));
   return streamTypes(path.join(outputDir, playlistPath), [
-    '-allowed_extensions', 'ALL',
-    '-protocol_whitelist', 'file,crypto,data',
+    '-allowed_extensions',
+    'ALL',
+    '-protocol_whitelist',
+    'file,crypto,data',
   ]);
 }
 
@@ -243,10 +258,7 @@ describe.skipIf(!MEDIA_TOOLS_AVAILABLE)('packageToEncryptedHls (requires ffmpeg 
     // assert the keyUri is identical across playlists — the contract that
     // one key endpoint serves all renditions.
     for (const rendition of result.renditions) {
-      const content = fs.readFileSync(
-        path.join(result.outputDir, rendition.playlistPath),
-        'utf8',
-      );
+      const content = fs.readFileSync(path.join(result.outputDir, rendition.playlistPath), 'utf8');
       expect(content).toContain(`URI="${result.keyUri}"`);
     }
   });

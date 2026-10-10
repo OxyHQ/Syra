@@ -149,10 +149,7 @@ describe('POST /api/tracks/upload temp file lifecycle', () => {
     await withUploadServer(async (baseUrl) => {
       const response = await fetch(`${baseUrl}/api/tracks/upload`, {
         method: 'POST',
-        body: audioForm(
-          { title: 'Borrowed', artistId: foreignArtistId },
-          'irrelevant bytes',
-        ),
+        body: audioForm({ title: 'Borrowed', artistId: foreignArtistId }, 'irrelevant bytes'),
       });
 
       expect(response.status).toBe(403);
@@ -169,10 +166,7 @@ describe('POST /api/tracks/upload temp file lifecycle', () => {
         method: 'POST',
         // Declared audio/mpeg so the multer filter passes; the bytes are not audio,
         // so the probe is the thing that rejects it.
-        body: audioForm(
-          { title: 'Not Really Audio', artistId },
-          'this is definitely not an mp3',
-        ),
+        body: audioForm({ title: 'Not Really Audio', artistId }, 'this is definitely not an mp3'),
       });
 
       expect(response.status).toBe(400);

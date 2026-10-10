@@ -1,12 +1,5 @@
 import React, { useMemo } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -26,7 +19,14 @@ import { cn } from '@/lib/utils';
 import type { LibrarySortOrder } from '@/stores/uiStore';
 
 /** Exported so the sidebar's filter state cannot drift from the chips it renders. */
-export type LibraryFilter = 'All' | 'Playlists' | 'Artists' | 'Albums' | 'Uploads' | 'Podcasts' | 'Shows';
+export type LibraryFilter =
+  | 'All'
+  | 'Playlists'
+  | 'Artists'
+  | 'Albums'
+  | 'Uploads'
+  | 'Podcasts'
+  | 'Shows';
 /**
  * Every kind an entry can carry — DERIVED from {@link FILTER_KINDS} rather than
  * declared beside it.
@@ -197,26 +197,31 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
 
   const entries = useMemo<LibraryEntry[]>(() => {
     const likedSongs: LibraryEntry[] = isAuthenticated
-      ? [{
-          id: 'liked',
-          kind: 'liked',
-          title: t('library.likedSongs'),
-          subtitle: `Playlist • ${likedTracksCount} ${likedTracksCount === 1 ? 'song' : 'songs'}`,
-          href: '/library/liked',
-          imageShape: 'square',
-        }]
+      ? [
+          {
+            id: 'liked',
+            kind: 'liked',
+            title: t('library.likedSongs'),
+            subtitle: `Playlist • ${likedTracksCount} ${likedTracksCount === 1 ? 'song' : 'songs'}`,
+            href: '/library/liked',
+            imageShape: 'square',
+          },
+        ]
       : [];
 
-    const uploadsEntry: LibraryEntry[] = isAuthenticated && uploadCount > 0
-      ? [{
-          id: 'uploads',
-          kind: 'uploads',
-          title: t('uploads.locker.title'),
-          subtitle: t('uploads.locker.trackCount', { count: uploadCount }),
-          href: '/library/uploads',
-          imageShape: 'square',
-        }]
-      : [];
+    const uploadsEntry: LibraryEntry[] =
+      isAuthenticated && uploadCount > 0
+        ? [
+            {
+              id: 'uploads',
+              kind: 'uploads',
+              title: t('uploads.locker.title'),
+              subtitle: t('uploads.locker.trackCount', { count: uploadCount }),
+              href: '/library/uploads',
+              imageShape: 'square',
+            },
+          ]
+        : [];
 
     const playlistEntries = playlists.map<LibraryEntry>((playlist) => ({
       id: playlist.id,
@@ -224,7 +229,12 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
       title: playlist.name,
       subtitle: `${playlist.visibility === 'public' ? 'Public playlist' : 'Private playlist'} • ${playlist.trackCount || 0} ${playlist.trackCount === 1 ? 'song' : 'songs'}`,
       href: { pathname: '/playlist/[id]', params: { id: playlist.id } },
-      imageUrl: pickCatalogImageUrl(undefined, playlist.coverArt, 'thumbnail', playlist.coverArtSizes),
+      imageUrl: pickCatalogImageUrl(
+        undefined,
+        playlist.coverArt,
+        'thumbnail',
+        playlist.coverArtSizes,
+      ),
       imageShape: 'square',
     }));
 
@@ -492,7 +502,11 @@ export const LibrarySidebarExpanded: React.FC<LibrarySidebarExpandedProps> = ({
                 {entry.imageUrl ? (
                   <Image
                     source={{ uri: entry.imageUrl }}
-                    style={entry.imageShape === 'circle' ? styles.circleArtworkImage : styles.artworkImage}
+                    style={
+                      entry.imageShape === 'circle'
+                        ? styles.circleArtworkImage
+                        : styles.artworkImage
+                    }
                     contentFit="cover"
                   />
                 ) : entry.kind === 'liked' ? (

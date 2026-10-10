@@ -1,11 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  runOnJS,
-} from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, runOnJS } from 'react-native-reanimated';
 import { useTheme } from '@oxy.so/bloom/theme';
 
 const THUMB_SIZE = 20;
@@ -14,13 +10,10 @@ const TRACK_HEIGHT = 4;
 const TRACK_TOP = 18;
 const THUMB_TOP = 10;
 
-const clamp = (value: number, min: number, max: number) => (
-  Math.min(max, Math.max(min, value))
-);
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-const getFiniteValue = (value: number, fallback: number) => (
-  Number.isFinite(value) ? value : fallback
-);
+const getFiniteValue = (value: number, fallback: number) =>
+  Number.isFinite(value) ? value : fallback;
 
 interface SliderProps {
   value: number;
@@ -136,9 +129,13 @@ export const Slider: React.FC<SliderProps> = ({
     <View style={styles.container}>
       {label && (
         <View style={styles.labelRow}>
-          <Text className="text-foreground" style={styles.label}>{label}</Text>
+          <Text className="text-foreground" style={styles.label}>
+            {label}
+          </Text>
           {showValue && (
-            <Text className="text-primary" style={styles.value}>{displayValue}</Text>
+            <Text className="text-primary" style={styles.value}>
+              {displayValue}
+            </Text>
           )}
         </View>
       )}
@@ -152,26 +149,14 @@ export const Slider: React.FC<SliderProps> = ({
             widthSV.value = newWidth;
           }}
         >
-          <View className="bg-border"
-            style={[
-              styles.track,
-              disabled && { opacity: 0.5 },
-            ]}
-          />
-          <Animated.View className="bg-primary"
-            style={[
-              styles.fill,
-              disabled && { opacity: 0.5 },
-              fillStyle,
-            ]}
+          <View className="bg-border" style={[styles.track, disabled && { opacity: 0.5 }]} />
+          <Animated.View
+            className="bg-primary"
+            style={[styles.fill, disabled && { opacity: 0.5 }, fillStyle]}
           />
           <Animated.View
             className="bg-card border-primary"
-            style={[
-              styles.thumb,
-              disabled && { opacity: 0.5 },
-              thumbStyle,
-            ]}
+            style={[styles.thumb, disabled && { opacity: 0.5 }, thumbStyle]}
           />
         </View>
       </GestureDetector>

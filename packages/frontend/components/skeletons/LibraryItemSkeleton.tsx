@@ -13,8 +13,8 @@ interface LibraryItemSkeletonProps {
  * Loading placeholder mirroring a single library list row: a 48x48 thumbnail
  * followed by a title line and a shorter subtitle line.
  */
-export const LibraryItemSkeleton: React.FC<LibraryItemSkeletonProps> =
-  React.memo(({ shape = 'square' }) => {
+export const LibraryItemSkeleton: React.FC<LibraryItemSkeletonProps> = React.memo(
+  ({ shape = 'square' }) => {
     const theme = useTheme();
 
     return (
@@ -30,7 +30,8 @@ export const LibraryItemSkeleton: React.FC<LibraryItemSkeletonProps> =
         </View>
       </View>
     );
-  });
+  },
+);
 LibraryItemSkeleton.displayName = 'LibraryItemSkeleton';
 
 interface LibraryListSkeletonProps {
@@ -40,14 +41,15 @@ interface LibraryListSkeletonProps {
 }
 
 /** Vertical list of {@link LibraryItemSkeleton}s for the library screen. */
-export const LibraryListSkeleton: React.FC<LibraryListSkeletonProps> =
-  React.memo(({ count = 6, shape = 'square' }) => {
+export const LibraryListSkeleton: React.FC<LibraryListSkeletonProps> = React.memo(
+  ({ count = 6, shape = 'square' }) => {
     return (
       <View>
         <Repeat count={count} render={() => <LibraryItemSkeleton shape={shape} />} />
       </View>
     );
-  });
+  },
+);
 LibraryListSkeleton.displayName = 'LibraryListSkeleton';
 
 const styles = StyleSheet.create({

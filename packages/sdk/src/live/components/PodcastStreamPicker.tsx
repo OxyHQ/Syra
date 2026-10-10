@@ -36,7 +36,8 @@ const DEFAULT_STRINGS: Record<string, string> = {
   'agora.podcastStream.emptyShows': 'No podcasts found',
   'agora.podcastStream.emptyEpisodes': 'No episodes found',
   'agora.podcastStream.errorShows': "Couldn't load podcasts. Check your connection and try again.",
-  'agora.podcastStream.errorEpisodes': "Couldn't load episodes. Check your connection and try again.",
+  'agora.podcastStream.errorEpisodes':
+    "Couldn't load episodes. Check your connection and try again.",
   'agora.podcastStream.retry': 'Retry',
   'agora.podcastStream.openInSyra': 'Open in Syra',
   'agora.podcastStream.openFailed': "Couldn't open Syra",
@@ -124,7 +125,10 @@ const ShowRow = memo(function ShowRow({
           {show.title}
         </Text>
         {!!show.author && (
-          <Text style={[styles.rowSubtitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+          <Text
+            style={[styles.rowSubtitle, { color: theme.colors.textSecondary }]}
+            numberOfLines={1}
+          >
             {show.author}
           </Text>
         )}
@@ -159,14 +163,21 @@ const EpisodeRow = memo(function EpisodeRow({
 
   return (
     <View style={styles.row}>
-      <TouchableOpacity style={styles.rowMain} activeOpacity={0.7} onPress={() => onSelect(episode)}>
+      <TouchableOpacity
+        style={styles.rowMain}
+        activeOpacity={0.7}
+        onPress={() => onSelect(episode)}
+      >
         <AvatarComponent size={44} source={episode.artworkUrl} shape="squircle" />
         <View style={styles.rowText}>
           <Text style={[styles.rowTitle, { color: theme.colors.text }]} numberOfLines={2}>
             {episode.title}
           </Text>
           {!!meta && (
-            <Text style={[styles.rowSubtitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+            <Text
+              style={[styles.rowSubtitle, { color: theme.colors.textSecondary }]}
+              numberOfLines={1}
+            >
               {meta}
             </Text>
           )}
@@ -237,10 +248,7 @@ export function PodcastStreamPicker({ onSelectEpisode, onStartQueue }: PodcastSt
   const { useTheme, roomsService, AvatarComponent, toast, t, getPinnedPodcast } = useLiveConfig();
   const theme = useTheme();
 
-  const tr = useCallback<TranslateFn>(
-    (key) => (t ? t(key) : DEFAULT_STRINGS[key] ?? key),
-    [t],
-  );
+  const tr = useCallback<TranslateFn>((key) => (t ? t(key) : (DEFAULT_STRINGS[key] ?? key)), [t]);
 
   // Up-next queue: only offered when the host wired the multi-episode start.
   const queueEnabled = !!onStartQueue;
@@ -414,7 +422,14 @@ export function PodcastStreamPicker({ onSelectEpisode, onStartQueue }: PodcastSt
   const handleEpisodesEndReached = useCallback(() => {
     if (!selectedShow || episodesLoading || episodesLoadingMore || !episodesHasMore) return;
     loadEpisodes(selectedShow.syraPodcastId, episodesNextOffset);
-  }, [selectedShow, episodesLoading, episodesLoadingMore, episodesHasMore, loadEpisodes, episodesNextOffset]);
+  }, [
+    selectedShow,
+    episodesLoading,
+    episodesLoadingMore,
+    episodesHasMore,
+    loadEpisodes,
+    episodesNextOffset,
+  ]);
 
   const handleSelectEpisode = useCallback(
     (episode: EpisodeListItem) => {
@@ -487,7 +502,12 @@ export function PodcastStreamPicker({ onSelectEpisode, onStartQueue }: PodcastSt
   // Floats over the bottom of either level; queued items persist across shows
   // so the host can review/launch after adding from multiple shows.
   const queueFooter = showQueueFooter ? (
-    <View style={[styles.queueFooter, { backgroundColor: theme.colors.background, borderTopColor: theme.colors.border }]}>
+    <View
+      style={[
+        styles.queueFooter,
+        { backgroundColor: theme.colors.background, borderTopColor: theme.colors.border },
+      ]}
+    >
       <TouchableOpacity
         style={styles.queueClearBtn}
         activeOpacity={0.7}
@@ -536,7 +556,11 @@ export function PodcastStreamPicker({ onSelectEpisode, onStartQueue }: PodcastSt
             accessibilityRole="link"
             accessibilityLabel={tr('agora.podcastStream.openInSyra')}
           >
-            <MaterialCommunityIcons name="open-in-new" size={20} color={theme.colors.textSecondary} />
+            <MaterialCommunityIcons
+              name="open-in-new"
+              size={20}
+              color={theme.colors.textSecondary}
+            />
           </TouchableOpacity>
         </View>
 
@@ -553,7 +577,11 @@ export function PodcastStreamPicker({ onSelectEpisode, onStartQueue }: PodcastSt
           />
         ) : episodes.length === 0 ? (
           <View style={styles.stateBox}>
-            <MaterialCommunityIcons name="playlist-remove" size={32} color={theme.colors.textSecondary} />
+            <MaterialCommunityIcons
+              name="playlist-remove"
+              size={32}
+              color={theme.colors.textSecondary}
+            />
             <Text style={[styles.stateText, { color: theme.colors.textSecondary }]}>
               {tr('agora.podcastStream.emptyEpisodes')}
             </Text>
@@ -600,14 +628,23 @@ export function PodcastStreamPicker({ onSelectEpisode, onStartQueue }: PodcastSt
   return (
     <View style={styles.container}>
       <View style={styles.disclaimer}>
-        <MaterialCommunityIcons name="shield-alert-outline" size={15} color={theme.colors.textSecondary} />
+        <MaterialCommunityIcons
+          name="shield-alert-outline"
+          size={15}
+          color={theme.colors.textSecondary}
+        />
         <Text style={[styles.disclaimerText, { color: theme.colors.textSecondary }]}>
           {tr('agora.podcastStream.disclaimer')}
         </Text>
       </View>
 
       <View style={styles.searchWrap}>
-        <View style={[styles.searchRow, { backgroundColor: `${theme.colors.card}80`, borderColor: theme.colors.border }]}>
+        <View
+          style={[
+            styles.searchRow,
+            { backgroundColor: `${theme.colors.card}80`, borderColor: theme.colors.border },
+          ]}
+        >
           <MaterialCommunityIcons name="magnify" size={18} color={theme.colors.textSecondary} />
           <TextInput
             style={[styles.searchInput, { color: theme.colors.text }]}
@@ -621,7 +658,11 @@ export function PodcastStreamPicker({ onSelectEpisode, onStartQueue }: PodcastSt
           />
           {query.length > 0 && (
             <TouchableOpacity onPress={handleClearQuery} hitSlop={8}>
-              <MaterialCommunityIcons name="close-circle" size={18} color={theme.colors.textSecondary} />
+              <MaterialCommunityIcons
+                name="close-circle"
+                size={18}
+                color={theme.colors.textSecondary}
+              />
             </TouchableOpacity>
           )}
         </View>
@@ -631,7 +672,10 @@ export function PodcastStreamPicker({ onSelectEpisode, onStartQueue }: PodcastSt
         <View>
           {pinnedPodcast && (
             <TouchableOpacity
-              style={[styles.pinnedRow, { backgroundColor: `${theme.colors.primary}14`, borderColor: theme.colors.border }]}
+              style={[
+                styles.pinnedRow,
+                { backgroundColor: `${theme.colors.primary}14`, borderColor: theme.colors.border },
+              ]}
               activeOpacity={0.7}
               onPress={handleSelectPinned}
             >
@@ -643,12 +687,19 @@ export function PodcastStreamPicker({ onSelectEpisode, onStartQueue }: PodcastSt
                   {tr('agora.podcastStream.pinnedTitle')}
                 </Text>
                 {!!pinnedPodcast.title && (
-                  <Text style={[styles.rowSubtitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+                  <Text
+                    style={[styles.rowSubtitle, { color: theme.colors.textSecondary }]}
+                    numberOfLines={1}
+                  >
                     {pinnedPodcast.title}
                   </Text>
                 )}
               </View>
-              <MaterialCommunityIcons name="chevron-right" size={22} color={theme.colors.textSecondary} />
+              <MaterialCommunityIcons
+                name="chevron-right"
+                size={22}
+                color={theme.colors.textSecondary}
+              />
             </TouchableOpacity>
           )}
           <View style={styles.stateBox}>
@@ -671,7 +722,11 @@ export function PodcastStreamPicker({ onSelectEpisode, onStartQueue }: PodcastSt
         </View>
       ) : shows.length === 0 ? (
         <View style={styles.stateBox}>
-          <MaterialCommunityIcons name="magnify-close" size={32} color={theme.colors.textSecondary} />
+          <MaterialCommunityIcons
+            name="magnify-close"
+            size={32}
+            color={theme.colors.textSecondary}
+          />
           <Text style={[styles.stateText, { color: theme.colors.textSecondary }]}>
             {tr('agora.podcastStream.emptyShows')}
           </Text>
@@ -681,7 +736,12 @@ export function PodcastStreamPicker({ onSelectEpisode, onStartQueue }: PodcastSt
           data={shows}
           keyExtractor={(item) => item.syraPodcastId}
           renderItem={({ item }) => (
-            <ShowRow show={item} theme={theme} AvatarComponent={AvatarComponent} onSelect={handleSelectShow} />
+            <ShowRow
+              show={item}
+              theme={theme}
+              AvatarComponent={AvatarComponent}
+              onSelect={handleSelectShow}
+            />
           )}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
@@ -730,7 +790,10 @@ const MusicTrackRow = memo(function MusicTrackRow({
             {track.title}
           </Text>
           {!!meta && (
-            <Text style={[styles.rowSubtitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+            <Text
+              style={[styles.rowSubtitle, { color: theme.colors.textSecondary }]}
+              numberOfLines={1}
+            >
               {meta}
             </Text>
           )}
@@ -782,7 +845,7 @@ export function MusicPicker({ onSelectTrack, onStartQueue }: MusicPickerProps) {
   const { useTheme, roomsService, AvatarComponent, t } = useLiveConfig();
   const theme = useTheme();
 
-  const tr = useCallback<TranslateFn>((key) => (t ? t(key) : DEFAULT_STRINGS[key] ?? key), [t]);
+  const tr = useCallback<TranslateFn>((key) => (t ? t(key) : (DEFAULT_STRINGS[key] ?? key)), [t]);
 
   const queueEnabled = !!onStartQueue;
   const [queued, setQueued] = useState<string[]>([]);
@@ -903,7 +966,12 @@ export function MusicPicker({ onSelectTrack, onStartQueue }: MusicPickerProps) {
     : styles.listContent;
 
   const queueFooter = showQueueFooter ? (
-    <View style={[styles.queueFooter, { backgroundColor: theme.colors.background, borderTopColor: theme.colors.border }]}>
+    <View
+      style={[
+        styles.queueFooter,
+        { backgroundColor: theme.colors.background, borderTopColor: theme.colors.border },
+      ]}
+    >
       <TouchableOpacity
         style={styles.queueClearBtn}
         activeOpacity={0.7}
@@ -932,14 +1000,23 @@ export function MusicPicker({ onSelectTrack, onStartQueue }: MusicPickerProps) {
   return (
     <View style={styles.container}>
       <View style={styles.disclaimer}>
-        <MaterialCommunityIcons name="shield-alert-outline" size={15} color={theme.colors.textSecondary} />
+        <MaterialCommunityIcons
+          name="shield-alert-outline"
+          size={15}
+          color={theme.colors.textSecondary}
+        />
         <Text style={[styles.disclaimerText, { color: theme.colors.textSecondary }]}>
           {tr('agora.musicStream.disclaimer')}
         </Text>
       </View>
 
       <View style={styles.searchWrap}>
-        <View style={[styles.searchRow, { backgroundColor: `${theme.colors.card}80`, borderColor: theme.colors.border }]}>
+        <View
+          style={[
+            styles.searchRow,
+            { backgroundColor: `${theme.colors.card}80`, borderColor: theme.colors.border },
+          ]}
+        >
           <MaterialCommunityIcons name="magnify" size={18} color={theme.colors.textSecondary} />
           <TextInput
             style={[styles.searchInput, { color: theme.colors.text }]}
@@ -953,7 +1030,11 @@ export function MusicPicker({ onSelectTrack, onStartQueue }: MusicPickerProps) {
           />
           {query.length > 0 && (
             <TouchableOpacity onPress={handleClearQuery} hitSlop={8}>
-              <MaterialCommunityIcons name="close-circle" size={18} color={theme.colors.textSecondary} />
+              <MaterialCommunityIcons
+                name="close-circle"
+                size={18}
+                color={theme.colors.textSecondary}
+              />
             </TouchableOpacity>
           )}
         </View>
@@ -979,7 +1060,11 @@ export function MusicPicker({ onSelectTrack, onStartQueue }: MusicPickerProps) {
         </View>
       ) : tracks.length === 0 ? (
         <View style={styles.stateBox}>
-          <MaterialCommunityIcons name="magnify-close" size={32} color={theme.colors.textSecondary} />
+          <MaterialCommunityIcons
+            name="magnify-close"
+            size={32}
+            color={theme.colors.textSecondary}
+          />
           <Text style={[styles.stateText, { color: theme.colors.textSecondary }]}>
             {tr('agora.musicStream.empty')}
           </Text>

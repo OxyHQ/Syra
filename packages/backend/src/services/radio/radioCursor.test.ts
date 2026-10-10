@@ -41,12 +41,16 @@ describe('decodeRadioCursor rejects bad input', () => {
     expect(decodeRadioCursor(b64url('a string'))).toBeNull();
     expect(decodeRadioCursor(b64url(42))).toBeNull();
     expect(decodeRadioCursor(b64url(null))).toBeNull();
-    expect(decodeRadioCursor(b64url([{ v: 1, seedType: 'track', seedId: 'a', page: 0 }]))).toBeNull();
+    expect(
+      decodeRadioCursor(b64url([{ v: 1, seedType: 'track', seedId: 'a', page: 0 }])),
+    ).toBeNull();
   });
 
   it('returns null for a wrong version', () => {
     expect(decodeRadioCursor(b64url({ v: 2, seedType: 'track', seedId: 'a', page: 0 }))).toBeNull();
-    expect(decodeRadioCursor(b64url({ v: '1', seedType: 'track', seedId: 'a', page: 0 }))).toBeNull();
+    expect(
+      decodeRadioCursor(b64url({ v: '1', seedType: 'track', seedId: 'a', page: 0 })),
+    ).toBeNull();
     expect(decodeRadioCursor(b64url({ seedType: 'track', seedId: 'a', page: 0 }))).toBeNull();
   });
 
@@ -57,19 +61,29 @@ describe('decodeRadioCursor rejects bad input', () => {
   });
 
   it('returns null for an unknown seed type', () => {
-    expect(decodeRadioCursor(b64url({ v: 1, seedType: 'podcast', seedId: 'a', page: 0 }))).toBeNull();
+    expect(
+      decodeRadioCursor(b64url({ v: 1, seedType: 'podcast', seedId: 'a', page: 0 })),
+    ).toBeNull();
   });
 
   it('returns null for ill-typed fields', () => {
     expect(decodeRadioCursor(b64url({ v: 1, seedType: 'track', seedId: 7, page: 0 }))).toBeNull();
-    expect(decodeRadioCursor(b64url({ v: 1, seedType: 'track', seedId: 'a', page: '0' }))).toBeNull();
+    expect(
+      decodeRadioCursor(b64url({ v: 1, seedType: 'track', seedId: 'a', page: '0' })),
+    ).toBeNull();
     expect(decodeRadioCursor(b64url({ v: 1, seedType: 1, seedId: 'a', page: 0 }))).toBeNull();
   });
 
   it('returns null for a non-integer or negative page', () => {
-    expect(decodeRadioCursor(b64url({ v: 1, seedType: 'track', seedId: 'a', page: 1.5 }))).toBeNull();
-    expect(decodeRadioCursor(b64url({ v: 1, seedType: 'track', seedId: 'a', page: -1 }))).toBeNull();
-    expect(decodeRadioCursor(b64url({ v: 1, seedType: 'track', seedId: 'a', page: NaN }))).toBeNull();
+    expect(
+      decodeRadioCursor(b64url({ v: 1, seedType: 'track', seedId: 'a', page: 1.5 })),
+    ).toBeNull();
+    expect(
+      decodeRadioCursor(b64url({ v: 1, seedType: 'track', seedId: 'a', page: -1 })),
+    ).toBeNull();
+    expect(
+      decodeRadioCursor(b64url({ v: 1, seedType: 'track', seedId: 'a', page: NaN })),
+    ).toBeNull();
   });
 
   it('never throws on arbitrary junk', () => {
@@ -81,7 +95,7 @@ describe('decodeRadioCursor rejects bad input', () => {
 
   it('ignores extra fields rather than trusting them', () => {
     const decoded = decodeRadioCursor(
-      b64url({ v: 1, seedType: 'artist', seedId: 'a1', page: 2, ownerKey: 'someone-else' })
+      b64url({ v: 1, seedType: 'artist', seedId: 'a1', page: 2, ownerKey: 'someone-else' }),
     );
     expect(decoded).toEqual({ v: 1, seedType: 'artist', seedId: 'a1', page: 2 });
     expect(decoded).not.toHaveProperty('ownerKey');

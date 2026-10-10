@@ -93,128 +93,137 @@ const TrackRowComponent: React.FC<TrackRowProps> = ({
 
   return (
     <>
-    <Pressable
-      className={isCurrentTrack ? 'bg-surface/25' : undefined}
-      style={[
-        styles.trackRow,
-        // `bg-surface/25`, never `theme.colors.backgroundSecondary + '40'`: an accent
-        // role resolves to `rgb(...)`, so a hex-alpha suffix yields a malformed colour
-        // that react-native-web parses back as fully OPAQUE — the row would hide the
-        // art behind it instead of tinting.
-        undefined,
-        ...Platform.select({
-          web: [webViewStyle({ cursor: 'pointer' })],
-          default: [],
-        }),
-      ]}
-      onPress={onPress}
-    >
-      <View style={styles.trackRowLeft}>
-        {showNumber && (
-          <View style={styles.trackNumberContainer}>
-            {isTrackPlaying ? (
-              <Ionicons name="volume-high" size={16} color={theme.colors.primary} />
-            ) : (
-              <Text
-                style={[
-                  styles.trackNumber,
-                  { color: isCurrentTrack ? theme.colors.primary : theme.colors.textSecondary }
-                ]}
-              >
-                {index + 1}
-              </Text>
-            )}
-          </View>
-        )}
-        <View style={styles.trackInfo}>
-          <Text
-            style={[
-              styles.trackTitle,
-              { color: isCurrentTrack ? theme.colors.primary : theme.colors.text }
-            ]}
-            numberOfLines={1}
-          >
-            {track.title}
-          </Text>
-          {showPlayCount ? <Text className="text-muted-foreground text-sm">{new Intl.NumberFormat().format(track.playCount ?? 0)}</Text> : null}
-          <View style={styles.trackArtistRow}>
-            {track.isExplicit && (
-              <View className="bg-popover" style={styles.explicitBadge}>
-                <Text className="text-muted-foreground" style={styles.explicitText}>E</Text>
-              </View>
-            )}
-            {badge ? (
-              <View className="bg-popover" style={styles.badge}>
+      <Pressable
+        className={isCurrentTrack ? 'bg-surface/25' : undefined}
+        style={[
+          styles.trackRow,
+          // `bg-surface/25`, never `theme.colors.backgroundSecondary + '40'`: an accent
+          // role resolves to `rgb(...)`, so a hex-alpha suffix yields a malformed colour
+          // that react-native-web parses back as fully OPAQUE — the row would hide the
+          // art behind it instead of tinting.
+          undefined,
+          ...Platform.select({
+            web: [webViewStyle({ cursor: 'pointer' })],
+            default: [],
+          }),
+        ]}
+        onPress={onPress}
+      >
+        <View style={styles.trackRowLeft}>
+          {showNumber && (
+            <View style={styles.trackNumberContainer}>
+              {isTrackPlaying ? (
+                <Ionicons name="volume-high" size={16} color={theme.colors.primary} />
+              ) : (
                 <Text
-                  className="text-muted-foreground" style={styles.badgeText}
-                  numberOfLines={1}
+                  style={[
+                    styles.trackNumber,
+                    { color: isCurrentTrack ? theme.colors.primary : theme.colors.textSecondary },
+                  ]}
                 >
-                  {badge}
+                  {index + 1}
                 </Text>
-              </View>
-            ) : null}
-            <TrackArtistLine
-              track={track}
-              className="text-muted-foreground"
-              style={styles.trackArtist}
+              )}
+            </View>
+          )}
+          <View style={styles.trackInfo}>
+            <Text
+              style={[
+                styles.trackTitle,
+                { color: isCurrentTrack ? theme.colors.primary : theme.colors.text },
+              ]}
               numberOfLines={1}
-              fallback={track.artistName}
-            />
+            >
+              {track.title}
+            </Text>
+            {showPlayCount ? (
+              <Text className="text-muted-foreground text-sm">
+                {new Intl.NumberFormat().format(track.playCount ?? 0)}
+              </Text>
+            ) : null}
+            <View style={styles.trackArtistRow}>
+              {track.isExplicit && (
+                <View className="bg-popover" style={styles.explicitBadge}>
+                  <Text className="text-muted-foreground" style={styles.explicitText}>
+                    E
+                  </Text>
+                </View>
+              )}
+              {badge ? (
+                <View className="bg-popover" style={styles.badge}>
+                  <Text
+                    className="text-muted-foreground"
+                    style={styles.badgeText}
+                    numberOfLines={1}
+                  >
+                    {badge}
+                  </Text>
+                </View>
+              ) : null}
+              <TrackArtistLine
+                track={track}
+                className="text-muted-foreground"
+                style={styles.trackArtist}
+                numberOfLines={1}
+                fallback={track.artistName}
+              />
+            </View>
           </View>
         </View>
-      </View>
-      <View style={styles.trackRowRight}>
-        <Pressable
-          onPress={(e) => {
-            e?.stopPropagation?.();
-            handleToggleLike();
-          }}
-          style={styles.likeButton}
-          accessibilityRole="button"
-          accessibilityState={{ selected: isLiked }}
-          accessibilityLabel={isLiked ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
-        >
-          <Ionicons
-            name={isLiked ? 'heart' : 'heart-outline'}
-            size={18}
-            color={isLiked ? theme.colors.primary : theme.colors.textSecondary}
-          />
-        </Pressable>
-        <Pressable
-          onPress={(e) => {
-            e?.stopPropagation?.();
-            handlePlayPress();
-          }}
-          style={styles.playButton}
-          accessibilityRole="button"
-          accessibilityLabel={isTrackPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
-        >
-          <Ionicons
-            name={isTrackPlaying ? 'pause' : 'play'}
-            size={20}
-            color={theme.colors.text}
-          />
-        </Pressable>
-        <Text className="text-muted-foreground" style={styles.trackDuration}>
-          {formatDuration(track.duration)}
-        </Text>
-        {(
+        <View style={styles.trackRowRight}>
           <Pressable
             onPress={(e) => {
               e?.stopPropagation?.();
-              if (onMorePress) onMorePress();
-              else setShowActions(true);
+              handleToggleLike();
             }}
-            style={styles.moreButton}
+            style={styles.likeButton}
             accessibilityRole="button"
-            accessibilityLabel={`More options for ${track.title}`}
+            accessibilityState={{ selected: isLiked }}
+            accessibilityLabel={isLiked ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
           >
-            <Ionicons name="ellipsis-horizontal" size={18} color={theme.colors.textSecondary} />
+            <Ionicons
+              name={isLiked ? 'heart' : 'heart-outline'}
+              size={18}
+              color={isLiked ? theme.colors.primary : theme.colors.textSecondary}
+            />
           </Pressable>
-        )}
-      </View>
-    </Pressable>
-    {showActions ? <TrackActionsSheet visible onClose={() => setShowActions(false)} track={track} /> : null}
+          <Pressable
+            onPress={(e) => {
+              e?.stopPropagation?.();
+              handlePlayPress();
+            }}
+            style={styles.playButton}
+            accessibilityRole="button"
+            accessibilityLabel={isTrackPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
+          >
+            <Ionicons
+              name={isTrackPlaying ? 'pause' : 'play'}
+              size={20}
+              color={theme.colors.text}
+            />
+          </Pressable>
+          <Text className="text-muted-foreground" style={styles.trackDuration}>
+            {formatDuration(track.duration)}
+          </Text>
+          {
+            <Pressable
+              onPress={(e) => {
+                e?.stopPropagation?.();
+                if (onMorePress) onMorePress();
+                else setShowActions(true);
+              }}
+              style={styles.moreButton}
+              accessibilityRole="button"
+              accessibilityLabel={`More options for ${track.title}`}
+            >
+              <Ionicons name="ellipsis-horizontal" size={18} color={theme.colors.textSecondary} />
+            </Pressable>
+          }
+        </View>
+      </Pressable>
+      {showActions ? (
+        <TrackActionsSheet visible onClose={() => setShowActions(false)} track={track} />
+      ) : null}
     </>
   );
 };

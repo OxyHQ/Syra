@@ -46,7 +46,9 @@ async function findPlayableTracksByIds(ids: readonly string[]) {
 function parseListeningSource(value: unknown): ListeningSource {
   if (typeof value !== 'string') return 'unknown';
   const source = value.trim();
-  return LISTENING_SOURCES.includes(source as ListeningSource) ? (source as ListeningSource) : 'unknown';
+  return LISTENING_SOURCES.includes(source as ListeningSource)
+    ? (source as ListeningSource)
+    : 'unknown';
 }
 
 function parseOptionalNonNegativeNumber(value: unknown): number | undefined {
@@ -93,7 +95,7 @@ const MISSING_TARGET_MESSAGE: Readonly<Record<MembershipKind, string>> = {
 async function addToLibrary(
   oxyUserId: string,
   kind: MembershipKind,
-  entityId: string
+  entityId: string,
 ): Promise<string[] | null> {
   if ((await addMembership(kind, oxyUserId, entityId)) === 'missing-target') return null;
   return listMembership(kind, oxyUserId);
@@ -103,7 +105,7 @@ async function addToLibrary(
 async function removeFromLibrary(
   oxyUserId: string,
   kind: MembershipKind,
-  entityId: string
+  entityId: string,
 ): Promise<string[]> {
   await removeMembership(kind, oxyUserId, entityId);
   return listMembership(kind, oxyUserId);

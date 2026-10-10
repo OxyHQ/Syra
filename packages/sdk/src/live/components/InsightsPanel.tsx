@@ -71,13 +71,18 @@ export function InsightsPanel({ room, participants, theme, onClose }: InsightsPa
           {stats.map((stat) => (
             <View
               key={stat.label}
-              style={[styles.statCard, { backgroundColor: `${theme.colors.card}80`, borderColor: theme.colors.border }]}
+              style={[
+                styles.statCard,
+                { backgroundColor: `${theme.colors.card}80`, borderColor: theme.colors.border },
+              ]}
             >
               <View style={[styles.statIconCircle, { backgroundColor: `${stat.color}1A` }]}>
                 <MaterialCommunityIcons name={stat.icon} size={20} color={stat.color} />
               </View>
               <Text style={[styles.statValue, { color: theme.colors.text }]}>{stat.value}</Text>
-              <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>{stat.label}</Text>
+              <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
+                {stat.label}
+              </Text>
             </View>
           ))}
         </View>
@@ -87,20 +92,34 @@ export function InsightsPanel({ room, participants, theme, onClose }: InsightsPa
             Breakdown
           </Text>
 
-          <View style={[styles.breakdownRow, { backgroundColor: `${theme.colors.card}80`, borderColor: theme.colors.border }]}>
+          <View
+            style={[
+              styles.breakdownRow,
+              { backgroundColor: `${theme.colors.card}80`, borderColor: theme.colors.border },
+            ]}
+          >
             <View style={[styles.breakdownIcon, { backgroundColor: `${theme.colors.primary}1A` }]}>
               <MaterialCommunityIcons name="microphone" size={18} color={theme.colors.primary} />
             </View>
             <Text style={[styles.breakdownLabel, { color: theme.colors.text }]}>Speakers</Text>
-            <Text style={[styles.breakdownValue, { color: theme.colors.text }]}>{speakers.length}</Text>
+            <Text style={[styles.breakdownValue, { color: theme.colors.text }]}>
+              {speakers.length}
+            </Text>
           </View>
 
-          <View style={[styles.breakdownRow, { backgroundColor: `${theme.colors.card}80`, borderColor: theme.colors.border }]}>
+          <View
+            style={[
+              styles.breakdownRow,
+              { backgroundColor: `${theme.colors.card}80`, borderColor: theme.colors.border },
+            ]}
+          >
             <View style={[styles.breakdownIcon, { backgroundColor: '#FF98001A' }]}>
               <MaterialCommunityIcons name="headphones" size={18} color="#FF9800" />
             </View>
             <Text style={[styles.breakdownLabel, { color: theme.colors.text }]}>Listeners</Text>
-            <Text style={[styles.breakdownValue, { color: theme.colors.text }]}>{listeners.length}</Text>
+            <Text style={[styles.breakdownValue, { color: theme.colors.text }]}>
+              {listeners.length}
+            </Text>
           </View>
         </View>
 
@@ -109,7 +128,10 @@ export function InsightsPanel({ room, participants, theme, onClose }: InsightsPa
             <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>Tags</Text>
             <View style={styles.tagsRow}>
               {room.tags.map((tag) => (
-                <View key={tag} style={[styles.tagChip, { backgroundColor: `${theme.colors.primary}1A` }]}>
+                <View
+                  key={tag}
+                  style={[styles.tagChip, { backgroundColor: `${theme.colors.primary}1A` }]}
+                >
                   <Text style={[styles.tagText, { color: theme.colors.primary }]}>#{tag}</Text>
                 </View>
               ))}
@@ -119,17 +141,34 @@ export function InsightsPanel({ room, participants, theme, onClose }: InsightsPa
 
         {room?.startedAt && (
           <View style={styles.metaSection}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>Details</Text>
-            <View style={[styles.metaRow, { backgroundColor: `${theme.colors.card}80`, borderColor: theme.colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>
+              Details
+            </Text>
+            <View
+              style={[
+                styles.metaRow,
+                { backgroundColor: `${theme.colors.card}80`, borderColor: theme.colors.border },
+              ]}
+            >
               <Text style={[styles.metaLabel, { color: theme.colors.textSecondary }]}>Started</Text>
               <Text style={[styles.metaValue, { color: theme.colors.text }]}>
-                {new Date(room.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {new Date(room.startedAt).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
               </Text>
             </View>
             {room.topic && (
-              <View style={[styles.metaRow, { backgroundColor: `${theme.colors.card}80`, borderColor: theme.colors.border }]}>
+              <View
+                style={[
+                  styles.metaRow,
+                  { backgroundColor: `${theme.colors.card}80`, borderColor: theme.colors.border },
+                ]}
+              >
                 <Text style={[styles.metaLabel, { color: theme.colors.textSecondary }]}>Topic</Text>
-                <Text style={[styles.metaValue, { color: theme.colors.text }]} numberOfLines={1}>{room.topic}</Text>
+                <Text style={[styles.metaValue, { color: theme.colors.text }]} numberOfLines={1}>
+                  {room.topic}
+                </Text>
               </View>
             )}
           </View>
@@ -166,7 +205,13 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 22, fontWeight: '700' },
   statLabel: { fontSize: 12, fontWeight: '500' },
   breakdownSection: { marginTop: 20, gap: 8 },
-  sectionTitle: { fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
   breakdownRow: {
     flexDirection: 'row',
     alignItems: 'center',

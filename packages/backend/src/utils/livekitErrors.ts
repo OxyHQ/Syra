@@ -93,7 +93,8 @@ export function mapLiveKitIngressError(error: unknown): MappedLiveKitIngressErro
     return {
       statusCode: 400,
       code: 'STREAM_SOURCE_REJECTED',
-      message: 'LiveKit could not start from that URL. Use a direct HLS (.m3u8), Icecast, or media file URL.',
+      message:
+        'LiveKit could not start from that URL. Use a direct HLS (.m3u8), Icecast, or media file URL.',
       liveKit,
     };
   }
@@ -111,7 +112,8 @@ export function mapLiveKitIngressError(error: unknown): MappedLiveKitIngressErro
     return {
       statusCode: 400,
       code: 'STREAM_SOURCE_REJECTED',
-      message: 'LiveKit could not start from that URL. Use a direct HLS (.m3u8), Icecast, or media file URL.',
+      message:
+        'LiveKit could not start from that URL. Use a direct HLS (.m3u8), Icecast, or media file URL.',
       liveKit,
     };
   }

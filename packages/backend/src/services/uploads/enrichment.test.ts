@@ -120,7 +120,9 @@ describe('enrichmentHttp — caching', () => {
 describe('htmlToPlainText', () => {
   it('strips the markup Commons wraps an attribution in', () => {
     expect(
-      htmlToPlainText('<a href="//commons.wikimedia.org/wiki/User:X" title="User:X">Bo&nbsp;Trenter</a>'),
+      htmlToPlainText(
+        '<a href="//commons.wikimedia.org/wiki/User:X" title="User:X">Bo&nbsp;Trenter</a>',
+      ),
     ).toBe('Bo Trenter');
     expect(htmlToPlainText('Jane &amp; John <b>Doe</b>')).toBe('Jane & John Doe');
     expect(htmlToPlainText('a<br/>b')).toBe('a b');
@@ -330,14 +332,28 @@ describe('coverArtArchive', () => {
 
   it('ignores a back cover — wrong art is worse than none', async () => {
     setEnrichmentFetchForTests(async () => ({
-      images: [{ image: 'https://coverartarchive.org/a.jpg', front: false, types: ['Back'], approved: true }],
+      images: [
+        {
+          image: 'https://coverartarchive.org/a.jpg',
+          front: false,
+          types: ['Back'],
+          approved: true,
+        },
+      ],
     }));
     expect(await fetchCoverArtForRelease('31765b9f-e969-4257-855f-c7ea1f657b2a')).toBeUndefined();
   });
 
   it('ignores an unapproved image', async () => {
     setEnrichmentFetchForTests(async () => ({
-      images: [{ image: 'https://coverartarchive.org/a.jpg', front: true, types: ['Front'], approved: false }],
+      images: [
+        {
+          image: 'https://coverartarchive.org/a.jpg',
+          front: true,
+          types: ['Front'],
+          approved: false,
+        },
+      ],
     }));
     // An unapproved image is a pending edit — anything a contributor uploaded
     // minutes ago, not artwork the archive stands behind.
@@ -352,7 +368,10 @@ describe('coverArtArchive', () => {
           front: true,
           types: ['Front'],
           approved: true,
-          thumbnails: { '250': 'https://coverartarchive.org/250.jpg', '1200': 'https://coverartarchive.org/1200.jpg' },
+          thumbnails: {
+            '250': 'https://coverartarchive.org/250.jpg',
+            '1200': 'https://coverartarchive.org/1200.jpg',
+          },
         },
       ],
     }));
@@ -362,7 +381,14 @@ describe('coverArtArchive', () => {
 
   it('falls back to the original when no thumbnail was generated', async () => {
     setEnrichmentFetchForTests(async () => ({
-      images: [{ image: 'https://coverartarchive.org/full.jpg', front: true, types: ['Front'], approved: true }],
+      images: [
+        {
+          image: 'https://coverartarchive.org/full.jpg',
+          front: true,
+          types: ['Front'],
+          approved: true,
+        },
+      ],
     }));
     const cover = await fetchCoverArtForRelease('31765b9f-e969-4257-855f-c7ea1f657b2a');
     expect(cover?.url).toBe('https://coverartarchive.org/full.jpg');

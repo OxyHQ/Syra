@@ -65,7 +65,7 @@ const OLD_MODULES = [
 
 /** Absolute path of each old module, without extension. */
 const OLD_MODULE_PATHS = new Map(
-  OLD_MODULES.map((module) => [resolve(SOURCE_DIR, module), module] as const)
+  OLD_MODULES.map((module) => [resolve(SOURCE_DIR, module), module] as const),
 );
 
 /** The directory holding the drizzle replacements. */
@@ -119,7 +119,12 @@ function readImports(source: string): ImportRecord[] {
     const [, braced, specifier] = match;
     const names = (braced ?? '')
       .split(',')
-      .map((entry) => entry.replace(/^\s*type\s+/, '').split(/\s+as\s+/)[0].trim())
+      .map((entry) =>
+        entry
+          .replace(/^\s*type\s+/, '')
+          .split(/\s+as\s+/)[0]
+          .trim(),
+      )
       .filter((entry) => entry.length > 0);
     records.push({ specifier, names });
   }
@@ -138,7 +143,7 @@ function readImports(source: string): ImportRecord[] {
 function halfPortedImport(
   imports: readonly ImportRecord[],
   fromDir: string,
-  exemptions: ExemptSymbols = UNPORTED_SYMBOLS
+  exemptions: ExemptSymbols = UNPORTED_SYMBOLS,
 ): { module: string; name: string } | null {
   const resolved = imports.map((entry) => ({
     ...entry,
@@ -338,10 +343,13 @@ describe('no file holds half of the catalog port', () => {
 
   /** The same case in both spellings: `../utils/x` from elsewhere, `./x` from within. */
   function bothSpellings(
-    build: (oldModule: string, newModule: string) => string
+    build: (oldModule: string, newModule: string) => string,
   ): { source: string; fromDir: string }[] {
     return [
-      { source: build('../utils/catalogVisibility', '../db/catalog/visibility'), fromDir: FROM_CONTROLLER },
+      {
+        source: build('../utils/catalogVisibility', '../db/catalog/visibility'),
+        fromDir: FROM_CONTROLLER,
+      },
       { source: build('./catalogVisibility', '../db/catalog/visibility'), fromDir: FROM_UTILS },
     ];
   }
@@ -351,10 +359,10 @@ describe('no file holds half of the catalog port', () => {
       (oldModule, newModule) => `
         import { playableTrackFilter } from '${oldModule}';
         import { toTrackDto } from '${newModule}';
-      `
+      `,
     )) {
       expect(`${fromDir}: ${JSON.stringify(halfPortedImport(readImports(source), fromDir))}`).toBe(
-        `${fromDir}: ${JSON.stringify({ module: 'utils/catalogVisibility', name: 'playableTrackFilter' })}`
+        `${fromDir}: ${JSON.stringify({ module: 'utils/catalogVisibility', name: 'playableTrackFilter' })}`,
       );
     }
   });
@@ -377,7 +385,7 @@ describe('no file holds half of the catalog port', () => {
     // accident until membership was decided by the importing file's location.
     const source = `import { isPlayableTrack } from '../../utils/catalogVisibility';`;
     expect(halfPortedImport(readImports(source), FROM_DB_CATALOG)?.module).toBe(
-      'utils/catalogVisibility'
+      'utils/catalogVisibility',
     );
   });
 
@@ -395,15 +403,17 @@ describe('no file holds half of the catalog port', () => {
       import { toAlbumDto } from '../db/catalog/serialize';
     `;
     expect(halfPortedImport(readImports(source), FROM_CONTROLLER)?.module).toBe(
-      'utils/musicHelpers'
+      'utils/musicHelpers',
     );
   });
 
   it('allows a file still entirely on the old side, in either spelling', () => {
     for (const { source, fromDir } of bothSpellings(
-      (oldModule) => `import { playableTrackFilter } from '${oldModule}';`
+      (oldModule) => `import { playableTrackFilter } from '${oldModule}';`,
     )) {
-      expect(`${fromDir}: ${halfPortedImport(readImports(source), fromDir)}`).toBe(`${fromDir}: null`);
+      expect(`${fromDir}: ${halfPortedImport(readImports(source), fromDir)}`).toBe(
+        `${fromDir}: null`,
+      );
     }
   });
 
@@ -439,10 +449,10 @@ describe('no file holds half of the catalog port', () => {
       (oldModule, newModule) => `
         import { getRequestUserId } from '${oldModule}';
         import { playableTrackFilter } from '${newModule}';
-      `
+      `,
     )) {
       expect(
-        `${fromDir}: ${halfPortedImport(readImports(source), fromDir, SYNTHETIC_EXEMPTIONS)}`
+        `${fromDir}: ${halfPortedImport(readImports(source), fromDir, SYNTHETIC_EXEMPTIONS)}`,
       ).toBe(`${fromDir}: null`);
     }
   });
@@ -452,9 +462,9 @@ describe('no file holds half of the catalog port', () => {
       import { getRequestUserId, canViewPlaylist } from '../utils/catalogVisibility';
       import { playableTrackFilter } from '../db/catalog/visibility';
     `;
-    expect(
-      halfPortedImport(readImports(source), FROM_CONTROLLER, SYNTHETIC_EXEMPTIONS)?.name
-    ).toBe('canViewPlaylist');
+    expect(halfPortedImport(readImports(source), FROM_CONTROLLER, SYNTHETIC_EXEMPTIONS)?.name).toBe(
+      'canViewPlaylist',
+    );
   });
 
   /**
@@ -483,9 +493,9 @@ describe('no file holds half of the catalog port', () => {
       import { getRequestUserIdAndMore } from '../utils/catalogVisibility';
       import { playableTrackFilter } from '../db/catalog/visibility';
     `;
-    expect(
-      halfPortedImport(readImports(source), FROM_CONTROLLER, SYNTHETIC_EXEMPTIONS)?.name
-    ).toBe('getRequestUserIdAndMore');
+    expect(halfPortedImport(readImports(source), FROM_CONTROLLER, SYNTHETIC_EXEMPTIONS)?.name).toBe(
+      'getRequestUserIdAndMore',
+    );
   });
 
   it('flags an explicit-extension specifier, in every spelling TS accepts', () => {
@@ -498,7 +508,7 @@ describe('no file holds half of the catalog port', () => {
         import { playableTrackFilter } from '../db/catalog/visibility';
       `;
       expect(`${extension}: ${halfPortedImport(readImports(source), FROM_UTILS)?.name}`).toBe(
-        `${extension}: isPlayableTrack`
+        `${extension}: isPlayableTrack`,
       );
     }
   });
@@ -540,8 +550,8 @@ describe('the Mongoose modules still standing', () => {
     return sourceFiles(SOURCE_DIR)
       .filter((file) =>
         readImports(readFileSync(file, 'utf8')).some(
-          (entry) => resolveSpecifier(entry.specifier, dirname(file)) === target
-        )
+          (entry) => resolveSpecifier(entry.specifier, dirname(file)) === target,
+        ),
       )
       .map((file) => relative(SOURCE_DIR, file))
       .sort();
@@ -549,7 +559,7 @@ describe('the Mongoose modules still standing', () => {
 
   it('every registered survivor still exists', () => {
     const vanished = Object.keys(SURVIVING_MONGOOSE_MODULES).filter(
-      (module) => !moduleExists(module)
+      (module) => !moduleExists(module),
     );
     expect(vanished).toEqual([]);
   });
@@ -570,7 +580,7 @@ describe('the Mongoose modules still standing', () => {
   it('every registered survivor is imported by exactly the files recorded', () => {
     for (const [module, entry] of Object.entries(SURVIVING_MONGOOSE_MODULES)) {
       expect(`${module}: ${importersOf(module).join(', ')}`).toBe(
-        `${module}: ${[...entry.importers].sort().join(', ')}`
+        `${module}: ${[...entry.importers].sort().join(', ')}`,
       );
     }
   });
@@ -586,7 +596,7 @@ describe('the Mongoose modules still standing', () => {
     // register itself.
     const registered = new Set(Object.keys(SURVIVING_MONGOOSE_MODULES));
     const shouldBeGone = OLD_MODULES.filter(
-      (module) => !registered.has(module) && moduleExists(module)
+      (module) => !registered.has(module) && moduleExists(module),
     );
     expect(shouldBeGone).toEqual([]);
   });

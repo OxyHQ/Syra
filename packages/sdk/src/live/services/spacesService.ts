@@ -1,5 +1,13 @@
 import type { Room, Recording, House, HouseVisibility, HttpClient } from '../types';
-import { validateRooms, validateRoom, validateRecordings, validateRecording, validateHouse, ZStartStreamResponse, ZGenerateStreamKeyResponse } from '../validation';
+import {
+  validateRooms,
+  validateRoom,
+  validateRecordings,
+  validateRecording,
+  validateHouse,
+  ZStartStreamResponse,
+  ZGenerateStreamKeyResponse,
+} from '../validation';
 
 export interface CreateRoomData {
   [key: string]: unknown;
@@ -98,7 +106,10 @@ const PODCAST_PAGE_SIZE = 20;
 // `/podcasts/:id/episodes`) — the raw show/episode shape, NOT Mention's
 // pre-mapped `/profile/media/*` proxy. Map `id`→`syraPodcastId`, the absolute
 // `imageSourceUrl`→`artworkUrl`, `duration`/`pubDate`→`durationSec`/`publishedAt`.
-function parsePodcastSearchResponse(data: Record<string, unknown>, requestedOffset: number): PaginatedResult<PodcastResult> {
+function parsePodcastSearchResponse(
+  data: Record<string, unknown>,
+  requestedOffset: number,
+): PaginatedResult<PodcastResult> {
   const raw = Array.isArray(data.data) ? data.data : [];
   const items: PodcastResult[] = [];
   for (const entry of raw) {
@@ -118,7 +129,10 @@ function parsePodcastSearchResponse(data: Record<string, unknown>, requestedOffs
   };
 }
 
-function parseEpisodeListResponse(data: Record<string, unknown>, requestedOffset: number): PaginatedResult<EpisodeListItem> {
+function parseEpisodeListResponse(
+  data: Record<string, unknown>,
+  requestedOffset: number,
+): PaginatedResult<EpisodeListItem> {
   const raw = Array.isArray(data.data) ? data.data : [];
   const items: EpisodeListItem[] = [];
   for (const entry of raw) {
@@ -146,7 +160,10 @@ function parseEpisodeListResponse(data: Record<string, unknown>, requestedOffset
  * caller (`offset + items.length`). Each track's `coverArt` is the server's image
  * ref — the host's `AvatarComponent` resolves it, mirroring the podcast rows.
  */
-function parseMusicSearchResponse(data: Record<string, unknown>, requestedOffset: number): PaginatedResult<MusicTrackResult> {
+function parseMusicSearchResponse(
+  data: Record<string, unknown>,
+  requestedOffset: number,
+): PaginatedResult<MusicTrackResult> {
   const raw = Array.isArray(data.tracks) ? data.tracks : [];
   const items: MusicTrackResult[] = [];
   for (const entry of raw) {
@@ -186,11 +203,11 @@ export function createRoomsService(httpClient: HttpClient) {
         const params: Record<string, string> = {};
         if (status) params.status = status;
         if (type) params.type = type;
-        const res = await httpClient.get("/rooms", { params });
+        const res = await httpClient.get('/rooms', { params });
         const raw = res.rooms || res.data || res || [];
         return validateRooms(Array.isArray(raw) ? raw : []);
       } catch (error) {
-        console.warn("Failed to fetch rooms", error);
+        console.warn('Failed to fetch rooms', error);
         return [];
       }
     },
@@ -202,18 +219,18 @@ export function createRoomsService(httpClient: HttpClient) {
         const raw = res.room || res.data || res || null;
         return raw ? validateRoom(raw) : null;
       } catch (error) {
-        console.warn("Failed to fetch room", error);
+        console.warn('Failed to fetch room', error);
         return null;
       }
     },
 
     async createRoom(data: CreateRoomData): Promise<Room | null> {
       try {
-        const res = await httpClient.post("/rooms", data);
+        const res = await httpClient.post('/rooms', data);
         const raw = res.room || res.data || res || null;
         return raw ? validateRoom(raw) : null;
       } catch (error) {
-        console.warn("Failed to create room", error);
+        console.warn('Failed to create room', error);
         return null;
       }
     },
@@ -224,7 +241,7 @@ export function createRoomsService(httpClient: HttpClient) {
         await httpClient.post(`/rooms/${id}/start`);
         return true;
       } catch (error) {
-        console.warn("Failed to start room", error);
+        console.warn('Failed to start room', error);
         return false;
       }
     },
@@ -235,7 +252,7 @@ export function createRoomsService(httpClient: HttpClient) {
         await httpClient.post(`/rooms/${id}/end`);
         return true;
       } catch (error) {
-        console.warn("Failed to end room", error);
+        console.warn('Failed to end room', error);
         return false;
       }
     },
@@ -246,7 +263,7 @@ export function createRoomsService(httpClient: HttpClient) {
         await httpClient.post(`/rooms/${id}/stop`);
         return true;
       } catch (error) {
-        console.warn("Failed to stop room", error);
+        console.warn('Failed to stop room', error);
         return false;
       }
     },
@@ -257,7 +274,7 @@ export function createRoomsService(httpClient: HttpClient) {
         await httpClient.post(`/rooms/${id}/join`);
         return true;
       } catch (error) {
-        console.warn("Failed to join room", error);
+        console.warn('Failed to join room', error);
         return false;
       }
     },
@@ -268,12 +285,15 @@ export function createRoomsService(httpClient: HttpClient) {
         await httpClient.post(`/rooms/${id}/leave`);
         return true;
       } catch (error) {
-        console.warn("Failed to leave room", error);
+        console.warn('Failed to leave room', error);
         return false;
       }
     },
 
-    async startStream(id: string, data: { url: string; title?: string; image?: string; description?: string }): Promise<{ ingressId: string; url: string } | null> {
+    async startStream(
+      id: string,
+      data: { url: string; title?: string; image?: string; description?: string },
+    ): Promise<{ ingressId: string; url: string } | null> {
       if (!id) return null;
       try {
         const res = await httpClient.post(`/rooms/${id}/stream`, data);
@@ -284,12 +304,15 @@ export function createRoomsService(httpClient: HttpClient) {
         }
         return parsed.data;
       } catch (error) {
-        console.warn("Failed to start stream", error);
+        console.warn('Failed to start stream', error);
         return null;
       }
     },
 
-    async generateStreamKey(id: string, data?: { title?: string; image?: string; description?: string }): Promise<{ rtmpUrl: string; streamKey: string } | null> {
+    async generateStreamKey(
+      id: string,
+      data?: { title?: string; image?: string; description?: string },
+    ): Promise<{ rtmpUrl: string; streamKey: string } | null> {
       if (!id) return null;
       try {
         const res = await httpClient.post(`/rooms/${id}/stream/rtmp`, data || {});
@@ -300,7 +323,7 @@ export function createRoomsService(httpClient: HttpClient) {
         }
         return parsed.data;
       } catch (error) {
-        console.warn("Failed to generate stream key", error);
+        console.warn('Failed to generate stream key', error);
         return null;
       }
     },
@@ -311,7 +334,7 @@ export function createRoomsService(httpClient: HttpClient) {
         await httpClient.patch(`/rooms/${id}/stream`, data);
         return true;
       } catch (error) {
-        console.warn("Failed to update stream metadata", error);
+        console.warn('Failed to update stream metadata', error);
         return false;
       }
     },
@@ -322,7 +345,7 @@ export function createRoomsService(httpClient: HttpClient) {
         await httpClient.delete(`/rooms/${id}/stream`);
         return true;
       } catch (error) {
-        console.warn("Failed to stop stream", error);
+        console.warn('Failed to stop stream', error);
         return false;
       }
     },
@@ -336,28 +359,38 @@ export function createRoomsService(httpClient: HttpClient) {
         });
         return { ok: true, ...parsePodcastSearchResponse(res, offset) };
       } catch (error) {
-        console.warn("Failed to search podcasts", error);
+        console.warn('Failed to search podcasts', error);
         return { ok: false };
       }
     },
 
-    async getPodcastEpisodes(syraPodcastId: string, offset = 0): Promise<PodcastFetchResult<EpisodeListItem>> {
+    async getPodcastEpisodes(
+      syraPodcastId: string,
+      offset = 0,
+    ): Promise<PodcastFetchResult<EpisodeListItem>> {
       // An empty id is not a failure — it is simply an empty (successful) result.
       if (!syraPodcastId) return { ok: true, items: [], hasMore: false, offset };
       try {
         const res = await httpClient.get(`/podcasts/${syraPodcastId}/episodes`, {
-          params: { page: String(Math.floor(offset / PODCAST_PAGE_SIZE) + 1), limit: String(PODCAST_PAGE_SIZE) },
+          params: {
+            page: String(Math.floor(offset / PODCAST_PAGE_SIZE) + 1),
+            limit: String(PODCAST_PAGE_SIZE),
+          },
         });
         return { ok: true, ...parseEpisodeListResponse(res, offset) };
       } catch (error) {
-        console.warn("Failed to fetch podcast episodes", error);
+        console.warn('Failed to fetch podcast episodes', error);
         return { ok: false };
       }
     },
 
     async startPodcastStream(
       roomId: string,
-      body: { syraPodcastId: string; episodeId: string; queue?: { syraPodcastId?: string; episodeId: string }[] },
+      body: {
+        syraPodcastId: string;
+        episodeId: string;
+        queue?: { syraPodcastId?: string; episodeId: string }[];
+      },
     ): Promise<{ ingressId: string; url: string } | null> {
       if (!roomId) return null;
       try {
@@ -369,7 +402,7 @@ export function createRoomsService(httpClient: HttpClient) {
         }
         return parsed.data;
       } catch (error) {
-        console.warn("Failed to start podcast stream", error);
+        console.warn('Failed to start podcast stream', error);
         return null;
       }
     },
@@ -390,7 +423,7 @@ export function createRoomsService(httpClient: HttpClient) {
         console.warn('[live] Invalid skipPodcastNext response:', parsed.error.issues[0]);
         return null;
       } catch (error) {
-        console.warn("Failed to skip to next podcast episode", error);
+        console.warn('Failed to skip to next podcast episode', error);
         return null;
       }
     },
@@ -410,7 +443,7 @@ export function createRoomsService(httpClient: HttpClient) {
         });
         return { ok: true, ...parseMusicSearchResponse(res, offset) };
       } catch (error) {
-        console.warn("Failed to search music", error);
+        console.warn('Failed to search music', error);
         return { ok: false };
       }
     },
@@ -435,7 +468,7 @@ export function createRoomsService(httpClient: HttpClient) {
         }
         return parsed.data;
       } catch (error) {
-        console.warn("Failed to start track stream", error);
+        console.warn('Failed to start track stream', error);
         return null;
       }
     },
@@ -446,7 +479,7 @@ export function createRoomsService(httpClient: HttpClient) {
         await httpClient.delete(`/rooms/${id}`);
         return true;
       } catch (error) {
-        console.warn("Failed to delete room", error);
+        console.warn('Failed to delete room', error);
         return false;
       }
     },
@@ -460,7 +493,7 @@ export function createRoomsService(httpClient: HttpClient) {
           archived: res.archived !== undefined ? Boolean(res.archived) : true,
         };
       } catch (error) {
-        console.warn("Failed to archive room", error);
+        console.warn('Failed to archive room', error);
         return { success: false, archived: false };
       }
     },
@@ -469,14 +502,12 @@ export function createRoomsService(httpClient: HttpClient) {
       try {
         const params: Record<string, string> = {};
         if (search) params.search = search;
-        const res = await httpClient.get("/houses", { params });
+        const res = await httpClient.get('/houses', { params });
         const raw = res.houses || res.data || res || [];
         const items = Array.isArray(raw) ? raw : [];
-        return items
-          .map((h: unknown) => validateHouse(h))
-          .filter((h): h is House => h !== null);
+        return items.map((h: unknown) => validateHouse(h)).filter((h): h is House => h !== null);
       } catch (error) {
-        console.warn("Failed to fetch houses", error);
+        console.warn('Failed to fetch houses', error);
         return [];
       }
     },
@@ -488,7 +519,7 @@ export function createRoomsService(httpClient: HttpClient) {
         const raw = res.house || res.data || res || null;
         return raw ? validateHouse(raw) : null;
       } catch (error) {
-        console.warn("Failed to fetch house", error);
+        console.warn('Failed to fetch house', error);
         return null;
       }
     },
@@ -499,10 +530,10 @@ export function createRoomsService(httpClient: HttpClient) {
         const houses = await this.getHouses();
         const ROLE_HIERARCHY: Record<string, number> = { member: 0, host: 1, admin: 2, owner: 3 };
         return houses.filter((h) =>
-          h.members.some((m) => m.userId === userId && (ROLE_HIERARCHY[m.role] ?? 0) >= 1)
+          h.members.some((m) => m.userId === userId && (ROLE_HIERARCHY[m.role] ?? 0) >= 1),
         );
       } catch (error) {
-        console.warn("Failed to fetch user houses", error);
+        console.warn('Failed to fetch user houses', error);
         return [];
       }
     },
@@ -511,11 +542,9 @@ export function createRoomsService(httpClient: HttpClient) {
       if (!userId) return [];
       try {
         const houses = await this.getHouses();
-        return houses.filter((h) =>
-          h.members.some((m) => m.userId === userId)
-        );
+        return houses.filter((h) => h.members.some((m) => m.userId === userId));
       } catch (error) {
-        console.warn("Failed to fetch user houses", error);
+        console.warn('Failed to fetch user houses', error);
         return [];
       }
     },
@@ -529,7 +558,7 @@ export function createRoomsService(httpClient: HttpClient) {
         const raw = res.rooms || res.data || res || [];
         return validateRooms(Array.isArray(raw) ? raw : []);
       } catch (error) {
-        console.warn("Failed to fetch house rooms", error);
+        console.warn('Failed to fetch house rooms', error);
         return [];
       }
     },
@@ -542,7 +571,7 @@ export function createRoomsService(httpClient: HttpClient) {
         await httpClient.post(`/rooms/${roomId}/recording/start`);
         return true;
       } catch (error) {
-        console.warn("Failed to start recording", error);
+        console.warn('Failed to start recording', error);
         return false;
       }
     },
@@ -553,7 +582,7 @@ export function createRoomsService(httpClient: HttpClient) {
         await httpClient.post(`/rooms/${roomId}/recording/stop`);
         return true;
       } catch (error) {
-        console.warn("Failed to stop recording", error);
+        console.warn('Failed to stop recording', error);
         return false;
       }
     },
@@ -565,29 +594,34 @@ export function createRoomsService(httpClient: HttpClient) {
         const raw = res.recordings || [];
         return validateRecordings(Array.isArray(raw) ? raw : []);
       } catch (error) {
-        console.warn("Failed to fetch recordings", error);
+        console.warn('Failed to fetch recordings', error);
         return [];
       }
     },
 
-    async getRecording(recordingId: string): Promise<{ recording: Recording; playbackUrl: string } | null> {
+    async getRecording(
+      recordingId: string,
+    ): Promise<{ recording: Recording; playbackUrl: string } | null> {
       if (!recordingId) return null;
       try {
         const res = await httpClient.get(`/recordings/${recordingId}`);
         return parseRecordingResponse(res);
       } catch (error) {
-        console.warn("Failed to fetch recording", error);
+        console.warn('Failed to fetch recording', error);
         return null;
       }
     },
 
-    async updateRecordingAccess(recordingId: string, access: 'public' | 'participants'): Promise<boolean> {
+    async updateRecordingAccess(
+      recordingId: string,
+      access: 'public' | 'participants',
+    ): Promise<boolean> {
       if (!recordingId) return false;
       try {
         await httpClient.patch(`/recordings/${recordingId}`, { access });
         return true;
       } catch (error) {
-        console.warn("Failed to update recording access", error);
+        console.warn('Failed to update recording access', error);
         return false;
       }
     },
@@ -598,7 +632,7 @@ export function createRoomsService(httpClient: HttpClient) {
         await httpClient.delete(`/recordings/${recordingId}`);
         return true;
       } catch (error) {
-        console.warn("Failed to delete recording", error);
+        console.warn('Failed to delete recording', error);
         return false;
       }
     },
@@ -608,35 +642,40 @@ export function createRoomsService(httpClient: HttpClient) {
         const params: Record<string, string> = {};
         if (sortBy) params.sortBy = sortBy;
         if (limit) params.limit = String(limit);
-        const res = await httpClient.get("/recordings", { params });
+        const res = await httpClient.get('/recordings', { params });
         const raw = res.recordings || res.data || res || [];
         return validateRecordings(Array.isArray(raw) ? raw : []);
       } catch (error) {
-        console.warn("Failed to fetch recordings", error);
+        console.warn('Failed to fetch recordings', error);
         return [];
       }
     },
 
     async getTopHosts(): Promise<{ userId: string; roomCount: number; totalListeners: number }[]> {
       try {
-        const res = await httpClient.get("/rooms/top-hosts");
+        const res = await httpClient.get('/rooms/top-hosts');
         const raw = res.hosts || res.data || res || [];
         return Array.isArray(raw) ? raw : [];
       } catch (error) {
-        console.warn("Failed to fetch top hosts", error);
+        console.warn('Failed to fetch top hosts', error);
         return [];
       }
     },
 
     // --- Houses ---
 
-    async createHouse(data: { name: string; description?: string; tags?: string[]; visibility?: Partial<HouseVisibility> }): Promise<House | null> {
+    async createHouse(data: {
+      name: string;
+      description?: string;
+      tags?: string[];
+      visibility?: Partial<HouseVisibility>;
+    }): Promise<House | null> {
       try {
-        const res = await httpClient.post("/houses", data);
+        const res = await httpClient.post('/houses', data);
         const raw = res.house || res.data || res || null;
         return raw ? validateHouse(raw) : null;
       } catch (error) {
-        console.warn("Failed to create house", error);
+        console.warn('Failed to create house', error);
         return null;
       }
     },
@@ -649,7 +688,7 @@ export function createRoomsService(httpClient: HttpClient) {
         const res = await httpClient.post(`/houses/${houseId}/avatar`, formData);
         return (res.avatar as string) || null;
       } catch (error) {
-        console.warn("Failed to upload house avatar", error);
+        console.warn('Failed to upload house avatar', error);
         return null;
       }
     },
@@ -660,7 +699,7 @@ export function createRoomsService(httpClient: HttpClient) {
         const res = await httpClient.post(`/houses/${houseId}/cover`, formData);
         return (res.coverImage as string) || null;
       } catch (error) {
-        console.warn("Failed to upload house cover", error);
+        console.warn('Failed to upload house cover', error);
         return null;
       }
     },
@@ -671,7 +710,7 @@ export function createRoomsService(httpClient: HttpClient) {
         const res = await httpClient.post(`/rooms/${roomId}/image`, formData);
         return (res.streamImage as string) || null;
       } catch (error) {
-        console.warn("Failed to upload room image", error);
+        console.warn('Failed to upload room image', error);
         return null;
       }
     },
@@ -682,7 +721,7 @@ export function createRoomsService(httpClient: HttpClient) {
         const res = await httpClient.post(`/series/${seriesId}/cover`, formData);
         return (res.coverImage as string) || null;
       } catch (error) {
-        console.warn("Failed to upload series cover", error);
+        console.warn('Failed to upload series cover', error);
         return null;
       }
     },

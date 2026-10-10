@@ -139,7 +139,7 @@ interface ImageSizeIds {
 
 function toImageSizes(
   ids: ImageSizeIds,
-  lookup: ImageVariantLookup
+  lookup: ImageVariantLookup,
 ): CatalogImageSizes | undefined {
   return compact({
     small: lookup(ids.small),
@@ -181,7 +181,7 @@ export function podcastArtwork(row: PodcastRow, lookup: ImageVariantLookup): Pod
         xxlarge: row.imageSizesXxlargeId,
         original: row.imageSizesOriginalId,
       },
-      lookup
+      lookup,
     ),
     imageSourceUrl: optional(row.imageSourceUrl),
     primaryColor: optional(row.primaryColor),
@@ -244,7 +244,7 @@ export interface PodcastDtoContext {
 export function toPodcastDto(
   row: PodcastRow,
   lookup: ImageVariantLookup,
-  context: PodcastDtoContext
+  context: PodcastDtoContext,
 ): Podcast {
   const artwork = podcastArtwork(row, lookup);
   const { viewer } = context;
@@ -255,8 +255,7 @@ export function toPodcastDto(
    * content, so it is only published for a show that is `public`. The owner
    * always sees it: they need it to submit the show to a directory.
    */
-  const feedUrl =
-    viewer.isOwner || row.visibility === 'public' ? optional(row.feedUrl) : undefined;
+  const feedUrl = viewer.isOwner || row.visibility === 'public' ? optional(row.feedUrl) : undefined;
 
   return {
     id: row.id,
@@ -338,7 +337,7 @@ export function toEpisodeDto(
   row: EpisodeRow,
   lookup: ImageVariantLookup,
   showArtwork: PodcastArtwork | undefined,
-  context: EpisodeDtoContext
+  context: EpisodeDtoContext,
 ): Episode {
   /**
    * Artwork inheritance: `row.imageId` — the re-hosted Syra cover — is the
@@ -362,7 +361,7 @@ export function toEpisodeDto(
             xxlarge: row.imageSizesXxlargeId,
             original: row.imageSizesOriginalId,
           },
-          lookup
+          lookup,
         ),
         imageSourceUrl: optional(row.imageSourceUrl),
         primaryColor: optional(row.primaryColor),

@@ -41,14 +41,30 @@ export function unescapeCopyValue(raw: string | undefined): string | undefined {
     }
     i += 1;
     switch (raw[i]) {
-      case 'b': out += '\b'; break;
-      case 'f': out += '\f'; break;
-      case 'n': out += '\n'; break;
-      case 'r': out += '\r'; break;
-      case 't': out += '\t'; break;
-      case 'v': out += '\v'; break;
-      case '\\': out += '\\'; break;
-      default: out += raw[i] ?? ''; break;
+      case 'b':
+        out += '\b';
+        break;
+      case 'f':
+        out += '\f';
+        break;
+      case 'n':
+        out += '\n';
+        break;
+      case 'r':
+        out += '\r';
+        break;
+      case 't':
+        out += '\t';
+        break;
+      case 'v':
+        out += '\v';
+        break;
+      case '\\':
+        out += '\\';
+        break;
+      default:
+        out += raw[i] ?? '';
+        break;
     }
   }
   return out;

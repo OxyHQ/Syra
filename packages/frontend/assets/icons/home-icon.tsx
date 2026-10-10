@@ -3,8 +3,15 @@ import Svg, { Path, Line, Polygon } from 'react-native-svg';
 import { ViewStyle } from 'react-native';
 import { useTheme } from '@oxy.so/bloom/theme';
 
-
-export const Home = ({ color: colorProp, size = 26, style }: { color?: string; size?: number; style?: ViewStyle }) => {
+export const Home = ({
+  color: colorProp,
+  size = 26,
+  style,
+}: {
+  color?: string;
+  size?: number;
+  style?: ViewStyle;
+}) => {
   const theme = useTheme();
   const color = colorProp ?? theme.colors.icon;
   return (
@@ -20,7 +27,15 @@ export const Home = ({ color: colorProp, size = 26, style }: { color?: string; s
   );
 };
 
-export const HomeActive = ({ color: colorProp, size = 26, style }: { color?: string; size?: number; style?: ViewStyle }) => {
+export const HomeActive = ({
+  color: colorProp,
+  size = 26,
+  style,
+}: {
+  color?: string;
+  size?: number;
+  style?: ViewStyle;
+}) => {
   const theme = useTheme();
   const color = colorProp ?? theme.colors.icon;
   return (

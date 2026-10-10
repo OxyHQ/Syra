@@ -192,9 +192,7 @@ export const AppProviders = memo(function AppProviders({
                   <BottomSheetProvider>
                     <MenuProvider>
                       <HomeRefreshProvider>
-                        <LiveRoomsProvider>
-                          {children}
-                        </LiveRoomsProvider>
+                        <LiveRoomsProvider>{children}</LiveRoomsProvider>
                         <StatusBar style="auto" />
                         {/* Mounted once for the whole app, after `children` so it
                             overlays content. Toasts are rendered by the single

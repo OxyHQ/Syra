@@ -33,7 +33,10 @@ type FakeSocket = { active: boolean; connected: boolean; disconnect: () => void 
 
 function withSocket(socket: FakeSocket | null): { disconnected: () => boolean } {
   let disconnected = false;
-  if (socket) socket.disconnect = () => { disconnected = true; };
+  if (socket)
+    socket.disconnect = () => {
+      disconnected = true;
+    };
   // The service holds its socket privately; this is the one place a test needs
   // to reach it, so the cast is narrow and local rather than an `any` on the API.
   (playerSocketService as unknown as { socket: FakeSocket | null }).socket = socket;

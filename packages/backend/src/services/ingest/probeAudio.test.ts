@@ -7,8 +7,12 @@ import path from 'path';
 import { probeAudio } from './probeAudio';
 
 function hasBinary(name: string): boolean {
-  try { execFileSync('which', [name], { stdio: 'ignore' }); return true; }
-  catch { return false; }
+  try {
+    execFileSync('which', [name], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
 }
 const MEDIA_TOOLS_AVAILABLE = ['ffmpeg', 'ffprobe'].every(hasBinary);
 
@@ -30,16 +34,25 @@ beforeAll(async () => {
   mp3Path = path.join(tmpDir, 'input.mp3');
   notAudioPath = path.join(tmpDir, 'not-audio.mp3');
 
-  await execFile('ffmpeg', [
-    '-nostdin',
-    '-f', 'lavfi',
-    '-i', `sine=frequency=440:duration=${FIXTURE_DURATION_SEC}:sample_rate=${FIXTURE_SAMPLE_RATE}`,
-    '-ac', String(FIXTURE_CHANNELS),
-    '-c:a', 'libmp3lame',
-    '-b:a', `${FIXTURE_BITRATE_KBPS}k`,
-    mp3Path,
-    '-y',
-  ], { maxBuffer: 8 * 1024 * 1024 });
+  await execFile(
+    'ffmpeg',
+    [
+      '-nostdin',
+      '-f',
+      'lavfi',
+      '-i',
+      `sine=frequency=440:duration=${FIXTURE_DURATION_SEC}:sample_rate=${FIXTURE_SAMPLE_RATE}`,
+      '-ac',
+      String(FIXTURE_CHANNELS),
+      '-c:a',
+      'libmp3lame',
+      '-b:a',
+      `${FIXTURE_BITRATE_KBPS}k`,
+      mp3Path,
+      '-y',
+    ],
+    { maxBuffer: 8 * 1024 * 1024 },
+  );
 
   // An .mp3 extension over bytes that are not audio at all — the shape a
   // hand-renamed or truncated upload takes.

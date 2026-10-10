@@ -79,11 +79,10 @@ function readLicence(
   // `Artist` is the author, as an HTML fragment (usually an anchor to a user
   // page). `Credit` is the source. Either can stand as the attribution; a file
   // with neither cannot be attributed, so it cannot be used.
-  const attribution =
-    (readField('Artist') ?? readField('Credit') ?? readField('Attribution'))
-      ?.split('\n')
-      .map((line) => htmlToPlainText(line))
-      .find((line) => line.length > 0);
+  const attribution = (readField('Artist') ?? readField('Credit') ?? readField('Attribution'))
+    ?.split('\n')
+    .map((line) => htmlToPlainText(line))
+    .find((line) => line.length > 0);
   if (!attribution) return undefined;
 
   const licenceUrl = readField('LicenseUrl');

@@ -355,7 +355,7 @@ export const artistInsightsSchema = z.object({
       trackId: z.string(),
       title: z.string(),
       playCount: z.number(),
-    })
+    }),
   ),
   period: z.enum(['7days', '30days', 'alltime']).optional(),
 });
@@ -375,7 +375,7 @@ export const artistDashboardSchema = z.object({
       title: z.string(),
       createdAt: z.string(),
       playCount: z.number(),
-    })
+    }),
   ),
   recentAlbums: z.array(
     z.object({
@@ -383,7 +383,7 @@ export const artistDashboardSchema = z.object({
       title: z.string(),
       createdAt: z.string(),
       totalTracks: z.number(),
-    })
+    }),
   ),
   copyrightRemovedTracks: z.array(
     z.object({
@@ -391,7 +391,7 @@ export const artistDashboardSchema = z.object({
       title: z.string(),
       removedAt: z.string(),
       removedReason: z.string().optional(),
-    })
+    }),
   ),
 });
 export type ArtistDashboard = z.infer<typeof artistDashboardSchema>;

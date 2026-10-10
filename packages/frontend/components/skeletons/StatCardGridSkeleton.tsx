@@ -18,8 +18,8 @@ interface StatCardGridSkeletonProps {
  * period-selector row followed by a wrapping grid of stat cards (icon + value
  * + label). Mirrors `artist/insights` and `artist/dashboard` layout.
  */
-export const StatCardGridSkeleton: React.FC<StatCardGridSkeletonProps> =
-  React.memo(({ count = 4, minWidth = '30%', showPeriodSelector = false }) => {
+export const StatCardGridSkeleton: React.FC<StatCardGridSkeletonProps> = React.memo(
+  ({ count = 4, minWidth = '30%', showPeriodSelector = false }) => {
     const theme = useTheme();
 
     return (
@@ -39,10 +39,7 @@ export const StatCardGridSkeleton: React.FC<StatCardGridSkeletonProps> =
           <Repeat
             count={count}
             render={() => (
-              <View
-                className="bg-surface"
-                style={[styles.statCard, { minWidth }]}
-              >
+              <View className="bg-surface" style={[styles.statCard, { minWidth }]}>
                 <Skeleton.Circle size={32} />
                 <Skeleton.Box width={64} height={24} borderRadius={6} />
                 <Skeleton.Box width={80} height={12} borderRadius={4} />
@@ -52,7 +49,8 @@ export const StatCardGridSkeleton: React.FC<StatCardGridSkeletonProps> =
         </View>
       </View>
     );
-  });
+  },
+);
 StatCardGridSkeleton.displayName = 'StatCardGridSkeleton';
 
 const styles = StyleSheet.create({

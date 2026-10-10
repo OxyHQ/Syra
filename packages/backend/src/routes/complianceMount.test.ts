@@ -52,20 +52,28 @@ async function withApi(
   const publicApiRouter = express.Router();
   // Optional auth: resolves the caller when there is one, never rejects.
   publicApiRouter.use('/artists', artistsRoutes);
-  publicApiRouter.use('/copyright', (req, _res, next) => {
-    if (userId) (req as AuthRequest).user = { id: userId };
-    next();
-  }, copyrightRoutes);
+  publicApiRouter.use(
+    '/copyright',
+    (req, _res, next) => {
+      if (userId) (req as AuthRequest).user = { id: userId };
+      next();
+    },
+    copyrightRoutes,
+  );
 
   const authenticatedApiRouter = express.Router();
   authenticatedApiRouter.use('/artists', artistsAuthRoutes);
   authenticatedApiRouter.use('/artist-claims', artistClaimsRoutes);
 
   app.use('/api', publicApiRouter);
-  app.use('/api', (req, _res, next) => {
-    if (userId) (req as AuthRequest).user = { id: userId };
-    next();
-  }, authenticatedApiRouter);
+  app.use(
+    '/api',
+    (req, _res, next) => {
+      if (userId) (req as AuthRequest).user = { id: userId };
+      next();
+    },
+    authenticatedApiRouter,
+  );
 
   const server = await new Promise<Server>((resolve) => {
     const listening = app.listen(0, () => resolve(listening));
@@ -123,8 +131,12 @@ async function makeTrack(artistId: string): Promise<string> {
   const [track] = await getDb()
     .insert(tracks)
     .values({
-      title: 'Reported', artistId, artistName: 'X',
-      duration: 100, source: 'upload', status: 'ready',
+      title: 'Reported',
+      artistId,
+      artistName: 'X',
+      duration: 100,
+      source: 'upload',
+      status: 'ready',
     })
     .returning({ id: tracks.id });
   if (!track) throw new Error('makeTrack: insert returned no row');
@@ -157,7 +169,7 @@ describe('claim submission routing', () => {
       await getDb()
         .select({ id: artistClaims.id })
         .from(artistClaims)
-        .where(and(eq(artistClaims.artistId, artistId), eq(artistClaims.status, 'pending')))
+        .where(and(eq(artistClaims.artistId, artistId), eq(artistClaims.status, 'pending'))),
     ).toHaveLength(1);
     const artist = await readArtist(artistId);
     expect(artist?.ownerOxyUserId).toBeNull();
@@ -167,8 +179,13 @@ describe('claim submission routing', () => {
   it('GET /api/artists/:id still reaches the PUBLIC handler, unauthenticated', async () => {
     const artistId = await makeClaimableArtist();
     await getDb().insert(tracks).values({
-      title: 'Something Playable', artistId, artistName: 'X',
-      duration: 100, source: 'upload', status: 'ready', isAvailable: true,
+      title: 'Something Playable',
+      artistId,
+      artistName: 'X',
+      duration: 100,
+      source: 'upload',
+      status: 'ready',
+      isAvailable: true,
     });
 
     await withApi(undefined, async (baseUrl) => {
@@ -259,9 +276,11 @@ describe('copyright routing', () => {
       await withApi('ordinary-user', async (baseUrl) => {
         expect((await fetch(`${baseUrl}/api/copyright/reports`)).status).toBe(403);
         expect(
-          (await post(`${baseUrl}/api/copyright/reports/000000000000000000000000/resolve`, {
-            status: 'approved',
-          })).status,
+          (
+            await post(`${baseUrl}/api/copyright/reports/000000000000000000000000/resolve`, {
+              status: 'approved',
+            })
+          ).status,
         ).toBe(403);
       });
 

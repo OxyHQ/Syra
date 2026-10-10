@@ -6,7 +6,13 @@ import { clearDb, connectDb, disconnectDb } from '../test/postgres';
 import { getDb } from '../db/postgres';
 import { albums, catalogEntities, imageAssets, tracks } from '../db/schema/catalog';
 import { playlistTracks, playlists } from '../db/schema/library';
-import { getGenres, getHomeBrowse, getMadeForYou, getPopularAlbums, getPopularTracks } from './browse.controller';
+import {
+  getGenres,
+  getHomeBrowse,
+  getMadeForYou,
+  getPopularAlbums,
+  getPopularTracks,
+} from './browse.controller';
 import type { OxyAuthRequest as AuthRequest } from '@oxy.so/core/server';
 import type { Request, Response, NextFunction } from 'express';
 
@@ -35,9 +41,18 @@ function makeRes(): CapturedRes {
     _status: 200,
     _body: undefined,
     _headers: {},
-    status(code) { this._status = code; return this; },
-    set(name, value) { this._headers[name] = value; return this; },
-    json(body) { this._body = body; return this; },
+    status(code) {
+      this._status = code;
+      return this;
+    },
+    set(name, value) {
+      this._headers[name] = value;
+      return this;
+    },
+    json(body) {
+      this._body = body;
+      return this;
+    },
   };
 }
 
@@ -89,16 +104,18 @@ afterEach(() => {
 /** A stored image asset, because `albums.cover_art_id` is a NOT NULL foreign key. */
 async function seedCoverArt(): Promise<string> {
   const id = uuidv7();
-  await getDb().insert(imageAssets).values({
-    id,
-    s3Key: `covers/${id}.jpg`,
-    filename: 'cover.jpg',
-    contentType: 'image/jpeg',
-    byteSize: 1000,
-    width: 640,
-    height: 640,
-    ownerType: 'album',
-  });
+  await getDb()
+    .insert(imageAssets)
+    .values({
+      id,
+      s3Key: `covers/${id}.jpg`,
+      filename: 'cover.jpg',
+      contentType: 'image/jpeg',
+      byteSize: 1000,
+      width: 640,
+      height: 640,
+      ownerType: 'album',
+    });
   return id;
 }
 
@@ -123,9 +140,7 @@ async function seedTrack(overrides: TrackOverrides = {}): Promise<string> {
   return track.id;
 }
 
-async function seedAlbum(
-  overrides: Partial<typeof albums.$inferInsert> = {}
-): Promise<string> {
+async function seedAlbum(overrides: Partial<typeof albums.$inferInsert> = {}): Promise<string> {
   const [album] = await getDb()
     .insert(albums)
     .values({
@@ -164,12 +179,14 @@ async function seedPlaylistWithTrack(
 
   const trackId = await seedTrack({ title: `${playlistName} Track`, ...trackOverrides });
 
-  await getDb().insert(playlistTracks).values({
-    playlistId: playlist.id,
-    trackId,
-    addedAt: new Date('2026-01-01T00:00:00.000Z'),
-    position: 0,
-  });
+  await getDb()
+    .insert(playlistTracks)
+    .values({
+      playlistId: playlist.id,
+      trackId,
+      addedAt: new Date('2026-01-01T00:00:00.000Z'),
+      position: 0,
+    });
 }
 
 // ── getGenres ───────────────────────────────────────────────────────────────
@@ -256,7 +273,7 @@ describe('getGenres', () => {
 
     const body = res._body as { genres: Array<{ name: string; coverArt: string | null }> };
     expect(body.genres.find((g) => g.name === 'Electronic')?.coverArt).toBe(
-      `/api/images/${coverArtId}`
+      `/api/images/${coverArtId}`,
     );
   });
 });
@@ -304,18 +321,20 @@ describe('getPopularAlbums', () => {
 
 describe('getHomeBrowse', () => {
   it('does not surface playlists whose only tracks are not playable', async () => {
-    await seedPlaylistWithTrack(
-      'Unplayable Playlist',
-      { isAvailable: false },
-      { followers: 100 },
-    );
+    await seedPlaylistWithTrack('Unplayable Playlist', { isAvailable: false }, { followers: 100 });
     await seedPlaylistWithTrack('Playable Playlist', {}, { followers: 1 });
 
     const res = makeRes();
-    await getHomeBrowse(makeReq({ sectionLimit: '4', tracksLimit: '4' }), res as unknown as Response, next);
+    await getHomeBrowse(
+      makeReq({ sectionLimit: '4', tracksLimit: '4' }),
+      res as unknown as Response,
+      next,
+    );
 
     const body = res._body as { madeForYou: { playlists: Array<{ name: string }> } };
-    expect(body.madeForYou.playlists.map((playlist) => playlist.name)).toEqual(['Playable Playlist']);
+    expect(body.madeForYou.playlists.map((playlist) => playlist.name)).toEqual([
+      'Playable Playlist',
+    ]);
   });
 });
 

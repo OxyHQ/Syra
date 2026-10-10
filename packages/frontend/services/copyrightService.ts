@@ -22,11 +22,13 @@ export const copyrightService = {
    * Uses publicClient to ensure it works without authentication
    */
   async reportCopyrightViolation(
-    data: ReportCopyrightViolationRequest
+    data: ReportCopyrightViolationRequest,
   ): Promise<ReportCopyrightViolationResponse> {
     // Use publicClient for public endpoint (no auth required)
-    const response = await publicClient.post<ReportCopyrightViolationResponse>('/copyright/report', data);
+    const response = await publicClient.post<ReportCopyrightViolationResponse>(
+      '/copyright/report',
+      data,
+    );
     return response.data;
   },
 };
-

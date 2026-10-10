@@ -1,9 +1,5 @@
 import { Router } from 'express';
-import {
-  streamAudio,
-  getAudioInfo,
-  getAudioUrl,
-} from '../controllers/audio.controller';
+import { streamAudio, getAudioInfo, getAudioUrl } from '../controllers/audio.controller';
 
 const router = Router();
 
@@ -24,4 +20,3 @@ router.get('/:trackId/info', getAudioInfo);
 router.get('/:trackId/url', getAudioUrl);
 
 export default router;
-

@@ -103,12 +103,16 @@ jobs:
       # @expo/vector-icons import instead.
       - name: SDK tests
         run: bun run --filter @syra.fm/sdk test
-      # Lint only the packages that carry an eslint config today (frontend,
-      # studio). `expo lint` exits non-zero only on errors, not warnings, so this
-      # gates real breakage without failing on the existing warning backlog.
-      # backend / sdk / shared-types have no eslint config yet — adding one is a
-      # separate change so this gate can land without a lint-fix sweep.
-      - name: Lint
+      # Biome formats and lints EVERY package (root `biome.json`). `biome ci`
+      # fails on formatting drift and on error-level rules, not on warnings, so
+      # the baselined backlog (rules set to "warn" when Biome was adopted) does
+      # not block while it is paid down.
+      - name: Biome
+        run: bunx biome ci .
+      # The minimal ESLint left in the two Expo apps holds only what Biome has no
+      # rule for (eslint-plugin-expo's EXPO_PUBLIC_* env-var rules and the React
+      # Compiler rules). `expo lint` exits non-zero only on errors.
+      - name: Lint (Expo ESLint remnants)
         run: |
           cd packages/frontend && bun run lint
           cd ../studio && bun run lint

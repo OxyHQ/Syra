@@ -49,8 +49,17 @@ function formatClock(totalSeconds: number, withHours: boolean): string {
   return withHours ? `${hours}:${pad(minutes)}:${pad(secs)}` : `${minutes}:${pad(secs)}`;
 }
 
-type AvatarComponentType = React.ComponentType<{ size: number; source?: string; shape?: string; style?: ViewStyle }>;
-type CachedFileDownloadUrlSyncFn = (oxyServices: unknown, fileId: string, variant?: string) => string;
+type AvatarComponentType = React.ComponentType<{
+  size: number;
+  source?: string;
+  shape?: string;
+  style?: ViewStyle;
+}>;
+type CachedFileDownloadUrlSyncFn = (
+  oxyServices: unknown,
+  fileId: string,
+  variant?: string,
+) => string;
 
 const RoleBadge = ({ role, theme }: { role: string; theme: LiveTheme }) => {
   if (role === 'host') {
@@ -129,46 +138,118 @@ const ListenerAvatar = ({
 }) => {
   return (
     <View style={styles.listenerItem}>
-      <AvatarComponent size={40} source={getAvatarUrl(userProfile, oxyServices, getCachedFileDownloadUrlSync)} shape="squircle" />
+      <AvatarComponent
+        size={40}
+        source={getAvatarUrl(userProfile, oxyServices, getCachedFileDownloadUrlSync)}
+        shape="squircle"
+      />
     </View>
   );
 };
 
-const ConnectedSpeakerTile = ({ participant, isCurrentUser, isSpeaking, theme, oxyServices, AvatarComponent, getCachedFileDownloadUrlSync, useUserById }: {
-  participant: RoomParticipant; isCurrentUser: boolean; isSpeaking: boolean; theme: LiveTheme; oxyServices: unknown;
-  AvatarComponent: AvatarComponentType; getCachedFileDownloadUrlSync: CachedFileDownloadUrlSyncFn; useUserById: (id: string | undefined) => UserEntity | undefined;
+const ConnectedSpeakerTile = ({
+  participant,
+  isCurrentUser,
+  isSpeaking,
+  theme,
+  oxyServices,
+  AvatarComponent,
+  getCachedFileDownloadUrlSync,
+  useUserById,
+}: {
+  participant: RoomParticipant;
+  isCurrentUser: boolean;
+  isSpeaking: boolean;
+  theme: LiveTheme;
+  oxyServices: unknown;
+  AvatarComponent: AvatarComponentType;
+  getCachedFileDownloadUrlSync: CachedFileDownloadUrlSyncFn;
+  useUserById: (id: string | undefined) => UserEntity | undefined;
 }) => {
   const userProfile = useUserById(participant.userId);
-  return <SpeakerTile participant={participant} isCurrentUser={isCurrentUser} isSpeaking={isSpeaking} theme={theme} userProfile={userProfile} oxyServices={oxyServices} AvatarComponent={AvatarComponent} getCachedFileDownloadUrlSync={getCachedFileDownloadUrlSync} />;
+  return (
+    <SpeakerTile
+      participant={participant}
+      isCurrentUser={isCurrentUser}
+      isSpeaking={isSpeaking}
+      theme={theme}
+      userProfile={userProfile}
+      oxyServices={oxyServices}
+      AvatarComponent={AvatarComponent}
+      getCachedFileDownloadUrlSync={getCachedFileDownloadUrlSync}
+    />
+  );
 };
 
-const ConnectedListenerAvatar = ({ participant, oxyServices, AvatarComponent, getCachedFileDownloadUrlSync, useUserById }: {
-  participant: RoomParticipant; oxyServices: unknown;
-  AvatarComponent: AvatarComponentType; getCachedFileDownloadUrlSync: CachedFileDownloadUrlSyncFn; useUserById: (id: string | undefined) => UserEntity | undefined;
+const ConnectedListenerAvatar = ({
+  participant,
+  oxyServices,
+  AvatarComponent,
+  getCachedFileDownloadUrlSync,
+  useUserById,
+}: {
+  participant: RoomParticipant;
+  oxyServices: unknown;
+  AvatarComponent: AvatarComponentType;
+  getCachedFileDownloadUrlSync: CachedFileDownloadUrlSyncFn;
+  useUserById: (id: string | undefined) => UserEntity | undefined;
 }) => {
   const userProfile = useUserById(participant.userId);
-  return <ListenerAvatar participant={participant} userProfile={userProfile} oxyServices={oxyServices} AvatarComponent={AvatarComponent} getCachedFileDownloadUrlSync={getCachedFileDownloadUrlSync} />;
+  return (
+    <ListenerAvatar
+      participant={participant}
+      userProfile={userProfile}
+      oxyServices={oxyServices}
+      AvatarComponent={AvatarComponent}
+      getCachedFileDownloadUrlSync={getCachedFileDownloadUrlSync}
+    />
+  );
 };
 
-const ConnectedRequestRow = ({ request, theme, oxyServices, onApprove, onDeny, AvatarComponent, getCachedFileDownloadUrlSync, useUserById }: {
-  request: { userId: string; requestedAt: string }; theme: LiveTheme; oxyServices: unknown;
-  onApprove: (userId: string) => void; onDeny: (userId: string) => void;
-  AvatarComponent: AvatarComponentType; getCachedFileDownloadUrlSync: CachedFileDownloadUrlSyncFn; useUserById: (id: string | undefined) => UserEntity | undefined;
+const ConnectedRequestRow = ({
+  request,
+  theme,
+  oxyServices,
+  onApprove,
+  onDeny,
+  AvatarComponent,
+  getCachedFileDownloadUrlSync,
+  useUserById,
+}: {
+  request: { userId: string; requestedAt: string };
+  theme: LiveTheme;
+  oxyServices: unknown;
+  onApprove: (userId: string) => void;
+  onDeny: (userId: string) => void;
+  AvatarComponent: AvatarComponentType;
+  getCachedFileDownloadUrlSync: CachedFileDownloadUrlSyncFn;
+  useUserById: (id: string | undefined) => UserEntity | undefined;
 }) => {
   const userProfile = useUserById(request.userId);
   const displayName = getDisplayName(userProfile, request.userId, false);
   const avatarUri = getAvatarUrl(userProfile, oxyServices, getCachedFileDownloadUrlSync);
 
   return (
-    <View style={[styles.requestRow, { backgroundColor: `${theme.colors.card}80`, borderColor: theme.colors.border }]}>
+    <View
+      style={[
+        styles.requestRow,
+        { backgroundColor: `${theme.colors.card}80`, borderColor: theme.colors.border },
+      ]}
+    >
       <AvatarComponent size={36} source={avatarUri} shape="squircle" />
       <Text style={[styles.requestName, { color: theme.colors.text }]} numberOfLines={1}>
         {displayName}
       </Text>
-      <TouchableOpacity onPress={() => onApprove(request.userId)} style={[styles.approveBtn, { backgroundColor: theme.colors.primary }]}>
+      <TouchableOpacity
+        onPress={() => onApprove(request.userId)}
+        style={[styles.approveBtn, { backgroundColor: theme.colors.primary }]}
+      >
         <MaterialCommunityIcons name="check" size={18} color="#FFFFFF" />
       </TouchableOpacity>
-      <TouchableOpacity onPress={() => onDeny(request.userId)} style={[styles.denyBtn, { backgroundColor: theme.colors.backgroundSecondary }]}>
+      <TouchableOpacity
+        onPress={() => onDeny(request.userId)}
+        style={[styles.denyBtn, { backgroundColor: theme.colors.backgroundSecondary }]}
+      >
         <MaterialCommunityIcons name="close" size={18} color={theme.colors.text} />
       </TouchableOpacity>
     </View>
@@ -183,16 +264,29 @@ interface LiveRoomSheetProps {
   onLeave: () => void;
 }
 
-export function LiveRoomSheet({ roomId, isExpanded, onCollapse, onExpand, onLeave }: LiveRoomSheetProps) {
-  const { useTheme, useUserById, AvatarComponent, roomsService, toast, getCachedFileDownloadUrl, getCachedFileDownloadUrlSync, onRoomChanged, t } = useLiveConfig();
+export function LiveRoomSheet({
+  roomId,
+  isExpanded,
+  onCollapse,
+  onExpand,
+  onLeave,
+}: LiveRoomSheetProps) {
+  const {
+    useTheme,
+    useUserById,
+    AvatarComponent,
+    roomsService,
+    toast,
+    getCachedFileDownloadUrl,
+    getCachedFileDownloadUrlSync,
+    onRoomChanged,
+    t,
+  } = useLiveConfig();
   const theme = useTheme();
   const { user, oxyServices } = useAuth();
   const [room, setRoom] = useState<Room | null>(null);
 
-  const tr = useCallback(
-    (key: string) => (t ? t(key) : LIVE_ROOM_STRINGS[key] ?? key),
-    [t],
-  );
+  const tr = useCallback((key: string) => (t ? t(key) : (LIVE_ROOM_STRINGS[key] ?? key)), [t]);
 
   useEffect(() => {
     if (roomId) {
@@ -315,8 +409,9 @@ export function LiveRoomSheet({ roomId, isExpanded, onCollapse, onExpand, onLeav
   const [activePanel, setActivePanel] = useState<ActivePanel>(null);
   const [streamLoading, setStreamLoading] = useState(false);
 
-  const effectiveStream: StreamInfo | null = activeStream
-    ?? (room?.streamTitle || room?.activeStreamUrl
+  const effectiveStream: StreamInfo | null =
+    activeStream ??
+    (room?.streamTitle || room?.activeStreamUrl
       ? {
           title: room.streamTitle ?? undefined,
           image: room.streamImage ?? undefined,
@@ -358,8 +453,13 @@ export function LiveRoomSheet({ roomId, isExpanded, onCollapse, onExpand, onLeav
     return Math.min(Math.max(Math.floor((nowMs - startMs) / 1000), 0), streamDurationSec);
   }, [hasProgress, streamStartedAt, nowMs, streamDurationSec]);
 
-  const progressPct = hasProgress ? Math.min(Math.max(elapsedSec / streamDurationSec, 0), 1) * 100 : 0;
-  const progressFillStyle: ViewStyle = { backgroundColor: theme.colors.primary, width: `${progressPct}%` };
+  const progressPct = hasProgress
+    ? Math.min(Math.max(elapsedSec / streamDurationSec, 0), 1) * 100
+    : 0;
+  const progressFillStyle: ViewStyle = {
+    backgroundColor: theme.colors.primary,
+    width: `${progressPct}%`,
+  };
   const withHours = streamDurationSec >= 3600;
 
   const handleStopStream = async () => {
@@ -388,7 +488,9 @@ export function LiveRoomSheet({ roomId, isExpanded, onCollapse, onExpand, onLeav
       if (!result) {
         toast.error(tr('agora.podcastStream.skipFailed'));
       } else {
-        toast.success(tr(result.ended ? 'agora.podcastStream.queueEnded' : 'agora.podcastStream.skipped'));
+        toast.success(
+          tr(result.ended ? 'agora.podcastStream.queueEnded' : 'agora.podcastStream.skipped'),
+        );
         const updated = await roomsService.getRoom(roomId);
         if (updated) setRoom(updated);
       }
@@ -402,9 +504,7 @@ export function LiveRoomSheet({ roomId, isExpanded, onCollapse, onExpand, onLeav
   const participantIds = useMemo(() => participants.map((p) => p.userId), [participants]);
   useRoomUsers(participantIds);
 
-  const speakers = participants.filter(
-    (p) => p.role === 'host' || p.role === 'speaker'
-  );
+  const speakers = participants.filter((p) => p.role === 'host' || p.role === 'speaker');
   const listeners = participants.filter((p) => p.role === 'listener');
 
   const userId = user?.id;
@@ -468,16 +568,21 @@ export function LiveRoomSheet({ roomId, isExpanded, onCollapse, onExpand, onLeav
                 color={isRecording ? '#FF0000' : theme.colors.text}
               />
               <View style={styles.settingsItemText}>
-                <Text style={[styles.settingsItemTitle, { color: theme.colors.text }]}>Recording</Text>
+                <Text style={[styles.settingsItemTitle, { color: theme.colors.text }]}>
+                  Recording
+                </Text>
                 <Text style={[styles.settingsItemDesc, { color: theme.colors.textSecondary }]}>
                   {isRecording ? 'Currently recording (max 1h)' : 'Record room audio for replay'}
                 </Text>
               </View>
               <TouchableOpacity
                 onPress={isRecording ? handleStopRecording : handleStartRecording}
-                style={[styles.recordingToggle, {
-                  backgroundColor: isRecording ? LIVE_COLOR : theme.colors.primary,
-                }]}
+                style={[
+                  styles.recordingToggle,
+                  {
+                    backgroundColor: isRecording ? LIVE_COLOR : theme.colors.primary,
+                  },
+                ]}
               >
                 <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 13 }}>
                   {isRecording ? 'Stop' : 'Start'}
@@ -485,10 +590,7 @@ export function LiveRoomSheet({ roomId, isExpanded, onCollapse, onExpand, onLeav
               </TouchableOpacity>
             </View>
           )}
-          <TouchableOpacity
-            style={styles.settingsItem}
-            onPress={handleDeleteRoom}
-          >
+          <TouchableOpacity style={styles.settingsItem} onPress={handleDeleteRoom}>
             <MaterialCommunityIcons name="delete-outline" size={22} color={LIVE_COLOR} />
             <View style={styles.settingsItemText}>
               <Text style={[styles.settingsItemTitle, { color: LIVE_COLOR }]}>Delete Room</Text>
@@ -572,7 +674,12 @@ export function LiveRoomSheet({ roomId, isExpanded, onCollapse, onExpand, onLeav
       )}
 
       {effectiveStream && (
-        <View style={[styles.streamCard, { backgroundColor: `${theme.colors.card}80`, borderColor: theme.colors.border }]}>
+        <View
+          style={[
+            styles.streamCard,
+            { backgroundColor: `${theme.colors.card}80`, borderColor: theme.colors.border },
+          ]}
+        >
           <View style={styles.streamCardRow}>
             {streamImageUrl ? (
               <Image source={{ uri: streamImageUrl }} style={styles.streamCardImage} />
@@ -582,11 +689,17 @@ export function LiveRoomSheet({ roomId, isExpanded, onCollapse, onExpand, onLeav
               </View>
             )}
             <View style={styles.streamCardContent}>
-              <Text style={[styles.streamCardTitle, { color: theme.colors.text }]} numberOfLines={1}>
+              <Text
+                style={[styles.streamCardTitle, { color: theme.colors.text }]}
+                numberOfLines={1}
+              >
                 {effectiveStream.title || 'Live Stream'}
               </Text>
               {effectiveStream.description ? (
-                <Text style={[styles.streamCardDesc, { color: theme.colors.textSecondary }]} numberOfLines={2}>
+                <Text
+                  style={[styles.streamCardDesc, { color: theme.colors.textSecondary }]}
+                  numberOfLines={2}
+                >
                   {effectiveStream.description}
                 </Text>
               ) : null}
@@ -601,10 +714,18 @@ export function LiveRoomSheet({ roomId, isExpanded, onCollapse, onExpand, onLeav
                     accessibilityRole="button"
                     accessibilityLabel={tr('agora.podcastStream.skipNext')}
                   >
-                    <MaterialCommunityIcons name="skip-next-circle" size={22} color={theme.colors.primary} />
+                    <MaterialCommunityIcons
+                      name="skip-next-circle"
+                      size={22}
+                      color={theme.colors.primary}
+                    />
                   </TouchableOpacity>
                 )}
-                <TouchableOpacity onPress={handleStopStream} disabled={streamLoading} style={styles.streamCardAction}>
+                <TouchableOpacity
+                  onPress={handleStopStream}
+                  disabled={streamLoading}
+                  style={styles.streamCardAction}
+                >
                   <MaterialCommunityIcons name="close-circle" size={22} color="#C62828" />
                 </TouchableOpacity>
               </View>
@@ -686,12 +807,7 @@ export function LiveRoomSheet({ roomId, isExpanded, onCollapse, onExpand, onLeav
         )}
       </ScrollView>
 
-      <View
-        style={[
-          styles.controlBar,
-          { borderTopColor: theme.colors.border },
-        ]}
-      >
+      <View style={[styles.controlBar, { borderTopColor: theme.colors.border }]}>
         {canSpeak ? (
           <TouchableOpacity style={styles.controlItem} onPress={toggleMute}>
             <View
@@ -717,10 +833,7 @@ export function LiveRoomSheet({ roomId, isExpanded, onCollapse, onExpand, onLeav
         ) : (
           <TouchableOpacity style={styles.controlItem} onPress={requestToSpeak}>
             <View
-              style={[
-                styles.controlCircle,
-                { backgroundColor: theme.colors.backgroundSecondary },
-              ]}
+              style={[styles.controlCircle, { backgroundColor: theme.colors.backgroundSecondary }]}
             >
               <MaterialCommunityIcons name="hand-back-left" size={24} color={theme.colors.text} />
             </View>
@@ -732,32 +845,29 @@ export function LiveRoomSheet({ roomId, isExpanded, onCollapse, onExpand, onLeav
 
         <TouchableOpacity style={styles.controlItem} onPress={() => setActivePanel('insights')}>
           <View
-            style={[
-              styles.controlCircle,
-              { backgroundColor: theme.colors.backgroundSecondary },
-            ]}
+            style={[styles.controlCircle, { backgroundColor: theme.colors.backgroundSecondary }]}
           >
             <MaterialCommunityIcons name="chart-box-outline" size={24} color={theme.colors.text} />
           </View>
-          <Text style={[styles.controlLabel, { color: theme.colors.textSecondary }]}>
-            Insights
-          </Text>
+          <Text style={[styles.controlLabel, { color: theme.colors.textSecondary }]}>Insights</Text>
         </TouchableOpacity>
 
         {isHost && (
           <TouchableOpacity style={styles.controlItem} onPress={() => setActivePanel('stream')}>
-            <View style={[styles.controlCircle, { backgroundColor: theme.colors.backgroundSecondary }]}>
+            <View
+              style={[styles.controlCircle, { backgroundColor: theme.colors.backgroundSecondary }]}
+            >
               <MaterialCommunityIcons name="radio" size={24} color={theme.colors.text} />
             </View>
-            <Text style={[styles.controlLabel, { color: theme.colors.textSecondary }]}>
-              Stream
-            </Text>
+            <Text style={[styles.controlLabel, { color: theme.colors.textSecondary }]}>Stream</Text>
           </TouchableOpacity>
         )}
 
         {isHost && (
           <TouchableOpacity style={styles.controlItem} onPress={() => setActivePanel('settings')}>
-            <View style={[styles.controlCircle, { backgroundColor: theme.colors.backgroundSecondary }]}>
+            <View
+              style={[styles.controlCircle, { backgroundColor: theme.colors.backgroundSecondary }]}
+            >
               <MaterialCommunityIcons name="cog-outline" size={24} color={theme.colors.text} />
             </View>
             <Text style={[styles.controlLabel, { color: theme.colors.textSecondary }]}>
@@ -770,9 +880,7 @@ export function LiveRoomSheet({ roomId, isExpanded, onCollapse, onExpand, onLeav
           <View style={[styles.leaveCircle, { backgroundColor: LIVE_COLOR }]}>
             <MaterialCommunityIcons name="exit-run" size={24} color="#FFFFFF" />
           </View>
-          <Text style={[styles.controlLabel, { color: theme.colors.textSecondary }]}>
-            Leave
-          </Text>
+          <Text style={[styles.controlLabel, { color: theme.colors.textSecondary }]}>Leave</Text>
         </TouchableOpacity>
       </View>
     </View>

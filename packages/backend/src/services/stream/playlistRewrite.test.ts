@@ -49,9 +49,7 @@ describe('rewriteVariantPlaylist', () => {
       presign: fakePres,
     });
 
-    expect(result).toContain(
-      `URI="${BASE_URL}/api/stream/${TRACK_ID}/key?t=${TOKEN}"`,
-    );
+    expect(result).toContain(`URI="${BASE_URL}/api/stream/${TRACK_ID}/key?t=${TOKEN}"`);
   });
 
   it('preserves METHOD=AES-128 and the IV= param in EXT-X-KEY', async () => {

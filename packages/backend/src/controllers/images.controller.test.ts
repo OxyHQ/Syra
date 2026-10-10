@@ -47,9 +47,17 @@ function makeRes(): CapturedRes {
   return {
     _status: 200,
     _body: undefined,
-    status(code) { this._status = code; return this; },
-    json(body) { this._body = body; return this; },
-    setHeader() { return this; },
+    status(code) {
+      this._status = code;
+      return this;
+    },
+    json(body) {
+      this._body = body;
+      return this;
+    },
+    setHeader() {
+      return this;
+    },
   };
 }
 
@@ -91,7 +99,13 @@ describe('GET /api/images/:id', () => {
   });
 
   it('rejects an id of neither live shape', async () => {
-    for (const id of ['', 'not-an-id', '/api/images/x', 'https://x/y.jpg', 'zzzzzzzzzzzzzzzzzzzzzzzz']) {
+    for (const id of [
+      '',
+      'not-an-id',
+      '/api/images/x',
+      'https://x/y.jpg',
+      'zzzzzzzzzzzzzzzzzzzzzzzz',
+    ]) {
       const res = await getThrough(id);
       expect(`${id || '<empty>'} -> ${res._status}`).toBe(`${id || '<empty>'} -> 400`);
     }

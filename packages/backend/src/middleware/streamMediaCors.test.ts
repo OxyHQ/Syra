@@ -56,7 +56,12 @@ describe('streamMediaCors', () => {
     expect(res.headers.get('access-control-expose-headers')).toBe(
       'Content-Length, Content-Range, Accept-Ranges, Content-Type',
     );
-    expect(res.headers.get('vary')?.split(',').map((v) => v.trim())).toContain('Origin');
+    expect(
+      res.headers
+        .get('vary')
+        ?.split(',')
+        .map((v) => v.trim()),
+    ).toContain('Origin');
   });
 
   it('short-circuits an OPTIONS preflight with 204 and the CORS headers', async () => {

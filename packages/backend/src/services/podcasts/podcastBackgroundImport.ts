@@ -25,7 +25,10 @@ import {
   type ShallowCandidate,
 } from '../../db/podcasts/podcasts';
 import { logger } from '../../utils/logger';
-import { searchPodcasts as directorySearch, type PodcastDirectoryCandidate } from './PodcastDirectory';
+import {
+  searchPodcasts as directorySearch,
+  type PodcastDirectoryCandidate,
+} from './PodcastDirectory';
 import { importFeed } from './podcastImportService';
 import { describeErrorSafely } from '../../utils/error';
 
@@ -106,7 +109,9 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Pro
  * import. Best-effort; a bulk error (e.g. a rare duplicate podcastGuid) never
  * throws into the caller.
  */
-export async function shallowUpsertCandidates(candidates: PodcastDirectoryCandidate[]): Promise<void> {
+export async function shallowUpsertCandidates(
+  candidates: PodcastDirectoryCandidate[],
+): Promise<void> {
   if (candidates.length === 0) return;
 
   const rows: ShallowCandidate[] = candidates.map((candidate) => {
@@ -152,7 +157,10 @@ export async function shallowUpsertCandidates(candidates: PodcastDirectoryCandid
    * logging rather than inside the data layer.
    */
   await shallowUpsertPodcasts(rows, (feedUrl, err) =>
-    logger.warn('[podcast-import] shallow upsert failed for one candidate', { feedUrl, err: describeErrorSafely(err) })
+    logger.warn('[podcast-import] shallow upsert failed for one candidate', {
+      feedUrl,
+      err: describeErrorSafely(err),
+    }),
   );
 }
 
@@ -176,7 +184,10 @@ export function enqueuePodcastImport(feedUrl: string, directory?: PodcastDirecto
       try {
         await importFeed(feedUrl, directory ? { directory } : {});
       } catch (err) {
-        logger.warn('[podcast-import] deep feed import failed', { feedUrl, err: describeErrorSafely(err) });
+        logger.warn('[podcast-import] deep feed import failed', {
+          feedUrl,
+          err: describeErrorSafely(err),
+        });
       } finally {
         queuedFeeds.delete(key);
       }
@@ -232,7 +243,12 @@ export async function syncPodcastSearch(
   query: string,
   deps: PodcastSearchSyncDeps = {},
 ): Promise<PodcastSearchSyncResult> {
-  const empty: PodcastSearchSyncResult = { skipped: true, candidates: 0, shallowUpserted: 0, deepEnqueued: 0 };
+  const empty: PodcastSearchSyncResult = {
+    skipped: true,
+    candidates: 0,
+    shallowUpserted: 0,
+    deepEnqueued: 0,
+  };
   if (!bulkImportEnabled()) return empty;
 
   const search = deps.search ?? directorySearch;
@@ -248,12 +264,14 @@ export async function syncPodcastSearch(
 
   let candidates: PodcastDirectoryCandidate[];
   try {
-    candidates = (await withTimeout(search(key, MAX_FEEDS_PER_SEARCH), DIRECTORY_TIMEOUT_MS, [])).slice(
-      0,
-      MAX_FEEDS_PER_SEARCH,
-    );
+    candidates = (
+      await withTimeout(search(key, MAX_FEEDS_PER_SEARCH), DIRECTORY_TIMEOUT_MS, [])
+    ).slice(0, MAX_FEEDS_PER_SEARCH);
   } catch (err) {
-    logger.warn('[podcast-import] directory search failed', { query: key, err: describeErrorSafely(err) });
+    logger.warn('[podcast-import] directory search failed', {
+      query: key,
+      err: describeErrorSafely(err),
+    });
     return { ...empty, skipped: false };
   }
 
@@ -264,11 +282,23 @@ export async function syncPodcastSearch(
   try {
     deepEnqueued = await enqueueDeepImports(candidates, enqueue, now);
   } catch (err) {
-    logger.warn('[podcast-import] deep-import scheduling failed', { query: key, err: describeErrorSafely(err) });
+    logger.warn('[podcast-import] deep-import scheduling failed', {
+      query: key,
+      err: describeErrorSafely(err),
+    });
   }
 
-  logger.info('[podcast-import] search sync', { query: key, candidates: candidates.length, deepEnqueued });
-  return { skipped: false, candidates: candidates.length, shallowUpserted: candidates.length, deepEnqueued };
+  logger.info('[podcast-import] search sync', {
+    query: key,
+    candidates: candidates.length,
+    deepEnqueued,
+  });
+  return {
+    skipped: false,
+    candidates: candidates.length,
+    shallowUpserted: candidates.length,
+    deepEnqueued,
+  };
 }
 
 /** Test-only: reset module throttle/dedup state between cases. */

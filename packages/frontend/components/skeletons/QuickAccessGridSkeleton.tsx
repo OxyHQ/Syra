@@ -13,23 +13,15 @@ interface QuickAccessGridSkeletonProps {
  * Loading placeholder for the home "quick access" compact 2-column grid:
  * each tile is a 40x40 thumbnail beside a single title line.
  */
-export const QuickAccessGridSkeleton: React.FC<QuickAccessGridSkeletonProps> =
-  React.memo(({ count = 8 }) => {
+export const QuickAccessGridSkeleton: React.FC<QuickAccessGridSkeletonProps> = React.memo(
+  ({ count = 8 }) => {
     const theme = useTheme();
 
     return (
       <ResponsiveGrid minItemWidth={300} minColumns={2} gap={8} style={styles.compactGrid}>
         {Array.from({ length: count }).map((_, index) => (
-          <View
-            key={index}
-            className="bg-surface" style={styles.compactGridItem}
-          >
-            <Skeleton.Box
-              width={40}
-              height={40}
-              borderRadius={12}
-              style={styles.compactImage}
-            />
+          <View key={index} className="bg-surface" style={styles.compactGridItem}>
+            <Skeleton.Box width={40} height={40} borderRadius={12} style={styles.compactImage} />
             <View style={styles.compactTitle}>
               <Skeleton.Box width="70%" height={13} borderRadius={4} />
             </View>
@@ -37,7 +29,8 @@ export const QuickAccessGridSkeleton: React.FC<QuickAccessGridSkeletonProps> =
         ))}
       </ResponsiveGrid>
     );
-  });
+  },
+);
 QuickAccessGridSkeleton.displayName = 'QuickAccessGridSkeleton';
 
 const styles = StyleSheet.create({

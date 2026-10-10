@@ -141,14 +141,17 @@ class NativeCastEngine implements PlayerEngine {
     const uri = source.uri;
     if (!uri) return;
 
-    this.client.loadMedia({ autoplay: true, mediaInfo: this.buildMediaInfo(uri) }).catch(
-      (error: unknown) => {
+    this.client
+      .loadMedia({ autoplay: true, mediaInfo: this.buildMediaInfo(uri) })
+      .catch((error: unknown) => {
         logger.warn('Cast loadMedia failed', { error });
-      },
-    );
+      });
   }
 
-  addListener(event: 'playbackStatusUpdate', callback: (status: PlaybackStatusUpdate) => void): void {
+  addListener(
+    event: 'playbackStatusUpdate',
+    callback: (status: PlaybackStatusUpdate) => void,
+  ): void {
     if (event === 'playbackStatusUpdate') {
       this.listeners.push(callback);
     }
@@ -313,9 +316,14 @@ class NativeCastController implements CastController {
   }
 
   private createEngine(client: RemoteMediaClient): NativeCastEngine {
-    return new NativeCastEngine(client, () => this.meta, () => this.contentType, () => {
-      this.engine = null;
-    });
+    return new NativeCastEngine(
+      client,
+      () => this.meta,
+      () => this.contentType,
+      () => {
+        this.engine = null;
+      },
+    );
   }
 
   private releaseSession(): void {

@@ -55,19 +55,27 @@ function makeRes(): CapturedRes {
   return {
     _status: 200,
     _body: undefined,
-    status(code) { this._status = code; return this; },
-    json(body) { this._body = body; return this; },
+    status(code) {
+      this._status = code;
+      return this;
+    },
+    json(body) {
+      this._body = body;
+      return this;
+    },
   };
 }
 
-const failNext: NextFunction = (err) => { throw err; };
+const failNext: NextFunction = (err) => {
+  throw err;
+};
 
 function makeReq(params: Record<string, string>, userId: string, body: unknown = {}): AuthRequest {
   return { params, query: {}, body, user: { id: userId } } as unknown as AuthRequest;
 }
 
 async function makeClaimableArtist(
-  overrides: Partial<typeof catalogEntities.$inferInsert> = {}
+  overrides: Partial<typeof catalogEntities.$inferInsert> = {},
 ): Promise<string> {
   const name = `Contributed ${uuidv7()}`;
   const [artist] = await getDb()
@@ -89,13 +97,15 @@ async function makeClaimableArtist(
 
 /** An artist already owned by someone — the conflict fixture. */
 async function makeOwnedArtist(name: string, ownerOxyUserId: string): Promise<void> {
-  await getDb().insert(catalogEntities).values({
-    type: 'artist',
-    name,
-    nameKey: normalizeNameKey(name),
-    source: 'upload',
-    ownerOxyUserId,
-  });
+  await getDb()
+    .insert(catalogEntities)
+    .values({
+      type: 'artist',
+      name,
+      nameKey: normalizeNameKey(name),
+      source: 'upload',
+      ownerOxyUserId,
+    });
 }
 
 // ── Submission ────────────────────────────────────────────────────────────────
@@ -112,7 +122,9 @@ describe('POST /api/artists/:id/claim', () => {
 
     const res = makeRes();
     await createArtistClaim(
-      makeReq({ id: artistId }, 'claimant-1', { evidence: 'I am this artist, here is my label page' }),
+      makeReq({ id: artistId }, 'claimant-1', {
+        evidence: 'I am this artist, here is my label page',
+      }),
       res as unknown as Response,
       failNext,
     );
@@ -380,13 +392,15 @@ describe('POST /api/artist-claims/:id/resolve', () => {
 // ── The claimant's own view ───────────────────────────────────────────────────
 
 describe('GET /api/artist-claims/mine', () => {
-  it('returns only the caller\'s claims', async () => {
+  it("returns only the caller's claims", async () => {
     const artistId = await makeClaimableArtist();
     const otherArtistId = await makeClaimableArtist();
-    await getDb().insert(artistClaims).values([
-      { artistId, oxyUserId: 'claimant-1', evidence: 'mine', status: 'pending' },
-      { artistId: otherArtistId, oxyUserId: 'claimant-2', evidence: 'theirs', status: 'pending' },
-    ]);
+    await getDb()
+      .insert(artistClaims)
+      .values([
+        { artistId, oxyUserId: 'claimant-1', evidence: 'mine', status: 'pending' },
+        { artistId: otherArtistId, oxyUserId: 'claimant-2', evidence: 'theirs', status: 'pending' },
+      ]);
 
     const res = makeRes();
     await listMyArtistClaims(makeReq({}, 'claimant-1'), res as unknown as Response, failNext);

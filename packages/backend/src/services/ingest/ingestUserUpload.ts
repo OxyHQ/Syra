@@ -86,17 +86,12 @@ async function markFailed(uploadId: string): Promise<void> {
       // row. Redacted rather than logged whole.
       logger.error('[locker-ingest] failed to persist failed status', {
         uploadId,
-        ...(isDriverError(saveErr)
-          ? { driver: describeDriverError(saveErr) }
-          : { err: saveErr }),
+        ...(isDriverError(saveErr) ? { driver: describeDriverError(saveErr) } : { err: saveErr }),
       }),
     );
 }
 
-export async function ingestUserUpload(
-  uploadId: string,
-  deps?: UploadIngestDeps,
-): Promise<void> {
+export async function ingestUserUpload(uploadId: string, deps?: UploadIngestDeps): Promise<void> {
   const [upload] = await getDb()
     .select({
       ownerOxyUserId: userUploads.ownerOxyUserId,
@@ -120,7 +115,10 @@ export async function ingestUserUpload(
   }
   const audioSource = { key: upload.audioSourceKey, format: upload.audioSourceFormat };
 
-  await getDb().update(userUploads).set({ status: 'processing' }).where(eq(userUploads.id, uploadId));
+  await getDb()
+    .update(userUploads)
+    .set({ status: 'processing' })
+    .where(eq(userUploads.id, uploadId));
 
   const fetchSource = deps?.fetchSource ?? defaultFetchSource;
   const probe = deps?.probe ?? probeAudio;

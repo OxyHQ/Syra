@@ -22,18 +22,24 @@ const WEB_BASE_URL_RESOURCE = 'syra_widget_web_base_url';
  */
 function assertBaseUrl(option, value) {
   if (typeof value !== 'string' || value.trim() !== value || value.length === 0) {
-    throw new Error(`withSyraWidgets: \`${option}\` must be a non-empty string with no surrounding whitespace.`);
+    throw new Error(
+      `withSyraWidgets: \`${option}\` must be a non-empty string with no surrounding whitespace.`,
+    );
   }
 
   let parsed;
   try {
     parsed = new URL(value);
   } catch {
-    throw new Error(`withSyraWidgets: \`${option}\` must be an absolute URL, got ${JSON.stringify(value)}.`);
+    throw new Error(
+      `withSyraWidgets: \`${option}\` must be an absolute URL, got ${JSON.stringify(value)}.`,
+    );
   }
 
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new Error(`withSyraWidgets: \`${option}\` must be http or https, got ${parsed.protocol}.`);
+    throw new Error(
+      `withSyraWidgets: \`${option}\` must be http or https, got ${parsed.protocol}.`,
+    );
   }
 
   const bareOrigin = value.replace(/\/+$/, '');

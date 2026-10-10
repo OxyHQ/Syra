@@ -1,5 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+} from 'react-native';
 import MaterialCommunityIcons from '../icons/MaterialCommunityIcons';
 
 import { PanelHeader } from './PanelHeader';
@@ -65,11 +72,12 @@ export function RecordingsPanel({ roomId, isHost, theme, onClose, onPlay }: Reco
   };
 
   const handleToggleAccess = async (recording: Recording) => {
-    const newAccess = recording.access === 'public' ? 'participants' as const : 'public' as const;
+    const newAccess =
+      recording.access === 'public' ? ('participants' as const) : ('public' as const);
     const success = await roomsService.updateRecordingAccess(recording.id, newAccess);
     if (success) {
       setRecordings((prev) =>
-        prev.map((r) => r.id === recording.id ? { ...r, access: newAccess } : r)
+        prev.map((r) => (r.id === recording.id ? { ...r, access: newAccess } : r)),
       );
       toast.success(`Recording is now ${newAccess}`);
     } else {
@@ -102,7 +110,11 @@ export function RecordingsPanel({ roomId, isHost, theme, onClose, onPlay }: Reco
           </View>
         ) : recordings.length === 0 ? (
           <View style={styles.centered}>
-            <MaterialCommunityIcons name="record-circle-outline" size={40} color={theme.colors.textSecondary} />
+            <MaterialCommunityIcons
+              name="record-circle-outline"
+              size={40}
+              color={theme.colors.textSecondary}
+            />
             <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
               No recordings yet
             </Text>
@@ -111,11 +123,17 @@ export function RecordingsPanel({ roomId, isHost, theme, onClose, onPlay }: Reco
           recordings.map((recording) => (
             <View
               key={recording.id}
-              style={[styles.recordingCard, { backgroundColor: `${theme.colors.card}80`, borderColor: theme.colors.border }]}
+              style={[
+                styles.recordingCard,
+                { backgroundColor: `${theme.colors.card}80`, borderColor: theme.colors.border },
+              ]}
             >
               <View style={styles.recordingHeader}>
                 <View style={styles.recordingInfo}>
-                  <Text style={[styles.recordingTitle, { color: theme.colors.text }]} numberOfLines={1}>
+                  <Text
+                    style={[styles.recordingTitle, { color: theme.colors.text }]}
+                    numberOfLines={1}
+                  >
                     {recording.roomTitle}
                   </Text>
                   <View style={styles.recordingMeta}>
@@ -125,17 +143,30 @@ export function RecordingsPanel({ roomId, isHost, theme, onClose, onPlay }: Reco
                     <Text style={[styles.recordingDuration, { color: theme.colors.textSecondary }]}>
                       {formatDurationMs(recording.durationMs)}
                     </Text>
-                    <View style={[styles.accessBadge, {
-                      backgroundColor: recording.access === 'public' ? `${theme.colors.primary}1A` : '#FF98001A',
-                    }]}>
+                    <View
+                      style={[
+                        styles.accessBadge,
+                        {
+                          backgroundColor:
+                            recording.access === 'public'
+                              ? `${theme.colors.primary}1A`
+                              : '#FF98001A',
+                        },
+                      ]}
+                    >
                       <MaterialCommunityIcons
                         name={recording.access === 'public' ? 'earth' : 'lock'}
                         size={10}
                         color={recording.access === 'public' ? theme.colors.primary : '#FF9800'}
                       />
-                      <Text style={[styles.accessBadgeText, {
-                        color: recording.access === 'public' ? theme.colors.primary : '#FF9800',
-                      }]}>
+                      <Text
+                        style={[
+                          styles.accessBadgeText,
+                          {
+                            color: recording.access === 'public' ? theme.colors.primary : '#FF9800',
+                          },
+                        ]}
+                      >
                         {recording.access === 'public' ? 'Public' : 'Participants'}
                       </Text>
                     </View>

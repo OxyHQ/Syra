@@ -72,35 +72,38 @@ export default function LiveScreen() {
   }, [closeCreateSheet, refetch]);
 
   return (
-    <View className="flex-1 bg-background" >
+    <View className="flex-1 bg-background">
       <SEO title={t('live.seo.title')} description={t('live.seo.description')} />
 
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 120 }}
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={theme.colors.primary} />
+          <RefreshControl
+            refreshing={isRefetching}
+            onRefresh={refetch}
+            tintColor={theme.colors.primary}
+          />
         }
       >
         <View className="px-4 pb-3" style={{ paddingTop: insets.top + 12 }}>
           <View className="flex-row items-center gap-2">
-            <View className="w-2.5 h-2.5 rounded-full bg-error"  />
-            <Text className="text-3xl font-extrabold text-foreground" >
-              {t('live.title')}
-            </Text>
+            <View className="w-2.5 h-2.5 rounded-full bg-error" />
+            <Text className="text-3xl font-extrabold text-foreground">{t('live.title')}</Text>
           </View>
-          <Text className="mt-1 text-base text-muted-foreground" >
-            {t('live.subtitle')}
-          </Text>
+          <Text className="mt-1 text-base text-muted-foreground">{t('live.subtitle')}</Text>
         </View>
 
         <Pressable
           onPress={openCreateSheet}
           className="mx-4 mb-4 flex-row items-center justify-center gap-2 rounded-full py-3 bg-primary"
-          
         >
-          <MaterialCommunityIcons name="microphone-plus" size={20} color={theme.colors.primaryForeground} />
-          <Text className="text-base font-semibold text-primary-foreground" >
+          <MaterialCommunityIcons
+            name="microphone-plus"
+            size={20}
+            color={theme.colors.primaryForeground}
+          />
+          <Text className="text-base font-semibold text-primary-foreground">
             {t('live.startRoom')}
           </Text>
         </Pressable>
@@ -117,18 +120,24 @@ export default function LiveScreen() {
           </View>
         ) : (
           <View className="items-center justify-center px-8 py-16">
-            <MaterialCommunityIcons name="broadcast-off" size={56} color={theme.colors.textTertiary} />
-            <Text className="mt-4 text-lg font-semibold text-foreground" >
-              {t('live.empty')}
-            </Text>
-            <Text className="mt-1 text-center text-sm text-muted-foreground" >
+            <MaterialCommunityIcons
+              name="broadcast-off"
+              size={56}
+              color={theme.colors.textTertiary}
+            />
+            <Text className="mt-4 text-lg font-semibold text-foreground">{t('live.empty')}</Text>
+            <Text className="mt-1 text-center text-sm text-muted-foreground">
               {t('live.emptySubtitle')}
             </Text>
           </View>
         )}
       </ScrollView>
 
-      <BottomSheet ref={sheetRef} enablePanDownToClose style={{ maxWidth: 500, marginHorizontal: 'auto' }}>
+      <BottomSheet
+        ref={sheetRef}
+        enablePanDownToClose
+        style={{ maxWidth: 500, marginHorizontal: 'auto' }}
+      >
         <CreateRoomSheet
           ref={createRef}
           onClose={closeCreateSheet}
@@ -145,18 +154,26 @@ export default function LiveScreen() {
             disabled={!formState.isValid || formState.loading}
             className="flex-row items-center justify-center gap-1.5 rounded-full py-3"
             style={{
-              backgroundColor: formState.isValid ? theme.colors.primary : theme.colors.backgroundSecondary,
+              backgroundColor: formState.isValid
+                ? theme.colors.primary
+                : theme.colors.backgroundSecondary,
               opacity: formState.loading ? 0.6 : 1,
             }}
           >
             <MaterialCommunityIcons
               name="play"
               size={20}
-              color={formState.isValid ? theme.colors.primaryForeground : theme.colors.textSecondary}
+              color={
+                formState.isValid ? theme.colors.primaryForeground : theme.colors.textSecondary
+              }
             />
             <Text
               className="text-base font-semibold"
-              style={{ color: formState.isValid ? theme.colors.primaryForeground : theme.colors.textSecondary }}
+              style={{
+                color: formState.isValid
+                  ? theme.colors.primaryForeground
+                  : theme.colors.textSecondary,
+              }}
             >
               {formState.loading ? t('live.creating') : t('live.startNow')}
             </Text>
@@ -170,7 +187,7 @@ export default function LiveScreen() {
               style={{ borderWidth: 1 }}
             >
               <MaterialCommunityIcons name="calendar" size={20} color={theme.colors.text} />
-              <Text className="text-base font-semibold text-foreground" >
+              <Text className="text-base font-semibold text-foreground">
                 {t('live.scheduleRoom')}
               </Text>
             </Pressable>

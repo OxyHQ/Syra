@@ -312,7 +312,7 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
       if (!title || !artistId) {
         return res.status(400).json({
           error: 'Missing required fields',
-          message: 'Title and artistId are required'
+          message: 'Title and artistId are required',
         });
       }
 
@@ -322,7 +322,7 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
       if (!artist) {
         return res.status(403).json({
           error: 'Forbidden',
-          message: 'You do not own this artist profile'
+          message: 'You do not own this artist profile',
         });
       }
 
@@ -330,7 +330,8 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
       if (artist.uploadsDisabled) {
         return res.status(403).json({
           error: 'Uploads disabled',
-          message: 'Uploads are disabled due to copyright strikes. Please contact support for more information.'
+          message:
+            'Uploads are disabled due to copyright strikes. Please contact support for more information.',
         });
       }
 
@@ -346,7 +347,7 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
         if (!found) {
           return res.status(404).json({
             error: 'Album not found',
-            message: 'Album does not exist or does not belong to this artist'
+            message: 'Album does not exist or does not belong to this artist',
           });
         }
         album = found;
@@ -375,10 +376,16 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
       // Validate coverArt if provided - must be the id of an already-uploaded asset
       if (coverArt) {
         // Reject blob URLs, http/https URLs, or any other format
-        if (coverArt.startsWith('blob:') || coverArt.startsWith('http://') || coverArt.startsWith('https://') || coverArt.startsWith('/api/')) {
+        if (
+          coverArt.startsWith('blob:') ||
+          coverArt.startsWith('http://') ||
+          coverArt.startsWith('https://') ||
+          coverArt.startsWith('/api/')
+        ) {
           return res.status(400).json({
             error: 'Invalid coverArt',
-            message: 'coverArt must be a valid image ID. Images must be uploaded first using /api/images/upload.'
+            message:
+              'coverArt must be a valid image ID. Images must be uploaded first using /api/images/upload.',
           });
         }
 
@@ -388,10 +395,10 @@ export const uploadTrack = async (req: AuthRequest, res: Response, next: NextFun
         if (!isLiveEntityId(coverArt)) {
           return res.status(400).json({
             error: 'Invalid coverArt',
-            message: 'coverArt must be a valid image ID. Images must be uploaded first using /api/images/upload.'
+            message:
+              'coverArt must be a valid image ID. Images must be uploaded first using /api/images/upload.',
           });
         }
-
       }
 
       const coverArtColors = coverArt ? await getStoredImageColors(coverArt) : undefined;

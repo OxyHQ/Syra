@@ -1,6 +1,12 @@
 import { browseService } from './browseService';
 import { api } from '@/utils/api';
-import { PlaylistVisibility, type Album, type Artist, type Playlist, type Track } from '@syra/shared-types';
+import {
+  PlaylistVisibility,
+  type Album,
+  type Artist,
+  type Playlist,
+  type Track,
+} from '@syra/shared-types';
 
 jest.mock('@/utils/api', () => ({
   api: {
@@ -86,7 +92,9 @@ describe('browseService client selection', () => {
           tracks: { tracks: [track], total: 1, hasMore: false },
         },
       })
-      .mockResolvedValueOnce({ data: { genres: [{ name: 'Electronic', color: '#000000', coverArt: null }] } })
+      .mockResolvedValueOnce({
+        data: { genres: [{ name: 'Electronic', color: '#000000', coverArt: null }] },
+      })
       .mockResolvedValueOnce({ data: { tracks: [track], total: 1, hasMore: false } })
       .mockResolvedValueOnce({ data: { tracks: [track], total: 1, hasMore: false } })
       .mockResolvedValueOnce({ data: { albums: [album], total: 1, hasMore: false } })
@@ -124,6 +132,8 @@ describe('browseService client selection', () => {
   it('rejects malformed browse responses at the API boundary', async () => {
     mockApiGet.mockResolvedValueOnce({ data: { tracks: [track], total: 1 } });
 
-    await expect(browseService.getPopularTracks()).rejects.toThrow('Invalid popular tracks response');
+    await expect(browseService.getPopularTracks()).rejects.toThrow(
+      'Invalid popular tracks response',
+    );
   });
 });

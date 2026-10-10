@@ -58,7 +58,7 @@ function normalizeGenreNames(names: readonly string[]): string[] {
  */
 export async function resolveMusicGenreIds(
   db: DbOrTransaction,
-  names: readonly string[]
+  names: readonly string[],
 ): Promise<string[]> {
   const wanted = normalizeGenreNames(names);
   if (wanted.length === 0) return [];
@@ -102,7 +102,7 @@ export async function resolveMusicGenreIds(
 export async function setAlbumGenres(
   db: DbOrTransaction,
   albumId: string,
-  names: readonly string[]
+  names: readonly string[],
 ): Promise<void> {
   const genreIds = await resolveMusicGenreIds(db, names);
 

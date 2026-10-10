@@ -1,4 +1,10 @@
-import { PlaybackContext, PlayableItem, Queue, RepeatMode, UserUploadAsTrack } from '@syra/shared-types';
+import {
+  PlaybackContext,
+  PlayableItem,
+  Queue,
+  RepeatMode,
+  UserUploadAsTrack,
+} from '@syra/shared-types';
 import { queueService } from '../services/queueService';
 import { useQueueStore } from './queueStore';
 
@@ -84,10 +90,7 @@ describe('queueStore', () => {
     };
     const queue: Queue = {
       current: 1,
-      tracks: [
-        track('6a34c2c5d1646e517424358f'),
-        track('6a34c2c5d1646e5174243592'),
-      ],
+      tracks: [track('6a34c2c5d1646e517424358f'), track('6a34c2c5d1646e5174243592')],
       context,
     };
     mockedQueueService.replaceQueue.mockResolvedValueOnce({ queue });
@@ -292,7 +295,12 @@ describe('queueStore', () => {
     const firstQueue: Queue = { current: 0, tracks: [track('first')] };
     const nextQueue: Queue = { current: 0, tracks: [track('first'), track('next')] };
     let resolveFirst: ((value: { queue: Queue }) => void) | undefined;
-    mockedQueueService.replaceQueue.mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }));
+    mockedQueueService.replaceQueue.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveFirst = resolve;
+        }),
+    );
     mockedQueueService.replaceQueue.mockResolvedValueOnce({ queue: nextQueue });
     const firstRequest = useQueueStore.getState().replaceQueue(firstQueue);
     await Promise.resolve();
@@ -304,14 +312,22 @@ describe('queueStore', () => {
     expect(useQueueStore.getState().queue).toEqual(nextQueue);
     await secondRequest;
     expect(useQueueStore.getState().queue).toEqual(nextQueue);
-    expect(mockedQueueService.replaceQueue.mock.calls.slice(-2)).toEqual([[firstQueue], [nextQueue]]);
+    expect(mockedQueueService.replaceQueue.mock.calls.slice(-2)).toEqual([
+      [firstQueue],
+      [nextQueue],
+    ]);
   });
 
   it('ignores a pending response after the Oxy account changes', async () => {
     useQueueStore.getState().setAccount('account-one');
     const queue: Queue = { current: 0, tracks: [track('private-recording')] };
     let finish: ((value: { queue: Queue }) => void) | undefined;
-    mockedQueueService.replaceQueue.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    mockedQueueService.replaceQueue.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
     const request = useQueueStore.getState().replaceQueue(queue);
     await Promise.resolve();
     useQueueStore.getState().setAccount('account-two');
@@ -322,26 +338,44 @@ describe('queueStore', () => {
     expect(useQueueStore.getState().accountId).toBe('account-two');
   });
 
-  it.each([NaN, -1, 0.5, 9, 0])('ignores no-op current index %s without invalidating a pending replace', async (index) => {
-    const optimistic: Queue = { current: 0, tracks: [track('first')] };
-    const persisted: Queue = { ...optimistic, context: { type: 'album', id: 'album', name: 'Persisted' } };
-    let finish: ((value: { queue: Queue }) => void) | undefined;
-    mockedQueueService.replaceQueue.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
-    const request = useQueueStore.getState().replaceQueue(optimistic);
-    await Promise.resolve();
-    await useQueueStore.getState().setCurrentIndex(index);
-    if (!finish) throw new Error('Request did not start');
-    finish({ queue: persisted });
-    await request;
-    expect(useQueueStore.getState().queue).toEqual(persisted);
-    expect(mockedQueueService.setCurrentIndex).not.toHaveBeenCalled();
-  });
+  it.each([NaN, -1, 0.5, 9, 0])(
+    'ignores no-op current index %s without invalidating a pending replace',
+    async (index) => {
+      const optimistic: Queue = { current: 0, tracks: [track('first')] };
+      const persisted: Queue = {
+        ...optimistic,
+        context: { type: 'album', id: 'album', name: 'Persisted' },
+      };
+      let finish: ((value: { queue: Queue }) => void) | undefined;
+      mockedQueueService.replaceQueue.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+      );
+      const request = useQueueStore.getState().replaceQueue(optimistic);
+      await Promise.resolve();
+      await useQueueStore.getState().setCurrentIndex(index);
+      if (!finish) throw new Error('Request did not start');
+      finish({ queue: persisted });
+      await request;
+      expect(useQueueStore.getState().queue).toEqual(persisted);
+      expect(mockedQueueService.setCurrentIndex).not.toHaveBeenCalled();
+    },
+  );
 
   it('an empty append leaves the current request authoritative', async () => {
     const queue: Queue = { current: 0, tracks: [track('persisted')] };
     let finish: ((value: { queue: Queue }) => void) | undefined;
-    mockedQueueService.replaceQueue.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
-    const request = useQueueStore.getState().replaceQueue({ current: 0, tracks: [track('optimistic')] });
+    mockedQueueService.replaceQueue.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const request = useQueueStore
+      .getState()
+      .replaceQueue({ current: 0, tracks: [track('optimistic')] });
     await Promise.resolve();
     await useQueueStore.getState().addTracksLocally([]);
     if (!finish) throw new Error('Request did not start');
@@ -354,7 +388,12 @@ describe('queueStore', () => {
     const old: Queue = { current: 0, tracks: [track('old')] };
     const next: Queue = { current: 0, tracks: [track('new')] };
     let finish: ((value: Awaited<ReturnType<typeof queueService.getQueue>>) => void) | undefined;
-    mockedQueueService.getQueue.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    mockedQueueService.getQueue.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
     mockedQueueService.replaceQueue.mockResolvedValueOnce({ queue: next });
     const read = useQueueStore.getState().loadQueue();
     await Promise.resolve();
@@ -366,5 +405,4 @@ describe('queueStore', () => {
     expect(useQueueStore.getState().queue).toEqual(next);
     expect(useQueueStore.getState().isLoading).toBe(false);
   });
-
 });

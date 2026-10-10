@@ -41,7 +41,16 @@ const FAB_SIDE_OFFSET = 16;
 // These stay English identifiers: they are the filter's VALUE (and the source of
 // `LibraryFilter`), not its label. The label comes from the key maps below, so a
 // translated UI never changes what the state machine compares against.
-const LIBRARY_FILTERS = ['All', 'Playlists', 'Artists', 'Albums', 'Uploads', 'Podcasts', 'Shows', 'Episodes'] as const;
+const LIBRARY_FILTERS = [
+  'All',
+  'Playlists',
+  'Artists',
+  'Albums',
+  'Uploads',
+  'Podcasts',
+  'Shows',
+  'Episodes',
+] as const;
 type LibraryFilter = (typeof LIBRARY_FILTERS)[number];
 
 /** Chip label per filter. */
@@ -119,7 +128,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
       right: FAB_SIDE_OFFSET,
       bottom: FAB_BOTTOM_OFFSET + FAB_PLAYER_BAR_CLEARANCE + insets.bottom,
     }),
-    [insets.bottom]
+    [insets.bottom],
   );
 
   // Filter state
@@ -154,17 +163,24 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   const isUsingProps = propsPlaylists !== undefined;
   const collections = useLibraryCollections();
 
-  const finalPlaylists = isUsingProps ? (propsPlaylists || []) : collections.playlists;
-  const finalSavedAlbums = isUsingProps ? (propsSavedAlbums || []) : collections.savedAlbums;
-  const finalFollowedArtists = isUsingProps ? (propsFollowedArtists || []) : collections.followedArtists;
-  const finalLikedTracksCount = isUsingProps ? (propsLikedTracksCount || 0) : collections.likedTracksCount;
-  const finalLoading = gate.isResolving || (isUsingProps ? (propsLoading ?? false) : collections.loading);
+  const finalPlaylists = isUsingProps ? propsPlaylists || [] : collections.playlists;
+  const finalSavedAlbums = isUsingProps ? propsSavedAlbums || [] : collections.savedAlbums;
+  const finalFollowedArtists = isUsingProps
+    ? propsFollowedArtists || []
+    : collections.followedArtists;
+  const finalLikedTracksCount = isUsingProps
+    ? propsLikedTracksCount || 0
+    : collections.likedTracksCount;
+  const finalLoading =
+    gate.isResolving || (isUsingProps ? (propsLoading ?? false) : collections.loading);
   // A session that never resolved is an error in BOTH modes — in sidebar mode
   // the parent passes data but not the session's terminal state, so an
   // unresolved auth would otherwise fall through to "your library is empty".
   const finalError = gate.isTimedOut
     ? t('library.errors.session')
-    : isUsingProps ? (propsError ?? null) : collections.error;
+    : isUsingProps
+      ? (propsError ?? null)
+      : collections.error;
 
   // Each of the four sections above renders straight off `?? []`, which collapses
   // three different situations into one empty array: the query succeeded and
@@ -181,7 +197,18 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   const uploadsUnresolved = uploadsQuery.isError || uploadsQuery.isLoading;
 
   const isLibraryEmptyForFilter =
-    (activeFilter === 'All' && finalPlaylists.length === 0 && finalFollowedArtists.length === 0 && finalSavedAlbums.length === 0 && !subscriptionsUnresolved && subscribedPodcasts.length === 0 && !myPodcastsUnresolved && myPodcasts.length === 0 && !inProgressUnresolved && inProgressEpisodes.length === 0 && !uploadsUnresolved && uploads.length === 0) ||
+    (activeFilter === 'All' &&
+      finalPlaylists.length === 0 &&
+      finalFollowedArtists.length === 0 &&
+      finalSavedAlbums.length === 0 &&
+      !subscriptionsUnresolved &&
+      subscribedPodcasts.length === 0 &&
+      !myPodcastsUnresolved &&
+      myPodcasts.length === 0 &&
+      !inProgressUnresolved &&
+      inProgressEpisodes.length === 0 &&
+      !uploadsUnresolved &&
+      uploads.length === 0) ||
     (activeFilter === 'Playlists' && finalPlaylists.length === 0) ||
     (activeFilter === 'Artists' && finalFollowedArtists.length === 0) ||
     (activeFilter === 'Albums' && finalSavedAlbums.length === 0) ||
@@ -193,328 +220,412 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   return (
     <>
       {!showSidebarControls && (
-        <SEO
-          title={t('library.seo.title')}
-          description={t('library.seo.description')}
-        />
+        <SEO title={t('library.seo.title')} description={t('library.seo.description')} />
       )}
       <View className="flex-1 relative">
-      <Animated.ScrollView
-        className="flex-1"
-        contentContainerClassName="px-3 pt-3 pb-[100px]"
-        showsVerticalScrollIndicator={false}
-        onScroll={scrollHandler}
-        scrollEventThrottle={16}
-      >
-        <View className="flex-row items-center justify-between mb-3">
-          <Text className="text-[24px] font-bold text-foreground">{t('library.title')}</Text>
-          <View className="flex-row gap-2 items-center">
-            {showSidebarControls && onFullscreen && (
-              <Pressable
-                onPress={onFullscreen}
-                className="w-7 h-7 items-center justify-center rounded-[14px] bg-popover web:cursor-pointer"
-              >
-                <Ionicons
-                  name={isFullscreen ? 'contract' : 'expand'}
-                  size={18}
-                  color={theme.colors.text}
-                />
-              </Pressable>
-            )}
-            {showSidebarControls && onCollapse && !isFullscreen && (
-              <Pressable
-                onPress={onCollapse}
-                className="w-7 h-7 items-center justify-center rounded-[14px] bg-popover web:cursor-pointer"
-              >
-                <Octicons
-                  name="sidebar-collapse"
-                  size={18}
-                  color={theme.colors.text}
-                />
-              </Pressable>
-            )}
+        <Animated.ScrollView
+          className="flex-1"
+          contentContainerClassName="px-3 pt-3 pb-[100px]"
+          showsVerticalScrollIndicator={false}
+          onScroll={scrollHandler}
+          scrollEventThrottle={16}
+        >
+          <View className="flex-row items-center justify-between mb-3">
+            <Text className="text-[24px] font-bold text-foreground">{t('library.title')}</Text>
+            <View className="flex-row gap-2 items-center">
+              {showSidebarControls && onFullscreen && (
+                <Pressable
+                  onPress={onFullscreen}
+                  className="w-7 h-7 items-center justify-center rounded-[14px] bg-popover web:cursor-pointer"
+                >
+                  <Ionicons
+                    name={isFullscreen ? 'contract' : 'expand'}
+                    size={18}
+                    color={theme.colors.text}
+                  />
+                </Pressable>
+              )}
+              {showSidebarControls && onCollapse && !isFullscreen && (
+                <Pressable
+                  onPress={onCollapse}
+                  className="w-7 h-7 items-center justify-center rounded-[14px] bg-popover web:cursor-pointer"
+                >
+                  <Octicons name="sidebar-collapse" size={18} color={theme.colors.text} />
+                </Pressable>
+              )}
+            </View>
           </View>
-        </View>
 
-        <View className="flex-row flex-wrap gap-3 px-4 py-2">
-          <Pressable accessibilityRole="link" onPress={() => router.push('/library/history')} className="px-3 py-2 rounded-full bg-surface"><Text className="text-foreground">{t('listener.history')}</Text></Pressable>
-<Pressable accessibilityRole="link" onPress={() => router.push('/library/queue')} className="px-3 py-2 rounded-full bg-surface"><Text className="text-foreground">{t('listener.queue')}</Text></Pressable>
-        </View>
-        {/* Filters */}
-        <View className="flex-row gap-1.5 mb-3 items-center">
-          {LIBRARY_FILTERS.map((filter) => {
-            const isActive = activeFilter === filter;
-            return (
-              <Pressable
-                key={filter}
-                onPress={() => setActiveFilter(filter)}
-                className={cn(
-                  'px-2.5 py-[3px] rounded-[12px] h-6 justify-center items-center',
-                  isActive ? 'bg-primary' : 'bg-popover',
-                )}
-              >
-                <Text
+          <View className="flex-row flex-wrap gap-3 px-4 py-2">
+            <Pressable
+              accessibilityRole="link"
+              onPress={() => router.push('/library/history')}
+              className="px-3 py-2 rounded-full bg-surface"
+            >
+              <Text className="text-foreground">{t('listener.history')}</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="link"
+              onPress={() => router.push('/library/queue')}
+              className="px-3 py-2 rounded-full bg-surface"
+            >
+              <Text className="text-foreground">{t('listener.queue')}</Text>
+            </Pressable>
+          </View>
+          {/* Filters */}
+          <View className="flex-row gap-1.5 mb-3 items-center">
+            {LIBRARY_FILTERS.map((filter) => {
+              const isActive = activeFilter === filter;
+              return (
+                <Pressable
+                  key={filter}
+                  onPress={() => setActiveFilter(filter)}
                   className={cn(
-                    'text-[11px] leading-[13px]',
-                    isActive ? 'font-bold text-primary-foreground' : 'font-semibold text-foreground',
+                    'px-2.5 py-[3px] rounded-[12px] h-6 justify-center items-center',
+                    isActive ? 'bg-primary' : 'bg-popover',
                   )}
                 >
-                  {t(LIBRARY_FILTER_KEYS[filter])}
+                  <Text
+                    className={cn(
+                      'text-[11px] leading-[13px]',
+                      isActive
+                        ? 'font-bold text-primary-foreground'
+                        : 'font-semibold text-foreground',
+                    )}
+                  >
+                    {t(LIBRARY_FILTER_KEYS[filter])}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {/* Liked Songs - show only when All or Playlists filter is active */}
+          {gate.isAuthenticated && (activeFilter === 'All' || activeFilter === 'Playlists') && (
+            <Pressable
+              className="flex-row items-center gap-3 p-2 rounded-[6px] mb-2 bg-popover"
+              onPress={() => router.push('/library/liked')}
+            >
+              <View className="w-12 h-12 rounded-[4px] items-center justify-center bg-primary">
+                <Ionicons name="heart" size={24} color={theme.colors.primaryForeground} />
+              </View>
+              <View className="flex-1">
+                <Text className="text-[14px] font-semibold mb-0.5 text-foreground">
+                  {t('library.likedSongs')}
                 </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+                <Text className="text-[12px] text-muted-foreground">
+                  Playlist •{' '}
+                  {finalLoading
+                    ? '...'
+                    : `${finalLikedTracksCount} ${finalLikedTracksCount === 1 ? 'song' : 'songs'}`}
+                </Text>
+              </View>
+            </Pressable>
+          )}
 
-        {/* Liked Songs - show only when All or Playlists filter is active */}
-        {gate.isAuthenticated && (activeFilter === 'All' || activeFilter === 'Playlists') && (
-          <Pressable
-            className="flex-row items-center gap-3 p-2 rounded-[6px] mb-2 bg-popover"
-            onPress={() => router.push('/library/liked')}
-          >
-            <View className="w-12 h-12 rounded-[4px] items-center justify-center bg-primary">
-              <Ionicons name="heart" size={24} color={theme.colors.primaryForeground} />
-            </View>
-            <View className="flex-1">
-              <Text className="text-[14px] font-semibold mb-0.5 text-foreground">{t('library.likedSongs')}</Text>
-              <Text className="text-[12px] text-muted-foreground">
-                Playlist • {finalLoading ? '...' : `${finalLikedTracksCount} ${finalLikedTracksCount === 1 ? 'song' : 'songs'}`}
-              </Text>
-            </View>
-          </Pressable>
-        )}
-
-        {/* Your uploads — the private locker, alongside Liked Songs rather than
+          {/* Your uploads — the private locker, alongside Liked Songs rather than
             inside the saved-album lists, because nothing in it is catalogue. */}
-        {gate.isAuthenticated && (activeFilter === 'All' || activeFilter === 'Uploads') && uploads.length > 0 && (
-          <Pressable
-            className="flex-row items-center gap-3 p-2 rounded-[6px] mb-2 bg-popover"
-            onPress={() => router.push('/library/uploads')}
-          >
-            <View className="w-12 h-12 rounded-[4px] items-center justify-center bg-surface">
-              <MaterialCommunityIcons name="folder-music" size={24} color={theme.colors.text} />
-            </View>
-            <View className="flex-1">
-              <Text className="text-[14px] font-semibold mb-0.5 text-foreground">{t('uploads.locker.title')}</Text>
-              <Text className="text-[12px] text-muted-foreground">
-                {t('uploads.locker.trackCount', { count: uploadCount })}
-              </Text>
-            </View>
-          </Pressable>
-        )}
+          {gate.isAuthenticated &&
+            (activeFilter === 'All' || activeFilter === 'Uploads') &&
+            uploads.length > 0 && (
+              <Pressable
+                className="flex-row items-center gap-3 p-2 rounded-[6px] mb-2 bg-popover"
+                onPress={() => router.push('/library/uploads')}
+              >
+                <View className="w-12 h-12 rounded-[4px] items-center justify-center bg-surface">
+                  <MaterialCommunityIcons name="folder-music" size={24} color={theme.colors.text} />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-[14px] font-semibold mb-0.5 text-foreground">
+                    {t('uploads.locker.title')}
+                  </Text>
+                  <Text className="text-[12px] text-muted-foreground">
+                    {t('uploads.locker.trackCount', { count: uploadCount })}
+                  </Text>
+                </View>
+              </Pressable>
+            )}
 
-        {/* …and the locker's own failure, in its place. The same `EmptyState`
+          {/* …and the locker's own failure, in its place. The same `EmptyState`
             error shape as the collections error above, but scoped to one
             section and retrying one query, because a failed locker says nothing
             about whether the sections below it loaded. */}
-        {gate.isAuthenticated && (activeFilter === 'All' || activeFilter === 'Uploads') && uploadsQuery.isError && (
-          <EmptyState
-            containerStyle={styles.inlineState}
-            icon={{ name: 'cloud-offline-outline' }}
-            error={{
-              title: t('uploads.locker.loadError'),
-              message: t('common.retryHint'),
-              onRetry: async () => {
-                await uploadsQuery.refetch();
-              },
-            }}
-          />
-        )}
+          {gate.isAuthenticated &&
+            (activeFilter === 'All' || activeFilter === 'Uploads') &&
+            uploadsQuery.isError && (
+              <EmptyState
+                containerStyle={styles.inlineState}
+                icon={{ name: 'cloud-offline-outline' }}
+                error={{
+                  title: t('uploads.locker.loadError'),
+                  message: t('common.retryHint'),
+                  onRetry: async () => {
+                    await uploadsQuery.refetch();
+                  },
+                }}
+              />
+            )}
 
-        {/* Loading state */}
-        {finalLoading && (gate.isAuthenticated || gate.isResolving) && (
-          <View className="mb-6">
-            <Text className="text-[16px] font-bold mb-3 text-foreground">{t('common.playlists')}</Text>
-            <View className="gap-0">
-              <LibraryListSkeleton count={6} />
+          {/* Loading state */}
+          {finalLoading && (gate.isAuthenticated || gate.isResolving) && (
+            <View className="mb-6">
+              <Text className="text-[16px] font-bold mb-3 text-foreground">
+                {t('common.playlists')}
+              </Text>
+              <View className="gap-0">
+                <LibraryListSkeleton count={6} />
+              </View>
             </View>
-          </View>
-        )}
+          )}
 
-        {/* Error state — always offers a retry, including the auth timeout */}
-        {finalError && !finalLoading && (
-          <EmptyState
-            containerStyle={styles.inlineState}
-            icon={{ name: 'cloud-offline-outline' }}
-            error={{
-              title: t('library.errors.load'),
-              message: finalError,
-              onRetry: collections.retry,
-            }}
-          />
-        )}
+          {/* Error state — always offers a retry, including the auth timeout */}
+          {finalError && !finalLoading && (
+            <EmptyState
+              containerStyle={styles.inlineState}
+              icon={{ name: 'cloud-offline-outline' }}
+              error={{
+                title: t('library.errors.load'),
+                message: finalError,
+                onRetry: collections.retry,
+              }}
+            />
+          )}
 
-        {/* Playlists list */}
-        {!finalLoading && !finalError && finalPlaylists.length > 0 && (activeFilter === 'All' || activeFilter === 'Playlists') && (
-          <View className="mb-6">
-            <Text className="text-[16px] font-bold mb-3 text-foreground">{t('common.playlists')}</Text>
-            <View className="gap-0">
-              {finalPlaylists.map((playlist) => (
-                <Pressable
-                  key={playlist.id}
-                  className="flex-row items-center gap-3 p-2 rounded-[6px] mb-2 bg-popover"
-                  onPress={() => router.push(`/playlist/${playlist.id}`)}
-                >
-                  {playlist.coverArt ? (
-                    <Image
-                      source={{ uri: pickCatalogImageUrl(undefined, playlist.coverArt, 'thumbnail', playlist.coverArtSizes) }}
-                      style={styles.squareArtwork}
-                      contentFit="cover"
-                    />
-                  ) : (
-                    <View className="w-12 h-12 rounded-[4px] items-center justify-center bg-background">
-                      <MaterialCommunityIcons
-                        name="playlist-music"
-                        size={24}
-                        color={theme.colors.textSecondary}
-                      />
-                    </View>
-                  )}
-                  <View className="flex-1">
-                    <Text className="text-[14px] font-semibold mb-0.5 text-foreground" numberOfLines={1}>
-                      {playlist.name}
-                    </Text>
-                    <Text className="text-[12px] text-muted-foreground">
-                      {playlist.visibility === 'public' ? t('common.public') : t('common.private')} • {t('common.songCount', { count: playlist.trackCount || 0 })}
-                    </Text>
-                  </View>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* Artists list */}
-        {!finalLoading && !finalError && finalFollowedArtists.length > 0 && (activeFilter === 'All' || activeFilter === 'Artists') && (
-          <View className="mb-6">
-            <Text className="text-[16px] font-bold mb-3 text-foreground">{t('common.artists')}</Text>
-            <View className="gap-0">
-              {finalFollowedArtists.map((artist) => (
-                <Pressable
-                  key={artist.id}
-                  className="flex-row items-center gap-3 p-2 rounded-[6px] mb-2 bg-popover"
-                  onPress={() => router.push(`/p/${artist.id}`)}
-                >
-                  {(artist.image || artist.images?.length) ? (
-                    <Image
-                      source={{ uri: pickCatalogImageUrl(artist.images, artist.image, 'thumbnail', artist.imageSizes) }}
-                      style={styles.roundArtwork}
-                      contentFit="cover"
-                    />
-                  ) : (
-                    <View className="w-12 h-12 rounded-[24px] items-center justify-center bg-background">
-                      <Ionicons
-                        name="person"
-                        size={24}
-                        color={theme.colors.textSecondary}
-                      />
-                    </View>
-                  )}
-                  <View className="flex-1">
-                    <Text className="text-[14px] font-semibold mb-0.5 text-foreground" numberOfLines={1}>
-                      {artist.name}
-                    </Text>
-                    <Text className="text-[12px] text-muted-foreground">
-                      {t('common.artist')}
-                    </Text>
-                  </View>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* Albums list */}
-        {!finalLoading && !finalError && finalSavedAlbums.length > 0 && (activeFilter === 'All' || activeFilter === 'Albums') && (
-          <View className="mb-6">
-            <Text className="text-[16px] font-bold mb-3 text-foreground">{t('common.albums')}</Text>
-            <View className="gap-0">
-              {finalSavedAlbums.map((album) => (
-                <Pressable
-                  key={album.id}
-                  className="flex-row items-center gap-3 p-2 rounded-[6px] mb-2 bg-popover"
-                  onPress={() => router.push(`/album/${album.id}`)}
-                >
-                  {album.coverArt ? (
-                    <Image
-                      source={{ uri: pickCatalogImageUrl(undefined, album.coverArt, 'thumbnail', album.coverArtSizes) }}
-                      style={styles.squareArtwork}
-                      contentFit="cover"
-                    />
-                  ) : (
-                    <View className="w-12 h-12 rounded-[4px] items-center justify-center bg-background">
-                      <MaterialCommunityIcons
-                        name="album"
-                        size={24}
-                        color={theme.colors.textSecondary}
-                      />
-                    </View>
-                  )}
-                  <View className="flex-1">
-                    <Text className="text-[14px] font-semibold mb-0.5 text-foreground" numberOfLines={1}>
-                      {album.title}
-                    </Text>
-                    <Text className="text-[12px] text-muted-foreground">
-                      {album.artistName} • {album.releaseDate ? new Date(album.releaseDate).getFullYear() : ''}
-                    </Text>
-                  </View>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* Subscribed podcasts */}
-        {gate.isAuthenticated && (activeFilter === 'All' || activeFilter === 'Podcasts') && subscribedPodcasts.length > 0 && (
-          <View className="mb-6">
-            <Text className="text-[16px] font-bold mb-3 text-foreground">{t('common.podcasts')}</Text>
-            <View className="gap-0">
-              {subscribedPodcasts.map(({ podcast }) => {
-                const imageUri = resolvePodcastArtwork(podcast, 'thumbnail');
-                return (
-                  <Pressable
-                    key={podcast.id}
-                    className="flex-row items-center gap-3 p-2 rounded-[6px] mb-2 bg-popover"
-                    onPress={() => router.push({ pathname: '/podcasts/[id]', params: { id: podcast.id } })}
-                  >
-                    {imageUri ? (
-                      <Image source={{ uri: imageUri }} style={styles.squareArtwork} contentFit="cover" />
-                    ) : (
-                      <View className="w-12 h-12 rounded-[4px] items-center justify-center bg-background">
-                        <MaterialCommunityIcons name="podcast" size={24} color={theme.colors.textSecondary} />
+          {/* Playlists list */}
+          {!finalLoading &&
+            !finalError &&
+            finalPlaylists.length > 0 &&
+            (activeFilter === 'All' || activeFilter === 'Playlists') && (
+              <View className="mb-6">
+                <Text className="text-[16px] font-bold mb-3 text-foreground">
+                  {t('common.playlists')}
+                </Text>
+                <View className="gap-0">
+                  {finalPlaylists.map((playlist) => (
+                    <Pressable
+                      key={playlist.id}
+                      className="flex-row items-center gap-3 p-2 rounded-[6px] mb-2 bg-popover"
+                      onPress={() => router.push(`/playlist/${playlist.id}`)}
+                    >
+                      {playlist.coverArt ? (
+                        <Image
+                          source={{
+                            uri: pickCatalogImageUrl(
+                              undefined,
+                              playlist.coverArt,
+                              'thumbnail',
+                              playlist.coverArtSizes,
+                            ),
+                          }}
+                          style={styles.squareArtwork}
+                          contentFit="cover"
+                        />
+                      ) : (
+                        <View className="w-12 h-12 rounded-[4px] items-center justify-center bg-background">
+                          <MaterialCommunityIcons
+                            name="playlist-music"
+                            size={24}
+                            color={theme.colors.textSecondary}
+                          />
+                        </View>
+                      )}
+                      <View className="flex-1">
+                        <Text
+                          className="text-[14px] font-semibold mb-0.5 text-foreground"
+                          numberOfLines={1}
+                        >
+                          {playlist.name}
+                        </Text>
+                        <Text className="text-[12px] text-muted-foreground">
+                          {playlist.visibility === 'public'
+                            ? t('common.public')
+                            : t('common.private')}{' '}
+                          • {t('common.songCount', { count: playlist.trackCount || 0 })}
+                        </Text>
                       </View>
-                    )}
-                    <View className="flex-1">
-                      <Text className="text-[14px] font-semibold mb-0.5 text-foreground" numberOfLines={1}>
-                        {podcast.title}
-                      </Text>
-                      <Text className="text-[12px] text-muted-foreground" numberOfLines={1}>
-                        {podcast.author ?? t('common.podcast')}
-                      </Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-        )}
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            )}
 
-        {/* …and the subscriptions' own failure, in their place. */}
-        {gate.isAuthenticated && (activeFilter === 'All' || activeFilter === 'Podcasts') && subscriptionsQuery.isError && (
-          <EmptyState
-            containerStyle={styles.inlineState}
-            icon={{ name: 'cloud-offline-outline' }}
-            error={{
-              title: t('library.errors.podcasts'),
-              message: t('common.retryHint'),
-              onRetry: async () => {
-                await subscriptionsQuery.refetch();
-              },
-            }}
-          />
-        )}
+          {/* Artists list */}
+          {!finalLoading &&
+            !finalError &&
+            finalFollowedArtists.length > 0 &&
+            (activeFilter === 'All' || activeFilter === 'Artists') && (
+              <View className="mb-6">
+                <Text className="text-[16px] font-bold mb-3 text-foreground">
+                  {t('common.artists')}
+                </Text>
+                <View className="gap-0">
+                  {finalFollowedArtists.map((artist) => (
+                    <Pressable
+                      key={artist.id}
+                      className="flex-row items-center gap-3 p-2 rounded-[6px] mb-2 bg-popover"
+                      onPress={() => router.push(`/p/${artist.id}`)}
+                    >
+                      {artist.image || artist.images?.length ? (
+                        <Image
+                          source={{
+                            uri: pickCatalogImageUrl(
+                              artist.images,
+                              artist.image,
+                              'thumbnail',
+                              artist.imageSizes,
+                            ),
+                          }}
+                          style={styles.roundArtwork}
+                          contentFit="cover"
+                        />
+                      ) : (
+                        <View className="w-12 h-12 rounded-[24px] items-center justify-center bg-background">
+                          <Ionicons name="person" size={24} color={theme.colors.textSecondary} />
+                        </View>
+                      )}
+                      <View className="flex-1">
+                        <Text
+                          className="text-[14px] font-semibold mb-0.5 text-foreground"
+                          numberOfLines={1}
+                        >
+                          {artist.name}
+                        </Text>
+                        <Text className="text-[12px] text-muted-foreground">
+                          {t('common.artist')}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            )}
 
-        {/* The viewer's OWN shows.
+          {/* Albums list */}
+          {!finalLoading &&
+            !finalError &&
+            finalSavedAlbums.length > 0 &&
+            (activeFilter === 'All' || activeFilter === 'Albums') && (
+              <View className="mb-6">
+                <Text className="text-[16px] font-bold mb-3 text-foreground">
+                  {t('common.albums')}
+                </Text>
+                <View className="gap-0">
+                  {finalSavedAlbums.map((album) => (
+                    <Pressable
+                      key={album.id}
+                      className="flex-row items-center gap-3 p-2 rounded-[6px] mb-2 bg-popover"
+                      onPress={() => router.push(`/album/${album.id}`)}
+                    >
+                      {album.coverArt ? (
+                        <Image
+                          source={{
+                            uri: pickCatalogImageUrl(
+                              undefined,
+                              album.coverArt,
+                              'thumbnail',
+                              album.coverArtSizes,
+                            ),
+                          }}
+                          style={styles.squareArtwork}
+                          contentFit="cover"
+                        />
+                      ) : (
+                        <View className="w-12 h-12 rounded-[4px] items-center justify-center bg-background">
+                          <MaterialCommunityIcons
+                            name="album"
+                            size={24}
+                            color={theme.colors.textSecondary}
+                          />
+                        </View>
+                      )}
+                      <View className="flex-1">
+                        <Text
+                          className="text-[14px] font-semibold mb-0.5 text-foreground"
+                          numberOfLines={1}
+                        >
+                          {album.title}
+                        </Text>
+                        <Text className="text-[12px] text-muted-foreground">
+                          {album.artistName} •{' '}
+                          {album.releaseDate ? new Date(album.releaseDate).getFullYear() : ''}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            )}
+
+          {/* Subscribed podcasts */}
+          {gate.isAuthenticated &&
+            (activeFilter === 'All' || activeFilter === 'Podcasts') &&
+            subscribedPodcasts.length > 0 && (
+              <View className="mb-6">
+                <Text className="text-[16px] font-bold mb-3 text-foreground">
+                  {t('common.podcasts')}
+                </Text>
+                <View className="gap-0">
+                  {subscribedPodcasts.map(({ podcast }) => {
+                    const imageUri = resolvePodcastArtwork(podcast, 'thumbnail');
+                    return (
+                      <Pressable
+                        key={podcast.id}
+                        className="flex-row items-center gap-3 p-2 rounded-[6px] mb-2 bg-popover"
+                        onPress={() =>
+                          router.push({ pathname: '/podcasts/[id]', params: { id: podcast.id } })
+                        }
+                      >
+                        {imageUri ? (
+                          <Image
+                            source={{ uri: imageUri }}
+                            style={styles.squareArtwork}
+                            contentFit="cover"
+                          />
+                        ) : (
+                          <View className="w-12 h-12 rounded-[4px] items-center justify-center bg-background">
+                            <MaterialCommunityIcons
+                              name="podcast"
+                              size={24}
+                              color={theme.colors.textSecondary}
+                            />
+                          </View>
+                        )}
+                        <View className="flex-1">
+                          <Text
+                            className="text-[14px] font-semibold mb-0.5 text-foreground"
+                            numberOfLines={1}
+                          >
+                            {podcast.title}
+                          </Text>
+                          <Text className="text-[12px] text-muted-foreground" numberOfLines={1}>
+                            {podcast.author ?? t('common.podcast')}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+
+          {/* …and the subscriptions' own failure, in their place. */}
+          {gate.isAuthenticated &&
+            (activeFilter === 'All' || activeFilter === 'Podcasts') &&
+            subscriptionsQuery.isError && (
+              <EmptyState
+                containerStyle={styles.inlineState}
+                icon={{ name: 'cloud-offline-outline' }}
+                error={{
+                  title: t('library.errors.podcasts'),
+                  message: t('common.retryHint'),
+                  onRetry: async () => {
+                    await subscriptionsQuery.refetch();
+                  },
+                }}
+              />
+            )}
+
+          {/* The viewer's OWN shows.
             Its own section rather than a row mixed into the subscriptions above,
             for the reason the uploads locker gets its own entry: what you MADE
             and what you FOLLOW are different relationships, and here they are
@@ -523,119 +634,155 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
             surface a creator would otherwise conclude from that their private or
             unpublished show is live. A show you own and also subscribe to
             appears in both lists, which is true rather than a duplicate. */}
-        {gate.isAuthenticated && (activeFilter === 'All' || activeFilter === 'Shows') && myPodcasts.length > 0 && (
-          <View className="mb-6">
-            <Text className="text-[16px] font-bold mb-3 text-foreground">{t('library.yourShows')}</Text>
-            <View className="gap-0">
-              {myPodcasts.map((podcast) => {
-                const imageUri = resolvePodcastArtwork(podcast, 'thumbnail');
-                return (
-                  <Pressable
-                    key={podcast.id}
-                    className="flex-row items-center gap-3 p-2 rounded-[6px] mb-2 bg-popover"
-                    onPress={() => router.push({ pathname: '/podcasts/[id]', params: { id: podcast.id } })}
-                  >
-                    {imageUri ? (
-                      <Image source={{ uri: imageUri }} style={styles.squareArtwork} contentFit="cover" />
-                    ) : (
-                      <View className="w-12 h-12 rounded-[4px] items-center justify-center bg-background">
-                        <MaterialCommunityIcons name="podcast" size={24} color={theme.colors.textSecondary} />
-                      </View>
-                    )}
-                    <View className="flex-1">
-                      <Text className="text-[14px] font-semibold mb-0.5 text-foreground" numberOfLines={1}>
-                        {podcast.title}
-                      </Text>
-                      <Text className="text-[12px] text-muted-foreground" numberOfLines={1}>
-                        {t(ownedShowStateKey(podcast))}
-                      </Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-        )}
+          {gate.isAuthenticated &&
+            (activeFilter === 'All' || activeFilter === 'Shows') &&
+            myPodcasts.length > 0 && (
+              <View className="mb-6">
+                <Text className="text-[16px] font-bold mb-3 text-foreground">
+                  {t('library.yourShows')}
+                </Text>
+                <View className="gap-0">
+                  {myPodcasts.map((podcast) => {
+                    const imageUri = resolvePodcastArtwork(podcast, 'thumbnail');
+                    return (
+                      <Pressable
+                        key={podcast.id}
+                        className="flex-row items-center gap-3 p-2 rounded-[6px] mb-2 bg-popover"
+                        onPress={() =>
+                          router.push({ pathname: '/podcasts/[id]', params: { id: podcast.id } })
+                        }
+                      >
+                        {imageUri ? (
+                          <Image
+                            source={{ uri: imageUri }}
+                            style={styles.squareArtwork}
+                            contentFit="cover"
+                          />
+                        ) : (
+                          <View className="w-12 h-12 rounded-[4px] items-center justify-center bg-background">
+                            <MaterialCommunityIcons
+                              name="podcast"
+                              size={24}
+                              color={theme.colors.textSecondary}
+                            />
+                          </View>
+                        )}
+                        <View className="flex-1">
+                          <Text
+                            className="text-[14px] font-semibold mb-0.5 text-foreground"
+                            numberOfLines={1}
+                          >
+                            {podcast.title}
+                          </Text>
+                          <Text className="text-[12px] text-muted-foreground" numberOfLines={1}>
+                            {t(ownedShowStateKey(podcast))}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
 
-        {/* …and the same section when the query REJECTED — which is what the
+          {/* …and the same section when the query REJECTED — which is what the
             reported "I can't see my podcasts" was: the rows, the API and the
             deployed bundle were all correct, and a thrown parse removed the
             section with nothing said in its place. */}
-        {gate.isAuthenticated && (activeFilter === 'All' || activeFilter === 'Shows') && myPodcastsQuery.isError && (
-          <EmptyState
-            containerStyle={styles.inlineState}
-            icon={{ name: 'cloud-offline-outline' }}
-            error={{
-              title: t('library.errors.shows'),
-              message: t('common.retryHint'),
-              onRetry: async () => {
-                await myPodcastsQuery.refetch();
-              },
-            }}
-          />
-        )}
+          {gate.isAuthenticated &&
+            (activeFilter === 'All' || activeFilter === 'Shows') &&
+            myPodcastsQuery.isError && (
+              <EmptyState
+                containerStyle={styles.inlineState}
+                icon={{ name: 'cloud-offline-outline' }}
+                error={{
+                  title: t('library.errors.shows'),
+                  message: t('common.retryHint'),
+                  onRetry: async () => {
+                    await myPodcastsQuery.refetch();
+                  },
+                }}
+              />
+            )}
 
-        {/* In-progress episodes */}
-        {gate.isAuthenticated && (activeFilter === 'All' || activeFilter === 'Episodes') && inProgressEpisodes.length > 0 && (
-          <View className="mb-6">
-            <Text className="text-[16px] font-bold mb-3 text-foreground">{t('library.continueListening')}</Text>
-            <View className="gap-0">
-              {inProgressEpisodes.map((entry) => (
-                <EpisodeRow
-                  key={entry.episode.id}
-                  episode={entry.episode}
-                  progress={{ progressSec: entry.progressSec, durationSec: entry.durationSec, completed: entry.completed }}
-                  isCurrent={currentEpisode?.id === entry.episode.id}
-                  isPlaying={currentEpisode?.id === entry.episode.id && isEpisodePlaying}
-                  onPress={() => router.push({ pathname: '/episode/[id]', params: { id: entry.episode.id } })}
-                  onPlayPress={() => playEpisode(entry.episode, { resumeFromSec: entry.progressSec })}
-                />
-              ))}
-            </View>
-          </View>
-        )}
+          {/* In-progress episodes */}
+          {gate.isAuthenticated &&
+            (activeFilter === 'All' || activeFilter === 'Episodes') &&
+            inProgressEpisodes.length > 0 && (
+              <View className="mb-6">
+                <Text className="text-[16px] font-bold mb-3 text-foreground">
+                  {t('library.continueListening')}
+                </Text>
+                <View className="gap-0">
+                  {inProgressEpisodes.map((entry) => (
+                    <EpisodeRow
+                      key={entry.episode.id}
+                      episode={entry.episode}
+                      progress={{
+                        progressSec: entry.progressSec,
+                        durationSec: entry.durationSec,
+                        completed: entry.completed,
+                      }}
+                      isCurrent={currentEpisode?.id === entry.episode.id}
+                      isPlaying={currentEpisode?.id === entry.episode.id && isEpisodePlaying}
+                      onPress={() =>
+                        router.push({ pathname: '/episode/[id]', params: { id: entry.episode.id } })
+                      }
+                      onPlayPress={() =>
+                        playEpisode(entry.episode, { resumeFromSec: entry.progressSec })
+                      }
+                    />
+                  ))}
+                </View>
+              </View>
+            )}
 
-        {/* …and the in-progress episodes' own failure, in their place. */}
-        {gate.isAuthenticated && (activeFilter === 'All' || activeFilter === 'Episodes') && continueQuery.isError && (
-          <EmptyState
-            containerStyle={styles.inlineState}
-            icon={{ name: 'cloud-offline-outline' }}
-            error={{
-              title: t('library.errors.episodes'),
-              message: t('common.retryHint'),
-              onRetry: async () => {
-                await continueQuery.refetch();
-              },
-            }}
-          />
-        )}
+          {/* …and the in-progress episodes' own failure, in their place. */}
+          {gate.isAuthenticated &&
+            (activeFilter === 'All' || activeFilter === 'Episodes') &&
+            continueQuery.isError && (
+              <EmptyState
+                containerStyle={styles.inlineState}
+                icon={{ name: 'cloud-offline-outline' }}
+                error={{
+                  title: t('library.errors.episodes'),
+                  message: t('common.retryHint'),
+                  onRetry: async () => {
+                    await continueQuery.refetch();
+                  },
+                }}
+              />
+            )}
 
-        {/* Empty state — only once the session resolved AND the queries settled,
+          {/* Empty state — only once the session resolved AND the queries settled,
             so an unresolved auth is never mistaken for an empty library. */}
-        {!finalLoading && !finalError && gate.canUsePrivateApi && isLibraryEmptyForFilter && (
-          <EmptyState
-            containerStyle={styles.inlineState}
-            icon={{ name: 'musical-notes-outline' }}
-            title={t(EMPTY_LIBRARY_KEYS[activeFilter])}
-            action={
-              activeFilter === 'Playlists'
-                ? { label: t('library.createFirstPlaylist'), onPress: () => router.push('/create-playlist') }
-                : activeFilter === 'Uploads'
-                  ? { label: t('uploads.title'), onPress: () => router.push('/upload') }
-                  : undefined
-            }
-          />
-        )}
+          {!finalLoading && !finalError && gate.canUsePrivateApi && isLibraryEmptyForFilter && (
+            <EmptyState
+              containerStyle={styles.inlineState}
+              icon={{ name: 'musical-notes-outline' }}
+              title={t(EMPTY_LIBRARY_KEYS[activeFilter])}
+              action={
+                activeFilter === 'Playlists'
+                  ? {
+                      label: t('library.createFirstPlaylist'),
+                      onPress: () => router.push('/create-playlist'),
+                    }
+                  : activeFilter === 'Uploads'
+                    ? { label: t('uploads.title'), onPress: () => router.push('/upload') }
+                    : undefined
+              }
+            />
+          )}
 
-        {/* Signed out — a terminal state, distinct from a session still resolving */}
-        {gate.status === 'guest' && !finalLoading && (
-          <EmptyState
-            containerStyle={styles.inlineState}
-            icon={{ name: 'lock-closed-outline' }}
-            title={t('library.signedOut')}
-          />
-        )}
-      </Animated.ScrollView>
+          {/* Signed out — a terminal state, distinct from a session still resolving */}
+          {gate.status === 'guest' && !finalLoading && (
+            <EmptyState
+              containerStyle={styles.inlineState}
+              icon={{ name: 'lock-closed-outline' }}
+              title={t('library.signedOut')}
+            />
+          )}
+        </Animated.ScrollView>
 
         {gate.canUsePrivateApi && (
           <Fab

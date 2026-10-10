@@ -126,7 +126,7 @@ export async function fingerprintFile(filePath: string): Promise<FingerprintResu
         status: 'unavailable',
         reason:
           'fpcalc (Chromaprint) is not installed — acoustic screening was not performed. ' +
-          'It ships in Alpine\'s `chromaprint` package, which the runtime image installs.',
+          "It ships in Alpine's `chromaprint` package, which the runtime image installs.",
       };
     }
     const stderr = (err as { stderr?: string }).stderr;
@@ -184,7 +184,7 @@ export async function fingerprintFile(filePath: string): Promise<FingerprintResu
  * its floor a PESSIMISTIC bound: two genuinely unrelated commercial recordings
  * sit far further apart than anything measured here.
  */
-export const FINGERPRINT_MATCH_BER = 0.10;
+export const FINGERPRINT_MATCH_BER = 0.1;
 
 /**
  * Chromaprint's frame rate: 11025 Hz / a 1365-sample hop ≈ 8.08 items per
@@ -299,7 +299,11 @@ export function compareFingerprints(
 ): FingerprintComparison {
   let best: { bitErrorRate: number; alignedItems: number; offset: number } | undefined;
 
-  for (let offset = -FINGERPRINT_MAX_OFFSET_ITEMS; offset <= FINGERPRINT_MAX_OFFSET_ITEMS; offset += 1) {
+  for (
+    let offset = -FINGERPRINT_MAX_OFFSET_ITEMS;
+    offset <= FINGERPRINT_MAX_OFFSET_ITEMS;
+    offset += 1
+  ) {
     const rate = rateAtOffset(a, b, offset);
     if (!rate) continue;
     if (!best || rate.bitErrorRate < best.bitErrorRate) {

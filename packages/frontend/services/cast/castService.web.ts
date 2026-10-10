@@ -20,11 +20,11 @@ const logger = createScopedLogger('CastWeb');
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function getFramework(): CafFrameworkNamespace | null {
-  return typeof window !== 'undefined' ? window.cast?.framework ?? null : null;
+  return typeof window !== 'undefined' ? (window.cast?.framework ?? null) : null;
 }
 
 function getChromeCast(): CafChromeCastNamespace | null {
-  return typeof window !== 'undefined' ? window.chrome?.cast ?? null : null;
+  return typeof window !== 'undefined' ? (window.chrome?.cast ?? null) : null;
 }
 
 function mapCastState(raw: string, framework: CafFrameworkNamespace): CastSessionState {
@@ -62,7 +62,10 @@ class WebCastEngine implements PlayerEngine {
   ) {
     this.previousPlayerState = remotePlayer.playerState;
     this.onChange = () => this.handleChange();
-    this.controller.addEventListener(this.framework.RemotePlayerEventType.ANY_CHANGE, this.onChange);
+    this.controller.addEventListener(
+      this.framework.RemotePlayerEventType.ANY_CHANGE,
+      this.onChange,
+    );
   }
 
   // ── PlayerEngine properties ────────────────────────────────────────────────
@@ -134,7 +137,10 @@ class WebCastEngine implements PlayerEngine {
     });
   }
 
-  addListener(event: 'playbackStatusUpdate', callback: (status: PlaybackStatusUpdate) => void): void {
+  addListener(
+    event: 'playbackStatusUpdate',
+    callback: (status: PlaybackStatusUpdate) => void,
+  ): void {
     if (event === 'playbackStatusUpdate') {
       this.listeners.push(callback);
     }

@@ -101,5 +101,5 @@ export const genres = pgTable(
     uniqueIndex('genres_lower_name_kind_key').on(sql`lower(${t.name})`, t.kind),
     // FK-target-only — see the file-level doc comment.
     unique('genres_id_kind_key').on(t.id, t.kind),
-  ]
+  ],
 );

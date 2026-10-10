@@ -33,8 +33,18 @@ const NAME_MAX_LENGTH = 100;
 const DESCRIPTION_MAX_LENGTH = 300;
 
 const createPlaylistFormSchema = z.object({
-  name: z.string().trim().min(1, 'Playlist name is required').max(NAME_MAX_LENGTH, `Name must be ${NAME_MAX_LENGTH} characters or less`),
-  description: z.string().trim().max(DESCRIPTION_MAX_LENGTH, `Description must be ${DESCRIPTION_MAX_LENGTH} characters or less`),
+  name: z
+    .string()
+    .trim()
+    .min(1, 'Playlist name is required')
+    .max(NAME_MAX_LENGTH, `Name must be ${NAME_MAX_LENGTH} characters or less`),
+  description: z
+    .string()
+    .trim()
+    .max(
+      DESCRIPTION_MAX_LENGTH,
+      `Description must be ${DESCRIPTION_MAX_LENGTH} characters or less`,
+    ),
   coverArt: z.string().nullable(),
   visibility: z.nativeEnum(PlaylistVisibility),
 });
@@ -66,7 +76,7 @@ const CreatePlaylistScreen: React.FC = () => {
         description: input.description || undefined,
         coverArt: input.coverArt || undefined,
         visibility: input.visibility,
-    }),
+      }),
     onSuccess: (playlist) => {
       toast.success(`Playlist "${playlist.name}" created successfully`);
       router.replace({ pathname: '/playlist/[id]', params: { id: playlist.id } });
@@ -121,17 +131,33 @@ const CreatePlaylistScreen: React.FC = () => {
   }, [isCreating, router]);
 
   const visibilityOptions = [
-    { label: t('common.public'), value: PlaylistVisibility.PUBLIC, description: t('createPlaylist.publicHint') },
-    { label: t('common.private'), value: PlaylistVisibility.PRIVATE, description: t('createPlaylist.privateHint') },
-    { label: t('common.unlisted'), value: PlaylistVisibility.UNLISTED, description: t('createPlaylist.unlistedHint') },
+    {
+      label: t('common.public'),
+      value: PlaylistVisibility.PUBLIC,
+      description: t('createPlaylist.publicHint'),
+    },
+    {
+      label: t('common.private'),
+      value: PlaylistVisibility.PRIVATE,
+      description: t('createPlaylist.privateHint'),
+    },
+    {
+      label: t('common.unlisted'),
+      value: PlaylistVisibility.UNLISTED,
+      description: t('createPlaylist.unlistedHint'),
+    },
   ];
 
   return (
     <>
-      <SEO title={t('createPlaylist.seo.title')} description={t('createPlaylist.seo.description')} />
+      <SEO
+        title={t('createPlaylist.seo.title')}
+        description={t('createPlaylist.seo.description')}
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        className="bg-surface" style={styles.container}
+        className="bg-surface"
+        style={styles.container}
       >
         {/* Header */}
         <View
@@ -145,16 +171,8 @@ const CreatePlaylistScreen: React.FC = () => {
             },
           ]}
         >
-          <Pressable
-            onPress={handleGoBack}
-            disabled={isCreating}
-            style={styles.backButton}
-          >
-            <MaterialCommunityIcons
-              name="arrow-left"
-              size={24}
-              color={theme.colors.text}
-            />
+          <Pressable onPress={handleGoBack} disabled={isCreating} style={styles.backButton}>
+            <MaterialCommunityIcons name="arrow-left" size={24} color={theme.colors.text} />
           </Pressable>
           <Text className="text-foreground" style={styles.title}>
             {t('library.createPlaylist')}
@@ -166,9 +184,7 @@ const CreatePlaylistScreen: React.FC = () => {
               styles.createHeaderButton,
               {
                 backgroundColor:
-                  isCreating || !name.trim()
-                    ? theme.colors.textSecondary
-                    : theme.colors.primary,
+                  isCreating || !name.trim() ? theme.colors.textSecondary : theme.colors.primary,
                 opacity: isCreating || !name.trim() ? 0.6 : 1,
               },
             ]}
@@ -176,17 +192,16 @@ const CreatePlaylistScreen: React.FC = () => {
             {isCreating ? (
               <ActivityIndicator size="small" color={theme.colors.primaryForeground} />
             ) : (
-              <Text className="text-primary-foreground" style={styles.createHeaderButtonText}>{t('common.create')}</Text>
+              <Text className="text-primary-foreground" style={styles.createHeaderButtonText}>
+                {t('common.create')}
+              </Text>
             )}
           </Pressable>
         </View>
 
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingBottom: insets.bottom + 16 },
-          ]}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 16 }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -278,9 +293,7 @@ const CreatePlaylistScreen: React.FC = () => {
                             ? theme.colors.primary
                             : theme.colors.backgroundSecondary,
                         borderColor:
-                          visibility === option.value
-                            ? theme.colors.primary
-                            : theme.colors.border,
+                          visibility === option.value ? theme.colors.primary : theme.colors.border,
                       },
                     ]}
                     disabled={isCreating}

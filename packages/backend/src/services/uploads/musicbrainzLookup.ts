@@ -25,7 +25,6 @@ import { logger } from '../../utils/logger';
 
 const MBID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-
 /**
  * The artist MusicBrainz credits on the recording this ISRC names.
  *

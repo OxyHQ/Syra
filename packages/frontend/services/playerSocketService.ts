@@ -1,6 +1,12 @@
 import { API_URL_SOCKET } from '@/config';
 import { io, Socket } from 'socket.io-client';
-import { ConnectPlaybackState, Queue, Device, DeviceType, PlaybackCommand } from '@syra/shared-types';
+import {
+  ConnectPlaybackState,
+  Queue,
+  Device,
+  DeviceType,
+  PlaybackCommand,
+} from '@syra/shared-types';
 import { usePlayerStore } from '../stores/playerStore';
 import { useQueueStore } from '../stores/queueStore';
 
@@ -285,9 +291,3 @@ class PlayerSocketService {
 
 // Export singleton instance
 export const playerSocketService = new PlayerSocketService();
-
-
-
-
-
-

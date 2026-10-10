@@ -127,7 +127,7 @@ export async function evaluatePublicContribution(
       code: CONTRIBUTION_REJECTION_CODES.artistUnresolved,
       message:
         'This file does not say who the artist is, so it cannot be published to the ' +
-        'public catalog. Add the artist to the file\'s tags or pick one on the review ' +
+        "public catalog. Add the artist to the file's tags or pick one on the review " +
         'screen — or keep the file in your private library instead.',
       status: 422,
     };
@@ -159,8 +159,7 @@ export async function evaluatePublicContribution(
     return {
       allowed: false,
       code: CONTRIBUTION_REJECTION_CODES.artistUploadsDisabled,
-      message:
-        'This artist profile cannot receive new recordings because of copyright strikes.',
+      message: 'This artist profile cannot receive new recordings because of copyright strikes.',
       status: 403,
     };
   }

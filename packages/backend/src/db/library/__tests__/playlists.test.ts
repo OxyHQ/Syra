@@ -43,30 +43,28 @@ const OWNER = 'oxy-owner';
 const COLLABORATOR = 'oxy-collaborator';
 const STRANGER = 'oxy-stranger';
 
-async function makeTrack(
-  over: Partial<typeof tracks.$inferInsert> = {}
-): Promise<string> {
+async function makeTrack(over: Partial<typeof tracks.$inferInsert> = {}): Promise<string> {
   const artistId = uuidv7();
   await getDb()
     .insert(catalogEntities)
     .values({ id: artistId, type: 'artist', name: 'Artist', nameKey: artistId, source: 'upload' });
 
   const id = uuidv7();
-  await getDb().insert(tracks).values({
-    id,
-    title: 'Track',
-    artistId,
-    artistName: 'Artist',
-    duration: 200,
-    source: 'upload',
-    ...over,
-  });
+  await getDb()
+    .insert(tracks)
+    .values({
+      id,
+      title: 'Track',
+      artistId,
+      artistName: 'Artist',
+      duration: 200,
+      source: 'upload',
+      ...over,
+    });
   return id;
 }
 
-async function makePlaylist(
-  over: Partial<typeof playlists.$inferInsert> = {}
-): Promise<string> {
+async function makePlaylist(over: Partial<typeof playlists.$inferInsert> = {}): Promise<string> {
   const [row] = await getDb()
     .insert(playlists)
     .values({ name: 'Mix', ownerOxyUserId: OWNER, ownerUsername: 'owner', ...over })
@@ -85,7 +83,7 @@ async function fill(playlistId: string, trackIds: string[]): Promise<void> {
         addedAt: new Date(),
         addedBy: OWNER,
         position,
-      }))
+      })),
     );
 }
 
@@ -136,15 +134,15 @@ describe('assignPlaylistTrackPositions survives a permutation', () => {
     const playlistId = await makePlaylist();
     await fill(playlistId, ids);
 
-    await getDb()
-      .delete(playlistTracks)
-      .where(eq(playlistTracks.trackId, ids[1]));
+    await getDb().delete(playlistTracks).where(eq(playlistTracks.trackId, ids[1]));
 
     const remaining = [ids[0], ids[2], ids[3]];
     await getDb().transaction((tx) => assignPlaylistTrackPositions(tx, playlistId, remaining));
 
     expect(await orderOf(playlistId)).toEqual(remaining);
-    expect((await findPlaylistTracks(playlistId)).map((entry) => entry.position)).toEqual([0, 1, 2]);
+    expect((await findPlaylistTracks(playlistId)).map((entry) => entry.position)).toEqual([
+      0, 1, 2,
+    ]);
   });
 
   it('leaves another playlist alone', async () => {
@@ -179,7 +177,7 @@ describe('assignPlaylistTrackPositions survives a permutation', () => {
     await fill(playlistId, [a, b]);
 
     await getDb().transaction((tx) =>
-      assignPlaylistTrackPositions(tx, playlistId, [absentX, absentY, b, a])
+      assignPlaylistTrackPositions(tx, playlistId, [absentX, absentY, b, a]),
     );
 
     // The absent ids are skipped rather than consuming a position, so what
@@ -207,10 +205,12 @@ describe('assignPlaylistTrackPositions survives a permutation', () => {
   it('survives a playlist whose positions are gapped', async () => {
     const [a, b] = [await makeTrack(), await makeTrack()];
     const playlistId = await makePlaylist();
-    await getDb().insert(playlistTracks).values([
-      { playlistId, trackId: a, addedAt: new Date(), addedBy: OWNER, position: 0 },
-      { playlistId, trackId: b, addedAt: new Date(), addedBy: OWNER, position: 7 },
-    ]);
+    await getDb()
+      .insert(playlistTracks)
+      .values([
+        { playlistId, trackId: a, addedAt: new Date(), addedBy: OWNER, position: 0 },
+        { playlistId, trackId: b, addedAt: new Date(), addedBy: OWNER, position: 7 },
+      ]);
 
     await getDb().transaction((tx) => assignPlaylistTrackPositions(tx, playlistId, [b, a]));
 
@@ -277,7 +277,7 @@ describe('canViewPlaylist, against the rows the loaders return', () => {
       const collaboratorOxyUserIds = await findCollaboratorOxyUserIds(playlistId);
 
       expect(
-        `${visibility}/${viewer ?? 'anon'}: ${canViewPlaylist({ ...row, collaboratorOxyUserIds }, viewer)}`
+        `${visibility}/${viewer ?? 'anon'}: ${canViewPlaylist({ ...row, collaboratorOxyUserIds }, viewer)}`,
       ).toBe(`${visibility}/${viewer ?? 'anon'}: ${readable}`);
     });
   }
@@ -363,14 +363,16 @@ describe('findPlaylistsForUser', () => {
    */
   it('puts playlists with cover art ahead of newer ones without', async () => {
     const coverArtId = uuidv7();
-    await getDb().insert(imageAssets).values({
-      id: coverArtId,
-      s3Key: `k/${coverArtId}`,
-      filename: 'c.jpg',
-      contentType: 'image/jpeg',
-      byteSize: 1,
-      ownerType: 'album',
-    });
+    await getDb()
+      .insert(imageAssets)
+      .values({
+        id: coverArtId,
+        s3Key: `k/${coverArtId}`,
+        filename: 'c.jpg',
+        contentType: 'image/jpeg',
+        byteSize: 1,
+        ownerType: 'album',
+      });
 
     await makePlaylist({
       name: 'Older, with art',

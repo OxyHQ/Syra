@@ -10,13 +10,7 @@ import { ReportCategory, ReportedType } from './types';
 
 describe('subject registry', () => {
   it('delivers exactly the five nouns Syra can describe', () => {
-    expect(deliverableTypes().sort()).toEqual([
-      'artist',
-      'house',
-      'playlist',
-      'room',
-      'track',
-    ]);
+    expect(deliverableTypes().sort()).toEqual(['artist', 'house', 'playlist', 'room', 'track']);
   });
 
   it('declares §5.4-valid subject types', () => {

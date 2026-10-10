@@ -214,7 +214,10 @@ export const uploadsService = {
    * Same outcome contract as {@link createUpload}, and for the same reason: the
    * contribution matrix can refuse this too, and the uploader needs to know why.
    */
-  async promoteUpload(uploadId: string, request: Omit<UploadRequest, 'destination'>): Promise<UploadOutcome> {
+  async promoteUpload(
+    uploadId: string,
+    request: Omit<UploadRequest, 'destination'>,
+  ): Promise<UploadOutcome> {
     const formData = new FormData();
     appendOverrides(formData, request);
 

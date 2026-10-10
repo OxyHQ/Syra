@@ -26,7 +26,10 @@ async function showCount(): Promise<number> {
 const NOW = 1_000_000_000_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-function candidate(n: number, extra: Partial<PodcastDirectoryCandidate> = {}): PodcastDirectoryCandidate {
+function candidate(
+  n: number,
+  extra: Partial<PodcastDirectoryCandidate> = {},
+): PodcastDirectoryCandidate {
   return {
     feedUrl: `https://feeds.example/${n}.xml`,
     title: `Show ${n}`,
@@ -67,14 +70,16 @@ describe('syncPodcastSearch — shallow upsert + deep scheduling', () => {
   });
 
   it('REFRESHES an existing show and does NOT re-enqueue it when fresh', async () => {
-    await getDb().insert(podcasts).values({
-      title: 'Old Title',
-      author: 'Old Author',
-      source: 'rss',
-      feedUrl: 'https://feeds.example/0.xml',
-      needsDeepImport: false,
-      lastRefreshedAt: new Date(NOW), // fresh
-    });
+    await getDb()
+      .insert(podcasts)
+      .values({
+        title: 'Old Title',
+        author: 'Old Author',
+        source: 'rss',
+        feedUrl: 'https://feeds.example/0.xml',
+        needsDeepImport: false,
+        lastRefreshedAt: new Date(NOW), // fresh
+      });
 
     const enqueued: string[] = [];
     const result = await syncPodcastSearch('tech', {
@@ -93,13 +98,15 @@ describe('syncPodcastSearch — shallow upsert + deep scheduling', () => {
   });
 
   it('re-enqueues a STALE existing show for a deep refresh', async () => {
-    await getDb().insert(podcasts).values({
-      title: 'Old',
-      source: 'rss',
-      feedUrl: 'https://feeds.example/0.xml',
-      needsDeepImport: false,
-      lastRefreshedAt: new Date(NOW - 2 * DAY_MS), // stale (> 24h)
-    });
+    await getDb()
+      .insert(podcasts)
+      .values({
+        title: 'Old',
+        source: 'rss',
+        feedUrl: 'https://feeds.example/0.xml',
+        needsDeepImport: false,
+        lastRefreshedAt: new Date(NOW - 2 * DAY_MS), // stale (> 24h)
+      });
 
     const enqueued: string[] = [];
     const result = await syncPodcastSearch('stale', {
@@ -129,7 +136,10 @@ describe('syncPodcastSearch — shallow upsert + deep scheduling', () => {
   });
 
   it('is a no-op for a blank query', async () => {
-    const result = await syncPodcastSearch('   ', { search: async () => [candidate(1)], enqueue: () => {} });
+    const result = await syncPodcastSearch('   ', {
+      search: async () => [candidate(1)],
+      enqueue: () => {},
+    });
     expect(result).toEqual({ skipped: true, candidates: 0, shallowUpserted: 0, deepEnqueued: 0 });
     expect(await showCount()).toBe(0);
   });

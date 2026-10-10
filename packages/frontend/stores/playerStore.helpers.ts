@@ -75,7 +75,9 @@ export async function fetchAuthenticatedAudioUrl(trackId: string): Promise<strin
     const response = await api.get<AudioUrlResponse>(`/audio/${trackId}/url`);
     return response.data.url;
   } catch (error) {
-    throw new Error(`Failed to fetch authenticated audio URL: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new Error(
+      `Failed to fetch authenticated audio URL: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    );
   }
 }
 
@@ -89,7 +91,7 @@ export async function fetchAuthenticatedAudioUrl(trackId: string): Promise<strin
 export function calculateTrackDuration(
   trackDuration: number | undefined,
   playerDuration: number | undefined,
-  isPlayerLoaded: boolean
+  isPlayerLoaded: boolean,
 ): number {
   if (trackDuration && trackDuration > 0) {
     return trackDuration;
@@ -110,8 +112,3 @@ export function calculateTrackDuration(
 export function clampVolume(volume: number, min: number = 0, max: number = 1): number {
   return Math.max(min, Math.min(max, volume));
 }
-
-
-
-
-

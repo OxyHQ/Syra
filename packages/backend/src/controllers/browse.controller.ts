@@ -25,21 +25,21 @@ import { getMadeForYou as getPersonalisedMadeForYou } from '../services/recommen
  * Default genre colors for genre cards (Spotify-like colors)
  */
 const GENRE_COLORS: Record<string, string> = {
-  'Rock': '#E13300',
-  'Pop': '#8D67AB',
+  Rock: '#E13300',
+  Pop: '#8D67AB',
   'Hip-Hop': '#BA5D07',
-  'Jazz': '#148A08',
-  'Classical': '#E8115B',
-  'Electronic': '#E1118C',
-  'Country': '#D84000',
+  Jazz: '#148A08',
+  Classical: '#E8115B',
+  Electronic: '#E1118C',
+  Country: '#D84000',
   'R&B': '#EB1E32',
-  'Reggae': '#D84000',
-  'Latin': '#BA5D07',
-  'Indie': '#E1118C',
-  'Alternative': '#E8115B',
-  'Dance': '#1E3264',
-  'Blues': '#148A08',
-  'Folk': '#1E3264',
+  Reggae: '#D84000',
+  Latin: '#BA5D07',
+  Indie: '#E1118C',
+  Alternative: '#E8115B',
+  Dance: '#1E3264',
+  Blues: '#148A08',
+  Folk: '#1E3264',
 };
 
 /** How many genre cards the browse screen renders. */
@@ -74,7 +74,10 @@ const ARTIST_POPULAR_ORDER = [
   descNullsLast(catalogEntities.statsFollowers),
 ];
 const ALBUM_POPULAR_ORDER = [descNullsLast(albums.popularity), descNullsLast(albums.releaseDate)];
-const ALBUM_MADE_FOR_YOU_ORDER = [descNullsLast(albums.popularity), descNullsLast(albums.playCount)];
+const ALBUM_MADE_FOR_YOU_ORDER = [
+  descNullsLast(albums.popularity),
+  descNullsLast(albums.playCount),
+];
 const PLAYLIST_MADE_FOR_YOU_ORDER = [
   imageFirst(playlists.coverArtId),
   descNullsLast(playlists.followers),
@@ -134,31 +137,26 @@ export const getHomeBrowse = async (req: Request, res: Response, next: NextFunct
     const sectionLimit = parseBoundedLimit(req.query.sectionLimit, 8, 20);
     const madeForYouHalf = Math.max(1, Math.floor(sectionLimit / 2));
 
-    const [
-      madeForYouAlbums,
-      madeForYouPlaylists,
-      popularAlbums,
-      popularArtists,
-      trackRows,
-    ] = await Promise.all([
-      findAlbumsWithPlayableTracks(undefined, {
-        orderBy: ALBUM_MADE_FOR_YOU_ORDER,
-        limit: madeForYouHalf,
-      }),
-      findPlaylistsWithPlayableTracks(publicPlaylist(), {
-        orderBy: PLAYLIST_MADE_FOR_YOU_ORDER,
-        limit: madeForYouHalf,
-      }),
-      findAlbumsWithPlayableTracks(undefined, {
-        orderBy: ALBUM_POPULAR_ORDER,
-        limit: sectionLimit,
-      }),
-      findArtistsWithPlayableTracks(undefined, {
-        orderBy: ARTIST_POPULAR_ORDER,
-        limit: sectionLimit,
-      }),
-      findPopularTracks(tracksLimit),
-    ]);
+    const [madeForYouAlbums, madeForYouPlaylists, popularAlbums, popularArtists, trackRows] =
+      await Promise.all([
+        findAlbumsWithPlayableTracks(undefined, {
+          orderBy: ALBUM_MADE_FOR_YOU_ORDER,
+          limit: madeForYouHalf,
+        }),
+        findPlaylistsWithPlayableTracks(publicPlaylist(), {
+          orderBy: PLAYLIST_MADE_FOR_YOU_ORDER,
+          limit: madeForYouHalf,
+        }),
+        findAlbumsWithPlayableTracks(undefined, {
+          orderBy: ALBUM_POPULAR_ORDER,
+          limit: sectionLimit,
+        }),
+        findArtistsWithPlayableTracks(undefined, {
+          orderBy: ARTIST_POPULAR_ORDER,
+          limit: sectionLimit,
+        }),
+        findPopularTracks(tracksLimit),
+      ]);
 
     // Personalised "Made For You": when the request is authenticated, surface a
     // taste-driven blend of fresh tracks + artists from the recommendation
@@ -272,7 +270,7 @@ export const getGenres = async (req: Request, res: Response, next: NextFunction)
         tracks.genre,
         imageFirst(tracks.coverArtId),
         descNullsLast(tracks.popularity),
-        descNullsLast(tracks.playCount)
+        descNullsLast(tracks.playCount),
       )
       .limit(GENRE_CARD_LIMIT);
 
@@ -384,7 +382,7 @@ export const getPopularAlbums = async (req: Request, res: Response, next: NextFu
         orderBy: ALBUM_POPULAR_ORDER,
         offset,
         limit,
-      })
+      }),
     );
 
     setCatalogCache(res, userId);
@@ -417,7 +415,7 @@ export const getPopularArtists = async (req: Request, res: Response, next: NextF
         orderBy: ARTIST_POPULAR_ORDER,
         offset,
         limit,
-      })
+      }),
     );
 
     setCatalogCache(res, userId);

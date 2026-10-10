@@ -29,7 +29,9 @@ export const LyricsView: React.FC<LyricsViewProps> = React.memo(({ trackId }) =>
   const { lyrics, isLoading, isError, retry } = useLyrics(trackId);
 
   // currentTime is in seconds — convert to ms for the active-line computation.
-  const currentTimeMs = usePlayerStore((state) => state.currentTrack?.id === trackId ? state.currentTime * SECONDS_TO_MS : 0);
+  const currentTimeMs = usePlayerStore((state) =>
+    state.currentTrack?.id === trackId ? state.currentTime * SECONDS_TO_MS : 0,
+  );
   const isCurrent = usePlayerStore((state) => state.currentTrack?.id === trackId);
   const seek = usePlayerStore((state) => state.seek);
 
@@ -42,22 +44,26 @@ export const LyricsView: React.FC<LyricsViewProps> = React.memo(({ trackId }) =>
     return (
       <View className="flex-1 px-6 py-4 gap-3">
         {Array.from({ length: LYRICS_SKELETON_LINE_COUNT }).map((_, i) => (
-          <Skeleton.Box
-            key={i}
-            width={i % 3 === 2 ? '55%' : '85%'}
-            height={18}
-            borderRadius={6}
-          />
+          <Skeleton.Box key={i} width={i % 3 === 2 ? '55%' : '85%'} height={18} borderRadius={6} />
         ))}
       </View>
     );
   }
 
   if (isError) {
-    return <View className="p-6 gap-3"><Text className="text-muted-foreground">{t('listener.lyricsFailed')}</Text><Pressable accessibilityRole="button" onPress={retry}><Text className="text-primary">{t('listener.retry')}</Text></Pressable></View>;
+    return (
+      <View className="p-6 gap-3">
+        <Text className="text-muted-foreground">{t('listener.lyricsFailed')}</Text>
+        <Pressable accessibilityRole="button" onPress={retry}>
+          <Text className="text-primary">{t('listener.retry')}</Text>
+        </Pressable>
+      </View>
+    );
   }
 
-  const plainText = lyrics?.plain?.trim() ? lyrics.plain : lyrics?.lines.map((line) => line.text).join('\n');
+  const plainText = lyrics?.plain?.trim()
+    ? lyrics.plain
+    : lyrics?.lines.map((line) => line.text).join('\n');
   if (!lyrics || !plainText?.trim()) {
     return (
       <View className="flex-1 items-center justify-center px-6">
@@ -77,20 +83,29 @@ export const LyricsView: React.FC<LyricsViewProps> = React.memo(({ trackId }) =>
         showsVerticalScrollIndicator={false}
       >
         {lyrics.lines.map((line, index) => (
-          <Pressable key={index} disabled={!isCurrent} accessibilityState={{ disabled: !isCurrent, selected: index === activeIndex }} accessibilityRole="button" accessibilityLabel={t('listener.seekLyric', { line: line.text })} onPress={() => void seek(line.timeMs / SECONDS_TO_MS)}>
-          <Text
-            selectable={!isCurrent}
-            className={
-              index === activeIndex
-                ? 'text-lg font-semibold text-primary leading-relaxed'
-                : 'text-base text-muted-foreground leading-relaxed'
-            }
+          <Pressable
+            key={index}
+            disabled={!isCurrent}
+            accessibilityState={{ disabled: !isCurrent, selected: index === activeIndex }}
+            accessibilityRole="button"
+            accessibilityLabel={t('listener.seekLyric', { line: line.text })}
+            onPress={() => void seek(line.timeMs / SECONDS_TO_MS)}
           >
-            {line.text}
-          </Text>
+            <Text
+              selectable={!isCurrent}
+              className={
+                index === activeIndex
+                  ? 'text-lg font-semibold text-primary leading-relaxed'
+                  : 'text-base text-muted-foreground leading-relaxed'
+              }
+            >
+              {line.text}
+            </Text>
           </Pressable>
         ))}
-        <Text className="text-sm text-muted-foreground">{t('listener.lyricsSource', { source: lyrics.source })}</Text>
+        <Text className="text-sm text-muted-foreground">
+          {t('listener.lyricsSource', { source: lyrics.source })}
+        </Text>
       </ScrollView>
     );
   }
@@ -102,10 +117,10 @@ export const LyricsView: React.FC<LyricsViewProps> = React.memo(({ trackId }) =>
       contentContainerClassName="px-6 py-4"
       showsVerticalScrollIndicator={false}
     >
-      <Text className="text-base text-foreground leading-relaxed">
-        {plainText}
+      <Text className="text-base text-foreground leading-relaxed">{plainText}</Text>
+      <Text className="text-sm text-muted-foreground mt-4">
+        {t('listener.lyricsSource', { source: lyrics.source })}
       </Text>
-      <Text className="text-sm text-muted-foreground mt-4">{t('listener.lyricsSource', { source: lyrics.source })}</Text>
     </ScrollView>
   );
 });

@@ -114,10 +114,7 @@ export async function listReadableSubscribedPodcastIds(oxyUserId: string): Promi
     .from(userPodcastSubscriptions)
     .innerJoin(podcasts, eq(podcasts.id, userPodcastSubscriptions.podcastId))
     .where(
-      and(
-        eq(userPodcastSubscriptions.oxyUserId, oxyUserId),
-        viewerCanReadShowFilter(oxyUserId)
-      )
+      and(eq(userPodcastSubscriptions.oxyUserId, oxyUserId), viewerCanReadShowFilter(oxyUserId)),
     )
     .orderBy(asc(userPodcastSubscriptions.createdAt));
 
@@ -155,7 +152,7 @@ export type SubscribeResult = 'subscribed' | 'already-subscribed' | 'missing-pod
  */
 export async function subscribeToPodcast(
   oxyUserId: string,
-  podcastId: string
+  podcastId: string,
 ): Promise<SubscribeResult> {
   try {
     return await getDb().transaction(async (tx) => {
@@ -193,7 +190,7 @@ export async function subscribeToPodcast(
  */
 export async function unsubscribeFromPodcast(
   oxyUserId: string,
-  podcastId: string
+  podcastId: string,
 ): Promise<boolean> {
   return getDb().transaction(async (tx) => {
     const removed = await tx
@@ -201,8 +198,8 @@ export async function unsubscribeFromPodcast(
       .where(
         and(
           eq(userPodcastSubscriptions.oxyUserId, oxyUserId),
-          eq(userPodcastSubscriptions.podcastId, podcastId)
-        )
+          eq(userPodcastSubscriptions.podcastId, podcastId),
+        ),
       )
       .returning({ id: userPodcastSubscriptions.id });
 

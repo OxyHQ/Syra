@@ -1,5 +1,18 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, Pressable, Platform, ViewStyle, TextInput, Image, ScrollView, GestureResponderEvent, type NativeSyntheticEvent, type TextInputKeyPressEventData } from 'react-native';
+import {
+  StyleSheet,
+  View,
+  Text,
+  Pressable,
+  Platform,
+  ViewStyle,
+  TextInput,
+  Image,
+  ScrollView,
+  GestureResponderEvent,
+  type NativeSyntheticEvent,
+  type TextInputKeyPressEventData,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { webTextStyle, webViewStyle } from '@/utils/webStyles';
 import { useRouter, usePathname, useLocalSearchParams, type Href } from 'expo-router';
@@ -75,7 +88,9 @@ export const TopBar: React.FC = () => {
   const { playTrackList } = usePlayerStore();
   const { playAlbum, playPlaylist, playArtist } = usePlayEntity();
   const isMobile = useMediaQuery({ maxWidth: 767 });
-  const [searchQuery, setSearchQuery] = useState(() => (pathname === '/search' && typeof q === 'string' ? q : ''));
+  const [searchQuery, setSearchQuery] = useState(() =>
+    pathname === '/search' && typeof q === 'string' ? q : '',
+  );
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [activeSearchIndex, setActiveSearchIndex] = useState(-1);
 
@@ -97,11 +112,12 @@ export const TopBar: React.FC = () => {
 
   const { data: headerSearchResults, isLoading: isHeaderSearchLoading } = useQuery({
     queryKey: ['search', 'topbar', debouncedSearchQuery],
-    queryFn: () => searchService.search(debouncedSearchQuery, {
-      category: SearchCategory.ALL,
-      limit: 5,
-      offset: 0,
-    }),
+    queryFn: () =>
+      searchService.search(debouncedSearchQuery, {
+        category: SearchCategory.ALL,
+        limit: 5,
+        offset: 0,
+      }),
     enabled: !isMobile && hasHeaderSearchQuery,
     staleTime: 1000 * 60 * 5,
   });
@@ -146,7 +162,6 @@ export const TopBar: React.FC = () => {
     router.push('/browse');
   };
 
-
   const navigateFromSearch = (href: Href) => {
     setIsSearchOpen(false);
     setActiveSearchIndex(-1);
@@ -166,7 +181,10 @@ export const TopBar: React.FC = () => {
       icon: 'music-note-outline' as const,
       onPlay: () => {
         const tracks = results?.tracks ?? [track];
-        const startIndex = Math.max(0, tracks.findIndex((item) => item.id === track.id));
+        const startIndex = Math.max(
+          0,
+          tracks.findIndex((item) => item.id === track.id),
+        );
         return playTrackList(tracks, startIndex, { type: 'search', name: trimmedQuery });
       },
     }));
@@ -277,10 +295,7 @@ export const TopBar: React.FC = () => {
     await item.onPlay?.();
   };
 
-  const renderArtwork = (
-    item: HeaderSearchItem,
-    showPlayButton: boolean,
-  ) => (
+  const renderArtwork = (item: HeaderSearchItem, showPlayButton: boolean) => (
     <View
       className="bg-popover"
       style={[styles.searchResultArtwork, { borderRadius: item.rounded ? 18 : 6 }]}
@@ -288,7 +303,10 @@ export const TopBar: React.FC = () => {
       {item.avatarId ? (
         <Avatar source={item.avatarId} variant="thumb" size={36} label={item.title} />
       ) : item.imageUri ? (
-        <Image source={{ uri: item.imageUri }} style={[styles.searchResultImage, { borderRadius: item.rounded ? 18 : 6 }]} />
+        <Image
+          source={{ uri: item.imageUri }}
+          style={[styles.searchResultImage, { borderRadius: item.rounded ? 18 : 6 }]}
+        />
       ) : (
         <MaterialCommunityIcons name={item.icon} size={18} color={theme.colors.textSecondary} />
       )}
@@ -307,13 +325,7 @@ export const TopBar: React.FC = () => {
     </View>
   );
 
-  const renderSearchResultRow = ({
-    item,
-    index,
-  }: {
-    item: HeaderSearchItem;
-    index: number;
-  }) => {
+  const renderSearchResultRow = ({ item, index }: { item: HeaderSearchItem; index: number }) => {
     const isActive = activeSearchIndex === index;
 
     return (
@@ -322,17 +334,18 @@ export const TopBar: React.FC = () => {
         onPress={() => navigateFromSearch(item.href)}
         onHoverIn={() => setActiveSearchIndex(index)}
         className={isActive ? 'bg-popover' : undefined}
-        style={({ pressed }) => [
-          styles.searchResultRow,
-          pressed && { opacity: 0.9 },
-        ]}
+        style={({ pressed }) => [styles.searchResultRow, pressed && { opacity: 0.9 }]}
       >
         {renderArtwork(item, isActive)}
         <View style={styles.searchResultText}>
           <Text className="text-foreground" style={styles.searchResultTitle} numberOfLines={1}>
             {item.title}
           </Text>
-          <Text className="text-muted-foreground" style={styles.searchResultSubtitle} numberOfLines={1}>
+          <Text
+            className="text-muted-foreground"
+            style={styles.searchResultSubtitle}
+            numberOfLines={1}
+          >
             {item.subtitle}
           </Text>
         </View>
@@ -340,19 +353,21 @@ export const TopBar: React.FC = () => {
     );
   };
 
-  const renderSearchSection = (
-    title: HeaderSearchItem['section'],
-  ) => {
+  const renderSearchSection = (title: HeaderSearchItem['section']) => {
     const sectionItems = searchItems.filter((item) => item.section === title);
     if (sectionItems.length === 0) return null;
 
     return (
       <View style={styles.searchResultSection}>
-        <Text className="text-muted-foreground" style={styles.searchResultSectionTitle}>{t(SEARCH_SECTION_KEYS[title])}</Text>
-        {sectionItems.map((item) => renderSearchResultRow({
-          item,
-          index: searchItems.findIndex((candidate) => candidate.key === item.key),
-        }))}
+        <Text className="text-muted-foreground" style={styles.searchResultSectionTitle}>
+          {t(SEARCH_SECTION_KEYS[title])}
+        </Text>
+        {sectionItems.map((item) =>
+          renderSearchResultRow({
+            item,
+            index: searchItems.findIndex((candidate) => candidate.key === item.key),
+          }),
+        )}
       </View>
     );
   };
@@ -390,12 +405,11 @@ export const TopBar: React.FC = () => {
               onPress={handleSearchSubmit}
               onHoverIn={() => setActiveSearchIndex(viewAllIndex)}
               className={isViewAllActive ? 'bg-popover' : undefined}
-              style={({ pressed }) => [
-                styles.viewAllButton,
-                pressed && { opacity: 0.9 },
-              ]}
+              style={({ pressed }) => [styles.viewAllButton, pressed && { opacity: 0.9 }]}
             >
-              <Text className="text-primary" style={styles.viewAllText}>{t('topbar.viewAllResults')}</Text>
+              <Text className="text-primary" style={styles.viewAllText}>
+                {t('topbar.viewAllResults')}
+              </Text>
               <MaterialCommunityIcons name="arrow-right" size={18} color={theme.colors.primary} />
             </Pressable>
           </>
@@ -408,42 +422,54 @@ export const TopBar: React.FC = () => {
     const isExpanded = showOverlay && isSearchOpen && hasHeaderSearchQuery;
 
     return (
-    <View style={styles.searchShell}>
-      <View
-        className={`bg-surface ${isExpanded ? 'border-border' : 'border-transparent'}`}
-        style={[styles.searchSurface, isExpanded && styles.searchSurfaceExpanded]}
-      >
+      <View style={styles.searchShell}>
         <View
-          style={[
-            styles.searchContainer,
-            containerStyle,
-          ]}
+          className={`bg-surface ${isExpanded ? 'border-border' : 'border-transparent'}`}
+          style={[styles.searchSurface, isExpanded && styles.searchSurfaceExpanded]}
         >
-          <MaterialCommunityIcons name="magnify" size={20} color={theme.colors.textSecondary} />
-          <TextInput
-            className="text-foreground" style={styles.searchInput}
-            placeholder={t('search.placeholder')}
-            placeholderTextColor={theme.colors.textSecondary}
-            value={searchQuery}
-            onFocus={handleSearch}
-            onChangeText={handleSearchChange}
-            onKeyPress={handleSearchKeyPress}
-            onSubmitEditing={handleSearchSubmit}
-            returnKeyType="search"
-          />
-          {searchQuery.length > 0 && (
-            <Pressable onPress={handleClearSearch} accessibilityRole="button" accessibilityLabel={t('search.clear')}>
-              <MaterialCommunityIcons name="close-circle" size={18} color={theme.colors.textSecondary} />
+          <View style={[styles.searchContainer, containerStyle]}>
+            <MaterialCommunityIcons name="magnify" size={20} color={theme.colors.textSecondary} />
+            <TextInput
+              className="text-foreground"
+              style={styles.searchInput}
+              placeholder={t('search.placeholder')}
+              placeholderTextColor={theme.colors.textSecondary}
+              value={searchQuery}
+              onFocus={handleSearch}
+              onChangeText={handleSearchChange}
+              onKeyPress={handleSearchKeyPress}
+              onSubmitEditing={handleSearchSubmit}
+              returnKeyType="search"
+            />
+            {searchQuery.length > 0 && (
+              <Pressable
+                onPress={handleClearSearch}
+                accessibilityRole="button"
+                accessibilityLabel={t('search.clear')}
+              >
+                <MaterialCommunityIcons
+                  name="close-circle"
+                  size={18}
+                  color={theme.colors.textSecondary}
+                />
+              </Pressable>
+            )}
+            <View className="bg-border" style={styles.searchActionSeparator} />
+            <Pressable
+              onPress={handleBrowse}
+              accessibilityRole="button"
+              accessibilityLabel={t('search.browse')}
+            >
+              <MaterialCommunityIcons
+                name="view-grid-outline"
+                size={19}
+                color={theme.colors.textSecondary}
+              />
             </Pressable>
-          )}
-          <View className="bg-border" style={styles.searchActionSeparator} />
-          <Pressable onPress={handleBrowse} accessibilityRole="button" accessibilityLabel={t('search.browse')}>
-            <MaterialCommunityIcons name="view-grid-outline" size={19} color={theme.colors.textSecondary} />
-          </Pressable>
+          </View>
+          {showOverlay && hasHeaderSearchQuery && renderSearchOverlay()}
         </View>
-        {showOverlay && hasHeaderSearchQuery && renderSearchOverlay()}
       </View>
-    </View>
     );
   };
 
@@ -469,9 +495,7 @@ export const TopBar: React.FC = () => {
             <Logo color={navIconColor} />
           </View>
         </Pressable>
-        <View style={styles.mobileRightSection}>
-          {renderProfileAction()}
-        </View>
+        <View style={styles.mobileRightSection}>{renderProfileAction()}</View>
       </View>
     );
   }
@@ -530,9 +554,7 @@ export const TopBar: React.FC = () => {
             />
           </Pressable>
 
-          {!isMobile && (
-            <View className="bg-border" style={styles.separator} />
-          )}
+          {!isMobile && <View className="bg-border" style={styles.separator} />}
 
           {renderSearchField(undefined, true)}
         </View>

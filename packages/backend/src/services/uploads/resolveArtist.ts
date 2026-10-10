@@ -160,7 +160,7 @@ async function findArtistByNameKey(nameKey: string): Promise<ArtistIdentity | nu
 }
 
 async function findArtistByMusicBrainzId(
-  musicbrainzArtistId: string
+  musicbrainzArtistId: string,
 ): Promise<ArtistIdentity | null> {
   const [artist] = await getDb()
     .select({ id: catalogEntities.id, name: catalogEntities.name })
@@ -168,8 +168,8 @@ async function findArtistByMusicBrainzId(
     .where(
       and(
         eq(catalogEntities.externalMusicbrainzArtistId, musicbrainzArtistId),
-        eq(catalogEntities.type, 'artist')
-      )
+        eq(catalogEntities.type, 'artist'),
+      ),
     )
     .limit(1);
 

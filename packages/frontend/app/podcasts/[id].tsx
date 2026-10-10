@@ -127,7 +127,11 @@ const PodcastShowScreen: React.FC = () => {
         icon={{ name: 'mic-off-outline' }}
         title={t('podcasts.notFound')}
         subtitle={t('podcasts.notFoundMessage')}
-        action={{ label: t('podcasts.browse'), onPress: () => router.push('/podcasts'), icon: 'search-outline' }}
+        action={{
+          label: t('podcasts.browse'),
+          onPress: () => router.push('/podcasts'),
+          icon: 'search-outline',
+        }}
         className="bg-surface"
       />
     );
@@ -156,7 +160,9 @@ const PodcastShowScreen: React.FC = () => {
         toggleSubscription.mutate({ podcastId: podcast.id, next: !subscribed, podcast })
       }
       onPlayEpisode={handlePlayEpisode}
-      onOpenEpisode={(episodeId) => router.push({ pathname: '/episode/[id]', params: { id: episodeId } })}
+      onOpenEpisode={(episodeId) =>
+        router.push({ pathname: '/episode/[id]', params: { id: episodeId } })
+      }
     />
   );
 };
@@ -223,68 +229,70 @@ const PodcastShowView: React.FC<PodcastShowViewProps> = ({
     <>
       <SEO title={`${podcast.title} - Syra`} description={description.slice(0, 160)} />
       <ScrollView
-        className="bg-surface" style={styles.container}
+        className="bg-surface"
+        style={styles.container}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
         {/* Header — cover-derived gradient hero (bleeds past the content padding). */}
         <LinearGradient colors={gradientColors} locations={[0, 0.45, 1]} style={styles.hero}>
-        <View style={styles.header}>
-          {/* Show artwork (the app is themed from it on view, not on hover) */}
-          <View
-            accessibilityRole="image"
-            accessibilityLabel={`${podcast.title} cover art`}
-          >
-            {artwork ? (
-              <Image source={{ uri: artwork }} style={styles.headerArtwork} contentFit="cover" />
-            ) : (
-              <View className="bg-popover" style={styles.headerArtworkPlaceholder}>
-                <Ionicons name="mic" size={48} color={theme.colors.textSecondary} />
-              </View>
-            )}
-          </View>
-          <View style={styles.headerInfo}>
-            <Text className="text-foreground" style={styles.showTitle} numberOfLines={3}>
-              {podcast.title}
-            </Text>
-            {podcast.author ? (
-              <Text className="text-muted-foreground" style={styles.showAuthor} numberOfLines={2}>
-                {podcast.author}
+          <View style={styles.header}>
+            {/* Show artwork (the app is themed from it on view, not on hover) */}
+            <View accessibilityRole="image" accessibilityLabel={`${podcast.title} cover art`}>
+              {artwork ? (
+                <Image source={{ uri: artwork }} style={styles.headerArtwork} contentFit="cover" />
+              ) : (
+                <View className="bg-popover" style={styles.headerArtworkPlaceholder}>
+                  <Ionicons name="mic" size={48} color={theme.colors.textSecondary} />
+                </View>
+              )}
+            </View>
+            <View style={styles.headerInfo}>
+              <Text className="text-foreground" style={styles.showTitle} numberOfLines={3}>
+                {podcast.title}
               </Text>
-            ) : null}
-            <Pressable
-              onPress={onToggleSubscription}
-              className={subscribed ? 'border-border' : undefined}
-              style={[
-                styles.subscribeButton,
-                subscribed ? { borderWidth: 1 } : { backgroundColor: subscribeButtonColor },
-              ]}
-              accessibilityRole="button"
-              accessibilityState={{ selected: subscribed }}
-            >
-              <Ionicons
-                name={subscribed ? 'checkmark' : 'add'}
-                size={18}
-                color={subscribed ? theme.colors.text : subscribeTextColor}
-              />
-              <Text
+              {podcast.author ? (
+                <Text className="text-muted-foreground" style={styles.showAuthor} numberOfLines={2}>
+                  {podcast.author}
+                </Text>
+              ) : null}
+              <Pressable
+                onPress={onToggleSubscription}
+                className={subscribed ? 'border-border' : undefined}
                 style={[
-                  styles.subscribeText,
-                  { color: subscribed ? theme.colors.text : subscribeTextColor },
+                  styles.subscribeButton,
+                  subscribed ? { borderWidth: 1 } : { backgroundColor: subscribeButtonColor },
                 ]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: subscribed }}
               >
-                {subscribed ? t('podcasts.subscribed') : t('podcasts.subscribe')}
-              </Text>
-            </Pressable>
+                <Ionicons
+                  name={subscribed ? 'checkmark' : 'add'}
+                  size={18}
+                  color={subscribed ? theme.colors.text : subscribeTextColor}
+                />
+                <Text
+                  style={[
+                    styles.subscribeText,
+                    { color: subscribed ? theme.colors.text : subscribeTextColor },
+                  ]}
+                >
+                  {subscribed ? t('podcasts.subscribed') : t('podcasts.subscribe')}
+                </Text>
+              </Pressable>
+            </View>
           </View>
-        </View>
         </LinearGradient>
 
         {/* Description */}
         {description ? (
-          <Pressable onPress={() => setDescriptionExpanded((value) => !value)} style={styles.descriptionWrap}>
+          <Pressable
+            onPress={() => setDescriptionExpanded((value) => !value)}
+            style={styles.descriptionWrap}
+          >
             <Text
-              className="text-muted-foreground" style={styles.description}
+              className="text-muted-foreground"
+              style={styles.description}
               numberOfLines={descriptionExpanded ? undefined : 3}
             >
               {description}
@@ -299,7 +307,9 @@ const PodcastShowView: React.FC<PodcastShowViewProps> = ({
         <HostsAndGuests persons={persons} />
 
         {/* Episodes */}
-        <Text className="text-foreground" style={styles.sectionTitle}>{t('common.episodes')}</Text>
+        <Text className="text-foreground" style={styles.sectionTitle}>
+          {t('common.episodes')}
+        </Text>
         {episodesLoading && episodes.length === 0 ? (
           <LibraryListSkeleton count={6} />
         ) : episodesFailed && episodes.length === 0 ? (

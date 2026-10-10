@@ -42,21 +42,23 @@ import { setAlbumGenres } from '../../db/catalog/genres';
 /** An `image_assets` row, because `albums.cover_art_id` is NOT NULL. */
 async function makeImageAsset(): Promise<string> {
   const id = uuidv7();
-  await getDb().insert(imageAssets).values({
-    id,
-    s3Key: `fixtures/${id}.jpg`,
-    filename: `${id}.jpg`,
-    contentType: 'image/jpeg',
-    byteSize: 1024,
-    width: 640,
-    height: 640,
-    ownerType: 'album',
-  });
+  await getDb()
+    .insert(imageAssets)
+    .values({
+      id,
+      s3Key: `fixtures/${id}.jpg`,
+      filename: `${id}.jpg`,
+      contentType: 'image/jpeg',
+      byteSize: 1024,
+      width: 640,
+      height: 640,
+      ownerType: 'album',
+    });
   return id;
 }
 
 export async function makeArtist(
-  over: Partial<{ name: string; genres: string[]; popularity: number; terminated: boolean }> = {}
+  over: Partial<{ name: string; genres: string[]; popularity: number; terminated: boolean }> = {},
 ): Promise<string> {
   const [artist] = await getDb()
     .insert(catalogEntities)
@@ -145,7 +147,7 @@ export async function makeAlbum(
     artistName: string;
     genre: string[];
     isAvailable: boolean;
-  }> = {}
+  }> = {},
 ): Promise<string> {
   const artistId = over.artistId ?? (await makeArtist({ name: over.artistName }));
 
@@ -172,7 +174,7 @@ export async function makeAlbum(
 }
 
 export async function makePlaylist(
-  over: Partial<{ name: string; ownerOxyUserId: string; visibility: PlaylistVisibility }> = {}
+  over: Partial<{ name: string; ownerOxyUserId: string; visibility: PlaylistVisibility }> = {},
 ): Promise<string> {
   const [playlist] = await getDb()
     .insert(playlists)
@@ -199,7 +201,7 @@ export async function addPlaylistTracks(playlistId: string, trackIds: string[]):
         trackId,
         addedAt: new Date(),
         position: order,
-      }))
+      })),
     );
 }
 
@@ -207,7 +209,7 @@ export async function relate(
   kind: 'track' | 'artist',
   sourceId: string,
   targetId: string,
-  score: number
+  score: number,
 ): Promise<void> {
   await getDb().insert(catalogRelations).values({ kind, sourceId, targetId, score, coCount: 10 });
 }
@@ -221,7 +223,7 @@ export async function relate(
 export async function makeTasteProfile(
   oxyUserId: string,
   genres: { key: string; weight: number }[],
-  artists: { key: string; weight: number }[]
+  artists: { key: string; weight: number }[],
 ): Promise<void> {
   const [profile] = await getDb()
     .insert(userTasteProfiles)
@@ -236,7 +238,9 @@ export async function makeTasteProfile(
   if (artists.length > 0) {
     await getDb()
       .insert(userTasteArtists)
-      .values(artists.map((a) => ({ tasteProfileId: profile.id, artistId: a.key, weight: a.weight })));
+      .values(
+        artists.map((a) => ({ tasteProfileId: profile.id, artistId: a.key, weight: a.weight })),
+      );
   }
 }
 

@@ -37,9 +37,13 @@ const upload = multer({
     if (ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error(`File type ${file.mimetype} not allowed. Allowed: ${ALLOWED_IMAGE_TYPES.join(', ')}`));
+      cb(
+        new Error(
+          `File type ${file.mimetype} not allowed. Allowed: ${ALLOWED_IMAGE_TYPES.join(', ')}`,
+        ),
+      );
     }
-  }
+  },
 });
 
 const router = Router();
@@ -74,14 +78,7 @@ async function canManageSeries(
 router.post('/', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const {
-      title,
-      description,
-      coverImage,
-      houseId,
-      recurrence,
-      roomTemplate,
-    } = req.body;
+    const { title, description, coverImage, houseId, recurrence, roomTemplate } = req.body;
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized' });
@@ -104,7 +101,11 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Invalid recurrence type' });
     }
 
-    if (!recurrence.time || typeof recurrence.time !== 'string' || !/^\d{2}:\d{2}$/.test(recurrence.time)) {
+    if (
+      !recurrence.time ||
+      typeof recurrence.time !== 'string' ||
+      !/^\d{2}:\d{2}$/.test(recurrence.time)
+    ) {
       return res.status(400).json({ message: 'Recurrence time is required in HH:mm format' });
     }
 
@@ -125,17 +126,21 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       }
 
       if (!hasRole(owning.members, userId, HouseMemberRole.HOST)) {
-        return res.status(403).json({ message: 'You must be a host or higher in this house to create series' });
+        return res
+          .status(403)
+          .json({ message: 'You must be a host or higher in this house to create series' });
       }
     }
 
     // Resolve room template type
-    const templateType: RoomType = roomTemplate.type && Object.values(RoomType).includes(roomTemplate.type)
-      ? roomTemplate.type
-      : RoomType.TALK;
+    const templateType: RoomType =
+      roomTemplate.type && Object.values(RoomType).includes(roomTemplate.type)
+        ? roomTemplate.type
+        : RoomType.TALK;
 
     const templateSpeakerPermission: SpeakerPermission =
-      roomTemplate.speakerPermission && Object.values(SpeakerPermission).includes(roomTemplate.speakerPermission)
+      roomTemplate.speakerPermission &&
+      Object.values(SpeakerPermission).includes(roomTemplate.speakerPermission)
         ? roomTemplate.speakerPermission
         : SpeakerPermission.INVITED;
 
@@ -156,9 +161,10 @@ router.post('/', async (req: AuthRequest, res: Response) => {
         titlePattern: roomTemplate.titlePattern.trim(),
         type: templateType,
         description: roomTemplate.description ? String(roomTemplate.description).trim() : undefined,
-        maxParticipants: roomTemplate.maxParticipants && typeof roomTemplate.maxParticipants === 'number'
-          ? Math.min(Math.max(roomTemplate.maxParticipants, 1), 10000)
-          : 100,
+        maxParticipants:
+          roomTemplate.maxParticipants && typeof roomTemplate.maxParticipants === 'number'
+            ? Math.min(Math.max(roomTemplate.maxParticipants, 1), 10000)
+            : 100,
         speakerPermission: templateSpeakerPermission,
         tags: Array.isArray(roomTemplate.tags)
           ? roomTemplate.tags.map((t: unknown) => String(t).trim()).filter(Boolean)
@@ -173,7 +179,10 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       series: toSeriesView(row, []),
     });
   } catch (error) {
-    logger.error('Error creating series:', { userId: req.user?.id, error: describeErrorSafely(error) });
+    logger.error('Error creating series:', {
+      userId: req.user?.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error creating series',
       error: describeErrorSafely(error),
@@ -206,13 +215,17 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
         return res.status(404).json({ message: 'Series not found' });
       }
       if (!canAccessRooms(owning.house, owning.members, userId)) {
-        return res.status(403).json({ message: 'Only members can view this house\'s series' });
+        return res.status(403).json({ message: "Only members can view this house's series" });
       }
     }
 
     res.json({ series });
   } catch (error) {
-    logger.error('Error fetching series:', { userId: req.user?.id, seriesId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error fetching series:', {
+      userId: req.user?.id,
+      seriesId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error fetching series',
       error: describeErrorSafely(error),
@@ -276,7 +289,11 @@ router.patch('/:id', async (req: AuthRequest, res: Response) => {
       if (typeof recurrence.dayOfMonth === 'number') {
         update.recurrenceDayOfMonth = recurrence.dayOfMonth;
       }
-      if (recurrence.time && typeof recurrence.time === 'string' && /^\d{2}:\d{2}$/.test(recurrence.time)) {
+      if (
+        recurrence.time &&
+        typeof recurrence.time === 'string' &&
+        /^\d{2}:\d{2}$/.test(recurrence.time)
+      ) {
         update.recurrenceTime = recurrence.time;
       }
       if (recurrence.timezone && typeof recurrence.timezone === 'string') {
@@ -298,13 +315,21 @@ router.patch('/:id', async (req: AuthRequest, res: Response) => {
           : null;
       }
       if (roomTemplate.maxParticipants && typeof roomTemplate.maxParticipants === 'number') {
-        update.roomTemplateMaxParticipants = Math.min(Math.max(roomTemplate.maxParticipants, 1), 10000);
+        update.roomTemplateMaxParticipants = Math.min(
+          Math.max(roomTemplate.maxParticipants, 1),
+          10000,
+        );
       }
-      if (roomTemplate.speakerPermission && Object.values(SpeakerPermission).includes(roomTemplate.speakerPermission)) {
+      if (
+        roomTemplate.speakerPermission &&
+        Object.values(SpeakerPermission).includes(roomTemplate.speakerPermission)
+      ) {
         update.roomTemplateSpeakerPermission = roomTemplate.speakerPermission;
       }
       if (roomTemplate.tags !== undefined && Array.isArray(roomTemplate.tags)) {
-        update.roomTemplateTags = roomTemplate.tags.map((t: unknown) => String(t).trim()).filter(Boolean);
+        update.roomTemplateTags = roomTemplate.tags
+          .map((t: unknown) => String(t).trim())
+          .filter(Boolean);
       }
     }
 
@@ -317,7 +342,11 @@ router.patch('/:id', async (req: AuthRequest, res: Response) => {
       series: await findSeriesView(existing.id),
     });
   } catch (error) {
-    logger.error('Error updating series:', { userId: req.user?.id, seriesId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error updating series:', {
+      userId: req.user?.id,
+      seriesId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error updating series',
       error: describeErrorSafely(error),
@@ -354,7 +383,11 @@ router.delete('/:id', async (req: AuthRequest, res: Response) => {
 
     res.json({ success: true });
   } catch (error) {
-    logger.error('Error deleting series:', { userId: req.user?.id, seriesId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error deleting series:', {
+      userId: req.user?.id,
+      seriesId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error deleting series',
       error: describeErrorSafely(error),
@@ -387,7 +420,9 @@ router.post('/:id/generate-episode', async (req: AuthRequest, res: Response) => 
     }
 
     if (!(await canManageSeries(series, userId))) {
-      return res.status(403).json({ message: 'You do not have permission to generate episodes for this series' });
+      return res
+        .status(403)
+        .json({ message: 'You do not have permission to generate episodes for this series' });
     }
 
     // Resolve the scheduled start date
@@ -443,7 +478,11 @@ router.post('/:id/generate-episode', async (req: AuthRequest, res: Response) => 
       episodeNumber,
     });
   } catch (error) {
-    logger.error('Error generating episode:', { userId: req.user?.id, seriesId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error generating episode:', {
+      userId: req.user?.id,
+      seriesId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({
       message: 'Error generating episode',
       error: describeErrorSafely(error),
@@ -487,7 +526,10 @@ router.post('/:id/cover', upload.single('file'), async (req: AuthRequest, res: R
 
     res.json({ coverImage: cdnUrl });
   } catch (error) {
-    logger.error('Error uploading series cover:', { seriesId: req.params.id, error: describeErrorSafely(error) });
+    logger.error('Error uploading series cover:', {
+      seriesId: req.params.id,
+      error: describeErrorSafely(error),
+    });
     res.status(500).json({ message: 'Error uploading cover', error: describeErrorSafely(error) });
   }
 });

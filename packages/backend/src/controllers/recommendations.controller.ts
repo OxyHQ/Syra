@@ -40,7 +40,11 @@ function setPrivateDiscoveryCache(res: Response): void {
  * GET /api/artists/:id/related
  * Artists fans of this artist also listen to (collaborative graph + fallbacks).
  */
-export const getRelatedArtistsHandler = async (req: AuthRequest, res: Response, next: NextFunction) => {
+export const getRelatedArtistsHandler = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+) => {
   try {
     if (!isPostgresConnected()) return res.status(503).json({ error: 'Database not available' });
     const id = getParam(req, 'id');
@@ -57,7 +61,11 @@ export const getRelatedArtistsHandler = async (req: AuthRequest, res: Response, 
  * GET /api/tracks/:id/similar
  * Tracks similar to this one (collaborative graph + content fallbacks).
  */
-export const getSimilarTracksHandler = async (req: AuthRequest, res: Response, next: NextFunction) => {
+export const getSimilarTracksHandler = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+) => {
   try {
     if (!isPostgresConnected()) return res.status(503).json({ error: 'Database not available' });
     const id = getParam(req, 'id');

@@ -127,7 +127,8 @@ const CopyrightReportScreen: React.FC = () => {
       <SEO title={t('copyright.seo.title')} description={t('common.reportCopyright')} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        className="bg-surface" style={styles.container}
+        className="bg-surface"
+        style={styles.container}
       >
         {/* Header */}
         <View
@@ -141,16 +142,8 @@ const CopyrightReportScreen: React.FC = () => {
             },
           ]}
         >
-          <Pressable
-            onPress={handleGoBack}
-            disabled={isSubmitting}
-            style={styles.backButton}
-          >
-            <MaterialCommunityIcons
-              name="arrow-left"
-              size={24}
-              color={theme.colors.text}
-            />
+          <Pressable onPress={handleGoBack} disabled={isSubmitting} style={styles.backButton}>
+            <MaterialCommunityIcons name="arrow-left" size={24} color={theme.colors.text} />
           </Pressable>
           <Text className="text-foreground" style={styles.title}>
             {t('copyright.title')}
@@ -160,10 +153,7 @@ const CopyrightReportScreen: React.FC = () => {
 
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingBottom: insets.bottom + 16 },
-          ]}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 16 }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -190,7 +180,7 @@ const CopyrightReportScreen: React.FC = () => {
                 editable={!isSubmitting}
                 autoFocus
               />
-            {isSearching && (
+              {isSearching && (
                 <ActivityIndicator
                   size="small"
                   color={theme.colors.primary}
@@ -239,11 +229,7 @@ const CopyrightReportScreen: React.FC = () => {
             {selectedTrack && (
               <View className="bg-primary/10 border-primary" style={styles.selectedTrack}>
                 <View style={styles.selectedTrackInfo}>
-                  <MaterialCommunityIcons
-                    name="music"
-                    size={20}
-                    color={theme.colors.primary}
-                  />
+                  <MaterialCommunityIcons name="music" size={20} color={theme.colors.primary} />
                   <View style={styles.selectedTrackText}>
                     <Text className="text-foreground" style={styles.selectedTrackTitle}>
                       {selectedTrack.title}
@@ -260,11 +246,7 @@ const CopyrightReportScreen: React.FC = () => {
                   }}
                   style={styles.removeButton}
                 >
-                  <MaterialCommunityIcons
-                    name="close"
-                    size={20}
-                    color={theme.colors.text}
-                  />
+                  <MaterialCommunityIcons name="close" size={20} color={theme.colors.text} />
                 </Pressable>
               </View>
             )}
@@ -310,7 +292,9 @@ const CopyrightReportScreen: React.FC = () => {
             {isSubmitting ? (
               <ActivityIndicator size="small" color={theme.colors.primaryForeground} />
             ) : (
-              <Text className="text-primary-foreground" style={styles.submitButtonText}>{t('copyright.submit')}</Text>
+              <Text className="text-primary-foreground" style={styles.submitButtonText}>
+                {t('copyright.submit')}
+              </Text>
             )}
           </Pressable>
         </ScrollView>
@@ -482,6 +466,3 @@ const styles = StyleSheet.create({
 });
 
 export default CopyrightReportScreen;
-
-
-

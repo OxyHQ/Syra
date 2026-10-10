@@ -135,9 +135,25 @@
  */
 
 import { sql } from 'drizzle-orm';
-import { boolean, check, doublePrecision, index, integer, pgTable, text, unique } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  check,
+  doublePrecision,
+  index,
+  integer,
+  pgTable,
+  text,
+  unique,
+} from 'drizzle-orm/pg-core';
 import { createdAt, generatedId, inList, timestamptz, tsvector, updatedAt } from '@oxy.so/db';
-import { albums, CATALOG_SOURCES, catalogEntities, imageAssets, PROVENANCE_PROVIDERS, tracks } from './catalog';
+import {
+  albums,
+  CATALOG_SOURCES,
+  catalogEntities,
+  imageAssets,
+  PROVENANCE_PROVIDERS,
+  tracks,
+} from './catalog';
 import { podcasts } from './podcasts';
 
 // ── Closed value sets ────────────────────────────────────────────────────
@@ -186,16 +202,19 @@ export const playlists = pgTable(
     // fourth sibling of `track_sources`/`album_sources`/
     // `catalog_entity_sources`. See the file-level doc comment.
     searchVector: tsvector().generatedAlwaysAs(
-      sql`to_tsvector('english', name || ' ' || coalesce(description, ''))`
+      sql`to_tsvector('english', name || ' ' || coalesce(description, ''))`,
     ),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
-    check('playlists_visibility_check', sql`${t.visibility} in (${sql.raw(inList(PLAYLIST_VISIBILITIES))})`),
+    check(
+      'playlists_visibility_check',
+      sql`${t.visibility} in (${sql.raw(inList(PLAYLIST_VISIBILITIES))})`,
+    ),
     check(
       'playlists_source_check',
-      sql`${t.source} is null or ${t.source} in (${sql.raw(inList(CATALOG_SOURCES))})`
+      sql`${t.source} is null or ${t.source} in (${sql.raw(inList(CATALOG_SOURCES))})`,
     ),
     index('playlists_owner_oxy_user_id_created_at_idx').on(t.ownerOxyUserId, t.createdAt.desc()),
     /**
@@ -218,7 +237,7 @@ export const playlists = pgTable(
     index('playlists_cover_art_sizes_xlarge_id_idx').on(t.coverArtSizesXlargeId),
     index('playlists_cover_art_sizes_xxlarge_id_idx').on(t.coverArtSizesXxlargeId),
     index('playlists_cover_art_sizes_original_id_idx').on(t.coverArtSizesOriginalId),
-  ]
+  ],
 );
 
 // ── playlist_tracks ──────────────────────────────────────────────────────
@@ -248,7 +267,7 @@ export const playlistTracks = pgTable(
     // the "does this playlist already have track X" existence check in
     // `controllers/playlists.controller.ts`'s add-tracks flow.
     index('playlist_tracks_playlist_id_track_id_idx').on(t.playlistId, t.trackId),
-  ]
+  ],
 );
 
 // ── playlist_collaborators (child of playlists — see the file-level doc comment) ──
@@ -269,7 +288,7 @@ export const playlistCollaborators = pgTable(
   (t) => [
     check(
       'playlist_collaborators_role_check',
-      sql`${t.role} in (${sql.raw(inList(PLAYLIST_COLLABORATOR_ROLES))})`
+      sql`${t.role} in (${sql.raw(inList(PLAYLIST_COLLABORATOR_ROLES))})`,
     ),
     // "Is this user a collaborator of this playlist" — canViewPlaylist /
     // the edit-permission helper.
@@ -278,7 +297,7 @@ export const playlistCollaborators = pgTable(
     // getUserPlaylists' `$or: [{ ownerOxyUserId }, { 'collaborators.oxyUserId' }]`.
     // Not served by the unique index above, which leads with playlist_id.
     index('playlist_collaborators_oxy_user_id_idx').on(t.oxyUserId),
-  ]
+  ],
 );
 
 // ── playlist_sources (SourceProvenance child table — the fourth sibling; see catalog.ts) ──
@@ -305,10 +324,13 @@ export const playlistSources = pgTable(
     fields: text().array().notNull().default(sql`array[]::text[]`),
   },
   (t) => [
-    check('playlist_sources_provider_check', sql`${t.provider} in (${sql.raw(inList(PROVENANCE_PROVIDERS))})`),
+    check(
+      'playlist_sources_provider_check',
+      sql`${t.provider} in (${sql.raw(inList(PROVENANCE_PROVIDERS))})`,
+    ),
     check('playlist_sources_position_check', sql`${t.position} >= 0`),
     unique('playlist_sources_playlist_id_position_key').on(t.playlistId, t.position),
-  ]
+  ],
 );
 
 // ── recently_played ───────────────────────────────────────────────────────
@@ -330,7 +352,7 @@ export const recentlyPlayed = pgTable(
     // Primary read pattern: a user's plays, newest first (getRecentlyPlayed's
     // aggregation; the retention-pruning skip/limit in recordRecentlyPlayed).
     index('recently_played_oxy_user_id_played_at_idx').on(t.oxyUserId, t.playedAt.desc()),
-  ]
+  ],
 );
 
 // ── playback_states (one row per user — ephemeral "now playing" state) ─────
@@ -372,16 +394,16 @@ export const playbackStates = pgTable(
   (t) => [
     check(
       'playback_states_source_check',
-      sql`${t.source} is null or ${t.source} in (${sql.raw(inList(CATALOG_SOURCES))})`
+      sql`${t.source} is null or ${t.source} in (${sql.raw(inList(CATALOG_SOURCES))})`,
     ),
     check(
       'playback_states_repeat_check',
-      sql`${t.repeat} in (${sql.raw(inList(PLAYBACK_REPEAT_MODES))})`
+      sql`${t.repeat} in (${sql.raw(inList(PLAYBACK_REPEAT_MODES))})`,
     ),
     check('playback_states_position_ms_check', sql`${t.positionMs} >= 0`),
     check('playback_states_volume_check', sql`${t.volume} between 0 and 1`),
     unique('playback_states_oxy_user_id_key').on(t.oxyUserId),
-  ]
+  ],
 );
 
 // ── devices ───────────────────────────────────────────────────────────────
@@ -411,7 +433,7 @@ export const devices = pgTable(
     // oxy_user_id-only lookups too, so no separate standalone index is added
     // — an index dropped in writing, per Task 2's own convention.
     unique('devices_oxy_user_id_device_id_key').on(t.oxyUserId, t.deviceId),
-  ]
+  ],
 );
 
 // ── user_liked_tracks / user_saved_albums / user_followed_artists /
@@ -430,7 +452,7 @@ export const userLikedTracks = pgTable(
     /** When this like was added — see the file-level doc comment. */
     createdAt: createdAt(),
   },
-  (t) => [unique('user_liked_tracks_oxy_user_id_track_id_key').on(t.oxyUserId, t.trackId)]
+  (t) => [unique('user_liked_tracks_oxy_user_id_track_id_key').on(t.oxyUserId, t.trackId)],
 );
 
 export const userSavedAlbums = pgTable(
@@ -445,7 +467,7 @@ export const userSavedAlbums = pgTable(
     /** When this album was saved — see the file-level doc comment. */
     createdAt: createdAt(),
   },
-  (t) => [unique('user_saved_albums_oxy_user_id_album_id_key').on(t.oxyUserId, t.albumId)]
+  (t) => [unique('user_saved_albums_oxy_user_id_album_id_key').on(t.oxyUserId, t.albumId)],
 );
 
 export const userFollowedArtists = pgTable(
@@ -460,7 +482,7 @@ export const userFollowedArtists = pgTable(
     /** When this follow was added — see the file-level doc comment. */
     createdAt: createdAt(),
   },
-  (t) => [unique('user_followed_artists_oxy_user_id_artist_id_key').on(t.oxyUserId, t.artistId)]
+  (t) => [unique('user_followed_artists_oxy_user_id_artist_id_key').on(t.oxyUserId, t.artistId)],
 );
 
 export const userSavedPlaylists = pgTable(
@@ -480,7 +502,7 @@ export const userSavedPlaylists = pgTable(
     /** When this playlist was saved — see the file-level doc comment. */
     createdAt: createdAt(),
   },
-  (t) => [unique('user_saved_playlists_oxy_user_id_playlist_id_key').on(t.oxyUserId, t.playlistId)]
+  (t) => [unique('user_saved_playlists_oxy_user_id_playlist_id_key').on(t.oxyUserId, t.playlistId)],
 );
 
 export const userPodcastSubscriptions = pgTable(
@@ -501,5 +523,5 @@ export const userPodcastSubscriptions = pgTable(
     // services/notifications/triggers/episodePublished.ts's fan-out join.
     // Not served by the unique index above, which leads with oxy_user_id.
     index('user_podcast_subscriptions_podcast_id_idx').on(t.podcastId),
-  ]
+  ],
 );

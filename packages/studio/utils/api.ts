@@ -15,7 +15,6 @@ const API_CONFIG = {
 const syraApiClient = oxyServices.createLinkedClient({ baseURL: API_CONFIG.baseURL });
 const authenticatedClient: OxyServices['http'] = syraApiClient.client;
 
-
 export interface ApiRequestOptions {
   cache?: boolean;
   cacheTTL?: number;
@@ -49,12 +48,20 @@ export const api = {
     return { data };
   },
 
-  async post<T = unknown>(endpoint: string, body?: unknown, options?: ApiRequestOptions): Promise<{ data: T }> {
+  async post<T = unknown>(
+    endpoint: string,
+    body?: unknown,
+    options?: ApiRequestOptions,
+  ): Promise<{ data: T }> {
     const data = await authenticatedClient.post<T>(endpoint, body, options);
     return { data };
   },
 
-  async put<T = unknown>(endpoint: string, body?: unknown, options?: ApiRequestOptions): Promise<{ data: T }> {
+  async put<T = unknown>(
+    endpoint: string,
+    body?: unknown,
+    options?: ApiRequestOptions,
+  ): Promise<{ data: T }> {
     const data = await authenticatedClient.put<T>(endpoint, body, options);
     return { data };
   },
@@ -64,14 +71,22 @@ export const api = {
     return { data };
   },
 
-  async patch<T = unknown>(endpoint: string, body?: unknown, options?: ApiRequestOptions): Promise<{ data: T }> {
+  async patch<T = unknown>(
+    endpoint: string,
+    body?: unknown,
+    options?: ApiRequestOptions,
+  ): Promise<{ data: T }> {
     const data = await authenticatedClient.patch<T>(endpoint, body, options);
     return { data };
   },
 };
 
 export class ApiError extends Error {
-  constructor(message: string, public status?: number, public response?: unknown) {
+  constructor(
+    message: string,
+    public status?: number,
+    public response?: unknown,
+  ) {
     super(message);
     this.name = 'ApiError';
   }
@@ -151,7 +166,11 @@ export function isNotFoundError(error: unknown): boolean {
 export function webAlert(
   title: string,
   message: string,
-  buttons?: Array<{ text: string; style?: 'default' | 'cancel' | 'destructive'; onPress?: () => void }>,
+  buttons?: Array<{
+    text: string;
+    style?: 'default' | 'cancel' | 'destructive';
+    onPress?: () => void;
+  }>,
 ): void {
   if (Platform.OS === 'web') {
     if (buttons && buttons.length > 1) {

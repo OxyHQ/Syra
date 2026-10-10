@@ -65,9 +65,7 @@ function sourceFiles(dir: string): string[] {
 }
 
 function stripComments(source: string): string {
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, ' ')
-    .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
+  return source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
 }
 
 /**
@@ -161,12 +159,12 @@ describe('no caught error reaches a log field raw', () => {
     // `services/strikeService.ts` passed one, which is how it was found. The
     // fixture is here because the detector cannot tell the two apart and should
     // not — both hand the raw error to the logger.
-    expect(rawErrorFields("logger.error(`msg ${id}`, error)")).toEqual(['error']);
+    expect(rawErrorFields('logger.error(`msg ${id}`, error)')).toEqual(['error']);
   });
 
   it('balances the call to its own closing paren', () => {
     // A nested call must not end the match early, or a raw field after it hides.
-    const calls = loggerCalls("logger.error(fmt(a, b), { err });\nconst x = 1;");
+    const calls = loggerCalls('logger.error(fmt(a, b), { err });\nconst x = 1;');
     expect(calls).toHaveLength(1);
     expect(calls[0]).toContain('{ err }');
   });
@@ -174,6 +172,6 @@ describe('no caught error reaches a log field raw', () => {
   it('strips a discussion of the hazard but not a real call', () => {
     expect(stripComments('/* logger.error(m, { error }) */')).not.toContain('logger.error');
     expect(stripComments('// logger.error(m, { error })')).not.toContain('logger.error');
-    expect(stripComments("logger.error(m, { error });")).toContain('logger.error');
+    expect(stripComments('logger.error(m, { error });')).toContain('logger.error');
   });
 });

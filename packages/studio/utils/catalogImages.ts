@@ -23,7 +23,9 @@ function getCatalogApiOrigin(): string {
 }
 
 function apiImageUrl(pathOrId: string): string {
-  const path = pathOrId.startsWith(IMAGE_PATH_PREFIX) ? pathOrId : `${IMAGE_PATH_PREFIX}${pathOrId}`;
+  const path = pathOrId.startsWith(IMAGE_PATH_PREFIX)
+    ? pathOrId
+    : `${IMAGE_PATH_PREFIX}${pathOrId}`;
   return `${getCatalogApiOrigin()}${path}`;
 }
 

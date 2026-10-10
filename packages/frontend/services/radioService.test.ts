@@ -73,7 +73,12 @@ describe('radioService', () => {
 
   it('omits the seed id of the user station rather than sending it empty', async () => {
     mockApiGet.mockResolvedValueOnce({
-      data: { station: { ...station, seedType: 'user', seedId: '' }, tracks: [], cursor: null, gate: null },
+      data: {
+        station: { ...station, seedType: 'user', seedId: '' },
+        tracks: [],
+        cursor: null,
+        gate: null,
+      },
     });
 
     await radioService.getPage({ seedType: 'user', seedId: '' });

@@ -21,9 +21,7 @@ interface WebNativePressEvent {
   clientX?: number;
 }
 
-const clamp = (value: number, min: number, max: number) => (
-  Math.min(max, Math.max(min, value))
-);
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 const getProgressPercent = (currentTime: number, duration: number) => {
   if (!Number.isFinite(currentTime) || !Number.isFinite(duration) || duration <= 0) {
@@ -44,15 +42,15 @@ export const MobilePlayerBar: React.FC = () => {
   const insets = useSafeAreaInsets();
   const [progressBarWidth, setProgressBarWidth] = useState(0);
 
-  const currentTrack = usePlayerStore(s => s.currentTrack);
-  const isPlaying = usePlayerStore(s => s.isPlaying);
-  const isLoading = usePlayerStore(s => s.isLoading);
-  const currentTime = usePlayerStore(s => s.currentTime);
-  const duration = usePlayerStore(s => s.duration);
-  const pause = usePlayerStore(s => s.pause);
-  const resume = usePlayerStore(s => s.resume);
-  const seek = usePlayerStore(s => s.seek);
-  const playNext = usePlayerStore(s => s.playNext);
+  const currentTrack = usePlayerStore((s) => s.currentTrack);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const isLoading = usePlayerStore((s) => s.isLoading);
+  const currentTime = usePlayerStore((s) => s.currentTime);
+  const duration = usePlayerStore((s) => s.duration);
+  const pause = usePlayerStore((s) => s.pause);
+  const resume = usePlayerStore((s) => s.resume);
+  const seek = usePlayerStore((s) => s.seek);
+  const playNext = usePlayerStore((s) => s.playNext);
 
   const media = useNowPlayingMedia();
   const hasMedia = media !== null;
@@ -108,7 +106,7 @@ export const MobilePlayerBar: React.FC = () => {
   const containerStyle = useMemo(() => {
     // Calculate bottom position: bottom nav (60px + 8px padding) + no gap
     const bottomOffset = 68 + (Platform.OS === 'web' ? 0 : insets.bottom);
-    
+
     return {
       ...styles.container,
       borderRadius: 16,
@@ -141,33 +139,40 @@ export const MobilePlayerBar: React.FC = () => {
   return (
     <View className="bg-primary" style={containerStyle}>
       {/* Main Player Content */}
-      <View style={[styles.content, { paddingHorizontal: SPACING, paddingVertical: SPACING, gap: SPACING }]}>
+      <View
+        style={[
+          styles.content,
+          { paddingHorizontal: SPACING, paddingVertical: SPACING, gap: SPACING },
+        ]}
+      >
         {/* Left: Track Info */}
         <View style={[styles.trackInfo, { gap: SPACING }]}>
-          <Pressable style={styles.albumArtPressable} accessibilityRole="button" accessibilityLabel={t('listener.creditsLyrics')} onPress={() => {
-            if (isCatalogTrack && currentTrack) router.push({ pathname: '/track/[id]', params: { id: currentTrack.id } });
-            else if (isEpisode && media) router.push({ pathname: '/episode/[id]', params: { id: media.id } });
-          }}>
+          <Pressable
+            style={styles.albumArtPressable}
+            accessibilityRole="button"
+            accessibilityLabel={t('listener.creditsLyrics')}
+            onPress={() => {
+              if (isCatalogTrack && currentTrack)
+                router.push({ pathname: '/track/[id]', params: { id: currentTrack.id } });
+              else if (isEpisode && media)
+                router.push({ pathname: '/episode/[id]', params: { id: media.id } });
+            }}
+          >
             {media?.imageUri ? (
-              <Image
-                source={{ uri: media.imageUri }}
-                style={styles.albumArt}
-                contentFit="cover"
-              />
+              <Image source={{ uri: media.imageUri }} style={styles.albumArt} contentFit="cover" />
             ) : (
               <View className="bg-surface" style={styles.albumArtPlaceholder}>
-                <MaterialCommunityIcons name={isEpisode ? 'microphone' : 'music'} size={24} color={theme.colors.textSecondary} />
+                <MaterialCommunityIcons
+                  name={isEpisode ? 'microphone' : 'music'}
+                  size={24}
+                  color={theme.colors.textSecondary}
+                />
               </View>
             )}
           </Pressable>
           <View style={styles.trackDetails}>
-            <Text
-              className="text-primary-foreground" style={styles.trackTitle}
-              numberOfLines={1}
-            >
-              {media
-                ? media.title
-                : (isLoading ? 'Loading...' : 'No track selected')}
+            <Text className="text-primary-foreground" style={styles.trackTitle} numberOfLines={1}>
+              {media ? media.title : isLoading ? 'Loading...' : 'No track selected'}
             </Text>
             <Text
               className="text-primary-foreground opacity-70"
@@ -175,10 +180,12 @@ export const MobilePlayerBar: React.FC = () => {
               numberOfLines={1}
             >
               {media
-                // A locker file with no resolved artist ships an empty name by
-                // design; it is an unknown artist, not a missing one.
-                ? media.subtitle || t('uploads.unknownArtist')
-                : (isLoading ? '' : 'Choose a track to play')}
+                ? // A locker file with no resolved artist ships an empty name by
+                  // design; it is an unknown artist, not a missing one.
+                  media.subtitle || t('uploads.unknownArtist')
+                : isLoading
+                  ? ''
+                  : 'Choose a track to play'}
             </Text>
           </View>
         </View>
@@ -222,7 +229,12 @@ export const MobilePlayerBar: React.FC = () => {
             )}
           </Pressable>
           {isEpisode ? (
-            <SkipButton direction="forward" seconds={30} size={24} tint={theme.colors.primaryForeground} />
+            <SkipButton
+              direction="forward"
+              seconds={30}
+              size={24}
+              tint={theme.colors.primaryForeground}
+            />
           ) : (
             <Pressable
               style={styles.controlButton}
@@ -231,7 +243,11 @@ export const MobilePlayerBar: React.FC = () => {
               accessibilityRole="button"
               accessibilityLabel={t('common.nextTrack')}
             >
-              <MaterialCommunityIcons name="skip-next" size={24} color={theme.colors.primaryForeground} />
+              <MaterialCommunityIcons
+                name="skip-next"
+                size={24}
+                color={theme.colors.primaryForeground}
+              />
             </Pressable>
           )}
         </View>

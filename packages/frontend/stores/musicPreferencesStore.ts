@@ -52,13 +52,12 @@ export const DEFAULT_MUSIC_PREFERENCES: Omit<MusicPreferences, 'oxyUserId'> = {
   monoAudio: false,
 };
 
-const STREAM_RELEVANT_PREFERENCES: Array<keyof MusicPreferences> = [
-  'audioQuality',
-  'dataSaver',
-];
+const STREAM_RELEVANT_PREFERENCES: Array<keyof MusicPreferences> = ['audioQuality', 'dataSaver'];
 
 function touchesStreamPreferences(partial: Partial<MusicPreferences>): boolean {
-  return STREAM_RELEVANT_PREFERENCES.some((key) => Object.prototype.hasOwnProperty.call(partial, key));
+  return STREAM_RELEVANT_PREFERENCES.some((key) =>
+    Object.prototype.hasOwnProperty.call(partial, key),
+  );
 }
 
 export const musicPreferencesQueryKeys = {
@@ -100,14 +99,21 @@ export function useMusicPreferencesQuery(enabled: boolean) {
 export function useUpdateMusicPreferences() {
   const activeQueryClient = useQueryClient();
 
-  return useMutation<MusicPreferences | null, Error, Partial<MusicPreferences>, { previous?: MusicPreferences | null }>({
+  return useMutation<
+    MusicPreferences | null,
+    Error,
+    Partial<MusicPreferences>,
+    { previous?: MusicPreferences | null }
+  >({
     mutationFn: updateMusicPreferences,
     onMutate: async (partial) => {
       await activeQueryClient.cancelQueries({ queryKey: musicPreferencesQueryKeys.me });
       if (touchesStreamPreferences(partial)) {
         clearStreamResolutionCache();
       }
-      const previous = activeQueryClient.getQueryData<MusicPreferences | null>(musicPreferencesQueryKeys.me);
+      const previous = activeQueryClient.getQueryData<MusicPreferences | null>(
+        musicPreferencesQueryKeys.me,
+      );
       if (previous) {
         activeQueryClient.setQueryData<MusicPreferences>(musicPreferencesQueryKeys.me, {
           ...previous,

@@ -32,7 +32,5 @@ export async function getLyrics(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  res
-    .set('Cache-Control', `public, max-age=${LYRICS_CACHE_MAX_AGE}`)
-    .json(lyrics);
+  res.set('Cache-Control', `public, max-age=${LYRICS_CACHE_MAX_AGE}`).json(lyrics);
 }

@@ -260,25 +260,35 @@ describe('the catalog providers scope the discriminator', () => {
   const artistProvider = subjectProviderFor(ReportedType.ARTIST);
   const trackProvider = subjectProviderFor(ReportedType.TRACK);
 
-  async function makeEntity(type: 'artist' | 'person', over: Partial<typeof catalogEntities.$inferInsert> = {}) {
+  async function makeEntity(
+    type: 'artist' | 'person',
+    over: Partial<typeof catalogEntities.$inferInsert> = {},
+  ) {
     const id = uuidv7();
-    await getDb().insert(catalogEntities).values({
-      id,
-      type,
-      name: `${type} name`,
-      nameKey: id,
-      source: 'upload',
-      claimedByOxyUserId: `oxy-${type}-claimant`,
-      ...over,
-    });
+    await getDb()
+      .insert(catalogEntities)
+      .values({
+        id,
+        type,
+        name: `${type} name`,
+        nameKey: id,
+        source: 'upload',
+        claimedByOxyUserId: `oxy-${type}-claimant`,
+        ...over,
+      });
     return id;
   }
 
   async function makeTrack(artistId: string) {
     const id = uuidv7();
-    await getDb()
-      .insert(tracks)
-      .values({ id, title: 'A track', artistId, artistName: 'whoever', duration: 100, source: 'upload' });
+    await getDb().insert(tracks).values({
+      id,
+      title: 'A track',
+      artistId,
+      artistName: 'whoever',
+      duration: 100,
+      source: 'upload',
+    });
     return id;
   }
 

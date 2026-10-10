@@ -86,7 +86,7 @@ export function toUploadTrackDto(row: UploadRow, lookup: ImageVariantLookup): Us
       xxlarge: row.coverArtSizesXxlargeId,
       original: row.coverArtSizesOriginalId,
     },
-    lookup
+    lookup,
   );
 
   return {

@@ -9,7 +9,11 @@ import { getDb } from '../db/postgres';
 import { catalogEntities, tracks } from '../db/schema/catalog';
 import { loadImageVariants } from '../db/catalog/hydrate';
 import { toArtistDto, toTrackDto } from '../db/catalog/serialize';
-import { contributionAttestations, userUploadHlsRenditions, userUploads } from '../db/schema/creators';
+import {
+  contributionAttestations,
+  userUploadHlsRenditions,
+  userUploads,
+} from '../db/schema/creators';
 import { UPLOAD_COLUMNS } from '../db/creators/uploads';
 import { toUploadTrackDto, uploadImageIds } from '../db/creators/serialize';
 import { getEntityProfile } from './entityProfile.controller';
@@ -106,11 +110,7 @@ async function readArtist(id: string) {
 }
 
 async function readTrackOfArtist(artistId: string) {
-  const [row] = await getDb()
-    .select()
-    .from(tracks)
-    .where(eq(tracks.artistId, artistId))
-    .limit(1);
+  const [row] = await getDb().select().from(tracks).where(eq(tracks.artistId, artistId)).limit(1);
   return row;
 }
 
@@ -125,14 +125,26 @@ function makeRes(): CapturedRes {
   return {
     _status: 200,
     _body: undefined,
-    status(code) { this._status = code; return this; },
-    json(body) { this._body = body; return this; },
+    status(code) {
+      this._status = code;
+      return this;
+    },
+    json(body) {
+      this._body = body;
+      return this;
+    },
   };
 }
 
-const failNext: NextFunction = (err) => { throw err; };
+const failNext: NextFunction = (err) => {
+  throw err;
+};
 
-function makeReq(userId: string, body: unknown = {}, params: Record<string, string> = {}): AuthRequest {
+function makeReq(
+  userId: string,
+  body: unknown = {},
+  params: Record<string, string> = {},
+): AuthRequest {
   return { params, query: {}, body, user: { id: userId } } as unknown as AuthRequest;
 }
 
@@ -284,11 +296,16 @@ describe('server-only fields never reach a catalog response', () => {
     // Both must have ANSWERED — a 404 body contains no secret either.
     expect(artistRes._status).toBe(200);
     expect((artistRes._body as { id?: string }).id).toBe(artistId);
-    expect((profileRes._body as { data?: { music?: { tracks?: unknown[] } } }).data?.music?.tracks?.length)
-      .toBeGreaterThan(0);
+    expect(
+      (profileRes._body as { data?: { music?: { tracks?: unknown[] } } }).data?.music?.tracks
+        ?.length,
+    ).toBeGreaterThan(0);
 
     for (const { field, marker } of SERVER_ONLY) {
-      for (const [label, res] of [['artist', artistRes], ['profile', profileRes]] as const) {
+      for (const [label, res] of [
+        ['artist', artistRes],
+        ['profile', profileRes],
+      ] as const) {
         const json = JSON.stringify(res._body);
         expect(`${label}:${field}:${json.includes(field)}`).toBe(`${label}:${field}:false`);
         expect(`${label}:${field}:${json.includes(marker)}`).toBe(`${label}:${field}:false`);
@@ -419,14 +436,22 @@ describe('server-only fields never reach a catalog response', () => {
     expect(dto).toContain('Locker File');
 
     for (const marker of [
-      'APIDLEAKMARKER', 'SHA256LEAKMARKER', 'AUDIOKEYLEAKMARKER',
-      'HLSLEAKMARKER', 'OWNERIDLEAKMARKER',
+      'APIDLEAKMARKER',
+      'SHA256LEAKMARKER',
+      'AUDIOKEYLEAKMARKER',
+      'HLSLEAKMARKER',
+      'OWNERIDLEAKMARKER',
     ]) {
       expect(`${marker}:${dto.includes(marker)}`).toBe(`${marker}:false`);
     }
     for (const field of [
-      'rawTags', 'sha256', 'fingerprint', 'audioSource', 'hlsMasterKey',
-      'manifestKey', 'ownerOxyUserId',
+      'rawTags',
+      'sha256',
+      'fingerprint',
+      'audioSource',
+      'hlsMasterKey',
+      'manifestKey',
+      'ownerOxyUserId',
     ]) {
       expect(`${field}:${dto.includes(field)}`).toBe(`${field}:false`);
     }
@@ -437,21 +462,23 @@ describe('server-only fields never reach a catalog response', () => {
    * artist-facing contributions panel exposes WHO contributed, deliberately —
    * it must never expose from where.
    */
-  it('never exposes an attestation\'s ip, user agent or raw tags', async () => {
+  it("never exposes an attestation's ip, user agent or raw tags", async () => {
     const artistId = await makeArtistWithSuggestions();
     const track = await readTrackOfArtist(artistId);
     if (!track) throw new Error('readTrackOfArtist returned no track');
-    await getDb().insert(contributionAttestations).values({
-      trackId: track.id,
-      uploaderOxyUserId: 'a-stranger',
-      statement: 'I may distribute this recording',
-      acceptedAt: new Date(),
-      ip: 'IPSERVERONLYMARKER',
-      userAgent: 'UASERVERONLYMARKER',
-      rawTagsJson: JSON.stringify({ apID: 'APIDSERVERONLYMARKER' }),
-      rawTagsTruncated: false,
-      rawTagsOriginalByteLength: 9,
-    });
+    await getDb()
+      .insert(contributionAttestations)
+      .values({
+        trackId: track.id,
+        uploaderOxyUserId: 'a-stranger',
+        statement: 'I may distribute this recording',
+        acceptedAt: new Date(),
+        ip: 'IPSERVERONLYMARKER',
+        userAgent: 'UASERVERONLYMARKER',
+        rawTagsJson: JSON.stringify({ apID: 'APIDSERVERONLYMARKER' }),
+        rawTagsTruncated: false,
+        rawTagsOriginalByteLength: 9,
+      });
 
     const res = makeRes();
     await getMyContributions(makeReq(OWNER), res as unknown as Response, failNext);

@@ -109,8 +109,16 @@ export interface HttpRequestConfig {
  */
 export interface HttpClient {
   get: (url: string, config?: HttpRequestConfig) => Promise<Record<string, unknown>>;
-  post: (url: string, data?: Record<string, unknown> | FormData, config?: HttpRequestConfig) => Promise<Record<string, unknown>>;
-  patch: (url: string, data?: Record<string, unknown>, config?: HttpRequestConfig) => Promise<Record<string, unknown>>;
+  post: (
+    url: string,
+    data?: Record<string, unknown> | FormData,
+    config?: HttpRequestConfig,
+  ) => Promise<Record<string, unknown>>;
+  patch: (
+    url: string,
+    data?: Record<string, unknown>,
+    config?: HttpRequestConfig,
+  ) => Promise<Record<string, unknown>>;
   delete: (url: string, config?: HttpRequestConfig) => Promise<Record<string, unknown>>;
 }
 

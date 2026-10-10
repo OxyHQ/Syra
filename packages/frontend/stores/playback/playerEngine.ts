@@ -72,7 +72,10 @@ export interface PlayerEngine {
   /** Replace the current source. Playback state is preserved where possible. */
   replace(source: AudioSourceInput): void;
   /** Subscribe to playback status updates. */
-  addListener(event: 'playbackStatusUpdate', callback: (status: PlaybackStatusUpdate) => void): void;
+  addListener(
+    event: 'playbackStatusUpdate',
+    callback: (status: PlaybackStatusUpdate) => void,
+  ): void;
   /** Destroy the player and release all resources. */
   remove(): void;
 }

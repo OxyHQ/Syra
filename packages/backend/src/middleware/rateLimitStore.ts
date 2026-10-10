@@ -30,7 +30,7 @@ export class RedisStore {
    */
   async get(key: string): Promise<{ totalHits: number; resetTime: Date | undefined } | undefined> {
     const fullKey = `${this.prefix}${key}`;
-    
+
     return await withRedisFallback(
       this.redis,
       async () => {
@@ -38,15 +38,15 @@ export class RedisStore {
         if (!value) {
           return undefined;
         }
-        
+
         const totalHits = parseInt(value, 10);
         const ttl = await this.redis.ttl(fullKey);
         const resetTime = ttl > 0 ? new Date(Date.now() + ttl * 1000) : undefined;
-        
+
         return { totalHits, resetTime };
       },
       undefined,
-      'rate limit get'
+      'rate limit get',
     );
   }
 
@@ -60,7 +60,7 @@ export class RedisStore {
         await this.redis.setEx(`${this.prefix}${key}`, Math.ceil(ttl / 1000), value.toString());
       },
       undefined,
-      'rate limit set'
+      'rate limit set',
     );
   }
 
@@ -72,22 +72,22 @@ export class RedisStore {
   async increment(key: string): Promise<{ totalHits: number; resetTime: Date | undefined }> {
     const fullKey = `${this.prefix}${key}`;
     const fallback = { totalHits: 1, resetTime: undefined as Date | undefined };
-    
+
     return await withRedisFallback(
       this.redis,
       async () => {
         // Check if key exists
         const exists = await this.redis.exists(fullKey);
-        
+
         // Increment the key
         const value = await this.redis.incr(fullKey);
-        
+
         // If key didn't exist before, set TTL now
         if (exists === 0) {
           const ttlSeconds = Math.ceil(this.windowMs / 1000);
           await this.redis.expire(fullKey, ttlSeconds);
         }
-        
+
         // Get current TTL to determine reset time
         const ttl = await this.redis.ttl(fullKey);
         const resetTime = ttl > 0 ? new Date(Date.now() + ttl * 1000) : undefined;
@@ -95,7 +95,7 @@ export class RedisStore {
         return { totalHits: value, resetTime };
       },
       fallback,
-      'rate limit increment'
+      'rate limit increment',
     );
   }
 
@@ -109,7 +109,7 @@ export class RedisStore {
         await this.redis.decr(`${this.prefix}${key}`);
       },
       undefined,
-      'rate limit decrement'
+      'rate limit decrement',
     );
   }
 
@@ -123,7 +123,7 @@ export class RedisStore {
         await this.redis.del([`${this.prefix}${key}`]);
       },
       undefined,
-      'rate limit delete'
+      'rate limit delete',
     );
   }
 
@@ -141,4 +141,3 @@ export class RedisStore {
     // Redis client is managed globally, no need to close here
   }
 }
-

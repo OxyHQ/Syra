@@ -232,7 +232,10 @@ export async function importIsrcRegistry(options: ImportOptions): Promise<Import
   }
 
   const recordingsWithIsrc = await collectRecordingsWithIsrc(options.dumpDir);
-  const { recordings, artistCredits } = await collectRecordings(options.dumpDir, recordingsWithIsrc);
+  const { recordings, artistCredits } = await collectRecordings(
+    options.dumpDir,
+    recordingsWithIsrc,
+  );
   const credits = await collectArtistCredits(options.dumpDir, artistCredits);
   const releaseCounts = options.skipReleaseCounts
     ? undefined
@@ -360,7 +363,7 @@ async function main(): Promise<void> {
 
 if (require.main === module) {
   main().catch((err: unknown) => {
-    logger.error(err instanceof Error ? err.stack ?? err.message : String(err));
+    logger.error(err instanceof Error ? (err.stack ?? err.message) : String(err));
     process.exitCode = 1;
   });
 }

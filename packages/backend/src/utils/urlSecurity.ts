@@ -57,13 +57,7 @@ export function validateUrlSecurity(url: string): { valid: boolean; error?: stri
 
     // Block localhost and local domains
     const hostname = urlObj.hostname.toLowerCase();
-    const blockedHosts = [
-      'localhost',
-      '127.0.0.1',
-      '0.0.0.0',
-      '::1',
-      '[::1]',
-    ];
+    const blockedHosts = ['localhost', '127.0.0.1', '0.0.0.0', '::1', '[::1]'];
 
     if (blockedHosts.includes(hostname)) {
       return { valid: false, error: 'Localhost URLs are not allowed' };
@@ -110,16 +104,16 @@ export function sanitizeHtml(html: string): string {
 
   // Remove script tags and their content
   html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-  
+
   // Remove event handlers (onclick, onerror, etc.)
   html = html.replace(/\s*on\w+\s*=\s*["'][^"']*["']/gi, '');
-  
+
   // Remove javascript: protocol in links
   html = html.replace(/javascript:/gi, '');
-  
+
   // Remove data: URIs that could be dangerous
   html = html.replace(/data:text\/html/gi, '');
-  
+
   return html;
 }
 
@@ -157,4 +151,3 @@ export function sanitizeText(text: string | null | undefined): string {
 export function validateUrlLength(url: string, maxLength: number = 2048): boolean {
   return url.length <= maxLength;
 }
-

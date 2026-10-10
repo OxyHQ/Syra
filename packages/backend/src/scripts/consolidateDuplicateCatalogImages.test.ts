@@ -35,7 +35,13 @@ const SIZES = ['small', 'medium', 'large', 'xlarge', 'xxlarge', 'original'] as c
 async function makePodcast(overrides: Partial<typeof podcasts.$inferInsert> = {}): Promise<string> {
   const [row] = await getDb()
     .insert(podcasts)
-    .values({ title: 'The Daily', source: 'rss', status: 'active', feedUrl: 'https://feeds.example/daily.xml', ...overrides })
+    .values({
+      title: 'The Daily',
+      source: 'rss',
+      status: 'active',
+      feedUrl: 'https://feeds.example/daily.xml',
+      ...overrides,
+    })
     .returning({ id: podcasts.id });
   if (!row) throw new Error('makePodcast: insert returned no row');
   return row.id;
@@ -44,7 +50,7 @@ async function makePodcast(overrides: Partial<typeof podcasts.$inferInsert> = {}
 async function makeEpisode(
   podcastId: string,
   guid: string,
-  overrides: Partial<typeof episodes.$inferInsert> = {}
+  overrides: Partial<typeof episodes.$inferInsert> = {},
 ): Promise<string> {
   const [row] = await getDb()
     .insert(episodes)
@@ -101,12 +107,20 @@ async function seedImageSet(input: {
 }
 
 async function readEpisodeImageId(id: string): Promise<string | null> {
-  const [row] = await getDb().select({ imageId: episodes.imageId }).from(episodes).where(eq(episodes.id, id)).limit(1);
+  const [row] = await getDb()
+    .select({ imageId: episodes.imageId })
+    .from(episodes)
+    .where(eq(episodes.id, id))
+    .limit(1);
   return row?.imageId ?? null;
 }
 
 async function readPodcastImageId(id: string): Promise<string | null> {
-  const [row] = await getDb().select({ imageId: podcasts.imageId }).from(podcasts).where(eq(podcasts.id, id)).limit(1);
+  const [row] = await getDb()
+    .select({ imageId: podcasts.imageId })
+    .from(podcasts)
+    .where(eq(podcasts.id, id))
+    .limit(1);
   return row?.imageId ?? null;
 }
 
@@ -134,11 +148,20 @@ describe('consolidateDuplicateCatalogImages', () => {
       createdAt: new Date('2025-06-01T00:00:00Z'),
     });
 
-    await getDb().update(episodes).set({ imageId: canonical.large }).where(eq(episodes.id, episodeOld));
-    await getDb().update(episodes).set({ imageId: duplicate.large }).where(eq(episodes.id, episodeNew));
+    await getDb()
+      .update(episodes)
+      .set({ imageId: canonical.large })
+      .where(eq(episodes.id, episodeOld));
+    await getDb()
+      .update(episodes)
+      .set({ imageId: duplicate.large })
+      .where(eq(episodes.id, episodeNew));
     // A DIFFERENT table referencing the same duplicate set — proves the rewrite
     // is not scoped to whichever table happened to create it.
-    await getDb().update(podcasts).set({ imageId: duplicate.large }).where(eq(podcasts.id, podcastId));
+    await getDb()
+      .update(podcasts)
+      .set({ imageId: duplicate.large })
+      .where(eq(podcasts.id, podcastId));
 
     const stats = await consolidateDuplicateCatalogImages();
 
@@ -153,7 +176,7 @@ describe('consolidateDuplicateCatalogImages', () => {
 
     expect(await countImageAssetRows()).toBe(6);
     expect(deletedKeyBatches.flat().sort()).toEqual(
-      SIZES.map((size) => `images/ep-new/${size}`).sort()
+      SIZES.map((size) => `images/ep-new/${size}`).sort(),
     );
   });
 
@@ -192,8 +215,14 @@ describe('consolidateDuplicateCatalogImages', () => {
       sourceContentHash: 'content-hash-shared',
       createdAt: new Date('2025-06-01T00:00:00Z'),
     });
-    await getDb().update(episodes).set({ imageId: canonical.large }).where(eq(episodes.id, episodeOld));
-    await getDb().update(episodes).set({ imageId: duplicate.large }).where(eq(episodes.id, episodeNew));
+    await getDb()
+      .update(episodes)
+      .set({ imageId: canonical.large })
+      .where(eq(episodes.id, episodeOld));
+    await getDb()
+      .update(episodes)
+      .set({ imageId: duplicate.large })
+      .where(eq(episodes.id, episodeNew));
 
     const stats = await consolidateDuplicateCatalogImages({ dryRun: true });
 
@@ -219,8 +248,14 @@ describe('consolidateDuplicateCatalogImages', () => {
       sourceContentHash: 'content-hash-shared',
       createdAt: new Date('2025-06-01T00:00:00Z'),
     });
-    await getDb().update(episodes).set({ imageId: canonical.large }).where(eq(episodes.id, episodeOld));
-    await getDb().update(episodes).set({ imageId: duplicate.large }).where(eq(episodes.id, episodeNew));
+    await getDb()
+      .update(episodes)
+      .set({ imageId: canonical.large })
+      .where(eq(episodes.id, episodeOld));
+    await getDb()
+      .update(episodes)
+      .set({ imageId: duplicate.large })
+      .where(eq(episodes.id, episodeNew));
 
     await consolidateDuplicateCatalogImages();
     const second = await consolidateDuplicateCatalogImages();
