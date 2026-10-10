@@ -1,4 +1,4 @@
-import { type ComponentProps } from 'react';
+import type { ComponentProps } from 'react';
 // The SUBPATH, never the `@expo/vector-icons` barrel: the barrel re-exports every
 // icon family, so one glyph through it drags every family's font into a web
 // bundle.
